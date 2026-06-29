@@ -64,7 +64,13 @@ def load_skill_instruction(skill_name: str, fallback_desc: str) -> str:
 def _backend_get(path: str) -> dict:
     """Execute a GET request against the K8S Control Plane backend API."""
     url = f"{BACKEND_BASE_URL}{path}"
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "Authorization": "Bearer k8s-enterprise-demo-token",
+        },
+    )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode("utf-8"))
