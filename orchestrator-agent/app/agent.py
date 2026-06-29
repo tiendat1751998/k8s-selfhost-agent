@@ -159,7 +159,7 @@ def get_capacity_forecast(query: str) -> str:
 # ---------------------------------------------------------------------------
 
 model = Gemini(
-    model="gemini-2.5-flash",
+    model="gemini-1.5-flash",
     retry_options=types.HttpRetryOptions(attempts=3),
 )
 
