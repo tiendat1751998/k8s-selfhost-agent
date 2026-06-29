@@ -1,4 +1,4 @@
-# Binaries and Executables
+# Binaries
 *.exe
 *.exe~
 *.dll
@@ -6,83 +6,55 @@
 *.dylib
 /bin/
 /dist/
-server.exe
-standalone.exe
 
-# Test and Coverage
+# Test binary
 *.test
+
+# Output of go coverage
 *.out
 coverage.html
-*.cover
 
-# Go Workspace & Modules
+# Go workspace
 go.work
 go.work.sum
 
 # Dependency directories
 vendor/
-node_modules/
 
-# Python Cache, Environment and Package Metadata
-__pycache__/
-*.py[cod]
-*.pyo
-.venv/
-env/
-venv/
-ENV/
-.pytest_cache/
-*.egg-info/
-
-# IDE / Editors
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-*.suo
-*.sln
-*.user
 
-# OS Metadata
+# OS
 .DS_Store
 Thumbs.db
 
 # Docker
 .docker/
 
-# Environment Files (MUST NEVER BE COMMITTED)
+# Environment
 .env
 .env.local
 .env.*.local
-.env.development
-.env.production
-.env.test
-.env.sample
-.env.example.local
-!.env.example
 
-# Logs and Debug Output
+# Logs
 *.log
 logs/
-server_stdout.log
-server_stderr.log
-server_startup.log
 
-# Temporary files
+# Temporary
 tmp/
 temp/
-payload.json
 
-# Local configurations
-config.yaml
-
-# Large files
-*.webp
-*.zip
-*.tar.gz
-*.tgz
-*.rar
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+.pytest_cache/
+*.egg-info/
 
 # Agent artifacts
 routing_traces/
@@ -90,8 +62,19 @@ orchestrator-agent/.adk/
 orchestrator-agent/.venv/
 orchestrator-agent/.pytest_cache/
 orchestrator-agent/datdevops/
-.google-agents-cli/
-.agents-cli-scripts/
-.adk/
-.persist_vector_store/
-.saved_chats/
+
+# Build artifacts
+server_stdout.log
+server_stderr.log
+server_startup.log
+payload.json
+
+# Lock files (reproducible from pyproject.toml)
+orchestrator-agent/uv.lock
+
+# Large recording files
+*.webp
+
+# Local config
+config.yaml
+
