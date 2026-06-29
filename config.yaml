@@ -1,0 +1,19 @@
+postgres:
+  host: "10.10.10.133"
+  port: 5432
+  user: "myuser"
+  password: "mysecretpassword"
+  dbname: "mydatabase"
+  sslmode: "disable"
+  max_conns: 25
+  min_conns: 5
+redis:
+  host: "10.10.10.133"
+  port: 6379
+  password: ""
+  db: 0
+docker:
+  host: "tcp://10.10.10.133:2375"
+  version: "1.41"
+nats:
+  url: "nats://10.10.10.133:4222"

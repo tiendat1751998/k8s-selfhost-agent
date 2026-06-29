@@ -1,0 +1,105 @@
+// auth.js - Handles JWT authentication and fetch interception
+(function() {
+    // 1. Intercept Global Fetch to append Authorization header
+    const nativeFetch = window.fetch;
+    window.fetch = function(input, init) {
+        if (typeof input === 'string' && input.startsWith('/api/v1')) {
+            const token = localStorage.getItem('k8s_token');
+            if (token) {
+                init = init || {};
+                init.headers = init.headers || {};
+                init.headers['Authorization'] = 'Bearer ' + token;
+            }
+        }
+        return nativeFetch.call(this, input, init).then(response => {
+            if (response.status === 401) {
+                showLoginModal();
+            }
+            return response;
+        });
+    };
+
+    // 2. Setup Login UI logic
+    function showLoginModal() {
+        const modal = document.getElementById('login-modal');
+        if (modal) {
+            modal.style.display = 'flex';
+        }
+    }
+
+    function hideLoginModal() {
+        const modal = document.getElementById('login-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    function handleLogin(e) {
+        e.preventDefault();
+        const form = e.target;
+        const emailInput = form.querySelector('input[type="email"]');
+        const passwordInput = form.querySelector('input[type="password"]');
+        const email = emailInput ? emailInput.value : '';
+        const password = passwordInput ? passwordInput.value : '';
+
+        // Clear any previous error
+        let errEl = form.querySelector('.login-error');
+        if (errEl) errEl.remove();
+
+        fetch('/api/v1/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Invalid email or password');
+            }
+            return res.json();
+        })
+        .then(data => {
+            if (data && data.token) {
+                localStorage.setItem('k8s_token', data.token);
+                hideLoginModal();
+                window.location.reload();
+            } else {
+                throw new Error('Authentication failed');
+            }
+        })
+        .catch(err => {
+            console.error('Login error:', err);
+            const errDiv = document.createElement('div');
+            errDiv.className = 'login-error';
+            errDiv.style.color = 'var(--color-critical)';
+            errDiv.style.marginTop = 'var(--space-md)';
+            errDiv.style.textAlign = 'center';
+            errDiv.style.fontSize = '14px';
+            errDiv.textContent = err.message || 'Login failed. Please try again.';
+            form.appendChild(errDiv);
+        });
+    }
+
+    // 3. Initialize
+    document.addEventListener("DOMContentLoaded", () => {
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', handleLogin);
+        }
+
+        const token = localStorage.getItem('k8s_token');
+        if (!token) {
+            showLoginModal();
+        }
+    });
+
+    // Expose auth API if needed by other modules
+    window.Auth = {
+        logout: () => {
+            localStorage.removeItem('k8s_token');
+            showLoginModal();
+        },
+        getToken: () => localStorage.getItem('k8s_token')
+    };
+})();

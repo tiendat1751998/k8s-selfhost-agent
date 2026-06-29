@@ -1,0 +1,80 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/dist/
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+coverage.html
+
+# Go workspace
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+temp/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Agent artifacts
+routing_traces/
+orchestrator-agent/.adk/
+orchestrator-agent/.venv/
+orchestrator-agent/.pytest_cache/
+orchestrator-agent/datdevops/
+
+# Build artifacts
+server_stdout.log
+server_stderr.log
+server_startup.log
+payload.json
+
+# Lock files (reproducible from pyproject.toml)
+orchestrator-agent/uv.lock
+
+# Large recording files
+*.webp
+
+# Local config
+config.yaml
+

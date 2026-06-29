@@ -1,0 +1,94 @@
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      K8S_SERVER_HOST: "0.0.0.0"
+      K8S_SERVER_PORT: "8080"
+      K8S_POSTGRES_HOST: "postgres"
+      K8S_POSTGRES_PORT: "5432"
+      K8S_POSTGRES_USER: "postgres"
+      K8S_POSTGRES_PASSWORD: "postgres"
+      K8S_POSTGRES_DBNAME: "k8sselfhost"
+      K8S_POSTGRES_SSLMODE: "disable"
+      K8S_REDIS_HOST: "redis"
+      K8S_REDIS_PORT: "6379"
+      K8S_NATS_URL: "nats://nats:4222"
+      K8S_LOG_LEVEL: "debug"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/livez"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - k8sselfhost
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: k8sselfhost
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../../migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - k8sselfhost
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - k8sselfhost
+
+  nats:
+    image: nats:2-alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: --jetstream --store_dir /data --http_port 8222
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - k8sselfhost
+
+volumes:
+  postgres_data:
+  redis_data:
+  nats_data:
+
+networks:
+  k8sselfhost:
+    driver: bridge

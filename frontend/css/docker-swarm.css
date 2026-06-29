@@ -1,0 +1,185 @@
+/* ============================================================
+   DOCKER & SWARM PROVIDER MODULE STYLING
+   ============================================================ */
+
+.docker-swarm-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  animation: fadeIn var(--transition-normal);
+}
+
+/* Stats grid */
+.docker-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-md);
+}
+
+.docker-stat-card {
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-lg);
+  padding: var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.docker-stat-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-primary);
+}
+
+.docker-stat-icon {
+  font-size: 2.2rem;
+  background: rgba(252, 213, 53, 0.1);
+  border-radius: var(--rounded-md);
+  padding: var(--space-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.docker-stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.docker-stat-label {
+  font-size: var(--text-caption);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.docker-stat-value {
+  font-size: var(--text-title-md);
+  font-family: var(--font-number);
+  font-weight: 700;
+  color: var(--color-on-dark);
+}
+
+/* Tabs system */
+.docker-tabs-header {
+  display: flex;
+  gap: var(--space-xs);
+  border-bottom: 1px solid var(--color-hairline);
+  margin-bottom: var(--space-sm);
+}
+
+.docker-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--text-body-md);
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.docker-tab-btn:hover {
+  color: var(--color-on-dark);
+}
+
+.docker-tab-btn.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* Card lists */
+.docker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-md);
+}
+
+.docker-card {
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-lg);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.docker-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+.docker-card-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--color-hairline);
+  padding-bottom: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
+.docker-card-title h3 {
+  margin: 0;
+  font-size: var(--text-title-sm);
+  font-weight: 700;
+  color: var(--color-on-dark);
+}
+
+.docker-card-rows {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.docker-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-body-sm);
+}
+
+.docker-card-row .label {
+  color: var(--color-muted);
+}
+
+.docker-card-row .value {
+  font-weight: 500;
+  font-family: var(--font-number);
+}
+
+.docker-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-hairline);
+}
+
+/* Console logs area */
+.docker-console-wrapper {
+  background: #0d1117;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  padding: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.docker-console-log {
+  height: 200px;
+  overflow-y: auto;
+  font-family: var(--font-number);
+  font-size: 11px;
+  color: #39eb0a;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}

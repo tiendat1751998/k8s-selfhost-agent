@@ -1,0 +1,60 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "architect_routing",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Can you review the module dependencies in our Go codebase to ensure we are not crossing Clean Architecture boundaries?"}]
+      }
+    },
+    {
+      "eval_case_id": "backend_routing",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Create a new Go CRUD handler in internal/adapter/http for managing cluster connection profiles."}]
+      }
+    },
+    {
+      "eval_case_id": "frontend_routing",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Build a beautiful CSS styling layout for the navigation tabs in our frontend dashboard view."}]
+      }
+    },
+    {
+      "eval_case_id": "dba_routing",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Write a timestamped PostgreSQL migration script to add a new column to the tasks table safely without SQL injection."}]
+      }
+    },
+    {
+      "eval_case_id": "devops_routing",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Configure a Kubernetes deployment file with readiness and liveness probes for the api-server container."}]
+      }
+    },
+    {
+      "eval_case_id": "keyword_database_routing",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Optimize the MySQL query indexes to prevent slow queries on the audit logs table."}]
+      }
+    },
+    {
+      "eval_case_id": "keyword_k8s_routing",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "How do I scale my containerized app to 5 replicas using docker service scale?"}]
+      }
+    },
+    {
+      "eval_case_id": "general_greeting",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Hello, who are you and how can you help me today?"}]
+      }
+    }
+  ]
+}

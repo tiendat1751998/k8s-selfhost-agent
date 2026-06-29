@@ -1,0 +1,2467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="K8S Self-Healing Agent — Enterprise Configuration Control Plane">
+  <title>K8S Control Plane — Configuration Center</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/enterprise.css">
+  <link rel="stylesheet" href="/css/cost.css">
+  <link rel="stylesheet" href="/css/observability.css">
+  <link rel="stylesheet" href="/css/copilot.css">
+  <link rel="stylesheet" href="/css/docker-swarm.css">
+</head>
+<body>
+  <!-- Login Modal -->
+  <div id="login-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:var(--color-canvas-dark); z-index:9999; justify-content:center; align-items:center;">
+    <div class="panel" style="width:100%; max-width:400px; border:1px solid var(--color-hairline); box-shadow:0 8px 30px rgba(0,0,0,0.5);">
+      <div class="panel-header" style="text-align:center; padding-top:var(--space-lg);">
+        <div class="nav-brand-icon" style="margin:0 auto var(--space-md) auto; font-size:24px;">K8</div>
+        <h2 style="margin:0; font-size:20px; color:var(--color-on-dark);">K8S Control Plane</h2>
+        <p style="margin:var(--space-xs) 0 0 0; color:var(--color-muted); font-size:14px;">Sign in to your enterprise account</p>
+      </div>
+      <div class="panel-body" style="padding:var(--space-lg);">
+        <form id="login-form">
+          <div class="form-group mb-md">
+            <label class="form-label">Email Address</label>
+            <input type="email" class="form-select" placeholder="admin@k8sselfhost.local" required>
+          </div>
+          <div class="form-group" style="margin-bottom:var(--space-lg);">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-select" placeholder="••••••••" required>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%; padding:10px;">Sign In</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-shell">
+
+    <!-- ═══ Sidebar Navigation ═══ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="nav-brand-icon">K8</div>
+        <div class="sidebar-brand-text"><span>K8S</span> Control Plane</div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <!-- Sidebar content will be dynamically injected by EnterpriseSidebar component -->
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-indicator" id="ws-status">
+          <span class="status-dot connecting" id="ws-dot"></span>
+          <span id="ws-label">Connecting…</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══ Main Content ═══ -->
+    <div class="main-area">
+
+      <!-- Top Bar -->
+      <header class="top-bar">
+        <div class="top-bar-left" style="display:flex; align-items:center; gap:var(--space-md);">
+          <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" aria-label="Toggle Navigation">☰</button>
+          <h1 class="page-title" id="page-title">Overview</h1>
+        </div>
+        <div class="top-bar-center" style="flex:1; max-width:400px; margin: 0 var(--space-lg); position:relative;">
+          <div style="position:relative;width:100%;">
+            <input type="text" class="form-select form-select-sm" id="global-search-input" placeholder="🔍 Search clusters, pods, logs... (Ctrl+K)" style="border-radius:var(--rounded-lg);padding-left:32px;">
+            <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--color-muted);">🔍</span>
+            <!-- Autocomplete suggestion panel -->
+            <div id="global-search-dropdown" class="panel" style="position:absolute;top:38px;left:0;right:0;z-index:999;max-height:400px;overflow-y:auto;display:none;box-shadow:0 8px 30px rgba(0,0,0,0.5);border:1px solid var(--color-hairline);">
+              <div style="display:flex;gap:4px;border-bottom:1px solid var(--color-hairline);padding:var(--space-xs);background:var(--color-surface-elevated);overflow-x:auto;">
+                <button class="btn btn-ghost btn-sm search-cat-tab active" data-cat="all" style="padding:2px 8px;font-size:11px;">All</button>
+                <button class="btn btn-ghost btn-sm search-cat-tab" data-cat="kubernetes" style="padding:2px 8px;font-size:11px;">K8s</button>
+                <button class="btn btn-ghost btn-sm search-cat-tab" data-cat="log" style="padding:2px 8px;font-size:11px;">Logs</button>
+                <button class="btn btn-ghost btn-sm search-cat-tab" data-cat="git" style="padding:2px 8px;font-size:11px;">Git</button>
+                <button class="btn btn-ghost btn-sm search-cat-tab" data-cat="incident" style="padding:2px 8px;font-size:11px;">Incidents</button>
+              </div>
+              <div id="global-search-results" style="padding:var(--space-xs);"></div>
+              <div style="border-top:1px solid var(--color-hairline);padding:var(--space-xs);text-align:center;background:var(--color-surface-elevated);">
+                <a href="#enterprise-search" id="global-search-view-all" style="font-size:12px;color:var(--color-primary);text-decoration:none;font-weight:600;">View All Results in Search Center →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="top-bar-right" style="display:flex;align-items:center;gap:var(--space-sm);">
+          <button class="btn btn-ghost btn-sm" id="release-notes-btn" style="position:relative;">
+            📣 Release Notes
+            <span id="release-notes-unread-badge" style="position:absolute;top:-2px;right:-2px;width:8px;height:8px;background:var(--color-trading-down);border-radius:50%;display:none;"></span>
+          </button>
+          <button class="btn btn-ghost btn-sm" id="start-tour-btn" onclick="Onboarding.reset()">🗺️ Tour</button>
+          <button class="btn btn-ghost btn-sm" id="theme-toggle-btn">☀️ Light Mode</button>
+          <span class="top-bar-badge" id="health-score-badge">Health: —%</span>
+          <button class="btn btn-primary btn-sm" id="refresh-btn">↻ Refresh</button>
+        </div>
+      </header>
+
+      <!-- Dynamic Content Sections -->
+      <main class="main-content-area" id="main-content">
+
+        <!-- ═══ SECTION: Overview ═══ -->
+        <section class="section active" id="section-overview">
+          <div class="section-header">
+            <div>
+              <h2>Operational Overview</h2>
+              <p class="text-muted">Real-time control plane status, pipeline lifecycle, and dynamic widgets</p>
+            </div>
+            <div class="section-actions">
+              <button class="btn btn-outline" id="overview-customize-btn">⚙️ Customize Dashboard</button>
+            </div>
+          </div>
+
+          <!-- Stats Bar -->
+          <div class="stats-bar">
+            <div class="stat-card"><div class="stat-icon critical">⚠</div><div class="stat-content"><div class="stat-value" id="stat-critical">0</div><div class="stat-label">Critical</div></div></div>
+            <div class="stat-card"><div class="stat-icon warning">⚡</div><div class="stat-content"><div class="stat-value" id="stat-warning">0</div><div class="stat-label">Warning</div></div></div>
+            <div class="stat-card"><div class="stat-icon healthy">✓</div><div class="stat-content"><div class="stat-value" id="stat-resolved">0</div><div class="stat-label">Resolved</div></div></div>
+            <div class="stat-card"><div class="stat-icon info">◈</div><div class="stat-content"><div class="stat-value" id="stat-agents">0</div><div class="stat-label">Agent Runs</div></div></div>
+          </div>
+
+          <!-- Panels Grid -->
+          <div class="panels-grid">
+            <!-- Incident Panel -->
+            <div class="panel" id="incident-panel">
+              <div class="panel-header">
+                <div class="panel-title">🔴 Incidents <span class="count" id="incident-count">0</span></div>
+                <div class="panel-actions">
+                  <button class="btn btn-ghost btn-sm active" data-filter="all">All</button>
+                  <button class="btn btn-ghost btn-sm" data-filter="critical">Critical</button>
+                  <button class="btn btn-ghost btn-sm" data-filter="warning">Warning</button>
+                </div>
+              </div>
+              <div class="panel-body" id="incident-list">
+                <div class="empty-state" id="incident-empty"><div class="empty-state-icon">🛡️</div><div class="empty-state-text">No incidents detected</div><div class="empty-state-sub">All systems operational</div></div>
+              </div>
+            </div>
+
+            <!-- Agent Pipeline Panel -->
+            <div class="panel" id="agent-panel">
+              <div class="panel-header">
+                <div class="panel-title">🤖 Agent Pipeline <span class="count" id="agent-run-count">0</span></div>
+                <div class="panel-actions"><span id="agent-status-label" style="font-size:var(--text-caption);color:var(--color-muted);">Idle</span></div>
+              </div>
+              <div class="panel-body">
+                <div class="pipeline-container" id="pipeline-container">
+                  <div class="pipeline-steps" id="pipeline-steps">
+                    <div class="pipeline-step" data-step="TASK"><div class="step-icon">📋</div><div class="step-label">Task</div><div class="step-duration" id="dur-TASK">—</div></div>
+                    <div class="pipeline-step" data-step="LLM"><div class="step-icon">🧠</div><div class="step-label">LLM</div><div class="step-duration" id="dur-LLM">—</div></div>
+                    <div class="pipeline-step" data-step="CODE"><div class="step-icon">💻</div><div class="step-label">Code</div><div class="step-duration" id="dur-CODE">—</div></div>
+                    <div class="pipeline-step" data-step="TEST"><div class="step-icon">🧪</div><div class="step-label">Test</div><div class="step-duration" id="dur-TEST">—</div></div>
+                    <div class="pipeline-step" data-step="FIX"><div class="step-icon">🔧</div><div class="step-label">Fix</div><div class="step-duration" id="dur-FIX">—</div></div>
+                    <div class="pipeline-step" data-step="COMMIT"><div class="step-icon">📦</div><div class="step-label">Commit</div><div class="step-duration" id="dur-COMMIT">—</div></div>
+                    <div class="pipeline-step" data-step="PR"><div class="step-icon">🚀</div><div class="step-label">PR</div><div class="step-duration" id="dur-PR">—</div></div>
+                  </div>
+                  <div class="pipeline-detail" id="pipeline-detail">
+                    <div class="pipeline-detail-row"><span class="pipeline-detail-label">Current Step</span><span class="pipeline-detail-value" id="detail-step">—</span></div>
+                    <div class="pipeline-detail-row"><span class="pipeline-detail-label">Status</span><span class="pipeline-detail-value" id="detail-status">Idle</span></div>
+                    <div class="pipeline-detail-row"><span class="pipeline-detail-label">Duration</span><span class="pipeline-detail-value" id="detail-duration">—</span></div>
+                    <div class="pipeline-detail-row"><span class="pipeline-detail-label">Total Runs</span><span class="pipeline-detail-value" id="detail-runs">0</span></div>
+                  </div>
+                </div>
+              </div>
+            <!-- Favorites Panel -->
+            <div class="panel" id="favorites-panel">
+              <div class="panel-header">
+                <div class="panel-title">⭐ Favorites</div>
+              </div>
+              <div class="panel-body" id="favorites-list">
+                <div class="empty-state"><div class="empty-state-icon">⭐</div><div class="empty-state-text">No favorites pinned</div><div class="empty-state-sub">Pin clusters from the Clusters section</div></div>
+              </div>
+            </div>
+
+            <!-- Recently Viewed Panel -->
+            <div class="panel" id="recent-panel">
+              <div class="panel-header">
+                <div class="panel-title">👁️ Recently Viewed</div>
+              </div>
+              <div class="panel-body" id="recent-list">
+                <div class="empty-state"><div class="empty-state-icon">👁️</div><div class="empty-state-text">No recently viewed sections</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Log Stream (full width) -->
+          <div class="panel" id="log-panel">
+            <div class="panel-header">
+              <div class="panel-title">📋 Live Logs <span class="count" id="log-count">0</span></div>
+              <div class="log-controls">
+                <input type="text" class="log-filter-input" id="log-filter" placeholder="Filter logs…">
+                <button class="btn btn-ghost btn-sm" id="log-pause-btn" title="Pause/Resume">⏸</button>
+                <button class="btn btn-ghost btn-sm" id="log-clear-btn" title="Clear logs">🗑</button>
+              </div>
+            </div>
+            <div class="panel-body log-stream" id="log-list" style="max-height:200px;">
+              <div class="empty-state" id="log-empty"><div class="empty-state-icon">📋</div><div class="empty-state-text">Waiting for log stream…</div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Docker & Swarm Integration ═══ -->
+        <section class="section" id="section-docker-swarm">
+          <div class="section-header">
+            <h2>🐳 Docker & Swarm Integration</h2>
+            <div class="section-actions">
+              <button class="btn btn-primary btn-sm" id="btn-refresh-docker">↻ Refresh Data</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-body" id="docker-swarm-view"></div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Container Clusters (K8s / Docker / Swarm) ═══ -->
+        <section class="section" id="section-kubernetes">
+          <div class="section-header">
+            <h2>Container Clusters</h2>
+            <button class="btn btn-primary btn-sm" id="add-cluster-btn">+ Add Cluster</button>
+          </div>
+          <div class="enterprise-table-wrap">
+            <table class="enterprise-table" id="k8s-table">
+              <thead>
+                <tr>
+                  <th>Cluster Name</th>
+                  <th>Provider</th>
+                  <th>Endpoint</th>
+                  <th>Status</th>
+                  <th>Last Check</th>
+                  <th>Nodes</th>
+                  <th>Containers</th>
+                  <th>Services</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="k8s-table-body"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="k8s-empty" style="display:none;"><div class="empty-state-icon">📦</div><div class="empty-state-text">No clusters configured</div><div class="empty-state-sub">Add a Kubernetes, Docker, or Docker Swarm cluster</div></div>
+        </section>
+
+        <!-- ═══ SECTION: Git Providers ═══ -->
+        <section class="section" id="section-git-providers">
+          <div class="section-header">
+            <h2>Git Providers</h2>
+            <button class="btn btn-primary btn-sm" id="add-git-btn">+ Add Provider</button>
+          </div>
+          <div class="enterprise-table-wrap">
+            <table class="enterprise-table" id="git-table">
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Organization</th>
+                  <th>Repos</th>
+                  <th>Sync Status</th>
+                  <th>Last Webhook</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="git-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: CI/CD Integrations ═══ -->
+        <section class="section" id="section-cicd">
+          <div class="section-header">
+            <h2>CI/CD Integrations</h2>
+            <button class="btn btn-primary btn-sm" id="add-cicd-btn">+ Add Integration</button>
+          </div>
+          <div class="enterprise-table-wrap">
+            <table class="enterprise-table" id="cicd-table">
+              <thead>
+                <tr>
+                  <th>Pipeline</th>
+                  <th>Provider</th>
+                  <th>Status</th>
+                  <th>Success Rate</th>
+                  <th>Last Run</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="cicd-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: AI Providers ═══ -->
+        <section class="section" id="section-ai-providers">
+          <div class="section-header">
+            <h2>AI Providers</h2>
+            <button class="btn btn-primary btn-sm" id="add-ai-btn">+ Add Provider</button>
+          </div>
+
+          <!-- Sub-tabs bar -->
+          <div style="display:flex;gap:var(--space-xs);margin-bottom:var(--space-md);border-bottom:1px solid var(--color-hairline);padding-bottom:var(--space-xs);">
+            <button class="btn btn-ghost btn-sm active" id="ai-tab-btn-registry" style="font-weight:600;">📁 Model Registry</button>
+            <button class="btn btn-ghost btn-sm" id="ai-tab-btn-copilot" style="font-weight:600;">💬 AI Copilot Console</button>
+          </div>
+
+          <!-- Tab Content 1: Registry Grid -->
+          <div class="ai-tab-content-panel active" id="ai-panel-registry">
+            <div class="ai-providers-grid">
+              <div class="enterprise-table-wrap">
+                <table class="enterprise-table" id="ai-table">
+                  <thead>
+                    <tr>
+                      <th>Provider</th>
+                      <th>Model</th>
+                      <th>Endpoint</th>
+                      <th>Status</th>
+                      <th>Latency</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ai-table-body"></tbody>
+                </table>
+              </div>
+              <!-- AI Test Console -->
+              <div class="panel ai-test-console" id="ai-test-console">
+                <div class="panel-header">
+                  <div class="panel-title">🧪 AI Test Console</div>
+                </div>
+                <div class="panel-body" style="padding:var(--space-md);">
+                  <div class="form-group">
+                    <label class="form-label">Provider</label>
+                    <select class="form-select" id="ai-test-provider"><option>Select provider…</option></select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Prompt</label>
+                    <textarea class="form-textarea" id="ai-test-prompt" rows="3" placeholder="Enter a test prompt…"></textarea>
+                  </div>
+                  <button class="btn btn-primary" id="ai-test-send" style="width:100%;">▶ Send Test</button>
+                  <div class="ai-test-result" id="ai-test-result">
+                    <div class="ai-test-meta">
+                      <span>Latency: <strong id="ai-test-latency">—</strong></span>
+                      <span>Tokens: <strong id="ai-test-tokens">—</strong></span>
+                    </div>
+                    <pre class="ai-test-response" id="ai-test-response">Response will appear here…</pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab Content 2: AI Copilot Chat Center -->
+          <div class="ai-tab-content-panel" id="ai-panel-copilot" style="display:none;">
+            <div class="copilot-page-layout">
+              <div class="copilot-main-panel">
+                <div class="copilot-output" id="page-copilot-output">
+                  <div class="copilot-output-entry" style="color:var(--color-muted);font-size:12px;">Welcome to the AI Copilot Chat Center. Type a command or click one of the suggested prompts to get started.</div>
+                </div>
+                <div class="copilot-input-area">
+                  <span class="copilot-prompt">›</span>
+                  <input type="text" class="copilot-input" id="page-copilot-input" placeholder="Ask anything... e.g. deploy nginx to production" autocomplete="off">
+                </div>
+              </div>
+              <div class="copilot-suggestions-panel">
+                <h4>Suggested Commands</h4>
+                <div class="copilot-page-suggestions" id="page-copilot-suggestions"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Connection Health ═══ -->
+        <section class="section" id="section-connection-health">
+          <div class="section-header">
+            <h2>Connection Health Monitor</h2>
+            <span class="top-bar-badge" id="health-overall">System Health: —%</span>
+          </div>
+          <div class="health-grid" id="health-grid">
+            <div class="health-card" data-system="kubernetes">
+              <div class="health-card-header">
+                <span class="health-card-icon">☸️</span>
+                <span class="health-card-title">Kubernetes API</span>
+              </div>
+              <div class="health-card-status">
+                <span class="health-dot" id="health-k8s-dot"></span>
+                <span class="health-status-text" id="health-k8s-text">Checking…</span>
+              </div>
+              <div class="health-card-meta">
+                <span>Latency: <strong id="health-k8s-latency">—</strong></span>
+                <span>Last: <strong id="health-k8s-last">—</strong></span>
+              </div>
+              <div class="health-heartbeat" id="health-k8s-beat"></div>
+            </div>
+            <div class="health-card" data-system="git">
+              <div class="health-card-header"><span class="health-card-icon">🔀</span><span class="health-card-title">Git Providers</span></div>
+              <div class="health-card-status"><span class="health-dot" id="health-git-dot"></span><span class="health-status-text" id="health-git-text">Checking…</span></div>
+              <div class="health-card-meta"><span>Latency: <strong id="health-git-latency">—</strong></span><span>Last: <strong id="health-git-last">—</strong></span></div>
+              <div class="health-heartbeat" id="health-git-beat"></div>
+            </div>
+            <div class="health-card" data-system="cicd">
+              <div class="health-card-header"><span class="health-card-icon">🔄</span><span class="health-card-title">CI/CD Webhooks</span></div>
+              <div class="health-card-status"><span class="health-dot" id="health-cicd-dot"></span><span class="health-status-text" id="health-cicd-text">Checking…</span></div>
+              <div class="health-card-meta"><span>Latency: <strong id="health-cicd-latency">—</strong></span><span>Last: <strong id="health-cicd-last">—</strong></span></div>
+              <div class="health-heartbeat" id="health-cicd-beat"></div>
+            </div>
+            <div class="health-card" data-system="ai">
+              <div class="health-card-header"><span class="health-card-icon">🧠</span><span class="health-card-title">AI Endpoints</span></div>
+              <div class="health-card-status"><span class="health-dot" id="health-ai-dot"></span><span class="health-status-text" id="health-ai-text">Checking…</span></div>
+              <div class="health-card-meta"><span>Latency: <strong id="health-ai-latency">—</strong></span><span>Last: <strong id="health-ai-last">—</strong></span></div>
+              <div class="health-heartbeat" id="health-ai-beat"></div>
+            </div>
+          </div>
+          <!-- Failure Timeline -->
+          <div class="panel" style="margin-top:var(--space-md);">
+            <div class="panel-header"><div class="panel-title">⚠ Failure Timeline</div></div>
+            <div class="panel-body" id="health-timeline" style="max-height:200px;">
+              <div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">No failures detected</div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Audit Logs ═══ -->
+        <section class="section" id="section-audit-logs">
+          <div class="section-header">
+            <h2>Audit Logs</h2>
+            <div class="audit-controls">
+              <input type="text" class="log-filter-input" id="audit-search" placeholder="Search logs…">
+              <select class="form-select form-select-sm" id="audit-filter-action">
+                <option value="">All Actions</option>
+                <option value="create">Create</option>
+                <option value="update">Update</option>
+                <option value="delete">Delete</option>
+                <option value="test">Test</option>
+              </select>
+            </div>
+          </div>
+          <div class="enterprise-table-wrap">
+            <table class="enterprise-table" id="audit-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Actor</th>
+                  <th>Action</th>
+                  <th>Target</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody id="audit-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Action Center ═══ -->
+        <section class="section" id="section-action-center">
+          <div class="section-header">
+            <h2>🎯 Action Center</h2>
+            <div class="action-group">
+              <select class="form-select" id="action-cluster-select" style="width:200px;">
+                <option value="">All Clusters</option>
+              </select>
+              <select class="form-select" id="action-namespace-select" style="width:160px;">
+                <option value="">All Namespaces</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Resource Type Tabs -->
+          <div style="display:flex;gap:var(--space-xs);margin-bottom:var(--space-md);">
+            <button class="btn btn-ghost btn-sm action-tab active" data-tab="pods">📦 Pods</button>
+            <button class="btn btn-ghost btn-sm action-tab" data-tab="deployments">🚀 Deployments</button>
+            <button class="btn btn-ghost btn-sm action-tab" data-tab="statefulsets">📊 StatefulSets</button>
+            <button class="btn btn-ghost btn-sm action-tab" data-tab="nodes">🖥️ Nodes</button>
+            <button class="btn btn-ghost btn-sm action-tab" data-tab="history">📜 History</button>
+          </div>
+
+          <!-- Pod Actions -->
+          <div class="action-tab-content active" id="tab-pods">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">📦 Pod Actions</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div class="enterprise-table-wrap">
+                  <table class="enterprise-table" id="action-pods-table">
+                    <thead><tr><th>Pod Name</th><th>Namespace</th><th>Status</th><th>Restarts</th><th>Age</th><th>Actions</th></tr></thead>
+                    <tbody id="action-pods-body"></tbody>
+                  </table>
+                </div>
+                <div class="empty-state" id="action-pods-empty"><div class="empty-state-icon">📦</div><div class="empty-state-text">No pods loaded</div><div class="empty-state-sub">Connect to a cluster to view pods</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Deployment Actions -->
+          <div class="action-tab-content" id="tab-deployments">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">🚀 Deployment Actions</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div class="enterprise-table-wrap">
+                  <table class="enterprise-table" id="action-deploys-table">
+                    <thead><tr><th>Deployment</th><th>Namespace</th><th>Replicas</th><th>Available</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="action-deploys-body"></tbody>
+                  </table>
+                </div>
+                <div class="empty-state" id="action-deploys-empty"><div class="empty-state-icon">🚀</div><div class="empty-state-text">No deployments loaded</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- StatefulSet Actions -->
+          <div class="action-tab-content" id="tab-statefulsets">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">📊 StatefulSet Actions</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div class="enterprise-table-wrap">
+                  <table class="enterprise-table" id="action-sts-table">
+                    <thead><tr><th>StatefulSet</th><th>Namespace</th><th>Replicas</th><th>Ready</th><th>Storage</th><th>Actions</th></tr></thead>
+                    <tbody id="action-sts-body"></tbody>
+                  </table>
+                </div>
+                <div class="empty-state" id="action-sts-empty"><div class="empty-state-icon">📊</div><div class="empty-state-text">No StatefulSets loaded</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Node Actions -->
+          <div class="action-tab-content" id="tab-nodes">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">🖥️ Node Actions</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div class="enterprise-table-wrap">
+                  <table class="enterprise-table" id="action-nodes-table">
+                    <thead><tr><th>Node</th><th>Role</th><th>Status</th><th>CPU</th><th>Memory</th><th>Pods</th><th>Actions</th></tr></thead>
+                    <tbody id="action-nodes-body"></tbody>
+                  </table>
+                </div>
+                <div class="empty-state" id="action-nodes-empty"><div class="empty-state-icon">🖥️</div><div class="empty-state-text">No nodes loaded</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action History -->
+          <div class="action-tab-content" id="tab-history">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">📜 Action History</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div class="enterprise-table-wrap">
+                  <table class="enterprise-table" id="action-history-table">
+                    <thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Status</th><th>Duration</th><th>Details</th></tr></thead>
+                    <tbody id="action-history-body"></tbody>
+                  </table>
+                </div>
+                <div class="empty-state" id="action-history-empty"><div class="empty-state-icon">✅</div><div class="empty-state-text">No actions executed yet</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Execution Console (slide-up panel) -->
+          <div class="panel" id="action-console" style="display:none;margin-top:var(--space-md);border:1px solid var(--color-primary);">
+            <div class="panel-header" style="background:rgba(252,213,53,0.08);">
+              <div class="panel-title">▶ Execution Console</div>
+              <button class="btn btn-ghost btn-sm" id="action-console-close">✕</button>
+            </div>
+            <div class="panel-body" style="padding:var(--space-md);">
+              <div style="display:flex;gap:var(--space-md);align-items:center;margin-bottom:var(--space-sm);">
+                <span id="action-console-action" style="font-weight:600;"></span>
+                <span class="badge" id="action-console-status">Pending</span>
+                <div style="flex:1;"></div>
+                <span id="action-console-duration" style="font-family:var(--font-number);font-size:12px;color:var(--color-muted);"></span>
+              </div>
+              <div class="progress-bar" style="margin-bottom:var(--space-sm);">
+                <div class="progress-fill" id="action-console-progress" style="width:0%;height:4px;background:var(--color-primary);border-radius:2px;transition:width .3s;"></div>
+              </div>
+              <pre class="ai-test-response" id="action-console-log" style="max-height:200px;overflow-y:auto;font-size:12px;">Waiting for execution...</pre>
+            </div>
+          </div>
+        </section>
+        <!-- ═══ SECTION: AI Operations ═══ -->
+        <section class="section" id="section-ai-ops">
+          <div class="section-header">
+            <h2>🧠 AI Operations</h2>
+            <div class="action-group">
+              <select class="form-select" id="ai-ops-cluster" style="width:180px;">
+                <option value="">Select Cluster</option>
+              </select>
+              <select class="form-select" id="ai-ops-model" style="width:160px;">
+                <option value="ollama">Ollama (Local)</option>
+                <option value="openai">OpenAI</option>
+                <option value="vllm">vLLM</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-md);">
+            <!-- RCA Panel -->
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">🔍 Root Cause Analysis</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div class="form-group" style="margin-bottom:var(--space-sm);">
+                  <label class="form-label">Analysis Target</label>
+                  <select class="form-select" id="ai-rca-target">
+                    <option value="pod">Analyze Pod</option>
+                    <option value="deployment">Analyze Deployment</option>
+                    <option value="namespace">Analyze Namespace</option>
+                    <option value="cluster">Analyze Cluster</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-sm);">
+                  <label class="form-label">Resource Name</label>
+                  <input type="text" class="form-select" id="ai-rca-name" placeholder="e.g. payment-svc-4d2e1">
+                </div>
+                <button class="btn btn-primary btn-sm" id="ai-rca-run" style="width:100%;">🔍 Run RCA</button>
+              </div>
+            </div>
+
+            <!-- Remediation View -->
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">🛠 Remediation</div></div>
+              <div class="panel-body" style="padding:var(--space-md);" id="ai-remediation-body">
+                <div class="empty-state" style="padding:var(--space-lg) 0;"><div class="empty-state-icon">🛠</div><div class="empty-state-text">Run RCA to generate remediation</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Chat Console -->
+          <div class="panel mb-md">
+            <div class="panel-header"><div class="panel-title">💬 AI Chat Console</div></div>
+            <div class="panel-body" style="padding:0;">
+              <div id="ai-chat-messages" style="height:300px;overflow-y:auto;padding:var(--space-md);"></div>
+              <div style="display:flex;gap:var(--space-xs);padding:var(--space-sm);border-top:1px solid var(--color-hairline);">
+                <input type="text" class="form-select" id="ai-chat-input" placeholder="Ask about your cluster... (e.g. Why is this pod restarting?)" style="flex:1;">
+                <button class="btn btn-primary btn-sm" id="ai-chat-send">Send</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Incident Correlation -->
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🔗 Incident Correlation</div></div>
+            <div class="panel-body" style="padding:var(--space-md);" id="ai-correlation-body">
+              <div class="empty-state" style="padding:var(--space-lg) 0;"><div class="empty-state-icon">🔗</div><div class="empty-state-text">No correlations available</div><div class="empty-state-sub">Run RCA to find similar incidents</div></div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ═══ SECTION: GitOps ═══ -->
+        <section class="section" id="section-gitops">
+          <div class="section-header">
+            <h2>🔀 GitOps Control Plane</h2>
+            <div class="action-group">
+              <button class="btn btn-primary btn-sm" id="gitops-new-patch">📝 Generate Patch</button>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-md);">
+            <!-- GitOps Actions -->
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">📝 Patch Generator</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div class="form-group" style="margin-bottom:var(--space-sm);">
+                  <label class="form-label">Patch Type</label>
+                  <select class="form-select" id="gitops-patch-type">
+                    <option value="helm">Helm Values</option>
+                    <option value="kustomize">Kustomize Patch</option>
+                    <option value="raw">Raw YAML</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-sm);">
+                  <label class="form-label">Target Deployment</label>
+                  <input type="text" class="form-select" id="gitops-target" placeholder="e.g. payment-svc">
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-sm);">
+                  <label class="form-label">Change Description</label>
+                  <input type="text" class="form-select" id="gitops-description" placeholder="e.g. Increase memory limit to 1Gi">
+                </div>
+                <button class="btn btn-primary btn-sm" id="gitops-generate" style="width:100%;">🔧 Generate</button>
+              </div>
+            </div>
+
+            <!-- PR Generator -->
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">🔀 Pull Request Preview</div></div>
+              <div class="panel-body" style="padding:var(--space-md);" id="gitops-pr-preview">
+                <div class="empty-state" style="padding:var(--space-lg) 0;"><div class="empty-state-icon">🔀</div><div class="empty-state-text">Generate a patch to preview PR</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PR Status Dashboard -->
+          <div class="panel mb-md">
+            <div class="panel-header"><div class="panel-title">📊 Pull Request Status</div></div>
+            <div class="panel-body" style="padding:var(--space-md);">
+              <div class="enterprise-table-wrap">
+                <table class="enterprise-table" id="gitops-pr-table">
+                  <thead><tr><th>PR</th><th>Branch</th><th>Target</th><th>Status</th><th>Author</th><th>Created</th><th>Actions</th></tr></thead>
+                  <tbody id="gitops-pr-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Deployment Approval Flow -->
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">✅ Deployment Approvals</div></div>
+            <div class="panel-body" style="padding:var(--space-md);">
+              <div class="enterprise-table-wrap">
+                <table class="enterprise-table" id="gitops-approval-table">
+                  <thead><tr><th>Deployment</th><th>Environment</th><th>Version</th><th>Status</th><th>Requested By</th><th>Actions</th></tr></thead>
+                  <tbody id="gitops-approval-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Enterprise ═══ -->
+        <section class="section" id="section-enterprise">
+          <div class="section-header">
+            <h2>🏢 Enterprise Platform Control</h2>
+            <div style="display:flex;gap:var(--space-xs);flex-wrap:wrap;">
+              <button class="btn btn-ghost btn-sm enterprise-tab active" data-tab="control-plane">⚙️ Control Plane</button>
+              <button class="btn btn-ghost btn-sm enterprise-tab" data-tab="tenancy">🏢 Multi-Tenancy</button>
+              <button class="btn btn-ghost btn-sm enterprise-tab" data-tab="rbac">🔑 RBAC Matrix</button>
+              <button class="btn btn-ghost btn-sm enterprise-tab" data-tab="marketplace">🛒 Marketplace</button>
+              <button class="btn btn-ghost btn-sm enterprise-tab" data-tab="backup">💾 Backup & DR</button>
+              <button class="btn btn-ghost btn-sm enterprise-tab" data-tab="provisioning">☸️ Provisioning Wizard</button>
+            </div>
+          </div>
+
+          <!-- ── Tab 0: Control Plane ── -->
+          <div class="enterprise-tab-content active" id="ent-tab-control-plane">
+            <!-- RBAC -->
+            <div class="panel mb-md">
+              <div class="panel-header"><div class="panel-title">🔐 Role-Based Access Control</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div class="enterprise-table-wrap">
+                  <table class="enterprise-table" id="rbac-table">
+                    <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
+                    <tbody id="rbac-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Multi-Cluster -->
+            <div class="panel mb-md">
+              <div class="panel-header"><div class="panel-title">🌐 Multi-Cluster Fleet</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div class="grid-3-col" id="fleet-grid"></div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-md);">
+              <!-- Maintenance Mode -->
+              <div class="panel">
+                <div class="panel-header"><div class="panel-title">🔧 Maintenance Mode</div></div>
+                <div class="panel-body" style="padding:var(--space-md);">
+                  <div class="pipeline-detail" style="margin-bottom:var(--space-sm);">
+                    <div class="pipeline-detail-row"><span class="pipeline-detail-label">Status</span><span class="pipeline-detail-value" id="maint-status">● Inactive</span></div>
+                    <div class="pipeline-detail-row"><span class="pipeline-detail-label">Scheduled</span><span class="pipeline-detail-value" id="maint-scheduled">None</span></div>
+                  </div>
+                  <div class="flex-row-xs">
+                    <button class="btn btn-primary btn-sm" id="maint-start">▶ Start Maintenance</button>
+                    <button class="btn btn-ghost btn-sm" id="maint-schedule">📅 Schedule</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Notification Center -->
+              <div class="panel">
+                <div class="panel-header"><div class="panel-title">🔔 Notification Channels</div></div>
+                <div class="panel-body" style="padding:var(--space-md);">
+                  <div class="enterprise-table-wrap">
+                    <table class="enterprise-table" id="notif-table">
+                      <thead><tr><th>Channel</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead>
+                      <tbody id="notif-body"></tbody>
+                    </table>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" id="notif-add" style="margin-top:var(--space-sm);">+ Add Channel</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bulk Operations -->
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">⚡ Bulk Operations</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div style="display:flex;gap:var(--space-sm);flex-wrap:wrap;">
+                  <button class="btn btn-ghost btn-sm" id="bulk-restart-pods">🔄 Restart Selected Pods</button>
+                  <button class="btn btn-ghost btn-sm" id="bulk-scale-deploys">📐 Scale Deployments</button>
+                  <button class="btn btn-ghost btn-sm" id="bulk-diagnostics">🔍 Bulk Diagnostics</button>
+                  <button class="btn btn-ghost btn-sm" id="bulk-export-reports">📊 Export Reports</button>
+                </div>
+                <div style="margin-top:var(--space-sm);font-size:13px;color:var(--color-muted);" id="bulk-status">Select resources from Action Center, then use bulk operations here.</div>
+          </div>
+
+<!-- ── Tab 1: Multi-Tenancy ── -->
+          <div class="enterprise-tab-content" id="ent-tab-tenancy" style="display:none;">
+            <div style="display:grid;grid-template-columns: 240px 1fr; gap:var(--space-md); margin-bottom:var(--space-md);">
+              <div class="panel" style="height:fit-content;padding:var(--space-md);">
+                <h4 style="margin:0 0 var(--space-sm);font-size:13px;color:var(--color-muted);">Tenant Hierarchies</h4>
+                <div class="form-group">
+                  <label class="form-label">Organization</label>
+                  <select class="form-select" id="ent-org-select"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Project</label>
+                  <select class="form-select" id="ent-project-select"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Environment</label>
+                  <select class="form-select" id="ent-env-select">
+                    <option value="dev">dev</option>
+                    <option value="staging">staging</option>
+                    <option value="prod">production</option>
+                  </select>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:var(--space-md);">
+                  <button class="btn btn-primary btn-sm" id="ent-btn-create-org">🏢 Create Org</button>
+                  <button class="btn btn-ghost btn-sm" id="ent-btn-create-proj">📁 Create Project</button>
+                </div>
+              </div>
+
+              <div>
+                <!-- Metrics Grid -->
+                <div style="display:grid;grid-template-columns: repeat(4, 1fr); gap:var(--space-md); margin-bottom:var(--space-md);">
+                  <div class="panel" style="padding:var(--space-md);">
+                    <h4 style="margin:0 0 var(--space-xs);font-size:11px;color:var(--color-muted);text-transform:uppercase;">Namespace Isolation</h4>
+                    <div style="font-size:24px;font-family:var(--font-number);font-weight:700;color:var(--color-primary);" id="ent-metric-namespaces">3</div>
+                    <div style="font-size:11px;color:var(--color-muted);margin-top:4px;">Strict network policies enforced</div>
+                  </div>
+                  <div class="panel" style="padding:var(--space-md);">
+                    <h4 style="margin:0 0 var(--space-xs);font-size:11px;color:var(--color-muted);text-transform:uppercase;">Active Workloads</h4>
+                    <div style="font-size:24px;font-family:var(--font-number);font-weight:700;color:var(--color-info);" id="ent-metric-workloads">12</div>
+                    <div style="font-size:11px;color:var(--color-muted);margin-top:4px;">Across isolated virtual nodes</div>
+                  </div>
+                  <div class="panel" style="padding:var(--space-md);">
+                    <h4 style="margin:0 0 var(--space-xs);font-size:11px;color:var(--color-muted);text-transform:uppercase;">Assigned Users</h4>
+                    <div style="font-size:24px;font-family:var(--font-number);font-weight:700;color:var(--color-trading-up);" id="ent-metric-users">8</div>
+                    <div style="font-size:11px;color:var(--color-muted);margin-top:4px;">With distinct RBAC access levels</div>
+                  </div>
+                  <div class="panel" style="padding:var(--space-md);">
+                    <h4 style="margin:0 0 var(--space-xs);font-size:11px;color:var(--color-muted);text-transform:uppercase;">Org Billing Tier</h4>
+                    <div style="font-size:24px;font-family:var(--font-number);font-weight:700;color:var(--color-primary);" id="ent-metric-tier">Enterprise</div>
+                    <div style="font-size:11px;color:var(--color-trading-up);margin-top:4px;">SaaS Subscription: Active</div>
+                  </div>
+                </div>
+
+                <!-- Projects & Members -->
+                <div style="display:grid;grid-template-columns: 1fr 1fr; gap:var(--space-md);">
+                  <div class="panel">
+                    <div class="panel-header"><div class="panel-title">Projects List</div></div>
+                    <div class="panel-body" style="padding:var(--space-md);">
+                      <div class="enterprise-table-wrap">
+                        <table class="enterprise-table">
+                          <thead>
+                            <tr>
+                              <th>Project</th>
+                              <th>Environments</th>
+                              <th>Workloads</th>
+                            </tr>
+                          </thead>
+                          <tbody id="ent-projects-body">
+                            <!-- Populated dynamically -->
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="panel">
+                    <div class="panel-header"><div class="panel-title">Project Members Assignments</div></div>
+                    <div class="panel-body" style="padding:var(--space-md);">
+                      <div class="enterprise-table-wrap">
+                        <table class="enterprise-table">
+                          <thead>
+                            <tr>
+                              <th>User</th>
+                              <th>Access level</th>
+                              <th>Scope</th>
+                            </tr>
+                          </thead>
+                          <tbody id="ent-members-body">
+                            <!-- Populated dynamically -->
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Tab 2: RBAC Matrix ── -->
+          <div class="enterprise-tab-content" id="ent-tab-rbac" style="display:none;">
+            <div style="display:grid;grid-template-columns: 1fr 340px; gap:var(--space-md); margin-bottom:var(--space-md);">
+              <div class="panel">
+                <div class="panel-header">
+                  <div class="panel-title">🔑 Resource Access Control Policy Matrix</div>
+                </div>
+                <div class="panel-body" style="padding:var(--space-md);">
+                  <div class="enterprise-table-wrap">
+                    <table class="enterprise-table" style="text-align:center;">
+                      <thead>
+                        <tr>
+                          <th style="text-align:left;">Resource Scope</th>
+                          <th>Platform Admin</th>
+                          <th>Org Admin</th>
+                          <th>DevOps Team</th>
+                          <th>Developer</th>
+                          <th>Viewer</th>
+                        </tr>
+                      </thead>
+                      <tbody id="ent-rbac-matrix-body">
+                        <!-- Permissions table checkboxes -->
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style="margin-top:var(--space-sm);text-align:right;">
+                    <button class="btn btn-primary btn-sm" id="ent-rbac-save-matrix">💾 Save Access Policies</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- User Assign & Role Create -->
+              <div style="display:flex;flex-direction:column;gap:var(--space-md);">
+                <div class="panel">
+                  <div class="panel-header"><div class="panel-title">User Role Assignment</div></div>
+                  <div class="panel-body" style="padding:var(--space-md);">
+                    <div class="form-group">
+                      <label class="form-label">User Target</label>
+                      <select class="form-select" id="ent-rbac-user-select"></select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Assigned Role</label>
+                      <select class="form-select" id="ent-rbac-role-select">
+                        <option value="Platform Admin">Platform Admin</option>
+                        <option value="Org Admin">Org Admin</option>
+                        <option value="DevOps Engineer">DevOps Engineer</option>
+                        <option value="Developer">Developer</option>
+                        <option value="Viewer">Viewer</option>
+                      </select>
+                    </div>
+                    <button class="btn btn-primary btn-sm" id="ent-rbac-assign-btn" style="width:100%;">Assign Access Role</button>
+                  </div>
+                </div>
+
+                <div class="panel">
+                  <div class="panel-header"><div class="panel-title">Create Custom Role</div></div>
+                  <div class="panel-body" style="padding:var(--space-md);">
+                    <div class="form-group">
+                      <label class="form-label">Role Name</label>
+                      <input type="text" class="form-select" id="ent-rbac-custom-role-name" placeholder="e.g. Auditor">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Inherits From</label>
+                      <select class="form-select" id="ent-rbac-custom-role-inherit">
+                        <option value="Viewer">Viewer</option>
+                        <option value="Developer">Developer</option>
+                      </select>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" id="ent-rbac-create-role-btn" style="width:100%;">Create Custom Role</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Audit Logs -->
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">📋 RBAC Policy Audit Log Trail</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div class="enterprise-table-wrap">
+                  <table class="enterprise-table">
+                    <thead>
+                      <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Action</th>
+                        <th>Scope Resource</th>
+                        <th>Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ent-rbac-audit-body">
+                      <!-- Audit trails populated dynamically -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Tab 3: App Marketplace ── -->
+          <div class="enterprise-tab-content" id="ent-tab-marketplace" style="display:none;">
+            <div style="margin-bottom:var(--space-md);display:flex;gap:var(--space-xs);align-items:center;">
+              <span style="font-weight:600;font-size:14px;color:var(--color-muted);">Catalog Filters:</span>
+              <button class="btn btn-ghost btn-sm active ent-market-filter" data-filter="all">All Templates</button>
+              <button class="btn btn-ghost btn-sm ent-market-filter" data-filter="web">Web Services</button>
+              <button class="btn btn-ghost btn-sm ent-market-filter" data-filter="data">Database & Cache</button>
+              <button class="btn btn-ghost btn-sm ent-market-filter" data-filter="custom">Custom Templates</button>
+              <div style="flex:1;"></div>
+              <button class="btn btn-primary btn-sm" id="ent-market-save-custom">💾 Save Deployment as Template</button>
+            </div>
+
+            <div class="health-grid" id="ent-market-grid">
+              <!-- Catalog Cards -->
+            </div>
+          </div>
+
+          <!-- ── Tab 4: Backup & DR ── -->
+          <div class="enterprise-tab-content" id="ent-tab-backup" style="display:none;">
+            <div style="display:grid;grid-template-columns: 1fr 1fr; gap:var(--space-md); margin-bottom:var(--space-md);">
+              
+              <!-- Backups & Schedules -->
+              <div style="display:flex;flex-direction:column;gap:var(--space-md);">
+                <div class="panel">
+                  <div class="panel-header"><div class="panel-title">💾 Backup Policy Schedules</div></div>
+                  <div class="panel-body" style="padding:var(--space-md);">
+                    <div style="display:grid;grid-template-columns: 1fr 1fr; gap:var(--space-xs); margin-bottom:var(--space-sm);">
+                      <div class="form-group">
+                        <label class="form-label">Policy Name</label>
+                        <input type="text" class="form-select form-select-sm" id="ent-backup-policy-name" placeholder="Daily Snapshot">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Cron Schedule</label>
+                        <input type="text" class="form-select form-select-sm" id="ent-backup-policy-cron" placeholder="0 2 * * *">
+                      </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns: 1fr 1fr; gap:var(--space-xs); margin-bottom:var(--space-md);">
+                      <div class="form-group">
+                        <label class="form-label">Backup Target</label>
+                        <select class="form-select" id="ent-backup-policy-target">
+                          <option value="cluster">Entire Cluster state</option>
+                          <option value="namespace">Namespace volumes</option>
+                          <option value="gitops">GitOps manifests config</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Storage Backend</label>
+                        <select class="form-select" id="ent-backup-policy-backend">
+                          <option value="MinIO Cluster">MinIO Cluster (S3 Local)</option>
+                          <option value="AWS S3 Bucket">AWS S3 Bucket (Production)</option>
+                          <option value="Azure Blob">Azure Blob Storage</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" id="ent-backup-create-policy" style="width:100%;">Create Backup Policy</button>
+                  </div>
+                </div>
+
+                <div class="panel">
+                  <div class="panel-header"><div class="panel-title">Active Backup Policies</div></div>
+                  <div class="panel-body" style="padding:var(--space-md);">
+                    <div class="enterprise-table-wrap">
+                      <table class="enterprise-table">
+                        <thead>
+                          <tr>
+                            <th>Policy Name</th>
+                            <th>Target</th>
+                            <th>Schedule</th>
+                            <th>Backend</th>
+                          </tr>
+                        </thead>
+                        <tbody id="ent-backup-policies-body">
+                          <!-- Populated dynamically -->
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Storage & Snapshots -->
+              <div style="display:flex;flex-direction:column;gap:var(--space-md);">
+                <div class="panel">
+                  <div class="panel-header">
+                    <div class="panel-title">🗂️ Backup Snapshot Registry</div>
+                    <button class="btn btn-primary btn-sm" id="ent-backup-now-btn">⚡ Back Up Now</button>
+                  </div>
+                  <div class="panel-body" style="padding:var(--space-md);">
+                    <div class="enterprise-table-wrap">
+                      <table class="enterprise-table">
+                        <thead>
+                          <tr>
+                            <th>Snapshot ID</th>
+                            <th>Scope</th>
+                            <th>Size</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody id="ent-backup-snapshots-body">
+                          <!-- Populated dynamically -->
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="panel">
+                  <div class="panel-header"><div class="panel-title">Storage Backends</div></div>
+                  <div class="panel-body" style="padding:var(--space-md);">
+                    <div class="enterprise-table-wrap">
+                      <table class="enterprise-table">
+                        <thead>
+                          <tr>
+                            <th>Storage Name</th>
+                            <th>Type</th>
+                            <th>Endpoint</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody id="ent-backup-backends-body">
+                          <!-- Populated dynamically -->
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- DR Simulation Console -->
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title">💥 Disaster Recovery Simulation Console</div>
+                <div class="flex-row-xs">
+                  <select class="form-select form-select-sm" id="ent-dr-snap-select" style="width:200px;">
+                    <!-- Snapshots options -->
+                  </select>
+                  <button class="btn btn-ghost btn-sm" id="ent-dr-simulate-btn" style="border-color:var(--color-trading-down);color:var(--color-trading-down);">▶ Simulate DR Recovery</button>
+                </div>
+              </div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <pre class="ai-test-response" id="ent-dr-log-console" style="height:250px;background:#0d1117;color:#39eb0a;font-family:monospace;padding:12px;overflow-y:auto;border:1px solid var(--color-hairline);border-radius:6px;font-size:11px;">[Ready] Select a snapshot and click "Simulate DR Recovery" to begin restoration pipeline simulation...</pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Tab 5: Cluster Provisioning CLM ── -->
+          <div class="enterprise-tab-content" id="ent-tab-provisioning" style="display:none;">
+            <div style="display:grid;grid-template-columns: 340px 1fr; gap:var(--space-md);">
+              
+              <!-- CLM Wizard Left: Steps Indicators & Action Buttons -->
+              <div class="panel" style="display:flex;flex-direction:column;justify-content:space-between;height:fit-content;padding:var(--space-md);">
+                <div>
+                  <h4 style="margin:0 0 var(--space-md);font-size:14px;color:var(--color-muted);border-bottom:1px solid var(--color-hairline);padding-bottom:8px;">Wizard Flow Steps</h4>
+                  <div style="display:flex;flex-direction:column;gap:8px;" id="ent-prov-wizard-steps">
+                    <div class="sidebar-link active" data-wstep="1" style="cursor:default;font-weight:600;"><span class="sidebar-icon">1</span> <span class="sidebar-text">Select Provider</span></div>
+                    <div class="sidebar-link" data-wstep="2" style="cursor:default;font-weight:600;"><span class="sidebar-icon">2</span> <span class="sidebar-text">Configure Region / Infra</span></div>
+                    <div class="sidebar-link" data-wstep="3" style="cursor:default;font-weight:600;"><span class="sidebar-icon">3</span> <span class="sidebar-text">Define Node Pools</span></div>
+                    <div class="sidebar-link" data-wstep="4" style="cursor:default;font-weight:600;"><span class="sidebar-icon">4</span> <span class="sidebar-text">Networking Setup (CNI)</span></div>
+                    <div class="sidebar-link" data-wstep="5" style="cursor:default;font-weight:600;"><span class="sidebar-icon">5</span> <span class="sidebar-text">Storage Configuration</span></div>
+                    <div class="sidebar-link" data-wstep="6" style="cursor:default;font-weight:600;"><span class="sidebar-icon">6</span> <span class="sidebar-text">Security & GitOps</span></div>
+                    <div class="sidebar-link" data-wstep="7" style="cursor:default;font-weight:600;"><span class="sidebar-icon">7</span> <span class="sidebar-text">Bootstrap Rollout</span></div>
+                  </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:var(--space-lg);border-top:1px solid var(--color-hairline);padding-top:12px;" id="ent-prov-nav-bar">
+                  <button class="btn btn-ghost btn-sm" id="ent-prov-btn-back" disabled>← Back</button>
+                  <button class="btn btn-primary btn-sm" id="ent-prov-btn-next">Next →</button>
+                </div>
+              </div>
+
+              <!-- CLM Wizard Right: Steps Forms -->
+              <div class="panel" style="min-height:400px;display:flex;flex-direction:column;">
+                <div class="panel-header">
+                  <div class="panel-title" id="ent-prov-step-title">Step 1: Select Infrastructure Provider</div>
+                </div>
+                <div class="panel-body" style="padding:var(--space-lg);flex:1;" id="ent-prov-panels">
+                  
+                  <!-- Step 1: Select Provider -->
+                  <div class="ent-prov-step-panel active" data-wstep="1">
+                    <div class="health-grid" style="grid-template-columns:1fr 1fr;">
+                      <div class="health-card" id="prov-card-eks" style="cursor:pointer;border-color:var(--color-primary);">
+                        <div class="health-card-header"><span class="health-card-icon">☁️</span><div class="health-card-title">AWS EKS</div></div>
+                        <div style="font-size:12px;color:var(--color-muted);">Amazon Elastic Kubernetes Service managed control plane. Highly resilient.</div>
+                      </div>
+                      <div class="health-card" id="prov-card-gke" style="cursor:pointer;">
+                        <div class="health-card-header"><span class="health-card-icon">☁️</span><div class="health-card-title">GCP GKE</div></div>
+                        <div style="font-size:12px;color:var(--color-muted);">Google Kubernetes Engine. Native autoscaling, advanced telemetry.</div>
+                      </div>
+                      <div class="health-card" id="prov-card-aks" style="cursor:pointer;">
+                        <div class="health-card-header"><span class="health-card-icon">☁️</span><div class="health-card-title">Azure AKS</div></div>
+                        <div style="font-size:12px;color:var(--color-muted);">Azure Kubernetes Service. Integrated security and identity sync.</div>
+                      </div>
+                      <div class="health-card" id="prov-card-bare" style="cursor:pointer;">
+                        <div class="health-card-header"><span class="health-card-icon">☸️</span><div class="health-card-title">Bare-Metal (kubeadm)</div></div>
+                        <div style="font-size:12px;color:var(--color-muted);">Self-managed nodes, bare-metal physical servers deploy wizard.</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Step 2: Configure Region / Infra -->
+                  <div class="ent-prov-step-panel" data-wstep="2" style="display:none;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);">
+                      <div class="form-group">
+                        <label class="form-label">Cluster Region</label>
+                        <select class="form-select" id="ent-prov-region">
+                          <option value="us-east-1">AWS us-east-1 (N. Virginia)</option>
+                          <option value="eu-west-1">AWS eu-west-1 (Ireland)</option>
+                          <option value="ap-southeast-1">AWS ap-southeast-1 (Singapore)</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">VPC CIDR block</label>
+                        <input type="text" class="form-select" id="ent-prov-cidr" value="10.0.0.0/16">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Kubernetes Control Version</label>
+                        <select class="form-select" id="ent-prov-version">
+                          <option value="1.29">1.29 (Stable)</option>
+                          <option value="1.28">1.28 (Legacy)</option>
+                          <option value="1.30">1.30 (Beta)</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Resource Namespace Isolation</label>
+                        <select class="form-select" id="ent-prov-isolation">
+                          <option value="true">Strict (Project NetworkPolicies enabled)</option>
+                          <option value="false">Standard (Permissive namespaces)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Step 3: Define Node Pools -->
+                  <div class="ent-prov-step-panel" data-wstep="3" style="display:none;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-xs);">
+                      <span style="font-weight:600;font-size:13px;color:var(--color-muted);">Node Groups Configuration</span>
+                      <button class="btn btn-ghost btn-sm" id="ent-prov-add-pool-btn">➕ Add Node Pool</button>
+                    </div>
+                    <div class="enterprise-table-wrap">
+                      <table class="enterprise-table">
+                        <thead>
+                          <tr>
+                            <th>Pool Name</th>
+                            <th>Instance Spec</th>
+                            <th>Scale Limit</th>
+                            <th>Autoscale</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody id="ent-prov-nodepools-body">
+                          <!-- Dynamic node pools configuration row -->
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <!-- Step 4: Networking Setup (CNI) -->
+                  <div class="ent-prov-step-panel" data-wstep="4" style="display:none;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);">
+                      <div class="form-group">
+                        <label class="form-label">CNI Network Plugin</label>
+                        <select class="form-select" id="ent-prov-cni">
+                          <option value="Cilium">Cilium (eBPF secure network policies)</option>
+                          <option value="Calico">Calico (Standard IP routing & isolation)</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Pod CIDR block</label>
+                        <input type="text" class="form-select" id="ent-prov-pod-cidr" value="10.244.0.0/16">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Service IP Range</label>
+                        <input type="text" class="form-select" id="ent-prov-svc-cidr" value="10.96.0.0/12">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Ingress Controller API</label>
+                        <select class="form-select" id="ent-prov-ingress">
+                          <option value="Nginx Ingress">Nginx Ingress Controller</option>
+                          <option value="Traefik Gateway">Traefik API Gateway</option>
+                          <option value="None">None</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Step 5: Storage Configuration -->
+                  <div class="ent-prov-step-panel" data-wstep="5" style="display:none;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);">
+                      <div class="form-group">
+                        <label class="form-label">Default Storage Class</label>
+                        <select class="form-select" id="ent-prov-storage-class">
+                          <option value="gp3-ebs">AWS gp3 EBS CSI driver</option>
+                          <option value="minio-pvc">Local MinIO PV storage</option>
+                          <option value="hostpath">hostPath Local storage (Not HA)</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Volume Provisioner Policy</label>
+                        <select class="form-select" id="ent-prov-volume-policy">
+                          <option value="Retain">Retain (Keep data on delete)</option>
+                          <option value="Delete">Delete (Wipe volume on destroy)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Step 6: Security & GitOps -->
+                  <div class="ent-prov-step-panel" data-wstep="6" style="display:none;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-lg);">
+                      <div>
+                        <h4 style="margin:0 0 var(--space-xs);font-size:12px;color:var(--color-muted);text-transform:uppercase;">Observability Bootstrapping</h4>
+                        <div style="display:flex;flex-direction:column;gap:8px;margin-top:var(--space-xs);">
+                          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                            <input type="checkbox" id="ent-prov-opt-prom" checked> Prometheus Operator (Metrics)
+                          </label>
+                          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                            <input type="checkbox" id="ent-prov-opt-grafana" checked> Grafana Dashboard Console
+                          </label>
+                          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                            <input type="checkbox" id="ent-prov-opt-loki" checked> Loki Log Shipper stack
+                          </label>
+                        </div>
+                      </div>
+                      <div>
+                        <h4 style="margin:0 0 var(--space-xs);font-size:12px;color:var(--color-muted);text-transform:uppercase;">GitOps Auto-Bootstrap</h4>
+                        <div style="display:flex;flex-direction:column;gap:8px;margin-top:var(--space-xs);">
+                          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                            <input type="checkbox" id="ent-prov-opt-argocd" checked> Install ArgoCD Engine
+                          </label>
+                          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                            <input type="checkbox" id="ent-prov-opt-register" checked> Register to Central Fleet Management
+                          </label>
+                          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                            <input type="checkbox" id="ent-prov-opt-sync" checked> Sync Base Cluster Manifests
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Step 7: Bootstrap Rollout -->
+                  <div class="ent-prov-step-panel" data-wstep="7" style="display:none;">
+                    <div style="display:flex;gap:var(--space-md);align-items:center;margin-bottom:var(--space-sm);">
+                      <span style="font-weight:600;">Deployment Script Status:</span>
+                      <span class="badge" id="ent-prov-status-badge">Awaiting launch</span>
+                      <div style="flex:1;"></div>
+                      <span id="ent-prov-duration" style="font-family:var(--font-number);font-size:12px;color:var(--color-muted);">0.0s</span>
+                    </div>
+                    <div class="progress-bar" style="margin-bottom:var(--space-sm);height:4px;">
+                      <div class="progress-fill" id="ent-prov-progress" style="width:0%;height:4px;background:var(--color-primary);border-radius:2px;transition:width .3s;"></div>
+                    </div>
+                    <pre class="ai-test-response" id="ent-prov-console" style="height:250px;background:#0d1117;color:#39eb0a;font-family:monospace;padding:12px;overflow-y:auto;border:1px solid var(--color-hairline);border-radius:6px;font-size:11px;">[Ready] Configure nodes and click "Launch Cluster" to execute Terraform configuration rollout script...</pre>
+                    <div style="margin-top:var(--space-md);text-align:right;">
+                      <button class="btn btn-primary" id="ent-prov-launch-btn">🚀 Launch Cluster Infrastructure</button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Deployment Center ═══ -->
+        <section class="section" id="section-deployment-center">
+          <div class="section-header">
+            <h2>🚀 Application Deployment Center</h2>
+            <div class="flex-row-xs">
+              <button class="btn btn-ghost btn-sm deploy-tab active" data-tab="catalog">📋 Catalog</button>
+              <button class="btn btn-ghost btn-sm deploy-tab" data-tab="wizard">✨ New Deployment</button>
+            </div>
+          </div>
+
+          <!-- Catalog View -->
+          <div class="deploy-tab-content active" id="deploy-tab-catalog">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">Application Catalog</div></div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-md); gap:var(--space-sm);">
+                  <div style="display:flex; gap:var(--space-xs); flex:1; align-items:center;">
+                    <input type="text" class="form-select" id="deploy-catalog-search" placeholder="Quick search catalog..." style="max-width:300px;">
+                    <button class="btn btn-link btn-xs" id="toggle-deploy-adv-builder" style="color:var(--color-primary);font-size:12px;text-decoration:none;background:none;border:none;cursor:pointer;padding:0;">⚙️ Advanced Filter</button>
+                  </div>
+                  <button class="btn btn-outline btn-sm" id="deploy-catalog-save-btn" style="padding:8px 16px;">💾 Save Search</button>
+                </div>
+                
+                <!-- Advanced Filter Builder for Deployments (initially hidden) -->
+                <div id="deploy-adv-builder-container" style="display:none; background:var(--color-surface-elevated); border:1px solid var(--color-hairline); border-radius:var(--rounded-lg); padding:var(--space-md); margin-bottom:var(--space-md);">
+                  <div style="display:flex; align-items:center; gap:var(--space-md); margin-bottom:var(--space-sm);">
+                    <span style="font-weight:600; font-size:13px;">Match</span>
+                    <select class="form-select" id="deploy-adv-match-type" style="width:100px; padding:4px 8px;">
+                      <option value="AND">ALL (AND)</option>
+                      <option value="OR">ANY (OR)</option>
+                    </select>
+                    <span style="font-weight:600; font-size:13px;">of the following conditions:</span>
+                  </div>
+                  <div id="deploy-adv-rules" style="display:flex; flex-direction:column; gap:var(--space-xs); margin-bottom:var(--space-sm);">
+                    <!-- Rules dynamically inserted here -->
+                  </div>
+                  <div style="display:flex; gap:var(--space-xs);">
+                    <button class="btn btn-outline btn-xs" id="deploy-adv-add-rule-btn">+ Add Rule</button>
+                    <button class="btn btn-outline btn-xs" id="deploy-adv-add-group-btn">+ Add Group</button>
+                    <button class="btn btn-primary btn-xs" id="deploy-adv-apply-btn">Apply Filter</button>
+                    <button class="btn btn-ghost btn-xs" id="deploy-adv-reset-btn">Reset</button>
+                  </div>
+                </div>
+                <div class="enterprise-table-wrap">
+                  <table class="enterprise-table" id="deploy-catalog-table">
+                    <thead>
+                      <tr>
+                        <th>Application</th>
+                        <th>Team</th>
+                        <th>Env</th>
+                        <th>Image / Source</th>
+                        <th>Target</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="deploy-catalog-body"></tbody>
+                  </table>
+                </div>
+                <div class="empty-state" id="deploy-catalog-empty" style="display:none; padding:var(--space-xl); text-align:center; background:var(--color-surface-elevated); border:1px dashed var(--color-hairline); border-radius:var(--rounded-lg); margin:var(--space-md) 0;">
+                  <span class="empty-state-icon" style="font-size:36px; margin-bottom:var(--space-md); filter:drop-shadow(0 4px 6px rgba(0,0,0,0.15)); display:block;">🚀</span>
+                  <h4 class="empty-state-title" style="font-size:var(--text-body-lg); font-weight:700; color:var(--color-on-dark); margin:0 0 var(--space-xs) 0;">No Applications Registered</h4>
+                  <p class="empty-state-description" style="font-size:var(--text-body-sm); color:var(--color-muted); margin:0 0 var(--space-md) 0; max-width:320px; line-height:1.5; display:inline-block;">Use the deployment wizard to deploy your first application or adjust your search filters.</p>
+                  <div style="margin-top:var(--space-xs);"><button class="btn btn-primary btn-sm" onclick="document.querySelector('[data-tab=wizard]').click()">Deploy Application</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Wizard View -->
+          <div class="deploy-tab-content" id="deploy-tab-wizard">
+            <div style="display:grid;grid-template-columns: 1fr 340px; gap:var(--space-md);">
+              
+              <!-- Left Column: Wizard Steps -->
+              <div class="panel" style="display:flex;flex-direction:column;min-height:550px;">
+                <div class="panel-header">
+                  <div class="panel-title" id="wizard-step-title">Step 1: Select Target</div>
+                  <div id="wizard-steps-indicator" style="font-size:12px;color:var(--color-muted);">Step 1 of 8</div>
+                </div>
+
+                <div class="panel-body" style="flex:1;padding:var(--space-md);position:relative;">
+                  
+                  <!-- Step 1: Target -->
+                  <div class="wizard-step-panel active" data-step="1">
+                    <div class="form-group">
+                      <label class="form-label">Platform Type</label>
+                      <select class="form-select" id="wiz-target-type">
+                        <option value="kubernetes">Kubernetes</option>
+                        <option value="swarm">Docker Swarm</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Target Cluster</label>
+                      <select class="form-select" id="wiz-cluster-select">
+                        <option value="">Select a cluster...</option>
+                      </select>
+                    </div>
+                    <div class="form-group" id="wiz-ns-group">
+                      <label class="form-label">Namespace</label>
+                      <input type="text" class="form-select" id="wiz-namespace" value="default" placeholder="e.g. production">
+                    </div>
+                    <div class="form-group" id="wiz-node-group" style="display:none;">
+                      <label class="form-label">Node Placement Rule</label>
+                      <select class="form-select" id="wiz-node-placement">
+                        <option value="any">Any Available Node</option>
+                        <option value="worker-only">Worker Nodes Only</option>
+                        <option value="manager-only">Manager Nodes Only</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Step 2: Image / Source -->
+                  <div class="wizard-step-panel" data-step="2" style="display:none;">
+                    <div class="form-group">
+                      <label class="form-label">Source Type</label>
+                      <select class="form-select" id="wiz-source-type">
+                        <option value="docker">Docker Image</option>
+                        <option value="helm">Helm Chart</option>
+                        <option value="git">Git Repository</option>
+                        <option value="oci">OCI Artifact</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" id="wiz-img-label">Image Name</label>
+                      <input type="text" class="form-select" id="wiz-image" placeholder="e.g. nginx">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" id="wiz-tag-label">Image Tag / Branch</label>
+                      <input type="text" class="form-select" id="wiz-image-tag" placeholder="e.g. latest">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Pull Policy</label>
+                      <select class="form-select" id="wiz-pull-policy">
+                        <option value="IfNotPresent">IfNotPresent</option>
+                        <option value="Always">Always</option>
+                        <option value="Never">Never</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Step 3: Configure Resources -->
+                  <div class="wizard-step-panel" data-step="3" style="display:none;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);">
+                      <div class="form-group">
+                        <label class="form-label">CPU Request</label>
+                        <input type="text" class="form-select" id="wiz-cpu-req" value="100m" placeholder="e.g. 250m">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">CPU Limit</label>
+                        <input type="text" class="form-select" id="wiz-cpu-limit" value="500m" placeholder="e.g. 1">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Memory Request</label>
+                        <input type="text" class="form-select" id="wiz-mem-req" value="128Mi" placeholder="e.g. 256Mi">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Memory Limit</label>
+                        <input type="text" class="form-select" id="wiz-mem-limit" value="512Mi" placeholder="e.g. 1Gi">
+                      </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);margin-top:var(--space-xs);">
+                      <div class="form-group">
+                        <label class="form-label">Desired Replicas</label>
+                        <input type="number" class="form-select" id="wiz-replicas" value="2" min="1">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Autoscaling (HPA / Swarm Policy)</label>
+                        <select class="form-select" id="wiz-autoscaling">
+                          <option value="off">Off (Manual scaling only)</option>
+                          <option value="cpu-80">CPU > 80%</option>
+                          <option value="mem-80">Memory > 80%</option>
+                          <option value="both-70">CPU/Mem > 70%</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Step 4: Configure Network -->
+                  <div class="wizard-step-panel" data-step="4" style="display:none;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);">
+                      <div class="form-group">
+                        <label class="form-label">Container Port</label>
+                        <input type="number" class="form-select" id="wiz-container-port" value="80">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Service Port</label>
+                        <input type="number" class="form-select" id="wiz-service-port" value="80">
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Service Type / Ingress Mode</label>
+                      <select class="form-select" id="wiz-network-type">
+                        <option value="ClusterIP">ClusterIP (Internal Only)</option>
+                        <option value="NodePort">NodePort (Expose Port on Nodes)</option>
+                        <option value="LoadBalancer">LoadBalancer (External Public IP)</option>
+                        <option value="Ingress">Ingress Controller (Domain Route)</option>
+                      </select>
+                    </div>
+                    <div class="form-group" id="wiz-domain-group" style="display:none;">
+                      <label class="form-label">Ingress Host Domain</label>
+                      <input type="text" class="form-select" id="wiz-domain" placeholder="e.g. app.company.com">
+                    </div>
+                  </div>
+
+                  <!-- Step 5: Configure Storage -->
+                  <div class="wizard-step-panel" data-step="5" style="display:none;">
+                    <div class="form-group">
+                      <label class="form-label">Volume Type</label>
+                      <select class="form-select" id="wiz-volume-type">
+                        <option value="none">No Persistent Storage</option>
+                        <option value="pvc">Persistent Volume Claim (PVC)</option>
+                        <option value="hostpath">Host Path Mount</option>
+                        <option value="named">Named Swarm Volume</option>
+                      </select>
+                    </div>
+                    <div class="wiz-vol-details" style="display:none;" id="wiz-vol-details">
+                      <div class="form-group">
+                        <label class="form-label">Volume/Claim Name</label>
+                        <input type="text" class="form-select" id="wiz-volume-name" placeholder="e.g. app-data">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Mount Path inside Container</label>
+                        <input type="text" class="form-select" id="wiz-volume-mount" placeholder="e.g. /data">
+                      </div>
+                      <div class="form-group" id="wiz-sc-group">
+                        <label class="form-label">Storage Class</label>
+                        <select class="form-select" id="wiz-storage-class">
+                          <option value="default">Default Storage Class</option>
+                          <option value="gp3">gp3 (AWS SSD)</option>
+                          <option value="standard">standard</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Step 6: Configure Environment -->
+                  <div class="wizard-step-panel" data-step="6" style="display:none;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-sm);">
+                      <label class="form-label" style="margin:0;">Environment Variables</label>
+                      <div class="flex-row-xs">
+                        <button class="btn btn-ghost btn-sm" id="wiz-env-import" style="padding:2px 6px;font-size:11px;">📥 Import</button>
+                        <button class="btn btn-ghost btn-sm" id="wiz-env-export" style="padding:2px 6px;font-size:11px;">📤 Export</button>
+                      </div>
+                    </div>
+                    <div id="wiz-env-list" style="max-height:220px;overflow-y:auto;margin-bottom:var(--space-sm);">
+                      <div style="display:flex;gap:var(--space-xs);margin-bottom:var(--space-xs);">
+                        <input type="text" class="form-select form-select-sm wiz-env-key" placeholder="KEY" style="flex:1;">
+                        <input type="text" class="form-select form-select-sm wiz-env-val" placeholder="VALUE" style="flex:1;">
+                        <button class="btn btn-ghost btn-sm wiz-env-del" style="border-color:var(--color-trading-down);color:var(--color-trading-down);padding:0 8px;">✕</button>
+                      </div>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" id="wiz-env-add">+ Add Variable</button>
+                  </div>
+
+                  <!-- Step 7: Configure Security -->
+                  <div class="wizard-step-panel" data-step="7" style="display:none;">
+                    <div class="form-group">
+                      <label class="form-label">Service Account</label>
+                      <input type="text" class="form-select" id="wiz-service-account" value="default">
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:var(--space-sm);margin-top:var(--space-md);">
+                      <label class="form-label" style="display:flex;align-items:center;gap:8px;text-transform:none;">
+                        <input type="checkbox" id="wiz-sec-nonroot" checked>
+                        <span>Run as Non-Root User</span>
+                      </label>
+                      <label class="form-label" style="display:flex;align-items:center;gap:8px;text-transform:none;">
+                        <input type="checkbox" id="wiz-sec-readonly">
+                        <span>Read-Only Root Filesystem</span>
+                      </label>
+                      <label class="form-label" style="display:flex;align-items:center;gap:8px;text-transform:none;">
+                        <input type="checkbox" id="wiz-sec-scan" checked>
+                        <span>Enable Vulnerability Scanning</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Step 8: Review & Cost Estimation -->
+                  <div class="wizard-step-panel" data-step="8" style="display:none;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);">
+                      <div class="panel" style="background:rgba(252,213,53,0.02);border-color:rgba(252,213,53,0.1);">
+                        <div class="panel-header" style="padding:var(--space-sm) var(--space-md);"><div class="panel-title" style="font-size:13px;">Cost breakdown</div></div>
+                        <div class="panel-body" style="padding:var(--space-sm) var(--space-md);">
+                          <div class="pipeline-detail" style="font-size:12px;">
+                            <div class="pipeline-detail-row"><span>CPU Allocation:</span><strong id="cost-cpu-val">—</strong></div>
+                            <div class="pipeline-detail-row"><span>Memory Allocation:</span><strong id="cost-mem-val">—</strong></div>
+                            <div class="pipeline-detail-row"><span>Replicas Count:</span><strong id="cost-replicas-val">—</strong></div>
+                            <div class="pipeline-detail-row" style="border-top:1px dashed var(--color-hairline);margin-top:4px;padding-top:4px;">
+                              <span style="font-weight:600;">Monthly Estimate:</span><strong id="cost-total-val" style="color:var(--color-primary);font-size:14px;">$0.00</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="panel">
+                        <div class="panel-header" style="padding:var(--space-sm) var(--space-md);"><div class="panel-title" style="font-size:13px;">Specification Review</div></div>
+                        <div class="panel-body" style="padding:var(--space-sm) var(--space-md);">
+                          <div class="pipeline-detail" style="font-size:12px;">
+                            <div class="pipeline-detail-row"><span>App Name:</span><strong id="rev-name">—</strong></div>
+                            <div class="pipeline-detail-row"><span>Cluster / Target:</span><strong id="rev-target">—</strong></div>
+                            <div class="pipeline-detail-row"><span>Image / Source:</span><strong id="rev-source">—</strong></div>
+                            <div class="pipeline-detail-row"><span>Service Port:</span><strong id="rev-port">—</strong></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div style="margin-top:var(--space-sm);">
+                      <label class="form-label">Deployment Manifest Preview</label>
+                      <pre class="ai-test-response" id="wiz-manifest-preview" style="max-height:160px;font-size:11px;">Generating preview...</pre>
+                    </div>
+                  </div>
+
+                  <!-- Step 9: Rollout Console -->
+                  <div class="wizard-step-panel" data-step="9" style="display:none;">
+                    <div style="display:flex;gap:var(--space-md);align-items:center;margin-bottom:var(--space-sm);">
+                      <span style="font-weight:600;">Deployment Status:</span>
+                      <span class="badge" id="wiz-deploy-status">Deploying</span>
+                      <div style="flex:1;"></div>
+                      <span id="wiz-deploy-duration" style="font-family:var(--font-number);font-size:12px;color:var(--color-muted);">0.0s</span>
+                    </div>
+                    <div class="progress-bar" style="margin-bottom:var(--space-sm);">
+                      <div class="progress-fill" id="wiz-deploy-progress" style="width:0%;height:4px;background:var(--color-primary);border-radius:2px;transition:width .3s;"></div>
+                    </div>
+                    <pre class="ai-test-response" id="wiz-deploy-log" style="height:250px;font-size:11px;">Initializing deployment configuration...</pre>
+                  </div>
+
+                </div>
+
+                <div class="panel-footer" style="display:flex;justify-content:space-between;align-items:center;" id="wizard-navigation-bar">
+                  <button class="btn btn-ghost btn-sm" id="wiz-btn-back" disabled>← Back</button>
+                  <button class="btn btn-primary btn-sm" id="wiz-btn-next">Next →</button>
+                </div>
+              </div>
+
+              <!-- Right Column: AI Assistant -->
+              <div class="panel" style="height:fit-content;">
+                <div class="panel-header"><div class="panel-title">🤖 AI Assistant</div></div>
+                <div class="panel-body" style="padding:var(--space-md);">
+                  <div class="form-group">
+                    <label class="form-label" style="text-transform:none;">Describe your deployment in plain English</label>
+                    <textarea class="form-textarea" id="wiz-ai-prompt" rows="6" placeholder="e.g. Deploy nginx version 1.29 with 3 replicas behind LoadBalancer using 200m CPU and 512Mi memory. Add an environment variable APP_ENV=production."></textarea>
+                  </div>
+                  <button class="btn btn-primary btn-sm" id="wiz-ai-generate" style="width:100%;">▶ Generate Configuration</button>
+                  <div style="margin-top:var(--space-sm);font-size:12px;color:var(--color-muted);line-height:1.4;">
+                    The AI parses your request, populates the configuration settings, and skips to the review step.
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Enterprise Search ═══ -->
+        <section class="section" id="section-enterprise-search">
+          <div class="section-header">
+            <h2>🔍 Enterprise Search Center</h2>
+            <div class="flex-row-xs">
+              <button class="btn btn-ghost btn-sm search-main-tab active" data-tab="universal">🌐 Universal Search</button>
+              <button class="btn btn-ghost btn-sm search-main-tab" data-tab="logs">📋 Log Search</button>
+              <button class="btn btn-ghost btn-sm search-main-tab" data-tab="gitops">🔀 GitOps Trace</button>
+              <button class="btn btn-ghost btn-sm search-main-tab" data-tab="graph">🕸️ Deployment Graph</button>
+              <button class="btn btn-ghost btn-sm search-main-tab" data-tab="analytics">📊 Search Analytics</button>
+            </div>
+          </div>
+
+          <!-- Tab 1: Universal Search -->
+          <div class="search-tab-content active" id="search-tab-universal">
+            <div style="display:grid;grid-template-columns: 200px 1fr; gap:var(--space-md);">
+              <div>
+                <div class="panel" style="height:fit-content;padding:var(--space-md);">
+                  <h4 style="margin:0 0 var(--space-sm);font-size:13px;color:var(--color-muted);">Categories</h4>
+                  <div style="display:flex;flex-direction:column;gap:4px;">
+                    <button class="btn btn-ghost btn-sm search-filter-cat active" data-filter="all" style="text-align:left;">All Resources</button>
+                    <button class="btn btn-ghost btn-sm search-filter-cat" data-filter="cluster" style="text-align:left;">Clusters</button>
+                    <button class="btn btn-ghost btn-sm search-filter-cat" data-filter="node" style="text-align:left;">Nodes</button>
+                    <button class="btn btn-ghost btn-sm search-filter-cat" data-filter="pod" style="text-align:left;">Pods</button>
+                    <button class="btn btn-ghost btn-sm search-filter-cat" data-filter="deployment" style="text-align:left;">Deployments</button>
+                    <button class="btn btn-ghost btn-sm search-filter-cat" data-filter="log" style="text-align:left;">Log Entries</button>
+                    <button class="btn btn-ghost btn-sm search-filter-cat" data-filter="git" style="text-align:left;">Git Commits</button>
+                    <button class="btn btn-ghost btn-sm search-filter-cat" data-filter="incident" style="text-align:left;">Incidents</button>
+                  </div>
+                </div>
+                <div class="panel" style="height:fit-content;padding:var(--space-md);margin-top:var(--space-md);">
+                  <h4 style="margin:0 0 var(--space-sm);font-size:13px;color:var(--color-muted);">Saved Searches</h4>
+                  <div id="saved-searches-list" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;">
+                    <div style="font-size:11px;color:var(--color-muted);font-style:italic;">No saved searches</div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-header">
+                  <div class="panel-title">Search Results</div>
+                  <div id="search-results-count" style="font-size:12px;color:var(--color-muted);">Showing 0 matches</div>
+                </div>
+                <div class="panel-body" style="padding:var(--space-md);">
+                  <div style="margin-bottom:var(--space-md);display:flex;gap:var(--space-xs);">
+                    <input type="text" class="form-select" id="search-main-input" placeholder="Search keywords...">
+                    <button class="btn btn-primary" id="search-main-btn" style="padding:8px 24px;">Search</button>
+                    <button class="btn btn-outline" id="search-main-save-btn" style="padding:8px 16px;">💾 Save</button>
+                  </div>
+                  <div id="search-main-results-list" style="display:flex;flex-direction:column;gap:var(--space-sm);max-height:400px;overflow-y:auto;padding-right:4px;">
+                    <div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">Enter query to search infrastructure index</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 2: Log Search -->
+          <div class="search-tab-content" id="search-tab-logs">
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title">Log Aggregator & Explorer</div>
+                <div class="flex-row-xs">
+                  <label style="font-size:12px;color:var(--color-muted);display:flex;align-items:center;gap:4px;margin:0;">
+                    <input type="checkbox" id="search-logs-refresh" checked> Auto-Refresh
+                  </label>
+                </div>
+              </div>
+              <div class="panel-body" style="padding:var(--space-md);">
+                <div style="margin-bottom:var(--space-sm); display:flex; justify-content:space-between; align-items:center;">
+                  <span style="font-size:12px;color:var(--color-muted);">Filter Settings:</span>
+                  <button class="btn btn-link btn-xs" id="toggle-logs-adv-builder" style="color:var(--color-primary);font-size:12px;text-decoration:none;background:none;border:none;cursor:pointer;padding:0;">⚙️ Switch to Advanced Filter Builder</button>
+                </div>
+                <!-- Filters Bar -->
+                <div id="logs-simple-filters" style="display:grid;grid-template-columns:1fr 150px 150px 150px 120px 80px;gap:var(--space-xs);margin-bottom:var(--space-md);">
+                  <input type="text" class="form-select" id="search-logs-input" placeholder="Search log message...">
+                  <select class="form-select" id="search-logs-cluster"><option value="">All Clusters</option></select>
+                  <select class="form-select" id="search-logs-namespace">
+                    <option value="">All Namespaces</option>
+                    <option value="default">default</option>
+                    <option value="production">production</option>
+                    <option value="staging">staging</option>
+                    <option value="kube-system">kube-system</option>
+                  </select>
+                  <select class="form-select" id="search-logs-severity">
+                    <option value="">All Severities</option>
+                    <option value="INFO">INFO</option>
+                    <option value="WARN">WARN</option>
+                    <option value="ERROR">ERROR</option>
+                  </select>
+                  <button class="btn btn-primary" id="search-logs-btn">Search Logs</button>
+                  <button class="btn btn-outline" id="search-logs-save-btn" style="padding:8px 16px;">💾 Save</button>
+                </div>
+
+                <!-- Advanced Filter Builder for Logs (initially hidden) -->
+                <div id="logs-adv-builder-container" style="display:none; background:var(--color-surface-elevated); border:1px solid var(--color-hairline); border-radius:var(--rounded-lg); padding:var(--space-md); margin-bottom:var(--space-md);">
+                  <div style="display:flex; align-items:center; gap:var(--space-md); margin-bottom:var(--space-sm);">
+                    <span style="font-weight:600; font-size:13px;">Match</span>
+                    <select class="form-select" id="logs-adv-match-type" style="width:100px; padding:4px 8px;">
+                      <option value="AND">ALL (AND)</option>
+                      <option value="OR">ANY (OR)</option>
+                    </select>
+                    <span style="font-weight:600; font-size:13px;">of the following conditions:</span>
+                  </div>
+                  <div id="logs-adv-rules" style="display:flex; flex-direction:column; gap:var(--space-xs); margin-bottom:var(--space-sm);">
+                    <!-- Rules dynamically inserted here -->
+                  </div>
+                  <div style="display:flex; gap:var(--space-xs); align-items:center;">
+                    <button class="btn btn-outline btn-xs" id="logs-adv-add-rule-btn">+ Add Rule</button>
+                    <button class="btn btn-outline btn-xs" id="logs-adv-add-group-btn">+ Add Group</button>
+                    <button class="btn btn-primary btn-xs" id="logs-adv-apply-btn">Apply Filter</button>
+                    <button class="btn btn-outline btn-xs" id="logs-adv-save-btn">💾 Save Search</button>
+                    <button class="btn btn-ghost btn-xs" id="logs-adv-reset-btn">Reset</button>
+                  </div>
+                </div>
+
+                <!-- Streaming Log Console -->
+                <div class="log-stream" id="search-logs-stream" style="height:350px;max-height:350px;background:var(--color-surface-elevated);border:1px solid var(--color-hairline);border-radius:var(--rounded-lg);padding:var(--space-sm);font-family:var(--font-number);font-size:12px;overflow-y:auto;">
+                  <div style="color:var(--color-muted);font-style:italic;">Initializing logs index stream...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 3: GitOps Trace -->
+          <div class="search-tab-content" id="search-tab-gitops">
+            <div style="display:grid;grid-template-columns: 280px 1fr; gap:var(--space-md);">
+              <div class="panel" style="height:fit-content;padding:var(--space-md);">
+                <div class="form-group">
+                  <label class="form-label">Search Commits / PRs</label>
+                  <input type="text" class="form-select" id="search-git-query" placeholder="e.g. increase memory limit">
+                </div>
+                <button class="btn btn-primary btn-sm" id="search-git-btn" style="width:100%;">Search GitOps</button>
+              </div>
+              <div class="panel">
+                <div class="panel-header"><div class="panel-title">Commit Deployment Trace</div></div>
+                <div class="panel-body" style="padding:var(--space-md);" id="search-git-trace-details">
+                  <div class="empty-state"><div class="empty-state-icon">🔀</div><div class="empty-state-text">Search for a commit or PR to trace deployment path</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 4: Deployment Graph -->
+          <div class="search-tab-content" id="search-tab-graph">
+            <div style="display:grid;grid-template-columns: 280px 1fr; gap:var(--space-md);">
+              <div class="panel" style="height:fit-content;padding:var(--space-md);">
+                <div class="form-group">
+                  <label class="form-label">Image Name</label>
+                  <input type="text" class="form-select" id="search-graph-image" placeholder="e.g. nginx">
+                </div>
+                <button class="btn btn-primary btn-sm" id="search-graph-btn" style="width:100%;">Map Deployments</button>
+              </div>
+              <div class="panel">
+                <div class="panel-header"><div class="panel-title">Cluster Mapping Graph</div></div>
+                <div class="panel-body" style="padding:var(--space-md);background:var(--color-canvas-dark);position:relative;min-height:350px;display:flex;align-items:center;justify-content:center;" id="search-graph-canvas">
+                  <div class="empty-state"><div class="empty-state-icon">🕸️</div><div class="empty-state-text">Enter an image name to build mapping graph</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 5: Search Analytics -->
+          <div class="search-tab-content" id="search-tab-analytics">
+            <div style="display:grid;grid-template-columns: repeat(3, 1fr); gap:var(--space-md); margin-bottom:var(--space-md);">
+              <div class="panel" style="padding:var(--space-md);">
+                <h4 style="margin:0 0 var(--space-xs);font-size:12px;color:var(--color-muted);">TOTAL SEARCH QUERIES</h4>
+                <div style="font-size:28px;font-family:var(--font-number);font-weight:700;color:var(--color-primary);" id="analytic-queries-count">0</div>
+                <div style="font-size:11px;color:var(--color-trading-up);margin-top:4px;">↑ 12% increase vs last hour</div>
+              </div>
+              <div class="panel" style="padding:var(--space-md);">
+                <h4 style="margin:0 0 var(--space-xs);font-size:12px;color:var(--color-muted);">AI SEARCH USAGE</h4>
+                <div style="font-size:28px;font-family:var(--font-number);font-weight:700;color:var(--color-info);" id="analytic-ai-count">0</div>
+                <div style="font-size:11px;color:var(--color-muted);margin-top:4px;">0% of total search traffic</div>
+              </div>
+              <div class="panel" style="padding:var(--space-md);">
+                <h4 style="margin:0 0 var(--space-xs);font-size:12px;color:var(--color-muted);">AVERAGE LATENCY</h4>
+                <div style="font-size:28px;font-family:var(--font-number);font-weight:700;color:var(--color-trading-up);" id="analytic-latency-val">4.2ms</div>
+                <div style="font-size:11px;color:var(--color-trading-up);margin-top:4px;">Local indexing index query latency</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns: 1fr 1fr; gap:var(--space-md);">
+              <div class="panel">
+                <div class="panel-header"><div class="panel-title" style="font-size:13px;">Top Searched Resource Targets</div></div>
+                <div class="panel-body" style="padding:var(--space-md);">
+                  <div class="pipeline-detail" id="analytic-targets"></div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-header"><div class="panel-title" style="font-size:13px;">Most Frequent Cluster Errors</div></div>
+                <div class="panel-body" style="padding:var(--space-md);">
+                  <div class="pipeline-detail" id="analytic-errors"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Settings ═══ -->
+        <section class="section" id="section-settings">
+          <div class="section-header">
+            <h2>⚙️ Global Settings</h2>
+            <div class="action-group">
+              <button class="btn btn-ghost btn-sm" id="settings-export-btn">📤 Export</button>
+              <button class="btn btn-ghost btn-sm" id="settings-import-btn">📥 Import</button>
+              <button class="btn btn-primary btn-sm" id="settings-save-btn">💾 Save</button>
+            </div>
+          </div>
+
+          <!-- System Preferences -->
+          <div class="panel mb-md">
+            <div class="panel-header"><div class="panel-title">System Preferences</div></div>
+            <div class="panel-body" style="padding:var(--space-md);">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-lg);">
+                <div class="form-group">
+                  <label class="form-label">Theme</label>
+                  <select class="form-select" id="setting-theme">
+                    <option value="dark">🌙 Dark (Default)</option>
+                    <option value="light">☀️ Light</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Dashboard Refresh Interval</label>
+                  <select class="form-select" id="setting-refresh">
+                    <option value="5">5 seconds</option>
+                    <option value="10" selected>10 seconds</option>
+                    <option value="30">30 seconds</option>
+                    <option value="60">60 seconds</option>
+                    <option value="0">Manual only</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Log Retention (lines)</label>
+                  <select class="form-select" id="setting-log-retention">
+                    <option value="100">100</option>
+                    <option value="200" selected>200</option>
+                    <option value="500">500</option>
+                    <option value="1000">1000</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Incident Buffer Size</label>
+                  <select class="form-select" id="setting-incident-buffer">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Notifications</label>
+                  <select class="form-select" id="setting-notifications">
+                    <option value="all">All Events</option>
+                    <option value="critical" selected>Critical Only</option>
+                    <option value="none">Disabled</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Date Format</label>
+                  <select class="form-select" id="setting-date-format">
+                    <option value="relative" selected>Relative (5m ago)</option>
+                    <option value="absolute">Absolute (2026-06-25 08:00)</option>
+                    <option value="iso">ISO 8601</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Timezone Display</label>
+                  <select class="form-select" id="setting-timezone">
+                    <option value="local" selected>Local Time</option>
+                    <option value="utc">UTC Time</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature Flags Panel -->
+          <div class="panel mb-md" id="settings-feature-flags-panel">
+            <div class="panel-header"><div class="panel-title">Feature Toggles (Enterprise Flags)</div></div>
+            <div class="panel-body" style="padding:var(--space-md);">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-lg);" id="feature-flags-container">
+                <!-- Dynamic Feature switches will be rendered here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Connection Status Summary -->
+          <div class="panel mb-md">
+            <div class="panel-header"><div class="panel-title">Connection Status</div></div>
+            <div class="panel-body" style="padding:var(--space-md);">
+              <div class="grid-4-col">
+                <div class="pipeline-detail">
+                  <div class="pipeline-detail-row"><span class="pipeline-detail-label">WebSocket</span><span class="pipeline-detail-value" id="settings-ws-status">—</span></div>
+                  <div class="pipeline-detail-row"><span class="pipeline-detail-label">K8s API</span><span class="pipeline-detail-value" id="settings-k8s-status">—</span></div>
+                </div>
+                <div class="pipeline-detail">
+                  <div class="pipeline-detail-row"><span class="pipeline-detail-label">Git Providers</span><span class="pipeline-detail-value" id="settings-git-status">—</span></div>
+                  <div class="pipeline-detail-row"><span class="pipeline-detail-label">CI/CD</span><span class="pipeline-detail-value" id="settings-cicd-status">—</span></div>
+                </div>
+                <div class="pipeline-detail">
+                  <div class="pipeline-detail-row"><span class="pipeline-detail-label">AI Providers</span><span class="pipeline-detail-value" id="settings-ai-status">—</span></div>
+                  <div class="pipeline-detail-row"><span class="pipeline-detail-label">Database</span><span class="pipeline-detail-value" id="settings-db-status">—</span></div>
+                </div>
+                <div class="pipeline-detail">
+                  <div class="pipeline-detail-row"><span class="pipeline-detail-label">Redis</span><span class="pipeline-detail-value" id="settings-redis-status">—</span></div>
+                  <div class="pipeline-detail-row"><span class="pipeline-detail-label">NATS</span><span class="pipeline-detail-value" id="settings-nats-status">—</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Danger Zone -->
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title" style="color:var(--color-trading-down)">⚠ Danger Zone</div></div>
+            <div class="panel-body" style="padding:var(--space-md);display:flex;gap:var(--space-sm);">
+              <button class="btn btn-ghost btn-sm" id="settings-reset-btn" style="border-color:var(--color-trading-down);color:var(--color-trading-down);">Reset All Settings</button>
+              <button class="btn btn-ghost btn-sm" id="settings-clear-cache-btn" style="border-color:var(--color-trading-down);color:var(--color-trading-down);">Clear Cache</button>
+            </div>
+          </div>
+          <input type="file" id="settings-import-file" accept=".json" style="display:none;">
+        </section>
+
+        
+
+        <!-- ═══ SECTION: Cost Management ═══ -->
+        <section class="section" id="section-cost-management">
+          <div class="section-header">
+            <h2>💰 Cost Management</h2>
+            <div class="section-actions">
+              <select class="form-select form-select-sm" id="cost-time-range" style="width:140px;">
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+                <option value="90d">Last 90 Days</option>
+              </select>
+              <button class="btn btn-primary btn-sm" onclick="CostManager.refresh()">↻ Refresh</button>
+            </div>
+          </div>
+
+          <!-- Overview Cards -->
+          <div id="cost-overview-cards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-md);margin-bottom:var(--space-lg);"></div>
+
+          <!-- Tabs -->
+          <div class="cost-tabs-bar">
+            <button class="cost-tab-btn active" data-cost-tab="cost-tab-clusters">Cluster Costs</button>
+            <button class="cost-tab-btn" data-cost-tab="cost-tab-namespaces">Namespace Costs</button>
+            <button class="cost-tab-btn" data-cost-tab="cost-tab-waste">Resource Waste</button>
+            <button class="cost-tab-btn" data-cost-tab="cost-tab-trends">Cost Trends</button>
+          </div>
+
+          <!-- Tab: Cluster Costs -->
+          <div class="cost-tab-panel" id="cost-tab-clusters">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">Cluster Cost Breakdown</div></div>
+              <div class="panel-body" style="overflow-x:auto;">
+                <table class="data-table">
+                  <thead><tr>
+                    <th>Cluster</th><th>Provider</th><th>Monthly</th><th>Daily</th><th>CPU</th><th>Memory</th><th>Storage</th><th>Trend</th>
+                  </tr></thead>
+                  <tbody id="cost-cluster-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Namespace Costs -->
+          <div class="cost-tab-panel" id="cost-tab-namespaces" style="display:none;">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">Namespace Resource Allocation & Cost</div></div>
+              <div class="panel-body" style="overflow-x:auto;">
+                <table class="data-table">
+                  <thead><tr>
+                    <th>Namespace</th><th>Cluster</th><th>CPU Requested</th><th>Memory Requested</th><th>Monthly Cost</th><th>Utilization</th>
+                  </tr></thead>
+                  <tbody id="cost-namespace-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Resource Waste -->
+          <div class="cost-tab-panel" id="cost-tab-waste" style="display:none;">
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title">🗑️ Resource Waste Detection</div>
+                <div class="panel-actions"><span style="font-size:12px;color:var(--color-muted);">Automatically scans for underutilized and orphaned resources</span></div>
+              </div>
+              <div class="panel-body" style="overflow-x:auto;">
+                <table class="data-table">
+                  <thead><tr>
+                    <th>Severity</th><th>Type</th><th>Resource</th><th>Namespace</th><th>Cluster</th><th>Utilization</th><th>Wasted Cost</th><th>Action</th>
+                  </tr></thead>
+                  <tbody id="cost-waste-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Cost Trends -->
+          <div class="cost-tab-panel" id="cost-tab-trends" style="display:none;">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">📈 Daily Cost Trend (7 Days)</div></div>
+              <div class="panel-body" id="cost-trend-chart" style="padding:var(--space-md);"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Observability ═══ -->
+        <section class="section" id="section-observability">
+          <div class="section-header">
+            <h2>📊 Observability</h2>
+            <div class="section-actions">
+              <button class="btn btn-primary btn-sm" onclick="ObservabilityModule.refresh()">↻ Refresh</button>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div class="obs-tabs-bar">
+            <button class="obs-tab-btn active" data-obs-tab="obs-tab-slo">SLO Dashboard</button>
+            <button class="obs-tab-btn" data-obs-tab="obs-tab-traces">Traces</button>
+            <button class="obs-tab-btn" data-obs-tab="obs-tab-events">Events</button>
+          </div>
+
+          <!-- Tab: SLO Dashboard -->
+          <div class="obs-tab-panel" id="obs-tab-slo">
+            <div id="obs-slo-grid" class="grid-3-col"></div>
+          </div>
+
+          <!-- Tab: Traces -->
+          <div class="obs-tab-panel" id="obs-tab-traces" style="display:none;">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">🔍 Distributed Traces</div></div>
+              <div class="panel-body" style="overflow-x:auto;">
+                <table class="data-table">
+                  <thead><tr>
+                    <th>Trace ID</th><th>Service</th><th>Operation</th><th>Duration</th><th>Status</th><th>Spans</th><th>Time</th><th>Action</th>
+                  </tr></thead>
+                  <tbody id="obs-trace-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Events -->
+          <div class="obs-tab-panel" id="obs-tab-events" style="display:none;">
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title">⚡ Kubernetes Events</div>
+                <div class="panel-actions"><span style="font-size:12px;color:var(--color-muted);">Real-time event stream from cluster</span></div>
+              </div>
+              <div class="panel-body" id="obs-events-list" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Topology Map ═══ -->
+        <section class="section" id="section-topology">
+          <div class="section-header">
+            <h2>🗺️ Topology Map</h2>
+            <div class="section-actions">
+              <button class="btn btn-primary btn-sm" onclick="TopologyModule.refresh()">↻ Refresh</button>
+            </div>
+          </div>
+
+          <div class="topo-tabs-bar">
+            <button class="topo-tab-btn active" data-topo-tab="topo-tab-tree">Cluster Topology</button>
+            <button class="topo-tab-btn" data-topo-tab="topo-tab-deps">Service Dependencies</button>
+          </div>
+
+          <div class="topo-tab-panel" id="topo-tab-tree">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">☸️ Cluster → Namespace → Deployment → Pod → Service → Ingress</div></div>
+              <div class="panel-body" id="topo-tree-container" style="max-height:600px;overflow-y:auto;"></div>
+            </div>
+          </div>
+
+          <div class="topo-tab-panel" id="topo-tab-deps" style="display:none;">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">🔗 Service Dependency Graph</div></div>
+              <div class="panel-body" id="topo-dep-graph" style="min-height:520px;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Workflow Automation ═══ -->
+        <section class="section" id="section-workflow-automation">
+          <div class="section-header">
+            <h2>⚙️ Workflow Automation</h2>
+            <div class="section-actions">
+              <button class="btn btn-primary btn-sm" onclick="WorkflowAutomation.showCreateModal()">➕ New Rule</button>
+              <button class="btn btn-ghost btn-sm" onclick="WorkflowAutomation.refresh()">↻ Refresh</button>
+            </div>
+          </div>
+
+          <div class="auto-tabs-bar">
+            <button class="auto-tab-btn active" data-auto-tab="auto-tab-rules">Automation Rules</button>
+            <button class="auto-tab-btn" data-auto-tab="auto-tab-history">Execution History</button>
+          </div>
+
+          <div class="auto-tab-panel" id="auto-tab-rules">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">📋 Active Automation Rules</div></div>
+              <div class="panel-body" style="overflow-x:auto;">
+                <table class="data-table">
+                  <thead><tr>
+                    <th>Rule Name</th><th>Trigger</th><th>Condition</th><th>Action</th><th>Status</th><th>Runs</th><th>Last Triggered</th><th>Controls</th>
+                  </tr></thead>
+                  <tbody id="auto-rules-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="auto-tab-panel" id="auto-tab-history" style="display:none;">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">📜 Execution History</div></div>
+              <div class="panel-body" id="auto-exec-log" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Notification Center ═══ -->
+        <section class="section" id="section-notifications">
+          <div class="section-header">
+            <h2>🔔 Notification Center</h2>
+            <div class="section-actions">
+              <button class="btn btn-primary btn-sm" onclick="NotificationCenter.refresh()">↻ Refresh</button>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:4px;border-bottom:1px solid var(--color-hairline);margin-bottom:var(--space-md);">
+            <button class="notif-tab-btn active" data-notif-tab="notif-tab-channels" style="background:transparent;border:none;color:var(--color-primary);padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid var(--color-primary);">Channels</button>
+            <button class="notif-tab-btn" data-notif-tab="notif-tab-history" style="background:transparent;border:none;color:var(--color-muted);padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;">Delivery History</button>
+          </div>
+
+          <div class="notif-tab-panel" id="notif-tab-channels">
+            <div id="notif-channels-grid" class="grid-4-col"></div>
+          </div>
+
+          <div class="notif-tab-panel" id="notif-tab-history" style="display:none;">
+            <div class="panel">
+              <div class="panel-header"><div class="panel-title">📜 Notification Delivery History</div></div>
+              <div class="panel-body" style="overflow-x:auto;">
+                <table class="data-table">
+                  <thead><tr><th>Notification</th><th>Channel</th><th>Status</th><th>Timestamp</th><th>Action</th></tr></thead>
+                  <tbody id="notif-history-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Compliance ═══ -->
+        <section class="section" id="section-compliance">
+          <div class="section-header">
+            <h2>🛡️ Compliance & Security</h2>
+            <div class="section-actions">
+              <button class="btn btn-primary btn-sm" onclick="ComplianceModule.refresh()">↻ Refresh</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:4px;border-bottom:1px solid var(--color-hairline);margin-bottom:var(--space-md);">
+            <button class="comp-tab-btn active" data-comp-tab="comp-tab-score" style="background:transparent;border:none;color:var(--color-primary);padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid var(--color-primary);">Compliance Score</button>
+            <button class="comp-tab-btn" data-comp-tab="comp-tab-violations" style="background:transparent;border:none;color:var(--color-muted);padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;">Violations</button>
+            <button class="comp-tab-btn" data-comp-tab="comp-tab-posture" style="background:transparent;border:none;color:var(--color-muted);padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;">Security Posture</button>
+          </div>
+          <div class="comp-tab-panel" id="comp-tab-score">
+            <div id="comp-score-grid" class="grid-2-col"></div>
+          </div>
+          <div class="comp-tab-panel" id="comp-tab-violations" style="display:none;">
+            <div class="panel"><div class="panel-header"><div class="panel-title">⚠️ Policy Violations</div></div>
+              <div class="panel-body" style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Severity</th><th>Policy</th><th>Resource</th><th>Namespace</th><th>Detected</th></tr></thead><tbody id="comp-violations-tbody"></tbody></table></div>
+            </div>
+          </div>
+          <div class="comp-tab-panel" id="comp-tab-posture" style="display:none;">
+            <div id="comp-posture-grid" class="grid-3-col"></div>
+          </div>
+        </section>
+
+        <!-- ═══ SECTION: Runbook Center ═══ -->
+        <section class="section" id="section-runbooks">
+          <div class="section-header">
+            <h2>📓 Runbook Center</h2>
+            <div class="section-actions">
+              <button class="btn btn-primary btn-sm" onclick="RunbookCenter.showCreateModal()">➕ New Runbook</button>
+              <button class="btn btn-ghost btn-sm" onclick="RunbookCenter.refresh()">↻ Refresh</button>
+            </div>
+          </div>
+          <div id="runbook-grid" class="grid-3-col"></div>
+        </section>
+
+        <!-- ═══ SECTION: Deployment Timeline ═══ -->
+        <section class="section" id="section-timeline">
+          <div class="section-header">
+            <h2>📅 Deployment Timeline</h2>
+            <div class="section-actions">
+              <select class="form-select form-select-sm" id="timeline-range" style="width:120px;" onchange="DeploymentTimeline.refresh()">
+                <option value="24h">Last 24h</option>
+                <option value="7d" selected>Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+              </select>
+              <button class="btn btn-ghost btn-sm" onclick="DeploymentTimeline.refresh()">↻ Refresh</button>
+            </div>
+          </div>
+          <div class="panel"><div class="panel-body" id="timeline-container" style="min-height:300px;overflow-x:auto;"></div></div>
+          <div class="panel" style="margin-top:var(--space-md);"><div class="panel-header"><div class="panel-title">Event Detail</div></div><div class="panel-body" id="timeline-detail" style="min-height:80px;"><span class="text-muted-sm">Click an event on the timeline to view details.</span></div></div>
+        </section>
+
+        <!-- ═══ SECTION: Platform Engineering ═══ -->
+        <section class="section" id="section-platform-engineering">
+          <div class="section-header">
+            <h2>🏗️ Platform Engineering</h2>
+            <div class="section-actions">
+              <button class="btn btn-primary btn-sm" onclick="PlatformEngineering.refresh()">↻ Refresh</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:4px;border-bottom:1px solid var(--color-hairline);margin-bottom:var(--space-md);">
+            <button class="pe-tab-btn active" data-pe-tab="pe-tab-catalog">Service Catalog</button>
+            <button class="pe-tab-btn" data-pe-tab="pe-tab-templates">Golden Templates</button>
+            <button class="pe-tab-btn" data-pe-tab="pe-tab-blueprints">Blueprints</button>
+          </div>
+          <div class="pe-tab-panel" id="pe-tab-catalog">
+            <div id="pe-catalog-grid" class="grid-3-col"></div>
+          </div>
+          <div class="pe-tab-panel" id="pe-tab-templates" style="display:none;">
+            <div id="pe-templates-grid" class="grid-2-col"></div>
+          </div>
+          <div class="pe-tab-panel" id="pe-tab-blueprints" style="display:none;">
+            <div id="pe-blueprints-grid" class="grid-2-col"></div>
+          </div>
+        </section>
+
+        <!-- Capacity Planning -->
+        <section class="section" id="section-capacity">
+          <div id="capacity-planning"></div>
+        </section>
+
+        <!-- Drift Detection -->
+        <section class="section" id="section-drift">
+          <div id="drift-detection"></div>
+        </section>
+
+        <!-- Event Correlation -->
+        <section class="section" id="section-correlation">
+          <div id="event-correlation"></div>
+        </section>
+
+        <!-- Change Management -->
+        <section class="section" id="section-change">
+          <div id="change-management"></div>
+        </section>
+
+        <!-- Deployment Promotion -->
+        <section class="section" id="section-promotion">
+          <div id="deployment-promotion"></div>
+        </section>
+
+        <!-- Resource Explorer -->
+        <section class="section" id="section-explorer">
+          <div id="resource-explorer"></div>
+        </section>
+
+        <!-- Tagging System -->
+        <section class="section" id="section-tagging">
+          <div id="tagging-system"></div>
+        </section>
+
+        <!-- Reporting Center -->
+        <section class="section" id="section-reporting">
+          <div id="reporting-center"></div>
+        </section>
+
+        <!-- Platform Health Center -->
+        <section class="section" id="section-health">
+          <div id="health-center"></div>
+        </section>
+
+        <!-- Multi-Cluster Fleet View -->
+        <section class="section" id="section-fleet">
+          <div id="fleet-view"></div>
+        </section>
+
+        <!-- Platform Audit Mode -->
+        <section class="section" id="section-audit">
+          <div id="audit-mode"></div>
+        </section>
+
+        <!-- Nodes -->
+        <section class="section" id="section-nodes">
+          <div id="kubernetes-nodes"></div>
+        </section>
+
+        <!-- Pods -->
+        <section class="section" id="section-pods">
+          <div id="kubernetes-pods"></div>
+        </section>
+
+        <!-- Rollouts -->
+        <section class="section" id="section-rollouts">
+          <div id="deployment-rollouts"></div>
+        </section>
+
+        <!-- Auto Scaling -->
+        <section class="section" id="section-scaling">
+          <div id="kubernetes-scaling"></div>
+        </section>
+
+        <!-- Incidents Page -->
+        <section class="section" id="section-incidents">
+          <div id="incidents-page"></div>
+        </section>
+
+        <!-- Agents Dashboard Page -->
+        <section class="section" id="section-agents">
+          <div id="agents-page"></div>
+        </section>
+
+      </main>
+    </div>
+
+    <!-- ═══ Modal Overlay ═══ -->
+    <div class="modal-overlay" id="modal-overlay" style="display:none;">
+      <div class="modal" id="modal">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-title">Modal</h3>
+          <button class="btn btn-ghost btn-sm modal-close" id="modal-close">✕</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+        <div class="modal-footer" id="modal-footer"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Core Scripts -->
+  <script src="/core/state/globalStore.js"></script>
+  <script src="/modules/auth/auth.js"></script>
+  <script src="/modules/core/theme.js"></script>
+  <script src="/modules/core/feature-flags.js"></script>
+  <script src="/modules/core/release-notes.js"></script>
+  <script src="/modules/core/command-palette.js"></script>
+  <script src="/core/utils/sanitizer.js"></script>
+  <script src="/core/utils/table-renderer.js"></script>
+  <script src="/core/utils/components.js"></script>
+  <script src="/core/services/ws-client.js"></script>
+  <script src="/core/services/api-client.js?v=prod"></script>
+  <script src="/core/services/telemetry.js"></script>
+  <script src="/components/ui/modal.js"></script>
+  <script src="/components/layout/sidebar.js"></script>
+  <script src="/core/router/index.js?v=prod"></script>
+  <script src="/modules/incidents/incidents.js"></script>
+  <script src="/core/services/agents.js"></script>
+  <script src="/modules/search/logs.js"></script>
+  <script src="/modules/clusters/metrics.js"></script>
+  <script src="/modules/incidents/incidents-detail.js"></script>
+  <script src="/modules/core/personalization.js"></script>
+  <script src="/modules/core/onboarding.js"></script>
+  
+  <script src="/app/app.js"></script>
+  
+  <script>
+    // Initialize the new modular sidebar layout
+    document.addEventListener('DOMContentLoaded', () => {
+      window.sidebarNav = new EnterpriseSidebar('sidebar-nav', null);
+    });
+  </script>
+</body>
+</html>

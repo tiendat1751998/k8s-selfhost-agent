@@ -1,0 +1,135 @@
+# Default values for k8sselfhost
+replicaCount: 1
+
+image:
+  repository: k8sselfhost
+  pullPolicy: IfNotPresent
+  tag: "0.1.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  fsGroup: 65534
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65534
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: k8sselfhost.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Application config
+config:
+  logLevel: info
+  server:
+    host: "0.0.0.0"
+    port: 8080
+
+  postgres:
+    host: postgresql
+    port: 5432
+    user: postgres
+    password: postgres
+    dbname: k8sselfhost
+    sslmode: disable
+    maxConns: 25
+    minConns: 5
+
+  redis:
+    host: redis-master
+    port: 6379
+    password: ""
+    db: 0
+
+  nats:
+    url: nats://nats:4222
+    streamName: INCIDENTS
+    streamSubjects:
+      - "incidents.>"
+
+  llm:
+    provider: ollama
+    endpoint: http://ollama:11434
+    model: llama3
+
+  telemetry:
+    serviceName: k8sselfhost
+    serviceVersion: "0.1.0"
+    environment: production
+    otlpEndpoint: ""
+
+# PostgreSQL subchart
+postgresql:
+  enabled: true
+  auth:
+    username: postgres
+    password: postgres
+    database: k8sselfhost
+
+# Redis subchart
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+
+# NATS subchart
+nats:
+  enabled: true
+  jetstream:
+    enabled: true
+
+# Prometheus Alert Rules
+prometheusRule:
+  enabled: false
+  additionalLabels: {}

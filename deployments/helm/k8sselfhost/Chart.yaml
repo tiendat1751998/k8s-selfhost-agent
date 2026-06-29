@@ -1,0 +1,17 @@
+apiVersion: v2
+name: k8sselfhost
+description: K8S Self-Healing Agent - AI-powered Kubernetes incident detection and remediation
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+maintainers:
+  - name: datdt
+    email: datdt@k8sselfhost.io
+
+keywords:
+  - kubernetes
+  - self-healing
+  - ai
+  - gitops
+  - incident-management
