@@ -167,5 +167,5 @@ For **SRE/DevOps teams** managing Kubernetes at scale, this agent delivers:
 
 ## Project Links
 
-- **GitHub Repository**: [https://github.com/YOUR_USERNAME/k8s-selfhost-agent](https://github.com/YOUR_USERNAME/k8s-selfhost-agent)
+- **GitHub Repository**: [https://github.com/tiendat1751998/k8s-selfhost-agent](https://github.com/tiendat1751998/k8s-selfhost-agent)
 - **Demo Video**: [YouTube Link — Coming Soon]

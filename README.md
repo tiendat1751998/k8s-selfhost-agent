@@ -2,7 +2,7 @@
 
 **AI-Powered Multi-Agent Kubernetes Control Plane with GitOps Auto-Remediation**
 
-[![CI](https://github.com/YOUR_USERNAME/k8s-selfhost-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/k8s-selfhost-agent/actions)
+[![CI](https://github.com/tiendat1751998/k8s-selfhost-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/tiendat1751998/k8s-selfhost-agent/actions)
 [![Go](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go)](https://go.dev/)
 [![ADK](https://img.shields.io/badge/Google_ADK-Agent_Dev_Kit-4285F4?logo=google)](https://adk.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)](https://postgresql.org/)
