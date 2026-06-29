@@ -1,63 +1,61 @@
 # YouTube Demo Video Script (≤ 5 minutes)
 
 ## Video Title
-**K8S Self-Healing Agent: AI-Powered Multi-Agent Kubernetes Control Plane**
+**K8S Self-Healing Agent: The Complete Autonomous Control Plane for DevOps & SRE**
 
 ## Video Description
-Capstone project for the AI Agents Intensive Vibe Coding course. An autonomous multi-agent system built on Google ADK that monitors Kubernetes clusters, performs AI-powered root cause analysis, detects GitOps configuration drift, and auto-remediates failures.
+Capstone project for the AI Agents Intensive Vibe Coding course. An enterprise-grade, multi-tenant autonomous SRE control plane built on Google ADK and Go Clean Architecture. It solves the entire DevOps lifecycle: continuous monitoring, AI-powered root-cause analysis (RCA), GitOps configuration drift remediation, change management, runbook automation, SLO tracking, and compliance auditing.
 
 ---
 
 ## Script & Timing
 
-### Intro (0:00 - 0:30) — Problem Statement
+### Intro (0:00 - 0:40) — The Complete DevOps Challenge
 **Show**: Title card with cover image
 
-**Say**: "Managing Kubernetes clusters at scale is one of the hardest problems in DevOps. When pods crash with CrashLoopBackOff or OOMKilled, engineers spend 15 to 45 minutes correlating logs, checking config diffs, and identifying root causes. Meanwhile, configuration drift accumulates silently after emergency hotfixes. The K8S Self-Healing Agent solves this with AI."
+**Say**: "Modern platform engineering teams face a mountain of operational challenges: troubleshooting transient pod failures, resolving configuration drift, coordinating service promotions across dev and production environments, tracking SLO burn rates, executing runbooks, and ensuring security compliance. 
+
+The **K8S Self-Healing Agent** is not just an alerting tool — it is a complete, autonomous SRE Control Plane designed to solve the full lifecycle of DevOps problems."
 
 ---
 
-### Why Agents? (0:30 - 1:00)
+### Why Agents? & Tech Stack (0:40 - 1:20)
 **Show**: Architecture diagram from README
 
-**Say**: "Instead of static monitoring dashboards, we built an autonomous multi-agent system on Google's Agent Development Kit. Ten specialist agents — each with domain expertise — collaborate under a central orchestrator. The orchestrator analyzes user intent and routes requests to the right specialist. The agents have real tools that query the live cluster API — not mock data."
+**Say**: "Instead of static dashboards, we built a collaborative multi-agent system on Google's Agent Development Kit. 10 specialist agents — including dedicated DevOps, GitOps, DBA, Kubernetes, Security, and Code Reviewer agents — coordinate under a central orchestrator. 
+
+Our agents are backed by a production-grade Go backend designed with Clean Architecture, using PostgreSQL for state, Redis for caching, NATS JetStream for event-driven message queuing, and AES-256-GCM for in-memory decryption of cluster credentials."
 
 ---
 
-### Architecture Deep Dive (1:00 - 2:00)
-**Show**: Code editor with `agent.py` open, scroll through the 10 agents
+### Key Capabilities & Live Demo (1:20 - 4:00)
+**Show**: Open the Frontend Dashboard, tour the tabs:
 
-**Say**: "The system has three layers. First, the ADK Orchestrator — 10 Python agents with a routing table. The DevOps agent has tools like check_system_health and list_cluster_resources. The GitOps agent has get_drift_status. Second, a Go backend with 166 source files following Clean Architecture — handlers, usecases, domain entities, and infrastructure adapters for PostgreSQL, Redis, and NATS. Third, a premium dark-mode dashboard with real-time WebSocket updates."
+**Say**: "Let's tour the control plane in action.
 
-**Show**: Scroll through migrations folder (23 files)
-
-**Say**: "23 database migrations cover everything from incidents and drift detection to capacity planning and RBAC."
-
----
-
-### Live Demo (2:00 - 4:00)
-**Show**: Start the Go backend server, then the ADK playground
-
-1. **Dashboard Tour** (30s): Navigate through the dashboard — show Health Center, Resource Explorer, Drift Detection, Incident Center, Audit Logs
-2. **Agent Playground** (30s): Open `agents-cli playground`, type "Check the health of all platform components", show the orchestrator routing to DevOps agent
-3. **Drift Detection** (30s): Show the Drift Center with visual diffs
-4. **Capacity Planning** (30s): Show capacity forecasts and resource utilization charts
+1. **Resource Explorer & Fleet View** (1:20 - 1:50): Here we can inspect live Pods, Services, and Deployments across both Kubernetes and Docker Swarm clusters in a single multi-tenant pane.
+2. **AI RCA & Incident Center** (1:50 - 2:30): When an incident occurs — like an OOMKill or scheduling failure — the system retrieves container logs, correlates events, and runs AI-powered root-cause analysis with confidence scoring, suggesting immediate fixes.
+3. **GitOps Drift Control** (2:30 - 3:00): The Drift Center continuously compares live cluster configuration against your Git baseline, showing visual diffs and providing auto-reconciliation to bring services back in sync.
+4. **Change Management & Promotion** (3:00 - 3:30): Deployments are managed transactionally, allowing automated, secure promotion of configurations from dev to staging and production.
+5. **Runbook Center & Playbook Automation** (3:30 - 4:00): Common operations are documented as executable runbooks, which the agent can trigger automatically to resolve recurring issues."
 
 ---
 
-### The Build & Course Concepts (4:00 - 4:45)
-**Show**: Antigravity IDE session, .agents/skills/ folder, test results
+### Course Concepts & Engineering Polish (4:00 - 4:45)
+**Show**: Terminal running `uv run pytest` (14 unit tests passing) and code files in Antigravity IDE
 
-**Say**: "The entire 36,000-line codebase was vibe-coded with Antigravity IDE. We demonstrate all six course concepts: ADK multi-agent system with 10 specialist agents, MCP server integration for developer knowledge, Antigravity for AI-assisted development, AES-256-GCM encryption and JWT security, Docker and Helm deployability with GitHub Actions CI/CD, and agents-cli for playground testing and evaluation."
-
-**Show**: Run unit tests (14 passing)
+**Say**: "Developed using the Antigravity IDE, this project demonstrates all six course concepts:
+- **ADK Multi-Agent System**: 10 specialist Python agents with dedicated skill files.
+- **MCP Server**: Integrating developer knowledge and language server diagnostic tools.
+- **Security**: Strict parameter-bound SQL (23 database migrations) and JWT auth.
+- **Deployability**: Multi-stage Dockerfiles and Helm charts ready for production GKE or Cloud Run."
 
 ---
 
 ### Closing (4:45 - 5:00)
-**Show**: GitHub repository page
+**Show**: GitHub repository page: `github.com/tiendat1751998/k8s-selfhost-agent`
 
-**Say**: "The K8S Self-Healing Agent transforms DevOps from reactive monitoring to proactive self-healing. Check out the full source code on GitHub. Thanks for watching!"
+**Say**: "By automating the entire SRE loop — from detection to GitOps remediation — this platform drastically reduces MTTR and operational overhead. The full source code is public on GitHub. Thanks for watching!"
 
 ---
 
@@ -66,17 +64,16 @@ Capstone project for the AI Agents Intensive Vibe Coding course. An autonomous m
 Before recording, make sure:
 
 - [ ] Go backend server is running at `localhost:8080`
-- [ ] PostgreSQL, Redis are running (via Docker Compose)
+- [ ] PostgreSQL, Redis, NATS are active in Docker
 - [ ] ADK agent playground is running (`agents-cli playground`)
-- [ ] Frontend dashboard is accessible
+- [ ] Frontend dashboard is open on the Resource Explorer tab
 - [ ] Screen recording software is set to 1080p
-- [ ] Microphone is tested
-- [ ] Browser zoom is at 100% for clear text
-- [ ] Terminal font size is increased for readability
+- [ ] Microphone volume and clarity are tested
+- [ ] Browser zoom is adjusted for optimal legibility
 
 ## Upload Settings
 
 - **YouTube Privacy**: Public (or Unlisted if preferred)
 - **Length**: ≤ 5 minutes
 - **Resolution**: 1080p recommended
-- **Tags**: `kubernetes`, `ai-agents`, `google-adk`, `devops`, `self-healing`, `kaggle`
+- **Tags**: `kubernetes`, `ai-agents`, `google-adk`, `devops`, `sre`, `self-healing`, `gitops`, `kaggle`
