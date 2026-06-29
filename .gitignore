@@ -78,3 +78,15 @@ orchestrator-agent/uv.lock
 # Local config
 config.yaml
 
+# Package Manager & Build Directories
+node_modules/
+.yarn/
+.pnpm-store/
+dist/
+build/
+.next/
+.nuxt/
+out/
+coverage/
+.cache/
+
