@@ -90,3 +90,8 @@ out/
 coverage/
 .cache/
 
+# Kaggle & Local Scripts
+video_script.md
+system_test_protocol.md
+kaggle_writeup.md
+
