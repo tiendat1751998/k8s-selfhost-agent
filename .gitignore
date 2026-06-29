@@ -1,13 +1,13 @@
-# Binaries and Compiled Code
+# Binaries and Executables
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-*.o
-*.a
 /bin/
 /dist/
+server.exe
+standalone.exe
 
 # Test and Coverage
 *.test
@@ -23,7 +23,7 @@ go.work.sum
 vendor/
 node_modules/
 
-# Python Environment and Cache (Global)
+# Python Cache, Environment and Package Metadata
 __pycache__/
 *.py[cod]
 *.pyo
@@ -33,28 +33,6 @@ venv/
 ENV/
 .pytest_cache/
 *.egg-info/
-
-# Agent CLI, ADK & Traces (Global)
-.google-agents-cli/
-.agents-cli-scripts/
-.adk/
-routing_traces/
-.persist_vector_store/
-.saved_chats/
-/orchestrator-agent/datdevops/
-
-# Secrets, Keys, and Local Configuration
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-*.cert
-*.cert.pem
-*creds*
-secrets.yaml
-config.yaml
-/payload.json
 
 # IDE / Editors
 .idea/
@@ -70,20 +48,50 @@ config.yaml
 .DS_Store
 Thumbs.db
 
-# Large media & backups
+# Docker
+.docker/
+
+# Environment Files (MUST NEVER BE COMMITTED)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+.env.sample
+.env.example.local
+!.env.example
+
+# Logs and Debug Output
+*.log
+logs/
+server_stdout.log
+server_stderr.log
+server_startup.log
+
+# Temporary files
+tmp/
+temp/
+payload.json
+
+# Local configurations
+config.yaml
+
+# Large files
 *.webp
 *.zip
 *.tar.gz
 *.tgz
 *.rar
 
-# Logs
-*.log
-logs/
-
-# Temporary
-tmp/
-temp/
-/server.exe
-/standalone.exe
-
+# Agent artifacts
+routing_traces/
+orchestrator-agent/.adk/
+orchestrator-agent/.venv/
+orchestrator-agent/.pytest_cache/
+orchestrator-agent/datdevops/
+.google-agents-cli/
+.agents-cli-scripts/
+.adk/
+.persist_vector_store/
+.saved_chats/
