@@ -52,7 +52,7 @@
 
   const moduleRegistry = {
     'kubernetes': { scripts: ['/modules/clusters/kubernetes.js'], globalObj: 'KubernetesSection' },
-    'docker-swarm': { scripts: ['/modules/provider/docker-swarm.js'], globalObj: 'DockerSwarmSection' },
+    'docker-swarm': { scripts: ['/modules/provider/docker-swarm.js?v=2'], globalObj: 'DockerSwarmSection' },
     'deployment-center': {
       scripts: [
         '/modules/deployments/deployment-catalog.js',

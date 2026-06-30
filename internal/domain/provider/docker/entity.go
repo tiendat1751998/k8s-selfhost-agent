@@ -44,5 +44,8 @@ type Repository interface {
 	ScaleService(ctx context.Context, serviceID string, replicas int) error
 	UpdateNodeAvailability(ctx context.Context, nodeID string, availability string) error
 	ToggleContainer(ctx context.Context, containerID string, action string) error
+	DeleteService(ctx context.Context, serviceID string) error
+	RestartService(ctx context.Context, serviceID string) error
+	CreateService(ctx context.Context, name string, image string, replicas int, port int) error
 	GetLogs(ctx context.Context, targetID string, targetType string) (string, error)
 }

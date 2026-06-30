@@ -7,12 +7,22 @@
   var isDeployAdvActive = false;
   var currentSearchQuery = '';
 
-  function loadInitialApps() {
-    global.DeploymentState.apps = [
-      { name: 'nginx-prod', team: 'SRE', env: 'production', image: 'nginx:1.29', target: 'prod-us-east', namespace: 'default', type: 'kubernetes', replicas: 3, status: 'healthy', cpu: '200m', memory: '512Mi', port: 80, netType: 'LoadBalancer', volume: 'none' },
-      { name: 'auth-svc-staging', team: 'Dev-Auth', env: 'staging', image: 'myorg/auth:v1.2.3', target: 'staging-1', namespace: 'auth', type: 'kubernetes', replicas: 2, status: 'degraded', cpu: '100m', memory: '256Mi', port: 8080, netType: 'ClusterIP', volume: 'none' },
-      { name: 'payment-worker', team: 'Finance', env: 'production', image: 'myorg/payment:v1.1.0', target: 'swarm-cluster', placement: 'manager-only', type: 'swarm', replicas: 1, status: 'down', cpu: '500m', memory: '1Gi', port: 9000, netType: 'NodePort', volume: 'named' },
-    ];
+  async function loadInitialApps() {
+    try {
+      var body = document.getElementById('deploy-catalog-body');
+      if (body && (!global.DeploymentState.apps || global.DeploymentState.apps.length === 0)) {
+        body.innerHTML = '<tr><td colspan="7"><div class="skeleton" style="height:120px;border-radius:var(--rounded-lg);"></div></td></tr>';
+      }
+      var res = await fetch('/api/v1/deployments');
+      if (!res.ok) throw new Error('API request failed');
+      var json = await res.json();
+      global.DeploymentState.apps = json.data || [];
+      renderCatalog();
+    } catch (e) {
+      console.error('Failed to load apps:', e);
+      global.DeploymentState.apps = [];
+      renderCatalog();
+    }
   }
 
   function renderCatalog() {
@@ -92,13 +102,29 @@
         body: '<div class="form-group"><label class="form-label">Desired Replicas</label><input type="number" class="form-select" id="cat-scale-replicas" value="' + app.replicas + '" min="0" max="100"></div>',
         actions: [
           { label: 'Cancel' },
-          { label: 'Scale', primary: true, onClick: function () {
+          { label: 'Scale', primary: true, onClick: async function () {
             var val = parseInt(document.getElementById('cat-scale-replicas').value);
-            app.replicas = val;
-            app.status = val === 0 ? 'down' : 'healthy';
-            AppState.addAuditLog({ action: 'scale', target: 'app/' + app.name, result: 'replicas=' + val });
-            renderCatalog();
-            alert('Scale request sent for ' + app.name + ' ✅');
+            try {
+              var response = await fetch('/api/v1/deployments/scale', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: app.type,
+                  cluster: app.target,
+                  namespace: app.namespace || '',
+                  name: app.name,
+                  replicas: val
+                })
+              });
+              if (!response.ok) throw new Error('API request failed');
+              app.replicas = val;
+              app.status = val === 0 ? 'down' : 'healthy';
+              AppState.addAuditLog({ action: 'scale', target: 'app/' + app.name, result: 'replicas=' + val });
+              renderCatalog();
+              alert('Scale request sent for ' + app.name + ' ✅');
+            } catch (e) {
+              alert('Scale request failed: ' + e.message);
+            }
           }}
         ]
       });
@@ -111,14 +137,29 @@
         body: '<p style="color:var(--color-text-secondary)">Are you sure you want to trigger a rolling restart of <strong>' + esc(app.name) + '</strong>?</p>',
         actions: [
           { label: 'Cancel' },
-          { label: 'Restart', primary: true, onClick: function () {
-            app.status = 'degraded';
-            renderCatalog();
-            AppState.addAuditLog({ action: 'restart', target: 'app/' + app.name, result: 'triggered' });
-            setTimeout(function () {
-              app.status = 'healthy';
+          { label: 'Restart', primary: true, onClick: async function () {
+            try {
+              app.status = 'degraded';
               renderCatalog();
-            }, 3000);
+              var response = await fetch('/api/v1/deployments/restart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: app.type,
+                  cluster: app.target,
+                  namespace: app.namespace || '',
+                  name: app.name
+                })
+              });
+              if (!response.ok) throw new Error('API request failed');
+              AppState.addAuditLog({ action: 'restart', target: 'app/' + app.name, result: 'triggered' });
+              setTimeout(async function () {
+                await loadInitialApps();
+              }, 3000);
+            } catch (e) {
+              alert('Restart request failed: ' + e.message);
+              loadInitialApps();
+            }
           }}
         ]
       });
@@ -132,10 +173,25 @@
               '<p style="color:var(--color-trading-down);font-size:13px;">This will remove all replica containers and network endpoints.</p>',
         actions: [
           { label: 'Cancel' },
-          { label: 'Delete', primary: true, onClick: function () {
-            global.DeploymentState.apps.splice(idx, 1);
-            AppState.addAuditLog({ action: 'delete', target: 'app/' + app.name, result: 'success' });
-            renderCatalog();
+          { label: 'Delete', primary: true, onClick: async function () {
+            try {
+              var response = await fetch('/api/v1/deployments/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: app.type,
+                  cluster: app.target,
+                  namespace: app.namespace || '',
+                  name: app.name
+                })
+              });
+              if (!response.ok) throw new Error('API request failed');
+              global.DeploymentState.apps.splice(idx, 1);
+              AppState.addAuditLog({ action: 'delete', target: 'app/' + app.name, result: 'success' });
+              renderCatalog();
+            } catch (e) {
+              alert('Delete request failed: ' + e.message);
+            }
           }}
         ]
       });

@@ -5,29 +5,57 @@
 (function (global) {
   'use strict';
 
-  var mockPRs = [
-    { id: '#142', branch: 'fix/memory-limit-increase', target: 'payment-svc', status: 'open', author: 'ai-agent', created: '2m ago' },
-    { id: '#141', branch: 'fix/hpa-config', target: 'api-server', status: 'merged', author: 'sre-bot', created: '1h ago' },
-    { id: '#140', branch: 'fix/image-rollback', target: 'frontend', status: 'merged', author: 'admin', created: '3h ago' },
-    { id: '#139', branch: 'feat/resource-quotas', target: 'namespace/production', status: 'failed', author: 'ai-agent', created: '5h ago' },
-  ];
-
-  var mockApprovals = [
-    { deployment: 'payment-svc', env: 'production', version: 'v2.5.0', status: 'pending', requestedBy: 'ai-agent' },
-    { deployment: 'api-server', env: 'staging', version: 'v3.1.2', status: 'approved', requestedBy: 'admin' },
-    { deployment: 'frontend', env: 'production', version: 'v1.8.0', status: 'rejected', requestedBy: 'sre-bot' },
-  ];
+  var gitopsPRs = [];
+  var gitopsApprovals = [];
 
   function init() {
     var generateBtn = document.getElementById('gitops-generate');
     if (generateBtn) generateBtn.addEventListener('click', generatePatch);
 
-    loadMockData();
+    loadRealData();
   }
 
-  function loadMockData() {
-    renderPRs();
-    renderApprovals();
+  function loadRealData() {
+    fetchPRs();
+    fetchApprovals();
+  }
+
+  function fetchPRs() {
+    fetch('/api/v1/prs')
+      .then(function(res) {
+        if (!res.ok) throw new Error('Failed to fetch PRs');
+        return res.json();
+      })
+      .then(function(json) {
+        gitopsPRs = json.data || [];
+        renderPRs();
+      })
+      .catch(function(err) {
+        console.error('Error fetching PRs:', err);
+        var body = document.getElementById('gitops-pr-body');
+        if (body) {
+          body.innerHTML = '<tr><td colspan="7" class="text-center" style="color:var(--color-muted);padding:24px;">Failed to load pull requests: ' + esc(err.message) + '</td></tr>';
+        }
+      });
+  }
+
+  function fetchApprovals() {
+    fetch('/api/v1/promotions')
+      .then(function(res) {
+        if (!res.ok) throw new Error('Failed to fetch promotions');
+        return res.json();
+      })
+      .then(function(json) {
+        gitopsApprovals = json.data || json || [];
+        renderApprovals();
+      })
+      .catch(function(err) {
+        console.error('Error fetching promotions:', err);
+        var body = document.getElementById('gitops-approval-body');
+        if (body) {
+          body.innerHTML = '<tr><td colspan="6" class="text-center" style="color:var(--color-muted);padding:24px;">Failed to load approvals: ' + esc(err.message) + '</td></tr>';
+        }
+      });
   }
 
   function generatePatch() {
@@ -52,16 +80,6 @@
       btn.textContent = '🔧 Generate';
       btn.disabled = false;
 
-      // Add to PR list
-      mockPRs.unshift({
-        id: '#' + (143 + Math.floor(Math.random() * 100)),
-        branch: 'fix/' + targetName.replace(/[^a-z0-9]/gi, '-').toLowerCase(),
-        target: targetName,
-        status: 'open',
-        author: 'ai-agent',
-        created: 'just now'
-      });
-      renderPRs();
       AppState.addAuditLog({ action: 'gitops-patch', target: targetName, result: 'success' });
     }, 1500);
   }
@@ -135,28 +153,112 @@
       '<label class="form-label">Diff Preview</label>' +
       '<pre class="ai-test-response" style="font-size:12px;max-height:200px;overflow-y:auto;">' + esc(patch) + '</pre>' +
       '<div style="display:flex;gap:var(--space-xs);margin-top:var(--space-sm);">' +
-        '<button class="btn btn-primary btn-sm" onclick="alert(\'PR created successfully!\')">🔀 Create PR</button>' +
+        '<button class="btn btn-primary btn-sm" id="btn-create-pr-action">🔀 Create PR</button>' +
         '<button class="btn btn-ghost btn-sm" onclick="alert(\'Rollback plan generated\')">⏪ Rollback Plan</button>' +
       '</div>';
+
+    var createPrBtn = document.getElementById('btn-create-pr-action');
+    if (createPrBtn) {
+      createPrBtn.addEventListener('click', function() {
+        createPR({
+          branch: branchName,
+          title: 'fix(' + target + '): ' + (desc || 'auto-remediation'),
+          description: desc || 'Auto-generated patch for ' + target,
+          repo_url: 'https://github.com/k8s-selfhost-agent/manifests',
+          provider: 'github',
+          files_changed: [{
+            path: type === 'helm' ? 'values.yaml' : (type === 'kustomize' ? 'kustomization.yaml' : 'deployment.yaml'),
+            content: patch,
+            action: 'modify'
+          }]
+        });
+      });
+    }
+  }
+
+  function createPR(payload) {
+    var btn = document.getElementById('btn-create-pr-action');
+    if (btn) {
+      btn.textContent = '⏳ Creating...';
+      btn.disabled = true;
+    }
+    fetch('/api/v1/prs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Failed to create PR');
+      return res.json();
+    })
+    .then(function(data) {
+      alert('PR created successfully!');
+      fetchPRs();
+      var preview = document.getElementById('gitops-pr-preview');
+      if (preview) preview.innerHTML = '<div class="text-center" style="padding:var(--space-md);color:var(--color-muted);">Generate a patch to preview changes.</div>';
+    })
+    .catch(function(err) {
+      alert('Error creating PR: ' + err.message);
+      if (btn) {
+        btn.textContent = '🔀 Create PR';
+        btn.disabled = false;
+      }
+    });
   }
 
   function renderPRs() {
     var body = document.getElementById('gitops-pr-body');
     if (!body) return;
     body.innerHTML = '';
-    mockPRs.forEach(function (pr) {
+    if (gitopsPRs.length === 0) {
+      body.innerHTML = '<tr><td colspan="7" class="text-center" style="color:var(--color-muted);padding:24px;">No active pull requests found.</td></tr>';
+      return;
+    }
+    gitopsPRs.forEach(function (pr) {
       var tr = document.createElement('tr');
+      var status = pr.Status || pr.status;
       tr.innerHTML =
-        '<td><strong style="color:var(--color-primary);">' + esc(pr.id) + '</strong></td>' +
-        '<td><code style="font-size:12px;">' + esc(pr.branch) + '</code></td>' +
-        '<td>' + esc(pr.target) + '</td>' +
-        '<td>' + prStatusBadge(pr.status) + '</td>' +
-        '<td>' + esc(pr.author) + '</td>' +
-        '<td style="font-size:12px;color:var(--color-muted);">' + esc(pr.created) + '</td>' +
+        '<td><strong style="color:var(--color-primary);">' + esc(pr.ID || pr.id) + '</strong></td>' +
+        '<td><code style="font-size:12px;">' + esc(pr.Branch || pr.branch) + '</code></td>' +
+        '<td>' + esc(pr.RepoURL || pr.repo_url || pr.target) + '</td>' +
+        '<td>' + prStatusBadge(status) + '</td>' +
+        '<td>' + esc(pr.Provider || pr.provider || 'github') + '</td>' +
+        '<td style="font-size:12px;color:var(--color-muted);">' + esc(pr.CreatedAt ? new Date(pr.CreatedAt).toLocaleDateString() : (pr.created || '')) + '</td>' +
         '<td><div class="action-group">' +
-          (pr.status === 'open' ? '<button class="action-btn">Merge</button><button class="action-btn">Close</button>' : '<button class="action-btn">View</button>') +
+          (status === 'open' ?
+            '<button class="action-btn" onclick="GitOpsSection.mergePR(\'' + (pr.ID || pr.id) + '\')">Merge</button>' +
+            '<button class="action-btn danger" onclick="GitOpsSection.closePR(\'' + (pr.ID || pr.id) + '\')">Close</button>' :
+            '<button class="action-btn">View</button>') +
         '</div></td>';
       body.appendChild(tr);
+    });
+  }
+
+  function mergePR(id) {
+    fetch('/api/v1/prs/' + id + '/merge', {
+      method: 'POST'
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Failed to merge PR');
+      fetchPRs();
+    })
+    .catch(function(err) {
+      alert('Error merging PR: ' + err.message);
+    });
+  }
+
+  function closePR(id) {
+    fetch('/api/v1/prs/' + id + '/close', {
+      method: 'POST'
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Failed to close PR');
+      fetchPRs();
+    })
+    .catch(function(err) {
+      alert('Error closing PR: ' + err.message);
     });
   }
 
@@ -164,22 +266,43 @@
     var body = document.getElementById('gitops-approval-body');
     if (!body) return;
     body.innerHTML = '';
-    mockApprovals.forEach(function (a) {
+    if (gitopsApprovals.length === 0) {
+      body.innerHTML = '<tr><td colspan="6" class="text-center" style="color:var(--color-muted);padding:24px;">No promotion actions required.</td></tr>';
+      return;
+    }
+    gitopsApprovals.forEach(function (a) {
       var tr = document.createElement('tr');
       tr.innerHTML =
-        '<td><strong>' + esc(a.deployment) + '</strong></td>' +
-        '<td><span class="badge badge-synced">' + esc(a.env) + '</span></td>' +
-        '<td><code style="font-size:12px;">' + esc(a.version) + '</code></td>' +
-        '<td>' + approvalBadge(a.status) + '</td>' +
-        '<td>' + esc(a.requestedBy) + '</td>' +
+        '<td><strong>' + esc(a.Service || a.service) + '</strong></td>' +
+        '<td><span class="badge badge-synced">' + esc(a.ToEnv || a.to_env || a.env) + '</span></td>' +
+        '<td><code style="font-size:12px;">' + esc(a.Version || a.version) + '</code></td>' +
+        '<td>' + approvalBadge(a.Status || a.status) + '</td>' +
+        '<td>' + esc(a.Requester || a.requester || a.requestedBy) + '</td>' +
         '<td><div class="action-group">' +
-          (a.status === 'pending' ?
-            '<button class="action-btn" style="color:var(--color-trading-up);">Approve</button>' +
-            '<button class="action-btn danger">Reject</button>' :
+          ((a.Status || a.status) === 'pending' ?
+            '<button class="action-btn" style="color:var(--color-trading-up);" onclick="GitOpsSection.approvePromotion(\'' + a.id + '\')">Approve</button>' +
+            '<button class="action-btn danger" onclick="GitOpsSection.rejectPromotion(\'' + a.id + '\')">Reject</button>' :
             '<button class="action-btn">Details</button>') +
         '</div></td>';
       body.appendChild(tr);
     });
+  }
+
+  function approvePromotion(id) {
+    fetch('/api/v1/promotions/' + id + '/approve?approver=admin', {
+      method: 'PUT'
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Failed to approve promotion');
+      fetchApprovals();
+    })
+    .catch(function(err) {
+      alert('Error approving promotion: ' + err.message);
+    });
+  }
+
+  function rejectPromotion(id) {
+    alert('Reject functionality is not implemented on the backend. Promoting or completing is required.');
   }
 
   function prStatusBadge(s) {
@@ -194,7 +317,11 @@
     return '<span class="badge badge-down">✗ Rejected</span>';
   }
 
-  
-
-  global.GitOpsSection = { init: init };
+  global.GitOpsSection = {
+    init: init,
+    mergePR: mergePR,
+    closePR: closePR,
+    approvePromotion: approvePromotion,
+    rejectPromotion: rejectPromotion
+  };
 })(window);

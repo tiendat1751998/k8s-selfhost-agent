@@ -81,29 +81,37 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			if err != nil {
 				payloadBytes, err = base64.StdEncoding.DecodeString(payloadSegment)
 			}
+			if err != nil {
+				http.Error(w, "invalid token encoding", http.StatusUnauthorized)
+				return
+			}
 			
-			if err == nil {
-				var claims struct {
-					Sub    string `json:"sub"`
-					Role   string `json:"role"`
-					Tenant string `json:"tenant"`
-				}
-				if err := json.Unmarshal(payloadBytes, &claims); err == nil {
-					if claims.Sub != "" {
-						userID = claims.Sub
-					}
-					if claims.Role != "" {
-						userRole = claims.Role
-					}
-					if claims.Tenant != "" {
-						tenantID = claims.Tenant
-					}
-				}
+			var claims struct {
+				Sub    string `json:"sub"`
+				Role   string `json:"role"`
+				Tenant string `json:"tenant"`
+			}
+			if err := json.Unmarshal(payloadBytes, &claims); err != nil {
+				http.Error(w, "invalid token claims", http.StatusUnauthorized)
+				return
+			}
+
+			if claims.Sub != "" {
+				userID = claims.Sub
+			}
+			if claims.Role != "" {
+				userRole = claims.Role
+			}
+			if claims.Tenant != "" {
+				tenantID = claims.Tenant
 			}
 		} else if strings.HasPrefix(token, "k8s-enterprise-demo-") {
 			userID = "admin-user-id"
 			userRole = "platform_admin"
 			tenantID = "default-tenant"
+		} else {
+			http.Error(w, "invalid token format", http.StatusUnauthorized)
+			return
 		}
 
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)

@@ -117,6 +117,16 @@ func (pr *PullRequest) MarkMerged() error {
 	return nil
 }
 
+// MarkClosed transitions the PR to closed status.
+func (pr *PullRequest) MarkClosed() error {
+	if pr.Status != PRStatusOpen && pr.Status != PRStatusPending {
+		return errors.NewConflict("pull_request", fmt.Sprintf("cannot close PR in status %s", pr.Status))
+	}
+	pr.Status = PRStatusClosed
+	pr.UpdatedAt = time.Now().UTC()
+	return nil
+}
+
 // MarkFailed transitions the PR to failed status.
 func (pr *PullRequest) MarkFailed() {
 	pr.Status = PRStatusFailed

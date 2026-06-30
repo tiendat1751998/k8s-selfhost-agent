@@ -45,6 +45,7 @@ type PlatformHandlers struct {
 	Cost          *CostHandler
 	Backup        *BackupHandler
 	Agents        *AgentHandler
+	Deployments   *DeploymentHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -200,6 +201,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Agents != nil {
 				r.Route("/agents", platform.Agents.RegisterRoutes)
+			}
+			if platform.Deployments != nil {
+				r.Route("/deployments", platform.Deployments.RegisterRoutes)
 			}
 		}
 	})

@@ -47,9 +47,11 @@
   function init() {
     createOverlayAndTooltip();
 
-    // Check if user has completed onboarding
+    // Check if user has completed onboarding and has a valid token
     const completed = localStorage.getItem(COMPLETED_KEY);
-    if (!completed) {
+    const token = localStorage.getItem('k8s_token');
+    const hasValidToken = token && token !== 'invalid-token';
+    if (!completed && hasValidToken) {
       // Delay slightly to allow other modules to finish layout rendering
       setTimeout(() => {
         startTour();
@@ -74,6 +76,10 @@
   }
 
   function startTour() {
+    const loginModal = document.getElementById('login-modal');
+    if (loginModal && loginModal.style.display === 'flex') {
+      return; // Do not start onboarding if login modal is active
+    }
     currentStep = 0;
     overlayEl.style.display = 'block';
     showStep(currentStep);

@@ -210,3 +210,63 @@ func (r *realDockerRepo) GetLogs(ctx context.Context, targetID string, targetTyp
 
 	return buf.String(), nil
 }
+
+func (r *realDockerRepo) DeleteService(ctx context.Context, serviceID string) error {
+	err := r.cli.ServiceRemove(ctx, serviceID)
+	if err != nil {
+		return fmt.Errorf("removing service: %w", err)
+	}
+	return nil
+}
+
+func (r *realDockerRepo) RestartService(ctx context.Context, serviceID string) error {
+	service, _, err := r.cli.ServiceInspectWithRaw(ctx, serviceID, types.ServiceInspectOptions{})
+	if err != nil {
+		return fmt.Errorf("inspecting service for restart: %w", err)
+	}
+
+	spec := service.Spec
+	spec.TaskTemplate.ForceUpdate++
+
+	_, err = r.cli.ServiceUpdate(ctx, serviceID, service.Version, spec, types.ServiceUpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("triggering service restart: %w", err)
+	}
+	return nil
+}
+
+func (r *realDockerRepo) CreateService(ctx context.Context, name string, image string, replicas int, port int) error {
+	replicasVal := uint64(replicas)
+	spec := swarm.ServiceSpec{
+		Annotations: swarm.Annotations{
+			Name: name,
+		},
+		TaskTemplate: swarm.TaskSpec{
+			ContainerSpec: &swarm.ContainerSpec{
+				Image: image,
+			},
+		},
+		Mode: swarm.ServiceMode{
+			Replicated: &swarm.ReplicatedService{
+				Replicas: &replicasVal,
+			},
+		},
+	}
+	if port > 0 {
+		spec.EndpointSpec = &swarm.EndpointSpec{
+			Ports: []swarm.PortConfig{
+				{
+					Protocol:   swarm.PortConfigProtocolTCP,
+					TargetPort: uint32(port),
+				},
+			},
+		}
+	}
+	_, err := r.cli.ServiceCreate(ctx, spec, types.ServiceCreateOptions{})
+	if err != nil {
+		return fmt.Errorf("creating swarm service: %w", err)
+	}
+	return nil
+}
+
+

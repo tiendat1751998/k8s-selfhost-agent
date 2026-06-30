@@ -68,6 +68,10 @@
       refreshBtn.addEventListener('click', function () {
         WSClient.send({ type: 'get_config' });
         AppState.addAuditLog({ action: 'refresh', target: 'system/config', result: 'success' });
+        var section = document.getElementById('section-deployment-center');
+        if (window.DeploymentCatalog && section && section.classList.contains('active')) {
+          window.DeploymentCatalog.loadInitialApps();
+        }
       });
     }
 

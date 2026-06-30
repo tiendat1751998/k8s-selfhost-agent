@@ -55,31 +55,14 @@
         const json = await res.json();
         let items = json.data || [];
         
-        // Dynamic fallback mock data if no scaling rules are configured in cluster
         if (items.length === 0) {
-          items = [
-            {
-              name: 'backend-cpu-scaler',
-              target: 'Deployment/server',
-              min: 2,
-              max: 10,
-              current: 3,
-              metrics: 'CPU: 45% / 80%'
-            },
-            {
-              name: 'frontend-hpa',
-              target: 'Deployment/frontend',
-              min: 3,
-              max: 15,
-              current: 4,
-              metrics: 'CPU: 32% / 75%'
-            }
-          ];
+          tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 24px; text-align: center; color: var(--color-muted);">No active HPA (Horizontal Pod Autoscaler) rules found.</td></tr>`;
+          return;
         }
         
         this.renderTable(items);
       } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 24px; text-align: center; color: var(--color-muted);">No active HPA (Horizontal Pod Autoscaler) rules found on the current Swarm/Docker host. (Autoscaling is managed natively by Kubernetes).</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 24px; text-align: center; color: var(--color-muted);">No active HPA (Horizontal Pod Autoscaler) rules found on the current host. Detail: ${e.message}</td></tr>`;
       }
     },
 

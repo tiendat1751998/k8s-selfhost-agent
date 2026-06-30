@@ -45,6 +45,18 @@ func (r *testDockerRepo) ToggleContainer(ctx context.Context, containerID string
 	return nil
 }
 
+func (r *testDockerRepo) DeleteService(ctx context.Context, serviceID string) error {
+	return nil
+}
+
+func (r *testDockerRepo) RestartService(ctx context.Context, serviceID string) error {
+	return nil
+}
+
+func (r *testDockerRepo) CreateService(ctx context.Context, name string, image string, replicas int, port int) error {
+	return nil
+}
+
 func (r *testDockerRepo) GetLogs(ctx context.Context, targetID string, targetType string) (string, error) {
 	return "mock logs", nil
 }

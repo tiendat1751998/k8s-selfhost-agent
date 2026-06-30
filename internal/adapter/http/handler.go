@@ -50,7 +50,10 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 	r.Route("/prs", func(r chi.Router) {
 		r.Get("/", h.ListPRs)
+		r.Post("/", h.CreatePR)
 		r.Get("/{id}", h.GetPR)
+		r.Post("/{id}/merge", h.MergePR)
+		r.Post("/{id}/close", h.ClosePR)
 	})
 }
 
@@ -303,4 +306,167 @@ func parseIntParam(r *http.Request, key string, defaultVal int) int {
 		return defaultVal
 	}
 	return parsed
+}
+
+// CreatePR handles POST /api/v1/prs
+func (h *Handler) CreatePR(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IncidentID   string                    `json:"incident_id"`
+		Provider     domainGitops.Provider     `json:"provider"`
+		RepoURL      string                    `json:"repo_url"`
+		Branch       string                    `json:"branch"`
+		BaseBranch   string                    `json:"base_branch"`
+		Title        string                    `json:"title"`
+		Description  string                    `json:"description"`
+		FilesChanged []struct {
+			Path    string                  `json:"path"`
+			Content string                  `json:"content"`
+			Action  domainGitops.FileAction `json:"action"`
+		} `json:"files_changed"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	// In CreatePR, check if an incident exists to satisfy foreign key constraints, or link/create a default system incident.
+	var incID = req.IncidentID
+	if incID != "" {
+		_, err := h.incidentRepo.GetByID(r.Context(), incID)
+		if err != nil {
+			incID = ""
+		}
+	}
+
+	if incID == "" {
+		// Find or create default system incident
+		filter := incident.Filter{
+			ClusterName: "system",
+			Namespace:   "system",
+			Limit:       1,
+		}
+		incidents, _, err := h.incidentRepo.List(r.Context(), filter)
+		if err == nil && len(incidents) > 0 {
+			incID = incidents[0].ID
+		} else {
+			defaultInc, err := incident.New("system", "system", "system-pod", incident.TypeCrashLoopBackOff, incident.SeverityMedium, "Default system incident for orphaned PRs")
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to create default incident struct", err)
+				return
+			}
+			if err := h.incidentRepo.Create(r.Context(), defaultInc); err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to persist default incident", err)
+				return
+			}
+			incID = defaultInc.ID
+		}
+	}
+
+	provider := req.Provider
+	if provider == "" {
+		provider = domainGitops.ProviderGitHub
+	}
+	repoURL := req.RepoURL
+	if repoURL == "" {
+		repoURL = "https://github.com/k8s-selfhost-agent/k8s-selfhost-agent"
+	}
+	branch := req.Branch
+	if branch == "" {
+		branch = "gitops-patch"
+	}
+	baseBranch := req.BaseBranch
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	title := req.Title
+	if title == "" {
+		title = "Remediation PR"
+	}
+
+	pr, err := domainGitops.New(incID, provider, repoURL, branch, baseBranch, title, req.Description)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid PR fields", err)
+		return
+	}
+
+	for _, f := range req.FilesChanged {
+		action := f.Action
+		if action == "" {
+			action = domainGitops.FileActionModify
+		}
+		pr.AddFileChange(f.Path, f.Content, action)
+	}
+
+	// Since we are registering it, make it default to Open so it can be merged/closed in UI
+	_ = pr.MarkOpen(repoURL+"/pull/1", 1)
+
+	if err := h.prRepo.Create(r.Context(), pr); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create PR", err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, pr)
+}
+
+// MergePR handles POST /api/v1/prs/{id}/merge
+func (h *Handler) MergePR(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	pr, err := h.prRepo.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errors.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "pull request not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get PR", err)
+		return
+	}
+
+	if err := pr.MarkMerged(); err != nil {
+		writeError(w, http.StatusConflict, "failed to mark PR as merged", err)
+		return
+	}
+
+	if err := h.prRepo.Update(r.Context(), pr); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update PR", err)
+		return
+	}
+
+	// Update the associated incident to resolved if there is one
+	if pr.IncidentID != "" {
+		inc, err := h.incidentRepo.GetByID(r.Context(), pr.IncidentID)
+		if err == nil && inc != nil {
+			if err := inc.MarkResolved(); err == nil {
+				_ = h.incidentRepo.Update(r.Context(), inc)
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, pr)
+}
+
+// ClosePR handles POST /api/v1/prs/{id}/close
+func (h *Handler) ClosePR(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	pr, err := h.prRepo.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errors.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "pull request not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get PR", err)
+		return
+	}
+
+	if err := pr.MarkClosed(); err != nil {
+		writeError(w, http.StatusConflict, "failed to mark PR as closed", err)
+		return
+	}
+
+	if err := h.prRepo.Update(r.Context(), pr); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update PR", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, pr)
 }

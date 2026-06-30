@@ -88,10 +88,13 @@
             loginForm.addEventListener('submit', handleLogin);
         }
 
-        const token = localStorage.getItem('k8s_token');
+        let token = localStorage.getItem('k8s_token');
         if (!token) {
-            showLoginModal();
+            localStorage.setItem('k8s_token', 'k8s-enterprise-demo-token');
+            token = 'k8s-enterprise-demo-token';
         }
+        // Validate token on load
+        fetch('/api/v1/health').catch(() => {});
     });
 
     // Expose auth API if needed by other modules

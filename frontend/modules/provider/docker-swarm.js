@@ -376,10 +376,10 @@
     if (!logEl) return;
 
     logEl.textContent += '\n[Swarm Engine] Authenticating CLI session to Docker daemon client...';
-    logEl.textContent += '\n[Swarm Engine] Updating replication factor for service ID ' + svc.ID + '...';
+    logEl.textContent += '\n[Swarm Engine] Updating replication factor for service ID ' + svc.id + '...';
 
     try {
-      var res = await fetch('/api/v1/docker/services/' + encodeURIComponent(svc.ID) + '/scale', {
+      var res = await fetch('/api/v1/docker/services/' + encodeURIComponent(svc.id) + '/scale', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ replicas: count })
@@ -403,7 +403,7 @@
   async function triggerContainerStateToggle(name, state, container) {
     var action = state === 'running' ? 'start' : 'stop';
     try {
-      var res = await fetch('/api/v1/docker/containers/' + encodeURIComponent(container.ID) + '/toggle', {
+      var res = await fetch('/api/v1/docker/containers/' + encodeURIComponent(container.id) + '/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: action })
@@ -428,7 +428,7 @@
 
   async function triggerNodeDrain(name, node) {
     try {
-      var res = await fetch('/api/v1/docker/nodes/' + encodeURIComponent(node.ID) + '/drain', {
+      var res = await fetch('/api/v1/docker/nodes/' + encodeURIComponent(node.id) + '/drain', {
         method: 'POST'
       });
       if (!res.ok) throw new Error('API returned status ' + res.status);

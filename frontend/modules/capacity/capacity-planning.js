@@ -39,13 +39,8 @@ const CapacityPlanning = {
         <div class="capacity-charts-grid">
           <div class="capacity-card">
             <h3>CPU Forecast</h3>
-            <div class="capacity-chart" id="cpu-forecast-chart">
-              <!-- Mock chart -->
-              <div class="mock-chart-line" style="height: 40%; left: 0;"></div>
-              <div class="mock-chart-line" style="height: 50%; left: 25%;"></div>
-              <div class="mock-chart-line" style="height: 65%; left: 50%;"></div>
-              <div class="mock-chart-line warning" style="height: 85%; left: 75%;"></div>
-              <div class="mock-chart-line critical" style="height: 98%; left: 100%;"></div>
+            <div class="capacity-chart" id="cpu-forecast-chart" style="display:flex;align-items:center;justify-content:center;">
+              <span class="loading loading-spinner"></span>
             </div>
             <div class="chart-labels">
               <span>Today</span>
@@ -58,13 +53,8 @@ const CapacityPlanning = {
           
           <div class="capacity-card">
             <h3>Memory Forecast</h3>
-            <div class="capacity-chart" id="mem-forecast-chart">
-              <!-- Mock chart -->
-              <div class="mock-chart-line" style="height: 60%; left: 0;"></div>
-              <div class="mock-chart-line" style="height: 65%; left: 25%;"></div>
-              <div class="mock-chart-line" style="height: 70%; left: 50%;"></div>
-              <div class="mock-chart-line" style="height: 75%; left: 75%;"></div>
-              <div class="mock-chart-line" style="height: 80%; left: 100%;"></div>
+            <div class="capacity-chart" id="mem-forecast-chart" style="display:flex;align-items:center;justify-content:center;">
+              <span class="loading loading-spinner"></span>
             </div>
             <div class="chart-labels">
               <span>Today</span>
@@ -100,29 +90,43 @@ const CapacityPlanning = {
   async loadData() {
     try {
       const res = await fetch('/api/v1/capacity');
-      if (res.ok) {
-        const json = await res.json();
-        const items = json.data || [];
-        if (items.length > 0) {
-          this.renderMetrics(items);
-          return;
-        }
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      const json = await res.json();
+      const items = json.data || [];
+      if (items.length > 0) {
+        this.renderMetrics(items);
+        return;
+      }
+      
+      // Empty capacity data fallback
+      const alerts = document.getElementById('capacity-alerts');
+      if (alerts) {
+        alerts.innerHTML = `
+          <div class="alert alert-warning">
+            <span class="icon">⚠️</span>
+            <div>
+              <h4>No capacity planning data available</h4>
+              <p>The metrics server returned empty forecasting records.</p>
+            </div>
+          </div>
+        `;
       }
     } catch (e) {
       console.warn('Capacity API unavailable:', e);
-    }
-    
-    const alerts = document.getElementById('capacity-alerts');
-    if (alerts) {
-      alerts.innerHTML = `
-        <div class="alert alert-danger">
-          <span class="icon">⚠️</span>
-          <div>
-            <h4>Unable to load capacity planning data</h4>
-            <p>Please check connection or ensure the metrics server is running on the cluster.</p>
+      const alerts = document.getElementById('capacity-alerts');
+      if (alerts) {
+        alerts.innerHTML = `
+          <div class="alert alert-danger">
+            <span class="icon">⚠️</span>
+            <div>
+              <h4>Unable to load capacity planning data</h4>
+              <p>Please check connection or ensure the metrics server is running on the cluster. Detail: ${esc(e.message)}</p>
+            </div>
           </div>
-        </div>
-      `;
+        `;
+      }
     }
   },
 

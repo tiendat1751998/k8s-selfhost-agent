@@ -28,10 +28,19 @@
 
     // Populate cluster dropdown
     AppState.on('kubernetes', populateClusters);
-    AppState.on('navigate', function (s) {
+    AppState.on('navigate', async function (s) {
       if (s === 'deployment-center') {
+        try {
+          var res = await fetch('/api/v1/fleet');
+          if (res.ok) {
+            var data = await res.json();
+            if (data && data.data) AppState.setKubernetes(data.data);
+          }
+        } catch (e) {
+          console.error('Failed to load fleet clusters:', e);
+        }
         populateClusters(AppState.getState().kubernetes);
-        if (global.DeploymentCatalog) global.DeploymentCatalog.renderCatalog();
+        if (global.DeploymentCatalog) global.DeploymentCatalog.loadInitialApps();
       }
     });
 
@@ -49,6 +58,7 @@
             '<option value="none">No Persistent Storage</option><option value="pvc">Persistent Volume Claim (PVC)</option><option value="hostpath">Host Path Mount</option>' :
             '<option value="none">No Persistent Storage</option><option value="hostpath">Host Path Mount</option><option value="named">Named Swarm Volume</option>';
         }
+        populateClusters(AppState.getState().kubernetes);
       });
     }
 
@@ -148,7 +158,7 @@
     if (tabId === 'wizard') {
       if (global.DeploymentWizard) global.DeploymentWizard.reset();
     } else {
-      if (global.DeploymentCatalog) global.DeploymentCatalog.renderCatalog();
+      if (global.DeploymentCatalog) global.DeploymentCatalog.loadInitialApps();
     }
   }
 
@@ -157,7 +167,16 @@
     if (!sel || !clusters) return;
     var cur = sel.value;
     sel.innerHTML = '<option value="">Select a cluster...</option>';
+    
+    var targetType = document.getElementById('wiz-target-type');
+    var selectedType = targetType ? targetType.value : 'kubernetes';
+
     clusters.forEach(function (c) {
+      var provider = (c.provider || '').toLowerCase();
+      var isSwarmCluster = provider === 'docker' || provider === 'docker_swarm';
+      if (selectedType === 'kubernetes' && isSwarmCluster) return;
+      if (selectedType === 'swarm' && !isSwarmCluster) return;
+
       sel.innerHTML += '<option value="' + esc(c.name) + '">' + esc(c.name) + ' (' + esc(c.provider) + ')</option>';
     });
     sel.value = cur;

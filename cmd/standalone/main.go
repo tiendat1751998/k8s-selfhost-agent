@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 	usecaseAgent "github.com/datdt/k8sselfhost/internal/usecase/agent"
+	usecaseDeployment "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 	"github.com/datdt/k8sselfhost/pkg/health"
 	"github.com/datdt/k8sselfhost/pkg/logger"
 )
@@ -152,11 +153,18 @@ func run() error {
 	clientManager := infraCluster.NewClientManager(fleetRepo)
 
 	agentRepo := postgres.NewAgentRepo(pgClient)
+	incRepo := postgres.NewIncidentRepo(pgClient)
+	reportRepo := postgres.NewReportRepo(pgClient)
+	prRepo := postgres.NewPRRepo(pgClient)
+	costRepo := postgres.NewCostRepo(pgClient)
+	backupRepo := postgres.NewBackupRepo(pgClient)
+
 	defaultLLM, _ := registry.Default()
 	bridge := &wsBridge{hub: wsHub}
 	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge)
 
 	platformHandlers := &adapthttp.PlatformHandlers{
+		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, nil),
 		Docker:        adapthttp.NewDockerHandler(dockerRepo),
 		Drift:         adapthttp.NewDriftHandler(postgres.NewDriftRepo(pgClient)),
 		Correlation:   adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(pgClient)),
@@ -176,7 +184,12 @@ func run() error {
 		Automation:    adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(pgClient)),
 		Timeline:      adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(pgClient)),
 		AI:            adapthttp.NewAIHandler(registry),
+		Auth:          adapthttp.NewAuthHandler(pgClient),
+		Search:        adapthttp.NewSearchHandler(pgClient),
+		Cost:          adapthttp.NewCostHandler(costRepo),
+		Backup:        adapthttp.NewBackupHandler(backupRepo, wsHub),
 		Agents:        adapthttp.NewAgentHandler(agentRepo, orchestrator),
+		Deployments:   adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager))),
 	}
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)

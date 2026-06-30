@@ -220,7 +220,7 @@
     return val;
   }
 
-  function triggerWizardDeploy() {
+  async function triggerWizardDeploy() {
     var progressEl = document.getElementById('wiz-deploy-progress');
     var logEl = document.getElementById('wiz-deploy-log');
     var statusEl = document.getElementById('wiz-deploy-status');
@@ -230,6 +230,47 @@
     progressEl.style.width = '0%';
     statusEl.textContent = 'Deploying';
     statusEl.className = 'badge badge-degraded';
+    logEl.textContent = '[' + new Date().toLocaleTimeString() + '] Initializing deployment session...';
+
+    // Get input values
+    var type = document.getElementById('wiz-target-type').value;
+    var cluster = document.getElementById('wiz-cluster-select').value;
+    var ns = document.getElementById('wiz-namespace').value.trim();
+    var img = document.getElementById('wiz-image').value.trim();
+    var tag = document.getElementById('wiz-image-tag').value.trim();
+    var replicas = parseInt(document.getElementById('wiz-replicas').value) || 2;
+    var port = parseInt(document.getElementById('wiz-service-port').value) || 80;
+    var cpu = document.getElementById('wiz-cpu-req').value;
+    var memory = document.getElementById('wiz-mem-req').value;
+    var appName = img.split('/').pop().split(':')[0];
+
+    try {
+      var response = await fetch('/api/v1/deployments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: type,
+          target: cluster,
+          namespace: type === 'kubernetes' ? ns : '',
+          name: appName,
+          image: img + ':' + tag,
+          replicas: replicas,
+          port: port,
+          cpu: cpu,
+          memory: memory
+        })
+      });
+      if (!response.ok) {
+        var errText = await response.text();
+        throw new Error(errText || 'Deployment API request failed');
+      }
+    } catch (e) {
+      logEl.textContent += '\n[' + new Date().toLocaleTimeString() + '] [ERROR] Deployment failed: ' + e.message;
+      statusEl.textContent = 'Failed';
+      statusEl.className = 'badge badge-down';
+      btnNext.disabled = false;
+      return;
+    }
 
     var logs = [
       '→ Validating target cluster connection...',
@@ -239,7 +280,7 @@
       '→ Triggering ArgoCD sync / Swarm Service deploy...',
       '→ Registering Service endpoints & DNS records...',
       '→ Pulling container image...',
-      '→ Pods rolling out (0/' + document.getElementById('wiz-replicas').value + ')...',
+      '→ Pods rolling out (0/' + replicas + ')...',
       '→ Probes checking health...',
       '✓ Rollout complete. Service is healthy.'
     ];
@@ -253,29 +294,6 @@
         statusEl.className = 'badge badge-healthy';
         progressEl.style.width = '100%';
         btnNext.disabled = false;
-
-        // Add application to catalog
-        var type = document.getElementById('wiz-target-type').value;
-        var cluster = document.getElementById('wiz-cluster-select').value;
-        var ns = document.getElementById('wiz-namespace').value.trim();
-        var img = document.getElementById('wiz-image').value.trim();
-        var appName = img.split('/').pop().split(':')[0];
-        global.DeploymentState.apps.unshift({
-          name: appName,
-          team: 'SRE',
-          env: 'production',
-          image: img + ':' + document.getElementById('wiz-image-tag').value,
-          target: cluster,
-          namespace: type === 'kubernetes' ? ns : '',
-          type: type,
-          replicas: parseInt(document.getElementById('wiz-replicas').value) || 2,
-          status: 'healthy',
-          cpu: document.getElementById('wiz-cpu-req').value,
-          memory: document.getElementById('wiz-mem-req').value,
-          port: parseInt(document.getElementById('wiz-service-port').value) || 80,
-          netType: document.getElementById('wiz-network-type').value,
-          volume: document.getElementById('wiz-volume-type').value
-        });
 
         AppState.addAuditLog({ action: 'deploy', target: 'app/' + appName, result: 'success' });
         return;
@@ -292,7 +310,6 @@
       setTimeout(runLogStep, 400 + Math.random() * 400);
     }
 
-    logEl.textContent = '[' + new Date().toLocaleTimeString() + '] Initializing deployment session...';
     setTimeout(runLogStep, 500);
   }
 

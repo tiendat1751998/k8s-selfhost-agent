@@ -76,10 +76,47 @@ const TaggingSystem = {
     if (btnCancel) btnCancel.addEventListener('click', () => modal.style.display = 'none');
 
     if (btnSave) {
-      btnSave.addEventListener('click', () => {
-        alert('Tag created successfully');
-        modal.style.display = 'none';
-        this.loadData();
+      btnSave.addEventListener('click', async () => {
+        const keyEl = document.getElementById('tag-key');
+        const valEl = document.getElementById('tag-value');
+        const catEl = document.getElementById('tag-category');
+        
+        const key = keyEl ? keyEl.value.trim() : '';
+        const value = valEl ? valEl.value.trim() : '';
+        const category = catEl ? catEl.value : 'custom';
+        
+        if (!key || !value) {
+          alert('Key and Value are required');
+          return;
+        }
+        
+        btnSave.disabled = true;
+        btnSave.textContent = 'Saving...';
+        
+        try {
+          const res = await fetch('/api/v1/tags', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ key, value, category })
+          });
+          
+          if (!res.ok) throw new Error('Failed to save tag');
+          
+          alert('Tag created successfully');
+          modal.style.display = 'none';
+          
+          if (keyEl) keyEl.value = '';
+          if (valEl) valEl.value = '';
+          
+          this.loadData();
+        } catch (e) {
+          alert('Error saving tag: ' + e.message);
+        } finally {
+          btnSave.disabled = false;
+          btnSave.textContent = 'Save Tag';
+        }
       });
     }
   },
@@ -90,30 +127,37 @@ const TaggingSystem = {
       if (res.ok) {
         const json = await res.json();
         const items = json.data || [];
-        if (items.length > 0) {
-          this.renderTags(items);
-          return;
-        }
+        this.renderTags(items);
+      } else {
+        throw new Error('Failed to fetch tags');
       }
     } catch (e) {
-      console.warn('Tags API unavailable, using mock data:', e);
+      console.warn('Tags API unavailable:', e);
+      const grid = document.getElementById('tagging-grid');
+      if (grid) {
+        grid.innerHTML = `<div class="text-center" style="grid-column:span 3;padding:24px;color:var(--color-muted);">Unable to load tags. Detail: ${e.message}</div>`;
+      }
     }
-    this.renderMockTags();
   },
 
   renderTags(data) {
     const grid = document.getElementById('tagging-grid');
     if (!grid) return;
 
+    if (data.length === 0) {
+      grid.innerHTML = '<div class="text-center" style="grid-column:span 3;padding:48px 24px;color:var(--color-muted);">No tags defined yet. Click "Create Tag" to add one.</div>';
+      return;
+    }
+
     grid.innerHTML = data.map(m => `
       <div class="tag-card">
         <div class="tag-card-header">
-          <span class="badge badge-outline">${m.category || 'custom'}</span>
+          <span class="badge badge-outline">${esc(m.category || 'custom')}</span>
           <button class="btn btn-ghost btn-sm btn-icon" title="Delete Tag" onclick="TaggingSystem.deleteTag('${m.id || ''}')">🗑️</button>
         </div>
         <div class="tag-key-value">
-          <span class="tag-key">${m.key || ''}:</span>
-          <span class="tag-value">${m.value || ''}</span>
+          <span class="tag-key">${esc(m.key || '')}:</span>
+          <span class="tag-value">${esc(m.value || '')}</span>
         </div>
         <div class="tag-card-footer">
           <span class="text-sm text-muted">${m.usage_count || 0} resources</span>
@@ -123,35 +167,21 @@ const TaggingSystem = {
     `).join('');
   },
 
-  renderMockTags() {
-    const grid = document.getElementById('tagging-grid');
-    if (!grid) return;
-
-    const mocks = [
-      { key: 'environment', value: 'production', category: 'environment', usageCount: 4210 },
-      { key: 'environment', value: 'staging', category: 'environment', usageCount: 840 },
-      { key: 'owner', value: 'team-payments', category: 'owner', usageCount: 156 },
-      { key: 'owner', value: 'team-platform', category: 'owner', usageCount: 342 },
-      { key: 'cost_center', value: 'cc-9921-marketing', category: 'cost_center', usageCount: 89 },
-      { key: 'tier', value: 'frontend', category: 'custom', usageCount: 50 }
-    ];
-
-    grid.innerHTML = mocks.map(m => `
-      <div class="tag-card">
-        <div class="tag-card-header">
-          <span class="badge badge-outline">${m.category}</span>
-          <button class="btn btn-ghost btn-sm btn-icon" title="Delete Tag">🗑️</button>
-        </div>
-        <div class="tag-key-value">
-          <span class="tag-key">${m.key}:</span>
-          <span class="tag-value">${m.value}</span>
-        </div>
-        <div class="tag-card-footer">
-          <span class="text-sm text-muted">${m.usageCount} resources</span>
-          <button class="btn btn-sm btn-outline">View Resources</button>
-        </div>
-      </div>
-    `).join('');
+  async deleteTag(id) {
+    if (!id) return;
+    if (!confirm('Are you sure you want to delete this tag?')) return;
+    
+    try {
+      const res = await fetch(`/api/v1/tags/${id}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error('Failed to delete tag');
+      
+      alert('Tag deleted successfully');
+      this.loadData();
+    } catch (e) {
+      alert('Error deleting tag: ' + e.message);
+    }
   }
 };
 

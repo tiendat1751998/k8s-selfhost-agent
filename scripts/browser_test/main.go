@@ -58,17 +58,25 @@ func main() {
 	err := chromedp.Run(ctx,
 		// Navigate to host
 		chromedp.Navigate("http://localhost:8080"),
-		// Wait for email input to appear (Login Modal is visible)
+		// Wait for initial dashboard load
+		chromedp.WaitVisible(`a[data-section="overview"]`, chromedp.ByQuery),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Force logout to trigger the login modal
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			fmt.Println("1. Triggering logout to show login modal...")
+			return nil
+		}),
+		chromedp.Evaluate(`window.Auth.logout()`, nil),
 		chromedp.WaitVisible(`input[type="email"]`, chromedp.ByQuery),
 		chromedp.Sleep(500*time.Millisecond),
 
-		// Fill in credentials
+		// Fill in credentials and log back in
 		chromedp.SendKeys(`input[type="email"]`, "admin@k8sselfhost.local", chromedp.ByQuery),
 		chromedp.SendKeys(`input[type="password"]`, "admin", chromedp.ByQuery),
 		chromedp.Click(`#login-form button[type="submit"]`, chromedp.ByQuery),
 		
 		// Wait for redirect, reload, and overview section load
-		chromedp.Sleep(2*time.Second),
 		chromedp.WaitVisible(`a[data-section="overview"]`, chromedp.ByQuery),
 		chromedp.Sleep(1*time.Second),
 
