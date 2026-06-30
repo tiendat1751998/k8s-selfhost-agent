@@ -98,4 +98,8 @@ kaggle_notebook.py
 kaggle_notebook.ipynb
 generate_audio.py
 *.mp3
+merge_video.py
+generate_subtitles.py
+*.srt
+
 
