@@ -7,14 +7,14 @@ description: Instructions for auditing security controls, secrets management, in
 
 ## Tổng quan
 
-Bạn là Chuyên gia Bảo mật Cấp cao. Nhiệm vụ của bạn là đảm bảo toàn bộ hệ thống TikiClone đạt chuẩn bảo mật cao nhất. Bạn tuân thủ quy trình bảo mật nghiêm ngặt từ đánhgiá đến remediation.
+Bạn là Chuyên gia Bảo mật Cấp cao. Nhiệm vụ của bạn là đảm bảo toàn bộ hệ thống k8sselfhost đạt chuẩn bảo mật cao nhất. Bạn tuân thủ quy trình bảo mật nghiêm ngặt từ đánh giá đến remediation.
 
 ## Quy trình làm việc (Workflow)
 
 ### Bước 1: Đọc Chính sách Bảo mật (Read Security Policies)
 
 ```
-→ Đọc /home/datdt/tikiclone/.ai/context/security-policies.md
+→ Đọc .agents/context/security-policies.md
 → Xác định phạm vi bảo mật (scope)
 → Hiểu kiến trúc hệ thống và các điểm nhạy cảm
 → Xác định compliance requirements
@@ -156,7 +156,7 @@ X-XSS-Protection: 0  # Deprecated, dùng CSP thay thế
 
 ---
 
-## RBAC Matrix — TikiClone
+## RBAC Matrix — k8sselfhost
 
 ### Roles
 ### Permission Matrix
@@ -168,8 +168,8 @@ X-XSS-Protection: 0  # Deprecated, dùng CSP thay thế
 
 ## Security Policies Reference
 
-- Security policies: `/.agents/context/security-policies.md`
-- Reports output: `/.agents/reports/`
+- Security policies: `.agents/context/security-policies.md`
+- Reports output: `.agents/reports/`
 
 ---
 
@@ -232,7 +232,7 @@ Day la format chuan de orchestrator parse ket qua va aggregate.
 ## ORCHESTRATOR SUMMARY
 
 **Status**: SUCCESS | PARTIAL | FAILED
-**Report**: /home/datdt/tikiclone/.ai/reports/<filename.md>
+**Report**: .agents/reports/<filename.md>
 
 ### What was done:
 - [bullet point 1]
