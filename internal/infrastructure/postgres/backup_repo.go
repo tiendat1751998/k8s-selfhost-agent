@@ -53,13 +53,13 @@ func (r *backupRepo) GetHistory(ctx context.Context) ([]backup.BackupLog, error)
 
 func (r *backupRepo) TriggerRecovery(ctx context.Context, target string) (*backup.BackupLog, error) {
 	log := backup.BackupLog{
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Action:    "restore",
 		Target:    target,
-		Status:    "success",
-		Duration:  "34s",
-		Size:      "1.2 GB",
-		Details:   json.RawMessage(`{"recovered_namespaces":["production"],"status":"verified"}`),
+		Status:    "running",
+		Duration:  "0s",
+		Size:      "Pending",
+		Details:   json.RawMessage(`{}`),
 	}
 
 	err := r.pool.QueryRow(ctx, `
@@ -72,4 +72,17 @@ func (r *backupRepo) TriggerRecovery(ctx context.Context, target string) (*backu
 	}
 
 	return &log, nil
+}
+
+func (r *backupRepo) Update(ctx context.Context, log *backup.BackupLog) error {
+	query := `
+		UPDATE backup_history
+		SET status = $1, duration = $2, size = $3, details = $4
+		WHERE id = $5
+	`
+	_, err := r.pool.Exec(ctx, query, log.Status, log.Duration, log.Size, string(log.Details), log.ID)
+	if err != nil {
+		return fmt.Errorf("updating backup log: %w", err)
+	}
+	return nil
 }

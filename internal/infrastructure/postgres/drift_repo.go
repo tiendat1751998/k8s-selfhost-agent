@@ -47,15 +47,19 @@ func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
 
 		if actualReplicas != expectedReplicas {
 			var exists bool
-			_ = r.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM drift_records WHERE cluster = $1 AND resource = $2 AND status = 'drifted')",
+			err := r.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM drift_records WHERE cluster = $1 AND resource = $2 AND status = 'drifted')",
 				"cls-dev-local", s.Spec.Name).Scan(&exists)
+			if err != nil {
+				logger.Get().Error("failed to check if drift record exists", zap.Error(err))
+				continue
+			}
 
 			if !exists {
 				expectedState := fmt.Sprintf("deploy:\n  replicas: %d\n  image: %s", expectedReplicas, s.Spec.TaskTemplate.ContainerSpec.Image)
 				actualState := fmt.Sprintf("deploy:\n  replicas: %d\n  image: %s", actualReplicas, s.Spec.TaskTemplate.ContainerSpec.Image)
 				diff := fmt.Sprintf("--- Expected (GitOps)\n+++ Actual (Live Swarm)\n@@ -2,2 +2,2 @@\n-  replicas: %d\n+  replicas: %d\n", expectedReplicas, actualReplicas)
 
-				_ = r.Create(ctx, &drift.DriftRecord{
+				err := r.Create(ctx, &drift.DriftRecord{
 					Cluster:       "cls-dev-local",
 					Namespace:     "default",
 					Resource:      s.Spec.Name,
@@ -66,10 +70,16 @@ func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
 					Status:        drift.Drifted,
 					DetectedAt:    time.Now().UTC(),
 				})
+				if err != nil {
+					logger.Get().Error("failed to create drift record", zap.Error(err))
+				}
 			}
 		} else {
-			_, _ = r.pool.Exec(ctx, "UPDATE drift_records SET status = 'in_sync' WHERE cluster = $1 AND resource = $2 AND status = 'drifted'",
+			_, err := r.pool.Exec(ctx, "UPDATE drift_records SET status = 'in_sync' WHERE cluster = $1 AND resource = $2 AND status = 'drifted'",
 				"cls-dev-local", s.Spec.Name)
+			if err != nil {
+				logger.Get().Error("failed to update drift status to in_sync", zap.Error(err))
+			}
 		}
 	}
 }
