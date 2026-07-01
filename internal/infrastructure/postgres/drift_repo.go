@@ -11,7 +11,10 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/drift"
 	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/pkg/logger"
+	"go.uber.org/zap"
 )
+
 
 // DriftRepo implements drift.Repository using PostgreSQL.
 type DriftRepo struct {
