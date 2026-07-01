@@ -279,7 +279,42 @@ This document defines the mandatory runtime behavior for every AI agent working 
 
 ---
 
-## 38. Runtime Loop
+## 38. Role-Specific Production Standards
+
+### A. Architect Role Rules
+* **ADR Requirement**: Every architectural pattern change (e.g., introducing a new service, shifting from REST to WebSockets, modifying package structure) must be documented in a `.agents/adr/ADR-<num>-<title>.md` file before coding.
+* **Pure Domain Layer**: The `internal/domain/` directory must remain free of external dependencies (no HTTP frameworks, no database drivers, no ORM annotations). It must contain only pure Go models, aggregates, value objects, and repository ports (interfaces).
+* **Dependency Inversion**: Outer layers (adapters, infrastructure) must depend on the inner layers (domain, usecase). Use Go interfaces to decouple the business logic from database engines, network clients, or brokers.
+
+### B. Backend Engineer (Go) Rules
+* **Strict Error Handling**: Wrap all lower-level repository errors using structured domain error wrappers (e.g., `fmt.Errorf("loading user: %w", err)`). Never return raw database connection errors or database driver exceptions directly to the REST API layers.
+* **Channel Closed Safety**: Always use the comma-ok idiom (`val, ok := <-ch`) when reading from channels in select loops to avoid infinite spin locks on closed channels. Set closed channels to `nil` to remove them from the select scheduler.
+* **Encapsulated Mutex**: Declare mutex fields inside structs as private unexported fields (e.g., `mu sync.RWMutex`) to prevent external callers from hijacking the lock publicly.
+* **Resource Optimization**: Utilize `sync.Pool` for heavy allocations (like JSON encoders, write buffers). Pre-allocate slices/maps when the final capacity is known to avoid dynamic memory copies.
+
+### C. Frontend Engineer (Vanilla JS SPA) Rules
+* **State Encapsulation**: Never store state in global variables on the `window` object. Encapsulate all states in ES6 module-scoped variables or centralized state store classes.
+* **XSS Protection**: Never render dynamic content using `.innerHTML` without running it through a robust sanitizer helper. Use `.textContent` for static text rendering.
+* **Graceful Degradation**: Always show a visual loading spinner for asynchronous network requests. Disable submit/trigger buttons immediately upon click to prevent double-submissions. Display detailed, localized error toasts if network requests fail.
+
+### D. DevOps Engineer Rules
+* **Distroless Containerization**: All production Dockerfiles must use multi-stage builds targeting minimal runtime base images (e.g., `gcr.io/distroless/static-debian12:nonroot`) to minimize the security attack surface.
+* **Zero Hardcoded Secrets**: Secrets, credentials, or encryption keys must never be committed to repository YAML files or Helm values. They must be loaded dynamically at runtime via Kubernetes secrets mapped to environment variables or GKE Secret Manager integration.
+* **Probes & Resources**: All Kubernetes workloads must define resource requests and limits, along with liveness (`/livez`) and readiness (`/readyz`) HTTP probes to support safe rollouts and auto-healing.
+
+### E. DBA (Database) Rules
+* **Query Verification**: Run `EXPLAIN ANALYZE` on every new database query. Ensure that queries utilize indexes and do not trigger full-table scans on high-traffic tables.
+* **Indexed Foreign Keys**: Every foreign key constraint in PostgreSQL must have a corresponding index to avoid table locks during parent deletion/updates.
+* **Transactional Migrations**: All schema updates must be managed through timestamped SQL migration scripts wrapped in a transaction block. Every migration must provide a corresponding rollback script.
+
+### F. SRE & QA Engineer Rules
+* **Graceful Shutdown**: The Go backend server must capture OS signals (`SIGINT`, `SIGTERM`) and drain all active connections, cancel background context tasks, and close connection pools cleanly before exiting.
+* **Prometheus Instrumentation**: All custom usecases and business flows must be instrumented with RED metrics (Rate, Errors, Duration) exposed via `/metrics`.
+* **Race-Free Test Suites**: Maintain 100% test coverage on critical business workflows. Verify concurrency safety by running `go test -race ./...` on every pipeline execution.
+
+---
+
+## 39. Runtime Loop
 1. **Understand**: Clarify requirements and intent.
 2. **Size**: Check the scope and size of the task.
 3. **Plan**: Formulate steps/plans for large modifications.
