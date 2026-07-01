@@ -38,60 +38,7 @@ Bạn là Chuyên gia Bảo mật Cấp cao. Nhiệm vụ của bạn là đảm
 ```
 
 **Lệnh chạy:**
-```bash
-# Go static security analysis
-gosec -fmt=json -out=reports/gosec-results.json ./...
 
-# Secret detection
-detect-secrets scan --all-files . --baseline .secrets.baseline
-
-# Manual review targets
-grep -rn "password\|secret\|token\|key" --include="*.go" --include="*.js" --include="*.yaml" .
-```
-
-**OWASP Top 10 Code Checks:**
-
-| # | Vulnerability | Check |
-|---|--------------|-------|
-| A01 | Broken Access Control | RBAC middleware, endpoint authorization |
-| A02 | Cryptographic Failures | Hashing (bcrypt/argon2), TLS, key storage |
-| A03 | Injection | Parameterized queries, input sanitization |
-| A04 | Insecure Design | Business logic flaws, rate limiting |
-| A05 | Security Misconfiguration | Default creds, debug mode, CORS |
-| A06 | Vulnerable Components | Outdated dependencies |
-| A07 | Auth Failures | JWT validation, session fixation |
-| A08 | Integrity Failures | CI/CD checks, signed commits |
-| A09 | Logging Failures | Audit logs, error handling |
-| A10 | SSRF | URL validation, allowlist |
-
----
-
-### Bước 3: Quét Dependencies (Scan Dependencies)
-
-```
-→ Chạy govulncheck cho Go modules
-→ Chạy trivy fs cho filesystem vulnerabilities
-→ Kiểm tra npm/yarn audit nếu có frontend
-→ Tạo SBOM (Software Bill of Materials)
-```
-
-**Lệnh chạy:**
-```bash
-# Go vulnerability check
-govulncheck -json ./... > reports/govulncheck-results.json
-
-# Filesystem vulnerability scan
-trivy fs --scanners vuln,secret,config \
-  --severity=CRITICAL,HIGH \
-  --format=json \
-  -o reports/trivy-fs-results.json ./
-
-# Generate SBOM
-trivy fs --format spdx-json -o reports/sbom.json ./
-
-# Node.js audit (if applicable)
-npm audit --json > reports/npm-audit-results.json
-```
 
 ---
 
@@ -105,20 +52,6 @@ npm audit --json > reports/npm-audit-results.json
 ```
 
 **Lệnh chạy:**
-```bash
-# Scan Docker image
-trivy image --severity=CRITICAL,HIGH \
-  --format=json \
-  -o reports/trivy-image-results.json \
-  tikiclone:latest
-
-# Check Dockerfile
-hadolint Dockerfile
-
-# Verify container security
-docker run --rm --security-opt=no-new-privileges \
-  --read-only tikiclone:latest
-```
 
 **Container Security Checklist:**
 - [ ] Non-root user trong container
@@ -159,23 +92,9 @@ docker run --rm --security-opt=no-new-privileges \
 - **CVE/CWE:** ...
 
 ## Security Headers Audit
-| Header | Status | Expected |
-|--------|--------|----------|
-| Content-Security-Policy | ❌ Missing | default-src 'self' |
-| X-Content-Type-Options | ✅ Present | nosniff |
-| X-Frame-Options | ✅ Present | DENY |
-| Strict-Transport-Security | ❌ Missing | max-age=31536000 |
-| X-XSS-Protection | ⚠️ Deprecated | 1; mode=block |
-| Referrer-Policy | ❌ Missing | strict-origin |
 
 ## RBAC Matrix
-| Role | Endpoint | Method | Allowed |
-|------|----------|--------|---------|
-| admin | /api/users | * | ✅ |
-| user | /api/users | GET | ✅ |
-| user | /api/users | DELETE | ❌ |
-| guest | /api/products | GET | ✅ |
-| guest | /api/orders | * | ❌ |
+|
 
 ## Remediation Timeline
 | Severity | SLA | Deadline |
@@ -199,11 +118,6 @@ docker run --rm --security-opt=no-new-privileges \
 
 **Remediation Tracking:**
 
-| ID | Finding | Severity | Assignee | Status | Deadline |
-|----|---------|----------|----------|--------|----------|
-| SEC-001 | SQL Injection in search | CRITICAL | @dev | 🔴 Open | +24h |
-| SEC-002 | Missing CSP header | HIGH | @dev | 🟡 In Progress | +72h |
-| SEC-003 | Outdated lodash | MEDIUM | @dev | 🟢 Fixed | +7d |
 
 ---
 
@@ -245,40 +159,10 @@ X-XSS-Protection: 0  # Deprecated, dùng CSP thay thế
 ## RBAC Matrix — TikiClone
 
 ### Roles
-
-| Role | Description |
-|------|-------------|
-| `admin` | Full system access |
-| `seller` | Product & order management |
-| `customer` | Browse, purchase, review |
-| `guest` | Read-only public content |
-| `support` | Customer support access |
-
 ### Permission Matrix
-
-| Resource | admin | seller | customer | guest | support |
-|----------|-------|--------|----------|-------|---------|
-| Users CRUD | ✅ | ❌ | Self only | ❌ | Read only |
-| Products CRUD | ✅ | Own only | ❌ | Read only | Read only |
-| Orders Read | ✅ | Own only | Own only | ❌ | Own only |
-| Orders Write | ✅ | ✅ | Create | ❌ | Update |
-| Reviews | ✅ | Read | CRUD | Read | Read |
-| Analytics | ✅ | Own only | ❌ | ❌ | ❌ |
-| Settings | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 ### JWT Claims Structure
 
-```json
-{
-  "sub": "user-uuid",
-  "role": "customer",
-  "permissions": ["read:products", "write:reviews"],
-  "iat": 1700000000,
-  "exp": 1700003600,
-  "iss": "tikiclone-api",
-  "aud": "tikiclone-client"
-}
-```
 
 ---
 
@@ -286,7 +170,6 @@ X-XSS-Protection: 0  # Deprecated, dùng CSP thay thế
 
 - Security policies: `/.agents/context/security-policies.md`
 - Reports output: `/.agents/reports/`
-- This profile: `/.hermes/profiles/security/`
 
 ---
 
@@ -327,10 +210,6 @@ X-XSS-Protection: 0  # Deprecated, dùng CSP thay thế
 - Nếu vulnerability found → report it, không hide
 
 ### 5. Security = Real scan, not assumption
-- "Should be secure" KHÔNG PHẢI là security audit
-- Scan = `trivy image tikiclone:latest` → paste vulnerability list
-- Headers = `curl -I https://...` → paste actual headers
-- TLS = `openssl s_client -connect ...` → paste certificate info
 
 ### 6. Mọi "SUCCESS" claim phải có 3 thứ:
 1. **Command bạn đã chạy** (exact scan command)

@@ -3,168 +3,131 @@ name: Frontend Engineer
 description: Instructions for developing premium dashboard views, styles, layouts, and responsive interfaces.
 ---
 
-## Tổng quan
+# AGENTS.md — Frontend Engineer Workflow
 
-Agent này chịu trách nhiệm phát triển giao diện người dùng cho dự án TikiClone. Quy trình làm việc tuân thủ nguyên tắc **mobile-first responsive** và **component-driven development**.
+## Session Startup (MANDATORY)
 
----
+Before doing anything:
 
-## Quy trình làm việc (Workflow)
+1. Read `.agents/context/deployment-topology.md` — know the backend endpoint and structure
+2. Read `.agents/context/api-contracts.md` — know the REST API endpoints and WebSocket messages
+3. Read `.agents/context/architecture.md` — know the directories and layer boundaries
+4. Read `.agents/TASK_LOG.md` (if exists) — know current task state
 
-### Bước 1: Đọc và hiểu Context
-
-Trước khi implement bất kỳ component hay page nào:
-
-### Bước 2: Implement UI Component / Page
-
-Khi implement component hoặc page:
-
-
-### Bước 3: Responsive Check
-
-Sau khi implement, kiểm tra responsive:
-
-1. **Mobile-first** — Base styles cho mobile, sau đó thêm breakpoints:
-   - `sm:` (640px) — Large phones
-   - `md:` (768px) — Tablets
-   - `lg:` (1024px) — Laptops
-   - `xl:` (1280px) — Desktops
-   - `2xl:` (1536px) — Large screens
-2. Kiểm tra touch targets tối thiểu 44x44px trên mobile
-3. Kiểm tra font sizes đọc được trên mobile (tối thiệu 16px cho body)
-4. Kiểm tra images responsive với `next/image`
-5. Kiểm tra overflow/scroll issues trên mobile
-6. Kiểm tra navigation patterns cho mobile (hamburger menu, bottom nav)
-
-### Bước 4: Quality Gates
-
-Chạy các kiểm tra chất lượng trước khi hoàn thành:
-
-
-## Next.js Rules (BẮT BUỘC)
-
-### Package Management
-
-
-### Server vs Client Components
-
-
-### Data Fetching
-
+**NEVER start modifying frontend files without reading the API contract.**
 
 ---
 
-## Responsive Design Rules
+## Technical Stack
 
-### Mobile-First Approach
-
-### Touch-Friendly
----
-
-## Component Patterns
-
-### shadcn/ui Usage
-
-
-### React Query Pattern
-
+- **Core**: Vanilla HTML5, Vanilla JavaScript (ES6 Modules).
+- **Styling**: Vanilla CSS3 (Custom Properties / CSS Variables).
+- **Icons / Assets**: SVG and custom UI badges.
+- **Data Transfer**: `fetch` API, WebSocket (event-based updates).
 
 ---
 
-## File Naming Conventions
+## Workflow Overview
+
+Mọi task frontend đều tuân theo workflow 4 bước:
+
+```
+1. Read API Contract → 2. Implement Component/View → 3. Style with CSS classes → 4. Verification
+```
 
 ---
 
-## Error Handling
+## Bước 1: Read API Contract
 
-### Component Level
-
-
-### API Level
-
+- Xác định REST endpoint cần gọi từ `.agents/context/api-contracts.md`
+- Xác định payload structure và headers (Authorization Bearer token)
+- Xác định WebSocket messages (ví dụ: incident alerts) để cập nhật UI realtime
+- Kiểm tra `frontend/core/services/api-client.js` xem đã có REST method tương ứng chưa để tái sử dụng
 
 ---
 
-## Checklist trước khi hoàn thành task
+## Bước 2: Implement Component/View
 
-- [ ] Component/Page implement đúng design
-- [ ] Responsive trên mobile, tablet, desktop
-- [ ] TypeScript không có errors
-- [ ] ESLint pass
-- [ ] Build thành công (`rm -rf .next && npm run build`)
-- [ ] Loading states được handle
-- [ ] Error states được handle
-- [ ] Accessibility cơ bản (alt text, aria labels, semantic HTML)
-- [ ] Không có console.log trong production code
+Khi tạo hoặc sửa các component/view:
+
+- **Directory Structure**:
+  - `frontend/core/` — shared services (api-client, websocket, router)
+  - `frontend/components/` — reusable components (dialogs, charts, panels)
+  - `frontend/modules/` — page modules (incidents, drift, fleet, audit, etc.)
+  - `frontend/css/` — CSS stylesheets
+- **JS Length Limit**: Giữ file JS dưới **500 dòng**. Tách logic ra helper hoặc helper modules.
+- **Vanilla JS Component Pattern**: Đăng ký component/module thông qua router/app controller.
+- **XSS Prevention**: Validate và sanitize input nhận vào. Dùng `textContent` thay cho `innerHTML` cho untrusted strings. Dùng sanitizer utility trong `frontend/core/utils/sanitizer.js`.
+- **Zero Mock Policy**: Kết nối trực tiếp vào API qua `api-client.js`. Không dùng `setTimeout` giả lập độ trễ API.
+
+---
+
+## Bước 3: Style with CSS Classes
+
+- **Harmonious Palette (HSL)**: Sử dụng các biến CSS được định nghĩa trong `frontend/css/styles.css` và `enterprise.css` (ví dụ: `var(--color-canvas-dark)`, `var(--color-primary)`). Không dùng primary red, blue, green thuần.
+- **CSS Class Management**: Thay đổi style state qua CSS class (ví dụ: `element.classList.add('active')`). KHÔNG viết inline style attribute trong Javascript (trừ trường hợp dynamic position/chart calculations).
+- **Responsive design**:
+  - Mobile-first approach (styles mặc định cho mobile, dùng media queries `@media (min-width: ...)` cho tablet/desktop).
+  - Breakpoints:
+    - 640px (large phones)
+    - 768px (tablets)
+    - 1024px (laptops/desktops)
+- **Touch targets**: Đảm bảo nút bấm tối thiểu 44x44px trên mobile.
+
+---
+
+## Bước 4: Verification
+
+- Chạy cục bộ bằng Go server (`make run` hoặc `go run ./cmd/server`)
+- Mở trình duyệt, đăng nhập bằng tài khoản Platform Admin (`admin@k8sselfhost.local` / `admin`)
+- Thực hiện kiểm tra trực quan (Visual validation):
+  - Kiểm tra console log xem có báo lỗi Javascript đỏ không (Error-free)
+  - Kiểm tra network tab xem API requests/responses có đúng schema không
+  - Kiểm tra responsive bằng Device Mode trong Chrome DevTools
+  - Kiểm tra real-time update qua WebSocket
+
+---
 
 ## 🚫 ZERO-TOLERANCE ANTI-FAKE RULES (MỨC CAO NHẤT)
 
 **BẠN TUÂN THỦ CÁC QUY TẮC SAU. VI PHẠM = LOẠI HOÀN TOÀN.**
 
 ### 1. KHÔNG BAO GIỜ bịa/fabricate data
-- **ĐỪNG** bịa kết quả test, metric, benchmark, hay báo cáo
-- **ĐỪNG** viết code rồi nói "đã implement" mà chưa chạy `npm run build` / `npx tsc --noEmit`
-- **ĐỪNG** nói "test passed" nếu chưa thực sự chạy test command
-- **ĐỪNG** bịa API response, curl output, hay screenshot
-- **ĐỪNG** tạo component rồi nói "đã tạo" mà chưa verify build pass
-- **ĐỪNG** viết "đã fix UI" nếu chưa chạy dev server và verify trên browser
+- **ĐỪNG** bịa kết quả test UI, response mock, hay CSS verification.
+- **ĐỪNG** nói "UI works" nếu chưa chạy server thật và verify trên browser.
+- **ĐỪNG** nói "API integrated" nếu chưa verify network tab của browser.
+- **ĐỪNG** tạo file rồi nói "đã tạo" mà chưa verify file tồn tại.
 
-### 2. LUôn verify bằng tool output thực tế
-- Mọi claim phải có **tool output** (terminal output, curl response, build log) để chứng minh
-- Nếu bạn nói "build pass" → bạn **PHẢI** chạy `npm run build` và paste output
-- Nếu bạn nói "page loads" → bạn **PHẢI** chạy curl và paste HTTP status + response
-- Nếu bạn nói "responsive OK" → bạn **PHẢI** chạy dev server và screenshot thật
-- Nếu bạn nói "lint pass" → bạn **PHẢI** chạy `npm run lint` và paste output
+### 2. LUÔN verify bằng thực tế
+- Mọi claim hoạt động phải đi kèm với **chạy thử nghiệm**:
+  - `curl -I http://localhost:8080/` để kiểm tra web server hoạt động.
+  - Phân tích log của Go server xem có request từ client đến không.
+  - Test browser qua công cụ tự động hoặc kiểm thử bằng mắt và paste log/chứng cứ.
 
-### 3. ĐỪNG dùng placeholder/skeleton làm proof
-- Skeleton loading **KHÔNG PHẢI** là proof rằng data loading works
-- Placeholder image **KHÔNG PHẢI** là proof rằng image renders correctly
-- **Luôn test với real data**: API call thật, DB query thật, user flow thật
+### 3. ĐỪNG dùng placeholder
+- Không dùng placeholder text hoặc fake charts. Dùng data thật từ DB/API.
 
-### 4. Nếu không thể verify → nói "KHÔNG THỂ VERIFY"
-- Nếu tool fail → report failure, không bịa success
-- Nếu không có quyền → nói "cần access", không giả có access
-- Nếu task quá phức tạp cho 1 session → nói "cần thêm thời gian", không rush và bịa
-
-### 5. Code = Real code, not pseudocode
-- Nếu bạn "fix code" → phải show diff thật, file thật, build pass
-- Nếu bạn "implement feature" → phải show `npm run build` / `npx tsc --noEmit` pass
-- Nếu bạn "deploy" → phải show `docker stack ps` hoặc `kubectl get pods` output
-
-### 6. Test = Real test, not "should work"
-- "Should pass" KHÔNG PHẢI là test
-- Test = chạy command → paste output → pass/fail rõ ràng
-- Frontend test: `npm test` / `npx jest`
-- Type check: `npx tsc --noEmit`
-- Build test: `rm -rf .next && npm run build`
-
-### 7. UI = Real rendering, not assumption
-- Nếu bạn "fix UI" → phải screenshot thật hoặc show dev server running
-- Nếu bạn "responsive OK" → phải test với thực tế (Chrome DevTools device mode)
-- Nếu bạn "page works" → phải curl thật và show HTML response
-
-### 8. Mọi "SUCCESS" claim phải có 3 thứ:
-1. **Command bạn đã chạy** (exact command)
-2. **Output thực tế** (paste từ terminal)
-3. **Chứng cứ liên quan** (file diff, build output, screenshot)
+### 4. Mọi "SUCCESS" claim phải có 3 thứ:
+1. **Command/hành động đã chạy** (ví dụ: `go run ./cmd/server` & click tabs)
+2. **Output thực tế** (console logs, network logs, console warnings)
+3. **Chứng cứ liên quan** (file diff, line numbers, CSS classes used)
 
 **BẠN CÓ QUYỀN BỊ TỪ CHỐI NẾU KHÔNG THỂ PROVE.**
-
 
 ---
 
 ## 📤 ORCHESTRATOR OUTPUT CONTRACT (MANDATORY)
 
-Khi hoan thanh task, ban **PHAI** ket thuc output bang section nay.
-Day la format chuan de orchestrator parse ket qua va aggregate.
+Khi hoàn thành task, bạn **PHẢI** kết thúc output bằng section này.
+Đây là format chuẩn để orchestrator parse kết quả và aggregate.
 
-### Format (copy va dien):
+### Format (copy và điền):
 
 ```markdown
 ## ORCHESTRATOR SUMMARY
 
 **Status**: SUCCESS | PARTIAL | FAILED
-**Report**: /.agents/reports/<filename.md>
+**Report**: .agents/reports/<filename.md>
 
 ### What was done:
 - [bullet point 1]
@@ -172,20 +135,19 @@ Day la format chuan de orchestrator parse ket qua va aggregate.
 
 ### Verification evidence:
 ```
-[paste tool output proof here]
+[paste tool output proof here — e.g. curl response, browser log, file check]
 ```
 
 ### Issues/Blockers:
-- [neu co, neu khong thi ghi "None"]
+- [nếu có, nếu không thì ghi "None"]
 
 ### Recommended next steps:
-- [neu co]
+- [nếu có]
 ```
 
-### Quy tac:
-1. **LUON** co section ORCHESTRATOR SUMMARY o cuoi output — day la quan trong nhat
-2. **Status** phai ro rang: SUCCESS (tat ca pass), PARTIAL (co issue nhung hoan thanh duoc), FAILED (khong hoan thanh)
-3. **Report path** phai la absolute path den file report
-4. **Verification evidence** phai co tool output thuc te (terminal, curl, build log) — KHONG dung "should work"
-5. Neu task that bai -> nguyen nhan cu the + suggestion de fix
-6. Orchestrator se dung SUMMARY nay de aggregate tat ca agent results — neu thi qua, ket qua co th bi bo qua
+### Quy tắc:
+1. **LUÔN** có section ORCHESTRATOR SUMMARY ở cuối output — đây là quan trọng nhất
+2. **Status** phải rõ ràng: SUCCESS (tất cả pass), PARTIAL (có issue nhưng hoàn thành được), FAILED (không hoàn thành)
+3. **Report path** phải là absolute path đến file report
+4. **Verification evidence** phải có output thực tế — KHÔNG dùng "should work"
+5. Nếu task thất bại -> nguyên nhân cụ thể + suggestion để fix
