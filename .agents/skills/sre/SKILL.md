@@ -3,16 +3,16 @@ name: SRE Engineer
 description: Instructions for monitoring, capacity planning, alerting, log aggregation, and incident response.
 ---
 
-# AGENTS.md — SRE Engineer Workflow
+# SRE Engineer Playbook
 
 ## Session Startup (MANDATORY)
 
 Before doing anything:
 
-1. Read `.agents/context/deployment-topology.md` — understand service topology and ports
-2. Read `.agents/context/performance-budgets.md` — understand target SLOs and budgets
-3. Read `.agents/context/architecture.md` — understand system design and core directories
-4. Read `.agents/TASK_LOG.md` (if exists) — know current task state
+1. Read `.agents/context/deployment-topology.md` — understand service topology and ports.
+2. Read `.agents/context/performance-budgets.md` — understand target SLOs and budgets.
+3. Read `.agents/context/architecture.md` — understand system design and core directories.
+4. Read `.agents/TASK_LOG.md` (if exists) — know current task state.
 
 **NEVER start SRE operations without knowing active SLO budgets.**
 
@@ -20,7 +20,7 @@ Before doing anything:
 
 ## Workflow Overview
 
-Mọi task SRE đều tuân theo workflow 5 bước:
+All SRE tasks follow a 5-step workflow:
 
 ```
 1. Read Context & Budgets → 2. Design Monitoring/SLOs → 3. Configure Alerts → 4. Execute Response/Verify → 5. Document Postmortem
@@ -28,35 +28,35 @@ Mọi task SRE đều tuân theo workflow 5 bước:
 
 ---
 
-## Bước 1: Đọc Topology & Hiểu Hệ Thống
+## Step 1: Read Topology & Understand the System
 
-- Hệ thống chạy ở chế độ **Standalone Mode** hoặc **Kubernetes Multi-Cluster Mode**.
-- Dependencies chính gồm:
-  - **PostgreSQL 16**: Chạy cổng 5432, pgx connection pool.
-  - **Redis 7**: Chạy cổng 6379, cache database 0.
-  - **NATS JetStream**: Chạy cổng 4222, message stream `INCIDENTS`.
-- API endpoints chạy qua chi/v5 router trên port 8080.
-- Telemetry: OpenTelemetry exporter, Prometheus endpoint tại `/metrics`, zap structured logging.
+- The system runs in **Standalone Mode** or **Kubernetes Multi-Cluster Mode**.
+- Main dependencies include:
+  - **PostgreSQL 16**: Port 5432, pgx connection pool.
+  - **Redis 7**: Port 6379, cache database 0.
+  - **NATS JetStream**: Port 4222, message stream `INCIDENTS`.
+- API endpoints run via a chi/v5 router on port 8080.
+- Telemetry: OpenTelemetry exporter, Prometheus endpoint at `/metrics`, zap structured logging.
 
 ---
 
-## Bước 2: Thiết Kế Monitoring & SLOs
+## Step 2: Design Monitoring & SLOs
 
-### RED Metrics (cho REST API & WS):
+### RED Metrics (for REST API & WS):
 - **Rate**: Request count per second (`http_requests_total`).
 - **Errors**: HTTP 5xx error rate.
 - **Duration**: Latency quantiles p50, p95, p99 (`http_request_duration_seconds_bucket`).
 
-### USE Metrics (cho Containers & Nodes):
-- **Utilization**: CPU, memory, disk usage percent.
+### USE Metrics (for Containers & Nodes):
+- **Utilization**: CPU, memory, and disk usage percent.
 - **Saturation**: Goroutine count (`go_goroutines`), connection pool exhaustion (`db_pool_active_connections`).
 - **Errors**: Out Of Memory (OOM) alerts, database connection timeouts.
 
 ---
 
-## Bước 3: Cấu Hình Alert Rules (Prometheus)
+## Step 3: Configure Alert Rules (Prometheus)
 
-Cấu hình mẫu cho AlertManager:
+Example configuration for AlertManager:
 
 ```yaml
 groups:
@@ -149,7 +149,7 @@ groups:
 
 ---
 
-## Bước 4: Hoạch Định Tải & Khắc Phục Incident
+## Step 4: Capacity Planning & Incident Mitigation
 
 ### Capacity Planning Budgets (performance-budgets.md)
 
@@ -163,57 +163,71 @@ groups:
 ### Incident Response Runbooks
 
 1. **OOM Killed Backend Pod**:
-   - **Xác nhận**: Check logs via `kubectl logs` or check container status.
-   - **Xử lý nhanh**: Scale replicas up to 3 hoặc tăng memory limits lên 512Mi.
-   - **Xử lý gốc**: Phân tích go runtime pprof heap profile.
+   - **Verification**: Check logs via `kubectl logs` or check container status.
+   - **Mitigation**: Scale replicas up to 3 or increase memory limits to 512Mi.
+   - **Resolution**: Analyze Go runtime `pprof` heap profile.
 
 2. **API Latency Spikes (p99 > 100ms)**:
-   - **Xác nhận**: Check `/metrics` hoặc query slow database queries.
-   - **Xử lý nhanh**: Bật cache Redis hoặc scale container.
-   - **Xử lý gốc**: Phêm index (EXPLAIN ANALYZE) cho table SQL tương ứng.
+   - **Verification**: Check `/metrics` or query slow database queries.
+   - **Mitigation**: Enable Redis caching or scale container.
+   - **Resolution**: Add database indexes (EXPLAIN ANALYZE) for the target tables.
 
 3. **NATS JetStream Message Processing Failures**:
-   - **Xác nhận**: Kiểm tra NATS server logs hoặc metric `nats_stream_lag_messages`.
-   - **Xử lý nhanh**: Restart consumer / agent-runner.
+   - **Verification**: Check NATS server logs or metric `nats_stream_lag_messages`.
+   - **Mitigation**: Restart consumer / agent-runner.
 
 ---
 
-## Bước 5: Viết Postmortem
+## Step 5: Document Postmortem
 
-Sau khi khắc phục sự cố, ghi nhận lại:
-- **Timeline**: Bắt đầu sự cố, thời gian nhận alert, các hành động xử lý và thời điểm kết thúc.
-- **Root Cause**: Tại sao sự cố xảy ra (sử dụng 5 Whys).
-- **Remediation Action Items**: Các task bổ sung (ví dụ: tối ưu câu lệnh SQL, tăng CPU limits) để tránh lặp lại.
+After mitigating the incident, record:
+- **Timeline**: Start of incident, alert received, mitigation actions, and resolution time.
+- **Root Cause**: Why the issue occurred (using 5 Whys).
+- **Remediation Action Items**: Additional tasks (e.g., query optimization, increasing limits) to prevent recurrence.
 
 ---
 
-## 🚫 ZERO-TOLERANCE ANTI-FAKE RULES (MỨC CAO NHẤT)
+## 🚫 ZERO-TOLERANCE ANTI-FAKE RULES (HIGHEST LEVEL)
 
-**BẠN TUÂN THỦ CÁC QUY TẮC SAU. VI PHẠM = LOẠI HOÀN TOÀN.**
+**YOU MUST COMPLY WITH THE FOLLOWING RULES. VIOLATION = IMMEDIATE TERMINATION.**
 
-### 1. KHÔNG BAO GIỜ bịa/fabricate data
-- **ĐỪNG** bịa log entries, error rate, latency numbers, hay metrics.
-- **ĐỪNG** nói "no incidents" hay "all alerts green" nếu chưa thực hiện call API/CLI kiểm tra.
+### 1. NEVER fabricate data
+- **DO NOT** fabricate monitoring metrics, alert statuses, or SLO compliance reports.
+- **DO NOT** state "CPU is 50%" unless you have queried Prometheus/Grafana and pasted the output.
+- **DO NOT** fabricate log entries, error rates, or latency graphs.
 
-### 2. LUÔN verify bằng thực tế
-- Query Prometheus endpoint (`/metrics`) thật để lấy giá trị số liệu cụ thể.
-- Kiểm tra file log của server để tìm vết lỗi thật thay vì dự đoán.
+### 2. ALWAYS verify using actual tool outputs
+- Every monitoring claim must be backed by **real tool output** (Prometheus query, Loki query, etc.).
+- If you state "p99=Xms" → you **MUST** query Prometheus and paste the output.
+- If you state "no alerts firing" → you **MUST** query the alert manager API and paste the output.
 
-### 3. Mọi "SUCCESS" claim phải có 3 thứ:
-1. **Query/command đã chạy** (ví dụ: `curl http://localhost:8080/metrics | grep ...`)
-2. **Output thực tế** (paste kết quả hiển thị)
-3. **Chứng cứ đi kèm** (giá trị thực của metrics, alert state)
+### 3. DO NOT use "dashboard looks OK" as proof
+- A Grafana screenshot **IS NOT** proof that metrics are correct or that no alerts are firing.
+- **Always query the datasource directly**: run a Prometheus query or Loki query and paste the raw output.
 
-**BẠN CÓ QUYỀN BỊ TỪ CHỐI NẾU KHÔNG THỂ PROVE.**
+### 4. If you cannot verify → state "CANNOT VERIFY"
+- If Prometheus is unavailable → report it; do not invent metrics.
+- If you lack monitoring access → report the lack of access.
+
+### 5. Monitoring = Real data, not assumptions
+- "Should be normal" IS NOT monitoring.
+- Monitoring = query API → paste actual numbers.
+
+### 6. Every "SUCCESS" claim must include 3 things:
+1. **Command you ran** (exact query command)
+2. **Actual output** (pasted from the monitoring tool)
+3. **Relevant evidence** (metric values, alert list, SLO calculation)
+
+**YOU WILL BE REJECTED IF YOU CANNOT PROVE.**
 
 ---
 
 ## 📤 ORCHESTRATOR OUTPUT CONTRACT (MANDATORY)
 
-Khi hoàn thành task, bạn **PHẢI** kết thúc output bằng section này.
-Đây là format chuẩn để orchestrator parse kết quả và aggregate.
+When completing a task, you **MUST** end the output with this section.
+This is the standard format for the orchestrator to parse and aggregate results.
 
-### Format (copy và điền):
+### Format (copy and fill):
 
 ```markdown
 ## ORCHESTRATOR SUMMARY
@@ -231,15 +245,16 @@ Khi hoàn thành task, bạn **PHẢI** kết thúc output bằng section này.
 ```
 
 ### Issues/Blockers:
-- [nếu có, nếu không thì ghi "None"]
+- [if any, otherwise write "None"]
 
 ### Recommended next steps:
-- [nếu có]
+- [if any]
 ```
 
-### Quy tắc:
-1. **LUÔN** có section ORCHESTRATOR SUMMARY ở cuối output — đây là quan trọng nhất
-2. **Status** phải rõ ràng: SUCCESS (tất cả pass), PARTIAL (có issue nhưng hoàn thành được), FAILED (không hoàn thành)
-3. **Report path** phải là absolute path đến file report
-4. **Verification evidence** phải có output thực tế — KHÔNG dùng "should work"
-5. Nếu task thất bại -> nguyên nhân cụ thể + suggestion để fix
+### Rules:
+1. **ALWAYS** include the ORCHESTRATOR SUMMARY section at the end of the output — this is critical.
+2. **Status** must be clear: SUCCESS (all passed), PARTIAL (completed with minor issues), FAILED (not completed).
+3. **Report path** must be the path to the report file.
+4. **Verification evidence** must include actual tool output (terminal, curl, build log) — DO NOT use "should work".
+5. If the task failed → specify the cause + suggest a fix.
+6. The orchestrator will use this SUMMARY to aggregate all agent results — if missing, the results may be ignored.
