@@ -33,14 +33,6 @@ Before writing any code:
 
 ### Coding Rules (MANDATORY)
 
-| Rule | Detail |
-|------|--------|
-| **Prices** | Always use `int64` — maps to BIGINT in DB. NEVER use float for money. |
-| **Weight** | Use `int` — unit is grams. |
-| **Currency** | Always **VND** — no multi-currency support. |
-| **DB Enums** | Use **UPPERCASE**: `ORDER_STATUS_PENDING`, `PAYMENT_METHOD_COD`. |
-| **Domain Errors** | Return `*DomainError` pointer — enables wrapping, type assertion, and structured responses. |
-
 ### Implementation Guidelines
 
 - Follow existing project patterns — do not invent new approaches.
@@ -106,6 +98,85 @@ go test -race ./...
 - If `staticcheck` is not available: `go install honnef.co/go/tools/cmd/staticcheck@latest`.
 - If `go test -race` is too slow: `go test -race ./internal/...`.
 - NEVER skip quality gates because "it's probably correct".
+
+---
+
+## 🔥 GOROUTINE & CONCURRENCY RULES (CRITICAL)
+
+### 1. Mandatory Panic Recovery
+Every background goroutine MUST recover from panics. An unrecovered panic inside a goroutine will crash the entire Go program.
+```go
+// CORRECT: Goroutine with defer recover
+go func() {
+    defer func() {
+        if r := recover(); r != nil {
+            logger.Error("goroutine panic recovered", zap.Any("panic", r))
+        }
+    }()
+    // Your background business logic here
+}()
+```
+
+### 2. Prevent Goroutine Leaks
+Never start a goroutine without knowing how it will terminate. Always use context cancellation or select channels with a timeout.
+```go
+// CORRECT: Clean termination using context
+go func(ctx context.Context) {
+    for {
+        select {
+        case <-ctx.Done():
+            return // exit goroutine when context cancels
+        case msg := <-ch:
+            process(msg)
+        }
+    }
+}(ctx)
+```
+
+### 3. Thread-Safe Maps
+Standard Go maps are NOT thread-safe for concurrent reads and writes. A concurrent write map access triggers a fatal runtime panic that cannot be recovered.
+- Use `sync.Map` for read-heavy keys with high concurrency.
+- Use a standard map wrapped with `sync.RWMutex` for general thread-safe operations.
+```go
+type SafeMap struct {
+    sync.RWMutex
+    data map[string]*Item
+}
+
+func (m *SafeMap) Set(key string, val *Item) {
+    m.Lock()
+    defer m.Unlock()
+    m.data[key] = val
+}
+
+func (m *SafeMap) Get(key string) (*Item, bool) {
+    m.RLock()
+    defer m.RUnlock()
+    val, ok := m.data[key]
+    return val, ok
+}
+```
+
+### 4. Structured Concurrency (errgroup)
+Prefer `golang.org/x/sync/errgroup` over raw WaitGroups when executing parallel operations that need to return errors or handle cancellations collectively.
+```go
+eg, egCtx := errgroup.WithContext(ctx)
+for _, item := range items {
+    item := item // pin variable
+    eg.Go(func() error {
+        return processItem(egCtx, item)
+    })
+}
+if err := eg.Wait(); err != nil {
+    return err // returns first error and cancels egCtx
+}
+```
+
+### 5. Always Run the Race Detector
+No code involving concurrency or shared state is ready for production unless verified by the race detector:
+```bash
+go test -race ./...
+```
 
 ---
 
