@@ -242,7 +242,44 @@ This document defines the mandatory runtime behavior for every AI agent working 
 
 ---
 
-## 32. Runtime Loop
+## 32. Advanced Concurrency & Goroutine Safety
+* **No Unbounded Goroutines**: Always limit concurrency inside loops using `errgroup.SetLimit` or channel semaphores to prevent CPU/memory exhaustion.
+* **Centralized Panic Recovery**: All background goroutines must use a centralized helper with `recover()` logic (e.g., `concurrency.Go(log, fn)`) instead of duplicating inline recovery blocks.
+* **Spin Prevention**: Always verify channel readability status (`val, ok := <-ch`). Set the channel to `nil` when closed to disable the select case and prevent 100% CPU spinning.
+* **Encapsulated Mutex**: Never embed locks anonymously in structs. Declare them as private unexported fields (e.g., `mu sync.RWMutex`) to prevent external lock-hijacking.
+
+---
+
+## 33. Memory Management & Allocation Control
+* **Object Reuse**: Use `sync.Pool` for high-allocation, short-lived structures such as JSON encoders/decoders, query buffers, and heavy request/response payloads to minimize garbage collection (GC) pauses.
+* **Pre-Allocation**: Always initialize slices and maps with known sizes (`make([]T, 0, capacity)` or `make(map[K]V, size)`) to avoid internal resizing and memory copying.
+
+---
+
+## 34. Context Lifetime & Transaction Safety
+* **Deadline Scoping**: Every database, Redis, and network operation must be executed with a derived context specifying a strict timeout (e.g., database queries <= 5s, external HTTP requests <= 10s).
+* **Safe Transactions**: All multi-statement or multi-table updates must be wrapped in a database transaction (`pool.BeginTx`). Ensure transaction rollback (`defer tx.Rollback(ctx)`) is deferred immediately after starting, and handle panics gracefully.
+
+---
+
+## 35. Structured Logging & Telemetry Guidelines
+* **No PII/Secrets**: Never log sensitive data such as JWT secrets, tokens, passwords, or personal details.
+* **Structured Logger Fields**: Use key-value logging fields (`logger.Info("event occurred", zap.String("id", id))`) instead of string formatting (`logger.Infof("event occurred: %s", id)`) to keep log indexing fast and efficient.
+
+---
+
+## 36. High-Availability & Graceful Shutdown
+* **Graceful Shutdown**: All servers (HTTP, WebSockets, background consumers) must implement graceful shutdown by capturing termination signals (`SIGINT`, `SIGTERM`), closing network listeners, draining outstanding requests, and releasing connection pools before exiting.
+
+---
+
+## 37. Frontend Anti-Vulnerability Rules (Vanilla JS)
+* **Sanitization**: Never render user input directly using `.innerHTML` or string interpolation without running it through a robust sanitizer to prevent Cross-Site Scripting (XSS).
+* **Fail-Safe UI States**: Provide visual loading indicators, disable double-clicks on submit buttons, and display graceful error alerts for all network failures.
+
+---
+
+## 38. Runtime Loop
 1. **Understand**: Clarify requirements and intent.
 2. **Size**: Check the scope and size of the task.
 3. **Plan**: Formulate steps/plans for large modifications.
