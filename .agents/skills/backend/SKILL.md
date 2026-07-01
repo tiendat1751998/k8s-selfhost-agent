@@ -101,78 +101,106 @@ go test -race ./...
 
 ---
 
-## 🔥 GOROUTINE & CONCURRENCY RULES (CRITICAL)
+## 🔥 MASTER-LEVEL GOROUTINE & CONCURRENCY RULES (PRODUCTION-GRADE)
 
-### 1. Mandatory Panic Recovery
-Every background goroutine MUST recover from panics. An unrecovered panic inside a goroutine will crash the entire Go program.
+### 1. Centralized Safe Goroutine Spawning & Panic Recovery
+NEVER manually write `go func() { defer recover() }` blocks inline across the codebase. It creates massive duplication, error-prone boilerplate, and violates DRY. Use a centralized concurrency utility package (e.g., `pkg/concurrency`) to guarantee recovery.
+
 ```go
-// CORRECT: Goroutine with defer recover
-go func() {
-    defer func() {
-        if r := recover(); r != nil {
-            logger.Error("goroutine panic recovered", zap.Any("panic", r))
-        }
-    }()
-    // Your background business logic here
-}()
+// CORRECT: pkg/concurrency/goroutine.go
+package concurrency
+
+import (
+	"context"
+	"go.uber.org/zap"
+)
+
+// Go spawns a goroutine with recovery to prevent server crashes
+func Go(log *zap.Logger, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error("recovered panic in background goroutine",
+					zap.Any("panic", r),
+					zap.Stack("stack"),
+				)
+			}
+		}()
+		fn()
+	}()
+}
 ```
 
-### 2. Prevent Goroutine Leaks
-Never start a goroutine without knowing how it will terminate. Always use context cancellation or select channels with a timeout.
+### 2. Prevent Channel Spin Locks & Leakages
+When reading from channels inside select loops, ALWAYS verify if the channel was closed. Reading from a closed channel returns the zero value instantly without blocking, which will cause your select loop to spin at 100% CPU.
+
 ```go
-// CORRECT: Clean termination using context
+// CORRECT: Handle channel closure by nil-ing the channel to disable the select case
 go func(ctx context.Context) {
     for {
         select {
         case <-ctx.Done():
-            return // exit goroutine when context cancels
-        case msg := <-ch:
+            return
+        case msg, ok := <-ch:
+            if !ok {
+                ch = nil // Set to nil so this select case is ignored, preventing infinite spins
+                continue
+            }
             process(msg)
         }
     }
 }(ctx)
 ```
 
-### 3. Thread-Safe Maps
-Standard Go maps are NOT thread-safe for concurrent reads and writes. A concurrent write map access triggers a fatal runtime panic that cannot be recovered.
-- Use `sync.Map` for read-heavy keys with high concurrency.
-- Use a standard map wrapped with `sync.RWMutex` for general thread-safe operations.
+### 3. Thread-Safe Encapsulation (Mutex Ownership)
+NEVER anonymously embed `sync.Mutex` or `sync.RWMutex` in your structs. Embedding them exposes the `.Lock()` and `.Unlock()` methods on the struct's public API surface, allowing external callers to lock or unlock the struct, leading to deadlocks.
+
 ```go
-type SafeMap struct {
-    sync.RWMutex
-    data map[string]*Item
+// CORRECT: Mutex encapsulated as a private unexported field
+type SafeCache struct {
+	mu   sync.RWMutex
+	data map[string]*Item
 }
 
-func (m *SafeMap) Set(key string, val *Item) {
-    m.Lock()
-    defer m.Unlock()
-    m.data[key] = val
+func (c *SafeCache) Load(key string) (*Item, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	val, ok := c.data[key]
+	return val, ok
 }
 
-func (m *SafeMap) Get(key string) (*Item, bool) {
-    m.RLock()
-    defer m.RUnlock()
-    val, ok := m.data[key]
-    return val, ok
+func (c *SafeCache) Store(key string, val *Item) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data[key] = val
 }
 ```
 
-### 4. Structured Concurrency (errgroup)
-Prefer `golang.org/x/sync/errgroup` over raw WaitGroups when executing parallel operations that need to return errors or handle cancellations collectively.
+### 4. Bounded Structured Concurrency (Resource Limits)
+NEVER spawn unbounded goroutines inside a loop (e.g., calling `eg.Go` without limits on a dynamic slice of items). This can trigger out-of-memory (OOM) failures or exhaust file descriptors. Always bound concurrency using Go 1.20's `SetLimit` or a buffered channel semaphore.
+
 ```go
-eg, egCtx := errgroup.WithContext(ctx)
-for _, item := range items {
-    item := item // pin variable
-    eg.Go(func() error {
-        return processItem(egCtx, item)
-    })
-}
-if err := eg.Wait(); err != nil {
-    return err // returns first error and cancels egCtx
+// CORRECT: Structured concurrency with explicit resource limits
+func ProcessBatch(ctx context.Context, items []*Item) error {
+	eg, egCtx := errgroup.WithContext(ctx)
+	
+	// Limit maximum concurrent active workers (e.g., max 10 concurrent database queries)
+	eg.SetLimit(10) 
+	
+	for _, item := range items {
+		item := item // Pin range variable to prevent loop variable capture bugs
+		eg.Go(func() error {
+			return processItem(egCtx, item)
+		})
+	}
+	return eg.Wait()
 }
 ```
 
-### 5. Always Run the Race Detector
+### 5. Proper Context Propagation in Concurrency
+Any concurrent worker must respect the parent context deadline. Always pass the derived context (e.g., `egCtx` from `errgroup`) to down-stream requests to abort database transactions and connection requests immediately on cancellation.
+
+### 6. Always Run the Race Detector
 No code involving concurrency or shared state is ready for production unless verified by the race detector:
 ```bash
 go test -race ./...
