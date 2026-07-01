@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import contextlib
+import logging
 import os
 from collections.abc import AsyncIterator
 
@@ -31,7 +32,7 @@ from app.app_utils.typing import Feedback
 
 load_dotenv()
 setup_telemetry()
-import logging
+
 logger = logging.getLogger(__name__)
 
 if os.getenv("GOOGLE_GENAI_USE_VERTEXAI") == "True":
@@ -40,7 +41,9 @@ if os.getenv("GOOGLE_GENAI_USE_VERTEXAI") == "True":
         logging_client = google_cloud_logging.Client()
         logger = logging_client.logger(__name__)
     except Exception as ex:
-        logging.warning("Failed to initialize GCP logging, using standard logger: %v", ex)
+        logging.warning(
+            "Failed to initialize GCP logging, using standard logger: %v", ex
+        )
 allow_origins = (
     os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else None
 )
@@ -95,7 +98,10 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
         Success message
     """
     if hasattr(logger, "log_struct"):
-        logger.log_struct(feedback.model_dump(), severity="INFO")
+        from typing import Any
+
+        logger_any: Any = logger
+        logger_any.log_struct(feedback.model_dump(), severity="INFO")
     else:
         logger.info("Feedback: %s", feedback.model_dump())
     return {"status": "success"}
