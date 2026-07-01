@@ -9,10 +9,10 @@ description: Instructions for container orchestration, Kubernetes/Swarm deployme
 
 Before doing anything:
 
-1. Read `.agents/context/deployment-topology.md` — know the infrastructure
-2. Read `.agents/context/architecture.md` — know the system design
-3. Read `.agents/context/security-policies.md` — know container security requirements
-4. Read `.agents/TASK_LOG.md` (if exists) — know current task state
+1. Read `.agents/context/deployment-topology.md` — know the infrastructure.
+2. Read `.agents/context/architecture.md` — know the system design.
+3. Read `.agents/context/security-policies.md` — know container security requirements.
+4. Read `.agents/TASK_LOG.md` (if exists) — know current task state.
 
 **NEVER start work without knowing the infrastructure topology.**
 
@@ -20,7 +20,7 @@ Before doing anything:
 
 ## Workflow Overview
 
-Mọi task deployment đều tuân theo workflow 5 bước:
+All deployment tasks follow a 5-step workflow:
 
 ```
 1. Read Topology → 2. Write Dockerfile/Compose → 3. Validate → 4. Write Helm Charts → 5. Deploy & Verify
@@ -28,21 +28,21 @@ Mọi task deployment đều tuân theo workflow 5 bước:
 
 ---
 
-## Bước 1: Read Topology
+## Step 1: Read Topology
 
-Trước khi chỉnh sửa bất kỳ file deployment nào:
+Before modifying any deployment files:
 
-1. Hiểu service map — hệ thống có **3 services**:
-   - **Go Backend** (port 8080) — standalone binary serving REST API + WebSocket + Frontend SPA
-   - **ADK Playground** (port 8200) — Python uvicorn server, 10 specialist agents
-   - **Frontend** — static SPA served by Go backend tại `/*`
+1. Understand the service map — the system consists of **3 services**:
+   - **Go Backend** (port 8080) — standalone binary serving REST API + WebSocket + Frontend SPA.
+   - **ADK Playground** (port 8200) — Python uvicorn server, 10 specialist agents.
+   - **Frontend** — static SPA served by the Go backend at `/*`.
 
-2. Hiểu infrastructure dependencies — **3 infrastructure components**:
-   - **PostgreSQL 16** (port 5432) — 24 migration files, pgx/v5 driver, pool max 25
-   - **Redis 7** (port 6379) — go-redis/v9, cache DB0, maxmemory 256mb LRU
-   - **NATS JetStream** (port 4222) — stream `INCIDENTS`, subjects `incidents.>`
+2. Understand the infrastructure dependencies — **3 infrastructure components**:
+   - **PostgreSQL 16** (port 5432) — 24 migration files, pgx/v5 driver, connection pool max 25.
+   - **Redis 7** (port 6379) — go-redis/v9, cache DB0, maxmemory 256mb LRU.
+   - **NATS JetStream** (port 4222) — stream `INCIDENTS`, subjects `incidents.>`.
 
-3. Hiểu network topology:
+3. Understand the network topology:
    ```
    Internet → Ingress → Service (ClusterIP:8080) → Go Backend Pod
                                                          │
@@ -51,33 +51,33 @@ Trước khi chỉnh sửa bất kỳ file deployment nào:
                               PostgreSQL:5432       Redis:6379          NATS:4222
    ```
 
-4. Check deployment files hiện có:
-   - `deployments/docker/Dockerfile` — multi-stage (golang:1.23-alpine → distroless)
-   - `deployments/docker/docker-compose.yml` — 4 services (app, postgres, redis, nats)
-   - `deployments/helm/k8sselfhost/` — Helm chart (Chart v0.1.0, App v0.1.0)
-   - `deployments/k8s/argocd-app.yaml` — ArgoCD Application (auto-sync, self-heal)
-   - `.github/workflows/ci.yml` — CI pipeline (lint → test → build)
+4. Check existing deployment files:
+   - `deployments/docker/Dockerfile` — multi-stage (golang:1.23-alpine → distroless).
+   - `deployments/docker/docker-compose.yml` — 4 services (app, postgres, redis, nats).
+   - `deployments/helm/k8sselfhost/` — Helm chart (Chart v0.1.0, App v0.1.0).
+   - `deployments/k8s/argocd-app.yaml` — ArgoCD Application (auto-sync, self-heal).
+   - `.github/workflows/ci.yml` — CI pipeline (lint → test → build).
 
 ---
 
-## Bước 2: Write Dockerfile / Compose
+## Step 2: Write Dockerfile / Compose
 
-Khi tạo hoặc cập nhật container images và compose files:
+When creating or updating container images and compose files:
 
-### Dockerfile Rules (bắt buộc)
+### Dockerfile Rules (MANDATORY)
 
-| Quy tắc | Chi tiết |
-|---------|----------|
-| **Multi-stage builds** | Builder: `golang:1.23-alpine`. Runtime: `gcr.io/distroless/static-debian12:nonroot` |
-| **Non-root user** | `USER nonroot:nonroot` — KHÔNG BAO GIỜ chạy app với root |
-| **Layer caching** | Copy `go.mod` + `go.sum` trước → `go mod download` → copy source |
-| **.dockerignore** | Loại bỏ `.git`, `*.exe`, `*.mp3`, `*.mp4`, `__pycache__`, `orchestrator-agent/.venv` |
-| **Pin versions** | KHÔNG dùng `latest` — pin cụ thể: `golang:1.23-alpine`, `postgres:16-alpine` |
-| **Healthcheck** | `wget --spider -q http://localhost:8080/livez` cho app service |
-| **Static binary** | `CGO_ENABLED=0 GOOS=linux GOARCH=amd64` cho cross-compilation |
-| **Strip debug** | `-ldflags="-s -w"` để giảm binary size |
+| Rule | Detail |
+|------|--------|
+| **Multi-stage builds** | Builder: `golang:1.23-alpine`. Runtime: `gcr.io/distroless/static-debian12:nonroot`. |
+| **Non-root user** | `USER nonroot:nonroot` — NEVER run the app as root. |
+| **Layer caching** | Copy `go.mod` + `go.sum` first → `go mod download` → copy source. |
+| **.dockerignore** | Exclude `.git`, `*.exe`, `*.mp3`, `*.mp4`, `__pycache__`, `orchestrator-agent/.venv`. |
+| **Pin versions** | DO NOT use `latest` — pin specifically: `golang:1.23-alpine`, `postgres:16-alpine`. |
+| **Healthcheck** | `wget --spider -q http://localhost:8080/livez` for the app service. |
+| **Static binary** | `CGO_ENABLED=0 GOOS=linux GOARCH=amd64` for cross-compilation. |
+| **Strip debug** | `-ldflags="-s -w"` to reduce binary size. |
 
-### Dockerfile hiện tại (reference)
+### Reference Dockerfile
 
 ```dockerfile
 # Build stage
@@ -105,13 +105,13 @@ ENTRYPOINT ["/server"]
 
 ### Docker Compose Rules (k8sselfhost)
 
-- Dùng `services:` format (Compose v2 — không cần `version` key)
-- Defined services: `app`, `postgres`, `redis`, `nats`
-- Named volumes cho persistent data: `postgres_data`, `redis_data`, `nats_data`
-- Network: `k8sselfhost` (bridge driver)
-- Health checks bắt buộc cho tất cả services
-- `depends_on` với `condition: service_healthy` để đảm bảo startup order
-- Environment variables prefix: `K8S_` (ví dụ: `K8S_POSTGRES_HOST`, `K8S_REDIS_PORT`)
+- Use the `services:` format (Compose v2 — no `version` key needed).
+- Defined services: `app`, `postgres`, `redis`, `nats`.
+- Named volumes for persistent data: `postgres_data`, `redis_data`, `nats_data`.
+- Network: `k8sselfhost` (bridge driver).
+- Mandatory health checks for all services.
+- `depends_on` with `condition: service_healthy` to ensure startup ordering.
+- Environment variables prefix: `K8S_` (e.g., `K8S_POSTGRES_HOST`, `K8S_REDIS_PORT`).
 
 ### Docker Compose Environment Variables
 
@@ -137,20 +137,20 @@ ENTRYPOINT ["/server"]
 
 ### Docker Swarm Constraints
 
-Khi deploy lên Docker Swarm:
+When deploying to Docker Swarm:
 
-- Đặt labels trong `deploy.labels`, KHÔNG phải ở service level
-- Named volumes persist data — anonymous volumes KHÔNG persist
-- `docker stack deploy` REMOVES services không có trong YAML — luôn deploy full stack
-- Resource limits: `deploy.resources.limits` cho memory và CPU
-- Replicas: `deploy.replicas` — default 1, scale qua `docker service scale`
-- Update strategy: `deploy.update_config` với `order: start-first` cho zero-downtime
+- Place labels in `deploy.labels`, NOT at the service level.
+- Named volumes persist data — anonymous volumes DO NOT.
+- `docker stack deploy` REMOVES services not present in the YAML — always deploy the full stack.
+- Resource limits: `deploy.resources.limits` for memory and CPU.
+- Replicas: `deploy.replicas` — default 1, scale via `docker service scale`.
+- Update strategy: `deploy.update_config` with `order: start-first` for zero-downtime updates.
 
 ---
 
-## Bước 3: Validate
+## Step 3: Validate
 
-Trước khi deploy, chạy validation pipeline:
+Before deploying, run the validation pipeline:
 
 ```bash
 # 1. Build Docker image
@@ -168,7 +168,7 @@ helm lint deployments/helm/k8sselfhost/
 # 5. Helm template render (dry-run)
 helm template k8sselfhost deployments/helm/k8sselfhost/ --debug
 
-# 6. Kubernetes manifest validation (if kubeval installed)
+# 6. Kubernetes manifest validation
 helm template k8sselfhost deployments/helm/k8sselfhost/ | kubeval --strict
 
 # 7. Security scan container image
@@ -177,19 +177,18 @@ trivy image --severity CRITICAL,HIGH k8sselfhost:latest
 
 ### Validation Rules
 
-- **Tất cả validation phải pass** — nếu có bất kỳ step nào fail, fix trước khi deploy
-- Không bao giờ skip validation vì "chắc chắn đúng"
-- Nếu Helm template fail → fix templates trước khi package
-- Nếu trivy scan tìm CRITICAL CVE → fix hoặc accept risk trước khi deploy
-- Nếu hadolint warning → evaluate và fix nếu có thể
+- **All validations must pass** — if any step fails, fix it before deploying.
+- Never skip validation because "it should be correct".
+- If Helm template fails → fix the templates before packaging.
+- If Trivy scan finds a CRITICAL CVE → fix or accept the risk before deploying.
 
 ---
 
-## Bước 4: Write Helm Charts
+## Step 4: Write Helm Charts
 
-Khi tạo hoặc cập nhật Helm charts cho Kubernetes deployment:
+When creating or updating Helm charts for Kubernetes deployment:
 
-### Chart Structure (hiện tại)
+### Chart Structure
 
 ```
 deployments/helm/k8sselfhost/
@@ -209,20 +208,20 @@ deployments/helm/k8sselfhost/
     └── prometheusrule.yaml  # PrometheusRule alerts
 ```
 
-### Helm Rules (bắt buộc)
+### Helm Rules (MANDATORY)
 
-| Quy tắc | Chi tiết |
-|---------|----------|
-| **Templating** | Dùng `_helpers.tpl` cho common labels, selectors, fullname |
-| **Values-driven** | Mọi configurable value đều trong `values.yaml` — không hardcode |
-| **Resource limits** | requests: CPU 100m, Memory 128Mi / limits: CPU 500m, Memory 256Mi |
-| **HPA** | minReplicas: 1, maxReplicas: 5, target CPU: 80% |
-| **PDB** | minAvailable: 1 cho production |
-| **Secrets** | Sensitive values (passwords, keys) trong `secrets.yaml` — referencing via `secretKeyRef` |
-| **Probes** | Liveness: `/livez` (delay 10s, period 30s), Readiness: `/readyz` (delay 5s, period 10s) |
-| **Security** | `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, drop ALL capabilities |
-| **Annotations** | Prometheus scrape: `prometheus.io/scrape: "true"`, port: `"8080"`, path: `"/metrics"` |
-| **NetworkPolicy** | Restrict ingress/egress cho least-privilege access |
+| Rule | Detail |
+|------|--------|
+| **Templating** | Use `_helpers.tpl` for common labels, selectors, and fullname. |
+| **Values-driven** | All configurable values must be in `values.yaml` — no hardcoding. |
+| **Resource limits** | requests: CPU 100m, Memory 128Mi / limits: CPU 500m, Memory 256Mi. |
+| **HPA** | minReplicas: 1, maxReplicas: 5, target CPU: 80%. |
+| **PDB** | minAvailable: 1 for production. |
+| **Secrets** | Sensitive values (passwords, keys) in `secrets.yaml` — referencing via `secretKeyRef`. |
+| **Probes** | Liveness: `/livez` (delay 10s, period 30s), Readiness: `/readyz` (delay 5s, period 10s). |
+| **Security** | `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, drop ALL capabilities. |
+| **Annotations** | Prometheus scrape: `prometheus.io/scrape: "true"`, port: `"8080"`, path: `"/metrics"`. |
+| **NetworkPolicy** | Restrict ingress/egress for least-privilege access. |
 
 ### Values.yaml Key Sections
 
@@ -258,14 +257,13 @@ nats:
 
 ---
 
-## Bước 5: Deploy & Verify
+## Step 5: Deploy & Verify
 
 ### Docker Compose (Local Development)
 
 ```bash
 # Start all services
 make docker-up
-# hoặc: docker compose -f deployments/docker/docker-compose.yml up -d
 
 # Verify all services healthy
 docker compose -f deployments/docker/docker-compose.yml ps
@@ -321,37 +319,6 @@ syncPolicy:
       maxDuration: 3m
 ```
 
-- Source: `deployments/helm/k8sselfhost/` from repo `main` branch
-- Destination: `k8sselfhost` namespace
-- Auto-sync enabled — push to `main` triggers deploy
-
-### Verification Checklist
-
-Sau khi deploy, verify:
-
-```bash
-# 1. Pods running
-kubectl -n k8sselfhost get pods -o wide
-
-# 2. Services accessible
-kubectl -n k8sselfhost get svc
-
-# 3. Health check
-curl -s http://<endpoint>/healthz | jq .
-
-# 4. API responds
-curl -s -H "Authorization: Bearer <token>" http://<endpoint>/api/v1/ | jq .
-
-# 5. WebSocket connection
-wscat -c ws://<endpoint>/ws?token=<token>
-
-# 6. Metrics available
-curl -s http://<endpoint>/metrics | head -20
-
-# 7. Logs clean (no ERROR entries)
-kubectl -n k8sselfhost logs deploy/k8sselfhost --tail=50 | grep -i error
-```
-
 ---
 
 ## CI/CD Pipeline (GitHub Actions)
@@ -376,24 +343,9 @@ Tests run against real services (not mocks):
 - **PostgreSQL 16-alpine** on port 5432 (test DB: `k8sselfhost_test`)
 - **Redis 7-alpine** on port 6379
 
-### Makefile Targets
-
-| Target | Command | Purpose |
-|--------|---------|---------|
-| `make build` | `go build` | Build server + agent-runner binaries |
-| `make test` | `go test ./... -race` | Run all tests |
-| `make lint` | `golangci-lint run` | Lint code |
-| `make fmt` | `go fmt` + `goimports` | Format code |
-| `make run` | `go run ./cmd/server` | Run server locally |
-| `make docker-build` | `docker build` | Build Docker image |
-| `make docker-up` | `docker compose up -d` | Start Docker Compose |
-| `make docker-down` | `docker compose down` | Stop Docker Compose |
-| `make migrate` | `psql -f migrations/*.sql` | Apply DB migrations |
-| `make tidy` | `go mod tidy` | Tidy Go modules |
-
 ---
 
-## Infrastructure Constraints (k8sseflhost)
+## Infrastructure Constraints (k8sselfhost)
 
 ### Service Ports
 
@@ -417,101 +369,52 @@ Tests run against real services (not mocks):
 | Privilege escalation | Disabled |
 | Capabilities | ALL dropped |
 
-### Resource Limits (Kubernetes)
-
-```yaml
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 256Mi
-```
-
-### Network Policies
-
-- Go Backend → PostgreSQL:5432 (egress allowed)
-- Go Backend → Redis:6379 (egress allowed)
-- Go Backend → NATS:4222 (egress allowed)
-- Ingress → Go Backend:8080 (ingress allowed)
-- All other traffic → DENIED
-
 ---
 
-## Reference Files
+## 🚫 ZERO-TOLERANCE ANTI-FAKE RULES (HIGHEST LEVEL)
 
-| File | Path | Purpose |
-|------|------|---------|
-| Dockerfile | `deployments/docker/Dockerfile` | Multi-stage container build |
-| Compose | `deployments/docker/docker-compose.yml` | Local dev environment |
-| Helm Chart | `deployments/helm/k8sselfhost/` | Kubernetes deployment |
-| ArgoCD App | `deployments/k8s/argocd-app.yaml` | GitOps application |
-| CI Pipeline | `.github/workflows/ci.yml` | Lint → Test → Build |
-| Makefile | `Makefile` | Build automation targets |
-| Config | `config.yaml` | Local config (not for production) |
-| Topology | `.agents/context/deployment-topology.md` | Infrastructure documentation |
+**YOU MUST COMPLY WITH THE FOLLOWING RULES. VIOLATION = IMMEDIATE TERMINATION.**
 
----
+### 1. NEVER fabricate data
+- **DO NOT** fabricate deploy statuses, service replicas, or container health.
+- **DO NOT** state "deploy success" unless you have run `kubectl get pods` or `docker ps` and pasted the output.
+- **DO NOT** fabricate image build results — you must provide actual build logs.
+- **DO NOT** state "healthy" unless you have queried the health check endpoint.
 
-## Session Memory
+### 2. ALWAYS verify using actual tool outputs
+- Every claim must be backed by **real tool output** (docker, kubectl, helm, curl).
+- If you state "image built" → you **MUST** paste the `docker images` output.
+- If you state "pod running" → you **MUST** paste the `kubectl get pods` output.
+- If you state "service healthy" → you **MUST** paste the `curl /healthz` response.
 
-- Ghi nhớ deployment history: services đã deploy, images đã build, issues đã gặp
-- Ghi nhớ cluster state: node labels, network config, volume locations
-- Ghi nhớ rollback procedures cho từng service
-- Ghi nhớ infrastructure versions: PostgreSQL 16, Redis 7, NATS 2, Go 1.26
+### 3. DO NOT use "deploy command executed" as proof
+- Running `docker compose up` **IS NOT** proof that services are healthy.
+- Running `helm install` **IS NOT** proof that pods are running.
+- **Always verify after deploy**: `docker ps`, `kubectl get pods`, `curl /healthz`.
 
----
-
-## 🚫 ZERO-TOLERANCE ANTI-FAKE RULES (MỨC CAO NHẤT)
-
-**BẠN TUÂN THỦ CÁC QUY TẮC SAU. VI PHẠM = LOẠI HOÀN TOÀN.**
-
-### 1. KHÔNG BAO GIỜ bịa/fabricate data
-- **ĐỪNG** bịa deploy status, service replicas, hay container health
-- **ĐỪNG** nói "deploy success" nếu chưa chạy `kubectl get pods` hoặc `docker ps`
-- **ĐỪNG** bịa image build result — phải có actual build log
-- **ĐỪNG** nói "healthy" nếu chưa chạy health check endpoint
-- **ĐỪNG** bịa Helm install result nếu chưa chạy `helm list`
-
-### 2. Luôn verify bằng tool output thực tế
-- Mọi claim phải có **tool output** (docker, kubectl, helm, curl) để chứng minh
-- Nếu nói "image built" → **PHẢI** paste `docker images` output
-- Nếu nói "pod running" → **PHẢI** paste `kubectl get pods` output
-- Nếu nói "service healthy" → **PHẢI** paste `curl /healthz` response
-- Nếu nói "Helm deployed" → **PHẢI** paste `helm list` output
-
-### 3. ĐỪNG dùng "deploy command executed" làm proof
-- Running `docker compose up` **KHÔNG PHẢI** là proof rằng services healthy
-- Running `helm install` **KHÔNG PHẢI** là proof rằng pods running
-- **Luôn verify sau deploy**: `docker ps`, `kubectl get pods`, `curl /healthz`
-
-### 4. Nếu không thể verify → nói "KHÔNG THỂ VERIFY"
-- Nếu Docker fail → report error, không bịa success
-- Nếu image build fail → report build log, không bịa pass
-- Nếu service unhealthy → report actual status, không bịa healthy
-- Nếu không có cluster access → nói "cần cluster access"
+### 4. If you cannot verify → state "CANNOT VERIFY"
+- If Docker fails → report the error; do not fabricate success.
+- If the image build fails → report the build logs; do not fabricate a pass.
 
 ### 5. Deploy = Real deploy + verification
-- Deploy = run command → verify pods → verify health → verify API
-- Build = run docker build → verify image exists → verify image size
-- Rollback = run rollback → verify previous version → verify health
+- Deploy = run command → verify pods → verify health → verify API.
+- Build = run docker build → verify image exists → verify image size.
 
-### 6. Mọi "SUCCESS" claim phải có 3 thứ:
-1. **Command bạn đã chạy** (exact docker/kubectl/helm/curl command)
-2. **Output thực tế** (paste từ terminal)
-3. **Chứng cứ liên quan** (replicas count, HTTP status, response body, pod status)
+### 6. Every "SUCCESS" claim must include 3 things:
+1. **Command you ran** (exact docker/kubectl/helm/curl command)
+2. **Actual output** (pasted from the terminal)
+3. **Relevant evidence** (replicas count, HTTP status, response body, pod status)
 
-**BẠN CÓ QUYỀN BỊ TỪ CHỐI NẾU KHÔNG THỂ PROVE.**
+**YOU WILL BE REJECTED IF YOU CANNOT PROVE.**
 
 ---
 
 ## 📤 ORCHESTRATOR OUTPUT CONTRACT (MANDATORY)
 
-Khi hoàn thành task, bạn **PHẢI** kết thúc output bằng section này.
-Đây là format chuẩn để orchestrator parse kết quả và aggregate.
+When completing a task, you **MUST** end the output with this section.
+This is the standard format for the orchestrator to parse and aggregate results.
 
-### Format (copy và điền):
+### Format (copy and fill):
 
 ```markdown
 ## ORCHESTRATOR SUMMARY
@@ -529,16 +432,16 @@ Khi hoàn thành task, bạn **PHẢI** kết thúc output bằng section này.
 ```
 
 ### Issues/Blockers:
-- [nếu có, nếu không thì ghi "None"]
+- [if any, otherwise write "None"]
 
 ### Recommended next steps:
-- [nếu có]
+- [if any]
 ```
 
-### Quy tắc:
-1. **LUÔN** có section ORCHESTRATOR SUMMARY ở cuối output — đây là quan trọng nhất
-2. **Status** phải rõ ràng: SUCCESS (tất cả pass), PARTIAL (có issue nhưng hoàn thành được), FAILED (không hoàn thành)
-3. **Report path** phải là path đến file report
-4. **Verification evidence** phải có tool output thực tế (terminal, curl, build log) — KHÔNG dùng "should work"
-5. Nếu task thất bại → nguyên nhân cụ thể + suggestion để fix
-6. Orchestrator sẽ dùng SUMMARY này để aggregate tất cả agent results — nếu thiếu, kết quả có thể bị bỏ qua
+### Rules:
+1. **ALWAYS** include the ORCHESTRATOR SUMMARY section at the end of the output — this is critical.
+2. **Status** must be clear: SUCCESS (all passed), PARTIAL (completed with minor issues), FAILED (not completed).
+3. **Report path** must be the path to the report file.
+4. **Verification evidence** must include actual tool output (terminal, curl, build log) — DO NOT use "should work".
+5. If the task failed → specify the cause + suggest a fix.
+6. The orchestrator will use this SUMMARY to aggregate all agent results — if missing, the results may be ignored.

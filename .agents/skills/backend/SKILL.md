@@ -19,13 +19,13 @@ All tasks follow the 4-step workflow:
 
 Before writing any code:
 
-1. Read `.agents/skills/backend/coding-standards.md` in project root — mandatory coding standards
-2. Understand project structure: `go.mod`, `main.go`, `internal/`, `pkg/`, `api/`
-3. Read files related to the feature being implemented
-4. Understand existing patterns: error handling, logging (zap), routing (gin), DB access (gorm)
-5. Check existing test files to follow the same style
+1. Read `.agents/context/coding-standards.md` — mandatory coding standards.
+2. Understand the project structure: `go.mod`, `main.go`, `internal/`, `pkg/`.
+3. Read files related to the feature being implemented.
+4. Understand existing patterns: error handling, logging (zap), routing (chi), DB access (pgx).
+5. Check existing test files to follow the same style.
 
-**NEVER implement without reading context first.**
+**NEVER implement without reading the context first.**
 
 ---
 
@@ -35,26 +35,28 @@ Before writing any code:
 
 | Rule | Detail |
 |------|--------|
-| **Prices** | Always use `int64` — maps to BIGINT in DB. NEVER use float for money |
-| **Weight** | Use `int` — unit is grams |
-| **Currency** | Always **VND** — no multi-currency support |
-| **DB Enums** | Use **UPPERCASE**: `ORDER_STATUS_PENDING`, `PAYMENT_METHOD_COD` |
-| **Domain Errors** | Return `*DomainError` pointer — enables wrapping, type assertion, structured response |
+| **Prices** | Always use `int64` — maps to BIGINT in DB. NEVER use float for money. |
+| **Weight** | Use `int` — unit is grams. |
+| **Currency** | Always **VND** — no multi-currency support. |
+| **DB Enums** | Use **UPPERCASE**: `ORDER_STATUS_PENDING`, `PAYMENT_METHOD_COD`. |
+| **Domain Errors** | Return `*DomainError` pointer — enables wrapping, type assertion, and structured responses. |
 
 ### Implementation Guidelines
 
-- Follow existing project patterns — do not invent new approaches
-- Every I/O-bound function must accept `context.Context` as first parameter
-- Use dependency injection via constructors — avoid global state
-- Clear error handling — never swallow errors
-- Use `zap.Logger` for structured logging
-- Use `gin` for HTTP routing, `gorm` for DB, `sonic v1.15.1` for JSON serialization
+- Follow existing project patterns — do not invent new approaches.
+- Every I/O-bound function must accept `context.Context` as the first parameter.
+- Use dependency injection via constructors — avoid global state.
+- Clear error handling — never swallow errors.
+- Use `zap.Logger` for structured logging.
+- Use `chi/v5` for HTTP routing, `pgx/v5` for DB connection pooling, and `encoding/json` for JSON serialization.
+- Use `sync.Pool` for allocation optimization.
+- Implement goroutine panic recovery.
 
 ### Go-Specific Notes
 
-- After every `patch` tool use → **run `go build ./...`** immediately
-- `patch` tool can corrupt Go files — verify with `go build` after each edit
-- If `go build` fails → fix before continuing
+- After every code modification → **run `go build ./...`** immediately.
+- Verify compilation after each edit.
+- If `go build` fails → fix the compilation issues before continuing.
 
 ---
 
@@ -62,11 +64,11 @@ Before writing any code:
 
 ### Test Style
 
-- Use **table-driven tests** — idiomatic Go
-- Use `testify/assert` or manual assertions
-- Mock external dependencies (DB, HTTP, Kafka) — never test against real services
-- Test both happy path and error cases
-- Name tests clearly: `Test_<Function>_<Scenario>_<Expected>`
+- Use **table-driven tests** — idiomatic Go.
+- Use `testify/assert` or manual assertions.
+- Mock external dependencies (DB, HTTP, NATS) — never test against real services in unit tests.
+- Test both the happy path and error cases.
+- Name tests clearly: `Test_<Function>_<Scenario>_<Expected>`.
 
 ### Test Structure
 
@@ -80,15 +82,15 @@ func Test_CreateOrder_InvalidInput_ReturnsDomainError(t *testing.T) {
 
 ### Coverage
 
-- Business logic: target 80%+ coverage
-- Error handling: must test ALL error paths
-- Edge cases: nil input, empty slice, zero values, max int64
+- Business logic: target 80%+ coverage.
+- Error handling: must test ALL error paths.
+- Edge cases: nil input, empty slice, zero values, max int64.
 
 ---
 
 ## Step 4: Run Quality Gates
 
-Before completing task, run **ALL** quality gates:
+Before completing a task, run **ALL** quality gates:
 
 ```bash
 go fmt ./...
@@ -100,16 +102,17 @@ go test -race ./...
 
 ### Quality Gate Rules
 
-- **All 5 gates MUST pass** — if any gate fails, fix before reporting done
-- If `staticcheck` not available: `go install honnef.co/go/tools/cmd/staticcheck@latest`
-- If `go test -race` too slow: `go test -race ./internal/...`
-- NEVER skip quality gates because "it's probably correct"
+- **All 5 gates MUST pass** — if any gate fails, fix before reporting done.
+- If `staticcheck` is not available: `go install honnef.co/go/tools/cmd/staticcheck@latest`.
+- If `go test -race` is too slow: `go test -race ./internal/...`.
+- NEVER skip quality gates because "it's probably correct".
 
 ---
 
 ## 🔥 REDIS OPTIMIZATION RULES (CRITICAL)
 
-### Redis Connection Pool (MUST configure correctly)
+### Redis Connection Pool Configuration
+
 ```go
 // CORRECT: connection pool with proper settings
 redisClient := redis.NewClient(&redis.Options{
@@ -128,35 +131,32 @@ redisClient := redis.NewClient(&redis.Options{
 })
 ```
 
-### Redis Key Patterns (MUST follow)
+### Redis Key Patterns
+
 | Pattern | TTL | Use Case |
 |---------|-----|----------|
-| `product:{spu_id}:detail` | 5 min | Single product detail |
-| `product:{spu_id}:stock` | 30 sec | Real-time stock (short TTL) |
-| `products:list:{hash}` | 3 min | Product list cache |
-| `categories:tree` | 30 min | Category tree (rarely changes) |
-| `categories:all` | 30 min | All categories |
-| `category:{id}` | 10 min | Single category |
-| `search:{query_hash}` | 15 min | Search results |
+| `incident:{id}:detail` | 10 min | Single incident detail |
+| `incident:list:{hash}` | 3 min | Incident list cache |
 | `session:{user_id}` | 7 days | User session |
-| `cart:{user_id}` | 7 days | User cart |
 | `rate_limit:{ip}:{action}` | 1 min | Rate limiting |
 
 ### Redis Anti-Patterns (MUST NOT)
-- ❌ **NO `KEYS *` command** in production — use SCAN
-- ❌ **NO big keys** (>10KB) — split into smaller chunks
-- ❌ **NO N+1 Redis calls** — use Pipeline/MGet
-- ❌ **NO cache without TTL** — always set expiration
-- ❌ **NO silent failure** — log ALL Redis errors with zap
-- ❌ **NO single connection** — always use connection pool
-- ❌ **NO `SELECT` in code** — configure DB in connection string
 
-### Redis Pipeline Usage (MUST for batch operations)
+- ❌ **NO `KEYS *` command** in production — use SCAN.
+- ❌ **NO big keys** (>10KB) — split into smaller chunks.
+- ❌ **NO N+1 Redis calls** — use Pipeline or MGet.
+- ❌ **NO cache without TTL** — always set expiration.
+- ❌ **NO silent failure** — log ALL Redis errors with zap.
+- ❌ **NO single connection** — always use connection pool.
+- ❌ **NO `SELECT` in code** — configure DB in the connection string.
+
+### Redis Pipeline Usage (Batch Operations)
+
 ```go
 // CORRECT: Pipeline for batch operations
 pipe := redisClient.Pipeline()
 for _, id := range ids {
-    pipe.Get(ctx, "product:"+id)
+    pipe.Get(ctx, "incident:"+id)
 }
 cmds, err := pipe.Exec(ctx)
 if err != nil {
@@ -167,7 +167,8 @@ if err != nil {
 vals, err := redisClient.MGet(ctx, keys...).Result()
 ```
 
-### Redis Error Handling (MUST)
+### Redis Error Handling
+
 ```go
 // CORRECT: Log error, continue without cache (graceful degradation)
 val, err := redisClient.Get(ctx, key).Result()
@@ -185,236 +186,154 @@ if err != nil {
 }
 ```
 
-### Redis Health Check (MUST)
-```go
-// In main.go, add Redis health check:
-if redisClient != nil {
-    healthChecker.AddCheck("redis", func(ctx context.Context) error {
-        return redisClient.Ping(ctx).Err()
-    })
-}
-```
-
 ---
 
-## 🔥 KAFKA OPTIMIZATION RULES (CRITICAL)
+## 🔥 NATS JETSTREAM OPTIMIZATION RULES (CRITICAL)
 
-### Kafka Producer Config (MUST use optimized config)
+### NATS JetStream Publisher Config
+
 ```go
-// HIGH THROUGHPUT (for async events like analytics, logs)
-producer := kafka.NewWriter(kafka.WriterConfig{
-    Addr:         kafka.TCP(brokers...),
-    Balancer:     &kafka.LeastBytes{},
-    BatchTimeout: 5 * time.Millisecond,
-    WriteTimeout: 5 * time.Second,
-    Async:        true,
-    RequiredAcks: kafka.RequireOne,
-    MaxAttempts:  3,
-    BatchSize:    100,
-    Compression:  kafka.Lz4,
-})
-
-// HIGH RELIABILITY (for critical events like orders, payments)
-producer := kafka.NewWriter(kafka.WriterConfig{
-    Addr:         kafka.TCP(brokers...),
-    Balancer:     &kafka.LeastBytes{},
-    BatchTimeout: 10 * time.Millisecond,
-    WriteTimeout: 10 * time.Second,
-    Async:        false,
-    RequiredAcks: kafka.RequireAll,
-    MaxAttempts:  3,
-    BatchSize:    1,
-    Compression:  kafka.Lz4,
-})
-```
-
-### Kafka Consumer Config (MUST)
-```go
-reader := kafka.NewReader(kafka.ReaderConfig{
-    Brokers:         brokers,
-    Topic:           topic,
-    GroupID:         groupID,
-    MinBytes:        1e3,    // 1KB
-    MaxBytes:        10e6,   // 10MB
-    MaxWait:         500 * time.Millisecond,
-    ReadLagInterval: -1,
-    CommitInterval:  1 * time.Second,
-    StartOffset:     kafka.FirstOffset,
-})
-```
-
-### Kafka Anti-Patterns (MUST NOT)
-- ❌ **NO synchronous produce in hot path** — use Async for non-critical
-- ❌ **NO producer per message** — reuse single writer per service
-- ❌ **NO consumer per message** — use reader.Read in loop with commit
-- ❌ **NO nil producer check missing** — always check producer != nil
-- ❌ **NO ignoring write errors** — log and track failed publishes
-- ❌ **NO no-comsumer group** — always set GroupID for consumers
-- ❌ **NO manual offset commit in auto-commit** — pick one strategy
-
-### Kafka Error Handling (MUST)
-```go
-// Producer error handling
-err := producer.WriteMessages(ctx, msg)
-if err != nil {
-    logger.Error("kafka publish failed",
-        zap.String("topic", topic),
-        zap.Error(err),
-    )
-    metrics.KafkaPublishErrors.Inc()
-    // For critical events: retry or write to outbox
-}
-
-// Consumer error handling
-for {
-    msg, err := reader.ReadMessage(ctx)
-    if err != nil {
-        logger.Error("kafka read failed",
-            zap.String("topic", topic),
-            zap.Error(err),
-        )
-        continue // Don't crash on transient errors
-    }
-    // Process message...
-    if err := reader.CommitMessages(ctx, msg); err != nil {
-        logger.Error("kafka commit failed", zap.Error(err))
-    }
-}
-```
-
-### Kafka Message Format (MUST)
-```go
-// Standard message envelope
-type Event struct {
-    ID        string    `json:"id"`
-    Type      string    `json:"type"`
-    Timestamp time.Time `json:"timestamp"`
-    Payload   []byte    `json:"payload"`
-}
-
-// Serialize
+// CORRECT: Publish with context and structured payload
 data, err := json.Marshal(event)
-msg := kafka.Message{
-    Key:   []byte(event.ID),   // For partitioning
-    Value: data,
-    Topic: topic,
+if err != nil {
+    return err
+}
+
+_, err = js.Publish(ctx, "incidents.created", data)
+if err != nil {
+    logger.Error("NATS JetStream publish failed", zap.Error(err))
+    return err
 }
 ```
 
+### NATS JetStream Consumer Config
+
+```go
+// Subscription configuration
+sub, err := js.PullSubscribe("incidents.>", "incident-processor", nats.BindStream("INCIDENTS"))
+if err != nil {
+    return err
+}
+
+// Processing loop
+for {
+    msgs, err := sub.Fetch(10, nats.MaxWait(1*time.Second))
+    if err != nil {
+        if err == nats.ErrTimeout {
+            continue
+        }
+        logger.Error("NATS fetch failed", zap.Error(err))
+        time.Sleep(1 * time.Second)
+        continue
+    }
+    
+    for _, msg := range msgs {
+        // Process message...
+        if err := msg.Ack(); err != nil {
+            logger.Error("NATS ack failed", zap.Error(err))
+        }
+    }
+}
+```
+
+### NATS Anti-Patterns (MUST NOT)
+
+- ❌ **NO synchronous waiting** on publish without context deadlines.
+- ❌ **NO connection recreation** per request — reuse a single connection.
+- ❌ **NO auto-acknowledgement** for critical message flows — always use explicit Ack.
+- ❌ **NO ignoring consumer errors** — log all failures and monitor consumer lag.
+
 ---
 
-## 🐛 BUG FIX WORKFLOW (When fixing bugs)
+## 🐛 BUG FIX WORKFLOW
 
 ### Step 1: Reproduce the Bug
-1. Read the error message / log output carefully
-2. Identify the exact file and line where the bug occurs
-3. Write a test case that reproduces the bug (RED)
-4. Run the test to confirm it fails: `go test ./... -run TestBugName -v`
+1. Read the error message / log output carefully.
+2. Identify the exact file and line where the bug occurs.
+3. Write a test case that reproduces the bug (RED).
+4. Run the test to confirm it fails: `go test ./... -run TestBugName -v`.
 
 ### Step 2: Root Cause Analysis
-1. Read the code around the bug location
+1. Read the code around the bug location.
 2. Check for common Go bugs:
-   - Nil pointer dereference
-   - Race condition (needs -race flag)
-   - Incorrect error handling (swallowed errors)
-   - Off-by-one in slices
-   - Goroutine leak (missing context cancellation)
-   - Connection leak (not closing response bodies)
-3. Use `go vet` and `staticcheck` to find static issues
+   - Nil pointer dereference.
+   - Race condition (needs `-race` flag).
+   - Incorrect error handling (swallowed errors).
+   - Off-by-one in slices.
+   - Goroutine leak (missing context cancellation).
+   - Connection leak (not closing connection pool clients/rows).
+3. Use `go vet` and `staticcheck` to find static issues.
 
 ### Step 3: Fix the Bug
-1. Make minimal change — don't refactor
-2. Add/update test to cover the fix (GREEN)
+1. Make minimal changes — do not refactor unrelated code.
+2. Add/update tests to cover the fix (GREEN).
 3. Run: `go build ./...`
 4. Run: `go test ./... -v`
 5. Run: `go test -race ./...`
 
-### Step 4: Verify Fix
-1. Confirm test passes
-2. Check no regression: `go test ./... -race`
-3. Check no goroutine leak
-4. Update TASK_LOG.md with fix details
+### Step 4: Verify the Fix
+1. Confirm the test passes.
+2. Check that no regressions occur: `go test ./... -race`.
+3. Check that no goroutine leaks exist.
 
 ---
 
 ## Reference Files
 
-- `coding-standards.md` — project coding standards (MUST follow)
-- `go.mod` — dependencies and Go version
-- `internal/` — private application code
-- `pkg/` — public library code
-- `api/` — API definitions (protobuf, OpenAPI)
-- `packages/go-shared/pkg/redis/` — shared Redis client (read before modifying)
-- `packages/go-shared/pkg/kafka/` — shared Kafka config (read before modifying)
+- `.agents/context/coding-standards.md` — project coding standards.
+- `go.mod` — dependencies and Go version.
+- `internal/` — private Go application code.
+- `pkg/` — public Go library code.
 
-## Session Memory
+---
 
-- Record architecture decisions that have been approved
-- Record bugs that have been fixed to avoid recurrence
-- Record patterns that the team has agreed on
+## 🚫 ZERO-TOLERANCE ANTI-FAKE RULES (HIGHEST LEVEL)
 
-## 🚫 ZERO-TOLERANCE ANTI-FAKE RULES (MỨC CAO NHẤT)
+**YOU MUST COMPLY WITH THE FOLLOWING RULES. VIOLATION = IMMEDIATE TERMINATION.**
 
-**BẠN TUÂN THỦ CÁC QUY TẮC SAU. VI PHẠM = LOẠI HOÀN TOÀN.**
+### 1. NEVER fabricate data
+- **DO NOT** invent test results, metrics, benchmarks, or reports.
+- **DO NOT** state "feature implemented" unless you have run `go build` and verified compilation.
+- **DO NOT** state "tests passed" unless you have run the actual test command.
+- **DO NOT** fabricate API responses, curl output, or database query results.
+- **DO NOT** write "optimized" unless you have run a load test and compared actual metrics.
 
-### 1. KHÔNG BAO GIỜ bịa/fabricate data
-- **ĐỪNG** bịa kết quả test, metric, benchmark, hay báo cáo
-- **ĐỪNG** viết code rồi nói "đã implement" mà chưa chạy `go build` / `npm run build`
-- **ĐỪNG** nói "test passed" nếu chưa thực sự chạy test command
-- **ĐỪNG** bịa API response, curl output, hay database query result
-- **ĐỪNG** tạo file rồi nói "đã tạo" mà chưa verify file tồn tại
-- **ĐỪNG** viết "đã optimize" nếu chưa chạy load test và so sánh metric thực tế
+### 2. ALWAYS verify using the actual tool output
+- Every claim must be backed by **real tool output** (terminal output, curl response, build log).
+- If you state "build pass" → you **MUST** run the build command and paste the output.
+- If you state "test pass" → you **MUST** run the test command and paste the output.
+- If you state "API returns 200" → you **MUST** run curl and paste the response.
+- If you state "deploy OK" → you **MUST** run `kubectl get pods` and paste the output.
 
-### 2. LUôn verify bằng tool output thực tế
-- Mọi claim phải có **tool output** (terminal output, curl response, build log) để chứng minh
-- Nếu bạn nói "build pass" → bạn **PHẢI** chạy build command và paste output
-- Nếu bạn nói "test pass" → bạn **PHẢI** chạy test command và paste output
-- Nếu bạn nói "API return 200" → bạn **PHẢI** chạy curl và paste response
-- Nếu bạn nói "deploy OK" → bạn **PHẢI** chạy `docker stack ps` và paste output
+### 3. DO NOT use health checks alone as proof of correctness
+- A simple `/healthz` return code 200 **IS NOT** proof that your business feature works.
+- Health checks only prove that the process is running, not that the business logic is correct.
+- **Always test actual behavior**: make real API calls, run real DB queries, and verify real outputs.
 
-### 3. ĐỪNG dùng health check làm proof
-- Health check (`curl /health` → 200) **KHÔNG PHẢI** là proof rằng feature hoạt động
-- Health check chỉ chứng process sống, không chứng business logic đúng
-- **Luôn test actual behavior**: gọi API thật, query DB thật, load test thật
-
-### 4. Nếu không thể verify → nói "KHÔNG THỂ VERIFY"
-- Nếu tool fail → report failure, không bịa success
-- Nếu không có quyền → nói "cần access", không giả có access
-- Nếu task quá phức tạp cho 1 session → nói "cần thêm thời gian", không rush và bịa
+### 4. If you cannot verify → state "CANNOT VERIFY"
+- If a tool fails → report the failure; do not pretend it succeeded.
+- If you lack access → report the lack of access; do not fabricate data.
+- If a task is too complex for one session → state that you need more time.
 
 ### 5. Code = Real code, not pseudocode
-- Nếu bạn "fix code" → phải show diff thật, file thật, build pass
-- Nếu bạn "optimize" → phải show before/after metric từ load test tool (hey, k6, vegeta)
-- Nếu bạn "deploy" → phải show `docker stack ps` hoặc `kubectl get pods` output
+- If you fix code → show the actual diff, the actual file, and verify compilation.
+- If you optimize → show the before/after metrics from a load test tool.
 
-### 6. Test = Real test, not "should work"
-- "Should pass" KHÔNG PHẢI là test
-- Test = chạy command → paste output → pass/fail rõ ràng
-- Unit test: `go test ./... -v` hoặc `npm test`
-- Integration test: curl thật đến endpoint
-- Load test: `hey` / `k6` / `vegeta` với output
+### 6. Every "SUCCESS" claim must include 3 things:
+1. **Command you ran** (exact CLI command)
+2. **Actual output** (pasted from the terminal)
+3. **Relevant evidence** (file diff, metric comparison, log output)
 
-### 7. Database = Real queries, not assumed
-- Nếu bạn "optimize DB" → phải chạy EXPLAIN, show query plan, compare execution time
-- Nếu bạn "add index" → phải chạy `CREATE INDEX` trên DB thật và verify
-- Nếu bạn "check performance" → phải chạy query với `time` command
-
-### 8. Mọi "SUCCESS" claim phải có 3 thứ:
-1. **Command bạn đã chạy** (exact command)
-2. **Output thực tế** (paste từ terminal)
-3. **Chứng cứ liên quan** (file diff, metric comparison, log output)
-
-**BẠN CÓ QUYỀN BỊ TỪ CHỐI NẾU KHÔNG THỂ PROVE.**
-
+**YOU WILL BE REJECTED IF YOU CANNOT PROVE.**
 
 ---
 
 ## 📤 ORCHESTRATOR OUTPUT CONTRACT (MANDATORY)
 
-Khi hoan thanh task, ban **PHAI** ket thuc output bang section nay.
-Day la format chuan de orchestrator parse ket qua va aggregate.
+When completing a task, you **MUST** end the output with this section.
+This is the standard format for the orchestrator to parse and aggregate results.
 
-### Format (copy va dien):
+### Format (copy and fill):
 
 ```markdown
 ## ORCHESTRATOR SUMMARY
@@ -432,16 +351,16 @@ Day la format chuan de orchestrator parse ket qua va aggregate.
 ```
 
 ### Issues/Blockers:
-- [neu co, neu khong thi ghi "None"]
+- [if any, otherwise write "None"]
 
 ### Recommended next steps:
-- [neu co]
+- [if any]
 ```
 
-### Quy tac:
-1. **LUON** co section ORCHESTRATOR SUMMARY o cuoi output — day la quan trong nhat
-2. **Status** phai ro rang: SUCCESS (tat ca pass), PARTIAL (co issue nhung hoan thanh duoc), FAILED (khong hoan thanh)
-3. **Report path** phai la absolute path den file report
-4. **Verification evidence** phai co tool output thuc te (terminal, curl, build log) — KHONG dung "should work"
-5. Neu task that bai -> nguyen nhan cu the + suggestion de fix
-6. Orchestrator se dung SUMMARY nay de aggregate tat ca agent results — neu thi qua, ket qua co th bi bo qua
+### Rules:
+1. **ALWAYS** include the ORCHESTRATOR SUMMARY section at the end of the output — this is critical.
+2. **Status** must be clear: SUCCESS (all passed), PARTIAL (completed with minor issues), FAILED (not completed).
+3. **Report path** must be the path to the report file.
+4. **Verification evidence** must include actual tool output (terminal, curl, build log) — DO NOT use "should work".
+5. If the task failed → specify the cause + suggest a fix.
+6. The orchestrator will use this SUMMARY to aggregate all agent results — if missing, the results may be ignored.

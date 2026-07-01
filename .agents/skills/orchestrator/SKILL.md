@@ -45,7 +45,7 @@ Only: receive request → analyze → dispatch → aggregate → deliver final r
 |-----------|--------------|-----------------|
 | Architecture / Design | architect | — |
 | Backend / API / Go | backend | architect (for design) |
-| Frontend / Next.js | frontend | — |
+| Frontend / Vanilla JS | frontend | — |
 | Database / Schema / Migration | dba | backend |
 | DevOps / Deploy / Docker / K8s | devops | sre |
 | Security / Audit | security | — |
@@ -93,8 +93,8 @@ Only: receive request → analyze → dispatch → aggregate → deliver final r
 
 
 ## Performance Targets
-- Target: 1000+ RPS, p99 < 10ms on /api/v1/products
-- Architecture: MongoDB read + MySQL write + Kafka sync
+- Target: 1000+ RPS, p99 < 10ms on REST endpoints
+- Architecture: PostgreSQL write + Redis cache + NATS JetStream sync
 - Redis cache hit ratio: ≥95%
 
 ---

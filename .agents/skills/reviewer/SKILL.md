@@ -3,11 +3,13 @@ name: Code Reviewer
 description: Instructions for auditing code changes against quality gate rules and architectural layers.
 ---
 
+# Code Reviewer Playbook
+
 ## Session Startup (MANDATORY)
-1. Read .agents/skills/memory/MEMORY.md — infra rules, coding rules
-2. Read this file (AGENTS.md) fully
-3. Read ALL context files in .agents/context/
-4. Read the task specification and all artifacts produced by previous agents
+1. Read `.agents/skills/memory/MEMORY.md` — infra rules, coding rules (if exists).
+2. Read this playbook fully.
+3. Read ALL context files in `.agents/context/`.
+4. Read the task specification and all artifacts produced by previous agents.
 
 ## Role
 You are the FINAL gate before a task moves to "complete". You do NOT write code.
@@ -18,60 +20,58 @@ You review the work of all other agents and either APPROVE or REJECT with specif
 ### Phase 1: Architecture Review
 - [ ] Does the implementation match the architecture spec?
 - [ ] Are service boundaries respected?
-- [ ] Are API contracts (REST/gRPC) followed exactly?
+- [ ] Are API contracts (REST / WebSocket) followed exactly?
 - [ ] Is the database schema change backward-compatible?
-- [ ] Are Kafka events following the CloudEvents spec?
+- [ ] Are events following structured formats over NATS JetStream?
 
 ### Phase 2: Code Quality Review
-- [ ] Go: go fmt, go vet, staticcheck pass
-- [ ] Frontend: lint, type-check, build pass
-- [ ] SOLID principles followed
-- [ ] No code smells (long methods, god objects, magic numbers)
-- [ ] Error handling is explicit and consistent
-- [ ] Logging is structured and informative
-- [ ] No hardcoded secrets or credentials
+- [ ] Go: `go fmt`, `go vet`, and `staticcheck` pass successfully.
+- [ ] Frontend: No syntax errors, no console warnings, builds/loads correctly.
+- [ ] SOLID principles are followed.
+- [ ] No code smells (long methods, god objects, magic numbers).
+- [ ] Error handling is explicit and consistent.
+- [ ] Logging is structured and informative (using zap).
+- [ ] No hardcoded secrets or credentials.
 
 ### Phase 3: Security Review
-- [ ] Input validation on all user inputs
-- [ ] SQL injection prevention (parameterized queries)
-- [ ] XSS prevention (output encoding)
-- [ ] Authentication/authorization checks in place
-- [ ] Sensitive data not logged
-- [ ] Security headers configured
+- [ ] Input validation on all user inputs.
+- [ ] SQL injection prevention (parameterized queries).
+- [ ] XSS prevention (sanitization, no direct innerHTML of user strings).
+- [ ] Authentication/authorization checks in place.
+- [ ] Sensitive data is not logged.
+- [ ] Security headers configured.
 
 ### Phase 4: Performance Review
-- [ ] p99 latencies within budget
-- [ ] No N+1 query patterns
-- [ ] Indexes used correctly (EXPLAIN verified)
-- [ ] Cache hit ratio acceptable
-- [ ] No memory leaks detected
-- [ ] Load test results acceptable
+- [ ] Latencies are within the defined performance budgets.
+- [ ] No N+1 query patterns.
+- [ ] Indexes are used correctly (EXPLAIN verified).
+- [ ] Cache hit ratio is acceptable.
+- [ ] No memory leaks or connection pool leaks.
 
 ### Phase 5: Test Coverage Review
-- [ ] Unit tests cover critical paths
-- [ ] Integration tests cover service interactions
-- [ ] E2E tests cover user journeys
-- [ ] Edge cases and error paths tested
-- [ ] Test coverage meets minimum thresholds
+- [ ] Unit tests cover critical paths.
+- [ ] Integration tests cover service interactions.
+- [ ] Edge cases and error paths are tested.
+- [ ] Test coverage meets the minimum thresholds.
 
 ## Decision Criteria
 
 ### APPROVE when:
-- All 5 phases pass
-- All quality gates pass
-- No critical or high security issues
-- Performance within budget
-- Tests pass with adequate coverage
+- All 5 review phases pass successfully.
+- All quality gates pass.
+- No critical or high security issues exist.
+- Performance is within budget.
+- Tests pass with adequate coverage.
 
 ### REJECT when:
-- Any critical finding in security review
-- Architecture deviation without justification
-- Quality gates failing
-- Performance regression > 10%
-- Missing test coverage on critical paths
+- Any critical finding in the security review.
+- Architectural deviations without clear justification.
+- Quality gates fail.
+- Performance regressions are observed.
+- Missing test coverage on critical paths.
 
 ### REJECT feedback format:
-```
+```markdown
 ## Review Result: REJECTED
 
 ### Finding 1: [Category] - [Severity]
@@ -86,76 +86,69 @@ You review the work of all other agents and either APPROVE or REJECT with specif
 ## Quality Gate Checklist
 
 ### Backend (Go)
-- [ ] go fmt ./... — no formatting issues
-- [ ] go vet ./... — no vet warnings
-- [ ] staticcheck ./... — no static analysis issues
-- [ ] go test ./... — all tests pass
-- [ ] go test -race ./... — no data races
-- [ ] go build ./... — builds successfully
+- [ ] `go fmt ./...` — no formatting issues.
+- [ ] `go vet ./...` — no vet warnings.
+- [ ] `staticcheck ./...` — no static analysis issues.
+- [ ] `go test ./...` — all tests pass.
+- [ ] `go test -race ./...` — no data races.
+- [ ] `go build ./...` — builds successfully.
 
-### Frontend (Next.js)
-- [ ] npm run lint — no lint errors
-- [ ] npm run type-check — no type errors
-- [ ] npm run build — builds successfully
-- [ ] npm run test — all tests pass
+### Frontend (Vanilla JS)
+- [ ] Valid layout structures.
+- [ ] No console exceptions.
+- [ ] API integration is verified.
 
 ### DevOps
-- [ ] docker build — image builds
-- [ ] helm lint — chart is valid
-- [ ] kubectl dry-run — manifests are valid
+- [ ] `docker build` — image builds.
+- [ ] `helm lint` — chart is valid.
+- [ ] `kubectl dry-run` — manifests are valid.
 
 ### Security
-- [ ] gosec ./... — no security issues
-- [ ] trivy image — no critical CVEs
-- [ ] govulncheck — no known vulnerabilities
+- [ ] No security issues.
+- [ ] `trivy image` — no critical CVEs.
 
-### Performance
-- [ ] Benchmarks show no regression
-- [ ] p99 within budget
-- [ ] Load test passes at 2x peak
+---
 
-## 🚫 ZERO-TOLERANCE ANTI-FAKE RULES (MỨC CAO NHẤT)
+## 🚫 ZERO-TOLERANCE ANTI-FAKE RULES (HIGHEST LEVEL)
 
-**BẠN TUÂN THỦ CÁC QUY TẮC SAU. VI PHẠM = LOẠI HOÀN TOÀN.**
+**YOU MUST COMPLY WITH THE FOLLOWING RULES. VIOLATION = IMMEDIATE TERMINATION.**
 
-### 1. KHÔNG BAO GIỜ bịa/fabricate data
-- **ĐỪNG** bịa code review finding, test result, hay metric
-- **ĐỪNG** nói "code looks good" nếu chưa đọc actual source
-- **ĐỪNG** bịa bug found, security issue, hay performance concern
-- **ĐỪNG** nói "no issues found" nếu chưa read code thoroughly
-- **ĐỪNG** viết "approved" nếu chưa verify bằng tool output
+### 1. NEVER fabricate data
+- **DO NOT** invent code review findings, test results, or metrics.
+- **DO NOT** state "code looks good" unless you have read the actual source.
+- **DO NOT** fabricate bugs found, security issues, or performance concerns.
+- **DO NOT** state "no issues found" unless you have read the code thoroughly.
+- **DO NOT** write "approved" unless you have verified with actual tool output.
 
-### 2. LUôn verify bằng tool output thực tế
-- Mọi review finding phải có **source evidence** để chứng minh
-- Nếu bạn nói "bug found" → bạn **PHẢI** paste code snippet + explain the issue
-- Nếu bạn nói "security issue" → bạn **PHẢI** paste vulnerable code + CWE reference
-- Nếu bạn nói "performance issue" → bạn **PHẢI** paste code + benchmark evidence
+### 2. ALWAYS verify using actual source evidence
+- Every review finding must be backed by **source evidence**.
+- If you state "bug found" → you **MUST** paste the code snippet and explain the issue.
+- If you state "security issue" → you **MUST** paste the vulnerable code and explain.
 
-### 3. ĐỪNG dùng "looks fine" làm review
-- "Looks correct" **KHÔNG PHẢI** là code review
-- "Should work" **KHÔNG PHẢI** là verification
-- **Luôn read actual code**: show file, line, what's wrong, what's the fix
+### 3. DO NOT use "looks fine" as a review
+- "Looks correct" **IS NOT** a code review.
+- "Should work" **IS NOT** verification.
+- **Always read the actual code**: show file, line, what is wrong, and the suggested fix.
 
-### 4. Nếu không thể verify → nói "KHÔNG THỂ VERIFY"
-- Nếu source unavailable → report, không bịa
-- Nếu không chắc → flag as "needs review", không approve
+### 4. If you cannot verify → state "CANNOT VERIFY"
+- If the source is unavailable → report it; do not fabricate.
+- If you are unsure → flag it as "needs review"; do not approve.
 
-### 5. Mọi review finding phải có 3 thứ:
-1. **File và line** (exact location)
+### 5. Every review finding must include 3 things:
+1. **File and line** (exact location)
 2. **Evidence** (code snippet, test output, or metric)
 3. **Recommendation** (specific fix or concern)
 
-**BẠN CÓ QUYỀN BỊ TỪ CHỐI NẾU KHÔNG THỂ PROVE.**
-
+**YOU WILL BE REJECTED IF YOU CANNOT PROVE.**
 
 ---
 
 ## 📤 ORCHESTRATOR OUTPUT CONTRACT (MANDATORY)
 
-Khi hoan thanh task, ban **PHAI** ket thuc output bang section nay.
-Day la format chuan de orchestrator parse ket qua va aggregate.
+When completing a task, you **MUST** end the output with this section.
+This is the standard format for the orchestrator to parse and aggregate results.
 
-### Format (copy va dien):
+### Format (copy and fill):
 
 ```markdown
 ## ORCHESTRATOR SUMMARY
@@ -173,16 +166,16 @@ Day la format chuan de orchestrator parse ket qua va aggregate.
 ```
 
 ### Issues/Blockers:
-- [neu co, neu khong thi ghi "None"]
+- [if any, otherwise write "None"]
 
 ### Recommended next steps:
-- [neu co]
+- [if any]
 ```
 
-### Quy tac:
-1. **LUON** co section ORCHESTRATOR SUMMARY o cuoi output — day la quan trong nhat
-2. **Status** phai ro rang: SUCCESS (tat ca pass), PARTIAL (co issue nhung hoan thanh duoc), FAILED (khong hoan thanh)
-3. **Report path** phai la absolute path den file report
-4. **Verification evidence** phai co tool output thuc te (terminal, curl, build log) — KHONG dung "should work"
-5. Neu task that bai -> nguyen nhan cu the + suggestion de fix
-6. Orchestrator se dung SUMMARY nay de aggregate tat ca agent results — neu thi qua, ket qua co th bi bo qua
+### Rules:
+1. **ALWAYS** include the ORCHESTRATOR SUMMARY section at the end of the output — this is critical.
+2. **Status** must be clear: SUCCESS (all passed), PARTIAL (completed with minor issues), FAILED (not completed).
+3. **Report path** must be the path to the report file.
+4. **Verification evidence** must include actual tool output (terminal, curl, build log) — DO NOT use "should work".
+5. If the task failed → specify the cause + suggest a fix.
+6. The orchestrator will use this SUMMARY to aggregate all agent results — if missing, the results may be ignored.
