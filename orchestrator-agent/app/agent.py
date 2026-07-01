@@ -46,7 +46,9 @@ def load_skill_instruction(skill_name: str, fallback_desc: str) -> str:
     Falls back to fallback_desc if the file is missing or unreadable.
     """
     try:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        base_dir = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
         skill_path = os.path.join(base_dir, ".agents", "skills", skill_name, "SKILL.md")
         if os.path.exists(skill_path):
             with open(skill_path, "r", encoding="utf-8") as f:
@@ -180,7 +182,7 @@ architect_agent = Agent(
     model=model,
     instruction=load_skill_instruction(
         "architect",
-        "You are the Architect Agent. Validate system architecture, enforce Clean Architecture boundaries, modularity, and DDD principles. Never write business features."
+        "You are the Architect Agent. Validate system architecture, enforce Clean Architecture boundaries, modularity, and DDD principles. Never write business features.",
     ),
     description="Validates software architecture, enforces Clean Architecture boundaries, modularity, and DDD principles. Use for architecture reviews, dependency analysis, and layer violation detection.",
 )
@@ -191,7 +193,7 @@ backend_agent = Agent(
     model=model,
     instruction=load_skill_instruction(
         "backend",
-        "You are the Backend Engineer. Build production-grade Go services, database repositories, business logic adapters, and REST API handlers. Never modify frontend code."
+        "You are the Backend Engineer. Build production-grade Go services, database repositories, business logic adapters, and REST API handlers. Never modify frontend code.",
     ),
     description="Develops production-grade Go backend services, database structures, business logic, API handlers, and transaction coordinators. Use for any Go/API/backend/endpoint/service/CRUD tasks.",
 )
@@ -202,7 +204,7 @@ frontend_agent = Agent(
     model=model,
     instruction=load_skill_instruction(
         "frontend",
-        "You are the Frontend Engineer. Build beautiful, premium, responsive UI dashboards and components using HTML, CSS, and vanilla JavaScript. Never modify Go backend code."
+        "You are the Frontend Engineer. Build beautiful, premium, responsive UI dashboards and components using HTML, CSS, and vanilla JavaScript. Never modify Go backend code.",
     ),
     description="Develops premium dashboard views, custom layouts, CSS styling, and interactive frontend elements. Use for any React/Next.js/UI/frontend/CSS/HTML tasks.",
 )
@@ -213,7 +215,7 @@ dba_agent = Agent(
     model=model,
     instruction=load_skill_instruction(
         "dba",
-        "You are the DBA Agent. Manage database schemas, write timestamped SQL migration scripts, optimize query performance, and enforce parameter-bound SQL security. Never use fmt.Sprintf for queries."
+        "You are the DBA Agent. Manage database schemas, write timestamped SQL migration scripts, optimize query performance, and enforce parameter-bound SQL security. Never use fmt.Sprintf for queries.",
     ),
     description="Manages database schema migrations, query performance optimizations, connection pooling, and parameter-bound SQL security. Use for any PostgreSQL/MySQL/SQL/database/schema/migration/query tasks.",
 )
@@ -224,7 +226,7 @@ devops_agent = Agent(
     model=model,
     instruction=load_skill_instruction(
         "devops",
-        "You are the DevOps Engineer. Manage container orchestration, Kubernetes and Docker Swarm deployments, CI/CD pipelines, and platform health monitoring."
+        "You are the DevOps Engineer. Manage container orchestration, Kubernetes and Docker Swarm deployments, CI/CD pipelines, and platform health monitoring.",
     ),
     description="Manages container configurations, Kubernetes/Swarm deployment setups, CI/CD integrations, infrastructure scaling, and health metrics monitoring. Use for any Docker/K8s/deploy/infrastructure/container tasks.",
     tools=[check_system_health, list_cluster_resources, get_capacity_forecast],
@@ -236,7 +238,7 @@ qa_agent = Agent(
     model=model,
     instruction=load_skill_instruction(
         "qa",
-        "You are the QA Engineer. Write unit and integration tests, validate compilations, execute test suites, and enforce quality gates. Never implement business logic."
+        "You are the QA Engineer. Write unit and integration tests, validate compilations, execute test suites, and enforce quality gates. Never implement business logic.",
     ),
     description="Develops test suites, runs unit and integration verifications, and validates builds. Use for any test/unit test/integration/QA/coverage tasks.",
 )
@@ -247,7 +249,7 @@ security_agent = Agent(
     model=model,
     instruction=load_skill_instruction(
         "security",
-        "You are the Security Engineer. Audit security controls, review secrets management, enforce input sanitization, validate encryption usage (AES-256), and ensure RBAC permissions."
+        "You are the Security Engineer. Audit security controls, review secrets management, enforce input sanitization, validate encryption usage (AES-256), and ensure RBAC permissions.",
     ),
     description="Audits security controls, secrets management, input sanitization, and encryption. Use for any security/vulnerability/scan/OWASP/auth tasks.",
 )
@@ -258,7 +260,7 @@ reviewer_agent = Agent(
     model=model,
     instruction=load_skill_instruction(
         "reviewer",
-        "You are the Code Reviewer. Audit all proposed code changes against quality gate rules. Reject duplicate code, dead code, placeholders, oversized files, and architectural layer violations."
+        "You are the Code Reviewer. Audit all proposed code changes against quality gate rules. Reject duplicate code, dead code, placeholders, oversized files, and architectural layer violations.",
     ),
     description="Audits code changes against quality gate rules and architectural layers. Use for any PR/code review/pull request tasks.",
 )
@@ -269,7 +271,7 @@ kubernetes_agent = Agent(
     model=model,
     instruction=load_skill_instruction(
         "kubernetes",
-        "You are the Kubernetes Engineer. Manage Kubernetes resource manifests, Helm charts, CRDs, deployment configs, network policies, and cluster setups. Use typed client-go structures."
+        "You are the Kubernetes Engineer. Manage Kubernetes resource manifests, Helm charts, CRDs, deployment configs, network policies, and cluster setups. Use typed client-go structures.",
     ),
     description="Manages Kubernetes resources, manifests, Helm charts, CRDs, and cluster permissions. Use for any Kubernetes-specific manifest, scaling, or cluster configuration tasks.",
     tools=[list_cluster_resources, get_capacity_forecast],
@@ -281,7 +283,7 @@ gitops_agent = Agent(
     model=model,
     instruction=load_skill_instruction(
         "gitops",
-        "You are the GitOps Engineer. Manage Git workflows, repository syncing, PR generation, CD reconciliation loops, and configuration drift detection."
+        "You are the GitOps Engineer. Manage Git workflows, repository syncing, PR generation, CD reconciliation loops, and configuration drift detection.",
     ),
     description="Manages Git workflows, repo syncing, PR generation, and CD reconciliations. Use for any GitOps/drift/ArgoCD/FluxCD/Git branch tasks.",
     tools=[get_drift_status],

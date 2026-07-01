@@ -9,8 +9,8 @@ Demonstrates Course Concept #2 (MCP Server) for the Kaggle Capstone submission.
 
 import json
 import os
-import urllib.request
 import urllib.error
+import urllib.request
 from typing import Any
 
 BACKEND_BASE_URL = os.getenv("K8S_BACKEND_URL", "http://localhost:8080")

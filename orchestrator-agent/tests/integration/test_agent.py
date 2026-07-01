@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ruff: noqa: E402
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from google.adk.agents.run_config import RunConfig, StreamingMode
@@ -35,7 +37,12 @@ def test_agent_stream() -> None:
     runner = Runner(agent=root_agent, session_service=session_service, app_name="test")
 
     message = types.Content(
-        role="user", parts=[types.Part.from_text(text="Check the health status of all platform components")]
+        role="user",
+        parts=[
+            types.Part.from_text(
+                text="Check the health status of all platform components"
+            )
+        ],
     )
 
     events = list(
