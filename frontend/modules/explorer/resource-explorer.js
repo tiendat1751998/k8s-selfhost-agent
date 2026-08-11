@@ -80,8 +80,6 @@ const ResourceExplorer = {
             <label>Cluster</label>
             <select class="select select-bordered" id="search-cluster">
               <option value="">All Clusters</option>
-              <option value="production-us-east">production-us-east</option>
-              <option value="staging-eu-west">staging-eu-west</option>
             </select>
           </div>
         </div>

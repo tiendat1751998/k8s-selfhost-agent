@@ -108,93 +108,27 @@
         '<div class="pipeline-detail-row"><span class="pipeline-detail-label">Memory Request</span><span class="pipeline-detail-value">' + esc(app.memory) + '</span></div>' +
         '<div class="pipeline-detail-row"><span class="pipeline-detail-label">Container Port</span><span class="pipeline-detail-value">' + app.port + '</span></div>' +
         '<div class="pipeline-detail-row"><span class="pipeline-detail-label">Network Sync Mode</span><span class="pipeline-detail-value">' + esc(app.netType) + '</span></div>' +
-      '</div>' +
-      '<div style="margin-top:var(--space-md);background:rgba(14,203,129,0.04);border:1px solid rgba(14,203,129,0.1);padding:var(--space-sm);border-radius:6px;font-size:13px;">' +
-        '<strong>🧠 AI Health Audit:</strong> Workload matches current utilization metrics. Recommended limits are CPU: 500m, Memory: 512Mi. No anomalies detected.' +
       '</div>';
   }
 
   function renderSubTabPods(app) {
-    var rows = '';
-    for (var i = 1; i <= app.replicas; i++) {
-      var podName = app.name + '-' + Math.random().toString(36).substring(2, 7);
-      rows += '<tr>' +
-        '<td><strong>' + podName + '</strong></td>' +
-        '<td><span class="badge badge-healthy">Running</span></td>' +
-        '<td style="font-family:var(--font-number)">0</td>' +
-        '<td>3h</td>' +
-        '<td><button class="action-btn" onclick="alert(\'Opening live logs...\')">Logs</button></td>' +
-      '</tr>';
-    }
-
-    if (app.replicas === 0) {
-      return '<div class="empty-state"><div class="empty-state-text">No active active pods (scaled to 0)</div></div>';
-    }
-
-    return '' +
-      '<div class="enterprise-table-wrap">' +
-        '<table class="enterprise-table">' +
-          '<thead><tr><th>Pod Name</th><th>Status</th><th>Restarts</th><th>Age</th><th>Actions</th></tr></thead>' +
-          '<tbody>' + rows + '</tbody>' +
-        '</table>' +
-      '</div>';
+    return '<div class="empty-state"><div class="empty-state-text">No data available</div></div>';
   }
 
   function renderSubTabEvents(app) {
-    return '' +
-      '<div style="border-left:2px solid var(--color-hairline);padding-left:var(--space-md);">' +
-        eventRow('10m ago', 'Normal', 'Scheduled', 'Successfully scheduled to node ip-10-0-1-78') +
-        eventRow('9m ago', 'Normal', 'Pulled', 'Container image pulled successfully') +
-        eventRow('9m ago', 'Normal', 'Created', 'Created container app') +
-        eventRow('9m ago', 'Normal', 'Started', 'Started container app') +
-      '</div>';
-  }
-
-  function eventRow(time, type, reason, msg) {
-    return '<div style="margin-bottom:var(--space-sm);position:relative;">' +
-      '<div style="position:absolute;left:-21px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--color-primary);"></div>' +
-      '<div style="font-size:11px;color:var(--color-muted);">' + esc(time) + ' · ' + esc(type) + '</div>' +
-      '<div style="font-size:13px;"><strong>' + esc(reason) + '</strong> — ' + esc(msg) + '</div>' +
-    '</div>';
+    return '<div class="empty-state"><div class="empty-state-text">No data available</div></div>';
   }
 
   function renderSubTabMetrics(app) {
-    return '' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);">' +
-        '<div class="panel"><div class="panel-header"><div class="panel-title" style="font-size:12px;">CPU Utilization</div></div>' +
-        '<div class="panel-body" style="height:120px;display:flex;align-items:center;justify-content:center;color:var(--color-primary);font-size:24px;font-family:var(--font-number);">18%</div></div>' +
-        '<div class="panel"><div class="panel-header"><div class="panel-title" style="font-size:12px;">Memory Utilization</div></div>' +
-        '<div class="panel-body" style="height:120px;display:flex;align-items:center;justify-content:center;color:var(--color-info);font-size:24px;font-family:var(--font-number);">42%</div></div>' +
-      '</div>';
+    return '<div class="empty-state"><div class="empty-state-text">No data available</div></div>';
   }
 
   function renderSubTabEnv(app) {
-    return '' +
-      '<div class="enterprise-table-wrap">' +
-        '<table class="enterprise-table">' +
-          '<thead><tr><th>Key</th><th>Value</th></tr></thead>' +
-          '<tbody>' +
-            '<tr><td><code>APP_ENV</code></td><td><code>production</code></td></tr>' +
-            '<tr><td><code>DB_CONNECTION_TIMEOUT</code></td><td><code>30s</code></td></tr>' +
-            '<tr><td><code>LOG_LEVEL</code></td><td><code>info</code></td></tr>' +
-          '</tbody>' +
-        '</table>' +
-      '</div>';
+    return '<div class="empty-state"><div class="empty-state-text">No data available</div></div>';
   }
 
   function renderSubTabGitOps(app) {
-    return '' +
-      '<div class="pipeline-detail" style="margin-bottom:var(--space-md);">' +
-        '<div class="pipeline-detail-row"><span>ArgoCD Status:</span><span class="badge badge-healthy">Synced</span></div>' +
-        '<div class="pipeline-detail-row"><span>Git Repo Branch:</span><span><code>main</code></span></div>' +
-        '<div class="pipeline-detail-row"><span>Auto-Remediation PR:</span><span><a href="#" style="color:var(--color-primary);text-decoration:none;">PR #142 (Merged)</a></span></div>' +
-      '</div>' +
-      '<h4 style="margin:var(--space-md) 0 var(--space-xs);font-size:13px;color:var(--color-muted);">Rollout History</h4>' +
-      '<div style="font-size:12px;line-height:1.6;">' +
-        '<div><strong>v1.2.0</strong> — 2 hours ago by admin (Scale deployment to ' + app.replicas + ')</div>' +
-        '<div style="color:var(--color-muted)">v1.1.9 — 1 day ago by gitops (Update image tag to v2.4)</div>' +
-        '<div style="color:var(--color-muted)">v1.1.8 — 3 days ago by system (Auto-heal OOMKilled crash)</div>' +
-      '</div>';
+    return '<div class="empty-state"><div class="empty-state-text">No data available</div></div>';
   }
 
   function statusBadge(s) {
