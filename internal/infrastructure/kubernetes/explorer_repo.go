@@ -319,12 +319,208 @@ func (r *explorerRepo) Search(ctx context.Context, kind, cluster, namespace, que
 }
 
 func (r *explorerRepo) GetByID(ctx context.Context, id string) (*explorer.Resource, error) {
-	// Not easily implemented via live K8s API without knowing kind/namespace. 
-	// In a real app we might store a cache in Postgres, or encode kind/ns in the ID.
-	return nil, fmt.Errorf("GetByID not implemented in live K8s adapter")
+	// Parse ID format: [cluster/]kind/namespace/name or kind/namespace/name
+	var clusterName, kind, namespace, name string
+	parts := strings.Split(id, "/")
+	if len(parts) >= 3 {
+		if len(parts) == 4 {
+			clusterName = parts[0]
+			kind = parts[1]
+			namespace = parts[2]
+			name = parts[3]
+		} else {
+			kind = parts[0]
+			namespace = parts[1]
+			name = parts[2]
+		}
+	} else if len(parts) == 2 {
+		kind = parts[0]
+		name = parts[1]
+	} else {
+		return nil, fmt.Errorf("invalid resource ID format: %s", id)
+	}
+
+	var client *kubernetes.Clientset
+	if r.clientManager != nil && clusterName != "" {
+		kCli, err := r.clientManager.GetK8sClient(ctx, clusterName)
+		if err == nil && kCli != nil {
+			client = kCli
+		}
+	}
+	if client == nil {
+		var err error
+		client, err = getClient(ctx, r.client)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if client == nil {
+		return nil, fmt.Errorf("kubernetes client is not initialized")
+	}
+
+	switch strings.ToLower(kind) {
+	case "pod", "pods":
+		p, err := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return &explorer.Resource{
+			ID:        id,
+			Kind:      "Pod",
+			Name:      p.Name,
+			Namespace: p.Namespace,
+			Cluster:   clusterName,
+			Status:    string(p.Status.Phase),
+			Labels:    p.Labels,
+			Age:       time.Since(p.CreationTimestamp.Time).String(),
+		}, nil
+	case "deployment", "deployments":
+		d, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		status := "Ready"
+		if d.Status.ReadyReplicas < *d.Spec.Replicas {
+			status = "NotReady"
+		}
+		return &explorer.Resource{
+			ID:        id,
+			Kind:      "Deployment",
+			Name:      d.Name,
+			Namespace: d.Namespace,
+			Cluster:   clusterName,
+			Status:    status,
+			Labels:    d.Labels,
+			Age:       time.Since(d.CreationTimestamp.Time).String(),
+		}, nil
+	case "service", "services":
+		s, err := client.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return &explorer.Resource{
+			ID:        id,
+			Kind:      "Service",
+			Name:      s.Name,
+			Namespace: s.Namespace,
+			Cluster:   clusterName,
+			Status:    "Active",
+			Labels:    s.Labels,
+			Age:       time.Since(s.CreationTimestamp.Time).String(),
+		}, nil
+	case "node", "nodes":
+		n, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		status := "NotReady"
+		for _, cond := range n.Status.Conditions {
+			if cond.Type == "Ready" && cond.Status == "True" {
+				status = "Ready"
+				break
+			}
+		}
+		return &explorer.Resource{
+			ID:        id,
+			Kind:      "Node",
+			Name:      n.Name,
+			Namespace: "",
+			Cluster:   clusterName,
+			Status:    status,
+			Labels:    n.Labels,
+			Age:       time.Since(n.CreationTimestamp.Time).String(),
+		}, nil
+	case "statefulset", "statefulsets":
+		s, err := client.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		status := "Ready"
+		if s.Status.ReadyReplicas < s.Status.Replicas {
+			status = "NotReady"
+		}
+		return &explorer.Resource{
+			ID:        id,
+			Kind:      "StatefulSet",
+			Name:      s.Name,
+			Namespace: s.Namespace,
+			Cluster:   clusterName,
+			Status:    status,
+			Labels:    s.Labels,
+			Age:       time.Since(s.CreationTimestamp.Time).String(),
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported resource kind for GetByID: %s", kind)
+	}
 }
 
 func (r *explorerRepo) SyncResource(ctx context.Context, res *explorer.Resource) error {
-	// No-op for live K8s adapter
-	return nil
+	var client *kubernetes.Clientset
+	if r.clientManager != nil && res.Cluster != "" {
+		kCli, err := r.clientManager.GetK8sClient(ctx, res.Cluster)
+		if err == nil && kCli != nil {
+			client = kCli
+		}
+	}
+	if client == nil {
+		var err error
+		client, err = getClient(ctx, r.client)
+		if err != nil {
+			return err
+		}
+	}
+	if client == nil {
+		return fmt.Errorf("kubernetes client is not initialized")
+	}
+
+	namespace := res.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	switch strings.ToLower(res.Kind) {
+	case "pod", "pods":
+		p, err := client.CoreV1().Pods(namespace).Get(ctx, res.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		p.Labels = res.Labels
+		_, err = client.CoreV1().Pods(namespace).Update(ctx, p, metav1.UpdateOptions{})
+		return err
+	case "deployment", "deployments":
+		d, err := client.AppsV1().Deployments(namespace).Get(ctx, res.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		d.Labels = res.Labels
+		_, err = client.AppsV1().Deployments(namespace).Update(ctx, d, metav1.UpdateOptions{})
+		return err
+	case "service", "services":
+		s, err := client.CoreV1().Services(namespace).Get(ctx, res.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		s.Labels = res.Labels
+		_, err = client.CoreV1().Services(namespace).Update(ctx, s, metav1.UpdateOptions{})
+		return err
+	case "node", "nodes":
+		n, err := client.CoreV1().Nodes().Get(ctx, res.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		n.Labels = res.Labels
+		_, err = client.CoreV1().Nodes().Update(ctx, n, metav1.UpdateOptions{})
+		return err
+	case "statefulset", "statefulsets":
+		s, err := client.AppsV1().StatefulSets(namespace).Get(ctx, res.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		s.Labels = res.Labels
+		_, err = client.AppsV1().StatefulSets(namespace).Update(ctx, s, metav1.UpdateOptions{})
+		return err
+	default:
+		return fmt.Errorf("unsupported resource kind for SyncResource: %s", res.Kind)
+	}
 }
+

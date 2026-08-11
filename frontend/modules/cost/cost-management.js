@@ -156,8 +156,8 @@
     },
     refresh: function () {
       Promise.all([
-        fetch('/api/v1/cost/summary').then(function (r) { return r.json(); }),
-        fetch('/api/v1/cost/waste').then(function (r) { return r.json(); })
+        APIClient.get('/cost/summary'),
+        APIClient.get('/cost/waste')
       ]).then(function (results) {
         var summary = results[0];
         var waste = results[1];

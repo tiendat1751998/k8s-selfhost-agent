@@ -35,7 +35,7 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB: k8sselfhost_test
         ports:
           - 5432:5432
@@ -74,8 +74,8 @@ jobs:
         env:
           K8S_POSTGRES_HOST: localhost
           K8S_POSTGRES_PORT: 5432
-          K8S_POSTGRES_USER: postgres
-          K8S_POSTGRES_PASSWORD: postgres
+          K8S_POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          K8S_POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           K8S_POSTGRES_DBNAME: k8sselfhost_test
           K8S_REDIS_HOST: localhost
           K8S_REDIS_PORT: 6379
@@ -86,6 +86,11 @@ jobs:
         with:
           name: coverage
           path: coverage.out
+
+      - name: Security Scan
+        uses: securego/gosec@latest
+        with:
+          args: ./...
 
   build:
     name: Build

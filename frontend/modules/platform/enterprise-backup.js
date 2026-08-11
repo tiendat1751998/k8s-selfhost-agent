@@ -4,15 +4,6 @@
 (function (global) {
   'use strict';
 
-  function esc(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;')
-              .replace(/'/g, '&#039;');
-  }
-
   function initBackup() {
     renderBackupPolicies();
     loadBackupHistory();
@@ -43,21 +34,15 @@
         backupNowBtn.disabled = true;
         backupNowBtn.textContent = '⏳ Backing up...';
 
-        fetch('/api/v1/backup/recover', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target: 'manual-backup-' + new Date().toISOString().slice(0, 10) })
-        }).then(function (r) {
-          if (r.ok) {
-            alert('Backup task created successfully.');
-            loadBackupHistory();
-          } else {
-            alert('Failed to trigger manual backup.');
-          }
+        APIClient.post('/backup/recover', { target: 'manual-backup-' + new Date().toISOString().slice(0, 10) })
+        .then(function () {
+          alert('Backup task created successfully.');
+          loadBackupHistory();
           backupNowBtn.disabled = false;
           backupNowBtn.textContent = '⚡ Back Up Now';
         }).catch(function (e) {
           console.error(e);
+          alert('Failed to trigger manual backup.');
           backupNowBtn.disabled = false;
           backupNowBtn.textContent = '⚡ Back Up Now';
         });
@@ -76,17 +61,10 @@
           consoleEl.textContent = '[DR Engine] Locating backup configurations...\n';
         }
 
-        fetch('/api/v1/backup/recover', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target: snapId })
-        }).then(function (r) {
-          if (!r.ok) {
-            alert('Failed to trigger disaster recovery simulation.');
-            simulateDRBtn.disabled = false;
-          }
-        }).catch(function (e) {
+        APIClient.post('/backup/recover', { target: snapId })
+        .catch(function (e) {
           console.error(e);
+          alert('Failed to trigger disaster recovery simulation.');
           simulateDRBtn.disabled = false;
         });
       });
@@ -117,8 +95,7 @@
   }
 
   function loadBackupHistory() {
-    fetch('/api/v1/backup/history')
-      .then(function (r) { return r.json(); })
+    APIClient.get('/backup/history')
       .then(function (json) {
         var data = json.data || [];
         renderBackupSnapshots(data);
@@ -174,17 +151,14 @@
         var snapId = this.dataset.snap;
         var target = this.dataset.target;
         if (confirm('Confirm restoration of namespace from backup ' + snapId + '?')) {
-          fetch('/api/v1/backup/recover', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target: target })
-          }).then(function (r) {
-            if (r.ok) {
-              alert('Snapshot ' + snapId + ' restore triggered. Progress logs are written to system output.');
-              loadBackupHistory();
-            } else {
-              alert('Failed to trigger restore.');
-            }
+          APIClient.post('/backup/recover', { target: target })
+          .then(function () {
+            alert('Snapshot ' + snapId + ' restore triggered. Progress logs are written to system output.');
+            loadBackupHistory();
+          })
+          .catch(function (e) {
+            console.error(e);
+            alert('Failed to trigger restore.');
           });
         }
       });

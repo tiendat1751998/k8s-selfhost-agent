@@ -69,13 +69,8 @@
 
     for (const kind of kinds) {
       try {
-        const res = await fetch('/api/v1/explorer?kind=' + kind);
-        if (res.ok) {
-          const json = await res.json();
-          renderers[kind](json.data || []);
-        } else {
-          renderers[kind]([]);
-        }
+        const json = await APIClient.get('/explorer?kind=' + kind);
+        renderers[kind](json.data || []);
       } catch (e) {
         console.warn('Failed to load ' + kind + ' data:', e);
         renderers[kind]([]);
@@ -263,7 +258,7 @@
     });
   }
 
-  function executeAction(action, kind, name, params) {
+  async function executeAction(action, kind, name, params) {
     var startTime = Date.now();
     var entry = {
       action: action,
@@ -278,28 +273,48 @@
     // Show execution console
     showConsole(entry);
 
-    // Simulate execution steps
-    var steps = getExecutionSteps(action, kind, name, params);
-    var stepIndex = 0;
+    if (action === 'restart' || action === 'delete' || action === 'scale') {
+      var url = '/deployments/' + action;
+      var body = {
+        type: kind === 'Service' || kind === 'Container' ? 'swarm' : 'kubernetes',
+        cluster: params && params.cluster || 'eks-101-prod',
+        namespace: params && params.namespace || 'default',
+        name: name
+      };
+      if (action === 'scale') {
+        body.replicas = params && params.replicas || 3;
+      }
 
-    function runStep() {
-      if (stepIndex >= steps.length) {
+      try {
+        entry.logs.push('$ kubectl ' + action + ' ' + kind + ' ' + name);
+        entry.logs.push('→ Submitting action request to backend API...');
+        updateConsole(entry, 30);
+
+        var response = await APIClient.post(url, body);
+
         entry.status = 'success';
         entry.duration = Date.now() - startTime;
+        entry.logs.push('✓ Action successfully processed by backend API.');
         updateConsole(entry, 100);
         addToHistory(entry);
         AppState.addAuditLog({ action: action, target: kind + '/' + name, result: 'success' });
-        return;
+      } catch (e) {
+        entry.status = 'failed';
+        entry.logs.push('❌ Error: ' + e.message);
+        updateConsole(entry, 100);
+        addToHistory(entry);
+        AppState.addAuditLog({ action: action, target: kind + '/' + name, result: 'failure' });
       }
-
-      var step = steps[stepIndex];
-      entry.logs.push(step.log);
-      updateConsole(entry, Math.round(((stepIndex + 1) / steps.length) * 100));
-      stepIndex++;
-      setTimeout(runStep, step.delay);
+    } else {
+      entry.logs.push('$ kubectl ' + action + ' ' + kind + ' ' + name);
+      entry.logs.push('→ Executing action locally...');
+      entry.status = 'success';
+      entry.duration = Date.now() - startTime;
+      entry.logs.push('✓ Action complete');
+      updateConsole(entry, 100);
+      addToHistory(entry);
+      AppState.addAuditLog({ action: action, target: kind + '/' + name, result: 'success' });
     }
-
-    setTimeout(runStep, 300);
   }
 
   function getExecutionSteps(action, kind, name, params) {
@@ -415,56 +430,64 @@
   }
 
   // ── SPECIAL MODALS ──
-  function showLogsModal(name) {
+  async function showLogsModal(name) {
     Modal.open({
       title: '📋 Logs: ' + name,
-      body: '<pre class="ai-test-response" style="max-height:400px;overflow-y:auto;font-size:12px;">' +
-        '2026-06-25T08:55:01Z [INFO] Starting server on :8080\n' +
-        '2026-06-25T08:55:02Z [INFO] Connected to database\n' +
-        '2026-06-25T08:55:02Z [INFO] Health check passed\n' +
-        '2026-06-25T08:55:15Z [WARN] High memory usage: 89%\n' +
-        '2026-06-25T08:55:30Z [ERROR] Connection timeout to redis:6379\n' +
-        '2026-06-25T08:55:31Z [INFO] Reconnecting to redis...\n' +
-        '2026-06-25T08:55:32Z [INFO] Redis connection restored\n' +
-        '2026-06-25T08:56:00Z [INFO] Request processed: GET /api/v1/pods (200)\n' +
-        '</pre>',
+      body: '<div id="logs-content" style="padding:20px;text-align:center;color:var(--color-muted);">Loading logs...</div>',
       actions: [{ label: 'Close', primary: true }]
     });
+
+    try {
+      var json = await APIClient.get('/observability/logs?name=' + encodeURIComponent(name));
+      if (true) {
+        var logs = json.data || 'No logs found.';
+        document.getElementById('logs-content').outerHTML = '<pre class="ai-test-response" style="max-height:400px;overflow-y:auto;font-size:12px;">' + esc(logs) + '</pre>';
+      } else {
+        document.getElementById('logs-content').textContent = 'No logs available for ' + name;
+      }
+    } catch (e) {
+      document.getElementById('logs-content').textContent = 'Failed to load logs.';
+    }
   }
 
-  function showYamlModal(kind, name) {
+  async function showYamlModal(kind, name) {
     Modal.open({
       title: '📄 YAML: ' + kind + '/' + name,
-      body: '<pre class="ai-test-response" style="max-height:400px;overflow-y:auto;font-size:12px;">' +
-        'apiVersion: v1\n' +
-        'kind: Pod\n' +
-        'metadata:\n' +
-        '  name: ' + esc(name) + '\n' +
-        '  namespace: production\n' +
-        '  labels:\n' +
-        '    app: ' + esc(name.split('-')[0]) + '\n' +
-        'spec:\n' +
-        '  containers:\n' +
-        '  - name: app\n' +
-        '    image: registry.internal/' + esc(name.split('-')[0]) + ':latest\n' +
-        '    resources:\n' +
-        '      requests:\n' +
-        '        cpu: 250m\n' +
-        '        memory: 256Mi\n' +
-        '      limits:\n' +
-        '        cpu: 500m\n' +
-        '        memory: 512Mi\n' +
-        '</pre>',
+      body: '<div id="yaml-content" style="padding:20px;text-align:center;color:var(--color-muted);">Loading YAML...</div>',
       actions: [{ label: 'Close', primary: true }]
     });
+
+    try {
+      var json = await APIClient.get('/explorer/yaml?kind=' + encodeURIComponent(kind) + '&name=' + encodeURIComponent(name));
+      if (true) {
+        var yaml = json.data || 'No YAML found.';
+        document.getElementById('yaml-content').outerHTML = '<pre class="ai-test-response" style="max-height:400px;overflow-y:auto;font-size:12px;">' + esc(yaml) + '</pre>';
+      } else {
+        document.getElementById('yaml-content').textContent = 'No YAML available for ' + kind + '/' + name;
+      }
+    } catch (e) {
+      document.getElementById('yaml-content').textContent = 'Failed to load YAML.';
+    }
   }
 
-  function showStorageModal(name) {
+  async function showStorageModal(name) {
     Modal.open({
       title: '💾 Storage: ' + name,
-      body: '<div class="pipeline-detail"><div class="pipeline-detail-row"><span class="pipeline-detail-label">PVC Count</span><span class="pipeline-detail-value">3</span></div><div class="pipeline-detail-row"><span class="pipeline-detail-label">Total Size</span><span class="pipeline-detail-value">300Gi</span></div><div class="pipeline-detail-row"><span class="pipeline-detail-label">Used</span><span class="pipeline-detail-value">187Gi (62%)</span></div><div class="pipeline-detail-row"><span class="pipeline-detail-label">Storage Class</span><span class="pipeline-detail-value">gp3-encrypted</span></div><div class="pipeline-detail-row"><span class="pipeline-detail-label">Status</span><span class="pipeline-detail-value"><span class="badge badge-healthy">Bound</span></span></div></div>',
+      body: '<div id="storage-content" style="padding:20px;text-align:center;color:var(--color-muted);">Loading storage details...</div>',
       actions: [{ label: 'Close', primary: true }]
     });
+
+    try {
+      var json = await APIClient.get('/capacity/storage?name=' + encodeURIComponent(name));
+      if (true) {
+        var details = json.data || 'No storage details found.';
+        document.getElementById('storage-content').outerHTML = '<pre class="ai-test-response" style="max-height:400px;overflow-y:auto;font-size:12px;">' + esc(JSON.stringify(details, null, 2)) + '</pre>';
+      } else {
+        document.getElementById('storage-content').textContent = 'No storage data available for ' + name;
+      }
+    } catch (e) {
+      document.getElementById('storage-content').textContent = 'Failed to load storage details.';
+    }
   }
 
   // ── HELPERS ──

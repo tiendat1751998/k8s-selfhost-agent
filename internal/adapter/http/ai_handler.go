@@ -2,8 +2,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -51,11 +51,44 @@ type addProviderRequest struct {
 	Default  bool   `json:"default"`
 }
 
+func (r *addProviderRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "name is required")
+	}
+	if strings.TrimSpace(r.Endpoint) == "" {
+		ve.Add("endpoint", "endpoint is required")
+	}
+	if strings.TrimSpace(r.Model) == "" {
+		ve.Add("model", "model is required")
+	}
+	switch r.Type {
+	case "ollama", "openai", "vllm":
+	default:
+		ve.Add("type", "type must be one of: ollama, openai, vllm")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // testPromptRequest is the request body for testing a prompt.
 type testPromptRequest struct {
 	Provider string `json:"provider"`
 	Prompt   string `json:"prompt"`
 	System   string `json:"system,omitempty"`
+}
+
+func (r *testPromptRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Prompt) == "" {
+		ve.Add("prompt", "prompt is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
 }
 
 // testPromptResponse is the response for a test prompt.
@@ -110,14 +143,8 @@ func (h *AIHandler) GetProvider(w http.ResponseWriter, r *http.Request) {
 
 // AddProvider registers a new LLM provider dynamically.
 func (h *AIHandler) AddProvider(w http.ResponseWriter, r *http.Request) {
-	var req addProviderRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
-		return
-	}
-
-	if req.Name == "" || req.Type == "" || req.Endpoint == "" || req.Model == "" {
-		writeError(w, http.StatusBadRequest, "name, type, endpoint, and model are required", nil)
+	req, ok := decodeJSON[addProviderRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -194,14 +221,8 @@ func (h *AIHandler) HealthCheckProvider(w http.ResponseWriter, r *http.Request) 
 
 // TestPrompt sends a test prompt to a specified provider.
 func (h *AIHandler) TestPrompt(w http.ResponseWriter, r *http.Request) {
-	var req testPromptRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
-		return
-	}
-
-	if req.Prompt == "" {
-		writeError(w, http.StatusBadRequest, "prompt is required", nil)
+	req, ok := decodeJSON[testPromptRequest](w, r)
+	if !ok {
 		return
 	}
 

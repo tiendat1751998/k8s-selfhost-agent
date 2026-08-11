@@ -33,7 +33,7 @@ func (h *AuditHandler) ListFindings(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = "open"
 	}
-	
+
 	items, err := h.repo.ListFindings(r.Context(), status)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list findings", err)

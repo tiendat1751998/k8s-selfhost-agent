@@ -102,4 +102,8 @@ merge_video.py
 generate_subtitles.py
 *.srt
 
-
+# Missing Requested Patterns
+*.mp4
+*.png
+*.pyc
+bin/

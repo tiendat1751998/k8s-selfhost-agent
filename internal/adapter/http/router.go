@@ -14,8 +14,8 @@ import (
 	"go.uber.org/zap"
 
 	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
-	"github.com/datdt/k8sselfhost/pkg/health"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/health"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // PlatformHandlers holds all handler dependencies for platform feature routes.
@@ -46,6 +46,7 @@ type PlatformHandlers struct {
 	Backup        *BackupHandler
 	Agents        *AgentHandler
 	Deployments   *DeploymentHandler
+	Tenancy       *TenancyHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -205,6 +206,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			if platform.Deployments != nil {
 				r.Route("/deployments", platform.Deployments.RegisterRoutes)
 			}
+			if platform.Tenancy != nil {
+				r.Route("/tenancy", platform.Tenancy.RegisterRoutes)
+			}
 		}
 	})
 
@@ -217,7 +221,6 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 
 	return r
 }
-
 
 // findFrontendDir locates the frontend directory relative to the binary.
 func findFrontendDir() string {
@@ -233,4 +236,3 @@ func findFrontendDir() string {
 	}
 	return ""
 }
-

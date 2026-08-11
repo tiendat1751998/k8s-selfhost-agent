@@ -4,7 +4,7 @@
 (function (global) {
   'use strict';
 
-  function drawDeploymentGraph() {
+  async function drawDeploymentGraph() {
     var imgName = document.getElementById('search-graph-image').value.trim();
     var canvas = document.getElementById('search-graph-canvas');
     if (!canvas) return;
@@ -14,18 +14,27 @@
       return;
     }
 
+    canvas.innerHTML = '<div style="text-align:center;padding:20px;color:var(--color-muted);">Loading mapping data...</div>';
+
     var targets = [];
-    if (imgName.toLowerCase().indexOf('nginx') >= 0) {
-      targets = [
-        { cluster: 'prod-us-east', ns: 'default', workload: 'nginx-prod', status: 'healthy' },
-        { cluster: 'prod-eu-west', ns: 'default', workload: 'api-server', status: 'healthy' }
-      ];
-    } else if (imgName.toLowerCase().indexOf('auth') >= 0) {
-      targets = [{ cluster: 'staging-1', ns: 'auth', workload: 'auth-svc-staging', status: 'degraded' }];
-    } else if (imgName.toLowerCase().indexOf('payment') >= 0) {
-      targets = [{ cluster: 'swarm-cluster', ns: 'manager', workload: 'payment-worker', status: 'down' }];
-    } else {
-      targets = [{ cluster: 'prod-us-east', ns: 'production', workload: imgName + '-deployment', status: 'healthy' }];
+    try {
+      var json = await APIClient.get('/explorer?kind=Deployment');
+        var deployments = json.data || [];
+        deployments.forEach(function(d) {
+          var imageMatch = false;
+          if (d.name && d.name.toLowerCase().indexOf(imgName.toLowerCase()) >= 0) imageMatch = true;
+          if (imageMatch) {
+            targets.push({ cluster: d.cluster || 'default', ns: d.namespace || 'default', workload: d.name, status: d.status === 'Ready' ? 'healthy' : 'degraded' });
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to fetch mapping data:', e);
+    }
+
+    if (targets.length === 0) {
+      canvas.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-text">No mapping data available for this image.</div></div>';
+      return;
     }
 
     var nodesHtml = '';

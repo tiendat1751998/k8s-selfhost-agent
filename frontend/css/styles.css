@@ -927,3 +927,23 @@ a {
   padding: var(--spacing-md, var(--space-md)) var(--spacing-lg, var(--space-lg));
   border-top: 1px solid var(--border, var(--color-hairline));
 }
+
+/* Unified Global Tab Button Styling */
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.tab-btn:hover {
+  color: var(--color-text);
+}
+.tab-btn.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}

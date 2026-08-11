@@ -13,13 +13,13 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 var (
-	tracer        = otel.Tracer("k8sselfhost/http")
-	meter         = otel.Meter("k8sselfhost/http")
-	requestCount  metric.Int64Counter
+	tracer          = otel.Tracer("k8sselfhost/http")
+	meter           = otel.Meter("k8sselfhost/http")
+	requestCount    metric.Int64Counter
 	requestDuration metric.Float64Histogram
 )
 
@@ -150,7 +150,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		w.Header().Set("Content-Security-Policy",
-		"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:")
+			"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:")
 
 		next.ServeHTTP(w, r)
 	})

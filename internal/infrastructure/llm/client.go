@@ -12,35 +12,19 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // Client defines the interface for LLM interactions.
-type Client interface {
-	// Complete sends a prompt to the LLM and returns the generated response.
-	Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error)
-	// HealthCheck verifies the LLM service is reachable.
-	HealthCheck(ctx context.Context) error
-}
+type Client = ports.LLMClient
 
 // CompletionRequest holds the parameters for an LLM completion.
-type CompletionRequest struct {
-	Model       string  `json:"model"`
-	Prompt      string  `json:"prompt"`
-	System      string  `json:"system,omitempty"`
-	Temperature float64 `json:"temperature,omitempty"`
-	MaxTokens   int     `json:"max_tokens,omitempty"`
-}
+type CompletionRequest = ports.LLMCompletionRequest
 
 // CompletionResponse holds the LLM response.
-type CompletionResponse struct {
-	Content        string `json:"content"`
-	Model          string `json:"model"`
-	PromptTokens   int    `json:"prompt_tokens"`
-	ResponseTokens int    `json:"response_tokens"`
-	Duration       time.Duration `json:"duration"`
-}
+type CompletionResponse = ports.LLMCompletionResponse
 
 // OllamaClient implements the Client interface using the Ollama API.
 type OllamaClient struct {

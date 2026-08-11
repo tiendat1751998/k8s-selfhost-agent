@@ -9,7 +9,7 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // IncidentStore handles incident deduplication, persistence, and event publishing.

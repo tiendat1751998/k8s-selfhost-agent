@@ -72,8 +72,8 @@ func main() {
 		chromedp.Sleep(500*time.Millisecond),
 
 		// Fill in credentials and log back in
-		chromedp.SendKeys(`input[type="email"]`, "admin@k8sselfhost.local", chromedp.ByQuery),
-		chromedp.SendKeys(`input[type="password"]`, "admin", chromedp.ByQuery),
+		chromedp.SendKeys(`input[type="email"]`, os.Getenv("K8S_TEST_EMAIL"), chromedp.ByQuery),
+		chromedp.SendKeys(`input[type="password"]`, os.Getenv("K8S_TEST_PASSWORD"), chromedp.ByQuery),
 		chromedp.Click(`#login-form button[type="submit"]`, chromedp.ByQuery),
 		
 		// Wait for redirect, reload, and overview section load

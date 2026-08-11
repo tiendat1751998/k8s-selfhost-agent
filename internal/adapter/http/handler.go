@@ -5,31 +5,35 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
-	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
-	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/usecase/gitops"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // Handler provides HTTP handlers for the dashboard API.
 type Handler struct {
-	incidentRepo incident.Repository
-	reportRepo   report.Repository
-	prRepo       domainGitops.Repository
-	publisher    *infraNats.Publisher
+	incidentRepo     incident.Repository
+	reportRepo       report.Repository
+	prRepo           domainGitops.Repository
+	publisher        *infraNats.Publisher
+	gitopsController *gitops.Controller
 }
 
 // NewHandler creates a new dashboard HTTP handler.
-func NewHandler(incidentRepo incident.Repository, reportRepo report.Repository, prRepo domainGitops.Repository, publisher *infraNats.Publisher) *Handler {
+func NewHandler(incidentRepo incident.Repository, reportRepo report.Repository, prRepo domainGitops.Repository, publisher *infraNats.Publisher, gitopsController *gitops.Controller) *Handler {
 	return &Handler{
-		incidentRepo: incidentRepo,
-		reportRepo:   reportRepo,
-		prRepo:       prRepo,
-		publisher:    publisher,
+		incidentRepo:     incidentRepo,
+		reportRepo:       reportRepo,
+		prRepo:           prRepo,
+		publisher:        publisher,
+		gitopsController: gitopsController,
 	}
 }
 
@@ -90,9 +94,9 @@ func (h *Handler) ListIncidents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data":  incidents,
-		"total": total,
-		"limit": filter.Limit,
+		"data":   incidents,
+		"total":  total,
+		"limit":  filter.Limit,
 		"offset": filter.Offset,
 	})
 }
@@ -282,7 +286,7 @@ func AuthMiddleware(token string) func(http.Handler) http.Handler {
 	}
 }
 
-func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
@@ -294,6 +298,44 @@ func writeError(w http.ResponseWriter, status int, message string, err error) {
 		resp["detail"] = err.Error()
 	}
 	writeJSON(w, status, resp)
+}
+
+// decodeJSON decodes the request body into a value of type T and validates it if T or *T implements Validator.
+// Returns the decoded value and true on success, or writes a 400 error and returns false.
+func decodeJSON[T any](w http.ResponseWriter, r *http.Request) (*T, bool) {
+	var v T
+	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body", err)
+		return nil, false
+	}
+
+	var valErr error
+	if validator, ok := any(&v).(Validator); ok {
+		valErr = validator.Validate()
+	} else if validator, ok := any(v).(Validator); ok {
+		valErr = validator.Validate()
+	}
+
+	if valErr != nil {
+		writeValidationError(w, valErr)
+		return nil, false
+	}
+
+	return &v, true
+}
+
+func writeValidationError(w http.ResponseWriter, err error) {
+	if ve, ok := err.(*ValidationError); ok {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error":   "validation failed",
+			"details": ve.Fields,
+		})
+		return
+	}
+	writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+		"error":  "validation failed",
+		"detail": err.Error(),
+	})
 }
 
 func parseIntParam(r *http.Request, key string, defaultVal int) int {
@@ -308,100 +350,30 @@ func parseIntParam(r *http.Request, key string, defaultVal int) int {
 	return parsed
 }
 
+type createPRRequest struct {
+	gitops.CreatePRRequest
+}
+
+func (r *createPRRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.IncidentID) == "" && strings.TrimSpace(r.Title) == "" {
+		ve.Add("incident_id", "incident_id or title is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // CreatePR handles POST /api/v1/prs
 func (h *Handler) CreatePR(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		IncidentID   string                    `json:"incident_id"`
-		Provider     domainGitops.Provider     `json:"provider"`
-		RepoURL      string                    `json:"repo_url"`
-		Branch       string                    `json:"branch"`
-		BaseBranch   string                    `json:"base_branch"`
-		Title        string                    `json:"title"`
-		Description  string                    `json:"description"`
-		FilesChanged []struct {
-			Path    string                  `json:"path"`
-			Content string                  `json:"content"`
-			Action  domainGitops.FileAction `json:"action"`
-		} `json:"files_changed"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[createPRRequest](w, r)
+	if !ok {
 		return
 	}
 
-	// In CreatePR, check if an incident exists to satisfy foreign key constraints, or link/create a default system incident.
-	var incID = req.IncidentID
-	if incID != "" {
-		_, err := h.incidentRepo.GetByID(r.Context(), incID)
-		if err != nil {
-			incID = ""
-		}
-	}
-
-	if incID == "" {
-		// Find or create default system incident
-		filter := incident.Filter{
-			ClusterName: "system",
-			Namespace:   "system",
-			Limit:       1,
-		}
-		incidents, _, err := h.incidentRepo.List(r.Context(), filter)
-		if err == nil && len(incidents) > 0 {
-			incID = incidents[0].ID
-		} else {
-			defaultInc, err := incident.New("system", "system", "system-pod", incident.TypeCrashLoopBackOff, incident.SeverityMedium, "Default system incident for orphaned PRs")
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, "failed to create default incident struct", err)
-				return
-			}
-			if err := h.incidentRepo.Create(r.Context(), defaultInc); err != nil {
-				writeError(w, http.StatusInternalServerError, "failed to persist default incident", err)
-				return
-			}
-			incID = defaultInc.ID
-		}
-	}
-
-	provider := req.Provider
-	if provider == "" {
-		provider = domainGitops.ProviderGitHub
-	}
-	repoURL := req.RepoURL
-	if repoURL == "" {
-		repoURL = "https://github.com/k8s-selfhost-agent/k8s-selfhost-agent"
-	}
-	branch := req.Branch
-	if branch == "" {
-		branch = "gitops-patch"
-	}
-	baseBranch := req.BaseBranch
-	if baseBranch == "" {
-		baseBranch = "main"
-	}
-	title := req.Title
-	if title == "" {
-		title = "Remediation PR"
-	}
-
-	pr, err := domainGitops.New(incID, provider, repoURL, branch, baseBranch, title, req.Description)
+	pr, err := h.gitopsController.CreatePR(r.Context(), req.CreatePRRequest)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid PR fields", err)
-		return
-	}
-
-	for _, f := range req.FilesChanged {
-		action := f.Action
-		if action == "" {
-			action = domainGitops.FileActionModify
-		}
-		pr.AddFileChange(f.Path, f.Content, action)
-	}
-
-	// Since we are registering it, make it default to Open so it can be merged/closed in UI
-	_ = pr.MarkOpen(repoURL+"/pull/1", 1)
-
-	if err := h.prRepo.Create(r.Context(), pr); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create PR", err)
 		return
 	}
@@ -412,34 +384,10 @@ func (h *Handler) CreatePR(w http.ResponseWriter, r *http.Request) {
 // MergePR handles POST /api/v1/prs/{id}/merge
 func (h *Handler) MergePR(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	pr, err := h.prRepo.GetByID(r.Context(), id)
+	pr, err := h.gitopsController.MergePR(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, errors.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "pull request not found", err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to get PR", err)
+		writeError(w, http.StatusInternalServerError, "failed to merge PR", err)
 		return
-	}
-
-	if err := pr.MarkMerged(); err != nil {
-		writeError(w, http.StatusConflict, "failed to mark PR as merged", err)
-		return
-	}
-
-	if err := h.prRepo.Update(r.Context(), pr); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update PR", err)
-		return
-	}
-
-	// Update the associated incident to resolved if there is one
-	if pr.IncidentID != "" {
-		inc, err := h.incidentRepo.GetByID(r.Context(), pr.IncidentID)
-		if err == nil && inc != nil {
-			if err := inc.MarkResolved(); err == nil {
-				_ = h.incidentRepo.Update(r.Context(), inc)
-			}
-		}
 	}
 
 	writeJSON(w, http.StatusOK, pr)
@@ -448,23 +396,9 @@ func (h *Handler) MergePR(w http.ResponseWriter, r *http.Request) {
 // ClosePR handles POST /api/v1/prs/{id}/close
 func (h *Handler) ClosePR(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	pr, err := h.prRepo.GetByID(r.Context(), id)
+	pr, err := h.gitopsController.ClosePR(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, errors.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "pull request not found", err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to get PR", err)
-		return
-	}
-
-	if err := pr.MarkClosed(); err != nil {
-		writeError(w, http.StatusConflict, "failed to mark PR as closed", err)
-		return
-	}
-
-	if err := h.prRepo.Update(r.Context(), pr); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update PR", err)
+		writeError(w, http.StatusInternalServerError, "failed to close PR", err)
 		return
 	}
 

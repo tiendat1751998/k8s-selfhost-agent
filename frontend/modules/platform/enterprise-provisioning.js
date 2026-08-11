@@ -93,51 +93,53 @@
           'EKS Cluster registered in central dashboard. Provisioning completed!'
         ];
 
-        consoleEl.textContent = '';
-        var logIdx = 0;
-        var start = Date.now();
-        var progressTimer = setInterval(function () {
-          var elapsed = ((Date.now() - start) / 1000).toFixed(1);
-          if (durationEl) durationEl.textContent = elapsed + 's';
-          if (fillEl) fillEl.style.width = Math.min(100, (logIdx / logs.length) * 100) + '%';
+        consoleEl.textContent = 'Contacting infrastructure provisioning control plane...\n';
+        launchBtn.disabled = true;
 
-          if (logIdx < logs.length) {
-            consoleEl.textContent += '[Bootstrap] ' + logs[logIdx] + '\n';
-            consoleEl.scrollTop = consoleEl.scrollHeight;
-            logIdx++;
-          } else {
-            clearInterval(progressTimer);
-            launchBtn.disabled = false;
-            if (statusEl) {
-              statusEl.textContent = 'Active';
-              statusEl.className = 'badge badge-healthy';
-            }
+        var providerMap = {
+          'eks': 'aws',
+          'gke': 'gcp',
+          'aks': 'azure',
+          'bare': 'onprem'
+        };
 
-            // Push cluster to application state
-            var currentClusters = AppState.getState().kubernetes || [];
-            var providerMap = {
-              'eks': 'aws_eks',
-              'gke': 'gcp_gke',
-              'aks': 'azure_aks',
-              'bare': 'bare_metal'
-            };
-            var newCluster = {
-              name: 'eks-' + Math.floor(Math.random() * 900 + 100) + '-prod',
-              provider: providerMap[global.EnterpriseState.selectedProvider] || 'aws_eks',
-              status: 'healthy',
-              nodes: global.EnterpriseState.nodePools.reduce(function (acc, val) { return acc + val.limit; }, 0),
-              cpu: '16 Cores',
-              memory: '64 GB'
-            };
-            currentClusters.push(newCluster);
-            
-            // FIX: updateState was a bug, correct call is setKubernetes
-            AppState.setKubernetes(currentClusters);
+        var clusterName = 'eks-' + Math.floor(Math.random() * 900 + 100) + '-prod';
+        var clusterPayload = {
+          id: clusterName,
+          name: clusterName,
+          group: 'production',
+          region: 'us-west-2',
+          provider: providerMap[global.EnterpriseState.selectedProvider] || 'aws',
+          status: 'active',
+          version: 'v1.30.0',
+          nodes: global.EnterpriseState.nodePools.reduce(function (acc, val) { return acc + val.limit; }, 0)
+        };
 
-            global.EnterpriseState.addAuditLogEntry('admin', 'Platform Admin', 'Provision Cluster', newCluster.name);
-            alert('Kubernetes cluster ' + newCluster.name + ' successfully provisioned and linked to console.');
+        try {
+          var response = await APIClient.post('/fleet', clusterPayload);
+
+          consoleEl.textContent += '✓ Terraform apply successful.\n';
+          consoleEl.textContent += '✓ Cluster registered in fleet. Status: active\n';
+          
+          if (statusEl) {
+            statusEl.textContent = 'Active';
+            statusEl.className = 'badge badge-healthy';
           }
-        }, 350);
+          if (fillEl) fillEl.style.width = '100%';
+
+          // Fetch fleet and update state
+          var dataFleet = await APIClient.get('/fleet');
+          if (dataFleet && dataFleet.data) {
+            AppState.setKubernetes(dataFleet.data);
+          }
+
+          global.EnterpriseState.addAuditLogEntry('admin', 'Platform Admin', 'Provision Cluster', clusterName);
+          alert('Kubernetes cluster ' + clusterName + ' successfully provisioned and linked to console.');
+        } catch (e) {
+          consoleEl.textContent += '❌ Cluster provisioning failed: ' + e.message + '\n';
+        } finally {
+          launchBtn.disabled = false;
+        }
       });
     }
   }

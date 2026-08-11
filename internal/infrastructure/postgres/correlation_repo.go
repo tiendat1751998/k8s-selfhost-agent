@@ -5,20 +5,23 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/correlation"
-	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // CorrelationRepo implements correlation.Repository using PostgreSQL.
 type CorrelationRepo struct {
-	pool *pgxpool.Pool
+	pool DBTX
 }
 
 // NewCorrelationRepo creates a new PostgreSQL-backed correlation repository.
-func NewCorrelationRepo(pool *pgxpool.Pool) *CorrelationRepo {
+func NewCorrelationRepo(pool DBTX) *CorrelationRepo {
 	return &CorrelationRepo{pool: pool}
+}
+
+func (r *CorrelationRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.pool)
 }
 
 func (r *CorrelationRepo) ListCorrelated(ctx context.Context, status string, limit, offset int) ([]correlation.CorrelatedEvent, int, error) {
@@ -35,14 +38,14 @@ func (r *CorrelationRepo) ListCorrelated(ctx context.Context, status string, lim
 	}
 
 	var total int
-	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+	if err := r.getDB(ctx).QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, errors.Wrap(err, "counting correlated events")
 	}
 
-	query += fmt.Sprintf(" ORDER BY correlated_at DESC LIMIT $%d OFFSET $%d", idx, idx+1)
-	args = append(args, limit, offset)
+	selectQuery := query + fmt.Sprintf(" ORDER BY correlated_at DESC LIMIT $%d OFFSET $%d", idx, idx+1)
+	selectArgs := append(args, limit, offset)
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.getDB(ctx).Query(ctx, selectQuery, selectArgs...)
 	if err != nil {
 		return nil, 0, errors.Wrap(err, "listing correlated events")
 	}
@@ -66,9 +69,8 @@ func (r *CorrelationRepo) ListCorrelated(ctx context.Context, status string, lim
 func (r *CorrelationRepo) GetByID(ctx context.Context, id string) (*correlation.CorrelatedEvent, error) {
 	var e correlation.CorrelatedEvent
 	var eventIDsJSON []byte
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, title, root_cause, severity, event_ids, event_count, cluster, namespace, status, correlated_at FROM correlated_events WHERE id = $1`, id,
-	).Scan(&e.ID, &e.Title, &e.RootCause, &e.Severity, &eventIDsJSON, &e.EventCount, &e.Cluster, &e.Namespace, &e.Status, &e.CorrelatedAt)
+	query := `SELECT id, title, root_cause, severity, event_ids, event_count, cluster, namespace, status, correlated_at FROM correlated_events WHERE id = $1`
+	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(&e.ID, &e.Title, &e.RootCause, &e.Severity, &eventIDsJSON, &e.EventCount, &e.Cluster, &e.Namespace, &e.Status, &e.CorrelatedAt)
 	if err != nil {
 		return nil, errors.Wrap(err, "getting correlated event")
 	}
@@ -88,7 +90,7 @@ func (r *CorrelationRepo) Create(ctx context.Context, c *correlation.CorrelatedE
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id`
 
-	err = r.pool.QueryRow(ctx, query,
+	err = r.getDB(ctx).QueryRow(ctx, query,
 		c.Title, c.RootCause, c.Severity, eventIDsJSON, c.EventCount,
 		c.Cluster, c.Namespace, c.Status, c.CorrelatedAt,
 	).Scan(&c.ID)
@@ -99,7 +101,7 @@ func (r *CorrelationRepo) Create(ctx context.Context, c *correlation.CorrelatedE
 }
 
 func (r *CorrelationRepo) Resolve(ctx context.Context, id string) error {
-	_, err := r.pool.Exec(ctx, `UPDATE correlated_events SET status = 'resolved' WHERE id = $1`, id)
+	_, err := r.getDB(ctx).Exec(ctx, `UPDATE correlated_events SET status = 'resolved' WHERE id = $1`, id)
 	if err != nil {
 		return errors.Wrap(err, "resolving correlated event")
 	}

@@ -3,18 +3,21 @@ package postgres
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/user"
 )
 
 type userRepo struct {
-	db *pgxpool.Pool
+	db DBTX
 }
 
 // NewUserRepo creates a new Postgres-backed User repository.
-func NewUserRepo(db *pgxpool.Pool) user.Repository {
+func NewUserRepo(db DBTX) user.Repository {
 	return &userRepo{db: db}
+}
+
+func (r *userRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.db)
 }
 
 func (r *userRepo) GetByEmail(ctx context.Context, email string) (*user.User, error) {
@@ -34,7 +37,7 @@ func (r *userRepo) GetByEmail(ctx context.Context, email string) (*user.User, er
 		LIMIT 1
 	`
 	var u user.User
-	err := r.db.QueryRow(ctx, query, email).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, email).Scan(
 		&u.ID,
 		&u.PasswordHash,
 		&u.PlatformRole,

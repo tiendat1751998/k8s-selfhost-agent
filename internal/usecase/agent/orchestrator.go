@@ -8,8 +8,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
-	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 type WSBroadcaster interface {
@@ -18,11 +18,11 @@ type WSBroadcaster interface {
 
 type Orchestrator struct {
 	repo      agent.Repository
-	llmClient llm.Client
+	llmClient ports.LLMClient
 	wsHub     WSBroadcaster
 }
 
-func NewOrchestrator(repo agent.Repository, llmClient llm.Client, wsHub WSBroadcaster) *Orchestrator {
+func NewOrchestrator(repo agent.Repository, llmClient ports.LLMClient, wsHub WSBroadcaster) *Orchestrator {
 	return &Orchestrator{
 		repo:      repo,
 		llmClient: llmClient,
@@ -50,7 +50,9 @@ func (o *Orchestrator) ExecuteTask(ctx context.Context, task *agent.Task) error 
 		state.CurrentFeature = task.Feature
 		state.CurrentTaskID = task.ID
 		state.UpdatedAt = time.Now().UTC()
-		_ = o.repo.UpdateProjectState(ctx, state)
+		if err := o.repo.UpdateProjectState(ctx, state); err != nil {
+			log.Error("failed to update project state", zap.Error(err))
+		}
 	}
 
 	// Step sequence
@@ -108,7 +110,9 @@ func (o *Orchestrator) ExecuteTask(ctx context.Context, task *agent.Task) error 
 	task.UpdatedAt = time.Now().UTC()
 	if finalErr != nil {
 		task.Status = agent.TaskFailed
-		_ = o.repo.UpdateTask(ctx, task)
+		if err := o.repo.UpdateTask(ctx, task); err != nil {
+			log.Error("failed to update task status to failed", zap.String("task_id", task.ID), zap.Error(err))
+		}
 		log.Error("multi-agent execution pipeline failed", zap.Error(finalErr))
 		return finalErr
 	}
@@ -116,19 +120,88 @@ func (o *Orchestrator) ExecuteTask(ctx context.Context, task *agent.Task) error 
 	now := time.Now().UTC()
 	task.Status = agent.TaskSuccess
 	task.CompletedAt = &now
-	_ = o.repo.UpdateTask(ctx, task)
+	if err := o.repo.UpdateTask(ctx, task); err != nil {
+		log.Error("failed to update task status to success", zap.String("task_id", task.ID), zap.Error(err))
+	}
 
-	// Adjust metrics upon task success
+		// Adjust metrics upon task success
 	if state, err := o.repo.GetProjectState(ctx); err == nil {
 		state.CurrentTaskID = ""
 		state.CurrentSubtaskID = ""
-		state.RepositoryHealth = 100.0
-		state.TechnicalDebt = 0.0
-		state.ArchitectureScore = 100.0
-		state.QualityScore = 100.0
+
+		// Calculate dynamic quality metrics
+		var totalTasks, successTasks int
+		if tasks, err := o.repo.ListTasks(ctx); err == nil {
+			totalTasks = len(tasks)
+			for _, t := range tasks {
+				if t.Status == agent.TaskSuccess {
+					successTasks++
+				}
+			}
+		}
+
+		// Calculate execution success rate
+		var totalExecs, successExecs int
+		if tasks, err := o.repo.ListTasks(ctx); err == nil {
+			for _, t := range tasks {
+				if execs, err := o.repo.ListExecutions(ctx, t.ID); err == nil {
+					totalExecs += len(execs)
+					for _, e := range execs {
+						if e.Status == "success" {
+							successExecs++
+						}
+					}
+				}
+			}
+		}
+
+		health := 100.0
+		if totalTasks > 0 {
+			health = (float64(successTasks) / float64(totalTasks)) * 100.0
+		}
+
+		quality := 100.0
+		if totalExecs > 0 {
+			quality = (float64(successExecs) / float64(totalExecs)) * 100.0
+		}
+
+		// Calculate architecture score based on Architect agent execution success
+		var archTotal, archSuccess int
+		if tasks, err := o.repo.ListTasks(ctx); err == nil {
+			for _, t := range tasks {
+				if execs, err := o.repo.ListExecutions(ctx, t.ID); err == nil {
+					for _, e := range execs {
+						if e.AgentType == agent.Architect {
+							archTotal++
+							if e.Status == "success" {
+								archSuccess++
+							}
+						}
+					}
+				}
+			}
+		}
+		archScore := 100.0
+		if archTotal > 0 {
+			archScore = (float64(archSuccess) / float64(archTotal)) * 100.0
+		}
+
+		// Technical debt can be calculated as the inverse of health/quality
+		techDebt := 100.0 - health
+		if techDebt < 0 {
+			techDebt = 0.0
+		}
+
+		state.RepositoryHealth = health
+		state.TechnicalDebt = techDebt
+		state.ArchitectureScore = archScore
+		state.QualityScore = quality
 		state.UpdatedAt = time.Now().UTC()
-		_ = o.repo.UpdateProjectState(ctx, state)
+		if err := o.repo.UpdateProjectState(ctx, state); err != nil {
+			log.Error("failed to update project state metrics", zap.Error(err))
+		}
 	}
+
 
 	log.Info("multi-agent execution pipeline completed successfully")
 	return nil

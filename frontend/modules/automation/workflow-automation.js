@@ -5,23 +5,12 @@
 (function (global) {
   'use strict';
 
-  var rules = [
-    { id: 'rule-001', name: 'Auto-RCA on Restart Loop', enabled: true, trigger: { type: 'pod_restart', condition: 'count > 5', threshold: 5 }, action: { type: 'generate_rca' }, lastTriggered: '2h ago', executions: 12 },
-    { id: 'rule-002', name: 'Notify SRE on Node Pressure', enabled: true, trigger: { type: 'node_pressure', condition: 'memory > 90%', threshold: 90 }, action: { type: 'send_notification', channel: 'Slack #sre-alerts' }, lastTriggered: '6h ago', executions: 5 },
-    { id: 'rule-003', name: 'Auto-Rollback on Failure', enabled: false, trigger: { type: 'deployment_failure', condition: 'health_check_failed', threshold: 0 }, action: { type: 'rollback' }, lastTriggered: '3d ago', executions: 2 },
-    { id: 'rule-004', name: 'Scale on High CPU', enabled: true, trigger: { type: 'high_cpu', condition: 'cpu > 85%', threshold: 85 }, action: { type: 'scale_deployment', replicas: '+2' }, lastTriggered: '1h ago', executions: 8 },
-    { id: 'rule-005', name: 'Create Incident on SLO Breach', enabled: true, trigger: { type: 'slo_breach', condition: 'budget < 10%', threshold: 10 }, action: { type: 'create_incident', severity: 'critical' }, lastTriggered: '12h ago', executions: 3 }
-  ];
+  var rules = [];
+  var executionLog = [];
+  var loadingRules = false;
+  var loadingHistory = false;
 
-  var executionLog = [
-    { ruleId: 'rule-001', ruleName: 'Auto-RCA on Restart Loop', trigger: 'payment-api pod restarted 6 times', action: 'Generated RCA report', result: 'success', timestamp: '2026-06-25 12:15:00' },
-    { ruleId: 'rule-004', ruleName: 'Scale on High CPU', trigger: 'order-service CPU at 91%', action: 'Scaled from 3 to 5 replicas', result: 'success', timestamp: '2026-06-25 11:30:00' },
-    { ruleId: 'rule-002', ruleName: 'Notify SRE on Node Pressure', trigger: 'worker-node-03 memory at 94%', action: 'Sent Slack notification to #sre-alerts', result: 'success', timestamp: '2026-06-25 08:45:00' },
-    { ruleId: 'rule-001', ruleName: 'Auto-RCA on Restart Loop', trigger: 'cache-warmer pod restarted 8 times', action: 'Generated RCA report', result: 'success', timestamp: '2026-06-25 06:20:00' },
-    { ruleId: 'rule-005', ruleName: 'Create Incident on SLO Breach', trigger: 'payment-api SLO budget at 8%', action: 'Created critical incident INC-2847', result: 'success', timestamp: '2026-06-24 22:10:00' },
-    { ruleId: 'rule-003', ruleName: 'Auto-Rollback on Failure', trigger: 'analytics-worker health check failed', action: 'Rolled back to revision 4', result: 'success', timestamp: '2026-06-22 14:30:00' }
-  ];
-
+  // Intentional constants for dropdown configurations (no dynamic backend endpoint available)
   var triggerTypes = [
     { value: 'pod_restart', label: 'Pod Restart Count > Threshold' },
     { value: 'node_pressure', label: 'Node Resource Pressure' },
@@ -47,20 +36,44 @@
     var tbody = document.getElementById('auto-rules-tbody');
     if (!tbody) return;
 
+    if (loadingRules) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:var(--space-md);"><span class="loading loading-spinner"></span> Loading rules...</td></tr>';
+      return;
+    }
+
+    if (rules.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--color-muted);padding:var(--space-md);">No rules configured.</td></tr>';
+      return;
+    }
+
     tbody.innerHTML = rules.map(function (r) {
       var statusHtml = r.enabled
         ? '<span style="color:#10b981;font-weight:600;">● Active</span>'
         : '<span style="color:#6b7280;">○ Disabled</span>';
+      
+      var name = Security.escapeHTML(r.name);
+      var triggerType = Security.escapeHTML(r.trigger_type || (r.trigger && r.trigger.type) || '');
+      var condition = Security.escapeHTML((r.trigger_config && r.trigger_config.condition) || (r.trigger && r.trigger.condition) || '');
+      var actionType = Security.escapeHTML(r.action_type || (r.action && r.action.type) || '');
+      var executions = r.executions !== undefined ? r.executions : 0;
+      
+      var lastTriggeredVal = 'Never';
+      if (r.last_triggered) {
+        lastTriggeredVal = new Date(r.last_triggered).toLocaleString();
+      } else if (r.lastTriggered) {
+        lastTriggeredVal = r.lastTriggered;
+      }
+
       return '<tr>'
-        + '<td><strong>' + r.name + '</strong></td>'
-        + '<td style="font-size:12px;">' + r.trigger.type.replace(/_/g, ' ') + '</td>'
-        + '<td style="font-size:12px;color:var(--color-muted);">' + r.trigger.condition + '</td>'
-        + '<td style="font-size:12px;">' + r.action.type.replace(/_/g, ' ') + '</td>'
+        + '<td><strong>' + name + '</strong></td>'
+        + '<td style="font-size:12px;">' + triggerType.replace(/_/g, ' ') + '</td>'
+        + '<td style="font-size:12px;color:var(--color-muted);">' + condition + '</td>'
+        + '<td style="font-size:12px;">' + actionType.replace(/_/g, ' ') + '</td>'
         + '<td>' + statusHtml + '</td>'
-        + '<td style="font-family:var(--font-number);font-size:12px;">' + r.executions + '</td>'
-        + '<td style="font-size:12px;color:var(--color-muted);">' + r.lastTriggered + '</td>'
+        + '<td style="font-family:var(--font-number);font-size:12px;">' + executions + '</td>'
+        + '<td style="font-size:12px;color:var(--color-muted);">' + Security.escapeHTML(lastTriggeredVal) + '</td>'
         + '<td>'
-        + '  <button class="btn btn-ghost btn-sm" onclick="WorkflowAutomation.toggleRule(\'' + r.id + '\')">' + (r.enabled ? 'Disable' : 'Enable') + '</button>'
+        + '  <button class="btn btn-ghost btn-sm" onclick="WorkflowAutomation.toggleRule(\'' + r.id + '\', ' + r.enabled + ')">' + (r.enabled ? 'Disable' : 'Enable') + '</button>'
         + '  <button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="WorkflowAutomation.deleteRule(\'' + r.id + '\')">✕</button>'
         + '</td>'
         + '</tr>';
@@ -72,18 +85,34 @@
     var container = document.getElementById('auto-exec-log');
     if (!container) return;
 
+    if (loadingHistory) {
+      container.innerHTML = '<div style="text-align:center;padding:var(--space-md);"><span class="loading loading-spinner"></span> Loading history...</div>';
+      return;
+    }
+
+    if (executionLog.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:var(--color-muted);padding:var(--space-md);">No execution logs found.</div>';
+      return;
+    }
+
     container.innerHTML = executionLog.map(function (e) {
       var resultColor = e.result === 'success' ? '#10b981' : '#ef4444';
       var resultIcon = e.result === 'success' ? '✅' : '❌';
+      
+      var ruleName = Security.escapeHTML(e.rule_name || e.ruleName || 'Unknown Rule');
+      var trigger = Security.escapeHTML(e.trigger_event || e.trigger || '');
+      var action = Security.escapeHTML(e.action_taken || e.action || '');
+      var timestamp = Security.escapeHTML(e.created_at ? new Date(e.created_at).toLocaleString() : (e.timestamp || ''));
+
       return '<div class="auto-exec-item">'
         + '<div class="auto-exec-icon">' + resultIcon + '</div>'
         + '<div class="auto-exec-body">'
         + '  <div class="auto-exec-header">'
-        + '    <strong>' + e.ruleName + '</strong>'
-        + '    <span style="font-size:11px;color:var(--color-muted);margin-left:auto;">' + e.timestamp + '</span>'
+        + '    <strong>' + ruleName + '</strong>'
+        + '    <span style="font-size:11px;color:var(--color-muted);margin-left:auto;">' + timestamp + '</span>'
         + '  </div>'
-        + '  <div style="font-size:12px;color:var(--color-muted);">Trigger: ' + e.trigger + '</div>'
-        + '  <div style="font-size:12px;">Action: <span style="color:' + resultColor + ';">' + e.action + '</span></div>'
+        + '  <div style="font-size:12px;color:var(--color-muted);">Trigger: ' + trigger + '</div>'
+        + '  <div style="font-size:12px;">Action: <span style="color:' + resultColor + ';">' + action + '</span></div>'
         + '</div>'
         + '</div>';
     }).join('');
@@ -105,7 +134,7 @@
           + '</div>'
           + '<div class="form-group"><label class="form-label">Action</label><select class="form-select" id="auto-new-action">' + actionOptions + '</select></div>'
           + '<div style="display:flex;gap:8px;margin-top:var(--space-sm);">'
-          + '<button class="btn btn-primary btn-sm" onclick="WorkflowAutomation.createRule()">Create Rule</button>'
+          + '<button id="auto-create-submit-btn" class="btn btn-primary btn-sm" onclick="WorkflowAutomation.createRule()">Create Rule</button>'
           + '<button class="btn btn-ghost btn-sm" onclick="Modal.close()">Cancel</button>'
           + '</div>'
           + '</div>'
@@ -120,37 +149,129 @@
       this.refresh();
     },
     refresh: function () {
+      var self = this;
+      
+      loadingRules = true;
+      loadingHistory = true;
       renderRulesTable();
       renderExecutionLog();
+
+      APIClient.get('/automation/rules')
+        .then(function (res) {
+          loadingRules = false;
+          if (res && res.data) {
+            rules = res.data;
+          } else {
+            console.error('Failed to parse automation rules response.');
+          }
+          renderRulesTable();
+        })
+        .catch(function (err) {
+          loadingRules = false;
+          console.error('Error fetching automation rules:', err);
+          renderRulesTable();
+        });
+
+      APIClient.get('/automation/executions')
+        .then(function (res) {
+          loadingHistory = false;
+          if (res && res.data) {
+            executionLog = res.data;
+          } else {
+            console.error('Failed to parse executions response.');
+          }
+          renderExecutionLog();
+        })
+        .catch(function (err) {
+          loadingHistory = false;
+          console.error('Error fetching executions:', err);
+          renderExecutionLog();
+        });
     },
     showCreateModal: function () {
       showCreateRuleModal();
     },
     createRule: function () {
-      var name = document.getElementById('auto-new-name');
-      var trigger = document.getElementById('auto-new-trigger');
-      var threshold = document.getElementById('auto-new-threshold');
-      var action = document.getElementById('auto-new-action');
-      if (!name || !name.value.trim()) { alert('Please enter a rule name.'); return; }
-      rules.push({
-        id: 'rule-' + Date.now(),
-        name: name.value.trim(),
+      var nameEl = document.getElementById('auto-new-name');
+      var triggerEl = document.getElementById('auto-new-trigger');
+      var thresholdEl = document.getElementById('auto-new-threshold');
+      var actionEl = document.getElementById('auto-new-action');
+      var submitBtn = document.getElementById('auto-create-submit-btn');
+
+      if (!nameEl || !nameEl.value.trim()) { alert('Please enter a rule name.'); return; }
+      
+      var thresholdVal = thresholdEl ? thresholdEl.value : '5';
+      var triggerTypeVal = triggerEl ? triggerEl.value : 'pod_restart';
+      var actionTypeVal = actionEl ? actionEl.value : 'generate_rca';
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating...';
+      }
+
+      var payload = {
+        name: nameEl.value.trim(),
         enabled: true,
-        trigger: { type: trigger.value, condition: trigger.value.replace(/_/g, ' ') + ' > ' + threshold.value, threshold: parseInt(threshold.value) },
-        action: { type: action.value },
-        lastTriggered: 'Never',
-        executions: 0
-      });
-      if (global.Modal) global.Modal.close();
-      this.refresh();
+        trigger_type: triggerTypeVal,
+        trigger_config: {
+          condition: triggerTypeVal.replace(/_/g, ' ') + ' > ' + thresholdVal,
+          threshold: thresholdVal
+        },
+        action_type: actionTypeVal,
+        action_config: {}
+      };
+
+      var self = this;
+      APIClient.post('/automation/rules', payload)
+        .then(function (res) {
+          if (res) {
+            if (global.Modal) global.Modal.close();
+            self.refresh();
+          } else {
+            alert('Failed to create rule.');
+            if (submitBtn) {
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Create Rule';
+            }
+          }
+        })
+        .catch(function (err) {
+          alert('Error creating rule: ' + err.message);
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create Rule';
+          }
+        });
     },
-    toggleRule: function (id) {
-      rules.forEach(function (r) { if (r.id === id) r.enabled = !r.enabled; });
-      this.refresh();
+    toggleRule: function (id, currentEnabled) {
+      var self = this;
+      var newEnabled = !currentEnabled;
+      APIClient.put('/automation/rules/' + id + '/toggle', { enabled: newEnabled })
+        .then(function (res) {
+          if (res && res.status === 'ok') {
+            self.refresh();
+          } else {
+            alert('Failed to toggle rule.');
+          }
+        })
+        .catch(function (err) {
+          alert('Error toggling rule: ' + err.message);
+        });
     },
     deleteRule: function (id) {
-      rules = rules.filter(function (r) { return r.id !== id; });
-      this.refresh();
+      if (!confirm('Are you sure you want to delete this rule?')) return;
+      var self = this;
+      APIClient.delete('/automation/rules/' + id)
+        .then(function (res) {
+          if (res && res.status === 'deleted') {
+            self.refresh();
+          } else {
+            alert('Failed to delete rule.');
+          }
+        })
+        .catch(function (err) {
+          alert('Error deleting rule: ' + err.message);
+        });
     }
   };
 

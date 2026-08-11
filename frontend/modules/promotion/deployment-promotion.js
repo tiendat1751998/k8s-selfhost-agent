@@ -82,13 +82,10 @@ const DeploymentPromotion = {
 
   async loadData() {
     try {
-      const res = await fetch('/api/v1/promotions');
-      if (res.ok) {
-        const json = await res.json();
-        const items = json.data || [];
-        this.renderPipeline(items);
-        return;
-      }
+      const json = await APIClient.get('/promotions');
+      const items = json.data || [];
+      this.renderPipeline(items);
+      return;
     } catch (e) {
       console.error('Promotions API request failed:', e);
     }

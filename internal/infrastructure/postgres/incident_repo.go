@@ -8,20 +8,24 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
-	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // IncidentRepo implements incident.Repository using PostgreSQL.
 type IncidentRepo struct {
-	pool *pgxpool.Pool
+	pool DBTX
 }
 
 // NewIncidentRepo creates a new PostgreSQL-backed incident repository.
-func NewIncidentRepo(pool *pgxpool.Pool) *IncidentRepo {
+func NewIncidentRepo(pool DBTX) *IncidentRepo {
 	return &IncidentRepo{pool: pool}
+}
+
+func (r *IncidentRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.pool)
 }
 
 // Create persists a new incident and assigns a generated UUID.
@@ -31,12 +35,17 @@ func (r *IncidentRepo) Create(ctx context.Context, inc *incident.Incident) error
 		return errors.Wrap(err, "marshaling raw data")
 	}
 
+	tenantID := middleware.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "org-google"
+	}
+
 	query := `
-		INSERT INTO incidents (cluster_name, namespace, pod_name, type, status, severity, message, raw_data, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO incidents (cluster_name, namespace, pod_name, type, status, severity, message, raw_data, tenant_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id`
 
-	err = r.pool.QueryRow(ctx, query,
+	err = r.getDB(ctx).QueryRow(ctx, query,
 		inc.ClusterName,
 		inc.Namespace,
 		inc.PodName,
@@ -45,6 +54,7 @@ func (r *IncidentRepo) Create(ctx context.Context, inc *incident.Incident) error
 		string(inc.Severity),
 		inc.Message,
 		rawData,
+		tenantID,
 		inc.CreatedAt,
 		inc.UpdatedAt,
 	).Scan(&inc.ID)
@@ -63,7 +73,8 @@ func (r *IncidentRepo) GetByID(ctx context.Context, id string) (*incident.Incide
 		FROM incidents
 		WHERE id = $1`
 
-	inc, err := r.scanIncident(r.pool.QueryRow(ctx, query, id))
+	query, args := BuildTenantQuery(ctx, query, id)
+	inc, err := r.scanIncident(r.getDB(ctx).QueryRow(ctx, query, args...))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errors.NewNotFound("incident", id)
@@ -88,7 +99,7 @@ func (r *IncidentRepo) Update(ctx context.Context, inc *incident.Incident) error
 		SET status = $1, severity = $2, message = $3, raw_data = $4, updated_at = $5, resolved_at = $6
 		WHERE id = $7`
 
-	tag, err := r.pool.Exec(ctx, query,
+	tag, err := r.getDB(ctx).Exec(ctx, query,
 		string(inc.Status),
 		string(inc.Severity),
 		inc.Message,
@@ -143,7 +154,8 @@ func (r *IncidentRepo) List(ctx context.Context, filter incident.Filter) ([]*inc
 	// Count total
 	var total int64
 	countQuery := "SELECT COUNT(*) " + baseQuery
-	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+	countQuery, countArgs := BuildTenantQuery(ctx, countQuery, args...)
+	if err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, errors.Wrap(err, "counting incidents")
 	}
 
@@ -161,9 +173,10 @@ func (r *IncidentRepo) List(ctx context.Context, filter incident.Filter) ([]*inc
 		"SELECT id, cluster_name, namespace, pod_name, type, status, severity, message, raw_data, created_at, updated_at, resolved_at %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
 		baseQuery, argIdx, argIdx+1,
 	)
-	args = append(args, limit, offset)
+	selectArgs := append(args, limit, offset)
+	selectQuery, selectArgs = BuildTenantQuery(ctx, selectQuery, selectArgs...)
 
-	rows, err := r.pool.Query(ctx, selectQuery, args...)
+	rows, err := r.getDB(ctx).Query(ctx, selectQuery, selectArgs...)
 	if err != nil {
 		return nil, 0, errors.Wrap(err, "querying incidents")
 	}
@@ -194,7 +207,8 @@ func (r *IncidentRepo) GetByPodAndType(ctx context.Context, namespace, podName s
 		ORDER BY created_at DESC
 		LIMIT 1`
 
-	inc, err := r.scanIncident(r.pool.QueryRow(ctx, query, namespace, podName, string(incidentType), string(incident.StatusResolved)))
+	query, args := BuildTenantQuery(ctx, query, namespace, podName, string(incidentType), string(incident.StatusResolved))
+	inc, err := r.scanIncident(r.getDB(ctx).QueryRow(ctx, query, args...))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil

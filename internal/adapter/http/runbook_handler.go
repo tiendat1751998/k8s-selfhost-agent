@@ -1,15 +1,15 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	"github.com/datdt/k8sselfhost/internal/domain/runbook"
-	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // RunbookHandler provides HTTP handlers for the runbook API.
@@ -60,13 +60,31 @@ func (h *RunbookHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rb)
 }
 
+type createRunbookRequest struct {
+	runbook.Runbook
+}
+
+func (r *createRunbookRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Title) == "" {
+		ve.Add("title", "title is required")
+	}
+	if strings.TrimSpace(r.Category) == "" {
+		ve.Add("category", "category is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // Create handles POST /api/v1/runbooks
 func (h *RunbookHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var rb runbook.Runbook
-	if err := json.NewDecoder(r.Body).Decode(&rb); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[createRunbookRequest](w, r)
+	if !ok {
 		return
 	}
+	rb := req.Runbook
 
 	err := h.repo.Create(r.Context(), &rb)
 	result := "success"
@@ -91,14 +109,32 @@ func (h *RunbookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, rb)
 }
 
+type updateRunbookRequest struct {
+	runbook.Runbook
+}
+
+func (r *updateRunbookRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Title) == "" {
+		ve.Add("title", "title is required")
+	}
+	if strings.TrimSpace(r.Category) == "" {
+		ve.Add("category", "category is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // Update handles PUT /api/v1/runbooks/{id}
 func (h *RunbookHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var rb runbook.Runbook
-	if err := json.NewDecoder(r.Body).Decode(&rb); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[updateRunbookRequest](w, r)
+	if !ok {
 		return
 	}
+	rb := req.Runbook
 	rb.ID = id
 
 	err := h.repo.Update(r.Context(), &rb)

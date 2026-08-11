@@ -12,10 +12,49 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Required environment variables:
+//   DB_HOST     - PostgreSQL host (e.g., "localhost")
+//   DB_PORT     - PostgreSQL port (e.g., "5432")
+//   DB_USER     - PostgreSQL user
+//   DB_PASSWORD - PostgreSQL password
+//   DB_NAME     - PostgreSQL database name
+//
+// Optional environment variables:
+//   DB_SSLMODE  - SSL mode (default: "disable")
+
 func main() {
-	dsn := "postgres://myuser:mysecretpassword@10.10.10.133:5432/mydatabase?sslmode=disable"
-	
-	fmt.Println("Connecting to PostgreSQL at 10.10.10.133...")
+	required := map[string]string{
+		"DB_HOST":     os.Getenv("DB_HOST"),
+		"DB_PORT":     os.Getenv("DB_PORT"),
+		"DB_USER":     os.Getenv("DB_USER"),
+		"DB_PASSWORD": os.Getenv("DB_PASSWORD"),
+		"DB_NAME":     os.Getenv("DB_NAME"),
+	}
+
+	var missing []string
+	for k, v := range required {
+		if v == "" {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		fmt.Fprintf(os.Stderr, "Missing required environment variables: %s\n", strings.Join(missing, ", "))
+		os.Exit(1)
+	}
+
+	sslMode := os.Getenv("DB_SSLMODE")
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		required["DB_USER"], required["DB_PASSWORD"],
+		required["DB_HOST"], required["DB_PORT"],
+		required["DB_NAME"], sslMode,
+	)
+
+	fmt.Printf("Connecting to PostgreSQL at %s:%s...\n", required["DB_HOST"], required["DB_PORT"])
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -33,7 +72,7 @@ func main() {
 	fmt.Println("Connected successfully!")
 
 	fmt.Println("Running migrations...")
-	files, err := filepath.Glob("migrations/*.sql")
+	files, err := filepath.Glob("migrations/*.up.sql")
 	if err != nil {
 		fmt.Printf("Failed to read migrations directory: %v\n", err)
 		os.Exit(1)

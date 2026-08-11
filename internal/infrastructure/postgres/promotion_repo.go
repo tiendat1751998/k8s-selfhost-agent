@@ -5,18 +5,21 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/promotion"
 )
 
 type promotionRepo struct {
-	db *pgxpool.Pool
+	db DBTX
 }
 
 // NewPromotionRepo creates a new Postgres-backed Promotion repository.
-func NewPromotionRepo(db *pgxpool.Pool) promotion.Repository {
+func NewPromotionRepo(db DBTX) promotion.Repository {
 	return &promotionRepo{db: db}
+}
+
+func (r *promotionRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.db)
 }
 
 func (r *promotionRepo) List(ctx context.Context, status string, limit, offset int) ([]promotion.Promotion, int, error) {
@@ -48,12 +51,12 @@ func (r *promotionRepo) List(ctx context.Context, status string, limit, offset i
 	}
 
 	var total int
-	err := r.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total)
+	err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting promotions: %w", err)
 	}
 
-	rows, err := r.db.Query(ctx, query, args...)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying promotions: %w", err)
 	}
@@ -94,7 +97,7 @@ func (r *promotionRepo) GetByID(ctx context.Context, id string) (*promotion.Prom
 	var p promotion.Promotion
 	var approver *string
 
-	err := r.db.QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
 		&p.ID, &p.Service, &p.Version, &p.FromEnv, &p.ToEnv, &p.Status, 
 		&p.Requester, &approver, &p.ApprovedAt, &p.CompletedAt, &p.CreatedAt,
 	)
@@ -118,7 +121,7 @@ func (r *promotionRepo) Create(ctx context.Context, p *promotion.Promotion) erro
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id
 	`
-	err := r.db.QueryRow(ctx, query,
+	err := r.getDB(ctx).QueryRow(ctx, query,
 		p.Service, p.Version, string(p.FromEnv), string(p.ToEnv), string(p.Status), p.Requester, p.CreatedAt,
 	).Scan(&p.ID)
 	
@@ -135,9 +138,25 @@ func (r *promotionRepo) Approve(ctx context.Context, id, approver string) error 
 		SET status = 'approved', approver = $1, approved_at = NOW() 
 		WHERE id = $2 AND status = 'pending'
 	`
-	cmd, err := r.db.Exec(ctx, query, approver, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, approver, id)
 	if err != nil {
 		return fmt.Errorf("approving promotion: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("promotion not found or not in pending status")
+	}
+	return nil
+}
+
+func (r *promotionRepo) Reject(ctx context.Context, id, rejecter string) error {
+	query := `
+		UPDATE promotions 
+		SET status = 'rejected', approver = $1, approved_at = NOW() 
+		WHERE id = $2 AND status = 'pending'
+	`
+	cmd, err := r.getDB(ctx).Exec(ctx, query, rejecter, id)
+	if err != nil {
+		return fmt.Errorf("rejecting promotion: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
 		return fmt.Errorf("promotion not found or not in pending status")
@@ -151,7 +170,7 @@ func (r *promotionRepo) Complete(ctx context.Context, id string) error {
 		SET status = 'completed', completed_at = NOW() 
 		WHERE id = $1 AND status = 'promoting'
 	`
-	cmd, err := r.db.Exec(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("completing promotion: %w", err)
 	}

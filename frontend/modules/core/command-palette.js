@@ -67,13 +67,8 @@
         searchResults.innerHTML = '<div style="padding:10px;text-align:center;color:var(--color-muted);">Searching...</div>';
 
         try {
-            const res = await fetch(`/api/v1/search?q=${encodeURIComponent(query)}&type=${category}`);
-            if (res.ok) {
-                const data = await res.json();
-                renderResults(data);
-            } else {
-                searchResults.innerHTML = '<div style="padding:10px;text-align:center;color:var(--color-trading-down);">Search requires API connection</div>';
-            }
+            const data = await APIClient.get(`/search?q=${encodeURIComponent(query)}&type=${category}`);
+            renderResults(data);
         } catch (e) {
             searchResults.innerHTML = '<div style="padding:10px;text-align:center;color:var(--color-trading-down);">Search requires API connection</div>';
         }

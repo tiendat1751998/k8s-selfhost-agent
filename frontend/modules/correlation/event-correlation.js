@@ -73,13 +73,10 @@ const EventCorrelation = {
 
   async loadData() {
     try {
-      const res = await fetch('/api/v1/correlation');
-      if (res.ok) {
-        const json = await res.json();
-        const items = json.data || [];
-        this.renderChains(items);
-        return;
-      }
+      const json = await APIClient.get('/correlation');
+      const items = json.data || [];
+      this.renderChains(items);
+      return;
     } catch (e) {
       console.error('Correlation API request failed:', e);
     }

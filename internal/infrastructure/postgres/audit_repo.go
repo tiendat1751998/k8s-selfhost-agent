@@ -6,19 +6,22 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
 )
 
 // auditRepo implements audit.Repository using PostgreSQL.
 type auditRepo struct {
-	db *pgxpool.Pool
+	db DBTX
 }
 
 // NewAuditRepo creates a new Postgres-backed Audit repository.
-func NewAuditRepo(db *pgxpool.Pool) audit.Repository {
+func NewAuditRepo(db DBTX) audit.Repository {
 	return &auditRepo{db: db}
+}
+
+func (r *auditRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.db)
 }
 
 func (r *auditRepo) ListFindings(ctx context.Context, status string) ([]audit.AuditFinding, error) {
@@ -41,7 +44,7 @@ func (r *auditRepo) ListFindings(ctx context.Context, status string) ([]audit.Au
 		`
 	}
 
-	rows, err := r.db.Query(ctx, query, args...)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying audit findings: %w", err)
 	}
@@ -73,7 +76,7 @@ func (r *auditRepo) GetFinding(ctx context.Context, id string) (*audit.AuditFind
 		WHERE id = $1
 	`
 	var f audit.AuditFinding
-	err := r.db.QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
 		&f.ID, &f.Category, &f.Severity, &f.Description, &f.Remediation,
 		&f.Status, &f.DetectedAt, &f.ResolvedAt,
 	)
@@ -92,7 +95,7 @@ func (r *auditRepo) ResolveFinding(ctx context.Context, id string) error {
 		SET status = 'resolved', resolved_at = NOW() 
 		WHERE id = $1
 	`
-	cmd, err := r.db.Exec(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("updating audit finding: %w", err)
 	}
@@ -108,7 +111,7 @@ func (r *auditRepo) RecordRun(ctx context.Context, run *audit.AuditRun) error {
 		VALUES ($1, $2, $3, $4)
 		RETURNING id
 	`
-	err := r.db.QueryRow(ctx, query, run.Status, run.StartTime, run.EndTime, run.FindingsCount).Scan(&run.ID)
+	err := r.getDB(ctx).QueryRow(ctx, query, run.Status, run.StartTime, run.EndTime, run.FindingsCount).Scan(&run.ID)
 	if err != nil {
 		return fmt.Errorf("inserting audit run: %w", err)
 	}
@@ -123,7 +126,7 @@ func (r *auditRepo) GetLastRun(ctx context.Context) (*audit.AuditRun, error) {
 		LIMIT 1
 	`
 	var run audit.AuditRun
-	err := r.db.QueryRow(ctx, query).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query).Scan(
 		&run.ID, &run.Status, &run.StartTime, &run.EndTime, &run.FindingsCount,
 	)
 	if err != nil {
@@ -151,7 +154,7 @@ func (r *auditRepo) RecordAction(ctx context.Context, actor, action, targetType,
 		INSERT INTO audit_logs (actor, action, target_type, target_id, target_name, result, details, ip_address, user_agent)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
-	_, err = r.db.Exec(ctx, query, actor, action, targetType, targetUUID, targetName, result, detailsJSON, ipAddress, userAgent)
+	_, err = r.getDB(ctx).Exec(ctx, query, actor, action, targetType, targetUUID, targetName, result, detailsJSON, ipAddress, userAgent)
 	if err != nil {
 		return fmt.Errorf("recording audit log action: %w", err)
 	}

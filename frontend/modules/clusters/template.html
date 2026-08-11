@@ -1,0 +1,29 @@
+<section class="section" id="section-kubernetes">
+  <div class="section-header">
+    <h2>Container Clusters</h2>
+    <button class="btn btn-primary btn-sm" id="add-cluster-btn">+ Add Cluster</button>
+  </div>
+  <div class="enterprise-table-wrap">
+    <table class="enterprise-table" id="k8s-table">
+      <thead>
+        <tr>
+          <th>Cluster Name</th>
+          <th>Provider</th>
+          <th>Endpoint</th>
+          <th>Status</th>
+          <th>Last Check</th>
+          <th>Nodes</th>
+          <th>Containers</th>
+          <th>Services</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="k8s-table-body"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="k8s-empty" style="display:none;">
+    <div class="empty-state-icon">📦</div>
+    <div class="empty-state-text">No clusters configured</div>
+    <div class="empty-state-sub">Add a Kubernetes, Docker, or Docker Swarm cluster</div>
+  </div>
+</section>

@@ -4,26 +4,30 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/cost"
 )
 
 type costRepo struct {
-	pool *pgxpool.Pool
+	pool DBTX
 }
 
 // NewCostRepo creates a new PostgreSQL-backed cost repository.
-func NewCostRepo(pool *pgxpool.Pool) cost.Repository {
+func NewCostRepo(pool DBTX) cost.Repository {
 	return &costRepo{pool: pool}
 }
 
+func (r *costRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.pool)
+}
+
 func (r *costRepo) GetClusterCosts(ctx context.Context) ([]cost.ClusterCost, error) {
-	rows, err := r.pool.Query(ctx, `
+	query := `
 		SELECT id, name, provider, monthly_cost, daily_cost, cpu_cost, memory_cost, storage_cost, network_cost, trend, updated_at
 		FROM cluster_costs
 		ORDER BY monthly_cost DESC
-	`)
+	`
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying cluster costs: %w", err)
 	}
@@ -49,11 +53,12 @@ func (r *costRepo) GetClusterCosts(ctx context.Context) ([]cost.ClusterCost, err
 }
 
 func (r *costRepo) GetNamespaceCosts(ctx context.Context) ([]cost.NamespaceCost, error) {
-	rows, err := r.pool.Query(ctx, `
+	query := `
 		SELECT id, namespace, cluster, cpu_requested, memory_requested, monthly_cost, utilization, updated_at
 		FROM namespace_costs
 		ORDER BY monthly_cost DESC
-	`)
+	`
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying namespace costs: %w", err)
 	}
@@ -78,11 +83,12 @@ func (r *costRepo) GetNamespaceCosts(ctx context.Context) ([]cost.NamespaceCost,
 }
 
 func (r *costRepo) GetResourceWaste(ctx context.Context) ([]cost.ResourceWaste, error) {
-	rows, err := r.pool.Query(ctx, `
+	query := `
 		SELECT id, type, resource, namespace, cluster, cpu_util, mem_util, wasted_cost, severity, updated_at
 		FROM resource_waste
 		ORDER BY wasted_cost DESC
-	`)
+	`
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying resource waste: %w", err)
 	}

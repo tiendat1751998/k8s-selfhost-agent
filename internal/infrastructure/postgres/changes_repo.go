@@ -5,18 +5,21 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/changes"
 )
 
 type changesRepo struct {
-	db *pgxpool.Pool
+	db DBTX
 }
 
 // NewChangesRepo creates a new Postgres-backed Changes repository.
-func NewChangesRepo(db *pgxpool.Pool) changes.Repository {
+func NewChangesRepo(db DBTX) changes.Repository {
 	return &changesRepo{db: db}
+}
+
+func (r *changesRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.db)
 }
 
 func (r *changesRepo) ListRequests(ctx context.Context, status *changes.ChangeStatus, limit, offset int) ([]changes.ChangeRequest, int, error) {
@@ -48,12 +51,12 @@ func (r *changesRepo) ListRequests(ctx context.Context, status *changes.ChangeSt
 	}
 
 	var total int
-	err := r.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total)
+	err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting change requests: %w", err)
 	}
 
-	rows, err := r.db.Query(ctx, query, args...)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying change requests: %w", err)
 	}
@@ -95,7 +98,7 @@ func (r *changesRepo) GetRequest(ctx context.Context, id string) (*changes.Chang
 	var req changes.ChangeRequest
 	var approver *string
 
-	err := r.db.QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
 		&req.ID, &req.Title, &req.Description, &req.Type, &req.Status, &req.Requester, 
 		&approver, &req.Cluster, &req.Namespace, &req.Resource, 
 		&req.ScheduledAt, &req.ApprovedAt, &req.CreatedAt, &req.UpdatedAt,
@@ -120,7 +123,7 @@ func (r *changesRepo) CreateRequest(ctx context.Context, req *changes.ChangeRequ
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id
 	`
-	err := r.db.QueryRow(ctx, query,
+	err := r.getDB(ctx).QueryRow(ctx, query,
 		req.Title, req.Description, string(req.Type), string(req.Status), req.Requester, 
 		req.Cluster, req.Namespace, req.Resource, req.ScheduledAt, req.CreatedAt, req.UpdatedAt,
 	).Scan(&req.ID)
@@ -138,7 +141,7 @@ func (r *changesRepo) ApproveRequest(ctx context.Context, id, approver string) e
 		SET status = 'approved', approver = $1, approved_at = NOW(), updated_at = NOW() 
 		WHERE id = $2 AND status = 'pending'
 	`
-	cmd, err := r.db.Exec(ctx, query, approver, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, approver, id)
 	if err != nil {
 		return fmt.Errorf("approving change request: %w", err)
 	}
@@ -154,7 +157,7 @@ func (r *changesRepo) RejectRequest(ctx context.Context, id, approver string) er
 		SET status = 'rejected', approver = $1, updated_at = NOW() 
 		WHERE id = $2 AND status = 'pending'
 	`
-	cmd, err := r.db.Exec(ctx, query, approver, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, approver, id)
 	if err != nil {
 		return fmt.Errorf("rejecting change request: %w", err)
 	}
@@ -170,7 +173,7 @@ func (r *changesRepo) ListWindows(ctx context.Context) ([]changes.MaintenanceWin
 		FROM maintenance_windows 
 		ORDER BY start_at DESC
 	`
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying maintenance windows: %w", err)
 	}
@@ -198,7 +201,7 @@ func (r *changesRepo) CreateWindow(ctx context.Context, w *changes.MaintenanceWi
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
-	err := r.db.QueryRow(ctx, query,
+	err := r.getDB(ctx).QueryRow(ctx, query,
 		w.Title, w.Cluster, w.StartAt, w.EndAt, w.Active, w.CreatedAt,
 	).Scan(&w.ID)
 	

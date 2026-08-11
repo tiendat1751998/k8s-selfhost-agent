@@ -31,10 +31,13 @@ import (
 	"github.com/datdt/k8sselfhost/internal/usecase/ai"
 	"github.com/datdt/k8sselfhost/internal/usecase/rca"
 	usecaseAgent "github.com/datdt/k8sselfhost/internal/usecase/agent"
+	usecaseAuth "github.com/datdt/k8sselfhost/internal/usecase/auth"
 	usecaseDeployment "github.com/datdt/k8sselfhost/internal/usecase/deployment"
-	"github.com/datdt/k8sselfhost/pkg/health"
-	"github.com/datdt/k8sselfhost/pkg/logger"
-	"github.com/datdt/k8sselfhost/pkg/telemetry"
+	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
+	usecaseSearch "github.com/datdt/k8sselfhost/internal/usecase/search"
+	"github.com/datdt/k8sselfhost/internal/pkg/health"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/telemetry"
 )
 
 func main() {
@@ -260,9 +263,10 @@ func run() error {
 	poller.Start(egCtx)
 	defer poller.Stop()
 
-	// 8. Initialize and start NATS worker (bridge wsHub)
-	bridge := &wsBridge{hub: wsHub}
-	rcaWorker := rca.NewWorker(natsClient, pipeline, incRepo, bridge)
+		// 8. Initialize and start NATS worker (bridge wsHub)
+	bridge := adapthttp.NewWSBridge(wsHub)
+
+	rcaWorker := rca.NewWorker(natsClient.JetStream(), pipeline, incRepo, bridge)
 	if err := rcaWorker.Start(egCtx); err != nil {
 		return fmt.Errorf("starting RCA worker: %w", err)
 	}
@@ -297,9 +301,18 @@ func run() error {
 	defaultLLM, _ := registry.Default()
 	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge)
 
+	userRepo := postgres.NewUserRepo(pgClient.Pool())
+	authUsecase := usecaseAuth.NewUsecase(userRepo)
+
+	searchRepo := postgres.NewSearchRepo(pgClient.Pool())
+	searchUsecase := usecaseSearch.NewUsecase(searchRepo)
+
+	gitopsController := usecaseGitops.NewController(prRepo, incRepo)
+	tenancyRepo := postgres.NewTenancyRepo(pgClient.Pool())
+
 	platformHandlers := &adapthttp.PlatformHandlers{
 		AI:            adapthttp.NewAIHandler(registry),
-		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, publisher),
+		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, publisher, gitopsController),
 		Docker:        adapthttp.NewDockerHandler(dockerRepo),
 		Drift:         adapthttp.NewDriftHandler(driftRepo),
 		Correlation:   adapthttp.NewCorrelationHandler(correlationRepo),
@@ -318,12 +331,13 @@ func run() error {
 		Notification:  adapthttp.NewNotificationHandler(notificationRepo),
 		Automation:    adapthttp.NewAutomationHandler(automationRepo),
 		Timeline:      adapthttp.NewTimelineHandler(timelineRepo),
-		Auth:          adapthttp.NewAuthHandler(pgClient.Pool()),
-		Search:        adapthttp.NewSearchHandler(pgClient.Pool()),
+		Auth:          adapthttp.NewAuthHandler(authUsecase),
+		Search:        adapthttp.NewSearchHandler(searchUsecase),
 		Cost:          adapthttp.NewCostHandler(costRepo),
 		Backup:        adapthttp.NewBackupHandler(backupRepo, wsHub),
 		Agents:        adapthttp.NewAgentHandler(agentRepo, orchestrator),
 		Deployments:   adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager))),
+		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
 	}
 	if err := initializeWelcomeMessage(egCtx, pgClient.Pool(), wsHub); err != nil {
 		log.Error("failed to initialize WebSocket welcome config message", zap.Error(err))
@@ -373,13 +387,8 @@ func run() error {
 	return nil
 }
 
-type wsBridge struct {
-	hub *adapthttp.WSHub
-}
+// local wsBridge removed, using adapthttp.WSBridge
 
-func (b *wsBridge) Broadcast(msgType string, data interface{}) {
-	b.hub.Broadcast(adapthttp.WSMessage{Type: msgType, Data: data})
-}
 
 func initializeWelcomeMessage(ctx context.Context, db *pgxpool.Pool, hub *adapthttp.WSHub) error {
 	// 1. Seed git_providers if empty

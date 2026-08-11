@@ -6,26 +6,30 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/backup"
 )
 
 type backupRepo struct {
-	pool *pgxpool.Pool
+	pool DBTX
 }
 
 // NewBackupRepo creates a new PostgreSQL-backed backup repository.
-func NewBackupRepo(pool *pgxpool.Pool) backup.Repository {
+func NewBackupRepo(pool DBTX) backup.Repository {
 	return &backupRepo{pool: pool}
 }
 
+func (r *backupRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.pool)
+}
+
 func (r *backupRepo) GetHistory(ctx context.Context) ([]backup.BackupLog, error) {
-	rows, err := r.pool.Query(ctx, `
+	query := `
 		SELECT id, timestamp, action, target, status, duration, size, details
 		FROM backup_history
 		ORDER BY timestamp DESC
-	`)
+	`
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying backup history: %w", err)
 	}
@@ -62,7 +66,7 @@ func (r *backupRepo) TriggerRecovery(ctx context.Context, target string) (*backu
 		Details:   json.RawMessage(`{}`),
 	}
 
-	err := r.pool.QueryRow(ctx, `
+	err := r.getDB(ctx).QueryRow(ctx, `
 		INSERT INTO backup_history (action, target, status, duration, size, details)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, timestamp
@@ -80,7 +84,7 @@ func (r *backupRepo) Update(ctx context.Context, log *backup.BackupLog) error {
 		SET status = $1, duration = $2, size = $3, details = $4
 		WHERE id = $5
 	`
-	_, err := r.pool.Exec(ctx, query, log.Status, log.Duration, log.Size, string(log.Details), log.ID)
+	_, err := r.getDB(ctx).Exec(ctx, query, log.Status, log.Duration, log.Size, string(log.Details), log.ID)
 	if err != nil {
 		return fmt.Errorf("updating backup log: %w", err)
 	}
