@@ -10,26 +10,27 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/datdt/k8sselfhost/internal/adapter/event"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/observability"
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
-	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/stringutil"
 )
+
 
 // Pipeline orchestrates the RCA analysis flow:
 // collect data → build prompt → call LLM → parse response → create report.
 type Pipeline struct {
-	collector  *event.Collector
-	registry   *llm.ProviderRegistry
+	collector  ports.DataCollector
+	registry   ports.LLMRegistry
 	reportRepo report.Repository
 	incRepo    incident.Repository
 	obsRepo    observability.Repository
 }
 
 // NewPipeline creates a new RCA pipeline.
-func NewPipeline(collector *event.Collector, registry *llm.ProviderRegistry, reportRepo report.Repository, incRepo incident.Repository, obsRepo observability.Repository) *Pipeline {
+func NewPipeline(collector ports.DataCollector, registry ports.LLMRegistry, reportRepo report.Repository, incRepo incident.Repository, obsRepo observability.Repository) *Pipeline {
 	return &Pipeline{
 		collector:  collector,
 		registry:   registry,
@@ -100,7 +101,7 @@ func (p *Pipeline) Analyze(ctx context.Context, inc *incident.Incident) (*report
 		return nil, fmt.Errorf("getting default LLM client: %w", err)
 	}
 
-	llmResp, err := llmClient.Complete(ctx, llm.CompletionRequest{
+	llmResp, err := llmClient.Complete(ctx, ports.LLMCompletionRequest{
 		Prompt:      prompt,
 		System:      SystemPrompt(),
 		Temperature: 0.1,
@@ -153,17 +154,18 @@ func (p *Pipeline) Analyze(ctx context.Context, inc *incident.Incident) (*report
 		return nil, fmt.Errorf("storing RCA report: %w", err)
 	}
 
-	log.Info("RCA analysis complete",
+		log.Info("RCA analysis complete",
 		zap.String("incident_id", inc.ID),
-		zap.String("root_cause", truncate(rcaResp.RootCause, 100)),
+		zap.String("root_cause", stringutil.Truncate(rcaResp.RootCause, 100)),
 		zap.Float64("confidence", rcaResp.Confidence),
 		zap.String("risk_level", rcaResp.RiskLevel),
 	)
 
+
 	return rpt, nil
 }
 
-func buildPromptData(inc *incident.Incident, data *event.CollectedData, slo *observability.SLOSnapshot) PromptData {
+func buildPromptData(inc *incident.Incident, data *ports.CollectedData, slo *observability.SLOSnapshot) PromptData {
 	pd := PromptData{
 		IncidentType: inc.Type.String(),
 		Namespace:    inc.Namespace,
@@ -217,10 +219,11 @@ func parseRCAResponse(content string) (*llmRCAResponse, error) {
 	// Try to extract JSON from the response (LLMs sometimes wrap in markdown)
 	jsonStr := extractJSON(content)
 
-	var resp llmRCAResponse
+		var resp llmRCAResponse
 	if err := json.Unmarshal([]byte(jsonStr), &resp); err != nil {
-		return nil, fmt.Errorf("unmarshaling RCA JSON response: %w (raw: %s)", err, truncate(content, 500))
+		return nil, fmt.Errorf("unmarshaling RCA JSON response: %w (raw: %s)", err, stringutil.Truncate(content, 500))
 	}
+
 
 	if resp.RootCause == "" {
 		return nil, fmt.Errorf("RCA response missing root_cause")
@@ -264,9 +267,5 @@ func mapRiskLevel(level string) report.RiskLevel {
 	}
 }
 
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
+// truncate removed, replaced by stringutil.Truncate
+

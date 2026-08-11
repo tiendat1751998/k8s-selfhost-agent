@@ -1,28 +1,40 @@
 package http
 
 import (
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
 	"net/http"
+	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
+	authUsecase "github.com/datdt/k8sselfhost/internal/usecase/auth"
 )
 
 // AuthHandler handles authentication-related HTTP requests.
 type AuthHandler struct {
-	pool *pgxpool.Pool
+	usecase *authUsecase.Usecase
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(pool *pgxpool.Pool) *AuthHandler {
-	return &AuthHandler{pool: pool}
+func NewAuthHandler(usecase *authUsecase.Usecase) *AuthHandler {
+	return &AuthHandler{usecase: usecase}
 }
 
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+func (r *loginRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Email) == "" {
+		ve.Add("email", "email is required")
+	}
+	if strings.TrimSpace(r.Password) == "" {
+		ve.Add("password", "password is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
 }
 
 type loginResponse struct {
@@ -38,70 +50,30 @@ type loginUser struct {
 
 // Login handles POST /api/v1/auth/login
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[loginRequest](w, r)
+	if !ok {
 		return
 	}
 
-	if req.Email == "" || req.Password == "" {
-		writeError(w, http.StatusBadRequest, "email and password are required", nil)
-		return
-	}
-
-	var userID string
-	var passwordHash string
-	var platformRole string
-	var tenantID string
-	var tenantRole string
-
-	query := `
-		SELECT 
-			u.id::text, 
-			u.password_hash, 
-			COALESCE(r_platform.name, '') as platform_role,
-			COALESCE(tb.tenant_id, 'default-tenant') as tenant_id,
-			COALESCE(r_tenant.name, 'viewer') as tenant_role
-		FROM users u
-		LEFT JOIN user_roles ur ON u.id = ur.user_id
-		LEFT JOIN roles r_platform ON ur.role_id = r_platform.id AND r_platform.name = 'platform_admin'
-		LEFT JOIN tenant_bindings tb ON u.id = tb.user_id
-		LEFT JOIN roles r_tenant ON tb.role_id = r_tenant.id
-		WHERE u.email = $1
-		LIMIT 1
-	`
-	err := h.pool.QueryRow(r.Context(), query, req.Email).Scan(&userID, &passwordHash, &platformRole, &tenantID, &tenantRole)
+	res, err := h.usecase.Authenticate(r.Context(), req.Email, req.Password)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid credentials", nil)
 		return
 	}
 
-	// Verify password hash
-	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password))
+	// Generate compliant JWT structure (header.payload.signature) signed with HMAC-SHA256
+	token, err := middleware.GenerateJWT(res.UserID, res.Role, res.TenantID)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid credentials", nil)
+		writeError(w, http.StatusInternalServerError, "failed to generate token", err)
 		return
 	}
-
-	userRole := tenantRole
-	if platformRole == "platform_admin" {
-		userRole = "platform_admin"
-	}
-
-	// Generate compliant JWT structure (header.payload.signature)
-	header := `{"alg":"HS256","typ":"JWT"}`
-	payload := fmt.Sprintf(`{"sub":%q,"role":%q,"tenant":%q}`, userID, userRole, tenantID)
-
-	encHeader := base64.RawURLEncoding.EncodeToString([]byte(header))
-	encPayload := base64.RawURLEncoding.EncodeToString([]byte(payload))
-	token := fmt.Sprintf("%s.%s.signature", encHeader, encPayload)
 
 	resp := loginResponse{
 		Token: token,
 		User: loginUser{
-			ID:       userID,
-			Role:     userRole,
-			TenantID: tenantID,
+			ID:       res.UserID,
+			Role:     res.Role,
+			TenantID: res.TenantID,
 		},
 	}
 

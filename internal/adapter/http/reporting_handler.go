@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -40,13 +40,31 @@ func (h *ReportingHandler) ListReports(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }
 
+type generateReportRequest struct {
+	reporting.Report
+}
+
+func (r *generateReportRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Title) == "" {
+		ve.Add("title", "title is required")
+	}
+	if strings.TrimSpace(r.Type) == "" {
+		ve.Add("type", "type is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // GenerateReport handles POST /api/v1/reports
 func (h *ReportingHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
-	var rep reporting.Report
-	if err := json.NewDecoder(r.Body).Decode(&rep); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[generateReportRequest](w, r)
+	if !ok {
 		return
 	}
+	rep := req.Report
 	rep.Status = "pending"
 	rep.ExpiresAt = time.Now().AddDate(0, 1, 0) // Expires in 1 month
 

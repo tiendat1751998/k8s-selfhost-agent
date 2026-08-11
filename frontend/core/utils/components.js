@@ -148,17 +148,6 @@ const UIComponents = {
   },
 
   /**
-   * Escape HTML entities to prevent XSS.
-   * @param {string} str - Raw string.
-   */
-  escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  },
-
-  /**
    * Render a themed empty state card.
    * @param {Object} opts - { title, description, icon?, actionText?, actionId? }
    */
@@ -197,10 +186,30 @@ const UIComponents = {
     if (s === 'success' || s === 'delivered') return '<span class="badge badge-healthy">✓ Success</span>';
     if (s === 'failed') return '<span class="badge badge-down">✗ Failed</span>';
     return '<span class="badge badge-degraded">' + Security.escapeHTML(s) + '</span>';
+  },
+
+  /**
+   * Highlight occurrences of a term in text by wrapping it with styling.
+   * @param {string} text - Raw text.
+   * @param {string} term - Search term.
+   * @returns {string} HTML string with highlights.
+   */
+  highlightText(text, term) {
+    if (!text) return '';
+    if (!term) return Security.escapeHTML(text);
+    const parts = text.split(new RegExp('(' + Security.escapeRegExp(term) + ')', 'gi'));
+    return parts.map((part, idx) => {
+      const escaped = Security.escapeHTML(part);
+      if (idx % 2 === 1) {
+        return '<span style="background:rgba(252,213,53,0.25);color:var(--color-primary);font-weight:700;border-radius:2px;padding:0 2px;">' + escaped + '</span>';
+      }
+      return escaped;
+    }).join('');
   }
 };
 
 window.UIComponents = UIComponents;
 window.esc = Security.escapeHTML;
 window.timeAgo = UIComponents.timeAgo;
+window.highlightText = UIComponents.highlightText;
 

@@ -79,6 +79,21 @@
 
   // ── API CLIENT METHODS ──
 
+  async function post(path, data) {
+    try {
+      const resp = await fetch(BASE_URL + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return await resp.json();
+    } catch (e) {
+      console.warn('[API] Post failed:', path, e.message);
+      throw e;
+    }
+  }
+
   async function fetchJSON(path) {
     try {
       const resp = await fetch(BASE_URL + path);
@@ -116,6 +131,28 @@
     return fetchJSON('/metrics');
   }
 
-  global.APIClient = { loadIncidents, loadReports, loadPRs, loadMetrics, abortAll };
+  async function get(path) {
+    const resp = await fetch(BASE_URL + path);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return await resp.json();
+  }
+
+  async function put(path, data) {
+    const resp = await fetch(BASE_URL + path, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return await resp.json();
+  }
+
+  async function del(path) {
+    const resp = await fetch(BASE_URL + path, { method: 'DELETE' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return await resp.json();
+  }
+
+  global.APIClient = { loadIncidents, loadReports, loadPRs, loadMetrics, abortAll, post, get, put, delete: del };
 
 })(window);

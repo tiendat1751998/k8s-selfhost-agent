@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -24,6 +24,7 @@ func (h *PromotionHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.ListPromotions)
 	r.Post("/", h.CreatePromotion)
 	r.Put("/{id}/approve", h.ApprovePromotion)
+	r.Put("/{id}/reject", h.RejectPromotion)
 	r.Put("/{id}/complete", h.CompletePromotion)
 }
 
@@ -41,18 +42,41 @@ func (h *PromotionHandler) ListPromotions(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }
 
+type createPromotionRequest struct {
+	promotion.Promotion
+}
+
+func (r *createPromotionRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Service) == "" {
+		ve.Add("service", "service is required")
+	}
+	if strings.TrimSpace(r.Version) == "" {
+		ve.Add("version", "version is required")
+	}
+	if strings.TrimSpace(string(r.FromEnv)) == "" {
+		ve.Add("from_env", "from_env is required")
+	}
+	if strings.TrimSpace(string(r.ToEnv)) == "" {
+		ve.Add("to_env", "to_env is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // CreatePromotion handles POST /api/v1/promotions
 func (h *PromotionHandler) CreatePromotion(w http.ResponseWriter, r *http.Request) {
-	var p promotion.Promotion
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[createPromotionRequest](w, r)
+	if !ok {
 		return
 	}
-	if err := h.repo.Create(r.Context(), &p); err != nil {
+	if err := h.repo.Create(r.Context(), &req.Promotion); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create promotion", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, p)
+	writeJSON(w, http.StatusCreated, req.Promotion)
 }
 
 // ApprovePromotion handles PUT /api/v1/promotions/{id}/approve
@@ -78,4 +102,19 @@ func (h *PromotionHandler) CompletePromotion(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "completed"})
+}
+
+// RejectPromotion handles PUT /api/v1/promotions/{id}/reject
+func (h *PromotionHandler) RejectPromotion(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	rejecter := r.URL.Query().Get("rejecter")
+	if rejecter == "" {
+		rejecter = "system"
+	}
+
+	if err := h.repo.Reject(r.Context(), id, rejecter); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to reject promotion", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
 }

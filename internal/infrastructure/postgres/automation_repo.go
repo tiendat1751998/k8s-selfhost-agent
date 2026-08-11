@@ -7,18 +7,21 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/automation"
 )
 
 type automationRepo struct {
-	db *pgxpool.Pool
+	db DBTX
 }
 
 // NewAutomationRepo creates a new Postgres-backed Automation repository.
-func NewAutomationRepo(db *pgxpool.Pool) automation.Repository {
+func NewAutomationRepo(db DBTX) automation.Repository {
 	return &automationRepo{db: db}
+}
+
+func (r *automationRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.db)
 }
 
 func (r *automationRepo) ListRules(ctx context.Context) ([]automation.Rule, error) {
@@ -28,7 +31,7 @@ func (r *automationRepo) ListRules(ctx context.Context) ([]automation.Rule, erro
 		FROM automation_rules 
 		ORDER BY created_at DESC
 	`
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying automation rules: %w", err)
 	}
@@ -83,7 +86,7 @@ func (r *automationRepo) GetRule(ctx context.Context, id string) (*automation.Ru
 	var rule automation.Rule
 	var triggerBytes, actionBytes []byte
 
-	err := r.db.QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
 		&rule.ID, &rule.Name, &rule.TriggerType, &triggerBytes,
 		&rule.ActionType, &actionBytes, &rule.Enabled, &rule.Executions,
 		&rule.LastTriggered, &rule.CreatedAt, &rule.UpdatedAt,
@@ -131,7 +134,7 @@ func (r *automationRepo) CreateRule(ctx context.Context, rule *automation.Rule) 
 		return fmt.Errorf("marshaling action config: %w", err)
 	}
 
-	err = r.db.QueryRow(ctx, query,
+	err = r.getDB(ctx).QueryRow(ctx, query,
 		rule.Name, string(rule.TriggerType), triggerBytes, string(rule.ActionType), actionBytes, rule.Enabled, rule.CreatedAt, rule.UpdatedAt,
 	).Scan(&rule.ID)
 	
@@ -160,7 +163,7 @@ func (r *automationRepo) UpdateRule(ctx context.Context, rule *automation.Rule) 
 		return fmt.Errorf("marshaling action config: %w", err)
 	}
 
-	cmd, err := r.db.Exec(ctx, query,
+	cmd, err := r.getDB(ctx).Exec(ctx, query,
 		rule.Name, string(rule.TriggerType), triggerBytes, string(rule.ActionType), actionBytes, rule.UpdatedAt, rule.ID,
 	)
 	if err != nil {
@@ -174,7 +177,7 @@ func (r *automationRepo) UpdateRule(ctx context.Context, rule *automation.Rule) 
 
 func (r *automationRepo) DeleteRule(ctx context.Context, id string) error {
 	query := `DELETE FROM automation_rules WHERE id = $1`
-	cmd, err := r.db.Exec(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("deleting automation rule: %w", err)
 	}
@@ -186,7 +189,7 @@ func (r *automationRepo) DeleteRule(ctx context.Context, id string) error {
 
 func (r *automationRepo) ToggleRule(ctx context.Context, id string, enabled bool) error {
 	query := `UPDATE automation_rules SET enabled = $1, updated_at = NOW() WHERE id = $2`
-	cmd, err := r.db.Exec(ctx, query, enabled, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, enabled, id)
 	if err != nil {
 		return fmt.Errorf("toggling automation rule: %w", err)
 	}
@@ -206,12 +209,12 @@ func (r *automationRepo) ListExecutions(ctx context.Context, limit, offset int) 
 	countQuery := `SELECT COUNT(*) FROM automation_executions`
 
 	var total int
-	err := r.db.QueryRow(ctx, countQuery).Scan(&total)
+	err := r.getDB(ctx).QueryRow(ctx, countQuery).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting automation executions: %w", err)
 	}
 
-	rows, err := r.db.Query(ctx, query, limit, offset)
+	rows, err := r.getDB(ctx).Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying automation executions: %w", err)
 	}
@@ -254,7 +257,7 @@ func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Exec
 		errDetail = &e.ErrorDetail
 	}
 
-	err := r.db.QueryRow(ctx, query,
+	err := r.getDB(ctx).QueryRow(ctx, query,
 		e.RuleID, e.RuleName, e.TriggerEvent, e.ActionTaken, e.Result, errDetail, e.CreatedAt,
 	).Scan(&e.ID)
 	
@@ -268,7 +271,7 @@ func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Exec
 		SET executions = executions + 1, last_triggered = NOW() 
 		WHERE id = $1
 	`
-	_, _ = r.db.Exec(ctx, updateQuery, e.RuleID)
+	_, _ = r.getDB(ctx).Exec(ctx, updateQuery, e.RuleID)
 	
 	return nil
 }

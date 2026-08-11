@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -36,16 +36,31 @@ func (h *HealthCenterHandler) GetHealthStatus(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items})
 }
 
+type pingComponentRequest struct {
+	Component string `json:"component"`
+	Status    string `json:"status"`
+	Message   string `json:"message"`
+}
+
+func (r *pingComponentRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Component) == "" {
+		ve.Add("component", "component is required")
+	}
+	if strings.TrimSpace(r.Status) == "" {
+		ve.Add("status", "status is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // PingComponent handles POST /api/v1/health/ping
 // This endpoint is used by components to report their own health status.
 func (h *HealthCenterHandler) PingComponent(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Component string `json:"component"`
-		Status    string `json:"status"`
-		Message   string `json:"message"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[pingComponentRequest](w, r)
+	if !ok {
 		return
 	}
 

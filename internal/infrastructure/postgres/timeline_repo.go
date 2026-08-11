@@ -7,18 +7,21 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/timeline"
 )
 
 type timelineRepo struct {
-	db *pgxpool.Pool
+	db DBTX
 }
 
 // NewTimelineRepo creates a new Postgres-backed Timeline repository.
-func NewTimelineRepo(db *pgxpool.Pool) timeline.Repository {
+func NewTimelineRepo(db DBTX) timeline.Repository {
 	return &timelineRepo{db: db}
+}
+
+func (r *timelineRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.db)
 }
 
 func (r *timelineRepo) List(ctx context.Context, eventType *timeline.EventType, since time.Time, limit, offset int) ([]timeline.Event, int, error) {
@@ -52,12 +55,12 @@ func (r *timelineRepo) List(ctx context.Context, eventType *timeline.EventType, 
 	}
 
 	var total int
-	err := r.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total)
+	err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting timeline events: %w", err)
 	}
 
-	rows, err := r.db.Query(ctx, query, args...)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying timeline events: %w", err)
 	}
@@ -110,7 +113,7 @@ func (r *timelineRepo) GetByID(ctx context.Context, id string) (*timeline.Event,
 	var metaBytes []byte
 	var ns, cl *string
 
-	err := r.db.QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
 		&e.ID, &e.Type, &e.Title, &e.Detail, &ns, &cl, &metaBytes, &e.CreatedAt,
 	)
 	if err != nil {
@@ -158,7 +161,7 @@ func (r *timelineRepo) Create(ctx context.Context, e *timeline.Event) error {
 		cl = &e.Cluster
 	}
 
-	err = r.db.QueryRow(ctx, query,
+	err = r.getDB(ctx).QueryRow(ctx, query,
 		string(e.Type), e.Title, e.Detail, ns, cl, metaBytes, e.CreatedAt,
 	).Scan(&e.ID)
 	

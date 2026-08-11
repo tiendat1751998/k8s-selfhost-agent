@@ -13,7 +13,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // NodeWatcher watches Kubernetes node statuses to detect NodeNotReady incidents.

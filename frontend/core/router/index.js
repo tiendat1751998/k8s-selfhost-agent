@@ -51,7 +51,7 @@
   };
 
   const moduleRegistry = {
-    'kubernetes': { scripts: ['/modules/clusters/kubernetes.js'], globalObj: 'KubernetesSection' },
+    'kubernetes': { scripts: ['/modules/clusters/index.js'], globalObj: 'KubernetesSection' },
     'docker-swarm': { scripts: ['/modules/provider/docker-swarm.js?v=2'], globalObj: 'DockerSwarmSection' },
     'deployment-center': {
       scripts: [
@@ -152,11 +152,14 @@
       promise = promise.then(() => loadScript(src));
     });
 
-    return promise.then(() => {
+    return promise.then(async () => {
       const obj = window[config.globalObj];
       if (obj && typeof obj.init === 'function') {
         try {
-          obj.init();
+          const initRes = obj.init();
+          if (initRes instanceof Promise) {
+            await initRes;
+          }
         } catch (e) {
           console.error(`Error initializing module ${config.globalObj}:`, e);
         }
@@ -204,11 +207,19 @@
       if (!window.FeatureFlags.isEnabled(basePath)) {
         console.warn(`[Router] Route "${basePath}" is disabled by feature flags.`);
         targetSection = 'overview';
+        basePath = 'overview';
       }
     }
     
-    loadModule(targetSection).then(() => {
-      if (!sections[targetSection]) {
+    loadModule(basePath).then(() => {
+      // Re-scan sections to catch any new lazy-loaded sections
+      document.querySelectorAll('.section').forEach(function (el) {
+        var id = el.id.replace('section-', '');
+        sections[id] = el;
+      });
+
+      if (!sections[basePath]) {
+        basePath = 'overview';
         targetSection = 'overview';
       }
 
@@ -216,18 +227,18 @@
       Object.values(sections).forEach(function (el) { el.classList.remove('active'); });
 
       // Show target
-      if (sections[targetSection]) {
-        sections[targetSection].classList.add('active');
+      if (sections[basePath]) {
+        sections[basePath].classList.add('active');
       }
 
       // Update sidebar active state
       document.querySelectorAll('.sidebar-link').forEach(function (link) {
-        link.classList.toggle('active', link.dataset.section === targetSection);
+        link.classList.toggle('active', link.dataset.section === basePath || link.dataset.section === targetSection);
       });
 
       // Update page title
       var titleEl = document.getElementById('page-title');
-      if (titleEl) titleEl.textContent = sectionTitles[targetSection] || targetSection;
+      if (titleEl) titleEl.textContent = sectionTitles[basePath] || basePath;
 
       // Update hash without triggering hashchange
       if (!skipHash) {

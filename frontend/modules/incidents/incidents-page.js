@@ -50,10 +50,7 @@
       if (!tbody) return;
 
       try {
-        const res = await fetch('/api/v1/incidents');
-        if (!res.ok) throw new Error('Failed to fetch incidents');
-        
-        const json = await res.json();
+        const json = await APIClient.loadIncidents();
         // The API returns incidents list under "data" or direct array
         const items = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
         this.incidents = items;

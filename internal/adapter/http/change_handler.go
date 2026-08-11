@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -46,18 +46,41 @@ func (h *ChangeHandler) ListChanges(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }
 
+type createChangeRequest struct {
+	changes.ChangeRequest
+}
+
+func (r *createChangeRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Title) == "" {
+		ve.Add("title", "title is required")
+	}
+	if strings.TrimSpace(r.Requester) == "" {
+		ve.Add("requester", "requester is required")
+	}
+	if strings.TrimSpace(r.Cluster) == "" {
+		ve.Add("cluster", "cluster is required")
+	}
+	if strings.TrimSpace(r.Namespace) == "" {
+		ve.Add("namespace", "namespace is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // CreateChange handles POST /api/v1/changes
 func (h *ChangeHandler) CreateChange(w http.ResponseWriter, r *http.Request) {
-	var c changes.ChangeRequest
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[createChangeRequest](w, r)
+	if !ok {
 		return
 	}
-	if err := h.repo.CreateRequest(r.Context(), &c); err != nil {
+	if err := h.repo.CreateRequest(r.Context(), &req.ChangeRequest); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create change request", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, c)
+	writeJSON(w, http.StatusCreated, req.ChangeRequest)
 }
 
 // ApproveChange handles PUT /api/v1/changes/{id}/approve

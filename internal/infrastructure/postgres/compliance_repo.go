@@ -4,25 +4,28 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/compliance"
-	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // ComplianceRepo implements compliance.Repository using PostgreSQL.
 type ComplianceRepo struct {
-	pool *pgxpool.Pool
+	pool DBTX
 }
 
 // NewComplianceRepo creates a new PostgreSQL-backed compliance repository.
-func NewComplianceRepo(pool *pgxpool.Pool) *ComplianceRepo {
+func NewComplianceRepo(pool DBTX) *ComplianceRepo {
 	return &ComplianceRepo{pool: pool}
 }
 
+func (r *ComplianceRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.pool)
+}
+
 func (r *ComplianceRepo) ListFrameworks(ctx context.Context) ([]compliance.Framework, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, created_at, updated_at FROM compliance_frameworks ORDER BY name`)
+	query := `SELECT id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, created_at, updated_at FROM compliance_frameworks ORDER BY name`
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, errors.Wrap(err, "listing compliance frameworks")
 	}
@@ -41,9 +44,8 @@ func (r *ComplianceRepo) ListFrameworks(ctx context.Context) ([]compliance.Frame
 
 func (r *ComplianceRepo) GetFramework(ctx context.Context, id string) (*compliance.Framework, error) {
 	var f compliance.Framework
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, created_at, updated_at FROM compliance_frameworks WHERE id = $1`, id,
-	).Scan(&f.ID, &f.Name, &f.Icon, &f.TotalChecks, &f.PassedChecks, &f.FailedChecks, &f.Score, &f.LastScanAt, &f.CreatedAt, &f.UpdatedAt)
+	query := `SELECT id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, created_at, updated_at FROM compliance_frameworks WHERE id = $1`
+	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(&f.ID, &f.Name, &f.Icon, &f.TotalChecks, &f.PassedChecks, &f.FailedChecks, &f.Score, &f.LastScanAt, &f.CreatedAt, &f.UpdatedAt)
 	if err != nil {
 		return nil, errors.Wrap(err, "getting compliance framework")
 	}
@@ -58,7 +60,7 @@ func (r *ComplianceRepo) UpsertFramework(ctx context.Context, f *compliance.Fram
 			failed_checks = EXCLUDED.failed_checks, score = EXCLUDED.score, last_scan_at = EXCLUDED.last_scan_at, updated_at = NOW()
 		RETURNING id`
 
-	err := r.pool.QueryRow(ctx, query,
+	err := r.getDB(ctx).QueryRow(ctx, query,
 		f.Name, f.Icon, f.TotalChecks, f.PassedChecks, f.FailedChecks, f.Score, f.LastScanAt,
 	).Scan(&f.ID)
 	if err != nil {
@@ -81,14 +83,14 @@ func (r *ComplianceRepo) ListViolations(ctx context.Context, severity *complianc
 	}
 
 	var total int
-	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+	if err := r.getDB(ctx).QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, errors.Wrap(err, "counting compliance violations")
 	}
 
-	query += fmt.Sprintf(" ORDER BY detected_at DESC LIMIT $%d OFFSET $%d", idx, idx+1)
-	args = append(args, limit, offset)
+	selectQuery := query + fmt.Sprintf(" ORDER BY detected_at DESC LIMIT $%d OFFSET $%d", idx, idx+1)
+	selectArgs := append(args, limit, offset)
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.getDB(ctx).Query(ctx, selectQuery, selectArgs...)
 	if err != nil {
 		return nil, 0, errors.Wrap(err, "listing compliance violations")
 	}
@@ -110,7 +112,7 @@ func (r *ComplianceRepo) CreateViolation(ctx context.Context, v *compliance.Viol
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id`
 
-	err := r.pool.QueryRow(ctx, query,
+	err := r.getDB(ctx).QueryRow(ctx, query,
 		v.FrameworkID, string(v.Severity), v.Policy, v.Resource, v.Namespace, v.Cluster, v.Message, v.Resolved, v.DetectedAt,
 	).Scan(&v.ID)
 	if err != nil {
@@ -120,7 +122,7 @@ func (r *ComplianceRepo) CreateViolation(ctx context.Context, v *compliance.Viol
 }
 
 func (r *ComplianceRepo) ResolveViolation(ctx context.Context, id string) error {
-	_, err := r.pool.Exec(ctx, `UPDATE compliance_violations SET resolved = TRUE WHERE id = $1`, id)
+	_, err := r.getDB(ctx).Exec(ctx, `UPDATE compliance_violations SET resolved = TRUE WHERE id = $1`, id)
 	if err != nil {
 		return errors.Wrap(err, "resolving compliance violation")
 	}

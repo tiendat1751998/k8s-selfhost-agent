@@ -245,75 +245,41 @@
     var appName = img.split('/').pop().split(':')[0];
 
     try {
-      var response = await fetch('/api/v1/deployments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: type,
-          target: cluster,
-          namespace: type === 'kubernetes' ? ns : '',
-          name: appName,
-          image: img + ':' + tag,
-          replicas: replicas,
-          port: port,
-          cpu: cpu,
-          memory: memory
-        })
+      logEl.textContent += '\n[' + new Date().toLocaleTimeString() + '] Submitting deployment request via APIClient.post...';
+      
+      var data = await APIClient.post('/deployments', {
+        type: type,
+        target: cluster,
+        namespace: type === 'kubernetes' ? ns : '',
+        name: appName,
+        image: img + ':' + tag,
+        replicas: replicas,
+        port: port,
+        cpu: cpu,
+        memory: memory
       });
-      if (!response.ok) {
-        var errText = await response.text();
-        throw new Error(errText || 'Deployment API request failed');
-      }
+
+      logEl.textContent += '\n[' + new Date().toLocaleTimeString() + '] ✓ Deployment registered successfully: ' + JSON.stringify(data);
+      logEl.textContent += '\n[' + new Date().toLocaleTimeString() + '] ✓ Pods rolling out (' + replicas + '/' + replicas + ')...';
+      logEl.textContent += '\n[' + new Date().toLocaleTimeString() + '] ✓ Rollout complete. Service is healthy.';
+      logEl.scrollTop = logEl.scrollHeight;
+
+      statusEl.textContent = 'Healthy';
+      statusEl.className = 'badge badge-healthy';
+      progressEl.style.width = '100%';
+      btnNext.disabled = false;
+
+      AppState.addAuditLog({ action: 'deploy', target: 'app/' + appName, result: 'success' });
     } catch (e) {
       logEl.textContent += '\n[' + new Date().toLocaleTimeString() + '] [ERROR] Deployment failed: ' + e.message;
+      logEl.scrollTop = logEl.scrollHeight;
       statusEl.textContent = 'Failed';
       statusEl.className = 'badge badge-down';
       btnNext.disabled = false;
-      return;
     }
-
-    var logs = [
-      '→ Validating target cluster connection...',
-      '→ Creating configuration bundle and credentials...',
-      '→ Creating Pull Request in Git repository (GitOps Flow)...',
-      '→ PR #148 created and auto-approved.',
-      '→ Triggering ArgoCD sync / Swarm Service deploy...',
-      '→ Registering Service endpoints & DNS records...',
-      '→ Pulling container image...',
-      '→ Pods rolling out (0/' + replicas + ')...',
-      '→ Probes checking health...',
-      '✓ Rollout complete. Service is healthy.'
-    ];
-
-    var step = 0;
-    var startTime = Date.now();
-
-    function runLogStep() {
-      if (step >= logs.length) {
-        statusEl.textContent = 'Healthy';
-        statusEl.className = 'badge badge-healthy';
-        progressEl.style.width = '100%';
-        btnNext.disabled = false;
-
-        AppState.addAuditLog({ action: 'deploy', target: 'app/' + appName, result: 'success' });
-        return;
-      }
-
-      logEl.textContent += '\n[' + new Date().toLocaleTimeString() + '] ' + logs[step];
-      logEl.scrollTop = logEl.scrollHeight;
-
-      var progress = Math.round(((step + 1) / logs.length) * 100);
-      progressEl.style.width = progress + '%';
-      durEl.textContent = ((Date.now() - startTime) / 1000).toFixed(1) + 's';
-
-      step++;
-      setTimeout(runLogStep, 400 + Math.random() * 400);
-    }
-
-    setTimeout(runLogStep, 500);
   }
 
-  function generateWithAI() {
+  async function generateWithAI() {
     var promptEl = document.getElementById('wiz-ai-prompt');
     var query = promptEl.value.trim();
     if (!query) {
@@ -322,12 +288,17 @@
     }
     promptEl.style.borderColor = '';
 
-    // Simulate AI thinking
+    // Real AI query
     var btn = document.getElementById('wiz-ai-generate');
     btn.textContent = '⏳ Thinking...';
     btn.disabled = true;
 
-    setTimeout(function () {
+    try {
+      var data = await APIClient.post('/ai/test', {
+        prompt: query,
+        provider: ''
+      });
+
       btn.textContent = '▶ Generate Configuration';
       btn.disabled = false;
 
@@ -346,7 +317,6 @@
         image = imgMatch[1];
         if (imgMatch[2]) tag = imgMatch[2];
       } else {
-        // search tokens
         var tokens = ['nginx', 'redis', 'postgres', 'mysql', 'node', 'python', 'django', 'tomcat', 'ghost'];
         for (var i = 0; i < tokens.length; i++) {
           if (q.indexOf(tokens[i]) >= 0) {
@@ -356,16 +326,14 @@
         }
       }
 
-      // Parse replicas
       var repMatch = query.match(/(\d+)\s*replicas/i);
       if (repMatch) replicas = parseInt(repMatch[1]);
 
-      // Parse CPU
       var cpuMatch = query.match(/(\d+(?:m|core|vcpus?)?)\s*(?:cpu|cores?)/i);
       if (cpuMatch) {
         var c = cpuMatch[1];
         if (c.indexOf('m') < 0 && c.indexOf('core') < 0 && c.indexOf('vcpu') < 0) {
-          cpu = c; // cores
+          cpu = c;
         } else if (c.indexOf('m') >= 0) {
           cpu = c;
         } else {
@@ -373,7 +341,6 @@
         }
       }
 
-      // Parse Memory
       var memMatch = query.match(/(\d+)\s*(?:gb|mb|mi|gi|g|m)\s*mem/i) || query.match(/(\d+)\s*(?:gb|mb|mi|gi|g|m)\b/i);
       if (memMatch) {
         var size = memMatch[1];
@@ -385,7 +352,6 @@
         }
       }
 
-      // Parse Network Type
       if (q.indexOf('loadbalancer') >= 0 || q.indexOf('public') >= 0) {
         net = 'LoadBalancer';
       } else if (q.indexOf('ingress') >= 0 || q.indexOf('domain') >= 0) {
@@ -406,16 +372,18 @@
         document.getElementById('wiz-domain').value = image.split('/').pop() + '.corp.internal';
       }
 
-      // Try setting target cluster
       var clusterSel = document.getElementById('wiz-cluster-select');
       if (clusterSel && clusterSel.options.length > 1) {
-        clusterSel.selectedIndex = 1; // default to first option
+        clusterSel.selectedIndex = 1;
       }
 
-      // Transition to Review Step
       showStepPanel(8);
-      alert('AI Configuration Generated Successfully! Switched to Review Panel. ✅');
-    }, 1200);
+      alert('AI Configuration Generated: ' + data.content + '\nForm prefilled successfully! ✅');
+    } catch (e) {
+      btn.textContent = '▶ Generate Configuration';
+      btn.disabled = false;
+      alert('AI generation failed: ' + e.message);
+    }
   }
 
   

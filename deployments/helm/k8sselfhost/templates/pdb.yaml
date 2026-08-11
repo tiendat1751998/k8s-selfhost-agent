@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "k8sselfhost.labels" . | nindent 4 }}
 spec:
-  minAvailable: 1
+  maxUnavailable: 1
   selector:
     matchLabels:
       {{- include "k8sselfhost.selectorLabels" . | nindent 6 }}

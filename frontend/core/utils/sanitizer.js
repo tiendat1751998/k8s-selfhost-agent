@@ -43,10 +43,21 @@
     return text.replace(SECRET_PATTERN, '[REDACTED]');
   }
 
+  /**
+   * Escape regular expression special characters.
+   * @param {string} string - Raw string.
+   * @returns {string} Escaped string.
+   */
+  function escapeRegExp(string) {
+    if (typeof string !== 'string') return '';
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   global.Security = {
     escapeHTML: escapeHTML,
     sanitizeObject: sanitizeObject,
-    redactSecrets: redactSecrets
+    redactSecrets: redactSecrets,
+    escapeRegExp: escapeRegExp
   };
 
 })(window);

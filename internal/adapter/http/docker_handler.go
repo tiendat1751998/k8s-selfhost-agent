@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -60,14 +59,26 @@ func (h *DockerHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items})
 }
 
+type scaleServiceRequest struct {
+	Replicas int `json:"replicas"`
+}
+
+func (r *scaleServiceRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if r.Replicas < 0 {
+		ve.Add("replicas", "replicas must be greater than or equal to 0")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // ScaleService handles POST /api/v1/docker/services/{id}/scale
 func (h *DockerHandler) ScaleService(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var req struct {
-		Replicas int `json:"replicas"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[scaleServiceRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -90,14 +101,28 @@ func (h *DockerHandler) DrainNode(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "drained"})
 }
 
+type toggleContainerRequest struct {
+	Action string `json:"action"` // "start" or "stop"
+}
+
+func (r *toggleContainerRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	switch r.Action {
+	case "start", "stop":
+	default:
+		ve.Add("action", "action must be start or stop")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // ToggleContainer handles POST /api/v1/docker/containers/{id}/toggle
 func (h *DockerHandler) ToggleContainer(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var req struct {
-		Action string `json:"action"` // "start" or "stop"
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[toggleContainerRequest](w, r)
+	if !ok {
 		return
 	}
 

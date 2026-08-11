@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -39,34 +39,74 @@ func (h *AutomationHandler) ListRules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": rules})
 }
 
+type createRuleRequest struct {
+	automation.Rule
+}
+
+func (r *createRuleRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "name is required")
+	}
+	if strings.TrimSpace(string(r.TriggerType)) == "" {
+		ve.Add("trigger_type", "trigger_type is required")
+	}
+	if strings.TrimSpace(string(r.ActionType)) == "" {
+		ve.Add("action_type", "action_type is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // CreateRule handles POST /api/v1/automation/rules
 func (h *AutomationHandler) CreateRule(w http.ResponseWriter, r *http.Request) {
-	var rule automation.Rule
-	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[createRuleRequest](w, r)
+	if !ok {
 		return
 	}
-	if err := h.repo.CreateRule(r.Context(), &rule); err != nil {
+	if err := h.repo.CreateRule(r.Context(), &req.Rule); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create rule", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, rule)
+	writeJSON(w, http.StatusCreated, req.Rule)
+}
+
+type updateRuleRequest struct {
+	automation.Rule
+}
+
+func (r *updateRuleRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "name is required")
+	}
+	if strings.TrimSpace(string(r.TriggerType)) == "" {
+		ve.Add("trigger_type", "trigger_type is required")
+	}
+	if strings.TrimSpace(string(r.ActionType)) == "" {
+		ve.Add("action_type", "action_type is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
 }
 
 // UpdateRule handles PUT /api/v1/automation/rules/{id}
 func (h *AutomationHandler) UpdateRule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var rule automation.Rule
-	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[updateRuleRequest](w, r)
+	if !ok {
 		return
 	}
-	rule.ID = id
-	if err := h.repo.UpdateRule(r.Context(), &rule); err != nil {
+	req.ID = id
+	if err := h.repo.UpdateRule(r.Context(), &req.Rule); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update rule", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, rule)
+	writeJSON(w, http.StatusOK, req.Rule)
 }
 
 // DeleteRule handles DELETE /api/v1/automation/rules/{id}
@@ -79,21 +119,22 @@ func (h *AutomationHandler) DeleteRule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+type toggleRuleRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
 // ToggleRule handles PUT /api/v1/automation/rules/{id}/toggle
 func (h *AutomationHandler) ToggleRule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var body struct {
-		Enabled bool `json:"enabled"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[toggleRuleRequest](w, r)
+	if !ok {
 		return
 	}
-	if err := h.repo.ToggleRule(r.Context(), id, body.Enabled); err != nil {
+	if err := h.repo.ToggleRule(r.Context(), id, req.Enabled); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to toggle rule", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok", "enabled": body.Enabled})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok", "enabled": req.Enabled})
 }
 
 // ListExecutions handles GET /api/v1/automation/executions

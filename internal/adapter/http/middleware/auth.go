@@ -2,10 +2,14 @@ package middleware
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -16,6 +20,63 @@ const (
 	UserRoleKey contextKey = "user_role"
 	TenantIDKey contextKey = "tenant_id"
 )
+
+var JWTSecret = []byte(getEnv("JWT_SECRET", "k8s-selfhost-secret-key-change-in-prod"))
+
+func getEnv(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
+}
+
+// GenerateJWT creates a secure HMAC-SHA256 JWT.
+func GenerateJWT(userID, role, tenantID string) (string, error) {
+	header := `{"alg":"HS256","typ":"JWT"}`
+	payload := fmt.Sprintf(`{"sub":%q,"role":%q,"tenant":%q}`, userID, role, tenantID)
+
+	encHeader := base64.RawURLEncoding.EncodeToString([]byte(header))
+	encPayload := base64.RawURLEncoding.EncodeToString([]byte(payload))
+	signingString := encHeader + "." + encPayload
+
+	h := hmac.New(sha256.New, JWTSecret)
+	if _, err := h.Write([]byte(signingString)); err != nil {
+		return "", err
+	}
+	signature := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+	return signingString + "." + signature, nil
+}
+
+// ValidateJWT verifies signature and returns the payload JSON string.
+func ValidateJWT(token string) (string, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return "", errors.New("invalid token format")
+	}
+
+	signingString := parts[0] + "." + parts[1]
+	expectedSigBytes, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return "", errors.New("failed to decode signature")
+	}
+
+	h := hmac.New(sha256.New, JWTSecret)
+	if _, err := h.Write([]byte(signingString)); err != nil {
+		return "", err
+	}
+	actualSigBytes := h.Sum(nil)
+
+	if !hmac.Equal(expectedSigBytes, actualSigBytes) {
+		return "", errors.New("invalid signature")
+	}
+
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", errors.New("failed to decode payload")
+	}
+
+	return string(payloadBytes), nil
+}
 
 // UserIDFromContext retrieves the user ID from context.
 func UserIDFromContext(ctx context.Context) string {
@@ -67,31 +128,24 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 		userRole := "guest"
 		tenantID := "default-tenant"
 
-		// Decode base64 payload if it looks like a JWT
-		tokenParts := strings.Split(token, ".")
-		if len(tokenParts) == 3 {
-			payloadSegment := tokenParts[1]
-			if l := len(payloadSegment) % 4; l > 0 {
-				payloadSegment += strings.Repeat("=", 4-l)
-			}
-			
-			var payloadBytes []byte
-			var err error
-			payloadBytes, err = base64.URLEncoding.DecodeString(payloadSegment)
+		var claims struct {
+			Sub    string `json:"sub"`
+			Role   string `json:"role"`
+			Tenant string `json:"tenant"`
+		}
+
+		if strings.HasPrefix(token, "k8s-enterprise-demo-") {
+			userID = "admin-user-id"
+			userRole = "platform_admin"
+			tenantID = "default-tenant"
+		} else {
+			payloadStr, err := ValidateJWT(token)
 			if err != nil {
-				payloadBytes, err = base64.StdEncoding.DecodeString(payloadSegment)
-			}
-			if err != nil {
-				http.Error(w, "invalid token encoding", http.StatusUnauthorized)
+				http.Error(w, "invalid token: signature verification failed", http.StatusUnauthorized)
 				return
 			}
-			
-			var claims struct {
-				Sub    string `json:"sub"`
-				Role   string `json:"role"`
-				Tenant string `json:"tenant"`
-			}
-			if err := json.Unmarshal(payloadBytes, &claims); err != nil {
+
+			if err := json.Unmarshal([]byte(payloadStr), &claims); err != nil {
 				http.Error(w, "invalid token claims", http.StatusUnauthorized)
 				return
 			}
@@ -105,13 +159,6 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			if claims.Tenant != "" {
 				tenantID = claims.Tenant
 			}
-		} else if strings.HasPrefix(token, "k8s-enterprise-demo-") {
-			userID = "admin-user-id"
-			userRole = "platform_admin"
-			tenantID = "default-tenant"
-		} else {
-			http.Error(w, "invalid token format", http.StatusUnauthorized)
-			return
 		}
 
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)

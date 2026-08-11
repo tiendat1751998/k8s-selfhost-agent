@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -63,11 +63,27 @@ type createTaskRequest struct {
 	Dependencies []string `json:"dependencies"`
 }
 
+func (r *createTaskRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Title) == "" {
+		ve.Add("title", "title is required")
+	}
+	if strings.TrimSpace(r.Phase) == "" {
+		ve.Add("phase", "phase is required")
+	}
+	if strings.TrimSpace(r.Module) == "" {
+		ve.Add("module", "module is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // CreateTask handles POST /api/v1/agents/tasks
 func (h *AgentHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
-	var req createTaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[createTaskRequest](w, r)
+	if !ok {
 		return
 	}
 

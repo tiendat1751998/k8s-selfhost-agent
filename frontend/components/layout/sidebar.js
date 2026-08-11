@@ -21,29 +21,16 @@ class EnterpriseSidebar {
         title: 'Infrastructure',
         items: [
           { id: 'kubernetes', label: 'Clusters', icon: '☸️' },
-          { id: 'docker-swarm', label: 'Docker & Swarm', icon: '🐳' },
-          { id: 'topology', label: 'Topology Map', icon: '🗺️' },
-          { id: 'nodes', label: 'Nodes', icon: '🖥️' },
-          { id: 'pods', label: 'Pods', icon: '📦' }
-        ]
-      },
-      {
-        title: 'Deployments',
-        items: [
-          { id: 'deployment-center', label: 'Applications', icon: '🚀' },
-          { id: 'promotion', label: 'Release Promotion', icon: '🛣️' },
-          { id: 'rollouts', label: 'Rollouts', icon: '🔄' },
-          { id: 'scaling', label: 'Scaling', icon: '📈' }
+          { id: 'explorer', label: 'Resource Explorer', icon: '🧭' }
         ]
       },
       {
         title: 'Operations',
         items: [
-          { id: 'action-center', label: 'Action Center', icon: '🎯' },
+          { id: 'deployment-center', label: 'Applications', icon: '🚀' },
           { id: 'incidents', label: 'Incidents', icon: '🚨' },
-          { id: 'capacity', label: 'Capacity Planning', icon: '📈' },
           { id: 'observability', label: 'Observability', icon: '📊' },
-          { id: 'workflow-automation', label: 'Automation', icon: '⚙️' },
+          { id: 'agents', label: 'Agent Pipeline', icon: '🤖' },
           { id: 'connection-health', label: 'Health', icon: '💓' }
         ]
       },
@@ -51,44 +38,13 @@ class EnterpriseSidebar {
         title: 'GitOps',
         items: [
           { id: 'gitops', label: 'Repositories', icon: '🔀' },
-          { id: 'drift', label: 'Drift Detection', icon: '⚖️' },
-          { id: 'cicd', label: 'CI/CD Integrations', icon: '🔄' }
+          { id: 'drift', label: 'Drift Detection', icon: '⚖️' }
         ]
       },
       {
-        title: 'AI Ops',
+        title: null, // Bottom
         items: [
-          { id: 'ai-ops', label: 'RCA Engine', icon: '🧠' },
-          { id: 'correlation', label: 'Event Correlation', icon: '⚡' },
-          { id: 'ai-providers', label: 'AI Providers', icon: '🤖' },
-          { id: 'agents', label: 'Agent Pipeline', icon: '🤖' }
-        ]
-      },
-      {
-        title: 'Search',
-        items: [
-          { id: 'enterprise-search', label: 'Global Search', icon: '🔍' },
-          { id: 'explorer', label: 'Resource Explorer', icon: '🧭' }
-        ]
-      },
-      {
-        title: 'Platform',
-        items: [
-          { id: 'enterprise', label: 'Enterprise Control', icon: '🏢' },
-          { id: 'reporting', label: 'Reporting Center', icon: '📊' },
-          { id: 'cost-management', label: 'Cost Management', icon: '💰' },
-          { id: 'compliance', label: 'Compliance', icon: '🛡️' },
-          { id: 'change', label: 'Change Management', icon: '📝' },
-          { id: 'notifications', label: 'Notifications', icon: '🔔' },
-          { id: 'runbooks', label: 'Runbooks', icon: '📓' },
-          { id: 'timeline', label: 'Timeline', icon: '📅' },
-          { id: 'tagging', label: 'Tagging System', icon: '🏷️' },
-          { id: 'health', label: 'Platform Health', icon: '💓' },
-          { id: 'audit', label: 'Audit Mode', icon: '🕵️' },
-          { id: 'platform-engineering', label: 'Platform Eng.', icon: '🏗️' },
-          { id: 'git-providers', label: 'Git Providers', icon: '🔀' },
-          { id: 'settings', label: 'Settings', icon: '⚙️' },
-          { id: 'audit-logs', label: 'Audit Logs', icon: '📋' }
+          { id: 'settings', label: 'Settings', icon: '⚙️' }
         ]
       }
     ];

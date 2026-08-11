@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -36,16 +36,33 @@ func (h *CapacityHandler) ListForecasts(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items})
 }
 
+type recordForecastRequest struct {
+	capacity.Forecast
+}
+
+func (r *recordForecastRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Cluster) == "" {
+		ve.Add("cluster", "cluster is required")
+	}
+	if strings.TrimSpace(string(r.ResourceType)) == "" {
+		ve.Add("resource_type", "resource_type is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // RecordForecast handles POST /api/v1/capacity
 func (h *CapacityHandler) RecordForecast(w http.ResponseWriter, r *http.Request) {
-	var f capacity.Forecast
-	if err := json.NewDecoder(r.Body).Decode(&f); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[recordForecastRequest](w, r)
+	if !ok {
 		return
 	}
-	if err := h.repo.Record(r.Context(), &f); err != nil {
+	if err := h.repo.Record(r.Context(), &req.Forecast); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to record capacity forecast", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, f)
+	writeJSON(w, http.StatusCreated, &req.Forecast)
 }

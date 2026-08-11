@@ -6,20 +6,24 @@ import (
 	"encoding/json"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/gitops"
-	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // PRRepo implements gitops.Repository using PostgreSQL.
 type PRRepo struct {
-	pool *pgxpool.Pool
+	pool DBTX
 }
 
 // NewPRRepo creates a new PostgreSQL-backed GitOps pull request repository.
-func NewPRRepo(pool *pgxpool.Pool) *PRRepo {
+func NewPRRepo(pool DBTX) *PRRepo {
 	return &PRRepo{pool: pool}
+}
+
+func (r *PRRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.pool)
 }
 
 // Create persists a new pull request record.
@@ -29,12 +33,17 @@ func (r *PRRepo) Create(ctx context.Context, pr *gitops.PullRequest) error {
 		return errors.Wrap(err, "marshaling files changed")
 	}
 
+	tenantID := middleware.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "org-google"
+	}
+
 	query := `
-		INSERT INTO gitops_prs (incident_id, provider, repo_url, branch, base_branch, title, description, pr_url, pr_number, status, files_changed, created_at, updated_at, merged_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		INSERT INTO gitops_prs (incident_id, provider, repo_url, branch, base_branch, title, description, pr_url, pr_number, status, files_changed, tenant_id, created_at, updated_at, merged_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id`
 
-	err = r.pool.QueryRow(ctx, query,
+	err = r.getDB(ctx).QueryRow(ctx, query,
 		pr.IncidentID,
 		string(pr.Provider),
 		pr.RepoURL,
@@ -46,6 +55,7 @@ func (r *PRRepo) Create(ctx context.Context, pr *gitops.PullRequest) error {
 		pr.PRNumber,
 		string(pr.Status),
 		filesJSON,
+		tenantID,
 		pr.CreatedAt,
 		pr.UpdatedAt,
 		pr.MergedAt,
@@ -65,12 +75,14 @@ func (r *PRRepo) GetByID(ctx context.Context, id string) (*gitops.PullRequest, e
 		FROM gitops_prs
 		WHERE id = $1`
 
+	query, args := BuildTenantQuery(ctx, query, id)
+
 	var pr gitops.PullRequest
 	var filesJSON []byte
 	var provider string
 	var status string
 
-	err := r.pool.QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&pr.ID,
 		&pr.IncidentID,
 		&provider,
@@ -111,12 +123,14 @@ func (r *PRRepo) GetByIncidentID(ctx context.Context, incidentID string) (*gitop
 		FROM gitops_prs
 		WHERE incident_id = $1`
 
+	query, args := BuildTenantQuery(ctx, query, incidentID)
+
 	var pr gitops.PullRequest
 	var filesJSON []byte
 	var provider string
 	var status string
 
-	err := r.pool.QueryRow(ctx, query, incidentID).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&pr.ID,
 		&pr.IncidentID,
 		&provider,
@@ -162,7 +176,7 @@ func (r *PRRepo) Update(ctx context.Context, pr *gitops.PullRequest) error {
 		SET status = $1, pr_url = $2, pr_number = $3, files_changed = $4, updated_at = $5, merged_at = $6
 		WHERE id = $7`
 
-	_, err = r.pool.Exec(ctx, query,
+	_, err = r.getDB(ctx).Exec(ctx, query,
 		string(pr.Status),
 		pr.PRURL,
 		pr.PRNumber,
@@ -187,10 +201,12 @@ func (r *PRRepo) List(ctx context.Context, status *gitops.PRStatus, limit, offse
 
 	if status != nil {
 		countQuery = `SELECT COUNT(*) FROM gitops_prs WHERE status = $1`
-		err = r.pool.QueryRow(ctx, countQuery, string(*status)).Scan(&total)
+		countQuery, countArgs := BuildTenantQuery(ctx, countQuery, string(*status))
+		err = r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	} else {
 		countQuery = `SELECT COUNT(*) FROM gitops_prs`
-		err = r.pool.QueryRow(ctx, countQuery).Scan(&total)
+		countQuery, countArgs := BuildTenantQuery(ctx, countQuery)
+		err = r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	}
 
 	if err != nil {
@@ -205,14 +221,16 @@ func (r *PRRepo) List(ctx context.Context, status *gitops.PRStatus, limit, offse
 			WHERE status = $1
 			ORDER BY created_at DESC
 			LIMIT $2 OFFSET $3`
-		rows, err = r.pool.Query(ctx, query, string(*status), limit, offset)
+		query, args := BuildTenantQuery(ctx, query, string(*status), limit, offset)
+		rows, err = r.getDB(ctx).Query(ctx, query, args...)
 	} else {
 		query := `
 			SELECT id, incident_id, provider, repo_url, branch, base_branch, title, description, pr_url, pr_number, status, files_changed, created_at, updated_at, merged_at
 			FROM gitops_prs
 			ORDER BY created_at DESC
 			LIMIT $1 OFFSET $2`
-		rows, err = r.pool.Query(ctx, query, limit, offset)
+		query, args := BuildTenantQuery(ctx, query, limit, offset)
+		rows, err = r.getDB(ctx).Query(ctx, query, args...)
 	}
 
 	if err != nil {
