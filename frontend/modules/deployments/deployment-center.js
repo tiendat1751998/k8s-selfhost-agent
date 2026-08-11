@@ -129,7 +129,7 @@
     var btnAiGen = document.getElementById('wiz-ai-generate');
     if (btnAiGen) btnAiGen.addEventListener('click', function () { if (global.DeploymentWizard) global.DeploymentWizard.generateWithAI(); });
 
-    // Initial mock catalog apps
+    // Initial catalog apps
     if (global.DeploymentCatalog) {
       global.DeploymentCatalog.init();
       global.DeploymentCatalog.loadInitialApps();

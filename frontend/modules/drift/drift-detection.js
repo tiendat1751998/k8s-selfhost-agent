@@ -24,15 +24,15 @@ const DriftDetection = {
 
         <div class="drift-summary">
           <div class="drift-stat warning">
-            <span class="stat-value">3</span>
+            <span class="stat-value">-</span>
             <span class="stat-label">Resources Drifted</span>
           </div>
           <div class="drift-stat success">
-            <span class="stat-value">1,245</span>
+            <span class="stat-value">-</span>
             <span class="stat-label">In Sync</span>
           </div>
           <div class="drift-stat">
-            <span class="stat-value">2m ago</span>
+            <span class="stat-value">-</span>
             <span class="stat-label">Last Scan</span>
           </div>
         </div>
@@ -129,6 +129,7 @@ const DriftDetection = {
     const statValues = this.container.querySelectorAll('.stat-value');
     if (statValues[0]) statValues[0].textContent = driftedCount;
     if (statValues[1]) statValues[1].textContent = inSyncCount.toLocaleString();
+    if (statValues[2]) statValues[2].textContent = 'just now';
   },
 
   renderTable(data) {
