@@ -10,7 +10,10 @@ import (
 )
 
 func main() {
-	dsn := "postgres://myuser:mysecretpassword@10.10.10.133:5432/mydatabase?sslmode=disable"
+	dsn := os.Getenv("K8S_DATABASE_URL")
+	if dsn == "" {
+		panic("K8S_DATABASE_URL is not set")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

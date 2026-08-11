@@ -6,4 +6,5 @@ import "context"
 type Repository interface {
 	GetHistory(ctx context.Context) ([]BackupLog, error)
 	TriggerRecovery(ctx context.Context, target string) (*BackupLog, error)
+	Update(ctx context.Context, log *BackupLog) error
 }

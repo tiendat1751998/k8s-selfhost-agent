@@ -31,11 +31,8 @@
     AppState.on('navigate', async function (s) {
       if (s === 'deployment-center') {
         try {
-          var res = await fetch('/api/v1/fleet');
-          if (res.ok) {
-            var data = await res.json();
+          var data = await APIClient.get('/fleet');
             if (data && data.data) AppState.setKubernetes(data.data);
-          }
         } catch (e) {
           console.error('Failed to load fleet clusters:', e);
         }
@@ -140,9 +137,7 @@
       if (body) {
         body.innerHTML = '<tr><td colspan="7"><div class="skeleton" style="height:120px;border-radius:var(--rounded-lg);"></div></td></tr>';
       }
-      setTimeout(function () {
-        global.DeploymentCatalog.renderCatalog();
-      }, 400);
+      global.DeploymentCatalog.renderCatalog();
     }
   }
 

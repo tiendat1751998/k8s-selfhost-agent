@@ -2,7 +2,10 @@ package rca
 
 import (
 	"testing"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/stringutil"
 )
+
 
 func TestRenderPrompt_Basic(t *testing.T) {
 	data := PromptData{
@@ -149,14 +152,15 @@ func TestMapRiskLevel(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
-	if truncate("short", 10) != "short" {
+	if stringutil.Truncate("short", 10) != "short" {
 		t.Error("short string should not be truncated")
 	}
-	result := truncate("this is a long string", 10)
+	result := stringutil.Truncate("this is a long string", 10)
 	if result != "this is a ..." {
 		t.Errorf("expected truncated string, got '%s'", result)
 	}
 }
+
 
 func TestParseRCAResponse_Valid(t *testing.T) {
 	input := `{

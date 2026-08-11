@@ -78,8 +78,10 @@ config:
   postgres:
     host: postgresql
     port: 5432
-    user: postgres
-    password: postgres
+    # Use --set config.postgres.user or external secrets
+    user: ""
+    # Use --set config.postgres.password or external secrets
+    password: ""
     dbname: k8sselfhost
     sslmode: disable
     maxConns: 25

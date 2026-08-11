@@ -7,18 +7,21 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/notification"
 )
 
 type notificationRepo struct {
-	db *pgxpool.Pool
+	db DBTX
 }
 
 // NewNotificationRepo creates a new Postgres-backed Notification repository.
-func NewNotificationRepo(db *pgxpool.Pool) notification.Repository {
+func NewNotificationRepo(db DBTX) notification.Repository {
 	return &notificationRepo{db: db}
+}
+
+func (r *notificationRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.db)
 }
 
 func (r *notificationRepo) ListChannels(ctx context.Context) ([]notification.Channel, error) {
@@ -27,7 +30,7 @@ func (r *notificationRepo) ListChannels(ctx context.Context) ([]notification.Cha
 		FROM notification_channels 
 		ORDER BY name ASC
 	`
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying notification channels: %w", err)
 	}
@@ -84,7 +87,7 @@ func (r *notificationRepo) CreateChannel(ctx context.Context, ch *notification.C
 		webhookURL = &ch.WebhookURL
 	}
 
-	err = r.db.QueryRow(ctx, query,
+	err = r.getDB(ctx).QueryRow(ctx, query,
 		string(ch.Type), ch.Name, webhookURL, configBytes, ch.Enabled, ch.CreatedAt, ch.UpdatedAt,
 	).Scan(&ch.ID)
 	
@@ -113,7 +116,7 @@ func (r *notificationRepo) UpdateChannel(ctx context.Context, ch *notification.C
 		webhookURL = &ch.WebhookURL
 	}
 
-	cmd, err := r.db.Exec(ctx, query,
+	cmd, err := r.getDB(ctx).Exec(ctx, query,
 		string(ch.Type), ch.Name, webhookURL, configBytes, ch.Enabled, ch.UpdatedAt, ch.ID,
 	)
 	if err != nil {
@@ -127,7 +130,7 @@ func (r *notificationRepo) UpdateChannel(ctx context.Context, ch *notification.C
 
 func (r *notificationRepo) DeleteChannel(ctx context.Context, id string) error {
 	query := `DELETE FROM notification_channels WHERE id = $1`
-	cmd, err := r.db.Exec(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("deleting notification channel: %w", err)
 	}
@@ -149,12 +152,12 @@ func (r *notificationRepo) ListNotifications(ctx context.Context, limit, offset 
 	countQuery := `SELECT COUNT(*) FROM notifications WHERE is_read = false`
 
 	var total int
-	err := r.db.QueryRow(ctx, countQuery).Scan(&total)
+	err := r.getDB(ctx).QueryRow(ctx, countQuery).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting notifications: %w", err)
 	}
 
-	rows, err := r.db.Query(ctx, query, limit, offset)
+	rows, err := r.getDB(ctx).Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying notifications: %w", err)
 	}
@@ -174,12 +177,12 @@ func (r *notificationRepo) ListHistory(ctx context.Context, limit, offset int) (
 	countQuery := `SELECT COUNT(*) FROM notifications`
 
 	var total int
-	err := r.db.QueryRow(ctx, countQuery).Scan(&total)
+	err := r.getDB(ctx).QueryRow(ctx, countQuery).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting notifications history: %w", err)
 	}
 
-	rows, err := r.db.Query(ctx, query, limit, offset)
+	rows, err := r.getDB(ctx).Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying notifications history: %w", err)
 	}
@@ -216,7 +219,7 @@ func (r *notificationRepo) scanNotifications(rows pgx.Rows) []notification.Notif
 
 func (r *notificationRepo) MarkRead(ctx context.Context, id string) error {
 	query := `UPDATE notifications SET is_read = true WHERE id = $1`
-	cmd, err := r.db.Exec(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("marking notification read: %w", err)
 	}
@@ -228,7 +231,7 @@ func (r *notificationRepo) MarkRead(ctx context.Context, id string) error {
 
 func (r *notificationRepo) MarkAllRead(ctx context.Context) error {
 	query := `UPDATE notifications SET is_read = true WHERE is_read = false`
-	_, err := r.db.Exec(ctx, query)
+	_, err := r.getDB(ctx).Exec(ctx, query)
 	if err != nil {
 		return fmt.Errorf("marking all notifications read: %w", err)
 	}
@@ -251,7 +254,7 @@ func (r *notificationRepo) CreateNotification(ctx context.Context, n *notificati
 		errDetail = &n.Error
 	}
 
-	err := r.db.QueryRow(ctx, query,
+	err := r.getDB(ctx).QueryRow(ctx, query,
 		channelID, n.Title, string(n.Severity), n.Message, string(n.Status), errDetail, n.Read, n.CreatedAt,
 	).Scan(&n.ID)
 	

@@ -4,8 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
+
 
 	"github.com/google/uuid"
 
@@ -25,8 +27,9 @@ func (a *baseAgent) Type() agent.AgentType {
 
 func (a *baseAgent) Execute(ctx context.Context, task *agent.Task, input string) (string, error) {
 	if a.llmClient == nil {
-		return "Mock agent execution: LLM client is nil", nil
+		return "", fmt.Errorf("llm client is not initialized for agent %s", a.agentType)
 	}
+
 
 	prompt := fmt.Sprintf("Task: %s\nDescription: %s\nPhase: %s\nModule: %s\nFeature: %s\n\nInput Context:\n%s",
 		task.Title, task.Description, task.Phase, task.Module, task.Feature, input)
@@ -55,16 +58,22 @@ func (a *qaAgent) Execute(ctx context.Context, task *agent.Task, input string) (
 		return "QA SUCCESS: Bypassed actual compiler and test runs during unit tests to prevent recursion.", nil
 	}
 
+		projectDir := os.Getenv("PROJECT_DIR")
+	if projectDir == "" {
+		projectDir = "."
+	}
+
 	// Execute real compiler and test check
 	cmdBuild := exec.CommandContext(ctx, "go", "build", "./...")
-	cmdBuild.Dir = "d:\\project\\k8sseflhost"
+	cmdBuild.Dir = projectDir
 	buildOut, err := cmdBuild.CombinedOutput()
 	if err != nil {
 		return fmt.Sprintf("QA FAILURE: Compilation failed:\n%s", string(buildOut)), nil
 	}
 
 	cmdTest := exec.CommandContext(ctx, "go", "test", "./...")
-	cmdTest.Dir = "d:\\project\\k8sseflhost"
+	cmdTest.Dir = projectDir
+
 	testOut, err := cmdTest.CombinedOutput()
 	if err != nil {
 		return fmt.Sprintf("QA FAILURE: Tests failed:\n%s", string(testOut)), nil

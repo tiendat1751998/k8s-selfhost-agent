@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // Incident is the aggregate root for Kubernetes incidents.

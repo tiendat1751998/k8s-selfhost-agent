@@ -329,16 +329,6 @@
     }
   }
 
-  function highlightText(text, term) {
-    if (!term) return esc(text);
-    var regex = new RegExp('(' + escapeRegExp(term) + ')', 'gi');
-    return esc(text).replace(regex, '<span style="background:rgba(252,213,53,0.25);color:var(--color-primary);font-weight:700;border-radius:2px;padding:0 2px;">$1</span>');
-  }
-
-  function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
   function debounce(func, wait) {
     var timeout;
     return function () {
@@ -440,6 +430,6 @@
     },
     switchSearchTab: switchSearchTab,
     executeMainSearch: executeMainSearch,
-    highlightText: highlightText
+    highlightText: UIComponents.highlightText
   };
 })(window);

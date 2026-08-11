@@ -4,7 +4,7 @@ package report
 import (
 	"time"
 
-	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // Report represents the result of a Root Cause Analysis for an incident.

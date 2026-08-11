@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -23,6 +23,7 @@ func NewDeploymentHandler(usecase *deploymentUsecase.Usecase) *DeploymentHandler
 // RegisterRoutes registers deployment routes.
 func (h *DeploymentHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.ListDeployments)
+	r.Get("/templates", h.ListTemplates)
 	r.Post("/", h.CreateDeployment)
 	r.Post("/scale", h.ScaleDeployment)
 	r.Post("/restart", h.RestartDeployment)
@@ -39,17 +40,35 @@ func (h *DeploymentHandler) ListDeployments(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": apps})
 }
 
+type scaleDeploymentRequest struct {
+	Type      string `json:"type"`
+	Cluster   string `json:"cluster"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Replicas  int    `json:"replicas"`
+}
+
+func (r *scaleDeploymentRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "deployment name is required")
+	}
+	if strings.TrimSpace(r.Namespace) == "" {
+		ve.Add("namespace", "namespace is required")
+	}
+	if r.Replicas < 0 {
+		ve.Add("replicas", "replicas must be greater than or equal to 0")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // ScaleDeployment handles POST /api/v1/deployments/scale
 func (h *DeploymentHandler) ScaleDeployment(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Type      string `json:"type"`
-		Cluster   string `json:"cluster"`
-		Namespace string `json:"namespace"`
-		Name      string `json:"name"`
-		Replicas  int    `json:"replicas"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[scaleDeploymentRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -61,16 +80,31 @@ func (h *DeploymentHandler) ScaleDeployment(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]string{"status": "scaled"})
 }
 
+type restartDeploymentRequest struct {
+	Type      string `json:"type"`
+	Cluster   string `json:"cluster"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
+func (r *restartDeploymentRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "deployment name is required")
+	}
+	if strings.TrimSpace(r.Namespace) == "" {
+		ve.Add("namespace", "namespace is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // RestartDeployment handles POST /api/v1/deployments/restart
 func (h *DeploymentHandler) RestartDeployment(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Type      string `json:"type"`
-		Cluster   string `json:"cluster"`
-		Namespace string `json:"namespace"`
-		Name      string `json:"name"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[restartDeploymentRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -82,16 +116,31 @@ func (h *DeploymentHandler) RestartDeployment(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]string{"status": "restarted"})
 }
 
+type deleteDeploymentRequest struct {
+	Type      string `json:"type"`
+	Cluster   string `json:"cluster"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
+func (r *deleteDeploymentRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "deployment name is required")
+	}
+	if strings.TrimSpace(r.Namespace) == "" {
+		ve.Add("namespace", "namespace is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // DeleteDeployment handles POST /api/v1/deployments/delete
 func (h *DeploymentHandler) DeleteDeployment(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Type      string `json:"type"`
-		Cluster   string `json:"cluster"`
-		Namespace string `json:"namespace"`
-		Name      string `json:"name"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[deleteDeploymentRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -103,19 +152,52 @@ func (h *DeploymentHandler) DeleteDeployment(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+// ListTemplates handles GET /api/v1/deployments/templates
+func (h *DeploymentHandler) ListTemplates(w http.ResponseWriter, r *http.Request) {
+	templates := []map[string]interface{}{
+		{"name": "Nginx Web Server", "category": "web", "version": "v1.25.1", "desc": "High performance HTTP and reverse proxy server.", "ports": 80, "cpu": "100m", "mem": "128Mi"},
+		{"name": "Redis Cache Store", "category": "data", "version": "v7.2.0", "desc": "In-memory key-value data structure store.", "ports": 6379, "cpu": "200m", "mem": "256Mi"},
+		{"name": "Postgres Database", "category": "data", "version": "v16.1", "desc": "Powerful, open source object-relational database system.", "ports": 5432, "cpu": "500m", "mem": "512Mi"},
+		{"name": "Apache Kafka Broker", "category": "data", "version": "v3.6.0", "desc": "Distributed event streaming platform.", "ports": 9092, "cpu": "1000m", "mem": "2048Mi"},
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": templates})
+}
+
+type createDeploymentRequest struct {
+	deployment.Application
+}
+
+func (r *createDeploymentRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "name is required")
+	}
+	if strings.TrimSpace(r.Namespace) == "" {
+		ve.Add("namespace", "namespace is required")
+	}
+	if strings.TrimSpace(r.Image) == "" {
+		ve.Add("image", "image is required")
+	}
+	if r.Replicas < 0 {
+		ve.Add("replicas", "replicas must be greater than or equal to 0")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // CreateDeployment handles POST /api/v1/deployments
 func (h *DeploymentHandler) CreateDeployment(w http.ResponseWriter, r *http.Request) {
-	var app deployment.Application
-	if err := json.NewDecoder(r.Body).Decode(&app); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[createDeploymentRequest](w, r)
+	if !ok {
 		return
 	}
 
-	err := h.usecase.CreateDeployment(r.Context(), app)
+	err := h.usecase.CreateDeployment(r.Context(), req.Application)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create deployment", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"status": "created", "name": app.Name})
+	writeJSON(w, http.StatusCreated, map[string]string{"status": "created", "name": req.Name})
 }
-

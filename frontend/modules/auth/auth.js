@@ -1,24 +1,5 @@
 // auth.js - Handles JWT authentication and fetch interception
 (function() {
-    // 1. Intercept Global Fetch to append Authorization header
-    const nativeFetch = window.fetch;
-    window.fetch = function(input, init) {
-        if (typeof input === 'string' && input.startsWith('/api/v1')) {
-            const token = localStorage.getItem('k8s_token');
-            if (token) {
-                init = init || {};
-                init.headers = init.headers || {};
-                init.headers['Authorization'] = 'Bearer ' + token;
-            }
-        }
-        return nativeFetch.call(this, input, init).then(response => {
-            if (response.status === 401) {
-                showLoginModal();
-            }
-            return response;
-        });
-    };
-
     // 2. Setup Login UI logic
     function showLoginModal() {
         const modal = document.getElementById('login-modal');
@@ -46,19 +27,7 @@
         let errEl = form.querySelector('.login-error');
         if (errEl) errEl.remove();
 
-        fetch('/api/v1/auth/login', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email, password })
-        })
-        .then(res => {
-            if (!res.ok) {
-                throw new Error('Invalid email or password');
-            }
-            return res.json();
-        })
+        APIClient.post('/auth/login', { email, password })
         .then(data => {
             if (data && data.token) {
                 localStorage.setItem('k8s_token', data.token);
@@ -94,7 +63,7 @@
             token = 'k8s-enterprise-demo-token';
         }
         // Validate token on load
-        fetch('/api/v1/health').catch(() => {});
+        APIClient.get('/health').catch(() => {});
     });
 
     // Expose auth API if needed by other modules

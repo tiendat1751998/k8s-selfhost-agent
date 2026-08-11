@@ -13,6 +13,7 @@ redis:
   password: ""
   db: 0
 docker:
+  # TLS should be used
   host: "tcp://10.10.10.133:2375"
   version: "1.41"
 nats:

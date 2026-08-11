@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -47,18 +47,38 @@ func (h *DriftHandler) ListDrifts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }
 
+type createDriftRequest struct {
+	drift.DriftRecord
+}
+
+func (r *createDriftRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Cluster) == "" {
+		ve.Add("cluster", "cluster is required")
+	}
+	if strings.TrimSpace(r.Resource) == "" {
+		ve.Add("resource", "resource is required")
+	}
+	if strings.TrimSpace(r.ResourceKind) == "" {
+		ve.Add("resource_kind", "resource_kind is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // CreateDrift handles POST /api/v1/drift
 func (h *DriftHandler) CreateDrift(w http.ResponseWriter, r *http.Request) {
-	var d drift.DriftRecord
-	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[createDriftRequest](w, r)
+	if !ok {
 		return
 	}
-	if err := h.repo.Create(r.Context(), &d); err != nil {
+	if err := h.repo.Create(r.Context(), &req.DriftRecord); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create drift record", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, d)
+	writeJSON(w, http.StatusCreated, req.DriftRecord)
 }
 
 // ResolveDrift handles PUT /api/v1/drift/{id}/resolve

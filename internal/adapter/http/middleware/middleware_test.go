@@ -48,8 +48,8 @@ func TestSecurityHeaders(t *testing.T) {
 
 	checks := map[string]string{
 		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":       "DENY",
-		"X-XSS-Protection":      "1; mode=block",
+		"X-Frame-Options":        "DENY",
+		"X-XSS-Protection":       "1; mode=block",
 	}
 
 	for header, expected := range checks {

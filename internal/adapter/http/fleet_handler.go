@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -13,6 +12,8 @@ import (
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	"github.com/datdt/k8sselfhost/internal/domain/fleet"
+	"github.com/datdt/k8sselfhost/internal/pkg/concurrency"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // FleetHandler provides HTTP handlers for the multi-cluster fleet API.
@@ -44,13 +45,34 @@ func (h *FleetHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items})
 }
 
+type registerClusterRequest struct {
+	fleet.Cluster
+}
+
+func (r *registerClusterRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "name is required")
+	}
+	if strings.TrimSpace(r.Region) == "" {
+		ve.Add("region", "region is required")
+	}
+	if strings.TrimSpace(r.Provider) == "" {
+		ve.Add("provider", "provider is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // RegisterCluster handles POST /api/v1/fleet
 func (h *FleetHandler) RegisterCluster(w http.ResponseWriter, r *http.Request) {
-	var c fleet.Cluster
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[registerClusterRequest](w, r)
+	if !ok {
 		return
 	}
+	c := req.Cluster
 
 	err := h.repo.RegisterCluster(r.Context(), &c)
 	result := "success"
@@ -83,7 +105,7 @@ func (h *FleetHandler) RegisterCluster(w http.ResponseWriter, r *http.Request) {
 // RemoveCluster handles DELETE /api/v1/fleet/{id}
 func (h *FleetHandler) RemoveCluster(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	
+
 	err := h.repo.RemoveCluster(r.Context(), id)
 	result := "success"
 	var details map[string]interface{}
@@ -155,12 +177,12 @@ func (h *FleetHandler) UpgradeCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Simulate background upgrade process
-	go func() {
-		time.Sleep(5 * time.Second)
-		ctx := context.Background()
+	// Trigger async background upgrade process
+	concurrency.Go(logger.Get(), func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		_ = h.repo.UpdateClusterStatus(ctx, id, "active", targetVersion, cluster.Nodes)
-	}()
+	})
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status":         "upgrade_started",

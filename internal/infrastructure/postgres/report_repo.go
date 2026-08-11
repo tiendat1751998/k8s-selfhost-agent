@@ -6,20 +6,24 @@ import (
 	"encoding/json"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
-	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // ReportRepo implements report.Repository using PostgreSQL.
 type ReportRepo struct {
-	pool *pgxpool.Pool
+	pool DBTX
 }
 
 // NewReportRepo creates a new PostgreSQL-backed report repository.
-func NewReportRepo(pool *pgxpool.Pool) *ReportRepo {
+func NewReportRepo(pool DBTX) *ReportRepo {
 	return &ReportRepo{pool: pool}
+}
+
+func (r *ReportRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.pool)
 }
 
 // Create persists a new report.
@@ -29,12 +33,17 @@ func (r *ReportRepo) Create(ctx context.Context, rpt *report.Report) error {
 		return errors.Wrap(err, "marshaling evidence")
 	}
 
+	tenantID := middleware.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "org-google"
+	}
+
 	query := `
-		INSERT INTO rca_reports (incident_id, root_cause, evidence, confidence, risk_level, remediation, rollback_plan, llm_model, prompt_tokens, response_tokens, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO rca_reports (incident_id, root_cause, evidence, confidence, risk_level, remediation, rollback_plan, llm_model, prompt_tokens, response_tokens, tenant_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id`
 
-	err = r.pool.QueryRow(ctx, query,
+	err = r.getDB(ctx).QueryRow(ctx, query,
 		rpt.IncidentID,
 		rpt.RootCause,
 		evidenceJSON,
@@ -45,6 +54,7 @@ func (r *ReportRepo) Create(ctx context.Context, rpt *report.Report) error {
 		rpt.LLMModel,
 		rpt.PromptTokens,
 		rpt.ResponseTokens,
+		tenantID,
 		rpt.CreatedAt,
 	).Scan(&rpt.ID)
 
@@ -62,11 +72,13 @@ func (r *ReportRepo) GetByID(ctx context.Context, id string) (*report.Report, er
 		FROM rca_reports
 		WHERE id = $1`
 
+	query, args := BuildTenantQuery(ctx, query, id)
+
 	var rpt report.Report
 	var evidenceJSON []byte
 	var riskLevel string
 
-	err := r.pool.QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&rpt.ID,
 		&rpt.IncidentID,
 		&rpt.RootCause,
@@ -103,11 +115,13 @@ func (r *ReportRepo) GetByIncidentID(ctx context.Context, incidentID string) (*r
 		FROM rca_reports
 		WHERE incident_id = $1`
 
+	query, args := BuildTenantQuery(ctx, query, incidentID)
+
 	var rpt report.Report
 	var evidenceJSON []byte
 	var riskLevel string
 
-	err := r.pool.QueryRow(ctx, query, incidentID).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&rpt.ID,
 		&rpt.IncidentID,
 		&rpt.RootCause,
@@ -141,7 +155,8 @@ func (r *ReportRepo) GetByIncidentID(ctx context.Context, incidentID string) (*r
 func (r *ReportRepo) List(ctx context.Context, limit, offset int) ([]*report.Report, int64, error) {
 	var total int64
 	countQuery := `SELECT COUNT(*) FROM rca_reports`
-	if err := r.pool.QueryRow(ctx, countQuery).Scan(&total); err != nil {
+	countQuery, countArgs := BuildTenantQuery(ctx, countQuery)
+	if err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, errors.Wrap(err, "counting reports")
 	}
 
@@ -150,8 +165,9 @@ func (r *ReportRepo) List(ctx context.Context, limit, offset int) ([]*report.Rep
 		FROM rca_reports
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2`
+	query, args := BuildTenantQuery(ctx, query, limit, offset)
 
-	rows, err := r.pool.Query(ctx, query, limit, offset)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, errors.Wrap(err, "listing reports")
 	}

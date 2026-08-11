@@ -7,15 +7,23 @@
   var isDeployAdvActive = false;
   var currentSearchQuery = '';
 
+  async function loadTemplates() {
+    try {
+      var json = await APIClient.get('/deployments/templates');
+      global.DeploymentState.templates = json.data || [];
+    } catch (e) {
+      console.error('Failed to load templates:', e);
+      global.DeploymentState.templates = [];
+    }
+  }
+
   async function loadInitialApps() {
     try {
       var body = document.getElementById('deploy-catalog-body');
       if (body && (!global.DeploymentState.apps || global.DeploymentState.apps.length === 0)) {
         body.innerHTML = '<tr><td colspan="7"><div class="skeleton" style="height:120px;border-radius:var(--rounded-lg);"></div></td></tr>';
       }
-      var res = await fetch('/api/v1/deployments');
-      if (!res.ok) throw new Error('API request failed');
-      var json = await res.json();
+      var json = await APIClient.get('/deployments');
       global.DeploymentState.apps = json.data || [];
       renderCatalog();
     } catch (e) {
@@ -105,18 +113,13 @@
           { label: 'Scale', primary: true, onClick: async function () {
             var val = parseInt(document.getElementById('cat-scale-replicas').value);
             try {
-              var response = await fetch('/api/v1/deployments/scale', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+              var response = await APIClient.post('/deployments/scale', {
                   type: app.type,
                   cluster: app.target,
                   namespace: app.namespace || '',
                   name: app.name,
                   replicas: val
-                })
-              });
-              if (!response.ok) throw new Error('API request failed');
+                });
               app.replicas = val;
               app.status = val === 0 ? 'down' : 'healthy';
               AppState.addAuditLog({ action: 'scale', target: 'app/' + app.name, result: 'replicas=' + val });
@@ -141,24 +144,17 @@
             try {
               app.status = 'degraded';
               renderCatalog();
-              var response = await fetch('/api/v1/deployments/restart', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+              var response = await APIClient.post('/deployments/restart', {
                   type: app.type,
                   cluster: app.target,
                   namespace: app.namespace || '',
                   name: app.name
-                })
-              });
-              if (!response.ok) throw new Error('API request failed');
+                });
               AppState.addAuditLog({ action: 'restart', target: 'app/' + app.name, result: 'triggered' });
-              setTimeout(async function () {
-                await loadInitialApps();
-              }, 3000);
+              await loadInitialApps();
             } catch (e) {
               alert('Restart request failed: ' + e.message);
-              loadInitialApps();
+              await loadInitialApps();
             }
           }}
         ]
@@ -175,17 +171,12 @@
           { label: 'Cancel' },
           { label: 'Delete', primary: true, onClick: async function () {
             try {
-              var response = await fetch('/api/v1/deployments/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+              var response = await APIClient.post('/deployments/delete', {
                   type: app.type,
                   cluster: app.target,
                   namespace: app.namespace || '',
                   name: app.name
-                })
-              });
-              if (!response.ok) throw new Error('API request failed');
+                });
               global.DeploymentState.apps.splice(idx, 1);
               AppState.addAuditLog({ action: 'delete', target: 'app/' + app.name, result: 'success' });
               renderCatalog();
@@ -207,6 +198,7 @@
   }
 
   function init() {
+    loadTemplates();
     var searchInput = document.getElementById('deploy-catalog-search');
     if (searchInput) {
       searchInput.addEventListener('input', function() {
@@ -304,6 +296,7 @@
     
     var advContainer = document.getElementById('deploy-adv-builder-container');
     var toggleBtn = document.getElementById('toggle-deploy-adv-builder');
+    loadTemplates();
     var searchInput = document.getElementById('deploy-catalog-search');
     
     if (isDeployAdvActive) {
@@ -516,6 +509,7 @@
 
   global.DeploymentCatalog = { 
     loadInitialApps, 
+    loadTemplates,
     renderCatalog, 
     handleCatalogAction,
     init,

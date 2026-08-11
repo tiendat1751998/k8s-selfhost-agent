@@ -12,18 +12,18 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
-	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/concurrency"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // WSBroadcaster defines the interface for real-time WebSocket notifications.
 type WSBroadcaster interface {
-	Broadcast(msgType string, data interface{})
+	Broadcast(msgType string, data any)
 }
 
 // Worker consumes analysis requests from NATS JetStream and runs the RCA pipeline.
 type Worker struct {
-	natsClient *infraNats.Client
+	js         jetstream.JetStream
 	pipeline   *Pipeline
 	incRepo    incident.Repository
 	wsHub      WSBroadcaster
@@ -32,9 +32,9 @@ type Worker struct {
 }
 
 // NewWorker creates a new RCA worker.
-func NewWorker(natsClient *infraNats.Client, pipeline *Pipeline, incRepo incident.Repository, wsHub WSBroadcaster) *Worker {
+func NewWorker(js jetstream.JetStream, pipeline *Pipeline, incRepo incident.Repository, wsHub WSBroadcaster) *Worker {
 	return &Worker{
-		natsClient: natsClient,
+		js:         js,
 		pipeline:   pipeline,
 		incRepo:    incRepo,
 		wsHub:      wsHub,
@@ -46,7 +46,7 @@ func (w *Worker) Start(ctx context.Context) error {
 	ctx, w.cancel = context.WithCancel(ctx)
 	log := logger.WithContext(ctx)
 
-	js := w.natsClient.JetStream()
+	js := w.js
 	
 	// Create or update durable consumer for analysis tasks
 	cons, err := js.CreateOrUpdateConsumer(ctx, "INCIDENTS", jetstream.ConsumerConfig{
@@ -62,17 +62,17 @@ func (w *Worker) Start(ctx context.Context) error {
 	log.Info("RCA worker started, listening on incidents.analyze")
 
 	w.wg.Add(1)
-	go func() {
+	concurrency.Go(log, func() {
 		defer w.wg.Done()
 
 		consumeCtx, err := cons.Consume(func(msg jetstream.Msg) {
 			w.wg.Add(1)
-			go func() {
+			concurrency.Go(log, func() {
 				defer w.wg.Done()
 				msgCtx, cancelMsg := context.WithTimeout(ctx, 5*time.Minute)
 				defer cancelMsg()
 				w.processMessage(msgCtx, msg)
-			}()
+			})
 		}, jetstream.ConsumeErrHandler(func(_ jetstream.ConsumeContext, err error) {
 			log.Error("error during message consumption", zap.Error(err))
 		}))
@@ -85,7 +85,7 @@ func (w *Worker) Start(ctx context.Context) error {
 		<-ctx.Done()
 		consumeCtx.Stop()
 		log.Info("RCA worker consumer stopped")
-	}()
+	})
 
 	return nil
 }

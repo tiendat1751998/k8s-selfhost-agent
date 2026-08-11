@@ -9,19 +9,14 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
+	"github.com/datdt/k8sselfhost/internal/pkg/concurrency"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // ProviderInfo describes a registered LLM provider's metadata and health status.
-type ProviderInfo struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Model    string `json:"model"`
-	Endpoint string `json:"endpoint"`
-	Status   string `json:"status"`
-	Latency  string `json:"latency,omitempty"`
-	Default  bool   `json:"default"`
-}
+type ProviderInfo = ports.LLMProviderInfo
 
 // ProviderRegistry manages multiple LLM provider clients with thread-safe access.
 type ProviderRegistry struct {
@@ -177,10 +172,12 @@ func (r *ProviderRegistry) HealthCheckAll(ctx context.Context) map[string]Provid
 
 	for i, name := range names {
 		wg.Add(1)
-		go func(n string, c Client) {
+		nVal := name
+		cVal := clients[i]
+		concurrency.Go(logger.Get(), func() {
 			defer wg.Done()
 			start := time.Now()
-			err := c.HealthCheck(ctx)
+			err := cVal.HealthCheck(ctx)
 			latency := time.Since(start)
 
 			hr := ProviderHealthResult{
@@ -193,8 +190,8 @@ func (r *ProviderRegistry) HealthCheckAll(ctx context.Context) map[string]Provid
 				hr.Status = "healthy"
 			}
 
-			ch <- result{name: n, health: hr}
-		}(name, clients[i])
+			ch <- result{name: nVal, health: hr}
+		})
 	}
 
 	wg.Wait()
@@ -217,15 +214,60 @@ func (r *ProviderRegistry) HealthCheckAll(ctx context.Context) map[string]Provid
 }
 
 // ProviderHealthResult holds the health check result for a single provider.
-type ProviderHealthResult struct {
-	Status  string        `json:"status"`
-	Latency time.Duration `json:"latency"`
-	Error   string        `json:"error,omitempty"`
-}
+type ProviderHealthResult = ports.LLMProviderHealthResult
 
 // Count returns the number of registered providers.
 func (r *ProviderRegistry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.providers)
+}
+
+// InitRegistry initializes and returns a ProviderRegistry from a configuration.
+func InitRegistry(cfg config.LLMConfig) *ProviderRegistry {
+	log := logger.Get()
+	registry := NewProviderRegistry()
+
+	for _, pCfg := range cfg.Providers {
+		var client Client
+		switch pCfg.Type {
+		case "ollama":
+			client = NewOllamaClientDynamic(OllamaClientConfig{
+				Endpoint: pCfg.Endpoint,
+				Model:    pCfg.Model,
+			})
+		case "openai":
+			client = NewOpenAIClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
+		case "vllm":
+			client = NewVLLMClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
+		default:
+			log.Warn("unknown LLM provider type, skipping", zap.String("type", pCfg.Type))
+			continue
+		}
+
+		cbClient := NewCircuitBreakerClient(pCfg.Name, client, DefaultCircuitBreakerConfig())
+		registry.Register(pCfg.Name, cbClient, ProviderInfo{
+			Type:     pCfg.Type,
+			Model:    pCfg.Model,
+			Endpoint: pCfg.Endpoint,
+			Default:  pCfg.Default,
+		})
+	}
+
+	// Register default fallback if empty
+	if registry.Count() == 0 && cfg.Endpoint != "" {
+		client := NewOllamaClientDynamic(OllamaClientConfig{
+			Endpoint: cfg.Endpoint,
+			Model:    cfg.Model,
+		})
+		cbClient := NewCircuitBreakerClient("default", client, DefaultCircuitBreakerConfig())
+		registry.Register("default", cbClient, ProviderInfo{
+			Type:     "ollama",
+			Model:    cfg.Model,
+			Endpoint: cfg.Endpoint,
+			Default:  true,
+		})
+	}
+
+	return registry
 }

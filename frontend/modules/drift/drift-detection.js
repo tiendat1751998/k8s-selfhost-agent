@@ -110,18 +110,10 @@ const DriftDetection = {
 
   async loadData() {
     try {
-      const res = await fetch('/api/v1/drift');
-      if (res.ok) {
-        const json = await res.json();
-        this.drifts = json.data || [];
-        this.renderTable(this.drifts);
-        this.updateSummary(this.drifts, json.total || this.drifts.length);
-      } else {
-        const tbody = document.getElementById('drift-tbody');
-        if (tbody) {
-          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-error">Failed to load live config drifts from API ❌</td></tr>';
-        }
-      }
+      const json = await APIClient.get('/drift');
+      this.drifts = json.data || [];
+      this.renderTable(this.drifts);
+      this.updateSummary(this.drifts, json.total || this.drifts.length);
     } catch (e) {
       console.warn('Drift API error:', e);
       const tbody = document.getElementById('drift-tbody');

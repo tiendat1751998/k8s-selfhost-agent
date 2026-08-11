@@ -89,11 +89,7 @@ const CapacityPlanning = {
 
   async loadData() {
     try {
-      const res = await fetch('/api/v1/capacity');
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      }
-      const json = await res.json();
+      const json = await APIClient.get('/capacity');
       const items = json.data || [];
       if (items.length > 0) {
         this.renderMetrics(items);
@@ -122,7 +118,7 @@ const CapacityPlanning = {
             <span class="icon">⚠️</span>
             <div>
               <h4>Unable to load capacity planning data</h4>
-              <p>Please check connection or ensure the metrics server is running on the cluster. Detail: ${esc(e.message)}</p>
+              <p>Please check connection or ensure the metrics server is running on the cluster. Detail: ${Security.escapeHTML(e.message)}</p>
             </div>
           </div>
         `;
@@ -140,8 +136,8 @@ const CapacityPlanning = {
           <div class="alert alert-${w.status === 'critical' ? 'danger' : 'warning'}">
             <span class="icon">⚠️</span>
             <div>
-              <h4>${w.resource_type.toUpperCase()} Exhaustion Warning</h4>
-              <p>Cluster ${esc(w.cluster)} is projected to run out of ${esc(w.resource_type)} capacity. Current: <strong>${w.current_usage.toFixed(1)}%</strong>. Status: <strong>${w.status}</strong>.</p>
+              <h4>${Security.escapeHTML(w.resource_type.toUpperCase())} Exhaustion Warning</h4>
+              <p>Cluster ${Security.escapeHTML(w.cluster)} is projected to run out of ${Security.escapeHTML(w.resource_type)} capacity. Current: <strong>${w.current_usage.toFixed(1)}%</strong>. Status: <strong>${Security.escapeHTML(w.status)}</strong>.</p>
             </div>
           </div>
         `).join('');
@@ -184,7 +180,7 @@ const CapacityPlanning = {
           <div class="metric-card">
             <div class="metric-icon" style="background: ${bg}; color: ${iconColor};">${icon}</div>
             <div class="metric-content">
-              <h4>${f.resource_type.toUpperCase()} Usage</h4>
+              <h4>${Security.escapeHTML(f.resource_type.toUpperCase())} Usage</h4>
               <div class="metric-value">${current.toFixed(1)}% <span class="trend ${trendClass}">${trendIcon} ${projected90d.toFixed(1)}% (90d)</span></div>
               <div class="progress-bar"><div class="progress-fill" style="width: ${current}%"></div></div>
             </div>

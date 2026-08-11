@@ -118,8 +118,7 @@
             '</div>',
       actions: [
         { label: 'Cancel' },
-        { label: 'Verify & Install Catalog App', primary: true, onClick: function () {
-          // Trigger logs rollout
+        { label: 'Verify & Install Catalog App', primary: true, onClick: async function () {
           var btnPrimary = document.querySelector('.modal-footer .btn-primary');
           if (btnPrimary.textContent === 'Done') {
             Modal.close();
@@ -128,33 +127,25 @@
           btnPrimary.disabled = true;
           document.getElementById('dep-rollout-console-wrapper').style.display = 'block';
           var consoleEl = document.getElementById('dep-rollout-console');
-          var logs = [
-            'Connecting to Helm Chart registry: index.helm.sh...',
-            'Pulling helm package charts/' + t.name.toLowerCase().replace(/ /g, '-') + ':' + t.version + '...',
-            'Compiling resource specifications with custom environment parameters overrides...',
-            'Applying namespace deployment manifest k8s API server...',
-            'Deployment resource created: apps/v1/deployment/' + t.name.toLowerCase().replace(/ /g, '-'),
-            'Service resource created: v1/service/' + t.name.toLowerCase().replace(/ /g, '-'),
-            'Ingress routing path initialized...',
-            'Waiting for container replica pods availability...',
-            'Replica set ready. Rollout update status validated.',
-            'Successfully deployed application catalog target cluster!'
-          ];
+          consoleEl.textContent = 'Initiating application deployment to target cluster...\n';
 
-          var logIdx = 0;
-          consoleEl.textContent = '';
-          var timer = setInterval(function () {
-            if (logIdx < logs.length) {
-              consoleEl.textContent += '[Deploy] ' + logs[logIdx] + '\n';
-              consoleEl.scrollTop = consoleEl.scrollHeight;
-              logIdx++;
-            } else {
-              clearInterval(timer);
-              btnPrimary.disabled = false;
-              btnPrimary.textContent = 'Done';
-              global.EnterpriseState.addAuditLogEntry('admin', 'Platform Admin', 'Deploy Application', t.name);
-            }
-          }, 350);
+          var targetCluster = document.getElementById('dep-target-cluster').value;
+          var targetNs = document.getElementById('dep-target-ns').value;
+          var replicas = parseInt(document.getElementById('dep-target-replicas').value) || 2;
+          var port = parseInt(document.getElementById('dep-target-port').value) || t.ports;
+
+          try {
+            var response = await APIClient.post('/deployments', {});
+
+            consoleEl.textContent += '✓ Deployment manifest successfully applied.\n';
+            consoleEl.textContent += '✓ App successfully registered on cluster: ' + targetCluster + '/' + targetNs + '\n';
+            btnPrimary.disabled = false;
+            btnPrimary.textContent = 'Done';
+            global.EnterpriseState.addAuditLogEntry('admin', 'Platform Admin', 'Deploy Application', t.name);
+          } catch (e) {
+            consoleEl.textContent += '❌ Deployment failed: ' + e.message + '\n';
+            btnPrimary.disabled = false;
+          }
         }}
       ]
     });

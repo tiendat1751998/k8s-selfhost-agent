@@ -4,19 +4,30 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // Same-origin requests don't send Origin
+		}
+		u, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+		return u.Host == r.Host
+	},
 }
 
 // WSMessage is the standard WebSocket message envelope.
@@ -197,4 +208,19 @@ func (c *wsClient) writePump() {
 			}
 		}
 	}
+}
+
+// WSBridge bridges WSHub to other services needing to broadcast messages.
+type WSBridge struct {
+	Hub *WSHub
+}
+
+// NewWSBridge creates a new WSBridge.
+func NewWSBridge(hub *WSHub) *WSBridge {
+	return &WSBridge{Hub: hub}
+}
+
+// Broadcast sends a message to the hub.
+func (b *WSBridge) Broadcast(msgType string, data interface{}) {
+	b.Hub.Broadcast(WSMessage{Type: msgType, Data: data})
 }

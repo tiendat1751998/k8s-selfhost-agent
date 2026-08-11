@@ -14,13 +14,10 @@ import (
 )
 
 func TestSearchRepo_ConnectionLeak(t *testing.T) {
-	// Set environment variables to point to the correct DB configuration
-	os.Setenv("K8S_POSTGRES_HOST", "10.10.10.133")
-	os.Setenv("K8S_POSTGRES_PORT", "5432")
-	os.Setenv("K8S_POSTGRES_USER", "myuser")
-	os.Setenv("K8S_POSTGRES_PASSWORD", "mysecretpassword")
-	os.Setenv("K8S_POSTGRES_DBNAME", "mydatabase")
-	os.Setenv("K8S_POSTGRES_SSLMODE", "disable")
+	// Ensure test password is set, otherwise skip
+	if os.Getenv("K8S_POSTGRES_PASSWORD") == "" {
+		t.Skip("Skipping test: K8S_POSTGRES_PASSWORD is not set")
+	}
 
 	cfg, err := config.Load()
 	if err != nil {

@@ -8,7 +8,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/concurrency"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 type Runner struct {
@@ -41,7 +42,7 @@ func (r *Runner) Start(ctx context.Context) {
 	r.wg.Add(1)
 	r.mu.Unlock()
 
-	go func() {
+	concurrency.Go(logger.Get(), func() {
 		defer r.wg.Done()
 		log := logger.WithContext(ctx)
 		log.Info("agent runner polling loop started", zap.Duration("interval", r.interval))
@@ -58,21 +59,22 @@ func (r *Runner) Start(ctx context.Context) {
 				r.processNextTask(ctx)
 			}
 		}
-	}()
+	})
 }
 
 // Stop stops the runner.
 func (r *Runner) Stop() {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if !r.running {
+		r.mu.Unlock()
 		return
 	}
 	if r.cancel != nil {
 		r.cancel()
 	}
-	r.wg.Wait()
 	r.running = false
+	r.mu.Unlock() // Unlock BEFORE waiting to avoid deadlock
+	r.wg.Wait()
 }
 
 func (r *Runner) processNextTask(ctx context.Context) {

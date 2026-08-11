@@ -7,11 +7,13 @@ import (
 
 	"go.uber.org/zap"
 
-	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
+		domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/stringutil"
 )
+
 
 // GitProvider defines the interface for interacting with Git hosting providers.
 type GitProvider interface {
@@ -63,7 +65,8 @@ func (c *Controller) CreateRemediationPR(ctx context.Context, inc *incident.Inci
 
 	// Create domain PR
 	branch := fmt.Sprintf("fix/incident-%s", inc.ID[:8])
-	title := fmt.Sprintf("fix(%s): %s - %s", inc.Namespace, inc.Type, truncateStr(inc.Message, 60))
+		title := fmt.Sprintf("fix(%s): %s - %s", inc.Namespace, inc.Type, stringutil.Truncate(inc.Message, 60))
+
 	body := buildPRBody(inc, rpt)
 
 	pr, err := domainGitops.New(inc.ID, provider, repoURL, branch, baseBranch, title, body)
@@ -182,9 +185,138 @@ func formatEvidence(evidence []string) string {
 	return result
 }
 
-func truncateStr(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
+// CreatePRRequest represents the payload for creating a pull request.
+type CreatePRRequest struct {
+	IncidentID   string                    `json:"incident_id"`
+	Provider     domainGitops.Provider     `json:"provider"`
+	RepoURL      string                    `json:"repo_url"`
+	Branch       string                    `json:"branch"`
+	BaseBranch   string                    `json:"base_branch"`
+	Title        string                    `json:"title"`
+	Description  string                    `json:"description"`
+	FilesChanged []struct {
+		Path    string                  `json:"path"`
+		Content string                  `json:"content"`
+		Action  domainGitops.FileAction `json:"action"`
+	} `json:"files_changed"`
 }
+
+// CreatePR handles logic to construct and persist a remediation PR.
+func (c *Controller) CreatePR(ctx context.Context, req CreatePRRequest) (*domainGitops.PullRequest, error) {
+	var incID = req.IncidentID
+	if incID != "" {
+		_, err := c.incRepo.GetByID(ctx, incID)
+		if err != nil {
+			incID = ""
+		}
+	}
+
+	if incID == "" {
+		filter := incident.Filter{
+			ClusterName: "system",
+			Namespace:   "system",
+			Limit:       1,
+		}
+		incidents, _, err := c.incRepo.List(ctx, filter)
+		if err == nil && len(incidents) > 0 {
+			incID = incidents[0].ID
+		} else {
+			defaultInc, err := incident.New("system", "system", "system-pod", incident.TypeCrashLoopBackOff, incident.SeverityMedium, "Default system incident for orphaned PRs")
+			if err != nil {
+				return nil, fmt.Errorf("failed to create default incident struct: %w", err)
+			}
+			if err := c.incRepo.Create(ctx, defaultInc); err != nil {
+				return nil, fmt.Errorf("failed to persist default incident: %w", err)
+			}
+			incID = defaultInc.ID
+		}
+	}
+
+	provider := req.Provider
+	if provider == "" {
+		provider = domainGitops.ProviderGitHub
+	}
+	repoURL := req.RepoURL
+	if repoURL == "" {
+		repoURL = "https://github.com/k8s-selfhost-agent/k8s-selfhost-agent"
+	}
+	branch := req.Branch
+	if branch == "" {
+		branch = "gitops-patch"
+	}
+	baseBranch := req.BaseBranch
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	title := req.Title
+	if title == "" {
+		title = "Remediation PR"
+	}
+
+	pr, err := domainGitops.New(incID, provider, repoURL, branch, baseBranch, title, req.Description)
+	if err != nil {
+		return nil, fmt.Errorf("invalid PR fields: %w", err)
+	}
+
+	for _, f := range req.FilesChanged {
+		action := f.Action
+		if action == "" {
+			action = domainGitops.FileActionModify
+		}
+		pr.AddFileChange(f.Path, f.Content, action)
+	}
+
+	_ = pr.MarkOpen(repoURL+"/pull/1", 1)
+
+	if err := c.prRepo.Create(ctx, pr); err != nil {
+		return nil, fmt.Errorf("failed to create PR: %w", err)
+	}
+
+	return pr, nil
+}
+
+// MergePR marks a pull request as merged and updates the incident state.
+func (c *Controller) MergePR(ctx context.Context, id string) (*domainGitops.PullRequest, error) {
+	pr, err := c.prRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR: %w", err)
+	}
+
+	if err := pr.MarkMerged(); err != nil {
+		return nil, fmt.Errorf("failed to mark PR as merged: %w", err)
+	}
+
+	if err := c.prRepo.Update(ctx, pr); err != nil {
+		return nil, fmt.Errorf("failed to update PR: %w", err)
+	}
+
+	if pr.IncidentID != "" {
+		inc, err := c.incRepo.GetByID(ctx, pr.IncidentID)
+		if err == nil && inc != nil {
+			if err := inc.MarkResolved(); err == nil {
+				_ = c.incRepo.Update(ctx, inc)
+			}
+		}
+	}
+
+	return pr, nil
+}
+
+// ClosePR marks a pull request as closed.
+func (c *Controller) ClosePR(ctx context.Context, id string) (*domainGitops.PullRequest, error) {
+	pr, err := c.prRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR: %w", err)
+	}
+
+	if err := pr.MarkClosed(); err != nil {
+		return nil, fmt.Errorf("failed to mark PR as closed: %w", err)
+	}
+
+	if err := c.prRepo.Update(ctx, pr); err != nil {
+		return nil, fmt.Errorf("failed to update PR: %w", err)
+	}
+
+	return pr, nil
+}
+

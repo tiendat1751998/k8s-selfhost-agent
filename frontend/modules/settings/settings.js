@@ -7,6 +7,7 @@
 
   var STORAGE_KEY = 'k8s_control_plane_settings';
 
+  // Intentional default settings configuration
   var defaults = {
     theme: 'dark',
     refreshInterval: '10',
@@ -63,11 +64,11 @@
       html += `
         <div class="switch-container">
           <div class="switch-info">
-            <span class="switch-label">` + item.label + `</span>
-            <span class="switch-description">` + item.description + `</span>
+            <span class="switch-label">` + Security.escapeHTML(item.label) + `</span>
+            <span class="switch-description">` + Security.escapeHTML(item.description) + `</span>
           </div>
           <label class="switch">
-            <input type="checkbox" class="feature-flag-toggle" data-flag="` + key + `" ` + checked + `>
+            <input type="checkbox" class="feature-flag-toggle" data-flag="` + Security.escapeHTML(key) + `" ` + checked + `>
             <span class="slider"></span>
           </label>
         </div>

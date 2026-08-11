@@ -73,17 +73,9 @@ const HealthCenter = {
 
   async loadData() {
     try {
-      const res = await fetch('/api/v1/health');
-      if (res.ok) {
-        const json = await res.json();
-        const items = json.data || [];
-        this.renderComponents(items);
-      } else {
-        const grid = document.getElementById('health-center-grid');
-        if (grid) {
-          grid.innerHTML = '<div class="text-error text-center p-4 w-full col-span-3">Failed to load platform health status from API ❌</div>';
-        }
-      }
+      const json = await APIClient.get('/health');
+      const items = json.data || [];
+      this.renderComponents(items);
     } catch (e) {
       console.warn('Health API error:', e);
       const grid = document.getElementById('health-center-grid');
