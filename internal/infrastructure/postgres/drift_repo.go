@@ -5,25 +5,28 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 
 	"github.com/datdt/k8sselfhost/internal/domain/drift"
-	"github.com/datdt/k8sselfhost/pkg/errors"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	"go.uber.org/zap"
 )
 
 
 // DriftRepo implements drift.Repository using PostgreSQL.
 type DriftRepo struct {
-	pool *pgxpool.Pool
+	pool DBTX
 }
 
 // NewDriftRepo creates a new PostgreSQL-backed drift repository.
-func NewDriftRepo(pool *pgxpool.Pool) *DriftRepo {
+func NewDriftRepo(pool DBTX) *DriftRepo {
 	return &DriftRepo{pool: pool}
+}
+
+func (r *DriftRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.pool)
 }
 
 func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
@@ -50,7 +53,7 @@ func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
 
 		if actualReplicas != expectedReplicas {
 			var exists bool
-			err := r.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM drift_records WHERE cluster = $1 AND resource = $2 AND status = 'drifted')",
+			err := r.getDB(ctx).QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM drift_records WHERE cluster = $1 AND resource = $2 AND status = 'drifted')",
 				"cls-dev-local", s.Spec.Name).Scan(&exists)
 			if err != nil {
 				logger.Get().Error("failed to check if drift record exists", zap.Error(err))
@@ -78,7 +81,7 @@ func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
 				}
 			}
 		} else {
-			_, err := r.pool.Exec(ctx, "UPDATE drift_records SET status = 'in_sync' WHERE cluster = $1 AND resource = $2 AND status = 'drifted'",
+			_, err := r.getDB(ctx).Exec(ctx, "UPDATE drift_records SET status = 'in_sync' WHERE cluster = $1 AND resource = $2 AND status = 'drifted'",
 				"cls-dev-local", s.Spec.Name)
 			if err != nil {
 				logger.Get().Error("failed to update drift status to in_sync", zap.Error(err))
@@ -109,14 +112,14 @@ func (r *DriftRepo) List(ctx context.Context, cluster string, status *drift.Drif
 	}
 
 	var total int
-	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+	if err := r.getDB(ctx).QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, errors.Wrap(err, "counting drift records")
 	}
 
-	query += fmt.Sprintf(" ORDER BY detected_at DESC LIMIT $%d OFFSET $%d", idx, idx+1)
-	args = append(args, limit, offset)
+	selectQuery := query + fmt.Sprintf(" ORDER BY detected_at DESC LIMIT $%d OFFSET $%d", idx, idx+1)
+	selectArgs := append(args, limit, offset)
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.getDB(ctx).Query(ctx, selectQuery, selectArgs...)
 	if err != nil {
 		return nil, 0, errors.Wrap(err, "listing drift records")
 	}
@@ -138,7 +141,7 @@ func (r *DriftRepo) Create(ctx context.Context, d *drift.DriftRecord) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id`
 
-	err := r.pool.QueryRow(ctx, query,
+	err := r.getDB(ctx).QueryRow(ctx, query,
 		d.Cluster, d.Namespace, d.Resource, d.ResourceKind,
 		d.ExpectedState, d.ActualState, d.Diff,
 		string(d.Status), d.DetectedAt,
@@ -150,7 +153,7 @@ func (r *DriftRepo) Create(ctx context.Context, d *drift.DriftRecord) error {
 }
 
 func (r *DriftRepo) Resolve(ctx context.Context, id string) error {
-	_, err := r.pool.Exec(ctx, `UPDATE drift_records SET status = 'in_sync' WHERE id = $1`, id)
+	_, err := r.getDB(ctx).Exec(ctx, `UPDATE drift_records SET status = 'in_sync' WHERE id = $1`, id)
 	if err != nil {
 		return errors.Wrap(err, "resolving drift record")
 	}

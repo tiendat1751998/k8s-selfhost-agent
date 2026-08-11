@@ -6,6 +6,8 @@
 (function (global) {
   'use strict';
 
+  var esc = Security.escapeHTML;
+
   /* ─── Render: Topology Tree ─── */
   function renderTopologyTree(treeData) {
     var container = document.getElementById('topo-tree-container');
@@ -31,7 +33,7 @@
         + '<span class="topo-status-dot" style="background:' + statusColor + ';"></span>'
         + '<span class="topo-icon">' + icon + '</span>'
         + '<span class="topo-name">' + esc(node.name) + '</span>'
-        + '<span class="topo-type-badge">' + node.type + '</span>';
+        + '<span class="topo-type-badge">' + esc(node.type) + '</span>';
 
       if (node.replicas) html += '<span class="topo-info">replicas: ' + esc(node.replicas) + '</span>';
       if (node.cpu) html += '<span class="topo-info">cpu: ' + esc(node.cpu) + '</span>';
@@ -153,11 +155,8 @@
         // 1. Fetch active clusters
         var clusters = [];
         try {
-          const res = await fetch('/api/v1/fleet');
-          if (res.ok) {
-            const json = await res.json();
+          const json = await APIClient.get('/fleet');
             clusters = json.data || [];
-          }
         } catch (e) {
           console.warn('Fleet API offline:', e);
         }
@@ -168,32 +167,25 @@
         var services = [];
 
         try {
-          const res = await fetch('/api/v1/explorer?kind=Deployment&limit=1000');
-          if (res.ok) {
-            const json = await res.json();
+          const json = await APIClient.get('/explorer?kind=Deployment&limit=1000');
             deployments = json.data || [];
-          }
         } catch (e) { console.warn(e); }
 
         try {
-          const res = await fetch('/api/v1/explorer?kind=Pod&limit=1000');
-          if (res.ok) {
-            const json = await res.json();
+          const json = await APIClient.get('/explorer?kind=Pod&limit=1000');
             pods = json.data || [];
-          }
         } catch (e) { console.warn(e); }
 
         try {
-          const res = await fetch('/api/v1/explorer?kind=Service&limit=1000');
-          if (res.ok) {
-            const json = await res.json();
+          const json = await APIClient.get('/explorer?kind=Service&limit=1000');
             services = json.data || [];
-          }
         } catch (e) { console.warn(e); }
 
         // Build dynamic hierarchy tree
         if (clusters.length === 0) {
-          clusters = [{ name: 'default-cluster', provider: 'onprem', status: 'healthy' }];
+          renderTopologyTree([]);
+          renderDependencyGraph({ services: [], edges: [] });
+          return;
         }
 
         var treeData = [];
@@ -303,8 +295,8 @@
             depEdges.push({
               from: from,
               to: to,
-              latency: Math.round(3 + Math.random() * 20) + 'ms',
-              errorRate: Math.random() > 0.85 ? 0.15 : 0.0
+              latency: 'N/A',
+              errorRate: 0.0
             });
           }
 

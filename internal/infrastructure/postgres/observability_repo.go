@@ -4,18 +4,21 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/observability"
 )
 
 type observabilityRepo struct {
-	db *pgxpool.Pool
+	db DBTX
 }
 
 // NewObservabilityRepo creates a new Postgres-backed Observability repository.
-func NewObservabilityRepo(db *pgxpool.Pool) observability.Repository {
+func NewObservabilityRepo(db DBTX) observability.Repository {
 	return &observabilityRepo{db: db}
+}
+
+func (r *observabilityRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.db)
 }
 
 func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observability.SLODefinition, error) {
@@ -24,7 +27,7 @@ func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observabi
 		FROM slo_definitions 
 		ORDER BY created_at DESC
 	`
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying slo definitions: %w", err)
 	}
@@ -52,7 +55,7 @@ func (r *observabilityRepo) CreateSLODefinition(ctx context.Context, d *observab
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
-	err := r.db.QueryRow(ctx, query,
+	err := r.getDB(ctx).QueryRow(ctx, query,
 		d.Service, d.Target, d.IndicatorType, d.Window, d.CreatedAt, d.UpdatedAt,
 	).Scan(&d.ID)
 	
@@ -69,7 +72,7 @@ func (r *observabilityRepo) ListSLOSnapshots(ctx context.Context) ([]observabili
 		ORDER BY recorded_at DESC 
 		LIMIT 100
 	`
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying slo snapshots: %w", err)
 	}
@@ -97,7 +100,7 @@ func (r *observabilityRepo) CreateSLOSnapshot(ctx context.Context, s *observabil
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
-	err := r.db.QueryRow(ctx, query,
+	err := r.getDB(ctx).QueryRow(ctx, query,
 		s.SLOID, s.Service, s.Target, s.Actual, s.BurnRate, s.ErrorBudget, s.BudgetStatus, s.RecordedAt,
 	).Scan(&s.ID)
 	

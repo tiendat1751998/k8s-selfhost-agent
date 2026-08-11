@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // Client wraps a NATS connection with JetStream support, health check, and lifecycle management.

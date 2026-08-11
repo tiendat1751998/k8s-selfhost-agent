@@ -8,5 +8,6 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*Promotion, error)
 	Create(ctx context.Context, p *Promotion) error
 	Approve(ctx context.Context, id, approver string) error
+	Reject(ctx context.Context, id, rejecter string) error
 	Complete(ctx context.Context, id string) error
 }

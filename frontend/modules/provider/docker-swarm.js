@@ -11,8 +11,13 @@
   var containersData = [];
 
   var initialized = false;
-  function init() {
+  async function init() {
     if (initialized) return;
+
+    if (global.ViewLoader) {
+      await global.ViewLoader.loadTemplate('/modules/provider/template.html');
+    }
+
     initialized = true;
     var container = document.getElementById('docker-swarm-view');
     if (!container) {
@@ -123,21 +128,15 @@
 
     try {
       // 1. Fetch Swarm Services
-      var res = await fetch('/api/v1/docker/services');
-      if (!res.ok) throw new Error('Services API returned status ' + res.status);
-      var body = await res.json();
+      var body = await APIClient.get('/docker/services');
       servicesData = body.data || [];
 
       // 2. Fetch Swarm Nodes
-      res = await fetch('/api/v1/docker/nodes');
-      if (!res.ok) throw new Error('Nodes API returned status ' + res.status);
-      body = await res.json();
+      body = await APIClient.get('/docker/nodes');
       nodesData = body.data || [];
 
       // 3. Fetch Standalone Containers
-      res = await fetch('/api/v1/docker/containers');
-      if (!res.ok) throw new Error('Containers API returned status ' + res.status);
-      body = await res.json();
+      body = await APIClient.get('/docker/containers');
       containersData = body.data || [];
     } catch (e) {
       if (e.name === 'AbortError') {
@@ -379,12 +378,7 @@
     logEl.textContent += '\n[Swarm Engine] Updating replication factor for service ID ' + svc.id + '...';
 
     try {
-      var res = await fetch('/api/v1/docker/services/' + encodeURIComponent(svc.id) + '/scale', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ replicas: count })
-      });
-      if (!res.ok) throw new Error('API returned status ' + res.status);
+      await APIClient.post('/docker/services/' + encodeURIComponent(svc.id) + '/scale', { replicas: count });
 
       logEl.textContent += '\n[Swarm Engine] Swarm Service converged to ' + count + ' running state.';
       logEl.textContent += '\n[Swarm Engine] Audit log updated. Execution verified successfully.';
@@ -403,12 +397,7 @@
   async function triggerContainerStateToggle(name, state, container) {
     var action = state === 'running' ? 'start' : 'stop';
     try {
-      var res = await fetch('/api/v1/docker/containers/' + encodeURIComponent(container.id) + '/toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: action })
-      });
-      if (!res.ok) throw new Error('API returned status ' + res.status);
+      await APIClient.post('/docker/containers/' + encodeURIComponent(container.id) + '/toggle', { action: action });
 
       var newState = state === 'running' ? 'running' : 'exited';
       var newStatus = state === 'running' ? 'Up Less than a minute' : 'Exited (0) Just now';
@@ -428,10 +417,7 @@
 
   async function triggerNodeDrain(name, node) {
     try {
-      var res = await fetch('/api/v1/docker/nodes/' + encodeURIComponent(node.id) + '/drain', {
-        method: 'POST'
-      });
-      if (!res.ok) throw new Error('API returned status ' + res.status);
+      await APIClient.post('/docker/nodes/' + encodeURIComponent(node.id) + '/drain');
 
       node.availability = 'drain';
       node.updated_at = new Date();
@@ -465,11 +451,7 @@
 
     logEl.textContent = 'Attaching logs handler to socket daemon...\nFetching stdout and stderr streams...';
 
-    fetch('/api/v1/docker/logs?id=' + encodeURIComponent(name) + '&type=' + type)
-      .then(function (res) {
-        if (!res.ok) throw new Error('API returned status ' + res.status);
-        return res.json();
-      })
+    APIClient.get('/docker/logs?id=' + encodeURIComponent(name) + '&type=' + type)
       .then(function (body) {
         logEl.textContent = body.logs || 'No logs available.';
         logEl.scrollTop = logEl.scrollHeight;

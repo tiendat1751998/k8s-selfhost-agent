@@ -7,18 +7,21 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
 )
 
 type agentRepo struct {
-	db *pgxpool.Pool
+	db DBTX
 }
 
 // NewAgentRepo creates a new Postgres-backed Agent repository.
-func NewAgentRepo(db *pgxpool.Pool) agent.Repository {
+func NewAgentRepo(db DBTX) agent.Repository {
 	return &agentRepo{db: db}
+}
+
+func (r *agentRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.db)
 }
 
 // Tasks
@@ -32,7 +35,7 @@ func (r *agentRepo) CreateTask(ctx context.Context, task *agent.Task) error {
 		INSERT INTO agent_tasks (id, phase, module, feature, title, description, status, dependencies, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
-	_, err = r.db.Exec(ctx, query,
+	_, err = r.getDB(ctx).Exec(ctx, query,
 		task.ID, task.Phase, task.Module, task.Feature, task.Title, task.Description,
 		string(task.Status), string(depsJSON), task.CreatedAt, task.UpdatedAt,
 	)
@@ -59,7 +62,7 @@ func (r *agentRepo) GetTask(ctx context.Context, id string) (*agent.Task, error)
 	var t agent.Task
 	var depsStr string
 	var statusStr string
-	err := r.db.QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
 		&t.ID, &t.Phase, &t.Module, &t.Feature, &t.Title, &t.Description,
 		&statusStr, &depsStr, &t.CreatedAt, &t.UpdatedAt, &t.CompletedAt,
 	)
@@ -91,7 +94,7 @@ func (r *agentRepo) ListTasks(ctx context.Context) ([]agent.Task, error) {
 		FROM agent_tasks
 		ORDER BY created_at ASC
 	`
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("listing agent tasks: %w", err)
 	}
@@ -138,7 +141,7 @@ func (r *agentRepo) UpdateTask(ctx context.Context, task *agent.Task) error {
 		    status = $6, dependencies = $7, updated_at = $8, completed_at = $9
 		WHERE id = $10
 	`
-	cmd, err := r.db.Exec(ctx, query,
+	cmd, err := r.getDB(ctx).Exec(ctx, query,
 		task.Phase, task.Module, task.Feature, task.Title, task.Description,
 		string(task.Status), string(depsJSON), task.UpdatedAt, task.CompletedAt, task.ID,
 	)
@@ -157,7 +160,7 @@ func (r *agentRepo) CreateSubtask(ctx context.Context, sub *agent.Subtask) error
 		INSERT INTO agent_subtasks (id, task_id, title, status, complexity, exec_order, completed_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
-	_, err := r.db.Exec(ctx, query,
+	_, err := r.getDB(ctx).Exec(ctx, query,
 		sub.ID, sub.TaskID, sub.Title, string(sub.Status), sub.Complexity, sub.ExecOrder, sub.CompletedAt,
 	)
 	if err != nil {
@@ -172,7 +175,7 @@ func (r *agentRepo) UpdateSubtask(ctx context.Context, sub *agent.Subtask) error
 		SET status = $1, completed_at = $2
 		WHERE id = $3
 	`
-	cmd, err := r.db.Exec(ctx, query, string(sub.Status), sub.CompletedAt, sub.ID)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, string(sub.Status), sub.CompletedAt, sub.ID)
 	if err != nil {
 		return fmt.Errorf("updating agent subtask: %w", err)
 	}
@@ -189,7 +192,7 @@ func (r *agentRepo) listSubtasks(ctx context.Context, taskID string) ([]agent.Su
 		WHERE task_id = $1
 		ORDER BY exec_order ASC
 	`
-	rows, err := r.db.Query(ctx, query, taskID)
+	rows, err := r.getDB(ctx).Query(ctx, query, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("listing agent subtasks: %w", err)
 	}
@@ -215,7 +218,7 @@ func (r *agentRepo) RecordExecution(ctx context.Context, exec *agent.Execution) 
 		INSERT INTO agent_executions (id, task_id, agent_type, status, input, output, error_detail, created_at, completed_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
-	_, err := r.db.Exec(ctx, query,
+	_, err := r.getDB(ctx).Exec(ctx, query,
 		exec.ID, exec.TaskID, string(exec.AgentType), exec.Status,
 		exec.Input, exec.Output, exec.ErrorDetail, exec.CreatedAt, exec.CompletedAt,
 	)
@@ -233,7 +236,7 @@ func (r *agentRepo) GetExecution(ctx context.Context, id string) (*agent.Executi
 	`
 	var e agent.Execution
 	var agentTypeStr string
-	err := r.db.QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
 		&e.ID, &e.TaskID, &agentTypeStr, &e.Status, &e.Input, &e.Output, &e.ErrorDetail, &e.CreatedAt, &e.CompletedAt,
 	)
 	if err != nil {
@@ -256,14 +259,14 @@ func (r *agentRepo) ListExecutions(ctx context.Context, taskID string) ([]agent.
 			WHERE task_id = $1
 			ORDER BY created_at DESC
 		`
-		rows, err = r.db.Query(ctx, query, taskID)
+		rows, err = r.getDB(ctx).Query(ctx, query, taskID)
 	} else {
 		query := `
 			SELECT id, task_id, agent_type, status, input, output, error_detail, created_at, completed_at
 			FROM agent_executions
 			ORDER BY created_at DESC
 		`
-		rows, err = r.db.Query(ctx, query)
+		rows, err = r.getDB(ctx).Query(ctx, query)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("listing agent executions: %w", err)
@@ -292,7 +295,7 @@ func (r *agentRepo) UpdateExecution(ctx context.Context, exec *agent.Execution) 
 		SET status = $1, output = $2, error_detail = $3, completed_at = $4
 		WHERE id = $5
 	`
-	cmd, err := r.db.Exec(ctx, query, exec.Status, exec.Output, exec.ErrorDetail, exec.CompletedAt, exec.ID)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, exec.Status, exec.Output, exec.ErrorDetail, exec.CompletedAt, exec.ID)
 	if err != nil {
 		return fmt.Errorf("updating agent execution: %w", err)
 	}
@@ -311,7 +314,7 @@ func (r *agentRepo) GetProjectState(ctx context.Context) (*agent.ProjectState, e
 		WHERE id = 'latest'
 	`
 	var s agent.ProjectState
-	err := r.db.QueryRow(ctx, query).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query).Scan(
 		&s.ID, &s.CurrentPhase, &s.CurrentModule, &s.CurrentFeature, &s.CurrentTaskID, &s.CurrentSubtaskID,
 		&s.RepositoryHealth, &s.TechnicalDebt, &s.ArchitectureScore, &s.QualityScore, &s.UpdatedAt,
 	)
@@ -358,7 +361,7 @@ func (r *agentRepo) UpdateProjectState(ctx context.Context, state *agent.Project
 		    quality_score = EXCLUDED.quality_score,
 		    updated_at = EXCLUDED.updated_at
 	`
-	_, err := r.db.Exec(ctx, query,
+	_, err := r.getDB(ctx).Exec(ctx, query,
 		state.CurrentPhase, state.CurrentModule, state.CurrentFeature, state.CurrentTaskID, state.CurrentSubtaskID,
 		state.RepositoryHealth, state.TechnicalDebt, state.ArchitectureScore, state.QualityScore, state.UpdatedAt,
 	)

@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -40,18 +40,38 @@ func (h *CorrelationHandler) ListCorrelated(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }
 
+type createCorrelatedRequest struct {
+	correlation.CorrelatedEvent
+}
+
+func (r *createCorrelatedRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Title) == "" {
+		ve.Add("title", "title is required")
+	}
+	if strings.TrimSpace(r.RootCause) == "" {
+		ve.Add("root_cause", "root_cause is required")
+	}
+	if strings.TrimSpace(r.Severity) == "" {
+		ve.Add("severity", "severity is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // CreateCorrelated handles POST /api/v1/correlation
 func (h *CorrelationHandler) CreateCorrelated(w http.ResponseWriter, r *http.Request) {
-	var c correlation.CorrelatedEvent
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[createCorrelatedRequest](w, r)
+	if !ok {
 		return
 	}
-	if err := h.repo.Create(r.Context(), &c); err != nil {
+	if err := h.repo.Create(r.Context(), &req.CorrelatedEvent); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create correlated event", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, c)
+	writeJSON(w, http.StatusCreated, req.CorrelatedEvent)
 }
 
 // ResolveCorrelated handles PUT /api/v1/correlation/{id}/resolve

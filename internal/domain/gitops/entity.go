@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/datdt/k8sselfhost/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // PullRequest represents a GitOps pull request created for an incident remediation.

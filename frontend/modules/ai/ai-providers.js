@@ -62,13 +62,8 @@
   /** Fetch providers from the backend API */
   async function fetchProviders() {
     try {
-      var res = await fetch(API_BASE + '/providers');
-      if (res.ok) {
-        var providers = await res.json();
-        AppState.setAiProviders(providers);
-      } else {
-        throw new Error('Response not OK');
-      }
+      var providers = await APIClient.get(API_BASE + '/providers');
+      AppState.setAiProviders(providers);
     } catch (err) {
       console.warn('Failed to fetch AI providers from API, using state fallback:', err);
       render(AppState.getState().aiProviders);
@@ -131,8 +126,7 @@
   /** Trigger a real health check via the API */
   async function runHealthCheck(name) {
     try {
-      var res = await fetch(API_BASE + '/providers/' + encodeURIComponent(name) + '/health', { method: 'POST' });
-      var result = await res.json();
+      var result = await APIClient.post(API_BASE + '/providers/' + encodeURIComponent(name) + '/health');
       var icon = result.status === 'healthy' ? '✅' : '❌';
       alert('Provider "' + name + '" — ' + icon + ' ' + result.status +
         (result.error ? '\nError: ' + result.error : ''));
@@ -148,8 +142,7 @@
     if (!confirm('Remove provider "' + name + '"?')) return;
 
     try {
-      var res = await fetch(API_BASE + '/providers/' + encodeURIComponent(name), { method: 'DELETE' });
-      await res.json();
+      await APIClient.delete(API_BASE + '/providers/' + encodeURIComponent(name));
       AppState.addAuditLog({ action: 'delete', target: 'ai/' + name, result: 'success' });
       await fetchProviders();
     } catch (err) {
@@ -171,19 +164,10 @@
     if (responseEl) responseEl.textContent = 'Processing… (this may take a moment)';
 
     try {
-      var res = await fetch(API_BASE + '/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: providerSelect.value,
-          prompt: prompt
-        })
+      var data = await APIClient.post(API_BASE + '/test', {
+        provider: providerSelect.value,
+        prompt: prompt
       });
-      if (!res.ok) {
-        var errData = await res.json();
-        throw new Error(errData.error || 'Request failed');
-      }
-      var data = await res.json();
       if (responseEl) responseEl.textContent = data.content;
       if (latencyEl) latencyEl.textContent = data.duration_ms + 'ms';
       if (tokensEl) tokensEl.textContent = (data.prompt_tokens + data.response_tokens);
@@ -247,16 +231,7 @@
           };
 
           try {
-            var res = await fetch(API_BASE + '/providers', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            if (!res.ok) {
-              var errData = await res.json();
-              throw new Error(errData.error || 'Failed to add provider');
-            }
-            await res.json();
+            await APIClient.post(API_BASE + '/providers', payload);
             AppState.addAuditLog({ action: 'create', target: 'ai/' + payload.name, result: 'success' });
             await fetchProviders();
             Modal.close();

@@ -18,7 +18,7 @@ import (
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	usecaseAgent "github.com/datdt/k8sselfhost/internal/usecase/agent"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 func main() {
@@ -79,47 +79,7 @@ func run() error {
 	defer natsClient.Close()
 
 	// Initialize LLM Provider Registry
-	registry := llm.NewProviderRegistry()
-	for _, pCfg := range cfg.LLM.Providers {
-		var client llm.Client
-		switch pCfg.Type {
-		case "ollama":
-			client = llm.NewOllamaClientDynamic(llm.OllamaClientConfig{
-				Endpoint: pCfg.Endpoint,
-				Model:    pCfg.Model,
-			})
-		case "openai":
-			client = llm.NewOpenAIClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
-		case "vllm":
-			client = llm.NewVLLMClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
-		default:
-			log.Warn("unknown LLM provider type, skipping", zap.String("type", pCfg.Type))
-			continue
-		}
-
-		cbClient := llm.NewCircuitBreakerClient(pCfg.Name, client, llm.DefaultCircuitBreakerConfig())
-		registry.Register(pCfg.Name, cbClient, llm.ProviderInfo{
-			Type:     pCfg.Type,
-			Model:    pCfg.Model,
-			Endpoint: pCfg.Endpoint,
-			Default:  pCfg.Default,
-		})
-	}
-
-	// Register default fallback if empty
-	if registry.Count() == 0 && cfg.LLM.Endpoint != "" {
-		client := llm.NewOllamaClientDynamic(llm.OllamaClientConfig{
-			Endpoint: cfg.LLM.Endpoint,
-			Model:    cfg.LLM.Model,
-		})
-		cbClient := llm.NewCircuitBreakerClient("default", client, llm.DefaultCircuitBreakerConfig())
-		registry.Register("default", cbClient, llm.ProviderInfo{
-			Type:     "ollama",
-			Model:    cfg.LLM.Model,
-			Endpoint: cfg.LLM.Endpoint,
-			Default:  true,
-		})
-	}
+	registry := llm.InitRegistry(cfg.LLM)
 
 	// Setup repositories & usecases
 	agentRepo := postgres.NewAgentRepo(pgClient.Pool())

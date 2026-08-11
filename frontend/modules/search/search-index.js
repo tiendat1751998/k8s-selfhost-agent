@@ -7,24 +7,26 @@
   var searchIndex = [];
   var searchCache = new Map();
 
-  function buildStaticIndex() {
+  async function buildStaticIndex() {
     searchIndex = [];
 
-    // Git Commits
-    indexResource('git', { id: 'c7f82b1', name: 'PR #142 (Merged): increase memory limit to 512Mi', author: 'admin', branch: 'main' });
-    indexResource('git', { id: 'a3d2e14', name: 'PR #140 (Merged): fix authentication token expiration', author: 'dev-team', branch: 'main' });
-    indexResource('git', { id: 'b8f921d', name: 'PR #138 (Merged): setup initial CI/CD pipeline', author: 'sre-team', branch: 'main' });
-    indexResource('git', { id: 'd9c3e41', name: 'PR #145 (Open): update liveness probes in deployment config', author: 'oncall', branch: 'dev' });
-
-    // AI RCA Reports
-    indexResource('ai', { id: 'rca-oom', name: 'AI RCA: Pod api-server OOMKilled Analysis Report', cluster: 'prod-us-east', result: 'exceeded 512Mi limits' });
-    indexResource('ai', { id: 'rca-probe', name: 'AI RCA: Startup Probe Failure Analysis for payment-svc', cluster: 'staging-1', result: 'container crashed in startup' });
+    try {
+      var json = await APIClient.get('/search');
+        var data = json.data || [];
+        data.forEach(function (item) {
+          indexResource(item.type || 'unknown', item);
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to fetch search index from API:', e);
+    }
 
     // Populate live state changes
     if (global.AppState) {
       indexClusters(global.AppState.getState().kubernetes);
       indexLogs(global.AppState.getState().logs);
       indexIncidents(global.AppState.getState().incidents);
+    }
     }
   }
 

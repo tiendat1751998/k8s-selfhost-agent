@@ -1,8 +1,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -43,14 +43,34 @@ func (h *ExplorerHandler) SearchResources(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }
 
+type syncResourceRequest struct {
+	explorer.Resource
+}
+
+func (r *syncResourceRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Kind) == "" {
+		ve.Add("kind", "kind is required")
+	}
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "name is required")
+	}
+	if strings.TrimSpace(r.Cluster) == "" {
+		ve.Add("cluster", "cluster is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // SyncResource handles POST /api/v1/explorer/sync
 func (h *ExplorerHandler) SyncResource(w http.ResponseWriter, r *http.Request) {
-	var res explorer.Resource
-	if err := json.NewDecoder(r.Body).Decode(&res); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[syncResourceRequest](w, r)
+	if !ok {
 		return
 	}
-	if err := h.repo.SyncResource(r.Context(), &res); err != nil {
+	if err := h.repo.SyncResource(r.Context(), &req.Resource); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to sync resource", err)
 		return
 	}

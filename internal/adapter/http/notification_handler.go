@@ -2,8 +2,8 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -72,18 +72,35 @@ func (h *NotificationHandler) ListChannels(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": channels})
 }
 
+type createChannelRequest struct {
+	notification.Channel
+}
+
+func (r *createChannelRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "name is required")
+	}
+	if strings.TrimSpace(string(r.Type)) == "" {
+		ve.Add("type", "type is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 // CreateChannel handles POST /api/v1/notifications/channels
 func (h *NotificationHandler) CreateChannel(w http.ResponseWriter, r *http.Request) {
-	var ch notification.Channel
-	if err := json.NewDecoder(r.Body).Decode(&ch); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err)
+	req, ok := decodeJSON[createChannelRequest](w, r)
+	if !ok {
 		return
 	}
-	if err := h.repo.CreateChannel(r.Context(), &ch); err != nil {
+	if err := h.repo.CreateChannel(r.Context(), &req.Channel); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create channel", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, ch)
+	writeJSON(w, http.StatusCreated, req.Channel)
 }
 
 // DeleteChannel handles DELETE /api/v1/notifications/channels/{id}

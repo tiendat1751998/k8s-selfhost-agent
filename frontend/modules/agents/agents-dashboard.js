@@ -102,24 +102,21 @@
 
   function refresh() {
     // 1. Fetch project state
-    fetch('/api/v1/agents/state')
-      .then(function(r){ return r.json(); })
+    APIClient.get('/agents/state')
       .then(function(state) {
         updateStateUI(state);
       })
       .catch(function(err){ console.error('Error fetching agent state:', err); });
 
     // 2. Fetch tasks
-    fetch('/api/v1/agents/tasks')
-      .then(function(r){ return r.json(); })
+    APIClient.get('/agents/tasks')
       .then(function(resp) {
         renderTasks(resp.data || []);
       })
       .catch(function(err){ console.error('Error fetching agent tasks:', err); });
 
     // 3. Fetch runs
-    fetch('/api/v1/agents/runs')
-      .then(function(r){ return r.json(); })
+    APIClient.get('/agents/runs')
       .then(function(resp) {
         renderRuns(resp.data || []);
       })
@@ -200,8 +197,7 @@
   }
 
   function viewOutput(runID) {
-    fetch('/api/v1/agents/runs')
-      .then(function(r){ return r.json(); })
+    APIClient.get('/agents/runs')
       .then(function(resp) {
         var run = (resp.data || []).find(function(r) { return r.id === runID; });
         if (!run || !global.Modal) return;
@@ -247,12 +243,7 @@
         dependencies: depsArray
       };
 
-      fetch('/api/v1/agents/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-      .then(function(r) { return r.json(); })
+      APIClient.post('/agents/tasks', payload)
       .then(function() {
         if (global.Modal) global.Modal.close();
         refresh();

@@ -21,11 +21,7 @@
   }
 
   function fetchPRs() {
-    fetch('/api/v1/prs')
-      .then(function(res) {
-        if (!res.ok) throw new Error('Failed to fetch PRs');
-        return res.json();
-      })
+    APIClient.get('/prs')
       .then(function(json) {
         gitopsPRs = json.data || [];
         renderPRs();
@@ -40,11 +36,7 @@
   }
 
   function fetchApprovals() {
-    fetch('/api/v1/promotions')
-      .then(function(res) {
-        if (!res.ok) throw new Error('Failed to fetch promotions');
-        return res.json();
-      })
+    APIClient.get('/promotions')
       .then(function(json) {
         gitopsApprovals = json.data || json || [];
         renderApprovals();
@@ -53,7 +45,7 @@
         console.error('Error fetching promotions:', err);
         var body = document.getElementById('gitops-approval-body');
         if (body) {
-          body.innerHTML = '<tr><td colspan="6" class="text-center" style="color:var(--color-muted);padding:24px;">Failed to load approvals: ' + esc(err.message) + '</td></tr>';
+          body.innerHTML = '<tr><td colspan="6" class="text-center" style="color:var(--color-muted);padding:24px;">Failed to load promotion requests: ' + esc(err.message) + '</td></tr>';
         }
       });
   }
@@ -182,17 +174,7 @@
       btn.textContent = '⏳ Creating...';
       btn.disabled = true;
     }
-    fetch('/api/v1/prs', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-    .then(function(res) {
-      if (!res.ok) throw new Error('Failed to create PR');
-      return res.json();
-    })
+    APIClient.post('/prs', payload)
     .then(function(data) {
       alert('PR created successfully!');
       fetchPRs();
@@ -237,11 +219,8 @@
   }
 
   function mergePR(id) {
-    fetch('/api/v1/prs/' + id + '/merge', {
-      method: 'POST'
-    })
-    .then(function(res) {
-      if (!res.ok) throw new Error('Failed to merge PR');
+    APIClient.post('/prs/' + id + '/merge')
+    .then(function() {
       fetchPRs();
     })
     .catch(function(err) {
@@ -250,11 +229,8 @@
   }
 
   function closePR(id) {
-    fetch('/api/v1/prs/' + id + '/close', {
-      method: 'POST'
-    })
-    .then(function(res) {
-      if (!res.ok) throw new Error('Failed to close PR');
+    APIClient.post('/prs/' + id + '/close')
+    .then(function() {
       fetchPRs();
     })
     .catch(function(err) {
@@ -289,11 +265,8 @@
   }
 
   function approvePromotion(id) {
-    fetch('/api/v1/promotions/' + id + '/approve?approver=admin', {
-      method: 'PUT'
-    })
-    .then(function(res) {
-      if (!res.ok) throw new Error('Failed to approve promotion');
+    APIClient.put('/promotions/' + id + '/approve?approver=admin')
+    .then(function() {
       fetchApprovals();
     })
     .catch(function(err) {
@@ -302,7 +275,13 @@
   }
 
   function rejectPromotion(id) {
-    alert('Reject functionality is not implemented on the backend. Promoting or completing is required.');
+    APIClient.put('/promotions/' + id + '/reject?rejecter=admin')
+    .then(function() {
+      fetchApprovals();
+    })
+    .catch(function(err) {
+      alert('Error rejecting promotion: ' + err.message);
+    });
   }
 
   function prStatusBadge(s) {

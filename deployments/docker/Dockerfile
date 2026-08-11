@@ -1,4 +1,5 @@
 # Build stage
+# TODO: Pin to digest for production: golang:1.23-alpine@sha256:<digest>
 FROM golang:1.23-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates tzdata
@@ -24,6 +25,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     ./cmd/agent-runner
 
 # Runtime stage
+# TODO: Pin to digest for production: gcr.io/distroless/static-debian12:nonroot@sha256:<digest>
 FROM gcr.io/distroless/static-debian12:nonroot
 
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo

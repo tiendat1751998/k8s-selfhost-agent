@@ -4,9 +4,9 @@ package event
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
+
 
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -15,7 +15,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // IncidentHandler is a callback function that processes detected incidents.
@@ -247,27 +247,6 @@ func (w *EventWatcher) createIncident(pod *corev1.Pod, incType incident.Type, se
 	return inc
 }
 
-// detectNodeIncident checks if a node event indicates a NodeNotReady incident.
-func detectNodeIncident(node *corev1.Node) *incident.Incident {
-	for _, condition := range node.Status.Conditions {
-		if condition.Type == corev1.NodeReady && condition.Status != corev1.ConditionTrue {
-			inc, err := incident.New(
-				"default",
-				"",
-				node.Name,
-				incident.TypeNodeNotReady,
-				incident.SeverityCritical,
-				fmt.Sprintf("Node '%s' is not ready: %s", node.Name, condition.Message),
-			)
-			if err != nil {
-				return nil
-			}
-			return inc
-		}
-	}
-	return nil
-}
-
 func namespaceDisplay(namespace string) string {
 	if namespace == "" {
 		return "all"
@@ -275,21 +254,4 @@ func namespaceDisplay(namespace string) string {
 	return namespace
 }
 
-// IsIncidentType checks if a Kubernetes event reason maps to a known incident type.
-func IsIncidentType(reason string) (incident.Type, bool) {
-	reason = strings.TrimSpace(reason)
-	switch reason {
-	case "CrashLoopBackOff":
-		return incident.TypeCrashLoopBackOff, true
-	case "OOMKilled":
-		return incident.TypeOOMKilled, true
-	case "ImagePullBackOff", "ErrImagePull":
-		return incident.TypeImagePullBackOff, true
-	case "FailedScheduling":
-		return incident.TypeFailedScheduling, true
-	case "NodeNotReady":
-		return incident.TypeNodeNotReady, true
-	default:
-		return "", false
-	}
-}
+

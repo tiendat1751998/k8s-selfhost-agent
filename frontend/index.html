@@ -201,45 +201,9 @@
           </div>
         </section>
 
-        <!-- ═══ SECTION: Docker & Swarm Integration ═══ -->
-        <section class="section" id="section-docker-swarm">
-          <div class="section-header">
-            <h2>🐳 Docker & Swarm Integration</h2>
-            <div class="section-actions">
-              <button class="btn btn-primary btn-sm" id="btn-refresh-docker">↻ Refresh Data</button>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-body" id="docker-swarm-view"></div>
-          </div>
-        </section>
+        <!-- ═══ SECTION: Docker & Swarm Integration (Lazy Loaded) ═══ -->
 
-        <!-- ═══ SECTION: Container Clusters (K8s / Docker / Swarm) ═══ -->
-        <section class="section" id="section-kubernetes">
-          <div class="section-header">
-            <h2>Container Clusters</h2>
-            <button class="btn btn-primary btn-sm" id="add-cluster-btn">+ Add Cluster</button>
-          </div>
-          <div class="enterprise-table-wrap">
-            <table class="enterprise-table" id="k8s-table">
-              <thead>
-                <tr>
-                  <th>Cluster Name</th>
-                  <th>Provider</th>
-                  <th>Endpoint</th>
-                  <th>Status</th>
-                  <th>Last Check</th>
-                  <th>Nodes</th>
-                  <th>Containers</th>
-                  <th>Services</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="k8s-table-body"></tbody>
-            </table>
-          </div>
-          <div class="empty-state" id="k8s-empty" style="display:none;"><div class="empty-state-icon">📦</div><div class="empty-state-text">No clusters configured</div><div class="empty-state-sub">Add a Kubernetes, Docker, or Docker Swarm cluster</div></div>
-        </section>
+        <!-- ═══ SECTION: Container Clusters (K8s / Docker / Swarm) (Lazy Loaded) ═══ -->
 
         <!-- ═══ SECTION: Git Providers ═══ -->
         <section class="section" id="section-git-providers">
@@ -2043,10 +2007,10 @@
 
           <!-- Tabs -->
           <div class="cost-tabs-bar">
-            <button class="cost-tab-btn active" data-cost-tab="cost-tab-clusters">Cluster Costs</button>
-            <button class="cost-tab-btn" data-cost-tab="cost-tab-namespaces">Namespace Costs</button>
-            <button class="cost-tab-btn" data-cost-tab="cost-tab-waste">Resource Waste</button>
-            <button class="cost-tab-btn" data-cost-tab="cost-tab-trends">Cost Trends</button>
+            <button class="tab-btn cost-tab-btn active" data-cost-tab="cost-tab-clusters">Cluster Costs</button>
+            <button class="tab-btn cost-tab-btn" data-cost-tab="cost-tab-namespaces">Namespace Costs</button>
+            <button class="tab-btn cost-tab-btn" data-cost-tab="cost-tab-waste">Resource Waste</button>
+            <button class="tab-btn cost-tab-btn" data-cost-tab="cost-tab-trends">Cost Trends</button>
           </div>
 
           <!-- Tab: Cluster Costs -->
@@ -2164,8 +2128,8 @@
           </div>
 
           <div class="topo-tabs-bar">
-            <button class="topo-tab-btn active" data-topo-tab="topo-tab-tree">Cluster Topology</button>
-            <button class="topo-tab-btn" data-topo-tab="topo-tab-deps">Service Dependencies</button>
+            <button class="tab-btn topo-tab-btn active" data-topo-tab="topo-tab-tree">Cluster Topology</button>
+            <button class="tab-btn topo-tab-btn" data-topo-tab="topo-tab-deps">Service Dependencies</button>
           </div>
 
           <div class="topo-tab-panel" id="topo-tab-tree">
@@ -2194,8 +2158,8 @@
           </div>
 
           <div class="auto-tabs-bar">
-            <button class="auto-tab-btn active" data-auto-tab="auto-tab-rules">Automation Rules</button>
-            <button class="auto-tab-btn" data-auto-tab="auto-tab-history">Execution History</button>
+            <button class="tab-btn auto-tab-btn active" data-auto-tab="auto-tab-rules">Automation Rules</button>
+            <button class="tab-btn auto-tab-btn" data-auto-tab="auto-tab-history">Execution History</button>
           </div>
 
           <div class="auto-tab-panel" id="auto-tab-rules">
@@ -2315,9 +2279,9 @@
             </div>
           </div>
           <div style="display:flex;gap:4px;border-bottom:1px solid var(--color-hairline);margin-bottom:var(--space-md);">
-            <button class="pe-tab-btn active" data-pe-tab="pe-tab-catalog">Service Catalog</button>
-            <button class="pe-tab-btn" data-pe-tab="pe-tab-templates">Golden Templates</button>
-            <button class="pe-tab-btn" data-pe-tab="pe-tab-blueprints">Blueprints</button>
+            <button class="tab-btn pe-tab-btn active" data-pe-tab="pe-tab-catalog">Service Catalog</button>
+            <button class="tab-btn pe-tab-btn" data-pe-tab="pe-tab-templates">Golden Templates</button>
+            <button class="tab-btn pe-tab-btn" data-pe-tab="pe-tab-blueprints">Blueprints</button>
           </div>
           <div class="pe-tab-panel" id="pe-tab-catalog">
             <div id="pe-catalog-grid" class="grid-3-col"></div>
@@ -2439,13 +2403,18 @@
   <script src="/modules/core/release-notes.js"></script>
   <script src="/modules/core/command-palette.js"></script>
   <script src="/core/utils/sanitizer.js"></script>
+  <script src="/core/utils/rules-builder.js"></script>
   <script src="/core/utils/table-renderer.js"></script>
   <script src="/core/utils/components.js"></script>
   <script src="/core/services/ws-client.js"></script>
   <script src="/core/services/api-client.js?v=prod2"></script>
   <script src="/core/services/telemetry.js"></script>
   <script src="/components/ui/modal.js"></script>
+  <script src="/components/ui/table.js"></script>
+  <script src="/core/components/list-view.js"></script>
+  <script src="/core/components/data-table-page.js"></script>
   <script src="/components/layout/sidebar.js"></script>
+  <script src="/core/ViewLoader.js"></script>
   <script src="/core/router/index.js?v=prod2"></script>
   <script src="/modules/incidents/incidents.js"></script>
   <script src="/core/services/agents.js"></script>

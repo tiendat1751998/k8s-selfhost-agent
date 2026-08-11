@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -64,11 +63,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	header := `{"alg":"HS256","typ":"JWT"}`
-	payload := `{"sub":"test-user-id","role":"platform_admin"}`
-	encHeader := base64.RawURLEncoding.EncodeToString([]byte(header))
-	encPayload := base64.RawURLEncoding.EncodeToString([]byte(payload))
-	token := encHeader + "." + encPayload + ".sig"
+	token, _ := GenerateJWT("test-user-id", "platform_admin", "")
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Authorization", "Bearer "+token)
@@ -108,8 +103,7 @@ func TestRBAC_RequiredRole_HasRole(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})))
 
-	payload := `{"sub":"user","role":"tenant_admin"}`
-	token := "hdr." + base64.RawURLEncoding.EncodeToString([]byte(payload)) + ".sig"
+	token, _ := GenerateJWT("user", "tenant_admin", "")
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Authorization", "Bearer "+token)
@@ -126,8 +120,7 @@ func TestRBAC_RequiredRole_MissingRole(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})))
 
-	payload := `{"sub":"user","role":"viewer"}`
-	token := "hdr." + base64.RawURLEncoding.EncodeToString([]byte(payload)) + ".sig"
+	token, _ := GenerateJWT("user", "viewer", "")
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Authorization", "Bearer "+token)
@@ -148,8 +141,7 @@ func TestJWTAuth_QueryToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	payload := `{"sub":"test-user-id","role":"viewer"}`
-	token := "hdr." + base64.RawURLEncoding.EncodeToString([]byte(payload)) + ".sig"
+	token, _ := GenerateJWT("test-user-id", "viewer", "")
 
 	r := httptest.NewRequest(http.MethodGet, "/?token="+token, nil)
 	w := httptest.NewRecorder()
@@ -169,8 +161,7 @@ func TestJWTAuth_TenantClaim(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	payload := `{"sub":"test-user-id","role":"viewer","tenant":"my-custom-tenant"}`
-	token := "hdr." + base64.RawURLEncoding.EncodeToString([]byte(payload)) + ".sig"
+	token, _ := GenerateJWT("test-user-id", "viewer", "my-custom-tenant")
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Authorization", "Bearer "+token)

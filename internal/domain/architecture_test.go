@@ -33,7 +33,8 @@ func TestArchitecture_Imports(t *testing.T) {
 		for _, imp := range fileAST.Imports {
 			val := strings.Trim(imp.Path.Value, `"`)
 			if strings.Contains(val, "github.com/datdt/k8sselfhost/internal/infrastructure") ||
-				strings.Contains(val, "github.com/datdt/k8sselfhost/internal/adapter") {
+				strings.Contains(val, "github.com/datdt/k8sselfhost/internal/adapter") ||
+				strings.Contains(val, "github.com/datdt/k8sselfhost/internal/usecase") {
 				t.Errorf("Violation: domain layer file %s imports disallowed package %s", path, val)
 			}
 		}

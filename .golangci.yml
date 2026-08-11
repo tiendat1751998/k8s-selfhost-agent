@@ -38,12 +38,9 @@ linters-settings:
       - diagnostic
       - style
       - performance
-  gosec:
-    excludes:
-      - G104
-
 issues:
   exclude-rules:
+    # Disable gosec and errcheck in test files as test helpers intentionally ignore errors and use simple mock setups
     - path: _test\.go
       linters:
         - gosec

@@ -14,7 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // MaxLogLines is the maximum number of log lines to retrieve from a pod.
@@ -31,42 +32,16 @@ func NewCollector(clientset *kubernetes.Clientset) *Collector {
 }
 
 // CollectedData holds all diagnostic data gathered for an incident.
-type CollectedData struct {
-	PodLogs        map[string]string `json:"pod_logs"`
-	Events         []EventSummary    `json:"events"`
-	DeploymentYAML string            `json:"deployment_yaml,omitempty"`
-	StatefulSetYAML string           `json:"statefulset_yaml,omitempty"`
-	ServiceYAML    string            `json:"service_yaml,omitempty"`
-	IngressYAML    string            `json:"ingress_yaml,omitempty"`
-	PodDescribe    string            `json:"pod_describe"`
-	NodeMetrics    *NodeMetrics      `json:"node_metrics,omitempty"`
-	PodMetrics     *PodMetrics       `json:"pod_metrics,omitempty"`
-}
+type CollectedData = ports.CollectedData
 
 // EventSummary holds a simplified Kubernetes event.
-type EventSummary struct {
-	Type      string `json:"type"`
-	Reason    string `json:"reason"`
-	Message   string `json:"message"`
-	Count     int32  `json:"count"`
-	FirstSeen string `json:"first_seen"`
-	LastSeen  string `json:"last_seen"`
-}
+type EventSummary = ports.EventSummary
 
 // NodeMetrics holds basic node resource metrics.
-type NodeMetrics struct {
-	NodeName       string `json:"node_name"`
-	CPUUsage       string `json:"cpu_usage"`
-	MemoryUsage    string `json:"memory_usage"`
-	PodCount       int    `json:"pod_count"`
-	Allocatable    string `json:"allocatable"`
-}
+type NodeMetrics = ports.NodeMetrics
 
 // PodMetrics holds basic pod resource metrics.
-type PodMetrics struct {
-	CPUUsage    string `json:"cpu_usage"`
-	MemoryUsage string `json:"memory_usage"`
-}
+type PodMetrics = ports.PodMetrics
 
 func (c *Collector) Collect(ctx context.Context, namespace, podName string) (*CollectedData, error) {
 	log := logger.WithContext(ctx)

@@ -76,9 +76,7 @@ const AuditMode = {
 
   async loadData() {
     try {
-      const res = await fetch('/api/v1/audit/findings');
-      if (!res.ok) throw new Error('API request failed');
-      const json = await res.json();
+      const json = await APIClient.get('/audit/findings');
       const items = json.data || [];
       this.renderFindings(items);
     } catch (e) {

@@ -5,7 +5,9 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
+	"github.com/datdt/k8sselfhost/internal/pkg/stringutil"
 )
+
 
 func TestBuildPRBody(t *testing.T) {
 	inc, _ := incident.New("default", "production", "api-server-xyz123", incident.TypeOOMKilled, incident.SeverityCritical, "Container 'api' was OOMKilled")
@@ -63,15 +65,16 @@ func TestFormatEvidence_Empty(t *testing.T) {
 }
 
 func TestTruncateStr(t *testing.T) {
-	if truncateStr("short", 10) != "short" {
+	if stringutil.Truncate("short", 10) != "short" {
 		t.Error("short string should not be truncated")
 	}
 
-	result := truncateStr("this is a very long string that needs truncation", 20)
+	result := stringutil.Truncate("this is a very long string that needs truncation", 20)
 	if len(result) > 24 {
 		t.Errorf("truncated string too long: %s", result)
 	}
 }
+
 
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {

@@ -165,13 +165,7 @@
           var payload = { id: newId, name: name, tier: tier };
 
           try {
-            var res = await fetch('/api/v1/organizations', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            if (!res.ok) throw new Error('API request failed');
-            await res.json();
+            await APIClient.post('/organizations', payload);
             global.EnterpriseState.organizations.push(payload);
             global.EnterpriseState.activeOrgId = newId;
             initialized = false;
@@ -214,13 +208,7 @@
           var payload = { id: newId, orgId: global.EnterpriseState.activeOrgId, name: name, envs: envs, workloads: wl };
 
           try {
-            var res = await fetch('/api/v1/projects', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            if (!res.ok) throw new Error('API request failed');
-            await res.json();
+            await APIClient.post('/projects', payload);
             global.EnterpriseState.projects.push(payload);
             
             updateProjectsDropdown();

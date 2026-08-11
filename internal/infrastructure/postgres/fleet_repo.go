@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/fleet"
@@ -14,37 +13,28 @@ import (
 )
 
 type fleetRepo struct {
-	pool *pgxpool.Pool
+	pool DBTX
 }
 
 // NewFleetRepo creates a new PostgreSQL fleet repository.
-func NewFleetRepo(pool *pgxpool.Pool) fleet.Repository {
+func NewFleetRepo(pool DBTX) fleet.Repository {
 	return &fleetRepo{pool: pool}
 }
 
+func (r *fleetRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.pool)
+}
+
 func (r *fleetRepo) ListClusters(ctx context.Context) ([]fleet.Cluster, error) {
-	tenantID := middleware.TenantIDFromContext(ctx)
-	userRole := middleware.UserRoleFromContext(ctx)
+	query := `
+		SELECT id, name, "group", region, provider, status, version, nodes, encrypted_token, tenant_id, created_at, updated_at
+		FROM fleet_clusters
+		ORDER BY name ASC
+	`
+	
+	query, args := BuildTenantQuery(ctx, query)
 
-	var query string
-	var args []interface{}
-	if userRole != "platform_admin" && tenantID != "" {
-		query = `
-			SELECT id, name, "group", region, provider, status, version, nodes, encrypted_token, tenant_id, created_at, updated_at
-			FROM fleet_clusters
-			WHERE tenant_id = $1
-			ORDER BY name ASC
-		`
-		args = append(args, tenantID)
-	} else {
-		query = `
-			SELECT id, name, "group", region, provider, status, version, nodes, encrypted_token, tenant_id, created_at, updated_at
-			FROM fleet_clusters
-			ORDER BY name ASC
-		`
-	}
-
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing fleet clusters: %w", err)
 	}
@@ -72,30 +62,16 @@ func (r *fleetRepo) ListClusters(ctx context.Context) ([]fleet.Cluster, error) {
 }
 
 func (r *fleetRepo) GetCluster(ctx context.Context, id string) (*fleet.Cluster, error) {
-	tenantID := middleware.TenantIDFromContext(ctx)
-	userRole := middleware.UserRoleFromContext(ctx)
-
-	var query string
-	var args []interface{}
-	if userRole != "platform_admin" && tenantID != "" {
-		query = `
-			SELECT id, name, "group", region, provider, status, version, nodes, encrypted_token, tenant_id, created_at, updated_at
-			FROM fleet_clusters
-			WHERE id = $1 AND tenant_id = $2
-		`
-		args = []interface{}{id, tenantID}
-	} else {
-		query = `
-			SELECT id, name, "group", region, provider, status, version, nodes, encrypted_token, tenant_id, created_at, updated_at
-			FROM fleet_clusters
-			WHERE id = $1
-		`
-		args = []interface{}{id}
-	}
+	query := `
+		SELECT id, name, "group", region, provider, status, version, nodes, encrypted_token, tenant_id, created_at, updated_at
+		FROM fleet_clusters
+		WHERE id = $1
+	`
+	query, args := BuildTenantQuery(ctx, query, id)
 
 	var c fleet.Cluster
 	var encryptedToken *string
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&c.ID, &c.Name, &c.Group, &c.Region, &c.Provider,
 		&c.Status, &c.Version, &c.Nodes, &encryptedToken, &c.TenantID, &c.CreatedAt, &c.UpdatedAt,
 	)
@@ -142,7 +118,7 @@ func (r *fleetRepo) RegisterCluster(ctx context.Context, c *fleet.Cluster) error
 			tenant_id = EXCLUDED.tenant_id,
 			updated_at = EXCLUDED.updated_at
 	`
-	_, err = r.pool.Exec(ctx, query,
+	_, err = r.getDB(ctx).Exec(ctx, query,
 		c.ID, c.Name, c.Group, c.Region, c.Provider,
 		c.Status, c.Version, c.Nodes, encToken, c.TenantID, now, now,
 	)
@@ -153,28 +129,14 @@ func (r *fleetRepo) RegisterCluster(ctx context.Context, c *fleet.Cluster) error
 }
 
 func (r *fleetRepo) UpdateClusterStatus(ctx context.Context, id, status, version string, nodes int) error {
-	tenantID := middleware.TenantIDFromContext(ctx)
-	userRole := middleware.UserRoleFromContext(ctx)
+	query := `
+		UPDATE fleet_clusters
+		SET status = $2, version = $3, nodes = $4, updated_at = $5
+		WHERE id = $1
+	`
+	query, args := BuildTenantQuery(ctx, query, id, status, version, nodes, time.Now().UTC())
 
-	var query string
-	var args []interface{}
-	if userRole != "platform_admin" && tenantID != "" {
-		query = `
-			UPDATE fleet_clusters
-			SET status = $2, version = $3, nodes = $4, updated_at = $5
-			WHERE id = $1 AND tenant_id = $6
-		`
-		args = []interface{}{id, status, version, nodes, time.Now().UTC(), tenantID}
-	} else {
-		query = `
-			UPDATE fleet_clusters
-			SET status = $2, version = $3, nodes = $4, updated_at = $5
-			WHERE id = $1
-		`
-		args = []interface{}{id, status, version, nodes, time.Now().UTC()}
-	}
-
-	_, err := r.pool.Exec(ctx, query, args...)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating fleet cluster status: %w", err)
 	}
@@ -182,20 +144,10 @@ func (r *fleetRepo) UpdateClusterStatus(ctx context.Context, id, status, version
 }
 
 func (r *fleetRepo) RemoveCluster(ctx context.Context, id string) error {
-	tenantID := middleware.TenantIDFromContext(ctx)
-	userRole := middleware.UserRoleFromContext(ctx)
+	query := `DELETE FROM fleet_clusters WHERE id = $1`
+	query, args := BuildTenantQuery(ctx, query, id)
 
-	var query string
-	var args []interface{}
-	if userRole != "platform_admin" && tenantID != "" {
-		query = `DELETE FROM fleet_clusters WHERE id = $1 AND tenant_id = $2`
-		args = []interface{}{id, tenantID}
-	} else {
-		query = `DELETE FROM fleet_clusters WHERE id = $1`
-		args = []interface{}{id}
-	}
-
-	_, err := r.pool.Exec(ctx, query, args...)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("removing fleet cluster: %w", err)
 	}

@@ -4,7 +4,41 @@ const ResourceExplorer = {
     if (!this.container) return;
     this.render();
     this.bindEvents();
+    
+    // Parse kind from route (e.g. #explorer/Node)
+    const hashParts = window.location.hash.replace('#', '').split('/');
+    if (hashParts.length > 1 && hashParts[0] === 'explorer') {
+      const kind = hashParts[1];
+      const kindSelect = document.getElementById('search-kind');
+      if (kindSelect) {
+        // match case insensitively
+        Array.from(kindSelect.options).forEach(opt => {
+          if (opt.value.toLowerCase() === kind.toLowerCase()) {
+            kindSelect.value = opt.value;
+          }
+        });
+      }
+    }
+    
     this.loadData();
+    
+    // Listen for navigation events to update kind if already mounted
+    if (window.AppState) {
+      window.AppState.on('navigate', (route) => {
+        const parts = route.split('/');
+        if (parts[0] === 'explorer' && parts[1]) {
+          const kindSelect = document.getElementById('search-kind');
+          if (kindSelect) {
+            Array.from(kindSelect.options).forEach(opt => {
+              if (opt.value.toLowerCase() === parts[1].toLowerCase()) {
+                kindSelect.value = opt.value;
+              }
+            });
+            this.loadData();
+          }
+        }
+      });
+    }
   },
 
   render() {
@@ -109,10 +143,7 @@ const ResourceExplorer = {
 
     try {
       const qs = new URLSearchParams({ q: query, kind, cluster }).toString();
-      const res = await fetch(`/api/v1/explorer?${qs}`);
-      if (!res.ok) throw new Error('API request failed');
-      
-      const json = await res.json();
+      const json = await APIClient.get(`/explorer?${qs}`);
       const items = json.data || [];
       this.renderTable(items, json.total || items.length);
     } catch (e) {

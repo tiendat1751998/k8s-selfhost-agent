@@ -18,13 +18,21 @@ spec:
           protocol: TCP
   egress:
     # Allow DNS resolution
-    - ports:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
         - port: 53
           protocol: UDP
         - port: 53
           protocol: TCP
     # Allow PostgreSQL
-    - ports:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
         - port: {{ .Values.config.postgres.port }}
           protocol: TCP
     # Allow Redis

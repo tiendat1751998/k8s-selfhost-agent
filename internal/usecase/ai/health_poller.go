@@ -8,17 +8,18 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
-	"github.com/datdt/k8sselfhost/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
+	"github.com/datdt/k8sselfhost/internal/pkg/concurrency"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // HealthPoller periodically checks the health of all registered AI providers
 // and updates their status in the registry. It also broadcasts status changes
 // via the provided callback.
 type HealthPoller struct {
-	registry     *llm.ProviderRegistry
+	registry     ports.LLMRegistry
 	interval     time.Duration
-	onStatusChange func(name string, result llm.ProviderHealthResult)
+	onStatusChange func(name string, result ports.LLMProviderHealthResult)
 	cancel       context.CancelFunc
 	wg           sync.WaitGroup
 }
@@ -26,9 +27,9 @@ type HealthPoller struct {
 // NewHealthPoller creates a new health poller.
 // onStatusChange is called when a provider's status is updated after a health check.
 func NewHealthPoller(
-	registry *llm.ProviderRegistry,
+	registry ports.LLMRegistry,
 	interval time.Duration,
-	onStatusChange func(name string, result llm.ProviderHealthResult),
+	onStatusChange func(name string, result ports.LLMProviderHealthResult),
 ) *HealthPoller {
 	return &HealthPoller{
 		registry:     registry,
@@ -42,7 +43,7 @@ func (hp *HealthPoller) Start(ctx context.Context) {
 	ctx, hp.cancel = context.WithCancel(ctx)
 	hp.wg.Add(1)
 
-	go func() {
+	concurrency.Go(logger.Get(), func() {
 		defer hp.wg.Done()
 		log := logger.WithContext(ctx)
 
@@ -81,7 +82,7 @@ func (hp *HealthPoller) Start(ctx context.Context) {
 				timer.Reset(currentInterval)
 			}
 		}
-	}()
+	})
 }
 
 // Stop gracefully stops the health poller and waits for completion.
