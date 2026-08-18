@@ -24,8 +24,8 @@ export const useBackupStore = defineStore('backup', () => {
       jobs.value = j
       restores.value = r
       storages.value = s
-    } catch (err: any) {
-      error.value = err.message || 'Failed to fetch backup data'
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to fetch backup data'
     } finally {
       loading.value = false
     }
@@ -37,8 +37,8 @@ export const useBackupStore = defineStore('backup', () => {
       const newJob = await backupApi.triggerBackup(policyId, type)
       jobs.value.unshift(newJob)
       return newJob
-    } catch (err: any) {
-      error.value = err.message || 'Failed to trigger backup'
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to trigger backup'
       throw err
     } finally {
       loading.value = false
@@ -51,8 +51,8 @@ export const useBackupStore = defineStore('backup', () => {
       const restore = await backupApi.triggerRestore(jobId, host, db)
       restores.value.unshift(restore)
       return restore
-    } catch (err: any) {
-      error.value = err.message || 'Failed to trigger restore'
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to trigger restore'
       throw err
     } finally {
       loading.value = false

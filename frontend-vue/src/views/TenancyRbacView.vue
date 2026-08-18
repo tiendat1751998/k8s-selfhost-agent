@@ -43,12 +43,12 @@ async function loadData() {
     projects.value = summary?.projects || []
     members.value = summary?.members || []
     rbacMatrix.value = summary?.rbacMatrix || {}
-  } catch (err: any) {
+  } catch (err: unknown) {
     organizations.value = []
     projects.value = []
     members.value = []
     rbacMatrix.value = {}
-    error.value = err?.message || 'Failed to load tenancy and RBAC data'
+    error.value = err instanceof Error ? err.message : 'Failed to load tenancy and RBAC data'
   } finally {
     loading.value = false
   }
@@ -125,8 +125,8 @@ async function handleCreateOrg() {
     showOrgModal.value = false
     showFeedback(`Organization ${newOrg.value.name} successfully provisioned.`)
     newOrg.value = { id: '', name: '', tier: 'Enterprise' }
-  } catch (e: any) {
-    showFeedback(`Failed to provision organization: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to provision organization: ${e instanceof Error ? e.message : 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }
@@ -149,8 +149,8 @@ async function handleCreateProject() {
     showProjectModal.value = false
     showFeedback(`Project ${proj.name} successfully created.`)
     newProj.value = { id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 5 }
-  } catch (e: any) {
-    showFeedback(`Failed to create project: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to create project: ${e instanceof Error ? e.message : 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }

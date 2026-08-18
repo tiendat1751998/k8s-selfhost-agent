@@ -39,9 +39,9 @@ async function loadChanges() {
   try {
     const res = await changesApi.getChanges()
     changes.value = res?.data || []
-  } catch (err: any) {
+  } catch (err: unknown) {
     changes.value = []
-    error.value = err?.message || 'Failed to load change requests'
+    error.value = err instanceof Error ? err.message : 'Failed to load change requests'
   } finally {
     loading.value = false
   }
@@ -85,8 +85,8 @@ async function handleApprove(cr: ChangeRequest) {
     cr.status = 'approved'
     cr.approver = 'current.user@enterprise.io'
     showFeedback(`Change request ${cr.id} successfully approved.`)
-  } catch (e: any) {
-    showFeedback(`Failed to approve change request: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to approve change request: ${e instanceof Error ? e.message : 'Unknown error'}`)
   }
 }
 
@@ -96,8 +96,8 @@ async function handleReject(cr: ChangeRequest) {
     cr.status = 'rejected'
     cr.approver = 'current.user@enterprise.io'
     showFeedback(`Change request ${cr.id} rejected.`)
-  } catch (e: any) {
-    showFeedback(`Failed to reject change request: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to reject change request: ${e instanceof Error ? e.message : 'Unknown error'}`)
   }
 }
 
@@ -125,8 +125,8 @@ async function handleCreateChange() {
     showFeedback(`Change Request ${cr.id} registered for review.`)
     newChange.value.title = ''
     newChange.value.description = ''
-  } catch (e: any) {
-    showFeedback(`Failed to submit change request: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to submit change request: ${e instanceof Error ? e.message : 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }

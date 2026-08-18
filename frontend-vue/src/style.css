@@ -252,3 +252,20 @@ h1, h2, h3, h4, h5, h6 {
 .animate-fade-in {
   animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
+
+/* Responsive Table Scrolling & Breakpoints */
+.table-scroll-wrapper,
+.base-table-container,
+.data-table-container,
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .data-table,
+  .base-table {
+    min-width: 600px;
+  }
+}

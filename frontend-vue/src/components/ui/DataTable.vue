@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="T extends Record<string, any>">
+<script setup lang="ts" generic="T extends Record<string, unknown>">
 import { ref, computed } from 'vue'
 
 export interface Column<T> {
@@ -7,7 +7,7 @@ export interface Column<T> {
   width?: string
   align?: 'left' | 'center' | 'right'
   sortable?: boolean
-  render?: (row: T) => any
+  render?: (row: T) => unknown
 }
 
 const props = defineProps<{
@@ -41,7 +41,9 @@ const filteredData = computed(() => {
       const va = a[sortKey.value]
       const vb = b[sortKey.value]
       if (va === vb) return 0
-      const res = va > vb ? 1 : -1
+      if (va === undefined || va === null) return 1
+      if (vb === undefined || vb === null) return -1
+      const res = String(va).localeCompare(String(vb), undefined, { numeric: true })
       return sortOrder.value === 'asc' ? res : -res
     })
   }

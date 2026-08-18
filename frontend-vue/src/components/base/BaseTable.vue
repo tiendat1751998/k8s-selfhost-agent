@@ -1,11 +1,11 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends Record<string, unknown> = Record<string, unknown>">
 export interface TableColumn {
   key: string
   label: string
 }
 defineProps<{
   columns: TableColumn[]
-  data: any[]
+  data: T[]
 }>()
 </script>
 

@@ -4,7 +4,7 @@ import { useAppStore } from '../stores/app'
 export function useWebSocket(url: string = 'ws://' + window.location.host + '/ws') {
   const store = useAppStore()
   let ws: WebSocket | null = null
-  let watchdog: any = null
+  let watchdog: ReturnType<typeof setTimeout> | null = null
 
   function connect() {
     store.setConnection('connecting')
@@ -19,7 +19,9 @@ export function useWebSocket(url: string = 'ws://' + window.location.host + '/ws
         const msg = JSON.parse(e.data)
         if (msg.type === 'incident') store.addIncident(msg.data)
         if (msg.type === 'log') store.addLog(msg.data)
-      } catch (err) {}
+      } catch (err: unknown) {
+        console.warn('Failed to parse WebSocket message:', err)
+      }
     }
     ws.onclose = () => {
       store.setConnection('offline')

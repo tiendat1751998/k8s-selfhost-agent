@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="login-page">
     <div class="login-background-glow"></div>
 
@@ -95,8 +95,8 @@ async function handleSubmit() {
     await authStore.login(email.value, password.value)
     const redirect = (route.query.redirect as string) || '/backup'
     router.push(redirect)
-  } catch (err: any) {
-    errorMessage.value = err.message || 'Authentication failed. Please check your credentials.'
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Authentication failed. Please check your credentials.'
   }
 }
 </script>

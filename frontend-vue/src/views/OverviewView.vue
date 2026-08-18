@@ -34,8 +34,8 @@ async function loadData() {
     if (incRes.status === 'fulfilled') {
       recentIncidents.value = incRes.value.data || []
     }
-  } catch (err: any) {
-    error.value = err?.message || 'Failed to load overview telemetry'
+  } catch (err: unknown) {
+    error.value = err instanceof Error ? err.message : 'Failed to load overview telemetry'
   } finally {
     loading.value = false
   }

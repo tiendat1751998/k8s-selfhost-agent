@@ -16,7 +16,7 @@ class ApiClient {
     this.token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
   }
 
-  setToken(token: string | null) {
+  setToken(token: string | null): void {
     this.token = token
     if (typeof window !== 'undefined') {
       if (token) {
@@ -27,7 +27,7 @@ class ApiClient {
     }
   }
 
-  clearToken() {
+  clearToken(): void {
     this.setToken(null)
     if (typeof window !== 'undefined') {
       localStorage.removeItem('k8s_user')
@@ -38,7 +38,7 @@ class ApiClient {
     return this.token
   }
 
-  setTenantId(tenantId: string) {
+  setTenantId(tenantId: string): void {
     this.tenantId = tenantId
   }
 
@@ -102,14 +102,14 @@ class ApiClient {
     return this.request<T>(`${endpoint}${query}`, { method: 'GET' })
   }
 
-  post<T>(endpoint: string, body?: any): Promise<T> {
+  post<T>(endpoint: string, body?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
     })
   }
 
-  put<T>(endpoint: string, body?: any): Promise<T> {
+  put<T>(endpoint: string, body?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PUT',
       body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
