@@ -34,71 +34,21 @@ const newMember = ref({ id: '', orgId: '', user: '', role: 'developer', scope: '
 const isSubmitting = ref(false)
 const feedbackMessage = ref<string | null>(null)
 
-// Fallback seed data in case backend has no initial records
-const fallbackOrgs: Organization[] = [
-  { id: 'org-enterprise-core', name: 'Global Enterprise Corp', tier: 'Enterprise Tier-1' },
-  { id: 'org-fintech-shield', name: 'Fintech Payments & Shield', tier: 'GovCloud High-Sec' },
-  { id: 'org-ai-research', name: 'Applied AI & ML Lab', tier: 'High-Performance' },
-]
-
-const fallbackProjects: Project[] = [
-  { id: 'proj-k8s-core', orgId: 'org-enterprise-core', name: 'Core Control Plane', envs: ['prod', 'stage'], workloads: 42 },
-  { id: 'proj-gateway-edge', orgId: 'org-enterprise-core', name: 'Edge Ingress Gateway', envs: ['prod', 'dev'], workloads: 18 },
-  { id: 'proj-ledger-pci', orgId: 'org-fintech-shield', name: 'PCI-DSS Ledger Cluster', envs: ['prod'], workloads: 28 },
-  { id: 'proj-ai-pipeline', orgId: 'org-ai-research', name: 'DeepSeek LLM Inference', envs: ['prod', 'dev', 'test'], workloads: 64 },
-]
-
-const fallbackMembers: Member[] = [
-  { id: 'mem-1', orgId: 'org-enterprise-core', user: 'alex.sre@enterprise.io', role: 'admin', scope: 'org-wide' },
-  { id: 'mem-2', orgId: 'org-enterprise-core', user: 'sarah.devops@enterprise.io', role: 'operator', scope: 'proj-k8s-core' },
-  { id: 'mem-3', orgId: 'org-fintech-shield', user: 'marcus.sec@fintech.io', role: 'auditor', scope: 'org-wide' },
-  { id: 'mem-4', orgId: 'org-ai-research', user: 'elena.ml@ai-lab.io', role: 'developer', scope: 'proj-ai-pipeline' },
-]
-
-const fallbackRBAC: RBACMatrix = {
-  admin: {
-    'pods:read': true, 'pods:write': true, 'deployments:scale': true,
-    'secrets:manage': true, 'backups:execute': true, 'nodes:drain': true,
-    'ai:configure': true, 'changes:approve': true, 'audit:view': true
-  },
-  operator: {
-    'pods:read': true, 'pods:write': true, 'deployments:scale': true,
-    'secrets:manage': false, 'backups:execute': true, 'nodes:drain': false,
-    'ai:configure': true, 'changes:approve': true, 'audit:view': true
-  },
-  developer: {
-    'pods:read': true, 'pods:write': true, 'deployments:scale': false,
-    'secrets:manage': false, 'backups:execute': false, 'nodes:drain': false,
-    'ai:configure': false, 'changes:approve': false, 'audit:view': false
-  },
-  auditor: {
-    'pods:read': true, 'pods:write': false, 'deployments:scale': false,
-    'secrets:manage': false, 'backups:execute': false, 'nodes:drain': false,
-    'ai:configure': false, 'changes:approve': false, 'audit:view': true
-  },
-  viewer: {
-    'pods:read': true, 'pods:write': false, 'deployments:scale': false,
-    'secrets:manage': false, 'backups:execute': false, 'nodes:drain': false,
-    'ai:configure': false, 'changes:approve': false, 'audit:view': false
-  }
-}
-
 async function loadData() {
   loading.value = true
   error.value = null
   try {
     const summary = await tenancyApi.getSummary()
-    organizations.value = summary.organizations?.length ? summary.organizations : fallbackOrgs
-    projects.value = summary.projects?.length ? summary.projects : fallbackProjects
-    members.value = summary.members?.length ? summary.members : fallbackMembers
-    rbacMatrix.value = Object.keys(summary.rbacMatrix || {}).length ? summary.rbacMatrix : fallbackRBAC
+    organizations.value = summary?.organizations || []
+    projects.value = summary?.projects || []
+    members.value = summary?.members || []
+    rbacMatrix.value = summary?.rbacMatrix || {}
   } catch (err: any) {
-    // Graceful fallback to seeded data
-    organizations.value = fallbackOrgs
-    projects.value = fallbackProjects
-    members.value = fallbackMembers
-    rbacMatrix.value = fallbackRBAC
-    error.value = 'Note: Telemetry running in fallback mode (' + (err.message || 'offline') + ')'
+    organizations.value = []
+    projects.value = []
+    members.value = []
+    rbacMatrix.value = {}
+    error.value = err?.message || 'Failed to load tenancy and RBAC data'
   } finally {
     loading.value = false
   }
@@ -164,21 +114,19 @@ function showFeedback(msg: string) {
 async function handleCreateOrg() {
   if (!newOrg.value.id || !newOrg.value.name) return
   isSubmitting.value = true
+  const orgPayload: Organization = {
+    id: newOrg.value.id.toLowerCase().replace(/\s+/g, '-'),
+    name: newOrg.value.name,
+    tier: newOrg.value.tier
+  }
   try {
-    await tenancyApi.createOrganization({
-      id: newOrg.value.id.toLowerCase().replace(/\s+/g, '-'),
-      name: newOrg.value.name,
-      tier: newOrg.value.tier
-    })
-    organizations.value.push({ ...newOrg.value })
+    const created = await tenancyApi.createOrganization(orgPayload)
+    organizations.value.push(created || orgPayload)
     showOrgModal.value = false
     showFeedback(`Organization ${newOrg.value.name} successfully provisioned.`)
     newOrg.value = { id: '', name: '', tier: 'Enterprise' }
   } catch (e: any) {
-    // Add locally for frontend demo
-    organizations.value.push({ ...newOrg.value })
-    showOrgModal.value = false
-    showFeedback(`Organization ${newOrg.value.name} registered (local sync).`)
+    showFeedback(`Failed to provision organization: ${e?.message || 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }
@@ -196,15 +144,13 @@ async function handleCreateProject() {
     workloads: Number(newProj.value.workloads) || 0
   }
   try {
-    await tenancyApi.createProject(proj)
-    projects.value.push(proj)
+    const created = await tenancyApi.createProject(proj)
+    projects.value.push(created || proj)
     showProjectModal.value = false
     showFeedback(`Project ${proj.name} successfully created.`)
     newProj.value = { id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 5 }
   } catch (e: any) {
-    projects.value.push(proj)
-    showProjectModal.value = false
-    showFeedback(`Project ${proj.name} created (local sync).`)
+    showFeedback(`Failed to create project: ${e?.message || 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }
@@ -376,7 +322,10 @@ function removeMember(id: string) {
 
     <!-- TAB 2: PROJECTS WORKLOAD GRID -->
     <div v-else-if="activeTab === 'projects'" class="tab-content animate-fade-in">
-      <div class="projects-grid">
+      <div v-if="filteredProjects.length === 0" class="empty-list glass-panel">
+        No project namespaces configured. Click "+ Create Project" above to allocate namespaces.
+      </div>
+      <div v-else class="projects-grid">
         <div v-for="proj in filteredProjects" :key="proj.id" class="project-card glass-panel">
           <div class="project-card-header">
             <div class="project-title-wrap">
@@ -433,7 +382,10 @@ function removeMember(id: string) {
           </button>
         </div>
 
-        <div class="rbac-table-wrap">
+        <div v-if="rbacRoles.length === 0" class="empty-list">
+          No RBAC roles configured
+        </div>
+        <div v-else class="rbac-table-wrap">
           <table class="rbac-table">
             <thead>
               <tr>
@@ -1064,5 +1016,12 @@ function removeMember(id: string) {
 .btn-sm {
   padding: 6px 12px;
   font-size: 12px;
+}
+
+.empty-list {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 </style>

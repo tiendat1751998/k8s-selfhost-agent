@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { fleetApi, incidentsApi, type Cluster, type Incident } from '../api/compute'
 import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 
 const router = useRouter()
+const loading = ref(false)
+const error = ref<string | null>(null)
+const clusters = ref<Cluster[]>([])
+const recentIncidents = ref<Incident[]>([])
 
 const quickLinks = [
   { path: '/ai-hub', icon: '🧠', title: 'AI Provider Hub', desc: 'Manage 20 LLM models & circuit breakers' },
@@ -15,17 +20,55 @@ const quickLinks = [
   { path: '/backup', icon: '📦', title: 'Disaster Recovery', desc: 'Dual-Sync NVMe & S3 replication' },
 ]
 
-const recentIncidents = [
-  { id: 'inc-104', title: 'OOMKilled Spike in payment-processor', cluster: 'prod-us-east-1', time: '14 mins ago', severity: 'high', status: 'resolved' },
-  { id: 'inc-103', title: 'Trivy CVE-2024-21626 containerd fix applied', cluster: 'prod-eu-west-1', time: '2 hours ago', severity: 'critical', status: 'deployed' },
-  { id: 'inc-102', title: 'S3 Dual-Sync backup resync verified', cluster: 'prod-us-east-1', time: '6 hours ago', severity: 'medium', status: 'healthy' },
-]
+async function loadData() {
+  loading.value = true
+  error.value = null
+  try {
+    const [fleetRes, incRes] = await Promise.allSettled([
+      fleetApi.list(),
+      incidentsApi.list({ limit: 5 })
+    ])
+    if (fleetRes.status === 'fulfilled') {
+      clusters.value = fleetRes.value || []
+    }
+    if (incRes.status === 'fulfilled') {
+      recentIncidents.value = incRes.value.data || []
+    }
+  } catch (err: any) {
+    error.value = err?.message || 'Failed to load overview telemetry'
+  } finally {
+    loading.value = false
+  }
+}
 
-const clusterStats = computed(() => [
-  { name: 'prod-us-east-1', nodes: 16, pods: 284, cpu: '64%', memory: '72%', status: 'healthy' },
-  { name: 'prod-eu-west-1', nodes: 12, pods: 198, cpu: '48%', memory: '58%', status: 'healthy' },
-  { name: 'staging-us-east', nodes: 6, pods: 86, cpu: '32%', memory: '41%', status: 'healthy' },
-])
+onMounted(() => {
+  loadData()
+})
+
+const onlineClustersCount = computed(() => {
+  return clusters.value.filter(c => c.status === 'active' || c.health_status === 'healthy').length
+})
+
+const totalNodes = computed(() => {
+  return clusters.value.reduce((acc, c) => acc + (c.nodes || 0), 0)
+})
+
+function formatTime(isoStr?: string): string {
+  if (!isoStr) return 'Just now'
+  try {
+    const date = new Date(isoStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins} mins ago`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `${diffHours} hours ago`
+    return date.toLocaleDateString()
+  } catch {
+    return isoStr
+  }
+}
 </script>
 
 <template>
@@ -57,15 +100,15 @@ const clusterStats = computed(() => [
     <div class="metrics-grid">
       <MetricCard 
         title="Global Fleet Health" 
-        value="99.98%" 
-        trend="3 Clusters Synchronized" 
+        :value="clusters.length > 0 ? `${Math.round((onlineClustersCount / clusters.length) * 100)}%` : '100%'" 
+        :trend="`${onlineClustersCount}/${clusters.length} Clusters Online`" 
         trendDirection="up" 
       />
       <MetricCard 
-        title="Total Workload Pods" 
-        value="568" 
-        trend="+14% this month" 
-        trendDirection="up" 
+        title="Total Cluster Nodes" 
+        :value="String(totalNodes)" 
+        trend="Managed Fleet Nodes" 
+        trendDirection="neutral" 
       />
       <MetricCard 
         title="Active AI Models" 
@@ -74,10 +117,10 @@ const clusterStats = computed(() => [
         trendDirection="neutral" 
       />
       <MetricCard 
-        title="ZeroTrust Compliance" 
-        value="100%" 
-        trend="CIS Benchmark Passed" 
-        trendDirection="up" 
+        title="Active Incidents" 
+        :value="String(recentIncidents.filter(i => i.status !== 'resolved').length)" 
+        trend="Autonomous SRE Tracking" 
+        trendDirection="down" 
       />
     </div>
 
@@ -107,19 +150,22 @@ const clusterStats = computed(() => [
       <div class="cluster-panel glass-panel">
         <div class="panel-head">
           <h3>Fleet Clusters Telemetry</h3>
-          <span class="badge badge-emerald">3/3 ONLINE</span>
+          <span class="badge badge-emerald">{{ onlineClustersCount }}/{{ clusters.length }} ONLINE</span>
         </div>
         <div class="cluster-list">
-          <div v-for="c in clusterStats" :key="c.name" class="cluster-item">
+          <div v-if="clusters.length === 0" class="empty-list">
+            No clusters connected yet
+          </div>
+          <div v-for="c in clusters" :key="c.id || c.name" class="cluster-item">
             <div class="c-left">
               <span class="c-name font-mono">{{ c.name }}</span>
-              <small class="c-meta">{{ c.nodes }} Nodes • {{ c.pods }} Pods</small>
+              <small class="c-meta">{{ c.nodes || 0 }} Nodes • {{ c.region || c.provider || 'default' }}</small>
             </div>
             <div class="c-metrics font-mono">
-              <span>CPU: <strong class="text-cyan">{{ c.cpu }}</strong></span>
-              <span>MEM: <strong class="text-emerald">{{ c.memory }}</strong></span>
+              <span>Provider: <strong class="text-cyan">{{ c.provider || 'k8s' }}</strong></span>
+              <span>Version: <strong class="text-emerald">{{ c.version || 'v1.31' }}</strong></span>
             </div>
-            <StatusBadge :status="c.status" size="sm" />
+            <StatusBadge :status="c.health_status || c.status || 'healthy'" size="sm" />
           </div>
         </div>
       </div>
@@ -133,10 +179,13 @@ const clusterStats = computed(() => [
           </button>
         </div>
         <div class="incident-list">
+          <div v-if="recentIncidents.length === 0" class="empty-list">
+            No recent incidents recorded
+          </div>
           <div v-for="inc in recentIncidents" :key="inc.id" class="incident-item">
             <div class="inc-left">
-              <div class="inc-title">{{ inc.title }}</div>
-              <small class="inc-meta font-mono">{{ inc.cluster }} • {{ inc.time }}</small>
+              <div class="inc-title">{{ inc.message || inc.type }}</div>
+              <small class="inc-meta font-mono">{{ inc.cluster_name || 'k8s' }} • {{ formatTime(inc.created_at) }}</small>
             </div>
             <StatusBadge :status="inc.status" size="sm" />
           </div>
@@ -336,5 +385,12 @@ const clusterStats = computed(() => [
 .btn-sm {
   padding: 4px 10px;
   font-size: 11px;
+}
+
+.empty-list {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 </style>

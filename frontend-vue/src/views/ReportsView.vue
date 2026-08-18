@@ -30,77 +30,15 @@ const newReport = ref({
   date_range: '30d'
 })
 
-// Seed Fallback Reports
-const fallbackReports: Report[] = [
-  {
-    id: 'rep-9821',
-    title: 'SOC2 Type II & CIS Kubernetes Benchmark Audit',
-    type: 'compliance',
-    format: 'pdf',
-    status: 'completed',
-    file_url: '/downloads/reports/soc2-cis-benchmark-aug2026.pdf',
-    created_by: 'marcus.sec@fintech.io',
-    created_at: '2026-08-18T08:00:00Z',
-    expires_at: '2026-09-18T08:00:00Z'
-  },
-  {
-    id: 'rep-9820',
-    title: 'FinOps Cloud & On-Prem Multi-Cluster Cost Breakdown',
-    type: 'cost',
-    format: 'excel',
-    status: 'completed',
-    file_url: '/downloads/reports/finops-cost-breakdown-q3.xlsx',
-    created_by: 'alex.sre@enterprise.io',
-    created_at: '2026-08-17T16:00:00Z',
-    expires_at: '2026-09-17T16:00:00Z'
-  },
-  {
-    id: 'rep-9819',
-    title: 'Dual-Sync Disaster Recovery Drill & RTO/RPO Verification',
-    type: 'operational',
-    format: 'pdf',
-    status: 'completed',
-    file_url: '/downloads/reports/dr-drill-rto-verification.pdf',
-    created_by: 'sarah.devops@enterprise.io',
-    created_at: '2026-08-16T12:00:00Z',
-    expires_at: '2026-09-16T12:00:00Z'
-  },
-  {
-    id: 'rep-9818',
-    title: 'Q3 Trivy Vulnerabilities & Secret Exposure Digest',
-    type: 'security',
-    format: 'pdf',
-    status: 'completed',
-    file_url: '/downloads/reports/security-cve-digest.pdf',
-    created_by: 'marcus.sec@fintech.io',
-    created_at: '2026-08-15T09:00:00Z',
-    expires_at: '2026-09-15T09:00:00Z'
-  },
-  {
-    id: 'rep-9817',
-    title: 'Incident Post-Mortem: OOM Ingress Spike Recovery',
-    type: 'incident',
-    format: 'pdf',
-    status: 'generating',
-    created_by: 'alex.sre@enterprise.io',
-    created_at: '2026-08-18T10:30:00Z',
-    expires_at: '2026-09-18T10:30:00Z'
-  }
-]
-
 async function loadReports() {
   loading.value = true
   error.value = null
   try {
     const res = await reportsApi.getReports()
-    if (res && res.data && res.data.length > 0) {
-      reports.value = res.data
-    } else {
-      reports.value = fallbackReports
-    }
+    reports.value = res?.data || []
   } catch (err: any) {
-    reports.value = fallbackReports
-    error.value = 'Note: Telemetry running in fallback mode'
+    reports.value = []
+    error.value = err?.message || 'Failed to load reports'
   } finally {
     loading.value = false
   }
@@ -151,8 +89,7 @@ async function handleDeleteReport(id: string) {
     reports.value = reports.value.filter(r => r.id !== id)
     showFeedback('Report file archived and removed.')
   } catch (e: any) {
-    reports.value = reports.value.filter(r => r.id !== id)
-    showFeedback('Report file removed (local sync).')
+    showFeedback(`Failed to delete report: ${e?.message || 'Unknown error'}`)
   }
 }
 
@@ -172,20 +109,17 @@ async function handleGenerateReport() {
   }
 
   try {
-    await reportsApi.generateReport({
+    const created = await reportsApi.generateReport({
       title: rep.title,
       type: rep.type,
       format: rep.format
     })
-    reports.value.unshift(rep)
+    reports.value.unshift(created || rep)
     showGenerateModal.value = false
     showFeedback(`Report "${rep.title}" compiled and signed.`)
     newReport.value.title = ''
   } catch (e: any) {
-    reports.value.unshift(rep)
-    showGenerateModal.value = false
-    showFeedback(`Report "${rep.title}" generated (local sync).`)
-    newReport.value.title = ''
+    showFeedback(`Failed to compile report: ${e?.message || 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }

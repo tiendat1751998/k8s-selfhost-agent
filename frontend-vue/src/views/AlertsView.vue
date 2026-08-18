@@ -46,108 +46,6 @@ const newChannel = ref({
   enabled: true
 })
 
-// Seed Fallback Data
-const fallbackRules: AlertRule[] = [
-  {
-    ID: 'rule-cpu-burst',
-    Name: 'High Cluster CPU Saturation',
-    Description: 'Triggers when worker node CPU usage exceeds 90% sustained for 5 minutes.',
-    MetricName: 'node_cpu_utilization_percent',
-    Condition: '>',
-    Threshold: 90,
-    DurationSeconds: 300,
-    Severity: 'critical',
-    ChannelIDs: ['chan-slack-ops', 'chan-pagerduty'],
-    Enabled: true,
-    CreatedAt: '2026-08-10T00:00:00Z'
-  },
-  {
-    ID: 'rule-pod-oom',
-    Name: 'Pod Memory Pressure & OOMKilled Warnings',
-    Description: 'Fires when container memory limit is within 95% threshold or OOM event observed.',
-    MetricName: 'container_memory_working_set_bytes',
-    Condition: '>',
-    Threshold: 95,
-    DurationSeconds: 120,
-    Severity: 'high',
-    ChannelIDs: ['chan-slack-ops'],
-    Enabled: true,
-    CreatedAt: '2026-08-11T00:00:00Z'
-  },
-  {
-    ID: 'rule-backup-drift',
-    Name: 'Dual-Sync S3 Replication Drift',
-    Description: 'Warns when NVMe snapshot is not uploaded to secondary S3 within 15 minutes.',
-    MetricName: 'backup_replication_lag_seconds',
-    Condition: '>',
-    Threshold: 900,
-    DurationSeconds: 60,
-    Severity: 'medium',
-    ChannelIDs: ['chan-email-sre'],
-    Enabled: true,
-    CreatedAt: '2026-08-12T00:00:00Z'
-  }
-]
-
-const fallbackChannels: AlertChannel[] = [
-  {
-    ID: 'chan-slack-ops',
-    Name: 'Production Ops War Room',
-    Type: 'slack',
-    Config: { webhook_url: 'https://hooks.slack.com/services/T00/B00/X00', channel: '#ops-incidents' },
-    Enabled: true
-  },
-  {
-    ID: 'chan-telegram-bot',
-    Name: 'Air-Gapped SRE Telegram Bot',
-    Type: 'telegram',
-    Config: { bot_token: 'bot8291823:AA...', chat_id: '-10029384920' },
-    Enabled: true
-  },
-  {
-    ID: 'chan-email-sre',
-    Name: 'Corporate On-Call Tier 1 Email',
-    Type: 'email',
-    Config: { recipients: ['sre-oncall@enterprise.io', 'lead-architect@enterprise.io'] },
-    Enabled: true
-  },
-  {
-    ID: 'chan-pagerduty',
-    Name: 'PagerDuty High Priority Escalation',
-    Type: 'webhook',
-    Config: { endpoint: 'https://events.pagerduty.com/v2/enqueue', routing_key: 'pd-prod-k8s' },
-    Enabled: true
-  }
-]
-
-const fallbackHistory: AlertHistory[] = [
-  {
-    ID: 'alert-901',
-    RuleID: 'rule-cpu-burst',
-    Status: 'firing',
-    Value: 94.2,
-    Message: 'Node worker-pool-04 CPU utilization peaked at 94.2% (Threshold: >90%)',
-    CreatedAt: '2026-08-18T10:14:00Z'
-  },
-  {
-    ID: 'alert-900',
-    RuleID: 'rule-pod-oom',
-    Status: 'acknowledged',
-    Value: 97.8,
-    Message: 'Pod payment-processor-7b4f9 memory reached 97.8% limit.',
-    AcknowledgedBy: 'alex.sre@enterprise.io',
-    CreatedAt: '2026-08-18T09:45:00Z'
-  },
-  {
-    ID: 'alert-899',
-    RuleID: 'rule-backup-drift',
-    Status: 'resolved',
-    Value: 120,
-    Message: 'S3 snapshot resync recovered. Replication lag returned to normal (120s).',
-    CreatedAt: '2026-08-17T22:00:00Z'
-  }
-]
-
 async function loadData() {
   loading.value = true
   error.value = null
@@ -158,19 +56,19 @@ async function loadData() {
       alertsApi.getHistory()
     ])
 
-    rules.value = fetchedRules.status === 'fulfilled' && fetchedRules.value.length > 0
-      ? fetchedRules.value : fallbackRules
+    rules.value = fetchedRules.status === 'fulfilled' && Array.isArray(fetchedRules.value)
+      ? fetchedRules.value : []
 
-    channels.value = fetchedChannels.status === 'fulfilled' && fetchedChannels.value.length > 0
-      ? fetchedChannels.value : fallbackChannels
+    channels.value = fetchedChannels.status === 'fulfilled' && Array.isArray(fetchedChannels.value)
+      ? fetchedChannels.value : []
 
-    history.value = fetchedHistory.status === 'fulfilled' && fetchedHistory.value.length > 0
-      ? fetchedHistory.value : fallbackHistory
+    history.value = fetchedHistory.status === 'fulfilled' && Array.isArray(fetchedHistory.value)
+      ? fetchedHistory.value : []
   } catch (err: any) {
-    rules.value = fallbackRules
-    channels.value = fallbackChannels
-    history.value = fallbackHistory
-    error.value = 'Note: Telemetry running in fallback mode'
+    rules.value = []
+    channels.value = []
+    history.value = []
+    error.value = err?.message || 'Failed to load alerting telemetry'
   } finally {
     loading.value = false
   }
@@ -217,9 +115,7 @@ async function handleAcknowledge(item: AlertHistory) {
     item.AcknowledgedBy = 'current.user@enterprise.io'
     showFeedback(`Alert ${item.ID} acknowledged. Escalation paused.`)
   } catch (e: any) {
-    item.Status = 'acknowledged'
-    item.AcknowledgedBy = 'current.user@enterprise.io'
-    showFeedback(`Alert ${item.ID} acknowledged.`)
+    showFeedback(`Failed to acknowledge alert: ${e?.message || 'Unknown error'}`)
   }
 }
 
@@ -234,8 +130,7 @@ async function handleDeleteRule(id: string) {
     rules.value = rules.value.filter(r => r.ID !== id)
     showFeedback('Alert rule removed.')
   } catch (e: any) {
-    rules.value = rules.value.filter(r => r.ID !== id)
-    showFeedback('Alert rule removed (local sync).')
+    showFeedback(`Failed to remove alert rule: ${e?.message || 'Unknown error'}`)
   }
 }
 
@@ -257,14 +152,12 @@ async function handleCreateRule() {
   }
 
   try {
-    await alertsApi.createRule(rule)
-    rules.value.unshift(rule)
+    const created = await alertsApi.createRule(rule)
+    rules.value.unshift(created || rule)
     showRuleModal.value = false
     showFeedback(`Alert Rule "${rule.Name}" armed successfully.`)
   } catch (e: any) {
-    rules.value.unshift(rule)
-    showRuleModal.value = false
-    showFeedback(`Alert Rule "${rule.Name}" registered (local sync).`)
+    showFeedback(`Failed to register alert rule: ${e?.message || 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }
@@ -287,19 +180,17 @@ async function handleCreateChannel() {
   }
 
   try {
-    await alertsApi.createChannel({
+    const created = await alertsApi.createChannel({
       name: chan.Name,
       type: chan.Type,
       config: chan.Config,
       enabled: chan.Enabled
     })
-    channels.value.push(chan)
+    channels.value.push(created || chan)
     showChannelModal.value = false
     showFeedback(`Notification Channel "${chan.Name}" registered.`)
   } catch (e: any) {
-    channels.value.push(chan)
-    showChannelModal.value = false
-    showFeedback(`Notification Channel "${chan.Name}" registered (local sync).`)
+    showFeedback(`Failed to register channel: ${e?.message || 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }
@@ -514,7 +405,10 @@ function triggerChannelTest(name: string) {
 
     <!-- TAB 3: NOTIFICATION CHANNELS -->
     <div v-else-if="activeTab === 'channels'" class="tab-content animate-fade-in">
-      <div class="channels-grid">
+      <div v-if="channels.length === 0" class="empty-list glass-panel">
+        No delivery channels configured yet. Click "+ Add Channel" above to configure Slack, Telegram, Email, or Webhooks.
+      </div>
+      <div v-else class="channels-grid">
         <div v-for="chan in channels" :key="chan.ID" class="channel-card glass-panel">
           <div class="channel-card-header">
             <div class="chan-title-wrap">
@@ -530,19 +424,19 @@ function triggerChannelTest(name: string) {
           </div>
 
           <div class="channel-body">
-            <div v-if="chan.Config.webhook_url" class="cstat-row">
+            <div v-if="chan.Config?.webhook_url" class="cstat-row">
               <span class="cstat-key">Webhook Target:</span>
               <span class="cstat-val font-mono text-muted">https://hooks.slack.com/...</span>
             </div>
-            <div v-if="chan.Config.channel" class="cstat-row">
+            <div v-if="chan.Config?.channel" class="cstat-row">
               <span class="cstat-key">Channel:</span>
               <span class="cstat-val font-mono text-cyan">{{ chan.Config.channel }}</span>
             </div>
-            <div v-if="chan.Config.recipients" class="cstat-row">
+            <div v-if="chan.Config?.recipients" class="cstat-row">
               <span class="cstat-key">Recipients:</span>
               <span class="cstat-val font-mono text-muted">{{ chan.Config.recipients.join(', ') }}</span>
             </div>
-            <div v-if="chan.Config.endpoint" class="cstat-row">
+            <div v-if="chan.Config?.endpoint" class="cstat-row">
               <span class="cstat-key">Endpoint:</span>
               <span class="cstat-val font-mono text-muted">{{ chan.Config.endpoint }}</span>
             </div>
@@ -981,5 +875,12 @@ function triggerChannelTest(name: string) {
 .btn-sm {
   padding: 6px 12px;
   font-size: 12px;
+}
+
+.empty-list {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 </style>

@@ -18,26 +18,7 @@ const selectedStatus = ref<string>('all')
 const feedbackMessage = ref<string | null>(null)
 
 // Maintenance Windows
-const maintenanceWindows = ref<MaintenanceWindow[]>([
-  {
-    id: 'mw-weekly-patch',
-    title: 'Weekly Node Kernel & Kubelet Patching',
-    cluster: 'prod-us-east-1',
-    start_at: '2026-08-20T02:00:00Z',
-    end_at: '2026-08-20T04:00:00Z',
-    active: false,
-    created_at: '2026-08-15T00:00:00Z'
-  },
-  {
-    id: 'mw-db-upgrade',
-    title: 'Disaster Recovery Dual-Sync NVMe Resync Window',
-    cluster: 'prod-eu-west-1',
-    start_at: '2026-08-18T10:00:00Z',
-    end_at: '2026-08-18T14:00:00Z',
-    active: true,
-    created_at: '2026-08-17T00:00:00Z'
-  }
-])
+const maintenanceWindows = ref<MaintenanceWindow[]>([])
 
 // Modal State
 const showCreateModal = ref(false)
@@ -52,81 +33,15 @@ const newChange = ref({
   requester: 'sre.lead@enterprise.io'
 })
 
-// Fallback seed data
-const fallbackChanges: ChangeRequest[] = [
-  {
-    id: 'cr-8021',
-    title: 'Scale payment-processor to 24 replicas for Black Friday burst',
-    description: 'Adjust HPA minReplicas from 8 to 24 and increase cpu limit to 4000m.',
-    type: 'standard',
-    status: 'pending',
-    requester: 'sarah.devops@enterprise.io',
-    cluster: 'prod-us-east-1',
-    namespace: 'production-core',
-    resource: 'deployment/payment-processor',
-    scheduled_at: '2026-08-19T06:00:00Z',
-    created_at: '2026-08-18T09:30:00Z',
-    updated_at: '2026-08-18T09:30:00Z'
-  },
-  {
-    id: 'cr-8020',
-    title: 'Hotfix: CVE-2024-21626 containerd runtime upgrade',
-    description: 'Emergency rolling update across all worker nodes in worker-pool-alpha.',
-    type: 'emergency',
-    status: 'approved',
-    requester: 'marcus.sec@fintech.io',
-    approver: 'alex.sre@enterprise.io',
-    cluster: 'prod-us-east-1',
-    namespace: 'kube-system',
-    resource: 'daemonset/containerd-updater',
-    approved_at: '2026-08-18T08:15:00Z',
-    created_at: '2026-08-18T08:00:00Z',
-    updated_at: '2026-08-18T08:15:00Z'
-  },
-  {
-    id: 'cr-8019',
-    title: 'Rotate Vault TLS Certificates & Secrets Injector',
-    description: 'Annual mutual TLS cert rotation for HashiCorp Vault agent sidecars.',
-    type: 'standard',
-    status: 'deployed',
-    requester: 'elena.ml@ai-lab.io',
-    approver: 'alex.sre@enterprise.io',
-    cluster: 'prod-eu-west-1',
-    namespace: 'vault-system',
-    resource: 'secret/vault-tls-ca',
-    approved_at: '2026-08-17T14:00:00Z',
-    created_at: '2026-08-17T12:00:00Z',
-    updated_at: '2026-08-17T16:00:00Z'
-  },
-  {
-    id: 'cr-8018',
-    title: 'Deprecate Ingress v1beta1 in favor of Gateway API HTTPRoute',
-    description: 'Migrate legacy ingress controller annotations to Gateway API Route.',
-    type: 'standard',
-    status: 'rejected',
-    requester: 'dev.junior@enterprise.io',
-    approver: 'alex.sre@enterprise.io',
-    cluster: 'staging-us-east',
-    namespace: 'frontend-apps',
-    resource: 'ingress/legacy-frontend',
-    created_at: '2026-08-16T11:00:00Z',
-    updated_at: '2026-08-16T15:30:00Z'
-  }
-]
-
 async function loadChanges() {
   loading.value = true
   error.value = null
   try {
     const res = await changesApi.getChanges()
-    if (res && res.data && res.data.length > 0) {
-      changes.value = res.data
-    } else {
-      changes.value = fallbackChanges
-    }
+    changes.value = res?.data || []
   } catch (err: any) {
-    changes.value = fallbackChanges
-    error.value = 'Note: Telemetry running in fallback mode'
+    changes.value = []
+    error.value = err?.message || 'Failed to load change requests'
   } finally {
     loading.value = false
   }
@@ -171,9 +86,7 @@ async function handleApprove(cr: ChangeRequest) {
     cr.approver = 'current.user@enterprise.io'
     showFeedback(`Change request ${cr.id} successfully approved.`)
   } catch (e: any) {
-    cr.status = 'approved'
-    cr.approver = 'current.user@enterprise.io'
-    showFeedback(`Change request ${cr.id} approved (local update).`)
+    showFeedback(`Failed to approve change request: ${e?.message || 'Unknown error'}`)
   }
 }
 
@@ -184,9 +97,7 @@ async function handleReject(cr: ChangeRequest) {
     cr.approver = 'current.user@enterprise.io'
     showFeedback(`Change request ${cr.id} rejected.`)
   } catch (e: any) {
-    cr.status = 'rejected'
-    cr.approver = 'current.user@enterprise.io'
-    showFeedback(`Change request ${cr.id} marked as rejected.`)
+    showFeedback(`Failed to reject change request: ${e?.message || 'Unknown error'}`)
   }
 }
 
@@ -208,18 +119,14 @@ async function handleCreateChange() {
   }
 
   try {
-    await changesApi.createChange(cr)
-    changes.value.unshift(cr)
+    const created = await changesApi.createChange(cr)
+    changes.value.unshift(created || cr)
     showCreateModal.value = false
     showFeedback(`Change Request ${cr.id} registered for review.`)
     newChange.value.title = ''
     newChange.value.description = ''
   } catch (e: any) {
-    changes.value.unshift(cr)
-    showCreateModal.value = false
-    showFeedback(`Change Request ${cr.id} registered (local sync).`)
-    newChange.value.title = ''
-    newChange.value.description = ''
+    showFeedback(`Failed to submit change request: ${e?.message || 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }
@@ -276,8 +183,8 @@ async function handleCreateChange() {
       />
       <MetricCard 
         title="Active Windows" 
-        value="1 LIVE" 
-        trend="prod-eu-west-1 Resync" 
+        :value="`${maintenanceWindows.filter(m => m.active).length} LIVE`" 
+        trend="Scheduled Maintenance" 
         trendDirection="neutral" 
       />
     </div>
@@ -292,7 +199,10 @@ async function handleCreateChange() {
         <span class="mw-badge">Air-Gapped Sync</span>
       </div>
 
-      <div class="mw-items">
+      <div v-if="maintenanceWindows.length === 0" class="empty-list">
+        No active maintenance windows scheduled
+      </div>
+      <div v-else class="mw-items">
         <div 
           v-for="mw in maintenanceWindows" 
           :key="mw.id" 
@@ -745,6 +655,13 @@ async function handleCreateChange() {
 
 .btn-sm {
   padding: 6px 12px;
+  font-size: 12px;
+}
+
+.empty-list {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-muted);
   font-size: 12px;
 }
 </style>
