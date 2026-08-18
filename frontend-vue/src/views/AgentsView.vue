@@ -32,23 +32,49 @@ const newTask = ref<CreateTaskPayload>({
 const dependencyInput = ref('')
 
 // Terminal Log Streaming Console
-const terminalLogs = ref<Array<{ timestamp: string; level: 'INFO' | 'STEP' | 'SUCCESS' | 'WARN'; message: string; agent: string }>>([
-  { timestamp: new Date().toISOString(), level: 'INFO', agent: 'Orchestrator', message: 'Multi-Agent Framework initialized. DAG scheduler listening on NATS message bus.' },
-  { timestamp: new Date().toISOString(), level: 'STEP', agent: 'RepositoryAnalyzer', message: 'AST syntax tree parsed. Zero cyclic dependencies found in internal/domain layer.' },
-  { timestamp: new Date().toISOString(), level: 'SUCCESS', agent: 'KubernetesEngineer', message: 'Dispatched reconciliation manifest for cluster-east-prod. All 3 pod replicas healthy.' },
-  { timestamp: new Date().toISOString(), level: 'INFO', agent: 'GitOpsEngineer', message: 'Observability & Compute views build verified with 100% strict TypeScript types.' },
-])
+const terminalLogs = ref<Array<{ timestamp: string; level: 'INFO' | 'STEP' | 'SUCCESS' | 'WARN'; message: string; agent: string }>>([])
 const autoScroll = ref(true)
 const terminalRef = ref<HTMLDivElement | null>(null)
 
-// DAG Stages definition
-const dagStages = [
-  { id: 'planner', name: '1. Planner & Architect', role: 'Planner', icon: '📐', status: 'completed' },
-  { id: 'backend', name: '2. Backend / Go Engine', role: 'Backend Engineer', icon: '⚙️', status: 'completed' },
-  { id: 'frontend', name: '3. Frontend Coder', role: 'Frontend Engineer', icon: '🎨', status: 'completed' },
-  { id: 'k8s', name: '4. K8s / Swarm Ops', role: 'Kubernetes Engineer', icon: '☸️', status: 'running' },
-  { id: 'qa', name: '5. Security & QA Gate', role: 'QA Engineer', icon: '🛡️', status: 'pending' },
-]
+// Reactive DAG Stages definition based on actual task & execution state
+const dagStages = computed(() => {
+  const stageDefs = [
+    { id: 'planner', name: '1. Planner & Architect', role: 'Planner', icon: '📐', agentType: 'planner' },
+    { id: 'backend', name: '2. Backend / Go Engine', role: 'Backend Engineer', icon: '⚙️', agentType: 'backend' },
+    { id: 'frontend', name: '3. Frontend Coder', role: 'Frontend Engineer', icon: '🎨', agentType: 'frontend' },
+    { id: 'k8s', name: '4. K8s / Swarm Ops', role: 'Kubernetes Engineer', icon: '☸️', agentType: 'k8s' },
+    { id: 'qa', name: '5. Security & QA Gate', role: 'QA Engineer', icon: '🛡️', agentType: 'qa' },
+  ]
+  return stageDefs.map(def => {
+    const matchingExecs = executions.value.filter(e =>
+      e.agent_type?.toLowerCase().includes(def.agentType) ||
+      e.agent_type?.toLowerCase().includes(def.id)
+    )
+    let status = 'idle'
+    if (matchingExecs.length > 0) {
+      if (matchingExecs.some(e => e.status === 'running')) {
+        status = 'running'
+      } else if (matchingExecs.some(e => e.status === 'failed')) {
+        status = 'failed'
+      } else if (matchingExecs.every(e => e.status === 'success')) {
+        status = 'completed'
+      } else {
+        status = 'completed'
+      }
+    } else if (tasks.value.length === 0) {
+      status = 'idle'
+    } else {
+      status = 'queued'
+    }
+    return {
+      id: def.id,
+      name: def.name,
+      role: def.role,
+      icon: def.icon,
+      status
+    }
+  })
+})
 
 async function fetchAgentData() {
   loading.value = true
@@ -70,14 +96,12 @@ async function fetchAgentData() {
       executions.value = runsRes.value
       // Populate terminal logs from real execution records
       if (runsRes.value.length > 0) {
-        runsRes.value.slice(0, 8).forEach(run => {
-          terminalLogs.value.push({
-            timestamp: run.created_at,
-            level: run.status === 'success' ? 'SUCCESS' : run.status === 'failed' ? 'WARN' : 'STEP',
-            agent: run.agent_type,
-            message: run.output || run.error_detail || `Execution step triggered for task: ${run.task_id}`
-          })
-        })
+        terminalLogs.value = runsRes.value.slice(0, 20).map(run => ({
+          timestamp: run.created_at,
+          level: run.status === 'success' ? 'SUCCESS' : run.status === 'failed' ? 'WARN' : 'STEP',
+          agent: run.agent_type || 'Agent',
+          message: run.output || run.error_detail || `Execution step triggered for task: ${run.task_id}`
+        }))
       }
     }
   } catch (err: unknown) {
@@ -187,43 +211,43 @@ function formatTime(d: string) {
     <div class="metrics-grid">
       <MetricCard
         title="Architecture Score"
-        :value="projectState?.architecture_score ? `${Math.round(projectState.architecture_score * 100)}%` : '99%'"
-        subtitle="Zero cyclic dependencies & strict layering"
+        :value="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? `${Math.round(projectState.architecture_score * 100)}%` : '—'"
+        :subtitle="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'Zero cyclic dependencies & strict layering' : 'No architecture telemetry recorded'"
         icon="🏛️"
-        badge="SCORE"
-        badge-color="cyan"
-        trend="High Cohesion"
-        trend-type="positive"
+        :badge="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'SCORE' : 'NO DATA'"
+        :badge-color="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'cyan' : 'muted'"
+        :trend="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'High Cohesion' : 'Uncalculated'"
+        :trend-type="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'positive' : 'neutral'"
       />
       <MetricCard
         title="Repository Health"
-        :value="projectState?.repository_health ? `${Math.round(projectState.repository_health * 100)}%` : '98%'"
-        subtitle="Full type safety & lint compliance"
+        :value="projectState?.repository_health !== undefined && projectState.repository_health !== null ? `${Math.round(projectState.repository_health * 100)}%` : '—'"
+        :subtitle="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'Full type safety & lint compliance' : 'No health telemetry recorded'"
         icon="🛡️"
-        badge="HEALTH"
-        badge-color="emerald"
-        trend="Continuous Clean"
-        trend-type="positive"
+        :badge="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'HEALTH' : 'NO DATA'"
+        :badge-color="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'emerald' : 'muted'"
+        :trend="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'Continuous Clean' : 'Uncalculated'"
+        :trend-type="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'positive' : 'neutral'"
       />
       <MetricCard
         title="Task Backlog"
-        :value="`${completedTasksCount}/${tasks.length}`"
-        :subtitle="`${activeTasksCount} in progress · ${blockedTasksCount} blocked`"
+        :value="tasks.length > 0 ? `${completedTasksCount}/${tasks.length}` : '0/0'"
+        :subtitle="tasks.length > 0 ? `${activeTasksCount} in progress · ${blockedTasksCount} blocked` : 'No tasks in backlog'"
         icon="📋"
         badge="PIPELINE"
-        badge-color="violet"
-        trend="DAG Scheduled"
+        :badge-color="tasks.length > 0 ? 'violet' : 'muted'"
+        :trend="tasks.length > 0 ? 'DAG Scheduled' : 'Queue Empty'"
         trend-type="neutral"
       />
       <MetricCard
         title="Swarm Executions"
         :value="executions.length"
-        subtitle="Total autonomous agent runs executed"
+        :subtitle="executions.length > 0 ? 'Total autonomous agent runs executed' : 'No agent runs recorded'"
         icon="⚡"
         badge="RUNS"
-        badge-color="emerald"
-        trend="Real-Time Step Logs"
-        trend-type="positive"
+        :badge-color="executions.length > 0 ? 'emerald' : 'muted'"
+        :trend="executions.length > 0 ? 'Real-Time Step Logs' : 'Idle'"
+        :trend-type="executions.length > 0 ? 'positive' : 'neutral'"
       />
     </div>
 

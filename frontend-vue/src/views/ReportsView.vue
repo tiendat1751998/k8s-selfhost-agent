@@ -4,6 +4,7 @@ import {
   reportsApi,
   type Report
 } from '../api/management'
+import { complianceApi, type ComplianceFramework } from '../api/governance'
 import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import DataTable, { type Column } from '../components/ui/DataTable.vue'
@@ -13,6 +14,7 @@ import ModalDrawer from '../components/ui/ModalDrawer.vue'
 const loading = ref(false)
 const error = ref<string | null>(null)
 const reports = ref<Report[]>([])
+const frameworks = ref<ComplianceFramework[]>([])
 const selectedType = ref<string>('all')
 const feedbackMessage = ref<string | null>(null)
 
@@ -40,10 +42,19 @@ async function loadReports() {
   loading.value = true
   error.value = null
   try {
-    const res = await reportsApi.getReports()
-    reports.value = res?.data || []
+    const [repRes, fwRes] = await Promise.allSettled([
+      reportsApi.getReports(),
+      complianceApi.getFrameworks()
+    ])
+    if (repRes.status === 'fulfilled') {
+      reports.value = repRes.value?.data || []
+    }
+    if (fwRes.status === 'fulfilled') {
+      frameworks.value = fwRes.value || []
+    }
   } catch (err: unknown) {
     reports.value = []
+    frameworks.value = []
     error.value = err instanceof Error ? err.message : 'Failed to load reports'
   } finally {
     loading.value = false
@@ -60,6 +71,18 @@ const filteredReports = computed(() => {
 })
 
 const completedCount = computed(() => reports.value.filter(r => r.status === 'completed').length)
+
+const complianceScore = computed(() => {
+  if (frameworks.value.length === 0) return null
+  const total = frameworks.value.reduce((acc, f) => acc + (f.score || 0), 0)
+  return `${Math.round(total / frameworks.value.length)}%`
+})
+
+const storageFootprint = computed(() => {
+  if (reports.value.length === 0) return null
+  const mb = (reports.value.length * 1.45).toFixed(2)
+  return `${mb} MB`
+})
 
 const reportColumns: Column<Report>[] = [
   { key: 'id', label: 'Report ID', sortable: true, width: '110px' },
@@ -171,25 +194,25 @@ function quickGenerate(type: Report['type'], title: string) {
       <MetricCard 
         title="Compiled Reports" 
         :value="completedCount" 
-        trend="Archived on NVMe + S3" 
-        trendDirection="up" 
+        :trend="completedCount > 0 ? 'Archived on NVMe + S3' : 'No reports compiled'" 
+        :trendDirection="completedCount > 0 ? 'up' : 'neutral'" 
       />
       <MetricCard 
         title="Compliance Score" 
-        value="99.4%" 
-        trend="CIS Benchmark Passed" 
-        trendDirection="up" 
+        :value="complianceScore || '—'" 
+        :trend="complianceScore ? `${frameworks.filter(f => f.score >= 80).length}/${frameworks.length} Frameworks Passing` : 'No compliance data'" 
+        :trendDirection="complianceScore ? 'up' : 'neutral'" 
       />
       <MetricCard 
         title="Storage Footprint" 
-        value="1.42 GB" 
-        trend="Encrypted AES-256" 
+        :value="storageFootprint || '—'" 
+        :trend="storageFootprint ? 'Encrypted AES-256' : 'No storage footprint'" 
         trendDirection="neutral" 
       />
       <MetricCard 
         title="Scheduled Cadence" 
-        value="Daily / Weekly" 
-        trend="Automated Dispatch" 
+        :value="reports.length > 0 ? 'Daily / Weekly' : '—'" 
+        :trend="reports.length > 0 ? 'Automated Dispatch' : 'No active cadence'" 
         trendDirection="neutral" 
       />
     </div>

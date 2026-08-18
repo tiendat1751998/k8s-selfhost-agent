@@ -7,7 +7,7 @@ defineProps<{
   trend?: string
   trendType?: 'positive' | 'negative' | 'neutral'
   badge?: string
-  badgeColor?: 'emerald' | 'amber' | 'rose' | 'cyan' | 'violet'
+  badgeColor?: 'emerald' | 'amber' | 'rose' | 'cyan' | 'violet' | 'muted'
 }>()
 </script>
 

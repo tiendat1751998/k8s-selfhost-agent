@@ -51,9 +51,9 @@
       <div class="metric-card glass-panel glass-panel-glow">
         <div class="metric-header">
           <span class="metric-title">COMPLIANCE BENCHMARK</span>
-          <span class="badge badge-cyan">CIS & NIST</span>
+          <span class="badge" :class="totalRulesCount > 0 ? 'badge-cyan' : 'badge-muted'">{{ totalRulesCount > 0 ? 'CIS & NIST' : 'NO BENCHMARKS' }}</span>
         </div>
-        <div class="metric-val font-mono text-cyan">{{ complianceScore }} <span class="metric-unit">Score</span></div>
+        <div class="metric-val font-mono text-cyan">{{ complianceScore }} <span v-if="complianceScore !== '—'" class="metric-unit">Score</span></div>
         <div class="metric-footer">
           <span class="text-emerald">{{ passingRulesCount }} Passing Rules</span>
           <span class="text-muted">of {{ totalRulesCount }} Rules</span>
@@ -63,12 +63,12 @@
       <div class="metric-card glass-panel glass-panel-glow">
         <div class="metric-header">
           <span class="metric-title">COMPLIANCE FRAMEWORKS</span>
-          <span class="badge badge-violet">ACTIVE</span>
+          <span class="badge" :class="securityStore.frameworks.length > 0 ? 'badge-violet' : 'badge-muted'">{{ securityStore.frameworks.length > 0 ? 'ACTIVE' : 'NONE' }}</span>
         </div>
         <div class="metric-val font-mono">{{ securityStore.frameworks.length }} <span class="metric-unit">Frameworks</span></div>
         <div class="metric-footer">
-          <span class="text-violet">{{ frameworkNames }}</span>
-          <span class="text-emerald">Enforced</span>
+          <span :class="securityStore.frameworks.length > 0 ? 'text-violet' : 'text-muted'">{{ frameworkNames }}</span>
+          <span v-if="securityStore.frameworks.length > 0" class="text-emerald">Enforced</span>
         </div>
       </div>
 
@@ -249,12 +249,12 @@ const totalViolationsCount = computed(() => securityStore.totalViolations || sec
 const totalRulesCount = computed(() => securityStore.frameworks.reduce((acc, f) => acc + (f.total_rules || 0), 0))
 const passingRulesCount = computed(() => securityStore.frameworks.reduce((acc, f) => acc + (f.passing_rules || 0), 0))
 const complianceScore = computed(() => {
-  if (totalRulesCount.value === 0) return '100%'
+  if (totalRulesCount.value === 0) return '—'
   return `${((passingRulesCount.value / totalRulesCount.value) * 100).toFixed(1)}%`
 })
 
 const frameworkNames = computed(() => {
-  if (securityStore.frameworks.length === 0) return 'CIS Benchmark'
+  if (securityStore.frameworks.length === 0) return 'No frameworks configured'
   return securityStore.frameworks.map(f => f.name).join(', ')
 })
 

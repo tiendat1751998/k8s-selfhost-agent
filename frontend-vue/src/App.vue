@@ -6,6 +6,7 @@ import { useBackupStore } from './stores/backupStore'
 import { useSecurityStore } from './stores/securityStore'
 import { useLogStore } from './stores/logStore'
 import { api } from './api/client'
+import { tenancyApi } from './api/management'
 import ModalDrawer from './components/ui/ModalDrawer.vue'
 
 const route = useRoute()
@@ -16,7 +17,7 @@ const securityStore = useSecurityStore()
 const logStore = useLogStore()
 
 // State
-const selectedTenant = ref('org-enterprise-core')
+const selectedTenant = ref('default-tenant')
 const showCommandPalette = ref(false)
 const searchQuery = ref('')
 const mobileSidebarOpen = ref(false)
@@ -39,12 +40,33 @@ function toggleSection(sectionKey: string) {
 }
 
 // Tenancy
-const tenants = [
-  { id: 'org-enterprise-core', name: 'Global Enterprise Corp (Prod)' },
-  { id: 'org-fintech-shield', name: 'Fintech Payments & Shield (GovCloud)' },
-  { id: 'org-ai-research', name: 'Applied AI & ML Lab (GPU Fleet)' },
-  { id: 'default', name: 'Default Air-Gapped Cluster' },
-]
+interface TenantOption {
+  id: string
+  name: string
+}
+
+const tenants = ref<TenantOption[]>([
+  { id: 'default-tenant', name: 'default-tenant' }
+])
+
+async function loadTenants() {
+  try {
+    const orgs = await tenancyApi.getOrganizations()
+    if (orgs && orgs.length > 0) {
+      tenants.value = orgs.map(o => ({ id: o.id, name: o.name || o.id }))
+      if (!tenants.value.some(t => t.id === selectedTenant.value)) {
+        selectedTenant.value = tenants.value[0].id
+      }
+    } else {
+      tenants.value = [{ id: 'default-tenant', name: 'default-tenant' }]
+      selectedTenant.value = 'default-tenant'
+    }
+  } catch {
+    tenants.value = [{ id: 'default-tenant', name: 'default-tenant' }]
+    selectedTenant.value = 'default-tenant'
+  }
+  api.setTenantId(selectedTenant.value)
+}
 
 function handleTenantChange() {
   api.setTenantId(selectedTenant.value)
@@ -104,7 +126,7 @@ const navGroups = [
     icon: '🏢',
     items: [
       { path: '/tenancy', name: 'Tenancy & RBAC', icon: '🏢', sub: 'Org Isolation Matrix' },
-      { path: '/ai-hub', name: 'AI Provider Hub', icon: '🧠', sub: '20 Models & Breakers' },
+      { path: '/ai-hub', name: 'AI Provider Hub', icon: '🧠', sub: 'LLM Gateway & Breakers' },
       { path: '/changes', name: 'Change Requests', icon: '📝', sub: 'RFC Approvals & Windows' },
       { path: '/alerts', name: 'Alerts & Channels', icon: '🔥', sub: 'Slack, Telegram, Email' },
       { path: '/reports', name: 'Reports Center', icon: '📊', sub: 'Executive SOC2 & Cost' },
@@ -158,6 +180,7 @@ onMounted(() => {
   if (authStore.isAuthenticated) {
     backupStore.fetchAll().catch(() => {})
     securityStore.fetchAll().catch(() => {})
+    loadTenants().catch(() => {})
   }
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', handleGlobalKeydown)
@@ -219,7 +242,7 @@ function handleLogout() {
         <span class="pulse-dot pulse-dot-emerald"></span>
         <div class="env-pill-text">
           <span class="env-mesh">Air-Gapped Mesh</span>
-          <span class="env-cluster">prod-us-east-1</span>
+          <span class="env-cluster">{{ selectedTenant }}</span>
         </div>
         <span class="env-chip">v2.4</span>
       </div>

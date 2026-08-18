@@ -80,6 +80,19 @@ onMounted(() => {
 
 const firingCount = computed(() => history.value.filter(h => h.Status === 'firing').length)
 
+const meanTimeToAcknowledge = computed(() => {
+  const acked = history.value.filter(h => h.Status === 'acknowledged' && h.UpdatedAt && h.CreatedAt)
+  if (acked.length === 0) return null
+  const totalMins = acked.reduce((sum, h) => {
+    const diff = Math.max(0, (new Date(h.UpdatedAt!).getTime() - new Date(h.CreatedAt).getTime()) / 60000)
+    return sum + diff
+  }, 0)
+  const avg = totalMins / acked.length
+  if (avg < 1) return `${Math.round(avg * 60)}s`
+  if (avg < 60) return `${avg.toFixed(1)}m`
+  return `${(avg / 60).toFixed(1)}h`
+})
+
 const historyColumns: Column<AlertHistory>[] = [
   { key: 'ID', label: 'Alert ID', sortable: true, width: '110px' },
   { key: 'Status', label: 'State', sortable: true, width: '130px' },
@@ -113,6 +126,7 @@ async function handleAcknowledge(item: AlertHistory) {
     await alertsApi.acknowledgeAlert(item.ID)
     item.Status = 'acknowledged'
     item.AcknowledgedBy = 'current.user@enterprise.io'
+    item.UpdatedAt = new Date().toISOString()
     showFeedback(`Alert ${item.ID} acknowledged. Escalation paused.`)
   } catch (e: unknown) {
     showFeedback(`Failed to acknowledge alert: ${e instanceof Error ? e.message : 'Unknown error'}`)
@@ -237,26 +251,26 @@ function triggerChannelTest(name: string) {
       <MetricCard 
         title="Firing Anomalies" 
         :value="firingCount" 
-        trend="Requires SRE Action" 
-        trendDirection="down" 
+        :trend="firingCount > 0 ? 'Requires SRE Action' : 'All alerts resolved'" 
+        :trendDirection="firingCount > 0 ? 'down' : 'up'" 
       />
       <MetricCard 
         title="Active Alert Rules" 
         :value="rules.length" 
-        trend="Continuously Evaluated" 
+        :trend="rules.length > 0 ? 'Continuously Evaluated' : 'No active rules'" 
         trendDirection="neutral" 
       />
       <MetricCard 
         title="Connected Channels" 
         :value="channels.length" 
-        trend="Slack, Telegram, Email, PD" 
-        trendDirection="up" 
+        :trend="channels.length > 0 ? `${channels.filter(c => c.Enabled).length} Channels Armed` : 'No channels configured'" 
+        :trendDirection="channels.length > 0 ? 'up' : 'neutral'" 
       />
       <MetricCard 
         title="Mean Time To Acknowledge" 
-        value="1.8m" 
-        trend="Under SLA (15m)" 
-        trendDirection="down" 
+        :value="meanTimeToAcknowledge || '—'" 
+        :trend="meanTimeToAcknowledge ? 'Real MTTA Calculated' : 'No acknowledged alerts'" 
+        :trendDirection="meanTimeToAcknowledge ? 'down' : 'neutral'" 
       />
     </div>
 

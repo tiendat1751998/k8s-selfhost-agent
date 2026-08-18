@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { fleetApi, incidentsApi, type Cluster, type Incident } from '../api/compute'
+import { aiApi, type AIProvider } from '../api/management'
 import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 
@@ -10,9 +11,10 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const clusters = ref<Cluster[]>([])
 const recentIncidents = ref<Incident[]>([])
+const aiProviders = ref<AIProvider[]>([])
 
 const quickLinks = [
-  { path: '/ai-hub', icon: '🧠', title: 'AI Provider Hub', desc: 'Manage 20 LLM models & circuit breakers' },
+  { path: '/ai-hub', icon: '🧠', title: 'AI Provider Hub', desc: 'Manage AI LLM models & circuit breakers' },
   { path: '/tenancy', icon: '🏢', title: 'Tenancy & RBAC', desc: 'Multi-org boundaries & permission matrix' },
   { path: '/changes', icon: '📝', title: 'Change Requests', desc: 'ITIL approval workflow & RFC review' },
   { path: '/alerts', icon: '🔥', title: 'Alert Engine', desc: 'Prometheus alerts & Slack/Telegram' },
@@ -24,15 +26,19 @@ async function loadData() {
   loading.value = true
   error.value = null
   try {
-    const [fleetRes, incRes] = await Promise.allSettled([
+    const [fleetRes, incRes, aiRes] = await Promise.allSettled([
       fleetApi.list(),
-      incidentsApi.list({ limit: 5 })
+      incidentsApi.list({ limit: 5 }),
+      aiApi.getProviders()
     ])
     if (fleetRes.status === 'fulfilled') {
       clusters.value = fleetRes.value || []
     }
     if (incRes.status === 'fulfilled') {
       recentIncidents.value = incRes.value.data || []
+    }
+    if (aiRes.status === 'fulfilled') {
+      aiProviders.value = aiRes.value || []
     }
   } catch (err: unknown) {
     error.value = err instanceof Error ? err.message : 'Failed to load overview telemetry'
@@ -47,6 +53,10 @@ onMounted(() => {
 
 const onlineClustersCount = computed(() => {
   return clusters.value.filter(c => c.status === 'active' || c.health_status === 'healthy').length
+})
+
+const activeAiProvidersCount = computed(() => {
+  return aiProviders.value.filter(p => p.status === 'ready' || p.status === 'active' || p.status === 'healthy').length
 })
 
 const totalNodes = computed(() => {
@@ -100,9 +110,9 @@ function formatTime(isoStr?: string): string {
     <div class="metrics-grid">
       <MetricCard 
         title="Global Fleet Health" 
-        :value="clusters.length > 0 ? `${Math.round((onlineClustersCount / clusters.length) * 100)}%` : '100%'" 
-        :trend="`${onlineClustersCount}/${clusters.length} Clusters Online`" 
-        trendDirection="up" 
+        :value="clusters.length > 0 ? `${Math.round((onlineClustersCount / clusters.length) * 100)}%` : '—'" 
+        :trend="clusters.length > 0 ? `${onlineClustersCount}/${clusters.length} Clusters Online` : 'No clusters connected'" 
+        :trendDirection="clusters.length > 0 ? 'up' : 'neutral'" 
       />
       <MetricCard 
         title="Total Cluster Nodes" 
@@ -112,9 +122,9 @@ function formatTime(isoStr?: string): string {
       />
       <MetricCard 
         title="Active AI Models" 
-        value="20 Models" 
-        trend="Sub-50ms Local Inference" 
-        trendDirection="neutral" 
+        :value="aiProviders.length > 0 ? `${aiProviders.length} ${aiProviders.length === 1 ? 'Model' : 'Models'}` : '0 Models'" 
+        :trend="aiProviders.length > 0 ? `${activeAiProvidersCount} Providers Active` : 'No providers registered'" 
+        :trendDirection="aiProviders.length > 0 ? 'neutral' : 'neutral'" 
       />
       <MetricCard 
         title="Active Incidents" 
