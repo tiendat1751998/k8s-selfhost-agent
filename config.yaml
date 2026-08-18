@@ -6,11 +6,11 @@ server:
   idle_timeout: 120s
 
 postgres:
-  host: "localhost"
+  host: "10.10.10.133"
   port: 5432
-  user: "postgres"
-  password: "password"
-  dbname: "k8sselfhost"
+  user: "myuser"
+  password: "mysecretpassword"
+  dbname: "mydatabase"
   sslmode: "disable"
   max_conns: 25
   min_conns: 5
@@ -22,7 +22,7 @@ redis:
   db: 0
 
 docker:
-  host: "unix:///var/run/docker.sock"
+  host: "tcp://10.10.10.133:2375"
   version: "1.41"
 
 nats:
