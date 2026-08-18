@@ -35,7 +35,7 @@ func (r *PRRepo) Create(ctx context.Context, pr *gitops.PullRequest) error {
 
 	tenantID := tenancy.TenantIDFromContext(ctx)
 	if tenantID == "" {
-		tenantID = "org-google"
+		tenantID = "default-tenant"
 	}
 
 	query := `
