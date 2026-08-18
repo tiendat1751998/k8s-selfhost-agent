@@ -18,3 +18,30 @@ type ProjectState struct {
 	QualityScore      float64   `json:"quality_score"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }
+
+// SetCurrentTask sets the active task context on the project state.
+func (s *ProjectState) SetCurrentTask(task *Task) {
+	if task != nil {
+		s.CurrentPhase = task.Phase
+		s.CurrentModule = task.Module
+		s.CurrentFeature = task.Feature
+		s.CurrentTaskID = task.ID
+	}
+	s.UpdatedAt = time.Now().UTC()
+}
+
+// ClearCurrentTask clears the active task from the project state.
+func (s *ProjectState) ClearCurrentTask() {
+	s.CurrentTaskID = ""
+	s.CurrentSubtaskID = ""
+	s.UpdatedAt = time.Now().UTC()
+}
+
+// UpdateMetrics updates the project metrics.
+func (s *ProjectState) UpdateMetrics(health, techDebt, archScore, quality float64) {
+	s.RepositoryHealth = health
+	s.TechnicalDebt = techDebt
+	s.ArchitectureScore = archScore
+	s.QualityScore = quality
+	s.UpdatedAt = time.Now().UTC()
+}

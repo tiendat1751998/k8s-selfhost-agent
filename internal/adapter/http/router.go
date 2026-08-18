@@ -47,6 +47,7 @@ type PlatformHandlers struct {
 	Agents        *AgentHandler
 	Deployments   *DeploymentHandler
 	Tenancy       *TenancyHandler
+	Alert         *AlertHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -208,6 +209,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Tenancy != nil {
 				r.Route("/tenancy", platform.Tenancy.RegisterRoutes)
+			}
+			if platform.Alert != nil {
+				r.Route("/alerts", platform.Alert.RegisterRoutes)
 			}
 		}
 	})

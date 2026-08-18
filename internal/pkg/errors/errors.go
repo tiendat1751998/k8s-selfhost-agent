@@ -8,13 +8,26 @@ import (
 
 // Sentinel errors for common domain error categories.
 var (
-	ErrNotFound     = errors.New("not found")
-	ErrValidation   = errors.New("validation error")
-	ErrInternal     = errors.New("internal error")
-	ErrUnauthorized = errors.New("unauthorized")
-	ErrForbidden    = errors.New("forbidden")
-	ErrConflict     = errors.New("conflict")
-	ErrTimeout      = errors.New("timeout")
+	ErrNotFound       = errors.New("not found")
+	ErrValidation     = errors.New("validation error")
+	ErrInternal       = errors.New("internal error")
+	ErrUnauthorized   = errors.New("unauthorized")
+	ErrForbidden      = errors.New("forbidden")
+	ErrConflict       = errors.New("conflict")
+	ErrTimeout        = errors.New("timeout")
+	ErrBinaryNotFound = errors.New("binary not found")
+)
+
+// Error codes for DomainError.
+const (
+	CodeNotFound       = "NOT_FOUND"
+	CodeValidation     = "VALIDATION_ERROR"
+	CodeInternal       = "INTERNAL_ERROR"
+	CodeUnauthorized   = "UNAUTHORIZED"
+	CodeForbidden      = "FORBIDDEN"
+	CodeConflict       = "CONFLICT"
+	CodeTimeout        = "TIMEOUT"
+	CodeBinaryNotFound = "BINARY_NOT_FOUND"
 )
 
 // DomainError represents a domain-level error with context, an error code, and an underlying cause.
@@ -40,7 +53,7 @@ func (e *DomainError) Unwrap() error {
 // NewNotFound creates a not-found domain error.
 func NewNotFound(resource string, id string) *DomainError {
 	return &DomainError{
-		Code:    "NOT_FOUND",
+		Code:    CodeNotFound,
 		Message: fmt.Sprintf("%s with id '%s' not found", resource, id),
 		Err:     ErrNotFound,
 	}
@@ -49,7 +62,7 @@ func NewNotFound(resource string, id string) *DomainError {
 // NewValidation creates a validation domain error.
 func NewValidation(field string, reason string) *DomainError {
 	return &DomainError{
-		Code:    "VALIDATION_ERROR",
+		Code:    CodeValidation,
 		Message: fmt.Sprintf("validation failed for field '%s': %s", field, reason),
 		Err:     ErrValidation,
 	}
@@ -58,7 +71,7 @@ func NewValidation(field string, reason string) *DomainError {
 // NewInternal creates an internal domain error wrapping the underlying cause.
 func NewInternal(message string, cause error) *DomainError {
 	return &DomainError{
-		Code:    "INTERNAL_ERROR",
+		Code:    CodeInternal,
 		Message: message,
 		Err:     fmt.Errorf("%w: %w", ErrInternal, cause),
 	}
@@ -67,7 +80,7 @@ func NewInternal(message string, cause error) *DomainError {
 // NewConflict creates a conflict domain error.
 func NewConflict(resource string, reason string) *DomainError {
 	return &DomainError{
-		Code:    "CONFLICT",
+		Code:    CodeConflict,
 		Message: fmt.Sprintf("conflict on %s: %s", resource, reason),
 		Err:     ErrConflict,
 	}
@@ -76,9 +89,27 @@ func NewConflict(resource string, reason string) *DomainError {
 // NewTimeout creates a timeout domain error.
 func NewTimeout(operation string) *DomainError {
 	return &DomainError{
-		Code:    "TIMEOUT",
+		Code:    CodeTimeout,
 		Message: fmt.Sprintf("operation '%s' timed out", operation),
 		Err:     ErrTimeout,
+	}
+}
+
+// NewUnauthorized creates an unauthorized domain error.
+func NewUnauthorized(reason string) *DomainError {
+	return &DomainError{
+		Code:    CodeUnauthorized,
+		Message: reason,
+		Err:     ErrUnauthorized,
+	}
+}
+
+// NewForbidden creates a forbidden domain error.
+func NewForbidden(reason string) *DomainError {
+	return &DomainError{
+		Code:    CodeForbidden,
+		Message: reason,
+		Err:     ErrForbidden,
 	}
 }
 

@@ -6,17 +6,19 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/promotion"
+	promotionUsecase "github.com/datdt/k8sselfhost/internal/usecase/promotion"
 )
 
 // PromotionHandler provides HTTP handlers for the deployment promotion API.
 type PromotionHandler struct {
-	repo promotion.Repository
+	usecase *promotionUsecase.Usecase
 }
 
-// NewPromotionHandler creates a new promotion HTTP handler.
-func NewPromotionHandler(repo promotion.Repository) *PromotionHandler {
-	return &PromotionHandler{repo: repo}
+// NewPromotionHandler creates a new promotion HTTP handler with injected usecase.
+func NewPromotionHandler(usecase *promotionUsecase.Usecase) *PromotionHandler {
+	return &PromotionHandler{usecase: usecase}
 }
 
 // RegisterRoutes registers deployment promotion routes.
@@ -34,7 +36,7 @@ func (h *PromotionHandler) ListPromotions(w http.ResponseWriter, r *http.Request
 	offset := parseIntParam(r, "offset", 0)
 	status := r.URL.Query().Get("status")
 
-	items, total, err := h.repo.List(r.Context(), status, limit, offset)
+	items, total, err := h.usecase.List(r.Context(), status, limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list promotions", err)
 		return
@@ -72,22 +74,20 @@ func (h *PromotionHandler) CreatePromotion(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	if err := h.repo.Create(r.Context(), &req.Promotion); err != nil {
+	created, err := h.usecase.Create(r.Context(), &req.Promotion)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create promotion", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, req.Promotion)
+	writeJSON(w, http.StatusCreated, created)
 }
 
 // ApprovePromotion handles PUT /api/v1/promotions/{id}/approve
 func (h *PromotionHandler) ApprovePromotion(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	approver := r.URL.Query().Get("approver")
-	if approver == "" {
-		approver = "system"
-	}
+	approver, _ := r.Context().Value(middleware.UserIDKey).(string)
 
-	if err := h.repo.Approve(r.Context(), id, approver); err != nil {
+	if err := h.usecase.Approve(r.Context(), id, approver); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to approve promotion", err)
 		return
 	}
@@ -97,7 +97,7 @@ func (h *PromotionHandler) ApprovePromotion(w http.ResponseWriter, r *http.Reque
 // CompletePromotion handles PUT /api/v1/promotions/{id}/complete
 func (h *PromotionHandler) CompletePromotion(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.repo.Complete(r.Context(), id); err != nil {
+	if err := h.usecase.Complete(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to complete promotion", err)
 		return
 	}
@@ -107,12 +107,9 @@ func (h *PromotionHandler) CompletePromotion(w http.ResponseWriter, r *http.Requ
 // RejectPromotion handles PUT /api/v1/promotions/{id}/reject
 func (h *PromotionHandler) RejectPromotion(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	rejecter := r.URL.Query().Get("rejecter")
-	if rejecter == "" {
-		rejecter = "system"
-	}
+	rejecter, _ := r.Context().Value(middleware.UserIDKey).(string)
 
-	if err := h.repo.Reject(r.Context(), id, rejecter); err != nil {
+	if err := h.usecase.Reject(r.Context(), id, rejecter); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to reject promotion", err)
 		return
 	}

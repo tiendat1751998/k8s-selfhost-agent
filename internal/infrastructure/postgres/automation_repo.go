@@ -118,6 +118,13 @@ func (r *automationRepo) GetRule(ctx context.Context, id string) (*automation.Ru
 }
 
 func (r *automationRepo) CreateRule(ctx context.Context, rule *automation.Rule) error {
+	if rule.CreatedAt.IsZero() {
+		rule.CreatedAt = time.Now().UTC()
+	}
+	if rule.UpdatedAt.IsZero() {
+		rule.UpdatedAt = time.Now().UTC()
+	}
+
 	query := `
 		INSERT INTO automation_rules (name, trigger_type, trigger_config, action_type, action_config, enabled, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -146,7 +153,7 @@ func (r *automationRepo) CreateRule(ctx context.Context, rule *automation.Rule) 
 }
 
 func (r *automationRepo) UpdateRule(ctx context.Context, rule *automation.Rule) error {
-	rule.UpdatedAt = time.Now()
+	rule.UpdatedAt = time.Now().UTC()
 	query := `
 		UPDATE automation_rules 
 		SET name = $1, trigger_type = $2, trigger_config = $3, action_type = $4, action_config = $5, updated_at = $6
@@ -246,6 +253,10 @@ func (r *automationRepo) ListExecutions(ctx context.Context, limit, offset int) 
 }
 
 func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Execution) error {
+	if e.CreatedAt.IsZero() {
+		e.CreatedAt = time.Now().UTC()
+	}
+
 	query := `
 		INSERT INTO automation_executions (rule_id, rule_name, trigger_event, action_taken, result, error_detail, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -271,7 +282,9 @@ func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Exec
 		SET executions = executions + 1, last_triggered = NOW() 
 		WHERE id = $1
 	`
-	_, _ = r.getDB(ctx).Exec(ctx, updateQuery, e.RuleID)
+	if _, err := r.getDB(ctx).Exec(ctx, updateQuery, e.RuleID); err != nil {
+		return fmt.Errorf("updating rule stats: %w", err)
+	}
 	
 	return nil
 }

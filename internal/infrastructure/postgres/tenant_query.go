@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type TokenType int
@@ -67,12 +67,12 @@ var nonTenantTables = map[string]bool{
 
 // BuildTenantQuery appends tenant filtering to a query if the user is not platform_admin.
 func BuildTenantQuery(ctx context.Context, query string, args ...interface{}) (string, []interface{}) {
-	userRole := middleware.UserRoleFromContext(ctx)
+	userRole := tenancy.UserRoleFromContext(ctx)
 	if userRole == "platform_admin" {
 		return query, args
 	}
 
-	tenantID := middleware.TenantIDFromContext(ctx)
+	tenantID := tenancy.TenantIDFromContext(ctx)
 	tokens := tokenizeSQL(query)
 	rewriter := newQueryRewriter(tenantID, args)
 	rewrittenTokens := rewriter.rewrite(tokens)

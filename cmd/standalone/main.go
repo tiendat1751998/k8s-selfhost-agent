@@ -1,5 +1,5 @@
 // Package main is a standalone development server for the K8S Self-Healing dashboard.
-// It runs WITHOUT PostgreSQL, Redis, or NATS — perfect for frontend development.
+// It runs with PostgreSQL but WITHOUT Redis or NATS — perfect for frontend development.
 // Usage: go run ./cmd/standalone
 package main
 
@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -17,6 +17,7 @@ import (
 
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	infraDocker "github.com/datdt/k8sselfhost/internal/infrastructure/provider/docker"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
@@ -28,40 +29,17 @@ import (
 	usecaseDeployment "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
 	usecaseSearch "github.com/datdt/k8sselfhost/internal/usecase/search"
+	usecaseBackup "github.com/datdt/k8sselfhost/internal/usecase/backup"
+	usecasePromotion "github.com/datdt/k8sselfhost/internal/usecase/promotion"
+	usecaseAlert "github.com/datdt/k8sselfhost/internal/usecase/alert"
+	usecaseCluster "github.com/datdt/k8sselfhost/internal/usecase/cluster"
+	"github.com/datdt/k8sselfhost/internal/domain/alert"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/notifier"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
-var mockProviders = []struct {
-	Name     string
-	Type     string
-	Model    string
-	Endpoint string
-	Default  bool
-}{
-	{"OpenAI GPT-4o", "openai", "gpt-4o", "https://api.openai.com/v1", true},
-	{"OpenAI GPT-4 Turbo", "openai", "gpt-4-turbo", "https://api.openai.com/v1", false},
-	{"OpenAI GPT-3.5 Turbo", "openai", "gpt-3.5-turbo", "https://api.openai.com/v1", false},
-	{"Azure OpenAI GPT-4", "openai", "azure/gpt-4", "https://corp.openai.azure.com", false},
-	{"Anthropic Claude 3.5 Sonnet", "anthropic", "claude-3-5-sonnet", "https://api.anthropic.com/v1", false},
-	{"Anthropic Claude 3 Opus", "anthropic", "claude-3-opus", "https://api.anthropic.com/v1", false},
-	{"Anthropic Claude 3 Haiku", "anthropic", "claude-3-haiku", "https://api.anthropic.com/v1", false},
-	{"Google Gemini 1.5 Pro", "gemini", "gemini-1.5-pro", "https://generativelanguage.googleapis.com", false},
-	{"Google Gemini 1.5 Flash", "gemini", "gemini-1.5-flash", "https://generativelanguage.googleapis.com", false},
-	{"Google Vertex AI Gemini", "gemini", "vertex/gemini-pro", "https://us-central1-aiplatform.googleapis.com", false},
-	{"AWS Bedrock Claude v3", "bedrock", "bedrock/claude-v3", "https://bedrock-runtime.us-east-1.amazonaws.com", false},
-	{"AWS Bedrock Llama 3 70B", "bedrock", "bedrock/llama3-70b", "https://bedrock-runtime.us-east-1.amazonaws.com", false},
-	{"Mistral Large 2", "mistral", "mistral-large-latest", "https://api.mistral.ai/v1", false},
-	{"Mistral Codestral", "mistral", "codestral-latest", "https://api.mistral.ai/v1", false},
-	{"Groq Llama 3.1 70B", "groq", "llama3-70b-8192", "https://api.groq.com/openai/v1", false},
-	{"Groq Mixtral 8x7B", "groq", "mixtral-8x7b-32768", "https://api.groq.com/openai/v1", false},
-	{"DeepSeek Coder V2", "deepseek", "deepseek-coder", "https://api.deepseek.com", false},
-	{"Cohere Command R+", "cohere", "command-r-plus", "https://api.cohere.ai/v1", false},
-	{"Ollama Local Llama 3", "ollama", "llama3:8b", "http://localhost:11434", false},
-	{"vLLM Cluster Codellama", "vllm", "codellama:34b", "http://vllm.internal:8000", false},
-}
 
-// Unused mock simulation variables removed
 
 
 func main() {
@@ -89,45 +67,89 @@ func run() error {
 		zap.String("mode", "standalone-enterprise"),
 	)
 
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal("failed to load config", zap.Error(err))
+	}
+
 	healthHandler := health.NewHandler(5 * time.Second)
 	wsHub := adapthttp.NewWSHub()
 	go wsHub.Run()
 
 	// Initialize LLM Provider Registry
 	registry := llm.NewProviderRegistry()
+	for _, pCfg := range cfg.LLM.Providers {
+		var client llm.Client
+		var initErr error
+		switch pCfg.Type {
+		case "ollama":
+			client = llm.NewOllamaClientDynamic(llm.OllamaClientConfig{
+				Endpoint: pCfg.Endpoint,
+				Model:    pCfg.Model,
+			})
+		case "openai":
+			client = llm.NewOpenAIClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
+		case "vllm":
+			client = llm.NewVLLMClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
+		default:
+			log.Warn("unknown LLM provider type, skipping", zap.String("type", pCfg.Type))
+			continue
+		}
+		if initErr != nil {
+			log.Error("failed to create client for LLM provider", zap.String("name", pCfg.Name), zap.Error(initErr))
+			continue
+		}
 
-	for _, mp := range mockProviders {
-		registry.Register(mp.Name, &mockLLMClient{model: mp.Model}, llm.ProviderInfo{
-			Type:     mp.Type,
-			Model:    mp.Model,
-			Endpoint: mp.Endpoint,
-			Default:  mp.Default,
+		cbClient := llm.NewCircuitBreakerClient(pCfg.Name, client, llm.DefaultCircuitBreakerConfig())
+		registry.Register(pCfg.Name, cbClient, llm.ProviderInfo{
+			Type:     pCfg.Type,
+			Model:    pCfg.Model,
+			Endpoint: pCfg.Endpoint,
+			Default:  pCfg.Default,
 		})
 	}
 
-	dsn := "postgres://myuser:mysecretpassword@10.10.10.133:5432/mydatabase?sslmode=disable"
+	// Register default fallback if empty
+	if registry.Count() == 0 && cfg.LLM.Endpoint != "" {
+		client := llm.NewOllamaClientDynamic(llm.OllamaClientConfig{
+			Endpoint: cfg.LLM.Endpoint,
+			Model:    cfg.LLM.Model,
+		})
+		cbClient := llm.NewCircuitBreakerClient("default", client, llm.DefaultCircuitBreakerConfig())
+		registry.Register("default", cbClient, llm.ProviderInfo{
+			Type:     "ollama",
+			Model:    cfg.LLM.Model,
+			Endpoint: cfg.LLM.Endpoint,
+			Default:  true,
+		})
+	}
+
+	dsn := cfg.Postgres.DSN()
 	pgClient, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		log.Fatal("failed to connect to postgres", zap.Error(err))
 	}
 	defer pgClient.Close()
 
-	dockerRepo, err := infraDocker.NewRealDockerRepo("tcp://10.10.10.133:2375", "1.41")
+	dockerRepo, err := infraDocker.NewRealDockerRepo(cfg.Docker.Host, cfg.Docker.Version)
 	if err != nil {
-		log.Fatal("failed to initialize docker repo", zap.Error(err))
+		log.Warn("failed to initialize real docker client, docker features will be unavailable", zap.Error(err))
+		dockerRepo = nil
 	}
 
 	kubeconfigPath := os.Getenv("KUBECONFIG")
 	if kubeconfigPath == "" {
 		if home := os.Getenv("USERPROFILE"); home != "" {
-			kubeconfigPath = home + "\\.kube\\config"
+			kubeconfigPath = filepath.Join(home, ".kube", "config")
 		} else if home = os.Getenv("HOME"); home != "" {
-			kubeconfigPath = home + "/.kube/config"
+			kubeconfigPath = filepath.Join(home, ".kube", "config")
 		}
 	}
+	k8sAvailable := true
 	k8sClient, err := infraK8s.NewClient(kubeconfigPath)
 	if err != nil {
-		log.Warn("failed to initialize Kubernetes client, some features will use mocks", zap.Error(err))
+		log.Warn("failed to initialize Kubernetes client, kubernetes features will be unavailable", zap.Error(err))
+		k8sAvailable = false
 	}
 	auditRepo := postgres.NewAuditRepo(pgClient)
 
@@ -141,18 +163,45 @@ func run() error {
 	costRepo := postgres.NewCostRepo(pgClient)
 	backupRepo := postgres.NewBackupRepo(pgClient)
 
-		defaultLLM, _ := registry.Default()
+	txManager := postgres.NewTxManager(pgClient)
+	defaultLLM, _ := registry.Default()
 	bridge := adapthttp.NewWSBridge(wsHub)
-	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge)
+	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge, txManager)
 
 	userRepo := postgres.NewUserRepo(pgClient)
 	authUsecase := usecaseAuth.NewUsecase(userRepo)
 
-	searchRepo := postgres.NewSearchRepo(pgClient)
+	searchRepo := postgres.NewSearchRepo(pgClient, nil)
 	searchUsecase := usecaseSearch.NewUsecase(searchRepo)
 
-	gitopsController := usecaseGitops.NewController(prRepo, incRepo)
+	gitopsController := usecaseGitops.NewController(prRepo, incRepo, txManager)
 	tenancyRepo := postgres.NewTenancyRepo(pgClient)
+
+	alertRepo := postgres.NewAlertRepo(pgClient)
+	alertNotifiers := map[string]alert.Notifier{
+		"slack":   notifier.NewSlackNotifier(),
+		"email":   notifier.NewEmailNotifier(),
+		"webhook": notifier.NewWebhookNotifier(),
+	}
+	_ = usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers)
+	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
+
+	var capacityHandler *adapthttp.CapacityHandler
+	var explorerHandler *adapthttp.ExplorerHandler
+	var healthCenterHandler *adapthttp.HealthCenterHandler
+	var deploymentsHandler *adapthttp.DeploymentHandler
+
+	if k8sAvailable {
+		capacityHandler = adapthttp.NewCapacityHandler(infraK8s.NewCapacityRepo(k8sClient, clientManager))
+		explorerHandler = adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
+		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager))
+		deploymentsHandler = adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
+	}
+
+	discoveryAdapter := infraK8s.NewDiscoveryAdapter()
+	importUsecase := usecaseCluster.NewImportUsecase(fleetRepo, discoveryAdapter, logger.Get())
+	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, logger.Get())
+	go healthChecker.Start(ctx, 1*time.Minute)
 
 	platformHandlers := &adapthttp.PlatformHandlers{
 		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, nil, gitopsController),
@@ -163,13 +212,13 @@ func run() error {
 		Tagging:       adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(pgClient)),
 		Runbook:       adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(pgClient), auditRepo),
 		Observability: adapthttp.NewObservabilityHandler(postgres.NewObservabilityRepo(pgClient)),
-		Capacity:      adapthttp.NewCapacityHandler(infraK8s.NewCapacityRepo(k8sClient, clientManager)),
+		Capacity:      capacityHandler,
 		Changes:       adapthttp.NewChangeHandler(postgres.NewChangesRepo(pgClient)),
-		Promotion:     adapthttp.NewPromotionHandler(postgres.NewPromotionRepo(pgClient)),
-		Explorer:      adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager)),
+		Promotion:     adapthttp.NewPromotionHandler(usecasePromotion.NewUsecase(postgres.NewPromotionRepo(pgClient))),
+		Explorer:      explorerHandler,
 		Reporting:     adapthttp.NewReportingHandler(postgres.NewReportingRepo(pgClient)),
-		HealthCenter:  adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager)),
-		Fleet:         adapthttp.NewFleetHandler(fleetRepo, auditRepo),
+		HealthCenter:  healthCenterHandler,
+		Fleet:         adapthttp.NewFleetHandler(fleetRepo, auditRepo, importUsecase),
 		Audit:         adapthttp.NewAuditHandler(auditRepo),
 		Notification:  adapthttp.NewNotificationHandler(postgres.NewNotificationRepo(pgClient)),
 		Automation:    adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(pgClient)),
@@ -178,10 +227,11 @@ func run() error {
 		Auth:          adapthttp.NewAuthHandler(authUsecase),
 		Search:        adapthttp.NewSearchHandler(searchUsecase),
 		Cost:          adapthttp.NewCostHandler(costRepo),
-		Backup:        adapthttp.NewBackupHandler(backupRepo, wsHub),
+		Backup:        adapthttp.NewBackupHandler(usecaseBackup.NewUsecase(backupRepo)),
 		Agents:        adapthttp.NewAgentHandler(agentRepo, orchestrator),
-		Deployments:   adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager))),
+		Deployments:   deploymentsHandler,
 		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
+		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
 	}
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)
@@ -221,26 +271,7 @@ func run() error {
 	return nil
 }
 
-// Unused simulation data loops generateOperationalData, generateEnterpriseData, and randomHex removed
 
-
-type mockLLMClient struct {
-	model string
-}
-
-func (m *mockLLMClient) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	return &llm.CompletionResponse{
-		Content:        fmt.Sprintf("[AI Response from %s] You asked: %s", m.model, req.Prompt),
-		Model:          m.model,
-		PromptTokens:   15,
-		ResponseTokens: 25,
-		Duration:       100 * time.Millisecond,
-	}, nil
-}
-
-func (m *mockLLMClient) HealthCheck(ctx context.Context) error {
-	return nil
-}
 
 // local wsBridge removed, using adapthttp.WSBridge
 

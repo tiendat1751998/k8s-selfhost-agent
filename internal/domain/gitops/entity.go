@@ -11,6 +11,7 @@ import (
 // PullRequest represents a GitOps pull request created for an incident remediation.
 type PullRequest struct {
 	ID          string
+	// IncidentID might require the database column to be NULL-able. This might need a migration.
 	IncidentID  string
 	Provider    Provider
 	RepoURL     string
@@ -71,6 +72,7 @@ func New(incidentID string, provider Provider, repoURL, branch, baseBranch, titl
 	if repoURL == "" {
 		return nil, errors.NewValidation("repo_url", "must not be empty")
 	}
+
 	if branch == "" {
 		return nil, errors.NewValidation("branch", "must not be empty")
 	}

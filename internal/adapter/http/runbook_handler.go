@@ -5,11 +5,13 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	"github.com/datdt/k8sselfhost/internal/domain/runbook"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // RunbookHandler provides HTTP handlers for the runbook API.
@@ -100,7 +102,9 @@ func (h *RunbookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if userID == "" {
 		userID = "system"
 	}
-	_ = h.auditRepo.RecordAction(r.Context(), userID, "create", "system", rb.ID, rb.Title, result, details, r.RemoteAddr, r.Header.Get("User-Agent"))
+	if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "create", "system", rb.ID, rb.Title, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+		logger.Get().Error("failed to record audit action for runbook creation", zap.Error(auditErr))
+	}
 
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create runbook", err)
@@ -151,7 +155,9 @@ func (h *RunbookHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if userID == "" {
 		userID = "system"
 	}
-	_ = h.auditRepo.RecordAction(r.Context(), userID, "update", "system", rb.ID, rb.Title, result, details, r.RemoteAddr, r.Header.Get("User-Agent"))
+	if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "update", "system", rb.ID, rb.Title, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+		logger.Get().Error("failed to record audit action for runbook update", zap.Error(auditErr))
+	}
 
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update runbook", err)
@@ -178,7 +184,9 @@ func (h *RunbookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if userID == "" {
 		userID = "system"
 	}
-	_ = h.auditRepo.RecordAction(r.Context(), userID, "delete", "system", id, id, result, details, r.RemoteAddr, r.Header.Get("User-Agent"))
+	if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "delete", "system", id, id, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+		logger.Get().Error("failed to record audit action for runbook deletion", zap.Error(auditErr))
+	}
 
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete runbook", err)

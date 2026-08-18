@@ -4,16 +4,19 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 var lastConfig *rest.Config
+
+var impersonatedClients sync.Map
 
 // GetLastConfig retrieves the last built rest.Config.
 func GetLastConfig() *rest.Config {
@@ -60,12 +63,16 @@ func getClient(ctx context.Context, defaultClient *kubernetes.Clientset) (*kuber
 		return defaultClient, nil
 	}
 
-	userID := middleware.UserIDFromContext(ctx)
+	userID := tenancy.UserIDFromContext(ctx)
 	if userID == "" || userID == "guest" {
 		return defaultClient, nil
 	}
 
 	// Create impersonated config
+	if cached, ok := impersonatedClients.Load(userID); ok {
+		return cached.(*kubernetes.Clientset), nil
+	}
+
 	impersonatedConfig := rest.CopyConfig(cfg)
 	impersonatedConfig.Impersonate = rest.ImpersonationConfig{
 		UserName: userID,
@@ -75,5 +82,6 @@ func getClient(ctx context.Context, defaultClient *kubernetes.Clientset) (*kuber
 	if err != nil {
 		return nil, fmt.Errorf("creating impersonated client: %w", err)
 	}
+	impersonatedClients.Store(userID, client)
 	return client, nil
 }

@@ -6,9 +6,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
 )
+
+type mockTxManager struct {
+	txCount int
+}
+
+func (m *mockTxManager) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	m.txCount++
+	return fn(ctx)
+}
+
+func (m *mockTxManager) RunInTxWithOpts(ctx context.Context, opts pgx.TxOptions, fn func(ctx context.Context) error) error {
+	m.txCount++
+	return fn(ctx)
+}
 
 type mockAgentRepository struct {
 	tasks      map[string]*agent.Task
@@ -157,8 +173,9 @@ func TestOrchestratorPipeline(t *testing.T) {
 	repo := newMockAgentRepository()
 	ws := &mockWSBroadcaster{}
 	mockL := &mockLLM{}
+	mockTx := &mockTxManager{}
 
-	orch := NewOrchestrator(repo, mockL, ws)
+	orch := NewOrchestrator(repo, mockL, ws, mockTx)
 
 	task := &agent.Task{
 		ID:          "task-1",
@@ -188,14 +205,19 @@ func TestOrchestratorPipeline(t *testing.T) {
 	if len(ws.events) == 0 {
 		t.Errorf("Expected websocket broadcast events to be emitted")
 	}
+
+	if mockTx.txCount < 2 {
+		t.Errorf("Expected at least 2 transactions (start and completion), got %d", mockTx.txCount)
+	}
 }
 
 func TestOrchestratorPipeline_StepFailure(t *testing.T) {
 	repo := newMockAgentRepository()
 	ws := &mockWSBroadcaster{}
 	mockL := &mockLLMWithError{err: errors.New("LLM completed with error")}
+	mockTx := &mockTxManager{}
 
-	orch := NewOrchestrator(repo, mockL, ws)
+	orch := NewOrchestrator(repo, mockL, ws, mockTx)
 
 	task := &agent.Task{
 		ID:          "task-fail",
@@ -241,8 +263,9 @@ func TestOrchestratorPipeline_DbUpdateFailure(t *testing.T) {
 	}
 	ws := &mockWSBroadcaster{}
 	mockL := &mockLLM{}
+	mockTx := &mockTxManager{}
 
-	orch := NewOrchestrator(repo, mockL, ws)
+	orch := NewOrchestrator(repo, mockL, ws, mockTx)
 
 	task := &agent.Task{
 		ID:          "task-db-fail",
@@ -263,3 +286,114 @@ func TestOrchestratorPipeline_DbUpdateFailure(t *testing.T) {
 		t.Errorf("Expected pipeline execution to fail due to DB update failure, but got nil")
 	}
 }
+
+func TestCreateAndScheduleTask_Success(t *testing.T) {
+	repo := newMockAgentRepository()
+	ws := &mockWSBroadcaster{}
+	mockL := &mockLLM{}
+	mockTx := &mockTxManager{}
+
+	orch := NewOrchestrator(repo, mockL, ws, mockTx)
+
+	task := &agent.Task{
+		Phase:       "Phase 12",
+		Module:      "agents",
+		Feature:     "Scheduling",
+		Title:       "Test Create and Schedule",
+		Description: "Task creation should validate and save to repo",
+	}
+
+	err := orch.CreateAndScheduleTask(context.Background(), task)
+	if err != nil {
+		t.Fatalf("Expected CreateAndScheduleTask to succeed, got %v", err)
+	}
+
+	if task.ID == "" {
+		t.Errorf("Expected task ID to be populated")
+	}
+
+	if task.Status != agent.TaskPending {
+		t.Errorf("Expected initial status pending, got %s", task.Status)
+	}
+
+	saved, err := repo.GetTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatalf("Expected task to be in repository: %v", err)
+	}
+
+	if saved.Title != "Test Create and Schedule" {
+		t.Errorf("Expected saved task title 'Test Create and Schedule', got %s", saved.Title)
+	}
+}
+
+func TestCreateAndScheduleTask_ValidationErrors(t *testing.T) {
+	repo := newMockAgentRepository()
+	ws := &mockWSBroadcaster{}
+	mockL := &mockLLM{}
+	mockTx := &mockTxManager{}
+
+	orch := NewOrchestrator(repo, mockL, ws, mockTx)
+
+	// nil task
+	if err := orch.CreateAndScheduleTask(context.Background(), nil); err == nil {
+		t.Errorf("Expected error for nil task")
+	}
+
+	// missing title
+	if err := orch.CreateAndScheduleTask(context.Background(), &agent.Task{Phase: "P", Module: "M"}); err == nil {
+		t.Errorf("Expected error for missing title")
+	}
+
+	// missing phase
+	if err := orch.CreateAndScheduleTask(context.Background(), &agent.Task{Title: "T", Module: "M"}); err == nil {
+		t.Errorf("Expected error for missing phase")
+	}
+
+	// missing module
+	if err := orch.CreateAndScheduleTask(context.Background(), &agent.Task{Title: "T", Phase: "P"}); err == nil {
+		t.Errorf("Expected error for missing module")
+	}
+}
+
+func TestCreateAndScheduleTask_WithUnmetDependencies(t *testing.T) {
+	repo := newMockAgentRepository()
+	ws := &mockWSBroadcaster{}
+	mockL := &mockLLM{}
+	mockTx := &mockTxManager{}
+
+	orch := NewOrchestrator(repo, mockL, ws, mockTx)
+
+	// Dependency task that is pending
+	depTask := &agent.Task{
+		ID:        "dep-1",
+		Phase:     "P",
+		Module:    "M",
+		Title:     "Dep 1",
+		Status:    agent.TaskPending,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	_ = repo.CreateTask(context.Background(), depTask)
+
+	task := &agent.Task{
+		Phase:        "P",
+		Module:       "M",
+		Title:        "Dependent Task",
+		Dependencies: []string{"dep-1"},
+	}
+
+	err := orch.CreateAndScheduleTask(context.Background(), task)
+	if err != nil {
+		t.Fatalf("Expected CreateAndScheduleTask to succeed, got %v", err)
+	}
+
+	saved, err := repo.GetTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatalf("Expected task to be saved in repository: %v", err)
+	}
+
+	if saved.Status != agent.TaskBlocked {
+		t.Errorf("Expected task status to be blocked due to unmet dependency, got %s", saved.Status)
+	}
+}
+

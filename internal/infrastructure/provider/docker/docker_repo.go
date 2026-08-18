@@ -25,13 +25,14 @@ type realDockerRepo struct {
 // NewRealDockerRepo initializes a new Docker client targeting the given host.
 // Example host: "tcp://10.10.10.133:2375"
 func NewRealDockerRepo(host string, version string) (domainDocker.Repository, error) {
-	if version == "" {
-		version = "1.41"
+	opts := []client.Opt{client.WithHost(host)}
+	if version != "" {
+		opts = append(opts, client.WithVersion(version))
+	} else {
+		opts = append(opts, client.WithAPIVersionNegotiation())
 	}
-	cli, err := client.NewClientWithOpts(
-		client.WithHost(host),
-		client.WithVersion(version),
-	)
+	
+	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
@@ -72,8 +73,7 @@ func (r *realDockerRepo) ListNodes(ctx context.Context) ([]domainDocker.Node, er
 	// Attempt to list swarm nodes. If not in swarm mode, this returns an error.
 	nodes, err := r.cli.NodeList(ctx, swarm.NodeListOptions{})
 	if err != nil {
-		// Just return empty nodes if not a swarm manager
-		return []domainDocker.Node{}, nil
+		return nil, fmt.Errorf("listing nodes from docker api: %w", err)
 	}
 
 	var result []domainDocker.Node
@@ -98,7 +98,7 @@ func (r *realDockerRepo) ListNodes(ctx context.Context) ([]domainDocker.Node, er
 func (r *realDockerRepo) ListServices(ctx context.Context) ([]domainDocker.Service, error) {
 	services, err := r.cli.ServiceList(ctx, swarm.ServiceListOptions{})
 	if err != nil {
-		return []domainDocker.Service{}, nil
+		return nil, fmt.Errorf("listing services from docker api: %w", err)
 	}
 
 	var result []domainDocker.Service

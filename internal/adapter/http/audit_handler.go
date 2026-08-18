@@ -55,14 +55,11 @@ func (h *AuditHandler) ResolveFinding(w http.ResponseWriter, r *http.Request) {
 // TriggerAuditRun handles POST /api/v1/audit/run
 func (h *AuditHandler) TriggerAuditRun(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
-	startTime := now.Add(-5 * time.Second)
 
-	// Create and record a proper completed AuditRun
+	// Create and record a pending AuditRun
 	run := &audit.AuditRun{
-		Status:        "completed",
-		StartTime:     startTime,
-		EndTime:       &now,
-		FindingsCount: 0,
+		Status:    "pending",
+		StartTime: now,
 	}
 
 	if err := h.repo.RecordRun(r.Context(), run); err != nil {
@@ -71,8 +68,9 @@ func (h *AuditHandler) TriggerAuditRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
-		"status": "audit_completed",
+		"status": "audit_pending",
 		"run_id": run.ID,
+		"message": "Audit run created. A background worker is needed to process it.",
 	})
 }
 

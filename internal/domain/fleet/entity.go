@@ -11,9 +11,14 @@ type Cluster struct {
 	Provider  string    `json:"provider"`   // e.g. aws, gcp, azure, onprem
 	Status    string    `json:"status"`     // active, offline, upgrading, maintenance
 	Version   string    `json:"version"`
-	Nodes          int       `json:"nodes"`
-	EncryptedToken string    `json:"encrypted_token,omitempty"`
-	TenantID       string    `json:"tenant_id"`
+	Nodes               int                    `json:"nodes"`
+	EncryptedToken      string                 `json:"encrypted_token,omitempty"`
+	ImportMethod        string                 `json:"import_method"`
+	KubeconfigHash      string                 `json:"kubeconfig_hash,omitempty"`
+	LastHealthCheck     *time.Time             `json:"last_health_check,omitempty"`
+	HealthStatus        string                 `json:"health_status"`
+	DiscoveredResources map[string]interface{} `json:"discovered_resources,omitempty"`
+	TenantID            string                 `json:"tenant_id"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }

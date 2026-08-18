@@ -78,21 +78,15 @@ func TestJWTAuth_NoneAlgorithm(t *testing.T) {
 	}
 }
 
-// TestJWTAuth_BypassVulnerabilityConfirm verifies that any token starting with
-// "k8s-enterprise-demo-" bypasses signature verification and is accepted as admin.
-func TestJWTAuth_BypassVulnerabilityConfirm(t *testing.T) {
+// TestJWTAuth_BypassVulnerabilityRejected verifies that tokens starting with
+// "k8s-enterprise-demo-" are properly rejected now that the backdoor is removed.
+func TestJWTAuth_BypassVulnerabilityRejected(t *testing.T) {
 	handler := JWTAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
-		userRole := UserRoleFromContext(r.Context())
-		tenantID := TenantIDFromContext(r.Context())
-
-		if userID != "admin-user-id" || userRole != "platform_admin" || tenantID != "default-tenant" {
-			t.Errorf("Unexpected context values: userID=%s, role=%s, tenant=%s", userID, userRole, tenantID)
-		}
+		t.Error("Handler should not be reached for invalid demo token")
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// A malicious token with the backdoor prefix
+	// A malicious token with the former backdoor prefix must now be rejected
 	maliciousToken := "k8s-enterprise-demo-attacker-session"
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -100,7 +94,7 @@ func TestJWTAuth_BypassVulnerabilityConfirm(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200 for bypassed demo token, got %d", w.Code)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status 401 for demo-prefix token (backdoor removed), got %d", w.Code)
 	}
 }

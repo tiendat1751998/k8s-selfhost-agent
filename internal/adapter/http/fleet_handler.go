@@ -1,30 +1,30 @@
 package http
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	"github.com/datdt/k8sselfhost/internal/domain/fleet"
-	"github.com/datdt/k8sselfhost/internal/pkg/concurrency"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/usecase/cluster"
 )
 
 // FleetHandler provides HTTP handlers for the multi-cluster fleet API.
 type FleetHandler struct {
-	repo      fleet.Repository
-	auditRepo audit.Repository
+	repo          fleet.Repository
+	auditRepo     audit.Repository
+	importUsecase *cluster.ImportUsecase
 }
 
 // NewFleetHandler creates a new fleet HTTP handler.
-func NewFleetHandler(repo fleet.Repository, auditRepo audit.Repository) *FleetHandler {
-	return &FleetHandler{repo: repo, auditRepo: auditRepo}
+func NewFleetHandler(repo fleet.Repository, auditRepo audit.Repository, importUsecase *cluster.ImportUsecase) *FleetHandler {
+	return &FleetHandler{repo: repo, auditRepo: auditRepo, importUsecase: importUsecase}
 }
 
 // RegisterRoutes registers fleet routes.
@@ -33,6 +33,7 @@ func (h *FleetHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/", h.RegisterCluster)
 	r.Delete("/{id}", h.RemoveCluster)
 	r.Post("/{id}/actions/upgrade", h.UpgradeCluster)
+	h.RegisterImportRoutes(r)
 }
 
 // ListClusters handles GET /api/v1/fleet
@@ -93,7 +94,9 @@ func (h *FleetHandler) RegisterCluster(w http.ResponseWriter, r *http.Request) {
 	if userID == "" {
 		userID = "system"
 	}
-	_ = h.auditRepo.RecordAction(r.Context(), userID, "create", "kubernetes", c.ID, c.Name, result, details, r.RemoteAddr, r.Header.Get("User-Agent"))
+	if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "create", "kubernetes", c.ID, c.Name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+		logger.Get().Error("failed to record audit action for cluster creation", zap.Error(auditErr))
+	}
 
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to register cluster", err)
@@ -120,7 +123,9 @@ func (h *FleetHandler) RemoveCluster(w http.ResponseWriter, r *http.Request) {
 	if userID == "" {
 		userID = "system"
 	}
-	_ = h.auditRepo.RecordAction(r.Context(), userID, "delete", "kubernetes", id, id, result, details, r.RemoteAddr, r.Header.Get("User-Agent"))
+	if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "delete", "kubernetes", id, id, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+		logger.Get().Error("failed to record audit action for cluster deletion", zap.Error(auditErr))
+	}
 
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to remove cluster", err)
@@ -170,22 +175,14 @@ func (h *FleetHandler) UpgradeCluster(w http.ResponseWriter, r *http.Request) {
 	if userID == "" {
 		userID = "system"
 	}
-	_ = h.auditRepo.RecordAction(r.Context(), userID, "upgrade", "kubernetes", id, cluster.Name, result, details, r.RemoteAddr, r.Header.Get("User-Agent"))
+	if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "upgrade", "kubernetes", id, cluster.Name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+		logger.Get().Warn("failed to record audit action", zap.Error(auditErr))
+	}
 
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to start cluster upgrade", err)
 		return
 	}
 
-	// Trigger async background upgrade process
-	concurrency.Go(logger.Get(), func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = h.repo.UpdateClusterStatus(ctx, id, "active", targetVersion, cluster.Nodes)
-	})
-
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status":         "upgrade_started",
-		"target_version": targetVersion,
-	})
+	writeError(w, http.StatusNotImplemented, "Cluster upgrade is not implemented", fmt.Errorf("upgrade not implemented"))
 }

@@ -22,15 +22,15 @@ func ValidateKey() error {
 	return nil
 }
 
-func getEncryptionKey() []byte {
+func getEncryptionKey() ([]byte, error) {
 	key := os.Getenv("ENCRYPTION_KEY")
 	if key == "" {
-		panic("ENCRYPTION_KEY environment variable is not set")
+		return nil, fmt.Errorf("ENCRYPTION_KEY environment variable is not set")
 	}
 	if len(key) < 32 {
-		panic("ENCRYPTION_KEY must be at least 32 characters long")
+		return nil, fmt.Errorf("ENCRYPTION_KEY must be at least 32 characters long")
 	}
-	return []byte(key[:32])
+	return []byte(key[:32]), nil
 }
 
 // Encrypt encrypts plain text using AES-GCM
@@ -39,7 +39,11 @@ func Encrypt(plaintext string) (string, error) {
 		return "", nil
 	}
 	
-	block, err := aes.NewCipher(getEncryptionKey())
+	key, err := getEncryptionKey()
+	if err != nil {
+		return "", err
+	}
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}
@@ -69,7 +73,11 @@ func Decrypt(hexString string) (string, error) {
 		return "", err
 	}
 
-	block, err := aes.NewCipher(getEncryptionKey())
+	key, err := getEncryptionKey()
+	if err != nil {
+		return "", err
+	}
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}

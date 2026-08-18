@@ -3,18 +3,21 @@ package postgres
 import (
 	"context"
 	"fmt"
-
+	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/search"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/redis"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type searchRepo struct {
-	db DBTX
+	db    DBTX
+	cache *redis.CacheManager
 }
 
 // NewSearchRepo creates a new Postgres-backed Search repository.
-func NewSearchRepo(db DBTX) search.Repository {
-	return &searchRepo{db: db}
+func NewSearchRepo(db DBTX, cache *redis.CacheManager) search.Repository {
+	return &searchRepo{db: db, cache: cache}
 }
 
 func (r *searchRepo) getDB(ctx context.Context) DBTX {
@@ -37,10 +40,15 @@ func (r *searchRepo) Search(ctx context.Context, q string, searchType string) ([
 		return nil, fmt.Errorf("unsupported search type: %q", searchType)
 	}
 
-	var results []search.Result
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	cacheKey := fmt.Sprintf("search:%s:%s:%s", tenantID, searchType, q)
+	var finalResults []search.Result
 
-	// 1. Incidents
-	if searchType == "all" || searchType == "incident" {
+	fallback := func() (interface{}, error) {
+		var results []search.Result
+
+		// 1. Incidents
+		if searchType == "all" || searchType == "incident" {
 		err := func() error {
 			query := `
 				SELECT 'incident' as type, 'Incident in Pod ' || pod_name as title, message as desc
@@ -170,5 +178,22 @@ func (r *searchRepo) Search(ctx context.Context, q string, searchType string) ([
 		}
 	}
 
-	return results, nil
+		return results, nil
+	}
+
+	if r.cache == nil {
+		res, err := fallback()
+		if err != nil {
+			return nil, err
+		}
+		return res.([]search.Result), nil
+	}
+
+	err := r.cache.GetOrSet(ctx, cacheKey, 1*time.Minute, &finalResults, fallback)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return finalResults, nil
 }
