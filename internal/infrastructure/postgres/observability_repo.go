@@ -23,7 +23,7 @@ func (r *observabilityRepo) getDB(ctx context.Context) DBTX {
 
 func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observability.SLODefinition, error) {
 	query := `
-		SELECT id, service, target, indicator_type, window, created_at, updated_at 
+		SELECT id, service, target, indicator_type, "window", created_at, updated_at 
 		FROM slo_definitions 
 		ORDER BY created_at DESC
 	`
@@ -51,7 +51,7 @@ func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observabi
 
 func (r *observabilityRepo) CreateSLODefinition(ctx context.Context, d *observability.SLODefinition) error {
 	query := `
-		INSERT INTO slo_definitions (service, target, indicator_type, window, created_at, updated_at)
+		INSERT INTO slo_definitions (service, target, indicator_type, "window", created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`

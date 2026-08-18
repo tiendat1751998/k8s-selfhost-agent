@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -47,12 +48,30 @@ func (r *fleetRepo) ListClusters(ctx context.Context) ([]fleet.Cluster, error) {
 	for rows.Next() {
 		var c fleet.Cluster
 		var encryptedToken *string
+		var importMethod *string
+		var kubeconfigHash *string
+		var healthStatus *string
+		var discoveredBytes []byte
 		if err := rows.Scan(
 			&c.ID, &c.Name, &c.Group, &c.Region, &c.Provider,
 			&c.Status, &c.Version, &c.Nodes, &encryptedToken, &c.TenantID, &c.CreatedAt, &c.UpdatedAt,
-			&c.ImportMethod, &c.KubeconfigHash, &c.LastHealthCheck, &c.HealthStatus, &c.DiscoveredResources,
+			&importMethod, &kubeconfigHash, &c.LastHealthCheck, &healthStatus, &discoveredBytes,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fleet cluster: %w", err)
+		}
+		if importMethod != nil {
+			c.ImportMethod = *importMethod
+		}
+		if kubeconfigHash != nil {
+			c.KubeconfigHash = *kubeconfigHash
+		}
+		if healthStatus != nil {
+			c.HealthStatus = *healthStatus
+		}
+		if len(discoveredBytes) > 0 {
+			if err := json.Unmarshal(discoveredBytes, &c.DiscoveredResources); err != nil {
+				c.DiscoveredResources = make(map[string]interface{})
+			}
 		}
 		if encryptedToken != nil && *encryptedToken != "" {
 			if decrypted, decErr := crypto.Decrypt(*encryptedToken); decErr != nil {
@@ -80,16 +99,34 @@ func (r *fleetRepo) GetCluster(ctx context.Context, id string) (*fleet.Cluster, 
 
 	var c fleet.Cluster
 	var encryptedToken *string
+	var importMethod *string
+	var kubeconfigHash *string
+	var healthStatus *string
+	var discoveredBytes []byte
 	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&c.ID, &c.Name, &c.Group, &c.Region, &c.Provider,
 		&c.Status, &c.Version, &c.Nodes, &encryptedToken, &c.TenantID, &c.CreatedAt, &c.UpdatedAt,
-		&c.ImportMethod, &c.KubeconfigHash, &c.LastHealthCheck, &c.HealthStatus, &c.DiscoveredResources,
+		&importMethod, &kubeconfigHash, &c.LastHealthCheck, &healthStatus, &discoveredBytes,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("getting fleet cluster: %w", err)
+	}
+	if importMethod != nil {
+		c.ImportMethod = *importMethod
+	}
+	if kubeconfigHash != nil {
+		c.KubeconfigHash = *kubeconfigHash
+	}
+	if healthStatus != nil {
+		c.HealthStatus = *healthStatus
+	}
+	if len(discoveredBytes) > 0 {
+		if err := json.Unmarshal(discoveredBytes, &c.DiscoveredResources); err != nil {
+			c.DiscoveredResources = make(map[string]interface{})
+		}
 	}
 	if encryptedToken != nil && *encryptedToken != "" {
 		if decrypted, decErr := crypto.Decrypt(*encryptedToken); decErr != nil {
@@ -117,6 +154,11 @@ func (r *fleetRepo) RegisterCluster(ctx context.Context, c *fleet.Cluster) error
 		c.TenantID = "default-tenant"
 	}
 
+	discoveredJSON, err := json.Marshal(c.DiscoveredResources)
+	if err != nil {
+		discoveredJSON = []byte("{}")
+	}
+
 	query := `
 		INSERT INTO fleet_clusters (id, name, "group", region, provider, status, version, nodes, encrypted_token, tenant_id, created_at, updated_at, import_method, kubeconfig_hash, last_health_check, health_status, discovered_resources)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
@@ -140,7 +182,7 @@ func (r *fleetRepo) RegisterCluster(ctx context.Context, c *fleet.Cluster) error
 	_, err = r.getDB(ctx).Exec(ctx, query,
 		c.ID, c.Name, c.Group, c.Region, c.Provider,
 		c.Status, c.Version, c.Nodes, encToken, c.TenantID, now, now,
-		c.ImportMethod, c.KubeconfigHash, c.LastHealthCheck, c.HealthStatus, c.DiscoveredResources,
+		c.ImportMethod, c.KubeconfigHash, c.LastHealthCheck, c.HealthStatus, discoveredJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("registering fleet cluster: %w", err)
@@ -179,14 +221,19 @@ func (r *fleetRepo) UpdateHealth(ctx context.Context, id, healthStatus string, l
 }
 
 func (r *fleetRepo) UpdateDiscoveredResources(ctx context.Context, id string, resources map[string]interface{}) error {
+	discoveredJSON, err := json.Marshal(resources)
+	if err != nil {
+		discoveredJSON = []byte("{}")
+	}
+
 	query := `
 		UPDATE fleet_clusters
 		SET discovered_resources = $2, updated_at = $3
 		WHERE id = $1
 	`
-	query, args := BuildTenantQuery(ctx, query, id, resources, time.Now().UTC())
+	query, args := BuildTenantQuery(ctx, query, id, discoveredJSON, time.Now().UTC())
 
-	_, err := r.getDB(ctx).Exec(ctx, query, args...)
+	_, err = r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating cluster discovered resources: %w", err)
 	}

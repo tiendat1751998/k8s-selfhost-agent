@@ -236,8 +236,9 @@ func (r *agentRepo) GetExecution(ctx context.Context, id string) (*agent.Executi
 	`
 	var e agent.Execution
 	var agentTypeStr string
+	var input, output, errorDetail *string
 	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
-		&e.ID, &e.TaskID, &agentTypeStr, &e.Status, &e.Input, &e.Output, &e.ErrorDetail, &e.CreatedAt, &e.CompletedAt,
+		&e.ID, &e.TaskID, &agentTypeStr, &e.Status, &input, &output, &errorDetail, &e.CreatedAt, &e.CompletedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -246,6 +247,15 @@ func (r *agentRepo) GetExecution(ctx context.Context, id string) (*agent.Executi
 		return nil, fmt.Errorf("getting agent execution: %w", err)
 	}
 	e.AgentType = agent.AgentType(agentTypeStr)
+	if input != nil {
+		e.Input = *input
+	}
+	if output != nil {
+		e.Output = *output
+	}
+	if errorDetail != nil {
+		e.ErrorDetail = *errorDetail
+	}
 	return &e, nil
 }
 
@@ -277,13 +287,23 @@ func (r *agentRepo) ListExecutions(ctx context.Context, taskID string) ([]agent.
 	for rows.Next() {
 		var e agent.Execution
 		var agentTypeStr string
+		var input, output, errorDetail *string
 		err := rows.Scan(
-			&e.ID, &e.TaskID, &agentTypeStr, &e.Status, &e.Input, &e.Output, &e.ErrorDetail, &e.CreatedAt, &e.CompletedAt,
+			&e.ID, &e.TaskID, &agentTypeStr, &e.Status, &input, &output, &errorDetail, &e.CreatedAt, &e.CompletedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning agent execution: %w", err)
 		}
 		e.AgentType = agent.AgentType(agentTypeStr)
+		if input != nil {
+			e.Input = *input
+		}
+		if output != nil {
+			e.Output = *output
+		}
+		if errorDetail != nil {
+			e.ErrorDetail = *errorDetail
+		}
 		execs = append(execs, e)
 	}
 	return execs, nil
@@ -314,8 +334,9 @@ func (r *agentRepo) GetProjectState(ctx context.Context) (*agent.ProjectState, e
 		WHERE id = 'latest'
 	`
 	var s agent.ProjectState
+	var currentTaskID, currentSubtaskID *string
 	err := r.getDB(ctx).QueryRow(ctx, query).Scan(
-		&s.ID, &s.CurrentPhase, &s.CurrentModule, &s.CurrentFeature, &s.CurrentTaskID, &s.CurrentSubtaskID,
+		&s.ID, &s.CurrentPhase, &s.CurrentModule, &s.CurrentFeature, &currentTaskID, &currentSubtaskID,
 		&s.RepositoryHealth, &s.TechnicalDebt, &s.ArchitectureScore, &s.QualityScore, &s.UpdatedAt,
 	)
 	if err != nil {
@@ -340,6 +361,12 @@ func (r *agentRepo) GetProjectState(ctx context.Context) (*agent.ProjectState, e
 			return &s, nil
 		}
 		return nil, fmt.Errorf("getting project state: %w", err)
+	}
+	if currentTaskID != nil {
+		s.CurrentTaskID = *currentTaskID
+	}
+	if currentSubtaskID != nil {
+		s.CurrentSubtaskID = *currentSubtaskID
 	}
 	return &s, nil
 }
