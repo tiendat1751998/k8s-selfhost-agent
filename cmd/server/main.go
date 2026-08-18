@@ -20,6 +20,9 @@ import (
 	"github.com/datdt/k8sselfhost/internal/adapter/event"
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
+	infraBackup "github.com/datdt/k8sselfhost/internal/infrastructure/backup"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/backup/drivers"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/backup/storage"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
@@ -27,13 +30,19 @@ import (
 	infraDocker "github.com/datdt/k8sselfhost/internal/infrastructure/provider/docker"
 	infraRedis "github.com/datdt/k8sselfhost/internal/infrastructure/redis"
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
+	"github.com/datdt/k8sselfhost/internal/domain/alert"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/notifier"
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 	"github.com/datdt/k8sselfhost/internal/usecase/ai"
 	"github.com/datdt/k8sselfhost/internal/usecase/rca"
 	usecaseAgent "github.com/datdt/k8sselfhost/internal/usecase/agent"
+	usecaseAlert "github.com/datdt/k8sselfhost/internal/usecase/alert"
 	usecaseAuth "github.com/datdt/k8sselfhost/internal/usecase/auth"
+	usecaseBackup "github.com/datdt/k8sselfhost/internal/usecase/backup"
+	usecaseCluster "github.com/datdt/k8sselfhost/internal/usecase/cluster"
 	usecaseDeployment "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
+	usecasePromotion "github.com/datdt/k8sselfhost/internal/usecase/promotion"
 	usecaseSearch "github.com/datdt/k8sselfhost/internal/usecase/search"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
@@ -133,6 +142,8 @@ func run() error {
 		}
 	}()
 
+	cacheManager := infraRedis.NewCacheManager(redisClient)
+
 	// Connect to NATS
 	natsClient, err := infraNats.NewClient(egCtx, cfg.NATS)
 	if err != nil {
@@ -180,8 +191,18 @@ func run() error {
 	prRepo := postgres.NewPRRepo(pgClient.Pool())
 	obsRepo := postgres.NewObservabilityRepo(pgClient.Pool())
 
-	// 3. Initialize NATS Publisher
+	// 3. Initialize NATS Publisher and Subscriber
 	publisher := infraNats.NewPublisher(natsClient)
+	subscriber := infraNats.NewSubscriber(natsClient)
+
+	// Subscribe to incident events
+	err = subscriber.Subscribe(egCtx, "incidents.>", func(ctx context.Context, subject string, data []byte) error {
+		log.Info("received incident event", zap.String("subject", subject), zap.ByteString("data", data))
+		return nil
+	})
+	if err != nil {
+		log.Error("failed to subscribe to incident events", zap.Error(err))
+	}
 
 	// 4. Initialize LLM Provider Registry
 	registry := llm.NewProviderRegistry()
@@ -240,9 +261,11 @@ func run() error {
 			kubeconfigPath = filepath.Join(home, ".kube", "config")
 		}
 	}
+	k8sAvailable := true
 	k8sClient, err := infraK8s.NewClient(kubeconfigPath)
 	if err != nil {
 		log.Warn("failed to initialize Kubernetes client, falling back to cached state", zap.Error(err))
+		k8sAvailable = false
 	}
 	collector := event.NewCollector(k8sClient)
 
@@ -294,21 +317,63 @@ func run() error {
 	fleetRepo := postgres.NewFleetRepo(pgClient.Pool())
 	costRepo := postgres.NewCostRepo(pgClient.Pool())
 	backupRepo := postgres.NewBackupRepo(pgClient.Pool())
+	backupEngine := infraBackup.NewEngine(
+		backupRepo,
+		drivers.NewDriverRegistry(),
+		storage.NewStorageRegistry(storage.NewLocalStorage("")),
+	)
+	backupPool := infraBackup.NewWorkerPool(backupEngine, log, 50)
+	backupPool.Start(3)
+	defer backupPool.Stop()
+
+	backupUsecase := usecaseBackup.NewUsecase(backupRepo)
+	backupUsecase.SetRunner(backupPool)
+
 	agentRepo := postgres.NewAgentRepo(pgClient.Pool())
+	alertRepo := postgres.NewAlertRepo(pgClient.Pool())
+
+	alertNotifiers := map[string]alert.Notifier{
+		"slack":   notifier.NewSlackNotifier(),
+		"email":   notifier.NewEmailNotifier(),
+		"webhook": notifier.NewWebhookNotifier(),
+	}
+	_ = usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers)
+	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
 
 	clientManager := infraCluster.NewClientManager(fleetRepo)
+	discoveryAdapter := infraK8s.NewDiscoveryAdapter()
+	importUsecase := usecaseCluster.NewImportUsecase(fleetRepo, discoveryAdapter, log)
+	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, log)
+	eg.Go(func() error {
+		healthChecker.Start(egCtx, 1*time.Minute)
+		return nil
+	})
 
+	txManager := postgres.NewTxManager(pgClient.Pool())
 	defaultLLM, _ := registry.Default()
-	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge)
+	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge, txManager)
 
 	userRepo := postgres.NewUserRepo(pgClient.Pool())
 	authUsecase := usecaseAuth.NewUsecase(userRepo)
 
-	searchRepo := postgres.NewSearchRepo(pgClient.Pool())
+	searchRepo := postgres.NewSearchRepo(pgClient.Pool(), cacheManager)
 	searchUsecase := usecaseSearch.NewUsecase(searchRepo)
+	promotionUsecase := usecasePromotion.NewUsecase(promotionRepo)
 
-	gitopsController := usecaseGitops.NewController(prRepo, incRepo)
+	gitopsController := usecaseGitops.NewController(prRepo, incRepo, txManager)
 	tenancyRepo := postgres.NewTenancyRepo(pgClient.Pool())
+
+	var capacityHandler *adapthttp.CapacityHandler
+	var explorerHandler *adapthttp.ExplorerHandler
+	var healthCenterHandler *adapthttp.HealthCenterHandler
+	var deploymentsHandler *adapthttp.DeploymentHandler
+
+	if k8sAvailable {
+		capacityHandler = adapthttp.NewCapacityHandler(infraK8s.NewCapacityRepo(k8sClient, clientManager))
+		explorerHandler = adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
+		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager))
+		deploymentsHandler = adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
+	}
 
 	platformHandlers := &adapthttp.PlatformHandlers{
 		AI:            adapthttp.NewAIHandler(registry),
@@ -320,13 +385,13 @@ func run() error {
 		Tagging:       adapthttp.NewTaggingHandler(taggingRepo),
 		Runbook:       adapthttp.NewRunbookHandler(runbookRepo, auditRepo),
 		Observability: adapthttp.NewObservabilityHandler(obsRepo),
-		Capacity:      adapthttp.NewCapacityHandler(infraK8s.NewCapacityRepo(k8sClient, clientManager)),
+		Capacity:      capacityHandler,
 		Changes:       adapthttp.NewChangeHandler(changesRepo),
-		Promotion:     adapthttp.NewPromotionHandler(promotionRepo),
-		Explorer:      adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager)),
+		Promotion:     adapthttp.NewPromotionHandler(promotionUsecase),
+		Explorer:      explorerHandler,
 		Reporting:     adapthttp.NewReportingHandler(reportingRepo),
-		HealthCenter:  adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager)),
-		Fleet:         adapthttp.NewFleetHandler(fleetRepo, auditRepo),
+		HealthCenter:  healthCenterHandler,
+		Fleet:         adapthttp.NewFleetHandler(fleetRepo, auditRepo, importUsecase),
 		Audit:         adapthttp.NewAuditHandler(auditRepo),
 		Notification:  adapthttp.NewNotificationHandler(notificationRepo),
 		Automation:    adapthttp.NewAutomationHandler(automationRepo),
@@ -334,10 +399,11 @@ func run() error {
 		Auth:          adapthttp.NewAuthHandler(authUsecase),
 		Search:        adapthttp.NewSearchHandler(searchUsecase),
 		Cost:          adapthttp.NewCostHandler(costRepo),
-		Backup:        adapthttp.NewBackupHandler(backupRepo, wsHub),
+		Backup:        adapthttp.NewBackupHandler(backupUsecase),
 		Agents:        adapthttp.NewAgentHandler(agentRepo, orchestrator),
-		Deployments:   adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager))),
+		Deployments:   deploymentsHandler,
 		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
+		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
 	}
 	if err := initializeWelcomeMessage(egCtx, pgClient.Pool(), wsHub); err != nil {
 		log.Error("failed to initialize WebSocket welcome config message", zap.Error(err))

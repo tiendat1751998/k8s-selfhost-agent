@@ -313,7 +313,10 @@ func (r *deploymentRepo) Create(ctx context.Context, app deployment.Application)
 				Type: corev1.ServiceType(app.NetType),
 			},
 		}
-		_, _ = client.CoreV1().Services(ns).Create(ctx, serviceObj, metav1.CreateOptions{})
+		_, err = client.CoreV1().Services(ns).Create(ctx, serviceObj, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("creating service for app %s: %w", app.Name, err)
+		}
 
 		return nil
 	} else if app.Type == "swarm" || app.Type == "docker" {

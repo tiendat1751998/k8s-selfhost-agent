@@ -89,7 +89,7 @@ func TestJWTAuth_DemoToken(t *testing.T) {
 	}))
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("Authorization", "Bearer k8s-enterprise-demo-token")
+	r.Header.Set("Authorization", "Bearer test-token-for-unit-tests")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 

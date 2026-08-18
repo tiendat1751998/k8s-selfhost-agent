@@ -7,9 +7,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // ReportRepo implements report.Repository using PostgreSQL.
@@ -33,7 +33,7 @@ func (r *ReportRepo) Create(ctx context.Context, rpt *report.Report) error {
 		return errors.Wrap(err, "marshaling evidence")
 	}
 
-	tenantID := middleware.TenantIDFromContext(ctx)
+	tenantID := tenancy.TenantIDFromContext(ctx)
 	if tenantID == "" {
 		tenantID = "org-google"
 	}

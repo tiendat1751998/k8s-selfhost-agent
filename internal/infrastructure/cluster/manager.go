@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/datdt/k8sselfhost/internal/domain/fleet"
+	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 )
 
 // ClientManager manages dynamic client pools for both Kubernetes and Docker clusters.
@@ -67,7 +68,12 @@ func (m *ClientManager) GetK8sClient(ctx context.Context, clusterID string) (*ku
 		return nil, fmt.Errorf("cluster %s has no token or kubeconfig data", clusterID)
 	}
 
-	config, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.EncryptedToken))
+	kubeconfigData := cluster.EncryptedToken
+	if decrypted, err := crypto.Decrypt(cluster.EncryptedToken); err == nil && decrypted != "" {
+		kubeconfigData = decrypted
+	}
+
+	config, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeconfigData))
 	if err != nil {
 		return nil, fmt.Errorf("parsing kubeconfig for cluster %s: %w", clusterID, err)
 	}
@@ -119,6 +125,9 @@ func (m *ClientManager) GetDockerClient(ctx context.Context, clusterID string) (
 	}
 
 	host := cluster.EncryptedToken
+	if decrypted, err := crypto.Decrypt(cluster.EncryptedToken); err == nil && decrypted != "" {
+		host = decrypted
+	}
 	if host == "" {
 		host = "tcp://10.10.10.133:2375"
 	}

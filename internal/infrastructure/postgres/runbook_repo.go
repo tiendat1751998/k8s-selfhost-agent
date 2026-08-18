@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/runbook"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type runbookRepo struct {
@@ -109,8 +109,8 @@ func (r *runbookRepo) GetByID(ctx context.Context, id string) (*runbook.Runbook,
 }
 
 func (r *runbookRepo) Create(ctx context.Context, rb *runbook.Runbook) error {
-	tenantID := middleware.TenantIDFromContext(ctx)
-	userRole := middleware.UserRoleFromContext(ctx)
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	userRole := tenancy.UserRoleFromContext(ctx)
 	if userRole != "platform_admin" && tenantID != "" {
 		rb.TenantID = tenantID
 	}

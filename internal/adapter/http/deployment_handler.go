@@ -53,7 +53,7 @@ func (r *scaleDeploymentRequest) Validate() error {
 	if strings.TrimSpace(r.Name) == "" {
 		ve.Add("name", "deployment name is required")
 	}
-	if strings.TrimSpace(r.Namespace) == "" {
+	if strings.TrimSpace(r.Namespace) == "" && r.Type != "docker" {
 		ve.Add("namespace", "namespace is required")
 	}
 	if r.Replicas < 0 {
@@ -92,7 +92,7 @@ func (r *restartDeploymentRequest) Validate() error {
 	if strings.TrimSpace(r.Name) == "" {
 		ve.Add("name", "deployment name is required")
 	}
-	if strings.TrimSpace(r.Namespace) == "" {
+	if strings.TrimSpace(r.Namespace) == "" && r.Type != "docker" {
 		ve.Add("namespace", "namespace is required")
 	}
 	if ve.HasErrors() {
@@ -128,7 +128,7 @@ func (r *deleteDeploymentRequest) Validate() error {
 	if strings.TrimSpace(r.Name) == "" {
 		ve.Add("name", "deployment name is required")
 	}
-	if strings.TrimSpace(r.Namespace) == "" {
+	if strings.TrimSpace(r.Namespace) == "" && r.Type != "docker" {
 		ve.Add("namespace", "namespace is required")
 	}
 	if ve.HasErrors() {
@@ -172,7 +172,7 @@ func (r *createDeploymentRequest) Validate() error {
 	if strings.TrimSpace(r.Name) == "" {
 		ve.Add("name", "name is required")
 	}
-	if strings.TrimSpace(r.Namespace) == "" {
+	if strings.TrimSpace(r.Namespace) == "" && r.Type != "docker" {
 		ve.Add("namespace", "namespace is required")
 	}
 	if strings.TrimSpace(r.Image) == "" {

@@ -3,27 +3,35 @@ package agent
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // AgentType represents a specialized agent role.
 type AgentType string
 
 const (
-	Orchestrator       AgentType = "Orchestrator"
-	Planner            AgentType = "Planner"
-	Architect          AgentType = "Architect"
-	RepositoryAnalyzer AgentType = "Repository Analyzer"
-	BackendEngineer    AgentType = "Backend Engineer"
-	FrontendEngineer   AgentType = "Frontend Engineer"
-	KubernetesEngineer AgentType = "Kubernetes Engineer"
-	GitOpsEngineer     AgentType = "GitOps Engineer"
-	SecurityEngineer   AgentType = "Security Engineer"
-	PerformanceEngineer AgentType = "Performance Engineer"
-	QAEngineer         AgentType = "QA Engineer"
-	CodeReviewer       AgentType = "Code Reviewer"
-	RefactoringEngineer AgentType = "Refactoring Engineer"
+	Orchestrator          AgentType = "Orchestrator"
+	Planner               AgentType = "Planner"
+	Architect             AgentType = "Architect"
+	RepositoryAnalyzer    AgentType = "Repository Analyzer"
+	BackendEngineer       AgentType = "Backend Engineer"
+	FrontendEngineer      AgentType = "Frontend Engineer"
+	KubernetesEngineer    AgentType = "Kubernetes Engineer"
+	GitOpsEngineer        AgentType = "GitOps Engineer"
+	SecurityEngineer      AgentType = "Security Engineer"
+	PerformanceEngineer   AgentType = "Performance Engineer"
+	QAEngineer            AgentType = "QA Engineer"
+	CodeReviewer          AgentType = "Code Reviewer"
+	RefactoringEngineer   AgentType = "Refactoring Engineer"
 	DocumentationEngineer AgentType = "Documentation Engineer"
-	ReleaseManager     AgentType = "Release Manager"
+	ReleaseManager        AgentType = "Release Manager"
+)
+
+const (
+	ExecutionRunning = "running"
+	ExecutionSuccess = "success"
+	ExecutionFailed  = "failed"
 )
 
 // Execution represents a specific execution run of an agent.
@@ -37,6 +45,34 @@ type Execution struct {
 	ErrorDetail string     `json:"error_detail,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
+}
+
+// NewExecution creates a new Execution entity with initial running state.
+func NewExecution(taskID string, agentType AgentType, input string) *Execution {
+	return &Execution{
+		ID:        uuid.New().String(),
+		TaskID:    taskID,
+		AgentType: agentType,
+		Status:    ExecutionRunning,
+		Input:     input,
+		CreatedAt: time.Now().UTC(),
+	}
+}
+
+// Complete marks the execution as successfully completed with output.
+func (e *Execution) Complete(output string) {
+	now := time.Now().UTC()
+	e.Status = ExecutionSuccess
+	e.Output = output
+	e.CompletedAt = &now
+}
+
+// Fail marks the execution as failed with the given error detail.
+func (e *Execution) Fail(errMsg string) {
+	now := time.Now().UTC()
+	e.Status = ExecutionFailed
+	e.ErrorDetail = errMsg
+	e.CompletedAt = &now
 }
 
 // Agent defines the generic execution contract for a specialized agent.

@@ -31,6 +31,10 @@ func (h *DockerHandler) RegisterRoutes(r chi.Router) {
 
 // ListContainers handles GET /api/v1/docker/containers
 func (h *DockerHandler) ListContainers(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
+		return
+	}
 	items, err := h.repo.ListContainers(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list containers", err)
@@ -41,6 +45,10 @@ func (h *DockerHandler) ListContainers(w http.ResponseWriter, r *http.Request) {
 
 // ListNodes handles GET /api/v1/docker/nodes
 func (h *DockerHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
+		return
+	}
 	items, err := h.repo.ListNodes(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list nodes", err)
@@ -51,6 +59,10 @@ func (h *DockerHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
 
 // ListServices handles GET /api/v1/docker/services
 func (h *DockerHandler) ListServices(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
+		return
+	}
 	items, err := h.repo.ListServices(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list services", err)
@@ -76,6 +88,10 @@ func (r *scaleServiceRequest) Validate() error {
 
 // ScaleService handles POST /api/v1/docker/services/{id}/scale
 func (h *DockerHandler) ScaleService(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
+		return
+	}
 	id := chi.URLParam(r, "id")
 	req, ok := decodeJSON[scaleServiceRequest](w, r)
 	if !ok {
@@ -92,6 +108,10 @@ func (h *DockerHandler) ScaleService(w http.ResponseWriter, r *http.Request) {
 
 // DrainNode handles POST /api/v1/docker/nodes/{id}/drain
 func (h *DockerHandler) DrainNode(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
+		return
+	}
 	id := chi.URLParam(r, "id")
 	err := h.repo.UpdateNodeAvailability(r.Context(), id, "drain")
 	if err != nil {
@@ -120,6 +140,10 @@ func (r *toggleContainerRequest) Validate() error {
 
 // ToggleContainer handles POST /api/v1/docker/containers/{id}/toggle
 func (h *DockerHandler) ToggleContainer(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
+		return
+	}
 	id := chi.URLParam(r, "id")
 	req, ok := decodeJSON[toggleContainerRequest](w, r)
 	if !ok {
@@ -136,6 +160,10 @@ func (h *DockerHandler) ToggleContainer(w http.ResponseWriter, r *http.Request) 
 
 // GetLogs handles GET /api/v1/docker/logs
 func (h *DockerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
+		return
+	}
 	id := r.URL.Query().Get("id")
 	targetType := r.URL.Query().Get("type")
 

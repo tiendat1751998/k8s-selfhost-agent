@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/changes"
 )
 
@@ -86,10 +87,7 @@ func (h *ChangeHandler) CreateChange(w http.ResponseWriter, r *http.Request) {
 // ApproveChange handles PUT /api/v1/changes/{id}/approve
 func (h *ChangeHandler) ApproveChange(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	approver := r.URL.Query().Get("approver")
-	if approver == "" {
-		approver = "system"
-	}
+	approver, _ := r.Context().Value(middleware.UserIDKey).(string)
 
 	if err := h.repo.ApproveRequest(r.Context(), id, approver); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to approve change", err)
@@ -101,10 +99,7 @@ func (h *ChangeHandler) ApproveChange(w http.ResponseWriter, r *http.Request) {
 // RejectChange handles PUT /api/v1/changes/{id}/reject
 func (h *ChangeHandler) RejectChange(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	approver := r.URL.Query().Get("approver")
-	if approver == "" {
-		approver = "system"
-	}
+	approver, _ := r.Context().Value(middleware.UserIDKey).(string)
 
 	if err := h.repo.RejectRequest(r.Context(), id, approver); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to reject change", err)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -40,7 +41,9 @@ func (b *natsBridge) Broadcast(msgType string, data interface{}) {
 		}
 		payload, err := json.Marshal(wsMsg)
 		if err == nil {
-			_ = b.client.Conn().Publish("agent.events", payload)
+			if pubErr := b.client.Conn().Publish("agent.events", payload); pubErr != nil {
+				logger.Get().Error("failed to publish agent event", zap.Error(pubErr))
+			}
 		}
 	}
 }
@@ -89,8 +92,35 @@ func run() error {
 	}
 
 	bridge := &natsBridge{client: natsClient}
-	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge)
+	txManager := postgres.NewTxManager(pgClient.Pool())
+	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge, txManager)
 	runner := usecaseAgent.NewRunner(agentRepo, orchestrator, 5*time.Second)
+
+	// Start health server
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		})
+		mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+			if bridge.client != nil && bridge.client.Conn() != nil && bridge.client.Conn().IsConnected() {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("OK"))
+			} else {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Write([]byte("NATS disconnected"))
+			}
+		})
+		srv := &http.Server{
+			Addr:    ":8081",
+			Handler: mux,
+		}
+		log.Info("starting health server on :8081")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("health server failed", zap.Error(err))
+		}
+	}()
 
 	// Start active polling loop
 	log.Info("agent-runner ready, starting runner loop")

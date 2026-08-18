@@ -11,32 +11,60 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
-type contextKey string
-
-const (
-	UserIDKey   contextKey = "user_id"
-	UserRoleKey contextKey = "user_role"
-	TenantIDKey contextKey = "tenant_id"
+// Backward compatibility aliases - delegate to pkg/tenancy
+var (
+	UserIDKey   = tenancy.UserIDKey
+	UserRoleKey = tenancy.UserRoleKey
+	TenantIDKey = tenancy.TenantIDKey
 )
 
-var JWTSecret = []byte(getEnv("JWT_SECRET", "k8s-selfhost-secret-key-change-in-prod"))
+const JWTIssuer = "k8s-selfhost"
 
-func getEnv(key, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
+var JWTSecret []byte
+
+func init() {
+	secret := os.Getenv("JWT_SECRET")
+	if len(secret) < 32 {
+		secret = "k8sselfhost-jwt-secret-key-32bytes-secure!"
 	}
-	return defaultVal
+	JWTSecret = []byte(secret)
 }
 
-// GenerateJWT creates a secure HMAC-SHA256 JWT.
+// JWTClaims holds standard and custom JWT claims.
+type JWTClaims struct {
+	Sub    string `json:"sub"`
+	Role   string `json:"role"`
+	Tenant string `json:"tenant"`
+	Exp    int64  `json:"exp"`
+	Iat    int64  `json:"iat"`
+	Iss    string `json:"iss"`
+}
+
+// GenerateJWT creates a secure HMAC-SHA256 JWT with exp (1 hour), iat, and iss claims.
 func GenerateJWT(userID, role, tenantID string) (string, error) {
 	header := `{"alg":"HS256","typ":"JWT"}`
-	payload := fmt.Sprintf(`{"sub":%q,"role":%q,"tenant":%q}`, userID, role, tenantID)
+	now := time.Now()
+	claims := JWTClaims{
+		Sub:    userID,
+		Role:   role,
+		Tenant: tenantID,
+		Exp:    now.Add(1 * time.Hour).Unix(),
+		Iat:    now.Unix(),
+		Iss:    JWTIssuer,
+	}
+
+	payloadBytes, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
 
 	encHeader := base64.RawURLEncoding.EncodeToString([]byte(header))
-	encPayload := base64.RawURLEncoding.EncodeToString([]byte(payload))
+	encPayload := base64.RawURLEncoding.EncodeToString(payloadBytes)
 	signingString := encHeader + "." + encPayload
 
 	h := hmac.New(sha256.New, JWTSecret)
@@ -47,11 +75,26 @@ func GenerateJWT(userID, role, tenantID string) (string, error) {
 	return signingString + "." + signature, nil
 }
 
-// ValidateJWT verifies signature and returns the payload JSON string.
+// ValidateJWT verifies signature and standard claims (exp, iat, iss), returning the payload JSON string.
 func ValidateJWT(token string) (string, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return "", errors.New("invalid token format")
+	}
+
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return "", errors.New("failed to decode header")
+	}
+	var header struct {
+		Alg string `json:"alg"`
+		Typ string `json:"typ"`
+	}
+	if err := json.Unmarshal(headerBytes, &header); err != nil {
+		return "", errors.New("failed to decode header JSON")
+	}
+	if header.Alg != "HS256" {
+		return "", errors.New("unsupported signing algorithm")
 	}
 
 	signingString := parts[0] + "." + parts[1]
@@ -75,32 +118,30 @@ func ValidateJWT(token string) (string, error) {
 		return "", errors.New("failed to decode payload")
 	}
 
+	var claims JWTClaims
+	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
+		return "", errors.New("failed to decode payload claims")
+	}
+
+	now := time.Now().Unix()
+	if claims.Exp == 0 || now > claims.Exp {
+		return "", errors.New("token has expired")
+	}
+	if claims.Iat == 0 || claims.Iat > now+60 {
+		return "", errors.New("invalid or future iat claim")
+	}
+	if claims.Iss != JWTIssuer {
+		return "", errors.New("invalid token issuer")
+	}
+
 	return string(payloadBytes), nil
 }
 
-// UserIDFromContext retrieves the user ID from context.
-func UserIDFromContext(ctx context.Context) string {
-	if val, ok := ctx.Value(UserIDKey).(string); ok {
-		return val
-	}
-	return ""
-}
+// Backward compatibility - delegate to pkg/tenancy
+func TenantIDFromContext(ctx context.Context) string { return tenancy.TenantIDFromContext(ctx) }
+func UserIDFromContext(ctx context.Context) string { return tenancy.UserIDFromContext(ctx) }
+func UserRoleFromContext(ctx context.Context) string { return tenancy.UserRoleFromContext(ctx) }
 
-// UserRoleFromContext retrieves the user role from context.
-func UserRoleFromContext(ctx context.Context) string {
-	if val, ok := ctx.Value(UserRoleKey).(string); ok {
-		return val
-	}
-	return ""
-}
-
-// TenantIDFromContext retrieves the tenant ID from context.
-func TenantIDFromContext(ctx context.Context) string {
-	if val, ok := ctx.Value(TenantIDKey).(string); ok {
-		return val
-	}
-	return ""
-}
 
 // JWTAuthMiddleware validates the JWT token in the Authorization header or query parameters.
 func JWTAuthMiddleware(next http.Handler) http.Handler {
@@ -128,37 +169,27 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 		userRole := "guest"
 		tenantID := "default-tenant"
 
-		var claims struct {
-			Sub    string `json:"sub"`
-			Role   string `json:"role"`
-			Tenant string `json:"tenant"`
+		var claims JWTClaims
+
+		payloadStr, err := ValidateJWT(token)
+		if err != nil {
+			http.Error(w, "invalid token: signature verification failed", http.StatusUnauthorized)
+			return
 		}
 
-		if strings.HasPrefix(token, "k8s-enterprise-demo-") {
-			userID = "admin-user-id"
-			userRole = "platform_admin"
-			tenantID = "default-tenant"
-		} else {
-			payloadStr, err := ValidateJWT(token)
-			if err != nil {
-				http.Error(w, "invalid token: signature verification failed", http.StatusUnauthorized)
-				return
-			}
+		if err := json.Unmarshal([]byte(payloadStr), &claims); err != nil {
+			http.Error(w, "invalid token claims", http.StatusUnauthorized)
+			return
+		}
 
-			if err := json.Unmarshal([]byte(payloadStr), &claims); err != nil {
-				http.Error(w, "invalid token claims", http.StatusUnauthorized)
-				return
-			}
-
-			if claims.Sub != "" {
-				userID = claims.Sub
-			}
-			if claims.Role != "" {
-				userRole = claims.Role
-			}
-			if claims.Tenant != "" {
-				tenantID = claims.Tenant
-			}
+		if claims.Sub != "" {
+			userID = claims.Sub
+		}
+		if claims.Role != "" {
+			userRole = claims.Role
+		}
+		if claims.Tenant != "" {
+			tenantID = claims.Tenant
 		}
 
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)

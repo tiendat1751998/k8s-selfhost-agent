@@ -6,10 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"time"
-
-
-	"github.com/google/uuid"
 
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
@@ -190,29 +186,5 @@ Generate release notes and confirm release completion.`,
 			llmClient: llmClient,
 			system:    "You are a generic Platform Agent in the Multi-Agent Framework.",
 		}
-	}
-}
-
-// Helpers for spawning executions
-func NewExecution(taskID string, agentType agent.AgentType, input string) *agent.Execution {
-	return &agent.Execution{
-		ID:        uuid.New().String(),
-		TaskID:    taskID,
-		AgentType: agentType,
-		Status:    "running",
-		Input:     input,
-		CreatedAt: time.Now().UTC(),
-	}
-}
-
-func CompleteExecution(exec *agent.Execution, output string, err error) {
-	now := time.Now().UTC()
-	exec.CompletedAt = &now
-	if err != nil {
-		exec.Status = "failed"
-		exec.ErrorDetail = err.Error()
-	} else {
-		exec.Status = "success"
-		exec.Output = output
 	}
 }

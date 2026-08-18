@@ -29,14 +29,14 @@ func init() {
 		metric.WithDescription("Total number of HTTP requests"),
 	)
 	if err != nil {
-		panic(err)
+		logger.Get().Fatal("failed to create http_requests_total counter", zap.Error(err))
 	}
 
 	requestDuration, err = meter.Float64Histogram("http_request_duration_seconds",
 		metric.WithDescription("HTTP request duration in seconds"),
 	)
 	if err != nil {
-		panic(err)
+		logger.Get().Fatal("failed to create http_request_duration_seconds histogram", zap.Error(err))
 	}
 }
 

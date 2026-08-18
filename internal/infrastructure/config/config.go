@@ -149,9 +149,11 @@ func Load() (*Config, error) {
 	v.SetDefault("llm.provider", "ollama")
 	v.SetDefault("llm.endpoint", "http://localhost:11434")
 	v.SetDefault("llm.model", "llama3")
+	v.SetDefault("llm.api_key", "")
 
 	v.SetDefault("telemetry.service_name", "k8sselfhost")
 	v.SetDefault("telemetry.service_version", "0.1.0")
+	v.SetDefault("telemetry.otlp_endpoint", "")
 	v.SetDefault("telemetry.environment", "development")
 
 	v.SetDefault("log.level", "info")
@@ -180,3 +182,4 @@ func Load() (*Config, error) {
 
 	return &cfg, nil
 }
+

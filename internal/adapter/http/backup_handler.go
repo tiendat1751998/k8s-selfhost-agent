@@ -1,61 +1,50 @@
 package http
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"go.uber.org/zap"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/backup"
-	"github.com/datdt/k8sselfhost/internal/pkg/concurrency"
-	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	backupUsecase "github.com/datdt/k8sselfhost/internal/usecase/backup"
 )
 
-// BackupHandler provides HTTP endpoints for Backup & DR actions.
 type BackupHandler struct {
-	repo  backup.Repository
-	wsHub *WSHub
+	usecase *backupUsecase.Usecase
 }
 
-// NewBackupHandler creates a new BackupHandler.
-func NewBackupHandler(repo backup.Repository, wsHub *WSHub) *BackupHandler {
-	return &BackupHandler{
-		repo:  repo,
-		wsHub: wsHub,
-	}
+func NewBackupHandler(usecase *backupUsecase.Usecase) *BackupHandler {
+	return &BackupHandler{usecase: usecase}
 }
 
-// RegisterRoutes registers backup endpoints.
 func (h *BackupHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/history", h.GetHistory)
-	r.Post("/recover", h.TriggerRecovery)
+	r.Post("/storages", h.CreateStorage)
+	r.Get("/storages", h.ListStorages)
+	r.Post("/policies", h.CreatePolicy)
+	r.Get("/policies", h.ListPolicies)
+	r.Post("/jobs", h.TriggerBackup)
+	r.Get("/jobs", h.ListJobs)
+	r.Post("/restores", h.TriggerRestore)
+	r.Get("/restores", h.ListRestores)
 }
 
-// GetHistory handles GET /api/v1/backup/history
-func (h *BackupHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
-	history, err := h.repo.GetHistory(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get backup history", err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data": history,
-	})
+type createStorageRequest struct {
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`
+	Endpoint    string            `json:"endpoint"`
+	Bucket      string            `json:"bucket"`
+	Credentials map[string]string `json:"credentials"`
 }
 
-type triggerRecoveryRequest struct {
-	Target string `json:"target"`
-}
-
-func (r *triggerRecoveryRequest) Validate() error {
+func (r *createStorageRequest) Validate() error {
 	ve := NewValidationError("validation failed")
-	if strings.TrimSpace(r.Target) == "" {
-		ve.Add("target", "target parameter is required")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "name is required")
+	}
+	if strings.TrimSpace(r.Type) == "" {
+		ve.Add("type", "type is required")
 	}
 	if ve.HasErrors() {
 		return ve
@@ -63,47 +52,230 @@ func (r *triggerRecoveryRequest) Validate() error {
 	return nil
 }
 
-// TriggerRecovery handles POST /api/v1/backup/recover
-func (h *BackupHandler) TriggerRecovery(w http.ResponseWriter, r *http.Request) {
-	req, ok := decodeJSON[triggerRecoveryRequest](w, r)
+func (h *BackupHandler) CreateStorage(w http.ResponseWriter, r *http.Request) {
+	req, ok := decodeJSON[createStorageRequest](w, r)
 	if !ok {
 		return
 	}
 
-	logRecord, err := h.repo.TriggerRecovery(r.Context(), req.Target)
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	storage := &backup.BackupStorage{
+		TenantID:    tenantID,
+		Name:        req.Name,
+		Type:        req.Type,
+		Endpoint:    req.Endpoint,
+		Bucket:      req.Bucket,
+		Credentials: req.Credentials,
+	}
+
+	if err := h.usecase.CreateStorage(r.Context(), storage); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create backup storage", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, storage)
+}
+
+func (h *BackupHandler) ListStorages(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	storages, err := h.usecase.ListStorages(r.Context(), tenantID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to trigger recovery", err)
+		writeError(w, http.StatusInternalServerError, "failed to list backup storages", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": storages})
+}
+
+type createPolicyRequest struct {
+	Name           string `json:"name"`
+	DBType         string `json:"db_type"`
+	DBHost         string `json:"db_host"`
+	DBPort         int    `json:"db_port"`
+	DBName         string `json:"db_name"`
+	StorageID      string `json:"storage_id"`
+	Schedule       string `json:"schedule"`
+	RetentionCount int    `json:"retention_count"`
+	BackupType     string `json:"backup_type"`
+	Enabled        bool   `json:"enabled"`
+}
+
+func (r *createPolicyRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "name is required")
+	}
+	if strings.TrimSpace(r.StorageID) == "" {
+		ve.Add("storage_id", "storage_id is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
+func (h *BackupHandler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
+	req, ok := decodeJSON[createPolicyRequest](w, r)
+	if !ok {
 		return
 	}
 
-	// Broadcast recovery steps via WebSocket
-	concurrency.Go(logger.Get(), func() {
-		start := time.Now()
-		h.wsHub.Broadcast(WSMessage{Type: "log", Data: fmt.Sprintf("backup: initializing recovery for target %s...", req.Target)})
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
 
-		// Run actual DB ping checks to simulate real task load
-		h.wsHub.Broadcast(WSMessage{Type: "log", Data: "backup: downloading snapshot..."})
+	policy := &backup.BackupPolicy{
+		TenantID:       tenantID,
+		Name:           req.Name,
+		DBType:         req.DBType,
+		DBHost:         req.DBHost,
+		DBPort:         req.DBPort,
+		DBName:         req.DBName,
+		StorageID:      req.StorageID,
+		Schedule:       req.Schedule,
+		RetentionCount: req.RetentionCount,
+		BackupType:     req.BackupType,
+		Enabled:        req.Enabled,
+	}
 
-		h.wsHub.Broadcast(WSMessage{Type: "log", Data: "backup: applying persistent volume claims..."})
+	if err := h.usecase.CreatePolicy(r.Context(), policy); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create backup policy", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, policy)
+}
 
-		h.wsHub.Broadcast(WSMessage{Type: "log", Data: "backup: verifying services status..."})
+func (h *BackupHandler) ListPolicies(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
 
-		duration := time.Since(start)
-		logRecord.Status = "success"
-		logRecord.Duration = duration.String()
-		logRecord.Size = "1.2 GB"
-		logRecord.Details = json.RawMessage(`{"recovered_namespaces":["production"],"status":"verified"}`)
+	policies, err := h.usecase.ListPolicies(r.Context(), tenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list backup policies", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": policies})
+}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+type triggerBackupRequest struct {
+	PolicyID    string `json:"policy_id"`
+	BackupType  string `json:"backup_type"`
+	StoragePath string `json:"storage_path"`
+}
 
-		if updateErr := h.repo.Update(ctx, logRecord); updateErr != nil {
-			logger.Get().Error("failed to update backup recovery log status", zap.Error(updateErr))
-		}
+func (r *triggerBackupRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.PolicyID) == "" {
+		ve.Add("policy_id", "policy_id is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
 
-		h.wsHub.Broadcast(WSMessage{Type: "log", Data: fmt.Sprintf("backup: recovery completed successfully for target %s!", req.Target)})
-		h.wsHub.Broadcast(WSMessage{Type: "backup_status", Data: logRecord})
-	})
+func (h *BackupHandler) TriggerBackup(w http.ResponseWriter, r *http.Request) {
+	req, ok := decodeJSON[triggerBackupRequest](w, r)
+	if !ok {
+		return
+	}
 
-	writeJSON(w, http.StatusAccepted, logRecord)
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	job := &backup.BackupJob{
+		TenantID:    tenantID,
+		PolicyID:    req.PolicyID,
+		BackupType:  req.BackupType,
+		StoragePath: req.StoragePath,
+		Status:      "running",
+	}
+
+	if err := h.usecase.TriggerBackup(r.Context(), job); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to trigger backup", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, job)
+}
+
+func (h *BackupHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	jobs, err := h.usecase.ListJobs(r.Context(), tenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list backup jobs", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": jobs})
+}
+
+type triggerRestoreRequest struct {
+	BackupJobID  string `json:"backup_job_id"`
+	TargetDBHost string `json:"target_db_host"`
+	TargetDBName string `json:"target_db_name"`
+}
+
+func (r *triggerRestoreRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.BackupJobID) == "" {
+		ve.Add("backup_job_id", "backup_job_id is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
+func (h *BackupHandler) TriggerRestore(w http.ResponseWriter, r *http.Request) {
+	req, ok := decodeJSON[triggerRestoreRequest](w, r)
+	if !ok {
+		return
+	}
+
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	restore := &backup.RestoreJob{
+		TenantID:     tenantID,
+		BackupJobID:  req.BackupJobID,
+		TargetDBHost: req.TargetDBHost,
+		TargetDBName: req.TargetDBName,
+		Status:       "running",
+	}
+
+	if err := h.usecase.TriggerRestore(r.Context(), restore); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to trigger restore", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, restore)
+}
+
+func (h *BackupHandler) ListRestores(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	restores, err := h.usecase.ListRestores(r.Context(), tenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list restores", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": restores})
 }

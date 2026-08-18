@@ -45,7 +45,10 @@ func main() {
 	})
 
 	// Ensure output directory for screenshots exists
-	outputDir := filepath.Join("C:", "Users", "datdt", ".gemini", "antigravity", "brain", "05612643-dd90-453c-b4db-aed6fc477f4e", "screenshots")
+	outputDir := os.Getenv("SCREENSHOT_DIR")
+	if outputDir == "" {
+		outputDir = filepath.Join(".", "test_output", "screenshots")
+	}
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		log.Fatalf("Failed to create screenshots directory: %v", err)
 	}
@@ -138,11 +141,13 @@ func main() {
 	fmt.Println("✅ Browser testing finished successfully! Screenshots saved at:", outputDir)
 
 	if len(consoleErrors) > 0 {
-		fmt.Println("\n⚠️ Detected the following console errors/exceptions during test:")
+		fmt.Println()
+		fmt.Println("⚠️ Detected the following console errors/exceptions during test:")
 		for _, e := range consoleErrors {
 			fmt.Println("- ", e)
 		}
 	} else {
-		fmt.Println("\n🎉 No Javascript console errors or exceptions detected!")
+		fmt.Println()
+		fmt.Println("🎉 No Javascript console errors or exceptions detected!")
 	}
 }

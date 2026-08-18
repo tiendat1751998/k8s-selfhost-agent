@@ -119,13 +119,13 @@ func TestChallenger_ComprehensiveInputValidation(t *testing.T) {
 
 		// 7. Backup Trigger Recovery Request
 		{
-			name:      "triggerRecoveryRequest - missing target",
+			name:      "triggerBackupRequest - missing target",
 			inputJSON: `{}`,
 			validateFn: func() error {
-				req := &triggerRecoveryRequest{}
+				req := &triggerBackupRequest{}
 				return req.Validate()
 			},
-			expectedFields: []string{"target"},
+			expectedFields: []string{"policy_id"},
 			expectErr:      true,
 		},
 

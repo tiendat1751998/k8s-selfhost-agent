@@ -3,10 +3,8 @@ package http
 import (
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
 	usecase "github.com/datdt/k8sselfhost/internal/usecase/agent"
@@ -87,22 +85,26 @@ func (h *AgentHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task := &agent.Task{
-		ID:           uuid.New().String(),
-		Phase:        req.Phase,
-		Module:       req.Module,
-		Feature:      req.Feature,
-		Title:        req.Title,
-		Description:  req.Description,
-		Status:       agent.TaskPending,
-		Dependencies: req.Dependencies,
-		CreatedAt:    time.Now().UTC(),
-		UpdatedAt:    time.Now().UTC(),
-	}
+	task := agent.NewTask(
+		"",
+		req.Phase,
+		req.Module,
+		req.Feature,
+		req.Title,
+		req.Description,
+		req.Dependencies,
+	)
 
-	if err := h.repo.CreateTask(r.Context(), task); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create task", err)
-		return
+	if h.orchestrator != nil {
+		if err := h.orchestrator.CreateAndScheduleTask(r.Context(), task); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to create task", err)
+			return
+		}
+	} else {
+		if err := h.repo.CreateTask(r.Context(), task); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to create task", err)
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusCreated, task)

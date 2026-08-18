@@ -90,7 +90,7 @@ func main() {
 		fmt.Printf("Applying %s... ", filepath.Base(file))
 		
 		// Split multiple statements if necessary, but Exec usually handles simple multiple statements
-		_, err = pool.Exec(context.Background(), string(content))
+		_, err = pool.Exec(ctx, string(content))
 		if err != nil {
 			if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate key") {
 				fmt.Println("Already applied (or partially).")

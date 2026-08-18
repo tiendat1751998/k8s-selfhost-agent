@@ -9,7 +9,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	dockerContainer "github.com/docker/docker/api/types/container"
 
 	"github.com/datdt/k8sselfhost/internal/domain/capacity"
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
@@ -38,82 +37,7 @@ func (r *capacityRepo) List(ctx context.Context, cluster string) ([]capacity.For
 		// Check if it's a Docker provider first
 		dCli, err := r.clientManager.GetDockerClient(ctx, cluster)
 		if err == nil && dCli != nil {
-			info, err := dCli.Info(ctx)
-			if err == nil {
-				containers, err := dCli.ContainerList(ctx, dockerContainer.ListOptions{All: true})
-				if err == nil {
-					activeContainers := int64(len(containers))
-					if activeContainers == 0 {
-						activeContainers = 1 // Prevent 0
-					}
-
-					// Dynamic calculation: each container consumes ~0.15 CPU core and ~256MB memory
-					cpuPercent := (float64(activeContainers) * 0.15 / float64(info.NCPU)) * 100.0
-					if cpuPercent > 100.0 {
-						cpuPercent = 95.0
-					}
-					memPercent := (float64(activeContainers) * 256 * 1024 * 1024 / float64(info.MemTotal)) * 100.0
-					if memPercent > 100.0 {
-						memPercent = 92.0
-					}
-
-					now := time.Now()
-					exhaust := now.AddDate(0, 3, 0)
-
-					cpuStatus := "healthy"
-					if cpuPercent > 80.0 {
-						cpuStatus = "critical"
-					} else if cpuPercent > 60.0 {
-						cpuStatus = "warning"
-					}
-
-					memStatus := "healthy"
-					if memPercent > 80.0 {
-						memStatus = "critical"
-					} else if memPercent > 60.0 {
-						memStatus = "warning"
-					}
-
-					return []capacity.Forecast{
-						{
-							ID:           "cap-cpu-" + cluster,
-							Cluster:      cluster,
-							ResourceType: capacity.ResourceCPU,
-							CurrentUsage: cpuPercent,
-							Forecast7d:   cpuPercent + (cpuPercent * 0.05),
-							Forecast30d:  cpuPercent + (cpuPercent * 0.15),
-							Forecast90d:  cpuPercent + (cpuPercent * 0.40),
-							ExhaustionAt: &exhaust,
-							Status:       cpuStatus,
-							RecordedAt:   now,
-						},
-						{
-							ID:           "cap-mem-" + cluster,
-							Cluster:      cluster,
-							ResourceType: capacity.ResourceMemory,
-							CurrentUsage: memPercent,
-							Forecast7d:   memPercent + (memPercent * 0.04),
-							Forecast30d:  memPercent + (memPercent * 0.12),
-							Forecast90d:  memPercent + (memPercent * 0.30),
-							ExhaustionAt: &exhaust,
-							Status:       memStatus,
-							RecordedAt:   now,
-						},
-						{
-							ID:           "cap-storage-" + cluster,
-							Cluster:      cluster,
-							ResourceType: capacity.ResourceStorage,
-							CurrentUsage: 25.0,
-							Forecast7d:   26.0,
-							Forecast30d:  28.0,
-							Forecast90d:  35.0,
-							ExhaustionAt: &exhaust,
-							Status:       "healthy",
-							RecordedAt:   now,
-						},
-					}, nil
-				}
-			}
+			return nil, fmt.Errorf("ErrMetricsUnavailable: real metrics source unavailable for docker provider")
 		}
 
 		kCli, err := r.clientManager.GetK8sClient(ctx, cluster)
@@ -200,9 +124,6 @@ func (r *capacityRepo) List(ctx context.Context, cluster string) ([]capacity.For
 		memStatus = "warning"
 	}
 
-	storagePercent := 35.0
-	storageStatus := "healthy"
-
 	return []capacity.Forecast{
 		{
 			ID:           "cap-cpu-live",
@@ -228,22 +149,9 @@ func (r *capacityRepo) List(ctx context.Context, cluster string) ([]capacity.For
 			Status:       memStatus,
 			RecordedAt:   now,
 		},
-		{
-			ID:           "cap-storage-live",
-			Cluster:      cluster,
-			ResourceType: capacity.ResourceStorage,
-			CurrentUsage: storagePercent,
-			Forecast7d:   storagePercent + 1.0,
-			Forecast30d:  storagePercent + 3.0,
-			Forecast90d:  storagePercent + 8.0,
-			ExhaustionAt: &exhaust,
-			Status:       storageStatus,
-			RecordedAt:   now,
-		},
 	}, nil
 }
 
 func (r *capacityRepo) Record(ctx context.Context, f *capacity.Forecast) error {
-	// Usually this would persist the live forecast to PostgreSQL for historical tracking
-	return nil
+	return fmt.Errorf("Record not implemented: missing persistence layer")
 }

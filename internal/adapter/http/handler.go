@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
@@ -15,6 +16,7 @@ import (
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
 	"github.com/datdt/k8sselfhost/internal/usecase/gitops"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // Handler provides HTTP handlers for the dashboard API.
@@ -253,7 +255,9 @@ func (h *Handler) AnalyzeIncident(w http.ResponseWriter, r *http.Request) {
 	if err := h.publisher.Publish(r.Context(), "incidents.analyze", task); err != nil {
 		// Rollback status to detected
 		inc.Status = incident.StatusDetected
-		_ = h.incidentRepo.Update(r.Context(), inc)
+		if rbErr := h.incidentRepo.Update(r.Context(), inc); rbErr != nil {
+			logger.Get().Error("failed to rollback incident status", zap.Error(rbErr))
+		}
 		writeError(w, http.StatusInternalServerError, "failed to publish analyze task", err)
 		return
 	}
@@ -293,11 +297,36 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 }
 
 func writeError(w http.ResponseWriter, status int, message string, err error) {
-	resp := map[string]string{"error": message}
+	finalStatus := status
+	finalMessage := message
+
 	if err != nil {
-		resp["detail"] = err.Error()
+		// Structured logging of the raw internal error for debugging
+		logger.Get().Error("HTTP handler error",
+			zap.Int("status", status),
+			zap.String("message", message),
+			zap.Error(err),
+		)
+
+		// Map domain error to appropriate HTTP status code if default/internal error is used
+		if status == 0 || status == http.StatusInternalServerError {
+			mappedStatus, mappedMsg := mapDomainErrorToHTTP(err)
+			finalStatus = mappedStatus
+			if finalMessage == "" || finalMessage == "Internal server error" {
+				finalMessage = mappedMsg
+			}
+		}
 	}
-	writeJSON(w, status, resp)
+
+	if finalStatus == 0 {
+		finalStatus = http.StatusInternalServerError
+	}
+	if finalMessage == "" {
+		finalMessage = http.StatusText(finalStatus)
+	}
+
+	resp := map[string]string{"error": finalMessage}
+	writeJSON(w, finalStatus, resp)
 }
 
 // decodeJSON decodes the request body into a value of type T and validates it if T or *T implements Validator.

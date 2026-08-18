@@ -7,9 +7,10 @@ import (
 
 	"go.uber.org/zap"
 
-		domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
+	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	"github.com/datdt/k8sselfhost/internal/pkg/stringutil"
 )
@@ -35,17 +36,19 @@ type FileCommit struct {
 
 // Controller orchestrates the GitOps flow: create branch → commit → open PR.
 type Controller struct {
-	providers  map[domainGitops.Provider]GitProvider
-	prRepo     domainGitops.Repository
-	incRepo    incident.Repository
+	providers map[domainGitops.Provider]GitProvider
+	prRepo    domainGitops.Repository
+	incRepo   incident.Repository
+	txManager postgres.TransactionManager
 }
 
 // NewController creates a new GitOps controller with the given providers.
-func NewController(prRepo domainGitops.Repository, incRepo incident.Repository) *Controller {
+func NewController(prRepo domainGitops.Repository, incRepo incident.Repository, txManager postgres.TransactionManager) *Controller {
 	return &Controller{
 		providers: make(map[domainGitops.Provider]GitProvider),
 		prRepo:    prRepo,
 		incRepo:   incRepo,
+		txManager: txManager,
 	}
 }
 
@@ -92,7 +95,9 @@ func (c *Controller) CreateRemediationPR(ctx context.Context, inc *incident.Inci
 	// Step 1: Create branch
 	if err := gitProvider.CreateBranch(ctx, repoURL, branch, baseBranch); err != nil {
 		pr.MarkFailed()
-		_ = c.prRepo.Update(ctx, pr)
+		if updateErr := c.prRepo.Update(ctx, pr); updateErr != nil {
+			log.Warn("failed to update PR state to failed", zap.Error(updateErr))
+		}
 		return nil, fmt.Errorf("creating branch: %w", err)
 	}
 
@@ -103,7 +108,9 @@ func (c *Controller) CreateRemediationPR(ctx context.Context, inc *incident.Inci
 	commitSHA, err := gitProvider.CommitFiles(ctx, repoURL, branch, commitMsg, files)
 	if err != nil {
 		pr.MarkFailed()
-		_ = c.prRepo.Update(ctx, pr)
+		if updateErr := c.prRepo.Update(ctx, pr); updateErr != nil {
+			log.Warn("failed to update PR state to failed", zap.Error(updateErr))
+		}
 		return nil, fmt.Errorf("committing files: %w", err)
 	}
 
@@ -116,7 +123,9 @@ func (c *Controller) CreateRemediationPR(ctx context.Context, inc *incident.Inci
 	prURL, prNumber, err := gitProvider.CreatePullRequest(ctx, repoURL, branch, baseBranch, title, body)
 	if err != nil {
 		pr.MarkFailed()
-		_ = c.prRepo.Update(ctx, pr)
+		if updateErr := c.prRepo.Update(ctx, pr); updateErr != nil {
+			log.Warn("failed to update PR state to failed", zap.Error(updateErr))
+		}
 		return nil, fmt.Errorf("creating pull request: %w", err)
 	}
 
@@ -130,7 +139,11 @@ func (c *Controller) CreateRemediationPR(ctx context.Context, inc *incident.Inci
 
 	// Update incident to remediating
 	if err := inc.MarkRemediating(); err == nil {
-		_ = c.incRepo.Update(ctx, inc)
+		if updateErr := c.incRepo.Update(ctx, inc); updateErr != nil {
+			log.Warn("failed to update incident state", zap.Error(updateErr))
+		}
+	} else {
+		log.Warn("failed to mark incident as remediating", zap.Error(err))
 	}
 
 	log.Info("remediation PR created",
@@ -203,32 +216,14 @@ type CreatePRRequest struct {
 
 // CreatePR handles logic to construct and persist a remediation PR.
 func (c *Controller) CreatePR(ctx context.Context, req CreatePRRequest) (*domainGitops.PullRequest, error) {
+	log := logger.WithContext(ctx)
+
 	var incID = req.IncidentID
 	if incID != "" {
 		_, err := c.incRepo.GetByID(ctx, incID)
 		if err != nil {
+			log.Warn("incident not found for provided ID, creating PR without incident link", zap.String("incident_id", incID), zap.Error(err))
 			incID = ""
-		}
-	}
-
-	if incID == "" {
-		filter := incident.Filter{
-			ClusterName: "system",
-			Namespace:   "system",
-			Limit:       1,
-		}
-		incidents, _, err := c.incRepo.List(ctx, filter)
-		if err == nil && len(incidents) > 0 {
-			incID = incidents[0].ID
-		} else {
-			defaultInc, err := incident.New("system", "system", "system-pod", incident.TypeCrashLoopBackOff, incident.SeverityMedium, "Default system incident for orphaned PRs")
-			if err != nil {
-				return nil, fmt.Errorf("failed to create default incident struct: %w", err)
-			}
-			if err := c.incRepo.Create(ctx, defaultInc); err != nil {
-				return nil, fmt.Errorf("failed to persist default incident: %w", err)
-			}
-			incID = defaultInc.ID
 		}
 	}
 
@@ -265,8 +260,9 @@ func (c *Controller) CreatePR(ctx context.Context, req CreatePRRequest) (*domain
 		}
 		pr.AddFileChange(f.Path, f.Content, action)
 	}
-
-	_ = pr.MarkOpen(repoURL+"/pull/1", 1)
+	if err := pr.MarkOpen("", 0); err != nil {
+		return nil, fmt.Errorf("failed to mark PR as open: %w", err)
+	}
 
 	if err := c.prRepo.Create(ctx, pr); err != nil {
 		return nil, fmt.Errorf("failed to create PR: %w", err)
@@ -286,16 +282,36 @@ func (c *Controller) MergePR(ctx context.Context, id string) (*domainGitops.Pull
 		return nil, fmt.Errorf("failed to mark PR as merged: %w", err)
 	}
 
-	if err := c.prRepo.Update(ctx, pr); err != nil {
-		return nil, fmt.Errorf("failed to update PR: %w", err)
+	runInTx := func(txCtx context.Context) error {
+		if err := c.prRepo.Update(txCtx, pr); err != nil {
+			return fmt.Errorf("failed to update PR: %w", err)
+		}
+
+		log := logger.WithContext(txCtx)
+		if pr.IncidentID != "" {
+			inc, err := c.incRepo.GetByID(txCtx, pr.IncidentID)
+			if err == nil && inc != nil {
+				if err := inc.MarkResolved(); err == nil {
+					if updateErr := c.incRepo.Update(txCtx, inc); updateErr != nil {
+						return fmt.Errorf("failed to update incident state: %w", updateErr)
+					}
+				} else {
+					log.Warn("failed to mark incident as resolved", zap.Error(err))
+				}
+			} else if err != nil {
+				log.Warn("failed to fetch incident for PR", zap.String("incident_id", pr.IncidentID), zap.Error(err))
+			}
+		}
+		return nil
 	}
 
-	if pr.IncidentID != "" {
-		inc, err := c.incRepo.GetByID(ctx, pr.IncidentID)
-		if err == nil && inc != nil {
-			if err := inc.MarkResolved(); err == nil {
-				_ = c.incRepo.Update(ctx, inc)
-			}
+	if c.txManager != nil {
+		if err := c.txManager.RunInTx(ctx, runInTx); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := runInTx(ctx); err != nil {
+			return nil, err
 		}
 	}
 

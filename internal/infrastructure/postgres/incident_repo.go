@@ -9,9 +9,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // IncidentRepo implements incident.Repository using PostgreSQL.
@@ -35,7 +35,7 @@ func (r *IncidentRepo) Create(ctx context.Context, inc *incident.Incident) error
 		return errors.Wrap(err, "marshaling raw data")
 	}
 
-	tenantID := middleware.TenantIDFromContext(ctx)
+	tenantID := tenancy.TenantIDFromContext(ctx)
 	if tenantID == "" {
 		tenantID = "org-google"
 	}

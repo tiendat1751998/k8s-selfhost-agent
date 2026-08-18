@@ -168,14 +168,14 @@ func (r *promotionRepo) Complete(ctx context.Context, id string) error {
 	query := `
 		UPDATE promotions 
 		SET status = 'completed', completed_at = NOW() 
-		WHERE id = $1 AND status = 'promoting'
+		WHERE id = $1 AND (status = 'approved' OR status = 'promoting')
 	`
 	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("completing promotion: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
-		return fmt.Errorf("promotion not found or not in promoting status")
+		return fmt.Errorf("promotion not found or not in approved/promoting status")
 	}
 	return nil
 }

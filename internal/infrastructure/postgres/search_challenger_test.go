@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -10,8 +11,11 @@ import (
 )
 
 func TestSearchRepo_ConnectionLeaks(t *testing.T) {
-	// The database DSN from config.yaml / check_db script
-	dsn := "postgres://myuser:mysecretpassword@10.10.10.133:5432/mydatabase?sslmode=disable"
+	// Load DSN from environment to avoid hardcoded credentials
+	dsn := os.Getenv("TEST_DATABASE_DSN")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_DSN not set, skipping integration test")
+	}
 	ctx := context.Background()
 
 	// Parse and configure pool to have a small MaxConns to easily trigger leaks/exhaustion
@@ -28,7 +32,7 @@ func TestSearchRepo_ConnectionLeaks(t *testing.T) {
 	}
 	defer pool.Close()
 
-	repo := NewSearchRepo(pool)
+	repo := NewSearchRepo(pool, nil)
 
 	// Ensure the pool is working
 	if err := pool.Ping(ctx); err != nil {

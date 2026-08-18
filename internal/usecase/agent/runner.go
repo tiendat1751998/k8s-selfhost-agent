@@ -47,16 +47,17 @@ func (r *Runner) Start(ctx context.Context) {
 		log := logger.WithContext(ctx)
 		log.Info("agent runner polling loop started", zap.Duration("interval", r.interval))
 
-		ticker := time.NewTicker(r.interval)
-		defer ticker.Stop()
+		timer := time.NewTimer(r.interval)
+		defer timer.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
 				log.Info("agent runner polling loop stopped")
 				return
-			case <-ticker.C:
+			case <-timer.C:
 				r.processNextTask(ctx)
+				timer.Reset(r.interval)
 			}
 		}
 	})
@@ -110,8 +111,10 @@ func (r *Runner) processNextTask(ctx context.Context) {
 		if dep.Status != agent.TaskSuccess {
 			// Dependency not met, block task
 			if nextTask.Status != agent.TaskBlocked {
-				nextTask.Status = agent.TaskBlocked
-				_ = r.repo.UpdateTask(ctx, nextTask)
+				nextTask.Block()
+				if err := r.repo.UpdateTask(ctx, nextTask); err != nil {
+					log.Error("failed to update task status to blocked", zap.Error(err))
+				}
 				log.Info("task blocked by dependency", zap.String("task_id", nextTask.ID), zap.String("dep_id", depID))
 			}
 			return
