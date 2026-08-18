@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="view-container">
     <!-- View Header -->
     <div class="view-header">
@@ -312,10 +312,10 @@ async function runScan() {
       type: 'success',
       text: 'Dispatched Trivy Image & Checkov IaC Security Scanners. Compliance matrix refreshed.',
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     statusMessage.value = {
       type: 'error',
-      text: err.message || 'Failed to refresh security scan compliance.',
+      text: err instanceof Error ? err.message : 'Failed to refresh security scan compliance.',
     }
   }
 }

@@ -463,12 +463,21 @@ export const changesApi = {
 // 4. ALERTS & NOTIFICATION CHANNELS
 // ==========================================
 
+export interface ChannelConfig {
+  webhook_url?: string
+  channel?: string
+  recipients?: string[]
+  endpoint?: string
+  chat_id?: string
+  [key: string]: unknown
+}
+
 export interface AlertChannel {
   ID: string
   TenantID?: string
   Name: string
   Type: string
-  Config: Record<string, any>
+  Config: ChannelConfig
   Enabled: boolean
   CreatedAt?: string
   UpdatedAt?: string
@@ -490,6 +499,18 @@ export interface AlertRule {
   UpdatedAt?: string
 }
 
+export interface AlertRuleInput extends Partial<AlertRule> {
+  name?: string
+  description?: string
+  metric_name?: string
+  condition?: string
+  threshold?: number
+  duration_seconds?: number
+  severity?: 'critical' | 'high' | 'medium' | 'low' | string
+  channel_ids?: string[]
+  enabled?: boolean
+}
+
 export interface AlertHistory {
   ID: string
   TenantID?: string
@@ -508,7 +529,7 @@ export const alertsApi = {
     return res?.data || []
   },
 
-  async createChannel(data: { name: string; type: string; config: Record<string, any>; enabled: boolean }): Promise<AlertChannel> {
+  async createChannel(data: { name: string; type: string; config: ChannelConfig; enabled: boolean }): Promise<AlertChannel> {
     return api.post<AlertChannel>('/alerts/channels', data)
   },
 
@@ -517,31 +538,31 @@ export const alertsApi = {
     return res?.data || []
   },
 
-  async createRule(data: Partial<AlertRule>): Promise<AlertRule> {
+  async createRule(data: AlertRuleInput): Promise<AlertRule> {
     return api.post<AlertRule>('/alerts/rules', {
-      name: data.Name || (data as any).name,
-      description: data.Description || (data as any).description,
-      metric_name: data.MetricName || (data as any).metric_name,
-      condition: data.Condition || (data as any).condition,
-      threshold: data.Threshold || (data as any).threshold,
-      duration_seconds: data.DurationSeconds || (data as any).duration_seconds,
-      severity: data.Severity || (data as any).severity,
-      channel_ids: data.ChannelIDs || (data as any).channel_ids || [],
-      enabled: data.Enabled !== undefined ? data.Enabled : (data as any).enabled !== undefined ? (data as any).enabled : true,
+      name: data.Name || data.name,
+      description: data.Description || data.description,
+      metric_name: data.MetricName || data.metric_name,
+      condition: data.Condition || data.condition,
+      threshold: data.Threshold || data.threshold,
+      duration_seconds: data.DurationSeconds || data.duration_seconds,
+      severity: data.Severity || data.severity,
+      channel_ids: data.ChannelIDs || data.channel_ids || [],
+      enabled: data.Enabled !== undefined ? data.Enabled : data.enabled !== undefined ? data.enabled : true,
     })
   },
 
-  async updateRule(id: string, data: Partial<AlertRule>): Promise<AlertRule> {
+  async updateRule(id: string, data: AlertRuleInput): Promise<AlertRule> {
     return api.put<AlertRule>(`/alerts/rules/${id}`, {
-      name: data.Name || (data as any).name,
-      description: data.Description || (data as any).description,
-      metric_name: data.MetricName || (data as any).metric_name,
-      condition: data.Condition || (data as any).condition,
-      threshold: data.Threshold || (data as any).threshold,
-      duration_seconds: data.DurationSeconds || (data as any).duration_seconds,
-      severity: data.Severity || (data as any).severity,
-      channel_ids: data.ChannelIDs || (data as any).channel_ids || [],
-      enabled: data.Enabled !== undefined ? data.Enabled : (data as any).enabled !== undefined ? (data as any).enabled : true,
+      name: data.Name || data.name,
+      description: data.Description || data.description,
+      metric_name: data.MetricName || data.metric_name,
+      condition: data.Condition || data.condition,
+      threshold: data.Threshold || data.threshold,
+      duration_seconds: data.DurationSeconds || data.duration_seconds,
+      severity: data.Severity || data.severity,
+      channel_ids: data.ChannelIDs || data.channel_ids || [],
+      enabled: data.Enabled !== undefined ? data.Enabled : data.enabled !== undefined ? data.enabled : true,
     })
   },
 

@@ -13,7 +13,7 @@ defineEmits<{
     <div class="modal-content panel">
       <div class="panel-header">
         <h3 class="panel-title">{{ title }}</h3>
-        <button class="close-btn" @click="$emit('close')">×</button>
+        <button class="close-btn" @click="$emit('close')">âœ•</button>
       </div>
       <div class="panel-body">
         <slot></slot>
@@ -25,8 +25,11 @@ defineEmits<{
 <style scoped>
 .modal-overlay {
   position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.7);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
   z-index: 9999;
   display: flex;
   justify-content: center;
@@ -39,7 +42,7 @@ defineEmits<{
   background: var(--color-surface-card);
   border: 1px solid var(--color-hairline);
   border-radius: var(--rounded-xl);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
 }

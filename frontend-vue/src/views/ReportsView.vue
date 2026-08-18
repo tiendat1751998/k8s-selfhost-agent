@@ -22,7 +22,13 @@ const showPreviewDrawer = ref(false)
 const activePreviewReport = ref<Report | null>(null)
 const isSubmitting = ref(false)
 
-const newReport = ref({
+const newReport = ref<{
+  title: string
+  type: Report['type']
+  format: Report['format']
+  cluster_scope: string
+  date_range: string
+}>({
   title: '',
   type: 'compliance',
   format: 'pdf',
@@ -36,9 +42,9 @@ async function loadReports() {
   try {
     const res = await reportsApi.getReports()
     reports.value = res?.data || []
-  } catch (err: any) {
+  } catch (err: unknown) {
     reports.value = []
-    error.value = err?.message || 'Failed to load reports'
+    error.value = err instanceof Error ? err.message : 'Failed to load reports'
   } finally {
     loading.value = false
   }
@@ -88,8 +94,8 @@ async function handleDeleteReport(id: string) {
     await reportsApi.deleteReport(id)
     reports.value = reports.value.filter(r => r.id !== id)
     showFeedback('Report file archived and removed.')
-  } catch (e: any) {
-    showFeedback(`Failed to delete report: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to delete report: ${e instanceof Error ? e.message : 'Unknown error'}`)
   }
 }
 
@@ -99,8 +105,8 @@ async function handleGenerateReport() {
   const rep: Report = {
     id: `rep-${Math.floor(Math.random() * 9000 + 1000)}`,
     title: newReport.value.title,
-    type: newReport.value.type as any,
-    format: newReport.value.format as any,
+    type: newReport.value.type,
+    format: newReport.value.format,
     status: 'completed',
     file_url: `/downloads/reports/${newReport.value.title.toLowerCase().replace(/\s+/g, '-')}.${newReport.value.format}`,
     created_by: 'current.sre@enterprise.io',
@@ -118,14 +124,14 @@ async function handleGenerateReport() {
     showGenerateModal.value = false
     showFeedback(`Report "${rep.title}" compiled and signed.`)
     newReport.value.title = ''
-  } catch (e: any) {
-    showFeedback(`Failed to compile report: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to compile report: ${e instanceof Error ? e.message : 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }
 }
 
-function quickGenerate(type: string, title: string) {
+function quickGenerate(type: Report['type'], title: string) {
   newReport.value.type = type
   newReport.value.title = title
   showGenerateModal.value = true

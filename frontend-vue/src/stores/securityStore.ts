@@ -20,8 +20,8 @@ export const useSecurityStore = defineStore('security', () => {
       frameworks.value = f
       violations.value = v.items
       totalViolations.value = v.total
-    } catch (err: any) {
-      error.value = err.message || 'Failed to fetch security data'
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to fetch security data'
     } finally {
       loading.value = false
     }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/authStore'
 import { useBackupStore } from './stores/backupStore'
@@ -19,6 +19,11 @@ const logStore = useLogStore()
 const selectedTenant = ref('org-enterprise-core')
 const showCommandPalette = ref(false)
 const searchQuery = ref('')
+const mobileSidebarOpen = ref(false)
+
+watch(() => route.path, () => {
+  mobileSidebarOpen.value = false
+})
 
 // Collapsible Navigation Section States
 const collapsedSections = ref<Record<string, boolean>>({
@@ -188,8 +193,15 @@ function handleLogout() {
   </div>
 
   <div v-else class="app-layout">
+    <!-- Backdrop for mobile drawer -->
+    <div 
+      v-if="mobileSidebarOpen" 
+      class="sidebar-backdrop" 
+      @click="mobileSidebarOpen = false"
+    ></div>
+
     <!-- Enterprise Multi-Group Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ 'sidebar-open': mobileSidebarOpen }">
       <!-- Brand Logo -->
       <div class="brand-container" @click="router.push('/')">
         <div class="brand-icon-wrapper">
@@ -269,6 +281,15 @@ function handleLogout() {
       <!-- Enterprise Top Navigation / HUD -->
       <header class="top-hud">
         <div class="hud-left">
+          <!-- Mobile Menu Toggle Button -->
+          <button 
+            class="mobile-menu-btn" 
+            @click="mobileSidebarOpen = !mobileSidebarOpen" 
+            aria-label="Toggle navigation menu"
+          >
+            <span>☰</span>
+          </button>
+
           <div class="breadcrumb-nav">
             <span class="breadcrumb-root">Enterprise Console</span>
             <span class="breadcrumb-sep">/</span>
@@ -957,5 +978,92 @@ function handleLogout() {
   width: 100vw;
   min-height: 100vh;
   display: flex;
+}
+
+/* Responsive Styles */
+.mobile-menu-btn {
+  display: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.mobile-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+    box-shadow: 0 0 35px rgba(0, 0, 0, 0.85);
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 99;
+  }
+
+  .page-container {
+    padding: 16px;
+  }
+
+  .command-search-btn .search-text {
+    display: none;
+  }
+
+  .hud-stat {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .top-hud {
+    padding: 0 12px;
+  }
+
+  .breadcrumb-nav {
+    display: none;
+  }
+
+  .tenant-selector-wrap {
+    max-width: 150px;
+  }
+
+  .tenant-select {
+    max-width: 110px;
+    text-overflow: ellipsis;
+  }
 }
 </style>

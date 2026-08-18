@@ -208,10 +208,23 @@ export interface Cluster {
   kubeconfig_hash?: string
   last_health_check?: string
   health_status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown' | string
-  discovered_resources?: Record<string, any>
+  discovered_resources?: Record<string, unknown>
   tenant_id?: string
   created_at: string
   updated_at: string
+}
+
+export interface NodePoolInfo {
+  name: string
+  instance: string
+  zone: string
+  count: number
+}
+
+export interface ClusterDiscoveryData {
+  namespaces?: string[]
+  node_pools?: NodePoolInfo[]
+  [key: string]: unknown
 }
 
 export interface ClusterHealthResponse {
@@ -472,8 +485,8 @@ export const fleetApi = {
     return api.delete<{ status: string }>(`/fleet/${id}`)
   },
 
-  async upgrade(id: string): Promise<any> {
-    return api.post<any>(`/fleet/${id}/actions/upgrade`)
+  async upgrade(id: string): Promise<{ status: string }> {
+    return api.post<{ status: string }>(`/fleet/${id}/actions/upgrade`)
   },
 
   async importCluster(formData: FormData): Promise<Cluster> {
@@ -484,8 +497,8 @@ export const fleetApi = {
     return api.get<ClusterHealthResponse>(`/fleet/${id}/health`)
   },
 
-  async discover(id: string): Promise<Record<string, any>> {
-    return api.post<Record<string, any>>(`/fleet/${id}/discover`)
+  async discover(id: string): Promise<ClusterDiscoveryData> {
+    return api.post<ClusterDiscoveryData>(`/fleet/${id}/discover`)
   },
 }
 

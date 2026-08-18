@@ -6,7 +6,8 @@ import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import {
   fleetApi,
-  type Cluster
+  type Cluster,
+  type ClusterDiscoveryData
 } from '../api/compute'
 
 const loading = ref(false)
@@ -30,7 +31,7 @@ const kubeconfigFile = ref<File | null>(null)
 // Discovery Drawer
 const showDiscoveryDrawer = ref(false)
 const selectedCluster = ref<Cluster | null>(null)
-const discoveredData = ref<Record<string, any> | null>(null)
+const discoveredData = ref<ClusterDiscoveryData | null>(null)
 
 async function fetchFleet() {
   loading.value = true

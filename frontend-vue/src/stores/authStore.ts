@@ -65,8 +65,8 @@ export const useAuthStore = defineStore('auth', () => {
         localStorage.setItem('k8s_user', JSON.stringify(user.value))
       }
       return user.value
-    } catch (err: any) {
-      error.value = err.message || 'Login failed'
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Login failed'
       throw err
     } finally {
       loading.value = false

@@ -64,11 +64,11 @@ async function loadData() {
 
     history.value = fetchedHistory.status === 'fulfilled' && Array.isArray(fetchedHistory.value)
       ? fetchedHistory.value : []
-  } catch (err: any) {
+  } catch (err: unknown) {
     rules.value = []
     channels.value = []
     history.value = []
-    error.value = err?.message || 'Failed to load alerting telemetry'
+    error.value = err instanceof Error ? err.message : 'Failed to load alerting telemetry'
   } finally {
     loading.value = false
   }
@@ -114,8 +114,8 @@ async function handleAcknowledge(item: AlertHistory) {
     item.Status = 'acknowledged'
     item.AcknowledgedBy = 'current.user@enterprise.io'
     showFeedback(`Alert ${item.ID} acknowledged. Escalation paused.`)
-  } catch (e: any) {
-    showFeedback(`Failed to acknowledge alert: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to acknowledge alert: ${e instanceof Error ? e.message : 'Unknown error'}`)
   }
 }
 
@@ -129,8 +129,8 @@ async function handleDeleteRule(id: string) {
     await alertsApi.deleteRule(id)
     rules.value = rules.value.filter(r => r.ID !== id)
     showFeedback('Alert rule removed.')
-  } catch (e: any) {
-    showFeedback(`Failed to remove alert rule: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to remove alert rule: ${e instanceof Error ? e.message : 'Unknown error'}`)
   }
 }
 
@@ -156,8 +156,8 @@ async function handleCreateRule() {
     rules.value.unshift(created || rule)
     showRuleModal.value = false
     showFeedback(`Alert Rule "${rule.Name}" armed successfully.`)
-  } catch (e: any) {
-    showFeedback(`Failed to register alert rule: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to register alert rule: ${e instanceof Error ? e.message : 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }
@@ -166,7 +166,7 @@ async function handleCreateRule() {
 async function handleCreateChannel() {
   if (!newChannel.value.name) return
   isSubmitting.value = true
-  const configObj: Record<string, any> = {}
+  const configObj: Record<string, unknown> = {}
   if (newChannel.value.type === 'slack') configObj.webhook_url = newChannel.value.webhook_url
   if (newChannel.value.type === 'email') configObj.recipients = [newChannel.value.email]
   if (newChannel.value.type === 'telegram') configObj.chat_id = newChannel.value.chat_id
@@ -189,8 +189,8 @@ async function handleCreateChannel() {
     channels.value.push(created || chan)
     showChannelModal.value = false
     showFeedback(`Notification Channel "${chan.Name}" registered.`)
-  } catch (e: any) {
-    showFeedback(`Failed to register channel: ${e?.message || 'Unknown error'}`)
+  } catch (e: unknown) {
+    showFeedback(`Failed to register channel: ${e instanceof Error ? e.message : 'Unknown error'}`)
   } finally {
     isSubmitting.value = false
   }
