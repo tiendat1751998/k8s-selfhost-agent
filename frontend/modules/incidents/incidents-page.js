@@ -56,7 +56,7 @@
         this.incidents = items;
         this.renderTable(items);
       } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger" style="padding: 24px; text-align: center; color: var(--color-trading-down);">Error loading incidents: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger" style="padding: 24px; text-align: center; color: var(--color-trading-down);">Error loading incidents: ${Security.escapeHTML(e.message)}</td></tr>`;
       }
     },
 

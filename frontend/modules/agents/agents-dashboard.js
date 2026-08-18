@@ -145,27 +145,27 @@
     container.innerHTML = '<div style="display:flex;flex-direction:column;gap:var(--space-sm);">' + tasks.map(function (t) {
       var statusColor = getStatusColor(t.status);
       var deps = t.dependencies && t.dependencies.length > 0 
-        ? '<div style="font-size:11px;color:var(--color-muted);margin-top:4px;">Dependencies: <strong>' + t.dependencies.join(', ') + '</strong></div>' 
+        ? '<div style="font-size:11px;color:var(--color-muted);margin-top:4px;">Dependencies: <strong>' + Security.escapeHTML(t.dependencies.join(', ')) + '</strong></div>' 
         : '';
       
       var subtasksHtml = t.subtasks && t.subtasks.length > 0 
         ? '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--color-hairline);">' + t.subtasks.map(function(s){
             return '<div style="font-size:11px;display:flex;align-items:center;gap:6px;margin-bottom:2px;">'
               + '<span style="color:' + getStatusColor(s.status) + ';">' + (s.status === 'success' ? '✓' : '⏳') + '</span>'
-              + '<span>' + s.title + ' (Complexity: ' + s.complexity + ')</span>'
+              + '<span>' + Security.escapeHTML(s.title) + ' (Complexity: ' + s.complexity + ')</span>'
               + '</div>';
           }).join('') + '</div>'
         : '';
 
       return '<div class="panel" style="padding:var(--space-md);border-left:3px solid ' + statusColor + ';">'
         + '<div style="display:flex;justify-content:between;align-items:center;">'
-        + '<span style="font-weight:600;font-size:13px;color:var(--color-primary-light);">' + t.title + '</span>'
+        + '<span style="font-weight:600;font-size:13px;color:var(--color-primary-light);">' + Security.escapeHTML(t.title) + '</span>'
         + '<span class="badge" style="background:' + statusColor + '20;color:' + statusColor + ';border:1px solid ' + statusColor + '40;font-size:10px;padding:1px 6px;border-radius:3px;">' + t.status.toUpperCase() + '</span>'
         + '</div>'
-        + '<div style="font-size:12px;color:var(--color-muted);margin-top:4px;">' + t.description + '</div>'
+        + '<div style="font-size:12px;color:var(--color-muted);margin-top:4px;">' + Security.escapeHTML(t.description) + '</div>'
         + '<div style="display:flex;gap:var(--space-md);font-size:11px;color:var(--color-muted);margin-top:6px;">'
-        + '<span>Phase: <strong>' + t.phase + '</strong></span>'
-        + '<span>Module: <strong>' + t.module + '</strong></span>'
+        + '<span>Phase: <strong>' + Security.escapeHTML(t.phase) + '</strong></span>'
+        + '<span>Module: <strong>' + Security.escapeHTML(t.module) + '</strong></span>'
         + '</div>'
         + deps
         + subtasksHtml

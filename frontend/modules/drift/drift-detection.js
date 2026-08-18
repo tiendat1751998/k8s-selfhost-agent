@@ -143,14 +143,14 @@ const DriftDetection = {
 
     tbody.innerHTML = data.map(d => `
       <tr>
-        <td><strong>${d.resource || d.res || ''}</strong></td>
-        <td><span class="badge badge-outline">${d.resource_kind || d.kind || ''}</span></td>
-        <td>${d.namespace || d.ns || ''}</td>
-        <td>${d.cluster || ''}</td>
-        <td><span class="badge badge-warning">${d.status || 'drifted'}</span></td>
-        <td>${d.detected_at ? new Date(d.detected_at).toLocaleString() : (d.detected || '')}</td>
+        <td><strong>${Security.escapeHTML(d.resource || d.res || '')}</strong></td>
+        <td><span class="badge badge-outline">${Security.escapeHTML(d.resource_kind || d.kind || '')}</span></td>
+        <td>${Security.escapeHTML(d.namespace || d.ns || '')}</td>
+        <td>${Security.escapeHTML(d.cluster || '')}</td>
+        <td><span class="badge badge-warning">${Security.escapeHTML(d.status || 'drifted')}</span></td>
+        <td>${Security.escapeHTML(d.detected_at ? new Date(d.detected_at).toLocaleString() : (d.detected || ''))}</td>
         <td>
-          <button class="btn btn-sm btn-ghost" onclick="DriftDetection.showDiff('${d.resource || d.res || ''}')">View Diff</button>
+          <button class="btn btn-sm btn-ghost" onclick="DriftDetection.showDiff('${Security.escapeHTML(d.resource || d.res || '')}')">View Diff</button>
         </td>
       </tr>
     `).join('');

@@ -81,8 +81,8 @@
       var trendClass = c.trend > 0 ? 'cost-trend-up' : 'cost-trend-down';
       var trendIcon = c.trend > 0 ? '▲' : '▼';
       return '<tr>'
-        + '<td><span class="cost-cluster-name">' + c.name + '</span></td>'
-        + '<td><span class="badge badge-ghost" style="font-size:11px;">' + c.provider.toUpperCase() + '</span></td>'
+        + '<td><span class="cost-cluster-name">' + Security.escapeHTML(c.name) + '</span></td>'
+        + '<td><span class="badge badge-ghost" style="font-size:11px;">' + Security.escapeHTML(c.provider.toUpperCase()) + '</span></td>'
         + '<td style="font-weight:600;">' + formatCurrency(c.monthlyCost) + '</td>'
         + '<td>' + formatCurrency(c.dailyCost) + '</td>'
         + '<td>' + formatCurrency(c.cpuCost) + '</td>'
@@ -100,8 +100,8 @@
     tbody.innerHTML = data.namespaceCosts.map(function (n) {
       var utilClass = n.utilization < 30 ? 'cost-util-low' : (n.utilization < 60 ? 'cost-util-mid' : 'cost-util-high');
       return '<tr>'
-        + '<td><strong>' + n.namespace + '</strong></td>'
-        + '<td style="font-size:12px;color:var(--color-muted);">' + n.cluster + '</td>'
+        + '<td><strong>' + Security.escapeHTML(n.namespace) + '</strong></td>'
+        + '<td style="font-size:12px;color:var(--color-muted);">' + Security.escapeHTML(n.cluster) + '</td>'
         + '<td>' + n.cpuRequested + '</td>'
         + '<td>' + n.memoryRequested + '</td>'
         + '<td style="font-weight:600;">' + formatCurrency(n.monthlyCost) + '</td>'

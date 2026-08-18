@@ -98,13 +98,13 @@ const AuditMode = {
     tbody.innerHTML = data.map(m => `
       <tr>
         <td>
-          <span class="badge badge-${this.getSeverityClass(m.severity)}">${(m.severity || 'medium').toUpperCase()}</span>
+          <span class="badge badge-${Security.escapeHTML(this.getSeverityClass(m.severity))}">${Security.escapeHTML((m.severity || 'medium').toUpperCase())}</span>
         </td>
-        <td><span class="badge badge-outline">${m.category || ''}</span></td>
-        <td><strong>${m.description || m.desc || ''}</strong></td>
-        <td class="text-muted text-sm">${m.remediation || m.action || ''}</td>
+        <td><span class="badge badge-outline">${Security.escapeHTML(m.category || '')}</span></td>
+        <td><strong>${Security.escapeHTML(m.description || m.desc || '')}</strong></td>
+        <td class="text-muted text-sm">${Security.escapeHTML(m.remediation || m.action || '')}</td>
         <td>
-          <button class="btn btn-sm btn-outline btn-resolve" onclick="AuditMode.resolveFinding(this, '${m.id || ''}')">Resolve</button>
+          <button class="btn btn-sm btn-outline btn-resolve" onclick="AuditMode.resolveFinding(this, '${Security.escapeHTML(m.id || '')}')">Resolve</button>
         </td>
       </tr>
     `).join('');

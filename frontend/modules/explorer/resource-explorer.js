@@ -152,7 +152,7 @@ const ResourceExplorer = {
   showError(msg) {
     const tbody = document.getElementById('explorer-tbody');
     const countSpan = document.getElementById('results-count');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">${msg}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">${Security.escapeHTML(msg)}</td></tr>`;
     if (countSpan) countSpan.innerText = '0';
   },
 
@@ -173,12 +173,12 @@ const ResourceExplorer = {
 
     tbody.innerHTML = data.map(m => `
       <tr>
-        <td><span class="badge badge-outline">${m.kind || m.resource_kind || ''}</span></td>
-        <td><strong>${m.name || ''}</strong></td>
-        <td>${m.namespace || m.ns || '-'}</td>
-        <td>${m.cluster || ''}</td>
-        <td><span class="badge badge-success">${m.status || 'Active'}</span></td>
-        <td>${m.created_at ? new Date(m.created_at).toLocaleDateString() : (m.age || '')}</td>
+        <td><span class="badge badge-outline">${Security.escapeHTML(m.kind || m.resource_kind || '')}</span></td>
+        <td><strong>${Security.escapeHTML(m.name || '')}</strong></td>
+        <td>${Security.escapeHTML(m.namespace || m.ns || '-')}</td>
+        <td>${Security.escapeHTML(m.cluster || '')}</td>
+        <td><span class="badge badge-success">${Security.escapeHTML(m.status || 'Active')}</span></td>
+        <td>${Security.escapeHTML(m.created_at ? new Date(m.created_at).toLocaleDateString() : (m.age || ''))}</td>
         <td>
           <button class="btn btn-sm btn-ghost">View Details</button>
         </td>

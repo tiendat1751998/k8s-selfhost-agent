@@ -32,4 +32,10 @@ ENV AGENT_VERSION=${AGENT_VERSION}
 
 EXPOSE 8080
 
+RUN useradd -m -r appuser && chown -R appuser /code
+USER appuser
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/livez')" || exit 1
+
 CMD ["uv", "run", "uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080"]

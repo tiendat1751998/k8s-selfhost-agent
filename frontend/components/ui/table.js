@@ -58,7 +58,14 @@
         const tr = document.createElement('tr');
         const td = document.createElement('td');
         td.colSpan = this.columns.length;
-        td.innerHTML = `<div class="empty-state" style="border: none; padding: 24px;"><div class="empty-state-text">${this.emptyMessage}</div></div>`;
+        const div = document.createElement('div');
+        div.className = 'empty-state';
+        div.style.cssText = 'border: none; padding: 24px;';
+        const text = document.createElement('div');
+        text.className = 'empty-state-text';
+        text.textContent = this.emptyMessage;
+        div.appendChild(text);
+        td.appendChild(div);
         td.style.textAlign = 'center';
         tr.appendChild(td);
         this.tbody.appendChild(tr);
