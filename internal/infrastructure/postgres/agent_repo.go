@@ -345,13 +345,13 @@ func (r *agentRepo) GetProjectState(ctx context.Context) (*agent.ProjectState, e
 			now := time.Now().UTC()
 			s = agent.ProjectState{
 				ID:                "latest",
-				CurrentPhase:      "Phase 11",
-				CurrentModule:     "Multi-Agent Framework",
-				CurrentFeature:    "Core Setup",
-				RepositoryHealth:  100.0,
+				CurrentPhase:      "",
+				CurrentModule:     "",
+				CurrentFeature:    "",
+				RepositoryHealth:  1.0,
 				TechnicalDebt:     0.0,
-				ArchitectureScore: 100.0,
-				QualityScore:      100.0,
+				ArchitectureScore: 0.99,
+				QualityScore:      1.0,
 				UpdatedAt:         now,
 			}
 			err = r.UpdateProjectState(ctx, &s)

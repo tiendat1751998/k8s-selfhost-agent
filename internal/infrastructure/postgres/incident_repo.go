@@ -37,7 +37,7 @@ func (r *IncidentRepo) Create(ctx context.Context, inc *incident.Incident) error
 
 	tenantID := tenancy.TenantIDFromContext(ctx)
 	if tenantID == "" {
-		tenantID = "org-google"
+		tenantID = "default-tenant"
 	}
 
 	query := `
