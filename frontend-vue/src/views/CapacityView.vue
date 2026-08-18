@@ -34,40 +34,40 @@
     <div class="metrics-grid">
       <MetricCard
         title="CPU Capacity Runway"
-        value="> 180 Days"
-        trend="+12% Headroom"
-        trend-type="positive"
-        badge="HEALTHY"
-        badge-color="emerald"
-        subtitle="Current peak compute utilization: 64%"
+        :value="cpuRunway.value"
+        :trend="cpuRunway.trend"
+        :trend-type="cpuRunway.trendType"
+        :badge="cpuRunway.badge"
+        :badge-color="cpuRunway.badgeColor"
+        :subtitle="cpuRunway.subtitle"
         icon="⚡"
       />
       <MetricCard
         title="RAM Saturation Forecast"
-        value="78 Days"
-        trend="Growth Trend +4.2%/mo"
-        trend-type="neutral"
-        badge="MONITOR"
-        badge-color="amber"
-        subtitle="Estimated saturation by Q4"
+        :value="memSaturation.value"
+        :trend="memSaturation.trend"
+        :trend-type="memSaturation.trendType"
+        :badge="memSaturation.badge"
+        :badge-color="memSaturation.badgeColor"
+        :subtitle="memSaturation.subtitle"
         icon="🧠"
       />
       <MetricCard
         title="Storage Volume Headroom"
-        value="4.8 TB"
-        trend="72% Available"
-        trend-type="positive"
-        badge="NVMe OPTIMAL"
-        badge-color="cyan"
-        subtitle="Total 6.8 TB Provisioned PVCs"
+        :value="storageHeadroom.value"
+        :trend="storageHeadroom.trend"
+        :trend-type="storageHeadroom.trendType"
+        :badge="storageHeadroom.badge"
+        :badge-color="storageHeadroom.badgeColor"
+        :subtitle="storageHeadroom.subtitle"
         icon="💾"
       />
       <MetricCard
         title="Scaling Action"
-        value="+1 Node Req"
-        badge="RECOMMENDED"
-        badge-color="violet"
-        subtitle="Pre-scale worker pool before Black Friday"
+        :value="scalingAction.value"
+        :badge="scalingAction.badge"
+        :badge-color="scalingAction.badgeColor"
+        :subtitle="scalingAction.subtitle"
         icon="📈"
       />
     </div>
@@ -149,42 +149,26 @@
           <h2 class="section-title">Cluster Sizing & Pod Bin-Packing Recommendations</h2>
           <p class="section-subtitle">AI-assisted node group recommendations to maximize compute density and prevent OOM-Kills</p>
         </div>
-        <span class="badge badge-emerald">Optimal Recommendations</span>
+        <span class="badge" :class="recommendations.length > 0 ? 'badge-emerald' : 'badge-muted'">
+          {{ recommendations.length > 0 ? `${recommendations.length} Recommendations` : 'No Recommendations' }}
+        </span>
       </div>
 
-      <div class="recommendations-grid">
-        <div class="rec-card glass-panel">
-          <div class="rec-icon">⚙️</div>
+      <div v-if="recommendations.length > 0" class="recommendations-grid">
+        <div v-for="(rec, idx) in recommendations" :key="idx" class="rec-card glass-panel">
+          <div class="rec-icon">{{ rec.icon }}</div>
           <div class="rec-content">
-            <h4 class="rec-title">Horizontal Node Pool Auto-Scaling</h4>
-            <p class="rec-desc">
-              Adjust minimum worker node count from <strong>3 → 4 nodes</strong> in node-pool-prod to accommodate the 30-day forecast increase.
-            </p>
-            <span class="rec-impact text-cyan font-mono font-semibold">Prevents pod scheduling throttles during peak traffic</span>
+            <h4 class="rec-title">{{ rec.title }}</h4>
+            <p class="rec-desc">{{ rec.desc }}</p>
+            <span class="rec-impact font-mono font-semibold" :class="rec.impactClass">{{ rec.impact }}</span>
           </div>
         </div>
+      </div>
 
-        <div class="rec-card glass-panel">
-          <div class="rec-icon">📦</div>
-          <div class="rec-content">
-            <h4 class="rec-title">Pod Request Right-Sizing</h4>
-            <p class="rec-desc">
-              Lower memory requests on <strong>staging-sandbox</strong> namespaces from 2.0GiB to 512MiB based on 90-day historical p99 utilization.
-            </p>
-            <span class="rec-impact text-emerald font-mono font-semibold">Frees up 6.0 GiB assignable memory capacity</span>
-          </div>
-        </div>
-
-        <div class="rec-card glass-panel">
-          <div class="rec-icon">🗄️</div>
-          <div class="rec-content">
-            <h4 class="rec-title">Storage Compaction & PVC Pruning</h4>
-            <p class="rec-desc">
-              Enable automated ZFS/NVMe volume snapshots deduplication to extend NVMe drive exhaustion past 24 months.
-            </p>
-            <span class="rec-impact text-violet font-mono font-semibold">Recovers approximately 850 GB unreferenced space</span>
-          </div>
-        </div>
+      <div v-else class="empty-state-box glass-panel">
+        <span class="empty-icon">💡</span>
+        <h3 class="empty-title">No Active Sizing Recommendations</h3>
+        <p class="empty-desc">Record capacity forecast checkpoints to generate automated node sizing and resource optimization recommendations.</p>
       </div>
     </div>
 
@@ -262,7 +246,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import {
   capacityApi,
   type CapacityForecast,
@@ -284,6 +268,117 @@ const newForecast = reactive({
   forecast_30d: 72.8,
   forecast_90d: 84.5,
   status: 'healthy',
+})
+
+const cpuForecast = computed(() => forecasts.value.find(f => f.resource_type.toLowerCase() === 'cpu'))
+const cpuRunway = computed(() => {
+  if (!cpuForecast.value) return { value: '—', trend: 'No CPU data', trendType: 'neutral' as const, badge: 'NO DATA', badgeColor: 'muted' as const, subtitle: 'No CPU forecast recorded' }
+  const fc = cpuForecast.value
+  const value = fc.exhaustion_at ? formatDate(fc.exhaustion_at) : (fc.forecast_90d < 80 ? '> 180 Days' : fc.forecast_90d < 90 ? '90-180 Days' : '< 90 Days')
+  const headroom = Math.max(0, Math.round(100 - fc.current_usage))
+  const trend = `${headroom}% Headroom`
+  const trendType = fc.current_usage < 80 ? ('positive' as const) : ('negative' as const)
+  const badge = fc.status.toUpperCase()
+  const badgeColor = fc.status === 'healthy' ? ('emerald' as const) : fc.status === 'warning' ? ('amber' as const) : ('rose' as const)
+  const subtitle = `Current peak compute utilization: ${fc.current_usage.toFixed(1)}%`
+  return { value, trend, trendType, badge, badgeColor, subtitle }
+})
+
+const memForecast = computed(() => forecasts.value.find(f => f.resource_type.toLowerCase() === 'memory' || f.resource_type.toLowerCase() === 'ram'))
+const memSaturation = computed(() => {
+  if (!memForecast.value) return { value: '—', trend: 'No RAM data', trendType: 'neutral' as const, badge: 'NO DATA', badgeColor: 'muted' as const, subtitle: 'No memory forecast recorded' }
+  const fc = memForecast.value
+  const value = fc.exhaustion_at ? formatDate(fc.exhaustion_at) : (fc.forecast_90d < 80 ? '> 180 Days' : fc.forecast_90d < 90 ? '90-180 Days' : '< 90 Days')
+  const diff = fc.forecast_30d - fc.current_usage
+  const growth = diff.toFixed(1)
+  const trend = `Growth Trend ${diff >= 0 ? '+' : ''}${growth}%/mo`
+  const trendType = fc.status === 'healthy' ? ('neutral' as const) : ('negative' as const)
+  const badge = fc.status.toUpperCase()
+  const badgeColor = fc.status === 'healthy' ? ('emerald' as const) : fc.status === 'warning' ? ('amber' as const) : ('rose' as const)
+  const subtitle = `Current memory utilization: ${fc.current_usage.toFixed(1)}%`
+  return { value, trend, trendType, badge, badgeColor, subtitle }
+})
+
+const storageForecast = computed(() => forecasts.value.find(f => f.resource_type.toLowerCase() === 'storage' || f.resource_type.toLowerCase() === 'disk' || f.resource_type.toLowerCase() === 'nvme'))
+const storageHeadroom = computed(() => {
+  if (!storageForecast.value) return { value: '—', trend: 'No storage data', trendType: 'neutral' as const, badge: 'NO DATA', badgeColor: 'muted' as const, subtitle: 'No storage forecast recorded' }
+  const fc = storageForecast.value
+  const avail = Math.max(0, Math.round(100 - fc.current_usage))
+  const value = `${avail}% Free`
+  const trend = `${avail}% Available`
+  const trendType = fc.current_usage < 85 ? ('positive' as const) : ('negative' as const)
+  const badge = fc.status.toUpperCase()
+  const badgeColor = fc.status === 'healthy' ? ('cyan' as const) : fc.status === 'warning' ? ('amber' as const) : ('rose' as const)
+  const subtitle = `Current storage utilization: ${fc.current_usage.toFixed(1)}%`
+  return { value, trend, trendType, badge, badgeColor, subtitle }
+})
+
+const scalingAction = computed(() => {
+  if (forecasts.value.length === 0) {
+    return { value: '—', badge: 'NO DATA', badgeColor: 'muted' as const, subtitle: 'No predictive forecast models' }
+  }
+  const hasCritical = forecasts.value.some(f => f.status === 'critical' || f.forecast_30d >= 85)
+  const hasWarning = forecasts.value.some(f => f.status === 'warning' || f.forecast_30d >= 70)
+  if (hasCritical) {
+    return { value: '+1 Node Req', badge: 'ACTION REQUIRED', badgeColor: 'rose' as const, subtitle: 'Pre-scale worker pool to absorb forecast load' }
+  }
+  if (hasWarning) {
+    return { value: 'Monitor Growth', badge: 'ATTENTION', badgeColor: 'amber' as const, subtitle: 'Resource consumption trending upward' }
+  }
+  return { value: 'Nominal', badge: 'OPTIMAL', badgeColor: 'emerald' as const, subtitle: 'Cluster capacity within safe thresholds' }
+})
+
+export interface CapacityRecommendation {
+  icon: string
+  title: string
+  desc: string
+  impact: string
+  impactClass: string
+}
+
+const recommendations = computed<CapacityRecommendation[]>(() => {
+  if (forecasts.value.length === 0) return []
+  const recs: CapacityRecommendation[] = []
+  
+  for (const fc of forecasts.value) {
+    if (fc.resource_type.toLowerCase() === 'cpu' && (fc.forecast_30d > 70 || fc.status !== 'healthy')) {
+      recs.push({
+        icon: '⚙️',
+        title: 'Horizontal Node Pool Auto-Scaling',
+        desc: `Adjust worker node pool capacity for cluster "${fc.cluster}" to absorb 30-day forecast load of ${fc.forecast_30d.toFixed(1)}%.`,
+        impact: 'Prevents CPU throttling during peak traffic periods',
+        impactClass: 'text-cyan'
+      })
+    } else if ((fc.resource_type.toLowerCase() === 'memory' || fc.resource_type.toLowerCase() === 'ram') && (fc.forecast_30d > 70 || fc.status !== 'healthy')) {
+      recs.push({
+        icon: '🧠',
+        title: 'Pod Memory Request Right-Sizing',
+        desc: `Review memory limits in cluster "${fc.cluster}" where forecast reaches ${fc.forecast_30d.toFixed(1)}% to prevent OOM-Kills.`,
+        impact: 'Optimizes memory bin-packing and prevents container evictions',
+        impactClass: 'text-emerald'
+      })
+    } else if ((fc.resource_type.toLowerCase() === 'storage' || fc.resource_type.toLowerCase() === 'disk') && (fc.forecast_30d > 70 || fc.status !== 'healthy')) {
+      recs.push({
+        icon: '🗄️',
+        title: 'Storage Volume Compaction & PVC Pruning',
+        desc: `Enable volume snapshot deduplication and purge unreferenced PVCs on cluster "${fc.cluster}".`,
+        impact: 'Recovers disk headroom and defers storage volume expansion',
+        impactClass: 'text-violet'
+      })
+    }
+  }
+
+  if (recs.length === 0 && forecasts.value.length > 0) {
+    recs.push({
+      icon: '✅',
+      title: 'Resource Allocation Sizing Optimal',
+      desc: `All ${forecasts.value.length} tracked capacity checkpoints are operating within healthy operating thresholds.`,
+      impact: 'Zero scaling actions required at this time',
+      impactClass: 'text-emerald'
+    })
+  }
+
+  return recs
 })
 
 onMounted(() => {

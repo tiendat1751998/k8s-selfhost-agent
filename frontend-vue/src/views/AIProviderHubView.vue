@@ -2,9 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import {
   aiApi,
-  CATALOG_MODELS,
   type AIProvider,
-  type CatalogModelCard,
   type CreateProviderPayload,
   type TestPromptResult
 } from '../api/management'
@@ -16,8 +14,7 @@ import ModalDrawer from '../components/ui/ModalDrawer.vue'
 const loading = ref(false)
 const error = ref<string | null>(null)
 const providers = ref<AIProvider[]>([])
-const selectedVendor = ref<string>('all')
-const activeSection = ref<'catalog' | 'providers' | 'console'>('catalog')
+const activeSection = ref<'providers' | 'console'>('providers')
 
 // Health Probing State
 const probingName = ref<string | null>(null)
@@ -62,17 +59,38 @@ onMounted(() => {
   loadProviders()
 })
 
-const filteredCatalog = computed(() => {
-  if (selectedVendor.value === 'all') return CATALOG_MODELS
-  return CATALOG_MODELS.filter(m => m.vendor === selectedVendor.value)
+const healthyProvidersCount = computed(() => {
+  return providers.value.filter(p => {
+    const probe = healthResults.value[p.name]
+    if (probe) return probe.status === 'healthy' || probe.status === 'ready' || probe.status === 'active' || probe.status === 'ok'
+    return p.status === 'healthy' || p.status === 'ready' || p.status === 'active' || p.status === 'ok'
+  }).length
 })
 
-const vendorCounts = computed(() => {
-  const counts: Record<string, number> = { all: CATALOG_MODELS.length }
-  for (const m of CATALOG_MODELS) {
-    counts[m.vendor] = (counts[m.vendor] || 0) + 1
+const distinctModelsCount = computed(() => {
+  return new Set(providers.value.map(p => p.model).filter(Boolean)).size
+})
+
+const avgLatency = computed(() => {
+  const latencies: number[] = []
+  for (const p of providers.value) {
+    const probe = healthResults.value[p.name]
+    if (probe?.latency) {
+      const parsed = parseInt(probe.latency)
+      if (!isNaN(parsed)) latencies.push(parsed)
+    } else if (p.latency) {
+      const parsed = parseInt(p.latency)
+      if (!isNaN(parsed)) latencies.push(parsed)
+    }
   }
-  return counts
+  if (latencies.length === 0) return '—'
+  const avg = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+  return `${avg}ms`
+})
+
+const failoverResilience = computed(() => {
+  if (providers.value.length === 0) return '—'
+  return `${Math.round((healthyProvidersCount.value / providers.value.length) * 100)}%`
 })
 
 async function triggerHealthCheck(name: string) {
@@ -146,18 +164,6 @@ function selectPromptTemplate(template: string) {
   }
 }
 
-function deployModelFromCatalog(model: CatalogModelCard) {
-  newProvider.value = {
-    name: `${model.id}-node`,
-    type: model.providerType,
-    endpoint: model.defaultEndpoint,
-    model: model.id,
-    api_key: '',
-    default: false,
-  }
-  showAddModal.value = true
-}
-
 async function handleCreateProvider() {
   if (!newProvider.value.name || !newProvider.value.endpoint || !newProvider.value.model) return
   isSubmittingProvider.value = true
@@ -194,13 +200,13 @@ function copyPromptOutput() {
     <div class="page-header">
       <div class="header-titles">
         <div class="header-badge">
-          <span class="badge badge-cyan">20 LLM Model Hub</span>
+          <span class="badge badge-cyan">{{ providers.length }} LLM {{ providers.length === 1 ? 'Gateway' : 'Gateways' }}</span>
           <span class="badge badge-emerald">Circuit Breaker Active</span>
           <span class="badge badge-violet">Air-Gapped + Cloud Failover</span>
         </div>
         <h1 class="page-title">AI Provider Hub & Multi-Model Matrix</h1>
         <p class="page-desc">
-          High-performance LLM gateway managing 20 industry models across OpenAI, Anthropic, Gemini, DeepSeek, and Ollama with autonomous circuit breakers and live latency probing.
+          High-performance LLM gateway managing enterprise models across OpenAI, Anthropic, Gemini, DeepSeek, and Ollama with autonomous circuit breakers and live latency probing.
         </p>
       </div>
 
@@ -226,40 +232,32 @@ function copyPromptOutput() {
       <MetricCard 
         title="Active Gateways" 
         :value="providers.length" 
-        trend="Circuit Breakers Armed" 
-        trendDirection="up" 
+        :trend="providers.length > 0 ? 'Circuit Breakers Armed' : 'No active gateways'" 
+        :trendDirection="providers.length > 0 ? 'up' : 'neutral'" 
       />
       <MetricCard 
-        title="Supported LLMs" 
-        :value="CATALOG_MODELS.length" 
-        trend="5 Major Ecosystems" 
+        title="Configured Models" 
+        :value="distinctModelsCount" 
+        :trend="distinctModelsCount > 0 ? `${providers.length} Endpoints Active` : 'No models registered'" 
         trendDirection="neutral" 
       />
       <MetricCard 
         title="Avg Gateway Latency" 
-        value="48ms" 
-        trend="Local Ollama NVMe" 
-        trendDirection="down" 
+        :value="avgLatency" 
+        :trend="avgLatency !== '—' ? 'Live Telemetry Probe' : 'No latency probes yet'" 
+        :trendDirection="avgLatency !== '—' ? 'down' : 'neutral'" 
       />
       <MetricCard 
         title="Failover Resilience" 
-        value="100%" 
-        trend="Zero Request Dropped" 
-        trendDirection="up" 
+        :value="failoverResilience" 
+        :trend="failoverResilience !== '—' ? `${healthyProvidersCount}/${providers.length} Endpoints Healthy` : 'No active gateways'" 
+        :trendDirection="failoverResilience !== '—' ? 'up' : 'neutral'" 
       />
     </div>
 
     <!-- Navigation Tabs -->
     <div class="view-tabs-bar glass-panel">
       <div class="view-tabs">
-        <button 
-          class="vtab-btn" 
-          :class="{ active: activeSection === 'catalog' }" 
-          @click="activeSection = 'catalog'"
-        >
-          <span>🧠 20 Model Catalog Matrix</span>
-          <span class="vtab-count">{{ CATALOG_MODELS.length }}</span>
-        </button>
         <button 
           class="vtab-btn" 
           :class="{ active: activeSection === 'providers' }" 
@@ -278,85 +276,8 @@ function copyPromptOutput() {
       </div>
     </div>
 
-    <!-- SECTION 1: 20 MODEL CATALOG -->
-    <div v-if="activeSection === 'catalog'" class="section-content animate-fade-in">
-      <!-- Vendor Filter Pills -->
-      <div class="vendor-filter-bar">
-        <span class="filter-title">Filter by AI Vendor:</span>
-        <div class="vendor-pills">
-          <button 
-            class="vpill" 
-            :class="{ active: selectedVendor === 'all' }" 
-            @click="selectedVendor = 'all'"
-          >
-            All Models ({{ vendorCounts['all'] }})
-          </button>
-          <button 
-            v-for="v in ['OpenAI', 'Anthropic', 'Google', 'DeepSeek', 'Ollama / OSS']" 
-            :key="v" 
-            class="vpill" 
-            :class="{ active: selectedVendor === v }" 
-            @click="selectedVendor = v"
-          >
-            {{ v }} ({{ vendorCounts[v] || 0 }})
-          </button>
-        </div>
-      </div>
-
-      <!-- Model Cards Grid -->
-      <div class="catalog-grid">
-        <div v-for="model in filteredCatalog" :key="model.id" class="model-card glass-panel glass-panel-glow">
-          <div class="model-card-top">
-            <div class="model-header-wrap">
-              <div class="vendor-tag font-mono">{{ model.vendor }}</div>
-              <h3 class="model-name">{{ model.name }}</h3>
-              <small class="model-id font-mono">{{ model.id }}</small>
-            </div>
-            <span 
-              class="latency-tier-badge font-mono" 
-              :class="`tier-${model.latencyTier.toLowerCase().replace(/\s+/g, '-')}`"
-            >
-              {{ model.latencyTier }}
-            </span>
-          </div>
-
-          <p class="model-desc">{{ model.description }}</p>
-
-          <div class="model-meta-box">
-            <div class="meta-row">
-              <span class="meta-label">Context Window:</span>
-              <span class="meta-val font-mono">{{ model.contextWindow }}</span>
-            </div>
-            <div class="meta-row">
-              <span class="meta-label">Provider Type:</span>
-              <span class="meta-val font-mono uppercase">{{ model.providerType }}</span>
-            </div>
-            <div class="meta-row">
-              <span class="meta-label">Best Suited For:</span>
-              <span class="meta-val text-cyan">{{ model.recommendedFor }}</span>
-            </div>
-          </div>
-
-          <div class="model-caps">
-            <span v-for="cap in model.capabilities" :key="cap" class="cap-tag">
-              {{ cap }}
-            </span>
-          </div>
-
-          <div class="model-card-footer">
-            <button class="btn btn-secondary btn-sm" @click="testProvider = model.id; activeSection = 'console'">
-              <span>Test in Console</span>
-            </button>
-            <button class="btn btn-primary btn-sm" @click="deployModelFromCatalog(model)">
-              <span>Connect Gateway</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SECTION 2: ACTIVE PROVIDERS & HEALTH PROBES -->
-    <div v-else-if="activeSection === 'providers'" class="section-content animate-fade-in">
+    <!-- SECTION 1: ACTIVE PROVIDERS & HEALTH PROBES -->
+    <div v-if="activeSection === 'providers'" class="section-content animate-fade-in">
       <div v-if="providers.length > 0" class="providers-grid">
         <div v-for="p in providers" :key="p.name" class="provider-card glass-panel">
           <div class="provider-card-header">
@@ -381,11 +302,13 @@ function copyPromptOutput() {
             </div>
             <div class="pstat-row">
               <span class="pstat-label">Live Latency:</span>
-              <span class="pstat-val font-mono text-emerald">{{ healthResults[p.name]?.latency || p.latency || '<50ms' }}</span>
+              <span class="pstat-val font-mono text-emerald">{{ healthResults[p.name]?.latency || p.latency || '—' }}</span>
             </div>
             <div class="pstat-row">
               <span class="pstat-label">Circuit Breaker:</span>
-              <span class="pstat-val text-emerald">CLOSED (NORMAL)</span>
+              <span class="pstat-val" :class="p.status === 'healthy' || p.status === 'ready' || p.status === 'active' ? 'text-emerald' : 'text-amber'">
+                {{ p.status === 'healthy' || p.status === 'ready' || p.status === 'active' ? 'CLOSED (NORMAL)' : 'DEGRADED' }}
+              </span>
             </div>
           </div>
 
@@ -397,6 +320,9 @@ function copyPromptOutput() {
             >
               <span>{{ probingName === p.name ? 'Probing...' : '⚡ Probe Health' }}</span>
             </button>
+            <button class="btn btn-secondary btn-sm" @click="testProvider = p.name; activeSection = 'console'">
+              <span>Test in Console</span>
+            </button>
             <button class="btn btn-secondary btn-sm" title="Remove" @click="deleteProvider(p.name)">
               <span>Remove</span>
             </button>
@@ -407,14 +333,14 @@ function copyPromptOutput() {
       <div v-else class="empty-state-box glass-panel">
         <span class="empty-icon">🔌</span>
         <h3 class="empty-title">No Active AI Providers Registered</h3>
-        <p class="empty-desc">Connect a local Ollama instance or external model endpoint from the catalog to activate the AI SRE mesh.</p>
+        <p class="empty-desc">Connect a local Ollama instance or external model endpoint to activate the AI SRE mesh.</p>
         <button class="btn btn-primary btn-sm" @click="showAddModal = true">
           <span>+ Register Custom Provider</span>
         </button>
       </div>
     </div>
 
-    <!-- SECTION 3: INTERACTIVE PROMPT CONSOLE -->
+    <!-- SECTION 2: INTERACTIVE PROMPT CONSOLE -->
     <div v-else-if="activeSection === 'console'" class="section-content animate-fade-in">
       <div class="console-layout glass-panel">
         <div class="console-input-pane">
@@ -424,8 +350,8 @@ function copyPromptOutput() {
               <label>Target LLM:</label>
               <select v-model="testProvider" class="input-glass select-llm">
                 <option value="default">Default Provider (Local Ollama)</option>
-                <option v-for="m in CATALOG_MODELS" :key="m.id" :value="m.id">
-                  {{ m.name }} ({{ m.vendor }})
+                <option v-for="p in providers" :key="p.name" :value="p.name">
+                  {{ p.name }} ({{ p.model }} - {{ p.type }})
                 </option>
               </select>
             </div>

@@ -49,7 +49,7 @@ const criticalSLOs = computed(() => snapshots.value.filter(s => s.budget_status 
 
 // Average burn rate
 const avgBurnRate = computed(() => {
-  if (snapshots.value.length === 0) return '1.0x'
+  if (snapshots.value.length === 0) return '—'
   const total = snapshots.value.reduce((acc, s) => acc + (s.burn_rate || 0), 0)
   return `${(total / snapshots.value.length).toFixed(2)}x`
 })
@@ -123,33 +123,33 @@ function formatDate(d?: string) {
       />
       <MetricCard
         title="Healthy Error Budgets"
-        :value="`${healthySLOs}/${snapshots.length || totalSLOs}`"
-        subtitle="Services with >20% remaining budget"
+        :value="snapshots.length > 0 ? `${healthySLOs}/${snapshots.length}` : '0/0'"
+        :subtitle="snapshots.length > 0 ? 'Services with >20% remaining budget' : 'No active budget snapshots'"
         icon="🛡️"
         badge="HEALTHY"
-        badge-color="emerald"
-        trend="Within Budget"
-        trend-type="positive"
+        :badge-color="snapshots.length > 0 ? 'emerald' : 'muted'"
+        :trend="snapshots.length > 0 ? 'Within Budget' : 'No active budgets'"
+        :trend-type="snapshots.length > 0 ? 'positive' : 'neutral'"
       />
       <MetricCard
         title="Budget Warnings"
         :value="warningSLOs"
         subtitle="Error budget consumption > 80%"
         icon="⚠️"
-        :badge="warningSLOs > 0 ? 'WARNING' : 'ZERO'"
-        :badge-color="warningSLOs > 0 ? 'amber' : 'emerald'"
-        :trend="warningSLOs > 0 ? 'Elevated Failure Rate' : 'Optimal Traffic'"
-        :trend-type="warningSLOs > 0 ? 'negative' : 'positive'"
+        :badge="snapshots.length === 0 ? 'ZERO' : warningSLOs > 0 ? 'WARNING' : 'ZERO'"
+        :badge-color="snapshots.length === 0 ? 'muted' : warningSLOs > 0 ? 'amber' : 'emerald'"
+        :trend="snapshots.length === 0 ? 'No active budgets' : warningSLOs > 0 ? 'Elevated Failure Rate' : 'Optimal Traffic'"
+        :trend-type="snapshots.length === 0 ? 'neutral' : warningSLOs > 0 ? 'negative' : 'positive'"
       />
       <MetricCard
         title="Average Burn Rate"
         :value="avgBurnRate"
-        subtitle="1.0x = exact budget consumption over window"
+        :subtitle="snapshots.length > 0 ? '1.0x = exact budget consumption over window' : 'No budget snapshots recorded'"
         icon="🔥"
-        :badge="criticalSLOs > 0 ? 'EXHAUSTING' : 'NOMINAL'"
-        :badge-color="criticalSLOs > 0 ? 'rose' : 'emerald'"
-        :trend="criticalSLOs > 0 ? 'Fast Burn Alert Active' : 'Normal Rate'"
-        :trend-type="criticalSLOs > 0 ? 'negative' : 'positive'"
+        :badge="snapshots.length === 0 ? 'NO DATA' : criticalSLOs > 0 ? 'EXHAUSTING' : 'NOMINAL'"
+        :badge-color="snapshots.length === 0 ? 'muted' : criticalSLOs > 0 ? 'rose' : 'emerald'"
+        :trend="snapshots.length === 0 ? 'No snapshots recorded' : criticalSLOs > 0 ? 'Fast Burn Alert Active' : 'Normal Rate'"
+        :trend-type="snapshots.length === 0 ? 'neutral' : criticalSLOs > 0 ? 'negative' : 'positive'"
       />
     </div>
 
