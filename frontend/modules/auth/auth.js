@@ -59,8 +59,9 @@
 
         let token = localStorage.getItem('k8s_token');
         if (!token) {
-            localStorage.setItem('k8s_token', 'k8s-enterprise-demo-token');
-            token = 'k8s-enterprise-demo-token';
+            // No token found — require user to authenticate
+            showLoginModal();
+            return;
         }
         // Validate token on load
         APIClient.get('/health').catch(() => {});

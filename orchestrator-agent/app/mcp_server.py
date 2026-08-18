@@ -14,12 +14,16 @@ import urllib.request
 from typing import Any
 
 BACKEND_BASE_URL = os.getenv("K8S_BACKEND_URL", "http://localhost:8080")
+BACKEND_API_TOKEN = os.getenv("BACKEND_API_TOKEN", "")
 
 
 def _backend_get(path: str) -> dict[str, Any]:
     """Execute a GET request against the K8S Control Plane backend API."""
     url = f"{BACKEND_BASE_URL}{path}"
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    headers = {"Accept": "application/json"}
+    if BACKEND_API_TOKEN:
+        headers["Authorization"] = f"Bearer {BACKEND_API_TOKEN}"
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode("utf-8"))

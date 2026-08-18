@@ -1,0 +1,59 @@
+---
+- name: Enterprise Linux OS Hardening & Air-Gapped Setup
+  hosts: all
+  become: yes
+  tasks:
+    - name: Set kernel sysctl parameters for K8s networking
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { key: "net.bridge.bridge-nf-call-iptables", value: "1" }
+        - { key: "net.ipv4.ip_forward", value: "1" }
+        - { key: "vm.max_map_count", value: "262144" }
+        - { key: "fs.file-max", value: "2097152" }
+
+    - name: Disable swap for Kubernetes stability
+      command: swapoff -a
+      when: ansible_swaptotal_mb > 0
+
+    - name: Configure local offline Air-Gapped package mirror
+      copy:
+        dest: /etc/yum.repos.d/airgapped-local.repo
+        content: |
+          [airgapped-local]
+          name=Air-Gapped Enterprise Local Repository
+          baseurl=http://mirror.internal.enterprise/repo/
+          enabled=1
+          gpgcheck=0
+        mode: '0644'
+
+    - name: Ensure Container Runtime (Podman / Docker) is installed and active
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - containerd
+        - docker
+      ignore_errors: yes
+
+    - name: Harden SSH daemon configuration
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      loop:
+        - { regexp: '^PermitRootLogin', line: 'PermitRootLogin no' }
+        - { regexp: '^PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^X11Forwarding', line: 'X11Forwarding no' }
+      notify: Restart SSH
+
+  handlers:
+    - name: Restart SSH
+      service:
+        name: sshd
+        state: restarted

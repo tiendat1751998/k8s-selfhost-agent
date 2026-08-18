@@ -3,7 +3,7 @@
 **AI-Powered Multi-Agent Kubernetes Control Plane with GitOps Auto-Remediation**
 
 [![CI](https://github.com/tiendat1751998/k8s-selfhost-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/tiendat1751998/k8s-selfhost-agent/actions)
-[![Go](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go)](https://go.dev/)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![ADK](https://img.shields.io/badge/Google_ADK-Agent_Dev_Kit-4285F4?logo=google)](https://adk.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)](https://postgresql.org/)
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC_BY_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
@@ -12,7 +12,7 @@
 
 ## Overview
 
-An enterprise-grade, multi-tenant platform that continuously monitors Kubernetes and Docker Swarm clusters, performs AI-powered root cause analysis (RCA) on incidents, detects configuration drift against Git baselines, and auto-remediates failures using a **10-agent multi-agent system** built on Google's Agent Development Kit (ADK).
+An enterprise-grade, multi-tenant platform that continuously monitors Kubernetes and Docker Swarm clusters, performs AI-powered root cause analysis (RCA) on incidents, detects configuration drift against Git baselines, and auto-remediates failures using a **10-agent multi-agent system** built on Google's Agent Development Kit (ADK) (Note: The Go domain model defines 15 agent types).
 
 ### Key Features
 
@@ -25,7 +25,7 @@ An enterprise-grade, multi-tenant platform that continuously monitors Kubernetes
 | **Real-Time Dashboard** | Premium dark-mode UI with WebSocket live updates, glassmorphism design |
 | **Encrypted Credentials** | AES-256-GCM encrypted cluster credentials with on-the-fly decryption |
 | **Multi-Tenant RBAC** | Role-based access control with tenant isolation |
-| **23 Database Migrations** | Production-grade PostgreSQL schema covering all platform features |
+| **26 Database Migrations** | Production-grade PostgreSQL schema covering all platform features |
 
 ---
 
@@ -56,7 +56,8 @@ An enterprise-grade, multi-tenant platform that continuously monitors Kubernetes
 ```
 ├── cmd/                    # Application entrypoints
 │   ├── server/             # Main API server
-│   └── agent-runner/       # Autonomous agent runner
+│   ├── agent-runner/       # Autonomous agent runner
+│   └── standalone/         # Combined server + agent runner
 ├── internal/
 │   ├── domain/             # Pure business models, port interfaces (DDD)
 │   ├── usecase/            # Application business logic
@@ -67,7 +68,7 @@ An enterprise-grade, multi-tenant platform that continuously monitors Kubernetes
 │   ├── app/mcp_server.py   # MCP server for K8S platform tools
 │   └── tests/              # Unit, integration, and eval tests
 ├── frontend/               # Premium dashboard UI
-├── migrations/             # 23 timestamped SQL migration scripts
+├── migrations/             # 26 timestamped SQL migration scripts
 ├── deployments/            # Docker, Helm, K8s manifests
 └── .agents/skills/         # 17 agent skill definitions
 ```
@@ -78,13 +79,13 @@ An enterprise-grade, multi-tenant platform that continuously monitors Kubernetes
 
 | Component | Technology |
 |-----------|-----------|
-| **Backend** | Go 1.23, Clean Architecture, DDD |
+| **Backend** | Go 1.26, Clean Architecture, DDD |
 | **AI/Agent** | Google ADK (Agent Development Kit), Gemini 2.0 Flash |
-| **Database** | PostgreSQL 16 (23 migrations) |
+| **Database** | PostgreSQL 16 (26 migrations) |
 | **Cache** | Redis 7 |
 | **Messaging** | NATS JetStream |
 | **Frontend** | HTML5, CSS3, Vanilla JavaScript, WebSocket |
-| **Security** | AES-256-GCM, JWT, RBAC, Parameter-bound SQL |
+| **Security** | AES-256-GCM, JWT, RBAC, Parameter-bound SQL (with custom tenant isolation SQL parser) |
 | **CI/CD** | GitHub Actions (lint → test → build) |
 | **Container** | Docker, Helm Charts |
 | **Orchestration** | Kubernetes, Docker Swarm |
@@ -95,7 +96,7 @@ An enterprise-grade, multi-tenant platform that continuously monitors Kubernetes
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.26+
 - Python 3.12+ with [uv](https://docs.astral.sh/uv/)
 - Docker & Docker Compose
 - PostgreSQL 16, Redis 7 (or use Docker Compose)
@@ -107,7 +108,7 @@ An enterprise-grade, multi-tenant platform that continuously monitors Kubernetes
 # Start PostgreSQL, Redis, NATS via Docker Compose
 make docker-up
 
-# Run database migrations (23 scripts)
+# Run database migrations (26 scripts)
 make migrate
 ```
 
@@ -147,7 +148,7 @@ uv run pytest tests/unit tests/integration -v
 
 ## Agent System
 
-The orchestrator agent routes user requests to 10 specialist sub-agents:
+The orchestrator agent routes user requests to 10 specialist sub-agents (Note: The Go domain model defines 15 agent types):
 
 | Agent | Responsibility | Tools |
 |-------|---------------|-------|

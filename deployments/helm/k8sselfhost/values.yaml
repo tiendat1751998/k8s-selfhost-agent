@@ -115,7 +115,8 @@ postgresql:
   enabled: true
   auth:
     username: postgres
-    password: postgres
+    # REQUIRED: Set during helm install with --set postgresql.auth.password=YOUR_PASSWORD
+    password: ""
     database: k8sselfhost
 
 # Redis subchart

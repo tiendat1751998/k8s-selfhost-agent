@@ -79,7 +79,7 @@
       if (!tbody) return;
 
       if (!data || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="${this.columns.length}" class="text-center text-muted" style="padding: 24px; text-align: center; color: var(--color-muted);">${this.emptyMessage}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${this.columns.length}" class="text-center text-muted" style="padding: 24px; text-align: center; color: var(--color-muted);">${Security.escapeHTML(this.emptyMessage)}</td></tr>`;
         return;
       }
 

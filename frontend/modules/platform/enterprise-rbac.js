@@ -15,7 +15,7 @@
         var roles = ['Platform Admin', 'Org Admin', 'DevOps Team', 'Developer', 'Viewer'];
         Object.keys(global.EnterpriseState.rbacMatrix).forEach(function (perm) {
           roles.forEach(function (role) {
-            var chk = document.getElementById('rbac-chk-' + perm.replace(/ /g, '-') + '-' + role.replace(/ /g, '-'));
+            var chk = document.getElementById('rbac-chk-' + encodeURIComponent(perm) + '-' + encodeURIComponent(role));
             if (chk) {
               global.EnterpriseState.rbacMatrix[perm][role] = chk.checked;
             }
@@ -100,7 +100,7 @@
       var tr = document.createElement('tr');
       var tdPerm = document.createElement('td');
       tdPerm.style.textAlign = 'left';
-      tdPerm.innerHTML = '<code style="color:var(--color-primary);">' + perm + '</code>';
+      tdPerm.innerHTML = '<code style="color:var(--color-primary);">' + Security.escapeHTML(perm) + '</code>';
       tr.appendChild(tdPerm);
 
       // Get roles dynamically from first permission mapping
@@ -108,8 +108,8 @@
       roles.forEach(function (role) {
         var td = document.createElement('td');
         var checked = global.EnterpriseState.rbacMatrix[perm][role] ? 'checked' : '';
-        var inputId = 'rbac-chk-' + perm.replace(/ /g, '-') + '-' + role.replace(/ /g, '-');
-        td.innerHTML = '<input type="checkbox" id="' + inputId + '" ' + checked + ' style="transform:scale(1.1);cursor:pointer;">';
+        var inputId = 'rbac-chk-' + encodeURIComponent(perm) + '-' + encodeURIComponent(role);
+        td.innerHTML = '<input type="checkbox" id="' + Security.escapeHTML(inputId) + '" ' + checked + ' style="transform:scale(1.1);cursor:pointer;">';
         tr.appendChild(td);
       });
 

@@ -1,20 +1,49 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 120s
+
 postgres:
-  host: "10.10.10.133"
+  host: "localhost"
   port: 5432
-  user: "myuser"
-  password: "mysecretpassword"
-  dbname: "mydatabase"
+  user: "postgres"
+  password: "password"
+  dbname: "k8sselfhost"
   sslmode: "disable"
   max_conns: 25
   min_conns: 5
+
 redis:
-  host: "10.10.10.133"
+  host: "localhost"
   port: 6379
   password: ""
   db: 0
+
 docker:
-  # TLS should be used
-  host: "tcp://10.10.10.133:2375"
+  host: "unix:///var/run/docker.sock"
   version: "1.41"
+
 nats:
-  url: "nats://10.10.10.133:4222"
+  url: "nats://localhost:4222"
+  max_reconnects: 60
+  reconnect_wait: 2s
+  stream_name: "INCIDENTS"
+  stream_subjects:
+    - "incidents.>"
+
+llm:
+  provider: "ollama"
+  endpoint: "http://localhost:11434"
+  model: "llama3"
+  api_key: ""
+
+telemetry:
+  service_name: "k8sselfhost"
+  service_version: "0.1.0"
+  otlp_endpoint: ""
+  environment: "development"
+
+log:
+  level: "info"

@@ -123,12 +123,12 @@ const DeploymentPromotion = {
     return `
       <div class="promo-card">
         <div class="promo-card-header">
-          <strong>${service}</strong>
-          <span class="badge badge-outline">${version}</span>
+          <strong>${Security.escapeHTML(service)}</strong>
+          <span class="badge badge-outline">${Security.escapeHTML(version)}</span>
         </div>
         <div class="promo-card-body">
-          <div class="text-sm text-muted">${time}</div>
-          <div class="text-sm ${requiresApproval ? 'text-warning' : 'text-success'}">${status}</div>
+          <div class="text-sm text-muted">${Security.escapeHTML(time)}</div>
+          <div class="text-sm ${requiresApproval ? 'text-warning' : 'text-success'}">${Security.escapeHTML(status)}</div>
         </div>
         ${requiresApproval ? `
         <div class="promo-card-actions">

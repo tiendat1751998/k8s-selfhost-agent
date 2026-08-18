@@ -66,11 +66,14 @@ def load_skill_instruction(skill_name: str, fallback_desc: str) -> str:
 def _backend_get(path: str) -> dict:
     """Execute a GET request against the K8S Control Plane backend API."""
     url = f"{BACKEND_BASE_URL}{path}"
+    token = os.getenv("BACKEND_API_TOKEN")
+    if not token:
+        raise ValueError("Missing required environment variable: BACKEND_API_TOKEN")
     req = urllib.request.Request(
         url,
         headers={
             "Accept": "application/json",
-            "Authorization": "Bearer k8s-enterprise-demo-token",
+            "Authorization": f"Bearer {token}",
         },
     )
     try:
@@ -229,7 +232,7 @@ devops_agent = Agent(
         "You are the DevOps Engineer. Manage container orchestration, Kubernetes and Docker Swarm deployments, CI/CD pipelines, and platform health monitoring.",
     ),
     description="Manages container configurations, Kubernetes/Swarm deployment setups, CI/CD integrations, infrastructure scaling, and health metrics monitoring. Use for any Docker/K8s/deploy/infrastructure/container tasks.",
-    tools=[check_system_health, list_cluster_resources, get_capacity_forecast],
+    tools=[check_system_health, list_cluster_resources, get_capacity_forecast, list_incidents],
 )
 
 # 6. QA Agent — test suites, build verification, quality gates
@@ -331,6 +334,7 @@ You are the ONLY agent authorized to receive user requests and route them. You N
 | architecture, design pattern, DDD, Clean Architecture | architect_agent |
 | GitOps, drift, ArgoCD, FluxCD, reconciliation, Git sync | gitops_agent |
 | health, status, monitoring, metrics, capacity, forecast | devops_agent |
+| incident, alert, failure, issue, outage | devops_agent |
 
 ## Rules
 1. **NEVER** do work directly — always delegate to the appropriate specialist.

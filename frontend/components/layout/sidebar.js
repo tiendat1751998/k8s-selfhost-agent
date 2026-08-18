@@ -21,6 +21,7 @@ class EnterpriseSidebar {
         title: 'Infrastructure',
         items: [
           { id: 'kubernetes', label: 'Clusters', icon: '☸️' },
+          { id: 'docker-swarm', label: 'Docker & Swarm', icon: '🐳' },
           { id: 'explorer', label: 'Resource Explorer', icon: '🧭' }
         ]
       },
