@@ -77,14 +77,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 
 func TestJWTAuth_DemoToken(t *testing.T) {
 	handler := JWTAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := r.Context().Value(UserIDKey).(string)
-		userRole := r.Context().Value(UserRoleKey).(string)
-		if userID != "admin-user-id" {
-			t.Errorf("expected userID admin-user-id, got %s", userID)
-		}
-		if userRole != "platform_admin" {
-			t.Errorf("expected userRole platform_admin, got %s", userRole)
-		}
+		t.Error("handler should not be called for invalid demo token")
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -93,8 +86,8 @@ func TestJWTAuth_DemoToken(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", w.Code)
 	}
 }
 
