@@ -119,6 +119,10 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		if platform != nil && platform.Auth != nil {
 			r.Post("/login", platform.Auth.Login)
+			r.Post("/verify-mfa", platform.Auth.VerifyMFA)
+			r.Post("/refresh", platform.Auth.RefreshToken)
+			r.Post("/recovery/verify", platform.Auth.VerifyRecoveryCode)
+			r.Post("/logout", platform.Auth.Logout)
 		}
 	})
 
@@ -261,6 +265,13 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.AI != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/ai", platform.AI.RegisterRoutes)
+			}
+			if platform.Auth != nil {
+				r.Post("/auth/logout", platform.Auth.Logout)
+				r.Post("/auth/totp/setup", platform.Auth.SetupTOTP)
+				r.Post("/auth/totp/verify-setup", platform.Auth.VerifyTOTPSetup)
+				r.Post("/auth/totp/disable", platform.Auth.DisableTOTP)
+				r.Get("/auth/totp/status", platform.Auth.TOTPStatus)
 			}
 			if platform.Search != nil {
 				r.Get("/search", platform.Search.Search)

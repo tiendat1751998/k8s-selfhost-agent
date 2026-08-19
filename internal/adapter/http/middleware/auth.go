@@ -3,9 +3,11 @@ package middleware
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,6 +29,19 @@ var (
 )
 
 const JWTIssuer = "k8s-selfhost"
+
+const (
+	AccessTokenDuration  = 15 * time.Minute
+	PartialTokenDuration = 5 * time.Minute
+	RefreshTokenDuration = 7 * 24 * time.Hour
+)
+
+type TokenType string
+
+const (
+	TokenTypeAccess  TokenType = "access"
+	TokenTypePartial TokenType = "partial"
+)
 
 var jwtSecret []byte
 
@@ -67,23 +82,25 @@ func SetJWTSecret(secret string) {
 
 // JWTClaims holds standard and custom JWT claims.
 type JWTClaims struct {
-	Sub    string `json:"sub"`
-	Role   string `json:"role"`
-	Tenant string `json:"tenant"`
-	Exp    int64  `json:"exp"`
-	Iat    int64  `json:"iat"`
-	Iss    string `json:"iss"`
+	Sub    string    `json:"sub"`
+	Role   string    `json:"role,omitempty"`
+	Tenant string    `json:"tenant,omitempty"`
+	Type   TokenType `json:"type,omitempty"`
+	Exp    int64     `json:"exp"`
+	Iat    int64     `json:"iat"`
+	Iss    string    `json:"iss"`
 }
 
-// GenerateJWT creates a secure HMAC-SHA256 JWT with exp (1 hour), iat, and iss claims.
-func GenerateJWT(userID, role, tenantID string) (string, error) {
+// GenerateAccessToken creates a secure HMAC-SHA256 JWT access token with 15-minute validity.
+func GenerateAccessToken(userID, role, tenantID string) (string, error) {
 	header := `{"alg":"HS256","typ":"JWT"}`
 	now := time.Now()
 	claims := JWTClaims{
 		Sub:    userID,
 		Role:   role,
 		Tenant: tenantID,
-		Exp:    now.Add(1 * time.Hour).Unix(),
+		Type:   TokenTypeAccess,
+		Exp:    now.Add(AccessTokenDuration).Unix(),
 		Iat:    now.Unix(),
 		Iss:    JWTIssuer,
 	}
@@ -103,6 +120,55 @@ func GenerateJWT(userID, role, tenantID string) (string, error) {
 	}
 	signature := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 	return signingString + "." + signature, nil
+}
+
+// GeneratePartialToken creates a limited-scope temporary token (5 min) used between password verification and TOTP confirmation.
+func GeneratePartialToken(userID string) (string, error) {
+	header := `{"alg":"HS256","typ":"JWT"}`
+	now := time.Now()
+	claims := JWTClaims{
+		Sub:  userID,
+		Type: TokenTypePartial,
+		Exp:  now.Add(PartialTokenDuration).Unix(),
+		Iat:  now.Unix(),
+		Iss:  JWTIssuer,
+	}
+
+	payloadBytes, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
+
+	encHeader := base64.RawURLEncoding.EncodeToString([]byte(header))
+	encPayload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	signingString := encHeader + "." + encPayload
+
+	h := hmac.New(sha256.New, jwtSecret)
+	if _, err := h.Write([]byte(signingString)); err != nil {
+		return "", err
+	}
+	signature := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+	return signingString + "." + signature, nil
+}
+
+// GenerateJWT creates an access token (backward-compatible alias for GenerateAccessToken).
+func GenerateJWT(userID, role, tenantID string) (string, error) {
+	return GenerateAccessToken(userID, role, tenantID)
+}
+
+// GenerateRefreshToken generates a cryptographically secure random 32-byte hex-encoded refresh token.
+func GenerateRefreshToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// HashToken produces a SHA-256 hex string of the given raw token string.
+func HashToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
 }
 
 // ValidateJWT verifies signature and standard claims (exp, iat, iss), returning the payload JSON string.
@@ -167,11 +233,26 @@ func ValidateJWT(token string) (string, error) {
 	return string(payloadBytes), nil
 }
 
+// ValidatePartialToken checks that a token is a valid unexpired partial token.
+func ValidatePartialToken(token string) (*JWTClaims, error) {
+	payloadStr, err := ValidateJWT(token)
+	if err != nil {
+		return nil, err
+	}
+	var claims JWTClaims
+	if err := json.Unmarshal([]byte(payloadStr), &claims); err != nil {
+		return nil, errors.New("invalid token claims")
+	}
+	if claims.Type != TokenTypePartial {
+		return nil, errors.New("invalid token type: expected partial token")
+	}
+	return &claims, nil
+}
+
 // Backward compatibility - delegate to pkg/tenancy
 func TenantIDFromContext(ctx context.Context) string { return tenancy.TenantIDFromContext(ctx) }
-func UserIDFromContext(ctx context.Context) string { return tenancy.UserIDFromContext(ctx) }
+func UserIDFromContext(ctx context.Context) string   { return tenancy.UserIDFromContext(ctx) }
 func UserRoleFromContext(ctx context.Context) string { return tenancy.UserRoleFromContext(ctx) }
-
 
 // JWTAuthMiddleware validates the JWT token in the Authorization header or query parameters (for websockets only).
 func JWTAuthMiddleware(next http.Handler) http.Handler {
@@ -195,10 +276,6 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		userID := "guest"
-		userRole := "guest"
-		tenantID := "default-tenant"
-
 		var claims JWTClaims
 
 		payloadStr, err := ValidateJWT(token)
@@ -211,6 +288,16 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			http.Error(w, "invalid token claims", http.StatusUnauthorized)
 			return
 		}
+
+		// REJECT partial tokens - they are only permitted for 2FA verification endpoints
+		if claims.Type == TokenTypePartial {
+			http.Error(w, "unauthorized: partial token cannot access API", http.StatusUnauthorized)
+			return
+		}
+
+		userID := "guest"
+		userRole := "guest"
+		tenantID := "default-tenant"
 
 		if claims.Sub != "" {
 			userID = claims.Sub
