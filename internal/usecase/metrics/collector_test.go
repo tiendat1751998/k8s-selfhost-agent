@@ -340,6 +340,20 @@ func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 		NetRxRate:   1024,
 		NetTxRate:   2048,
 		Processes:   10,
+		TopProcesses: []ProcessMetric{
+			{
+				PID:              413,
+				Name:             "nginx",
+				CommandLine:      "nginx: worker process",
+				User:             "www-data",
+				CPUPercent:       4.20,
+				MemoryBytes:      64 * 1024 * 1024,
+				MemoryPercent:    0.78,
+				ReadBytesPerSec:  1048576,
+				WriteBytesPerSec: 524288,
+				State:            "running",
+			},
+		},
 		Status:      "online",
 		LastSeen:    time.Now().UTC(),
 	})
@@ -390,6 +404,23 @@ func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 	}
 	if overview.Nodes[0].Role != "agent" {
 		t.Errorf("expected node role 'agent', got '%s'", overview.Nodes[0].Role)
+	}
+
+	var foundNode1 *NodeMetrics
+	for i := range overview.Nodes {
+		if overview.Nodes[i].NodeID == "agent-node-1" {
+			foundNode1 = &overview.Nodes[i]
+			break
+		}
+	}
+	if foundNode1 == nil {
+		t.Fatalf("expected agent-node-1 in overview.Nodes")
+	}
+	if len(foundNode1.TopProcesses) != 1 {
+		t.Fatalf("expected 1 top process on agent-node-1, got %d", len(foundNode1.TopProcesses))
+	}
+	if foundNode1.TopProcesses[0].PID != 413 || foundNode1.TopProcesses[0].Name != "nginx" {
+		t.Errorf("unexpected top process in node metrics: %+v", foundNode1.TopProcesses[0])
 	}
 }
 
@@ -555,6 +586,20 @@ func TestCollector_ScrapeAgent_Online(t *testing.T) {
 			"total_tx_bytes_per_sec": 512000,
 		},
 		"processes":    142,
+		"top_processes": []map[string]interface{}{
+			{
+				"pid":                 101,
+				"name":                "nginx",
+				"command_line":        "nginx: worker process",
+				"user":                "www-data",
+				"cpu_percent":         12.5,
+				"memory_bytes":        int64(67108864),
+				"memory_percent":      0.39,
+				"read_bytes_per_sec":  int64(1048576),
+				"write_bytes_per_sec": int64(524288),
+				"state":               "running",
+			},
+		},
 		"collected_at": "2026-08-19T15:20:00Z",
 	}
 
@@ -614,6 +659,12 @@ func TestCollector_ScrapeAgent_Online(t *testing.T) {
 	}
 	if m.NetRxRate != 1024000 {
 		t.Errorf("expected NetRxRate 1024000, got %d", m.NetRxRate)
+	}
+	if len(m.TopProcesses) != 1 {
+		t.Fatalf("expected 1 top process in agent metrics, got %d", len(m.TopProcesses))
+	}
+	if m.TopProcesses[0].PID != 101 || m.TopProcesses[0].Name != "nginx" || m.TopProcesses[0].CPUPercent != 12.5 {
+		t.Errorf("unexpected top process parsed: %+v", m.TopProcesses[0])
 	}
 
 	hostRepo.mu.Lock()
@@ -1131,6 +1182,138 @@ func TestCollector_ScrapeAgent_Recovery_ResolvesIncidentAndBroadcasts(t *testing
 	}
 	if !foundResolvedBroadcast {
 		t.Errorf("expected broadcast message of type 'incident_resolved'")
+	}
+}
+
+func TestCollector_TopProcesses_ScrapeAndTransfer(t *testing.T) {
+	agentResp := map[string]interface{}{
+		"hostname":       "worker-node-highcpu",
+		"os":             "linux",
+		"arch":           "amd64",
+		"uptime_seconds": 7200,
+		"load_average":   []float64{4.5, 3.2, 2.1},
+		"cpu": map[string]interface{}{
+			"count":         4,
+			"usage_percent": 91.5,
+		},
+		"memory": map[string]interface{}{
+			"total_bytes":     int64(16 * 1024 * 1024 * 1024),
+			"used_bytes":      int64(12 * 1024 * 1024 * 1024),
+			"available_bytes": int64(4 * 1024 * 1024 * 1024),
+			"usage_percent":   75.0,
+		},
+		"disks": []map[string]interface{}{
+			{
+				"mount_point":   "/",
+				"total_bytes":   int64(100 * 1024 * 1024 * 1024),
+				"used_bytes":    int64(40 * 1024 * 1024 * 1024),
+				"usage_percent": 40.0,
+				"filesystem":    "ext4",
+			},
+		},
+		"network": map[string]interface{}{
+			"total_rx_bytes_per_sec": 5000000,
+			"total_tx_bytes_per_sec": 2000000,
+		},
+		"processes": 150,
+		"top_processes": []map[string]interface{}{
+			{
+				"pid":                 8912,
+				"name":                "crypto-miner",
+				"command_line":        "/usr/local/bin/worker-task --threads=8",
+				"user":                "appuser",
+				"cpu_percent":         85.2,
+				"memory_bytes":        int64(4 * 1024 * 1024 * 1024),
+				"memory_percent":      25.0,
+				"read_bytes_per_sec":  int64(10485760),
+				"write_bytes_per_sec": int64(5242880),
+				"state":               "running",
+			},
+			{
+				"pid":                 1204,
+				"name":                "dockerd",
+				"command_line":        "/usr/bin/dockerd",
+				"user":                "root",
+				"cpu_percent":         3.5,
+				"memory_bytes":        int64(512 * 1024 * 1024),
+				"memory_percent":      3.12,
+				"read_bytes_per_sec":  int64(10240),
+				"write_bytes_per_sec": int64(40960),
+				"state":               "running",
+			},
+		},
+		"collected_at": "2026-08-19T16:30:00Z",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(agentResp)
+	}))
+	defer srv.Close()
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "worker1",
+				Name:     "worker-node-highcpu",
+				HostType: "agent",
+				Endpoint: srv.URL,
+			},
+		},
+	}
+
+	collector := NewCollector(nil, hostRepo, nil, zap.NewNop(), WithHTTPClient(srv.Client()))
+
+	// Scrape the agent
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[0])
+
+	// Check agent metrics
+	agentMetricsMap := collector.GetAgentMetrics()
+	am, ok := agentMetricsMap["worker1"]
+	if !ok {
+		t.Fatalf("expected agent metrics for worker1")
+	}
+	if len(am.TopProcesses) != 2 {
+		t.Fatalf("expected 2 top processes in agent metrics, got %d", len(am.TopProcesses))
+	}
+	if am.TopProcesses[0].PID != 8912 || am.TopProcesses[0].Name != "crypto-miner" || am.TopProcesses[0].CPUPercent != 85.2 {
+		t.Errorf("unexpected top process in agent metrics: %+v", am.TopProcesses[0])
+	}
+
+	// Run CollectOnce to merge into NodeMetrics
+	overview, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("CollectOnce failed: %v", err)
+	}
+
+	if len(overview.Nodes) != 1 {
+		t.Fatalf("expected 1 node in overview, got %d", len(overview.Nodes))
+	}
+
+	node := overview.Nodes[0]
+	if node.NodeID != "worker1" {
+		t.Errorf("expected node ID 'worker1', got '%s'", node.NodeID)
+	}
+	if len(node.TopProcesses) != 2 {
+		t.Fatalf("expected 2 top processes transferred to node metrics, got %d", len(node.TopProcesses))
+	}
+
+	top1 := node.TopProcesses[0]
+	if top1.PID != 8912 || top1.Name != "crypto-miner" || top1.CPUPercent != 85.2 || top1.MemoryPercent != 25.0 || top1.User != "appuser" {
+		t.Errorf("unexpected top1 process details: %+v", top1)
+	}
+
+	// Verify JSON marshaling includes top_processes
+	jsonData, err := json.Marshal(overview)
+	if err != nil {
+		t.Fatalf("failed to marshal overview: %v", err)
+	}
+	var unmarshaled SystemOverview
+	if err := json.Unmarshal(jsonData, &unmarshaled); err != nil {
+		t.Fatalf("failed to unmarshal overview: %v", err)
+	}
+	if len(unmarshaled.Nodes[0].TopProcesses) != 2 {
+		t.Fatalf("expected 2 top processes after JSON roundtrip, got %d", len(unmarshaled.Nodes[0].TopProcesses))
 	}
 }
 
