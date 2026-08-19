@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import type { Incident } from '../api/compute'
 import type { LogEntry } from './logStore'
+import type { SystemOverview } from '../api/overview'
 
 export interface AgentInfo {
   id: string
@@ -24,6 +25,7 @@ export const useAppStore = defineStore('app', () => {
   const incidents = ref<Incident[]>([])
   const agents = ref<AgentInfo[]>([])
   const logs = ref<LogEntry[]>([])
+  const latestMetrics = ref<SystemOverview | null>(null)
   
   const stats = reactive({
     critical: 0,
@@ -47,6 +49,10 @@ export const useAppStore = defineStore('app', () => {
     logs.value.push(log)
     if (logs.value.length > 200) logs.value.shift()
   }
+
+  function setMetrics(overview: SystemOverview) {
+    latestMetrics.value = overview
+  }
   
   const kubernetes = ref<IntegrationItem[]>([])
   const gitProviders = ref<IntegrationItem[]>([])
@@ -55,8 +61,9 @@ export const useAppStore = defineStore('app', () => {
   const connectionHealth = ref<Record<string, unknown>>({})
   
   return {
-    connection, incidents, agents, logs, stats,
+    connection, incidents, agents, logs, latestMetrics, stats,
     kubernetes, gitProviders, cicd, aiProviders, connectionHealth,
-    setConnection, addIncident, addLog
+    setConnection, addIncident, addLog, setMetrics
   }
 })
+
