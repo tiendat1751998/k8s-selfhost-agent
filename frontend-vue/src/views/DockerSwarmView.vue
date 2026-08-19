@@ -63,60 +63,6 @@ async function fetchDockerData() {
     if (swarmRes.status === 'fulfilled' && swarmRes.value && swarmRes.value.id) {
       swarmInfo.value = swarmRes.value
     }
-
-    // Default mock nodes if empty
-    if (nodes.value.length === 0) {
-      nodes.value = [
-        {
-          id: 'nd-mgr-01-a8x9',
-          name: 'swarm-mgr-01.internal',
-          hostname: 'swarm-mgr-01.internal',
-          role: 'manager',
-          availability: 'active',
-          status: 'ready',
-          version: '26.1.3',
-          engine_version: '26.1.3',
-          cpus: 8,
-          memory: 32 * 1024 * 1024 * 1024,
-          ip: '192.168.1.101',
-          labels: { 'node.role': 'core-ingress', 'env': 'production', 'region': 'us-east-1' },
-          joined_at: '2026-06-15T08:00:00Z',
-          updated_at: '2026-08-19T10:00:00Z'
-        },
-        {
-          id: 'nd-wrk-02-b4y1',
-          name: 'swarm-wrk-02.internal',
-          hostname: 'swarm-wrk-02.internal',
-          role: 'worker',
-          availability: 'active',
-          status: 'ready',
-          version: '26.1.3',
-          engine_version: '26.1.3',
-          cpus: 16,
-          memory: 64 * 1024 * 1024 * 1024,
-          ip: '192.168.1.102',
-          labels: { 'node.role': 'compute-worker', 'env': 'production', 'tier': 'highmem' },
-          joined_at: '2026-06-18T14:20:00Z',
-          updated_at: '2026-08-19T10:00:00Z'
-        },
-        {
-          id: 'nd-wrk-03-c7z5',
-          name: 'swarm-wrk-03.internal',
-          hostname: 'swarm-wrk-03.internal',
-          role: 'worker',
-          availability: 'drain',
-          status: 'ready',
-          version: '26.1.3',
-          engine_version: '26.1.3',
-          cpus: 8,
-          memory: 32 * 1024 * 1024 * 1024,
-          ip: '192.168.1.103',
-          labels: { 'node.role': 'batch-compute', 'env': 'staging', 'maintenance': 'pending' },
-          joined_at: '2026-07-01T09:10:00Z',
-          updated_at: '2026-08-19T10:00:00Z'
-        }
-      ]
-    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to retrieve Docker Swarm telemetry'
     error.value = msg
