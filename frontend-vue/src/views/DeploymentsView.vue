@@ -6,6 +6,7 @@ import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import {
   deploymentsApi,
+  dockerApi,
   type DeploymentApp,
   type DeploymentTemplate
 } from '../api/compute'
@@ -96,15 +97,121 @@ async function fetchDeployments() {
   loading.value = true
   error.value = null
   try {
-    const [depsRes, tmplRes] = await Promise.allSettled([
+    const [depsRes, svcRes, contRes, tmplRes] = await Promise.allSettled([
       deploymentsApi.list(),
+      dockerApi.listServices(),
+      dockerApi.listContainers(),
       deploymentsApi.listTemplates()
     ])
 
-    if (depsRes.status === 'fulfilled') {
-      deployments.value = depsRes.value
+    const allWorkloads: DeploymentApp[] = []
+    const seenNames = new Set<string>()
+
+    // 1. Live Kubernetes and registered cluster deployments from /deployments
+    if (depsRes.status === 'fulfilled' && Array.isArray(depsRes.value)) {
+      for (const d of depsRes.value) {
+        if (!seenNames.has(d.name)) {
+          seenNames.add(d.name)
+          allWorkloads.push({
+            ...d,
+            rawId: d.id || d.name,
+          })
+        }
+      }
     }
-    if (tmplRes.status === 'fulfilled') {
+
+    // 2. Live Docker Swarm services from /docker/services (e.g. tiki_drone, tiki_traefik, tiki_redis, my-nginx)
+    const swarmServiceNames: string[] = []
+    if (svcRes.status === 'fulfilled' && Array.isArray(svcRes.value)) {
+      for (const s of svcRes.value) {
+        swarmServiceNames.push(s.name)
+        let parsedPort = 80
+        if (s.ports && s.ports.length > 0) {
+          const parts = s.ports[0].split(':')
+          if (parts.length >= 2) {
+            const p = parseInt(parts[0], 10)
+            if (!isNaN(p)) parsedPort = p
+          }
+        }
+        const appItem: DeploymentApp = {
+          id: s.id,
+          rawId: s.id,
+          name: s.name,
+          team: s.name.startsWith('tiki_') ? 'Tiki Team' : 'Infrastructure',
+          env: 'production',
+          image: s.image || 'docker.io/library/unknown:latest',
+          target: 'swarm-manager',
+          namespace: s.name.includes('_') ? s.name.split('_')[0] : 'swarm',
+          type: 'swarm',
+          replicas: s.replicas || 0,
+          readyReplicas: s.replicas || 0,
+          availableReplicas: s.replicas || 0,
+          updatedReplicas: s.replicas || 0,
+          status: (s.replicas && s.replicas > 0) ? 'healthy' : 'down',
+          cpu: '500m',
+          memory: '512Mi',
+          port: parsedPort,
+          netType: (s.ports && s.ports.length > 0) ? 'NodePort' : 'Overlay',
+          strategy: 'RollingUpdate',
+          revision: 1,
+        }
+
+        const existingIdx = allWorkloads.findIndex(w => w.name === s.name)
+        if (existingIdx >= 0) {
+          allWorkloads[existingIdx] = { ...allWorkloads[existingIdx], ...appItem }
+        } else {
+          seenNames.add(s.name)
+          allWorkloads.push(appItem)
+        }
+      }
+    }
+
+    // 3. Live Standalone Docker Containers from /docker/containers (e.g. postgres_db, nats, registry)
+    if (contRes.status === 'fulfilled' && Array.isArray(contRes.value)) {
+      for (const c of contRes.value) {
+        const cleanName = (c.name || '').replace(/^\//, '')
+        // Skip swarm task containers (e.g. tiki_drone.1.x7y8z... or my-nginx.1.xxx)
+        const isSwarmTask = swarmServiceNames.some(sName => 
+          cleanName.startsWith(sName + '.') || cleanName.startsWith(sName + '_')
+        )
+        if (isSwarmTask || seenNames.has(cleanName)) {
+          continue
+        }
+
+        seenNames.add(cleanName)
+        const isRunning = c.state === 'running'
+        const isRestarting = c.state === 'restarting'
+        const isDegraded = isRestarting || (c.status && c.status.toLowerCase().includes('unhealthy'))
+        const status = isRunning && !isDegraded ? 'healthy' : isDegraded ? 'degraded' : 'down'
+
+        allWorkloads.push({
+          id: c.id,
+          rawId: c.id,
+          name: cleanName || c.id.slice(0, 12),
+          team: 'DevOps',
+          env: 'production',
+          image: c.image,
+          target: 'docker-engine',
+          namespace: 'docker',
+          type: 'docker',
+          replicas: isRunning ? 1 : 0,
+          readyReplicas: isRunning ? 1 : 0,
+          availableReplicas: isRunning ? 1 : 0,
+          updatedReplicas: isRunning ? 1 : 0,
+          status,
+          cpu: '250m',
+          memory: '256Mi',
+          port: 80,
+          netType: 'Bridge',
+          strategy: 'Recreate',
+          revision: 1,
+        })
+      }
+    }
+
+    deployments.value = allWorkloads
+
+    if (tmplRes.status === 'fulfilled' && Array.isArray(tmplRes.value)) {
       templates.value = tmplRes.value
     }
   } catch (err: unknown) {
@@ -129,8 +236,8 @@ const healthyCount = computed(() => deployments.value.filter(d => d.status === '
 
 const canaryCount = computed(() => deployments.value.filter(d => d.strategy === 'Canary' || (d.canaryWeight && d.canaryWeight > 0)).length)
 const blueGreenCount = computed(() => deployments.value.filter(d => d.strategy === 'BlueGreen').length)
-const k8sCount = computed(() => deployments.value.filter(d => d.type === 'kubernetes').length)
-const swarmCount = computed(() => deployments.value.filter(d => d.type === 'swarm' || d.type === 'docker').length)
+const k8sCount = computed(() => deployments.value.filter(d => d.type === 'kubernetes' || d.type === 'k8s').length)
+const swarmCount = computed(() => deployments.value.filter(d => d.type === 'swarm' || d.type === 'docker' || d.type === 'container').length)
 
 const namespaces = computed(() => {
   const set = new Set<string>()
@@ -149,10 +256,10 @@ const filteredDeployments = computed(() => {
     if (activeFilterTab.value === 'bluegreen' && d.strategy !== 'BlueGreen') {
       return false
     }
-    if (activeFilterTab.value === 'k8s' && d.type !== 'kubernetes') {
+    if (activeFilterTab.value === 'k8s' && d.type !== 'kubernetes' && d.type !== 'k8s') {
       return false
     }
-    if (activeFilterTab.value === 'swarm' && d.type !== 'swarm' && d.type !== 'docker') {
+    if (activeFilterTab.value === 'swarm' && d.type !== 'swarm' && d.type !== 'docker' && d.type !== 'container') {
       return false
     }
 
@@ -222,13 +329,17 @@ async function handleScale() {
   if (!selectedApp.value) return
   actionLoading.value = 'scale'
   try {
-    await deploymentsApi.scale({
-      type: selectedApp.value.type,
-      cluster: selectedApp.value.target,
-      namespace: selectedApp.value.namespace,
-      name: selectedApp.value.name,
-      replicas: targetReplicas.value
-    })
+    if (selectedApp.value.type === 'swarm') {
+      await dockerApi.scaleService(selectedApp.value.rawId || selectedApp.value.name, targetReplicas.value)
+    } else {
+      await deploymentsApi.scale({
+        type: selectedApp.value.type,
+        cluster: selectedApp.value.target,
+        namespace: selectedApp.value.namespace,
+        name: selectedApp.value.rawId || selectedApp.value.name,
+        replicas: targetReplicas.value
+      })
+    }
     selectedApp.value.replicas = targetReplicas.value
     selectedApp.value.readyReplicas = targetReplicas.value
     selectedApp.value.availableReplicas = targetReplicas.value
@@ -246,13 +357,19 @@ async function handleScale() {
 async function handleRestart(app: DeploymentApp) {
   actionLoading.value = app.name
   try {
-    await deploymentsApi.restart({
-      type: app.type,
-      cluster: app.target,
-      namespace: app.namespace,
-      name: app.name
-    })
-    showToast(`Rolling restart dispatched for ${app.name}!`, 'success')
+    if (app.type === 'docker') {
+      await dockerApi.toggleContainer(app.rawId || app.name, 'stop')
+      await dockerApi.toggleContainer(app.rawId || app.name, 'start')
+      showToast(`Container ${app.name} restarted!`, 'success')
+    } else {
+      await deploymentsApi.restart({
+        type: app.type,
+        cluster: app.target,
+        namespace: app.namespace,
+        name: app.rawId || app.name
+      })
+      showToast(`Rolling restart dispatched for ${app.name}!`, 'success')
+    }
     await fetchDeployments()
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Restart failed'
@@ -270,7 +387,7 @@ async function handleApplyCanaryWeight() {
       type: selectedApp.value.type,
       cluster: selectedApp.value.target,
       namespace: selectedApp.value.namespace,
-      name: selectedApp.value.name,
+      name: selectedApp.value.rawId || selectedApp.value.name,
       weight: canarySliderWeight.value
     })
     selectedApp.value.canaryWeight = canarySliderWeight.value
@@ -292,7 +409,7 @@ async function handlePromoteCanary(app: DeploymentApp) {
       type: app.type,
       cluster: app.target,
       namespace: app.namespace,
-      name: app.name,
+      name: app.rawId || app.name,
       weight: 100
     })
     app.canaryWeight = 100
@@ -317,7 +434,7 @@ async function handleAbortCanary(app: DeploymentApp) {
       type: app.type,
       cluster: app.target,
       namespace: app.namespace,
-      name: app.name,
+      name: app.rawId || app.name,
       weight: 0
     })
     app.canaryWeight = 0
@@ -339,7 +456,7 @@ async function handleBlueGreenCutover(app: DeploymentApp, targetColor: 'blue' | 
       type: app.type,
       cluster: app.target,
       namespace: app.namespace,
-      name: app.name,
+      name: app.rawId || app.name,
       targetColor
     })
     app.blueGreenActive = targetColor
@@ -361,7 +478,7 @@ async function handleRollback(app: DeploymentApp) {
       type: app.type,
       cluster: app.target,
       namespace: app.namespace,
-      name: app.name,
+      name: app.rawId || app.name,
       revision: Math.max(1, (app.revision || 2) - 1)
     })
     showToast(`Rollback to revision #${Math.max(1, (app.revision || 2) - 1)} dispatched for ${app.name}!`, 'success')
@@ -383,7 +500,7 @@ async function handleTogglePause(app: DeploymentApp) {
       type: app.type,
       cluster: app.target,
       namespace: app.namespace,
-      name: app.name,
+      name: app.rawId || app.name,
       action
     })
     app.paused = !app.paused
@@ -397,16 +514,20 @@ async function handleTogglePause(app: DeploymentApp) {
 }
 
 async function handleDelete(app: DeploymentApp) {
-  if (!confirm(`Are you sure you want to terminate deployment ${app.name} in namespace ${app.namespace}?`)) return
+  if (!confirm(`Are you sure you want to terminate workload ${app.name}?`)) return
   actionLoading.value = app.name
   try {
-    await deploymentsApi.delete({
-      type: app.type,
-      cluster: app.target,
-      namespace: app.namespace,
-      name: app.name
-    })
-    showToast(`Deployment ${app.name} terminated.`, 'info')
+    if (app.type === 'docker') {
+      await dockerApi.toggleContainer(app.rawId || app.name, 'stop')
+    } else {
+      await deploymentsApi.delete({
+        type: app.type,
+        cluster: app.target,
+        namespace: app.namespace,
+        name: app.rawId || app.name
+      })
+    }
+    showToast(`Workload ${app.name} terminated.`, 'info')
     showInspectorDrawer.value = false
     await fetchDeployments()
   } catch (err: unknown) {
@@ -789,7 +910,7 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'swarm' }"
             @click="activeFilterTab = 'swarm'"
           >
-            <span>🐳 Swarm</span>
+            <span>🐳 Docker / Swarm</span>
             <span class="pill-badge">{{ swarmCount }}</span>
           </button>
         </div>
@@ -821,7 +942,7 @@ function copyToClipboard(text: string) {
         :data="filteredDeployments"
         :loading="loading"
         :error="error"
-        empty-message="No matching workload deployments found. Click '+ Deploy Workload' to launch a service."
+        empty-message="0 Workloads Found. No active Kubernetes deployments or Docker Swarm services detected on this cluster/node."
         searchable
         search-placeholder="Search inside table rows..."
       >
