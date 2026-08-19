@@ -2,12 +2,19 @@ package catalog
 
 import "context"
 
-// Repository defines the data access interface for the service catalog.
 type Repository interface {
-	List(ctx context.Context, category string, limit, offset int) ([]ServiceTemplate, int, error)
-	GetByID(ctx context.Context, id string) (*ServiceTemplate, error)
-	Create(ctx context.Context, t *ServiceTemplate) error
-	Update(ctx context.Context, t *ServiceTemplate) error
+	Create(ctx context.Context, entry *ServiceEntry) error
+	GetByID(ctx context.Context, id string) (*ServiceEntry, error)
+	List(ctx context.Context, tenantID string, filter ListFilter) ([]ServiceEntry, error)
+	Update(ctx context.Context, entry *ServiceEntry) error
 	Delete(ctx context.Context, id string) error
-	IncrementDeployCount(ctx context.Context, id string) error
+	Stats(ctx context.Context, tenantID string) (*CatalogStats, error)
+}
+
+// ListFilter for querying the catalog
+type ListFilter struct {
+	Type      string `json:"type,omitempty"`
+	Lifecycle string `json:"lifecycle,omitempty"`
+	OwnerTeam string `json:"owner_team,omitempty"`
+	Search    string `json:"search,omitempty"` // name or description contains
 }
