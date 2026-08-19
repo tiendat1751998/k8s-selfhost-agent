@@ -10,6 +10,7 @@ import {
   type DeploymentApp,
   type DeploymentTemplate
 } from '../api/compute'
+import { formatContainerName, formatImageName } from '../utils/dockerFormat'
 
 // ==========================================
 // 1. STATE MANAGEMENT
@@ -271,8 +272,10 @@ const filteredDeployments = computed(() => {
     // Search query
     if (searchQuery.value.trim()) {
       const q = searchQuery.value.toLowerCase().trim()
-      const matchName = d.name.toLowerCase().includes(q)
-      const matchImage = d.image.toLowerCase().includes(q)
+      const formatted = formatContainerName(d.name)
+      const formattedImg = formatImageName(d.image)
+      const matchName = d.name.toLowerCase().includes(q) || formatted.serviceName.toLowerCase().includes(q) || (formatted.slotBadgeText && formatted.slotBadgeText.toLowerCase().includes(q))
+      const matchImage = d.image.toLowerCase().includes(q) || formattedImg.display.toLowerCase().includes(q)
       const matchNs = (d.namespace || '').toLowerCase().includes(q)
       const matchTeam = (d.team || '').toLowerCase().includes(q)
       const matchStrategy = (d.strategy || '').toLowerCase().includes(q)
@@ -950,8 +953,15 @@ function copyToClipboard(text: string) {
         <template #cell-name="{ row }">
           <div class="workload-name-cell">
             <div class="name-primary-row">
-              <span class="workload-name font-mono cursor-pointer" @click="openInspector(row)">
-                {{ row.name }}
+              <span class="workload-name font-mono cursor-pointer" @click="openInspector(row)" :title="row.name">
+                {{ formatContainerName(row.name).serviceName }}
+              </span>
+              <span
+                v-if="formatContainerName(row.name).slotBadgeText"
+                class="slot-badge font-mono"
+                :title="`Full Task Name: ${row.name}`"
+              >
+                {{ formatContainerName(row.name).slotBadgeText }}
               </span>
               <span class="runtime-pill font-mono">{{ row.type }}</span>
             </div>
@@ -993,7 +1003,7 @@ function copyToClipboard(text: string) {
         <!-- Container Image Cell -->
         <template #cell-image="{ row }">
           <div class="image-cell">
-            <span class="image-name font-mono" :title="row.image">{{ row.image }}</span>
+            <span class="image-name font-mono" :title="row.image">{{ formatImageName(row.image).display }}</span>
             <div class="image-sub-row font-mono">
               <span class="rev-badge">rev #{{ row.revision || 1 }}</span>
               <span v-if="row.paused" class="paused-badge font-sans">⏸️ Paused</span>
@@ -1086,14 +1096,14 @@ function copyToClipboard(text: string) {
     <ModalDrawer
       v-model:show="showScaleModal"
       mode="modal"
-      :title="`Scale Workload: ${selectedApp?.name || ''}`"
+      :title="`Scale Workload: ${formatContainerName(selectedApp?.name).serviceName || ''}`"
       subtitle="Dynamically adjust horizontal pod replica count and capacity"
       max-width="480px"
     >
       <div v-if="selectedApp" class="scale-modal-content">
         <div class="scale-info-row font-mono">
           <span class="text-muted">Target Scope:</span>
-          <span class="text-cyan">{{ selectedApp.namespace }}/{{ selectedApp.name }} ({{ selectedApp.type }})</span>
+          <span class="text-cyan">{{ selectedApp.namespace }}/{{ formatContainerName(selectedApp.name).serviceName }} ({{ selectedApp.type }})</span>
         </div>
 
         <div class="scale-slider-wrap">
@@ -1145,7 +1155,7 @@ function copyToClipboard(text: string) {
     <ModalDrawer
       v-model:show="showStrategyModal"
       mode="modal"
-      :title="`Rollout & Traffic Strategy: ${selectedApp?.name || ''}`"
+      :title="`Rollout & Traffic Strategy: ${formatContainerName(selectedApp?.name).serviceName || ''}`"
       subtitle="Manage live Canary weights, Blue-Green zero-downtime cutover, and revision rollbacks"
       max-width="640px"
     >
@@ -1369,7 +1379,7 @@ function copyToClipboard(text: string) {
     <ModalDrawer
       v-model:show="showInspectorDrawer"
       mode="drawer"
-      :title="`App Inspector: ${selectedApp?.name || ''}`"
+      :title="`App Inspector: ${formatContainerName(selectedApp?.name).serviceName || ''}`"
       :subtitle="`${selectedApp?.namespace || 'default'} · ${selectedApp?.type?.toUpperCase()} Workload`"
       max-width="620px"
     >
@@ -1411,7 +1421,11 @@ function copyToClipboard(text: string) {
           <div class="spec-grid font-mono">
             <div class="spec-row">
               <span class="spec-label">Workload Name</span>
-              <span class="spec-val text-cyan">{{ selectedApp.name }}</span>
+              <span class="spec-val text-cyan" :title="selectedApp.name">{{ formatContainerName(selectedApp.name).serviceName }}</span>
+            </div>
+            <div class="spec-row" v-if="formatContainerName(selectedApp.name).isSwarmTask">
+              <span class="spec-label">Full Swarm Task</span>
+              <span class="spec-val font-mono">{{ selectedApp.name }}</span>
             </div>
             <div class="spec-row">
               <span class="spec-label">Namespace</span>
@@ -1427,7 +1441,7 @@ function copyToClipboard(text: string) {
             </div>
             <div class="spec-row">
               <span class="spec-label">Container Image</span>
-              <span class="spec-val text-emerald">{{ selectedApp.image }}</span>
+              <span class="spec-val text-emerald" :title="selectedApp.image">{{ formatImageName(selectedApp.image).display }}</span>
             </div>
             <div class="spec-row">
               <span class="spec-label">Replicas Running</span>
@@ -1969,6 +1983,21 @@ function copyToClipboard(text: string) {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 4px;
   color: var(--text-muted);
+}
+
+.slot-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .name-sub-row {
