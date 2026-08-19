@@ -3,38 +3,47 @@
 # Usage: ./deploy-agent.sh user@remote-ip
 set -e
 REMOTE=$1
-AGENT_BIN="./k8s-agent"
 
 if [ -z "$REMOTE" ]; then
     echo "Usage: $0 user@remote-ip"
     exit 1
 fi
 
-echo "Building agent..."
-GOOS=linux GOARCH=amd64 go build -o $AGENT_BIN ./cmd/agent
+# Build agent for Linux
+echo "🔨 Building agent for linux/amd64..."
+GOOS=linux GOARCH=amd64 go build -o k8s-agent ./cmd/agent
 
-echo "Copying to $REMOTE..."
-scp $AGENT_BIN $REMOTE:~/k8s-agent
+# Copy binary
+echo "📦 Copying to $REMOTE..."
+scp k8s-agent $REMOTE:~/k8s-agent
 
-echo "Installing on remote..."
-ssh $REMOTE 'sudo mkdir -p /opt/k8scontrol && \
-  sudo mv ~/k8s-agent /opt/k8scontrol/ && \
-  sudo chmod +x /opt/k8scontrol/k8s-agent && \
-  cat << UNIT | sudo tee /etc/systemd/system/k8s-agent.service
+# Install and run (no sudo needed!)
+echo "🚀 Installing on $REMOTE..."
+ssh -t $REMOTE 'chmod +x ~/k8s-agent && \
+  mkdir -p ~/.config/systemd/user && \
+  cat > ~/.config/systemd/user/k8s-agent.service << UNIT
 [Unit]
 Description=K8sControl Monitoring Agent
 After=network.target
+
 [Service]
 Type=simple
-ExecStart=/opt/k8scontrol/k8s-agent --port 9100
+ExecStart=%h/k8s-agent --port 9100
 Restart=always
 RestartSec=5
-[Install]
-WantedBy=multi-user.target
-UNIT
-  sudo systemctl daemon-reload && \
-  sudo systemctl enable k8s-agent && \
-  sudo systemctl restart k8s-agent && \
-  echo "Agent running on port 9100"'
 
-echo "Done! Add http://$REMOTE:9100 in K8sControl UI"
+[Install]
+WantedBy=default.target
+UNIT
+  systemctl --user daemon-reload && \
+  systemctl --user enable k8s-agent && \
+  systemctl --user restart k8s-agent && \
+  loginctl enable-linger $(whoami) && \
+  echo "" && \
+  echo "✅ Agent running on port 9100" && \
+  echo "📊 Test: curl http://localhost:9100/health"'
+
+echo ""
+echo "🎉 Done! Add this server in K8sControl UI:"
+echo "   Docker Swarm → Node Management → Add Docker Host"
+echo "   Endpoint: http://$(echo $REMOTE | cut -d@ -f2):9100"
