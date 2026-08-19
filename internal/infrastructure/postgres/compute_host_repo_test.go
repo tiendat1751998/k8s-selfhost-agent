@@ -243,3 +243,58 @@ func TestComputeHostRepo_UpdateAndStatus(t *testing.T) {
 		t.Errorf("expected status 'connected', got %s", statusCheck.Status)
 	}
 }
+
+func TestComputeHostRepo_ListAll(t *testing.T) {
+	pool := getComputeHostTestPool(t)
+	defer pool.Close()
+
+	tenantA := fmt.Sprintf("tenant-listall-a-%d", time.Now().UnixNano())
+	tenantB := fmt.Sprintf("tenant-listall-b-%d", time.Now().UnixNano())
+
+	ctxA := computeHostTenantContext(tenantA)
+	ctxB := computeHostTenantContext(tenantB)
+	ctxAdmin := computeHostAdminContext()
+	ctxBg := context.Background()
+
+	repo := postgres.NewComputeHostRepo(pool)
+
+	hostA := &docker.ComputeHost{
+		Name:     fmt.Sprintf("host-listall-a-%d", time.Now().UnixNano()),
+		Endpoint: "tcp://10.10.10.1:2375",
+		TenantID: tenantA,
+	}
+	if err := repo.Create(ctxA, hostA); err != nil {
+		t.Fatalf("failed to create host A: %v", err)
+	}
+	defer func() { _ = repo.Delete(ctxAdmin, hostA.ID) }()
+
+	hostB := &docker.ComputeHost{
+		Name:     fmt.Sprintf("host-listall-b-%d", time.Now().UnixNano()),
+		Endpoint: "tcp://10.10.10.2:2375",
+		TenantID: tenantB,
+	}
+	if err := repo.Create(ctxB, hostB); err != nil {
+		t.Fatalf("failed to create host B: %v", err)
+	}
+	defer func() { _ = repo.Delete(ctxAdmin, hostB.ID) }()
+
+	// ListAll with empty background context (no tenant) should return both hosts
+	allHosts, err := repo.ListAll(ctxBg)
+	if err != nil {
+		t.Fatalf("ListAll failed: %v", err)
+	}
+
+	foundA, foundB := false, false
+	for _, h := range allHosts {
+		if h.ID == hostA.ID {
+			foundA = true
+		}
+		if h.ID == hostB.ID {
+			foundB = true
+		}
+	}
+	if !foundA || !foundB {
+		t.Errorf("expected ListAll to find both host A and host B, got foundA=%v, foundB=%v", foundA, foundB)
+	}
+}
+

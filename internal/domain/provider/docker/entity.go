@@ -115,7 +115,9 @@ type ComputeHostRepository interface {
 	Create(ctx context.Context, host *ComputeHost) error
 	GetByID(ctx context.Context, id string) (*ComputeHost, error)
 	List(ctx context.Context, tenantID string) ([]ComputeHost, error)
+	ListAll(ctx context.Context) ([]ComputeHost, error)
 	Update(ctx context.Context, host *ComputeHost) error
 	Delete(ctx context.Context, id string) error
 	UpdateStatus(ctx context.Context, id string, status string, lastHealthCheck time.Time) error
 }
+

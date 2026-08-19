@@ -192,6 +192,27 @@ func (r *computeHostRepo) List(ctx context.Context, tenantID string) ([]docker.C
 	}
 	defer rows.Close()
 
+	return scanComputeHosts(rows)
+}
+
+// ListAll returns all compute hosts across all tenants without tenant filtering.
+func (r *computeHostRepo) ListAll(ctx context.Context) ([]docker.ComputeHost, error) {
+	query := `
+		SELECT id, name, host_type, endpoint, tls_enabled, tls_ca, tls_cert, tls_key, api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
+		FROM compute_hosts
+		ORDER BY name ASC
+	`
+
+	rows, err := r.getDB(ctx).Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("listing all compute hosts: %w", err)
+	}
+	defer rows.Close()
+
+	return scanComputeHosts(rows)
+}
+
+func scanComputeHosts(rows pgx.Rows) ([]docker.ComputeHost, error) {
 	hosts := make([]docker.ComputeHost, 0)
 	for rows.Next() {
 		var host docker.ComputeHost
