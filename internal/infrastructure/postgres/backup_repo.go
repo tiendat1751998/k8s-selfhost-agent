@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/backup"
+	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
@@ -22,10 +23,52 @@ func (r *BackupRepo) getDB(ctx context.Context) DBTX {
 	return ExtractTx(ctx, r.pool)
 }
 
+func parseAndDecryptCredentials(rawCreds []byte) (map[string]string, error) {
+	if len(rawCreds) == 0 {
+		return make(map[string]string), nil
+	}
+
+	var wrapper map[string]string
+	if err := json.Unmarshal(rawCreds, &wrapper); err != nil {
+		return nil, errors.Wrap(err, "unmarshaling credentials json")
+	}
+
+	if encData, ok := wrapper["encrypted_data"]; ok && encData != "" {
+		decrypted, err := crypto.Decrypt(encData)
+		if err != nil {
+			return nil, errors.Wrap(err, "decrypting credentials")
+		}
+		var creds map[string]string
+		if err := json.Unmarshal([]byte(decrypted), &creds); err != nil {
+			return nil, errors.Wrap(err, "unmarshaling decrypted credentials")
+		}
+		return creds, nil
+	}
+
+	return wrapper, nil
+}
+
 func (r *BackupRepo) CreateStorage(ctx context.Context, storage *backup.BackupStorage) error {
-	creds, err := json.Marshal(storage.Credentials)
-	if err != nil {
-		return errors.Wrap(err, "marshaling credentials")
+	var credsJSON []byte
+	var err error
+
+	if len(storage.Credentials) > 0 {
+		rawCreds, err := json.Marshal(storage.Credentials)
+		if err != nil {
+			return errors.Wrap(err, "marshaling credentials")
+		}
+
+		encCreds, err := crypto.Encrypt(string(rawCreds))
+		if err != nil {
+			return errors.Wrap(err, "encrypting credentials")
+		}
+
+		credsJSON, err = json.Marshal(map[string]string{"encrypted_data": encCreds})
+		if err != nil {
+			return errors.Wrap(err, "marshaling encrypted credentials wrapper")
+		}
+	} else {
+		credsJSON = []byte("{}")
 	}
 
 	query := `
@@ -34,7 +77,7 @@ func (r *BackupRepo) CreateStorage(ctx context.Context, storage *backup.BackupSt
 		RETURNING id`
 	
 	err = r.getDB(ctx).QueryRow(ctx, query,
-		storage.TenantID, storage.Name, storage.Type, storage.Endpoint, storage.Bucket, creds, storage.CreatedAt, storage.UpdatedAt,
+		storage.TenantID, storage.Name, storage.Type, storage.Endpoint, storage.Bucket, credsJSON, storage.CreatedAt, storage.UpdatedAt,
 	).Scan(&storage.ID)
 
 	if err != nil {
@@ -61,9 +104,11 @@ func (r *BackupRepo) ListStorages(ctx context.Context, tenantID string) ([]*back
 			return nil, errors.Wrap(err, "scanning backup storage")
 		}
 		if len(creds) > 0 {
-			if err := json.Unmarshal(creds, &s.Credentials); err != nil {
-				return nil, errors.Wrap(err, "unmarshaling credentials")
+			decryptedCreds, err := parseAndDecryptCredentials(creds)
+			if err != nil {
+				return nil, err
 			}
+			s.Credentials = decryptedCreds
 		}
 		storages = append(storages, &s)
 	}
@@ -87,9 +132,11 @@ func (r *BackupRepo) GetStorage(ctx context.Context, id string) (*backup.BackupS
 		return nil, errors.Wrap(err, "querying backup storage by id")
 	}
 	if len(creds) > 0 {
-		if err := json.Unmarshal(creds, &s.Credentials); err != nil {
-			return nil, errors.Wrap(err, "unmarshaling credentials")
+		decryptedCreds, err := parseAndDecryptCredentials(creds)
+		if err != nil {
+			return nil, err
 		}
+		s.Credentials = decryptedCreds
 	}
 	return &s, nil
 }

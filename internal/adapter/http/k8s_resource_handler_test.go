@@ -17,26 +17,26 @@ import (
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 )
 
-type mockAuditRepo struct {
+type mockK8sAuditRepo struct {
 	actions []string
 }
 
-func (m *mockAuditRepo) ListFindings(ctx context.Context, status string) ([]audit.AuditFinding, error) {
+func (m *mockK8sAuditRepo) ListFindings(ctx context.Context, status string) ([]audit.AuditFinding, error) {
 	return nil, nil
 }
-func (m *mockAuditRepo) GetFinding(ctx context.Context, id string) (*audit.AuditFinding, error) {
+func (m *mockK8sAuditRepo) GetFinding(ctx context.Context, id string) (*audit.AuditFinding, error) {
 	return nil, nil
 }
-func (m *mockAuditRepo) ResolveFinding(ctx context.Context, id string) error {
+func (m *mockK8sAuditRepo) ResolveFinding(ctx context.Context, id string) error {
 	return nil
 }
-func (m *mockAuditRepo) RecordRun(ctx context.Context, run *audit.AuditRun) error {
+func (m *mockK8sAuditRepo) RecordRun(ctx context.Context, run *audit.AuditRun) error {
 	return nil
 }
-func (m *mockAuditRepo) GetLastRun(ctx context.Context) (*audit.AuditRun, error) {
+func (m *mockK8sAuditRepo) GetLastRun(ctx context.Context) (*audit.AuditRun, error) {
 	return nil, nil
 }
-func (m *mockAuditRepo) RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error {
+func (m *mockK8sAuditRepo) RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error {
 	m.actions = append(m.actions, action+":"+targetType+":"+targetName)
 	return nil
 }
@@ -96,7 +96,7 @@ func TestK8sResourceHandler_LiveOperations(t *testing.T) {
 	}
 	fakeClient := fake.NewSimpleClientset(secret)
 	repo := infraK8s.NewResourceRepoWithInterface(fakeClient, nil)
-	auditMock := &mockAuditRepo{}
+	auditMock := &mockK8sAuditRepo{}
 	handler := NewK8sResourceHandler(repo, auditMock)
 
 	r := chi.NewRouter()

@@ -7,11 +7,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/fleet"
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
-	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
@@ -74,11 +72,7 @@ func (r *fleetRepo) ListClusters(ctx context.Context) ([]fleet.Cluster, error) {
 			}
 		}
 		if encryptedToken != nil && *encryptedToken != "" {
-			if decrypted, decErr := crypto.Decrypt(*encryptedToken); decErr != nil {
-				logger.WithContext(ctx).Warn("failed to decrypt cluster token", zap.String("cluster_id", c.ID), zap.Error(decErr))
-			} else {
-				c.EncryptedToken = decrypted
-			}
+			c.EncryptedToken = *encryptedToken
 		}
 		clusters = append(clusters, c)
 	}
@@ -129,11 +123,7 @@ func (r *fleetRepo) GetCluster(ctx context.Context, id string) (*fleet.Cluster, 
 		}
 	}
 	if encryptedToken != nil && *encryptedToken != "" {
-		if decrypted, decErr := crypto.Decrypt(*encryptedToken); decErr != nil {
-			logger.WithContext(ctx).Warn("failed to decrypt cluster token", zap.String("cluster_id", c.ID), zap.Error(decErr))
-		} else {
-			c.EncryptedToken = decrypted
-		}
+		c.EncryptedToken = *encryptedToken
 	}
 	return &c, nil
 }

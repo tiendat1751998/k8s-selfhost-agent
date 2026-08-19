@@ -12,7 +12,7 @@ type Cluster struct {
 	Status    string    `json:"status"`     // active, offline, upgrading, maintenance
 	Version   string    `json:"version"`
 	Nodes               int                    `json:"nodes"`
-	EncryptedToken      string                 `json:"encrypted_token,omitempty"`
+	EncryptedToken      string                 `json:"-"`
 	ImportMethod        string                 `json:"import_method"`
 	KubeconfigHash      string                 `json:"kubeconfig_hash,omitempty"`
 	LastHealthCheck     *time.Time             `json:"last_health_check,omitempty"`

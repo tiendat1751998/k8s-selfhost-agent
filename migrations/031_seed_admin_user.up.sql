@@ -1,3 +1,5 @@
+-- WARNING: FOR DEVELOPMENT / TESTING ONLY!
+-- DO NOT USE DEFAULT CREDENTIALS (admin@k8s.local / admin123) IN PRODUCTION ENVIRONMENTS.
 -- Seed admin user: admin@k8s.local / admin123
 -- bcrypt hash for "admin123" at cost 10
 INSERT INTO users (id, email, password_hash, first_name, last_name, status)

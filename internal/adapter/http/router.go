@@ -152,13 +152,13 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 
 		// K8s-dependent routes: ALWAYS mounted. When handler is nil, return 503 Service Unavailable.
 		if platform != nil && platform.Explorer != nil {
-			r.Route("/explorer", platform.Explorer.RegisterRoutes)
+			r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/explorer", platform.Explorer.RegisterRoutes)
 		} else {
 			mountK8sUnavailable(r, "/explorer")
 		}
 
 		if platform != nil && platform.Deployments != nil {
-			r.Route("/deployments", platform.Deployments.RegisterRoutes)
+			r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/deployments", platform.Deployments.RegisterRoutes)
 		} else {
 			mountK8sUnavailable(r, "/deployments")
 		}
@@ -176,7 +176,22 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 		}
 
 		if platform != nil && platform.K8s != nil {
-			r.Route("/k8s/{cluster}", platform.K8s.RegisterRoutes)
+			r.Route("/k8s/{cluster}", func(sub chi.Router) {
+				sub.With(mw.RBACMiddleware("platform_admin")).Post("/apply", platform.K8s.ApplyYAML)
+				sub.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Group(func(k8sSub chi.Router) {
+					k8sSub.Get("/namespaces", platform.K8s.ListNamespaces)
+					k8sSub.Post("/namespaces", platform.K8s.CreateNamespace)
+					k8sSub.Delete("/namespaces/{name}", platform.K8s.DeleteNamespace)
+
+					k8sSub.Route("/resources/{kind}", func(resSub chi.Router) {
+						resSub.Get("/", platform.K8s.ListResources)
+						resSub.Post("/", platform.K8s.CreateResource)
+						resSub.Get("/{name}", platform.K8s.GetResource)
+						resSub.Put("/{name}", platform.K8s.UpdateResource)
+						resSub.Delete("/{name}", platform.K8s.DeleteResource)
+					})
+				})
+			})
 		} else {
 			mountK8sUnavailable(r, "/k8s")
 		}
@@ -187,79 +202,79 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 				platform.Dashboard.RegisterRoutes(r)
 			}
 			if platform.Notification != nil {
-				r.Route("/notifications", platform.Notification.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/notifications", platform.Notification.RegisterRoutes)
 			}
 			if platform.Automation != nil {
-				r.Route("/automation", platform.Automation.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/automation", platform.Automation.RegisterRoutes)
 			}
 			if platform.Compliance != nil {
-				r.Route("/compliance", platform.Compliance.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/compliance", platform.Compliance.RegisterRoutes)
 			}
 			if platform.Runbook != nil {
-				r.Route("/runbooks", platform.Runbook.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/runbooks", platform.Runbook.RegisterRoutes)
 			}
 			if platform.Observability != nil {
-				r.Route("/observability", platform.Observability.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/observability", platform.Observability.RegisterRoutes)
 			}
 			if platform.Timeline != nil {
-				r.Route("/timeline", platform.Timeline.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/timeline", platform.Timeline.RegisterRoutes)
 			}
 			if platform.Drift != nil {
-				r.Route("/drift", platform.Drift.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/drift", platform.Drift.RegisterRoutes)
 			}
 			if platform.Correlation != nil {
-				r.Route("/correlation", platform.Correlation.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/correlation", platform.Correlation.RegisterRoutes)
 			}
 			if platform.Changes != nil {
-				r.Route("/changes", platform.Changes.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/changes", platform.Changes.RegisterRoutes)
 			}
 			if platform.Promotion != nil {
-				r.Route("/promotions", platform.Promotion.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/promotions", platform.Promotion.RegisterRoutes)
 			}
 			if platform.Tagging != nil {
-				r.Route("/tags", platform.Tagging.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/tags", platform.Tagging.RegisterRoutes)
 			}
 			if platform.Reporting != nil {
-				r.Route("/reports-center", platform.Reporting.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/reports-center", platform.Reporting.RegisterRoutes)
 			}
 			if platform.Fleet != nil {
-				r.Route("/fleet", platform.Fleet.RegisterRoutes)
+				r.With(mw.RBACMiddleware("platform_admin")).Route("/fleet", platform.Fleet.RegisterRoutes)
 			}
 			if platform.Audit != nil {
 				r.Route("/audit", platform.Audit.RegisterRoutes)
 			}
 			if platform.Docker != nil {
-				r.Route("/docker", platform.Docker.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/docker", platform.Docker.RegisterRoutes)
 			}
 			if platform.AI != nil {
-				r.Route("/ai", platform.AI.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/ai", platform.AI.RegisterRoutes)
 			}
 			if platform.Search != nil {
 				r.Get("/search", platform.Search.Search)
 			}
 			if platform.Cost != nil {
-				r.Route("/cost", platform.Cost.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/cost", platform.Cost.RegisterRoutes)
 			}
 			if platform.Backup != nil {
-				r.Route("/backup", platform.Backup.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/backup", platform.Backup.RegisterRoutes)
 			}
 			if platform.Agents != nil {
-				r.Route("/agents", platform.Agents.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/agents", platform.Agents.RegisterRoutes)
 			}
 			if platform.Tenancy != nil {
-				r.Route("/tenancy", platform.Tenancy.RegisterRoutes)
+				r.With(mw.RBACMiddleware("platform_admin")).Route("/tenancy", platform.Tenancy.RegisterRoutes)
 			}
 			if platform.Alert != nil {
-				r.Route("/alerts", platform.Alert.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/alerts", platform.Alert.RegisterRoutes)
 			}
 			if platform.Cloud != nil {
-				r.Route("/cloud", platform.Cloud.RegisterRoutes)
+				r.With(mw.RBACMiddleware("platform_admin")).Route("/cloud", platform.Cloud.RegisterRoutes)
 			}
 			if platform.Settings != nil {
-				r.Route("/settings", platform.Settings.RegisterRoutes)
+				r.With(mw.RBACMiddleware("platform_admin")).Route("/settings", platform.Settings.RegisterRoutes)
 			}
 			if platform.Catalog != nil {
-				r.Route("/catalog", platform.Catalog.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/catalog", platform.Catalog.RegisterRoutes)
 			}
 		}
 	})
