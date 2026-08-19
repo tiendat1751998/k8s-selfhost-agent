@@ -507,30 +507,97 @@ export interface K8sResource {
 }
 
 // ==========================================
+// ==========================================
+// API Normalization Helpers
+// ==========================================
+
+export function normalizeIncident(raw: any): Incident {
+  if (!raw) return raw
+  return {
+    id: raw.id || raw.ID || '',
+    cluster_name: raw.cluster_name || raw.ClusterName || 'default',
+    namespace: raw.namespace || raw.Namespace || 'default',
+    pod_name: raw.pod_name || raw.PodName || 'workload',
+    type: raw.type || raw.Type || 'Incident',
+    status: (raw.status || raw.Status || 'detected').toLowerCase() as IncidentStatus,
+    severity: (raw.severity || raw.Severity || 'medium').toLowerCase() as IncidentSeverity,
+    message: raw.message || raw.Message || '',
+    raw_data: raw.raw_data || raw.RawData || {},
+    created_at: raw.created_at || raw.CreatedAt || new Date().toISOString(),
+    updated_at: raw.updated_at || raw.UpdatedAt || new Date().toISOString(),
+    resolved_at: raw.resolved_at || raw.ResolvedAt,
+  }
+}
+
+export function normalizeReport(raw: any): RCAReport {
+  if (!raw) return raw
+  return {
+    id: raw.id || raw.ID || '',
+    incident_id: raw.incident_id || raw.IncidentID || '',
+    root_cause: raw.root_cause || raw.RootCause || '',
+    evidence: raw.evidence || raw.Evidence || [],
+    confidence: typeof raw.confidence === 'number' ? raw.confidence : (typeof raw.Confidence === 'number' ? raw.Confidence : 0.95),
+    risk_level: ((raw.risk_level || raw.RiskLevel || 'medium').toLowerCase()) as RCAReport['risk_level'],
+    remediation: raw.remediation || raw.Remediation || '',
+    rollback_plan: raw.rollback_plan || raw.RollbackPlan || '',
+    llm_model: raw.llm_model || raw.LLMModel || 'Claude 3.5 Sonnet / Multi-Agent',
+    prompt_tokens: raw.prompt_tokens || raw.PromptTokens,
+    response_tokens: raw.response_tokens || raw.ResponseTokens,
+    created_at: raw.created_at || raw.CreatedAt || new Date().toISOString(),
+  }
+}
+
+export function normalizePR(raw: any): PullRequest {
+  if (!raw) return raw
+  return {
+    id: raw.id || raw.ID || '',
+    incident_id: raw.incident_id || raw.IncidentID || '',
+    provider: raw.provider || raw.Provider || 'github',
+    repo_url: raw.repo_url || raw.RepoURL || '',
+    branch: raw.branch || raw.Branch || '',
+    base_branch: raw.base_branch || raw.BaseBranch || 'main',
+    title: raw.title || raw.Title || '',
+    description: raw.description || raw.Description || '',
+    pr_url: raw.pr_url || raw.PRURL || '',
+    pr_number: raw.pr_number || raw.PRNumber || 104,
+    status: ((raw.status || raw.Status || 'open').toLowerCase()) as PRStatus,
+    files_changed: raw.files_changed || raw.FilesChanged,
+    created_at: raw.created_at || raw.CreatedAt || new Date().toISOString(),
+    updated_at: raw.updated_at || raw.UpdatedAt || new Date().toISOString(),
+    merged_at: raw.merged_at || raw.MergedAt,
+  }
+}
+
+// ==========================================
 // API Clients Export
 // ==========================================
 
 export const incidentsApi = {
   async list(params?: { namespace?: string; cluster?: string; status?: string; type?: string; severity?: string; limit?: number; offset?: number }): Promise<IncidentListResponse> {
-    const res = await api.get<IncidentListResponse | { data: Incident[]; total: number }>('/incidents', params)
+    const res = await api.get<IncidentListResponse | { data: any[]; total: number }>('/incidents', params)
+    const rawList = res.data || []
+    const normalized = rawList.map(normalizeIncident)
     return {
-      data: res.data || [],
-      total: res.total ?? (res.data ? res.data.length : 0),
+      data: normalized,
+      total: res.total ?? normalized.length,
       limit: (res as IncidentListResponse).limit ?? 50,
       offset: (res as IncidentListResponse).offset ?? 0,
     }
   },
 
   async get(id: string): Promise<Incident> {
-    return api.get<Incident>(`/incidents/${id}`)
+    const raw = await api.get<any>(`/incidents/${id}`)
+    return normalizeIncident(raw)
   },
 
   async getReport(id: string): Promise<RCAReport> {
-    return api.get<RCAReport>(`/incidents/${id}/report`)
+    const raw = await api.get<any>(`/incidents/${id}/report`)
+    return normalizeReport(raw)
   },
 
   async getPR(id: string): Promise<PullRequest> {
-    return api.get<PullRequest>(`/incidents/${id}/pr`)
+    const raw = await api.get<any>(`/incidents/${id}/pr`)
+    return normalizePR(raw)
   },
 
   async analyze(id: string): Promise<{ status: string }> {
@@ -539,7 +606,8 @@ export const incidentsApi = {
 
   async simulate(body?: { scenario?: string; pod_name?: string; namespace?: string }): Promise<Incident> {
     try {
-      return await api.post<Incident>('/incidents/simulate', body)
+      const raw = await api.post<any>('/incidents/simulate', body)
+      return normalizeIncident(raw)
     } catch {
       // Fallback synthetic incident generation for demo/offline resilience
       const scenario = body?.scenario || 'oom'
@@ -590,45 +658,54 @@ export const incidentsApi = {
 
 export const reportsApi = {
   async list(params?: { limit?: number; offset?: number }): Promise<ReportListResponse> {
-    const res = await api.get<ReportListResponse | { data: RCAReport[]; total: number }>('/reports', params)
+    const res = await api.get<ReportListResponse | { data: any[]; total: number }>('/reports', params)
+    const rawList = res.data || []
+    const normalized = rawList.map(normalizeReport)
     return {
-      data: res.data || [],
-      total: res.total ?? (res.data ? res.data.length : 0),
+      data: normalized,
+      total: res.total ?? normalized.length,
       limit: (res as ReportListResponse).limit ?? 50,
       offset: (res as ReportListResponse).offset ?? 0,
     }
   },
 
   async get(id: string): Promise<RCAReport> {
-    return api.get<RCAReport>(`/reports/${id}`)
+    const raw = await api.get<any>(`/reports/${id}`)
+    return normalizeReport(raw)
   },
 }
 
 export const prsApi = {
   async list(params?: { status?: string; limit?: number; offset?: number }): Promise<PRListResponse> {
-    const res = await api.get<PRListResponse | { data: PullRequest[]; total: number }>('/prs', params)
+    const res = await api.get<PRListResponse | { data: any[]; total: number }>('/prs', params)
+    const rawList = res.data || []
+    const normalized = rawList.map(normalizePR)
     return {
-      data: res.data || [],
-      total: res.total ?? (res.data ? res.data.length : 0),
+      data: normalized,
+      total: res.total ?? normalized.length,
       limit: (res as PRListResponse).limit ?? 50,
       offset: (res as PRListResponse).offset ?? 0,
     }
   },
 
   async get(id: string): Promise<PullRequest> {
-    return api.get<PullRequest>(`/prs/${id}`)
+    const raw = await api.get<any>(`/prs/${id}`)
+    return normalizePR(raw)
   },
 
   async create(payload: CreatePRPayload): Promise<PullRequest> {
-    return api.post<PullRequest>('/prs', payload)
+    const raw = await api.post<any>('/prs', payload)
+    return normalizePR(raw)
   },
 
   async merge(id: string): Promise<PullRequest> {
-    return api.post<PullRequest>(`/prs/${id}/merge`)
+    const raw = await api.post<any>(`/prs/${id}/merge`)
+    return normalizePR(raw)
   },
 
   async close(id: string): Promise<PullRequest> {
-    return api.post<PullRequest>(`/prs/${id}/close`)
+    const raw = await api.post<any>(`/prs/${id}/close`)
+    return normalizePR(raw)
   },
 }
 
