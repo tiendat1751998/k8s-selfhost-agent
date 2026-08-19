@@ -322,6 +322,7 @@
                 <option value="mariadb">MariaDB</option>
                 <option value="mongodb">MongoDB</option>
                 <option value="redis">Redis</option>
+                <option value="nats">NATS JetStream</option>
               </select>
             </div>
             <div class="form-group" style="flex: 1;">
@@ -654,6 +655,7 @@ function getDbIcon(type: string): string {
   if (t.includes('maria')) return '🦭'
   if (t.includes('mongo')) return '🍃'
   if (t.includes('redis')) return '⚡'
+  if (t.includes('nats')) return '📬'
   return '📦'
 }
 

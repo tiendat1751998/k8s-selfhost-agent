@@ -224,7 +224,7 @@ func (r *BackupRepo) ListJobs(ctx context.Context, tenantID string) ([]*backup.B
 		       COALESCE(local_storage_path, ''), COALESCE(cloud_storage_path, ''),
 		       size_bytes, COALESCE(compressed_size_bytes, 0), duration_ms, 
 		       COALESCE(checksum_sha256, ''), COALESCE(wal_start_lsn, ''), COALESCE(wal_end_lsn, ''),
-		       COALESCE(verification_status, 'unverified'), verified_at, error_message, created_at, updated_at 
+		       COALESCE(verification_status, 'unverified'), verified_at, COALESCE(error_message, ''), created_at, updated_at 
 		FROM backup_jobs WHERE tenant_id = $1 ORDER BY created_at DESC`
 	query, args := BuildTenantQuery(ctx, query, tenantID)
 
@@ -259,7 +259,7 @@ func (r *BackupRepo) GetJob(ctx context.Context, id string) (*backup.BackupJob, 
 		       COALESCE(local_storage_path, ''), COALESCE(cloud_storage_path, ''),
 		       size_bytes, COALESCE(compressed_size_bytes, 0), duration_ms, 
 		       COALESCE(checksum_sha256, ''), COALESCE(wal_start_lsn, ''), COALESCE(wal_end_lsn, ''),
-		       COALESCE(verification_status, 'unverified'), verified_at, error_message, created_at, updated_at 
+		       COALESCE(verification_status, 'unverified'), verified_at, COALESCE(error_message, ''), created_at, updated_at 
 		FROM backup_jobs WHERE id = $1`
 	query, args := BuildTenantQuery(ctx, query, id)
 
@@ -305,7 +305,7 @@ func (r *BackupRepo) UpdateJob(ctx context.Context, job *backup.BackupJob) error
 func (r *BackupRepo) CreateRestore(ctx context.Context, restore *backup.RestoreJob) error {
 	query := `
 		INSERT INTO restore_jobs (
-			tenant_id, backup_job_id, target_db_host, target_db_name, pitr_timestamp, 
+			tenant_id, backup_job_id, target_db_host, target_db_name, pitr_timestamp,
 			dry_run, source_storage_type, verification_log, status, error_message, created_at, updated_at
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -327,7 +327,7 @@ func (r *BackupRepo) ListRestores(ctx context.Context, tenantID string) ([]*back
 	query := `
 		SELECT id, tenant_id, backup_job_id, target_db_host, target_db_name, pitr_timestamp,
 		       COALESCE(dry_run, false), COALESCE(source_storage_type, ''), COALESCE(verification_log, ''),
-		       status, error_message, created_at, updated_at 
+		       status, COALESCE(error_message, ''), created_at, updated_at 
 		FROM restore_jobs WHERE tenant_id = $1 ORDER BY created_at DESC`
 	query, args := BuildTenantQuery(ctx, query, tenantID)
 
@@ -358,7 +358,7 @@ func (r *BackupRepo) GetRestore(ctx context.Context, id string) (*backup.Restore
 	query := `
 		SELECT id, tenant_id, backup_job_id, target_db_host, target_db_name, pitr_timestamp,
 		       COALESCE(dry_run, false), COALESCE(source_storage_type, ''), COALESCE(verification_log, ''),
-		       status, error_message, created_at, updated_at 
+		       status, COALESCE(error_message, ''), created_at, updated_at 
 		FROM restore_jobs WHERE id = $1`
 	query, args := BuildTenantQuery(ctx, query, id)
 

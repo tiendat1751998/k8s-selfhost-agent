@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
+	"strings"
 
 	"github.com/datdt/k8sselfhost/internal/domain/tenancy"
 )
@@ -86,20 +86,74 @@ func (r *tenancyRepo) GetRBAC(ctx context.Context) (map[string]map[string]bool, 
 	}
 	defer rows.Close()
 
-	result := make(map[string]map[string]bool)
+	roleMatrix := make(map[string]map[string]bool)
+
 	for rows.Next() {
-		var perm string
-		var rolesJSON []byte
-		if err := rows.Scan(&perm, &rolesJSON); err != nil {
+		var rowKey string
+		var jsonBytes []byte
+		if err := rows.Scan(&rowKey, &jsonBytes); err != nil {
 			return nil, fmt.Errorf("scanning rbac row: %w", err)
 		}
-		var roleMap map[string]bool
-		if err := json.Unmarshal(rolesJSON, &roleMap); err != nil {
-			roleMap = make(map[string]bool)
+		var valMap map[string]bool
+		if err := json.Unmarshal(jsonBytes, &valMap); err != nil {
+			valMap = make(map[string]bool)
 		}
-		result[perm] = roleMap
+
+		// Check if rowKey is a role name
+		isRole := strings.Contains(rowKey, "Admin") || strings.Contains(rowKey, "DevOps") ||
+			strings.Contains(rowKey, "Developer") || strings.Contains(rowKey, "Viewer") ||
+			strings.Contains(rowKey, "Auditor")
+
+		if isRole {
+			if roleMatrix[rowKey] == nil {
+				roleMatrix[rowKey] = make(map[string]bool)
+			}
+			for perm, allowed := range valMap {
+				roleMatrix[rowKey][perm] = allowed
+			}
+		} else {
+			// rowKey is a permission name (e.g. "pods:read", "Clusters Read")
+			for role, allowed := range valMap {
+				if roleMatrix[role] == nil {
+					roleMatrix[role] = make(map[string]bool)
+				}
+				roleMatrix[role][rowKey] = allowed
+			}
+		}
 	}
-	return result, nil
+
+	// If empty, return default enterprise RBAC matrix
+	if len(roleMatrix) == 0 {
+		roleMatrix = map[string]map[string]bool{
+			"Platform Admin": {
+				"pods:read": true, "pods:write": true, "deployments:scale": true,
+				"secrets:manage": true, "backups:execute": true, "nodes:drain": true,
+				"ai:configure": true, "changes:approve": true, "audit:view": true,
+			},
+			"DevOps Team": {
+				"pods:read": true, "pods:write": true, "deployments:scale": true,
+				"secrets:manage": true, "backups:execute": true, "nodes:drain": false,
+				"ai:configure": true, "changes:approve": true, "audit:view": true,
+			},
+			"Developer": {
+				"pods:read": true, "pods:write": false, "deployments:scale": false,
+				"secrets:manage": false, "backups:execute": false, "nodes:drain": false,
+				"ai:configure": false, "changes:approve": false, "audit:view": true,
+			},
+			"Viewer": {
+				"pods:read": true, "pods:write": false, "deployments:scale": false,
+				"secrets:manage": false, "backups:execute": false, "nodes:drain": false,
+				"ai:configure": false, "changes:approve": false, "audit:view": false,
+			},
+			"Security Auditor": {
+				"pods:read": true, "pods:write": false, "deployments:scale": false,
+				"secrets:manage": false, "backups:execute": false, "nodes:drain": false,
+				"ai:configure": false, "changes:approve": false, "audit:view": true,
+			},
+		}
+	}
+
+	return roleMatrix, nil
 }
 
 func (r *tenancyRepo) CreateOrganization(ctx context.Context, org tenancy.Organization) error {

@@ -52,16 +52,21 @@ func (r *createStorageRequest) Validate() error {
 	return nil
 }
 
+func normalizeTenantID(r *http.Request) string {
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" || tenantID == "default" {
+		return "default-tenant"
+	}
+	return tenantID
+}
+
 func (h *BackupHandler) CreateStorage(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSON[createStorageRequest](w, r)
 	if !ok {
 		return
 	}
 
-	tenantID := middleware.TenantIDFromContext(r.Context())
-	if tenantID == "" {
-		tenantID = "default"
-	}
+	tenantID := normalizeTenantID(r)
 
 	storage := &backup.BackupStorage{
 		TenantID:    tenantID,
@@ -81,10 +86,7 @@ func (h *BackupHandler) CreateStorage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BackupHandler) ListStorages(w http.ResponseWriter, r *http.Request) {
-	tenantID := middleware.TenantIDFromContext(r.Context())
-	if tenantID == "" {
-		tenantID = "default"
-	}
+	tenantID := normalizeTenantID(r)
 
 	storages, err := h.usecase.ListStorages(r.Context(), tenantID)
 	if err != nil {
@@ -132,10 +134,7 @@ func (h *BackupHandler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := middleware.TenantIDFromContext(r.Context())
-	if tenantID == "" {
-		tenantID = "default"
-	}
+	tenantID := normalizeTenantID(r)
 
 	policy := &backup.BackupPolicy{
 		TenantID:       tenantID,
@@ -159,10 +158,7 @@ func (h *BackupHandler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BackupHandler) ListPolicies(w http.ResponseWriter, r *http.Request) {
-	tenantID := middleware.TenantIDFromContext(r.Context())
-	if tenantID == "" {
-		tenantID = "default"
-	}
+	tenantID := normalizeTenantID(r)
 
 	policies, err := h.usecase.ListPolicies(r.Context(), tenantID)
 	if err != nil {
@@ -195,10 +191,7 @@ func (h *BackupHandler) TriggerBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := middleware.TenantIDFromContext(r.Context())
-	if tenantID == "" {
-		tenantID = "default"
-	}
+	tenantID := normalizeTenantID(r)
 
 	job := &backup.BackupJob{
 		TenantID:    tenantID,
@@ -216,10 +209,7 @@ func (h *BackupHandler) TriggerBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BackupHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
-	tenantID := middleware.TenantIDFromContext(r.Context())
-	if tenantID == "" {
-		tenantID = "default"
-	}
+	tenantID := normalizeTenantID(r)
 
 	jobs, err := h.usecase.ListJobs(r.Context(), tenantID)
 	if err != nil {
@@ -252,10 +242,7 @@ func (h *BackupHandler) TriggerRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := middleware.TenantIDFromContext(r.Context())
-	if tenantID == "" {
-		tenantID = "default"
-	}
+	tenantID := normalizeTenantID(r)
 
 	restore := &backup.RestoreJob{
 		TenantID:     tenantID,
@@ -273,10 +260,7 @@ func (h *BackupHandler) TriggerRestore(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BackupHandler) ListRestores(w http.ResponseWriter, r *http.Request) {
-	tenantID := middleware.TenantIDFromContext(r.Context())
-	if tenantID == "" {
-		tenantID = "default"
-	}
+	tenantID := normalizeTenantID(r)
 
 	restores, err := h.usecase.ListRestores(r.Context(), tenantID)
 	if err != nil {

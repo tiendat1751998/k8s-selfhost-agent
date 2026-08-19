@@ -122,8 +122,15 @@
         </div>
 
         <div class="rb-actions">
-          <button class="btn btn-primary" style="flex: 1;" @click="openExecutionModal(rb)">
-            <span>⚡ View & Execute Steps</span>
+          <button 
+            class="btn btn-primary" 
+            :disabled="executingId === rb.id"
+            @click="handleExecuteRunbook(rb)"
+          >
+            <span>{{ executingId === rb.id ? '⚡ Running...' : '⚡ 1-Click Run' }}</span>
+          </button>
+          <button class="btn btn-secondary" style="flex: 1;" @click="openExecutionModal(rb)">
+            <span>Inspect Steps ({{ rb.steps_count }})</span>
           </button>
           <button class="btn btn-secondary btn-sm" title="Delete Runbook" @click="handleDeleteRunbook(rb.id)">
             <span>🗑️</span>
@@ -207,11 +214,18 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="selectedRunbook = null">Close</button>
           <button 
-            class="btn btn-primary" 
+            class="btn btn-secondary" 
             :disabled="completedSteps.size === parsedSteps.length"
             @click="markAllStepsComplete"
           >
             <span>{{ completedSteps.size === parsedSteps.length ? '✅ All Steps Verified' : 'Mark All Complete' }}</span>
+          </button>
+          <button 
+            class="btn btn-primary" 
+            :disabled="executingId === selectedRunbook.id"
+            @click="handleExecuteRunbook(selectedRunbook); markAllStepsComplete()"
+          >
+            <span>{{ executingId === selectedRunbook.id ? '⚡ Executing Runbook...' : '⚡ 1-Click Dispatch Playbook' }}</span>
           </button>
         </div>
       </div>
@@ -406,6 +420,8 @@ const parsedSteps = computed<ParsedStep[]>(() => {
   return steps.length > 0 ? steps : [{ title: selectedRunbook.value.title, content: selectedRunbook.value.content }]
 })
 
+const executingId = ref<string | null>(null)
+
 function openExecutionModal(rb: Runbook) {
   selectedRunbook.value = rb
   completedSteps.value = new Set()
@@ -416,6 +432,24 @@ function toggleStep(idx: number) {
     completedSteps.value.delete(idx)
   } else {
     completedSteps.value.add(idx)
+  }
+}
+
+async function handleExecuteRunbook(rb: Runbook) {
+  executingId.value = rb.id
+  statusMessage.value = null
+  try {
+    const res = await runbookApi.executeRunbook(rb.id)
+    statusMessage.value = {
+      type: 'success',
+      text: res.message || `Runbook "${rb.title}" execution completed successfully.`,
+    }
+    rb.last_used_at = res.executed_at || new Date().toISOString()
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to execute runbook'
+    statusMessage.value = { type: 'error', text: msg }
+  } finally {
+    executingId.value = null
   }
 }
 

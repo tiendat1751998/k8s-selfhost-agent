@@ -8,14 +8,16 @@ import (
 
 func TestBuiltinTemplates_ValidAndComplete(t *testing.T) {
 	templates := scaffold.GetBuiltinTemplates()
-	if len(templates) != 3 {
-		t.Fatalf("expected 3 built-in templates, got %d", len(templates))
+	if len(templates) != 5 {
+		t.Fatalf("expected 5 built-in templates, got %d", len(templates))
 	}
 
 	expectedIDs := map[string]bool{
-		scaffold.BuiltinIDGoAPI:      true,
-		scaffold.BuiltinIDNodeWeb:    true,
-		scaffold.BuiltinIDPostgresDB: true,
+		scaffold.BuiltinIDGoMicroservice: true,
+		scaffold.BuiltinIDNodeFastify:    true,
+		scaffold.BuiltinIDPythonFastAPI:  true,
+		scaffold.BuiltinIDNginxProxy:     true,
+		scaffold.BuiltinIDPostgresDB:     true,
 	}
 
 	for _, tmpl := range templates {

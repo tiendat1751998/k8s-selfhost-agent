@@ -16,12 +16,14 @@ const (
 
 // Standard framework types
 const (
-	FrameworkGoChi        = "go-chi"
-	FrameworkNodeExpress  = "node-express"
+	FrameworkGoChi         = "go-chi"
+	FrameworkNodeExpress   = "node-express"
+	FrameworkNodeFastify   = "node-fastify"
 	FrameworkPythonFastAPI = "python-fastapi"
-	FrameworkReact        = "react"
-	FrameworkVue          = "vue"
-	FrameworkPostgres     = "postgres"
+	FrameworkNginx         = "nginx"
+	FrameworkReact         = "react"
+	FrameworkVue           = "vue"
+	FrameworkPostgres      = "postgres"
 )
 
 // Template represents a reusable application scaffold template.

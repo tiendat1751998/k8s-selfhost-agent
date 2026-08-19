@@ -105,6 +105,7 @@ func TestAllPostgresRepos_QueryCallsUseBuildTenantQuery(t *testing.T) {
 		"automation_repo.go":    {"*"},                             // Non-tenant tables (automation_rules, automation_executions)
 		"backup_repo.go":        {"*"},                             // Non-tenant tables (backup_history)
 		"changes_repo.go":       {"*"},                             // Non-tenant tables (change_requests, maintenance_windows)
+		"capacity_repo.go":      {"*"},                             // Non-tenant tables (capacity_forecasts)
 		"compliance_repo.go":    {"*"},                             // Non-tenant tables (compliance_frameworks, compliance_violations)
 		"correlation_repo.go":   {"*"},                             // Non-tenant tables (correlated_events)
 		"cost_repo.go":          {"*"},                             // Non-tenant tables (cluster_costs, namespace_costs, resource_waste)
