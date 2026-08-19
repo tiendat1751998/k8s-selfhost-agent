@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/system"
 	"go.uber.org/zap"
 
+	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 )
 
@@ -890,6 +891,246 @@ func TestCollector_ScrapeAllAgents_EvictsDeletedHosts(t *testing.T) {
 
 	if _, ok := metricsMap["host-deleted"]; ok {
 		t.Errorf("expected host-deleted to be evicted from agentMetrics")
+	}
+}
+
+type mockIncidentRepo struct {
+	mu        sync.Mutex
+	incidents map[string]*incident.Incident
+	created   []*incident.Incident
+	updated   []*incident.Incident
+}
+
+func newMockIncidentRepo() *mockIncidentRepo {
+	return &mockIncidentRepo{
+		incidents: make(map[string]*incident.Incident),
+	}
+}
+
+func (m *mockIncidentRepo) Create(ctx context.Context, inc *incident.Incident) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if inc.ID == "" {
+		inc.ID = "inc-test-1"
+	}
+	m.incidents[inc.Namespace+"/"+inc.PodName+"/"+string(inc.Type)] = inc
+	m.created = append(m.created, inc)
+	return nil
+}
+
+func (m *mockIncidentRepo) GetByID(ctx context.Context, id string) (*incident.Incident, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, inc := range m.incidents {
+		if inc.ID == id {
+			return inc, nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *mockIncidentRepo) Update(ctx context.Context, inc *incident.Incident) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.incidents[inc.Namespace+"/"+inc.PodName+"/"+string(inc.Type)] = inc
+	m.updated = append(m.updated, inc)
+	return nil
+}
+
+func (m *mockIncidentRepo) List(ctx context.Context, filter incident.Filter) ([]*incident.Incident, int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var res []*incident.Incident
+	for _, inc := range m.incidents {
+		res = append(res, inc)
+	}
+	return res, int64(len(res)), nil
+}
+
+func (m *mockIncidentRepo) GetByPodAndType(ctx context.Context, namespace, podName string, incidentType incident.Type) (*incident.Incident, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	inc, ok := m.incidents[namespace+"/"+podName+"/"+string(incidentType)]
+	if !ok {
+		return nil, nil
+	}
+	return inc, nil
+}
+
+func TestCollector_ScrapeAgent_Failure_CreatesIncidentAndBroadcasts(t *testing.T) {
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-failing",
+				Name:     "worker-srv-01",
+				HostType: "agent",
+				Endpoint: "http://127.0.0.1:59998",
+			},
+		},
+	}
+
+	incRepo := newMockIncidentRepo()
+	broadcaster := &mockBroadcaster{}
+
+	collector := NewCollector(
+		nil,
+		hostRepo,
+		broadcaster,
+		zap.NewNop(),
+		WithIncidentRepo(incRepo),
+	)
+
+	// Scrape failing agent
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[0])
+
+	incRepo.mu.Lock()
+	createdCount := len(incRepo.created)
+	incRepo.mu.Unlock()
+
+	if createdCount != 1 {
+		t.Fatalf("expected 1 incident to be created, got %d", createdCount)
+	}
+
+	incRepo.mu.Lock()
+	createdInc := incRepo.created[0]
+	incRepo.mu.Unlock()
+
+	if createdInc.Type != incident.TypeNodeNotReady {
+		t.Errorf("expected incident type %s, got %s", incident.TypeNodeNotReady, createdInc.Type)
+	}
+	if createdInc.Namespace != "infrastructure" {
+		t.Errorf("expected incident namespace 'infrastructure', got '%s'", createdInc.Namespace)
+	}
+	if createdInc.PodName != "worker-srv-01" {
+		t.Errorf("expected incident pod_name 'worker-srv-01', got '%s'", createdInc.PodName)
+	}
+	if createdInc.Severity != incident.SeverityCritical {
+		t.Errorf("expected incident severity %s, got %s", incident.SeverityCritical, createdInc.Severity)
+	}
+
+	msgs := broadcaster.getMessages()
+	foundIncidentBroadcast := false
+	for _, msg := range msgs {
+		if msg.msgType == "incident" {
+			foundIncidentBroadcast = true
+			break
+		}
+	}
+	if !foundIncidentBroadcast {
+		t.Errorf("expected broadcast message of type 'incident'")
+	}
+
+	// Consecutive scrape failure should NOT create duplicate incident
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[0])
+
+	incRepo.mu.Lock()
+	createdCountAfter := len(incRepo.created)
+	incRepo.mu.Unlock()
+
+	if createdCountAfter != 1 {
+		t.Errorf("expected still 1 incident (no duplicates), got %d", createdCountAfter)
+	}
+}
+
+func TestCollector_ScrapeAgent_Recovery_ResolvesIncidentAndBroadcasts(t *testing.T) {
+	agentResp := map[string]interface{}{
+		"hostname":       "worker-srv-02",
+		"os":             "linux",
+		"arch":           "amd64",
+		"uptime_seconds": 3600,
+		"load_average":   []float64{0.1, 0.1, 0.1},
+		"cpu": map[string]interface{}{
+			"count":         4,
+			"usage_percent": 10.0,
+		},
+		"memory": map[string]interface{}{
+			"total_bytes":     int64(8589934592),
+			"used_bytes":      int64(2147483648),
+			"available_bytes": int64(6442450944),
+			"usage_percent":   25.0,
+		},
+		"disks": []map[string]interface{}{
+			{
+				"mount_point":   "/",
+				"total_bytes":   int64(53687091200),
+				"used_bytes":    int64(10737418240),
+				"usage_percent": 20.0,
+				"filesystem":    "ext4",
+			},
+		},
+		"network": map[string]interface{}{
+			"total_rx_bytes_per_sec": 100,
+			"total_tx_bytes_per_sec": 200,
+		},
+		"processes":    20,
+		"collected_at": "2026-08-19T16:00:00Z",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(agentResp)
+	}))
+	defer srv.Close()
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-recovering",
+				Name:     "worker-srv-02",
+				HostType: "agent",
+				Endpoint: srv.URL,
+			},
+		},
+	}
+
+	incRepo := newMockIncidentRepo()
+	activeInc, _ := incident.New("fleet-primary", "infrastructure", "worker-srv-02", incident.TypeNodeNotReady, incident.SeverityCritical, "host down")
+	activeInc.ID = "inc-active-02"
+	_ = incRepo.Create(context.Background(), activeInc)
+
+	broadcaster := &mockBroadcaster{}
+
+	collector := NewCollector(
+		nil,
+		hostRepo,
+		broadcaster,
+		zap.NewNop(),
+		WithHTTPClient(srv.Client()),
+		WithIncidentRepo(incRepo),
+	)
+
+	// Scrape online agent — should resolve incident
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[0])
+
+	incRepo.mu.Lock()
+	updatedCount := len(incRepo.updated)
+	incRepo.mu.Unlock()
+
+	if updatedCount != 1 {
+		t.Fatalf("expected 1 incident update (resolved), got %d", updatedCount)
+	}
+
+	incRepo.mu.Lock()
+	resolvedInc := incRepo.updated[0]
+	incRepo.mu.Unlock()
+
+	if resolvedInc.Status != incident.StatusResolved {
+		t.Errorf("expected incident status %s, got %s", incident.StatusResolved, resolvedInc.Status)
+	}
+	if resolvedInc.ResolvedAt == nil {
+		t.Errorf("expected non-nil ResolvedAt timestamp")
+	}
+
+	msgs := broadcaster.getMessages()
+	foundResolvedBroadcast := false
+	for _, msg := range msgs {
+		if msg.msgType == "incident_resolved" {
+			foundResolvedBroadcast = true
+			break
+		}
+	}
+	if !foundResolvedBroadcast {
+		t.Errorf("expected broadcast message of type 'incident_resolved'")
 	}
 }
 

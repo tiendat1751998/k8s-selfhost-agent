@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types/system"
 	"go.uber.org/zap"
 
+	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 )
 
@@ -126,6 +127,7 @@ type DockerAPIClient interface {
 type Collector struct {
 	dockerClient    DockerAPIClient
 	computeHostRepo docker.ComputeHostRepository
+	incRepo         incident.Repository
 	httpClient      *http.Client
 	agentMetrics    map[string]*AgentMetrics
 	agentMu         sync.RWMutex
@@ -181,6 +183,13 @@ func WithHTTPClient(client *http.Client) Option {
 func WithComputeHostRepo(repo docker.ComputeHostRepository) Option {
 	return func(c *Collector) {
 		c.computeHostRepo = repo
+	}
+}
+
+// WithIncidentRepo sets the incident repository for auto-incident management on agent failure and recovery.
+func WithIncidentRepo(repo incident.Repository) Option {
+	return func(c *Collector) {
+		c.incRepo = repo
 	}
 }
 
@@ -441,6 +450,25 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 	if c.computeHostRepo != nil {
 		_ = c.computeHostRepo.UpdateStatus(ctx, host.ID, "connected", now)
 	}
+
+	if c.incRepo != nil {
+		activeInc, getErr := c.incRepo.GetByPodAndType(ctx, "infrastructure", host.Name, incident.TypeNodeNotReady)
+		if getErr != nil {
+			c.logger.Warn("Failed to query active incident on agent recovery", zap.String("host", host.Name), zap.Error(getErr))
+		} else if activeInc != nil {
+			if activeInc.Status == incident.StatusDetected || activeInc.Status == incident.StatusAnalyzing || activeInc.Status == incident.StatusRemediating {
+				if resErr := activeInc.MarkResolved(); resErr == nil {
+					if updateErr := c.incRepo.Update(ctx, activeInc); updateErr == nil {
+						if c.broadcaster != nil {
+							c.broadcaster.Broadcast("incident_resolved", activeInc)
+						}
+					} else {
+						c.logger.Error("Failed to update resolved incident on agent recovery", zap.String("host", host.Name), zap.Error(updateErr))
+					}
+				}
+			}
+		}
+	}
 }
 
 func (c *Collector) recordAgentFailure(ctx context.Context, host docker.ComputeHost, err error) {
@@ -464,6 +492,25 @@ func (c *Collector) recordAgentFailure(ctx context.Context, host docker.ComputeH
 
 	if c.computeHostRepo != nil {
 		_ = c.computeHostRepo.UpdateStatus(ctx, host.ID, "disconnected", now)
+	}
+
+	if c.incRepo != nil {
+		activeInc, getErr := c.incRepo.GetByPodAndType(ctx, "infrastructure", host.Name, incident.TypeNodeNotReady)
+		if getErr != nil {
+			c.logger.Warn("Failed to query existing incident on agent failure", zap.String("host", host.Name), zap.Error(getErr))
+		}
+		if activeInc == nil || activeInc.Status == incident.StatusResolved || activeInc.Status == incident.StatusFailed {
+			newInc, newErr := incident.New("fleet-primary", "infrastructure", host.Name, incident.TypeNodeNotReady, incident.SeverityCritical, fmt.Sprintf("Infrastructure host '%s' is unreachable: agent at %s is down (%v)", host.Name, host.Endpoint, err))
+			if newErr == nil {
+				if saveErr := c.incRepo.Create(ctx, newInc); saveErr == nil {
+					if c.broadcaster != nil {
+						c.broadcaster.Broadcast("incident", newInc)
+					}
+				} else {
+					c.logger.Error("Failed to create incident on agent failure", zap.String("host", host.Name), zap.Error(saveErr))
+				}
+			}
+		}
 	}
 }
 
