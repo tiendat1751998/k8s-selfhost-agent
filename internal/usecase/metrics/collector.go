@@ -12,7 +12,6 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/system"
 	"go.uber.org/zap"
 
@@ -119,7 +118,6 @@ type Broadcaster interface {
 type DockerAPIClient interface {
 	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
 	ContainerStats(ctx context.Context, containerID string, stream bool) (container.StatsResponseReader, error)
-	NodeList(ctx context.Context, options swarm.NodeListOptions) ([]swarm.Node, error)
 	Info(ctx context.Context) (system.Info, error)
 	DiskUsage(ctx context.Context, options types.DiskUsageOptions) (types.DiskUsage, error)
 }
@@ -540,7 +538,7 @@ func (c *Collector) runCollection(ctx context.Context) {
 	}
 }
 
-// CollectOnce polls the Docker API once, merges agent host metrics, builds SystemOverview, and generates alerts.
+// CollectOnce polls Docker containers, merges agent host metrics, builds SystemOverview, and generates alerts.
 func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 	now := time.Now().UTC()
 
@@ -563,318 +561,137 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 		c.mu.Unlock()
 	}
 
-	// Graceful fallback if Docker client is unavailable
-	if c.dockerClient == nil {
-		nodeMetricsList := make([]NodeMetrics, 0)
-		c.agentMu.RLock()
-		for hostID, am := range c.agentMetrics {
-			if am == nil {
-				continue
-			}
-			status := "ready"
-			if am.Status != "online" {
-				status = "down"
-			}
-			nodeMetricsList = append(nodeMetricsList, NodeMetrics{
-				NodeID:         hostID,
-				NodeName:       am.Hostname,
-				Role:           "agent",
-				Status:         status,
-				CPUPercent:     am.CPUUsage,
-				MemoryUsed:     am.MemUsed,
-				MemoryTotal:    am.MemTotal,
-				MemoryPercent:  am.MemPercent,
-				DiskUsed:       am.DiskUsed,
-				DiskTotal:      am.DiskTotal,
-				DiskPercent:    am.DiskPercent,
-				NetworkRxBytes: am.NetRxRate,
-				NetworkTxBytes: am.NetTxRate,
-				ContainerCount: am.Processes,
-				RunningCount:   am.Processes,
-				Source:         "agent",
-				UpdatedAt:      am.LastSeen,
-			})
-		}
-		c.agentMu.RUnlock()
-
-		healthyNodesCount := 0
-		var totalCPU float64
-		var totalMemUsed, totalMemLimit int64
-		var totalDiskUsed, totalDiskLimit int64
-
-		for _, nm := range nodeMetricsList {
-			if nm.Status == "ready" {
-				healthyNodesCount++
-			}
-			totalCPU += nm.CPUPercent
-			totalMemUsed += nm.MemoryUsed
-			totalMemLimit += nm.MemoryTotal
-			totalDiskUsed += nm.DiskUsed
-			totalDiskLimit += nm.DiskTotal
-		}
-
-		var totalMemPct, totalDiskPct, avgCPU float64
-		if totalMemLimit > 0 {
-			totalMemPct = (float64(totalMemUsed) / float64(totalMemLimit)) * 100.0
-		}
-		if totalDiskLimit > 0 {
-			totalDiskPct = (float64(totalDiskUsed) / float64(totalDiskLimit)) * 100.0
-		}
-		if len(nodeMetricsList) > 0 {
-			avgCPU = totalCPU / float64(len(nodeMetricsList))
-		}
-
-		overview := &SystemOverview{
-			Nodes:             nodeMetricsList,
-			Containers:        make([]ContainerMetrics, 0),
-			TotalNodes:        len(nodeMetricsList),
-			HealthyNodes:      healthyNodesCount,
-			TotalContainers:   0,
-			RunningContainers: 0,
-			TotalCPUPercent:   math.Round(avgCPU*100) / 100,
-			TotalMemPercent:   math.Round(totalMemPct*100) / 100,
-			TotalDiskPercent:  math.Round(totalDiskPct*100) / 100,
-			RequestsPerSec:    math.Round(rps*100) / 100,
-			Alerts:            make([]MetricAlert, 0),
-			CollectedAt:       now,
-		}
-		overview.Alerts = c.generateAlerts(overview)
-		return overview, nil
-	}
-
-	// 2. Fetch Docker Engine Info & Disk Usage
-	info, infoErr := c.dockerClient.Info(ctx)
-	if infoErr != nil {
-		c.logger.Debug("Failed to fetch Docker daemon info", zap.Error(infoErr))
-	}
-
-	var diskUsed int64
-	var diskTotal int64
+	containerMetricsList := make([]ContainerMetrics, 0)
+	var runningContainersCount int
 	var diskPercent float64
 
-	du, duErr := c.dockerClient.DiskUsage(ctx, types.DiskUsageOptions{})
-	if duErr == nil {
-		diskUsed += du.LayersSize
-		for _, img := range du.Images {
-			if img != nil {
-				diskUsed += img.Size
-			}
+	// 2. Fetch Docker Containers & Stats if Docker client is available
+	if c.dockerClient != nil {
+		info, infoErr := c.dockerClient.Info(ctx)
+		if infoErr != nil {
+			c.logger.Debug("Failed to fetch Docker daemon info", zap.Error(infoErr))
 		}
-		for _, cnt := range du.Containers {
-			if cnt != nil {
-				diskUsed += cnt.SizeRw
-			}
-		}
-		for _, vol := range du.Volumes {
-			if vol != nil && vol.UsageData != nil {
-				diskUsed += vol.UsageData.Size
-			}
-		}
-		for _, bc := range du.BuildCache {
-			if bc != nil {
-				diskUsed += bc.Size
-			}
-		}
-	}
 
-	if diskUsed > 0 {
-		diskTotal = 100 * 1024 * 1024 * 1024 // 100 GiB baseline
-		if diskUsed > diskTotal {
-			diskTotal = diskUsed * 2
-		}
-		diskPercent = (float64(diskUsed) / float64(diskTotal)) * 100.0
-	}
-
-	// 3. Fetch Containers & Stats
-	containersList, listErr := c.dockerClient.ContainerList(ctx, container.ListOptions{All: true})
-	if listErr != nil {
-		c.logger.Debug("Failed to list Docker containers", zap.Error(listErr))
-	}
-
-	containerMetricsList := make([]ContainerMetrics, 0, len(containersList))
-	var totalContainerMemUsed int64
-	var totalContainerCPUPercent float64
-	var runningContainersCount int
-	var totalNetRx, totalNetTx int64
-
-	type rawContainerStat struct {
-		cm ContainerMetrics
-	}
-
-	statCh := make(chan rawContainerStat, len(containersList))
-	var wg sync.WaitGroup
-
-	for _, cnt := range containersList {
-		wg.Add(1)
-		go func(cSummary container.Summary) {
-			defer wg.Done()
-
-			name := cSummary.ID
-			if len(cSummary.Names) > 0 {
-				name = cSummary.Names[0]
-				if len(name) > 0 && name[0] == '/' {
-					name = name[1:]
+		var diskUsed int64
+		var diskTotal int64
+		du, duErr := c.dockerClient.DiskUsage(ctx, types.DiskUsageOptions{})
+		if duErr == nil {
+			diskUsed += du.LayersSize
+			for _, img := range du.Images {
+				if img != nil {
+					diskUsed += img.Size
 				}
 			}
-
-			nodeID := ""
-			if cSummary.Labels != nil {
-				if nid, ok := cSummary.Labels["com.docker.swarm.node.id"]; ok {
-					nodeID = nid
+			for _, cnt := range du.Containers {
+				if cnt != nil {
+					diskUsed += cnt.SizeRw
 				}
 			}
-			if nodeID == "" {
-				nodeID = info.ID
+			for _, vol := range du.Volumes {
+				if vol != nil && vol.UsageData != nil {
+					diskUsed += vol.UsageData.Size
+				}
+			}
+			for _, bc := range du.BuildCache {
+				if bc != nil {
+					diskUsed += bc.Size
+				}
+			}
+		}
+
+		if diskUsed > 0 {
+			diskTotal = 100 * 1024 * 1024 * 1024 // 100 GiB baseline
+			if diskUsed > diskTotal {
+				diskTotal = diskUsed * 2
+			}
+			diskPercent = (float64(diskUsed) / float64(diskTotal)) * 100.0
+		}
+
+		containersList, listErr := c.dockerClient.ContainerList(ctx, container.ListOptions{All: true})
+		if listErr != nil {
+			c.logger.Debug("Failed to list Docker containers", zap.Error(listErr))
+		}
+
+		if len(containersList) > 0 {
+			type rawContainerStat struct {
+				cm ContainerMetrics
 			}
 
-			cm := ContainerMetrics{
-				ContainerID:   cSummary.ID,
-				ContainerName: name,
-				NodeID:        nodeID,
-				Image:         cSummary.Image,
-				State:         string(cSummary.State),
-			}
+			statCh := make(chan rawContainerStat, len(containersList))
+			var wg sync.WaitGroup
 
-			if cSummary.State == "running" {
-				statsReader, err := c.dockerClient.ContainerStats(ctx, cSummary.ID, false)
-				if err == nil && statsReader.Body != nil {
-					defer statsReader.Body.Close()
-					var stats container.StatsResponse
-					if decodeErr := json.NewDecoder(statsReader.Body).Decode(&stats); decodeErr == nil {
-						cm.CPUPercent = calculateCPUPercent(&stats)
-						cm.MemoryUsed = int64(stats.MemoryStats.Usage)
-						cm.MemoryLimit = int64(stats.MemoryStats.Limit)
-						if cm.MemoryLimit > 0 {
-							cm.MemoryPercent = math.Round((float64(cm.MemoryUsed)/float64(cm.MemoryLimit))*10000) / 100
+			for _, cnt := range containersList {
+				wg.Add(1)
+				go func(cSummary container.Summary) {
+					defer wg.Done()
+
+					name := cSummary.ID
+					if len(cSummary.Names) > 0 {
+						name = cSummary.Names[0]
+						if len(name) > 0 && name[0] == '/' {
+							name = name[1:]
 						}
-						var rx, tx int64
-						for _, netStat := range stats.Networks {
-							rx += int64(netStat.RxBytes)
-							tx += int64(netStat.TxBytes)
-						}
-						cm.NetworkRx = rx
-						cm.NetworkTx = tx
 					}
-				}
+
+					nodeID := ""
+					if cSummary.Labels != nil {
+						if nid, ok := cSummary.Labels["com.docker.swarm.node.id"]; ok {
+							nodeID = nid
+						}
+					}
+					if nodeID == "" {
+						nodeID = info.ID
+					}
+
+					cm := ContainerMetrics{
+						ContainerID:   cSummary.ID,
+						ContainerName: name,
+						NodeID:        nodeID,
+						Image:         cSummary.Image,
+						State:         string(cSummary.State),
+					}
+
+					if cSummary.State == "running" {
+						statsReader, err := c.dockerClient.ContainerStats(ctx, cSummary.ID, false)
+						if err == nil && statsReader.Body != nil {
+							defer statsReader.Body.Close()
+							var stats container.StatsResponse
+							if decodeErr := json.NewDecoder(statsReader.Body).Decode(&stats); decodeErr == nil {
+								cm.CPUPercent = calculateCPUPercent(&stats)
+								cm.MemoryUsed = int64(stats.MemoryStats.Usage)
+								cm.MemoryLimit = int64(stats.MemoryStats.Limit)
+								if cm.MemoryLimit > 0 {
+									cm.MemoryPercent = math.Round((float64(cm.MemoryUsed)/float64(cm.MemoryLimit))*10000) / 100
+								}
+								var rx, tx int64
+								for _, netStat := range stats.Networks {
+									rx += int64(netStat.RxBytes)
+									tx += int64(netStat.TxBytes)
+								}
+								cm.NetworkRx = rx
+								cm.NetworkTx = tx
+							}
+						}
+					}
+
+					statCh <- rawContainerStat{cm: cm}
+				}(cnt)
 			}
 
-			statCh <- rawContainerStat{cm: cm}
-		}(cnt)
-	}
+			wg.Wait()
+			close(statCh)
 
-	wg.Wait()
-	close(statCh)
-
-	for r := range statCh {
-		containerMetricsList = append(containerMetricsList, r.cm)
-		if r.cm.State == "running" {
-			runningContainersCount++
+			for r := range statCh {
+				containerMetricsList = append(containerMetricsList, r.cm)
+				if r.cm.State == "running" {
+					runningContainersCount++
+				}
+			}
 		}
-		totalContainerMemUsed += r.cm.MemoryUsed
-		totalContainerCPUPercent += r.cm.CPUPercent
-		totalNetRx += r.cm.NetworkRx
-		totalNetTx += r.cm.NetworkTx
 	}
 
-	// 4. Fetch Nodes (Swarm or Standalone fallback)
+	// 3. Build Agent Nodes (pure k8s-agent server topology)
 	nodeMetricsList := make([]NodeMetrics, 0)
-	swarmNodes, nodeErr := c.dockerClient.NodeList(ctx, swarm.NodeListOptions{})
-
-	if nodeErr == nil && len(swarmNodes) > 0 {
-		for _, n := range swarmNodes {
-			role := string(n.Spec.Role)
-			status := string(n.Status.State)
-			if status == "" {
-				status = "ready"
-			}
-
-			memTotal := n.Description.Resources.MemoryBytes
-			if memTotal == 0 && info.MemTotal > 0 {
-				memTotal = info.MemTotal
-			}
-
-			var nodeContainerCount, nodeRunningCount int
-			var nodeMemUsed int64
-			var nodeCPUPercent float64
-			var nodeNetRx, nodeNetTx int64
-
-			for _, cm := range containerMetricsList {
-				if cm.NodeID == n.ID || len(swarmNodes) == 1 {
-					nodeContainerCount++
-					if cm.State == "running" {
-						nodeRunningCount++
-					}
-					nodeMemUsed += cm.MemoryUsed
-					nodeCPUPercent += cm.CPUPercent
-					nodeNetRx += cm.NetworkRx
-					nodeNetTx += cm.NetworkTx
-				}
-			}
-
-			var memPct float64
-			if memTotal > 0 {
-				memPct = (float64(nodeMemUsed) / float64(memTotal)) * 100.0
-			}
-
-			nodeMetricsList = append(nodeMetricsList, NodeMetrics{
-				NodeID:         n.ID,
-				NodeName:       n.Description.Hostname,
-				Role:           role,
-				Status:         status,
-				CPUPercent:     math.Round(nodeCPUPercent*100) / 100,
-				MemoryUsed:     nodeMemUsed,
-				MemoryTotal:    memTotal,
-				MemoryPercent:  math.Round(memPct*100) / 100,
-				DiskUsed:       diskUsed,
-				DiskTotal:      diskTotal,
-				DiskPercent:    math.Round(diskPercent*100) / 100,
-				NetworkRxBytes: nodeNetRx,
-				NetworkTxBytes: nodeNetTx,
-				ContainerCount: nodeContainerCount,
-				RunningCount:   nodeRunningCount,
-				Source:         "docker",
-				UpdatedAt:      n.UpdatedAt,
-			})
-		}
-	} else {
-		// Standalone Docker Engine
-		nodeName := info.Name
-		if nodeName == "" {
-			nodeName = "localhost"
-		}
-		nodeID := info.ID
-		if nodeID == "" {
-			nodeID = "local-node"
-		}
-
-		memTotal := info.MemTotal
-		var memPct float64
-		if memTotal > 0 {
-			memPct = (float64(totalContainerMemUsed) / float64(memTotal)) * 100.0
-		}
-
-		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
-			NodeID:         nodeID,
-			NodeName:       nodeName,
-			Role:           "standalone",
-			Status:         "ready",
-			CPUPercent:     math.Round(totalContainerCPUPercent*100) / 100,
-			MemoryUsed:     totalContainerMemUsed,
-			MemoryTotal:    memTotal,
-			MemoryPercent:  math.Round(memPct*100) / 100,
-			DiskUsed:       diskUsed,
-			DiskTotal:      diskTotal,
-			DiskPercent:    math.Round(diskPercent*100) / 100,
-			NetworkRxBytes: totalNetRx,
-			NetworkTxBytes: totalNetTx,
-			ContainerCount: len(containersList),
-			RunningCount:   runningContainersCount,
-			Source:         "docker",
-			UpdatedAt:      now,
-		})
-	}
-
-	// 5. Merge Agent Nodes
 	c.agentMu.RLock()
 	for hostID, am := range c.agentMetrics {
 		if am == nil {
@@ -907,7 +724,7 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 	}
 	c.agentMu.RUnlock()
 
-	// 6. Aggregate System Overview
+	// 4. Aggregate System Overview
 	healthyNodesCount := 0
 	var totalCPU float64
 	var totalMemUsed, totalMemLimit int64
@@ -936,8 +753,8 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 		totalDiskPct = diskPercent
 	}
 
-	avgCPU := totalCPU
-	if len(nodeMetricsList) > 1 {
+	avgCPU := 0.0
+	if len(nodeMetricsList) > 0 {
 		avgCPU = totalCPU / float64(len(nodeMetricsList))
 	}
 
@@ -946,7 +763,7 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 		Containers:        containerMetricsList,
 		TotalNodes:        len(nodeMetricsList),
 		HealthyNodes:      healthyNodesCount,
-		TotalContainers:   len(containersList),
+		TotalContainers:   len(containerMetricsList),
 		RunningContainers: runningContainersCount,
 		TotalCPUPercent:   math.Round(avgCPU*100) / 100,
 		TotalMemPercent:   math.Round(totalMemPct*100) / 100,

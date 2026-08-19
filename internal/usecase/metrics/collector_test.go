@@ -14,7 +14,6 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/system"
 	"go.uber.org/zap"
 
@@ -53,10 +52,8 @@ func (m *mockBroadcaster) getMessages() []struct {
 type mockDockerAPI struct {
 	containers []container.Summary
 	statsMap   map[string]container.StatsResponse
-	nodes      []swarm.Node
 	info       system.Info
 	diskUsage  types.DiskUsage
-	nodeErr    error
 }
 
 func (m *mockDockerAPI) ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error) {
@@ -73,13 +70,6 @@ func (m *mockDockerAPI) ContainerStats(ctx context.Context, containerID string, 
 		Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
 		OSType: "linux",
 	}, nil
-}
-
-func (m *mockDockerAPI) NodeList(ctx context.Context, options swarm.NodeListOptions) ([]swarm.Node, error) {
-	if m.nodeErr != nil {
-		return nil, m.nodeErr
-	}
-	return m.nodes, nil
 }
 
 func (m *mockDockerAPI) Info(ctx context.Context) (system.Info, error) {
@@ -270,11 +260,11 @@ func TestCollector_GenerateAlerts(t *testing.T) {
 	}
 }
 
-func TestCollector_CollectOnce_Swarm(t *testing.T) {
+func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 	mockDocker := &mockDockerAPI{
 		info: system.Info{
 			ID:       "engine-1",
-			Name:     "swarm-manager",
+			Name:     "master-server",
 			MemTotal: 16 * 1024 * 1024 * 1024,
 			NCPU:     8,
 		},
@@ -284,62 +274,18 @@ func TestCollector_CollectOnce_Swarm(t *testing.T) {
 				{Size: 3 * 1024 * 1024 * 1024},
 			},
 		},
-		nodes: []swarm.Node{
-			{
-				ID: "node-1",
-				Description: swarm.NodeDescription{
-					Hostname: "swarm-node-1",
-					Resources: swarm.Resources{
-						MemoryBytes: 8 * 1024 * 1024 * 1024,
-					},
-				},
-				Spec: swarm.NodeSpec{
-					Role: swarm.NodeRoleManager,
-				},
-				Status: swarm.NodeStatus{
-					State: swarm.NodeStateReady,
-				},
-				Meta: swarm.Meta{
-					UpdatedAt: time.Now().Add(-1 * time.Hour),
-				},
-			},
-			{
-				ID: "node-2",
-				Description: swarm.NodeDescription{
-					Hostname: "swarm-node-2",
-					Resources: swarm.Resources{
-						MemoryBytes: 8 * 1024 * 1024 * 1024,
-					},
-				},
-				Spec: swarm.NodeSpec{
-					Role: swarm.NodeRoleWorker,
-				},
-				Status: swarm.NodeStatus{
-					State: swarm.NodeStateDown,
-				},
-				Meta: swarm.Meta{
-					UpdatedAt: time.Now().Add(-1 * time.Hour),
-				},
-			},
-		},
 		containers: []container.Summary{
 			{
 				ID:    "c1",
 				Names: []string{"/web-app"},
 				Image: "nginx:latest",
 				State: "running",
-				Labels: map[string]string{
-					"com.docker.swarm.node.id": "node-1",
-				},
 			},
 			{
 				ID:    "c2",
 				Names: []string{"/db-app"},
 				Image: "postgres:16",
 				State: "exited",
-				Labels: map[string]string{
-					"com.docker.swarm.node.id": "node-2",
-				},
 			},
 		},
 		statsMap: map[string]container.StatsResponse{
@@ -378,6 +324,43 @@ func TestCollector_CollectOnce_Swarm(t *testing.T) {
 		}),
 	)
 
+	collector.SetAgentMetric("agent-node-1", &AgentMetrics{
+		Hostname:    "agent-server-1",
+		OS:          "linux",
+		Arch:        "amd64",
+		CPUUsage:    85.0,
+		CPUCount:    4,
+		MemTotal:    8 * 1024 * 1024 * 1024,
+		MemUsed:     4 * 1024 * 1024 * 1024,
+		MemPercent:  50.0,
+		DiskTotal:   100 * 1024 * 1024 * 1024,
+		DiskUsed:    20 * 1024 * 1024 * 1024,
+		DiskPercent: 20.0,
+		NetRxRate:   1024,
+		NetTxRate:   2048,
+		Processes:   10,
+		Status:      "online",
+		LastSeen:    time.Now().UTC(),
+	})
+	collector.SetAgentMetric("agent-node-2", &AgentMetrics{
+		Hostname:    "agent-server-2",
+		OS:          "linux",
+		Arch:        "amd64",
+		CPUUsage:    10.0,
+		CPUCount:    4,
+		MemTotal:    8 * 1024 * 1024 * 1024,
+		MemUsed:     2 * 1024 * 1024 * 1024,
+		MemPercent:  25.0,
+		DiskTotal:   100 * 1024 * 1024 * 1024,
+		DiskUsed:    10 * 1024 * 1024 * 1024,
+		DiskPercent: 10.0,
+		NetRxRate:   0,
+		NetTxRate:   0,
+		Processes:   5,
+		Status:      "offline",
+		LastSeen:    time.Now().UTC(),
+	})
+
 	overview, err := collector.CollectOnce(context.Background())
 	if err != nil {
 		t.Fatalf("CollectOnce failed: %v", err)
@@ -401,8 +384,11 @@ func TestCollector_CollectOnce_Swarm(t *testing.T) {
 	if len(overview.Alerts) != 2 {
 		t.Errorf("expected 2 alerts (1 cpu_high, 1 node_down), got %d: %+v", len(overview.Alerts), overview.Alerts)
 	}
-	if overview.Nodes[0].Source != "docker" {
-		t.Errorf("expected node source 'docker', got '%s'", overview.Nodes[0].Source)
+	if overview.Nodes[0].Source != "agent" {
+		t.Errorf("expected node source 'agent', got '%s'", overview.Nodes[0].Source)
+	}
+	if overview.Nodes[0].Role != "agent" {
+		t.Errorf("expected node role 'agent', got '%s'", overview.Nodes[0].Role)
 	}
 }
 
@@ -415,7 +401,6 @@ func TestCollector_CollectOnce_Standalone(t *testing.T) {
 			Containers:        1,
 			ContainersRunning: 1,
 		},
-		nodeErr: context.Canceled, // Swarm not available
 		containers: []container.Summary{
 			{
 				ID:    "c-redis",
@@ -444,6 +429,12 @@ func TestCollector_CollectOnce_Standalone(t *testing.T) {
 	}
 
 	collector := NewCollector(mockDocker, nil, nil, zap.NewNop())
+	collector.SetAgentMetric("agent-1", &AgentMetrics{
+		Hostname: "my-agent-host",
+		Status:   "online",
+		CPUUsage: 15.0,
+	})
+
 	overview, err := collector.CollectOnce(context.Background())
 	if err != nil {
 		t.Fatalf("CollectOnce failed: %v", err)
@@ -452,14 +443,20 @@ func TestCollector_CollectOnce_Standalone(t *testing.T) {
 	if overview.TotalNodes != 1 {
 		t.Errorf("expected TotalNodes = 1, got %d", overview.TotalNodes)
 	}
-	if overview.Nodes[0].NodeName != "my-docker-host" {
-		t.Errorf("expected NodeName = my-docker-host, got %s", overview.Nodes[0].NodeName)
+	if overview.Nodes[0].NodeName != "my-agent-host" {
+		t.Errorf("expected NodeName = my-agent-host, got %s", overview.Nodes[0].NodeName)
 	}
-	if overview.Nodes[0].Role != "standalone" {
-		t.Errorf("expected Role = standalone, got %s", overview.Nodes[0].Role)
+	if overview.Nodes[0].Role != "agent" {
+		t.Errorf("expected Role = agent, got %s", overview.Nodes[0].Role)
 	}
-	if overview.Nodes[0].Source != "docker" {
-		t.Errorf("expected Source = docker, got %s", overview.Nodes[0].Source)
+	if overview.Nodes[0].Source != "agent" {
+		t.Errorf("expected Source = agent, got %s", overview.Nodes[0].Source)
+	}
+	if overview.TotalContainers != 1 {
+		t.Errorf("expected TotalContainers = 1, got %d", overview.TotalContainers)
+	}
+	if overview.RunningContainers != 1 {
+		t.Errorf("expected RunningContainers = 1, got %d", overview.RunningContainers)
 	}
 }
 
@@ -662,7 +659,7 @@ func TestCollector_ScrapeAgent_Offline(t *testing.T) {
 	}
 }
 
-func TestCollector_MergeDockerAndAgentNodes(t *testing.T) {
+func TestCollector_AgentNodesAndContainers(t *testing.T) {
 	mockDocker := &mockDockerAPI{
 		info: system.Info{
 			ID:                "docker-host-1",
@@ -671,7 +668,6 @@ func TestCollector_MergeDockerAndAgentNodes(t *testing.T) {
 			Containers:        1,
 			ContainersRunning: 1,
 		},
-		nodeErr: context.Canceled, // standalone docker
 		containers: []container.Summary{
 			{
 				ID:    "c-app",
@@ -725,43 +721,31 @@ func TestCollector_MergeDockerAndAgentNodes(t *testing.T) {
 		t.Fatalf("CollectOnce failed: %v", err)
 	}
 
-	if overview.TotalNodes != 2 {
-		t.Fatalf("expected TotalNodes = 2, got %d", overview.TotalNodes)
+	if overview.TotalNodes != 1 {
+		t.Fatalf("expected TotalNodes = 1, got %d", overview.TotalNodes)
 	}
-	if overview.HealthyNodes != 2 {
-		t.Errorf("expected HealthyNodes = 2, got %d", overview.HealthyNodes)
+	if overview.HealthyNodes != 1 {
+		t.Errorf("expected HealthyNodes = 1, got %d", overview.HealthyNodes)
 	}
-
-	var foundDocker, foundAgent bool
-	for _, n := range overview.Nodes {
-		if n.Source == "docker" {
-			foundDocker = true
-			if n.NodeName != "docker-node" {
-				t.Errorf("expected docker node name 'docker-node', got '%s'", n.NodeName)
-			}
-		}
-		if n.Source == "agent" {
-			foundAgent = true
-			if n.NodeName != "external-db" {
-				t.Errorf("expected agent node name 'external-db', got '%s'", n.NodeName)
-			}
-			if n.Role != "agent" {
-				t.Errorf("expected agent role 'agent', got '%s'", n.Role)
-			}
-			if n.Status != "ready" {
-				t.Errorf("expected agent status 'ready', got '%s'", n.Status)
-			}
-			if n.CPUPercent != 30.0 {
-				t.Errorf("expected agent CPUPercent 30.0, got %f", n.CPUPercent)
-			}
-		}
+	if overview.TotalContainers != 1 {
+		t.Errorf("expected TotalContainers = 1, got %d", overview.TotalContainers)
 	}
 
-	if !foundDocker {
-		t.Errorf("docker node missing from snapshot")
+	n := overview.Nodes[0]
+	if n.Source != "agent" {
+		t.Errorf("expected agent source, got '%s'", n.Source)
 	}
-	if !foundAgent {
-		t.Errorf("agent node missing from snapshot")
+	if n.NodeName != "external-db" {
+		t.Errorf("expected agent node name 'external-db', got '%s'", n.NodeName)
+	}
+	if n.Role != "agent" {
+		t.Errorf("expected agent role 'agent', got '%s'", n.Role)
+	}
+	if n.Status != "ready" {
+		t.Errorf("expected agent status 'ready', got '%s'", n.Status)
+	}
+	if n.CPUPercent != 30.0 {
+		t.Errorf("expected agent CPUPercent 30.0, got %f", n.CPUPercent)
 	}
 }
 
