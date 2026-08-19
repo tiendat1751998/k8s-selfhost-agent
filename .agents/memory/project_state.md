@@ -1,9 +1,7 @@
-﻿# K8sControl Project State — Session Handoff 2026-08-19T16:28
-
-## Running Subagents
-- **Infra Hosts Builder** (fe3198db): Building dedicated Infrastructure Hosts page with multi-type support + full CRUD. CHECK if committed.
+﻿# K8sControl Project State — Session Update 2026-08-19T16:35
 
 ## Git State (master)
+9d3573c feat(hosts): dedicated Infrastructure Hosts page + multi-type support + full CRUD
 9586bde fix(metrics): ListAll bypass tenant for agent scraping
 e2654ce fix(hosts): rename Docker Host to Infrastructure Host + agent test
 071a976 fix(deploy): remove sudo from deploy script
@@ -23,7 +21,7 @@ e98e229 security(P1-P2): tenant isolation + UUID validation
 ## Repo
 GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 
-## Credentials
+## Credentials & Config
 - Postgres: 10.10.10.133:5432 myuser/mysecretpassword mydatabase
 - Docker: tcp://10.10.10.133:2375
 - Admin: admin@k8s.local / admin123
@@ -53,27 +51,12 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 - TOTP 2FA + JWT Refresh (2-step login, QR wizard, recovery codes)
 - K8s-Agent Binary (cmd/agent/, deploy-agent.sh)
 - Agent Host Scraping (ListAll bypass tenant)
-- Infrastructure Host UI (agent type, test connectivity)
+- Dedicated Infrastructure Hosts Management View (/hosts, full CRUD, 7 host types: agent, docker, k8s, prometheus, git, database, custom)
 
-## IN PROGRESS
-- Infrastructure Hosts Page: dedicated /hosts page, CRUD, multi-type
-  (agent/docker/k8s/prometheus/git/database/custom), sidebar nav
-  Agent fe3198db may have committed — CHECK git log
+## Next Roadmap Candidates (Non-K8s)
+1. **AI SRE / RCA Engine + Ecosystem Tools Integration**: Ingest real metrics/logs/alerts from Prometheus, Postgres, Docker & detected ecosystem tools into AI diagnostic pipeline.
+2. **Edge Agent Command & Remote Diagnostics**: Secure script execution / remote diagnostics capability on k8s-agent nodes.
 
-## BLOCKED (waiting K8s cluster)
+## BLOCKED (waiting K8s cluster hardware)
 Pod Terminal, Helm Catalog, GitOps Visual, Real-time Logs,
 Image CVE Scanning, Policy Dashboard, Service Mesh, Network Policy
-
-## TODO (non-K8s)
-- Edge Agent, AI + Ecosystem Data integration
-
-## User Preferences
-- Quality > speed, always subagents, fix without asking
-- Chrome DevTools MCP for UI verify, always UI approach
-- Zero-mock, Vietnamese, max 3 parallel subagents
-
-## Technical Notes
-- PowerShell: ; not && | Chrome DevTools: evaluate_script for clicks
-- BuildTenantQuery adds tenant_id — use ListAll() for background services
-- compute_hosts stored under tenant_id='default-tenant'
-- 49+ test packages ALL PASS

@@ -822,3 +822,91 @@ func TestCollector_ScrapeAllAgents_UsesListAll(t *testing.T) {
 	}
 }
 
+func TestCollector_RemoveAgentMetric(t *testing.T) {
+	collector := NewCollector(nil, nil, nil, zap.NewNop())
+
+	collector.SetAgentMetric("host-to-remove", &AgentMetrics{
+		Hostname: "test-host",
+		Status:   "online",
+	})
+
+	metricsMap := collector.GetAgentMetrics()
+	if _, ok := metricsMap["host-to-remove"]; !ok {
+		t.Fatalf("expected host-to-remove to be present")
+	}
+
+	collector.RemoveAgentMetric("host-to-remove")
+
+	metricsMapAfter := collector.GetAgentMetrics()
+	if _, ok := metricsMapAfter["host-to-remove"]; !ok {
+		// good
+	} else {
+		t.Errorf("expected host-to-remove to be deleted, but still present")
+	}
+}
+
+func TestCollector_ScrapeAllAgents_EvictsDeletedHosts(t *testing.T) {
+	agentResp := map[string]interface{}{
+		"hostname":     "active-host",
+		"os":           "linux",
+		"arch":         "amd64",
+		"cpu_usage":    10.0,
+		"cpu_count":    2,
+		"mem_total":    4294967296,
+		"mem_used":     2147483648,
+		"mem_percent":  50.0,
+		"disk_total":   53687091200,
+		"disk_used":    26843545600,
+		"disk_percent": 50.0,
+		"network": map[string]interface{}{
+			"total_rx_bytes_per_sec": 500,
+			"total_tx_bytes_per_sec": 1000,
+		},
+		"processes":    20,
+		"collected_at": "2026-08-19T15:30:00Z",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(agentResp)
+	}))
+	defer srv.Close()
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-active",
+				Name:     "active-host",
+				HostType: "agent",
+				Endpoint: srv.URL,
+			},
+		},
+	}
+
+	collector := NewCollector(nil, hostRepo, nil, zap.NewNop(), WithHTTPClient(srv.Client()))
+
+	// Pre-populate with a stale deleted host and an active host
+	collector.SetAgentMetric("host-deleted", &AgentMetrics{
+		Hostname: "deleted-host",
+		Status:   "offline",
+	})
+	collector.SetAgentMetric("host-active", &AgentMetrics{
+		Hostname: "active-host",
+		Status:   "online",
+	})
+
+	// Run scrapeAllAgents
+	collector.scrapeAllAgents(context.Background())
+
+	metricsMap := collector.GetAgentMetrics()
+
+	if _, ok := metricsMap["host-active"]; !ok {
+		t.Errorf("expected host-active to be present in agentMetrics")
+	}
+
+	if _, ok := metricsMap["host-deleted"]; ok {
+		t.Errorf("expected host-deleted to be evicted from agentMetrics")
+	}
+}
+
+
