@@ -245,7 +245,7 @@ func run() error {
 
 	platformHandlers := &adapthttp.PlatformHandlers{
 		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, nil, gitopsController),
-		Docker:        adapthttp.NewDockerHandler(dockerRepo, computeHostRepo, authUsecase),
+		Docker:        adapthttp.NewDockerHandler(dockerRepo, computeHostRepo, authUsecase, metricsCollector),
 		Overview:      overviewHandler,
 		Drift:         adapthttp.NewDriftHandler(postgres.NewDriftRepo(pgClient)),
 		Correlation:   adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(pgClient)),

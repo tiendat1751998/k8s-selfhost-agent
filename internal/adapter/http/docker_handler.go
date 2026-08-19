@@ -118,13 +118,19 @@ func maskToken(token string) string {
 	return "SWMTKN-1-***..." + last8
 }
 
+// AgentMetricRemover defines the interface for removing agent metrics upon compute host deletion.
+type AgentMetricRemover interface {
+	RemoveAgentMetric(hostID string)
+}
+
 // DockerHandler provides HTTP handlers for Docker, Swarm, and multi-host compute registry.
 type DockerHandler struct {
-	repo         docker.Repository
-	hostRepo     docker.ComputeHostRepository
-	verifier     PasswordVerifier
-	logger       *zap.Logger
-	tokenLimiter *TokenViewLimiter
+	repo             docker.Repository
+	hostRepo         docker.ComputeHostRepository
+	verifier         PasswordVerifier
+	logger           *zap.Logger
+	tokenLimiter     *TokenViewLimiter
+	metricsCollector AgentMetricRemover
 }
 
 // NewDockerHandler creates a new Docker HTTP handler with optional dependencies.
@@ -148,6 +154,8 @@ func NewDockerHandler(repo docker.Repository, args ...interface{}) *DockerHandle
 			if v != nil {
 				h.tokenLimiter = v
 			}
+		case AgentMetricRemover:
+			h.metricsCollector = v
 		}
 	}
 	return h
@@ -703,6 +711,10 @@ func (h *DockerHandler) DeleteHost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete compute host", err)
 		return
+	}
+
+	if h.metricsCollector != nil {
+		h.metricsCollector.RemoveAgentMetric(id)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})

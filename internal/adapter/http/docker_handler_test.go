@@ -799,4 +799,47 @@ func TestDockerHandler_MultiTypeComputeHosts(t *testing.T) {
 	}
 }
 
+type mockMetricRemover struct {
+	evictedHosts []string
+}
+
+func (m *mockMetricRemover) RemoveAgentMetric(hostID string) {
+	m.evictedHosts = append(m.evictedHosts, hostID)
+}
+
+func TestDockerHandler_DeleteHost_EvictsAgentMetric(t *testing.T) {
+	repo := &testDockerRepo{}
+	hostRepo := newMockComputeHostRepo()
+	metricRemover := &mockMetricRemover{}
+	handler := NewDockerHandler(repo, hostRepo, metricRemover)
+
+	r := chi.NewRouter()
+	r.Route("/docker", handler.RegisterRoutes)
+
+	host := &domain.ComputeHost{
+		ID:        "host-to-delete",
+		Name:      "agent-node-1",
+		HostType:  "agent",
+		Endpoint:  "http://127.0.0.1:8080",
+		Status:    "connected",
+		TenantID:  "default-tenant",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	_ = hostRepo.Create(context.Background(), host)
+
+	req := httptest.NewRequest(http.MethodDelete, "/docker/hosts/"+host.ID, nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200 on DeleteHost, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if len(metricRemover.evictedHosts) != 1 || metricRemover.evictedHosts[0] != "host-to-delete" {
+		t.Errorf("expected host-to-delete to be evicted from metrics, got %v", metricRemover.evictedHosts)
+	}
+}
+
+
 

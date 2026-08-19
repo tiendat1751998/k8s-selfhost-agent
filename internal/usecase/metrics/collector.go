@@ -290,6 +290,11 @@ func (c *Collector) scrapeAllAgents(ctx context.Context) {
 		return
 	}
 
+	currentHostIDs := make(map[string]bool, len(hosts))
+	for _, host := range hosts {
+		currentHostIDs[host.ID] = true
+	}
+
 	var wg sync.WaitGroup
 	for _, host := range hosts {
 		wg.Add(1)
@@ -299,6 +304,14 @@ func (c *Collector) scrapeAllAgents(ctx context.Context) {
 		}(host)
 	}
 	wg.Wait()
+
+	c.agentMu.Lock()
+	for hostID := range c.agentMetrics {
+		if !currentHostIDs[hostID] {
+			delete(c.agentMetrics, hostID)
+		}
+	}
+	c.agentMu.Unlock()
 }
 
 // ScrapeAgent scrapes a single registered compute host agent.
@@ -475,6 +488,13 @@ func (c *Collector) SetAgentMetric(hostID string, m *AgentMetrics) {
 	c.agentMu.Lock()
 	defer c.agentMu.Unlock()
 	c.agentMetrics[hostID] = m
+}
+
+// RemoveAgentMetric removes an agent metric entry by hostID.
+func (c *Collector) RemoveAgentMetric(hostID string) {
+	c.agentMu.Lock()
+	defer c.agentMu.Unlock()
+	delete(c.agentMetrics, hostID)
 }
 
 func formatAgentURL(endpoint string, tlsEnabled bool) string {
