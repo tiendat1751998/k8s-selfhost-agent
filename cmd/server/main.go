@@ -350,6 +350,7 @@ func run() error {
 	alertRepo := postgres.NewAlertRepo(pgClient.Pool())
 	cloudAccountRepo := postgres.NewCloudAccountRepo(pgClient.Pool())
 	cloudHandler := adapthttp.NewCloudHandler(cloudAccountRepo, nil, log)
+	computeHostRepo := postgres.NewComputeHostRepo(pgClient.Pool())
 
 	alertNotifiers := map[string]alert.Notifier{
 		"slack":   notifier.NewSlackNotifier(),
@@ -401,7 +402,7 @@ func run() error {
 	platformHandlers := &adapthttp.PlatformHandlers{
 		AI:            adapthttp.NewAIHandler(registry),
 		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, publisher, gitopsController),
-		Docker:        adapthttp.NewDockerHandler(dockerRepo),
+		Docker:        adapthttp.NewDockerHandler(dockerRepo, computeHostRepo),
 		Overview:      overviewHandler,
 		Drift:         adapthttp.NewDriftHandler(driftRepo),
 		Correlation:   adapthttp.NewCorrelationHandler(correlationRepo),
