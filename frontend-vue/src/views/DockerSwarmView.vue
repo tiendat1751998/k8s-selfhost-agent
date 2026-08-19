@@ -11,9 +11,6 @@ import {
   type SwarmInfo,
   type SwarmTokens,
   type NodeDetails,
-  type ComputeHost,
-  type CreateHostRequest,
-  type AgentInfo,
 } from '../api/compute'
 
 // ==========================================
@@ -43,11 +40,6 @@ const revealManagerToken = ref(false)
 const autoHideSeconds = ref(60)
 let autoHideTimer: number | null = null
 
-// Remote Hosts State
-const hosts = ref<ComputeHost[]>([])
-const testingHostId = ref<string | null>(null)
-const hostTestResults = ref<Record<string, { latency_ms: number; status: string; timestamp: Date; agent_info?: AgentInfo }>>({})
-
 // Modals & Drawers
 const showLogsDrawer = ref(false)
 const logTargetTitle = ref('')
@@ -58,34 +50,6 @@ const selectedNode = ref<DockerNode | null>(null)
 const selectedNodeDetails = ref<NodeDetails | null>(null)
 const nodeDetailsLoading = ref(false)
 
-const showAddHostModal = ref(false)
-const submittingHost = ref(false)
-const hostForm = ref<{
-  name: string
-  host_type: string
-  endpoint: string
-  ip: string
-  port: number
-  tls_enabled: boolean
-  ca_cert: string
-  client_cert: string
-  client_key: string
-  api_version: string
-  labels: Array<{ key: string; value: string }>
-}>({
-  name: '',
-  host_type: 'agent',
-  endpoint: '',
-  ip: '',
-  port: 9100,
-  tls_enabled: false,
-  ca_cert: '',
-  client_cert: '',
-  client_key: '',
-  api_version: '',
-  labels: []
-})
-
 // Confirmation Dialogs
 const showDrainModal = ref(false)
 const nodeToDrain = ref<DockerNode | null>(null)
@@ -93,9 +57,6 @@ const nodeToDrain = ref<DockerNode | null>(null)
 const showRemoveNodeModal = ref(false)
 const nodeToRemove = ref<DockerNode | null>(null)
 const removeNodeConfirmInput = ref('')
-
-const showRemoveHostModal = ref(false)
-const hostToRemove = ref<ComputeHost | null>(null)
 
 // Node Table Filters
 const nodeSearch = ref('')
@@ -119,12 +80,11 @@ async function fetchDockerData() {
   loading.value = true
   error.value = null
   try {
-    const [svcRes, nodeRes, contRes, swarmRes, hostsRes] = await Promise.allSettled([
+    const [svcRes, nodeRes, contRes, swarmRes] = await Promise.allSettled([
       dockerApi.listServices(),
       dockerApi.listNodes(),
       dockerApi.listContainers(),
       dockerApi.getSwarmInfo(),
-      dockerApi.listHosts(),
     ])
 
     if (svcRes.status === 'fulfilled' && Array.isArray(svcRes.value)) {
@@ -138,9 +98,6 @@ async function fetchDockerData() {
     }
     if (swarmRes.status === 'fulfilled' && swarmRes.value && swarmRes.value.id) {
       swarmInfo.value = swarmRes.value
-    }
-    if (hostsRes.status === 'fulfilled' && Array.isArray(hostsRes.value)) {
-      hosts.value = hostsRes.value
     }
 
     // Default mock nodes if empty
@@ -193,23 +150,6 @@ async function fetchDockerData() {
           labels: { 'node.role': 'batch-compute', 'env': 'staging', 'maintenance': 'pending' },
           joined_at: '2026-07-01T09:10:00Z',
           updated_at: '2026-08-19T10:00:00Z'
-        }
-      ]
-    }
-
-    // Default mock remote hosts if empty
-    if (hosts.value.length === 0) {
-      hosts.value = [
-        {
-          id: 'host-edge-tokyo-01',
-          name: 'edge-docker-tokyo',
-          host_type: 'docker',
-          endpoint: 'tcp://10.20.0.15:2376',
-          tls_enabled: true,
-          status: 'connected',
-          last_health_check: new Date(Date.now() - 120000).toISOString(),
-          labels: { region: 'ap-northeast-1', zone: 'edge-a', env: 'production' },
-          created_at: '2026-07-10T12:00:00Z'
         }
       ]
     }
@@ -596,194 +536,6 @@ async function confirmRemoveNode() {
   }
 }
 
-// Remote Hosts Management
-function openAddHostModal() {
-  hostForm.value = {
-    name: '',
-    host_type: 'agent',
-    endpoint: '',
-    ip: '',
-    port: 9100,
-    tls_enabled: false,
-    ca_cert: '',
-    client_cert: '',
-    client_key: '',
-    api_version: '',
-    labels: [{ key: 'env', value: 'production' }]
-  }
-  showAddHostModal.value = true
-}
-
-function addLabelRow() {
-  hostForm.value.labels.push({ key: '', value: '' })
-}
-
-function removeLabelRow(index: number) {
-  hostForm.value.labels.splice(index, 1)
-}
-
-function formatUptime(seconds?: number): string {
-  if (!seconds || seconds <= 0) return '0s'
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const secs = seconds % 60
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  if (minutes > 0) return `${minutes}m ${secs}s`
-  return `${secs}s`
-}
-
-async function submitAddHost() {
-  if (!hostForm.value.name.trim()) {
-    showToast('Host name is required', 'error')
-    return
-  }
-
-  let endpoint = ''
-  if (hostForm.value.host_type === 'agent') {
-    endpoint = hostForm.value.endpoint.trim()
-    if (!endpoint && hostForm.value.ip.trim()) {
-      endpoint = `http://${hostForm.value.ip.trim()}:${hostForm.value.port || 9100}`
-    }
-    if (!endpoint) {
-      showToast('Agent endpoint is required (e.g. http://10.10.10.200:9100)', 'error')
-      return
-    }
-    if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
-      if (endpoint.startsWith('tcp://')) {
-        endpoint = `http://${endpoint.replace(/^tcp:\/\//, '')}`
-      } else {
-        endpoint = `http://${endpoint}`
-      }
-    }
-  } else {
-    endpoint = hostForm.value.endpoint.trim()
-    if (!endpoint && hostForm.value.ip.trim()) {
-      endpoint = `tcp://${hostForm.value.ip.trim()}:${hostForm.value.port || (hostForm.value.tls_enabled ? 2376 : 2375)}`
-    }
-    if (!endpoint) {
-      showToast('Daemon endpoint or IP address is required', 'error')
-      return
-    }
-    if (!endpoint.startsWith('tcp://') && !endpoint.startsWith('unix://') && !endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
-      endpoint = `tcp://${endpoint}`
-    }
-  }
-
-  submittingHost.value = true
-  const labelsRecord: Record<string, string> = {}
-  for (const l of hostForm.value.labels) {
-    if (l.key.trim()) {
-      labelsRecord[l.key.trim()] = l.value.trim()
-    }
-  }
-
-  const payload: CreateHostRequest = {
-    name: hostForm.value.name.trim(),
-    host_type: hostForm.value.host_type,
-    endpoint,
-    tls_enabled: hostForm.value.host_type === 'docker' ? hostForm.value.tls_enabled : false,
-    ca_cert: hostForm.value.host_type === 'docker' ? (hostForm.value.ca_cert || undefined) : undefined,
-    client_cert: hostForm.value.host_type === 'docker' ? (hostForm.value.client_cert || undefined) : undefined,
-    client_key: hostForm.value.host_type === 'docker' ? (hostForm.value.client_key || undefined) : undefined,
-    api_version: hostForm.value.host_type === 'docker' ? (hostForm.value.api_version || undefined) : undefined,
-    labels: labelsRecord
-  }
-
-  try {
-    const res = await dockerApi.registerHost(payload)
-    const newHost: ComputeHost = (res && res.id) ? res : {
-      id: `host-${Date.now().toString(36)}`,
-      name: payload.name,
-      host_type: payload.host_type || 'agent',
-      endpoint: payload.endpoint,
-      tls_enabled: payload.tls_enabled || false,
-      status: 'connected',
-      last_health_check: new Date().toISOString(),
-      labels: payload.labels || {},
-      created_at: new Date().toISOString()
-    }
-    hosts.value.unshift(newHost)
-    showToast(`Server "${newHost.name}" registered successfully!`)
-    showAddHostModal.value = false
-  } catch {
-    const newHost: ComputeHost = {
-      id: `host-${Date.now().toString(36)}`,
-      name: payload.name,
-      host_type: payload.host_type || 'agent',
-      endpoint: payload.endpoint,
-      tls_enabled: payload.tls_enabled || false,
-      status: 'connected',
-      last_health_check: new Date().toISOString(),
-      labels: payload.labels || {},
-      created_at: new Date().toISOString()
-    }
-    hosts.value.unshift(newHost)
-    showToast(`Server "${newHost.name}" registered!`)
-    showAddHostModal.value = false
-  } finally {
-    submittingHost.value = false
-  }
-}
-
-function promptRemoveHost(host: ComputeHost) {
-  hostToRemove.value = host
-  showRemoveHostModal.value = true
-}
-
-async function confirmRemoveHost() {
-  if (!hostToRemove.value) return
-  const host = hostToRemove.value
-  try {
-    await dockerApi.removeHost(host.id)
-    hosts.value = hosts.value.filter(h => h.id !== host.id)
-    showToast(`Remote host "${host.name}" removed.`)
-    showRemoveHostModal.value = false
-  } catch {
-    hosts.value = hosts.value.filter(h => h.id !== host.id)
-    showToast(`Remote host "${host.name}" removed.`)
-    showRemoveHostModal.value = false
-  }
-}
-
-async function handleTestHost(host: ComputeHost) {
-  testingHostId.value = host.id
-  try {
-    const res = await dockerApi.testHost(host.id)
-    const latency = res?.latency_ms || Math.floor(Math.random() * 20) + 8
-    const status = res?.status || 'connected'
-    const isSuccess = status === 'connected' || status === 'ok'
-    hostTestResults.value[host.id] = {
-      latency_ms: latency,
-      status: isSuccess ? 'ok' : 'error',
-      timestamp: new Date(),
-      agent_info: res?.agent_info
-    }
-    if (isSuccess) {
-      if (res?.agent_info?.hostname) {
-        const info = res.agent_info
-        const uptimeStr = formatUptime(info.uptime || info.uptime_seconds)
-        showToast(`Connected to ${info.hostname} (${info.os || ''} ${info.arch || ''}) - Uptime: ${uptimeStr} (${latency}ms)`)
-      } else {
-        showToast(`Connection to ${host.name} verified (${latency}ms latency)`)
-      }
-    } else {
-      showToast(`Connection failed: ${res?.message || 'Host unreachable'}`, 'error')
-    }
-  } catch (err: any) {
-    const latency = Math.floor(Math.random() * 20) + 12
-    hostTestResults.value[host.id] = {
-      latency_ms: latency,
-      status: 'error',
-      timestamp: new Date()
-    }
-    showToast(`Failed to connect to ${host.name}: ${err?.message || 'Error'}`, 'error')
-  } finally {
-    testingHostId.value = null
-  }
-}
-
 // Formatting Helpers
 function formatDate(d?: string) {
   if (!d) return '-'
@@ -817,7 +569,7 @@ function formatMemory(mem?: number) {
         </div>
         <h1 class="view-title">Docker Swarm & Container Racks</h1>
         <p class="view-desc">
-          Compute node rack telemetry, join token distribution, node lifecycle evacuation/activation, remote Docker host registry, and streaming log consoles.
+          Compute node rack telemetry, join token distribution, node lifecycle evacuation/activation, and streaming log consoles.
         </p>
       </div>
 
@@ -903,7 +655,7 @@ function formatMemory(mem?: number) {
         :class="{ 'tab-active': activeTab === 'management' }"
         @click="activeTab = 'management'"
       >
-        <span>⚙️ Node Management & Hosts ({{ nodes.length + hosts.length }})</span>
+        <span>⚙️ Swarm Management ({{ nodes.length }})</span>
       </button>
     </div>
 
@@ -1108,7 +860,7 @@ function formatMemory(mem?: number) {
     </div>
 
     <!-- ========================================== -->
-    <!-- 4. Node Management & Remote Hosts Tab      -->
+    <!-- 4. Swarm Node Management & Operations Tab -->
     <!-- ========================================== -->
     <div v-else-if="activeTab === 'management'" class="node-mgmt-view animate-fade-in">
       <!-- Section A: Swarm Cluster Info HUD -->
@@ -1423,95 +1175,6 @@ function formatMemory(mem?: number) {
           </table>
         </div>
       </div>
-
-      <!-- Section D: Remote Infrastructure Hosts -->
-      <div class="mgmt-section">
-        <div class="section-heading">
-          <div class="heading-title-group">
-            <span class="heading-icon">🌐</span>
-            <div>
-              <h2 class="section-title">Remote Infrastructure Hosts</h2>
-              <p class="section-desc">Register external monitoring agents, standalone Docker daemons, and compute servers</p>
-            </div>
-          </div>
-
-          <button class="btn btn-primary" @click="openAddHostModal">
-            <span>➕ Add Server</span>
-          </button>
-        </div>
-
-        <!-- Host Cards Grid -->
-        <div v-if="hosts.length === 0" class="empty-state glass-panel">
-          <span class="empty-icon">🌐</span>
-          <p>No remote infrastructure hosts registered yet.</p>
-          <button class="btn btn-secondary btn-sm" style="margin-top: 10px;" @click="openAddHostModal">
-            <span>Register First Server</span>
-          </button>
-        </div>
-
-        <div v-else class="hosts-grid">
-          <div v-for="host in hosts" :key="host.id" class="host-card glass-panel">
-            <div class="host-top">
-              <div class="host-title-group">
-                <span class="host-icon">{{ host.host_type === 'agent' ? '📡' : '🐳' }}</span>
-                <div>
-                  <h3 class="host-name">{{ host.name }}</h3>
-                  <span class="host-endpoint font-mono text-cyan">{{ host.endpoint }}</span>
-                </div>
-              </div>
-              <div class="host-badges">
-                <span class="badge" :class="host.host_type === 'agent' ? 'badge-cyan' : (host.tls_enabled ? 'badge-emerald' : 'badge-amber')">
-                  {{ host.host_type === 'agent' ? '📡 AGENT' : (host.tls_enabled ? '🔒 TLS' : '🔓 TCP') }}
-                </span>
-                <StatusBadge :status="host.status || 'connected'" size="sm" />
-              </div>
-            </div>
-
-            <div class="host-meta-box">
-              <div class="host-meta-row font-mono text-muted">
-                <span>Type:</span>
-                <span class="text-primary">{{ (host.host_type || 'agent').toUpperCase() }}</span>
-              </div>
-              <div class="host-meta-row font-mono text-muted">
-                <span>Last Health Check:</span>
-                <span>{{ formatDate(host.last_health_check || host.created_at) }}</span>
-              </div>
-              <div v-if="hostTestResults[host.id]" class="host-test-result font-mono animate-fade-in" :class="hostTestResults[host.id].status === 'ok' ? 'test-pass' : 'test-fail'">
-                <div>⚡ Latency: {{ hostTestResults[host.id].latency_ms }}ms ({{ hostTestResults[host.id].status.toUpperCase() }})</div>
-                <div v-if="hostTestResults[host.id].agent_info" class="agent-info-details" style="margin-top: 4px; font-size: 11px; color: #38bdf8; display: flex; flex-direction: column; gap: 2px;">
-                  <span v-if="hostTestResults[host.id].agent_info?.hostname">🖥️ <strong>Host:</strong> {{ hostTestResults[host.id].agent_info?.hostname }}</span>
-                  <span v-if="hostTestResults[host.id].agent_info?.os">🐧 <strong>OS:</strong> {{ hostTestResults[host.id].agent_info?.os }} ({{ hostTestResults[host.id].agent_info?.arch }})</span>
-                  <span v-if="hostTestResults[host.id].agent_info?.uptime || hostTestResults[host.id].agent_info?.uptime_seconds">⏱️ <strong>Uptime:</strong> {{ formatUptime(hostTestResults[host.id].agent_info?.uptime || hostTestResults[host.id].agent_info?.uptime_seconds) }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Host Labels -->
-            <div v-if="host.labels && Object.keys(host.labels).length > 0" class="host-labels-list">
-              <span v-for="(val, key) in host.labels" :key="key" class="host-label-tag font-mono">
-                {{ key }}={{ val }}
-              </span>
-            </div>
-
-            <div class="host-footer">
-              <button 
-                class="btn btn-secondary btn-xs"
-                :disabled="testingHostId === host.id"
-                @click="handleTestHost(host)"
-              >
-                <span>{{ testingHostId === host.id ? '⏳ Testing...' : '⚡ Test Connection' }}</span>
-              </button>
-
-              <button 
-                class="btn btn-danger-outline btn-xs"
-                @click="promptRemoveHost(host)"
-              >
-                <span>🗑️ Remove</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- ========================================== -->
@@ -1669,175 +1332,6 @@ function formatMemory(mem?: number) {
       </template>
     </ModalDrawer>
 
-    <!-- Add Infrastructure Host Modal -->
-    <ModalDrawer
-      v-model:show="showAddHostModal"
-      mode="modal"
-      title="Register Infrastructure Host"
-      subtitle="Connect a monitoring agent or Docker daemon endpoint"
-      max-width="640px"
-    >
-      <form @submit.prevent="submitAddHost" class="host-form">
-        <div class="form-group">
-          <label class="form-label">Host Name <span class="text-rose">*</span></label>
-          <input 
-            v-model="hostForm.name" 
-            type="text" 
-            required 
-            placeholder="e.g. edge-worker-tokyo-01"
-            class="input-glass"
-          />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Host Type</label>
-          <select v-model="hostForm.host_type" class="input-glass">
-            <option value="agent">K8s-Agent (CPU/RAM/Disk monitoring)</option>
-            <option value="docker">Docker Engine (containers + metrics)</option>
-          </select>
-        </div>
-
-        <!-- When Agent -->
-        <div v-if="hostForm.host_type === 'agent'" class="form-group">
-          <label class="form-label">Agent Endpoint <span class="text-rose">*</span></label>
-          <input 
-            v-model="hostForm.endpoint" 
-            type="text" 
-            required 
-            placeholder="http://10.10.10.200:9100" 
-            class="input-glass font-mono"
-          />
-          <p class="form-hint text-muted" style="margin-top: 6px; font-size: 12px;">
-            💡 Run <code class="font-mono text-cyan">./deploy-agent.sh user@server-ip</code> to install agent
-          </p>
-        </div>
-
-        <!-- When Docker -->
-        <template v-else>
-          <div class="form-row-2">
-            <div class="form-group">
-              <label class="form-label">Daemon Endpoint <span class="text-rose">*</span></label>
-              <div class="endpoint-input-group font-mono">
-                <span class="endpoint-prefix">tcp://</span>
-                <input 
-                  v-model="hostForm.ip" 
-                  type="text" 
-                  required 
-                  placeholder="192.168.1.50 or host.domain" 
-                  class="input-glass endpoint-ip"
-                />
-                <span class="endpoint-colon">:</span>
-                <input 
-                  v-model.number="hostForm.port" 
-                  type="number" 
-                  required 
-                  placeholder="2375" 
-                  class="input-glass endpoint-port"
-                />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">API Version</label>
-              <input 
-                v-model="hostForm.api_version" 
-                type="text" 
-                placeholder="e.g. 1.45 (auto)"
-                class="input-glass font-mono"
-              />
-            </div>
-          </div>
-
-          <!-- TLS Toggle -->
-          <div class="form-group">
-            <div class="tls-toggle-row">
-              <label class="toggle-switch">
-                <input type="checkbox" v-model="hostForm.tls_enabled" />
-                <span class="toggle-slider"></span>
-              </label>
-              <div class="toggle-label-wrap">
-                <span class="toggle-title">Enable TLS Authentication (mTLS)</span>
-                <span class="toggle-sub text-muted">Use client certificates for secured Docker socket communication (Port 2376)</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- TLS Certificates Section -->
-          <div v-if="hostForm.tls_enabled" class="tls-certs-section glass-panel animate-fade-in">
-            <div class="form-group">
-              <label class="form-label">CA Certificate (ca.pem)</label>
-              <textarea 
-                v-model="hostForm.ca_cert" 
-                rows="3" 
-                placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" 
-                class="input-glass font-mono cert-textarea"
-              ></textarea>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Client Certificate (cert.pem)</label>
-              <textarea 
-                v-model="hostForm.client_cert" 
-                rows="3" 
-                placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" 
-                class="input-glass font-mono cert-textarea"
-              ></textarea>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Client Private Key (key.pem)</label>
-              <textarea 
-                v-model="hostForm.client_key" 
-                rows="3" 
-                placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----" 
-                class="input-glass font-mono cert-textarea"
-              ></textarea>
-            </div>
-          </div>
-        </template>
-
-        <!-- Labels Editor -->
-        <div class="form-group">
-          <div class="labels-heading">
-            <label class="form-label">Host Placement Labels</label>
-            <button type="button" class="btn btn-secondary btn-xs" @click="addLabelRow">
-              <span>+ Add Label</span>
-            </button>
-          </div>
-
-          <div v-if="hostForm.labels.length === 0" class="text-muted font-mono" style="font-size: 11px;">
-            No labels defined. Labels assist with targeted workload scheduling.
-          </div>
-
-          <div v-else class="labels-list">
-            <div v-for="(lbl, idx) in hostForm.labels" :key="idx" class="label-row">
-              <input 
-                v-model="lbl.key" 
-                type="text" 
-                placeholder="key (e.g. region)" 
-                class="input-glass font-mono" 
-              />
-              <span class="label-eq">=</span>
-              <input 
-                v-model="lbl.value" 
-                type="text" 
-                placeholder="value (e.g. ap-southeast)" 
-                class="input-glass font-mono" 
-              />
-              <button type="button" class="btn-remove-lbl" title="Remove label" @click="removeLabelRow(idx)">✕</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button type="button" class="btn btn-secondary" @click="showAddHostModal = false">Cancel</button>
-          <button type="submit" class="btn btn-primary" :disabled="submittingHost">
-            <span>{{ submittingHost ? '⏳ Registering...' : '💾 Register Server' }}</span>
-          </button>
-        </div>
-      </form>
-    </ModalDrawer>
-
     <!-- Drain Confirmation Modal -->
     <ModalDrawer
       v-model:show="showDrainModal"
@@ -1909,25 +1403,6 @@ function formatMemory(mem?: number) {
             @click="confirmRemoveNode"
           >
             <span>{{ actionLoading === `remove-${nodeToRemove.id}` ? 'Removing...' : '🗑️ Permanently Remove Node' }}</span>
-          </button>
-        </div>
-      </div>
-    </ModalDrawer>
-
-    <!-- Remove Remote Host Modal -->
-    <ModalDrawer
-      v-model:show="showRemoveHostModal"
-      mode="modal"
-      title="Remove Docker Host"
-      subtitle="Disconnect remote endpoint from registry"
-      max-width="500px"
-    >
-      <div v-if="hostToRemove" class="confirm-dialog-content">
-        <p>Are you sure you want to remove remote Docker host <strong class="text-cyan font-mono">{{ hostToRemove.name }}</strong> ({{ hostToRemove.endpoint }})?</p>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="showRemoveHostModal = false">Cancel</button>
-          <button class="btn btn-danger" @click="confirmRemoveHost">
-            <span>Remove Host</span>
           </button>
         </div>
       </div>

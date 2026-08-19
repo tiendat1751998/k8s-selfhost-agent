@@ -6,7 +6,9 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -504,6 +506,16 @@ type createComputeHostRequest struct {
 	Labels     map[string]string `json:"labels"`
 }
 
+var validHostTypes = map[string]bool{
+	"agent":      true, // K8s-Agent (CPU/RAM/Disk)
+	"docker":     true, // Docker Engine
+	"k8s":        true, // Kubernetes API
+	"prometheus": true, // Prometheus endpoint
+	"git":        true, // Git repository (GitHub/GitLab)
+	"database":   true, // Database connection
+	"custom":     true, // Custom HTTP endpoint
+}
+
 func (r *createComputeHostRequest) Validate() error {
 	ve := NewValidationError("validation failed")
 	if strings.TrimSpace(r.Name) == "" {
@@ -512,8 +524,8 @@ func (r *createComputeHostRequest) Validate() error {
 	if strings.TrimSpace(r.Endpoint) == "" {
 		ve.Add("endpoint", "endpoint is required")
 	}
-	if r.HostType != "" && r.HostType != "docker" && r.HostType != "k8s" && r.HostType != "agent" {
-		ve.Add("host_type", "host_type must be agent, docker, or k8s")
+	if r.HostType != "" && !validHostTypes[r.HostType] {
+		ve.Add("host_type", "host_type must be agent, docker, k8s, prometheus, git, database, or custom")
 	}
 	if ve.HasErrors() {
 		return ve
@@ -535,8 +547,8 @@ type updateComputeHostRequest struct {
 
 func (r *updateComputeHostRequest) Validate() error {
 	ve := NewValidationError("validation failed")
-	if r.HostType != "" && r.HostType != "docker" && r.HostType != "k8s" && r.HostType != "agent" {
-		ve.Add("host_type", "host_type must be agent, docker, or k8s")
+	if r.HostType != "" && !validHostTypes[r.HostType] {
+		ve.Add("host_type", "host_type must be agent, docker, k8s, prometheus, git, database, or custom")
 	}
 	if ve.HasErrors() {
 		return ve
@@ -768,47 +780,102 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 			"latency_ms": latencyMs,
 		})
 
-	default:
-		// Fallback: If endpoint uses http/https scheme, test via agent health/metrics endpoint
-		if strings.HasPrefix(host.Endpoint, "http://") || strings.HasPrefix(host.Endpoint, "https://") {
-			latencyMs, agentInfo, testErr := testAgentHostConnection(r.Context(), host)
-			if testErr != nil {
-				_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
-				writeJSON(w, http.StatusOK, map[string]interface{}{
-					"status":     "error",
-					"message":    testErr.Error(),
-					"latency_ms": latencyMs,
-				})
-				return
-			}
-			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
-			resp := map[string]interface{}{
-				"status":     "connected",
-				"message":    "successfully connected to host",
-				"latency_ms": latencyMs,
-			}
-			if len(agentInfo) > 0 {
-				resp["agent_info"] = agentInfo
-			}
-			writeJSON(w, http.StatusOK, resp)
-		} else {
-			latencyMs, testErr := testDockerHostConnection(r.Context(), host)
-			if testErr != nil {
-				_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
-				writeJSON(w, http.StatusOK, map[string]interface{}{
-					"status":     "error",
-					"message":    testErr.Error(),
-					"latency_ms": latencyMs,
-				})
-				return
-			}
-			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
+	case "k8s":
+		latencyMs, testErr := testK8sHostConnection(r.Context(), host)
+		if testErr != nil {
+			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
 			writeJSON(w, http.StatusOK, map[string]interface{}{
-				"status":     "connected",
-				"message":    "successfully connected to docker host",
+				"status":     "error",
+				"message":    testErr.Error(),
 				"latency_ms": latencyMs,
 			})
+			return
 		}
+
+		_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status":     "connected",
+			"message":    "successfully connected to kubernetes api",
+			"latency_ms": latencyMs,
+		})
+
+	case "prometheus":
+		latencyMs, testErr := testPrometheusHostConnection(r.Context(), host)
+		if testErr != nil {
+			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"status":     "error",
+				"message":    testErr.Error(),
+				"latency_ms": latencyMs,
+			})
+			return
+		}
+
+		_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status":     "connected",
+			"message":    "successfully connected to prometheus endpoint",
+			"latency_ms": latencyMs,
+		})
+
+	case "git":
+		latencyMs, testErr := testGitHostConnection(r.Context(), host)
+		if testErr != nil {
+			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"status":     "error",
+				"message":    testErr.Error(),
+				"latency_ms": latencyMs,
+			})
+			return
+		}
+
+		_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status":     "connected",
+			"message":    "successfully connected to git repository endpoint",
+			"latency_ms": latencyMs,
+		})
+
+	case "database":
+		latencyMs, testErr := testDatabaseHostConnection(r.Context(), host)
+		if testErr != nil {
+			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"status":     "error",
+				"message":    testErr.Error(),
+				"latency_ms": latencyMs,
+			})
+			return
+		}
+
+		_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status":     "connected",
+			"message":    "successfully connected to database endpoint",
+			"latency_ms": latencyMs,
+		})
+
+	case "custom":
+		fallthrough
+	default:
+		latencyMs, testErr := testCustomHostConnection(r.Context(), host)
+		if testErr != nil {
+			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"status":     "error",
+				"message":    testErr.Error(),
+				"latency_ms": latencyMs,
+			})
+			return
+		}
+
+		_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status":     "connected",
+			"message":    "successfully connected to endpoint",
+			"latency_ms": latencyMs,
+		})
 	}
 }
 
@@ -955,3 +1022,244 @@ func configureDockerTLS(caPEM, certPEM, keyPEM string) (*tls.Config, error) {
 		MinVersion:   tls.VersionTLS12,
 	}, nil
 }
+
+func testK8sHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, error) {
+	endpoint := strings.TrimSpace(host.Endpoint)
+	endpoint = strings.TrimRight(endpoint, "/")
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		endpoint = "https://" + endpoint
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	if host.TLSEnabled && host.TLSCA != "" {
+		tlsConfig, err := configureDockerTLS(host.TLSCA, host.TLSCert, host.TLSKey)
+		if err == nil {
+			transport.TLSClientConfig = tlsConfig
+		}
+	}
+
+	client := &http.Client{
+		Timeout:   5 * time.Second,
+		Transport: transport,
+	}
+
+	start := time.Now()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/livez", nil)
+	if err != nil {
+		return 0, fmt.Errorf("creating k8s request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// Fallback probe to root
+		reqRoot, rErr := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if rErr == nil {
+			respRoot, err2 := client.Do(reqRoot)
+			if err2 == nil {
+				defer respRoot.Body.Close()
+				latencyMs := time.Since(start).Milliseconds()
+				if latencyMs <= 0 {
+					latencyMs = 1
+				}
+				return latencyMs, nil
+			}
+		}
+		return 0, fmt.Errorf("connecting to kubernetes endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	latencyMs := time.Since(start).Milliseconds()
+	if latencyMs <= 0 {
+		latencyMs = 1
+	}
+
+	if resp.StatusCode >= 500 {
+		return latencyMs, fmt.Errorf("kubernetes api returned status %d", resp.StatusCode)
+	}
+
+	return latencyMs, nil
+}
+
+func testPrometheusHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, error) {
+	endpoint := strings.TrimSpace(host.Endpoint)
+	endpoint = strings.TrimRight(endpoint, "/")
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		endpoint = "http://" + endpoint
+	}
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	start := time.Now()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/-/healthy", nil)
+	if err != nil {
+		return 0, fmt.Errorf("creating prometheus request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		reqRoot, _ := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if reqRoot != nil {
+			respRoot, rErr := client.Do(reqRoot)
+			if rErr == nil {
+				defer respRoot.Body.Close()
+				latencyMs := time.Since(start).Milliseconds()
+				if latencyMs <= 0 {
+					latencyMs = 1
+				}
+				return latencyMs, nil
+			}
+		}
+		return 0, fmt.Errorf("connecting to prometheus endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	latencyMs := time.Since(start).Milliseconds()
+	if latencyMs <= 0 {
+		latencyMs = 1
+	}
+
+	if resp.StatusCode >= 500 {
+		return latencyMs, fmt.Errorf("prometheus returned status %d", resp.StatusCode)
+	}
+
+	return latencyMs, nil
+}
+
+func testGitHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, error) {
+	endpoint := strings.TrimSpace(host.Endpoint)
+	endpoint = strings.TrimRight(endpoint, "/")
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		endpoint = "https://" + endpoint
+	}
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	start := time.Now()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return 0, fmt.Errorf("creating git request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("connecting to git endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	latencyMs := time.Since(start).Milliseconds()
+	if latencyMs <= 0 {
+		latencyMs = 1
+	}
+
+	if resp.StatusCode >= 500 {
+		return latencyMs, fmt.Errorf("git server returned status %d", resp.StatusCode)
+	}
+
+	return latencyMs, nil
+}
+
+func testDatabaseHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, error) {
+	endpoint := strings.TrimSpace(host.Endpoint)
+
+	var hostPort string
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		hostPort = u.Host
+	} else if strings.Contains(endpoint, "@tcp(") {
+		idx1 := strings.Index(endpoint, "@tcp(")
+		idx2 := strings.Index(endpoint[idx1:], ")")
+		if idx1 != -1 && idx2 != -1 {
+			hostPort = endpoint[idx1+5 : idx1+idx2]
+		}
+	} else {
+		clean := endpoint
+		if idx := strings.Index(clean, "://"); idx != -1 {
+			clean = clean[idx+3:]
+		}
+		if idx := strings.Index(clean, "/"); idx != -1 {
+			clean = clean[:idx]
+		}
+		if idx := strings.Index(clean, "@"); idx != -1 {
+			clean = clean[idx+1:]
+		}
+		hostPort = clean
+	}
+
+	if !strings.Contains(hostPort, ":") {
+		hostPort = hostPort + ":5432"
+	}
+
+	start := time.Now()
+	var d net.Dialer
+	dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	conn, err := d.DialContext(dialCtx, "tcp", hostPort)
+	if err != nil {
+		return 0, fmt.Errorf("tcp connection to database at %s failed: %w", hostPort, err)
+	}
+	defer conn.Close()
+
+	latencyMs := time.Since(start).Milliseconds()
+	if latencyMs <= 0 {
+		latencyMs = 1
+	}
+
+	return latencyMs, nil
+}
+
+func testCustomHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, error) {
+	endpoint := strings.TrimSpace(host.Endpoint)
+	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
+		client := &http.Client{
+			Timeout: 5 * time.Second,
+		}
+		start := time.Now()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return 0, fmt.Errorf("creating custom request: %w", err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return 0, fmt.Errorf("connecting to custom endpoint: %w", err)
+		}
+		defer resp.Body.Close()
+
+		latencyMs := time.Since(start).Milliseconds()
+		if latencyMs <= 0 {
+			latencyMs = 1
+		}
+		if resp.StatusCode >= 500 {
+			return latencyMs, fmt.Errorf("custom endpoint returned status %d", resp.StatusCode)
+		}
+		return latencyMs, nil
+	}
+
+	hostPort := endpoint
+	if strings.HasPrefix(hostPort, "tcp://") {
+		hostPort = strings.TrimPrefix(hostPort, "tcp://")
+	}
+	start := time.Now()
+	var d net.Dialer
+	dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	conn, err := d.DialContext(dialCtx, "tcp", hostPort)
+	if err != nil {
+		return 0, fmt.Errorf("tcp connection to %s failed: %w", hostPort, err)
+	}
+	defer conn.Close()
+
+	latencyMs := time.Since(start).Milliseconds()
+	if latencyMs <= 0 {
+		latencyMs = 1
+	}
+	return latencyMs, nil
+}
+

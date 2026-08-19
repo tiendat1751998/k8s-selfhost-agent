@@ -378,24 +378,50 @@ export interface NodeDetails {
   joined_at: string
 }
 
+export type HostType = 'agent' | 'docker' | 'k8s' | 'prometheus' | 'git' | 'database' | 'custom' | string
+export type HostStatus = 'connected' | 'disconnected' | 'pending' | 'error' | string
+
 export interface ComputeHost {
   id: string
   name: string
-  host_type: 'agent' | 'docker' | 'k8s' | string
+  host_type: HostType
   endpoint: string
   tls_enabled: boolean
-  status: 'connected' | 'disconnected' | 'pending' | 'error' | string
-  last_health_check: string
+  tls_ca?: string
+  tls_cert?: string
+  tls_key?: string
+  api_version?: string
+  status: HostStatus
+  last_health_check?: string
   labels: Record<string, string>
   tenant_id?: string
   created_at: string
+  updated_at?: string
 }
 
 export interface CreateHostRequest {
   name: string
-  host_type?: 'agent' | 'docker' | 'k8s' | string
+  host_type?: HostType
   endpoint: string
   tls_enabled?: boolean
+  tls_ca?: string
+  tls_cert?: string
+  tls_key?: string
+  ca_cert?: string
+  client_cert?: string
+  client_key?: string
+  api_version?: string
+  labels?: Record<string, string>
+}
+
+export interface UpdateHostRequest {
+  name?: string
+  host_type?: HostType
+  endpoint?: string
+  tls_enabled?: boolean
+  tls_ca?: string
+  tls_cert?: string
+  tls_key?: string
   ca_cert?: string
   client_cert?: string
   client_key?: string
@@ -690,12 +716,37 @@ export const dockerApi = {
   },
 
   async registerHost(data: CreateHostRequest): Promise<ComputeHost> {
-    const res = await api.post<ApiResponse<ComputeHost> | ComputeHost>('/docker/hosts', data)
+    const payload = {
+      ...data,
+      tls_ca: data.tls_ca || data.ca_cert || '',
+      tls_cert: data.tls_cert || data.client_cert || '',
+      tls_key: data.tls_key || data.client_key || '',
+    }
+    const res = await api.post<ApiResponse<ComputeHost> | ComputeHost>('/docker/hosts', payload)
     return (res as ApiResponse<ComputeHost>).data || (res as ComputeHost)
   },
 
-  async removeHost(id: string): Promise<{ status: string }> {
+  async createHost(data: CreateHostRequest): Promise<ComputeHost> {
+    return this.registerHost(data)
+  },
+
+  async updateHost(id: string, data: UpdateHostRequest): Promise<ComputeHost> {
+    const payload = {
+      ...data,
+      tls_ca: data.tls_ca !== undefined ? data.tls_ca : (data.ca_cert || undefined),
+      tls_cert: data.tls_cert !== undefined ? data.tls_cert : (data.client_cert || undefined),
+      tls_key: data.tls_key !== undefined ? data.tls_key : (data.client_key || undefined),
+    }
+    const res = await api.put<ApiResponse<ComputeHost> | ComputeHost>(`/docker/hosts/${id}`, payload)
+    return (res as ApiResponse<ComputeHost>).data || (res as ComputeHost)
+  },
+
+  async deleteHost(id: string): Promise<{ status: string }> {
     return api.delete<{ status: string }>(`/docker/hosts/${id}`)
+  },
+
+  async removeHost(id: string): Promise<{ status: string }> {
+    return this.deleteHost(id)
   },
 
   async testHost(id: string): Promise<TestHostResponse> {
@@ -710,6 +761,24 @@ export const dockerApi = {
     const params: Record<string, string> = { id }
     if (type) params.type = type
     return api.get<{ logs: string }>('/docker/logs', params)
+  },
+}
+
+export const hostsApi = {
+  async list(): Promise<ComputeHost[]> {
+    return dockerApi.listHosts()
+  },
+  async create(data: CreateHostRequest): Promise<ComputeHost> {
+    return dockerApi.createHost(data)
+  },
+  async update(id: string, data: UpdateHostRequest): Promise<ComputeHost> {
+    return dockerApi.updateHost(id, data)
+  },
+  async delete(id: string): Promise<{ status: string }> {
+    return dockerApi.deleteHost(id)
+  },
+  async test(id: string): Promise<TestHostResponse> {
+    return dockerApi.testHost(id)
   },
 }
 
