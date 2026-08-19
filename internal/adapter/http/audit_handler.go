@@ -44,7 +44,11 @@ func (h *AuditHandler) ListFindings(w http.ResponseWriter, r *http.Request) {
 
 // ResolveFinding handles POST /api/v1/audit/findings/{id}/resolve
 func (h *AuditHandler) ResolveFinding(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "finding id is required", err)
+		return
+	}
 	if err := h.repo.ResolveFinding(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to resolve finding", err)
 		return

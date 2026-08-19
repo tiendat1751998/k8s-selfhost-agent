@@ -58,7 +58,11 @@ func (h *TimelineHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 // GetEvent handles GET /api/v1/timeline/{id}
 func (h *TimelineHandler) GetEvent(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "event id is required", err)
+		return
+	}
 	ev, err := h.repo.GetByID(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get event", err)

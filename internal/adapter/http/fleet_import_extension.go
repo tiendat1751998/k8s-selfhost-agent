@@ -54,7 +54,11 @@ func (h *FleetHandler) ImportCluster(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FleetHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "cluster id is required", err)
+		return
+	}
 	c, err := h.repo.GetCluster(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get cluster", err)
@@ -72,7 +76,11 @@ func (h *FleetHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *FleetHandler) DiscoverClusterResources(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "cluster id is required", err)
+		return
+	}
 	c, err := h.repo.GetCluster(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get cluster", err)

@@ -200,9 +200,9 @@ func (h *CatalogHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 
 // GetService handles GET /services/{id} - retrieves a single service catalog entry by ID.
 func (h *CatalogHandler) GetService(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "service id is required", nil)
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "service id is required", err)
 		return
 	}
 
@@ -222,9 +222,9 @@ func (h *CatalogHandler) GetService(w http.ResponseWriter, r *http.Request) {
 
 // UpdateService handles PUT /services/{id} - updates an existing service catalog entry.
 func (h *CatalogHandler) UpdateService(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "service id is required", nil)
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "service id is required", err)
 		return
 	}
 
@@ -282,9 +282,9 @@ func (h *CatalogHandler) UpdateService(w http.ResponseWriter, r *http.Request) {
 
 // DeleteService handles DELETE /services/{id} - removes a service catalog entry.
 func (h *CatalogHandler) DeleteService(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "service id is required", nil)
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "service id is required", err)
 		return
 	}
 

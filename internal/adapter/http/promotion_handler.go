@@ -84,7 +84,11 @@ func (h *PromotionHandler) CreatePromotion(w http.ResponseWriter, r *http.Reques
 
 // ApprovePromotion handles PUT /api/v1/promotions/{id}/approve
 func (h *PromotionHandler) ApprovePromotion(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "promotion id is required", err)
+		return
+	}
 	approver, _ := r.Context().Value(middleware.UserIDKey).(string)
 
 	if err := h.usecase.Approve(r.Context(), id, approver); err != nil {
@@ -96,7 +100,11 @@ func (h *PromotionHandler) ApprovePromotion(w http.ResponseWriter, r *http.Reque
 
 // CompletePromotion handles PUT /api/v1/promotions/{id}/complete
 func (h *PromotionHandler) CompletePromotion(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "promotion id is required", err)
+		return
+	}
 	if err := h.usecase.Complete(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to complete promotion", err)
 		return
@@ -106,7 +114,11 @@ func (h *PromotionHandler) CompletePromotion(w http.ResponseWriter, r *http.Requ
 
 // RejectPromotion handles PUT /api/v1/promotions/{id}/reject
 func (h *PromotionHandler) RejectPromotion(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "promotion id is required", err)
+		return
+	}
 	rejecter, _ := r.Context().Value(middleware.UserIDKey).(string)
 
 	if err := h.usecase.Reject(r.Context(), id, rejecter); err != nil {

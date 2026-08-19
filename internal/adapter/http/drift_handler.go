@@ -83,7 +83,11 @@ func (h *DriftHandler) CreateDrift(w http.ResponseWriter, r *http.Request) {
 
 // ResolveDrift handles PUT /api/v1/drift/{id}/resolve
 func (h *DriftHandler) ResolveDrift(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "drift id is required", err)
+		return
+	}
 	if err := h.repo.Resolve(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to resolve drift", err)
 		return

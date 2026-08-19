@@ -168,9 +168,9 @@ func (h *AlertHandler) ListRules(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AlertHandler) UpdateRule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "rule id is required", nil)
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "rule id is required", err)
 		return
 	}
 
@@ -206,9 +206,9 @@ func (h *AlertHandler) UpdateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AlertHandler) DeleteRule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "rule id is required", nil)
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "rule id is required", err)
 		return
 	}
 
@@ -239,9 +239,9 @@ func (h *AlertHandler) ListHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AlertHandler) AcknowledgeAlert(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "alert id is required", nil)
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "alert id is required", err)
 		return
 	}
 

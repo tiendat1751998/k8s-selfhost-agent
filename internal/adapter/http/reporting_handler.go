@@ -77,7 +77,11 @@ func (h *ReportingHandler) GenerateReport(w http.ResponseWriter, r *http.Request
 
 // DeleteReport handles DELETE /api/v1/reports/{id}
 func (h *ReportingHandler) DeleteReport(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "report id is required", err)
+		return
+	}
 	if err := h.repo.DeleteReport(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete report", err)
 		return

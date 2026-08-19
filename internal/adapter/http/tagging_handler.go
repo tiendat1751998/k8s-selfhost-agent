@@ -73,7 +73,11 @@ func (h *TaggingHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 
 // DeleteTag handles DELETE /api/v1/tags/{id}
 func (h *TaggingHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "tag id is required", err)
+		return
+	}
 	if err := h.repo.DeleteTag(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete tag", err)
 		return

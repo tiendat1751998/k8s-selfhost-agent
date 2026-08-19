@@ -29,40 +29,41 @@ type Token struct {
 }
 
 var nonTenantTables = map[string]bool{
-	"agent_tasks":           true,
-	"agent_subtasks":        true,
-	"agent_executions":      true,
-	"agent_project_state":   true,
-	"audit_findings":        true,
-	"audit_runs":            true,
-	"audit_logs":            true,
-	"automation_rules":      true,
-	"automation_executions": true,
-	"backup_history":        true,
-	"change_requests":       true,
-	"maintenance_windows":   true,
-	"compliance_frameworks": true,
-	"compliance_violations": true,
-	"correlated_events":     true,
-	"cluster_costs":         true,
-	"namespace_costs":       true,
-	"resource_waste":        true,
-	"drift_records":         true,
-	"notification_channels": true,
-	"notifications":        true,
-	"slo_definitions":       true,
-	"slo_snapshots":         true,
-	"promotions":            true,
-	"reports":               true,
-	"reporting":             true,
-	"tags":                  true,
-	"resource_tags":         true,
-	"organizations":         true,
-	"projects":              true,
-	"tenant_members":        true,
-	"rbac_matrix":           true,
-	"timeline_events":       true,
-	"users":                 true,
+	// Tables without tenant_id column in database schema:
+	// TODO: Add migrations to add tenant_id column to these tables for full tenant isolation:
+	"agent_tasks":           true, // TODO: needs migration to add tenant_id
+	"agent_subtasks":        true, // TODO: needs migration to add tenant_id
+	"agent_executions":      true, // TODO: needs migration to add tenant_id
+	"agent_project_state":   true, // TODO: needs migration to add tenant_id
+	"audit_findings":        true, // TODO: needs migration to add tenant_id
+	"audit_runs":            true, // TODO: needs migration to add tenant_id
+	"audit_logs":            true, // TODO: needs migration to add tenant_id
+	"automation_rules":      true, // TODO: needs migration to add tenant_id
+	"automation_executions": true, // TODO: needs migration to add tenant_id
+	"backup_history":        true, // TODO: needs migration to add tenant_id
+	"change_requests":       true, // TODO: needs migration to add tenant_id
+	"maintenance_windows":   true, // TODO: needs migration to add tenant_id
+	"compliance_frameworks": true, // TODO: needs migration to add tenant_id
+	"compliance_violations": true, // TODO: needs migration to add tenant_id
+	"correlated_events":     true, // TODO: needs migration to add tenant_id
+	"cluster_costs":         true, // TODO: needs migration to add tenant_id
+	"namespace_costs":       true, // TODO: needs migration to add tenant_id
+	"resource_waste":        true, // TODO: needs migration to add tenant_id
+	"drift_records":         true, // TODO: needs migration to add tenant_id
+	"notifications":        true, // TODO: needs migration to add tenant_id
+	"slo_definitions":       true, // TODO: needs migration to add tenant_id
+	"slo_snapshots":         true, // TODO: needs migration to add tenant_id
+	"promotions":            true, // TODO: needs migration to add tenant_id
+	"reports":               true, // TODO: needs migration to add tenant_id
+	"reporting":             true, // TODO: needs migration to add tenant_id
+	"tags":                  true, // TODO: needs migration to add tenant_id
+	"resource_tags":         true, // TODO: needs migration to add tenant_id
+	"organizations":         true, // Root tenant table (id is tenant ID)
+	"projects":              true, // TODO: scoped by org_id; needs migration or mapping to tenant_id
+	"tenant_members":        true, // TODO: scoped by org_id; needs migration or mapping to tenant_id
+	"rbac_matrix":           true, // Global RBAC definitions
+	"timeline_events":       true, // TODO: needs migration to add tenant_id
+	"users":                 true, // Global user accounts
 }
 
 // BuildTenantQuery appends tenant filtering to a query if the user is not platform_admin.

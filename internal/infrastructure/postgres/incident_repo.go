@@ -99,7 +99,7 @@ func (r *IncidentRepo) Update(ctx context.Context, inc *incident.Incident) error
 		SET status = $1, severity = $2, message = $3, raw_data = $4, updated_at = $5, resolved_at = $6
 		WHERE id = $7`
 
-	tag, err := r.getDB(ctx).Exec(ctx, query,
+	query, args := BuildTenantQuery(ctx, query,
 		string(inc.Status),
 		string(inc.Severity),
 		inc.Message,
@@ -108,6 +108,8 @@ func (r *IncidentRepo) Update(ctx context.Context, inc *incident.Incident) error
 		inc.ResolvedAt,
 		inc.ID,
 	)
+
+	tag, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "updating incident")
 	}

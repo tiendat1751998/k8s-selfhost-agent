@@ -86,7 +86,11 @@ func (h *ChangeHandler) CreateChange(w http.ResponseWriter, r *http.Request) {
 
 // ApproveChange handles PUT /api/v1/changes/{id}/approve
 func (h *ChangeHandler) ApproveChange(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "change id is required", err)
+		return
+	}
 	approver, _ := r.Context().Value(middleware.UserIDKey).(string)
 
 	if err := h.repo.ApproveRequest(r.Context(), id, approver); err != nil {
@@ -98,7 +102,11 @@ func (h *ChangeHandler) ApproveChange(w http.ResponseWriter, r *http.Request) {
 
 // RejectChange handles PUT /api/v1/changes/{id}/reject
 func (h *ChangeHandler) RejectChange(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "change id is required", err)
+		return
+	}
 	approver, _ := r.Context().Value(middleware.UserIDKey).(string)
 
 	if err := h.repo.RejectRequest(r.Context(), id, approver); err != nil {

@@ -109,7 +109,7 @@ func TestAllPostgresRepos_QueryCallsUseBuildTenantQuery(t *testing.T) {
 		"correlation_repo.go":   {"*"},                             // Non-tenant tables (correlated_events)
 		"cost_repo.go":          {"*"},                             // Non-tenant tables (cluster_costs, namespace_costs, resource_waste)
 		"drift_repo.go":         {"*"},                             // Non-tenant tables (drift_records)
-		"notification_repo.go":  {"*"},                             // Non-tenant tables (notification_channels, notifications)
+		"notification_repo.go":  {"ListNotifications", "MarkRead", "MarkAllRead", "CreateNotification"}, // Non-tenant notifications table; notification_channels is now tenant-isolated
 		"observability_repo.go": {"*"},                             // Non-tenant tables (slo_definitions, slo_snapshots)
 		"promotion_repo.go":     {"*"},                             // Non-tenant tables (promotions)
 		"reporting_repo.go":     {"*"},                             // Non-tenant tables (reports)
