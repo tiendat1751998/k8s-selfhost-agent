@@ -95,7 +95,6 @@ const navGroups = [
       { path: '/hosts', name: 'Infrastructure Hosts', icon: '🖥️', sub: 'Compute & Database Nodes' },
       { path: '/deployments', name: 'Deployments', icon: '🚀', sub: 'Canary & Blue-Green' },
       { path: '/promotions', name: 'Promotions', icon: '🔄', sub: 'Dev → Stage → Prod' },
-      { path: '/docker', name: 'Docker Swarm', icon: '🐳', sub: 'Edge Container Nodes' },
       { path: '/explorer', name: 'Cluster Explorer', icon: '🔍', sub: 'Live CRD & Pod Trees' },
     ]
   },
