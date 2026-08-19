@@ -166,6 +166,8 @@ func run() error {
 	cloudHandler := adapthttp.NewCloudHandler(cloudAccountRepo, nil, log)
 	settingsRepo := postgres.NewSettingsRepo(pgClient)
 	settingsHandler := adapthttp.NewSettingsHandler(settingsRepo, log)
+	catalogRepo := postgres.NewCatalogRepo(pgClient)
+	catalogHandler := adapthttp.NewCatalogHandler(catalogRepo, log)
 
 	txManager := postgres.NewTxManager(pgClient)
 	defaultLLM, _ := registry.Default()
@@ -243,6 +245,7 @@ func run() error {
 		K8s:           k8sHandler,
 		Cloud:         cloudHandler,
 		Settings:      settingsHandler,
+		Catalog:       catalogHandler,
 	}
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)
