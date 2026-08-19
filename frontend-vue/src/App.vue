@@ -130,6 +130,7 @@ const navGroups = [
       { path: '/changes', name: 'Change Requests', icon: '📝', sub: 'RFC Approvals & Windows' },
       { path: '/alerts', name: 'Alerts & Channels', icon: '🔥', sub: 'Slack, Telegram, Email' },
       { path: '/reports', name: 'Reports Center', icon: '📊', sub: 'Executive SOC2 & Cost' },
+      { path: '/catalog', name: 'Service Catalog', icon: '📚', sub: 'Developer Portal & APIs' },
       { path: '/settings', name: 'System Settings', icon: '🔧', sub: 'MetalLB & KEDA Nodes' },
     ]
   }
