@@ -77,6 +77,12 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/hosts',
+      name: 'infra-hosts',
+      component: () => import('../views/InfraHostsView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/deployments',
       name: 'deployments',
       component: DeploymentsView,

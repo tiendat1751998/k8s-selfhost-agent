@@ -1,83 +1,79 @@
-# Project State — k8s-selfhost-agent
+﻿# K8sControl Project State — Session Handoff 2026-08-19T16:28
 
-> Last updated: 2026-08-14T15:39:00+07:00
-> Updated by: Orchestrator session `2aba5d84-0be1-4e98-817c-874156f54dc8`
+## Running Subagents
+- **Infra Hosts Builder** (fe3198db): Building dedicated Infrastructure Hosts page with multi-type support + full CRUD. CHECK if committed.
 
-## Architecture Overview
+## Git State (master)
+9586bde fix(metrics): ListAll bypass tenant for agent scraping
+e2654ce fix(hosts): rename Docker Host to Infrastructure Host + agent test
+071a976 fix(deploy): remove sudo from deploy script
+243127b docs: deployment guide + deploy script
+c534f3c feat(metrics): scrape k8s-agent hosts + merge overview
+3c81f3d feat(agent): lightweight monitoring agent binary
+545841e feat(frontend): TOTP 2FA login + setup wizard + token refresh
+0041b49 feat(auth): TOTP 2FA + JWT refresh tokens + recovery codes
+62bba6c security(docker): swarm join tokens protection
+5668ef0 feat(docker): node management APIs + multi-host + swarm tokens
+2c7ab2e feat(frontend): real-time overview with topology + gauges
+e229a5f feat(metrics): Docker stats collector + WebSocket + overview API
+684d70f feat(ecosystem): auto-detector + dashboard
+432f1f9 feat(plugins): plugin registry + marketplace
+e98e229 security(P1-P2): tenant isolation + UUID validation
 
-Self-hosted Kubernetes cluster management platform with AI-assisted incident RCA.
+## Repo
+GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 
-### Stack
-- **Backend**: Go 1.23, Chi router, PostgreSQL, Redis, NATS JetStream
-- **Frontend**: Vue 3 + TypeScript + Vite, Pinia stores
-- **Infrastructure**: Docker (distroless), Kubernetes, Helm, RBAC
-- **Observability**: Zap structured logging, OpenTelemetry, Prometheus metrics
+## Credentials
+- Postgres: 10.10.10.133:5432 myuser/mysecretpassword mydatabase
+- Docker: tcp://10.10.10.133:2375
+- Admin: admin@k8s.local / admin123
+- JWT: k8s-selfhost-enterprise-jwt-secret-2026
+- Encryption: 0123456789abcdef0123456789abcdef
 
-## Completed Enterprise Hardening (Session 2aba5d84)
+## Architecture
+- Backend: Go + chi, port 8080, Clean Architecture
+- Frontend: Vue3 + Vite + Pinia, port 3000
+- PlatformHandlers in router.go holds ALL handlers
+- WebSocket: WSHub + WSBridge.Broadcast (real-time metrics)
+- Metrics collector: goroutine poll Docker + agent hosts 5s
+- RBAC: platform_admin, tenant_admin, operator, viewer
+- JWT: access 15min + partial 5min (MFA) + refresh 7d httpOnly
+- TOTP: pquerna/otp, AES-GCM encrypted, bcrypt recovery codes
 
-### Phase 1: Security Critical ✅
-- Removed `test-token-for-unit-tests` auth backdoor from `auth.go`
-- JWT middleware now validates `exp`, `iat`, `iss` claims
-- `JWT_SECRET` env var required at startup (fail-fast)
-- CORS switched from wildcard `*` to configurable `CORS_ALLOW_ORIGIN`
-- `crypto.go` uses HKDF key derivation (not raw byte slicing)
-- Prometheus metric cardinality fixed (normalized paths)
+## Migrations 033-041
+033:cloud_accounts 034:platform_settings 035:service_catalog 036:admin_pw
+037:plugins 038:scaffold_templates 039:ecosystem_tools 040:compute_hosts
+041:user_mfa+refresh_tokens
 
-### Phase 2: Backend Quality ✅
-- Removed `initializeWelcomeMessage` seed data injection
-- Fake health broadcasts replaced with real `Ping()` calls
-- Trivy/Checkov scanners return explicit errors when binaries missing (not fake clean)
-- Terraform/Ansible runners error on missing binaries (not fake success)
-- `stringutil.go` uses `[]rune()` for UTF-8 safety
-- Standalone server reads `DOCKER_HOST` from env (no hardcoded IP)
+## Completed Features
+- Cloud Provider Connector, Platform Settings, Service Catalog
+- Security Audit 18/18, Plugin System, Scaffolder Templates
+- Ecosystem Auto-Detector, Real-time Overview Dashboard
+- Node Management (swarm tokens, drain/activate/remove)
+- TOTP 2FA + JWT Refresh (2-step login, QR wizard, recovery codes)
+- K8s-Agent Binary (cmd/agent/, deploy-agent.sh)
+- Agent Host Scraping (ListAll bypass tenant)
+- Infrastructure Host UI (agent type, test connectivity)
 
-### Phase 3: Frontend ✅
-- Removed `demo-admin-token` fallback, added 401 interceptor
-- Created `LoginView.vue` with real POST auth flow
-- Router has `beforeEach` auth guards + 404 catch-all
-- Removed all mock arrays: `defaultDrivers`, `baselineScans`, `initialLogs`, `defaultJobs`
-- Fixed deceptive `catch` blocks (no more fake success alerts)
-- All metric cards/badges wired to real Pinia store state
-- Design system consolidated to dark glassmorphic (`style.css`)
-- TypeScript strict mode enabled, `any` types removed
-- Deleted boilerplate: `HelloWorld.vue`, `useApi.ts`, old `useAuth.ts`
+## IN PROGRESS
+- Infrastructure Hosts Page: dedicated /hosts page, CRUD, multi-type
+  (agent/docker/k8s/prometheus/git/database/custom), sidebar nav
+  Agent fe3198db may have committed — CHECK git log
 
-### Phase 4: Infrastructure ✅
-- Dockerfile: multi-stage (Node.js + Go + distroless), static healthcheck binary
-- docker-compose: fixed healthcheck, added ENCRYPTION_KEY/JWT_SECRET, fixed migration mount
-- K8s: serviceAccountName, RBAC (ClusterRole + Binding), resource limits
-- Created `Makefile`, `service.yaml`, `rbac.yaml`
-- `.gitignore` updated (*.exe, fix.py)
-- `config.yaml` complete with all sections, consistent K8S_ prefix
-- `go.mod` aligned to Go 1.23
+## BLOCKED (waiting K8s cluster)
+Pod Terminal, Helm Catalog, GitOps Visual, Real-time Logs,
+Image CVE Scanning, Policy Dashboard, Service Mesh, Network Policy
 
-## Deferred Items — NOW COMPLETE (Session 2aba5d84, Phase 2)
+## TODO (non-K8s)
+- Edge Agent, AI + Ecosystem Data integration
 
-### Domain 1: Backup System ✅
-- All DB drivers (postgres, redis, oracle, sqlserver, mongodb) use `exec.LookPath()` pre-checks
-- Fake fallback stubs removed (no more 2-line comment headers pretending to be backups)
-- Credentials moved from CLI args to env vars (PGPASSWORD, ORACLE_PWD, SQLCMDPASSWORD, MONGODB_URI)
-- Redis driver rewritten to use redis-cli binary instead of go-redis in-process
+## User Preferences
+- Quality > speed, always subagents, fix without asking
+- Chrome DevTools MCP for UI verify, always UI approach
+- Zero-mock, Vietnamese, max 3 parallel subagents
 
-### Domain 2: Security & Auth ✅
-- Telegram bot denies all commands when adminMap empty (was: allow all)
-- Rollback action returns "not implemented" error (was: fake restart)
-- Approver identity from JWT context, not query params (was: spoofable)
-- Kubeconfig encrypted at rest via crypto.Encrypt()
-
-### Domain 3: Infrastructure Quality ✅
-- Log aggregator: TTL pruning (1hr) + LRU eviction (max 1000 buffers) + cleanup goroutine
-- Capacity repo: returns ErrMetricsUnavailable instead of hardcoded percentages
-- Agent-runner: /healthz + /readyz endpoints on :8081
-- Fleet upgrade: 501 Not Implemented (was: fake DB update)
-- Audit run: creates "pending" status (was: fake "completed")
-
-### Remaining Known Issues — NOW FIXED
-- ✅ Backup engine uses `io.Pipe()` streaming (was: `bytes.Buffer` OOM risk)
-- ✅ S3 storage has AWS SigV4 signing — stdlib-only impl (HMAC-SHA256, no aws-sdk-go-v2 dep)
-- ✅ Backup verification: SHA-256 checksum re-download comparison (was: hardcoded "verified")
-
-## Verification Evidence
-- `go vet ./...` — PASS (exit 0)
-- `go test ./internal/adapter/http/middleware/...` — PASS
-- `npm run build` (frontend-vue) — PASS (0 errors, 66 modules, 523ms)
+## Technical Notes
+- PowerShell: ; not && | Chrome DevTools: evaluate_script for clicks
+- BuildTenantQuery adds tenant_id — use ListAll() for background services
+- compute_hosts stored under tenant_id='default-tenant'
+- 49+ test packages ALL PASS

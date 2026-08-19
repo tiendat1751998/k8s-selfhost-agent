@@ -721,3 +721,82 @@ func TestDockerHandler_AgentHostConnectivity(t *testing.T) {
 	}
 }
 
+func TestDockerHandler_MultiTypeComputeHosts(t *testing.T) {
+	repo := &testDockerRepo{}
+	hostRepo := newMockComputeHostRepo()
+	handler := NewDockerHandler(repo, hostRepo)
+
+	r := chi.NewRouter()
+	r.Route("/docker", handler.RegisterRoutes)
+
+	// 1. Test all valid types can be created
+	validTypes := []string{"agent", "docker", "k8s", "prometheus", "git", "database", "custom"}
+	for _, ht := range validTypes {
+		body := fmt.Sprintf(`{
+			"name": "host-%s",
+			"host_type": "%s",
+			"endpoint": "http://127.0.0.1:8080",
+			"labels": {"type": "%s"}
+		}`, ht, ht, ht)
+		req := httptest.NewRequest(http.MethodPost, "/docker/hosts", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected status 201 for type %s, got %d: %s", ht, w.Code, w.Body.String())
+		}
+	}
+
+	// 2. Test invalid host_type is rejected
+	invalidBody := `{
+		"name": "invalid-host",
+		"host_type": "unsupported_type",
+		"endpoint": "http://127.0.0.1:8080"
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/docker/hosts", bytes.NewBufferString(invalidBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for invalid host_type, got %d", w.Code)
+	}
+
+	// 3. Test multi-type connectivity with mock servers
+	// Mock Prometheus server
+	promMux := http.NewServeMux()
+	promMux.HandleFunc("/-/healthy", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("Prometheus Server is Healthy.\n"))
+	})
+	promServer := httptest.NewServer(promMux)
+	defer promServer.Close()
+
+	promHost := &domain.ComputeHost{
+		ID:        "prom-test-1",
+		Name:      "prom-test-1",
+		HostType:  "prometheus",
+		Endpoint:  promServer.URL,
+		Status:    "pending",
+		TenantID:  "default-tenant",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	_ = hostRepo.Create(context.Background(), promHost)
+
+	testReq := httptest.NewRequest(http.MethodPost, "/docker/hosts/"+promHost.ID+"/test", nil)
+	testW := httptest.NewRecorder()
+	r.ServeHTTP(testW, testReq)
+
+	if testW.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for prometheus test, got %d: %s", testW.Code, testW.Body.String())
+	}
+	var promResp map[string]interface{}
+	_ = json.NewDecoder(testW.Body).Decode(&promResp)
+	if promResp["status"] != "connected" {
+		t.Errorf("expected prometheus connected status, got %v", promResp["status"])
+	}
+}
+
+

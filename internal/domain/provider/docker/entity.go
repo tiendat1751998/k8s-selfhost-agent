@@ -74,7 +74,7 @@ type NodeDetails struct {
 type ComputeHost struct {
 	ID              string            `json:"id"`
 	Name            string            `json:"name"`
-	HostType        string            `json:"host_type"` // agent, docker, k8s
+	HostType        string            `json:"host_type"` // agent, docker, k8s, prometheus, git, database, custom
 	Endpoint        string            `json:"endpoint"`  // http://ip:9100, tcp://ip:port, or unix:///var/run/docker.sock
 	TLSEnabled      bool              `json:"tls_enabled"`
 	TLSCA           string            `json:"tls_ca,omitempty"`
