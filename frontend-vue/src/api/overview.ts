@@ -1,5 +1,18 @@
 import { api } from './client'
 
+export interface ProcessMetric {
+  pid: number
+  name: string
+  command_line: string
+  user: string
+  cpu_percent: number
+  memory_bytes: number
+  memory_percent: number
+  read_bytes_per_sec: number
+  write_bytes_per_sec: number
+  state: string
+}
+
 export interface NodeMetrics {
   node_id: string
   node_name: string
@@ -17,6 +30,12 @@ export interface NodeMetrics {
   network_tx_bytes: number
   container_count: number
   running_count: number
+  os?: string
+  arch?: string
+  uptime?: number
+  uptime_seconds?: number
+  load_avg?: [number, number, number] | number[]
+  top_processes?: ProcessMetric[]
 }
 
 export interface ContainerMetrics {
