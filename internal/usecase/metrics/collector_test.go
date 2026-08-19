@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +17,8 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/system"
 	"go.uber.org/zap"
+
+	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 )
 
 type mockBroadcaster struct {
@@ -84,6 +88,42 @@ func (m *mockDockerAPI) Info(ctx context.Context) (system.Info, error) {
 
 func (m *mockDockerAPI) DiskUsage(ctx context.Context, options types.DiskUsageOptions) (types.DiskUsage, error) {
 	return m.diskUsage, nil
+}
+
+type mockComputeHostRepo struct {
+	hosts         []docker.ComputeHost
+	updatedStatus map[string]struct {
+		status    string
+		checkTime time.Time
+	}
+	mu sync.Mutex
+}
+
+func (m *mockComputeHostRepo) Create(ctx context.Context, host *docker.ComputeHost) error { return nil }
+func (m *mockComputeHostRepo) GetByID(ctx context.Context, id string) (*docker.ComputeHost, error) {
+	return nil, nil
+}
+func (m *mockComputeHostRepo) List(ctx context.Context, tenantID string) ([]docker.ComputeHost, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.hosts, nil
+}
+func (m *mockComputeHostRepo) Update(ctx context.Context, host *docker.ComputeHost) error { return nil }
+func (m *mockComputeHostRepo) Delete(ctx context.Context, id string) error               { return nil }
+func (m *mockComputeHostRepo) UpdateStatus(ctx context.Context, id string, status string, lastHealthCheck time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.updatedStatus == nil {
+		m.updatedStatus = make(map[string]struct {
+			status    string
+			checkTime time.Time
+		})
+	}
+	m.updatedStatus[id] = struct {
+		status    string
+		checkTime time.Time
+	}{status: status, checkTime: lastHealthCheck}
+	return nil
 }
 
 func TestCalculateCPUPercent(t *testing.T) {
@@ -163,7 +203,7 @@ func TestCalculateCPUPercent(t *testing.T) {
 }
 
 func TestCollector_GenerateAlerts(t *testing.T) {
-	collector := NewCollector(nil, nil, zap.NewNop(), WithThresholds(Thresholds{
+	collector := NewCollector(nil, nil, nil, zap.NewNop(), WithThresholds(Thresholds{
 		CPUWarning:    80.0,
 		MemoryWarning: 85.0,
 		DiskWarning:   90.0,
@@ -322,6 +362,7 @@ func TestCollector_CollectOnce_Swarm(t *testing.T) {
 
 	collector := NewCollector(
 		mockDocker,
+		nil,
 		broadcaster,
 		zap.NewNop(),
 		WithInterval(100*time.Millisecond),
@@ -352,6 +393,9 @@ func TestCollector_CollectOnce_Swarm(t *testing.T) {
 	}
 	if len(overview.Alerts) != 2 {
 		t.Errorf("expected 2 alerts (1 cpu_high, 1 node_down), got %d: %+v", len(overview.Alerts), overview.Alerts)
+	}
+	if overview.Nodes[0].Source != "docker" {
+		t.Errorf("expected node source 'docker', got '%s'", overview.Nodes[0].Source)
 	}
 }
 
@@ -392,7 +436,7 @@ func TestCollector_CollectOnce_Standalone(t *testing.T) {
 		},
 	}
 
-	collector := NewCollector(mockDocker, nil, zap.NewNop())
+	collector := NewCollector(mockDocker, nil, nil, zap.NewNop())
 	overview, err := collector.CollectOnce(context.Background())
 	if err != nil {
 		t.Fatalf("CollectOnce failed: %v", err)
@@ -407,10 +451,13 @@ func TestCollector_CollectOnce_Standalone(t *testing.T) {
 	if overview.Nodes[0].Role != "standalone" {
 		t.Errorf("expected Role = standalone, got %s", overview.Nodes[0].Role)
 	}
+	if overview.Nodes[0].Source != "docker" {
+		t.Errorf("expected Source = docker, got %s", overview.Nodes[0].Source)
+	}
 }
 
 func TestCollector_CollectOnce_NilClient(t *testing.T) {
-	collector := NewCollector(nil, nil, zap.NewNop())
+	collector := NewCollector(nil, nil, nil, zap.NewNop())
 	overview, err := collector.CollectOnce(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error on nil client: %v", err)
@@ -435,6 +482,7 @@ func TestCollector_Start_Stop_Broadcast(t *testing.T) {
 	broadcaster := &mockBroadcaster{}
 	collector := NewCollector(
 		mockDocker,
+		nil,
 		broadcaster,
 		zap.NewNop(),
 		WithInterval(20*time.Millisecond),
@@ -462,4 +510,250 @@ func TestCollector_Start_Stop_Broadcast(t *testing.T) {
 	}
 
 	collector.Stop()
+}
+
+func TestCollector_ScrapeAgent_Online(t *testing.T) {
+	agentResp := map[string]interface{}{
+		"hostname":       "db-server-01",
+		"os":             "linux",
+		"arch":           "amd64",
+		"uptime_seconds": 1234567,
+		"load_average":   []float64{0.5, 0.3, 0.2},
+		"cpu": map[string]interface{}{
+			"count":         8,
+			"usage_percent": 23.5,
+		},
+		"memory": map[string]interface{}{
+			"total_bytes":     int64(17179869184),
+			"used_bytes":      int64(8589934592),
+			"available_bytes": int64(8589934592),
+			"usage_percent":   50.0,
+		},
+		"disks": []map[string]interface{}{
+			{
+				"mount_point":   "/",
+				"total_bytes":   int64(107374182400),
+				"used_bytes":    int64(64424509440),
+				"usage_percent": 60.0,
+				"filesystem":    "ext4",
+			},
+		},
+		"network": map[string]interface{}{
+			"interfaces": []map[string]interface{}{
+				{
+					"name":             "eth0",
+					"rx_bytes_per_sec": 1024000,
+					"tx_bytes_per_sec": 512000,
+				},
+			},
+			"total_rx_bytes_per_sec": 1024000,
+			"total_tx_bytes_per_sec": 512000,
+		},
+		"processes":    142,
+		"collected_at": "2026-08-19T15:20:00Z",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/metrics" {
+			http.NotFound(w, r)
+			return
+		}
+		auth := r.Header.Get("Authorization")
+		if auth != "Bearer secret-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(agentResp)
+	}))
+	defer srv.Close()
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-db-01",
+				Name:     "db-server-01",
+				HostType: "agent",
+				Endpoint: srv.URL,
+				Labels: map[string]string{
+					"auth_token": "secret-token",
+				},
+			},
+		},
+	}
+
+	collector := NewCollector(nil, hostRepo, nil, zap.NewNop(), WithHTTPClient(srv.Client()))
+
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[0])
+
+	metricsMap := collector.GetAgentMetrics()
+	m, ok := metricsMap["host-db-01"]
+	if !ok {
+		t.Fatalf("expected agent metrics for host-db-01")
+	}
+
+	if m.Status != "online" {
+		t.Errorf("expected status 'online', got '%s'", m.Status)
+	}
+	if m.Hostname != "db-server-01" {
+		t.Errorf("expected hostname 'db-server-01', got '%s'", m.Hostname)
+	}
+	if m.CPUUsage != 23.5 {
+		t.Errorf("expected CPUUsage 23.5, got %f", m.CPUUsage)
+	}
+	if m.MemPercent != 50.0 {
+		t.Errorf("expected MemPercent 50.0, got %f", m.MemPercent)
+	}
+	if m.DiskTotal != 107374182400 {
+		t.Errorf("expected DiskTotal 107374182400, got %d", m.DiskTotal)
+	}
+	if m.NetRxRate != 1024000 {
+		t.Errorf("expected NetRxRate 1024000, got %d", m.NetRxRate)
+	}
+
+	hostRepo.mu.Lock()
+	statusEntry, recorded := hostRepo.updatedStatus["host-db-01"]
+	hostRepo.mu.Unlock()
+
+	if !recorded || statusEntry.status != "connected" {
+		t.Errorf("expected repo status 'connected', got recorded=%v status=%s", recorded, statusEntry.status)
+	}
+}
+
+func TestCollector_ScrapeAgent_Offline(t *testing.T) {
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-down",
+				Name:     "offline-server",
+				HostType: "agent",
+				Endpoint: "http://127.0.0.1:59997",
+			},
+		},
+	}
+
+	collector := NewCollector(nil, hostRepo, nil, zap.NewNop())
+
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[0])
+
+	metricsMap := collector.GetAgentMetrics()
+	m, ok := metricsMap["host-down"]
+	if !ok {
+		t.Fatalf("expected agent metrics for host-down")
+	}
+
+	if m.Status != "offline" {
+		t.Errorf("expected status 'offline', got '%s'", m.Status)
+	}
+
+	hostRepo.mu.Lock()
+	statusEntry, recorded := hostRepo.updatedStatus["host-down"]
+	hostRepo.mu.Unlock()
+
+	if !recorded || statusEntry.status != "disconnected" {
+		t.Errorf("expected repo status 'disconnected', got recorded=%v status=%s", recorded, statusEntry.status)
+	}
+}
+
+func TestCollector_MergeDockerAndAgentNodes(t *testing.T) {
+	mockDocker := &mockDockerAPI{
+		info: system.Info{
+			ID:                "docker-host-1",
+			Name:              "docker-node",
+			MemTotal:          8 * 1024 * 1024 * 1024,
+			Containers:        1,
+			ContainersRunning: 1,
+		},
+		nodeErr: context.Canceled, // standalone docker
+		containers: []container.Summary{
+			{
+				ID:    "c-app",
+				Names: []string{"/app"},
+				State: "running",
+			},
+		},
+		statsMap: map[string]container.StatsResponse{
+			"c-app": {
+				CPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 200000000},
+					SystemUsage: 1000000000,
+					OnlineCPUs:  1,
+				},
+				PreCPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 100000000},
+					SystemUsage: 500000000,
+				},
+				MemoryStats: container.MemoryStats{
+					Usage: 2 * 1024 * 1024 * 1024,
+					Limit: 8 * 1024 * 1024 * 1024,
+				},
+			},
+		},
+	}
+
+	collector := NewCollector(mockDocker, nil, nil, zap.NewNop())
+
+	// Set an agent metric
+	collector.SetAgentMetric("agent-host-01", &AgentMetrics{
+		Hostname:    "external-db",
+		OS:          "linux",
+		Arch:        "amd64",
+		CPUUsage:    30.0,
+		CPUCount:    4,
+		MemTotal:    16 * 1024 * 1024 * 1024,
+		MemUsed:     8 * 1024 * 1024 * 1024,
+		MemPercent:  50.0,
+		DiskTotal:   100 * 1024 * 1024 * 1024,
+		DiskUsed:    40 * 1024 * 1024 * 1024,
+		DiskPercent: 40.0,
+		NetRxRate:   5000,
+		NetTxRate:   2000,
+		Processes:   45,
+		Status:      "online",
+		LastSeen:    time.Now().UTC(),
+	})
+
+	overview, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("CollectOnce failed: %v", err)
+	}
+
+	if overview.TotalNodes != 2 {
+		t.Fatalf("expected TotalNodes = 2, got %d", overview.TotalNodes)
+	}
+	if overview.HealthyNodes != 2 {
+		t.Errorf("expected HealthyNodes = 2, got %d", overview.HealthyNodes)
+	}
+
+	var foundDocker, foundAgent bool
+	for _, n := range overview.Nodes {
+		if n.Source == "docker" {
+			foundDocker = true
+			if n.NodeName != "docker-node" {
+				t.Errorf("expected docker node name 'docker-node', got '%s'", n.NodeName)
+			}
+		}
+		if n.Source == "agent" {
+			foundAgent = true
+			if n.NodeName != "external-db" {
+				t.Errorf("expected agent node name 'external-db', got '%s'", n.NodeName)
+			}
+			if n.Role != "agent" {
+				t.Errorf("expected agent role 'agent', got '%s'", n.Role)
+			}
+			if n.Status != "ready" {
+				t.Errorf("expected agent status 'ready', got '%s'", n.Status)
+			}
+			if n.CPUPercent != 30.0 {
+				t.Errorf("expected agent CPUPercent 30.0, got %f", n.CPUPercent)
+			}
+		}
+	}
+
+	if !foundDocker {
+		t.Errorf("docker node missing from snapshot")
+	}
+	if !foundAgent {
+		t.Errorf("agent node missing from snapshot")
+	}
 }
