@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -65,6 +67,16 @@ func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 func (rw *responseWriter) Flush() {
 	if flusher, ok := rw.ResponseWriter.(http.Flusher); ok {
 		flusher.Flush()
+	}
+}
+
+// RequestBodyLimit limits the size of incoming HTTP request bodies.
+func RequestBodyLimit(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 
@@ -129,9 +141,36 @@ func StructuredLogger(next http.Handler) http.Handler {
 // CORS adds Cross-Origin Resource Sharing headers.
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		allowedOriginsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
+		if allowedOriginsEnv == "" {
+			allowedOriginsEnv = "http://localhost:3000,http://localhost:5173"
+		}
+
+		origin := r.Header.Get("Origin")
+		origins := strings.Split(allowedOriginsEnv, ",")
+
+		matched := false
+		if origin != "" {
+			for _, o := range origins {
+				o = strings.TrimSpace(o)
+				if o == "*" || o == origin {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Add("Vary", "Origin")
+					matched = true
+					break
+				}
+			}
+		}
+		if !matched && len(origins) > 0 {
+			if origin == "" {
+				first := strings.TrimSpace(origins[0])
+				w.Header().Set("Access-Control-Allow-Origin", first)
+			}
+		}
+
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -147,10 +186,11 @@ func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		w.Header().Set("Content-Security-Policy",
-			"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:")
+			"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 
 		next.ServeHTTP(w, r)
 	})

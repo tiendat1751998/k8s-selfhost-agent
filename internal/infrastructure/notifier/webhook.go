@@ -1,4 +1,4 @@
-﻿package notifier
+package notifier
 
 import (
 	"bytes"
@@ -6,14 +6,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
+	"github.com/datdt/k8sselfhost/internal/pkg/httputil"
 )
 
-type WebhookNotifier struct{}
+type WebhookNotifier struct {
+	client *http.Client
+}
 
 func NewWebhookNotifier() *WebhookNotifier {
-	return &WebhookNotifier{}
+	return &WebhookNotifier{
+		client: httputil.NewSafeHTTPClient(10 * time.Second),
+	}
 }
 
 func (n *WebhookNotifier) Send(ctx context.Context, channel *alert.NotificationChannel, message string) error {
@@ -44,7 +50,12 @@ func (n *WebhookNotifier) Send(ctx context.Context, channel *alert.NotificationC
 		}
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := n.client
+	if client == nil {
+		client = httputil.NewSafeHTTPClient(10 * time.Second)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to call webhook: %w", err)
 	}

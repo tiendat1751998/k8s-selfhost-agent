@@ -61,9 +61,9 @@ func TestChallenger_ComprehensiveInputValidation(t *testing.T) {
 		},
 		{
 			name:      "addProviderRequest - valid ollama",
-			inputJSON: `{"name": "local", "type": "ollama", "endpoint": "http://localhost:11434", "model": "llama3"}`,
+			inputJSON: `{"name": "remote", "type": "ollama", "endpoint": "https://8.8.8.8:11434", "model": "llama3"}`,
 			validateFn: func() error {
-				req := &addProviderRequest{Name: "local", Type: "ollama", Endpoint: "http://localhost:11434", Model: "llama3"}
+				req := &addProviderRequest{Name: "remote", Type: "ollama", Endpoint: "https://8.8.8.8:11434", Model: "llama3"}
 				return req.Validate()
 			},
 			expectErr: false,
