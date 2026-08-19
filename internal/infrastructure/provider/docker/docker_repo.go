@@ -22,21 +22,28 @@ type realDockerRepo struct {
 	cli *client.Client
 }
 
-// NewRealDockerRepo initializes a new Docker client targeting the given host.
-// Example host: "tcp://10.10.10.133:2375"
-func NewRealDockerRepo(host string, version string) (domainDocker.Repository, error) {
+// NewDockerClient creates a new Docker client targeting the given host.
+func NewDockerClient(host string, version string) (*client.Client, error) {
 	opts := []client.Opt{client.WithHost(host)}
 	if version != "" {
 		opts = append(opts, client.WithVersion(version))
 	} else {
 		opts = append(opts, client.WithAPIVersionNegotiation())
 	}
-	
 	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
+	return cli, nil
+}
 
+// NewRealDockerRepo initializes a new Docker client targeting the given host.
+// Example host: "tcp://10.10.10.133:2375"
+func NewRealDockerRepo(host string, version string) (domainDocker.Repository, error) {
+	cli, err := NewDockerClient(host, version)
+	if err != nil {
+		return nil, err
+	}
 	return &realDockerRepo{cli: cli}, nil
 }
 

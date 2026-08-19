@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -23,7 +24,21 @@ var (
 	meter           = otel.Meter("k8sselfhost/http")
 	requestCount    metric.Int64Counter
 	requestDuration metric.Float64Histogram
+	requestCounter  int64
 )
+
+// RequestCounter counts total incoming HTTP requests in-memory.
+func RequestCounter(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&requestCounter, 1)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// GetRequestCount returns the total number of HTTP requests recorded.
+func GetRequestCount() int64 {
+	return atomic.LoadInt64(&requestCounter)
+}
 
 func init() {
 	var err error

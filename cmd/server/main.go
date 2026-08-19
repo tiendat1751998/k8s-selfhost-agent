@@ -19,6 +19,7 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/adapter/event"
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
+	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	infraBackup "github.com/datdt/k8sselfhost/internal/infrastructure/backup"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/backup/drivers"
@@ -28,6 +29,7 @@ import (
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	infraDocker "github.com/datdt/k8sselfhost/internal/infrastructure/provider/docker"
+	domainDocker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	infraRedis "github.com/datdt/k8sselfhost/internal/infrastructure/redis"
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
@@ -42,6 +44,7 @@ import (
 	usecaseCluster "github.com/datdt/k8sselfhost/internal/usecase/cluster"
 	usecaseDeployment "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
+	usecaseMetrics "github.com/datdt/k8sselfhost/internal/usecase/metrics"
 	usecasePromotion "github.com/datdt/k8sselfhost/internal/usecase/promotion"
 	usecaseSearch "github.com/datdt/k8sselfhost/internal/usecase/search"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
@@ -296,10 +299,24 @@ func run() error {
 	defer rcaWorker.Stop()
 
 	// 9. Setup HTTP Platform Handlers & Router
-	dockerRepo, err := infraDocker.NewRealDockerRepo(cfg.Docker.Host, cfg.Docker.Version)
+	dockerClient, err := infraDocker.NewDockerClient(cfg.Docker.Host, cfg.Docker.Version)
+	var dockerRepo domainDocker.Repository
 	if err != nil {
-		log.Fatal("failed to initialize docker repo", zap.Error(err))
+		log.Warn("failed to initialize real docker client, docker features will be unavailable", zap.Error(err))
+		dockerRepo = nil
+		dockerClient = nil
+	} else {
+		dockerRepo = infraDocker.NewDockerRepoWithClient(dockerClient)
 	}
+
+	metricsCollector := usecaseMetrics.NewCollector(
+		dockerClient,
+		bridge,
+		log,
+		usecaseMetrics.WithRequestCountFn(mw.GetRequestCount),
+	)
+	go metricsCollector.Start(egCtx)
+	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log)
 
 	// Postgres-backed repos
 	driftRepo := postgres.NewDriftRepo(pgClient.Pool())
@@ -385,6 +402,7 @@ func run() error {
 		AI:            adapthttp.NewAIHandler(registry),
 		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, publisher, gitopsController),
 		Docker:        adapthttp.NewDockerHandler(dockerRepo),
+		Overview:      overviewHandler,
 		Drift:         adapthttp.NewDriftHandler(driftRepo),
 		Correlation:   adapthttp.NewCorrelationHandler(correlationRepo),
 		Compliance:    adapthttp.NewComplianceHandler(complianceRepo),

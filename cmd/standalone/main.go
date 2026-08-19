@@ -16,9 +16,11 @@ import (
 	"go.uber.org/zap"
 
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
+	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	infraDocker "github.com/datdt/k8sselfhost/internal/infrastructure/provider/docker"
+	domainDocker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
@@ -28,6 +30,7 @@ import (
 	usecaseAuth "github.com/datdt/k8sselfhost/internal/usecase/auth"
 	usecaseDeployment "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
+	usecaseMetrics "github.com/datdt/k8sselfhost/internal/usecase/metrics"
 	usecaseSearch "github.com/datdt/k8sselfhost/internal/usecase/search"
 	usecaseBackup "github.com/datdt/k8sselfhost/internal/usecase/backup"
 	usecasePromotion "github.com/datdt/k8sselfhost/internal/usecase/promotion"
@@ -134,10 +137,14 @@ func run() error {
 	}
 	defer pgClient.Close()
 
-	dockerRepo, err := infraDocker.NewRealDockerRepo(cfg.Docker.Host, cfg.Docker.Version)
+	dockerClient, err := infraDocker.NewDockerClient(cfg.Docker.Host, cfg.Docker.Version)
+	var dockerRepo domainDocker.Repository
 	if err != nil {
 		log.Warn("failed to initialize real docker client, docker features will be unavailable", zap.Error(err))
 		dockerRepo = nil
+		dockerClient = nil
+	} else {
+		dockerRepo = infraDocker.NewDockerRepoWithClient(dockerClient)
 	}
 
 	kubeconfigPath := os.Getenv("KUBECONFIG")
@@ -185,6 +192,15 @@ func run() error {
 	bridge := adapthttp.NewWSBridge(wsHub)
 	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge, txManager)
 
+	metricsCollector := usecaseMetrics.NewCollector(
+		dockerClient,
+		bridge,
+		log,
+		usecaseMetrics.WithRequestCountFn(mw.GetRequestCount),
+	)
+	go metricsCollector.Start(ctx)
+	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log)
+
 	userRepo := postgres.NewUserRepo(pgClient)
 	authUsecase := usecaseAuth.NewUsecase(userRepo)
 
@@ -227,6 +243,7 @@ func run() error {
 	platformHandlers := &adapthttp.PlatformHandlers{
 		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, nil, gitopsController),
 		Docker:        adapthttp.NewDockerHandler(dockerRepo),
+		Overview:      overviewHandler,
 		Drift:         adapthttp.NewDriftHandler(postgres.NewDriftRepo(pgClient)),
 		Correlation:   adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(pgClient)),
 		Compliance:    adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(pgClient)),
