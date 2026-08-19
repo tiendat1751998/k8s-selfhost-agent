@@ -162,6 +162,8 @@ func run() error {
 	prRepo := postgres.NewPRRepo(pgClient)
 	costRepo := postgres.NewCostRepo(pgClient)
 	backupRepo := postgres.NewBackupRepo(pgClient)
+	cloudAccountRepo := postgres.NewCloudAccountRepo(pgClient)
+	cloudHandler := adapthttp.NewCloudHandler(cloudAccountRepo, nil, log)
 
 	txManager := postgres.NewTxManager(pgClient)
 	defaultLLM, _ := registry.Default()
@@ -237,6 +239,7 @@ func run() error {
 		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
 		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
 		K8s:           k8sHandler,
+		Cloud:         cloudHandler,
 	}
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)

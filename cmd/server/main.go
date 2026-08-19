@@ -331,6 +331,8 @@ func run() error {
 
 	agentRepo := postgres.NewAgentRepo(pgClient.Pool())
 	alertRepo := postgres.NewAlertRepo(pgClient.Pool())
+	cloudAccountRepo := postgres.NewCloudAccountRepo(pgClient.Pool())
+	cloudHandler := adapthttp.NewCloudHandler(cloudAccountRepo, nil, log)
 
 	alertNotifiers := map[string]alert.Notifier{
 		"slack":   notifier.NewSlackNotifier(),
@@ -409,6 +411,7 @@ func run() error {
 		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
 		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
 		K8s:           k8sHandler,
+		Cloud:         cloudHandler,
 	}
 	if err := initializeWelcomeMessage(egCtx, pgClient.Pool(), wsHub); err != nil {
 		log.Error("failed to initialize WebSocket welcome config message", zap.Error(err))
