@@ -19,47 +19,63 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 )
 
+// ProcessMetric holds resource consumption details for a single OS process.
+type ProcessMetric struct {
+	PID              int     `json:"pid"`
+	Name             string  `json:"name"`
+	CommandLine      string  `json:"command_line"`
+	User             string  `json:"user"`
+	CPUPercent       float64 `json:"cpu_percent"`
+	MemoryBytes      int64   `json:"memory_bytes"`
+	MemoryPercent    float64 `json:"memory_percent"`
+	ReadBytesPerSec  int64   `json:"read_bytes_per_sec"`
+	WriteBytesPerSec int64   `json:"write_bytes_per_sec"`
+	State            string  `json:"state"`
+}
+
 // AgentMetrics represents metrics from a k8s-agent instance.
 type AgentMetrics struct {
-	Hostname    string     `json:"hostname"`
-	OS          string     `json:"os"`
-	Arch        string     `json:"arch"`
-	CPUUsage    float64    `json:"cpu_usage"`
-	CPUCount    int        `json:"cpu_count"`
-	MemTotal    int64      `json:"mem_total"`
-	MemUsed     int64      `json:"mem_used"`
-	MemPercent  float64    `json:"mem_percent"`
-	DiskTotal   int64      `json:"disk_total"`
-	DiskUsed    int64      `json:"disk_used"`
-	DiskPercent float64    `json:"disk_percent"`
-	NetRxRate   int64      `json:"net_rx_rate"`
-	NetTxRate   int64      `json:"net_tx_rate"`
-	Uptime      int64      `json:"uptime"`
-	LoadAvg     [3]float64 `json:"load_avg"`
-	Processes   int        `json:"processes"`
-	Status      string     `json:"status"` // "online", "offline", "error"
-	LastSeen    time.Time  `json:"last_seen"`
+	Hostname     string          `json:"hostname"`
+	OS           string          `json:"os"`
+	Arch         string          `json:"arch"`
+	CPUUsage     float64         `json:"cpu_usage"`
+	CPUCount     int             `json:"cpu_count"`
+	MemTotal     int64           `json:"mem_total"`
+	MemUsed      int64           `json:"mem_used"`
+	MemPercent   float64         `json:"mem_percent"`
+	DiskTotal    int64           `json:"disk_total"`
+	DiskUsed     int64           `json:"disk_used"`
+	DiskPercent  float64         `json:"disk_percent"`
+	NetRxRate    int64           `json:"net_rx_rate"`
+	NetTxRate    int64           `json:"net_tx_rate"`
+	Uptime       int64           `json:"uptime"`
+	LoadAvg      [3]float64      `json:"load_avg"`
+	Processes    int             `json:"processes"`
+	TopProcesses []ProcessMetric `json:"top_processes"`
+	Status       string          `json:"status"` // "online", "offline", "error"
+	LastSeen     time.Time       `json:"last_seen"`
 }
 
 // NodeMetrics represents infrastructure metrics for a single node.
 type NodeMetrics struct {
-	NodeID         string    `json:"node_id"`
-	NodeName       string    `json:"node_name"`
-	Role           string    `json:"role"`   // manager, worker, standalone, agent
-	Status         string    `json:"status"` // ready, down, disconnected
-	CPUPercent     float64   `json:"cpu_percent"`
-	MemoryUsed     int64     `json:"memory_used"`   // bytes
-	MemoryTotal    int64     `json:"memory_total"`  // bytes
-	MemoryPercent  float64   `json:"memory_percent"`
-	DiskUsed       int64     `json:"disk_used"`     // bytes
-	DiskTotal      int64     `json:"disk_total"`    // bytes
-	DiskPercent    float64   `json:"disk_percent"`
-	NetworkRxBytes int64     `json:"network_rx_bytes"`
-	NetworkTxBytes int64     `json:"network_tx_bytes"`
-	ContainerCount int       `json:"container_count"`
-	RunningCount   int       `json:"running_count"`
-	Source         string    `json:"source"` // "docker" or "agent"
-	UpdatedAt      time.Time `json:"updated_at"`
+	NodeID         string          `json:"node_id"`
+	NodeName       string          `json:"node_name"`
+	Role           string          `json:"role"`   // manager, worker, standalone, agent
+	Status         string          `json:"status"` // ready, down, disconnected
+	CPUPercent     float64         `json:"cpu_percent"`
+	MemoryUsed     int64           `json:"memory_used"`   // bytes
+	MemoryTotal    int64           `json:"memory_total"`  // bytes
+	MemoryPercent  float64         `json:"memory_percent"`
+	DiskUsed       int64           `json:"disk_used"`     // bytes
+	DiskTotal      int64           `json:"disk_total"`    // bytes
+	DiskPercent    float64         `json:"disk_percent"`
+	NetworkRxBytes int64           `json:"network_rx_bytes"`
+	NetworkTxBytes int64           `json:"network_tx_bytes"`
+	ContainerCount int             `json:"container_count"`
+	RunningCount   int             `json:"running_count"`
+	TopProcesses   []ProcessMetric `json:"top_processes"`
+	Source         string          `json:"source"` // "docker" or "agent"
+	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
 // ContainerMetrics represents resource stats for an individual container.
@@ -391,8 +407,9 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 			TotalRxBytesPerSec int64 `json:"total_rx_bytes_per_sec"`
 			TotalTxBytesPerSec int64 `json:"total_tx_bytes_per_sec"`
 		} `json:"network"`
-		Processes   int       `json:"processes"`
-		CollectedAt time.Time `json:"collected_at"`
+		Processes    int             `json:"processes"`
+		TopProcesses []ProcessMetric `json:"top_processes"`
+		CollectedAt  time.Time       `json:"collected_at"`
 	}
 
 	var payload agentMetricsPayload
@@ -423,24 +440,25 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 	}
 
 	am := &AgentMetrics{
-		Hostname:    hostname,
-		OS:          payload.OS,
-		Arch:        payload.Arch,
-		CPUUsage:    payload.CPU.UsagePercent,
-		CPUCount:    payload.CPU.Count,
-		MemTotal:    payload.Memory.TotalBytes,
-		MemUsed:     payload.Memory.UsedBytes,
-		MemPercent:  payload.Memory.UsagePercent,
-		DiskTotal:   diskTotal,
-		DiskUsed:    diskUsed,
-		DiskPercent: diskPercent,
-		NetRxRate:   payload.Network.TotalRxBytesPerSec,
-		NetTxRate:   payload.Network.TotalTxBytesPerSec,
-		Uptime:      payload.UptimeSeconds,
-		LoadAvg:     payload.LoadAverage,
-		Processes:   payload.Processes,
-		Status:      "online",
-		LastSeen:    collectedAt,
+		Hostname:     hostname,
+		OS:           payload.OS,
+		Arch:         payload.Arch,
+		CPUUsage:     payload.CPU.UsagePercent,
+		CPUCount:     payload.CPU.Count,
+		MemTotal:     payload.Memory.TotalBytes,
+		MemUsed:      payload.Memory.UsedBytes,
+		MemPercent:   payload.Memory.UsagePercent,
+		DiskTotal:    diskTotal,
+		DiskUsed:     diskUsed,
+		DiskPercent:  diskPercent,
+		NetRxRate:    payload.Network.TotalRxBytesPerSec,
+		NetTxRate:    payload.Network.TotalTxBytesPerSec,
+		Uptime:       payload.UptimeSeconds,
+		LoadAvg:      payload.LoadAverage,
+		Processes:    payload.Processes,
+		TopProcesses: payload.TopProcesses,
+		Status:       "online",
+		LastSeen:     collectedAt,
 	}
 
 	c.agentMu.Lock()
@@ -522,6 +540,9 @@ func (c *Collector) GetAgentMetrics() map[string]*AgentMetrics {
 	for k, v := range c.agentMetrics {
 		if v != nil {
 			metricCopy := *v
+			if v.TopProcesses != nil {
+				metricCopy.TopProcesses = append([]ProcessMetric(nil), v.TopProcesses...)
+			}
 			res[k] = &metricCopy
 		}
 	}
@@ -765,6 +786,7 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			NetworkTxBytes: am.NetTxRate,
 			ContainerCount: am.Processes,
 			RunningCount:   am.Processes,
+			TopProcesses:   am.TopProcesses,
 			Source:         "agent",
 			UpdatedAt:      am.LastSeen,
 		})

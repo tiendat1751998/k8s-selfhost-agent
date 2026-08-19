@@ -202,6 +202,136 @@ func TestCollectNetwork(t *testing.T) {
 	}
 }
 
+func TestReadTopProcesses_ProcFixtures(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Initial system stat
+	statFile := filepath.Join(tempDir, "stat")
+	initialStat := `cpu  10000 2000 3000 50000 1000 500 200 0 0 0
+cpu0 5000 1000 1500 25000 500 250 100 0 0 0
+cpu1 5000 1000 1500 25000 500 250 100 0 0 0
+`
+	if err := os.WriteFile(statFile, []byte(initialStat), 0644); err != nil {
+		t.Fatalf("failed to write initial stat: %v", err)
+	}
+
+	// PID 1 (systemd)
+	p1Dir := filepath.Join(tempDir, "1")
+	_ = os.MkdirAll(p1Dir, 0755)
+	_ = os.WriteFile(filepath.Join(p1Dir, "stat"), []byte("1 (systemd) S 0 1 1 0 -1 4194304 1000 0 0 0 10 5 0 0 20 0 1 0 100 1000 2560 0 0 0 0 0 0 0 0 0 0 0 0 0 0"), 0644)
+	_ = os.WriteFile(filepath.Join(p1Dir, "cmdline"), []byte("/sbin/init\x00"), 0644)
+	_ = os.WriteFile(filepath.Join(p1Dir, "status"), []byte("Name:\tsystemd\nState:\tS (sleeping)\nUid:\t0\t0\t0\t0\nVmRSS:\t10240 kB\n"), 0644)
+	_ = os.WriteFile(filepath.Join(p1Dir, "io"), []byte("read_bytes: 1000\nwrite_bytes: 2000\n"), 0644)
+
+	// PID 101 (nginx)
+	p101Dir := filepath.Join(tempDir, "101")
+	_ = os.MkdirAll(p101Dir, 0755)
+	_ = os.WriteFile(filepath.Join(p101Dir, "stat"), []byte("101 (nginx) R 1 101 101 0 -1 4194304 1000 0 0 0 100 50 0 0 20 0 1 0 100 1000 12800 0 0 0 0 0 0 0 0 0 0 0 0 0 0"), 0644)
+	_ = os.WriteFile(filepath.Join(p101Dir, "cmdline"), []byte("nginx\x00-g\x00daemon off;\x00"), 0644)
+	_ = os.WriteFile(filepath.Join(p101Dir, "status"), []byte("Name:\tnginx\nState:\tR (running)\nUid:\t1000\t1000\t1000\t1000\nVmRSS:\t51200 kB\n"), 0644)
+	_ = os.WriteFile(filepath.Join(p101Dir, "io"), []byte("read_bytes: 50000\nwrite_bytes: 30000\n"), 0644)
+
+	// PID 202 (postgres)
+	p202Dir := filepath.Join(tempDir, "202")
+	_ = os.MkdirAll(p202Dir, 0755)
+	_ = os.WriteFile(filepath.Join(p202Dir, "stat"), []byte("202 (postgres) S 1 202 202 0 -1 4194304 1000 0 0 0 50 25 0 0 20 0 1 0 100 1000 25600 0 0 0 0 0 0 0 0 0 0 0 0 0 0"), 0644)
+	_ = os.WriteFile(filepath.Join(p202Dir, "cmdline"), []byte("postgres: writer\x00"), 0644)
+	_ = os.WriteFile(filepath.Join(p202Dir, "status"), []byte("Name:\tpostgres\nState:\tS (sleeping)\nUid:\t1001\t1001\t1001\t1001\nVmRSS:\t102400 kB\n"), 0644)
+	_ = os.WriteFile(filepath.Join(p202Dir, "io"), []byte("read_bytes: 20000\nwrite_bytes: 10000\n"), 0644)
+
+	collector := NewSystemCollector(tempDir, "", nil)
+
+	// Pass 1: Baseline
+	resp1, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect pass 1 failed: %v", err)
+	}
+
+	if len(resp1.TopProcesses) != 3 {
+		t.Fatalf("expected 3 top processes in pass 1, got %d", len(resp1.TopProcesses))
+	}
+
+	// In pass 1 (no CPU delta yet), processes should be sorted by MemoryBytes desc (PID 202 (100MB), PID 101 (50MB), PID 1 (10MB))
+	if resp1.TopProcesses[0].PID != 202 {
+		t.Errorf("expected heaviest mem process PID 202 first in pass 1, got %d", resp1.TopProcesses[0].PID)
+	}
+	if resp1.TopProcesses[0].MemoryBytes != 102400*1024 {
+		t.Errorf("expected 102400 kB for PID 202, got %d", resp1.TopProcesses[0].MemoryBytes)
+	}
+	if resp1.TopProcesses[0].State != "sleeping" {
+		t.Errorf("expected state 'sleeping' for PID 202, got '%s'", resp1.TopProcesses[0].State)
+	}
+
+	// Update fixture for pass 2
+	updatedStat := `cpu  12000 2500 3500 51000 1000 600 200 0 0 0
+cpu0 6000 1250 1750 25500 500 300 100 0 0 0
+cpu1 6000 1250 1750 25500 500 300 100 0 0 0
+`
+	_ = os.WriteFile(statFile, []byte(updatedStat), 0644)
+	_ = os.WriteFile(filepath.Join(p101Dir, "stat"), []byte("101 (nginx) R 1 101 101 0 -1 4194304 1000 0 0 0 300 150 0 0 20 0 1 0 100 1000 12800 0 0 0 0 0 0 0 0 0 0 0 0 0 0"), 0644)
+	_ = os.WriteFile(filepath.Join(p101Dir, "io"), []byte("read_bytes: 150000\nwrite_bytes: 80000\n"), 0644)
+
+	collector.prevProcTime = time.Now().UTC().Add(-1 * time.Second)
+
+	// Pass 2
+	resp2, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect pass 2 failed: %v", err)
+	}
+
+	if len(resp2.TopProcesses) != 3 {
+		t.Fatalf("expected 3 top processes in pass 2, got %d", len(resp2.TopProcesses))
+	}
+
+	// In pass 2, PID 101 had major CPU increase and I/O increase, should be #1 by CPUPercent
+	p0 := resp2.TopProcesses[0]
+	if p0.PID != 101 {
+		t.Errorf("expected PID 101 to be #1 top process, got PID %d (%s)", p0.PID, p0.Name)
+	}
+	if p0.Name != "nginx" {
+		t.Errorf("expected name 'nginx', got '%s'", p0.Name)
+	}
+	if p0.CommandLine != "nginx -g daemon off;" {
+		t.Errorf("expected command line 'nginx -g daemon off;', got '%s'", p0.CommandLine)
+	}
+	if p0.CPUPercent <= 0 {
+		t.Errorf("expected positive CPUPercent for PID 101, got %f", p0.CPUPercent)
+	}
+	if p0.ReadBytesPerSec <= 0 || p0.WriteBytesPerSec <= 0 {
+		t.Errorf("expected positive IO rates for PID 101, got read=%d write=%d", p0.ReadBytesPerSec, p0.WriteBytesPerSec)
+	}
+	if p0.State != "running" {
+		t.Errorf("expected state 'running' for PID 101, got '%s'", p0.State)
+	}
+}
+
+func TestReadTopProcesses_Fallback(t *testing.T) {
+	collector := NewSystemCollector("/non/existent/path", "", nil)
+	topProcs := collector.readTopProcesses(5, 16*1024*1024*1024)
+
+	if len(topProcs) != 5 {
+		t.Fatalf("expected 5 fallback processes, got %d", len(topProcs))
+	}
+
+	for _, p := range topProcs {
+		if p.PID <= 0 {
+			t.Errorf("expected positive PID, got %d", p.PID)
+		}
+		if p.Name == "" {
+			t.Errorf("expected non-empty process name")
+		}
+		if p.State == "" {
+			t.Errorf("expected non-empty process state")
+		}
+		if p.MemoryBytes <= 0 {
+			t.Errorf("expected positive MemoryBytes")
+		}
+		if p.MemoryPercent <= 0 {
+			t.Errorf("expected positive MemoryPercent")
+		}
+	}
+}
+
 func TestMetricsEndpoint_ReturnsJSON(t *testing.T) {
 	collector := NewSystemCollector("", "", nil)
 	handler := setupHandler(collector, "")
@@ -228,6 +358,9 @@ func TestMetricsEndpoint_ReturnsJSON(t *testing.T) {
 	}
 	if resp.Arch == "" {
 		t.Errorf("expected non-empty Arch")
+	}
+	if len(resp.TopProcesses) == 0 {
+		t.Errorf("expected top_processes to be populated in metrics response")
 	}
 }
 
@@ -312,5 +445,8 @@ func TestAuthToken_Valid(t *testing.T) {
 	}
 	if resp.Hostname == "" {
 		t.Errorf("expected non-empty hostname")
+	}
+	if len(resp.TopProcesses) == 0 {
+		t.Errorf("expected top_processes in authenticated response")
 	}
 }

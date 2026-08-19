@@ -39,19 +39,34 @@ type NetworkMetrics struct {
 	TotalTxBytesPerSec int64                     `json:"total_tx_bytes_per_sec"`
 }
 
+// ProcessMetric holds resource consumption details for a single OS process.
+type ProcessMetric struct {
+	PID              int     `json:"pid"`
+	Name             string  `json:"name"`
+	CommandLine      string  `json:"command_line"`
+	User             string  `json:"user"`
+	CPUPercent       float64 `json:"cpu_percent"`
+	MemoryBytes      int64   `json:"memory_bytes"`
+	MemoryPercent    float64 `json:"memory_percent"`
+	ReadBytesPerSec  int64   `json:"read_bytes_per_sec"`
+	WriteBytesPerSec int64   `json:"write_bytes_per_sec"`
+	State            string  `json:"state"`
+}
+
 // MetricsResponse is the JSON schema returned by GET /metrics.
 type MetricsResponse struct {
-	Hostname      string         `json:"hostname"`
-	OS            string         `json:"os"`
-	Arch          string         `json:"arch"`
-	UptimeSeconds int64          `json:"uptime_seconds"`
-	LoadAverage   [3]float64     `json:"load_average"`
-	CPU           CPUMetrics     `json:"cpu"`
-	Memory        MemoryMetrics  `json:"memory"`
-	Disks         []DiskMetrics  `json:"disks"`
-	Network       NetworkMetrics `json:"network"`
-	Processes     int            `json:"processes"`
-	CollectedAt   time.Time      `json:"collected_at"`
+	Hostname      string          `json:"hostname"`
+	OS            string          `json:"os"`
+	Arch          string          `json:"arch"`
+	UptimeSeconds int64           `json:"uptime_seconds"`
+	LoadAverage   [3]float64      `json:"load_average"`
+	CPU           CPUMetrics      `json:"cpu"`
+	Memory        MemoryMetrics   `json:"memory"`
+	Disks         []DiskMetrics   `json:"disks"`
+	Network       NetworkMetrics  `json:"network"`
+	Processes     int             `json:"processes"`
+	TopProcesses  []ProcessMetric `json:"top_processes"`
+	CollectedAt   time.Time       `json:"collected_at"`
 }
 
 // HealthResponse is the JSON schema returned by GET /health.
