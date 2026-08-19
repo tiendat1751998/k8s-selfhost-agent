@@ -381,7 +381,7 @@ export interface NodeDetails {
 export interface ComputeHost {
   id: string
   name: string
-  host_type: 'docker' | 'k8s' | string
+  host_type: 'agent' | 'docker' | 'k8s' | string
   endpoint: string
   tls_enabled: boolean
   status: 'connected' | 'disconnected' | 'pending' | 'error' | string
@@ -393,7 +393,7 @@ export interface ComputeHost {
 
 export interface CreateHostRequest {
   name: string
-  host_type?: string
+  host_type?: 'agent' | 'docker' | 'k8s' | string
   endpoint: string
   tls_enabled?: boolean
   ca_cert?: string
@@ -403,9 +403,19 @@ export interface CreateHostRequest {
   labels?: Record<string, string>
 }
 
+export interface AgentInfo {
+  hostname?: string
+  os?: string
+  arch?: string
+  uptime?: number
+  uptime_seconds?: number
+}
+
 export interface TestHostResponse {
   status: string
   latency_ms: number
+  message?: string
+  agent_info?: AgentInfo
 }
 
 export interface DockerService {
@@ -688,8 +698,8 @@ export const dockerApi = {
     return api.delete<{ status: string }>(`/docker/hosts/${id}`)
   },
 
-  async testHost(id: string): Promise<{ status: string; latency_ms: number }> {
-    return api.post<{ status: string; latency_ms: number }>(`/docker/hosts/${id}/test`)
+  async testHost(id: string): Promise<TestHostResponse> {
+    return api.post<TestHostResponse>(`/docker/hosts/${id}/test`)
   },
 
   async toggleContainer(id: string, action: 'start' | 'stop'): Promise<{ status: string }> {

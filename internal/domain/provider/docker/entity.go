@@ -70,12 +70,12 @@ type NodeDetails struct {
 	JoinedAt      time.Time         `json:"joined_at"`
 }
 
-// ComputeHost represents an external compute host (Docker Engine or Kubernetes) registered in the multi-host registry.
+// ComputeHost represents an external compute host (k8s-agent, Docker Engine, or Kubernetes) registered in the multi-host registry.
 type ComputeHost struct {
 	ID              string            `json:"id"`
 	Name            string            `json:"name"`
-	HostType        string            `json:"host_type"` // docker, k8s
-	Endpoint        string            `json:"endpoint"`  // tcp://ip:port or unix:///var/run/docker.sock
+	HostType        string            `json:"host_type"` // agent, docker, k8s
+	Endpoint        string            `json:"endpoint"`  // http://ip:9100, tcp://ip:port, or unix:///var/run/docker.sock
 	TLSEnabled      bool              `json:"tls_enabled"`
 	TLSCA           string            `json:"tls_ca,omitempty"`
 	TLSCert         string            `json:"tls_cert,omitempty"`

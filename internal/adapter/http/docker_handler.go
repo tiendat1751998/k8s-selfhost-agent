@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -511,8 +512,8 @@ func (r *createComputeHostRequest) Validate() error {
 	if strings.TrimSpace(r.Endpoint) == "" {
 		ve.Add("endpoint", "endpoint is required")
 	}
-	if r.HostType != "" && r.HostType != "docker" && r.HostType != "k8s" {
-		ve.Add("host_type", "host_type must be docker or k8s")
+	if r.HostType != "" && r.HostType != "docker" && r.HostType != "k8s" && r.HostType != "agent" {
+		ve.Add("host_type", "host_type must be agent, docker, or k8s")
 	}
 	if ve.HasErrors() {
 		return ve
@@ -534,8 +535,8 @@ type updateComputeHostRequest struct {
 
 func (r *updateComputeHostRequest) Validate() error {
 	ve := NewValidationError("validation failed")
-	if r.HostType != "" && r.HostType != "docker" && r.HostType != "k8s" {
-		ve.Add("host_type", "host_type must be docker or k8s")
+	if r.HostType != "" && r.HostType != "docker" && r.HostType != "k8s" && r.HostType != "agent" {
+		ve.Add("host_type", "host_type must be agent, docker, or k8s")
 	}
 	if ve.HasErrors() {
 		return ve
@@ -576,7 +577,7 @@ func (h *DockerHandler) CreateHost(w http.ResponseWriter, r *http.Request) {
 
 	hostType := req.HostType
 	if hostType == "" {
-		hostType = "docker"
+		hostType = "agent"
 	}
 
 	labels := req.Labels
@@ -697,6 +698,11 @@ func (h *DockerHandler) DeleteHost(w http.ResponseWriter, r *http.Request) {
 
 // TestHost handles POST /api/v1/docker/hosts/{id}/test
 func (h *DockerHandler) TestHost(w http.ResponseWriter, r *http.Request) {
+	h.TestHostConnectivity(w, r)
+}
+
+// TestHostConnectivity tests connectivity to a compute host based on its host type (agent, docker, k8s).
+func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Request) {
 	if h.hostRepo == nil {
 		writeError(w, http.StatusServiceUnavailable, "compute host service unavailable", nil)
 		return
@@ -717,22 +723,184 @@ func (h *DockerHandler) TestHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	testErr := testComputeHostConnection(r.Context(), host)
 	now := time.Now().UTC()
-	if testErr != nil {
-		_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
+
+	switch host.HostType {
+	case "agent":
+		latencyMs, agentInfo, testErr := testAgentHostConnection(r.Context(), host)
+		if testErr != nil {
+			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"status":     "error",
+				"message":    testErr.Error(),
+				"latency_ms": latencyMs,
+			})
+			return
+		}
+
+		_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
+		resp := map[string]interface{}{
+			"status":     "connected",
+			"message":    "successfully connected to agent host",
+			"latency_ms": latencyMs,
+		}
+		if len(agentInfo) > 0 {
+			resp["agent_info"] = agentInfo
+		}
+		writeJSON(w, http.StatusOK, resp)
+
+	case "docker":
+		latencyMs, testErr := testDockerHostConnection(r.Context(), host)
+		if testErr != nil {
+			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"status":     "error",
+				"message":    testErr.Error(),
+				"latency_ms": latencyMs,
+			})
+			return
+		}
+
+		_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"status":  "error",
-			"message": testErr.Error(),
+			"status":     "connected",
+			"message":    "successfully connected to docker host",
+			"latency_ms": latencyMs,
 		})
-		return
+
+	default:
+		// Fallback: If endpoint uses http/https scheme, test via agent health/metrics endpoint
+		if strings.HasPrefix(host.Endpoint, "http://") || strings.HasPrefix(host.Endpoint, "https://") {
+			latencyMs, agentInfo, testErr := testAgentHostConnection(r.Context(), host)
+			if testErr != nil {
+				_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
+				writeJSON(w, http.StatusOK, map[string]interface{}{
+					"status":     "error",
+					"message":    testErr.Error(),
+					"latency_ms": latencyMs,
+				})
+				return
+			}
+			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
+			resp := map[string]interface{}{
+				"status":     "connected",
+				"message":    "successfully connected to host",
+				"latency_ms": latencyMs,
+			}
+			if len(agentInfo) > 0 {
+				resp["agent_info"] = agentInfo
+			}
+			writeJSON(w, http.StatusOK, resp)
+		} else {
+			latencyMs, testErr := testDockerHostConnection(r.Context(), host)
+			if testErr != nil {
+				_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
+				writeJSON(w, http.StatusOK, map[string]interface{}{
+					"status":     "error",
+					"message":    testErr.Error(),
+					"latency_ms": latencyMs,
+				})
+				return
+			}
+			_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"status":     "connected",
+				"message":    "successfully connected to docker host",
+				"latency_ms": latencyMs,
+			})
+		}
+	}
+}
+
+func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, map[string]interface{}, error) {
+	endpoint := strings.TrimSpace(host.Endpoint)
+	endpoint = strings.TrimRight(endpoint, "/")
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		if strings.HasPrefix(endpoint, "tcp://") {
+			endpoint = "http://" + strings.TrimPrefix(endpoint, "tcp://")
+		} else {
+			endpoint = "http://" + endpoint
+		}
 	}
 
-	_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":  "connected",
-		"message": "successfully connected to docker host",
-	})
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	start := time.Now()
+
+	// 1. GET /health
+	healthReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/health", nil)
+	if err != nil {
+		return 0, nil, fmt.Errorf("creating health request: %w", err)
+	}
+	healthResp, err := client.Do(healthReq)
+	if err != nil {
+		return 0, nil, fmt.Errorf("connecting to agent health endpoint: %w", err)
+	}
+	defer healthResp.Body.Close()
+
+	if healthResp.StatusCode != http.StatusOK {
+		return 0, nil, fmt.Errorf("agent health check returned status %d", healthResp.StatusCode)
+	}
+
+	var healthData struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(healthResp.Body).Decode(&healthData); err != nil {
+		return 0, nil, fmt.Errorf("decoding agent health response: %w", err)
+	}
+	if !strings.EqualFold(healthData.Status, "ok") && !strings.EqualFold(healthData.Status, "healthy") {
+		return 0, nil, fmt.Errorf("agent health status: %s", healthData.Status)
+	}
+
+	latencyMs := time.Since(start).Milliseconds()
+	if latencyMs <= 0 {
+		latencyMs = 1
+	}
+
+	// 2. GET /metrics for agent system info
+	agentInfo := make(map[string]interface{})
+	metricsReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/metrics", nil)
+	if err == nil {
+		metricsResp, err := client.Do(metricsReq)
+		if err == nil {
+			defer metricsResp.Body.Close()
+			if metricsResp.StatusCode == http.StatusOK {
+				var metricsData struct {
+					Hostname      string `json:"hostname"`
+					OS            string `json:"os"`
+					Arch          string `json:"arch"`
+					UptimeSeconds int64  `json:"uptime_seconds"`
+				}
+				if err := json.NewDecoder(metricsResp.Body).Decode(&metricsData); err == nil {
+					if metricsData.Hostname != "" {
+						agentInfo["hostname"] = metricsData.Hostname
+					}
+					if metricsData.OS != "" {
+						agentInfo["os"] = metricsData.OS
+					}
+					if metricsData.Arch != "" {
+						agentInfo["arch"] = metricsData.Arch
+					}
+					agentInfo["uptime"] = metricsData.UptimeSeconds
+					agentInfo["uptime_seconds"] = metricsData.UptimeSeconds
+				}
+			}
+		}
+	}
+
+	return latencyMs, agentInfo, nil
+}
+
+func testDockerHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, error) {
+	start := time.Now()
+	err := testComputeHostConnection(ctx, host)
+	latencyMs := time.Since(start).Milliseconds()
+	if latencyMs <= 0 {
+		latencyMs = 1
+	}
+	return latencyMs, err
 }
 
 func testComputeHostConnection(ctx context.Context, host *docker.ComputeHost) error {

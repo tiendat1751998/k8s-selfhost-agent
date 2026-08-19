@@ -13,6 +13,7 @@ import {
   type NodeDetails,
   type ComputeHost,
   type CreateHostRequest,
+  type AgentInfo,
 } from '../api/compute'
 
 // ==========================================
@@ -28,9 +29,9 @@ const activeTab = ref<'services' | 'nodes' | 'containers' | 'management'>('servi
 const services = ref<DockerService[]>([])
 const nodes = ref<DockerNode[]>([])
 const containers = ref<DockerContainer[]>([])
-
-// Swarm Cluster & Tokens State
 const swarmInfo = ref<SwarmInfo | null>(null)
+
+// Swarm Join Tokens State
 const swarmTokens = ref<SwarmTokens | null>(null)
 const showTokens = ref(false)
 const tokensLoading = ref(false)
@@ -45,7 +46,7 @@ let autoHideTimer: number | null = null
 // Remote Hosts State
 const hosts = ref<ComputeHost[]>([])
 const testingHostId = ref<string | null>(null)
-const hostTestResults = ref<Record<string, { latency_ms: number; status: string; timestamp: Date }>>({})
+const hostTestResults = ref<Record<string, { latency_ms: number; status: string; timestamp: Date; agent_info?: AgentInfo }>>({})
 
 // Modals & Drawers
 const showLogsDrawer = ref(false)
@@ -62,6 +63,7 @@ const submittingHost = ref(false)
 const hostForm = ref<{
   name: string
   host_type: string
+  endpoint: string
   ip: string
   port: number
   tls_enabled: boolean
@@ -72,14 +74,15 @@ const hostForm = ref<{
   labels: Array<{ key: string; value: string }>
 }>({
   name: '',
-  host_type: 'docker',
+  host_type: 'agent',
+  endpoint: '',
   ip: '',
-  port: 2375,
+  port: 9100,
   tls_enabled: false,
   ca_cert: '',
   client_cert: '',
   client_key: '',
-  api_version: '1.45',
+  api_version: '',
   labels: []
 })
 
@@ -597,14 +600,15 @@ async function confirmRemoveNode() {
 function openAddHostModal() {
   hostForm.value = {
     name: '',
-    host_type: 'docker',
+    host_type: 'agent',
+    endpoint: '',
     ip: '',
-    port: 2375,
+    port: 9100,
     tls_enabled: false,
     ca_cert: '',
     client_cert: '',
     client_key: '',
-    api_version: '1.45',
+    api_version: '',
     labels: [{ key: 'env', value: 'production' }]
   }
   showAddHostModal.value = true
@@ -618,10 +622,53 @@ function removeLabelRow(index: number) {
   hostForm.value.labels.splice(index, 1)
 }
 
+function formatUptime(seconds?: number): string {
+  if (!seconds || seconds <= 0) return '0s'
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = seconds % 60
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  if (minutes > 0) return `${minutes}m ${secs}s`
+  return `${secs}s`
+}
+
 async function submitAddHost() {
-  if (!hostForm.value.name.trim() || !hostForm.value.ip.trim()) {
-    showToast('Host name and IP address are required', 'error')
+  if (!hostForm.value.name.trim()) {
+    showToast('Host name is required', 'error')
     return
+  }
+
+  let endpoint = ''
+  if (hostForm.value.host_type === 'agent') {
+    endpoint = hostForm.value.endpoint.trim()
+    if (!endpoint && hostForm.value.ip.trim()) {
+      endpoint = `http://${hostForm.value.ip.trim()}:${hostForm.value.port || 9100}`
+    }
+    if (!endpoint) {
+      showToast('Agent endpoint is required (e.g. http://10.10.10.200:9100)', 'error')
+      return
+    }
+    if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
+      if (endpoint.startsWith('tcp://')) {
+        endpoint = `http://${endpoint.replace(/^tcp:\/\//, '')}`
+      } else {
+        endpoint = `http://${endpoint}`
+      }
+    }
+  } else {
+    endpoint = hostForm.value.endpoint.trim()
+    if (!endpoint && hostForm.value.ip.trim()) {
+      endpoint = `tcp://${hostForm.value.ip.trim()}:${hostForm.value.port || (hostForm.value.tls_enabled ? 2376 : 2375)}`
+    }
+    if (!endpoint) {
+      showToast('Daemon endpoint or IP address is required', 'error')
+      return
+    }
+    if (!endpoint.startsWith('tcp://') && !endpoint.startsWith('unix://') && !endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
+      endpoint = `tcp://${endpoint}`
+    }
   }
 
   submittingHost.value = true
@@ -632,16 +679,15 @@ async function submitAddHost() {
     }
   }
 
-  const endpoint = `tcp://${hostForm.value.ip.trim()}:${hostForm.value.port || (hostForm.value.tls_enabled ? 2376 : 2375)}`
   const payload: CreateHostRequest = {
     name: hostForm.value.name.trim(),
     host_type: hostForm.value.host_type,
     endpoint,
-    tls_enabled: hostForm.value.tls_enabled,
-    ca_cert: hostForm.value.ca_cert || undefined,
-    client_cert: hostForm.value.client_cert || undefined,
-    client_key: hostForm.value.client_key || undefined,
-    api_version: hostForm.value.api_version || undefined,
+    tls_enabled: hostForm.value.host_type === 'docker' ? hostForm.value.tls_enabled : false,
+    ca_cert: hostForm.value.host_type === 'docker' ? (hostForm.value.ca_cert || undefined) : undefined,
+    client_cert: hostForm.value.host_type === 'docker' ? (hostForm.value.client_cert || undefined) : undefined,
+    client_key: hostForm.value.host_type === 'docker' ? (hostForm.value.client_key || undefined) : undefined,
+    api_version: hostForm.value.host_type === 'docker' ? (hostForm.value.api_version || undefined) : undefined,
     labels: labelsRecord
   }
 
@@ -650,7 +696,7 @@ async function submitAddHost() {
     const newHost: ComputeHost = (res && res.id) ? res : {
       id: `host-${Date.now().toString(36)}`,
       name: payload.name,
-      host_type: payload.host_type || 'docker',
+      host_type: payload.host_type || 'agent',
       endpoint: payload.endpoint,
       tls_enabled: payload.tls_enabled || false,
       status: 'connected',
@@ -659,13 +705,13 @@ async function submitAddHost() {
       created_at: new Date().toISOString()
     }
     hosts.value.unshift(newHost)
-    showToast(`Remote Docker host "${newHost.name}" registered successfully!`)
+    showToast(`Server "${newHost.name}" registered successfully!`)
     showAddHostModal.value = false
   } catch {
     const newHost: ComputeHost = {
       id: `host-${Date.now().toString(36)}`,
       name: payload.name,
-      host_type: payload.host_type || 'docker',
+      host_type: payload.host_type || 'agent',
       endpoint: payload.endpoint,
       tls_enabled: payload.tls_enabled || false,
       status: 'connected',
@@ -674,7 +720,7 @@ async function submitAddHost() {
       created_at: new Date().toISOString()
     }
     hosts.value.unshift(newHost)
-    showToast(`Remote host "${newHost.name}" registered!`)
+    showToast(`Server "${newHost.name}" registered!`)
     showAddHostModal.value = false
   } finally {
     submittingHost.value = false
@@ -692,11 +738,11 @@ async function confirmRemoveHost() {
   try {
     await dockerApi.removeHost(host.id)
     hosts.value = hosts.value.filter(h => h.id !== host.id)
-    showToast(`Remote Docker host "${host.name}" removed.`)
+    showToast(`Remote host "${host.name}" removed.`)
     showRemoveHostModal.value = false
   } catch {
     hosts.value = hosts.value.filter(h => h.id !== host.id)
-    showToast(`Remote Docker host "${host.name}" removed.`)
+    showToast(`Remote host "${host.name}" removed.`)
     showRemoveHostModal.value = false
   }
 }
@@ -706,21 +752,33 @@ async function handleTestHost(host: ComputeHost) {
   try {
     const res = await dockerApi.testHost(host.id)
     const latency = res?.latency_ms || Math.floor(Math.random() * 20) + 8
-    const status = res?.status || 'ok'
+    const status = res?.status || 'connected'
+    const isSuccess = status === 'connected' || status === 'ok'
     hostTestResults.value[host.id] = {
       latency_ms: latency,
-      status,
-      timestamp: new Date()
+      status: isSuccess ? 'ok' : 'error',
+      timestamp: new Date(),
+      agent_info: res?.agent_info
     }
-    showToast(`Connection to ${host.name} verified (${latency}ms latency)`)
-  } catch {
+    if (isSuccess) {
+      if (res?.agent_info?.hostname) {
+        const info = res.agent_info
+        const uptimeStr = formatUptime(info.uptime || info.uptime_seconds)
+        showToast(`Connected to ${info.hostname} (${info.os || ''} ${info.arch || ''}) - Uptime: ${uptimeStr} (${latency}ms)`)
+      } else {
+        showToast(`Connection to ${host.name} verified (${latency}ms latency)`)
+      }
+    } else {
+      showToast(`Connection failed: ${res?.message || 'Host unreachable'}`, 'error')
+    }
+  } catch (err: any) {
     const latency = Math.floor(Math.random() * 20) + 12
     hostTestResults.value[host.id] = {
       latency_ms: latency,
-      status: 'ok',
+      status: 'error',
       timestamp: new Date()
     }
-    showToast(`Host ${host.name} reachable (${latency}ms ping)`)
+    showToast(`Failed to connect to ${host.name}: ${err?.message || 'Error'}`, 'error')
   } finally {
     testingHostId.value = null
   }
@@ -1366,28 +1424,28 @@ function formatMemory(mem?: number) {
         </div>
       </div>
 
-      <!-- Section D: Remote Docker Hosts -->
+      <!-- Section D: Remote Infrastructure Hosts -->
       <div class="mgmt-section">
         <div class="section-heading">
           <div class="heading-title-group">
             <span class="heading-icon">🌐</span>
             <div>
-              <h2 class="section-title">Remote Docker Hosts & Endpoints</h2>
-              <p class="section-desc">Register external standalone Docker daemons and edge engines for centralized orchestrations</p>
+              <h2 class="section-title">Remote Infrastructure Hosts</h2>
+              <p class="section-desc">Register external monitoring agents, standalone Docker daemons, and compute servers</p>
             </div>
           </div>
 
           <button class="btn btn-primary" @click="openAddHostModal">
-            <span>➕ Add Docker Host</span>
+            <span>➕ Add Server</span>
           </button>
         </div>
 
         <!-- Host Cards Grid -->
         <div v-if="hosts.length === 0" class="empty-state glass-panel">
           <span class="empty-icon">🌐</span>
-          <p>No remote Docker hosts registered yet.</p>
+          <p>No remote infrastructure hosts registered yet.</p>
           <button class="btn btn-secondary btn-sm" style="margin-top: 10px;" @click="openAddHostModal">
-            <span>Register First Host</span>
+            <span>Register First Server</span>
           </button>
         </div>
 
@@ -1395,15 +1453,15 @@ function formatMemory(mem?: number) {
           <div v-for="host in hosts" :key="host.id" class="host-card glass-panel">
             <div class="host-top">
               <div class="host-title-group">
-                <span class="host-icon">🐳</span>
+                <span class="host-icon">{{ host.host_type === 'agent' ? '📡' : '🐳' }}</span>
                 <div>
                   <h3 class="host-name">{{ host.name }}</h3>
                   <span class="host-endpoint font-mono text-cyan">{{ host.endpoint }}</span>
                 </div>
               </div>
               <div class="host-badges">
-                <span class="badge" :class="host.tls_enabled ? 'badge-emerald' : 'badge-amber'">
-                  {{ host.tls_enabled ? '🔒 TLS' : '🔓 TCP' }}
+                <span class="badge" :class="host.host_type === 'agent' ? 'badge-cyan' : (host.tls_enabled ? 'badge-emerald' : 'badge-amber')">
+                  {{ host.host_type === 'agent' ? '📡 AGENT' : (host.tls_enabled ? '🔒 TLS' : '🔓 TCP') }}
                 </span>
                 <StatusBadge :status="host.status || 'connected'" size="sm" />
               </div>
@@ -1412,14 +1470,19 @@ function formatMemory(mem?: number) {
             <div class="host-meta-box">
               <div class="host-meta-row font-mono text-muted">
                 <span>Type:</span>
-                <span class="text-primary">{{ (host.host_type || 'docker').toUpperCase() }}</span>
+                <span class="text-primary">{{ (host.host_type || 'agent').toUpperCase() }}</span>
               </div>
               <div class="host-meta-row font-mono text-muted">
                 <span>Last Health Check:</span>
                 <span>{{ formatDate(host.last_health_check || host.created_at) }}</span>
               </div>
               <div v-if="hostTestResults[host.id]" class="host-test-result font-mono animate-fade-in" :class="hostTestResults[host.id].status === 'ok' ? 'test-pass' : 'test-fail'">
-                <span>⚡ Latency: {{ hostTestResults[host.id].latency_ms }}ms ({{ hostTestResults[host.id].status.toUpperCase() }})</span>
+                <div>⚡ Latency: {{ hostTestResults[host.id].latency_ms }}ms ({{ hostTestResults[host.id].status.toUpperCase() }})</div>
+                <div v-if="hostTestResults[host.id].agent_info" class="agent-info-details" style="margin-top: 4px; font-size: 11px; color: #38bdf8; display: flex; flex-direction: column; gap: 2px;">
+                  <span v-if="hostTestResults[host.id].agent_info?.hostname">🖥️ <strong>Host:</strong> {{ hostTestResults[host.id].agent_info?.hostname }}</span>
+                  <span v-if="hostTestResults[host.id].agent_info?.os">🐧 <strong>OS:</strong> {{ hostTestResults[host.id].agent_info?.os }} ({{ hostTestResults[host.id].agent_info?.arch }})</span>
+                  <span v-if="hostTestResults[host.id].agent_info?.uptime || hostTestResults[host.id].agent_info?.uptime_seconds">⏱️ <strong>Uptime:</strong> {{ formatUptime(hostTestResults[host.id].agent_info?.uptime || hostTestResults[host.id].agent_info?.uptime_seconds) }}</span>
+                </div>
               </div>
             </div>
 
@@ -1606,12 +1669,12 @@ function formatMemory(mem?: number) {
       </template>
     </ModalDrawer>
 
-    <!-- Add Docker Host Modal -->
+    <!-- Add Infrastructure Host Modal -->
     <ModalDrawer
       v-model:show="showAddHostModal"
       mode="modal"
-      title="Register Remote Docker Host"
-      subtitle="Connect an external Docker daemon over TCP / TLS socket"
+      title="Register Infrastructure Host"
+      subtitle="Connect a monitoring agent or Docker daemon endpoint"
       max-width="640px"
     >
       <form @submit.prevent="submitAddHost" class="host-form">
@@ -1626,94 +1689,112 @@ function formatMemory(mem?: number) {
           />
         </div>
 
-        <div class="form-row-2">
-          <div class="form-group">
-            <label class="form-label">Host Type</label>
-            <select v-model="hostForm.host_type" class="input-glass">
-              <option value="docker">Docker Daemon</option>
-              <option value="k8s">Kubernetes Node</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">API Version</label>
-            <input 
-              v-model="hostForm.api_version" 
-              type="text" 
-              placeholder="e.g. 1.45 (auto)"
-              class="input-glass font-mono"
-            />
-          </div>
+        <div class="form-group">
+          <label class="form-label">Host Type</label>
+          <select v-model="hostForm.host_type" class="input-glass">
+            <option value="agent">K8s-Agent (CPU/RAM/Disk monitoring)</option>
+            <option value="docker">Docker Engine (containers + metrics)</option>
+          </select>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Daemon Endpoint <span class="text-rose">*</span></label>
-          <div class="endpoint-input-group font-mono">
-            <span class="endpoint-prefix">tcp://</span>
-            <input 
-              v-model="hostForm.ip" 
-              type="text" 
-              required 
-              placeholder="192.168.1.50 or host.domain" 
-              class="input-glass endpoint-ip"
-            />
-            <span class="endpoint-colon">:</span>
-            <input 
-              v-model.number="hostForm.port" 
-              type="number" 
-              required 
-              placeholder="2375" 
-              class="input-glass endpoint-port"
-            />
-          </div>
+        <!-- When Agent -->
+        <div v-if="hostForm.host_type === 'agent'" class="form-group">
+          <label class="form-label">Agent Endpoint <span class="text-rose">*</span></label>
+          <input 
+            v-model="hostForm.endpoint" 
+            type="text" 
+            required 
+            placeholder="http://10.10.10.200:9100" 
+            class="input-glass font-mono"
+          />
+          <p class="form-hint text-muted" style="margin-top: 6px; font-size: 12px;">
+            💡 Run <code class="font-mono text-cyan">./deploy-agent.sh user@server-ip</code> to install agent
+          </p>
         </div>
 
-        <!-- TLS Toggle -->
-        <div class="form-group">
-          <div class="tls-toggle-row">
-            <label class="toggle-switch">
-              <input type="checkbox" v-model="hostForm.tls_enabled" />
-              <span class="toggle-slider"></span>
-            </label>
-            <div class="toggle-label-wrap">
-              <span class="toggle-title">Enable TLS Authentication (mTLS)</span>
-              <span class="toggle-sub text-muted">Use client certificates for secured Docker socket communication (Port 2376)</span>
+        <!-- When Docker -->
+        <template v-else>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="form-label">Daemon Endpoint <span class="text-rose">*</span></label>
+              <div class="endpoint-input-group font-mono">
+                <span class="endpoint-prefix">tcp://</span>
+                <input 
+                  v-model="hostForm.ip" 
+                  type="text" 
+                  required 
+                  placeholder="192.168.1.50 or host.domain" 
+                  class="input-glass endpoint-ip"
+                />
+                <span class="endpoint-colon">:</span>
+                <input 
+                  v-model.number="hostForm.port" 
+                  type="number" 
+                  required 
+                  placeholder="2375" 
+                  class="input-glass endpoint-port"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">API Version</label>
+              <input 
+                v-model="hostForm.api_version" 
+                type="text" 
+                placeholder="e.g. 1.45 (auto)"
+                class="input-glass font-mono"
+              />
             </div>
           </div>
-        </div>
 
-        <!-- TLS Certificates Section -->
-        <div v-if="hostForm.tls_enabled" class="tls-certs-section glass-panel animate-fade-in">
+          <!-- TLS Toggle -->
           <div class="form-group">
-            <label class="form-label">CA Certificate (ca.pem)</label>
-            <textarea 
-              v-model="hostForm.ca_cert" 
-              rows="3" 
-              placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" 
-              class="input-glass font-mono cert-textarea"
-            ></textarea>
+            <div class="tls-toggle-row">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="hostForm.tls_enabled" />
+                <span class="toggle-slider"></span>
+              </label>
+              <div class="toggle-label-wrap">
+                <span class="toggle-title">Enable TLS Authentication (mTLS)</span>
+                <span class="toggle-sub text-muted">Use client certificates for secured Docker socket communication (Port 2376)</span>
+              </div>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Client Certificate (cert.pem)</label>
-            <textarea 
-              v-model="hostForm.client_cert" 
-              rows="3" 
-              placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" 
-              class="input-glass font-mono cert-textarea"
-            ></textarea>
-          </div>
+          <!-- TLS Certificates Section -->
+          <div v-if="hostForm.tls_enabled" class="tls-certs-section glass-panel animate-fade-in">
+            <div class="form-group">
+              <label class="form-label">CA Certificate (ca.pem)</label>
+              <textarea 
+                v-model="hostForm.ca_cert" 
+                rows="3" 
+                placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" 
+                class="input-glass font-mono cert-textarea"
+              ></textarea>
+            </div>
 
-          <div class="form-group">
-            <label class="form-label">Client Private Key (key.pem)</label>
-            <textarea 
-              v-model="hostForm.client_key" 
-              rows="3" 
-              placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----" 
-              class="input-glass font-mono cert-textarea"
-            ></textarea>
+            <div class="form-group">
+              <label class="form-label">Client Certificate (cert.pem)</label>
+              <textarea 
+                v-model="hostForm.client_cert" 
+                rows="3" 
+                placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" 
+                class="input-glass font-mono cert-textarea"
+              ></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Client Private Key (key.pem)</label>
+              <textarea 
+                v-model="hostForm.client_key" 
+                rows="3" 
+                placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----" 
+                class="input-glass font-mono cert-textarea"
+              ></textarea>
+            </div>
           </div>
-        </div>
+        </template>
 
         <!-- Labels Editor -->
         <div class="form-group">
@@ -1751,7 +1832,7 @@ function formatMemory(mem?: number) {
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" @click="showAddHostModal = false">Cancel</button>
           <button type="submit" class="btn btn-primary" :disabled="submittingHost">
-            <span>{{ submittingHost ? '⏳ Registering...' : '💾 Register Docker Host' }}</span>
+            <span>{{ submittingHost ? '⏳ Registering...' : '💾 Register Server' }}</span>
           </button>
         </div>
       </form>

@@ -604,3 +604,112 @@ func TestDockerHandler_ComputeHostsCRUD(t *testing.T) {
 		t.Errorf("expected status 404 for deleted host test, got %d", w.Code)
 	}
 }
+
+func TestDockerHandler_AgentHostConnectivity(t *testing.T) {
+	// Mock agent HTTP server
+	agentMux := http.NewServeMux()
+	agentMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+	agentMux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"hostname":       "prod-server-01",
+			"os":             "linux",
+			"arch":           "amd64",
+			"uptime_seconds": 123456,
+		})
+	})
+	agentServer := httptest.NewServer(agentMux)
+	defer agentServer.Close()
+
+	repo := &testDockerRepo{}
+	hostRepo := newMockComputeHostRepo()
+	handler := NewDockerHandler(repo, hostRepo)
+
+	r := chi.NewRouter()
+	r.Route("/docker", handler.RegisterRoutes)
+
+	// 1. Create Agent Host
+	createBody := fmt.Sprintf(`{
+		"name": "agent-host-1",
+		"host_type": "agent",
+		"endpoint": "%s",
+		"labels": {"role": "monitoring"}
+	}`, agentServer.URL)
+	req := httptest.NewRequest(http.MethodPost, "/docker/hosts", bytes.NewBufferString(createBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var created domain.ComputeHost
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatalf("failed to decode created host: %v", err)
+	}
+	if created.HostType != "agent" {
+		t.Errorf("expected host_type agent, got %s", created.HostType)
+	}
+
+	// 2. Test Agent Connectivity
+	req = httptest.NewRequest(http.MethodPost, "/docker/hosts/"+created.ID+"/test", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var testResp struct {
+		Status    string                 `json:"status"`
+		Message   string                 `json:"message"`
+		LatencyMs int64                  `json:"latency_ms"`
+		AgentInfo map[string]interface{} `json:"agent_info"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&testResp); err != nil {
+		t.Fatalf("failed to decode test response: %v", err)
+	}
+	if testResp.Status != "connected" {
+		t.Errorf("expected status connected, got %s", testResp.Status)
+	}
+	if testResp.AgentInfo["hostname"] != "prod-server-01" {
+		t.Errorf("expected hostname prod-server-01, got %v", testResp.AgentInfo["hostname"])
+	}
+	if testResp.AgentInfo["os"] != "linux" {
+		t.Errorf("expected os linux, got %v", testResp.AgentInfo["os"])
+	}
+
+	// 3. Test Agent Connectivity Failure
+	deadHost := &domain.ComputeHost{
+		ID:        "dead-agent",
+		Name:      "dead-agent",
+		HostType:  "agent",
+		Endpoint:  "http://127.0.0.1:59999",
+		Status:    "pending",
+		TenantID:  "default-tenant",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	_ = hostRepo.Create(context.Background(), deadHost)
+
+	req = httptest.NewRequest(http.MethodPost, "/docker/hosts/"+deadHost.ID+"/test", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+	var failResp struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}
+	_ = json.NewDecoder(w.Body).Decode(&failResp)
+	if failResp.Status != "error" {
+		t.Errorf("expected status error for dead agent, got %s", failResp.Status)
+	}
+}
+
