@@ -14,7 +14,7 @@ import (
 )
 
 func TestOverviewHandler_GetOverview_NilSnapshot(t *testing.T) {
-	collector := metrics.NewCollector(nil, nil, zap.NewNop())
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
 	handler := NewOverviewHandler(collector, zap.NewNop())
 
 	r := chi.NewRouter()
@@ -39,7 +39,7 @@ func TestOverviewHandler_GetOverview_NilSnapshot(t *testing.T) {
 }
 
 func TestOverviewHandler_GetOverview_WithData(t *testing.T) {
-	collector := metrics.NewCollector(nil, nil, zap.NewNop())
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
 	_, _ = collector.CollectOnce(context.Background())
 
 	handler := NewOverviewHandler(collector, zap.NewNop())
@@ -62,7 +62,7 @@ func TestOverviewHandler_GetOverview_WithData(t *testing.T) {
 }
 
 func TestOverviewHandler_GetNodes_And_Alerts_And_Containers(t *testing.T) {
-	collector := metrics.NewCollector(nil, nil, zap.NewNop())
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
 	handler := NewOverviewHandler(collector, zap.NewNop())
 
 	r := chi.NewRouter()
@@ -133,7 +133,7 @@ func TestOverviewHandler_GetNodes_And_Alerts_And_Containers(t *testing.T) {
 }
 
 func TestMetricsHandler_AliasConstructor(t *testing.T) {
-	collector := metrics.NewCollector(nil, nil, zap.NewNop())
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
 	handler := NewMetricsHandler(collector, zap.NewNop())
 	if handler == nil {
 		t.Fatal("expected non-nil handler")

@@ -309,8 +309,10 @@ func run() error {
 		dockerRepo = infraDocker.NewDockerRepoWithClient(dockerClient)
 	}
 
+	computeHostRepo := postgres.NewComputeHostRepo(pgClient.Pool())
 	metricsCollector := usecaseMetrics.NewCollector(
 		dockerClient,
+		computeHostRepo,
 		bridge,
 		log,
 		usecaseMetrics.WithRequestCountFn(mw.GetRequestCount),
@@ -350,7 +352,6 @@ func run() error {
 	alertRepo := postgres.NewAlertRepo(pgClient.Pool())
 	cloudAccountRepo := postgres.NewCloudAccountRepo(pgClient.Pool())
 	cloudHandler := adapthttp.NewCloudHandler(cloudAccountRepo, nil, log)
-	computeHostRepo := postgres.NewComputeHostRepo(pgClient.Pool())
 
 	alertNotifiers := map[string]alert.Notifier{
 		"slack":   notifier.NewSlackNotifier(),

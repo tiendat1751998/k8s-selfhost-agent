@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,13 +15,37 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/system"
 	"go.uber.org/zap"
+
+	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 )
+
+// AgentMetrics represents metrics from a k8s-agent instance.
+type AgentMetrics struct {
+	Hostname    string     `json:"hostname"`
+	OS          string     `json:"os"`
+	Arch        string     `json:"arch"`
+	CPUUsage    float64    `json:"cpu_usage"`
+	CPUCount    int        `json:"cpu_count"`
+	MemTotal    int64      `json:"mem_total"`
+	MemUsed     int64      `json:"mem_used"`
+	MemPercent  float64    `json:"mem_percent"`
+	DiskTotal   int64      `json:"disk_total"`
+	DiskUsed    int64      `json:"disk_used"`
+	DiskPercent float64    `json:"disk_percent"`
+	NetRxRate   int64      `json:"net_rx_rate"`
+	NetTxRate   int64      `json:"net_tx_rate"`
+	Uptime      int64      `json:"uptime"`
+	LoadAvg     [3]float64 `json:"load_avg"`
+	Processes   int        `json:"processes"`
+	Status      string     `json:"status"` // "online", "offline", "error"
+	LastSeen    time.Time  `json:"last_seen"`
+}
 
 // NodeMetrics represents infrastructure metrics for a single node.
 type NodeMetrics struct {
 	NodeID         string    `json:"node_id"`
 	NodeName       string    `json:"node_name"`
-	Role           string    `json:"role"`   // manager, worker, standalone
+	Role           string    `json:"role"`   // manager, worker, standalone, agent
 	Status         string    `json:"status"` // ready, down, disconnected
 	CPUPercent     float64   `json:"cpu_percent"`
 	MemoryUsed     int64     `json:"memory_used"`   // bytes
@@ -32,6 +58,7 @@ type NodeMetrics struct {
 	NetworkTxBytes int64     `json:"network_tx_bytes"`
 	ContainerCount int       `json:"container_count"`
 	RunningCount   int       `json:"running_count"`
+	Source         string    `json:"source"` // "docker" or "agent"
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
@@ -99,12 +126,16 @@ type DockerAPIClient interface {
 
 // Collector periodically collects metrics from Docker daemon, tracks request rate, and broadcasts over WebSocket.
 type Collector struct {
-	dockerClient   DockerAPIClient
-	broadcaster    Broadcaster
-	logger         *zap.Logger
-	interval       time.Duration
-	thresholds     Thresholds
-	requestCountFn func() int64
+	dockerClient    DockerAPIClient
+	computeHostRepo docker.ComputeHostRepository
+	httpClient      *http.Client
+	agentMetrics    map[string]*AgentMetrics
+	agentMu         sync.RWMutex
+	broadcaster     Broadcaster
+	logger          *zap.Logger
+	interval        time.Duration
+	thresholds      Thresholds
+	requestCountFn  func() int64
 
 	lastSnapshot *SystemOverview
 	lastReqCount int64
@@ -139,17 +170,36 @@ func WithRequestCountFn(fn func() int64) Option {
 	}
 }
 
+// WithHTTPClient sets a custom HTTP client for agent scraping.
+func WithHTTPClient(client *http.Client) Option {
+	return func(c *Collector) {
+		if client != nil {
+			c.httpClient = client
+		}
+	}
+}
+
+// WithComputeHostRepo sets the compute host repository.
+func WithComputeHostRepo(repo docker.ComputeHostRepository) Option {
+	return func(c *Collector) {
+		c.computeHostRepo = repo
+	}
+}
+
 // NewCollector creates a new infrastructure metrics collector.
-func NewCollector(dockerClient DockerAPIClient, broadcaster Broadcaster, logger *zap.Logger, opts ...Option) *Collector {
+func NewCollector(dockerClient DockerAPIClient, computeHostRepo docker.ComputeHostRepository, broadcaster Broadcaster, logger *zap.Logger, opts ...Option) *Collector {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
 	c := &Collector{
-		dockerClient: dockerClient,
-		broadcaster:  broadcaster,
-		logger:       logger,
-		interval:     5 * time.Second,
+		dockerClient:    dockerClient,
+		computeHostRepo: computeHostRepo,
+		httpClient:      &http.Client{Timeout: 5 * time.Second},
+		agentMetrics:    make(map[string]*AgentMetrics),
+		broadcaster:     broadcaster,
+		logger:          logger,
+		interval:        5 * time.Second,
 		thresholds: Thresholds{
 			CPUWarning:    80.0,
 			MemoryWarning: 85.0,
@@ -169,7 +219,8 @@ func NewCollector(dockerClient DockerAPIClient, broadcaster Broadcaster, logger 
 func (c *Collector) Start(ctx context.Context) {
 	c.logger.Info("Starting Docker infrastructure metrics collector", zap.Duration("interval", c.interval))
 
-	// Initial poll immediately
+	// Initial poll of agents and docker immediately
+	go c.pollAgentHosts(ctx)
 	c.runCollection(ctx)
 
 	ticker := time.NewTicker(c.interval)
@@ -205,6 +256,246 @@ func (c *Collector) GetLastSnapshot() *SystemOverview {
 	return c.lastSnapshot
 }
 
+// pollAgentHosts periodically polls all registered compute host agents.
+func (c *Collector) pollAgentHosts(ctx context.Context) {
+	if c.computeHostRepo == nil {
+		return
+	}
+
+	c.scrapeAllAgents(ctx)
+
+	ticker := time.NewTicker(c.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.stopCh:
+			return
+		case <-ticker.C:
+			c.scrapeAllAgents(ctx)
+		}
+	}
+}
+
+func (c *Collector) scrapeAllAgents(ctx context.Context) {
+	if c.computeHostRepo == nil {
+		return
+	}
+
+	hosts, err := c.computeHostRepo.List(ctx, "")
+	if err != nil {
+		c.logger.Debug("Failed to list compute hosts for agent scraping", zap.Error(err))
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, host := range hosts {
+		wg.Add(1)
+		go func(h docker.ComputeHost) {
+			defer wg.Done()
+			c.ScrapeAgent(ctx, h)
+		}(host)
+	}
+	wg.Wait()
+}
+
+// ScrapeAgent scrapes a single registered compute host agent.
+func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
+	url := formatAgentURL(host.Endpoint, host.TLSEnabled)
+	if url == "" {
+		return
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
+	if err != nil {
+		c.recordAgentFailure(ctx, host, err)
+		return
+	}
+
+	if host.Labels != nil {
+		if token, ok := host.Labels["auth_token"]; ok && token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		} else if token, ok := host.Labels["token"]; ok && token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
+
+	client := c.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.recordAgentFailure(ctx, host, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.recordAgentFailure(ctx, host, fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode))
+		return
+	}
+
+	type agentDiskPayload struct {
+		MountPoint   string  `json:"mount_point"`
+		TotalBytes   int64   `json:"total_bytes"`
+		UsedBytes    int64   `json:"used_bytes"`
+		UsagePercent float64 `json:"usage_percent"`
+		Filesystem   string  `json:"filesystem"`
+	}
+
+	type agentMetricsPayload struct {
+		Hostname      string             `json:"hostname"`
+		OS            string             `json:"os"`
+		Arch          string             `json:"arch"`
+		UptimeSeconds int64              `json:"uptime_seconds"`
+		LoadAverage   [3]float64         `json:"load_average"`
+		CPU           struct {
+			Count        int     `json:"count"`
+			UsagePercent float64 `json:"usage_percent"`
+		} `json:"cpu"`
+		Memory struct {
+			TotalBytes     int64   `json:"total_bytes"`
+			UsedBytes      int64   `json:"used_bytes"`
+			AvailableBytes int64   `json:"available_bytes"`
+			UsagePercent   float64 `json:"usage_percent"`
+		} `json:"memory"`
+		Disks   []agentDiskPayload `json:"disks"`
+		Network struct {
+			TotalRxBytesPerSec int64 `json:"total_rx_bytes_per_sec"`
+			TotalTxBytesPerSec int64 `json:"total_tx_bytes_per_sec"`
+		} `json:"network"`
+		Processes   int       `json:"processes"`
+		CollectedAt time.Time `json:"collected_at"`
+	}
+
+	var payload agentMetricsPayload
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		c.recordAgentFailure(ctx, host, fmt.Errorf("decoding agent response: %w", err))
+		return
+	}
+
+	var diskTotal, diskUsed int64
+	for _, d := range payload.Disks {
+		diskTotal += d.TotalBytes
+		diskUsed += d.UsedBytes
+	}
+	var diskPercent float64
+	if diskTotal > 0 {
+		diskPercent = math.Round((float64(diskUsed)/float64(diskTotal))*10000) / 100
+	}
+
+	now := time.Now().UTC()
+	collectedAt := payload.CollectedAt
+	if collectedAt.IsZero() {
+		collectedAt = now
+	}
+
+	hostname := payload.Hostname
+	if hostname == "" {
+		hostname = host.Name
+	}
+
+	am := &AgentMetrics{
+		Hostname:    hostname,
+		OS:          payload.OS,
+		Arch:        payload.Arch,
+		CPUUsage:    payload.CPU.UsagePercent,
+		CPUCount:    payload.CPU.Count,
+		MemTotal:    payload.Memory.TotalBytes,
+		MemUsed:     payload.Memory.UsedBytes,
+		MemPercent:  payload.Memory.UsagePercent,
+		DiskTotal:   diskTotal,
+		DiskUsed:    diskUsed,
+		DiskPercent: diskPercent,
+		NetRxRate:   payload.Network.TotalRxBytesPerSec,
+		NetTxRate:   payload.Network.TotalTxBytesPerSec,
+		Uptime:      payload.UptimeSeconds,
+		LoadAvg:     payload.LoadAverage,
+		Processes:   payload.Processes,
+		Status:      "online",
+		LastSeen:    collectedAt,
+	}
+
+	c.agentMu.Lock()
+	c.agentMetrics[host.ID] = am
+	c.agentMu.Unlock()
+
+	if c.computeHostRepo != nil {
+		_ = c.computeHostRepo.UpdateStatus(ctx, host.ID, "connected", now)
+	}
+}
+
+func (c *Collector) recordAgentFailure(ctx context.Context, host docker.ComputeHost, err error) {
+	c.logger.Debug("Agent scrape failed", zap.String("host_id", host.ID), zap.String("host_name", host.Name), zap.Error(err))
+
+	now := time.Now().UTC()
+	c.agentMu.Lock()
+	am, exists := c.agentMetrics[host.ID]
+	if !exists {
+		am = &AgentMetrics{
+			Hostname: host.Name,
+			Status:   "offline",
+			LastSeen: now,
+		}
+		c.agentMetrics[host.ID] = am
+	} else {
+		am.Status = "offline"
+		am.LastSeen = now
+	}
+	c.agentMu.Unlock()
+
+	if c.computeHostRepo != nil {
+		_ = c.computeHostRepo.UpdateStatus(ctx, host.ID, "disconnected", now)
+	}
+}
+
+// GetAgentMetrics returns a copy of the current agent metrics.
+func (c *Collector) GetAgentMetrics() map[string]*AgentMetrics {
+	c.agentMu.RLock()
+	defer c.agentMu.RUnlock()
+	res := make(map[string]*AgentMetrics, len(c.agentMetrics))
+	for k, v := range c.agentMetrics {
+		if v != nil {
+			metricCopy := *v
+			res[k] = &metricCopy
+		}
+	}
+	return res
+}
+
+// SetAgentMetric sets an agent metric entry (useful for tests).
+func (c *Collector) SetAgentMetric(hostID string, m *AgentMetrics) {
+	c.agentMu.Lock()
+	defer c.agentMu.Unlock()
+	c.agentMetrics[hostID] = m
+}
+
+func formatAgentURL(endpoint string, tlsEnabled bool) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return ""
+	}
+	var u string
+	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
+		u = endpoint
+	} else if tlsEnabled {
+		u = "https://" + endpoint
+	} else {
+		u = "http://" + endpoint
+	}
+	if !strings.HasSuffix(u, "/metrics") {
+		u = strings.TrimSuffix(u, "/") + "/metrics"
+	}
+	return u
+}
+
 func (c *Collector) runCollection(ctx context.Context) {
 	timeout := c.interval - 500*time.Millisecond
 	if timeout <= 0 {
@@ -229,7 +520,7 @@ func (c *Collector) runCollection(ctx context.Context) {
 	}
 }
 
-// CollectOnce polls the Docker API once, builds the SystemOverview, and generates threshold alerts.
+// CollectOnce polls the Docker API once, merges agent host metrics, builds SystemOverview, and generates alerts.
 func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 	now := time.Now().UTC()
 
@@ -254,20 +545,80 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 
 	// Graceful fallback if Docker client is unavailable
 	if c.dockerClient == nil {
+		nodeMetricsList := make([]NodeMetrics, 0)
+		c.agentMu.RLock()
+		for hostID, am := range c.agentMetrics {
+			if am == nil {
+				continue
+			}
+			status := "ready"
+			if am.Status != "online" {
+				status = "down"
+			}
+			nodeMetricsList = append(nodeMetricsList, NodeMetrics{
+				NodeID:         hostID,
+				NodeName:       am.Hostname,
+				Role:           "agent",
+				Status:         status,
+				CPUPercent:     am.CPUUsage,
+				MemoryUsed:     am.MemUsed,
+				MemoryTotal:    am.MemTotal,
+				MemoryPercent:  am.MemPercent,
+				DiskUsed:       am.DiskUsed,
+				DiskTotal:      am.DiskTotal,
+				DiskPercent:    am.DiskPercent,
+				NetworkRxBytes: am.NetRxRate,
+				NetworkTxBytes: am.NetTxRate,
+				ContainerCount: am.Processes,
+				RunningCount:   am.Processes,
+				Source:         "agent",
+				UpdatedAt:      am.LastSeen,
+			})
+		}
+		c.agentMu.RUnlock()
+
+		healthyNodesCount := 0
+		var totalCPU float64
+		var totalMemUsed, totalMemLimit int64
+		var totalDiskUsed, totalDiskLimit int64
+
+		for _, nm := range nodeMetricsList {
+			if nm.Status == "ready" {
+				healthyNodesCount++
+			}
+			totalCPU += nm.CPUPercent
+			totalMemUsed += nm.MemoryUsed
+			totalMemLimit += nm.MemoryTotal
+			totalDiskUsed += nm.DiskUsed
+			totalDiskLimit += nm.DiskTotal
+		}
+
+		var totalMemPct, totalDiskPct, avgCPU float64
+		if totalMemLimit > 0 {
+			totalMemPct = (float64(totalMemUsed) / float64(totalMemLimit)) * 100.0
+		}
+		if totalDiskLimit > 0 {
+			totalDiskPct = (float64(totalDiskUsed) / float64(totalDiskLimit)) * 100.0
+		}
+		if len(nodeMetricsList) > 0 {
+			avgCPU = totalCPU / float64(len(nodeMetricsList))
+		}
+
 		overview := &SystemOverview{
-			Nodes:             make([]NodeMetrics, 0),
+			Nodes:             nodeMetricsList,
 			Containers:        make([]ContainerMetrics, 0),
-			TotalNodes:        0,
-			HealthyNodes:      0,
+			TotalNodes:        len(nodeMetricsList),
+			HealthyNodes:      healthyNodesCount,
 			TotalContainers:   0,
 			RunningContainers: 0,
-			TotalCPUPercent:   0,
-			TotalMemPercent:   0,
-			TotalDiskPercent:  0,
+			TotalCPUPercent:   math.Round(avgCPU*100) / 100,
+			TotalMemPercent:   math.Round(totalMemPct*100) / 100,
+			TotalDiskPercent:  math.Round(totalDiskPct*100) / 100,
 			RequestsPerSec:    math.Round(rps*100) / 100,
 			Alerts:            make([]MetricAlert, 0),
 			CollectedAt:       now,
 		}
+		overview.Alerts = c.generateAlerts(overview)
 		return overview, nil
 	}
 
@@ -461,6 +812,7 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 				NetworkTxBytes: nodeNetTx,
 				ContainerCount: nodeContainerCount,
 				RunningCount:   nodeRunningCount,
+				Source:         "docker",
 				UpdatedAt:      n.UpdatedAt,
 			})
 		}
@@ -497,14 +849,49 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			NetworkTxBytes: totalNetTx,
 			ContainerCount: len(containersList),
 			RunningCount:   runningContainersCount,
+			Source:         "docker",
 			UpdatedAt:      now,
 		})
 	}
 
-	// 5. Aggregate System Overview
+	// 5. Merge Agent Nodes
+	c.agentMu.RLock()
+	for hostID, am := range c.agentMetrics {
+		if am == nil {
+			continue
+		}
+		status := "ready"
+		if am.Status != "online" {
+			status = "down"
+		}
+
+		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
+			NodeID:         hostID,
+			NodeName:       am.Hostname,
+			Role:           "agent",
+			Status:         status,
+			CPUPercent:     am.CPUUsage,
+			MemoryUsed:     am.MemUsed,
+			MemoryTotal:    am.MemTotal,
+			MemoryPercent:  am.MemPercent,
+			DiskUsed:       am.DiskUsed,
+			DiskTotal:      am.DiskTotal,
+			DiskPercent:    am.DiskPercent,
+			NetworkRxBytes: am.NetRxRate,
+			NetworkTxBytes: am.NetTxRate,
+			ContainerCount: am.Processes,
+			RunningCount:   am.Processes,
+			Source:         "agent",
+			UpdatedAt:      am.LastSeen,
+		})
+	}
+	c.agentMu.RUnlock()
+
+	// 6. Aggregate System Overview
 	healthyNodesCount := 0
 	var totalCPU float64
 	var totalMemUsed, totalMemLimit int64
+	var totalDiskUsed, totalDiskLimit int64
 
 	for _, nm := range nodeMetricsList {
 		if nm.Status == "ready" {
@@ -513,11 +900,20 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 		totalCPU += nm.CPUPercent
 		totalMemUsed += nm.MemoryUsed
 		totalMemLimit += nm.MemoryTotal
+		totalDiskUsed += nm.DiskUsed
+		totalDiskLimit += nm.DiskTotal
 	}
 
 	var totalMemPct float64
 	if totalMemLimit > 0 {
 		totalMemPct = (float64(totalMemUsed) / float64(totalMemLimit)) * 100.0
+	}
+
+	var totalDiskPct float64
+	if totalDiskLimit > 0 {
+		totalDiskPct = (float64(totalDiskUsed) / float64(totalDiskLimit)) * 100.0
+	} else {
+		totalDiskPct = diskPercent
 	}
 
 	avgCPU := totalCPU
@@ -534,7 +930,7 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 		RunningContainers: runningContainersCount,
 		TotalCPUPercent:   math.Round(avgCPU*100) / 100,
 		TotalMemPercent:   math.Round(totalMemPct*100) / 100,
-		TotalDiskPercent:  math.Round(diskPercent*100) / 100,
+		TotalDiskPercent:  math.Round(totalDiskPct*100) / 100,
 		RequestsPerSec:    math.Round(rps*100) / 100,
 		Alerts:            make([]MetricAlert, 0),
 		CollectedAt:       now,

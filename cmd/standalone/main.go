@@ -195,6 +195,7 @@ func run() error {
 
 	metricsCollector := usecaseMetrics.NewCollector(
 		dockerClient,
+		computeHostRepo,
 		bridge,
 		log,
 		usecaseMetrics.WithRequestCountFn(mw.GetRequestCount),
