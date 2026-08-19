@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
@@ -12,6 +13,8 @@ import {
   type AgentInfo,
 } from '../api/compute'
 
+const route = useRoute()
+
 // ==========================================
 // 1. STATE MANAGEMENT
 // ==========================================
@@ -23,10 +26,16 @@ const hosts = ref<ComputeHost[]>([])
 const viewMode = ref<'grid' | 'table'>('grid')
 
 // Filter State
-const searchQuery = ref('')
+const searchQuery = ref((route.query.search as string) || '')
 const selectedTypeFilter = ref<string>('all')
 const selectedStatusFilter = ref<string>('all')
 const selectedLabelFilter = ref<string>('all')
+
+watch(() => route.query.search, (newSearch) => {
+  if (typeof newSearch === 'string') {
+    searchQuery.value = newSearch
+  }
+})
 
 // Connection Testing State
 const testingHostId = ref<string | null>(null)
