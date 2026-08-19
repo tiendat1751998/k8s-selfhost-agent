@@ -48,6 +48,7 @@ type PlatformHandlers struct {
 	Deployments   *DeploymentHandler
 	Tenancy       *TenancyHandler
 	Alert         *AlertHandler
+	K8s           *K8sResourceHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -130,7 +131,54 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			_, _ = w.Write([]byte(`{"status":"accepted"}`))
 		})
 
-		// Platform feature routes (nil-safe for standalone mode)
+		// Kubernetes offline graceful handler helper
+		k8sUnavailableHandler := func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error":   "kubernetes not connected",
+				"message": "Import a kubeconfig via Fleet to enable this feature",
+			})
+		}
+		mountK8sUnavailable := func(r chi.Router, pattern string) {
+			r.Route(pattern, func(sub chi.Router) {
+				sub.HandleFunc("/", k8sUnavailableHandler)
+				sub.HandleFunc("/*", k8sUnavailableHandler)
+			})
+		}
+
+		// K8s-dependent routes: ALWAYS mounted. When handler is nil, return 503 Service Unavailable.
+		if platform != nil && platform.Explorer != nil {
+			r.Route("/explorer", platform.Explorer.RegisterRoutes)
+		} else {
+			mountK8sUnavailable(r, "/explorer")
+		}
+
+		if platform != nil && platform.Deployments != nil {
+			r.Route("/deployments", platform.Deployments.RegisterRoutes)
+		} else {
+			mountK8sUnavailable(r, "/deployments")
+		}
+
+		if platform != nil && platform.Capacity != nil {
+			r.Route("/capacity", platform.Capacity.RegisterRoutes)
+		} else {
+			mountK8sUnavailable(r, "/capacity")
+		}
+
+		if platform != nil && platform.HealthCenter != nil {
+			r.Route("/health", platform.HealthCenter.RegisterRoutes)
+		} else {
+			mountK8sUnavailable(r, "/health")
+		}
+
+		if platform != nil && platform.K8s != nil {
+			r.Route("/k8s/{cluster}", platform.K8s.RegisterRoutes)
+		} else {
+			mountK8sUnavailable(r, "/k8s")
+		}
+
+		// Other platform feature routes (nil-safe for standalone mode)
 		if platform != nil {
 			if platform.Dashboard != nil {
 				platform.Dashboard.RegisterRoutes(r)
@@ -153,9 +201,6 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			if platform.Timeline != nil {
 				r.Route("/timeline", platform.Timeline.RegisterRoutes)
 			}
-			if platform.Capacity != nil {
-				r.Route("/capacity", platform.Capacity.RegisterRoutes)
-			}
 			if platform.Drift != nil {
 				r.Route("/drift", platform.Drift.RegisterRoutes)
 			}
@@ -168,17 +213,11 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			if platform.Promotion != nil {
 				r.Route("/promotions", platform.Promotion.RegisterRoutes)
 			}
-			if platform.Explorer != nil {
-				r.Route("/explorer", platform.Explorer.RegisterRoutes)
-			}
 			if platform.Tagging != nil {
 				r.Route("/tags", platform.Tagging.RegisterRoutes)
 			}
 			if platform.Reporting != nil {
 				r.Route("/reports-center", platform.Reporting.RegisterRoutes)
-			}
-			if platform.HealthCenter != nil {
-				r.Route("/health", platform.HealthCenter.RegisterRoutes)
 			}
 			if platform.Fleet != nil {
 				r.Route("/fleet", platform.Fleet.RegisterRoutes)
@@ -203,9 +242,6 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Agents != nil {
 				r.Route("/agents", platform.Agents.RegisterRoutes)
-			}
-			if platform.Deployments != nil {
-				r.Route("/deployments", platform.Deployments.RegisterRoutes)
 			}
 			if platform.Tenancy != nil {
 				r.Route("/tenancy", platform.Tenancy.RegisterRoutes)
