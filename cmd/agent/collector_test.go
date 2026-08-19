@@ -1,0 +1,316 @@
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func TestCollectCPU(t *testing.T) {
+	tempDir := t.TempDir()
+	statFile := filepath.Join(tempDir, "stat")
+
+	initialStat := `cpu  10000 2000 3000 50000 1000 500 200 0 0 0
+cpu0 5000 1000 1500 25000 500 250 100 0 0 0
+cpu1 5000 1000 1500 25000 500 250 100 0 0 0
+`
+	if err := os.WriteFile(statFile, []byte(initialStat), 0644); err != nil {
+		t.Fatalf("failed to write initial stat fixture: %v", err)
+	}
+
+	collector := NewSystemCollector(tempDir, "", nil)
+
+	// First pass
+	resp1, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect pass 1 failed: %v", err)
+	}
+	if resp1.CPU.Count != 2 {
+		t.Errorf("expected CPU count 2, got %d", resp1.CPU.Count)
+	}
+
+	// Updated stat fixture
+	updatedStat := `cpu  12000 2500 3500 51000 1000 600 200 0 0 0
+cpu0 6000 1250 1750 25500 500 300 100 0 0 0
+cpu1 6000 1250 1750 25500 500 300 100 0 0 0
+`
+	if err := os.WriteFile(statFile, []byte(updatedStat), 0644); err != nil {
+		t.Fatalf("failed to write updated stat fixture: %v", err)
+	}
+
+	// Second pass
+	resp2, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect pass 2 failed: %v", err)
+	}
+	if resp2.CPU.Count != 2 {
+		t.Errorf("expected CPU count 2, got %d", resp2.CPU.Count)
+	}
+	if resp2.CPU.UsagePercent <= 0.0 || resp2.CPU.UsagePercent > 100.0 {
+		t.Errorf("expected positive valid CPU usage percent, got %f", resp2.CPU.UsagePercent)
+	}
+}
+
+func TestCollectMemory(t *testing.T) {
+	tempDir := t.TempDir()
+	memFile := filepath.Join(tempDir, "meminfo")
+
+	memContent := `MemTotal:       16384000 kB
+MemFree:         4000000 kB
+MemAvailable:    8000000 kB
+Buffers:          500000 kB
+Cached:          3500000 kB
+`
+	if err := os.WriteFile(memFile, []byte(memContent), 0644); err != nil {
+		t.Fatalf("failed to write meminfo fixture: %v", err)
+	}
+
+	collector := NewSystemCollector(tempDir, "", nil)
+	resp, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	expectedTotal := int64(16384000) * 1024
+	expectedAvail := int64(8000000) * 1024
+	expectedUsed := expectedTotal - expectedAvail
+
+	if resp.Memory.TotalBytes != expectedTotal {
+		t.Errorf("expected TotalBytes %d, got %d", expectedTotal, resp.Memory.TotalBytes)
+	}
+	if resp.Memory.AvailableBytes != expectedAvail {
+		t.Errorf("expected AvailableBytes %d, got %d", expectedAvail, resp.Memory.AvailableBytes)
+	}
+	if resp.Memory.UsedBytes != expectedUsed {
+		t.Errorf("expected UsedBytes %d, got %d", expectedUsed, resp.Memory.UsedBytes)
+	}
+	if resp.Memory.UsagePercent <= 0 {
+		t.Errorf("expected positive UsagePercent, got %f", resp.Memory.UsagePercent)
+	}
+}
+
+func TestCollectDisk(t *testing.T) {
+	tempDir := t.TempDir()
+	mountsFile := filepath.Join(tempDir, "mounts")
+
+	mountsContent := `/dev/sda1 / ext4 rw,relatime 0 0
+/dev/sdb1 /data xfs rw,relatime 0 0
+proc /proc proc rw 0 0
+tmpfs /run tmpfs rw 0 0
+`
+	if err := os.WriteFile(mountsFile, []byte(mountsContent), 0644); err != nil {
+		t.Fatalf("failed to write mounts fixture: %v", err)
+	}
+
+	mockDiskFn := func(mountPoint string) (int64, int64, error) {
+		switch mountPoint {
+		case "/":
+			return 100 * 1024 * 1024 * 1024, 40 * 1024 * 1024 * 1024, nil
+		case "/data":
+			return 200 * 1024 * 1024 * 1024, 150 * 1024 * 1024 * 1024, nil
+		default:
+			return 0, 0, nil
+		}
+	}
+
+	collector := NewSystemCollector(tempDir, mountsFile, mockDiskFn)
+	resp, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if len(resp.Disks) != 2 {
+		t.Fatalf("expected 2 disks, got %d: %+v", len(resp.Disks), resp.Disks)
+	}
+
+	disk0 := resp.Disks[0]
+	if disk0.MountPoint != "/" || disk0.Filesystem != "ext4" || disk0.UsagePercent != 40.0 {
+		t.Errorf("unexpected disk 0: %+v", disk0)
+	}
+
+	disk1 := resp.Disks[1]
+	if disk1.MountPoint != "/data" || disk1.Filesystem != "xfs" || disk1.UsagePercent != 75.0 {
+		t.Errorf("unexpected disk 1: %+v", disk1)
+	}
+}
+
+func TestCollectNetwork(t *testing.T) {
+	tempDir := t.TempDir()
+	netDir := filepath.Join(tempDir, "net")
+	if err := os.MkdirAll(netDir, 0755); err != nil {
+		t.Fatalf("failed to create net dir: %v", err)
+	}
+	devFile := filepath.Join(netDir, "dev")
+
+	initialDev := `Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+  eth0: 10000000    100    0    0    0     0          0         0  5000000     50    0    0    0     0       0          0
+  eth1:  2000000     20    0    0    0     0          0         0  1000000     10    0    0    0     0       0          0
+`
+	if err := os.WriteFile(devFile, []byte(initialDev), 0644); err != nil {
+		t.Fatalf("failed to write initial net/dev: %v", err)
+	}
+
+	collector := NewSystemCollector(tempDir, "", nil)
+
+	// Pass 1: sets baseline
+	_, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect pass 1 failed: %v", err)
+	}
+
+	updatedDev := `Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+  eth0: 11024000    110    0    0    0     0          0         0  5512000     60    0    0    0     0       0          0
+  eth1:  2100000     25    0    0    0     0          0         0  1050000     15    0    0    0     0       0          0
+`
+	if err := os.WriteFile(devFile, []byte(updatedDev), 0644); err != nil {
+		t.Fatalf("failed to write updated net/dev: %v", err)
+	}
+
+	// Override timestamp to simulate 1 second elapsed
+	collector.prevNetTime = time.Now().UTC().Add(-1 * time.Second)
+
+	resp, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect pass 2 failed: %v", err)
+	}
+
+	if len(resp.Network.Interfaces) != 2 {
+		t.Fatalf("expected 2 network interfaces, got %d", len(resp.Network.Interfaces))
+	}
+
+	var foundEth0 bool
+	for _, iface := range resp.Network.Interfaces {
+		if iface.Name == "eth0" {
+			foundEth0 = true
+			if iface.RxBytesPerSec <= 0 || iface.TxBytesPerSec <= 0 {
+				t.Errorf("expected positive rate for eth0, got rx=%d, tx=%d", iface.RxBytesPerSec, iface.TxBytesPerSec)
+			}
+		}
+	}
+
+	if !foundEth0 {
+		t.Errorf("eth0 interface not found in network metrics")
+	}
+	if resp.Network.TotalRxBytesPerSec <= 0 || resp.Network.TotalTxBytesPerSec <= 0 {
+		t.Errorf("expected positive total network rates, got rx=%d, tx=%d", resp.Network.TotalRxBytesPerSec, resp.Network.TotalTxBytesPerSec)
+	}
+}
+
+func TestMetricsEndpoint_ReturnsJSON(t *testing.T) {
+	collector := NewSystemCollector("", "", nil)
+	handler := setupHandler(collector, "")
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp MetricsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+
+	if resp.Hostname == "" {
+		t.Errorf("expected non-empty hostname")
+	}
+	if resp.OS == "" {
+		t.Errorf("expected non-empty OS")
+	}
+	if resp.Arch == "" {
+		t.Errorf("expected non-empty Arch")
+	}
+}
+
+func TestHealthEndpoint(t *testing.T) {
+	collector := NewSystemCollector("", "", nil)
+	handler := setupHandler(collector, "")
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp HealthResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode health JSON: %v", err)
+	}
+	if resp.Status != "ok" {
+		t.Errorf("expected status 'ok', got '%s'", resp.Status)
+	}
+}
+
+func TestAuthToken_Required(t *testing.T) {
+	collector := NewSystemCollector("", "", nil)
+	handler := setupHandler(collector, "secret-token-123")
+
+	// Missing header
+	{
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401 for missing token, got %d", rec.Code)
+		}
+	}
+
+	// Invalid token
+	{
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		req.Header.Set("Authorization", "Bearer invalid-token")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401 for invalid token, got %d", rec.Code)
+		}
+	}
+
+	// Health endpoint should remain unauthenticated
+	{
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200 for health endpoint without auth, got %d", rec.Code)
+		}
+	}
+}
+
+func TestAuthToken_Valid(t *testing.T) {
+	collector := NewSystemCollector("", "", nil)
+	handler := setupHandler(collector, "secret-token-123")
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer secret-token-123")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for valid token, got %d", rec.Code)
+	}
+
+	var resp MetricsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+	if resp.Hostname == "" {
+		t.Errorf("expected non-empty hostname")
+	}
+}
