@@ -40,6 +40,10 @@ const containerSortBy = ref<'cpu' | 'memory' | 'name'>('cpu')
 const selectedContainer = ref<ContainerMetrics | null>(null)
 const showContainerDrawer = ref(false)
 
+// Topology filtering & selection
+type TopologyFilter = 'all' | 'docker' | 'agent' | 'alerts'
+const selectedTopologyFilter = ref<TopologyFilter>('all')
+
 // Dismissed alert IDs (session-level)
 const dismissedAlerts = ref<Set<string>>(new Set())
 
@@ -154,6 +158,49 @@ const runningContainers = computed(() => overview.value?.running_containers || 0
 const activeAlerts = computed<MetricAlert[]>(() => {
   const alerts = overview.value?.alerts || []
   return alerts.filter(a => !dismissedAlerts.value.has(`${a.node_id}-${a.type}`))
+})
+
+// Topology Filter Counts
+const swarmNodesCount = computed(() => {
+  return nodes.value.filter(n => n.source === 'docker' || (!n.source && n.role !== 'agent')).length
+})
+
+const agentNodesCount = computed(() => {
+  return nodes.value.filter(n => n.source === 'agent' || n.role === 'agent').length
+})
+
+const downOrAlertNodesCount = computed(() => {
+  return nodes.value.filter(n =>
+    n.status === 'down' ||
+    n.status === 'disconnected' ||
+    n.status === 'error' ||
+    n.cpu_percent >= 80 ||
+    n.memory_percent >= 80 ||
+    n.disk_percent >= 85 ||
+    activeAlerts.value.some(a => a.node_id === n.node_id)
+  ).length
+})
+
+// Filtered Topology Nodes based on selected filter pill
+const filteredTopologyNodes = computed<NodeMetrics[]>(() => {
+  if (selectedTopologyFilter.value === 'docker') {
+    return nodes.value.filter(n => n.source === 'docker' || (!n.source && n.role !== 'agent'))
+  }
+  if (selectedTopologyFilter.value === 'agent') {
+    return nodes.value.filter(n => n.source === 'agent' || n.role === 'agent')
+  }
+  if (selectedTopologyFilter.value === 'alerts') {
+    return nodes.value.filter(n =>
+      n.status === 'down' ||
+      n.status === 'disconnected' ||
+      n.status === 'error' ||
+      n.cpu_percent >= 80 ||
+      n.memory_percent >= 80 ||
+      n.disk_percent >= 85 ||
+      activeAlerts.value.some(a => a.node_id === n.node_id)
+    )
+  }
+  return nodes.value
 })
 
 // Determine the node receiving the highest traffic
@@ -391,6 +438,13 @@ onUnmounted(() => {
           </p>
         </div>
         <div class="alert-actions">
+          <button
+            class="btn-alert-action"
+            @click="router.push({ path: '/hosts', query: { search: alert.node_name || alert.node_id } })"
+            title="Open host in Infrastructure Registry"
+          >
+            <span>⚙️ Open in Registry</span>
+          </button>
           <button class="btn-alert-dismiss" @click="dismissAlert(alert)" title="Dismiss Alert">
             ✕
           </button>
@@ -573,15 +627,76 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <!-- Topology Filter Pills Bar -->
+        <div class="topology-filter-bar">
+          <div class="filter-pills-group">
+            <button
+              class="filter-pill-btn"
+              :class="{ 'filter-pill-active': selectedTopologyFilter === 'all' }"
+              @click="selectedTopologyFilter = 'all'"
+            >
+              <span class="filter-pill-icon">🌐</span>
+              <span>All Nodes</span>
+              <span class="filter-pill-count">({{ nodes.length }})</span>
+            </button>
+
+            <button
+              class="filter-pill-btn"
+              :class="{ 'filter-pill-active': selectedTopologyFilter === 'docker' }"
+              @click="selectedTopologyFilter = 'docker'"
+            >
+              <span class="filter-pill-icon">🐳</span>
+              <span>Docker Swarm</span>
+              <span class="filter-pill-count">({{ swarmNodesCount }})</span>
+            </button>
+
+            <button
+              class="filter-pill-btn"
+              :class="{ 'filter-pill-active': selectedTopologyFilter === 'agent' }"
+              @click="selectedTopologyFilter = 'agent'"
+            >
+              <span class="filter-pill-icon">📡</span>
+              <span>Infra Hosts</span>
+              <span class="filter-pill-count">({{ agentNodesCount }})</span>
+            </button>
+
+            <button
+              class="filter-pill-btn"
+              :class="[
+                { 'filter-pill-active': selectedTopologyFilter === 'alerts' },
+                downOrAlertNodesCount > 0 ? 'filter-pill-alert' : ''
+              ]"
+              @click="selectedTopologyFilter = 'alerts'"
+            >
+              <span class="filter-pill-icon">⚠️</span>
+              <span>Down / Alerts</span>
+              <span class="filter-pill-count">({{ downOrAlertNodesCount }})</span>
+            </button>
+          </div>
+
+          <div class="filter-meta-text">
+            <span>Showing {{ filteredTopologyNodes.length }} of {{ nodes.length }} nodes</span>
+          </div>
+        </div>
+
         <!-- Node Cards Grid -->
         <div class="node-cards-grid">
           <div
-            v-for="node in nodes"
+            v-if="filteredTopologyNodes.length === 0"
+            class="empty-topology-state glass-panel"
+          >
+            <span class="empty-topology-icon">🔍</span>
+            <span class="empty-topology-text">No nodes match the selected filter "{{ selectedTopologyFilter }}".</span>
+            <button class="btn-reset-filters" @click="selectedTopologyFilter = 'all'">Show All Nodes</button>
+          </div>
+
+          <div
+            v-for="node in filteredTopologyNodes"
             :key="node.node_id"
             class="node-card glass-panel"
             :class="[getNodeCardClass(node), { 'is-busiest': node.node_id === busiestNodeId }]"
           >
-            <!-- Card Top: Name, Role & Status -->
+            <!-- Card Top: Name, Source Badge, Role & Status -->
             <div class="node-card-header">
               <div class="node-identity">
                 <span
@@ -591,9 +706,20 @@ onUnmounted(() => {
                 <span class="node-name" :title="node.node_name">{{ node.node_name }}</span>
               </div>
               <div class="node-badge-row">
-                <span class="badge" :class="node.role === 'manager' ? 'badge-violet' : 'badge-cyan'">
-                  {{ node.role.toUpperCase() }}
-                </span>
+                <!-- Source Badge & Role Pill -->
+                <template v-if="node.source === 'agent' || node.role === 'agent'">
+                  <span class="badge badge-indigo">
+                    📡 INFRA AGENT
+                  </span>
+                </template>
+                <template v-else>
+                  <span class="badge badge-cyan">
+                    🐳 DOCKER SWARM
+                  </span>
+                  <span class="badge" :class="node.role === 'manager' ? 'badge-violet' : 'badge-cyan'">
+                    {{ (node.role || 'WORKER').toUpperCase() }}
+                  </span>
+                </template>
                 <span v-if="node.node_id === busiestNodeId" class="badge badge-amber badge-traffic-pulse" title="Highest traffic node">
                   🔥 HOT NODE
                 </span>
@@ -653,16 +779,36 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- Footer Action: Filter Containers -->
+            <!-- Footer Actions: Direct Navigation & Filter Containers -->
             <div class="node-card-footer">
-              <button
-                class="btn-node-filter"
-                :class="{ 'btn-node-filter-active': selectedNodeFilter === node.node_id }"
-                @click="selectedNodeFilter = selectedNodeFilter === node.node_id ? 'all' : node.node_id"
-              >
-                <span>{{ selectedNodeFilter === node.node_id ? 'Viewing Containers' : 'Filter Containers' }}</span>
-                <span class="count-pill">{{ node.container_count }}</span>
-              </button>
+              <div class="node-footer-actions">
+                <button
+                  v-if="node.source === 'agent' || node.role === 'agent'"
+                  class="btn-node-action btn-manage-host"
+                  @click="router.push({ path: '/hosts', query: { search: node.node_name } })"
+                  title="Manage host in Infrastructure Registry"
+                >
+                  <span>⚙️ Manage in Registry</span>
+                </button>
+                <button
+                  v-else
+                  class="btn-node-action btn-view-swarm"
+                  @click="router.push('/docker')"
+                  title="View node in Docker Swarm"
+                >
+                  <span>🐳 View in Swarm</span>
+                </button>
+
+                <button
+                  v-if="node.container_count > 0 || node.source !== 'agent'"
+                  class="btn-node-filter"
+                  :class="{ 'btn-node-filter-active': selectedNodeFilter === node.node_id }"
+                  @click="selectedNodeFilter = selectedNodeFilter === node.node_id ? 'all' : node.node_id"
+                >
+                  <span>{{ selectedNodeFilter === node.node_id ? 'Viewing Containers' : 'Filter Containers' }}</span>
+                  <span class="count-pill">{{ node.container_count }}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1113,6 +1259,36 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
+.alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.btn-alert-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-alert-action:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: var(--border-accent);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
 .btn-alert-dismiss {
   background: transparent;
   border: none;
@@ -1341,6 +1517,103 @@ onUnmounted(() => {
   100% { left: 100%; }
 }
 
+/* Topology Filter Pills Bar */
+.topology-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-pills-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.filter-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: var(--border-accent);
+  transform: translateY(-1px);
+}
+
+.filter-pill-active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.2);
+}
+
+.filter-pill-active:hover {
+  background: rgba(6, 182, 212, 0.22);
+  color: var(--accent-cyan);
+}
+
+.filter-pill-alert {
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.08);
+  color: #fb7185;
+}
+
+.filter-pill-alert.filter-pill-active {
+  background: rgba(244, 63, 94, 0.2);
+  border-color: #f43f5e;
+  color: #fb7185;
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.3);
+}
+
+.filter-pill-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.filter-meta-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.empty-topology-state {
+  padding: 36px 20px;
+  text-align: center;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+}
+
+.empty-topology-icon {
+  font-size: 28px;
+}
+
+.empty-topology-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 /* Node Cards Grid */
 .node-cards-grid {
   display: grid;
@@ -1472,6 +1745,54 @@ onUnmounted(() => {
 
 .node-card-footer {
   margin-top: auto;
+}
+
+.node-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.btn-node-action {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-node-action:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text-primary);
+  border-color: var(--border-accent);
+  transform: translateY(-1px);
+}
+
+.btn-manage-host:hover {
+  border-color: #818cf8;
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.btn-view-swarm:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.12);
+}
+
+.node-footer-actions .btn-node-filter {
+  flex: 1;
 }
 
 .btn-node-filter {
