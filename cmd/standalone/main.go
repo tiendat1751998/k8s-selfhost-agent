@@ -38,6 +38,8 @@ import (
 	usecaseCluster "github.com/datdt/k8sselfhost/internal/usecase/cluster"
 	usecaseScaffold "github.com/datdt/k8sselfhost/internal/usecase/scaffold"
 	usecaseEcosystem "github.com/datdt/k8sselfhost/internal/usecase/ecosystem"
+	usecaseRCA "github.com/datdt/k8sselfhost/internal/usecase/rca"
+	"github.com/datdt/k8sselfhost/internal/adapter/event"
 	"github.com/datdt/k8sselfhost/internal/pkg/httputil"
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/notifier"
@@ -244,8 +246,15 @@ func run() error {
 	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, logger.Get())
 	go healthChecker.Start(ctx, 1*time.Minute)
 
+	obsRepo := postgres.NewObservabilityRepo(pgClient)
+	rcaCollector := event.NewCollector(k8sClient)
+	rcaPipeline := usecaseRCA.NewPipeline(rcaCollector, registry, reportRepo, incRepo, obsRepo)
+
+	dashboardHandler := adapthttp.NewHandler(incRepo, reportRepo, prRepo, nil, gitopsController)
+	dashboardHandler.SetRCAPipeline(rcaPipeline)
+
 	platformHandlers := &adapthttp.PlatformHandlers{
-		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, nil, gitopsController),
+		Dashboard:     dashboardHandler,
 		Docker:        adapthttp.NewDockerHandler(dockerRepo, computeHostRepo, authUsecase, metricsCollector),
 		Overview:      overviewHandler,
 		Drift:         adapthttp.NewDriftHandler(postgres.NewDriftRepo(pgClient)),

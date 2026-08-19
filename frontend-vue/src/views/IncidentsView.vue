@@ -127,13 +127,21 @@ async function handleSimulateIncident(scenario: SimulationScenario) {
   }
 }
 
-// WebSocket real-time sync for incident lifecycle events
+// WebSocket real-time sync for incident lifecycle events with debounce
+let wsRefreshTimer: ReturnType<typeof setTimeout> | null = null
+function debouncedFetchIncidents() {
+  if (wsRefreshTimer) clearTimeout(wsRefreshTimer)
+  wsRefreshTimer = setTimeout(() => {
+    fetchIncidents()
+  }, 1000)
+}
+
 useWebSocket({
   onIncident: () => {
-    fetchIncidents()
+    debouncedFetchIncidents()
   },
   onIncidentResolved: () => {
-    fetchIncidents()
+    debouncedFetchIncidents()
   }
 })
 
@@ -164,20 +172,20 @@ onMounted(() => {
 })
 
 const filteredIncidents = computed(() => {
-  let list = incidents.value
+  let list = incidents.value || []
   if (filterSeverity.value !== 'all') {
-    list = list.filter(i => i.severity === filterSeverity.value)
+    list = list.filter(i => (i.severity || '').toLowerCase() === filterSeverity.value.toLowerCase())
   }
   if (filterStatus.value !== 'all') {
-    list = list.filter(i => i.status === filterStatus.value)
+    list = list.filter(i => (i.status || '').toLowerCase() === filterStatus.value.toLowerCase())
   }
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase().trim()
     list = list.filter(i => 
-      i.pod_name.toLowerCase().includes(q) ||
-      i.cluster_name.toLowerCase().includes(q) ||
-      i.namespace.toLowerCase().includes(q) ||
-      i.type.toLowerCase().includes(q)
+      (i.pod_name || '').toLowerCase().includes(q) ||
+      (i.cluster_name || '').toLowerCase().includes(q) ||
+      (i.namespace || '').toLowerCase().includes(q) ||
+      (i.type || '').toLowerCase().includes(q)
     )
   }
   return list
@@ -198,6 +206,7 @@ function showToast(text: string, type: 'success' | 'error' = 'success') {
 }
 
 async function selectIncident(inc: Incident) {
+  if (!inc || !inc.id) return
   selectedIncident.value = inc
   loadingReport.value = true
   selectedReport.value = null
@@ -584,7 +593,7 @@ function formatTime(d?: string) {
                 <span class="diff-icon">📝</span>
                 <div>
                   <h3 class="diff-title">GitOps Remediation Manifest Diff</h3>
-                  <span class="diff-subtitle font-mono">deployments/{{ selectedIncident.namespace }}/{{ selectedIncident.pod_name.split('-')[0] }}.yaml</span>
+                  <span class="diff-subtitle font-mono">deployments/{{ selectedIncident.namespace }}/{{ (selectedIncident.pod_name || 'workload').split('-')[0] }}.yaml</span>
                 </div>
               </div>
 
@@ -608,7 +617,7 @@ function formatTime(d?: string) {
               <template v-else-if="selectedIncident.type === 'CrashLoopBackOff'">
                 <div class="diff-line diff-meta">@@ -28,7 +28,8 @@ spec:</div>
                 <div class="diff-line diff-context">      containers:</div>
-                <div class="diff-line diff-context">      - name: {{ selectedIncident.pod_name.split('-')[0] }}</div>
+                <div class="diff-line diff-context">      - name: {{ (selectedIncident.pod_name || 'workload').split('-')[0] }}</div>
                 <div class="diff-line diff-context">        env:</div>
                 <div class="diff-line diff-del">-       - name: DB_CONNECT_TIMEOUT</div>
                 <div class="diff-line diff-del">-         value: "5s"</div>
