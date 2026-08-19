@@ -486,6 +486,9 @@ onUnmounted(() => {
           <span class="btn-icon" :class="{ 'spin-icon': loading }">🔄</span>
           <span>Refresh</span>
         </button>
+        <button class="btn btn-secondary" @click="router.push('/deployments')">
+          <span>🚀 Deployments & Rollouts</span>
+        </button>
         <button class="btn btn-secondary" @click="router.push('/hosts')">
           <span>🖥️ Infrastructure Hosts</span>
         </button>
@@ -868,7 +871,12 @@ onUnmounted(() => {
         <section class="container-grid-section glass-panel">
           <div class="split-header">
             <div class="split-title-group">
-              <h2 class="section-title">Active Workload Containers</h2>
+              <div class="flex items-center gap-2">
+                <h2 class="section-title">Active Workload Containers</h2>
+                <button class="btn btn-secondary btn-xs" @click="router.push('/deployments')" title="Open Deployment & Workload Orchestrator">
+                  <span>🚀 Manage Workloads ➔</span>
+                </button>
+              </div>
               <span class="section-subtitle">
                 Showing {{ filteredContainers.length }} workloads
                 <span v-if="selectedNodeFilter !== 'all'">on node "{{ getNodeName(selectedNodeFilter) }}"</span>

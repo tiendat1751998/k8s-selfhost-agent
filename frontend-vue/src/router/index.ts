@@ -89,6 +89,12 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/workloads',
+      name: 'workloads',
+      component: DeploymentsView,
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/promotions',
       name: 'promotions',
       component: PromotionsView,

@@ -93,7 +93,7 @@ const navGroups = [
     items: [
       { path: '/fleet', name: 'Fleet Clusters', icon: '☸️', sub: 'Multi-Region Mesh' },
       { path: '/hosts', name: 'Infrastructure Hosts', icon: '🖥️', sub: 'Compute & Database Nodes' },
-      { path: '/deployments', name: 'Deployments', icon: '🚀', sub: 'Canary & Blue-Green' },
+      { path: '/deployments', name: 'Deployments & Apps', icon: '🚀', sub: 'Canary, Blue-Green & Workloads' },
       { path: '/promotions', name: 'Promotions', icon: '🔄', sub: 'Dev → Stage → Prod' },
       { path: '/explorer', name: 'Cluster Explorer', icon: '🔍', sub: 'Live CRD & Pod Trees' },
     ]
@@ -272,7 +272,7 @@ function handleLogout() {
               :key="item.path" 
               :to="item.path" 
               class="nav-item" 
-              :class="{ 'nav-active': route.path === item.path }"
+              :class="{ 'nav-active': route.path === item.path || (item.path === '/deployments' && route.path === '/workloads') }"
             >
               <div class="nav-icon">{{ item.icon }}</div>
               <div class="nav-label">
