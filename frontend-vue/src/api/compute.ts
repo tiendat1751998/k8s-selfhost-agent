@@ -194,43 +194,15 @@ export interface SLOSnapshot {
 // 4. Multi-Cluster Fleet Interfaces
 // ==========================================
 
-export interface Cluster {
-  id: string
-  name: string
-  group: string
-  region: string
-  provider: string
-  status: 'active' | 'offline' | 'upgrading' | 'maintenance' | string
-  version: string
-  nodes: number
-  encrypted_token?: string
-  import_method?: string
-  kubeconfig_hash?: string
-  last_health_check?: string
-  health_status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown' | string
-  discovered_resources?: Record<string, unknown>
-  tenant_id?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface NodePoolInfo {
-  name: string
-  instance: string
-  zone: string
-  count: number
-}
-
-export interface ClusterDiscoveryData {
-  namespaces?: string[]
-  node_pools?: NodePoolInfo[]
-  [key: string]: unknown
-}
-
-export interface ClusterHealthResponse {
-  health_status: string
-  last_health_check?: string
-}
+export type {
+  Cluster,
+  NodePoolInfo,
+  ClusterDiscoveryData,
+  ClusterHealthResponse,
+  SwarmClusterInfo,
+  ImportClusterPayload,
+} from './fleet'
+export { fleetApi } from './fleet'
 
 // ==========================================
 // 5. Workload Deployments Interfaces
@@ -801,36 +773,6 @@ export const sloApi = {
   },
 }
 
-export const fleetApi = {
-  async list(): Promise<Cluster[]> {
-    const res = await api.get<ApiResponse<Cluster[]>>('/fleet')
-    return res.data || []
-  },
-
-  async register(cluster: Partial<Cluster>): Promise<Cluster> {
-    return api.post<Cluster>('/fleet', cluster)
-  },
-
-  async remove(id: string): Promise<{ status: string }> {
-    return api.delete<{ status: string }>(`/fleet/${id}`)
-  },
-
-  async upgrade(id: string): Promise<{ status: string }> {
-    return api.post<{ status: string }>(`/fleet/${id}/actions/upgrade`)
-  },
-
-  async importCluster(formData: FormData): Promise<Cluster> {
-    return api.post<Cluster>('/fleet/import', formData)
-  },
-
-  async getHealth(id: string): Promise<ClusterHealthResponse> {
-    return api.get<ClusterHealthResponse>(`/fleet/${id}/health`)
-  },
-
-  async discover(id: string): Promise<ClusterDiscoveryData> {
-    return api.post<ClusterDiscoveryData>(`/fleet/${id}/discover`)
-  },
-}
 
 export const deploymentsApi = {
   async list(): Promise<DeploymentApp[]> {
