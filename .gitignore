@@ -6,6 +6,9 @@
 *.dylib
 /bin/
 /dist/
+k8s-agent
+k8s-agent-*
+
 
 # Test binary
 *.test
