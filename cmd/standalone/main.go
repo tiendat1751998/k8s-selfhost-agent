@@ -203,6 +203,7 @@ func run() error {
 	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log)
 
 	userRepo := postgres.NewUserRepo(pgClient)
+	refreshTokenRepo := postgres.NewRefreshTokenRepo(pgClient)
 	authUsecase := usecaseAuth.NewUsecase(userRepo)
 
 	searchRepo := postgres.NewSearchRepo(pgClient, nil)
@@ -263,7 +264,7 @@ func run() error {
 		Automation:    adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(pgClient)),
 		Timeline:      adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(pgClient)),
 		AI:            adapthttp.NewAIHandler(registry),
-		Auth:          adapthttp.NewAuthHandler(authUsecase),
+		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo),
 		Search:        adapthttp.NewSearchHandler(searchUsecase),
 		Cost:          adapthttp.NewCostHandler(costRepo),
 		Backup:        adapthttp.NewBackupHandler(usecaseBackup.NewUsecase(backupRepo)),

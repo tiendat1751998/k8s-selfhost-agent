@@ -31,6 +31,36 @@ func (m *mockUserRepo) GetByID(ctx context.Context, id string) (*user.User, erro
 	return nil, errors.New("not found")
 }
 
+func (m *mockUserRepo) UpdateMFA(ctx context.Context, userID, encryptedSecret string, enabled bool) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.MFASecret = encryptedSecret
+			u.MFAEnabled = enabled
+			return nil
+		}
+	}
+	return errors.New("not found")
+}
+
+func (m *mockUserRepo) SetRecoveryCodes(ctx context.Context, userID, encryptedCodes string) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.MFARecoveryCodes = encryptedCodes
+			return nil
+		}
+	}
+	return errors.New("not found")
+}
+
+func (m *mockUserRepo) GetMFASecret(ctx context.Context, userID string) (string, error) {
+	for _, u := range m.users {
+		if u.ID == userID {
+			return u.MFASecret, nil
+		}
+	}
+	return "", errors.New("not found")
+}
+
 func TestAuthUsecase_Authenticate(t *testing.T) {
 	pass := "secret123"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)

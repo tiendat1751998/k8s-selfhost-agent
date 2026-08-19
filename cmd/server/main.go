@@ -374,6 +374,7 @@ func run() error {
 	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge, txManager)
 
 	userRepo := postgres.NewUserRepo(pgClient.Pool())
+	refreshTokenRepo := postgres.NewRefreshTokenRepo(pgClient.Pool())
 	authUsecase := usecaseAuth.NewUsecase(userRepo)
 
 	searchRepo := postgres.NewSearchRepo(pgClient.Pool(), cacheManager)
@@ -421,7 +422,7 @@ func run() error {
 		Notification:  adapthttp.NewNotificationHandler(notificationRepo),
 		Automation:    adapthttp.NewAutomationHandler(automationRepo),
 		Timeline:      adapthttp.NewTimelineHandler(timelineRepo),
-		Auth:          adapthttp.NewAuthHandler(authUsecase),
+		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo),
 		Search:        adapthttp.NewSearchHandler(searchUsecase),
 		Cost:          adapthttp.NewCostHandler(costRepo),
 		Backup:        adapthttp.NewBackupHandler(backupUsecase),
