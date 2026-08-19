@@ -39,6 +39,7 @@ type PlatformHandlers struct {
 	Fleet         *FleetHandler
 	Audit         *AuditHandler
 	Docker        *DockerHandler
+	Overview      *OverviewHandler
 	AI            *AIHandler
 	Auth          *AuthHandler
 	Search        *SearchHandler
@@ -76,6 +77,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	r.Use(mw.StructuredLogger)
 	r.Use(mw.CORS)
 	r.Use(mw.Metrics)
+	r.Use(mw.RequestCounter)
 	r.Use(mw.Tracing)
 	r.Use(mw.SecurityHeaders)
 
@@ -253,6 +255,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Docker != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/docker", platform.Docker.RegisterRoutes)
+			}
+			if platform.Overview != nil {
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/overview", platform.Overview.RegisterRoutes)
 			}
 			if platform.AI != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/ai", platform.AI.RegisterRoutes)
