@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/notification"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type notificationRepo struct {
@@ -30,7 +31,8 @@ func (r *notificationRepo) ListChannels(ctx context.Context) ([]notification.Cha
 		FROM notification_channels 
 		ORDER BY name ASC
 	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying notification channels: %w", err)
 	}
@@ -71,9 +73,14 @@ func (r *notificationRepo) ListChannels(ctx context.Context) ([]notification.Cha
 }
 
 func (r *notificationRepo) CreateChannel(ctx context.Context, ch *notification.Channel) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
 	query := `
-		INSERT INTO notification_channels (type, name, webhook_url, config, enabled, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO notification_channels (type, name, webhook_url, config, enabled, tenant_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 	
@@ -88,7 +95,7 @@ func (r *notificationRepo) CreateChannel(ctx context.Context, ch *notification.C
 	}
 
 	err = r.getDB(ctx).QueryRow(ctx, query,
-		string(ch.Type), ch.Name, webhookURL, configBytes, ch.Enabled, ch.CreatedAt, ch.UpdatedAt,
+		string(ch.Type), ch.Name, webhookURL, configBytes, ch.Enabled, tenantID, ch.CreatedAt, ch.UpdatedAt,
 	).Scan(&ch.ID)
 	
 	if err != nil {
@@ -116,9 +123,11 @@ func (r *notificationRepo) UpdateChannel(ctx context.Context, ch *notification.C
 		webhookURL = &ch.WebhookURL
 	}
 
-	cmd, err := r.getDB(ctx).Exec(ctx, query,
+	query, args := BuildTenantQuery(ctx, query,
 		string(ch.Type), ch.Name, webhookURL, configBytes, ch.Enabled, ch.UpdatedAt, ch.ID,
 	)
+
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating notification channel: %w", err)
 	}
@@ -130,7 +139,8 @@ func (r *notificationRepo) UpdateChannel(ctx context.Context, ch *notification.C
 
 func (r *notificationRepo) DeleteChannel(ctx context.Context, id string) error {
 	query := `DELETE FROM notification_channels WHERE id = $1`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
+	query, args := BuildTenantQuery(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("deleting notification channel: %w", err)
 	}

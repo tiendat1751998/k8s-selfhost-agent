@@ -111,9 +111,13 @@ func (h *FleetHandler) RegisterCluster(w http.ResponseWriter, r *http.Request) {
 
 // RemoveCluster handles DELETE /api/v1/fleet/{id}
 func (h *FleetHandler) RemoveCluster(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "cluster id is required", err)
+		return
+	}
 
-	err := h.repo.RemoveCluster(r.Context(), id)
+	err = h.repo.RemoveCluster(r.Context(), id)
 	result := "success"
 	var details map[string]interface{}
 	if err != nil {
@@ -140,7 +144,11 @@ func (h *FleetHandler) RemoveCluster(w http.ResponseWriter, r *http.Request) {
 
 // UpgradeCluster handles POST /api/v1/fleet/{id}/actions/upgrade
 func (h *FleetHandler) UpgradeCluster(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "cluster id is required", err)
+		return
+	}
 
 	cluster, err := h.repo.GetCluster(r.Context(), id)
 	if err != nil {

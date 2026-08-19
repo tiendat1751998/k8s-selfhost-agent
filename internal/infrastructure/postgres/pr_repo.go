@@ -176,7 +176,7 @@ func (r *PRRepo) Update(ctx context.Context, pr *gitops.PullRequest) error {
 		SET status = $1, pr_url = $2, pr_number = $3, files_changed = $4, updated_at = $5, merged_at = $6
 		WHERE id = $7`
 
-	_, err = r.getDB(ctx).Exec(ctx, query,
+	query, args := BuildTenantQuery(ctx, query,
 		string(pr.Status),
 		pr.PRURL,
 		pr.PRNumber,
@@ -185,6 +185,8 @@ func (r *PRRepo) Update(ctx context.Context, pr *gitops.PullRequest) error {
 		pr.MergedAt,
 		pr.ID,
 	)
+
+	_, err = r.getDB(ctx).Exec(ctx, query, args...)
 
 	if err != nil {
 		return errors.Wrap(err, "updating pull request")

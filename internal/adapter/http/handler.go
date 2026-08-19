@@ -3,6 +3,7 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -379,6 +380,18 @@ func parseIntParam(r *http.Request, key string, defaultVal int) int {
 	return parsed
 }
 
+// parseUUIDParam extracts and validates an ID URL parameter.
+func parseUUIDParam(r *http.Request, param string) (string, error) {
+	id := chi.URLParam(r, param)
+	if id == "" {
+		return "", fmt.Errorf("missing parameter: %s", param)
+	}
+	if len(id) > 128 {
+		return "", fmt.Errorf("parameter too long: %s", param)
+	}
+	return id, nil
+}
+
 type createPRRequest struct {
 	gitops.CreatePRRequest
 }
@@ -412,7 +425,11 @@ func (h *Handler) CreatePR(w http.ResponseWriter, r *http.Request) {
 
 // MergePR handles POST /api/v1/prs/{id}/merge
 func (h *Handler) MergePR(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "PR id is required", err)
+		return
+	}
 	pr, err := h.gitopsController.MergePR(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to merge PR", err)
@@ -424,7 +441,11 @@ func (h *Handler) MergePR(w http.ResponseWriter, r *http.Request) {
 
 // ClosePR handles POST /api/v1/prs/{id}/close
 func (h *Handler) ClosePR(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "PR id is required", err)
+		return
+	}
 	pr, err := h.gitopsController.ClosePR(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to close PR", err)

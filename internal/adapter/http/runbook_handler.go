@@ -49,7 +49,11 @@ func (h *RunbookHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // GetByID handles GET /api/v1/runbooks/{id}
 func (h *RunbookHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "runbook id is required", err)
+		return
+	}
 	rb, err := h.repo.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, errors.ErrNotFound) {
@@ -133,7 +137,11 @@ func (r *updateRunbookRequest) Validate() error {
 
 // Update handles PUT /api/v1/runbooks/{id}
 func (h *RunbookHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "runbook id is required", err)
+		return
+	}
 	req, ok := decodeJSON[updateRunbookRequest](w, r)
 	if !ok {
 		return
@@ -141,7 +149,7 @@ func (h *RunbookHandler) Update(w http.ResponseWriter, r *http.Request) {
 	rb := req.Runbook
 	rb.ID = id
 
-	err := h.repo.Update(r.Context(), &rb)
+	err = h.repo.Update(r.Context(), &rb)
 	result := "success"
 	var details map[string]interface{}
 	if err != nil {
@@ -168,9 +176,13 @@ func (h *RunbookHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/runbooks/{id}
 func (h *RunbookHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "runbook id is required", err)
+		return
+	}
 
-	err := h.repo.Delete(r.Context(), id)
+	err = h.repo.Delete(r.Context(), id)
 	result := "success"
 	var details map[string]interface{}
 	if err != nil {

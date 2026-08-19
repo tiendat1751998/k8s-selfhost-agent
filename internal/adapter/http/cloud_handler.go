@@ -118,9 +118,9 @@ func (h *CloudHandler) ListAccounts(w http.ResponseWriter, r *http.Request) {
 
 // GetAccount handles GET /accounts/{id} - returns a single cloud account without credentials.
 func (h *CloudHandler) GetAccount(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "account id is required", nil)
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "account id is required", err)
 		return
 	}
 
@@ -141,9 +141,9 @@ func (h *CloudHandler) GetAccount(w http.ResponseWriter, r *http.Request) {
 
 // DeleteAccount handles DELETE /accounts/{id} - deletes a cloud account.
 func (h *CloudHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "account id is required", nil)
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "account id is required", err)
 		return
 	}
 
@@ -173,9 +173,9 @@ func (h *CloudHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 
 // ValidateAccount handles POST /accounts/{id}/validate - validates cloud credentials with the provider SDK.
 func (h *CloudHandler) ValidateAccount(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "account id is required", nil)
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "account id is required", err)
 		return
 	}
 

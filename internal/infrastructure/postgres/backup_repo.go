@@ -288,12 +288,14 @@ func (r *BackupRepo) UpdateJob(ctx context.Context, job *backup.BackupJob) error
 		    error_message = $13, updated_at = $14
 		WHERE id = $15`
 	
-	_, err := r.getDB(ctx).Exec(ctx, query,
+	query, args := BuildTenantQuery(ctx, query,
 		job.Status, job.StoragePath, job.LocalStoragePath, job.CloudStoragePath,
 		job.SizeBytes, job.CompressedSizeBytes, job.DurationMs, job.ChecksumSHA256,
 		job.WALStartLSN, job.WALEndLSN, job.VerificationStatus, job.VerifiedAt,
 		job.ErrorMessage, job.UpdatedAt, job.ID,
 	)
+
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "updating backup job")
 	}
@@ -380,9 +382,11 @@ func (r *BackupRepo) UpdateRestore(ctx context.Context, restore *backup.RestoreJ
 		SET status = $1, error_message = $2, verification_log = $3, updated_at = $4
 		WHERE id = $5`
 	
-	_, err := r.getDB(ctx).Exec(ctx, query,
+	query, args := BuildTenantQuery(ctx, query,
 		restore.Status, restore.ErrorMessage, restore.VerificationLog, restore.UpdatedAt, restore.ID,
 	)
+
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "updating restore job")
 	}

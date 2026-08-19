@@ -45,7 +45,11 @@ func (h *NotificationHandler) ListNotifications(w http.ResponseWriter, r *http.R
 
 // MarkRead handles PUT /api/v1/notifications/{id}/read
 func (h *NotificationHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "notification id is required", err)
+		return
+	}
 	if err := h.repo.MarkRead(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to mark read", err)
 		return
@@ -105,7 +109,11 @@ func (h *NotificationHandler) CreateChannel(w http.ResponseWriter, r *http.Reque
 
 // DeleteChannel handles DELETE /api/v1/notifications/channels/{id}
 func (h *NotificationHandler) DeleteChannel(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "channel id is required", err)
+		return
+	}
 	if err := h.repo.DeleteChannel(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete channel", err)
 		return

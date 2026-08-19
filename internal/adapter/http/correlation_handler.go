@@ -76,7 +76,11 @@ func (h *CorrelationHandler) CreateCorrelated(w http.ResponseWriter, r *http.Req
 
 // ResolveCorrelated handles PUT /api/v1/correlation/{id}/resolve
 func (h *CorrelationHandler) ResolveCorrelated(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "event id is required", err)
+		return
+	}
 	if err := h.repo.Resolve(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to resolve correlated event", err)
 		return

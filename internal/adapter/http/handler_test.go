@@ -1,9 +1,13 @@
 package http
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func TestWriteJSON(t *testing.T) {
@@ -115,4 +119,60 @@ func TestAuthMiddleware_MissingHeader(t *testing.T) {
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 with missing header, got %d", w.Code)
 	}
+}
+
+func TestParseUUIDParam(t *testing.T) {
+	t.Run("valid UUID", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/incidents/123e4567-e89b-12d3-a456-426614174000", nil)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "123e4567-e89b-12d3-a456-426614174000")
+		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+		id, err := parseUUIDParam(r, "id")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if id != "123e4567-e89b-12d3-a456-426614174000" {
+			t.Errorf("expected UUID, got %s", id)
+		}
+	})
+
+	t.Run("valid custom string ID", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/services/service-auth-prod", nil)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "service-auth-prod")
+		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+		id, err := parseUUIDParam(r, "id")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if id != "service-auth-prod" {
+			t.Errorf("expected string ID, got %s", id)
+		}
+	})
+
+	t.Run("missing parameter", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/incidents/", nil)
+		rctx := chi.NewRouteContext()
+		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+		_, err := parseUUIDParam(r, "id")
+		if err == nil {
+			t.Fatalf("expected error for missing param, got nil")
+		}
+	})
+
+	t.Run("parameter too long", func(t *testing.T) {
+		longID := strings.Repeat("a", 129)
+		r := httptest.NewRequest(http.MethodGet, "/incidents/"+longID, nil)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", longID)
+		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+		_, err := parseUUIDParam(r, "id")
+		if err == nil {
+			t.Fatalf("expected error for overly long param (>128 chars), got nil")
+		}
+	})
 }

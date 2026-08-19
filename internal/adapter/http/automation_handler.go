@@ -96,7 +96,11 @@ func (r *updateRuleRequest) Validate() error {
 
 // UpdateRule handles PUT /api/v1/automation/rules/{id}
 func (h *AutomationHandler) UpdateRule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "rule id is required", err)
+		return
+	}
 	req, ok := decodeJSON[updateRuleRequest](w, r)
 	if !ok {
 		return
@@ -111,7 +115,11 @@ func (h *AutomationHandler) UpdateRule(w http.ResponseWriter, r *http.Request) {
 
 // DeleteRule handles DELETE /api/v1/automation/rules/{id}
 func (h *AutomationHandler) DeleteRule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "rule id is required", err)
+		return
+	}
 	if err := h.repo.DeleteRule(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete rule", err)
 		return
@@ -125,7 +133,11 @@ type toggleRuleRequest struct {
 
 // ToggleRule handles PUT /api/v1/automation/rules/{id}/toggle
 func (h *AutomationHandler) ToggleRule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "rule id is required", err)
+		return
+	}
 	req, ok := decodeJSON[toggleRuleRequest](w, r)
 	if !ok {
 		return
