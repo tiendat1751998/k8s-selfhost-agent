@@ -329,7 +329,10 @@ func TestSettings_TestIntegration_Reachable(t *testing.T) {
 	defer server.Close()
 
 	repo := newMockSettingsRepo()
-	router := setupSettingsTestRouter(repo)
+	handler := NewSettingsHandler(repo, zap.NewNop())
+	handler.httpClient = server.Client()
+	router := chi.NewRouter()
+	router.Route("/settings", handler.RegisterRoutes)
 
 	body := map[string]string{
 		"url": server.URL,
@@ -360,5 +363,46 @@ func TestSettings_TestIntegration_Reachable(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+}
+
+func TestSettings_TestIntegration_SSRFBlocked(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	repo := newMockSettingsRepo()
+	router := setupSettingsTestRouter(repo)
+
+	body := map[string]string{
+		"url": server.URL,
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/integrations/test", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Reachable  bool  `json:"reachable"`
+		StatusCode int   `json:"status_code"`
+		LatencyMS  int64 `json:"latency_ms"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.Reachable {
+		t.Errorf("expected reachable false due to SSRF protection, got true")
+	}
+	if resp.StatusCode != 0 {
+		t.Errorf("expected status code 0, got %d", resp.StatusCode)
 	}
 }

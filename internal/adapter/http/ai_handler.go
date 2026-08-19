@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
+	"github.com/datdt/k8sselfhost/internal/pkg/httputil"
 )
 
 // AIHandler provides HTTP endpoints for managing AI/LLM providers.
@@ -58,6 +59,8 @@ func (r *addProviderRequest) Validate() error {
 	}
 	if strings.TrimSpace(r.Endpoint) == "" {
 		ve.Add("endpoint", "endpoint is required")
+	} else if err := httputil.ValidateExternalURL(r.Endpoint); err != nil {
+		ve.Add("endpoint", err.Error())
 	}
 	if strings.TrimSpace(r.Model) == "" {
 		ve.Add("model", "model is required")

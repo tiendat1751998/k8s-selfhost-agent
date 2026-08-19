@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/settings"
+	"github.com/datdt/k8sselfhost/internal/pkg/httputil"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
@@ -27,11 +28,9 @@ func NewSettingsHandler(repo settings.Repository, logger *zap.Logger) *SettingsH
 		logger = zap.NewNop()
 	}
 	return &SettingsHandler{
-		repo: repo,
-		httpClient: &http.Client{
-			Timeout: 5 * time.Second,
-		},
-		logger: logger,
+		repo:       repo,
+		httpClient: httputil.NewSafeHTTPClient(5 * time.Second),
+		logger:     logger,
 	}
 }
 
@@ -181,7 +180,7 @@ func (h *SettingsHandler) TestIntegration(w http.ResponseWriter, r *http.Request
 
 	client := h.httpClient
 	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
+		client = httputil.NewSafeHTTPClient(5 * time.Second)
 	}
 
 	resp, err := client.Do(httpReq)
