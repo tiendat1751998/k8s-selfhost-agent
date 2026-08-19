@@ -220,6 +220,12 @@ const router = createRouter({
       component: SettingsView,
       meta: { requiresAuth: true }
     },
+    {
+      path: '/settings/2fa-setup',
+      name: 'totp-setup',
+      component: () => import('../views/TOTPSetupView.vue'),
+      meta: { requiresAuth: true }
+    },
 
     // Catch-All
     {

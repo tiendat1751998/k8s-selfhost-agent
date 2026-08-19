@@ -1,16 +1,60 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import MetricCard from '../components/ui/MetricCard.vue'
+import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import {
   settingsApi,
   type Setting,
   type SettingUpdate,
   type IntegrationTestResult
 } from '../api/settings'
+import { authApi, type TOTPStatusResponse } from '../api/auth'
+
+const router = useRouter()
 
 // Active Tab State
 type TabKey = 'general' | 'security' | 'notifications' | 'integrations' | 'about'
 const activeTab = ref<TabKey>('general')
+
+// 2FA TOTP State
+const totpStatus = ref<TOTPStatusResponse | null>(null)
+const loadingTotpStatus = ref(false)
+const showDisable2FAModal = ref(false)
+const disablePassword = ref('')
+const disableTotpCode = ref('')
+const disabling2FA = ref(false)
+const disableError = ref('')
+
+async function fetchTOTPStatus() {
+  loadingTotpStatus.value = true
+  try {
+    const res = await authApi.getTOTPStatus()
+    totpStatus.value = res
+  } catch {
+    totpStatus.value = { enabled: false, verified_at: null }
+  } finally {
+    loadingTotpStatus.value = false
+  }
+}
+
+async function handleDisable2FA() {
+  if (!disablePassword.value || !disableTotpCode.value) return
+  disabling2FA.value = true
+  disableError.value = ''
+  try {
+    await authApi.disableTOTP(disablePassword.value, disableTotpCode.value)
+    showDisable2FAModal.value = false
+    disablePassword.value = ''
+    disableTotpCode.value = ''
+    showMessage('Two-factor authentication disabled successfully', 'success')
+    await fetchTOTPStatus()
+  } catch (err: unknown) {
+    disableError.value = err instanceof Error ? err.message : 'Failed to disable 2FA. Please verify your credentials and code.'
+  } finally {
+    disabling2FA.value = false
+  }
+}
 
 // Loading and Status States
 const loading = ref(true)
@@ -216,6 +260,7 @@ async function loadSettings() {
 
 onMounted(() => {
   loadSettings()
+  fetchTOTPStatus()
 })
 
 // Save Category Settings
@@ -567,6 +612,72 @@ async function testService(key: IntegrationKey) {
               <input v-model="form.require_2fa" type="checkbox" />
               <span class="toggle-slider"></span>
             </label>
+          </div>
+
+          <!-- Personal Operator 2FA Card -->
+          <div class="user-2fa-section">
+            <div class="section-divider"></div>
+            <div class="user-2fa-header">
+              <div class="user-2fa-info">
+                <h3 class="subsection-title">🔐 Personal Two-Factor Authentication (TOTP)</h3>
+                <p class="field-desc">
+                  Protect your individual operator credentials with Google Authenticator or RFC 6238 compliant TOTP apps.
+                </p>
+              </div>
+              <div class="user-2fa-badge-wrap">
+                <span v-if="loadingTotpStatus" class="spinner"></span>
+                <span v-else-if="totpStatus?.enabled" class="badge badge-emerald">
+                  ✅ 2FA ACTIVE
+                </span>
+                <span v-else class="badge badge-amber">
+                  ⚠️ NOT CONFIGURED
+                </span>
+              </div>
+            </div>
+
+            <div class="user-2fa-card">
+              <div v-if="totpStatus?.enabled" class="user-2fa-active-view">
+                <div class="status-detail">
+                  <span class="status-icon">🛡️</span>
+                  <div>
+                    <span class="status-title">Two-Factor Authentication is Enabled</span>
+                    <p class="status-sub">
+                      Active and verified {{ totpStatus.verified_at ? 'on ' + new Date(totpStatus.verified_at).toLocaleDateString() : 'for this account' }}. 10 single-use emergency recovery codes active.
+                    </p>
+                  </div>
+                </div>
+                <div class="user-2fa-actions">
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm btn-danger-outline"
+                    @click="showDisable2FAModal = true"
+                  >
+                    <span>Disable 2FA</span>
+                  </button>
+                </div>
+              </div>
+
+              <div v-else class="user-2fa-inactive-view">
+                <div class="status-detail">
+                  <span class="status-icon">🔒</span>
+                  <div>
+                    <span class="status-title">Two-Factor Authentication is Not Enabled</span>
+                    <p class="status-sub">
+                      Add a time-based one-time password authenticator to secure your cluster operations.
+                    </p>
+                  </div>
+                </div>
+                <div class="user-2fa-actions">
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-sm"
+                    @click="router.push('/settings/2fa-setup')"
+                  >
+                    <span>Enable 2FA Wizard →</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="security-info-box">
@@ -1031,6 +1142,72 @@ async function testService(key: IntegrationKey) {
         </div>
       </div>
     </div>
+
+    <!-- Disable 2FA Confirmation Modal -->
+    <ModalDrawer
+      v-model:show="showDisable2FAModal"
+      title="Disable Two-Factor Authentication"
+      subtitle="Enter your account password and current 6-digit TOTP code to confirm"
+      mode="modal"
+      max-width="480px"
+    >
+      <form class="disable-2fa-form" @submit.prevent="handleDisable2FA">
+        <div v-if="disableError" class="modal-error-banner animate-fade-in" role="alert">
+          <span class="error-icon">⚠️</span>
+          <span>{{ disableError }}</span>
+        </div>
+
+        <div class="form-group">
+          <label for="disable-password" class="form-label">Account Password</label>
+          <input
+            id="disable-password"
+            v-model="disablePassword"
+            type="password"
+            required
+            autocomplete="current-password"
+            placeholder="••••••••••••"
+            class="input-glass form-input"
+            :disabled="disabling2FA"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="disable-code" class="form-label">Current 6-Digit TOTP Code</label>
+          <input
+            id="disable-code"
+            v-model="disableTotpCode"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="6"
+            required
+            placeholder="000000"
+            class="input-glass form-input font-mono totp-input-mini"
+            :disabled="disabling2FA"
+            @input="disableTotpCode = ($event.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 6)"
+          />
+        </div>
+
+        <div class="modal-form-actions">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            :disabled="disabling2FA"
+            @click="showDisable2FAModal = false"
+          >
+            <span>Cancel</span>
+          </button>
+          <button
+            type="submit"
+            class="btn btn-danger"
+            :disabled="disabling2FA || !disablePassword || disableTotpCode.length !== 6"
+          >
+            <span v-if="disabling2FA" class="spinner"></span>
+            <span>{{ disabling2FA ? 'Disabling...' : 'Confirm Disable 2FA' }}</span>
+          </button>
+        </div>
+      </form>
+    </ModalDrawer>
   </div>
 </template>
 
@@ -1597,6 +1774,151 @@ async function testService(key: IntegrationKey) {
     flex-direction: column;
     text-align: center;
   }
+}
+
+/* User 2FA Styles */
+.user-2fa-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.section-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 8px 0;
+}
+
+.user-2fa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.subsection-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.user-2fa-badge-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+}
+
+.badge-emerald {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.user-2fa-card {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-medium);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.user-2fa-active-view,
+.user-2fa-inactive-view {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-detail {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.status-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.status-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: block;
+}
+
+.status-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.btn-danger-outline {
+  color: #f43f5e;
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.btn-danger-outline:hover {
+  background: rgba(244, 63, 94, 0.1);
+  border-color: #f43f5e;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+  color: #fff;
+  border: none;
+}
+
+.btn-danger:hover {
+  box-shadow: 0 4px 14px rgba(244, 63, 94, 0.4);
+}
+
+/* Modal Form */
+.disable-2fa-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  border-radius: 10px;
+  color: #fda4af;
+  font-size: 12px;
+}
+
+.totp-input-mini {
+  text-align: center;
+  font-size: 18px;
+  letter-spacing: 4px;
+}
+
+.modal-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
 }
 </style>
 
