@@ -12,6 +12,7 @@ import {
 import { useWebSocket } from '../composables/useWebSocket'
 import CircularGauge from '../components/ui/CircularGauge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
+import { formatContainerName, formatImageName } from '../utils/dockerFormat'
 
 const router = useRouter()
 
@@ -255,11 +256,18 @@ const filteredContainers = computed<ContainerMetrics[]>(() => {
 
   if (containerSearch.value.trim()) {
     const q = containerSearch.value.toLowerCase().trim()
-    list = list.filter(c =>
-      c.container_name.toLowerCase().includes(q) ||
-      c.image.toLowerCase().includes(q) ||
-      c.node_id.toLowerCase().includes(q)
-    )
+    list = list.filter(c => {
+      const formatted = formatContainerName(c.container_name)
+      const formattedImg = formatImageName(c.image)
+      return (
+        c.container_name.toLowerCase().includes(q) ||
+        formatted.serviceName.toLowerCase().includes(q) ||
+        (formatted.slotBadgeText && formatted.slotBadgeText.toLowerCase().includes(q)) ||
+        c.image.toLowerCase().includes(q) ||
+        formattedImg.display.toLowerCase().includes(q) ||
+        c.node_id.toLowerCase().includes(q)
+      )
+    })
   }
 
   const sorted = [...list]
@@ -935,12 +943,21 @@ onUnmounted(() => {
                   class="container-row"
                   @click="inspectContainer(c)"
                 >
-                  <td class="col-name">
-                    <span class="container-primary-name">{{ c.container_name }}</span>
+                  <td class="col-name" :title="c.container_name">
+                    <div class="container-name-row">
+                      <span class="container-primary-name">{{ formatContainerName(c.container_name).serviceName }}</span>
+                      <span
+                        v-if="formatContainerName(c.container_name).slotBadgeText"
+                        class="slot-badge font-mono"
+                        :title="`Full Task Name: ${c.container_name}`"
+                      >
+                        {{ formatContainerName(c.container_name).slotBadgeText }}
+                      </span>
+                    </div>
                     <span class="container-id-sub">{{ c.container_id.slice(0, 12) }}</span>
                   </td>
                   <td class="col-image" :title="c.image">
-                    <span class="image-text">{{ c.image }}</span>
+                    <span class="image-text">{{ formatImageName(c.image).display }}</span>
                   </td>
                   <td class="col-node">
                     <span class="badge badge-cyan">{{ getNodeName(c.node_id) }}</span>
@@ -1100,12 +1117,25 @@ onUnmounted(() => {
       <div v-if="selectedContainer" class="drawer-container-details">
         <div class="drawer-header-card glass-panel">
           <div class="drawer-title-row">
-            <h3 class="drawer-container-title">{{ selectedContainer.container_name }}</h3>
+            <div class="drawer-title-wrap">
+              <h3 class="drawer-container-title" :title="selectedContainer.container_name">
+                {{ formatContainerName(selectedContainer.container_name).serviceName }}
+              </h3>
+              <span
+                v-if="formatContainerName(selectedContainer.container_name).slotBadgeText"
+                class="slot-badge font-mono"
+                :title="`Full Task Name: ${selectedContainer.container_name}`"
+              >
+                {{ formatContainerName(selectedContainer.container_name).slotBadgeText }}
+              </span>
+            </div>
             <span class="badge" :class="selectedContainer.state === 'running' ? 'badge-emerald' : 'badge-rose'">
               {{ selectedContainer.state.toUpperCase() }}
             </span>
           </div>
-          <span class="drawer-sub-image">{{ selectedContainer.image }}</span>
+          <span class="drawer-sub-image font-mono" :title="selectedContainer.image">
+            {{ formatImageName(selectedContainer.image).display }}
+          </span>
         </div>
 
         <div class="drawer-metrics-grid">
@@ -1133,6 +1163,10 @@ onUnmounted(() => {
         </div>
 
         <div class="drawer-meta-list glass-panel">
+          <div class="drawer-meta-row" v-if="formatContainerName(selectedContainer.container_name).isSwarmTask">
+            <span class="dm-label">Full Swarm Task</span>
+            <span class="dm-val font-mono">{{ selectedContainer.container_name }}</span>
+          </div>
           <div class="drawer-meta-row">
             <span class="dm-label">Container ID</span>
             <span class="dm-val font-mono">{{ selectedContainer.container_id }}</span>
@@ -2327,11 +2361,41 @@ onUnmounted(() => {
 .col-name {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+}
+
+.container-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .container-primary-name {
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.slot-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.drawer-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .container-id-sub {
