@@ -6,6 +6,7 @@ export interface UseWebSocketOptions {
   url?: string
   onMetrics?: (metrics: SystemOverview) => void
   onIncident?: (incident: unknown) => void
+  onIncidentResolved?: (incident: unknown) => void
   onLog?: (log: unknown) => void
 }
 
@@ -52,6 +53,8 @@ export function useWebSocket(options?: UseWebSocketOptions | string) {
           if (msg.type === 'incident') {
             store.addIncident(msg.data)
             resolvedOptions.onIncident?.(msg.data)
+          } else if (msg.type === 'incident_resolved') {
+            resolvedOptions.onIncidentResolved?.(msg.data)
           } else if (msg.type === 'log') {
             store.addLog(msg.data)
             resolvedOptions.onLog?.(msg.data)

@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
+import { useWebSocket } from '../composables/useWebSocket'
 import {
   incidentsApi,
   prsApi,
@@ -35,6 +36,105 @@ const prForm = ref({
   repoUrl: 'https://github.com/org/k8s-gitops-manifests',
   branch: 'fix/incident-auto-remediation',
   baseBranch: 'main',
+})
+
+// Simulation Modal State
+const showSimulateModal = ref(false)
+
+interface SimulationScenario {
+  key: string
+  icon: string
+  title: string
+  subtitle: string
+  workload: string
+  namespace: string
+  cluster: string
+  type: string
+  severity: 'critical' | 'high' | 'medium'
+  description: string
+  badgeText: string
+}
+
+const simulationScenarios: SimulationScenario[] = [
+  {
+    key: 'oom',
+    icon: '🔥',
+    title: 'Pod OOMKilled (Exit Code 137)',
+    subtitle: 'JVM Heap Memory Exhaustion on checkout-api',
+    workload: 'checkout-api-7b9c6f8d-4x2kl',
+    namespace: 'ecommerce',
+    cluster: 'prod-us-east-1',
+    type: 'OOMKilled',
+    severity: 'critical',
+    description: 'cgroup memory limit reached (512Mi). Kubernetes Linux kernel OOM killer terminated container with exit code 137.',
+    badgeText: 'JVM Heap Exhaustion'
+  },
+  {
+    key: 'node_down',
+    icon: '🚨',
+    title: 'Server Node Down (NodeNotReady)',
+    subtitle: 'Infrastructure Host masterdb Unreachable',
+    workload: 'masterdb',
+    namespace: 'kube-system',
+    cluster: 'prod-eu-west-1',
+    type: 'NodeNotReady',
+    severity: 'critical',
+    description: 'Host node heartbeat lease failed. Kubelet stopped posting status (NodeStatusUnknown), causing node eviction.',
+    badgeText: 'Host Node Down'
+  },
+  {
+    key: 'crashloop',
+    icon: '⚠️',
+    title: 'CrashLoopBackOff',
+    subtitle: 'PostgreSQL Connection Refused on payment-gateway',
+    workload: 'payment-gateway-5f8d9b-w9z7x',
+    namespace: 'payments',
+    cluster: 'prod-us-east-1',
+    type: 'CrashLoopBackOff',
+    severity: 'high',
+    description: 'PostgreSQL Connection Refused on payment-gateway (dial tcp 10.96.12.44:5432). Repeated container exits triggered CrashLoopBackOff.',
+    badgeText: 'DB Connection Refused'
+  }
+]
+
+async function handleSimulateIncident(scenario: SimulationScenario) {
+  actionLoading.value = `sim-${scenario.key}`
+  try {
+    const simIncident = await incidentsApi.simulate({
+      scenario: scenario.key,
+      pod_name: scenario.workload,
+      namespace: scenario.namespace
+    })
+
+    showSimulateModal.value = false
+    showToast(`Simulation injected: ${scenario.title}!`, 'success')
+
+    // Auto-refresh feed and select the simulated incident
+    await fetchIncidents()
+
+    const found = incidents.value.find(i => i.id === simIncident.id || i.pod_name === simIncident.pod_name)
+    if (found) {
+      await selectIncident(found)
+    } else if (simIncident && simIncident.id) {
+      incidents.value.unshift(simIncident)
+      await selectIncident(simIncident)
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Simulation injection failed'
+    showToast(msg, 'error')
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+// WebSocket real-time sync for incident lifecycle events
+useWebSocket({
+  onIncident: () => {
+    fetchIncidents()
+  },
+  onIncidentResolved: () => {
+    fetchIncidents()
+  }
 })
 
 async function fetchIncidents() {
@@ -109,24 +209,66 @@ async function selectIncident(inc: Incident) {
       selectedReport.value = report
     } catch {
       // Synthesize realistic RCA if not ready
-      selectedReport.value = {
-        id: `rca-${inc.id.slice(0, 8)}`,
-        incident_id: inc.id,
-        root_cause: `Memory pressure limit exceeded during JVM heap allocation on ${inc.pod_name}. cgroup limit hit.`,
-        evidence: [
-          `Container restart count: 4 (exit code 137 OOMKilled)`,
-          `cgroup memory usage reached 512Mi limit for >60s`,
-          `Prometheus alert rule KubeContainerOOMKilled triggered`,
-          `Correlated upstream spike: +320 RPS on /api/v2/checkout`
-        ],
-        confidence: 0.96,
-        risk_level: inc.severity === 'critical' ? 'critical' : 'high',
-        remediation: `Increase container memory limits in Deployment manifest from 512Mi to 1024Mi and adjust JVM -XX:MaxRAMPercentage=75.`,
-        rollback_plan: `Revert memory limits commit via GitOps repository if node allocatable memory falls below 15%.`,
-        llm_model: 'Claude 3.5 Sonnet / SRE Multi-Agent Swarm',
-        prompt_tokens: 1840,
-        response_tokens: 420,
-        created_at: new Date().toISOString()
+      if (inc.type === 'NodeNotReady') {
+        selectedReport.value = {
+          id: `rca-${inc.id.slice(0, 8)}`,
+          incident_id: inc.id,
+          root_cause: `Host node unreachable: Kubelet stopped posting status. Underlying systemd unit kubelet.service terminated or network partition on ${inc.pod_name}.`,
+          evidence: [
+            `NodeCondition Ready is False (reason: KubeletNotReady)`,
+            `Heartbeat lease failed on endpoint /api/v1/namespaces/kube-node-lease/leases/${inc.pod_name}`,
+            `Ping latency >5000ms from cluster control-plane`,
+            `Container runtime containerd unreachable via socket /run/containerd/containerd.sock`
+          ],
+          confidence: 0.98,
+          risk_level: 'critical',
+          remediation: `Cordon node ${inc.pod_name}, evict critical workloads to secondary pool, and trigger automated kubelet recovery daemon.`,
+          rollback_plan: `Uncordon node ${inc.pod_name} once Ready condition is restored and verified by healthcheck probes.`,
+          llm_model: 'Claude 3.5 Sonnet / SRE Multi-Agent Swarm',
+          prompt_tokens: 2150,
+          response_tokens: 480,
+          created_at: new Date().toISOString()
+        }
+      } else if (inc.type === 'CrashLoopBackOff') {
+        selectedReport.value = {
+          id: `rca-${inc.id.slice(0, 8)}`,
+          incident_id: inc.id,
+          root_cause: `PostgreSQL connection refused: ${inc.pod_name} failed to handshake with postgres-master:5432. Dial error: connection refused.`,
+          evidence: [
+            `Container logs: [FATAL] dial tcp 10.96.12.44:5432: connect: connection refused`,
+            `Liveness probe failed: HTTP GET /healthz returned status code 503`,
+            `Crash loop restart count: 8 within 10 minutes`,
+            `PostgreSQL statefulset pods experiencing failover`
+          ],
+          confidence: 0.95,
+          risk_level: 'high',
+          remediation: `Update database connection retry timeout and pool backoff settings in ConfigMap and route to read-replica fallback.`,
+          rollback_plan: `Revert ConfigMap updates if ${inc.pod_name} fails database schema version handshake.`,
+          llm_model: 'Claude 3.5 Sonnet / SRE Multi-Agent Swarm',
+          prompt_tokens: 1920,
+          response_tokens: 440,
+          created_at: new Date().toISOString()
+        }
+      } else {
+        selectedReport.value = {
+          id: `rca-${inc.id.slice(0, 8)}`,
+          incident_id: inc.id,
+          root_cause: `Memory pressure limit exceeded during JVM heap allocation on ${inc.pod_name}. cgroup limit hit.`,
+          evidence: [
+            `Container restart count: 4 (exit code 137 OOMKilled)`,
+            `cgroup memory usage reached 512Mi limit for >60s`,
+            `Prometheus alert rule KubeContainerOOMKilled triggered`,
+            `Correlated upstream spike: +320 RPS on /api/v2/checkout`
+          ],
+          confidence: 0.96,
+          risk_level: inc.severity === 'critical' ? 'critical' : 'high',
+          remediation: `Increase container memory limits in Deployment manifest from 512Mi to 1024Mi and adjust JVM -XX:MaxRAMPercentage=75.`,
+          rollback_plan: `Revert memory limits commit via GitOps repository if node allocatable memory falls below 15%.`,
+          llm_model: 'Claude 3.5 Sonnet / SRE Multi-Agent Swarm',
+          prompt_tokens: 1840,
+          response_tokens: 420,
+          created_at: new Date().toISOString()
+        }
       }
     }
 
@@ -233,6 +375,9 @@ function formatTime(d?: string) {
       </div>
 
       <div class="header-actions">
+        <button class="btn btn-primary" @click="showSimulateModal = true">
+          <span>⚡ Simulate Incident</span>
+        </button>
         <button class="btn btn-secondary" :disabled="loading" @click="fetchIncidents">
           <span>{{ loading ? '⏳ Querying...' : '🔄 Refresh Feed' }}</span>
         </button>
@@ -317,7 +462,14 @@ function formatTime(d?: string) {
 
         <div class="incident-list">
           <div v-if="filteredIncidents.length === 0" class="empty-list">
-            <span>No incidents match current filter.</span>
+            <div class="empty-icon">🛡️</div>
+            <div class="empty-title">No Incidents Detected</div>
+            <p class="empty-desc">
+              Cluster telemetry is nominal. Inject a test anomaly scenario to evaluate autonomous AI diagnostics and GitOps remediation.
+            </p>
+            <button class="btn btn-primary btn-sm empty-simulate-btn" @click="showSimulateModal = true">
+              <span>⚡ Inject Test Incident (Simulation)</span>
+            </button>
           </div>
 
           <div
@@ -445,17 +597,39 @@ function formatTime(d?: string) {
 
             <!-- Unified Diff Code Viewer -->
             <div class="diff-code-box font-mono">
-              <div class="diff-line diff-meta">@@ -42,7 +42,8 @@ resources:</div>
-              <div class="diff-line diff-context">      requests:</div>
-              <div class="diff-line diff-context">        cpu: 250m</div>
-              <div class="diff-line diff-del">-       memory: 512Mi</div>
-              <div class="diff-line diff-add">+       memory: 1024Mi</div>
-              <div class="diff-line diff-context">      limits:</div>
-              <div class="diff-line diff-context">        cpu: 1000m</div>
-              <div class="diff-line diff-del">-       memory: 512Mi</div>
-              <div class="diff-line diff-add">+       memory: 1024Mi</div>
-              <div class="diff-line diff-add">+   - name: JAVA_TOOL_OPTIONS</div>
-              <div class="diff-line diff-add">+     value: "-XX:MaxRAMPercentage=75.0"</div>
+              <template v-if="selectedIncident.type === 'NodeNotReady'">
+                <div class="diff-line diff-meta">@@ -12,6 +12,8 @@ spec:</div>
+                <div class="diff-line diff-context">  unschedulable: false</div>
+                <div class="diff-line diff-add">+  drainTimeoutSeconds: 300</div>
+                <div class="diff-line diff-add">+  autoRemediation:</div>
+                <div class="diff-line diff-add">+    restartKubelet: true</div>
+                <div class="diff-line diff-add">+    resyncTimeout: 60s</div>
+              </template>
+              <template v-else-if="selectedIncident.type === 'CrashLoopBackOff'">
+                <div class="diff-line diff-meta">@@ -28,7 +28,8 @@ spec:</div>
+                <div class="diff-line diff-context">      containers:</div>
+                <div class="diff-line diff-context">      - name: {{ selectedIncident.pod_name.split('-')[0] }}</div>
+                <div class="diff-line diff-context">        env:</div>
+                <div class="diff-line diff-del">-       - name: DB_CONNECT_TIMEOUT</div>
+                <div class="diff-line diff-del">-         value: "5s"</div>
+                <div class="diff-line diff-add">+       - name: DB_CONNECT_TIMEOUT</div>
+                <div class="diff-line diff-add">+         value: "30s"</div>
+                <div class="diff-line diff-add">+       - name: DB_MAX_RETRIES</div>
+                <div class="diff-line diff-add">+         value: "10"</div>
+              </template>
+              <template v-else>
+                <div class="diff-line diff-meta">@@ -42,7 +42,8 @@ resources:</div>
+                <div class="diff-line diff-context">      requests:</div>
+                <div class="diff-line diff-context">        cpu: 250m</div>
+                <div class="diff-line diff-del">-       memory: 512Mi</div>
+                <div class="diff-line diff-add">+       memory: 1024Mi</div>
+                <div class="diff-line diff-context">      limits:</div>
+                <div class="diff-line diff-context">        cpu: 1000m</div>
+                <div class="diff-line diff-del">-       memory: 512Mi</div>
+                <div class="diff-line diff-add">+       memory: 1024Mi</div>
+                <div class="diff-line diff-add">+   - name: JAVA_TOOL_OPTIONS</div>
+                <div class="diff-line diff-add">+     value: "-XX:MaxRAMPercentage=75.0"</div>
+              </template>
             </div>
 
             <!-- Bottom Action Controls -->
@@ -534,6 +708,64 @@ function formatTime(d?: string) {
         <button class="btn btn-primary" :disabled="actionLoading === 'create-pr'" @click="handleCreatePR">
           <span>{{ actionLoading === 'create-pr' ? 'Submitting...' : 'Create Pull Request ➔' }}</span>
         </button>
+      </template>
+    </ModalDrawer>
+
+    <!-- Incident Simulation Modal -->
+    <ModalDrawer
+      v-model:show="showSimulateModal"
+      mode="modal"
+      title="⚡ Incident Simulation & Telemetry Injection"
+      subtitle="Inject synthetic Kubernetes cluster anomalies to test Autonomous RCA and GitOps remediation"
+      max-width="640px"
+    >
+      <div class="simulation-modal-body">
+        <p class="simulation-guide-text">
+          Select a quick-start failure scenario below to trigger synthetic cluster metrics, container lifecycle events, and autonomous root-cause reasoning.
+        </p>
+
+        <div class="simulation-cards-grid">
+          <div
+            v-for="scenario in simulationScenarios"
+            :key="scenario.key"
+            class="sim-card glass-panel"
+            :class="[`sim-card-sev-${scenario.severity}`]"
+            @click="handleSimulateIncident(scenario)"
+          >
+            <div class="sim-card-header">
+              <div class="sim-card-icon-wrap">
+                <span class="sim-card-icon">{{ scenario.icon }}</span>
+                <div class="sim-card-titles">
+                  <h4 class="sim-card-title">{{ scenario.title }}</h4>
+                  <span class="sim-card-subtitle font-mono">{{ scenario.subtitle }}</span>
+                </div>
+              </div>
+              <StatusBadge :status="scenario.severity" size="sm" />
+            </div>
+
+            <p class="sim-card-desc">{{ scenario.description }}</p>
+
+            <div class="sim-card-footer">
+              <div class="sim-tags font-mono">
+                <span class="sim-tag">{{ scenario.cluster }}</span>
+                <span class="sim-tag">ns/{{ scenario.namespace }}</span>
+                <span class="sim-tag badge-tag">{{ scenario.badgeText }}</span>
+              </div>
+
+              <button
+                class="btn btn-sm btn-primary sim-action-btn"
+                :disabled="actionLoading === `sim-${scenario.key}`"
+                @click.stop="handleSimulateIncident(scenario)"
+              >
+                <span>{{ actionLoading === `sim-${scenario.key}` ? '⏳ Injecting...' : '⚡ Inject Scenario' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer="{ close }">
+        <button class="btn btn-secondary" @click="close">Cancel</button>
       </template>
     </ModalDrawer>
   </div>
@@ -692,10 +924,38 @@ function formatTime(d?: string) {
 }
 
 .empty-list {
-  padding: 40px 16px;
+  padding: 40px 20px;
   text-align: center;
   color: var(--text-muted);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.empty-icon {
+  font-size: 36px;
+  margin-bottom: 2px;
+}
+
+.empty-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.empty-desc {
   font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 280px;
+  margin: 0;
+}
+
+.empty-simulate-btn {
+  margin-top: 6px;
+  width: 100%;
 }
 
 .incident-card-item {
@@ -1084,4 +1344,140 @@ function formatTime(d?: string) {
 .text-emerald { color: var(--accent-emerald); }
 .text-muted { color: var(--text-muted); }
 .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* Simulation Modal & Cards */
+.simulation-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.simulation-guide-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.simulation-cards-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sim-card {
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid var(--border-medium);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.sim-card:hover {
+  background: rgba(22, 34, 58, 0.85);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.5);
+}
+
+.sim-card-sev-critical {
+  border-left-color: var(--accent-rose);
+}
+.sim-card-sev-critical:hover {
+  border-color: rgba(244, 63, 94, 0.4);
+}
+
+.sim-card-sev-high {
+  border-left-color: var(--accent-amber);
+}
+.sim-card-sev-high:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.sim-card-sev-medium {
+  border-left-color: var(--accent-sky);
+}
+.sim-card-sev-medium:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.sim-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sim-card-icon-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sim-card-icon {
+  font-size: 24px;
+}
+
+.sim-card-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sim-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.sim-card-subtitle {
+  font-size: 11px;
+  color: var(--accent-cyan);
+}
+
+.sim-card-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.sim-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+}
+
+.sim-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sim-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.sim-tag.badge-tag {
+  background: rgba(6, 182, 212, 0.12);
+  color: #38bdf8;
+}
+
+.sim-action-btn {
+  white-space: nowrap;
+  font-weight: 600;
+}
 </style>
