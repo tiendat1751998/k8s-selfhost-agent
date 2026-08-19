@@ -165,3 +165,79 @@ func TestJWTAuth_TenantClaim(t *testing.T) {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 }
+
+func TestRequireRolesForMutations_ReadOnlyAllowed(t *testing.T) {
+	handler := JWTAuthMiddleware(RequireRolesForMutations("platform_admin", "operator")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	token, _ := GenerateJWT("user", "viewer", "")
+
+	// GET is read-only -> viewer should be allowed
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 for GET with viewer role, got %d", w.Code)
+	}
+}
+
+func TestRequireRolesForMutations_MutationDeniedForViewer(t *testing.T) {
+	handler := JWTAuthMiddleware(RequireRolesForMutations("platform_admin", "tenant_admin", "operator")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	token, _ := GenerateJWT("user", "viewer", "")
+
+	methods := []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
+	for _, method := range methods {
+		r := httptest.NewRequest(method, "/", nil)
+		r.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected status 403 for %s with viewer role, got %d", method, w.Code)
+		}
+	}
+}
+
+func TestRequireRolesForMutations_MutationAllowedForOperator(t *testing.T) {
+	handler := JWTAuthMiddleware(RequireRolesForMutations("platform_admin", "tenant_admin", "operator")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	token, _ := GenerateJWT("user", "operator", "")
+
+	methods := []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
+	for _, method := range methods {
+		r := httptest.NewRequest(method, "/", nil)
+		r.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200 for %s with operator role, got %d", method, w.Code)
+		}
+	}
+}
+
+func TestSetJWTSecret_ValidAndSign(t *testing.T) {
+	newSecret := "a-very-long-custom-jwt-secret-key-32chars!"
+	SetJWTSecret(newSecret)
+
+	token, err := GenerateJWT("user-custom", "platform_admin", "tenant-custom")
+	if err != nil {
+		t.Fatalf("unexpected error generating token with new secret: %v", err)
+	}
+
+	payloadStr, err := ValidateJWT(token)
+	if err != nil {
+		t.Fatalf("unexpected error validating token: %v", err)
+	}
+	if payloadStr == "" {
+		t.Error("expected non-empty payload")
+	}
+}

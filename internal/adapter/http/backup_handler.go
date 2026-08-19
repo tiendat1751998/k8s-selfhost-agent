@@ -76,6 +76,7 @@ func (h *BackupHandler) CreateStorage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to create backup storage", err)
 		return
 	}
+	storage.Credentials = nil
 	writeJSON(w, http.StatusCreated, storage)
 }
 
@@ -89,6 +90,11 @@ func (h *BackupHandler) ListStorages(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list backup storages", err)
 		return
+	}
+	for _, s := range storages {
+		if s != nil {
+			s.Credentials = nil
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": storages})
 }

@@ -27,7 +27,7 @@ type BackupStorage struct {
 	Type        string            `json:"type"`
 	Endpoint    string            `json:"endpoint"`
 	Bucket      string            `json:"bucket"`
-	Credentials map[string]string `json:"credentials,omitempty"`
+	Credentials map[string]string `json:"-"`
 	CreatedAt   time.Time         `json:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at"`
 }

@@ -43,6 +43,9 @@ func (h *FleetHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list clusters", err)
 		return
 	}
+	for i := range items {
+		items[i].EncryptedToken = ""
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items})
 }
 
@@ -102,6 +105,7 @@ func (h *FleetHandler) RegisterCluster(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to register cluster", err)
 		return
 	}
+	c.EncryptedToken = ""
 	writeJSON(w, http.StatusCreated, c)
 }
 

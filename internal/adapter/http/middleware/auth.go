@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
@@ -27,10 +29,37 @@ const JWTIssuer = "k8s-selfhost"
 
 var JWTSecret []byte
 
+func isRunningInTest() bool {
+	if testing.Testing() {
+		return true
+	}
+	if len(os.Args) > 0 {
+		base := strings.ToLower(os.Args[0])
+		if strings.Contains(base, "test") {
+			return true
+		}
+	}
+	return false
+}
+
 func init() {
 	secret := os.Getenv("JWT_SECRET")
 	if len(secret) < 32 {
-		secret = "k8sselfhost-jwt-secret-key-32bytes-secure!"
+		// During go test execution, allow test runner to use test secret if JWT_SECRET is not explicitly exported in env
+		if isRunningInTest() {
+			secret = "k8sselfhost-jwt-test-secret-key-32bytes-secure!"
+			JWTSecret = []byte(secret)
+			return
+		}
+		log.Fatal("FATAL: JWT_SECRET environment variable must be set (minimum 32 characters)")
+	}
+	JWTSecret = []byte(secret)
+}
+
+// SetJWTSecret allows setting the JWT signing secret programmatically (e.g. for testing).
+func SetJWTSecret(secret string) {
+	if len(secret) < 32 {
+		log.Fatal("FATAL: JWT_SECRET environment variable must be set (minimum 32 characters)")
 	}
 	JWTSecret = []byte(secret)
 }
@@ -205,7 +234,42 @@ func RBACMiddleware(requiredRoles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userRole, ok := r.Context().Value(UserRoleKey).(string)
-			if !ok {
+			if !ok || userRole == "" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			hasRole := false
+			for _, role := range requiredRoles {
+				if userRole == role {
+					hasRole = true
+					break
+				}
+			}
+
+			if !hasRole {
+				http.Error(w, fmt.Sprintf("forbidden: requires one of %v", requiredRoles), http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireRolesForMutations enforces role-based access control on state-modifying HTTP methods
+// (POST, PUT, PATCH, DELETE). Safe read-only methods (GET, HEAD, OPTIONS) are allowed
+// for all authenticated callers.
+func RequireRolesForMutations(requiredRoles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			userRole, ok := r.Context().Value(UserRoleKey).(string)
+			if !ok || userRole == "" {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}

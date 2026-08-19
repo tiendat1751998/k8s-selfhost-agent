@@ -47,6 +47,9 @@ func (h *FleetHandler) ImportCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if c != nil {
+		c.EncryptedToken = ""
+	}
 	writeJSON(w, http.StatusCreated, c)
 }
 
