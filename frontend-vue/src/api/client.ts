@@ -1,4 +1,4 @@
-// API Client with JWT Bearer Auth and Tenant Isolation
+// API Client with JWT Bearer Auth, Tenant Isolation, and Auto-Refresh
 
 export interface ApiResponse<T> {
   data: T
@@ -6,10 +6,15 @@ export interface ApiResponse<T> {
   error?: string
 }
 
+interface RequestOptions extends RequestInit {
+  _retry?: boolean
+}
+
 class ApiClient {
   private baseUrl: string
   private token: string | null = null
   private tenantId: string = 'default'
+  private refreshPromise: Promise<string | null> | null = null
 
   constructor() {
     this.baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
@@ -42,7 +47,32 @@ class ApiClient {
     this.tenantId = tenantId
   }
 
-  async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async doRefresh(): Promise<string | null> {
+    try {
+      const url = `${this.baseUrl}/auth/refresh`
+      const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tenant-ID': this.tenantId,
+        },
+      })
+      if (!res.ok) {
+        return null
+      }
+      const data = (await res.json()) as { token?: string }
+      if (data && data.token) {
+        this.setToken(data.token)
+        return data.token
+      }
+      return null
+    } catch {
+      return null
+    }
+  }
+
+  async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
     
     const headers: Record<string, string> = {
@@ -59,11 +89,28 @@ class ApiClient {
     }
 
     const response = await fetch(url, {
+      credentials: 'include',
       ...options,
       headers,
     })
 
     if (response.status === 401) {
+      const isAuthEndpoint = ['/auth/login', '/auth/refresh', '/auth/verify-mfa', '/auth/recovery/verify', '/auth/logout'].some(
+        ep => endpoint.includes(ep)
+      )
+
+      if (!options._retry && !isAuthEndpoint) {
+        if (!this.refreshPromise) {
+          this.refreshPromise = this.doRefresh().finally(() => {
+            this.refreshPromise = null
+          })
+        }
+        const newToken = await this.refreshPromise
+        if (newToken) {
+          return this.request<T>(endpoint, { ...options, _retry: true })
+        }
+      }
+
       this.clearToken()
       if (typeof window !== 'undefined') {
         localStorage.removeItem('k8s_token')
@@ -78,7 +125,14 @@ class ApiClient {
 
     if (!response.ok) {
       const errorBody = await response.text()
-      throw new Error(`API Error ${response.status} (${response.statusText}): ${errorBody}`)
+      let parsedMessage = errorBody
+      try {
+        const jsonErr = JSON.parse(errorBody)
+        parsedMessage = jsonErr.error || jsonErr.message || errorBody
+      } catch {
+        // Keep raw text
+      }
+      throw new Error(parsedMessage || `API Error ${response.status} (${response.statusText})`)
     }
 
     if (response.status === 204) {
@@ -122,3 +176,4 @@ class ApiClient {
 }
 
 export const api = new ApiClient()
+
