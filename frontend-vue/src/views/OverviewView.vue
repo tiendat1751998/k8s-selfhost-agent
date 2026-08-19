@@ -41,7 +41,7 @@ const selectedContainer = ref<ContainerMetrics | null>(null)
 const showContainerDrawer = ref(false)
 
 // Topology filtering & selection
-type TopologyFilter = 'all' | 'docker' | 'agent' | 'alerts'
+type TopologyFilter = 'all' | 'online' | 'offline'
 const selectedTopologyFilter = ref<TopologyFilter>('all')
 
 // Dismissed alert IDs (session-level)
@@ -117,7 +117,7 @@ function simulateActivity(reqs: number) {
     { method: 'GET', path: '/api/v1/fleet/health', status: 200 },
     { method: 'GET', path: '/metrics', status: 200 },
     { method: 'POST', path: '/api/v1/auth/verify', status: 200 },
-    { method: 'GET', path: '/api/v1/docker/containers', status: 200 },
+    { method: 'GET', path: '/api/v1/hosts', status: 200 },
     { method: 'GET', path: '/api/v1/governance/drift', status: 200 },
   ]
   const count = Math.min(3, Math.max(1, Math.floor(reqs / 40)))
@@ -160,45 +160,29 @@ const activeAlerts = computed<MetricAlert[]>(() => {
   return alerts.filter(a => !dismissedAlerts.value.has(`${a.node_id}-${a.type}`))
 })
 
-// Topology Filter Counts
-const swarmNodesCount = computed(() => {
-  return nodes.value.filter(n => n.source === 'docker' || (!n.source && n.role !== 'agent')).length
+// Topology Filter Counts & Predicate
+function isNodeDegradedOrOffline(n: NodeMetrics): boolean {
+  const isDown = n.status === 'down' || n.status === 'disconnected' || n.status === 'error' || n.status === 'offline'
+  const isOverloaded = (n.cpu_percent || 0) >= 80 || (n.memory_percent || 0) >= 80 || (n.disk_percent || 0) >= 85
+  const hasAlert = activeAlerts.value.some(a => a.node_id === n.node_id)
+  return isDown || isOverloaded || hasAlert
+}
+
+const onlineActiveCount = computed(() => {
+  return nodes.value.filter(n => !isNodeDegradedOrOffline(n)).length
 })
 
-const agentNodesCount = computed(() => {
-  return nodes.value.filter(n => n.source === 'agent' || n.role === 'agent').length
-})
-
-const downOrAlertNodesCount = computed(() => {
-  return nodes.value.filter(n =>
-    n.status === 'down' ||
-    n.status === 'disconnected' ||
-    n.status === 'error' ||
-    n.cpu_percent >= 80 ||
-    n.memory_percent >= 80 ||
-    n.disk_percent >= 85 ||
-    activeAlerts.value.some(a => a.node_id === n.node_id)
-  ).length
+const offlineDegradedCount = computed(() => {
+  return nodes.value.filter(n => isNodeDegradedOrOffline(n)).length
 })
 
 // Filtered Topology Nodes based on selected filter pill
 const filteredTopologyNodes = computed<NodeMetrics[]>(() => {
-  if (selectedTopologyFilter.value === 'docker') {
-    return nodes.value.filter(n => n.source === 'docker' || (!n.source && n.role !== 'agent'))
+  if (selectedTopologyFilter.value === 'online') {
+    return nodes.value.filter(n => !isNodeDegradedOrOffline(n))
   }
-  if (selectedTopologyFilter.value === 'agent') {
-    return nodes.value.filter(n => n.source === 'agent' || n.role === 'agent')
-  }
-  if (selectedTopologyFilter.value === 'alerts') {
-    return nodes.value.filter(n =>
-      n.status === 'down' ||
-      n.status === 'disconnected' ||
-      n.status === 'error' ||
-      n.cpu_percent >= 80 ||
-      n.memory_percent >= 80 ||
-      n.disk_percent >= 85 ||
-      activeAlerts.value.some(a => a.node_id === n.node_id)
-    )
+  if (selectedTopologyFilter.value === 'offline') {
+    return nodes.value.filter(n => isNodeDegradedOrOffline(n))
   }
   return nodes.value
 })
@@ -407,8 +391,8 @@ onUnmounted(() => {
           <span class="btn-icon" :class="{ 'spin-icon': loading }">🔄</span>
           <span>Refresh</span>
         </button>
-        <button class="btn btn-secondary" @click="router.push('/docker')">
-          <span>🐳 Docker Swarm</span>
+        <button class="btn btn-secondary" @click="router.push('/hosts')">
+          <span>🖥️ Infrastructure Hosts</span>
         </button>
         <button class="btn btn-primary" @click="router.push('/fleet')">
           <span>☸️ Fleet Mesh</span>
@@ -469,12 +453,12 @@ onUnmounted(() => {
 
     <!-- EMPTY STATE -->
     <div v-else-if="nodes.length === 0 && !loading" class="empty-state-card glass-panel">
-      <div class="empty-icon">🐳</div>
-      <h2>No Infrastructure Nodes Connected</h2>
-      <p>Configure Docker daemon or attach compute clusters to enable real-time telemetry streaming.</p>
+      <div class="empty-icon">🖥️</div>
+      <h2>No Infrastructure Servers Connected</h2>
+      <p>Deploy k8s-agent (port 9100) on your hosts or attach compute clusters to enable real-time telemetry streaming.</p>
       <div class="empty-actions">
-        <button class="btn btn-primary" @click="router.push('/settings')">Configure Settings</button>
-        <button class="btn btn-secondary" @click="router.push('/docker')">Open Docker Swarm</button>
+        <button class="btn btn-primary" @click="router.push('/hosts')">Manage Infrastructure Hosts</button>
+        <button class="btn btn-secondary" @click="router.push('/settings')">Configure Settings</button>
       </div>
     </div>
 
@@ -600,12 +584,12 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <!-- SECTION 2: NODE TOPOLOGY VISUALIZATION -->
+      <!-- SECTION 2: INFRASTRUCTURE SERVER TOPOLOGY -->
       <section class="topology-section">
         <div class="section-title-bar">
           <div class="section-title-group">
-            <h2 class="section-title">Cluster Node Topology</h2>
-            <span class="section-subtitle">Real-time compute nodes, role distribution & hardware gauge telemetry</span>
+            <h2 class="section-title">Infrastructure Server Topology</h2>
+            <span class="section-subtitle">Real-time k8s-agent compute nodes & hardware gauge telemetry</span>
           </div>
           <div class="topology-legend">
             <span class="legend-item"><span class="legend-dot bg-emerald"></span> &lt;60% Nominal</span>
@@ -620,7 +604,7 @@ onUnmounted(() => {
           <div class="mesh-pill">
             <span class="mesh-icon">⚡</span>
             <span>Mesh Interconnect Active</span>
-            <span class="mesh-nodes-count">({{ nodes.length }} nodes linked)</span>
+            <span class="mesh-nodes-count">({{ nodes.length }} servers linked)</span>
           </div>
           <div class="mesh-line-stream">
             <div class="mesh-pulse-line"></div>
@@ -636,46 +620,36 @@ onUnmounted(() => {
               @click="selectedTopologyFilter = 'all'"
             >
               <span class="filter-pill-icon">🌐</span>
-              <span>All Nodes</span>
+              <span>All Infrastructure Servers</span>
               <span class="filter-pill-count">({{ nodes.length }})</span>
             </button>
 
             <button
               class="filter-pill-btn"
-              :class="{ 'filter-pill-active': selectedTopologyFilter === 'docker' }"
-              @click="selectedTopologyFilter = 'docker'"
+              :class="{ 'filter-pill-active': selectedTopologyFilter === 'online' }"
+              @click="selectedTopologyFilter = 'online'"
             >
-              <span class="filter-pill-icon">🐳</span>
-              <span>Docker Swarm</span>
-              <span class="filter-pill-count">({{ swarmNodesCount }})</span>
-            </button>
-
-            <button
-              class="filter-pill-btn"
-              :class="{ 'filter-pill-active': selectedTopologyFilter === 'agent' }"
-              @click="selectedTopologyFilter = 'agent'"
-            >
-              <span class="filter-pill-icon">📡</span>
-              <span>Infra Hosts</span>
-              <span class="filter-pill-count">({{ agentNodesCount }})</span>
+              <span class="filter-pill-icon">🟢</span>
+              <span>Online / Active</span>
+              <span class="filter-pill-count">({{ onlineActiveCount }})</span>
             </button>
 
             <button
               class="filter-pill-btn"
               :class="[
-                { 'filter-pill-active': selectedTopologyFilter === 'alerts' },
-                downOrAlertNodesCount > 0 ? 'filter-pill-alert' : ''
+                { 'filter-pill-active': selectedTopologyFilter === 'offline' },
+                offlineDegradedCount > 0 ? 'filter-pill-alert' : ''
               ]"
-              @click="selectedTopologyFilter = 'alerts'"
+              @click="selectedTopologyFilter = 'offline'"
             >
-              <span class="filter-pill-icon">⚠️</span>
-              <span>Down / Alerts</span>
-              <span class="filter-pill-count">({{ downOrAlertNodesCount }})</span>
+              <span class="filter-pill-icon">🚨</span>
+              <span>Offline / Degraded</span>
+              <span class="filter-pill-count">({{ offlineDegradedCount }})</span>
             </button>
           </div>
 
           <div class="filter-meta-text">
-            <span>Showing {{ filteredTopologyNodes.length }} of {{ nodes.length }} nodes</span>
+            <span>Showing {{ filteredTopologyNodes.length }} of {{ nodes.length }} servers</span>
           </div>
         </div>
 
@@ -686,8 +660,8 @@ onUnmounted(() => {
             class="empty-topology-state glass-panel"
           >
             <span class="empty-topology-icon">🔍</span>
-            <span class="empty-topology-text">No nodes match the selected filter "{{ selectedTopologyFilter }}".</span>
-            <button class="btn-reset-filters" @click="selectedTopologyFilter = 'all'">Show All Nodes</button>
+            <span class="empty-topology-text">No servers match the selected filter "{{ selectedTopologyFilter }}".</span>
+            <button class="btn-reset-filters" @click="selectedTopologyFilter = 'all'">Show All Servers</button>
           </div>
 
           <div
@@ -701,25 +675,15 @@ onUnmounted(() => {
               <div class="node-identity">
                 <span
                   class="node-status-dot"
-                  :class="node.status === 'ready' ? 'status-green' : 'status-red'"
+                  :class="node.status === 'ready' || node.status === 'online' ? 'status-green' : 'status-red'"
                 ></span>
                 <span class="node-name" :title="node.node_name">{{ node.node_name }}</span>
               </div>
               <div class="node-badge-row">
-                <!-- Source Badge & Role Pill -->
-                <template v-if="node.source === 'agent' || node.role === 'agent'">
-                  <span class="badge badge-indigo">
-                    📡 INFRA AGENT
-                  </span>
-                </template>
-                <template v-else>
-                  <span class="badge badge-cyan">
-                    🐳 DOCKER SWARM
-                  </span>
-                  <span class="badge" :class="node.role === 'manager' ? 'badge-violet' : 'badge-cyan'">
-                    {{ (node.role || 'WORKER').toUpperCase() }}
-                  </span>
-                </template>
+                <!-- Source Badge -->
+                <span class="badge badge-indigo">
+                  📡 K8S-AGENT
+                </span>
                 <span v-if="node.node_id === busiestNodeId" class="badge badge-amber badge-traffic-pulse" title="Highest traffic node">
                   🔥 HOT NODE
                 </span>
@@ -734,7 +698,7 @@ onUnmounted(() => {
                   label="CPU"
                   :size="52"
                   :strokeWidth="3.5"
-                  :disabled="node.status === 'down'"
+                  :disabled="node.status === 'down' || node.status === 'offline' || node.status === 'disconnected'"
                 />
               </div>
               <div class="gauge-col">
@@ -743,7 +707,7 @@ onUnmounted(() => {
                   label="RAM"
                   :size="52"
                   :strokeWidth="3.5"
-                  :disabled="node.status === 'down'"
+                  :disabled="node.status === 'down' || node.status === 'offline' || node.status === 'disconnected'"
                 />
               </div>
               <div class="gauge-col">
@@ -752,7 +716,7 @@ onUnmounted(() => {
                   label="DISK"
                   :size="52"
                   :strokeWidth="3.5"
-                  :disabled="node.status === 'down'"
+                  :disabled="node.status === 'down' || node.status === 'offline' || node.status === 'disconnected'"
                 />
               </div>
             </div>
@@ -768,45 +732,26 @@ onUnmounted(() => {
                 <span class="meta-val">{{ formatBytes(node.disk_used) }} / {{ formatBytes(node.disk_total) }}</span>
               </div>
               <div class="meta-item">
-                <span class="meta-label">Containers</span>
-                <span class="meta-val">{{ node.running_count }} running / {{ node.container_count }} total</span>
-              </div>
-              <div class="meta-item">
                 <span class="meta-label">Network I/O</span>
                 <span class="meta-val font-mono">
                   ↑ {{ formatBytes(node.network_tx_bytes) }}/s  ↓ {{ formatBytes(node.network_rx_bytes) }}/s
                 </span>
               </div>
+              <div class="meta-item">
+                <span class="meta-label">Processes</span>
+                <span class="meta-val">{{ node.running_count || node.container_count || 0 }}</span>
+              </div>
             </div>
 
-            <!-- Footer Actions: Direct Navigation & Filter Containers -->
+            <!-- Footer Actions: Direct Navigation -->
             <div class="node-card-footer">
               <div class="node-footer-actions">
                 <button
-                  v-if="node.source === 'agent' || node.role === 'agent'"
                   class="btn-node-action btn-manage-host"
                   @click="router.push({ path: '/hosts', query: { search: node.node_name } })"
-                  title="Manage host in Infrastructure Registry"
+                  title="Manage server in Infrastructure Registry"
                 >
-                  <span>⚙️ Manage in Registry</span>
-                </button>
-                <button
-                  v-else
-                  class="btn-node-action btn-view-swarm"
-                  @click="router.push('/docker')"
-                  title="View node in Docker Swarm"
-                >
-                  <span>🐳 View in Swarm</span>
-                </button>
-
-                <button
-                  v-if="node.container_count > 0 || node.source !== 'agent'"
-                  class="btn-node-filter"
-                  :class="{ 'btn-node-filter-active': selectedNodeFilter === node.node_id }"
-                  @click="selectedNodeFilter = selectedNodeFilter === node.node_id ? 'all' : node.node_id"
-                >
-                  <span>{{ selectedNodeFilter === node.node_id ? 'Viewing Containers' : 'Filter Containers' }}</span>
-                  <span class="count-pill">{{ node.container_count }}</span>
+                  <span>⚙️ Manage Server</span>
                 </button>
               </div>
             </div>
@@ -1096,8 +1041,8 @@ onUnmounted(() => {
         </div>
 
         <div class="drawer-actions">
-          <button class="btn btn-secondary w-full" @click="router.push('/docker')">
-            Manage in Docker Swarm
+          <button class="btn btn-secondary w-full" @click="router.push('/hosts')">
+            Manage in Infrastructure Hosts
           </button>
           <button class="btn btn-secondary w-full" @click="router.push('/logs')">
             Stream Container Logs
@@ -1779,20 +1724,14 @@ onUnmounted(() => {
   transform: translateY(-1px);
 }
 
+.btn-manage-host {
+  width: 100%;
+}
+
 .btn-manage-host:hover {
   border-color: #818cf8;
   color: #a5b4fc;
   background: rgba(99, 102, 241, 0.12);
-}
-
-.btn-view-swarm:hover {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-  background: rgba(6, 182, 212, 0.12);
-}
-
-.node-footer-actions .btn-node-filter {
-  flex: 1;
 }
 
 .btn-node-filter {
