@@ -28,4 +28,4 @@ export K8S_DOCKER_HOST='tcp://docker-ip:2375'
 ./deploy-agent.sh user@app-server-ip
 ```
 
-Then in UI: Docker Swarm → Node Management → Add Docker Host → enter server IP:9100
+Then in UI: Docker Swarm → Node Management & Hosts → Add Server → enter http://server-ip:9100

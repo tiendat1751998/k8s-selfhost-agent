@@ -45,5 +45,5 @@ UNIT
 
 echo ""
 echo "🎉 Done! Add this server in K8sControl UI:"
-echo "   Docker Swarm → Node Management → Add Docker Host"
+echo "   Docker Swarm → Node Management & Hosts → Add Server"
 echo "   Endpoint: http://$(echo $REMOTE | cut -d@ -f2):9100"
