@@ -316,6 +316,7 @@ func run() error {
 		bridge,
 		log,
 		usecaseMetrics.WithRequestCountFn(mw.GetRequestCount),
+		usecaseMetrics.WithIncidentRepo(incRepo),
 	)
 	go metricsCollector.Start(egCtx)
 	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log)

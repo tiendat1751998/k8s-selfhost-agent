@@ -4,9 +4,11 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -44,6 +46,7 @@ func NewHandler(incidentRepo incident.Repository, reportRepo report.Repository, 
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/incidents", func(r chi.Router) {
 		r.Get("/", h.ListIncidents)
+		r.Post("/simulate", h.SimulateIncident)
 		r.Get("/{id}", h.GetIncident)
 		r.Get("/{id}/report", h.GetIncidentReport)
 		r.Get("/{id}/pr", h.GetIncidentPR)
@@ -264,6 +267,233 @@ func (h *Handler) AnalyzeIncident(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "analyzing"})
+}
+
+type simulateIncidentRequest struct {
+	Scenario    string `json:"scenario"`
+	PodName     string `json:"pod_name"`
+	Namespace   string `json:"namespace"`
+	ClusterName string `json:"cluster_name"`
+}
+
+// SimulateIncident handles POST /api/v1/incidents/simulate
+func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
+	var req simulateIncidentRequest
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+			writeError(w, http.StatusBadRequest, "invalid request body", err)
+			return
+		}
+	}
+
+	scenario := strings.ToLower(strings.TrimSpace(req.Scenario))
+	clusterName := strings.TrimSpace(req.ClusterName)
+	if clusterName == "" {
+		clusterName = "fleet-primary"
+	}
+	namespace := strings.TrimSpace(req.Namespace)
+	podName := strings.TrimSpace(req.PodName)
+
+	var (
+		incType      incident.Type
+		severity     incident.Severity
+		message      string
+		rawData      map[string]string
+		rootCause    string
+		evidence     []string
+		confidence   float64
+		riskLevel    report.RiskLevel
+		remediation  string
+		rollbackPlan string
+		filePath     string
+		fileContent  string
+	)
+
+	switch scenario {
+	case "node_down", "node_not_ready", "server_down":
+		if namespace == "" {
+			namespace = "infrastructure"
+		}
+		if podName == "" {
+			podName = "worker-node-03"
+		}
+		incType = incident.TypeNodeNotReady
+		severity = incident.SeverityCritical
+		message = fmt.Sprintf("Infrastructure host '%s' is unreachable: agent at https://192.168.1.103:9100 is down (connection refused)", podName)
+		rawData = map[string]string{
+			"node_status":          "NotReady",
+			"agent_endpoint":       "https://192.168.1.103:9100",
+			"consecutive_failures": "3",
+			"heartbeat_missed":     "45s",
+		}
+		rootCause = fmt.Sprintf("Compute node '%s' host agent stopped responding. Kernel panic or network interface failure on host eth0.", podName)
+		evidence = []string{
+			"Node heartbeat timeout after 40 seconds",
+			"TCP health check to agent:9100 failed with ECONNREFUSED",
+			"Kubelet cAdvisor metrics stream disrupted",
+			"12 pods rescheduled to adjacent worker nodes",
+		}
+		confidence = 0.92
+		riskLevel = report.RiskCritical
+		remediation = fmt.Sprintf("Reboot host '%s' via IPMI/BMC controller, verify network switch port status, and restart k8s-agent daemon.", podName)
+		rollbackPlan = "Drain node and cordon until hardware diagnostics pass."
+		filePath = fmt.Sprintf("infrastructure/hosts/%s.yaml", podName)
+		fileContent = fmt.Sprintf("apiVersion: v1\nkind: NodeConfig\nmetadata:\n  name: %s\nspec:\n  healthCheckInterval: 5s\n  agent:\n    restartPolicy: Always\n", podName)
+
+	case "crash_loop", "crash_loop_backoff", "crashloopbackoff":
+		if namespace == "" {
+			namespace = "production"
+		}
+		if podName == "" {
+			podName = "auth-api-5c79895db-j9m7w"
+		}
+		incType = incident.TypeCrashLoopBackOff
+		severity = incident.SeverityHigh
+		message = fmt.Sprintf("Pod '%s' is in CrashLoopBackOff: application panicked on initialization with exit code 1", podName)
+		rawData = map[string]string{
+			"exit_code":     "1",
+			"restart_count": "5",
+			"reason":        "CrashLoopBackOff",
+			"error_message": "DB_CONNECTION_TIMEOUT: failed to connect to database at postgres:5432",
+		}
+		rootCause = fmt.Sprintf("Application '%s' failed to start due to missing environment variable DB_PASSWORD and database connection timeout.", podName)
+		evidence = []string{
+			"Container exited with status 1 immediately after exec",
+			"Log output: panic: DB_PASSWORD not found in environment",
+			"Backoff restart delay increased to 5m0s",
+			"0/1 containers ready in pod",
+		}
+		confidence = 0.98
+		riskLevel = report.RiskMedium
+		remediation = fmt.Sprintf("Inject missing secret ref 'db-credentials' into Deployment spec for %s and trigger rolling update.", podName)
+		rollbackPlan = fmt.Sprintf("kubectl rollout undo deployment/%s -n %s", extractDeploymentName(podName), namespace)
+		filePath = fmt.Sprintf("k8s/%s/%s/deployment.yaml", namespace, extractDeploymentName(podName))
+		fileContent = "envFrom:\n  - secretRef:\n      name: db-credentials\n"
+
+	case "resource_exhaustion", "resource_exhaust", "cpu_exhaustion":
+		if namespace == "" {
+			namespace = "default"
+		}
+		if podName == "" {
+			podName = "order-processor-6b87d-8k9pq"
+		}
+		incType = incident.TypeResourceExhaust
+		severity = incident.SeverityHigh
+		message = fmt.Sprintf("Pod '%s' CPU throttling reached 88%% with high latency SLA breaches", podName)
+		rawData = map[string]string{
+			"cpu_throttled_percent": "88.4",
+			"cpu_limit":             "500m",
+			"p99_latency_ms":        "4500",
+		}
+		rootCause = fmt.Sprintf("Compute capacity saturation on %s due to un-indexed MongoDB query causing 100%% CPU spin.", podName)
+		evidence = []string{
+			"CFS quota throttled 88.4% of execution cycles",
+			"p99 response time increased from 120ms to 4500ms",
+			"CPU usage pegged at 500m limit for > 10m",
+			"Active worker thread pool exhausted",
+		}
+		confidence = 0.91
+		riskLevel = report.RiskHigh
+		remediation = "Increase CPU request/limit to 2000m and configure HorizontalPodAutoscaler targetCPUUtilizationPercentage to 70."
+		rollbackPlan = fmt.Sprintf("kubectl scale deployment %s --replicas=4", extractDeploymentName(podName))
+		filePath = fmt.Sprintf("k8s/%s/%s/deployment.yaml", namespace, extractDeploymentName(podName))
+		fileContent = "resources:\n  limits:\n    cpu: 2000m\n  requests:\n    cpu: 1000m\n"
+
+	default: // "oom_killed", "oom", or default
+		if namespace == "" {
+			namespace = "production"
+		}
+		if podName == "" {
+			podName = "payment-service-7d4b8f9c6d-x8k2l"
+		}
+		incType = incident.TypeOOMKilled
+		severity = incident.SeverityCritical
+		message = fmt.Sprintf("Container 'app' in pod '%s' terminated with exit code 137 (OOMKilled). Memory limit exceeded 512MiB threshold.", podName)
+		rawData = map[string]string{
+			"exit_code":          "137",
+			"reason":             "OOMKilled",
+			"last_memory_bytes":  "536870912",
+			"memory_limit_bytes": "536870912",
+			"container":          "app",
+		}
+		rootCause = fmt.Sprintf("Memory leak detected in %s/%s during high traffic burst. JVM heap allocation exceeded container cgroup memory limit (512Mi).", namespace, podName)
+		evidence = []string{
+			"Process received SIGKILL signal (Exit Code 137)",
+			"Memory usage reached 512.0 MiB (100% of cgroup limit)",
+			"Kernel OOM-killer invoked for process pid 42",
+			"Traffic spiked by 320% in the last 15 minutes",
+		}
+		confidence = 0.95
+		riskLevel = report.RiskHigh
+		remediation = fmt.Sprintf("Increase container memory limit from 512Mi to 1024Mi and configure -XX:MaxRAMPercentage=75.0 in Deployment manifest for %s.", podName)
+		rollbackPlan = fmt.Sprintf("kubectl rollout undo deployment/%s -n %s", extractDeploymentName(podName), namespace)
+		filePath = fmt.Sprintf("k8s/%s/%s/deployment.yaml", namespace, extractDeploymentName(podName))
+		fileContent = "resources:\n  limits:\n    memory: 1024Mi\n  requests:\n    memory: 512Mi\n"
+	}
+
+	inc, err := incident.New(clusterName, namespace, podName, incType, severity, message)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create incident entity", err)
+		return
+	}
+	for k, v := range rawData {
+		inc.AddRawData(k, v)
+	}
+
+	if err := h.incidentRepo.Create(r.Context(), inc); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to persist incident", err)
+		return
+	}
+
+	if inc.ID == "" {
+		inc.ID = fmt.Sprintf("sim-%d", time.Now().UnixNano())
+	}
+
+	if h.reportRepo != nil {
+		rpt, err := report.New(inc.ID, rootCause, evidence, confidence, riskLevel, remediation, rollbackPlan)
+		if err == nil {
+			rpt.LLMModel = "claude-3-5-sonnet"
+			rpt.PromptTokens = 420
+			rpt.ResponseTokens = 180
+			if err := h.reportRepo.Create(r.Context(), rpt); err != nil {
+				logger.Get().Warn("failed to persist simulated RCA report", zap.Error(err))
+			}
+		} else {
+			logger.Get().Warn("failed to create simulated report entity", zap.Error(err))
+		}
+	}
+
+	if h.prRepo != nil {
+		prBranchID := inc.ID
+		if len(prBranchID) > 8 {
+			prBranchID = prBranchID[:8]
+		}
+		branch := fmt.Sprintf("fix/incident-%s", prBranchID)
+		title := fmt.Sprintf("fix(%s): auto-remediation for %s incident", inc.Namespace, inc.Type)
+		desc := fmt.Sprintf("Automated GitOps PR to remediate %s on %s.\n\n### Root Cause\n%s\n\n### Remediation\n%s", inc.Type, inc.PodName, rootCause, remediation)
+		repoURL := "https://github.com/org/k8s-manifests"
+		pr, err := domainGitops.New(inc.ID, domainGitops.ProviderGitHub, repoURL, branch, "main", title, desc)
+		if err == nil {
+			pr.AddFileChange(filePath, fileContent, domainGitops.FileActionModify)
+			prNum := 100 + int(time.Now().Unix()%900)
+			_ = pr.MarkOpen(fmt.Sprintf("%s/pull/%d", repoURL, prNum), prNum)
+			if err := h.prRepo.Create(r.Context(), pr); err != nil {
+				logger.Get().Warn("failed to persist simulated GitOps PR", zap.Error(err))
+			}
+		} else {
+			logger.Get().Warn("failed to create simulated PR entity", zap.Error(err))
+		}
+	}
+
+	writeJSON(w, http.StatusCreated, inc)
+}
+
+func extractDeploymentName(podName string) string {
+	parts := strings.Split(podName, "-")
+	if len(parts) >= 3 {
+		return strings.Join(parts[:len(parts)-2], "-")
+	}
+	return podName
 }
 
 // Middleware: AuthMiddleware provides basic token authentication.
