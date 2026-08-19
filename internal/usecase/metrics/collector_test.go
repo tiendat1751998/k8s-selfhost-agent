@@ -92,6 +92,7 @@ func (m *mockDockerAPI) DiskUsage(ctx context.Context, options types.DiskUsageOp
 
 type mockComputeHostRepo struct {
 	hosts         []docker.ComputeHost
+	listAllCalled bool
 	updatedStatus map[string]struct {
 		status    string
 		checkTime time.Time
@@ -106,6 +107,12 @@ func (m *mockComputeHostRepo) GetByID(ctx context.Context, id string) (*docker.C
 func (m *mockComputeHostRepo) List(ctx context.Context, tenantID string) ([]docker.ComputeHost, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.hosts, nil
+}
+func (m *mockComputeHostRepo) ListAll(ctx context.Context) ([]docker.ComputeHost, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.listAllCalled = true
 	return m.hosts, nil
 }
 func (m *mockComputeHostRepo) Update(ctx context.Context, host *docker.ComputeHost) error { return nil }
@@ -757,3 +764,61 @@ func TestCollector_MergeDockerAndAgentNodes(t *testing.T) {
 		t.Errorf("agent node missing from snapshot")
 	}
 }
+
+func TestCollector_ScrapeAllAgents_UsesListAll(t *testing.T) {
+	agentResp := map[string]interface{}{
+		"hostname":     "agent-server-1",
+		"os":           "linux",
+		"arch":         "amd64",
+		"cpu_usage":    15.0,
+		"cpu_count":    4,
+		"mem_total":    8589934592,
+		"mem_used":     4294967296,
+		"mem_percent":  50.0,
+		"disk_total":   107374182400,
+		"disk_used":    53687091200,
+		"disk_percent": 50.0,
+		"network": map[string]interface{}{
+			"total_rx_bytes_per_sec": 1000,
+			"total_tx_bytes_per_sec": 2000,
+		},
+		"processes":    50,
+		"collected_at": "2026-08-19T15:20:00Z",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(agentResp)
+	}))
+	defer srv.Close()
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-listall-01",
+				Name:     "agent-server-1",
+				HostType: "agent",
+				Endpoint: srv.URL,
+			},
+		},
+	}
+
+	collector := NewCollector(nil, hostRepo, nil, zap.NewNop(), WithHTTPClient(srv.Client()))
+
+	// Calling scrapeAllAgents with context.Background() should invoke ListAll
+	collector.scrapeAllAgents(context.Background())
+
+	hostRepo.mu.Lock()
+	called := hostRepo.listAllCalled
+	hostRepo.mu.Unlock()
+
+	if !called {
+		t.Errorf("expected scrapeAllAgents to call ListAll on compute host repo")
+	}
+
+	metricsMap := collector.GetAgentMetrics()
+	if _, ok := metricsMap["host-listall-01"]; !ok {
+		t.Errorf("expected host-listall-01 to be scraped")
+	}
+}
+

@@ -284,7 +284,7 @@ func (c *Collector) scrapeAllAgents(ctx context.Context) {
 		return
 	}
 
-	hosts, err := c.computeHostRepo.List(ctx, "")
+	hosts, err := c.computeHostRepo.ListAll(ctx)
 	if err != nil {
 		c.logger.Debug("Failed to list compute hosts for agent scraping", zap.Error(err))
 		return

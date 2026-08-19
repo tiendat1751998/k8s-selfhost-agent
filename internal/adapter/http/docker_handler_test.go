@@ -163,6 +163,14 @@ func (m *mockComputeHostRepo) List(ctx context.Context, tenantID string) ([]doma
 	return result, nil
 }
 
+func (m *mockComputeHostRepo) ListAll(ctx context.Context) ([]domain.ComputeHost, error) {
+	var result []domain.ComputeHost
+	for _, h := range m.hosts {
+		result = append(result, h)
+	}
+	return result, nil
+}
+
 func (m *mockComputeHostRepo) Update(ctx context.Context, host *domain.ComputeHost) error {
 	if _, ok := m.hosts[host.ID]; !ok {
 		return fmt.Errorf("host not found")
