@@ -460,6 +460,13 @@ onMounted(() => {
         >
           <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
         </button>
+        <router-link
+          to="/scaffolder"
+          class="btn btn-secondary"
+          title="Deploy a new service from template"
+        >
+          <span>🪄 Scaffolder</span>
+        </router-link>
         <button
           type="button"
           class="btn btn-primary"
