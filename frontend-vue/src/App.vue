@@ -131,6 +131,9 @@ const navGroups = [
       { path: '/alerts', name: 'Alerts & Channels', icon: '🔥', sub: 'Slack, Telegram, Email' },
       { path: '/reports', name: 'Reports Center', icon: '📊', sub: 'Executive SOC2 & Cost' },
       { path: '/catalog', name: 'Service Catalog', icon: '📚', sub: 'Developer Portal & APIs' },
+      { path: '/scaffolder', name: 'Scaffolder Templates', icon: '🪄', sub: '1-Click App Deployment' },
+      { path: '/ecosystem', name: 'Ecosystem Tools', icon: '⚡', sub: 'Auto-Detected Stack' },
+      { path: '/plugins', name: 'Plugin Hub', icon: '🧩', sub: 'JS Extension Runtime' },
       { path: '/settings', name: 'System Settings', icon: '🔧', sub: 'MetalLB & KEDA Nodes' },
     ]
   }
