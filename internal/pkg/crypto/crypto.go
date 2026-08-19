@@ -10,27 +10,29 @@ import (
 	"os"
 )
 
-// ValidateKey checks if the ENCRYPTION_KEY is present and is at least 32 characters long.
+// ValidateKey checks if the ENCRYPTION_KEY is present and valid.
 func ValidateKey() error {
-	key := os.Getenv("ENCRYPTION_KEY")
-	if key == "" {
-		return fmt.Errorf("ENCRYPTION_KEY environment variable is not set")
-	}
-	if len(key) < 32 {
-		return fmt.Errorf("ENCRYPTION_KEY must be at least 32 characters long")
-	}
-	return nil
+	_, err := getEncryptionKey()
+	return err
 }
 
 func getEncryptionKey() ([]byte, error) {
 	key := os.Getenv("ENCRYPTION_KEY")
 	if key == "" {
-		return nil, fmt.Errorf("ENCRYPTION_KEY environment variable is not set")
+		return nil, fmt.Errorf("ENCRYPTION_KEY not set")
 	}
-	if len(key) < 32 {
-		return nil, fmt.Errorf("ENCRYPTION_KEY must be at least 32 characters long")
+	// Try hex decode first (64-char hex = 256-bit key)
+	if len(key) == 64 {
+		decoded, err := hex.DecodeString(key)
+		if err == nil {
+			return decoded, nil
+		}
 	}
-	return []byte(key[:32]), nil
+	// Fallback: raw bytes (32-char string = 256-bit key)
+	if len(key) >= 32 {
+		return []byte(key[:32]), nil
+	}
+	return nil, fmt.Errorf("ENCRYPTION_KEY must be at least 32 characters or 64 hex characters")
 }
 
 // Encrypt encrypts plain text using AES-GCM

@@ -125,7 +125,32 @@ func TestRBAC_RequiredRole_MissingRole(t *testing.T) {
 	}
 }
 
-func TestJWTAuth_QueryToken(t *testing.T) {
+func TestJWTAuth_QueryTokenDisallowedOnStandardRoutes(t *testing.T) {
+	handler := JWTAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	token, _ := GenerateJWT("test-user-id", "viewer", "")
+
+	// Normal endpoints must reject ?token=
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/clusters?token="+token, nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 for query token on non-ws route, got %d", w.Code)
+	}
+
+	rRoot := httptest.NewRequest(http.MethodGet, "/?token="+token, nil)
+	wRoot := httptest.NewRecorder()
+	handler.ServeHTTP(wRoot, rRoot)
+
+	if wRoot.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 for query token on root route, got %d", wRoot.Code)
+	}
+}
+
+func TestJWTAuth_WebSocketQueryTokenAllowed(t *testing.T) {
 	handler := JWTAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID := UserIDFromContext(r.Context())
 		if userID != "test-user-id" {
@@ -136,12 +161,22 @@ func TestJWTAuth_QueryToken(t *testing.T) {
 
 	token, _ := GenerateJWT("test-user-id", "viewer", "")
 
-	r := httptest.NewRequest(http.MethodGet, "/?token="+token, nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	// /ws with query param token should be allowed
+	rWS := httptest.NewRequest(http.MethodGet, "/ws?token="+token, nil)
+	wWS := httptest.NewRecorder()
+	handler.ServeHTTP(wWS, rWS)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
+	if wWS.Code != http.StatusOK {
+		t.Errorf("expected status 200 for query token on /ws, got %d", wWS.Code)
+	}
+
+	// /ws/events with query param token should also be allowed
+	rWSSub := httptest.NewRequest(http.MethodGet, "/ws/events?token="+token, nil)
+	wWSSub := httptest.NewRecorder()
+	handler.ServeHTTP(wWSSub, rWSSub)
+
+	if wWSSub.Code != http.StatusOK {
+		t.Errorf("expected status 200 for query token on /ws/events, got %d", wWSSub.Code)
 	}
 }
 
@@ -240,4 +275,56 @@ func TestSetJWTSecret_ValidAndSign(t *testing.T) {
 	if payloadStr == "" {
 		t.Error("expected non-empty payload")
 	}
+}
+
+func TestMetricsAuthMiddleware(t *testing.T) {
+	handler := MetricsAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	t.Run("No METRICS_TOKEN set allows request", func(t *testing.T) {
+		t.Setenv("METRICS_TOKEN", "")
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+	})
+
+	t.Run("METRICS_TOKEN set rejects request with missing token", func(t *testing.T) {
+		t.Setenv("METRICS_TOKEN", "my-secret-metrics-token-12345")
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("METRICS_TOKEN set rejects request with invalid token", func(t *testing.T) {
+		t.Setenv("METRICS_TOKEN", "my-secret-metrics-token-12345")
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		req.Header.Set("Authorization", "Bearer wrong-token")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("METRICS_TOKEN set accepts request with valid token", func(t *testing.T) {
+		t.Setenv("METRICS_TOKEN", "my-secret-metrics-token-12345")
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		req.Header.Set("Authorization", "Bearer my-secret-metrics-token-12345")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+	})
 }

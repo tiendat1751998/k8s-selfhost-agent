@@ -69,6 +69,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(60 * time.Second))
 	r.Use(chimw.Heartbeat("/ping"))
+	r.Use(mw.RequestBodyLimit(1 << 20))
 	r.Use(mw.StructuredLogger)
 	r.Use(mw.CORS)
 	r.Use(mw.Metrics)
@@ -80,23 +81,27 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	r.Get("/readyz", healthHandler.ServeHTTP)
 	r.Get("/livez", health.LivenessHandler())
 
-	// Metrics endpoint
-	r.Handle("/metrics", promhttp.Handler())
+	// Metrics endpoint (protected by METRICS_TOKEN when configured)
+	r.With(mw.MetricsAuthMiddleware).Handle("/metrics", promhttp.Handler())
 
-	// Debug/profiling endpoints (gated by env var for safety)
+	// Debug/profiling endpoints (gated by env var for safety and protected with platform_admin role)
 	if os.Getenv("K8S_ENABLE_PPROF") == "true" {
-		r.Route("/debug/pprof", func(r chi.Router) {
-			r.HandleFunc("/", pprof.Index)
-			r.HandleFunc("/cmdline", pprof.Cmdline)
-			r.HandleFunc("/profile", pprof.Profile)
-			r.HandleFunc("/symbol", pprof.Symbol)
-			r.HandleFunc("/trace", pprof.Trace)
-			r.Handle("/heap", pprof.Handler("heap"))
-			r.Handle("/goroutine", pprof.Handler("goroutine"))
-			r.Handle("/allocs", pprof.Handler("allocs"))
-			r.Handle("/block", pprof.Handler("block"))
-			r.Handle("/mutex", pprof.Handler("mutex"))
-			r.Handle("/threadcreate", pprof.Handler("threadcreate"))
+		r.Group(func(r chi.Router) {
+			r.Use(mw.JWTAuthMiddleware)
+			r.Use(mw.RBACMiddleware("platform_admin"))
+			r.Route("/debug/pprof", func(r chi.Router) {
+				r.HandleFunc("/", pprof.Index)
+				r.HandleFunc("/cmdline", pprof.Cmdline)
+				r.HandleFunc("/profile", pprof.Profile)
+				r.HandleFunc("/symbol", pprof.Symbol)
+				r.HandleFunc("/trace", pprof.Trace)
+				r.Handle("/heap", pprof.Handler("heap"))
+				r.Handle("/goroutine", pprof.Handler("goroutine"))
+				r.Handle("/allocs", pprof.Handler("allocs"))
+				r.Handle("/block", pprof.Handler("block"))
+				r.Handle("/mutex", pprof.Handler("mutex"))
+				r.Handle("/threadcreate", pprof.Handler("threadcreate"))
+			})
 		})
 	}
 
