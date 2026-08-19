@@ -50,6 +50,7 @@ type PlatformHandlers struct {
 	Alert         *AlertHandler
 	K8s           *K8sResourceHandler
 	Cloud         *CloudHandler
+	Settings      *SettingsHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -252,6 +253,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Cloud != nil {
 				r.Route("/cloud", platform.Cloud.RegisterRoutes)
+			}
+			if platform.Settings != nil {
+				r.Route("/settings", platform.Settings.RegisterRoutes)
 			}
 		}
 	})
