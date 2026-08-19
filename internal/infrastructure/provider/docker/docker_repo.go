@@ -276,4 +276,108 @@ func (r *realDockerRepo) CreateService(ctx context.Context, name string, image s
 	return nil
 }
 
+func (r *realDockerRepo) GetSwarmJoinTokens(ctx context.Context) (*domainDocker.SwarmTokens, error) {
+	swarmObj, err := r.cli.SwarmInspect(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("inspecting swarm: %w", err)
+	}
+
+	managerAddr := ""
+	info, err := r.cli.Info(ctx)
+	if err == nil {
+		if len(info.Swarm.RemoteManagers) > 0 {
+			managerAddr = info.Swarm.RemoteManagers[0].Addr
+		} else if info.Swarm.NodeAddr != "" {
+			managerAddr = info.Swarm.NodeAddr + ":2377"
+		}
+	}
+
+	return &domainDocker.SwarmTokens{
+		WorkerToken:  swarmObj.JoinTokens.Worker,
+		ManagerToken: swarmObj.JoinTokens.Manager,
+		ManagerAddr:  managerAddr,
+	}, nil
+}
+
+func (r *realDockerRepo) DrainNode(ctx context.Context, nodeID string) error {
+	return r.UpdateNodeAvailability(ctx, nodeID, string(swarm.NodeAvailabilityDrain))
+}
+
+func (r *realDockerRepo) ActivateNode(ctx context.Context, nodeID string) error {
+	return r.UpdateNodeAvailability(ctx, nodeID, string(swarm.NodeAvailabilityActive))
+}
+
+func (r *realDockerRepo) RemoveNode(ctx context.Context, nodeID string, force bool) error {
+	err := r.cli.NodeRemove(ctx, nodeID, types.NodeRemoveOptions{Force: force})
+	if err != nil {
+		return fmt.Errorf("removing swarm node %s: %w", nodeID, err)
+	}
+	return nil
+}
+
+func (r *realDockerRepo) GetNodeDetails(ctx context.Context, nodeID string) (*domainDocker.NodeDetails, error) {
+	node, _, err := r.cli.NodeInspectWithRaw(ctx, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("inspecting swarm node %s: %w", nodeID, err)
+	}
+
+	labels := make(map[string]string)
+	for k, v := range node.Spec.Labels {
+		labels[k] = v
+	}
+
+	return &domainDocker.NodeDetails{
+		ID:            node.ID,
+		Hostname:      node.Description.Hostname,
+		Role:          string(node.Spec.Role),
+		Availability:  string(node.Spec.Availability),
+		Status:        string(node.Status.State),
+		EngineVersion: node.Description.Engine.EngineVersion,
+		OS:            node.Description.Platform.OS,
+		Architecture:  node.Description.Platform.Architecture,
+		CPUs:          node.Description.Resources.NanoCPUs,
+		Memory:        node.Description.Resources.MemoryBytes,
+		IP:            node.Status.Addr,
+		Labels:        labels,
+		JoinedAt:      node.CreatedAt,
+	}, nil
+}
+
+func (r *realDockerRepo) GetSwarmInfo(ctx context.Context) (*domainDocker.SwarmInfo, error) {
+	swarmObj, err := r.cli.SwarmInspect(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("inspecting swarm: %w", err)
+	}
+
+	nodes, err := r.cli.NodeList(ctx, swarm.NodeListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("listing nodes for swarm info: %w", err)
+	}
+
+	managerCount := 0
+	workerCount := 0
+	for _, n := range nodes {
+		if n.Spec.Role == swarm.NodeRoleManager {
+			managerCount++
+		} else {
+			workerCount++
+		}
+	}
+
+	info, err := r.cli.Info(ctx)
+	isManager := false
+	if err == nil {
+		isManager = info.Swarm.ControlAvailable
+	}
+
+	return &domainDocker.SwarmInfo{
+		ID:           swarmObj.ID,
+		NodeCount:    len(nodes),
+		ManagerCount: managerCount,
+		WorkerCount:  workerCount,
+		CreatedAt:    swarmObj.CreatedAt,
+		IsManager:    isManager,
+	}, nil
+}
+
 

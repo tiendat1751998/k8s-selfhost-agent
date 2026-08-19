@@ -186,6 +186,7 @@ func run() error {
 	ecosystemRepo := postgres.NewEcosystemRepo(pgClient)
 	ecosystemUsecase := usecaseEcosystem.NewUsecase(ecosystemRepo, settingsRepo, httputil.NewSafeHTTPClient(5*time.Second), log)
 	ecosystemHandler := adapthttp.NewEcosystemHandler(ecosystemUsecase, log)
+	computeHostRepo := postgres.NewComputeHostRepo(pgClient)
 
 	txManager := postgres.NewTxManager(pgClient)
 	defaultLLM, _ := registry.Default()
@@ -242,7 +243,7 @@ func run() error {
 
 	platformHandlers := &adapthttp.PlatformHandlers{
 		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, nil, gitopsController),
-		Docker:        adapthttp.NewDockerHandler(dockerRepo),
+		Docker:        adapthttp.NewDockerHandler(dockerRepo, computeHostRepo),
 		Overview:      overviewHandler,
 		Drift:         adapthttp.NewDriftHandler(postgres.NewDriftRepo(pgClient)),
 		Correlation:   adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(pgClient)),

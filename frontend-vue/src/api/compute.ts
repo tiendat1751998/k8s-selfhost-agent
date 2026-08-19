@@ -330,11 +330,79 @@ export interface DockerContainer {
 export interface DockerNode {
   id: string
   name: string
+  hostname?: string
   role: 'manager' | 'worker' | string
   availability: 'active' | 'pause' | 'drain' | string
-  status: 'ready' | 'down' | string
-  version: string
-  updated_at: string
+  status: 'ready' | 'down' | 'disconnected' | string
+  version?: string
+  engine_version?: string
+  cpus?: number
+  memory?: number
+  ip?: string
+  labels?: Record<string, string>
+  joined_at?: string
+  updated_at?: string
+}
+
+export interface SwarmInfo {
+  id: string
+  node_count: number
+  manager_count: number
+  worker_count: number
+  created_at: string
+  is_manager: boolean
+}
+
+export interface SwarmTokens {
+  worker_token: string
+  manager_token: string
+  manager_addr: string
+}
+
+export interface NodeDetails {
+  id: string
+  hostname: string
+  role: 'manager' | 'worker' | string
+  availability: 'active' | 'pause' | 'drain' | string
+  status: 'ready' | 'down' | 'disconnected' | string
+  engine_version: string
+  os: string
+  architecture: string
+  cpus: number
+  memory: number
+  ip: string
+  labels: Record<string, string>
+  joined_at: string
+}
+
+export interface ComputeHost {
+  id: string
+  name: string
+  host_type: 'docker' | 'k8s' | string
+  endpoint: string
+  tls_enabled: boolean
+  status: 'connected' | 'disconnected' | 'pending' | 'error' | string
+  last_health_check: string
+  labels: Record<string, string>
+  tenant_id?: string
+  created_at: string
+}
+
+export interface CreateHostRequest {
+  name: string
+  host_type?: string
+  endpoint: string
+  tls_enabled?: boolean
+  ca_cert?: string
+  client_cert?: string
+  client_key?: string
+  api_version?: string
+  labels?: Record<string, string>
+}
+
+export interface TestHostResponse {
+  status: string
+  latency_ms: number
 }
 
 export interface DockerService {
@@ -558,18 +626,18 @@ export const promotionsApi = {
 
 export const dockerApi = {
   async listContainers(): Promise<DockerContainer[]> {
-    const res = await api.get<ApiResponse<DockerContainer[]>>('/docker/containers')
-    return res.data || []
+    const res = await api.get<ApiResponse<DockerContainer[]> | DockerContainer[]>('/docker/containers')
+    return Array.isArray(res) ? res : (res.data || [])
   },
 
   async listNodes(): Promise<DockerNode[]> {
-    const res = await api.get<ApiResponse<DockerNode[]>>('/docker/nodes')
-    return res.data || []
+    const res = await api.get<ApiResponse<DockerNode[]> | DockerNode[]>('/docker/nodes')
+    return Array.isArray(res) ? res : (res.data || [])
   },
 
   async listServices(): Promise<DockerService[]> {
-    const res = await api.get<ApiResponse<DockerService[]>>('/docker/services')
-    return res.data || []
+    const res = await api.get<ApiResponse<DockerService[]> | DockerService[]>('/docker/services')
+    return Array.isArray(res) ? res : (res.data || [])
   },
 
   async scaleService(id: string, replicas: number): Promise<{ status: string }> {
@@ -578,6 +646,47 @@ export const dockerApi = {
 
   async drainNode(id: string): Promise<{ status: string }> {
     return api.post<{ status: string }>(`/docker/nodes/${id}/drain`)
+  },
+
+  async activateNode(id: string): Promise<{ status: string }> {
+    return api.post<{ status: string }>(`/docker/nodes/${id}/activate`)
+  },
+
+  async removeNode(id: string): Promise<{ status: string }> {
+    return api.delete<{ status: string }>(`/docker/nodes/${id}`)
+  },
+
+  async getSwarmInfo(): Promise<SwarmInfo> {
+    const res = await api.get<ApiResponse<SwarmInfo> | SwarmInfo>('/docker/swarm')
+    return (res as ApiResponse<SwarmInfo>).data || (res as SwarmInfo)
+  },
+
+  async getSwarmTokens(): Promise<SwarmTokens> {
+    const res = await api.get<ApiResponse<SwarmTokens> | SwarmTokens>('/docker/swarm/tokens')
+    return (res as ApiResponse<SwarmTokens>).data || (res as SwarmTokens)
+  },
+
+  async getNodeDetails(id: string): Promise<NodeDetails> {
+    const res = await api.get<ApiResponse<NodeDetails> | NodeDetails>(`/docker/nodes/${id}`)
+    return (res as ApiResponse<NodeDetails>).data || (res as NodeDetails)
+  },
+
+  async listHosts(): Promise<ComputeHost[]> {
+    const res = await api.get<ApiResponse<ComputeHost[]> | ComputeHost[]>('/docker/hosts')
+    return Array.isArray(res) ? res : (res.data || [])
+  },
+
+  async registerHost(data: CreateHostRequest): Promise<ComputeHost> {
+    const res = await api.post<ApiResponse<ComputeHost> | ComputeHost>('/docker/hosts', data)
+    return (res as ApiResponse<ComputeHost>).data || (res as ComputeHost)
+  },
+
+  async removeHost(id: string): Promise<{ status: string }> {
+    return api.delete<{ status: string }>(`/docker/hosts/${id}`)
+  },
+
+  async testHost(id: string): Promise<{ status: string; latency_ms: number }> {
+    return api.post<{ status: string; latency_ms: number }>(`/docker/hosts/${id}/test`)
   },
 
   async toggleContainer(id: string, action: 'start' | 'stop'): Promise<{ status: string }> {
