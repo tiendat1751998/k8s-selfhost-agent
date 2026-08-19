@@ -295,16 +295,32 @@ func TestDockerHandler_GetSwarmInfo(t *testing.T) {
 	}
 }
 
+type testPasswordVerifier struct {
+	validPassword string
+}
+
+func (v *testPasswordVerifier) VerifyPassword(ctx context.Context, userID, password string) error {
+	if password == v.validPassword {
+		return nil
+	}
+	return fmt.Errorf("invalid password")
+}
+
 func TestDockerHandler_GetSwarmTokens(t *testing.T) {
 	repo := &testDockerRepo{}
-	handler := NewDockerHandler(repo)
+	verifier := &testPasswordVerifier{
+		validPassword: "secret-admin-password",
+	}
+	handler := NewDockerHandler(repo, verifier)
 
 	r := chi.NewRouter()
 	r.Route("/docker", handler.RegisterRoutes)
 
-	t.Run("Forbidden for non-admin", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/docker/swarm/tokens", nil)
+	t.Run("Forbidden for viewer", func(t *testing.T) {
+		body, _ := json.Marshal(TokenViewRequest{Password: "secret-admin-password"})
+		req := httptest.NewRequest(http.MethodPost, "/docker/swarm/tokens", bytes.NewReader(body))
 		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "viewer")
+		ctx = context.WithValue(ctx, tenancy.UserIDKey, "usr-admin-1")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req.WithContext(ctx))
 
@@ -313,22 +329,122 @@ func TestDockerHandler_GetSwarmTokens(t *testing.T) {
 		}
 	})
 
-	t.Run("Allowed for platform_admin", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/docker/swarm/tokens", nil)
-		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "platform_admin")
+	t.Run("Forbidden for operator", func(t *testing.T) {
+		body, _ := json.Marshal(TokenViewRequest{Password: "secret-admin-password"})
+		req := httptest.NewRequest(http.MethodPost, "/docker/swarm/tokens", bytes.NewReader(body))
+		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "operator")
+		ctx = context.WithValue(ctx, tenancy.UserIDKey, "usr-admin-1")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req.WithContext(ctx))
 
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected status 403, got %d", w.Code)
+		}
+	})
+
+	t.Run("Forbidden for tenant_admin", func(t *testing.T) {
+		body, _ := json.Marshal(TokenViewRequest{Password: "secret-admin-password"})
+		req := httptest.NewRequest(http.MethodPost, "/docker/swarm/tokens", bytes.NewReader(body))
+		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "tenant_admin")
+		ctx = context.WithValue(ctx, tenancy.UserIDKey, "usr-admin-1")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req.WithContext(ctx))
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected status 403, got %d", w.Code)
+		}
+	})
+
+	t.Run("Bad request for empty password", func(t *testing.T) {
+		body, _ := json.Marshal(TokenViewRequest{Password: ""})
+		req := httptest.NewRequest(http.MethodPost, "/docker/swarm/tokens", bytes.NewReader(body))
+		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "platform_admin")
+		ctx = context.WithValue(ctx, tenancy.UserIDKey, "usr-admin-1")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req.WithContext(ctx))
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("Forbidden for wrong password", func(t *testing.T) {
+		body, _ := json.Marshal(TokenViewRequest{Password: "wrong-password"})
+		req := httptest.NewRequest(http.MethodPost, "/docker/swarm/tokens", bytes.NewReader(body))
+		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "platform_admin")
+		ctx = context.WithValue(ctx, tenancy.UserIDKey, "usr-admin-1")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req.WithContext(ctx))
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected status 403, got %d", w.Code)
+		}
+	})
+
+	t.Run("Allowed for platform_admin with valid password and masked response", func(t *testing.T) {
+		// Use fresh handler to reset rate limiter
+		handlerFresh := NewDockerHandler(repo, verifier)
+		rFresh := chi.NewRouter()
+		rFresh.Route("/docker", handlerFresh.RegisterRoutes)
+
+		body, _ := json.Marshal(TokenViewRequest{Password: "secret-admin-password"})
+		req := httptest.NewRequest(http.MethodPost, "/docker/swarm/tokens", bytes.NewReader(body))
+		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "platform_admin")
+		ctx = context.WithValue(ctx, tenancy.UserIDKey, "usr-admin-1")
+		w := httptest.NewRecorder()
+		rFresh.ServeHTTP(w, req.WithContext(ctx))
+
 		if w.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d", w.Code)
+			t.Fatalf("expected status 200, got %d (body: %s)", w.Code, w.Body.String())
 		}
 
-		var tokens domain.SwarmTokens
-		if err := json.NewDecoder(w.Body).Decode(&tokens); err != nil {
+		var resp SwarmTokensResponse
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 			t.Fatalf("failed to decode swarm tokens: %v", err)
 		}
-		if tokens.WorkerToken != "SWMTKN-1-worker-token" || tokens.ManagerToken != "SWMTKN-1-manager-token" || tokens.ManagerAddr != "10.10.10.133:2377" {
-			t.Errorf("unexpected tokens: %+v", tokens)
+		if resp.WorkerToken != "SWMTKN-1-worker-token" || resp.ManagerToken != "SWMTKN-1-manager-token" || resp.ManagerAddr != "10.10.10.133:2377" {
+			t.Errorf("unexpected full tokens: %+v", resp)
+		}
+		if resp.WorkerTokenMasked != "SWMTKN-1-***...er-token" || resp.ManagerTokenMasked != "SWMTKN-1-***...er-token" {
+			t.Errorf("unexpected masked tokens: %+v", resp)
+		}
+		if resp.ExpiresInSeconds != 60 {
+			t.Errorf("expected ExpiresInSeconds 60, got %d", resp.ExpiresInSeconds)
+		}
+	})
+
+	t.Run("Rate limited after 3 views in window", func(t *testing.T) {
+		limiter := NewTokenViewLimiter(3, 15*time.Minute)
+		handlerWithLimiter := NewDockerHandler(repo, verifier, limiter)
+		rLimiter := chi.NewRouter()
+		rLimiter.Route("/docker", handlerWithLimiter.RegisterRoutes)
+
+		for i := 1; i <= 3; i++ {
+			body, _ := json.Marshal(TokenViewRequest{Password: "secret-admin-password"})
+			req := httptest.NewRequest(http.MethodPost, "/docker/swarm/tokens", bytes.NewReader(body))
+			ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "platform_admin")
+			ctx = context.WithValue(ctx, tenancy.UserIDKey, "usr-rate-test")
+			w := httptest.NewRecorder()
+			rLimiter.ServeHTTP(w, req.WithContext(ctx))
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("request %d: expected status 200, got %d", i, w.Code)
+			}
+		}
+
+		// 4th request should be rate-limited (429)
+		body, _ := json.Marshal(TokenViewRequest{Password: "secret-admin-password"})
+		req := httptest.NewRequest(http.MethodPost, "/docker/swarm/tokens", bytes.NewReader(body))
+		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "platform_admin")
+		ctx = context.WithValue(ctx, tenancy.UserIDKey, "usr-rate-test")
+		w := httptest.NewRecorder()
+		rLimiter.ServeHTTP(w, req.WithContext(ctx))
+
+		if w.Code != http.StatusTooManyRequests {
+			t.Fatalf("4th request: expected status 429, got %d (body: %s)", w.Code, w.Body.String())
+		}
+		if w.Header().Get("Retry-After") == "" {
+			t.Errorf("expected Retry-After header to be present")
 		}
 	})
 }

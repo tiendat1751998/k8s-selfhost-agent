@@ -49,3 +49,33 @@ func (r *userRepo) GetByEmail(ctx context.Context, email string) (*user.User, er
 	}
 	return &u, nil
 }
+
+func (r *userRepo) GetByID(ctx context.Context, id string) (*user.User, error) {
+	query := `
+		SELECT 
+			u.id::text, 
+			u.password_hash, 
+			COALESCE(r_platform.name, '') as platform_role,
+			COALESCE(tb.tenant_id, 'default-tenant') as tenant_id,
+			COALESCE(r_tenant.name, 'viewer') as tenant_role
+		FROM users u
+		LEFT JOIN user_roles ur ON u.id = ur.user_id
+		LEFT JOIN roles r_platform ON ur.role_id = r_platform.id AND r_platform.name = 'platform_admin'
+		LEFT JOIN tenant_bindings tb ON u.id = tb.user_id
+		LEFT JOIN roles r_tenant ON tb.role_id = r_tenant.id
+		WHERE u.id::text = $1
+		LIMIT 1
+	`
+	var u user.User
+	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
+		&u.ID,
+		&u.PasswordHash,
+		&u.PlatformRole,
+		&u.TenantID,
+		&u.TenantRole,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}

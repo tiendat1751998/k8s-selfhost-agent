@@ -22,6 +22,15 @@ func (m *mockUserRepo) GetByEmail(ctx context.Context, email string) (*user.User
 	return u, nil
 }
 
+func (m *mockUserRepo) GetByID(ctx context.Context, id string) (*user.User, error) {
+	for _, u := range m.users {
+		if u.ID == id {
+			return u, nil
+		}
+	}
+	return nil, errors.New("not found")
+}
+
 func TestAuthUsecase_Authenticate(t *testing.T) {
 	pass := "secret123"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
@@ -60,5 +69,43 @@ func TestAuthUsecase_Authenticate(t *testing.T) {
 	_, err = uc.Authenticate(context.Background(), "missing@example.com", pass)
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestAuthUsecase_VerifyPassword(t *testing.T) {
+	pass := "secret123"
+	hash, _ := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
+
+	repo := &mockUserRepo{
+		users: map[string]*user.User{
+			"admin@example.com": {
+				ID:           "u-1",
+				Email:        "admin@example.com",
+				PasswordHash: string(hash),
+				PlatformRole: "platform_admin",
+				TenantID:     "tenant-1",
+				TenantRole:   "admin",
+			},
+		},
+	}
+
+	uc := NewUsecase(repo)
+
+	// Valid password
+	err := uc.VerifyPassword(context.Background(), "u-1", pass)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Invalid password
+	err = uc.VerifyPassword(context.Background(), "u-1", "wrongpassword")
+	if err == nil {
+		t.Fatal("expected error for wrong password, got nil")
+	}
+
+	// Non-existent user ID
+	err = uc.VerifyPassword(context.Background(), "u-non-existent", pass)
+	if err == nil {
+		t.Fatal("expected error for non-existent user, got nil")
 	}
 }

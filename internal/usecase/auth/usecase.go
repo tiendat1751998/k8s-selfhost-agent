@@ -49,3 +49,23 @@ func (u *Usecase) Authenticate(ctx context.Context, email, password string) (*Au
 		TenantID: usr.TenantID,
 	}, nil
 }
+
+// PasswordVerifier defines the interface for verifying a user's password.
+type PasswordVerifier interface {
+	VerifyPassword(ctx context.Context, userID, password string) error
+}
+
+// VerifyPassword verifies user credentials by user ID.
+func (u *Usecase) VerifyPassword(ctx context.Context, userID, password string) error {
+	usr, err := u.repo.GetByID(ctx, userID)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(usr.PasswordHash), []byte(password))
+	if err != nil {
+		return errors.New("invalid credentials")
+	}
+
+	return nil
+}
