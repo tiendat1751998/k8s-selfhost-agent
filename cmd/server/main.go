@@ -367,12 +367,16 @@ func run() error {
 	var explorerHandler *adapthttp.ExplorerHandler
 	var healthCenterHandler *adapthttp.HealthCenterHandler
 	var deploymentsHandler *adapthttp.DeploymentHandler
+	var k8sHandler *adapthttp.K8sResourceHandler
 
 	if k8sAvailable {
 		capacityHandler = adapthttp.NewCapacityHandler(infraK8s.NewCapacityRepo(k8sClient, clientManager))
 		explorerHandler = adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
 		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager))
 		deploymentsHandler = adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
+		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(k8sClient, clientManager), auditRepo)
+	} else {
+		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(nil, clientManager), auditRepo)
 	}
 
 	platformHandlers := &adapthttp.PlatformHandlers{
@@ -404,6 +408,7 @@ func run() error {
 		Deployments:   deploymentsHandler,
 		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
 		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
+		K8s:           k8sHandler,
 	}
 	if err := initializeWelcomeMessage(egCtx, pgClient.Pool(), wsHub); err != nil {
 		log.Error("failed to initialize WebSocket welcome config message", zap.Error(err))
