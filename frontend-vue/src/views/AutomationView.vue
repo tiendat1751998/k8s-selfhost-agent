@@ -132,11 +132,18 @@
         <template #cell-actions="{ row }">
           <div class="actions-cell">
             <button 
+              class="btn btn-primary btn-sm"
+              :disabled="triggeringId === row.id"
+              @click="handleTriggerRule(row)"
+            >
+              <span>{{ triggeringId === row.id ? '⚡ Running...' : '⚡ Trigger' }}</span>
+            </button>
+            <button 
               class="btn btn-secondary btn-sm"
               :disabled="deletingId === row.id"
               @click="handleDeleteRule(row.id)"
             >
-              <span>{{ deletingId === row.id ? 'Deleting...' : '🗑️ Delete' }}</span>
+              <span>{{ deletingId === row.id ? 'Deleting...' : '🗑️' }}</span>
             </button>
           </div>
         </template>
@@ -361,6 +368,26 @@ async function handleDeleteRule(id: string) {
     statusMessage.value = { type: 'error', text: msg }
   } finally {
     deletingId.value = null
+  }
+}
+
+const triggeringId = ref<string | null>(null)
+
+async function handleTriggerRule(rule: AutomationRule) {
+  triggeringId.value = rule.id
+  statusMessage.value = null
+  try {
+    const res = await automationApi.triggerRule(rule.id)
+    statusMessage.value = {
+      type: 'success',
+      text: `Automation rule "${rule.name}" triggered: ${res.action_taken}`,
+    }
+    await fetchAutomationData()
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to trigger automation rule'
+    statusMessage.value = { type: 'error', text: msg }
+  } finally {
+    triggeringId.value = null
   }
 }
 

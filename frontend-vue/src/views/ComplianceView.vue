@@ -360,6 +360,14 @@ function getProgressColorClass(score: number): string {
 
 function formatFrameworkTag(tag: string): string {
   if (!tag) return 'POLICY'
+  const fw = frameworks.value.find(f => f.id === tag)
+  if (fw) {
+    if (fw.name.includes('CIS')) return 'CIS LEVEL 2'
+    if (fw.name.includes('SOC 2') || fw.name.includes('SOC2')) return 'SOC 2'
+    if (fw.name.includes('HIPAA')) return 'HIPAA'
+    if (fw.name.includes('PCI')) return 'PCI-DSS'
+    return fw.name.toUpperCase()
+  }
   return tag.replace(/-/g, ' ').toUpperCase()
 }
 

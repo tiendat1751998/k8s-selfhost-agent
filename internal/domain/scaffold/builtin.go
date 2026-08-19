@@ -4,9 +4,15 @@ import "time"
 
 // Built-in template IDs
 const (
-	BuiltinIDGoAPI      = "tpl-builtin-go-api"
-	BuiltinIDNodeWeb    = "tpl-builtin-node-web"
-	BuiltinIDPostgresDB = "tpl-builtin-postgres-db"
+	BuiltinIDGoMicroservice = "tpl-builtin-go-microservice"
+	BuiltinIDNodeFastify    = "tpl-builtin-node-fastify"
+	BuiltinIDPythonFastAPI  = "tpl-builtin-python-fastapi"
+	BuiltinIDNginxProxy     = "tpl-builtin-nginx-proxy"
+	BuiltinIDPostgresDB     = "tpl-builtin-postgres-db"
+
+	// Backward compatibility aliases
+	BuiltinIDGoAPI   = BuiltinIDGoMicroservice
+	BuiltinIDNodeWeb = BuiltinIDNodeFastify
 )
 
 // GetBuiltinTemplates returns the system-provided starter templates.
@@ -15,9 +21,9 @@ func GetBuiltinTemplates() []Template {
 
 	return []Template{
 		{
-			ID:          BuiltinIDGoAPI,
-			Name:        "Go API Service",
-			Description: "Production-ready Go microservice with chi router, health probes, configmaps, and multi-stage container build.",
+			ID:          BuiltinIDGoMicroservice,
+			Name:        "Go Microservice",
+			Description: "High-performance Go microservice with chi router, health probes, configmaps, and multi-stage container build.",
 			Category:    CategoryAPI,
 			Framework:   FrameworkGoChi,
 			BuiltIn:     true,
@@ -28,7 +34,7 @@ func GetBuiltinTemplates() []Template {
 					Name:     "app_name",
 					Label:    "Application Name",
 					Type:     "string",
-					Default:  "go-api-service",
+					Default:  "go-microservice",
 					Required: true,
 				},
 				{
@@ -181,20 +187,20 @@ services:
 			UpdatedAt: seedTime,
 		},
 		{
-			ID:          BuiltinIDNodeWeb,
-			Name:        "Node.js Web App",
-			Description: "Express.js web application with Nginx Ingress routing, health endpoints, and Docker compose support.",
-			Category:    CategoryWeb,
-			Framework:   FrameworkNodeExpress,
+			ID:          BuiltinIDNodeFastify,
+			Name:        "Node.js Fastify",
+			Description: "Ultra-fast low-overhead Node.js REST API with Fastify framework, JSON schema validation, and health checks.",
+			Category:    CategoryAPI,
+			Framework:   FrameworkNodeFastify,
 			BuiltIn:     true,
 			TenantID:    "default-tenant",
-			Tags:        []string{"nodejs", "express", "web", "frontend", "ingress"},
+			Tags:        []string{"nodejs", "fastify", "typescript", "api", "rest"},
 			Variables: []TemplateVariable{
 				{
 					Name:     "app_name",
 					Label:    "Application Name",
 					Type:     "string",
-					Default:  "node-web-app",
+					Default:  "fastify-api",
 					Required: true,
 				},
 				{
@@ -225,12 +231,139 @@ services:
 					Default:  "2",
 					Required: true,
 				},
+			},
+			ManifestYAML: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.app_name}}
+  namespace: {{.namespace}}
+  labels:
+    app.kubernetes.io/name: {{.app_name}}
+    app.kubernetes.io/component: api
+    app.kubernetes.io/framework: node-fastify
+spec:
+  replicas: {{.replicas}}
+  selector:
+    matchLabels:
+      app: {{.app_name}}
+  template:
+    metadata:
+      labels:
+        app: {{.app_name}}
+    spec:
+      containers:
+      - name: {{.app_name}}
+        image: {{.image}}
+        ports:
+        - containerPort: {{.port}}
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{.port}}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{.port}}
+          initialDelaySeconds: 10
+          periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.app_name}}
+  namespace: {{.namespace}}
+  labels:
+    app.kubernetes.io/name: {{.app_name}}
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{.port}}
+    targetPort: {{.port}}
+    protocol: TCP
+    name: http
+  selector:
+    app: {{.app_name}}
+`,
+			HelmValues: `nameOverride: "{{.app_name}}"
+replicaCount: {{.replicas}}
+
+image:
+  repository: {{.image}}
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: {{.port}}
+`,
+			DockerCompose: `version: '3.8'
+services:
+  {{.app_name}}:
+    image: {{.image}}
+    ports:
+      - "{{.port}}:{{.port}}"
+    environment:
+      - NODE_ENV=production
+      - PORT={{.port}}
+    restart: unless-stopped
+`,
+			CreatedAt: seedTime,
+			UpdatedAt: seedTime,
+		},
+		{
+			ID:          BuiltinIDPythonFastAPI,
+			Name:        "Python FastAPI",
+			Description: "High-performance Python asynchronous REST API service with FastAPI, Pydantic type validation, and OpenAPI documentation.",
+			Category:    CategoryAPI,
+			Framework:   FrameworkPythonFastAPI,
+			BuiltIn:     true,
+			TenantID:    "default-tenant",
+			Tags:        []string{"python", "fastapi", "uvicorn", "async", "api"},
+			Variables: []TemplateVariable{
 				{
-					Name:     "host",
-					Label:    "Ingress Hostname",
+					Name:     "app_name",
+					Label:    "Application Name",
 					Type:     "string",
-					Default:  "app.example.com",
-					Required: false,
+					Default:  "python-fastapi",
+					Required: true,
+				},
+				{
+					Name:     "namespace",
+					Label:    "Kubernetes Namespace",
+					Type:     "string",
+					Default:  "default",
+					Required: true,
+				},
+				{
+					Name:     "image",
+					Label:    "Container Image",
+					Type:     "string",
+					Default:  "python:3.11-slim",
+					Required: true,
+				},
+				{
+					Name:     "port",
+					Label:    "Service Port",
+					Type:     "number",
+					Default:  "8000",
+					Required: true,
+				},
+				{
+					Name:     "replicas",
+					Label:    "Replicas",
+					Type:     "number",
+					Default:  "2",
+					Required: true,
 				},
 			},
 			ManifestYAML: `apiVersion: apps/v1
@@ -240,8 +373,8 @@ metadata:
   namespace: {{.namespace}}
   labels:
     app.kubernetes.io/name: {{.app_name}}
-    app.kubernetes.io/component: web
-    app.kubernetes.io/framework: node-express
+    app.kubernetes.io/component: api
+    app.kubernetes.io/framework: python-fastapi
 spec:
   replicas: {{.replicas}}
   selector:
@@ -277,6 +410,141 @@ spec:
             port: {{.port}}
           initialDelaySeconds: 10
           periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.app_name}}
+  namespace: {{.namespace}}
+  labels:
+    app.kubernetes.io/name: {{.app_name}}
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{.port}}
+    targetPort: {{.port}}
+    protocol: TCP
+    name: http
+  selector:
+    app: {{.app_name}}
+`,
+			HelmValues: `nameOverride: "{{.app_name}}"
+replicaCount: {{.replicas}}
+
+image:
+  repository: {{.image}}
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: {{.port}}
+`,
+			DockerCompose: `version: '3.8'
+services:
+  {{.app_name}}:
+    image: {{.image}}
+    ports:
+      - "{{.port}}:{{.port}}"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT={{.port}}
+    restart: unless-stopped
+`,
+			CreatedAt: seedTime,
+			UpdatedAt: seedTime,
+		},
+		{
+			ID:          BuiltinIDNginxProxy,
+			Name:        "Nginx Reverse Proxy",
+			Description: "Production Nginx edge reverse proxy & static asset server with TLS termination, caching headers, and rate-limiting.",
+			Category:    CategoryWeb,
+			Framework:   FrameworkNginx,
+			BuiltIn:     true,
+			TenantID:    "default-tenant",
+			Tags:        []string{"nginx", "proxy", "web", "frontend", "ingress"},
+			Variables: []TemplateVariable{
+				{
+					Name:     "app_name",
+					Label:    "Application Name",
+					Type:     "string",
+					Default:  "nginx-proxy",
+					Required: true,
+				},
+				{
+					Name:     "namespace",
+					Label:    "Kubernetes Namespace",
+					Type:     "string",
+					Default:  "default",
+					Required: true,
+				},
+				{
+					Name:     "image",
+					Label:    "Container Image",
+					Type:     "string",
+					Default:  "nginx:alpine",
+					Required: true,
+				},
+				{
+					Name:     "port",
+					Label:    "Service Port",
+					Type:     "number",
+					Default:  "80",
+					Required: true,
+				},
+				{
+					Name:     "replicas",
+					Label:    "Replicas",
+					Type:     "number",
+					Default:  "2",
+					Required: true,
+				},
+				{
+					Name:     "host",
+					Label:    "Ingress Hostname",
+					Type:     "string",
+					Default:  "proxy.example.com",
+					Required: false,
+				},
+			},
+			ManifestYAML: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.app_name}}
+  namespace: {{.namespace}}
+  labels:
+    app.kubernetes.io/name: {{.app_name}}
+    app.kubernetes.io/component: proxy
+    app.kubernetes.io/framework: nginx
+spec:
+  replicas: {{.replicas}}
+  selector:
+    matchLabels:
+      app: {{.app_name}}
+  template:
+    metadata:
+      labels:
+        app: {{.app_name}}
+    spec:
+      containers:
+      - name: {{.app_name}}
+        image: {{.image}}
+        ports:
+        - containerPort: {{.port}}
+          name: http
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        readinessProbe:
+          httpGet:
+            path: /
+            port: {{.port}}
+          initialDelaySeconds: 2
+          periodSeconds: 5
 ---
 apiVersion: v1
 kind: Service
@@ -335,14 +603,6 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-
-resources:
-  limits:
-    cpu: 1000m
-    memory: 1Gi
-  requests:
-    cpu: 100m
-    memory: 256Mi
 `,
 			DockerCompose: `version: '3.8'
 services:
@@ -350,9 +610,6 @@ services:
     image: {{.image}}
     ports:
       - "{{.port}}:{{.port}}"
-    environment:
-      - NODE_ENV=production
-      - PORT={{.port}}
     restart: unless-stopped
 `,
 			CreatedAt: seedTime,
@@ -360,8 +617,8 @@ services:
 		},
 		{
 			ID:          BuiltinIDPostgresDB,
-			Name:        "PostgreSQL Database",
-			Description: "StatefulSet-managed PostgreSQL database with persistent volume claims, credentials secret, and headless service.",
+			Name:        "PostgreSQL StatefulSet",
+			Description: "StatefulSet-managed PostgreSQL 16 database with persistent volume claims, credentials secret, and headless service.",
 			Category:    CategoryDatabase,
 			Framework:   FrameworkPostgres,
 			BuiltIn:     true,
@@ -542,3 +799,4 @@ volumes:
 		},
 	}
 }
+

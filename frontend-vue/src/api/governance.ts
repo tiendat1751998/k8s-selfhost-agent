@@ -298,6 +298,9 @@ export const automationApi = {
   async toggleRule(id: string, enabled: boolean): Promise<{ status: string; enabled: boolean }> {
     return api.put<{ status: string; enabled: boolean }>(`/automation/rules/${id}/toggle`, { enabled })
   },
+  async triggerRule(id: string): Promise<{ status: string; rule_id: string; rule_name: string; action_taken: string; result: string; execution_id?: string }> {
+    return api.post<{ status: string; rule_id: string; rule_name: string; action_taken: string; result: string; execution_id?: string }>(`/automation/rules/${id}/trigger`)
+  },
   async getExecutions(limit: number = 50, offset: number = 0): Promise<AutomationExecutionsResponse> {
     const res = await api.get<AutomationExecutionsResponse>('/automation/executions', { limit, offset })
     return {
@@ -350,6 +353,9 @@ export const runbookApi = {
   },
   async deleteRunbook(id: string): Promise<{ status: string }> {
     return api.delete<{ status: string }>(`/runbooks/${id}`)
+  },
+  async executeRunbook(id: string): Promise<{ status: string; runbook_id: string; title: string; executed_at: string; message: string }> {
+    return api.post<{ status: string; runbook_id: string; title: string; executed_at: string; message: string }>(`/runbooks/${id}/execute`)
   },
 }
 

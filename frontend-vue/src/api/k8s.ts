@@ -84,14 +84,14 @@ export const k8sApi = {
   // Namespaces
   async listNamespaces(cluster: string): Promise<K8sNamespace[]> {
     const res = await api.get<ApiResponse<K8sNamespace[]> | K8sNamespace[]>(
-      `/clusters/${encodeURIComponent(cluster)}/namespaces`
+      `/k8s/${encodeURIComponent(cluster)}/namespaces`
     )
     return unwrapNamespaceList(res)
   },
 
   async createNamespace(cluster: string, name: string): Promise<K8sNamespace> {
     const res = await api.post<ApiResponse<K8sNamespace> | K8sNamespace>(
-      `/clusters/${encodeURIComponent(cluster)}/namespaces`,
+      `/k8s/${encodeURIComponent(cluster)}/namespaces`,
       { name }
     )
     return unwrapNamespace(res)
@@ -99,7 +99,7 @@ export const k8sApi = {
 
   async deleteNamespace(cluster: string, name: string): Promise<void> {
     await api.delete<void>(
-      `/clusters/${encodeURIComponent(cluster)}/namespaces/${encodeURIComponent(name)}`
+      `/k8s/${encodeURIComponent(cluster)}/namespaces/${encodeURIComponent(name)}`
     )
   },
 
@@ -109,9 +109,8 @@ export const k8sApi = {
     kind: ResourceKind,
     ns?: string
   ): Promise<K8sResource[]> {
-    const path = ns
-      ? `/clusters/${encodeURIComponent(cluster)}/namespaces/${encodeURIComponent(ns)}/${encodeURIComponent(kind)}`
-      : `/clusters/${encodeURIComponent(cluster)}/${encodeURIComponent(kind)}`
+    const query = ns ? `?ns=${encodeURIComponent(ns)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/${encodeURIComponent(kind)}${query}`
     const res = await api.get<ApiResponse<K8sResource[]> | K8sResource[]>(path)
     return unwrapResourceList(res)
   },
@@ -122,9 +121,8 @@ export const k8sApi = {
     name: string,
     ns?: string
   ): Promise<K8sResource> {
-    const path = ns
-      ? `/clusters/${encodeURIComponent(cluster)}/namespaces/${encodeURIComponent(ns)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`
-      : `/clusters/${encodeURIComponent(cluster)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`
+    const query = ns ? `?ns=${encodeURIComponent(ns)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/${encodeURIComponent(kind)}/${encodeURIComponent(name)}${query}`
     const res = await api.get<ApiResponse<K8sResource> | K8sResource>(path)
     return unwrapResource(res)
   },
@@ -135,9 +133,8 @@ export const k8sApi = {
     manifest: Record<string, unknown>,
     ns?: string
   ): Promise<K8sResource> {
-    const path = ns
-      ? `/clusters/${encodeURIComponent(cluster)}/namespaces/${encodeURIComponent(ns)}/${encodeURIComponent(kind)}`
-      : `/clusters/${encodeURIComponent(cluster)}/${encodeURIComponent(kind)}`
+    const query = ns ? `?ns=${encodeURIComponent(ns)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/${encodeURIComponent(kind)}${query}`
     const res = await api.post<ApiResponse<K8sResource> | K8sResource>(path, manifest)
     return unwrapResource(res)
   },
@@ -149,9 +146,8 @@ export const k8sApi = {
     manifest: Record<string, unknown>,
     ns?: string
   ): Promise<K8sResource> {
-    const path = ns
-      ? `/clusters/${encodeURIComponent(cluster)}/namespaces/${encodeURIComponent(ns)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`
-      : `/clusters/${encodeURIComponent(cluster)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`
+    const query = ns ? `?ns=${encodeURIComponent(ns)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/${encodeURIComponent(kind)}/${encodeURIComponent(name)}${query}`
     const res = await api.put<ApiResponse<K8sResource> | K8sResource>(path, manifest)
     return unwrapResource(res)
   },
@@ -162,9 +158,8 @@ export const k8sApi = {
     name: string,
     ns?: string
   ): Promise<void> {
-    const path = ns
-      ? `/clusters/${encodeURIComponent(cluster)}/namespaces/${encodeURIComponent(ns)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`
-      : `/clusters/${encodeURIComponent(cluster)}/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`
+    const query = ns ? `?ns=${encodeURIComponent(ns)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/${encodeURIComponent(kind)}/${encodeURIComponent(name)}${query}`
     await api.delete<void>(path)
   },
 
@@ -175,7 +170,7 @@ export const k8sApi = {
     ns?: string
   ): Promise<{ message: string }> {
     const res = await api.post<{ message?: string } | ApiResponse<{ message: string }>>(
-      `/clusters/${encodeURIComponent(cluster)}/apply`,
+      `/k8s/${encodeURIComponent(cluster)}/apply`,
       { yaml, namespace: ns }
     )
     if (res && typeof res === 'object' && 'data' in res && res.data) {

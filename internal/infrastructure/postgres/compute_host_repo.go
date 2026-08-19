@@ -110,7 +110,7 @@ func (r *computeHostRepo) Create(ctx context.Context, host *docker.ComputeHost) 
 // GetByID retrieves a ComputeHost by ID and decrypts stored TLS private key.
 func (r *computeHostRepo) GetByID(ctx context.Context, id string) (*docker.ComputeHost, error) {
 	query := `
-		SELECT id, name, host_type, endpoint, tls_enabled, tls_ca, tls_cert, tls_key, api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
+		SELECT id, name, host_type, endpoint, tls_enabled, COALESCE(tls_ca, ''), COALESCE(tls_cert, ''), COALESCE(tls_key, ''), api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
 		FROM compute_hosts
 		WHERE id = $1
 	`
@@ -170,7 +170,7 @@ func (r *computeHostRepo) List(ctx context.Context, tenantID string) ([]docker.C
 
 	if tenantID != "" {
 		query = `
-			SELECT id, name, host_type, endpoint, tls_enabled, tls_ca, tls_cert, tls_key, api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
+			SELECT id, name, host_type, endpoint, tls_enabled, COALESCE(tls_ca, ''), COALESCE(tls_cert, ''), COALESCE(tls_key, ''), api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
 			FROM compute_hosts
 			WHERE tenant_id = $1
 			ORDER BY name ASC
@@ -178,7 +178,7 @@ func (r *computeHostRepo) List(ctx context.Context, tenantID string) ([]docker.C
 		args = []any{tenantID}
 	} else {
 		query = `
-			SELECT id, name, host_type, endpoint, tls_enabled, tls_ca, tls_cert, tls_key, api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
+			SELECT id, name, host_type, endpoint, tls_enabled, COALESCE(tls_ca, ''), COALESCE(tls_cert, ''), COALESCE(tls_key, ''), api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
 			FROM compute_hosts
 			ORDER BY name ASC
 		`
@@ -198,7 +198,7 @@ func (r *computeHostRepo) List(ctx context.Context, tenantID string) ([]docker.C
 // ListAll returns all compute hosts across all tenants without tenant filtering.
 func (r *computeHostRepo) ListAll(ctx context.Context) ([]docker.ComputeHost, error) {
 	query := `
-		SELECT id, name, host_type, endpoint, tls_enabled, tls_ca, tls_cert, tls_key, api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
+		SELECT id, name, host_type, endpoint, tls_enabled, COALESCE(tls_ca, ''), COALESCE(tls_cert, ''), COALESCE(tls_key, ''), api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
 		FROM compute_hosts
 		ORDER BY name ASC
 	`
@@ -216,7 +216,7 @@ func scanComputeHosts(rows pgx.Rows) ([]docker.ComputeHost, error) {
 	hosts := make([]docker.ComputeHost, 0)
 	for rows.Next() {
 		var host docker.ComputeHost
-		var encKey string
+		var tlsCA, tlsCert, encKey, apiVersion, status *string
 		var labelsBytes []byte
 
 		if err := rows.Scan(
@@ -225,11 +225,11 @@ func scanComputeHosts(rows pgx.Rows) ([]docker.ComputeHost, error) {
 			&host.HostType,
 			&host.Endpoint,
 			&host.TLSEnabled,
-			&host.TLSCA,
-			&host.TLSCert,
+			&tlsCA,
+			&tlsCert,
 			&encKey,
-			&host.APIVersion,
-			&host.Status,
+			&apiVersion,
+			&status,
 			&host.LastHealthCheck,
 			&labelsBytes,
 			&host.TenantID,
@@ -237,6 +237,19 @@ func scanComputeHosts(rows pgx.Rows) ([]docker.ComputeHost, error) {
 			&host.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning compute host: %w", err)
+		}
+
+		if tlsCA != nil {
+			host.TLSCA = *tlsCA
+		}
+		if tlsCert != nil {
+			host.TLSCert = *tlsCert
+		}
+		if apiVersion != nil {
+			host.APIVersion = *apiVersion
+		}
+		if status != nil {
+			host.Status = *status
 		}
 
 		if len(labelsBytes) > 0 {

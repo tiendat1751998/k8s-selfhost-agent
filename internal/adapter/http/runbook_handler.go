@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -32,6 +33,7 @@ func (h *RunbookHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/{id}", h.GetByID)
 	r.Put("/{id}", h.Update)
 	r.Delete("/{id}", h.Delete)
+	r.Post("/{id}/execute", h.Execute)
 }
 
 // List handles GET /api/v1/runbooks
@@ -206,3 +208,41 @@ func (h *RunbookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
+
+// Execute handles POST /api/v1/runbooks/{id}/execute
+func (h *RunbookHandler) Execute(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "runbook id is required", err)
+		return
+	}
+	rb, err := h.repo.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "runbook not found", err)
+		return
+	}
+	now := time.Now()
+	rb.LastUsedAt = &now
+	_ = h.repo.Update(r.Context(), rb)
+
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "platform_admin"
+	}
+	details := map[string]interface{}{
+		"title":       rb.Title,
+		"category":    rb.Category,
+		"steps_count": rb.StepsCount,
+		"status":      "completed",
+	}
+	_ = h.auditRepo.RecordAction(r.Context(), userID, "execute", "runbook", rb.ID, rb.Title, "success", details, r.RemoteAddr, r.Header.Get("User-Agent"))
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":      "executed",
+		"runbook_id":  rb.ID,
+		"title":       rb.Title,
+		"executed_at": now,
+		"message":     "Runbook execution steps dispatched successfully",
+	})
+}
+

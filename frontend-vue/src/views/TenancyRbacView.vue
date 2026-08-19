@@ -92,7 +92,14 @@ const rbacResources = [
   { key: 'audit:view', label: 'CVE & Security Audit' }
 ]
 
-const rbacRoles = computed(() => Object.keys(rbacMatrix.value))
+const rbacRoles = computed(() => {
+  const keys = Object.keys(rbacMatrix.value || {})
+  const validRoles = keys.filter(k =>
+    !k.includes(':') && !k.toLowerCase().includes('read') && !k.toLowerCase().includes('write') &&
+    !k.toLowerCase().includes('scale') && !k.toLowerCase().includes('deploy') && !k.toLowerCase().includes('analyze')
+  )
+  return validRoles.length > 0 ? validRoles : ['Platform Admin', 'DevOps Team', 'Developer', 'Viewer', 'Security Auditor']
+})
 
 function toggleRbacPermission(role: string, resourceKey: string) {
   if (!rbacMatrix.value[role]) {

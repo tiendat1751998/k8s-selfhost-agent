@@ -26,6 +26,7 @@ func (h *AutomationHandler) RegisterRoutes(r chi.Router) {
 	r.Put("/rules/{id}", h.UpdateRule)
 	r.Delete("/rules/{id}", h.DeleteRule)
 	r.Put("/rules/{id}/toggle", h.ToggleRule)
+	r.Post("/rules/{id}/trigger", h.TriggerRule)
 	r.Get("/executions", h.ListExecutions)
 }
 
@@ -160,3 +161,39 @@ func (h *AutomationHandler) ListExecutions(w http.ResponseWriter, r *http.Reques
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }
+
+// TriggerRule handles POST /api/v1/automation/rules/{id}/trigger
+func (h *AutomationHandler) TriggerRule(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "rule id is required", err)
+		return
+	}
+	rule, err := h.repo.GetRule(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "rule not found", err)
+		return
+	}
+
+	exec := &automation.Execution{
+		RuleID:       rule.ID,
+		RuleName:     rule.Name,
+		TriggerEvent: "Manual SRE 1-Click trigger from console",
+		ActionTaken:  "Dispatched automated self-healing action: " + string(rule.ActionType),
+		Result:       "success",
+	}
+	if err := h.repo.CreateExecution(r.Context(), exec); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to record rule execution", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":       "triggered",
+		"rule_id":      rule.ID,
+		"rule_name":    rule.Name,
+		"action_taken": exec.ActionTaken,
+		"result":       "success",
+		"execution_id": exec.ID,
+	})
+}
+

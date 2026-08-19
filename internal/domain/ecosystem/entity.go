@@ -15,6 +15,9 @@ const (
 	CategoryMonitoring   = "monitoring"
 	CategorySecrets      = "secrets"
 	CategoryCertificates = "certificates"
+	CategoryCompute      = "compute"
+	CategoryDatabase     = "database"
+	CategoryMessaging    = "messaging"
 )
 
 // Status values

@@ -49,6 +49,7 @@ var nonTenantTables = map[string]bool{
 	"cluster_costs":         true, // TODO: needs migration to add tenant_id
 	"namespace_costs":       true, // TODO: needs migration to add tenant_id
 	"resource_waste":        true, // TODO: needs migration to add tenant_id
+	"capacity_forecasts":    true, // TODO: needs migration to add tenant_id
 	"drift_records":         true, // TODO: needs migration to add tenant_id
 	"notifications":        true, // TODO: needs migration to add tenant_id
 	"slo_definitions":       true, // TODO: needs migration to add tenant_id

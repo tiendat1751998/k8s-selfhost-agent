@@ -30,6 +30,9 @@ func (r *DriftRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
+	swarmCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
 	cli, err := client.NewClientWithOpts(
 		client.WithHost("tcp://10.10.10.133:2375"),
 		client.WithVersion("1.41"),
@@ -39,7 +42,7 @@ func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
 	}
 	defer cli.Close()
 
-	services, err := cli.ServiceList(ctx, types.ServiceListOptions{})
+	services, err := cli.ServiceList(swarmCtx, types.ServiceListOptions{})
 	if err != nil {
 		return
 	}
