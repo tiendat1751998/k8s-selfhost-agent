@@ -30,6 +30,7 @@ func NewFleetHandler(repo fleet.Repository, auditRepo audit.Repository, importUs
 // RegisterRoutes registers fleet routes.
 func (h *FleetHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.ListClusters)
+	r.Get("/clusters", h.ListClusters)
 	r.Post("/", h.RegisterCluster)
 	r.Delete("/{id}", h.RemoveCluster)
 	r.Post("/{id}/actions/upgrade", h.UpgradeCluster)
