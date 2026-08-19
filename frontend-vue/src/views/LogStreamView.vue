@@ -120,8 +120,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { useLogStore } from '../stores/logStore'
 
+const route = useRoute()
 const logStore = useLogStore()
 const autoScroll = ref(true)
 const searchKeyword = ref('')
@@ -130,6 +132,14 @@ const selectedNamespace = ref('')
 const terminalBody = ref<HTMLElement | null>(null)
 
 onMounted(() => {
+  if (route.query.namespace && typeof route.query.namespace === 'string') {
+    selectedNamespace.value = route.query.namespace
+  }
+  if (route.query.search && typeof route.query.search === 'string') {
+    searchKeyword.value = route.query.search
+  } else if (route.query.pod && typeof route.query.pod === 'string') {
+    searchKeyword.value = route.query.pod
+  }
   logStore.connect(selectedNamespace.value)
 })
 
