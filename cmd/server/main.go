@@ -402,7 +402,7 @@ func run() error {
 	platformHandlers := &adapthttp.PlatformHandlers{
 		AI:            adapthttp.NewAIHandler(registry),
 		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, publisher, gitopsController),
-		Docker:        adapthttp.NewDockerHandler(dockerRepo, computeHostRepo),
+		Docker:        adapthttp.NewDockerHandler(dockerRepo, computeHostRepo, authUsecase),
 		Overview:      overviewHandler,
 		Drift:         adapthttp.NewDriftHandler(driftRepo),
 		Correlation:   adapthttp.NewCorrelationHandler(correlationRepo),

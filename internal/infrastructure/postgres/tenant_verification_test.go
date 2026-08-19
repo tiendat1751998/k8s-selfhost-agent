@@ -117,7 +117,7 @@ func TestAllPostgresRepos_QueryCallsUseBuildTenantQuery(t *testing.T) {
 		"tagging_repo.go":       {"*"},                             // Non-tenant tables (tags, resource_tags)
 		"tenancy_repo.go":       {"*"},                             // Non-tenant tables (organizations, projects, tenant_members, rbac_matrix)
 		"timeline_repo.go":      {"*"},                             // Non-tenant tables (timeline_events)
-		"user_repo.go":          {"GetByEmail"},                    // Authentication prior to tenant context
+		"user_repo.go":          {"GetByEmail", "GetByID"},          // Authentication and re-authentication prior to/during user context lookup
 	}
 
 	var violations []string

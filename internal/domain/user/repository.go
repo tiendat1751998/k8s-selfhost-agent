@@ -15,4 +15,5 @@ type User struct {
 // Repository defines data access ports for user entity.
 type Repository interface {
 	GetByEmail(ctx context.Context, email string) (*User, error)
+	GetByID(ctx context.Context, id string) (*User, error)
 }

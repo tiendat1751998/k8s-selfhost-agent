@@ -357,6 +357,9 @@ export interface SwarmTokens {
   worker_token: string
   manager_token: string
   manager_addr: string
+  worker_token_masked?: string
+  manager_token_masked?: string
+  expires_in_seconds?: number
 }
 
 export interface NodeDetails {
@@ -661,8 +664,8 @@ export const dockerApi = {
     return (res as ApiResponse<SwarmInfo>).data || (res as SwarmInfo)
   },
 
-  async getSwarmTokens(): Promise<SwarmTokens> {
-    const res = await api.get<ApiResponse<SwarmTokens> | SwarmTokens>('/docker/swarm/tokens')
+  async getSwarmTokens(password: string): Promise<SwarmTokens> {
+    const res = await api.post<ApiResponse<SwarmTokens> | SwarmTokens>('/docker/swarm/tokens', { password })
     return (res as ApiResponse<SwarmTokens>).data || (res as SwarmTokens)
   },
 

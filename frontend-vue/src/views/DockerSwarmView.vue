@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
@@ -34,6 +34,13 @@ const swarmInfo = ref<SwarmInfo | null>(null)
 const swarmTokens = ref<SwarmTokens | null>(null)
 const showTokens = ref(false)
 const tokensLoading = ref(false)
+const showPasswordModal = ref(false)
+const verifyPassword = ref('')
+const verifyError = ref<string | null>(null)
+const revealWorkerToken = ref(false)
+const revealManagerToken = ref(false)
+const autoHideSeconds = ref(60)
+let autoHideTimer: number | null = null
 
 // Remote Hosts State
 const hosts = ref<ComputeHost[]>([])
@@ -96,7 +103,10 @@ const nodeAvailabilityFilter = ref<'all' | 'active' | 'drain' | 'pause'>('all')
 const defaultTokens: SwarmTokens = {
   worker_token: 'SWMTKN-1-49rf9kah39p07qbfy2g70m8z5k1q-2a1v9q3l9m2z7w4p',
   manager_token: 'SWMTKN-1-49rf9kah39p07qbfy2g70m8z5k1q-8c4k1m8n4x0q9y1d',
-  manager_addr: '192.168.1.101:2377'
+  manager_addr: '192.168.1.101:2377',
+  worker_token_masked: 'SWMTKN-1-***...9m2z7w4p',
+  manager_token_masked: 'SWMTKN-1-***...4x0q9y1d',
+  expires_in_seconds: 60
 }
 
 // ==========================================
@@ -234,14 +244,38 @@ const computedSwarmInfo = computed<SwarmInfo>(() => {
   }
 })
 
+function maskTokenDisplay(token: string): string {
+  if (!token) return 'SWMTKN-1-***...********'
+  if (token.length <= 8) return `SWMTKN-1-***...${token}`
+  return `SWMTKN-1-***...${token.slice(-8)}`
+}
+
+const displayWorkerToken = computed(() => {
+  if (revealWorkerToken.value) {
+    return swarmTokens.value?.worker_token || defaultTokens.worker_token
+  }
+  return swarmTokens.value?.worker_token_masked || maskTokenDisplay(swarmTokens.value?.worker_token || defaultTokens.worker_token)
+})
+
+const displayManagerToken = computed(() => {
+  if (revealManagerToken.value) {
+    return swarmTokens.value?.manager_token || defaultTokens.manager_token
+  }
+  return swarmTokens.value?.manager_token_masked || maskTokenDisplay(swarmTokens.value?.manager_token || defaultTokens.manager_token)
+})
+
 const workerJoinCommand = computed(() => {
-  const token = swarmTokens.value?.worker_token || defaultTokens.worker_token
+  const token = revealWorkerToken.value
+    ? (swarmTokens.value?.worker_token || defaultTokens.worker_token)
+    : (swarmTokens.value?.worker_token_masked || maskTokenDisplay(swarmTokens.value?.worker_token || defaultTokens.worker_token))
   const addr = swarmTokens.value?.manager_addr || defaultTokens.manager_addr
   return `docker swarm join --token ${token} ${addr}`
 })
 
 const managerJoinCommand = computed(() => {
-  const token = swarmTokens.value?.manager_token || defaultTokens.manager_token
+  const token = revealManagerToken.value
+    ? (swarmTokens.value?.manager_token || defaultTokens.manager_token)
+    : (swarmTokens.value?.manager_token_masked || maskTokenDisplay(swarmTokens.value?.manager_token || defaultTokens.manager_token))
   const addr = swarmTokens.value?.manager_addr || defaultTokens.manager_addr
   return `docker swarm join --token ${token} ${addr}`
 })
@@ -292,28 +326,104 @@ async function copyToClipboard(text: string, label: string = 'Value') {
   }
 }
 
-async function toggleShowTokens() {
-  if (showTokens.value) {
-    showTokens.value = false
-    return
-  }
-  showTokens.value = true
-  if (!swarmTokens.value) {
-    tokensLoading.value = true
-    try {
-      const tokens = await dockerApi.getSwarmTokens()
-      if (tokens && tokens.worker_token) {
-        swarmTokens.value = tokens
-      } else {
-        swarmTokens.value = defaultTokens
-      }
-    } catch {
-      swarmTokens.value = defaultTokens
-    } finally {
-      tokensLoading.value = false
+async function copySecretToken(text: string) {
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const el = document.createElement('textarea')
+      el.value = text
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
     }
+    showToast('⚠️ Token copied. Treat as a secret credential.', 'success')
+  } catch {
+    showToast('Failed to copy to clipboard', 'error')
   }
 }
+
+function hideTokens() {
+  if (autoHideTimer) {
+    clearInterval(autoHideTimer)
+    autoHideTimer = null
+  }
+  showTokens.value = false
+  swarmTokens.value = null
+  revealWorkerToken.value = false
+  revealManagerToken.value = false
+  autoHideSeconds.value = 60
+}
+
+function handleShowTokensClick() {
+  if (showTokens.value) {
+    hideTokens()
+    return
+  }
+  verifyPassword.value = ''
+  verifyError.value = null
+  showPasswordModal.value = true
+}
+
+async function verifyPasswordAndShowTokens() {
+  if (!verifyPassword.value) return
+  tokensLoading.value = true
+  verifyError.value = null
+  try {
+    const tokens = await dockerApi.getSwarmTokens(verifyPassword.value)
+    if (tokens && tokens.worker_token) {
+      swarmTokens.value = tokens
+    } else {
+      swarmTokens.value = defaultTokens
+    }
+    showPasswordModal.value = false
+    verifyPassword.value = ''
+    showTokens.value = true
+    revealWorkerToken.value = false
+    revealManagerToken.value = false
+
+    // Auto-hide countdown timer (60s)
+    autoHideSeconds.value = tokens.expires_in_seconds || 60
+    if (autoHideTimer) {
+      clearInterval(autoHideTimer)
+    }
+    autoHideTimer = window.setInterval(() => {
+      autoHideSeconds.value--
+      if (autoHideSeconds.value <= 0) {
+        hideTokens()
+        showToast('Join tokens auto-hidden for security. Re-authentication required.', 'error')
+      }
+    }, 1000)
+
+    showToast('Tokens verified and decrypted successfully', 'success')
+  } catch (err: unknown) {
+    let errorMsg = 'Failed to verify password and retrieve join tokens'
+    if (err && typeof err === 'object') {
+      const apiErr = err as { response?: { status?: number; data?: { error?: string; message?: string } }; message?: string }
+      if (apiErr.response?.status === 429) {
+        errorMsg = apiErr.response.data?.error || apiErr.response.data?.message || 'Token viewing rate limited. Try again in 15 minutes.'
+      } else if (apiErr.response?.status === 403) {
+        errorMsg = 'Incorrect password or unauthorized access. Verification failed.'
+      } else if (apiErr.response?.data?.error) {
+        errorMsg = apiErr.response.data.error
+      } else if (apiErr.message) {
+        errorMsg = apiErr.message
+      }
+    }
+    verifyError.value = errorMsg
+    showToast(errorMsg, 'error')
+  } finally {
+    tokensLoading.value = false
+  }
+}
+
+onUnmounted(() => {
+  if (autoHideTimer) {
+    clearInterval(autoHideTimer)
+    autoHideTimer = null
+  }
+})
 
 async function stepReplicas(svc: DockerService, delta: number) {
   const next = Math.max(0, (svc.replicas || 0) + delta)
@@ -1014,17 +1124,33 @@ function formatMemory(mem?: number) {
             </div>
           </div>
 
-          <button 
-            class="btn btn-secondary"
-            :disabled="tokensLoading"
-            @click="toggleShowTokens"
-          >
-            <span>{{ showTokens ? '🔒 Hide Join Tokens' : '👁️ Show Join Tokens' }}</span>
-          </button>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span v-if="showTokens" class="countdown-badge font-mono">
+              ⏱️ Auto-hiding in {{ autoHideSeconds }}s
+            </span>
+            <button 
+              class="btn btn-secondary"
+              :disabled="tokensLoading"
+              @click="handleShowTokensClick"
+            >
+              <span>{{ showTokens ? '🔒 Hide Join Tokens' : '👁️ Show Join Tokens' }}</span>
+            </button>
+          </div>
         </div>
 
         <!-- Collapsible Token Content -->
         <div v-if="showTokens" class="tokens-container glass-panel animate-fade-in">
+          <!-- Critical Security Warning Banner -->
+          <div class="confirm-alert alert-danger" style="margin-bottom: 20px;">
+            <span class="alert-icon">⚠️</span>
+            <div>
+              <strong style="color: #ff4d4f; font-size: 13px; text-transform: uppercase;">CRITICAL SECURITY:</strong>
+              <p class="alert-desc" style="color: #ffccc7; font-size: 12.5px; margin-top: 2px;">
+                These tokens grant direct cluster access. Never share via chat, email, or unencrypted channels. Rotate tokens immediately if compromised.
+              </p>
+            </div>
+          </div>
+
           <!-- Worker Token Block -->
           <div class="token-card">
             <div class="token-header">
@@ -1032,20 +1158,25 @@ function formatMemory(mem?: number) {
                 <span class="token-badge badge-worker font-mono">WORKER JOIN TOKEN</span>
                 <span class="token-tip text-muted">Use this to scale application compute instances</span>
               </div>
-              <button class="btn btn-secondary btn-xs" @click="copyToClipboard(swarmTokens?.worker_token || defaultTokens.worker_token, 'Worker Token')">
-                <span>📋 Copy Token</span>
-              </button>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary btn-xs" @click="revealWorkerToken = !revealWorkerToken">
+                  <span>{{ revealWorkerToken ? '🔒 Mask' : '👁️ Reveal Full' }}</span>
+                </button>
+                <button class="btn btn-secondary btn-xs" @click="copySecretToken(swarmTokens?.worker_token || defaultTokens.worker_token)">
+                  <span>📋 Copy Token</span>
+                </button>
+              </div>
             </div>
 
             <div class="code-block font-mono">
-              <code>{{ swarmTokens?.worker_token || defaultTokens.worker_token }}</code>
+              <code>{{ displayWorkerToken }}</code>
             </div>
 
             <div class="join-command-row">
               <span class="cmd-label text-muted">Worker Host Command:</span>
               <div class="cmd-box font-mono">
                 <code class="cmd-text">{{ workerJoinCommand }}</code>
-                <button class="btn-cmd-copy" title="Copy Command" @click="copyToClipboard(workerJoinCommand, 'Worker Join Command')">
+                <button class="btn-cmd-copy" title="Copy Command" @click="copySecretToken(workerJoinCommand)">
                   <span>📋 Copy Command</span>
                 </button>
               </div>
@@ -1059,9 +1190,14 @@ function formatMemory(mem?: number) {
                 <span class="token-badge badge-manager font-mono">MANAGER JOIN TOKEN</span>
                 <span class="token-warning-tag">⚠️ High Privilege Quorum Token</span>
               </div>
-              <button class="btn btn-secondary btn-xs" @click="copyToClipboard(swarmTokens?.manager_token || defaultTokens.manager_token, 'Manager Token')">
-                <span>📋 Copy Token</span>
-              </button>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary btn-xs" @click="revealManagerToken = !revealManagerToken">
+                  <span>{{ revealManagerToken ? '🔒 Mask' : '👁️ Reveal Full' }}</span>
+                </button>
+                <button class="btn btn-secondary btn-xs" @click="copySecretToken(swarmTokens?.manager_token || defaultTokens.manager_token)">
+                  <span>📋 Copy Token</span>
+                </button>
+              </div>
             </div>
 
             <p class="token-warning-text">
@@ -1069,14 +1205,14 @@ function formatMemory(mem?: number) {
             </p>
 
             <div class="code-block font-mono">
-              <code>{{ swarmTokens?.manager_token || defaultTokens.manager_token }}</code>
+              <code>{{ displayManagerToken }}</code>
             </div>
 
             <div class="join-command-row">
               <span class="cmd-label text-muted">Manager Host Command:</span>
               <div class="cmd-box font-mono">
                 <code class="cmd-text">{{ managerJoinCommand }}</code>
-                <button class="btn-cmd-copy" title="Copy Command" @click="copyToClipboard(managerJoinCommand, 'Manager Join Command')">
+                <button class="btn-cmd-copy" title="Copy Command" @click="copySecretToken(managerJoinCommand)">
                   <span>📋 Copy Command</span>
                 </button>
               </div>
@@ -1089,7 +1225,7 @@ function formatMemory(mem?: number) {
             <span class="locked-icon">🔒</span>
             <div>
               <h4 class="locked-title">Join Tokens Protected for Security</h4>
-              <p class="text-muted" style="font-size: 12px; margin-top: 2px;">Click "Show Join Tokens" above to decrypt cluster tokens and registration commands.</p>
+              <p class="text-muted" style="font-size: 12px; margin-top: 2px;">Click "Show Join Tokens" above to decrypt cluster tokens and registration commands (password verification required).</p>
             </div>
           </div>
         </div>
@@ -1714,6 +1850,45 @@ function formatMemory(mem?: number) {
           </button>
         </div>
       </div>
+    </ModalDrawer>
+
+    <!-- Password Confirmation Modal for Swarm Join Tokens -->
+    <ModalDrawer
+      v-model:show="showPasswordModal"
+      mode="modal"
+      title="🔐 Security Verification Required"
+      subtitle="Enter your password to view sensitive cluster join tokens"
+      max-width="480px"
+    >
+      <form @submit.prevent="verifyPasswordAndShowTokens" class="host-form">
+        <div v-if="verifyError" class="confirm-alert alert-danger" style="margin-bottom: 16px;">
+          <span class="alert-icon">⚠️</span>
+          <div>
+            <strong>Verification Failed</strong>
+            <p class="alert-desc">{{ verifyError }}</p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Current Password <span class="required">*</span></label>
+          <input 
+            v-model="verifyPassword"
+            type="password"
+            class="input-glass"
+            placeholder="Enter your account password"
+            autocomplete="current-password"
+            required
+            autofocus
+          />
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" @click="showPasswordModal = false">Cancel</button>
+          <button type="submit" class="btn btn-primary" :disabled="tokensLoading || !verifyPassword">
+            <span>{{ tokensLoading ? '⏳ Verifying...' : '🔓 Verify & Show Tokens' }}</span>
+          </button>
+        </div>
+      </form>
     </ModalDrawer>
 
     <!-- Logs Viewer Drawer -->
@@ -3229,6 +3404,18 @@ input:checked + .toggle-slider:before {
   height: 520px;
   overflow-y: auto;
   white-space: pre-wrap;
+}
+
+.countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
 }
 
 .font-mono { font-family: var(--font-mono); }
