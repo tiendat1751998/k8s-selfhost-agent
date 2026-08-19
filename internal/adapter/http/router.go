@@ -52,6 +52,9 @@ type PlatformHandlers struct {
 	Cloud         *CloudHandler
 	Settings      *SettingsHandler
 	Catalog       *CatalogHandler
+	Scaffolder    *ScaffoldHandler
+	Plugin        *PluginHandler
+	Ecosystem     *EcosystemHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -280,6 +283,15 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Catalog != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/catalog", platform.Catalog.RegisterRoutes)
+			}
+			if platform.Scaffolder != nil {
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/scaffolder", platform.Scaffolder.RegisterRoutes)
+			}
+			if platform.Plugin != nil {
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/plugins", platform.Plugin.RegisterRoutes)
+			}
+			if platform.Ecosystem != nil {
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/ecosystem", platform.Ecosystem.RegisterRoutes)
 			}
 		}
 	})

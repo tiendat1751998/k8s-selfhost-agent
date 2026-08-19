@@ -197,6 +197,24 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/scaffolder',
+      name: 'ScaffolderTemplates',
+      component: () => import('../views/ScaffolderView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/ecosystem',
+      name: 'ecosystem',
+      component: () => import('../views/EcosystemView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/plugins',
+      name: 'plugins',
+      component: () => import('../views/PluginsView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: SettingsView,

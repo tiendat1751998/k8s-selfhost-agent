@@ -33,6 +33,9 @@ import (
 	usecasePromotion "github.com/datdt/k8sselfhost/internal/usecase/promotion"
 	usecaseAlert "github.com/datdt/k8sselfhost/internal/usecase/alert"
 	usecaseCluster "github.com/datdt/k8sselfhost/internal/usecase/cluster"
+	usecaseScaffold "github.com/datdt/k8sselfhost/internal/usecase/scaffold"
+	usecaseEcosystem "github.com/datdt/k8sselfhost/internal/usecase/ecosystem"
+	"github.com/datdt/k8sselfhost/internal/pkg/httputil"
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/notifier"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
@@ -168,6 +171,14 @@ func run() error {
 	settingsHandler := adapthttp.NewSettingsHandler(settingsRepo, log)
 	catalogRepo := postgres.NewCatalogRepo(pgClient)
 	catalogHandler := adapthttp.NewCatalogHandler(catalogRepo, log)
+	pluginRepo := postgres.NewPluginRepo(pgClient)
+	pluginHandler := adapthttp.NewPluginHandler(pluginRepo, log)
+	scaffoldRepo := postgres.NewScaffoldRepo(pgClient)
+	scaffoldService := usecaseScaffold.NewService(scaffoldRepo, catalogRepo, usecaseScaffold.NewEngine())
+	scaffoldHandler := adapthttp.NewScaffoldHandler(scaffoldService, log)
+	ecosystemRepo := postgres.NewEcosystemRepo(pgClient)
+	ecosystemUsecase := usecaseEcosystem.NewUsecase(ecosystemRepo, settingsRepo, httputil.NewSafeHTTPClient(5*time.Second), log)
+	ecosystemHandler := adapthttp.NewEcosystemHandler(ecosystemUsecase, log)
 
 	txManager := postgres.NewTxManager(pgClient)
 	defaultLLM, _ := registry.Default()
@@ -246,6 +257,9 @@ func run() error {
 		Cloud:         cloudHandler,
 		Settings:      settingsHandler,
 		Catalog:       catalogHandler,
+		Scaffolder:    scaffoldHandler,
+		Plugin:        pluginHandler,
+		Ecosystem:     ecosystemHandler,
 	}
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)
