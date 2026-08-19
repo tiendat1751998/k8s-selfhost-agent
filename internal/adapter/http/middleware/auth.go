@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -27,7 +28,7 @@ var (
 
 const JWTIssuer = "k8s-selfhost"
 
-var JWTSecret []byte
+var jwtSecret []byte
 
 func isRunningInTest() bool {
 	if testing.Testing() {
@@ -48,12 +49,12 @@ func init() {
 		// During go test execution, allow test runner to use test secret if JWT_SECRET is not explicitly exported in env
 		if isRunningInTest() {
 			secret = "k8sselfhost-jwt-test-secret-key-32bytes-secure!"
-			JWTSecret = []byte(secret)
+			jwtSecret = []byte(secret)
 			return
 		}
 		log.Fatal("FATAL: JWT_SECRET environment variable must be set (minimum 32 characters)")
 	}
-	JWTSecret = []byte(secret)
+	jwtSecret = []byte(secret)
 }
 
 // SetJWTSecret allows setting the JWT signing secret programmatically (e.g. for testing).
@@ -61,7 +62,7 @@ func SetJWTSecret(secret string) {
 	if len(secret) < 32 {
 		log.Fatal("FATAL: JWT_SECRET environment variable must be set (minimum 32 characters)")
 	}
-	JWTSecret = []byte(secret)
+	jwtSecret = []byte(secret)
 }
 
 // JWTClaims holds standard and custom JWT claims.
@@ -96,7 +97,7 @@ func GenerateJWT(userID, role, tenantID string) (string, error) {
 	encPayload := base64.RawURLEncoding.EncodeToString(payloadBytes)
 	signingString := encHeader + "." + encPayload
 
-	h := hmac.New(sha256.New, JWTSecret)
+	h := hmac.New(sha256.New, jwtSecret)
 	if _, err := h.Write([]byte(signingString)); err != nil {
 		return "", err
 	}
@@ -132,7 +133,7 @@ func ValidateJWT(token string) (string, error) {
 		return "", errors.New("failed to decode signature")
 	}
 
-	h := hmac.New(sha256.New, JWTSecret)
+	h := hmac.New(sha256.New, jwtSecret)
 	if _, err := h.Write([]byte(signingString)); err != nil {
 		return "", err
 	}
@@ -172,7 +173,7 @@ func UserIDFromContext(ctx context.Context) string { return tenancy.UserIDFromCo
 func UserRoleFromContext(ctx context.Context) string { return tenancy.UserRoleFromContext(ctx) }
 
 
-// JWTAuthMiddleware validates the JWT token in the Authorization header or query parameters.
+// JWTAuthMiddleware validates the JWT token in the Authorization header or query parameters (for websockets only).
 func JWTAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var token string
@@ -184,8 +185,8 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// Fallback to query parameter "token" (for websockets)
-		if token == "" {
+		// Fallback to query parameter "token" ONLY for WebSocket paths (/ws, /ws/...)
+		if token == "" && (r.URL.Path == "/ws" || strings.HasPrefix(r.URL.Path, "/ws/")) {
 			token = r.URL.Query().Get("token")
 		}
 
@@ -290,4 +291,33 @@ func RequireRolesForMutations(requiredRoles ...string) func(http.Handler) http.H
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// MetricsAuthMiddleware checks for METRICS_TOKEN if configured in the environment.
+// If METRICS_TOKEN is not set or empty, requests to /metrics are allowed without authentication.
+// If METRICS_TOKEN is set, requests must provide Authorization: Bearer <METRICS_TOKEN>.
+func MetricsAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		expectedToken := os.Getenv("METRICS_TOKEN")
+		if expectedToken == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		authHeader := r.Header.Get("Authorization")
+		var token string
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				token = parts[1]
+			}
+		}
+
+		if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(expectedToken)) != 1 {
+			http.Error(w, "unauthorized: invalid or missing metrics token", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

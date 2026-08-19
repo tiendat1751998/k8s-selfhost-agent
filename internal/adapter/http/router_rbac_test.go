@@ -138,4 +138,74 @@ func TestRouter_RBACEnforcement(t *testing.T) {
 			t.Errorf("expected 200 OK for admin on root /api/v1, got %d", rec.Code)
 		}
 	})
+
+	t.Run("Pprof endpoints require platform_admin role when enabled", func(t *testing.T) {
+		t.Setenv("K8S_ENABLE_PPROF", "true")
+		pprofRouter := NewRouterWithWS(healthHandler, nil, platform)
+
+		// 1. Unauthenticated request -> 401 Unauthorized
+		reqUnauth := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+		recUnauth := httptest.NewRecorder()
+		pprofRouter.ServeHTTP(recUnauth, reqUnauth)
+		if recUnauth.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401 Unauthorized for unauthenticated pprof request, got %d", recUnauth.Code)
+		}
+
+		// 2. Viewer request -> 403 Forbidden
+		reqViewer := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+		reqViewer.Header.Set("Authorization", "Bearer "+viewerToken)
+		recViewer := httptest.NewRecorder()
+		pprofRouter.ServeHTTP(recViewer, reqViewer)
+		if recViewer.Code != http.StatusForbidden {
+			t.Errorf("expected 403 Forbidden for viewer on pprof, got %d", recViewer.Code)
+		}
+
+		// 3. Operator request -> 403 Forbidden
+		reqOp := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+		reqOp.Header.Set("Authorization", "Bearer "+operatorToken)
+		recOp := httptest.NewRecorder()
+		pprofRouter.ServeHTTP(recOp, reqOp)
+		if recOp.Code != http.StatusForbidden {
+			t.Errorf("expected 403 Forbidden for operator on pprof, got %d", recOp.Code)
+		}
+
+		// 4. Platform admin request -> 200 OK
+		reqAdmin := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+		reqAdmin.Header.Set("Authorization", "Bearer "+adminToken)
+		recAdmin := httptest.NewRecorder()
+		pprofRouter.ServeHTTP(recAdmin, reqAdmin)
+		if recAdmin.Code != http.StatusOK {
+			t.Errorf("expected 200 OK for platform_admin on pprof, got %d", recAdmin.Code)
+		}
+	})
+
+	t.Run("Metrics endpoint respects METRICS_TOKEN", func(t *testing.T) {
+		// 1. Default (no token configured): open access
+		t.Setenv("METRICS_TOKEN", "")
+		metricsRouter := NewRouterWithWS(healthHandler, nil, platform)
+		reqOpen := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		recOpen := httptest.NewRecorder()
+		metricsRouter.ServeHTTP(recOpen, reqOpen)
+		if recOpen.Code != http.StatusOK {
+			t.Errorf("expected 200 OK for open /metrics, got %d", recOpen.Code)
+		}
+
+		// 2. METRICS_TOKEN set: unauthenticated request is 401
+		t.Setenv("METRICS_TOKEN", "k8s-metrics-super-secret-token")
+		reqNoAuth := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		recNoAuth := httptest.NewRecorder()
+		metricsRouter.ServeHTTP(recNoAuth, reqNoAuth)
+		if recNoAuth.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401 Unauthorized for /metrics without token, got %d", recNoAuth.Code)
+		}
+
+		// 3. METRICS_TOKEN set: authenticated request with correct token is 200 OK
+		reqAuthed := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		reqAuthed.Header.Set("Authorization", "Bearer k8s-metrics-super-secret-token")
+		recAuthed := httptest.NewRecorder()
+		metricsRouter.ServeHTTP(recAuthed, reqAuthed)
+		if recAuthed.Code != http.StatusOK {
+			t.Errorf("expected 200 OK for /metrics with valid bearer token, got %d", recAuthed.Code)
+		}
+	})
 }
