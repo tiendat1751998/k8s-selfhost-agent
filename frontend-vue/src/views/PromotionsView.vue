@@ -28,64 +28,16 @@ const newPromotion = ref<CreatePromotionPayload>({
   requester: 'sre-engineer'
 })
 
-const defaultPromotions: Promotion[] = [
-  {
-    id: 'promo-tiki-cart-101',
-    service: 'tiki_cart',
-    from_env: 'dev',
-    to_env: 'qa',
-    version: 'v2.4.1',
-    status: 'pending',
-    requester: 'alex.chen@tiki.corp',
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: 'promo-tiki-prod-102',
-    service: 'tiki_product',
-    from_env: 'qa',
-    to_env: 'staging',
-    version: 'v1.8.0',
-    status: 'approved',
-    requester: 'sarah.lin@tiki.corp',
-    approver: 'qa-gatekeeper',
-    approved_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-    created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
-  },
-  {
-    id: 'promo-tiki-drone-103',
-    service: 'tiki_drone',
-    from_env: 'staging',
-    to_env: 'production',
-    version: 'v2.24.0',
-    status: 'completed',
-    requester: 'devops-lead@tiki.corp',
-    approver: 'sre-oncall',
-    approved_at: new Date(Date.now() - 85000000).toISOString(),
-    completed_at: new Date(Date.now() - 84000000).toISOString(),
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-  },
-]
-
 async function fetchPromotions() {
   loading.value = true
   error.value = null
   try {
-    let list: Promotion[] = []
-    try {
-      const res = await promotionsApi.list()
-      list = res.data || []
-    } catch {
-      // Backend offline or not seeded
-    }
-
-    if (list.length === 0) {
-      list = defaultPromotions
-    }
-
-    promotions.value = list
+    const res = await promotionsApi.list()
+    promotions.value = Array.isArray(res.data) ? res.data : []
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to retrieve promotions'
     error.value = msg
+    promotions.value = []
   } finally {
     loading.value = false
   }
@@ -299,7 +251,7 @@ function formatDate(d?: string) {
 
           <div class="column-body">
             <div v-if="getPromotionsForEnv(env).length === 0" class="stage-empty">
-              <span>No in-flight promotions targeting {{ env }}</span>
+              <span>No promotion requests found for {{ env }}. Click '+ Request Promotion' to submit a release.</span>
             </div>
 
             <div 
@@ -350,7 +302,7 @@ function formatDate(d?: string) {
         :data="promotions"
         :loading="loading"
         :error="error"
-        empty-message="No promotion records found."
+        empty-message="No promotion requests found. Click '+ Request Promotion' to submit a new release for environment gating."
         searchable
         search-placeholder="Search promotions by service, requester, or version..."
       >

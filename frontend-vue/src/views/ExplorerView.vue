@@ -99,271 +99,123 @@ const kindCategories: KindCategory[] = [
   },
 ]
 
+// Import Cluster Modal State
+const showImportModal = ref(false)
+const importMode = ref<'file' | 'text'>('file')
+const importForm = ref({
+  id: '',
+  name: '',
+  group: 'production',
+  region: 'us-east-1',
+  provider: 'k8s',
+  kubeconfigRaw: '',
+})
+const kubeconfigFile = ref<File | null>(null)
+const importingCluster = ref(false)
+
+function handleFileChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files.length > 0) {
+    kubeconfigFile.value = target.files[0]
+  }
+}
+
+async function handleImportCluster() {
+  if (!importForm.value.name.trim()) {
+    showToast('Cluster name is required', 'error')
+    return
+  }
+
+  let fileToUpload: File | null = kubeconfigFile.value
+
+  if (importMode.value === 'text') {
+    if (!importForm.value.kubeconfigRaw.trim()) {
+      showToast('Kubeconfig content cannot be empty', 'error')
+      return
+    }
+    fileToUpload = new File([importForm.value.kubeconfigRaw], `${importForm.value.name}-kubeconfig.yaml`, {
+      type: 'text/yaml',
+    })
+  }
+
+  if (!fileToUpload) {
+    showToast('Kubeconfig file or content is required for cluster import', 'error')
+    return
+  }
+
+  importingCluster.value = true
+  try {
+    const formData = new FormData()
+    formData.append('id', importForm.value.id.trim() || `cluster-${Date.now().toString(36)}`)
+    formData.append('name', importForm.value.name.trim())
+    formData.append('group', importForm.value.group)
+    formData.append('region', importForm.value.region.trim())
+    formData.append('provider', importForm.value.provider)
+    formData.append('kubeconfig', fileToUpload)
+
+    await fleetApi.importCluster(formData)
+    showToast(`Cluster ${importForm.value.name} successfully imported!`)
+    showImportModal.value = false
+    const importedName = importForm.value.name.trim()
+    importForm.value.name = ''
+    importForm.value.id = ''
+    importForm.value.kubeconfigRaw = ''
+    kubeconfigFile.value = null
+    await loadClusters()
+    selectedCluster.value = importedName
+    await loadNamespaces()
+    await fetchResources()
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Cluster import failed'
+    showToast(msg, 'error')
+  } finally {
+    importingCluster.value = false
+  }
+}
+
 // Fetch Clusters
 async function loadClusters() {
   try {
     const list = await fleetApi.list()
     if (list && list.length > 0) {
       clusters.value = list
-      if (!selectedCluster.value || selectedCluster.value === 'default') {
+      if (!selectedCluster.value || selectedCluster.value === 'default' || !list.some(c => (c.name || c.id) === selectedCluster.value)) {
         selectedCluster.value = list[0].name || list[0].id
       }
     } else {
-      clusters.value = [
-        {
-          id: 'primary-cluster',
-          name: 'primary-cluster',
-          group: 'production',
-          region: 'us-east-1',
-          provider: 'k8s',
-          status: 'active',
-          version: 'v1.30.2',
-          nodes: 3,
-          health_status: 'healthy',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-      ]
-      selectedCluster.value = 'primary-cluster'
+      clusters.value = []
+      if (!selectedCluster.value || selectedCluster.value === 'default') {
+        selectedCluster.value = 'primary-cluster'
+      }
     }
   } catch {
-    clusters.value = [
-      {
-        id: 'primary-cluster',
-        name: 'primary-cluster',
-        group: 'production',
-        region: 'us-east-1',
-        provider: 'k8s',
-        status: 'active',
-        version: 'v1.30.2',
-        nodes: 3,
-        health_status: 'healthy',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-    ]
-    selectedCluster.value = 'primary-cluster'
+    clusters.value = []
+    if (!selectedCluster.value || selectedCluster.value === 'default') {
+      selectedCluster.value = 'primary-cluster'
+    }
   }
 }
 
 // Fetch Namespaces for Selected Cluster
 async function loadNamespaces() {
-  if (!selectedCluster.value) return
+  if (!selectedCluster.value) {
+    namespaces.value = []
+    return
+  }
   try {
     const nsList = await k8sApi.listNamespaces(selectedCluster.value)
-    if (nsList && nsList.length > 0) {
-      namespaces.value = nsList
-    } else {
-      namespaces.value = [
-        { name: 'default', status: 'Active', createdAt: new Date().toISOString() },
-        { name: 'kube-system', status: 'Active', createdAt: new Date().toISOString() },
-        { name: 'ingress-nginx', status: 'Active', createdAt: new Date().toISOString() },
-        { name: 'production', status: 'Active', createdAt: new Date().toISOString() },
-      ]
-    }
+    namespaces.value = Array.isArray(nsList) ? nsList : []
   } catch {
-    namespaces.value = [
-      { name: 'default', status: 'Active', createdAt: new Date().toISOString() },
-      { name: 'kube-system', status: 'Active', createdAt: new Date().toISOString() },
-      { name: 'ingress-nginx', status: 'Active', createdAt: new Date().toISOString() },
-      { name: 'production', status: 'Active', createdAt: new Date().toISOString() },
-    ]
+    namespaces.value = []
   }
-}
-
-function getFallbackResources(kind: ResourceKind, nsFilter?: string): K8sResource[] {
-  const stackMap: Record<ResourceKind, K8sResource[]> = {
-    deployments: [
-      {
-        apiVersion: 'apps/v1',
-        kind: 'Deployment',
-        metadata: { name: 'tiki-cart', namespace: 'production', creationTimestamp: '2026-08-01T00:00:00Z', labels: { app: 'tiki-cart', 'tier': 'frontend' } },
-        spec: { replicas: 3 },
-        status: { readyReplicas: 3, replicas: 3, updatedReplicas: 3, availableReplicas: 3 },
-      },
-      {
-        apiVersion: 'apps/v1',
-        kind: 'Deployment',
-        metadata: { name: 'tiki-product', namespace: 'production', creationTimestamp: '2026-08-01T00:00:00Z', labels: { app: 'tiki-product', 'tier': 'api' } },
-        spec: { replicas: 2 },
-        status: { readyReplicas: 2, replicas: 2, updatedReplicas: 2, availableReplicas: 2 },
-      },
-      {
-        apiVersion: 'apps/v1',
-        kind: 'Deployment',
-        metadata: { name: 'tiki-drone', namespace: 'ci', creationTimestamp: '2026-08-01T00:00:00Z', labels: { app: 'tiki-drone', 'role': 'ci-runner' } },
-        spec: { replicas: 1 },
-        status: { readyReplicas: 1, replicas: 1, updatedReplicas: 1, availableReplicas: 1 },
-      },
-      {
-        apiVersion: 'apps/v1',
-        kind: 'Deployment',
-        metadata: { name: 'nats', namespace: 'infra', creationTimestamp: '2026-08-01T00:00:00Z', labels: { app: 'nats', 'component': 'messaging' } },
-        spec: { replicas: 3 },
-        status: { readyReplicas: 3, replicas: 3, updatedReplicas: 3, availableReplicas: 3 },
-      },
-      {
-        apiVersion: 'apps/v1',
-        kind: 'Deployment',
-        metadata: { name: 'tiki-traefik', namespace: 'kube-system', creationTimestamp: '2026-08-01T00:00:00Z', labels: { app: 'tiki-traefik', 'app.kubernetes.io/name': 'traefik' } },
-        spec: { replicas: 2 },
-        status: { readyReplicas: 2, replicas: 2, updatedReplicas: 2, availableReplicas: 2 },
-      },
-    ],
-    statefulsets: [
-      {
-        apiVersion: 'apps/v1',
-        kind: 'StatefulSet',
-        metadata: { name: 'postgres-db', namespace: 'storage', creationTimestamp: '2026-08-01T00:00:00Z', labels: { app: 'postgres-db' } },
-        spec: { replicas: 1, serviceName: 'postgres-db' },
-        status: { readyReplicas: 1, replicas: 1, currentReplicas: 1 },
-      },
-      {
-        apiVersion: 'apps/v1',
-        kind: 'StatefulSet',
-        metadata: { name: 'tiki-redis', namespace: 'storage', creationTimestamp: '2026-08-01T00:00:00Z', labels: { app: 'tiki-redis' } },
-        spec: { replicas: 1, serviceName: 'tiki-redis' },
-        status: { readyReplicas: 1, replicas: 1, currentReplicas: 1 },
-      },
-    ],
-    services: [
-      {
-        apiVersion: 'v1',
-        kind: 'Service',
-        metadata: { name: 'tiki-cart', namespace: 'production', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: { type: 'ClusterIP', clusterIP: '10.96.12.44', ports: [{ port: 8080, targetPort: 8080, name: 'http' }] },
-        status: {},
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Service',
-        metadata: { name: 'tiki-product', namespace: 'production', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: { type: 'ClusterIP', clusterIP: '10.96.18.91', ports: [{ port: 8000, targetPort: 8000, name: 'http' }] },
-        status: {},
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Service',
-        metadata: { name: 'postgres-db', namespace: 'storage', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: { type: 'ClusterIP', clusterIP: '10.96.0.52', ports: [{ port: 5432, targetPort: 5432, name: 'postgres' }] },
-        status: {},
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Service',
-        metadata: { name: 'tiki-redis', namespace: 'storage', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: { type: 'ClusterIP', clusterIP: '10.96.0.63', ports: [{ port: 6379, targetPort: 6379, name: 'redis' }] },
-        status: {},
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Service',
-        metadata: { name: 'nats', namespace: 'infra', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: { type: 'ClusterIP', clusterIP: '10.96.4.22', ports: [{ port: 4222, targetPort: 4222, name: 'nats' }, { port: 8222, targetPort: 8222, name: 'monitor' }] },
-        status: {},
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Service',
-        metadata: { name: 'tiki-traefik', namespace: 'kube-system', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: { type: 'LoadBalancer', clusterIP: '10.96.0.10', ports: [{ port: 80, targetPort: 80, name: 'web' }, { port: 443, targetPort: 443, name: 'websecure' }] },
-        status: { loadBalancer: { ingress: [{ ip: '192.168.1.200' }] } },
-      },
-    ],
-    configmaps: [
-      {
-        apiVersion: 'v1',
-        kind: 'ConfigMap',
-        metadata: { name: 'tiki-cart-config', namespace: 'production', creationTimestamp: '2026-08-01T00:00:00Z' },
-        data: { APP_ENV: 'production', LOG_LEVEL: 'info', PORT: '8080', REDIS_HOST: 'tiki-redis.storage:6379' },
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'ConfigMap',
-        metadata: { name: 'tiki-product-config', namespace: 'production', creationTimestamp: '2026-08-01T00:00:00Z' },
-        data: { APP_ENV: 'production', DB_HOST: 'postgres-db.storage', SEARCH_INDEX: 'catalog_v1' },
-      },
-    ],
-    secrets: [
-      {
-        apiVersion: 'v1',
-        kind: 'Secret',
-        type: 'Opaque',
-        metadata: { name: 'postgres-db-credentials', namespace: 'storage', creationTimestamp: '2026-08-01T00:00:00Z' },
-        data: { username: 'cG9zdGdyZXM=', password: 'c3VwZXJzZWNyZXRwYXNzd29yZA==' },
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Secret',
-        type: 'kubernetes.io/tls',
-        metadata: { name: 'tls-wildcard-cert', namespace: 'kube-system', creationTimestamp: '2026-08-01T00:00:00Z' },
-        data: { 'tls.crt': 'LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCg==', 'tls.key': 'LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCg==' },
-      },
-    ],
-    ingresses: [
-      {
-        apiVersion: 'networking.k8s.io/v1',
-        kind: 'Ingress',
-        metadata: { name: 'tiki-cart-ingress', namespace: 'production', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: { rules: [{ host: 'cart.example.com', http: { paths: [{ path: '/', pathType: 'Prefix', backend: { service: { name: 'tiki-cart', port: { number: 8080 } } } }] } }] },
-      },
-    ],
-    daemonsets: [
-      {
-        apiVersion: 'apps/v1',
-        kind: 'DaemonSet',
-        metadata: { name: 'vector-log-agent', namespace: 'kube-system', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: {},
-        status: { numberReady: 3, desiredNumberScheduled: 3, currentNumberScheduled: 3 },
-      },
-    ],
-    jobs: [
-      {
-        apiVersion: 'batch/v1',
-        kind: 'Job',
-        metadata: { name: 'db-migrate-v2', namespace: 'production', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: {},
-        status: { succeeded: 1, active: 0, failed: 0 },
-      },
-    ],
-    cronjobs: [
-      {
-        apiVersion: 'batch/v1',
-        kind: 'CronJob',
-        metadata: { name: 'nightly-db-backup', namespace: 'storage', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: { schedule: '0 2 * * *' },
-        status: {},
-      },
-    ],
-    persistentvolumeclaims: [
-      {
-        apiVersion: 'v1',
-        kind: 'PersistentVolumeClaim',
-        metadata: { name: 'data-postgres-db-0', namespace: 'storage', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: { resources: { requests: { storage: '10Gi' } }, storageClassName: 'nvme-fast' },
-        status: { phase: 'Bound' },
-      },
-    ],
-    storageclasses: [
-      {
-        apiVersion: 'storage.k8s.io/v1',
-        kind: 'StorageClass',
-        metadata: { name: 'nvme-fast', creationTimestamp: '2026-08-01T00:00:00Z' },
-        spec: { provisioner: 'csi.nvme.storage', reclaimPolicy: 'Retain' },
-      },
-    ],
-  }
-
-  let res = stackMap[kind] || []
-  if (nsFilter && nsFilter !== 'all') {
-    res = res.filter(r => r.metadata?.namespace === nsFilter)
-  }
-  return res
 }
 
 // Fetch Resources
 async function fetchResources() {
-  if (!selectedCluster.value) return
+  if (!selectedCluster.value) {
+    resources.value = []
+    return
+  }
   loading.value = true
   error.value = null
   clusterOffline.value = false
@@ -371,21 +223,13 @@ async function fetchResources() {
 
   try {
     const ns = selectedNamespace.value !== 'all' ? selectedNamespace.value : undefined
-    let list: K8sResource[] = []
-    try {
-      list = await k8sApi.listResources(selectedCluster.value, selectedKind.value, ns)
-    } catch {
-      // Cluster offline or route fallback
-    }
-
-    if (!list || list.length === 0) {
-      list = getFallbackResources(selectedKind.value, ns)
-    }
-
-    resources.value = list
+    const list = await k8sApi.listResources(selectedCluster.value, selectedKind.value, ns)
+    resources.value = Array.isArray(list) ? list : []
   } catch (err: unknown) {
+    resources.value = []
+    clusterOffline.value = true
     const msg = err instanceof Error ? err.message : 'Failed to query Kubernetes cluster'
-    error.value = msg
+    offlineErrorMessage.value = msg
   } finally {
     loading.value = false
   }
@@ -587,13 +431,26 @@ function getResourceAge(resource: K8sResource): string {
 
       <!-- Cluster Selector -->
       <div class="sidebar-section">
-        <label class="section-heading">Target Cluster</label>
+        <div class="section-heading-row">
+          <label class="section-heading">Target Cluster</label>
+          <button 
+            type="button" 
+            class="btn-icon-text" 
+            title="Import Kubernetes Cluster"
+            @click="showImportModal = true"
+          >
+            + Import
+          </button>
+        </div>
         <div class="cluster-select-wrapper">
-          <select v-model="selectedCluster" class="input-glass select-full cluster-select">
+          <select v-if="clusters.length > 0" v-model="selectedCluster" class="input-glass select-full cluster-select">
             <option v-for="c in clusters" :key="c.id || c.name" :value="c.name || c.id">
-              ?? {{ c.name || c.id }}
+              🌐 {{ c.name || c.id }}
             </option>
           </select>
+          <div v-else class="cluster-empty-box">
+            <span class="font-mono text-muted font-small">{{ selectedCluster || 'primary-cluster' }} (offline)</span>
+          </div>
         </div>
       </div>
 
@@ -681,17 +538,27 @@ function getResourceAge(resource: K8sResource): string {
         <button class="toast-close" @click="toastMessage = null">?</button>
       </div>
 
-      <!-- Offline / 503 Warning Banner -->
+      <!-- Offline / Disconnected Warning Banner -->
       <div v-if="clusterOffline" class="offline-banner animate-fade-in">
-        <span class="offline-icon">??</span>
+        <span class="offline-icon">⚠️</span>
         <div class="offline-content">
-          <strong>Kubernetes Cluster Offline / Unreachable</strong>
-          <span>{{ offlineErrorMessage || 'Received 503 Service Unavailable when querying Kubernetes API.' }}</span>
-          <p class="offline-hint">Please verify that the agent daemon is running, network connectivity to cluster API endpoint is active, and RBAC credentials are valid.</p>
+          <strong class="offline-title">Kubernetes Cluster Disconnected</strong>
+          <p class="offline-desc">
+            Kubernetes Cluster Disconnected: No Kubernetes control plane is currently attached to '{{ selectedCluster || 'primary-cluster' }}'. Import a Kubeconfig or manage Docker Swarm workloads on /deployments.
+          </p>
+          <span v-if="offlineErrorMessage" class="offline-err-detail font-mono">{{ offlineErrorMessage }}</span>
+          <div class="offline-actions">
+            <button type="button" class="btn btn-primary btn-xs" @click="showImportModal = true">
+              <span>+ Import Cluster (Kubeconfig)</span>
+            </button>
+            <router-link to="/deployments" class="btn btn-secondary btn-xs">
+              <span>Manage Docker Swarm Workloads</span>
+            </router-link>
+            <button type="button" class="btn btn-secondary btn-xs" :disabled="loading" @click="fetchResources">
+              <span>🔄 Retry Connection</span>
+            </button>
+          </div>
         </div>
-        <button type="button" class="btn btn-secondary btn-xs" @click="fetchResources">
-          ?? Retry Connection
-        </button>
       </div>
 
       <!-- HUD Metrics Cards -->
@@ -1030,6 +897,104 @@ function getResourceAge(resource: K8sResource): string {
         </button>
       </template>
     </ModalDrawer>
+
+    <!-- Import Cluster Modal -->
+    <ModalDrawer
+      v-model:show="showImportModal"
+      mode="modal"
+      title="Import Kubernetes Cluster"
+      subtitle="Upload cluster kubeconfig to establish secure telemetry bridge"
+      max-width="600px"
+    >
+      <div class="modal-form">
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label required">Cluster Identifier</label>
+            <input v-model="importForm.id" type="text" placeholder="e.g. k8s-prod-us" class="input-glass font-mono" />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label required">Cluster Display Name</label>
+            <input v-model="importForm.name" type="text" placeholder="e.g. Production US-East" class="input-glass" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label">Fleet Tier</label>
+            <select v-model="importForm.group" class="input-glass">
+              <option value="production">Production</option>
+              <option value="staging">Staging</option>
+              <option value="development">Development</option>
+              <option value="edge">Edge & Remote</option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">Provider</label>
+            <select v-model="importForm.provider" class="input-glass">
+              <option value="k8s">Generic K8s / Self-Hosted</option>
+              <option value="aws">AWS (EKS)</option>
+              <option value="gcp">Google Cloud (GKE)</option>
+              <option value="azure">Azure (AKS)</option>
+              <option value="baremetal">Bare Metal</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Region / Datacenter</label>
+          <input v-model="importForm.region" type="text" placeholder="e.g. us-east-1 / On-Prem DC-01" class="input-glass" />
+        </div>
+
+        <div class="form-group">
+          <div class="mode-tabs">
+            <button
+              type="button"
+              class="mode-tab"
+              :class="{ active: importMode === 'file' }"
+              @click="importMode = 'file'"
+            >
+              📁 File Upload
+            </button>
+            <button
+              type="button"
+              class="mode-tab"
+              :class="{ active: importMode === 'text' }"
+              @click="importMode = 'text'"
+            >
+              📝 Paste YAML
+            </button>
+          </div>
+
+          <div v-if="importMode === 'file'" class="file-drop-area">
+            <label class="form-label">Kubeconfig File (.yaml / .config / .json) *</label>
+            <input type="file" accept=".yaml,.yml,.config,.json" class="file-input" @change="handleFileChange" />
+          </div>
+
+          <div v-else class="text-paste-area">
+            <label class="form-label">Paste Kubeconfig YAML Content *</label>
+            <textarea
+              v-model="importForm.kubeconfigRaw"
+              rows="6"
+              class="input-glass font-mono text-area-input select-full"
+              placeholder="apiVersion: v1&#10;clusters:&#10;..."
+            ></textarea>
+          </div>
+          <span class="form-hint">🔒 Kubeconfig is encrypted with AES-256 GCM in local vault before persistence. Sensitive tokens are never returned in cleartext.</span>
+        </div>
+      </div>
+
+      <template #footer="{ close }">
+        <button type="button" class="btn btn-secondary" :disabled="importingCluster" @click="close">Cancel</button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          :disabled="importingCluster || !importForm.name.trim()"
+          @click="handleImportCluster"
+        >
+          <span>{{ importingCluster ? 'Importing...' : 'Import Cluster' }}</span>
+        </button>
+      </template>
+    </ModalDrawer>
   </div>
 </template>
 
@@ -1251,32 +1216,133 @@ function getResourceAge(resource: K8sResource): string {
   cursor: pointer;
 }
 
+.cluster-empty-box {
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+}
+
 .offline-banner {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 16px 20px;
-  background: rgba(244, 63, 94, 0.15);
+  gap: 16px;
+  padding: 18px 22px;
+  background: rgba(244, 63, 94, 0.12);
   border: 1px solid rgba(244, 63, 94, 0.35);
   border-radius: 14px;
   color: #fb7185;
 }
 
 .offline-icon {
-  font-size: 24px;
+  font-size: 26px;
+  line-height: 1;
 }
 
 .offline-content {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
 }
 
-.offline-hint {
-  font-size: 12px;
+.offline-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.offline-desc {
+  font-size: 13px;
   color: #fecdd3;
-  margin-top: 4px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.offline-err-detail {
+  font-size: 11px;
+  color: #fda4af;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px 8px;
+  border-radius: 6px;
+  word-break: break-all;
+}
+
+.offline-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.flex-1 { flex: 1; }
+
+.form-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.form-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.mode-tab {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mode-tab.active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--accent-cyan);
+  color: #fff;
+  font-weight: 600;
+}
+
+.file-input {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.text-area-input {
+  resize: vertical;
+  min-height: 120px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .metrics-grid {

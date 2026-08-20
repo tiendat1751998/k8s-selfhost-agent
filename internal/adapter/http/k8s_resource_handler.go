@@ -13,6 +13,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
+	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
@@ -51,22 +52,37 @@ func isK8sUnavailable(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, infraK8s.ErrK8sUnavailable) {
+	if errors.Is(err, infraK8s.ErrK8sUnavailable) || errors.Is(err, domainerrors.ErrK8sUnavailable) {
+		return true
+	}
+	var domErr *domainerrors.DomainError
+	if errors.As(err, &domErr) && domErr.Code == domainerrors.CodeK8sUnavailable {
 		return true
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "kubernetes not connected") ||
+		strings.Contains(msg, "kubernetes cluster not connected") ||
 		strings.Contains(msg, "kubernetes client not initialized") ||
 		strings.Contains(msg, "cluster is unreachable") ||
 		strings.Contains(msg, "not found in fleet repository") ||
-		strings.Contains(msg, "no token or kubeconfig data")
+		strings.Contains(msg, "no token or kubeconfig data") ||
+		strings.Contains(msg, "unconfigured") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "no such host") ||
+		strings.Contains(msg, "i/o timeout") ||
+		strings.Contains(msg, "context deadline exceeded") ||
+		strings.Contains(msg, "unable to connect to the server") ||
+		strings.Contains(msg, "k8s_unavailable") ||
+		strings.Contains(msg, "dial tcp") ||
+		strings.Contains(msg, "connection reset by peer")
 }
 
 func writeK8sUnavailable(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusServiceUnavailable)
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error":   "kubernetes not connected",
+		"error":   "Kubernetes cluster not connected or unconfigured",
+		"code":    "K8S_UNAVAILABLE",
 		"message": "Import a kubeconfig via Fleet to enable this feature",
 	})
 }

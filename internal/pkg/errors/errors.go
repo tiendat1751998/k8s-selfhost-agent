@@ -16,6 +16,7 @@ var (
 	ErrConflict       = errors.New("conflict")
 	ErrTimeout        = errors.New("timeout")
 	ErrBinaryNotFound = errors.New("binary not found")
+	ErrK8sUnavailable = errors.New("kubernetes cluster not connected or unconfigured")
 )
 
 // Error codes for DomainError.
@@ -28,6 +29,7 @@ const (
 	CodeConflict       = "CONFLICT"
 	CodeTimeout        = "TIMEOUT"
 	CodeBinaryNotFound = "BINARY_NOT_FOUND"
+	CodeK8sUnavailable = "K8S_UNAVAILABLE"
 )
 
 // DomainError represents a domain-level error with context, an error code, and an underlying cause.
@@ -110,6 +112,18 @@ func NewForbidden(reason string) *DomainError {
 		Code:    CodeForbidden,
 		Message: reason,
 		Err:     ErrForbidden,
+	}
+}
+
+// NewK8sUnavailable creates a k8s-unavailable domain error.
+func NewK8sUnavailable(message string, cause error) *DomainError {
+	if message == "" {
+		message = "Kubernetes cluster not connected or unconfigured"
+	}
+	return &DomainError{
+		Code:    CodeK8sUnavailable,
+		Message: message,
+		Err:     cause,
 	}
 }
 

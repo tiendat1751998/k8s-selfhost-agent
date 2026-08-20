@@ -64,6 +64,18 @@ func TestMapDomainErrorToHTTP(t *testing.T) {
 			expectedCode: http.StatusInternalServerError,
 			expectedMsg:  "Internal server error",
 		},
+		{
+			name:         "K8sUnavailable domain error",
+			err:          domainerrors.NewK8sUnavailable("", nil),
+			expectedCode: http.StatusServiceUnavailable,
+			expectedMsg:  "Kubernetes cluster not connected or unconfigured",
+		},
+		{
+			name:         "K8sUnavailable sentinel error",
+			err:          domainerrors.ErrK8sUnavailable,
+			expectedCode: http.StatusServiceUnavailable,
+			expectedMsg:  "Kubernetes cluster not connected or unconfigured",
+		},
 	}
 
 	for _, tt := range tests {

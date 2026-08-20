@@ -4,12 +4,16 @@ import (
 	"errors"
 	"net/http"
 
+	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // mapDomainErrorToHTTP converts domain errors to appropriate HTTP status codes.
 // Production environments should NEVER leak raw internal error details.
 func mapDomainErrorToHTTP(err error) (int, string) {
+	if errors.Is(err, infraK8s.ErrK8sUnavailable) || errors.Is(err, domainerrors.ErrK8sUnavailable) {
+		return http.StatusServiceUnavailable, "Kubernetes cluster not connected or unconfigured"
+	}
 	var domErr *domainerrors.DomainError
 	if errors.As(err, &domErr) {
 		switch domErr.Code {
@@ -27,6 +31,8 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 			return http.StatusGatewayTimeout, domErr.Message
 		case domainerrors.CodeBinaryNotFound:
 			return http.StatusNotFound, domErr.Message
+		case domainerrors.CodeK8sUnavailable:
+			return http.StatusServiceUnavailable, domErr.Message
 		case domainerrors.CodeInternal:
 			return http.StatusInternalServerError, "Internal server error"
 		}

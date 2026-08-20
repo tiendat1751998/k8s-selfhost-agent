@@ -108,156 +108,6 @@ function showToast(text: string, type: 'success' | 'error' = 'success') {
   }, 4000)
 }
 
-const defaultServices: ServiceEntry[] = [
-  {
-    id: 'srv-tiki-drone',
-    name: 'tiki_drone',
-    description: 'Drone CI/CD automation server and pipeline build runner for platform workloads',
-    type: 'worker',
-    lifecycle: 'production',
-    owner_team: 'devops-team',
-    owner_email: 'devops@tiki.corp',
-    repo_url: 'https://github.com/drone/drone',
-    docs_url: 'https://docs.drone.io',
-    tags: ['ci-cd', 'automation', 'runner', 'drone'],
-    annotations: {
-      'k8s.io/namespace': 'ci',
-      'k8s.io/deployment': 'tiki-drone',
-      'api.endpoint': 'http://drone.internal:80',
-      'cluster': 'primary-cluster',
-    },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-  {
-    id: 'srv-tiki-traefik',
-    name: 'tiki_traefik',
-    description: 'Edge reverse proxy, API gateway & ingress controller with TLS termination',
-    type: 'api',
-    lifecycle: 'production',
-    owner_team: 'networking-team',
-    owner_email: 'network-sre@tiki.corp',
-    repo_url: 'https://github.com/traefik/traefik',
-    docs_url: 'https://doc.traefik.io/traefik/',
-    tags: ['ingress', 'traefik', 'gateway', 'reverse-proxy', 'tls'],
-    annotations: {
-      'k8s.io/namespace': 'kube-system',
-      'k8s.io/deployment': 'tiki-traefik',
-      'api.endpoint': 'http://traefik.internal:8080',
-      'cluster': 'primary-cluster',
-    },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-  {
-    id: 'srv-tiki-redis',
-    name: 'tiki_redis',
-    description: 'High-throughput in-memory caching layer, session storage, and pub/sub broker',
-    type: 'database',
-    lifecycle: 'production',
-    owner_team: 'data-platform',
-    owner_email: 'dba@tiki.corp',
-    repo_url: 'https://github.com/redis/redis',
-    docs_url: 'https://redis.io/docs/',
-    tags: ['redis', 'cache', 'key-value', 'database'],
-    annotations: {
-      'k8s.io/namespace': 'storage',
-      'k8s.io/statefulset': 'tiki-redis',
-      'api.endpoint': 'redis://tiki-redis:6379',
-      'cluster': 'primary-cluster',
-    },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-  {
-    id: 'srv-tiki-cart',
-    name: 'tiki_cart',
-    description: 'Shopping cart state, session checkout orchestration, and promo calculation service',
-    type: 'service',
-    lifecycle: 'production',
-    owner_team: 'checkout-squad',
-    owner_email: 'cart-devs@tiki.corp',
-    repo_url: 'https://github.com/tiki/tiki-cart',
-    docs_url: 'https://docs.tiki.corp/services/cart',
-    tags: ['cart', 'checkout', 'ecommerce', 'microservice', 'golang'],
-    annotations: {
-      'k8s.io/namespace': 'production',
-      'k8s.io/deployment': 'tiki-cart',
-      'api.endpoint': 'http://tiki-cart.production.svc:8080',
-      'cluster': 'primary-cluster',
-    },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-  {
-    id: 'srv-tiki-product',
-    name: 'tiki_product',
-    description: 'Product catalog indexing, inventory query, and semantic search API',
-    type: 'api',
-    lifecycle: 'production',
-    owner_team: 'catalog-squad',
-    owner_email: 'catalog-devs@tiki.corp',
-    repo_url: 'https://github.com/tiki/tiki-product',
-    docs_url: 'https://docs.tiki.corp/services/product',
-    tags: ['product', 'catalog', 'search', 'inventory', 'python'],
-    annotations: {
-      'k8s.io/namespace': 'production',
-      'k8s.io/deployment': 'tiki-product',
-      'api.endpoint': 'http://tiki-product.production.svc:8000',
-      'cluster': 'primary-cluster',
-    },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-  {
-    id: 'srv-postgres-db',
-    name: 'postgres_db',
-    description: 'Primary PostgreSQL 16 ACID relational datastore for orders, inventory, and accounts',
-    type: 'database',
-    lifecycle: 'production',
-    owner_team: 'data-platform',
-    owner_email: 'dba@tiki.corp',
-    repo_url: 'https://github.com/postgres/postgres',
-    docs_url: 'https://www.postgresql.org/docs/16/',
-    tags: ['postgres', 'sql', 'database', 'relational', 'ha'],
-    annotations: {
-      'k8s.io/namespace': 'storage',
-      'k8s.io/statefulset': 'postgres-db',
-      'api.endpoint': 'postgres://db.internal:5432',
-      'cluster': 'primary-cluster',
-    },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-  {
-    id: 'srv-nats',
-    name: 'nats',
-    description: 'High-performance cloud-native messaging bus & JetStream event persistence streaming',
-    type: 'worker',
-    lifecycle: 'production',
-    owner_team: 'infra-core',
-    owner_email: 'infra@tiki.corp',
-    repo_url: 'https://github.com/nats-io/nats-server',
-    docs_url: 'https://docs.nats.io/',
-    tags: ['nats', 'jetstream', 'messaging', 'pubsub', 'streaming'],
-    annotations: {
-      'k8s.io/namespace': 'infra',
-      'k8s.io/deployment': 'nats',
-      'api.endpoint': 'nats://nats.infra:4222',
-      'cluster': 'primary-cluster',
-    },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-]
-
 // Data Fetching
 async function fetchCatalogData() {
   loading.value = true
@@ -269,41 +119,11 @@ async function fetchCatalogData() {
     if (filter.owner_team?.trim()) activeFilter.owner_team = filter.owner_team.trim()
     if (filter.search?.trim()) activeFilter.search = filter.search.trim()
 
-    let serviceList: ServiceEntry[] = []
-    let catalogStats: CatalogStats | null = null
-
-    try {
-      const [list, st] = await Promise.all([
-        catalogApi.list(activeFilter),
-        catalogApi.stats(),
-      ])
-      serviceList = Array.isArray(list) ? list : []
-      catalogStats = st
-    } catch {
-      // Backend not seeded or offline - fallback
-    }
-
-    if (serviceList.length === 0) {
-      let filtered = [...defaultServices]
-      if (filter.type) filtered = filtered.filter(s => s.type === filter.type)
-      if (filter.lifecycle) filtered = filtered.filter(s => s.lifecycle === filter.lifecycle)
-      if (filter.owner_team?.trim()) {
-        const ot = filter.owner_team.trim().toLowerCase()
-        filtered = filtered.filter(s => s.owner_team.toLowerCase().includes(ot))
-      }
-      if (filter.search?.trim()) {
-        const q = filter.search.trim().toLowerCase()
-        filtered = filtered.filter(s =>
-          s.name.toLowerCase().includes(q) ||
-          s.description.toLowerCase().includes(q) ||
-          s.tags.some(t => t.toLowerCase().includes(q)) ||
-          s.owner_team.toLowerCase().includes(q)
-        )
-      }
-      serviceList = filtered
-    }
-
-    services.value = serviceList
+    const [list, catalogStats] = await Promise.all([
+      catalogApi.list(activeFilter),
+      catalogApi.stats().catch(() => null),
+    ])
+    services.value = Array.isArray(list) ? list : []
 
     const byType: Record<string, number> = {}
     const byLifecycle: Record<string, number> = {}
@@ -320,6 +140,7 @@ async function fetchCatalogData() {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to retrieve service catalog'
     error.value = msg
+    services.value = []
     showToast(msg, 'error')
   } finally {
     loading.value = false
