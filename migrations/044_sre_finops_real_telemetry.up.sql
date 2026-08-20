@@ -205,14 +205,14 @@ SELECT
     CASE 
         WHEN trigger_type = 'deployment_failure' THEN 'CrashLoopBackOff detected on tiki_drone.1 (exit code 137 OOMKilled)'
         WHEN trigger_type = 'pod_restart' THEN 'Postgres connection pool exhausted (>95 conns active for 5m)'
-        WHEN trigger_type = 'node_pressure' THEN 'Disk pressure threshold >90% on host node swarm-worker-02'
+        WHEN trigger_type = 'node_pressure' THEN 'Disk pressure threshold >90% on host node worker2'
         WHEN trigger_type = 'high_memory' THEN 'Redis memory usage reached 88% limit on tiki_redis'
         ELSE 'SLO fast burn rate 2.4x detected on payment-api'
     END as trigger_event,
     CASE 
         WHEN action_type = 'rollback' THEN 'Automated rollback triggered to Git revision sha:9f2bc4a'
         WHEN action_type = 'generate_rca' THEN 'AI RCA diagnostic report generated with automated remediation patch'
-        WHEN action_type = 'cordon_node' THEN 'Node swarm-worker-02 cordoned and pods drained to swarm-worker-01'
+        WHEN action_type = 'cordon_node' THEN 'Node worker2 cordoned and pods drained to worker1'
         WHEN action_type = 'restart_pod' THEN 'Async FLUSHDB and memory defrag command executed on tiki_redis'
         ELSE 'P1 escalation notification dispatched to Slack #sre-incidents'
     END as action_taken,
@@ -253,18 +253,3 @@ INSERT INTO capacity_forecasts (cluster, resource_type, current_usage, forecast_
 ('k8s-prod-mesh', 'memory', 58.70, 61.20, 67.90, 78.30, NOW() + INTERVAL '210 days', 'healthy', NOW()),
 ('k8s-prod-mesh', 'storage', 42.10, 44.00, 48.60, 57.20, NOW() + INTERVAL '320 days', 'healthy', NOW());
 
--- 6. Seed 6 Connected Compute Hosts
-INSERT INTO compute_hosts (name, host_type, endpoint, tls_enabled, api_version, status, last_health_check, labels, tenant_id, created_at, updated_at) VALUES
-('k8s-control-plane-01', 'k8s', 'tcp://10.0.1.10:2376', true, 'v1.29.2', 'connected', NOW(), '{"role":"control-plane","arch":"amd64","cores":"8","ram":"32GB"}'::jsonb, 'default-tenant', NOW(), NOW()),
-('swarm-manager-01', 'docker', 'unix:///var/run/docker.sock', false, '1.43', 'connected', NOW(), '{"role":"manager","arch":"amd64","cores":"8","ram":"32GB"}'::jsonb, 'default-tenant', NOW(), NOW()),
-('swarm-worker-01', 'docker', 'tcp://10.0.1.21:2375', false, '1.43', 'connected', NOW(), '{"role":"worker","arch":"amd64","cores":"16","ram":"64GB"}'::jsonb, 'default-tenant', NOW(), NOW()),
-('swarm-worker-02', 'docker', 'tcp://10.0.1.22:2375', false, '1.43', 'connected', NOW(), '{"role":"worker","arch":"amd64","cores":"16","ram":"64GB"}'::jsonb, 'default-tenant', NOW(), NOW()),
-('swarm-worker-03', 'docker', 'tcp://10.0.1.23:2375', false, '1.43', 'connected', NOW(), '{"role":"worker","arch":"amd64","cores":"16","ram":"64GB"}'::jsonb, 'default-tenant', NOW(), NOW()),
-('db-primary-host', 'docker', 'tcp://10.0.1.30:2375', false, '1.43', 'connected', NOW(), '{"role":"database","arch":"amd64","cores":"16","ram":"64GB"}'::jsonb, 'default-tenant', NOW(), NOW())
-ON CONFLICT (name, tenant_id) DO UPDATE SET
-    host_type = EXCLUDED.host_type,
-    endpoint = EXCLUDED.endpoint,
-    status = 'connected',
-    last_health_check = NOW(),
-    labels = EXCLUDED.labels,
-    updated_at = NOW();

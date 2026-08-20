@@ -33,11 +33,3 @@ DELETE FROM cluster_costs WHERE name IN ('k8s-prod-mesh', 'swarm-edge-cluster');
 
 DELETE FROM capacity_forecasts WHERE cluster IN ('k8s-prod-mesh', 'swarm-edge-cluster');
 
-DELETE FROM compute_hosts WHERE name IN (
-    'k8s-control-plane-01',
-    'swarm-manager-01',
-    'swarm-worker-01',
-    'swarm-worker-02',
-    'swarm-worker-03',
-    'db-primary-host'
-);
