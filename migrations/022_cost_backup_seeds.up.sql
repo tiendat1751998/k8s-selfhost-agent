@@ -56,14 +56,6 @@ VALUES
 ('High CPU on Authentication Service', 'Unoptimized crypto hashing triggered by sudden burst of login requests from 3 IP addresses.', 'warning', 28, 'production-eu-west', 'security', 'active')
 ON CONFLICT DO NOTHING;
 
--- Seed promotions
-INSERT INTO promotions (service, version, from_env, to_env, status, requester, approver, approved_at, completed_at)
-VALUES
-('payment-gateway', 'v1.4.2', 'dev', 'qa', 'completed', 'john.doe@k8sselfhost.local', 'admin@k8sselfhost.local', NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour'),
-('auth-service', 'v2.1.0', 'qa', 'staging', 'pending', 'jane.doe@k8sselfhost.local', NULL, NULL, NULL),
-('portal-frontend', 'v1.12.0', 'staging', 'production', 'pending', 'admin@k8sselfhost.local', NULL, NULL, NULL)
-ON CONFLICT DO NOTHING;
-
 -- Seed costs
 INSERT INTO cluster_costs (name, provider, monthly_cost, daily_cost, cpu_cost, memory_cost, storage_cost, network_cost, trend)
 VALUES

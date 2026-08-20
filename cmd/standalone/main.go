@@ -266,7 +266,7 @@ func run() error {
 		Observability: adapthttp.NewObservabilityHandler(postgres.NewObservabilityRepo(pgClient)),
 		Capacity:      capacityHandler,
 		Changes:       adapthttp.NewChangeHandler(postgres.NewChangesRepo(pgClient)),
-		Promotion:     adapthttp.NewPromotionHandler(usecasePromotion.NewUsecase(postgres.NewPromotionRepo(pgClient))),
+		Promotion:     adapthttp.NewPromotionHandler(usecasePromotion.NewUsecase(postgres.NewPromotionRepo(pgClient), dockerRepo, auditRepo)),
 		Explorer:      explorerHandler,
 		Reporting:     adapthttp.NewReportingHandler(postgres.NewReportingRepo(pgClient)),
 		HealthCenter:  healthCenterHandler,

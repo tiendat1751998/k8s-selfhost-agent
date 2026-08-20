@@ -276,6 +276,25 @@ func (r *realDockerRepo) CreateService(ctx context.Context, name string, image s
 	return nil
 }
 
+func (r *realDockerRepo) UpdateServiceImage(ctx context.Context, serviceID string, image string) error {
+	service, _, err := r.cli.ServiceInspectWithRaw(ctx, serviceID, types.ServiceInspectOptions{})
+	if err != nil {
+		return fmt.Errorf("inspecting service for image update: %w", err)
+	}
+
+	spec := service.Spec
+	if spec.TaskTemplate.ContainerSpec == nil {
+		spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
+	}
+	spec.TaskTemplate.ContainerSpec.Image = image
+
+	_, err = r.cli.ServiceUpdate(ctx, serviceID, service.Version, spec, types.ServiceUpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("updating service image: %w", err)
+	}
+	return nil
+}
+
 func (r *realDockerRepo) GetSwarmJoinTokens(ctx context.Context) (*domainDocker.SwarmTokens, error) {
 	swarmObj, err := r.cli.SwarmInspect(ctx)
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	domainPromo "github.com/datdt/k8sselfhost/internal/domain/promotion"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 	promotionUsecase "github.com/datdt/k8sselfhost/internal/usecase/promotion"
@@ -229,3 +230,36 @@ func TestPromotionHandler_ValidationFailures(t *testing.T) {
 		t.Fatalf("expected 400 Bad Request for same environments, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestPromotionHandler_CompleteWithUserContext(t *testing.T) {
+	repo := newMockPromotionRepoForHandler()
+	repo.items["p-complete-1"] = &domainPromo.Promotion{
+		ID:        "p-complete-1",
+		Service:   "catalog-svc",
+		Version:   "v2.1.0",
+		FromEnv:   "staging",
+		ToEnv:     "production",
+		Status:    "approved",
+		Requester: "dev",
+		Approver:  "lead",
+	}
+
+	router, _ := setupPromotionTestServer(repo)
+
+	req := httptest.NewRequest(http.MethodPut, "/promotions/p-complete-1/complete", nil)
+	ctx := context.WithValue(req.Context(), middleware.UserIDKey, "ops-admin")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", w.Code, w.Body.String())
+	}
+
+	stored := repo.items["p-complete-1"]
+	if stored.Status != domainPromo.StatusCompleted {
+		t.Errorf("expected status completed, got %s", stored.Status)
+	}
+}
+

@@ -7,18 +7,42 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
+	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	"github.com/datdt/k8sselfhost/internal/domain/promotion"
+	domainDocker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // Usecase coordinates deployment promotion business logic and state transitions.
 type Usecase struct {
-	repo promotion.Repository
+	repo       promotion.Repository
+	dockerRepo domainDocker.Repository
+	auditRepo  audit.Repository
+	logger     *zap.Logger
 }
 
-// NewUsecase creates a new promotion usecase with the injected repository dependency.
-func NewUsecase(repo promotion.Repository) *Usecase {
-	return &Usecase{repo: repo}
+// NewUsecase creates a new promotion usecase with the injected repository dependency and optional adapters.
+func NewUsecase(repo promotion.Repository, args ...interface{}) *Usecase {
+	u := &Usecase{
+		repo:   repo,
+		logger: logger.Get(),
+	}
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case domainDocker.Repository:
+			u.dockerRepo = v
+		case audit.Repository:
+			u.auditRepo = v
+		case *zap.Logger:
+			if v != nil {
+				u.logger = v
+			}
+		}
+	}
+	return u
 }
 
 // Create validates source/target environments and mandatory fields, sets the initial pending status, and persists the record.
@@ -119,7 +143,9 @@ func (u *Usecase) Reject(ctx context.Context, id string, rejecter ...string) err
 }
 
 // Complete validates that the promotion is in Approved or Promoting status before transitioning to Completed.
-func (u *Usecase) Complete(ctx context.Context, id string) error {
+// When completed, if Docker Swarm client is available, it checks if the service exists in Docker Swarm and updates its container image.
+// If not a Swarm service (or standalone container), it logs the promotion event in the audit log.
+func (u *Usecase) Complete(ctx context.Context, id string, completer ...string) error {
 	if strings.TrimSpace(id) == "" {
 		return domainerrors.NewValidation("id", "promotion id is required")
 	}
@@ -140,7 +166,166 @@ func (u *Usecase) Complete(ctx context.Context, id string) error {
 	if err := u.repo.Complete(ctx, id); err != nil {
 		return fmt.Errorf("completing promotion: %w", err)
 	}
+
+	actor := "system"
+	if len(completer) > 0 && strings.TrimSpace(completer[0]) != "" {
+		actor = completer[0]
+	} else if promo.Approver != "" {
+		actor = promo.Approver
+	} else if promo.Requester != "" {
+		actor = promo.Requester
+	}
+
+	u.handlePostComplete(ctx, promo, actor)
 	return nil
+}
+
+func (u *Usecase) handlePostComplete(ctx context.Context, promo *promotion.Promotion, actor string) {
+	details := map[string]interface{}{
+		"service":   promo.Service,
+		"version":   promo.Version,
+		"from_env":  string(promo.FromEnv),
+		"to_env":    string(promo.ToEnv),
+		"status":    "completed",
+		"requester": promo.Requester,
+	}
+
+	if u.dockerRepo != nil {
+		services, err := u.dockerRepo.ListServices(ctx)
+		if err == nil {
+			if matchedSvc := matchSwarmService(services, promo.Service); matchedSvc != nil {
+				targetImage := resolveTargetImage(matchedSvc.Image, promo.Version)
+				details["swarm_service_id"] = matchedSvc.ID
+				details["swarm_service_name"] = matchedSvc.Name
+				details["target_image"] = targetImage
+				details["previous_image"] = matchedSvc.Image
+
+				updateErr := u.dockerRepo.UpdateServiceImage(ctx, matchedSvc.ID, targetImage)
+				if updateErr != nil {
+					details["docker_update_error"] = updateErr.Error()
+					if u.logger != nil {
+						u.logger.Error("failed to update swarm service image upon promotion completion",
+							zap.String("service_id", matchedSvc.ID),
+							zap.String("target_image", targetImage),
+							zap.Error(updateErr))
+					}
+					if u.auditRepo != nil {
+						if recErr := u.auditRepo.RecordAction(ctx, actor, "promote_docker_service", "docker_service", matchedSvc.ID, matchedSvc.Name, "failed", details, "", ""); recErr != nil {
+							if u.logger != nil {
+								u.logger.Warn("failed to record audit action for failed docker service promotion", zap.Error(recErr))
+							}
+						}
+					}
+					return
+				}
+
+				if u.auditRepo != nil {
+					if recErr := u.auditRepo.RecordAction(ctx, actor, "promote_docker_service", "docker_service", matchedSvc.ID, matchedSvc.Name, "success", details, "", ""); recErr != nil {
+						if u.logger != nil {
+							u.logger.Warn("failed to record audit action for successful docker service promotion", zap.Error(recErr))
+						}
+					}
+				}
+				return
+			}
+		}
+
+		// Check if it exists as a standalone container
+		containers, err := u.dockerRepo.ListContainers(ctx)
+		if err == nil {
+			if matchedCnt := matchContainer(containers, promo.Service); matchedCnt != nil {
+				details["standalone_container"] = true
+				details["container_id"] = matchedCnt.ID
+				details["container_name"] = matchedCnt.Name
+			}
+		}
+	}
+
+	// Not a Swarm service (or standalone container / external provider): log promotion event in audit log
+	if u.auditRepo != nil {
+		if recErr := u.auditRepo.RecordAction(ctx, actor, "complete", "promotion", promo.ID, promo.Service, "success", details, "", ""); recErr != nil {
+			if u.logger != nil {
+				u.logger.Warn("failed to record audit action for completed promotion", zap.Error(recErr))
+			}
+		}
+	}
+}
+
+// matchSwarmService matches a service name/ID against available Swarm services.
+func matchSwarmService(services []domainDocker.Service, serviceNameOrID string) *domainDocker.Service {
+	cleanName := strings.TrimSpace(serviceNameOrID)
+	if cleanName == "" {
+		return nil
+	}
+
+	// 1. Exact ID or Name match
+	for i := range services {
+		if services[i].ID == cleanName || services[i].Name == cleanName {
+			return &services[i]
+		}
+	}
+
+	// 2. Case-insensitive Name match
+	for i := range services {
+		if strings.EqualFold(services[i].Name, cleanName) {
+			return &services[i]
+		}
+	}
+
+	// 3. Stack prefix / suffix match (e.g. "tiki_redis" matches "redis" or vice versa)
+	for i := range services {
+		sName := services[i].Name
+		if strings.HasSuffix(sName, "_"+cleanName) || strings.HasSuffix(sName, "-"+cleanName) {
+			return &services[i]
+		}
+		if strings.HasSuffix(cleanName, "_"+sName) || strings.HasSuffix(cleanName, "-"+sName) {
+			return &services[i]
+		}
+	}
+
+	return nil
+}
+
+// matchContainer matches a container name/ID against available standalone Docker containers.
+func matchContainer(containers []domainDocker.Container, serviceNameOrID string) *domainDocker.Container {
+	cleanName := strings.TrimSpace(serviceNameOrID)
+	if cleanName == "" {
+		return nil
+	}
+
+	for i := range containers {
+		cName := strings.TrimPrefix(containers[i].Name, "/")
+		if containers[i].ID == cleanName || cName == cleanName || strings.EqualFold(cName, cleanName) {
+			return &containers[i]
+		}
+		if strings.HasSuffix(cName, "_"+cleanName) || strings.HasSuffix(cName, "-"+cleanName) {
+			return &containers[i]
+		}
+	}
+	return nil
+}
+
+// resolveTargetImage constructs the full image tag from current image and promoted version.
+func resolveTargetImage(currentImage, version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return currentImage
+	}
+
+	// If version contains a colon or slash, treat as explicit repository/tag
+	if strings.Contains(version, ":") || strings.Contains(version, "/") {
+		return version
+	}
+
+	// If currentImage is present and contains tag separator, replace the tag
+	if currentImage != "" {
+		if idx := strings.LastIndex(currentImage, ":"); idx != -1 {
+			return currentImage[:idx] + ":" + version
+		}
+		return currentImage + ":" + version
+	}
+
+	return version
 }
 
 // List retrieves promotions matching the optional status and pagination parameters.
