@@ -361,14 +361,14 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 			namespace = "infrastructure"
 		}
 		if podName == "" {
-			podName = "worker-node-03"
+			podName = "k8sworker3"
 		}
 		incType = incident.TypeNodeNotReady
 		severity = incident.SeverityCritical
-		message = fmt.Sprintf("Infrastructure host '%s' is unreachable: agent at https://192.168.1.103:9100 is down (connection refused)", podName)
+		message = fmt.Sprintf("Infrastructure host '%s' is unreachable: agent at http://10.10.10.152:9100 is down (connection refused)", podName)
 		rawData = map[string]string{
 			"node_status":          "NotReady",
-			"agent_endpoint":       "https://192.168.1.103:9100",
+			"agent_endpoint":       "http://10.10.10.152:9100",
 			"consecutive_failures": "3",
 			"heartbeat_missed":     "45s",
 		}
