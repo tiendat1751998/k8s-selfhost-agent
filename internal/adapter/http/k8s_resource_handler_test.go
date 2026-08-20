@@ -75,11 +75,58 @@ func TestK8sResourceHandler_OfflineGraceful(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
 			t.Errorf("[%s %s] failed to unmarshal response: %v", ep.method, ep.path, err)
 		}
-		if res["error"] != "kubernetes not connected" {
-			t.Errorf("[%s %s] expected error 'kubernetes not connected', got '%s'", ep.method, ep.path, res["error"])
+		if res["error"] != "Kubernetes cluster not connected or unconfigured" {
+			t.Errorf("[%s %s] expected error 'Kubernetes cluster not connected or unconfigured', got '%s'", ep.method, ep.path, res["error"])
+		}
+		if res["code"] != "K8S_UNAVAILABLE" {
+			t.Errorf("[%s %s] expected code 'K8S_UNAVAILABLE', got '%s'", ep.method, ep.path, res["code"])
 		}
 		if res["message"] != "Import a kubeconfig via Fleet to enable this feature" {
 			t.Errorf("[%s %s] expected message 'Import a kubeconfig via Fleet to enable this feature', got '%s'", ep.method, ep.path, res["message"])
+		}
+	}
+}
+
+func TestK8sResourceHandler_UnconfiguredClient(t *testing.T) {
+	// Handler with a repo that has no kubernetes client configured
+	repo := infraK8s.NewResourceRepoWithInterface(nil, nil)
+	handler := NewK8sResourceHandler(repo, nil)
+	r := chi.NewRouter()
+	r.Route("/k8s/{cluster}", handler.RegisterRoutes)
+
+	endpoints := []struct {
+		method string
+		path   string
+	}{
+		{"GET", "/k8s/unconfigured-cluster/namespaces"},
+		{"POST", "/k8s/unconfigured-cluster/namespaces"},
+		{"DELETE", "/k8s/unconfigured-cluster/namespaces/foo"},
+		{"GET", "/k8s/unconfigured-cluster/resources/configmaps"},
+		{"GET", "/k8s/unconfigured-cluster/resources/configmaps/bar"},
+		{"POST", "/k8s/unconfigured-cluster/resources/configmaps"},
+		{"PUT", "/k8s/unconfigured-cluster/resources/configmaps/bar"},
+		{"DELETE", "/k8s/unconfigured-cluster/resources/configmaps/bar"},
+		{"POST", "/k8s/unconfigured-cluster/apply"},
+	}
+
+	for _, ep := range endpoints {
+		req := httptest.NewRequest(ep.method, ep.path, bytes.NewBufferString(`{"name":"test","apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"test"}}`))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("[%s %s] expected status 503, got %d (body: %s)", ep.method, ep.path, rec.Code, rec.Body.String())
+		}
+
+		var res map[string]string
+		if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+			t.Errorf("[%s %s] failed to unmarshal response: %v", ep.method, ep.path, err)
+		}
+		if res["error"] != "Kubernetes cluster not connected or unconfigured" {
+			t.Errorf("[%s %s] expected error 'Kubernetes cluster not connected or unconfigured', got '%s'", ep.method, ep.path, res["error"])
+		}
+		if res["code"] != "K8S_UNAVAILABLE" {
+			t.Errorf("[%s %s] expected code 'K8S_UNAVAILABLE', got '%s'", ep.method, ep.path, res["code"])
 		}
 	}
 }

@@ -103,100 +103,11 @@ async function fetchHosts() {
   error.value = null
   try {
     const data = await hostsApi.list()
-    if (Array.isArray(data) && data.length > 0) {
-      hosts.value = data
-    } else {
-      // Default Mock Data for Demonstration
-      hosts.value = [
-        {
-          id: 'host-k8s-agent-01',
-          name: 'edge-node-tokyo-01',
-          host_type: 'agent',
-          endpoint: 'http://10.10.10.200:9100',
-          tls_enabled: false,
-          status: 'connected',
-          last_health_check: new Date(Date.now() - 60000).toISOString(),
-          labels: { env: 'production', region: 'ap-northeast-1', tier: 'edge', role: 'metrics-collector' },
-          tenant_id: 'default-tenant',
-          created_at: '2026-07-01T08:00:00Z'
-        },
-        {
-          id: 'host-docker-daemon-02',
-          name: 'worker-docker-sg-02',
-          host_type: 'docker',
-          endpoint: 'tcp://10.20.0.15:2376',
-          tls_enabled: true,
-          status: 'connected',
-          last_health_check: new Date(Date.now() - 120000).toISOString(),
-          labels: { env: 'production', region: 'ap-southeast-1', compute: 'gpu-t4', engine: 'docker-ce' },
-          tenant_id: 'default-tenant',
-          created_at: '2026-07-10T12:00:00Z'
-        },
-        {
-          id: 'host-k8s-api-03',
-          name: 'k8s-control-plane-us-east',
-          host_type: 'k8s',
-          endpoint: 'https://k8s-master.corp.internal:6443',
-          tls_enabled: true,
-          status: 'connected',
-          last_health_check: new Date(Date.now() - 180000).toISOString(),
-          labels: { env: 'production', region: 'us-east-1', cluster: 'primary-core', k8s_version: 'v1.28.4' },
-          tenant_id: 'default-tenant',
-          created_at: '2026-06-15T09:30:00Z'
-        },
-        {
-          id: 'host-prom-target-04',
-          name: 'prometheus-eu-central',
-          host_type: 'prometheus',
-          endpoint: 'http://prometheus.eu-central.internal:9090',
-          tls_enabled: false,
-          status: 'connected',
-          last_health_check: new Date(Date.now() - 300000).toISOString(),
-          labels: { env: 'staging', region: 'eu-central-1', service: 'monitoring', scrape_interval: '15s' },
-          tenant_id: 'default-tenant',
-          created_at: '2026-07-20T14:15:00Z'
-        },
-        {
-          id: 'host-git-repo-05',
-          name: 'github-enterprise-internal',
-          host_type: 'git',
-          endpoint: 'https://github.corp.internal/infra-fleet/gitops-deploy',
-          tls_enabled: true,
-          status: 'connected',
-          last_health_check: new Date(Date.now() - 600000).toISOString(),
-          labels: { env: 'production', provider: 'github', pipeline: 'gitops-sync' },
-          tenant_id: 'default-tenant',
-          created_at: '2026-06-01T10:00:00Z'
-        },
-        {
-          id: 'host-db-pg-06',
-          name: 'postgres-cluster-primary',
-          host_type: 'database',
-          endpoint: 'postgresql://infra_user:secr3t@10.50.0.8:5432/platform_db',
-          tls_enabled: false,
-          status: 'connected',
-          last_health_check: new Date(Date.now() - 240000).toISOString(),
-          labels: { env: 'production', db: 'postgresql', pool: 'pgbouncer', replica: 'master' },
-          tenant_id: 'default-tenant',
-          created_at: '2026-05-20T11:00:00Z'
-        },
-        {
-          id: 'host-custom-health-07',
-          name: 'vault-hsm-gateway',
-          host_type: 'custom',
-          endpoint: 'https://vault-edge.internal:8200/v1/sys/health',
-          tls_enabled: true,
-          status: 'connected',
-          last_health_check: new Date(Date.now() - 90000).toISOString(),
-          labels: { env: 'production', security: 'pci-dss', component: 'vault-agent' },
-          tenant_id: 'default-tenant',
-          created_at: '2026-07-25T16:40:00Z'
-        }
-      ]
-    }
+    hosts.value = Array.isArray(data) ? data : []
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to retrieve infrastructure hosts'
     error.value = msg
+    hosts.value = []
     showToast(msg, 'error')
   } finally {
     loading.value = false

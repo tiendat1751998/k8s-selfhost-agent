@@ -153,7 +153,8 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error":   "kubernetes not connected",
+				"error":   "Kubernetes cluster not connected or unconfigured",
+				"code":    "K8S_UNAVAILABLE",
 				"message": "Import a kubeconfig via Fleet to enable this feature",
 			})
 		}

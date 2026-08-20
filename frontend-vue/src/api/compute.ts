@@ -655,54 +655,8 @@ export const incidentsApi = {
   },
 
   async simulate(body?: { scenario?: string; pod_name?: string; namespace?: string }): Promise<Incident> {
-    try {
-      const raw = await api.post<any>('/incidents/simulate', body)
-      return normalizeIncident(raw)
-    } catch {
-      // Fallback synthetic incident generation for demo/offline resilience
-      const scenario = body?.scenario || 'oom'
-      const now = new Date().toISOString()
-      if (scenario.includes('node') || scenario === 'NodeNotReady') {
-        return {
-          id: `sim-${Date.now()}`,
-          cluster_name: 'prod-eu-west-1',
-          namespace: body?.namespace || 'kube-system',
-          pod_name: body?.pod_name || 'masterdb-node-01',
-          type: 'NodeNotReady',
-          status: 'detected',
-          severity: 'critical',
-          message: 'Infrastructure Host masterdb Unreachable — Kubelet stopped posting status (NodeStatusUnknown)',
-          created_at: now,
-          updated_at: now,
-        }
-      } else if (scenario.includes('crash') || scenario === 'CrashLoopBackOff') {
-        return {
-          id: `sim-${Date.now()}`,
-          cluster_name: 'prod-us-east-1',
-          namespace: body?.namespace || 'payments',
-          pod_name: body?.pod_name || 'payment-gateway-5f8d9b-w9z7x',
-          type: 'CrashLoopBackOff',
-          status: 'detected',
-          severity: 'high',
-          message: 'PostgreSQL Connection Refused on payment-gateway — dial tcp 10.96.12.44:5432: connect: connection refused',
-          created_at: now,
-          updated_at: now,
-        }
-      } else {
-        return {
-          id: `sim-${Date.now()}`,
-          cluster_name: 'prod-us-east-1',
-          namespace: body?.namespace || 'ecommerce',
-          pod_name: body?.pod_name || 'checkout-api-7b9c6f8d-4x2kl',
-          type: 'OOMKilled',
-          status: 'detected',
-          severity: 'critical',
-          message: 'JVM Heap Memory Exhaustion on checkout-api — container terminated with exit code 137 (OOMKilled)',
-          created_at: now,
-          updated_at: now,
-        }
-      }
-    }
+    const raw = await api.post<any>('/incidents/simulate', body)
+    return normalizeIncident(raw)
   },
 }
 
@@ -879,41 +833,19 @@ export const deploymentsApi = {
   },
 
   async rollback(payload: RollbackDeploymentPayload): Promise<{ status: string }> {
-    try {
-      return await api.post<{ status: string }>('/deployments/rollback', payload)
-    } catch {
-      // If endpoint is not mounted, invoke restart as fallback
-      return api.post<{ status: string }>('/deployments/restart', {
-        type: payload.type,
-        cluster: payload.cluster,
-        namespace: payload.namespace,
-        name: payload.name,
-      })
-    }
+    return api.post<{ status: string }>('/deployments/rollback', payload)
   },
 
   async setCanaryWeight(payload: CanaryWeightPayload): Promise<{ status: string }> {
-    try {
-      return await api.post<{ status: string }>('/deployments/canary', payload)
-    } catch {
-      return { status: 'canary_weight_updated' }
-    }
+    return api.post<{ status: string }>('/deployments/canary', payload)
   },
 
   async cutoverBlueGreen(payload: BlueGreenCutoverPayload): Promise<{ status: string }> {
-    try {
-      return await api.post<{ status: string }>('/deployments/bluegreen', payload)
-    } catch {
-      return { status: 'cutover_applied' }
-    }
+    return api.post<{ status: string }>('/deployments/bluegreen', payload)
   },
 
   async pauseResume(payload: PauseResumePayload): Promise<{ status: string }> {
-    try {
-      return await api.post<{ status: string }>(`/deployments/${payload.action}`, payload)
-    } catch {
-      return { status: `${payload.action}_applied` }
-    }
+    return api.post<{ status: string }>(`/deployments/${payload.action}`, payload)
   },
 }
 

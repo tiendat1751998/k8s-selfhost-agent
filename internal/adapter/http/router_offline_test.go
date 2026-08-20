@@ -52,8 +52,11 @@ func TestRouter_OfflineGracefulK8s(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 			t.Errorf("[%s %s] failed to decode json response: %v", tc.method, tc.path, err)
 		}
-		if resp["error"] != "kubernetes not connected" {
-			t.Errorf("[%s %s] expected error 'kubernetes not connected', got '%s'", tc.method, tc.path, resp["error"])
+		if resp["error"] != "Kubernetes cluster not connected or unconfigured" {
+			t.Errorf("[%s %s] expected error 'Kubernetes cluster not connected or unconfigured', got '%s'", tc.method, tc.path, resp["error"])
+		}
+		if resp["code"] != "K8S_UNAVAILABLE" {
+			t.Errorf("[%s %s] expected code 'K8S_UNAVAILABLE', got '%s'", tc.method, tc.path, resp["code"])
 		}
 		if resp["message"] != "Import a kubeconfig via Fleet to enable this feature" {
 			t.Errorf("[%s %s] expected message 'Import a kubeconfig via Fleet to enable this feature', got '%s'", tc.method, tc.path, resp["message"])

@@ -56,6 +56,20 @@ func TestNewTimeout(t *testing.T) {
 	}
 }
 
+func TestNewK8sUnavailable(t *testing.T) {
+	cause := errors.New("connection refused")
+	err := NewK8sUnavailable("", cause)
+	if err.Code != "K8S_UNAVAILABLE" {
+		t.Errorf("expected code K8S_UNAVAILABLE, got %s", err.Code)
+	}
+	if err.Message != "Kubernetes cluster not connected or unconfigured" {
+		t.Errorf("expected default message, got %s", err.Message)
+	}
+	if !errors.Is(err, cause) {
+		t.Error("expected error to wrap cause")
+	}
+}
+
 func TestDomainError_Error(t *testing.T) {
 	err := NewNotFound("pod", "nginx-123")
 	expected := "[NOT_FOUND] pod with id 'nginx-123' not found: not found"

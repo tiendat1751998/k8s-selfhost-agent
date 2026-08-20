@@ -543,73 +543,6 @@ const starterPresets: CreatePluginDTO[] = [
   },
 ]
 
-const defaultPlugins: Plugin[] = [
-  {
-    id: 'plg-trivy-sec',
-    name: 'Trivy Security Scanner',
-    version: '1.4.2',
-    category: 'security',
-    icon: '🛡️',
-    author: 'Aqua Security & Platform SRE',
-    description: 'Injects live CVE vulnerability analysis, SBOM component graphs, and image scan metrics directly into pod detail drawers.',
-    entry_point: 'https://cdn.jsdelivr.net/npm/@k8s-plugins/trivy-scanner/dist/index.js',
-    permissions: ['audit:read', 'k8s:read', 'cve:read'],
-    config: { scanner_endpoint: 'http://trivy.security:4954', auto_scan_on_mount: 'true', min_severity: 'HIGH' },
-    enabled: true,
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-  {
-    id: 'plg-grafana-embed',
-    name: 'Grafana Dashboard Embed',
-    version: '2.1.0',
-    category: 'monitoring',
-    icon: '📈',
-    author: 'Grafana Labs Community',
-    description: 'Seamlessly embeds contextual Grafana latency, throughput, and CPU/memory panels into deployment and service views.',
-    entry_point: 'https://cdn.jsdelivr.net/npm/@k8s-plugins/grafana-embed/dist/index.js',
-    permissions: ['metrics:read', 'dashboards:view'],
-    config: { grafana_url: 'http://grafana.monitoring:3000', theme: 'dark', refresh_interval: '15s' },
-    enabled: true,
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-  {
-    id: 'plg-prom-alertbridge',
-    name: 'Prometheus AlertBridge',
-    version: '1.2.0',
-    category: 'monitoring',
-    icon: '🔥',
-    author: 'Prometheus Authors',
-    description: 'Connects Alertmanager active firings, alert routing rules, and Prometheus SLI breach warnings to real-time notification toasts.',
-    entry_point: 'https://cdn.jsdelivr.net/npm/@k8s-plugins/alert-bridge/dist/index.js',
-    permissions: ['alerts:read', 'notifications:send'],
-    config: { alertmanager_url: 'http://alertmanager:9093', poll_interval_sec: '10', dedup_window: '60s' },
-    enabled: true,
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-  {
-    id: 'plg-vector-logs',
-    name: 'Vector Log Processor',
-    version: '1.1.5',
-    category: 'devtools',
-    icon: '📜',
-    author: 'Timber.io & Vector OSS',
-    description: 'High-throughput client-side log parsing, regex highlighting, and structured JSON stream extraction for container logs.',
-    entry_point: 'https://cdn.jsdelivr.net/npm/@k8s-plugins/vector-logs/dist/index.js',
-    permissions: ['logs:read', 'k8s:read'],
-    config: { buffer_lines: '5000', ansi_highlighting: 'true', filter_heartbeats: 'true' },
-    enabled: true,
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-20T00:00:00Z',
-  },
-]
-
 // Category Filter Options
 const categories = [
   { value: 'all', label: 'All Categories', icon: '🌐' },
@@ -697,25 +630,11 @@ async function loadData() {
   loading.value = true
   error.value = null
   try {
-    let pluginList: Plugin[] = []
-    let statData: PluginStats | null = null
-
-    try {
-      const [list, st] = await Promise.all([
-        pluginsApi.list(),
-        pluginsApi.getStats(),
-      ])
-      pluginList = list || []
-      statData = st
-    } catch {
-      // Backend offline or not seeded
-    }
-
-    if (pluginList.length === 0) {
-      pluginList = defaultPlugins
-    }
-
-    plugins.value = pluginList
+    const [list, statData] = await Promise.all([
+      pluginsApi.list(),
+      pluginsApi.getStats().catch(() => null),
+    ])
+    plugins.value = Array.isArray(list) ? list : []
 
     const enabledCount = plugins.value.filter(p => p.enabled).length
     const disabledCount = plugins.value.filter(p => !p.enabled).length
@@ -731,7 +650,8 @@ async function loadData() {
       by_category: byCategory,
     }
   } catch (err: any) {
-    error.value = err.message || 'Failed to load plugins'
+    error.value = err?.message || 'Failed to load plugins'
+    plugins.value = []
   } finally {
     loading.value = false
   }
