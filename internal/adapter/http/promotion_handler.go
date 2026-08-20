@@ -105,7 +105,9 @@ func (h *PromotionHandler) CompletePromotion(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "promotion id is required", err)
 		return
 	}
-	if err := h.usecase.Complete(r.Context(), id); err != nil {
+	completer, _ := r.Context().Value(middleware.UserIDKey).(string)
+
+	if err := h.usecase.Complete(r.Context(), id, completer); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to complete promotion", err)
 		return
 	}

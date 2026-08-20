@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	domainPromo "github.com/datdt/k8sselfhost/internal/domain/promotion"
+	domainDocker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
@@ -372,3 +374,359 @@ func TestUsecase_StateTransitions(t *testing.T) {
 		}
 	})
 }
+
+// Mocks for Docker and Audit domain interfaces
+type mockDockerRepoForUsecase struct {
+	services        []domainDocker.Service
+	containers      []domainDocker.Container
+	updatedServices map[string]string
+	updateErr       error
+}
+
+func newMockDockerRepoForUsecase() *mockDockerRepoForUsecase {
+	return &mockDockerRepoForUsecase{
+		updatedServices: make(map[string]string),
+	}
+}
+
+func (m *mockDockerRepoForUsecase) ListContainers(ctx context.Context) ([]domainDocker.Container, error) {
+	return m.containers, nil
+}
+func (m *mockDockerRepoForUsecase) ListNodes(ctx context.Context) ([]domainDocker.Node, error) {
+	return nil, nil
+}
+func (m *mockDockerRepoForUsecase) ListServices(ctx context.Context) ([]domainDocker.Service, error) {
+	return m.services, nil
+}
+func (m *mockDockerRepoForUsecase) ScaleService(ctx context.Context, serviceID string, replicas int) error {
+	return nil
+}
+func (m *mockDockerRepoForUsecase) UpdateNodeAvailability(ctx context.Context, nodeID string, availability string) error {
+	return nil
+}
+func (m *mockDockerRepoForUsecase) ToggleContainer(ctx context.Context, containerID string, action string) error {
+	return nil
+}
+func (m *mockDockerRepoForUsecase) DeleteService(ctx context.Context, serviceID string) error {
+	return nil
+}
+func (m *mockDockerRepoForUsecase) RestartService(ctx context.Context, serviceID string) error {
+	return nil
+}
+func (m *mockDockerRepoForUsecase) CreateService(ctx context.Context, name string, image string, replicas int, port int) error {
+	return nil
+}
+func (m *mockDockerRepoForUsecase) GetLogs(ctx context.Context, targetID string, targetType string) (string, error) {
+	return "", nil
+}
+func (m *mockDockerRepoForUsecase) UpdateServiceImage(ctx context.Context, serviceID string, image string) error {
+	if m.updateErr != nil {
+		return m.updateErr
+	}
+	m.updatedServices[serviceID] = image
+	return nil
+}
+func (m *mockDockerRepoForUsecase) GetSwarmJoinTokens(ctx context.Context) (*domainDocker.SwarmTokens, error) {
+	return nil, nil
+}
+func (m *mockDockerRepoForUsecase) DrainNode(ctx context.Context, nodeID string) error {
+	return nil
+}
+func (m *mockDockerRepoForUsecase) ActivateNode(ctx context.Context, nodeID string) error {
+	return nil
+}
+func (m *mockDockerRepoForUsecase) RemoveNode(ctx context.Context, nodeID string, force bool) error {
+	return nil
+}
+func (m *mockDockerRepoForUsecase) GetNodeDetails(ctx context.Context, nodeID string) (*domainDocker.NodeDetails, error) {
+	return nil, nil
+}
+func (m *mockDockerRepoForUsecase) GetSwarmInfo(ctx context.Context) (*domainDocker.SwarmInfo, error) {
+	return nil, nil
+}
+
+type auditRecord struct {
+	Actor      string
+	Action     string
+	TargetType string
+	TargetID   string
+	TargetName string
+	Result     string
+	Details    map[string]interface{}
+}
+
+type mockAuditRepoForUsecase struct {
+	records []auditRecord
+}
+
+func (m *mockAuditRepoForUsecase) ListFindings(ctx context.Context, status string) ([]audit.AuditFinding, error) {
+	return nil, nil
+}
+func (m *mockAuditRepoForUsecase) GetFinding(ctx context.Context, id string) (*audit.AuditFinding, error) {
+	return nil, nil
+}
+func (m *mockAuditRepoForUsecase) ResolveFinding(ctx context.Context, id string) error {
+	return nil
+}
+func (m *mockAuditRepoForUsecase) RecordRun(ctx context.Context, run *audit.AuditRun) error {
+	return nil
+}
+func (m *mockAuditRepoForUsecase) GetLastRun(ctx context.Context) (*audit.AuditRun, error) {
+	return nil, nil
+}
+func (m *mockAuditRepoForUsecase) RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error {
+	m.records = append(m.records, auditRecord{
+		Actor:      actor,
+		Action:     action,
+		TargetType: targetType,
+		TargetID:   targetID,
+		TargetName: targetName,
+		Result:     result,
+		Details:    details,
+	})
+	return nil
+}
+
+func TestUsecase_Complete_DockerSwarmServiceUpdate_ExactName(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockPromotionRepo()
+	dockerMock := newMockDockerRepoForUsecase()
+	auditMock := &mockAuditRepoForUsecase{}
+
+	dockerMock.services = []domainDocker.Service{
+		{ID: "svc-redis-id", Name: "tiki_redis", Image: "redis:7.0-alpine"},
+	}
+
+	uc := NewUsecase(repo, dockerMock, auditMock)
+
+	promo, err := uc.Create(ctx, &domainPromo.Promotion{
+		Service:   "tiki_redis",
+		Version:   "redis:7.2-alpine",
+		FromEnv:   domainPromo.EnvStaging,
+		ToEnv:     domainPromo.EnvProduction,
+		Requester: "alice",
+	})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	_ = uc.Approve(ctx, promo.ID, "bob")
+
+	err = uc.Complete(ctx, promo.ID, "admin-user")
+	if err != nil {
+		t.Fatalf("complete failed: %v", err)
+	}
+
+	// Verify service image was updated
+	if dockerMock.updatedServices["svc-redis-id"] != "redis:7.2-alpine" {
+		t.Errorf("expected updated image 'redis:7.2-alpine', got '%s'", dockerMock.updatedServices["svc-redis-id"])
+	}
+
+	// Verify audit log
+	if len(auditMock.records) != 1 {
+		t.Fatalf("expected 1 audit record, got %d", len(auditMock.records))
+	}
+	rec := auditMock.records[0]
+	if rec.Action != "promote_docker_service" || rec.Result != "success" || rec.TargetName != "tiki_redis" {
+		t.Errorf("unexpected audit record: %+v", rec)
+	}
+	if rec.Actor != "admin-user" {
+		t.Errorf("expected actor 'admin-user', got '%s'", rec.Actor)
+	}
+}
+
+func TestUsecase_Complete_DockerSwarmServiceUpdate_StackPrefixAndTags(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockPromotionRepo()
+	dockerMock := newMockDockerRepoForUsecase()
+	auditMock := &mockAuditRepoForUsecase{}
+
+	dockerMock.services = []domainDocker.Service{
+		{ID: "svc-redis-1", Name: "tiki_redis", Image: "redis:7.0-alpine"},
+		{ID: "svc-nginx-1", Name: "my-nginx", Image: "nginx:1.24"},
+		{ID: "svc-traefik-1", Name: "tiki_traefik", Image: "traefik:v2.10"},
+	}
+
+	uc := NewUsecase(repo, dockerMock, auditMock)
+
+	// 1. Match "redis" to "tiki_redis" and tag "7.2-alpine" -> "redis:7.2-alpine"
+	p1, _ := uc.Create(ctx, &domainPromo.Promotion{
+		Service: "redis",
+		Version: "7.2-alpine",
+		FromEnv: domainPromo.EnvDev,
+		ToEnv:   domainPromo.EnvQA,
+	})
+	_ = uc.Approve(ctx, p1.ID, "bob")
+	if err := uc.Complete(ctx, p1.ID); err != nil {
+		t.Fatalf("complete p1 failed: %v", err)
+	}
+	if dockerMock.updatedServices["svc-redis-1"] != "redis:7.2-alpine" {
+		t.Errorf("expected redis:7.2-alpine, got %s", dockerMock.updatedServices["svc-redis-1"])
+	}
+
+	// 2. Match "my-nginx" directly with version "1.25.4" -> "nginx:1.25.4"
+	p2, _ := uc.Create(ctx, &domainPromo.Promotion{
+		Service: "my-nginx",
+		Version: "1.25.4",
+		FromEnv: domainPromo.EnvDev,
+		ToEnv:   domainPromo.EnvQA,
+	})
+	_ = uc.Approve(ctx, p2.ID, "bob")
+	if err := uc.Complete(ctx, p2.ID); err != nil {
+		t.Fatalf("complete p2 failed: %v", err)
+	}
+	if dockerMock.updatedServices["svc-nginx-1"] != "nginx:1.25.4" {
+		t.Errorf("expected nginx:1.25.4, got %s", dockerMock.updatedServices["svc-nginx-1"])
+	}
+
+	// 3. Match "traefik" to "tiki_traefik" with full image "traefik:v3.0"
+	p3, _ := uc.Create(ctx, &domainPromo.Promotion{
+		Service: "traefik",
+		Version: "traefik:v3.0",
+		FromEnv: domainPromo.EnvDev,
+		ToEnv:   domainPromo.EnvQA,
+	})
+	_ = uc.Approve(ctx, p3.ID, "bob")
+	if err := uc.Complete(ctx, p3.ID); err != nil {
+		t.Fatalf("complete p3 failed: %v", err)
+	}
+	if dockerMock.updatedServices["svc-traefik-1"] != "traefik:v3.0" {
+		t.Errorf("expected traefik:v3.0, got %s", dockerMock.updatedServices["svc-traefik-1"])
+	}
+}
+
+func TestUsecase_Complete_StandaloneContainer_AuditLogged(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockPromotionRepo()
+	dockerMock := newMockDockerRepoForUsecase()
+	auditMock := &mockAuditRepoForUsecase{}
+
+	dockerMock.containers = []domainDocker.Container{
+		{ID: "cnt-standalone-1", Name: "/my-container", Image: "alpine:3.19"},
+	}
+
+	uc := NewUsecase(repo, dockerMock, auditMock)
+
+	promo, _ := uc.Create(ctx, &domainPromo.Promotion{
+		Service:   "my-container",
+		Version:   "alpine:3.20",
+		FromEnv:   domainPromo.EnvQA,
+		ToEnv:     domainPromo.EnvProduction,
+		Requester: "alice",
+	})
+	_ = uc.Approve(ctx, promo.ID, "bob")
+
+	err := uc.Complete(ctx, promo.ID, "admin-user")
+	if err != nil {
+		t.Fatalf("complete failed: %v", err)
+	}
+
+	// Swarm service update should NOT be triggered
+	if len(dockerMock.updatedServices) != 0 {
+		t.Errorf("expected 0 updated swarm services, got %d", len(dockerMock.updatedServices))
+	}
+
+	// Audit record should be logged
+	if len(auditMock.records) != 1 {
+		t.Fatalf("expected 1 audit record, got %d", len(auditMock.records))
+	}
+	rec := auditMock.records[0]
+	if rec.Action != "complete" || rec.TargetType != "promotion" || rec.TargetName != "my-container" {
+		t.Errorf("unexpected audit record: %+v", rec)
+	}
+	if isStandalone, ok := rec.Details["standalone_container"].(bool); !ok || !isStandalone {
+		t.Errorf("expected standalone_container detail to be true, got %v", rec.Details["standalone_container"])
+	}
+}
+
+func TestUsecase_Complete_NoDockerProvider_AuditLogged(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockPromotionRepo()
+	auditMock := &mockAuditRepoForUsecase{}
+
+	uc := NewUsecase(repo, auditMock)
+
+	promo, _ := uc.Create(ctx, &domainPromo.Promotion{
+		Service:   "payment-api",
+		Version:   "v3.0.0",
+		FromEnv:   domainPromo.EnvStaging,
+		ToEnv:     domainPromo.EnvProduction,
+		Requester: "charlie",
+	})
+	_ = uc.Approve(ctx, promo.ID, "lead")
+
+	err := uc.Complete(ctx, promo.ID)
+	if err != nil {
+		t.Fatalf("complete failed: %v", err)
+	}
+
+	if len(auditMock.records) != 1 {
+		t.Fatalf("expected 1 audit record, got %d", len(auditMock.records))
+	}
+	rec := auditMock.records[0]
+	if rec.Action != "complete" || rec.TargetType != "promotion" {
+		t.Errorf("unexpected audit record: %+v", rec)
+	}
+	if rec.Actor != "lead" {
+		t.Errorf("expected fallback actor 'lead' from approver, got '%s'", rec.Actor)
+	}
+}
+
+func TestUsecase_Complete_DockerUpdateError_Handled(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockPromotionRepo()
+	dockerMock := newMockDockerRepoForUsecase()
+	auditMock := &mockAuditRepoForUsecase{}
+
+	dockerMock.services = []domainDocker.Service{
+		{ID: "svc-err-1", Name: "tiki_redis", Image: "redis:7.0-alpine"},
+	}
+	dockerMock.updateErr = errors.New("docker daemon connection refused")
+
+	uc := NewUsecase(repo, dockerMock, auditMock)
+
+	promo, _ := uc.Create(ctx, &domainPromo.Promotion{
+		Service: "tiki_redis",
+		Version: "redis:7.2-alpine",
+		FromEnv: domainPromo.EnvDev,
+		ToEnv:   domainPromo.EnvQA,
+	})
+	_ = uc.Approve(ctx, promo.ID, "bob")
+
+	err := uc.Complete(ctx, promo.ID)
+	if err != nil {
+		t.Fatalf("complete returned unexpected error: %v", err)
+	}
+
+	if len(auditMock.records) != 1 {
+		t.Fatalf("expected 1 audit record, got %d", len(auditMock.records))
+	}
+	rec := auditMock.records[0]
+	if rec.Action != "promote_docker_service" || rec.Result != "failed" {
+		t.Errorf("expected failed docker service audit record, got %+v", rec)
+	}
+}
+
+func TestResolveTargetImage(t *testing.T) {
+	tests := []struct {
+		current  string
+		version  string
+		expected string
+	}{
+		{"redis:6.2-alpine", "redis:7.2-alpine", "redis:7.2-alpine"},
+		{"redis:6.2-alpine", "7.2-alpine", "redis:7.2-alpine"},
+		{"nginx:1.24", "1.25.3", "nginx:1.25.3"},
+		{"docker.io/myorg/myapp:v1.0.0", "v1.1.0", "docker.io/myorg/myapp:v1.1.0"},
+		{"myorg/myapp", "v1.1.0", "myorg/myapp:v1.1.0"},
+		{"", "redis:7.0", "redis:7.0"},
+		{"", "v1.0.0", "v1.0.0"},
+	}
+
+	for _, tt := range tests {
+		res := resolveTargetImage(tt.current, tt.version)
+		if res != tt.expected {
+			t.Errorf("resolveTargetImage(%q, %q) = %q; want %q", tt.current, tt.version, res, tt.expected)
+		}
+	}
+}
+

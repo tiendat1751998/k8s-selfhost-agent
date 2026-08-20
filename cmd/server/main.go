@@ -381,7 +381,7 @@ func run() error {
 
 	searchRepo := postgres.NewSearchRepo(pgClient.Pool(), cacheManager)
 	searchUsecase := usecaseSearch.NewUsecase(searchRepo)
-	promotionUsecase := usecasePromotion.NewUsecase(promotionRepo)
+	promotionUsecase := usecasePromotion.NewUsecase(promotionRepo, dockerRepo, auditRepo)
 
 	gitopsController := usecaseGitops.NewController(prRepo, incRepo, txManager)
 	tenancyRepo := postgres.NewTenancyRepo(pgClient.Pool())

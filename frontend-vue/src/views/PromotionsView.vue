@@ -6,17 +6,35 @@ import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import {
   promotionsApi,
+  dockerApi,
   type Promotion,
   type Environment,
   type CreatePromotionPayload
 } from '../api/compute'
+import { useAuthStore } from '../stores/authStore'
+
+const authStore = useAuthStore()
+
+export interface RunningServiceOption {
+  id: string
+  name: string
+  image: string
+  type: 'swarm' | 'container'
+  status?: string
+}
 
 const loading = ref(false)
+const loadingServices = ref(false)
 const error = ref<string | null>(null)
 const actionLoading = ref<string | null>(null)
 const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 
 const promotions = ref<Promotion[]>([])
+const runningServices = ref<RunningServiceOption[]>([])
+
+function getDefaultRequester(): string {
+  return authStore.user?.email || authStore.user?.role || 'admin'
+}
 
 // Create Promotion Modal
 const showCreateModal = ref(false)
@@ -25,7 +43,11 @@ const newPromotion = ref<CreatePromotionPayload>({
   version: '',
   from_env: 'dev',
   to_env: 'qa',
-  requester: 'sre-engineer'
+  requester: getDefaultRequester()
+})
+
+const selectedService = computed(() => {
+  return runningServices.value.find(s => s.name === newPromotion.value.service)
 })
 
 async function fetchPromotions() {
@@ -43,8 +65,88 @@ async function fetchPromotions() {
   }
 }
 
-onMounted(() => {
-  fetchPromotions()
+async function loadServices() {
+  loadingServices.value = true
+  try {
+    const [svcRes, contRes] = await Promise.allSettled([
+      dockerApi.getServices(),
+      dockerApi.getContainers()
+    ])
+
+    const servicesList: RunningServiceOption[] = []
+    const seenNames = new Set<string>()
+
+    // 1. Live Docker Swarm services (e.g. tiki_traefik, tiki_redis, my-nginx)
+    const swarmNames: string[] = []
+    if (svcRes.status === 'fulfilled' && Array.isArray(svcRes.value)) {
+      for (const s of svcRes.value) {
+        if (s.name && !seenNames.has(s.name)) {
+          seenNames.add(s.name)
+          swarmNames.push(s.name)
+          servicesList.push({
+            id: s.id || s.name,
+            name: s.name,
+            image: s.image || 'unknown:latest',
+            type: 'swarm',
+            status: s.replicas > 0 ? 'running' : 'stopped'
+          })
+        }
+      }
+    }
+
+    // 2. Live Standalone Docker containers (e.g. postgres_db, nats, registry)
+    if (contRes.status === 'fulfilled' && Array.isArray(contRes.value)) {
+      for (const c of contRes.value) {
+        const cleanName = (c.name || '').replace(/^\//, '')
+        if (!cleanName) continue
+        // Skip swarm replica tasks (e.g. tiki_traefik.1.xxxx, my-nginx.1.xxx)
+        const isSwarmTask = swarmNames.some(sName =>
+          cleanName.startsWith(sName + '.') || cleanName.startsWith(sName + '_')
+        )
+        if (isSwarmTask || seenNames.has(cleanName)) continue
+
+        seenNames.add(cleanName)
+        servicesList.push({
+          id: c.id || cleanName,
+          name: cleanName,
+          image: c.image || 'unknown:latest',
+          type: 'container',
+          status: c.state || c.status || 'running'
+        })
+      }
+    }
+
+    runningServices.value = servicesList
+
+    // Set initial selection if available
+    if (servicesList.length > 0 && !newPromotion.value.service) {
+      newPromotion.value.service = servicesList[0].name
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to load running services'
+    console.error('Failed to load active services:', msg)
+  } finally {
+    loadingServices.value = false
+  }
+}
+
+async function refreshAll() {
+  await Promise.all([
+    fetchPromotions(),
+    loadServices()
+  ])
+}
+
+function openCreateModal() {
+  if (runningServices.value.length > 0 && !newPromotion.value.service) {
+    newPromotion.value.service = runningServices.value[0].name
+  }
+  newPromotion.value.requester = getDefaultRequester()
+  showCreateModal.value = true
+}
+
+onMounted(async () => {
+  await refreshAll()
 })
 
 const pendingCount = computed(() => promotions.value.filter(p => p.status === 'pending').length)
@@ -81,7 +183,7 @@ function showToast(text: string, type: 'success' | 'error' = 'success') {
 
 async function handleCreatePromotion() {
   if (!newPromotion.value.service || !newPromotion.value.version) {
-    showToast('Service name and version are required', 'error')
+    showToast('Service name and target version are required', 'error')
     return
   }
   if (newPromotion.value.from_env === newPromotion.value.to_env) {
@@ -94,8 +196,12 @@ async function handleCreatePromotion() {
     await promotionsApi.create(newPromotion.value)
     showToast(`Promotion request for ${newPromotion.value.service} created!`)
     showCreateModal.value = false
-    newPromotion.value.service = ''
     newPromotion.value.version = ''
+    if (runningServices.value.length > 0) {
+      newPromotion.value.service = runningServices.value[0].name
+    } else {
+      newPromotion.value.service = ''
+    }
     await fetchPromotions()
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Promotion request failed'
@@ -173,10 +279,10 @@ function formatDate(d?: string) {
       </div>
 
       <div class="header-actions">
-        <button class="btn btn-secondary" :disabled="loading" @click="fetchPromotions">
-          <span>{{ loading ? '⏳ Querying...' : '🔄 Refresh' }}</span>
+        <button class="btn btn-secondary" :disabled="loading || loadingServices" @click="refreshAll">
+          <span>{{ loading || loadingServices ? '⏳ Querying...' : '🔄 Refresh' }}</span>
         </button>
-        <button class="btn btn-primary" @click="showCreateModal = true">
+        <button class="btn btn-primary" @click="openCreateModal">
           <span>+ Request Promotion</span>
         </button>
       </div>
@@ -372,12 +478,48 @@ function formatDate(d?: string) {
       <div class="modal-form">
         <div class="form-group">
           <label class="form-label">Service Name</label>
-          <input v-model="newPromotion.service" type="text" placeholder="e.g. auth-service" class="input-glass" />
+          <div v-if="loadingServices" class="input-loading-hint font-mono">
+            <span>⏳ Fetching running services from Docker / Swarm...</span>
+          </div>
+          <select 
+            v-else 
+            v-model="newPromotion.service" 
+            class="input-glass"
+          >
+            <option value="" disabled>Select an active service...</option>
+            <option 
+              v-for="svc in runningServices" 
+              :key="svc.id" 
+              :value="svc.name"
+            >
+              {{ svc.name }} ({{ svc.type === 'swarm' ? 'Swarm Service' : 'Container' }})
+            </option>
+          </select>
+        </div>
+
+        <!-- Currently Running Image Reference -->
+        <div v-if="selectedService" class="active-image-card glass-panel">
+          <div class="active-image-meta">
+            <span class="active-image-label">Currently Running Image:</span>
+            <span class="active-badge font-mono" :class="selectedService.type === 'swarm' ? 'badge-swarm' : 'badge-docker'">
+              {{ selectedService.type === 'swarm' ? 'Docker Swarm' : 'Standalone Container' }}
+            </span>
+          </div>
+          <div class="active-image-val font-mono">
+            <span class="image-icon">📦</span>
+            <span class="text-cyan font-bold">{{ selectedService.image }}</span>
+          </div>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Target Release Version / Git SHA</label>
-          <input v-model="newPromotion.version" type="text" placeholder="v2.4.1-rc1 or git-sha" class="input-glass font-mono" />
+          <label class="form-label">Target Release Version / Image Tag</label>
+          <input 
+            v-model="newPromotion.version" 
+            type="text" 
+            :placeholder="selectedService ? `e.g. ${selectedService.image}` : 'e.g. redis:8-alpine, nginx:1.27-alpine'" 
+            class="input-glass font-mono" 
+          />
+          <span class="form-hint">Specify the target Docker image tag or release version to promote</span>
         </div>
 
         <div class="form-row">
@@ -408,7 +550,11 @@ function formatDate(d?: string) {
 
       <template #footer="{ close }">
         <button class="btn btn-secondary" @click="close">Cancel</button>
-        <button class="btn btn-primary" :disabled="actionLoading === 'create'" @click="handleCreatePromotion">
+        <button 
+          class="btn btn-primary" 
+          :disabled="actionLoading === 'create' || !newPromotion.service || !newPromotion.version" 
+          @click="handleCreatePromotion"
+        >
           <span>{{ actionLoading === 'create' ? 'Submitting...' : 'Submit Promotion Request ➔' }}</span>
         </button>
       </template>
@@ -669,8 +815,79 @@ function formatDate(d?: string) {
 }
 
 .font-mono { font-family: var(--font-mono); }
+.font-bold { font-weight: 700; }
 .text-cyan { color: var(--accent-cyan); }
 .text-emerald { color: var(--accent-emerald); }
 .text-muted { color: var(--text-muted); }
 .btn-xs { padding: 4px 8px; font-size: 11px; }
+
+.active-image-card {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.active-image-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.active-image-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.active-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.badge-swarm {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.badge-docker {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.active-image-val {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  word-break: break-all;
+}
+
+.image-icon {
+  font-size: 13px;
+}
+
+.form-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.input-loading-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
 </style>
