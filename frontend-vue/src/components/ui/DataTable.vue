@@ -24,16 +24,26 @@ const search = ref('')
 const sortKey = ref<string>('')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 
+function deepSearchMatch(obj: unknown, query: string): boolean {
+  if (obj === null || obj === undefined) return false
+  if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') {
+    return String(obj).toLowerCase().includes(query)
+  }
+  if (Array.isArray(obj)) {
+    return obj.some(item => deepSearchMatch(item, query))
+  }
+  if (typeof obj === 'object') {
+    return Object.values(obj as Record<string, unknown>).some(val => deepSearchMatch(val, query))
+  }
+  return false
+}
+
 const filteredData = computed(() => {
   let result = [...props.data]
 
   if (props.searchable && search.value.trim()) {
     const q = search.value.toLowerCase().trim()
-    result = result.filter(item => {
-      return Object.values(item).some(val => 
-        String(val).toLowerCase().includes(q)
-      )
-    })
+    result = result.filter(item => deepSearchMatch(item, q))
   }
 
   if (sortKey.value) {
