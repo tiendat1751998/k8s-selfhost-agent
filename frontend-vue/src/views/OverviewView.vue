@@ -455,42 +455,6 @@ const clusterAvgLatencyMs = computed(() => {
   return tpsData.value?.http?.avg_latency_ms || 0
 })
 
-const activeServicesCount = computed(() => {
-  return tpsData.value?.services?.length || 0
-})
-
-const trendStats = computed(() => {
-  const pts = trendHistory.value
-  if (!pts.length) {
-    const defaultCpu = Math.round(overview.value?.total_cpu_percent || 0)
-    const defaultRam = Math.round(overview.value?.total_mem_percent || 0)
-    const defaultReqs = Math.round(effectiveHttpRps.value || 0)
-    return {
-      minCpu: defaultCpu,
-      avgCpu: defaultCpu,
-      maxCpu: defaultCpu,
-      minRam: defaultRam,
-      avgRam: defaultRam,
-      maxRam: defaultRam,
-      avgReqs: defaultReqs,
-      maxReqs: defaultReqs,
-    }
-  }
-  const cpus = pts.map(p => p.cpu)
-  const rams = pts.map(p => p.mem)
-  const reqs = pts.map(p => p.reqs)
-  return {
-    minCpu: Math.min(...cpus),
-    avgCpu: Math.round(cpus.reduce((a, b) => a + b, 0) / cpus.length),
-    maxCpu: Math.max(...cpus),
-    minRam: Math.min(...rams),
-    avgRam: Math.round(rams.reduce((a, b) => a + b, 0) / rams.length),
-    maxRam: Math.max(...rams),
-    avgReqs: Math.round(reqs.reduce((a, b) => a + b, 0) / reqs.length),
-    maxReqs: Math.max(...reqs),
-  }
-})
-
 // Topology Filter Counts & Predicate
 function isNodeDegradedOrOffline(n: NodeMetrics): boolean {
   const isDown = n.status === 'down' || n.status === 'disconnected' || n.status === 'error' || n.status === 'offline'
@@ -740,42 +704,95 @@ const sparklinePoints = computed(() => {
     .join(' ')
 })
 
-// Trend Chart SVG Points for 5-minute CPU / RAM
+// ==========================================
+// 4b. 5-MIN HIGH-RESOLUTION SATURATION TRENDS COMPUTEDS
+// ==========================================
+const trendChartMaxReqs = computed(() => {
+  return Math.max(10, ...trendHistory.value.map(p => p.reqs || 0), Math.round(effectiveHttpRps.value || 0))
+})
+
 const trendChartCpuPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const width = 300
-  const height = 80
-  const step = width / (history.length - 1)
-
+  const step = 665 / (history.length - 1)
   return history
     .map((h, i) => {
-      const x = i * step
-      const y = height - (Math.min(100, h.cpu) / 100) * (height - 10) - 5
+      const x = 45 + i * step
+      const y = 170 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 150
       return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
+})
+
+const trendChartCpuArea = computed(() => {
+  if (!trendChartCpuPath.value || trendHistory.value.length < 2) return ''
+  const history = trendHistory.value
+  const firstX = 45
+  const lastX = 45 + (history.length - 1) * (665 / (history.length - 1))
+  return `${trendChartCpuPath.value} L ${lastX.toFixed(1)} 170 L ${firstX.toFixed(1)} 170 Z`
 })
 
 const trendChartMemPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const width = 300
-  const height = 80
-  const step = width / (history.length - 1)
-
+  const step = 665 / (history.length - 1)
   return history
     .map((h, i) => {
-      const x = i * step
-      const y = height - (Math.min(100, h.mem) / 100) * (height - 10) - 5
+      const x = 45 + i * step
+      const y = 170 - (Math.min(100, Math.max(0, h.mem)) / 100) * 150
       return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
 })
 
-// ==========================================
-// 4b. 5-MIN TRENDS HOVER & TOOLTIP COMPUTEDS
-// ==========================================
+const trendChartMemArea = computed(() => {
+  if (!trendChartMemPath.value || trendHistory.value.length < 2) return ''
+  const history = trendHistory.value
+  const firstX = 45
+  const lastX = 45 + (history.length - 1) * (665 / (history.length - 1))
+  return `${trendChartMemPath.value} L ${lastX.toFixed(1)} 170 L ${firstX.toFixed(1)} 170 Z`
+})
+
+const trendChartReqsPath = computed(() => {
+  const history = trendHistory.value
+  if (history.length < 2) return ''
+  const step = 665 / (history.length - 1)
+  const maxR = trendChartMaxReqs.value
+  return history
+    .map((h, i) => {
+      const x = 45 + i * step
+      const y = 170 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 150
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const trendChartReqsArea = computed(() => {
+  if (!trendChartReqsPath.value || trendHistory.value.length < 2) return ''
+  const history = trendHistory.value
+  const firstX = 45
+  const lastX = 45 + (history.length - 1) * (665 / (history.length - 1))
+  return `${trendChartReqsPath.value} L ${lastX.toFixed(1)} 170 L ${firstX.toFixed(1)} 170 Z`
+})
+
+const trendTimeAxisMarkers = computed(() => {
+  const history = trendHistory.value
+  if (history.length === 0) return []
+  if (history.length === 1) return [{ x: 45, time: history[0].time }]
+  
+  const count = Math.min(5, history.length)
+  const markers = []
+  const step = 665 / (history.length - 1)
+  for (let i = 0; i < count; i++) {
+    const idx = Math.round((i / (count - 1)) * (history.length - 1))
+    markers.push({
+      x: 45 + idx * step,
+      time: history[idx].time,
+    })
+  }
+  return markers
+})
+
 const hoveredTrendPoint = computed<TrendPoint | null>(() => {
   if (hoveredTrendIndex.value === null || !trendHistory.value[hoveredTrendIndex.value]) {
     return null
@@ -797,25 +814,25 @@ const hoveredTrendElapsed = computed<string>(() => {
 const trendHoverCoords = computed(() => {
   if (hoveredTrendIndex.value === null || trendHistory.value.length < 2) return null
   const history = trendHistory.value
-  const width = 300
-  const height = 80
-  const step = width / (history.length - 1)
+  const step = 665 / (history.length - 1)
   const idx = hoveredTrendIndex.value
   const pt = history[idx]
   if (!pt) return null
-  const x = idx * step
-  const yCpu = height - (Math.min(100, Math.max(0, pt.cpu)) / 100) * (height - 10) - 5
-  const yMem = height - (Math.min(100, Math.max(0, pt.mem)) / 100) * (height - 10) - 5
-  return { x, yCpu, yMem }
+  const x = 45 + idx * step
+  const maxR = trendChartMaxReqs.value
+  const yCpu = 170 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 150
+  const yMem = 170 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 150
+  const yReq = 170 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 150
+  return { x, yCpu, yMem, yReq }
 })
 
 const trendTooltipStyle = computed(() => {
   if (!trendTooltipPos.value) return {}
   const { x, y } = trendTooltipPos.value
-  const isRightSide = x > 150
+  const isRightSide = x > 380
   return {
-    left: isRightSide ? `${x - 12}px` : `${x + 12}px`,
-    top: `${Math.min(55, Math.max(25, y))}px`,
+    left: isRightSide ? `${x - 16}px` : `${x + 16}px`,
+    top: `${Math.min(130, Math.max(30, y))}px`,
     transform: isRightSide ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
     pointerEvents: 'none' as const,
   }
@@ -828,7 +845,11 @@ function handleTrendChartHover(event: MouseEvent) {
   const rect = target.getBoundingClientRect()
   const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
   const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
-  const ratio = mouseX / rect.width
+  
+  const scaleX = rect.width / 760
+  const svgX = mouseX / scaleX
+  const boundedSvgX = Math.max(45, Math.min(710, svgX))
+  const ratio = (boundedSvgX - 45) / 665
   const idx = Math.round(ratio * (history.length - 1))
   hoveredTrendIndex.value = Math.max(0, Math.min(history.length - 1, idx))
   trendTooltipPos.value = { x: mouseX, y: mouseY }
@@ -1328,7 +1349,7 @@ onUnmounted(() => {
 
     <!-- MAIN DASHBOARD CONTENT -->
     <div v-else-if="overview" class="dashboard-body">
-      <!-- SECTION 1: SUMMARY HUD (SINGLE-ROW COMPACT FLEXBOX WITH DETAILED STATS) -->
+      <!-- SECTION 1: SUMMARY HUD (SINGLE-ROW COMPACT FLEXBOX) -->
       <section class="summary-hud-row">
         <!-- Card 1: Nodes -->
         <div class="hud-card glass-panel">
@@ -1359,11 +1380,6 @@ onUnmounted(() => {
               :style="{ width: `${overview.total_nodes ? (overview.healthy_nodes / overview.total_nodes) * 100 : 0}%` }"
             ></div>
           </div>
-          <div class="hud-sub-stats font-mono">
-            <span class="text-emerald font-semibold">🟢 {{ onlineActiveCount }} Active</span>
-            <span class="sub-stat-sep">·</span>
-            <span :class="offlineDegradedCount > 0 ? 'text-rose font-bold' : 'text-muted'">🔴 {{ offlineDegradedCount }} Down</span>
-          </div>
         </div>
 
         <!-- Card 2: Containers -->
@@ -1388,13 +1404,6 @@ onUnmounted(() => {
               class="hud-progress-fill bg-cyan smooth-bar"
               :style="{ width: `${totalContainers ? (runningContainers / totalContainers) * 100 : 0}%` }"
             ></div>
-          </div>
-          <div class="hud-sub-stats font-mono">
-            <span class="text-cyan font-semibold">📦 {{ activeServicesCount }} Services</span>
-            <span class="sub-stat-sep">·</span>
-            <span :class="totalContainers - runningContainers > 0 ? 'text-amber' : 'text-emerald'">
-              {{ totalContainers - runningContainers > 0 ? `${totalContainers - runningContainers} Stopped` : '100% Healthy' }}
-            </span>
           </div>
         </div>
 
@@ -1421,11 +1430,6 @@ onUnmounted(() => {
               :style="{ width: `${Math.min(100, overview.total_cpu_percent)}%` }"
             ></div>
           </div>
-          <div class="hud-sub-stats font-mono">
-            <span class="text-violet font-semibold" :title="`Highest CPU load on node ${peakCpuNode?.node_name || 'k8smater'}`">
-              🔥 Peak: {{ peakCpuNode?.node_name || 'k8smater' }} ({{ Math.round(peakCpuNode?.cpu_percent || 0) }}%)
-            </span>
-          </div>
         </div>
 
         <!-- Card 4: Avg RAM -->
@@ -1450,11 +1454,6 @@ onUnmounted(() => {
               :class="`bg-${getUtilizationColor(overview.total_mem_percent)}`"
               :style="{ width: `${Math.min(100, overview.total_mem_percent)}%` }"
             ></div>
-          </div>
-          <div class="hud-sub-stats font-mono">
-            <span class="text-cyan font-semibold">
-              🧠 {{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}
-            </span>
           </div>
         </div>
 
@@ -1485,10 +1484,8 @@ onUnmounted(() => {
               </svg>
             </div>
           </div>
-          <div class="hud-sub-stats font-mono">
-            <span class="text-violet font-semibold">
-              📡 ↓ {{ formatIoRate(clusterRxRate) }} · ↑ {{ formatIoRate(clusterTxRate) }}
-            </span>
+          <div class="hud-card-footer-text">
+            <span>Aggregated API gateway ingress stream</span>
           </div>
         </div>
       </section>
@@ -1553,14 +1550,6 @@ onUnmounted(() => {
             <div class="flow-metric-divider"></div>
 
             <div class="flow-metric-item">
-              <span class="flow-metric-icon">📡</span>
-              <span class="flow-metric-value font-mono text-emerald">↓ {{ formatIoRate(clusterRxRate) }}  ↑ {{ formatIoRate(clusterTxRate) }}</span>
-              <span class="flow-metric-label">ingress stream</span>
-            </div>
-
-            <div class="flow-metric-divider"></div>
-
-            <div class="flow-metric-item">
               <span class="flow-metric-icon">⏱️</span>
               <span class="flow-metric-value font-mono text-violet">{{ clusterAvgLatencyMs > 0 ? clusterAvgLatencyMs.toFixed(1) : '2.4' }}ms</span>
               <span class="flow-metric-label">latency</span>
@@ -1577,25 +1566,23 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <!-- SECTION: 5-MIN SATURATION TRENDS -->
+      <!-- SECTION: 5-MIN SATURATION TRENDS (HIGH-RESOLUTION MULTI-SERIES CHART) -->
       <section class="trend-chart-card glass-panel trend-card-clickable" @click="openDeepDiveModal">
         <div class="trend-chart-header">
-          <div class="trend-title-wrap" style="display: flex; align-items: center; gap: 8px;">
-            <h3 class="sidebar-card-title">📈 5-Min Saturation Trends</h3>
-            <span class="badge badge-indigo">LIVE HISTORICAL BUFFER</span>
+          <div class="trend-title-wrap">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3 class="sidebar-card-title">📈 5-Min Saturation Trends</h3>
+              <span class="badge badge-indigo">LIVE BUFFER</span>
+            </div>
+            <span class="trend-chart-subtitle text-muted text-xs">
+              Rolling 30-sample sliding window across CPU, RAM, and gateway RPS
+            </span>
           </div>
-          <div class="trend-header-actions" style="display: flex; align-items: center; gap: 12px;">
-            <!-- 5-Min Statistics Chips -->
-            <div class="trend-mini-chips font-mono">
-              <span class="mini-chip chip-cpu" title="5-minute CPU Saturation Summary">
-                🟣 CPU: Min {{ trendStats.minCpu }}% · Avg {{ trendStats.avgCpu }}% · Peak {{ trendStats.maxCpu }}%
-              </span>
-              <span class="mini-chip chip-mem" title="5-minute Memory Usage Summary">
-                🔵 RAM: Min {{ trendStats.minRam }}% · Avg {{ trendStats.avgRam }}% · Peak {{ trendStats.maxRam }}%
-              </span>
-              <span class="mini-chip chip-reqs" title="5-minute Throughput Summary">
-                ⚡ RPS: Avg {{ trendStats.avgReqs.toLocaleString() }} · Peak {{ trendStats.maxReqs.toLocaleString() }}
-              </span>
+          <div class="trend-header-actions" style="display: flex; align-items: center; gap: 14px;">
+            <div class="trend-legend">
+              <span class="legend-line cpu-legend">CPU Saturation</span>
+              <span class="legend-line mem-legend">RAM Usage</span>
+              <span class="legend-line reqs-legend">Throughput (req/s)</span>
             </div>
             <button class="trend-expand-badge" type="button" title="Click to open cluster telemetry deep-dive modal">
               🔍 Click to expand deep-dive
@@ -1603,47 +1590,96 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- SVG Multi-Line Chart with Interactive Hover Crosshair & Tooltip -->
+        <!-- High-Resolution Expanded SVG Chart Canvas with Left/Right Y-Axes & X-Axis Timestamps -->
         <div
-          class="trend-svg-box"
+          class="trend-svg-box trend-svg-highres"
           @mousemove="handleTrendChartHover"
           @mouseleave="handleTrendChartLeave"
         >
-          <svg viewBox="0 0 300 80" class="trend-svg" preserveAspectRatio="none">
-            <!-- Grid Lines -->
-            <line x1="0" y1="20" x2="300" y2="20" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
-            <line x1="0" y1="45" x2="300" y2="45" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
-            <line x1="0" y1="70" x2="300" y2="70" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
+          <svg viewBox="0 0 760 200" class="trend-svg" preserveAspectRatio="none">
+            <!-- Gradients -->
+            <defs>
+              <linearGradient id="mainCpuGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30" />
+                <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0" />
+              </linearGradient>
+              <linearGradient id="mainMemGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.25" />
+                <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+              </linearGradient>
+              <linearGradient id="mainReqGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#10b981" stop-opacity="0.25" />
+                <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
 
-            <!-- Memory Path (Cyan) -->
-            <path
-              v-if="trendChartMemPath"
-              :d="trendChartMemPath"
-              fill="none"
-              stroke="#06b6d4"
-              stroke-width="2"
-              stroke-linecap="round"
-            />
+            <!-- Horizontal Grid Lines & Left/Right Y-Axis Labels -->
+            <!-- 100% -->
+            <line x1="45" y1="20" x2="710" y2="20" stroke="rgba(255, 255, 255, 0.08)" stroke-dasharray="3,3" />
+            <text x="38" y="24" class="svg-axis-label text-left font-mono" text-anchor="end">100%</text>
+            <text x="716" y="24" class="svg-axis-label text-right font-mono" text-anchor="start">{{ trendChartMaxReqs }} req/s</text>
 
-            <!-- CPU Path (Violet) -->
-            <path
-              v-if="trendChartCpuPath"
-              :d="trendChartCpuPath"
-              fill="none"
-              stroke="#8b5cf6"
-              stroke-width="2"
-              stroke-linecap="round"
-            />
+            <!-- 75% -->
+            <line x1="45" y1="57.5" x2="710" y2="57.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+            <text x="38" y="61.5" class="svg-axis-label text-left font-mono" text-anchor="end">75%</text>
+            <text x="716" y="61.5" class="svg-axis-label text-right font-mono" text-anchor="start">{{ Math.round(trendChartMaxReqs * 0.75) }}</text>
 
-            <!-- Interactive Hover Crosshair & Dots -->
+            <!-- 50% -->
+            <line x1="45" y1="95" x2="710" y2="95" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+            <text x="38" y="99" class="svg-axis-label text-left font-mono" text-anchor="end">50%</text>
+            <text x="716" y="99" class="svg-axis-label text-right font-mono" text-anchor="start">{{ Math.round(trendChartMaxReqs * 0.5) }}</text>
+
+            <!-- 25% -->
+            <line x1="45" y1="132.5" x2="710" y2="132.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+            <text x="38" y="136.5" class="svg-axis-label text-left font-mono" text-anchor="end">25%</text>
+            <text x="716" y="136.5" class="svg-axis-label text-right font-mono" text-anchor="start">{{ Math.round(trendChartMaxReqs * 0.25) }}</text>
+
+            <!-- 0% Baseline -->
+            <line x1="45" y1="170" x2="710" y2="170" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.2" />
+            <text x="38" y="174" class="svg-axis-label text-left font-mono" text-anchor="end">0%</text>
+            <text x="716" y="174" class="svg-axis-label text-right font-mono" text-anchor="start">0</text>
+
+            <!-- X-Axis Timestamps -->
+            <g class="svg-x-axis-group">
+              <text
+                v-for="(marker, mIdx) in trendTimeAxisMarkers"
+                :key="mIdx"
+                :x="marker.x"
+                y="192"
+                class="svg-axis-label text-center font-mono"
+                text-anchor="middle"
+              >
+                {{ marker.time }}
+              </text>
+            </g>
+
+            <!-- Series 1: CPU Area & Line (Violet) -->
+            <g v-if="trendChartCpuPath">
+              <path :d="trendChartCpuArea" fill="url(#mainCpuGrad)" />
+              <path :d="trendChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+            </g>
+
+            <!-- Series 2: RAM Area & Line (Cyan) -->
+            <g v-if="trendChartMemPath">
+              <path :d="trendChartMemArea" fill="url(#mainMemGrad)" />
+              <path :d="trendChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+            </g>
+
+            <!-- Series 3: Throughput Area & Line (Emerald) -->
+            <g v-if="trendChartReqsPath">
+              <path :d="trendChartReqsArea" fill="url(#mainReqGrad)" />
+              <path :d="trendChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+            </g>
+
+            <!-- Interactive Hover Crosshair & Series Markers -->
             <g v-if="isTrendHovered && trendHoverCoords" class="trend-hover-layer">
               <!-- Vertical Crosshair line snapping to nearest X -->
               <line
                 :x1="trendHoverCoords.x"
-                y1="0"
+                y1="20"
                 :x2="trendHoverCoords.x"
-                y2="80"
-                stroke="rgba(255, 255, 255, 0.45)"
+                y2="170"
+                stroke="rgba(255, 255, 255, 0.55)"
                 stroke-dasharray="3,2"
                 stroke-width="1.2"
               />
@@ -1663,6 +1699,16 @@ onUnmounted(() => {
                 :cy="trendHoverCoords.yMem"
                 r="4.5"
                 fill="#06b6d4"
+                stroke="#ffffff"
+                stroke-width="1.5"
+                class="trend-hover-point"
+              />
+              <!-- Active Point Marker for Throughput (Emerald Glowing) -->
+              <circle
+                :cx="trendHoverCoords.x"
+                :cy="trendHoverCoords.yReq"
+                r="4.5"
+                fill="#10b981"
                 stroke="#ffffff"
                 stroke-width="1.5"
                 class="trend-hover-point"
@@ -1712,7 +1758,7 @@ onUnmounted(() => {
             <span class="stat-k">Current CPU</span>
             <span class="stat-v text-violet smooth-value font-mono">
               {{ formatPercent(overview?.total_cpu_percent) }}
-              <span class="stat-sub">({{ peakCpuNode ? `${peakCpuNode.node_name} ${Math.round(peakCpuNode.cpu_percent)}%` : 'Active' }})</span>
+              <span class="stat-sub" v-if="peakCpuNode">({{ peakCpuNode.node_name }} {{ Math.round(peakCpuNode.cpu_percent) }}%)</span>
             </span>
           </div>
           <div class="stat-pair">
@@ -1731,7 +1777,7 @@ onUnmounted(() => {
           </div>
           <div class="stat-pair">
             <span class="stat-k">Edge Throughput</span>
-            <span class="stat-v font-mono text-cyan smooth-value">
+            <span class="stat-v font-mono text-emerald smooth-value">
               {{ effectiveHttpRps >= 100 ? Math.round(effectiveHttpRps).toLocaleString() : (effectiveHttpRps > 0 ? effectiveHttpRps.toFixed(1) : '0') }} req/s
               <span class="stat-sub">(↓ {{ formatIoRate(clusterRxRate) }} ↑ {{ formatIoRate(clusterTxRate) }})</span>
             </span>
@@ -4398,6 +4444,14 @@ onUnmounted(() => {
   display: inline-block;
 }
 
+.reqs-legend::before {
+  content: '';
+  width: 10px;
+  height: 2px;
+  background: #10b981;
+  display: inline-block;
+}
+
 .trend-svg-box {
   position: relative;
   width: 100%;
@@ -4407,10 +4461,40 @@ onUnmounted(() => {
   overflow: visible;
 }
 
+.trend-svg-box.trend-svg-highres {
+  height: 185px;
+  background: rgba(8, 14, 26, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
 .trend-svg {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+.svg-axis-label {
+  font-size: 10px;
+  fill: #64748b;
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+  user-select: none;
+}
+
+.svg-axis-label.text-left {
+  fill: #94a3b8;
+}
+
+.svg-axis-label.text-right {
+  fill: #10b981;
+  font-weight: 600;
+}
+
+.svg-axis-label.text-center {
+  fill: #64748b;
+  font-size: 9.5px;
 }
 
 .trend-hover-point {
