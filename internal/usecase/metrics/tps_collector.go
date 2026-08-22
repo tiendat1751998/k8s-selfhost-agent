@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	domainLB "github.com/datdt/k8sselfhost/internal/domain/loadbalancer"
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 )
@@ -37,6 +38,9 @@ type ServiceTPS struct {
 	MemoryPercent  float64 `json:"memory_percent"`
 	RxBytesPerSec  int64   `json:"rx_bytes_per_sec"`
 	TxBytesPerSec  int64   `json:"tx_bytes_per_sec"`
+	RequestsPerSec float64 `json:"requests_per_sec"`
+	ErrorRate      float64 `json:"error_rate"`
+	AvgLatencyMs   float64 `json:"avg_latency_ms"`
 	Status         string  `json:"status"` // healthy, degraded, down
 }
 
@@ -131,6 +135,7 @@ type TPSCollector struct {
 	httpClient      *http.Client
 	natsMonitorURL  string
 	traefikAPIURL   string
+	lbProvider      domainLB.Provider
 	logger          *zap.Logger
 	interval        time.Duration
 	requestCountFn  func() int64
@@ -176,6 +181,13 @@ func WithTraefikURL(url string) TPSCollectorOption {
 		if url != "" {
 			c.traefikAPIURL = strings.TrimRight(url, "/")
 		}
+	}
+}
+
+// WithLoadBalancerProvider sets the load balancer metrics provider.
+func WithLoadBalancerProvider(provider domainLB.Provider) TPSCollectorOption {
+	return func(c *TPSCollector) {
+		c.lbProvider = provider
 	}
 }
 
@@ -284,6 +296,9 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 
 	// 2. HTTP TPS (Traefik API)
 	httpTPS := c.collectHTTPTPS(ctx, now)
+
+	// Enrich per-service TPS metrics with load balancer request stats
+	services = c.enrichServicesWithLBStats(ctx, services, httpTPS)
 
 	// 3. Database TPS (pg_stat_database)
 	dbTPS := c.collectDatabaseTPS(ctx, now)
@@ -971,4 +986,98 @@ func extractServiceName(cm ContainerMetrics) string {
 	}
 	return name
 }
+
+// enrichServicesWithLBStats merges per-service LoadBalancer request statistics into ServiceTPS metrics.
+func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services []ServiceTPS, httpTPS HTTPTPS) []ServiceTPS {
+	var lbStats []domainLB.ServiceRequestStats
+	if c.lbProvider != nil {
+		stats, err := c.lbProvider.GetServiceStats(ctx)
+		if err == nil {
+			lbStats = stats
+		} else {
+			c.logger.Debug("Failed to get load balancer service stats", zap.Error(err))
+		}
+	}
+
+	// Map normalized and raw service names to LB stats
+	statMap := make(map[string]domainLB.ServiceRequestStats, len(lbStats))
+	hasAnyLBRPS := false
+	for _, s := range lbStats {
+		norm := normalizeServiceNameForLB(s.ServiceName)
+		statMap[norm] = s
+		statMap[strings.ToLower(strings.TrimSpace(s.ServiceName))] = s
+		if s.RequestsPerSec > 0 {
+			hasAnyLBRPS = true
+		}
+	}
+
+	// Calculate total Rx traffic across all container services for fallback proportional estimation
+	var totalRxTraffic int64
+	for _, s := range services {
+		if s.RxBytesPerSec > 0 {
+			totalRxTraffic += s.RxBytesPerSec
+		}
+	}
+
+	for i := range services {
+		sName := services[i].ServiceName
+		norm := normalizeServiceNameForLB(sName)
+
+		matched := false
+		if stat, ok := statMap[norm]; ok {
+			matched = true
+			services[i].RequestsPerSec = stat.RequestsPerSec
+			services[i].ErrorRate = stat.ErrorRate
+			services[i].AvgLatencyMs = stat.AvgLatencyMs
+		} else if stat, ok := statMap[strings.ToLower(strings.TrimSpace(sName))]; ok {
+			matched = true
+			services[i].RequestsPerSec = stat.RequestsPerSec
+			services[i].ErrorRate = stat.ErrorRate
+			services[i].AvgLatencyMs = stat.AvgLatencyMs
+		} else {
+			// Substring / fuzzy match
+			for k, stat := range statMap {
+				if norm != "" && k != "" && (strings.Contains(norm, k) || strings.Contains(k, norm)) {
+					matched = true
+					services[i].RequestsPerSec = stat.RequestsPerSec
+					services[i].ErrorRate = stat.ErrorRate
+					services[i].AvgLatencyMs = stat.AvgLatencyMs
+					break
+				}
+			}
+		}
+
+		// Fallback: If no direct LB per-service RPS was reported and aggregate HTTP RequestsPerSec > 0,
+		// estimate per-service RPS proportionally from Docker container network throughput
+		if (!matched || services[i].RequestsPerSec == 0) && !hasAnyLBRPS && httpTPS.RequestsPerSec > 0 {
+			if totalRxTraffic > 0 && services[i].RxBytesPerSec > 0 {
+				ratio := float64(services[i].RxBytesPerSec) / float64(totalRxTraffic)
+				services[i].RequestsPerSec = math.Round(httpTPS.RequestsPerSec*ratio*100) / 100
+				if httpTPS.ErrorRate > 0 {
+					services[i].ErrorRate = httpTPS.ErrorRate
+				}
+				if httpTPS.AvgLatencyMs > 0 {
+					services[i].AvgLatencyMs = httpTPS.AvgLatencyMs
+				}
+			}
+		}
+	}
+
+	return services
+}
+
+// normalizeServiceNameForLB normalizes a service name by stripping load balancer and cluster prefixes/suffixes.
+func normalizeServiceNameForLB(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if idx := strings.Index(name, "@"); idx != -1 {
+		name = name[:idx]
+	}
+	name = strings.TrimPrefix(name, "/")
+	name = strings.TrimPrefix(name, "tiki_")
+	name = strings.TrimPrefix(name, "tiki-")
+	name = strings.TrimPrefix(name, "k8s_")
+	name = strings.TrimPrefix(name, "k8s-")
+	return name
+}
+
 

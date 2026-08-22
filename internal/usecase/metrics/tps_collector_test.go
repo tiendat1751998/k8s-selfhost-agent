@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	domainLB "github.com/datdt/k8sselfhost/internal/domain/loadbalancer"
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 )
@@ -563,6 +564,140 @@ func TestTPSCollector_NodeMapping(t *testing.T) {
 	}
 	if redis.NodeID != "host-uuid-k8smater" || redis.NodeName != "k8smater" {
 		t.Errorf("tiki_redis node mismatch: NodeID=%q NodeName=%q, want host-uuid-k8smater/k8smater", redis.NodeID, redis.NodeName)
+	}
+}
+
+type mockLBProvider struct {
+	stats []domainLB.ServiceRequestStats
+	err   error
+}
+
+func (m *mockLBProvider) GetServiceStats(ctx context.Context) ([]domainLB.ServiceRequestStats, error) {
+	return m.stats, m.err
+}
+
+func (m *mockLBProvider) HealthCheck(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockLBProvider) Name() string {
+	return "mock-traefik"
+}
+
+func TestTPSCollector_WithLoadBalancerProvider(t *testing.T) {
+	provider := &mockMetricsProvider{
+		snapshot: &SystemOverview{
+			Containers: []ContainerMetrics{
+				{
+					ContainerID:   "c-gateway",
+					ContainerName: "tiki_gateway",
+					ServiceName:   "tiki_gateway",
+					State:         "running",
+					CPUPercent:    3.2,
+					MemoryUsed:    1024 * 1024 * 64,
+					MemoryLimit:   1024 * 1024 * 512,
+					NetworkRx:     100000,
+					NetworkTx:     50000,
+				},
+				{
+					ContainerID:   "c-web",
+					ContainerName: "tiki_web",
+					ServiceName:   "tiki_web",
+					State:         "running",
+					CPUPercent:    1.5,
+					MemoryUsed:    1024 * 1024 * 32,
+					MemoryLimit:   1024 * 1024 * 256,
+					NetworkRx:     20000,
+					NetworkTx:     10000,
+				},
+			},
+		},
+	}
+
+	lbMock := &mockLBProvider{
+		stats: []domainLB.ServiceRequestStats{
+			{
+				ServiceName:    "gateway@file",
+				TotalRequests:  1500,
+				RequestsPerSec: 42.5,
+				Status2xx:      1450,
+				Status5xx:      10,
+				ErrorRate:      0.67,
+				AvgLatencyMs:   12.4,
+			},
+			{
+				ServiceName:    "web@file",
+				TotalRequests:  800,
+				RequestsPerSec: 18.2,
+				Status2xx:      790,
+				Status4xx:      10,
+				ErrorRate:      1.25,
+				AvgLatencyMs:   5.1,
+			},
+		},
+	}
+
+	collector := NewTPSCollector(
+		provider,
+		nil,
+		zap.NewNop(),
+		WithLoadBalancerProvider(lbMock),
+	)
+
+	snap, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if len(snap.Services) != 2 {
+		t.Fatalf("expected 2 services, got %d", len(snap.Services))
+	}
+
+	svcMap := make(map[string]ServiceTPS)
+	for _, s := range snap.Services {
+		svcMap[s.ServiceName] = s
+	}
+
+	gw, ok := svcMap["tiki_gateway"]
+	if !ok {
+		t.Fatal("expected tiki_gateway in services")
+	}
+	if gw.RequestsPerSec != 42.5 {
+		t.Errorf("expected gateway RequestsPerSec = 42.5, got %f", gw.RequestsPerSec)
+	}
+	if gw.ErrorRate != 0.67 {
+		t.Errorf("expected gateway ErrorRate = 0.67, got %f", gw.ErrorRate)
+	}
+	if gw.AvgLatencyMs != 12.4 {
+		t.Errorf("expected gateway AvgLatencyMs = 12.4, got %f", gw.AvgLatencyMs)
+	}
+
+	web, ok := svcMap["tiki_web"]
+	if !ok {
+		t.Fatal("expected tiki_web in services")
+	}
+	if web.RequestsPerSec != 18.2 {
+		t.Errorf("expected web RequestsPerSec = 18.2, got %f", web.RequestsPerSec)
+	}
+}
+
+func TestNormalizeServiceNameForLB(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"gateway@file", "gateway"},
+		{"tiki_gateway", "gateway"},
+		{"/tiki_web", "web"},
+		{"k8s_api@internal", "api"},
+		{"tiki-auth", "auth"},
+	}
+
+	for _, tt := range tests {
+		got := normalizeServiceNameForLB(tt.input)
+		if got != tt.want {
+			t.Errorf("normalizeServiceNameForLB(%q) = %q, want %q", tt.input, got, tt.want)
+		}
 	}
 }
 

@@ -161,6 +161,9 @@ export interface TpsServiceMetrics {
   memory_percent: number
   rx_bytes_per_sec: number
   tx_bytes_per_sec: number
+  requests_per_sec?: number
+  error_rate?: number
+  avg_latency_ms?: number
   status: string
 }
 
