@@ -12,6 +12,11 @@ import {
   type TpsSnapshot,
   type TpsServiceMetrics,
 } from '../api/overview'
+import {
+  nodeHistoryApi,
+  type NodeHistoryResponse,
+  type NodeMetricRollup,
+} from '../api/compute'
 import { useWebSocket } from '../composables/useWebSocket'
 import CircularGauge from '../components/ui/CircularGauge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
@@ -63,9 +68,16 @@ const modalServiceSearch = ref('')
 const modalServiceSortBy = ref<'traffic' | 'rps' | 'bandwidth' | 'cpu' | 'mem' | 'name' | 'node' | 'status'>('traffic')
 const modalServiceSortOrder = ref<'asc' | 'desc'>('desc')
 
-// Node diagnostics inspector drawer
+// Node diagnostics inspector drawer & Historical telemetry
 const selectedNodeId = ref<string | null>(null)
 const showNodeDrawer = ref(false)
+const nodeDrawerMode = ref<'live' | 'history'>('live')
+const nodeHistoryRange = ref<'1h' | '24h' | '7d' | '30d'>('24h')
+const nodeHistoryLoading = ref(false)
+const nodeHistoryData = ref<NodeHistoryResponse | null>(null)
+const hoveredNodeHistIndex = ref<number | null>(null)
+const nodeHistTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+const isNodeHistHovered = ref(false)
 const processSearch = ref('')
 const processSortBy = ref<'cpu' | 'mem' | 'disk' | 'name' | 'pid'>('cpu')
 
@@ -568,11 +580,190 @@ const filteredNodeProcesses = computed<ProcessMetric[]>(() => {
 // ==========================================
 // 4. FORMATTING & HELPER FUNCTIONS
 // ==========================================
+async function loadNodeHistory(nodeId?: string, range = nodeHistoryRange.value) {
+  const targetId = nodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
+  if (!targetId) return
+  nodeHistoryLoading.value = true
+  nodeHistoryRange.value = range as any
+  try {
+    const res = await nodeHistoryApi.getNodeHistory(targetId, range)
+    nodeHistoryData.value = res
+  } catch (err) {
+    console.warn('Failed to load node history:', err)
+  } finally {
+    nodeHistoryLoading.value = false
+  }
+}
+
+function switchNodeDrawerToHistory(range: '1h' | '24h' | '7d' | '30d' = '24h') {
+  nodeDrawerMode.value = 'history'
+  loadNodeHistory(selectedNode.value?.node_id || selectedNode.value?.node_name || undefined, range)
+}
+
 function inspectNode(node: NodeMetrics) {
   selectedNodeId.value = node.node_id
   processSearch.value = ''
   processSortBy.value = 'cpu'
+  nodeDrawerMode.value = 'live'
   showNodeDrawer.value = true
+  loadNodeHistory(node.node_id || node.node_name, '24h')
+}
+
+// ==========================================
+// 4e. NODE HISTORICAL TELEMETRY COMPUTEDS
+// ==========================================
+const nodeHistoryList = computed<NodeMetricRollup[]>(() => {
+  return nodeHistoryData.value?.history || []
+})
+
+const nodeHistoryChartCpuPath = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return ''
+  if (list.length === 1) {
+    const y = 190 - (Math.min(100, Math.max(0, list[0].cpu_percent)) / 100) * 170
+    return `M 50 ${y.toFixed(1)} L 700 ${y.toFixed(1)}`
+  }
+  const step = 650 / (list.length - 1)
+  return list
+    .map((h, i) => {
+      const x = 50 + i * step
+      const y = 190 - (Math.min(100, Math.max(0, h.cpu_percent)) / 100) * 170
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const nodeHistoryChartCpuArea = computed(() => {
+  if (!nodeHistoryChartCpuPath.value || nodeHistoryList.value.length === 0) return ''
+  const list = nodeHistoryList.value
+  const firstX = 50
+  const lastX = list.length === 1 ? 700 : 50 + (list.length - 1) * (650 / (list.length - 1))
+  return `${nodeHistoryChartCpuPath.value} L ${lastX.toFixed(1)} 190 L ${firstX.toFixed(1)} 190 Z`
+})
+
+const nodeHistoryChartMemPath = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return ''
+  if (list.length === 1) {
+    const y = 190 - (Math.min(100, Math.max(0, list[0].mem_percent)) / 100) * 170
+    return `M 50 ${y.toFixed(1)} L 700 ${y.toFixed(1)}`
+  }
+  const step = 650 / (list.length - 1)
+  return list
+    .map((h, i) => {
+      const x = 50 + i * step
+      const y = 190 - (Math.min(100, Math.max(0, h.mem_percent)) / 100) * 170
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const nodeHistoryChartMemArea = computed(() => {
+  if (!nodeHistoryChartMemPath.value || nodeHistoryList.value.length === 0) return ''
+  const list = nodeHistoryList.value
+  const firstX = 50
+  const lastX = list.length === 1 ? 700 : 50 + (list.length - 1) * (650 / (list.length - 1))
+  return `${nodeHistoryChartMemPath.value} L ${lastX.toFixed(1)} 190 L ${firstX.toFixed(1)} 190 Z`
+})
+
+const nodeHistoryChartDiskPath = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return ''
+  if (list.length === 1) {
+    const y = 190 - (Math.min(100, Math.max(0, list[0].disk_percent)) / 100) * 170
+    return `M 50 ${y.toFixed(1)} L 700 ${y.toFixed(1)}`
+  }
+  const step = 650 / (list.length - 1)
+  return list
+    .map((h, i) => {
+      const x = 50 + i * step
+      const y = 190 - (Math.min(100, Math.max(0, h.disk_percent)) / 100) * 170
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const nodeHistoryTimeMarkers = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return []
+  if (list.length === 1) {
+    const d = new Date(list[0].recorded_at)
+    return [{ x: 50, time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) }]
+  }
+  const count = Math.min(5, list.length)
+  const markers = []
+  const step = 650 / (list.length - 1)
+  for (let i = 0; i < count; i++) {
+    const idx = Math.round((i / (count - 1)) * (list.length - 1))
+    const d = new Date(list[idx].recorded_at)
+    const timeStr = nodeHistoryRange.value === '7d' || nodeHistoryRange.value === '30d'
+      ? `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`
+      : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+    markers.push({
+      x: 50 + idx * step,
+      time: timeStr,
+    })
+  }
+  return markers
+})
+
+const hoveredNodeHistPoint = computed<NodeMetricRollup | null>(() => {
+  if (hoveredNodeHistIndex.value === null || !nodeHistoryList.value[hoveredNodeHistIndex.value]) {
+    return null
+  }
+  return nodeHistoryList.value[hoveredNodeHistIndex.value]
+})
+
+const nodeHistHoverCoords = computed(() => {
+  if (hoveredNodeHistIndex.value === null || nodeHistoryList.value.length === 0) return null
+  const list = nodeHistoryList.value
+  const step = list.length > 1 ? 650 / (list.length - 1) : 0
+  const idx = hoveredNodeHistIndex.value
+  const pt = list[idx]
+  if (!pt) return null
+  const x = list.length > 1 ? 50 + idx * step : 375
+  const yCpu = 190 - (Math.min(100, Math.max(0, pt.cpu_percent)) / 100) * 170
+  const yMem = 190 - (Math.min(100, Math.max(0, pt.mem_percent)) / 100) * 170
+  const yDisk = 190 - (Math.min(100, Math.max(0, pt.disk_percent)) / 100) * 170
+  return { x, yCpu, yMem, yDisk }
+})
+
+const nodeHistTooltipStyle = computed(() => {
+  if (!nodeHistTooltipPos.value) return {}
+  const { x, y } = nodeHistTooltipPos.value
+  const isRightSide = x > 380
+  return {
+    left: isRightSide ? `${x - 16}px` : `${x + 16}px`,
+    top: `${Math.min(160, Math.max(35, y))}px`,
+    transform: isRightSide ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
+    pointerEvents: 'none' as const,
+  }
+})
+
+function handleNodeHistChartHover(event: MouseEvent) {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
+  const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
+  if (list.length === 1) {
+    hoveredNodeHistIndex.value = 0
+  } else {
+    const scaleX = rect.width / 760
+    const svgX = mouseX / scaleX
+    const boundedSvgX = Math.max(50, Math.min(700, svgX))
+    const ratio = (boundedSvgX - 50) / 650
+    const idx = Math.round(ratio * (list.length - 1))
+    hoveredNodeHistIndex.value = Math.max(0, Math.min(list.length - 1, idx))
+  }
+  nodeHistTooltipPos.value = { x: mouseX, y: mouseY }
+  isNodeHistHovered.value = true
+}
+
+function handleNodeHistChartLeave() {
+  isNodeHistHovered.value = false
+  hoveredNodeHistIndex.value = null
 }
 
 function formatBytes(bytes?: number, decimals = 1): string {
@@ -1997,240 +2188,217 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 2. Hardware Telemetry HUD -->
-        <div class="hardware-hud-section">
-          <div class="hud-section-header">
-            <h4 class="hud-section-heading">
-              <span class="heading-icon">📊</span> Hardware Saturation Telemetry
-            </h4>
-            <span class="badge badge-indigo">LIVE METRICS</span>
-          </div>
-
-          <div class="hardware-gauges-grid">
-            <!-- CPU HUD -->
-            <div class="hw-gauge-card glass-panel">
-              <div class="hw-gauge-top">
-                <span class="hw-gauge-label">CPU LOAD</span>
-                <span class="hw-gauge-value smooth-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
-                  {{ formatPercent(selectedNode.cpu_percent) }}
-                </span>
-              </div>
-              <div class="hw-progress-track">
-                <div
-                  class="hw-progress-fill smooth-bar"
-                  :class="`bg-${getUtilizationColor(selectedNode.cpu_percent)}`"
-                  :style="{ width: `${Math.min(100, selectedNode.cpu_percent)}%` }"
-                ></div>
-              </div>
-              <div class="hw-gauge-sub">
-                <span>Saturation:</span>
-                <strong class="smooth-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
-                  {{ selectedNode.cpu_percent >= 80 ? 'CRITICAL' : selectedNode.cpu_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
-                </strong>
-              </div>
-            </div>
-
-            <!-- RAM HUD -->
-            <div class="hw-gauge-card glass-panel">
-              <div class="hw-gauge-top">
-                <span class="hw-gauge-label">MEMORY USAGE</span>
-                <span class="hw-gauge-value text-cyan smooth-value">
-                  {{ formatPercent(selectedNode.memory_percent) }}
-                </span>
-              </div>
-              <div class="hw-progress-track">
-                <div
-                  class="hw-progress-fill bg-cyan smooth-bar"
-                  :style="{ width: `${Math.min(100, selectedNode.memory_percent)}%` }"
-                ></div>
-              </div>
-              <div class="hw-gauge-sub">
-                <span>{{ formatBytes(selectedNode.memory_used) }} / {{ formatBytes(selectedNode.memory_total) }}</span>
-              </div>
-            </div>
-
-            <!-- DISK HUD -->
-            <div class="hw-gauge-card glass-panel">
-              <div class="hw-gauge-top">
-                <span class="hw-gauge-label">DISK STORAGE</span>
-                <span class="hw-gauge-value text-emerald smooth-value">
-                  {{ formatPercent(selectedNode.disk_percent) }}
-                </span>
-              </div>
-              <div class="hw-progress-track">
-                <div
-                  class="hw-progress-fill bg-emerald smooth-bar"
-                  :style="{ width: `${Math.min(100, selectedNode.disk_percent)}%` }"
-                ></div>
-              </div>
-              <div class="hw-gauge-sub">
-                <span>{{ formatBytes(selectedNode.disk_used) }} / {{ formatBytes(selectedNode.disk_total) }}</span>
-              </div>
-            </div>
-
-            <!-- NETWORK I/O HUD -->
-            <div class="hw-gauge-card glass-panel">
-              <div class="hw-gauge-top">
-                <span class="hw-gauge-label">NETWORK I/O</span>
-                <span class="badge badge-violet font-mono">BANDWIDTH</span>
-              </div>
-              <div class="hw-net-rates font-mono">
-                <div class="net-rate-item">
-                  <span class="net-icon text-cyan">↓ RX:</span>
-                  <span class="net-val smooth-value">{{ formatIoRate(selectedNode.network_rx_bytes) }}</span>
-                </div>
-                <div class="net-rate-item">
-                  <span class="net-icon text-violet">↑ TX:</span>
-                  <span class="net-val smooth-value">{{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
-                </div>
-              </div>
-              <div class="hw-gauge-sub">
-                <span>Containers: {{ selectedNode.running_count ?? selectedNode.container_count ?? 0 }}</span>
-              </div>
-            </div>
-          </div>
+        <!-- Mode Switcher: Live Diagnostics vs Historical Telemetry -->
+        <div class="drawer-mode-tabs">
+          <button
+            class="mode-tab-btn"
+            :class="{ active: nodeDrawerMode === 'live' }"
+            @click="nodeDrawerMode = 'live'"
+          >
+            ⚡ Live Diagnostics & Processes
+          </button>
+          <button
+            class="mode-tab-btn"
+            :class="{ active: nodeDrawerMode === 'history' }"
+            @click="switchNodeDrawerToHistory('24h')"
+          >
+            📈 Historical Telemetry & Audit Trail
+          </button>
         </div>
 
-        <!-- 3. 📡 Network Interface Throughput Section -->
-        <div class="node-net-interfaces-section glass-panel">
-          <div class="hud-section-header">
-            <div class="node-section-title-group">
+        <!-- ========================================== -->
+        <!-- MODE A: LIVE DIAGNOSTICS & PROCESSES       -->
+        <!-- ========================================== -->
+        <div v-if="nodeDrawerMode === 'live'" class="node-live-content">
+          <!-- 2. Hardware Telemetry HUD -->
+          <div class="hardware-hud-section">
+            <div class="hud-section-header">
+              <h4 class="hud-section-heading">
+                <span class="heading-icon">📊</span> Hardware Saturation Telemetry
+              </h4>
+              <span class="badge badge-indigo">LIVE METRICS</span>
+            </div>
+
+            <div class="hardware-gauges-grid">
+              <!-- CPU HUD -->
+              <div class="hw-gauge-card glass-panel">
+                <div class="hw-gauge-top">
+                  <span class="hw-gauge-label">CPU LOAD</span>
+                  <span class="hw-gauge-value smooth-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
+                    {{ formatPercent(selectedNode.cpu_percent) }}
+                  </span>
+                </div>
+                <div class="hw-progress-track">
+                  <div
+                    class="hw-progress-fill smooth-bar"
+                    :class="`bg-${getUtilizationColor(selectedNode.cpu_percent)}`"
+                    :style="{ width: `${Math.min(100, selectedNode.cpu_percent)}%` }"
+                  ></div>
+                </div>
+                <div class="hw-gauge-sub">
+                  <span>Saturation:</span>
+                  <strong class="smooth-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
+                    {{ selectedNode.cpu_percent >= 80 ? 'CRITICAL' : selectedNode.cpu_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
+                  </strong>
+                </div>
+              </div>
+
+              <!-- RAM HUD -->
+              <div class="hw-gauge-card glass-panel">
+                <div class="hw-gauge-top">
+                  <span class="hw-gauge-label">MEMORY USAGE</span>
+                  <span class="hw-gauge-value text-cyan smooth-value">
+                    {{ formatPercent(selectedNode.memory_percent) }}
+                  </span>
+                </div>
+                <div class="hw-progress-track">
+                  <div
+                    class="hw-progress-fill bg-cyan smooth-bar"
+                    :style="{ width: `${Math.min(100, selectedNode.memory_percent)}%` }"
+                  ></div>
+                </div>
+                <div class="hw-gauge-sub">
+                  <span>{{ formatBytes(selectedNode.memory_used) }} / {{ formatBytes(selectedNode.memory_total) }}</span>
+                </div>
+              </div>
+
+              <!-- DISK HUD -->
+              <div class="hw-gauge-card glass-panel">
+                <div class="hw-gauge-top">
+                  <span class="hw-gauge-label">DISK STORAGE</span>
+                  <span class="hw-gauge-value text-emerald smooth-value">
+                    {{ formatPercent(selectedNode.disk_percent) }}
+                  </span>
+                </div>
+                <div class="hw-progress-track">
+                  <div
+                    class="hw-progress-fill bg-emerald smooth-bar"
+                    :style="{ width: `${Math.min(100, selectedNode.disk_percent)}%` }"
+                  ></div>
+                </div>
+                <div class="hw-gauge-sub">
+                  <span>{{ formatBytes(selectedNode.disk_used) }} / {{ formatBytes(selectedNode.disk_total) }}</span>
+                </div>
+              </div>
+
+              <!-- NETWORK I/O HUD -->
+              <div class="hw-gauge-card glass-panel">
+                <div class="hw-gauge-top">
+                  <span class="hw-gauge-label">NETWORK I/O</span>
+                  <span class="hw-gauge-value text-purple smooth-value">
+                    ↓ {{ formatIoRate(selectedNode.network_rx_bytes) }}
+                  </span>
+                </div>
+                <div class="hw-gauge-sub-row">
+                  <span>↑ TX:</span>
+                  <span class="net-val smooth-value">{{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
+                </div>
+                <div class="hw-gauge-sub">
+                  <span>Containers: {{ selectedNode.running_count ?? selectedNode.container_count ?? 0 }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Network Interfaces Section -->
+          <div class="network-interfaces-section" v-if="filteredNodeInterfaces.length > 0">
+            <div class="hud-section-header">
               <h4 class="hud-section-heading">
                 <span class="heading-icon">📡</span> Network Interface Throughput
               </h4>
-              <span class="badge badge-cyan font-mono" v-if="filteredNodeInterfaces.length > 0">
-                {{ filteredNodeInterfaces.length }} {{ filteredNodeInterfaces.length === 1 ? 'interface' : 'interfaces' }}
-              </span>
+              <span class="badge badge-cyan font-mono">{{ filteredNodeInterfaces.length }} interfaces</span>
             </div>
-            <span class="badge badge-violet font-mono">BANDWIDTH</span>
+            <div class="interfaces-grid">
+              <div
+                v-for="iface in filteredNodeInterfaces"
+                :key="iface.name"
+                class="iface-card glass-panel"
+              >
+                <div class="iface-top">
+                  <span class="iface-name font-mono">🌐 {{ iface.name }}</span>
+                </div>
+                <div class="iface-rates">
+                  <div class="iface-rate-item">
+                    <span class="rate-label">↓ RX</span>
+                    <span class="rate-val text-cyan font-mono">{{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
+                  </div>
+                  <div class="iface-rate-item">
+                    <span class="rate-label">↑ TX</span>
+                    <span class="rate-val text-purple font-mono">{{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="interfaces-table-wrapper" v-if="filteredNodeInterfaces.length > 0">
-            <table class="interfaces-table">
-              <thead>
-                <tr>
-                  <th class="th-iface">Interface</th>
-                  <th class="th-rx">↓ Rx</th>
-                  <th class="th-tx">↑ Tx</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="iface in filteredNodeInterfaces" :key="iface.name" class="iface-row">
-                  <td class="col-iface-name font-mono">
-                    <span class="iface-tag font-mono">{{ iface.name }}</span>
-                  </td>
-                  <td class="col-iface-rx font-mono">
-                    <span class="text-cyan smooth-value">↓ {{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
-                  </td>
-                  <td class="col-iface-tx font-mono">
-                    <span class="text-violet smooth-value">↑ {{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-else class="node-section-empty">
-            <span class="text-muted text-xs">No active network interfaces detected for this node</span>
-          </div>
-        </div>
-
-        <!-- 4. 📦 Apps & Services on this Node Section -->
-        <div class="node-services-section glass-panel">
-          <div class="hud-section-header">
-            <div class="node-section-title-group">
+          <!-- Containerized Services on this Node -->
+          <div class="node-services-section" v-if="nodeServices.length > 0">
+            <div class="hud-section-header">
               <h4 class="hud-section-heading">
                 <span class="heading-icon">📦</span> Apps & Services on this Node
               </h4>
-              <span class="badge badge-cyan font-mono" v-if="nodeServices.length > 0">
-                {{ nodeServices.length }} {{ nodeServices.length === 1 ? 'service' : 'services' }}
-              </span>
+              <span class="badge badge-emerald font-mono">{{ nodeServices.length }} running</span>
             </div>
-            <span class="badge badge-indigo font-mono">THROUGHPUT</span>
+            <div class="services-table-wrapper">
+              <table class="services-mini-table">
+                <thead>
+                  <tr>
+                    <th>Service</th>
+                    <th>CPU %</th>
+                    <th>Memory</th>
+                    <th>Req/s</th>
+                    <th>Err %</th>
+                    <th>Bandwidth</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="svc in nodeServices" :key="svc.service_name">
+                    <td class="col-svc-name">
+                      <span class="svc-bullet">●</span>
+                      <strong>{{ svc.service_name }}</strong>
+                    </td>
+                    <td class="font-mono text-purple">{{ formatPercent(svc.cpu_percent) }}</td>
+                    <td class="font-mono text-cyan">{{ formatBytes(svc.memory_used_mb * 1024 * 1024) }}</td>
+                    <td class="font-mono text-emerald">
+                      <span v-if="svc.requests_per_sec !== undefined && svc.requests_per_sec > 0">
+                        ⚡ {{ svc.requests_per_sec.toLocaleString() }}
+                      </span>
+                      <span v-else class="text-slate opacity-40">0</span>
+                    </td>
+                    <td class="font-mono">
+                      <span v-if="svc.error_rate !== undefined && svc.error_rate > 0" class="text-rose font-bold">
+                        {{ svc.error_rate.toFixed(1) }}%
+                      </span>
+                      <span v-else class="text-slate opacity-40">0.0%</span>
+                    </td>
+                    <td class="font-mono text-slate">
+                      <span class="bw-split">
+                        <span class="bw-rx text-cyan" :title="'Live: ' + formatIoRate(svc.rx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_rx_bytes || 0) + ' received'">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
+                        <span class="bw-tx text-purple" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_tx_bytes || 0) + ' sent'">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+                      </span>
+                    </td>
+                    <td>
+                      <span class="badge" :class="svc.status === 'healthy' ? 'badge-emerald' : 'badge-amber'">
+                        {{ svc.status.toUpperCase() }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div class="services-table-wrapper" v-if="nodeServices.length > 0">
-            <table class="node-services-table">
-              <thead>
-                <tr>
-                  <th class="th-svc-name">Service</th>
-                  <th class="th-svc-cpu">CPU</th>
-                  <th class="th-svc-mem">Memory</th>
-                  <th class="th-svc-rx">↓ Rx</th>
-                  <th class="th-svc-tx">↑ Tx</th>
-                  <th class="th-svc-rps">Req/s</th>
-                  <th class="th-svc-err">Err %</th>
-                  <th class="th-svc-status">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="svc in nodeServices" :key="svc.service_name + (svc.node_id || '')" class="node-svc-row">
-                  <td class="col-svc-name">
-                    <div class="svc-name-cell">
-                      <span
-                        class="node-indicator-dot"
-                        :class="svc.status === 'healthy' ? 'bg-emerald' : svc.status === 'degraded' ? 'bg-amber' : 'bg-rose'"
-                      ></span>
-                      <span class="svc-title font-mono">{{ svc.service_name }}</span>
-                    </div>
-                  </td>
-                  <td class="col-svc-cpu font-mono">
-                    <span class="smooth-value" :class="svc.cpu_percent > 80 ? 'text-rose' : svc.cpu_percent > 50 ? 'text-amber' : 'text-emerald'">
-                      {{ svc.cpu_percent.toFixed(1) }}%
-                    </span>
-                  </td>
-                  <td class="col-svc-mem font-mono">
-                    <span class="smooth-value" :class="svc.memory_percent > 85 ? 'text-rose' : svc.memory_percent > 70 ? 'text-amber' : 'text-cyan'">
-                      {{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}
-                    </span>
-                  </td>
-                  <td class="col-svc-rx font-mono" :title="'Live: ' + formatIoRate(svc.rx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_rx_bytes || 0) + ' received'">
-                    <span class="text-cyan smooth-value" :title="'Live: ' + formatIoRate(svc.rx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_rx_bytes || 0) + ' received'">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
-                  </td>
-                  <td class="col-svc-tx font-mono" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_tx_bytes || 0) + ' sent'">
-                    <span class="text-violet smooth-value" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_tx_bytes || 0) + ' sent'">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
-                  </td>
-                  <td class="col-svc-rps font-mono">
-                    <span class="smooth-value" :class="(svc.requests_per_sec || 0) > 0 ? 'text-emerald font-bold' : 'text-muted'">
-                      {{ (svc.requests_per_sec !== undefined && svc.requests_per_sec !== null) ? svc.requests_per_sec.toFixed(1) : '0.0' }}
-                    </span>
-                  </td>
-                  <td class="col-svc-err font-mono">
-                    <span class="smooth-value" :class="(svc.error_rate || 0) > 5 ? 'text-rose font-bold' : (svc.error_rate || 0) > 0 ? 'text-amber' : 'text-muted'">
-                      {{ (svc.error_rate !== undefined && svc.error_rate !== null) ? svc.error_rate.toFixed(1) + '%' : '0.0%' }}
-                    </span>
-                  </td>
-                  <td class="col-svc-status">
-                    <span
-                      class="badge smooth-value"
-                      :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
-                    >
-                      {{ svc.status === 'healthy' ? '● HEALTHY' : svc.status === 'degraded' ? '● DEGRADED' : '● DOWN' }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-else class="node-section-empty">
-            <span class="text-muted text-xs">No containerized services detected on this node</span>
-          </div>
-        </div>
-
-        <!-- 5. 🔥 Top Resource-Consuming Apps & Processes Table -->
-        <div class="processes-section glass-panel">
-          <div class="processes-header">
-            <div class="proc-title-group">
-              <div class="proc-title-row">
+          <!-- Top Resource-Consuming Processes -->
+          <div class="node-processes-section">
+            <div class="proc-header-row">
+              <div class="proc-title-group">
                 <h4 class="proc-section-heading">🔥 Top Resource-Consuming Apps & Processes</h4>
                 <span class="badge badge-indigo font-mono" v-if="filteredNodeProcesses.length > 0">
                   {{ filteredNodeProcesses.length }} active
                 </span>
               </div>
-              <p class="proc-section-desc">
-                Real-time operating system PID telemetry mapped to workload containers and system daemons.
-              </p>
             </div>
-
             <div class="proc-controls">
               <div class="proc-search-box">
                 <span class="search-icon">🔍</span>
@@ -2253,116 +2421,348 @@ onUnmounted(() => {
                 </select>
               </div>
             </div>
-          </div>
 
-          <!-- Processes Table -->
-          <div class="processes-table-wrapper" v-if="filteredNodeProcesses.length > 0">
-            <table class="processes-table">
-              <thead>
-                <tr>
-                  <th class="th-pid">PID</th>
-                  <th class="th-app">App / Command</th>
-                  <th class="th-user">User</th>
-                  <th class="th-cpu">CPU %</th>
-                  <th class="th-mem">Memory</th>
-                  <th class="th-disk">Disk I/O</th>
-                  <th class="th-state">State</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="proc in filteredNodeProcesses"
-                  :key="proc.pid"
-                  class="proc-row"
-                  :class="{ 'proc-row-hot': proc.cpu_percent >= 70 }"
+            <div class="processes-table-wrapper" v-if="filteredNodeProcesses.length > 0">
+              <table class="processes-table">
+                <thead>
+                  <tr>
+                    <th class="th-pid">PID</th>
+                    <th class="th-app">App / Command</th>
+                    <th class="th-user">User</th>
+                    <th class="th-cpu">CPU %</th>
+                    <th class="th-mem">Memory</th>
+                    <th class="th-disk">Disk I/O</th>
+                    <th class="th-state">State</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="proc in filteredNodeProcesses"
+                    :key="proc.pid"
+                    class="proc-row"
+                    :class="{ 'proc-row-hot': proc.cpu_percent >= 70 }"
+                  >
+                    <td class="col-proc-pid">
+                      <span class="pid-tag font-mono">#{{ proc.pid }}</span>
+                    </td>
+                    <td class="col-proc-app">
+                      <div class="proc-app-info" :title="proc.command_line ? `${proc.name}\nCommand: ${proc.command_line}` : proc.name">
+                        <span class="proc-name">{{ proc.name }}</span>
+                        <span class="proc-cmd-line font-mono" v-if="proc.command_line">
+                          {{ proc.command_line }}
+                        </span>
+                      </div>
+                    </td>
+                    <td class="col-proc-user">
+                      <span class="user-badge font-mono">{{ proc.user || 'root' }}</span>
+                    </td>
+                    <td class="col-proc-cpu">
+                      <div class="proc-cpu-box">
+                        <div class="proc-cpu-val-row">
+                          <span class="proc-cpu-val smooth-value" :class="`text-${getProcessCpuColor(proc.cpu_percent)}`">
+                            {{ formatPercent(proc.cpu_percent) }}
+                          </span>
+                          <span v-if="proc.cpu_percent >= 70" class="badge badge-rose badge-hot-pulse">
+                            HOT
+                          </span>
+                        </div>
+                        <div class="proc-mini-track">
+                          <div
+                            class="proc-mini-fill smooth-bar"
+                            :class="`bg-${getProcessCpuColor(proc.cpu_percent)}`"
+                            :style="{ width: `${Math.min(100, proc.cpu_percent)}%` }"
+                          ></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="col-proc-mem">
+                      <div class="proc-mem-box">
+                        <span class="proc-mem-val smooth-value">{{ formatBytes(proc.memory_bytes) }}</span>
+                        <span class="proc-mem-pct font-mono" v-if="proc.memory_percent">
+                          ({{ formatPercent(proc.memory_percent) }})
+                        </span>
+                      </div>
+                    </td>
+                    <td class="col-proc-disk">
+                      <span class="font-mono text-slate">
+                        ↓ {{ formatIoRate(proc.read_bytes_per_sec) }}
+                      </span>
+                    </td>
+                    <td class="col-proc-state">
+                      <span class="badge font-mono" :class="getProcessStateBadgeClass(proc.state)">{{ getProcessStateLabel(proc.state) }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="proc-empty-state glass-panel" v-else>
+              <span class="proc-empty-icon">📡</span>
+              <h5 class="proc-empty-title">
+                {{ processSearch ? 'No Processes Matching Filter' : 'No Process Telemetry Streamed' }}
+              </h5>
+              <p class="proc-empty-desc" v-if="processSearch">
+                No active processes matched "{{ processSearch }}". Try searching for a different process name or PID.
+              </p>
+              <p class="proc-empty-desc" v-else>
+                Node telemetry is online but process inspector stream is pending or waiting for agent collector broadcast. Ensure <code>k8s-agent</code> is running.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODE B: HISTORICAL TELEMETRY & AUDIT       -->
+        <!-- ========================================== -->
+        <div v-else-if="nodeDrawerMode === 'history'" class="node-history-content">
+          <!-- Time Range Selector Bar -->
+          <div class="hist-range-selector glass-panel">
+            <div class="range-left">
+              <span class="range-title">📅 Time Window:</span>
+              <div class="range-pills">
+                <button
+                  v-for="r in ['1h', '24h', '7d', '30d'] as const"
+                  :key="r"
+                  class="btn-range-pill"
+                  :class="{ active: nodeHistoryRange === r }"
+                  @click="switchNodeDrawerToHistory(r)"
                 >
-                  <!-- PID -->
-                  <td class="col-proc-pid">
-                    <span class="pid-tag font-mono">#{{ proc.pid }}</span>
-                  </td>
-
-                  <!-- App / Command -->
-                  <td class="col-proc-app">
-                    <div class="proc-app-info" :title="proc.command_line ? `${proc.name}\nCommand: ${proc.command_line}` : proc.name">
-                      <span class="proc-name">{{ proc.name }}</span>
-                      <span class="proc-cmd-line font-mono" v-if="proc.command_line">
-                        {{ proc.command_line }}
-                      </span>
-                    </div>
-                  </td>
-
-                  <!-- User -->
-                  <td class="col-proc-user">
-                    <span class="user-badge font-mono">{{ proc.user || 'root' }}</span>
-                  </td>
-
-                  <!-- CPU % -->
-                  <td class="col-proc-cpu">
-                    <div class="proc-cpu-box">
-                      <div class="proc-cpu-val-row">
-                        <span class="proc-cpu-val smooth-value" :class="`text-${getProcessCpuColor(proc.cpu_percent)}`">
-                          {{ formatPercent(proc.cpu_percent) }}
-                        </span>
-                        <span v-if="proc.cpu_percent >= 70" class="badge badge-rose badge-hot-pulse">
-                          HOT
-                        </span>
-                      </div>
-                      <div class="proc-mini-track">
-                        <div
-                          class="proc-mini-fill smooth-bar"
-                          :class="`bg-${getProcessCpuColor(proc.cpu_percent)}`"
-                          :style="{ width: `${Math.min(100, proc.cpu_percent)}%` }"
-                        ></div>
-                      </div>
-                    </div>
-                  </td>
-
-                  <!-- Memory -->
-                  <td class="col-proc-mem">
-                    <div class="proc-mem-box">
-                      <span class="proc-mem-val smooth-value">{{ formatBytes(proc.memory_bytes) }}</span>
-                      <span class="proc-mem-pct font-mono" v-if="proc.memory_percent">
-                        ({{ formatPercent(proc.memory_percent) }})
-                      </span>
-                    </div>
-                  </td>
-
-                  <!-- Disk I/O -->
-                  <td class="col-proc-disk font-mono">
-                    <div class="proc-io-rates">
-                      <span class="io-read">R: {{ formatIoRate(proc.read_bytes_per_sec) }}</span>
-                      <span class="io-sep">·</span>
-                      <span class="io-write">W: {{ formatIoRate(proc.write_bytes_per_sec) }}</span>
-                    </div>
-                  </td>
-
-                  <!-- State -->
-                  <td class="col-proc-state">
-                    <span class="badge" :class="getProcessStateBadgeClass(proc.state)">
-                      {{ getProcessStateLabel(proc.state) }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  {{ r === '1h' ? '1 Hour' : r === '24h' ? '24 Hours' : r === '7d' ? '7 Days' : '30 Days' }}
+                </button>
+              </div>
+            </div>
+            <div class="range-right">
+              <span class="badge badge-indigo font-mono" v-if="nodeHistoryData?.resolution">
+                Sample Rate: {{ nodeHistoryData.resolution }}
+              </span>
+              <button class="btn btn-secondary btn-xs" @click="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, nodeHistoryRange)" :disabled="nodeHistoryLoading">
+                ↺ Refresh History
+              </button>
+            </div>
           </div>
 
-          <!-- Clean Cybernetic Empty State -->
-          <div v-else class="proc-empty-state">
-            <div class="proc-empty-icon">📡</div>
-            <h5 class="proc-empty-title">
-              {{ processSearch ? 'No Processes Matching Filter' : 'No Process Telemetry Streamed' }}
-            </h5>
-            <p class="proc-empty-desc" v-if="processSearch">
-              No active processes matched "{{ processSearch }}". Try searching for a different process name or PID.
-            </p>
-            <p class="proc-empty-desc" v-else>
-              Node telemetry is online but process inspector stream is pending or waiting for agent collector broadcast. Ensure <code>k8s-agent</code> v2.4+ is installed and running with process collector enabled (port 9100).
-            </p>
-            <div class="proc-empty-actions" v-if="processSearch">
-              <button class="btn btn-secondary btn-sm" @click="processSearch = ''">
-                Clear Search Filter
-              </button>
+          <!-- Summary KPI Badges -->
+          <div class="hist-kpi-grid" v-if="nodeHistoryData?.summary">
+            <div class="hist-kpi-card glass-panel">
+              <span class="kpi-label">AVG CPU / PEAK</span>
+              <span class="kpi-val text-purple">{{ formatPercent(nodeHistoryData.summary.avg_cpu_percent) }}</span>
+              <span class="kpi-sub">🔥 Peak: {{ formatPercent(nodeHistoryData.summary.peak_cpu_percent) }}</span>
+            </div>
+            <div class="hist-kpi-card glass-panel">
+              <span class="kpi-label">AVG MEMORY / PEAK</span>
+              <span class="kpi-val text-cyan">{{ formatPercent(nodeHistoryData.summary.avg_mem_percent) }}</span>
+              <span class="kpi-sub">🧠 Peak: {{ formatPercent(nodeHistoryData.summary.peak_mem_percent) }}</span>
+            </div>
+            <div class="hist-kpi-card glass-panel">
+              <span class="kpi-label">PEAK NETWORK I/O</span>
+              <span class="kpi-val text-emerald">↓ {{ formatIoRate(nodeHistoryData.summary.peak_rx_bytes_sec) }}</span>
+              <span class="kpi-sub">↑ {{ formatIoRate(nodeHistoryData.summary.peak_tx_bytes_sec) }}</span>
+            </div>
+            <div class="hist-kpi-card glass-panel">
+              <span class="kpi-label">UPTIME & RELIABILITY</span>
+              <span class="kpi-val" :class="nodeHistoryData.summary.uptime_percent >= 99 ? 'text-emerald' : 'text-amber'">
+                {{ formatPercent(nodeHistoryData.summary.uptime_percent) }}
+              </span>
+              <span class="kpi-sub" :class="nodeHistoryData.summary.offline_count > 0 ? 'text-rose' : 'text-slate'">
+                {{ nodeHistoryData.summary.offline_count > 0 ? `🚨 ${nodeHistoryData.summary.offline_count} offline incident(s)` : '🟢 Zero Downtime' }}
+              </span>
+            </div>
+          </div>
+          <div class="hist-kpi-empty glass-panel" v-else-if="!nodeHistoryLoading">
+            <div class="empty-kpi-content">
+              <span class="empty-kpi-icon">📊</span>
+              <div class="empty-kpi-text">
+                <strong class="empty-kpi-title">Historical Summary Ingestion In Progress</strong>
+                <span class="empty-kpi-desc">No aggregated summary recorded for <code>{{ selectedNode?.node_name }}</code> in the {{ nodeHistoryRange }} window. Live telemetry and monitoring remain fully active.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Historical Multi-Series Chart -->
+          <div class="hist-chart-wrapper glass-panel">
+            <div class="hist-chart-header">
+              <div class="chart-title-group">
+                <h4 class="hist-chart-title">📈 {{ selectedNode?.node_name || 'Node' }} Hardware Saturation Trends</h4>
+                <span class="hist-chart-desc">{{ nodeHistoryList.length }} recorded samples in {{ nodeHistoryRange }} window</span>
+              </div>
+              <div class="hist-chart-legend" v-if="nodeHistoryList.length > 0">
+                <span class="legend-pill"><span class="legend-dot bg-purple"></span> CPU %</span>
+                <span class="legend-pill"><span class="legend-dot bg-cyan"></span> Memory %</span>
+                <span class="legend-pill"><span class="legend-dot bg-emerald"></span> Disk %</span>
+              </div>
+            </div>
+
+            <!-- Loading overlay when fetching new time range -->
+            <div v-if="nodeHistoryLoading" class="hist-chart-loading glass-panel">
+              <span class="spinner-sm"></span> Loading {{ nodeHistoryRange }} telemetry rollups...
+            </div>
+
+            <!-- SVG Chart with HTML-Overlay Grid Layout -->
+            <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave">
+              <!-- Left Y-Axis: 0 - 100% -->
+              <div class="hist-y-axis left">
+                <span class="y-tick">100%</span>
+                <span class="y-tick">75%</span>
+                <span class="y-tick">50%</span>
+                <span class="y-tick">25%</span>
+                <span class="y-tick">0%</span>
+              </div>
+
+              <!-- Main SVG Canvas -->
+              <svg class="hist-svg-canvas" viewBox="0 0 760 200" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="histCpuGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#a855f7" stop-opacity="0.3" />
+                    <stop offset="100%" stop-color="#a855f7" stop-opacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="histMemGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.25" />
+                    <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+                  </linearGradient>
+                </defs>
+
+                <!-- Horizontal Grid Lines -->
+                <line x1="50" y1="20" x2="700" y2="20" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+                <line x1="50" y1="62.5" x2="700" y2="62.5" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+                <line x1="50" y1="105" x2="700" y2="105" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+                <line x1="50" y1="147.5" x2="700" y2="147.5" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+                <line x1="50" y1="190" x2="700" y2="190" stroke="rgba(255,255,255,0.12)" />
+
+                <!-- Area Fills -->
+                <path v-if="nodeHistoryChartCpuArea" :d="nodeHistoryChartCpuArea" fill="url(#histCpuGrad)" />
+                <path v-if="nodeHistoryChartMemArea" :d="nodeHistoryChartMemArea" fill="url(#histMemGrad)" />
+
+                <!-- Trend Lines -->
+                <path v-if="nodeHistoryChartDiskPath" :d="nodeHistoryChartDiskPath" fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4,4" />
+                <path v-if="nodeHistoryChartMemPath" :d="nodeHistoryChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2" />
+                <path v-if="nodeHistoryChartCpuPath" :d="nodeHistoryChartCpuPath" fill="none" stroke="#a855f7" stroke-width="2.5" />
+
+                <!-- Interactive Crosshair -->
+                <g v-if="isNodeHistHovered && nodeHistHoverCoords">
+                  <line
+                    :x1="nodeHistHoverCoords.x"
+                    y1="15"
+                    :x2="nodeHistHoverCoords.x"
+                    y2="190"
+                    stroke="#38bdf8"
+                    stroke-width="1.5"
+                    stroke-dasharray="3,3"
+                  />
+                  <circle :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpu" r="4.5" fill="#a855f7" stroke="#ffffff" stroke-width="2" />
+                  <circle :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yMem" r="4" fill="#06b6d4" stroke="#ffffff" stroke-width="1.5" />
+                </g>
+              </svg>
+
+              <!-- Floating Tooltip Box -->
+              <div v-if="isNodeHistHovered && hoveredNodeHistPoint" class="hist-rich-tooltip" :style="nodeHistTooltipStyle">
+                <div class="tooltip-time-header">
+                  🕒 {{ new Date(hoveredNodeHistPoint.recorded_at).toLocaleString() }}
+                </div>
+                <div class="tooltip-series-row">
+                  <span class="tooltip-dot bg-purple"></span>
+                  <span class="tooltip-label">CPU:</span>
+                  <strong class="tooltip-val text-purple">{{ formatPercent(hoveredNodeHistPoint.cpu_percent) }} (Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})</strong>
+                </div>
+                <div class="tooltip-series-row">
+                  <span class="tooltip-dot bg-cyan"></span>
+                  <span class="tooltip-label">Memory:</span>
+                  <strong class="tooltip-val text-cyan">{{ formatPercent(hoveredNodeHistPoint.mem_percent) }} ({{ formatBytes(hoveredNodeHistPoint.mem_used_bytes) }})</strong>
+                </div>
+                <div class="tooltip-series-row">
+                  <span class="tooltip-dot bg-emerald"></span>
+                  <span class="tooltip-label">Disk:</span>
+                  <strong class="tooltip-val text-emerald">{{ formatPercent(hoveredNodeHistPoint.disk_percent) }} ({{ formatBytes(hoveredNodeHistPoint.disk_used_bytes) }})</strong>
+                </div>
+                <div class="tooltip-series-row">
+                  <span class="tooltip-dot bg-indigo"></span>
+                  <span class="tooltip-label">Net I/O:</span>
+                  <strong class="tooltip-val text-indigo">↓ {{ formatIoRate(hoveredNodeHistPoint.rx_bytes_per_sec) }} ↑ {{ formatIoRate(hoveredNodeHistPoint.tx_bytes_per_sec) }}</strong>
+                </div>
+              </div>
+
+              <!-- Bottom X-Axis Time Markers -->
+              <div class="hist-x-axis">
+                <span v-for="marker in nodeHistoryTimeMarkers" :key="marker.x" class="x-tick">
+                  {{ marker.time }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Empty History Chart Placeholder -->
+            <div v-else class="hist-chart-empty">
+              <div class="empty-chart-illustration">
+                <span class="empty-chart-icon">📈</span>
+                <span class="empty-pulse-badge">Awaiting Telemetry Rollups</span>
+              </div>
+              <h5 class="empty-chart-title">No Telemetry Recorded in {{ nodeHistoryRange }} Window</h5>
+              <p class="empty-chart-desc">
+                Historical metrics are aggregated periodically by the background collector. Once continuous telemetry is recorded for <code>{{ selectedNode?.node_name }}</code>, multi-series saturation curves will display here.
+              </p>
+            </div>
+          </div>
+
+          <!-- Incidents & Failure Evidence Table on this Server -->
+          <div class="node-incidents-section glass-panel">
+            <div class="incidents-section-header">
+              <div class="inc-title-group">
+                <h4>📜 Failure Logs & Incident Evidence on this Server</h4>
+                <span class="badge badge-rose font-mono" v-if="nodeHistoryData?.incidents && nodeHistoryData.incidents.length > 0">
+                  {{ nodeHistoryData.incidents.length }} incident{{ nodeHistoryData.incidents.length === 1 ? '' : 's' }}
+                </span>
+              </div>
+              <p class="inc-desc">
+                Automated pre-crash hardware snapshots, OOM kills, process dumps, and degradation logs.
+              </p>
+            </div>
+
+            <div class="incidents-table-wrapper" v-if="nodeHistoryData?.incidents && nodeHistoryData.incidents.length > 0">
+              <table class="incidents-mini-table">
+                <thead>
+                  <tr>
+                    <th>Type & Severity</th>
+                    <th>Message & Root Cause</th>
+                    <th>Pre-Crash State</th>
+                    <th>Status</th>
+                    <th>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="inc in nodeHistoryData.incidents" :key="inc.id" class="inc-row">
+                    <td>
+                      <div class="inc-type-cell">
+                        <span class="badge" :class="inc.severity === 'critical' ? 'badge-rose' : inc.severity === 'high' ? 'badge-amber' : 'badge-indigo'">
+                          {{ inc.severity?.toUpperCase() || 'HIGH' }}
+                        </span>
+                        <strong class="inc-type-name font-mono">{{ inc.type }}</strong>
+                      </div>
+                    </td>
+                    <td class="col-inc-msg">
+                      <div class="inc-msg-text">{{ inc.message }}</div>
+                      <div class="inc-meta-tags font-mono" v-if="inc.raw_data">
+                        <span v-if="inc.raw_data.top_processes" class="inc-tag">Has Process Dump</span>
+                        <span v-if="inc.raw_data.container_count" class="inc-tag">{{ inc.raw_data.container_count }} containers</span>
+                      </div>
+                    </td>
+                    <td class="font-mono text-slate">
+                      <div v-if="inc.raw_data?.pre_incident_cpu">CPU: {{ inc.raw_data.pre_incident_cpu }}</div>
+                      <div v-if="inc.raw_data?.pre_incident_memory">RAM: {{ inc.raw_data.pre_incident_memory }}</div>
+                      <span v-if="!inc.raw_data?.pre_incident_cpu && !inc.raw_data?.pre_incident_memory" class="text-muted">—</span>
+                    </td>
+                    <td>
+                      <span class="badge" :class="inc.status === 'resolved' ? 'badge-emerald' : inc.status === 'remediating' ? 'badge-cyan' : 'badge-amber'">
+                        {{ inc.status.toUpperCase() }}
+                      </span>
+                    </td>
+                    <td class="font-mono text-slate">{{ new Date(inc.created_at).toLocaleString() }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="inc-empty-state" v-else>
+              <span class="inc-empty-icon">🛡️</span>
+              <h5>Zero Critical Anomalies Recorded</h5>
+              <p>No crash loops, OOM events, or node degradation incidents have occurred on {{ selectedNode?.node_name }} during this time window.</p>
             </div>
           </div>
         </div>
@@ -6198,5 +6598,516 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 }
+
+/* ========================================== */
+/* DRAWER MODE TABS & HISTORICAL TELEMETRY    */
+/* ========================================== */
+
+.drawer-mode-tabs {
+  display: flex;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+}
+
+.mode-tab-btn {
+  flex: 1;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.mode-tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mode-tab-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.node-history-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hist-range-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-radius: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.range-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.range-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.range-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-range-pill {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-range-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.btn-range-pill.active {
+  background: #38bdf8;
+  color: #0f172a;
+  border-color: #38bdf8;
+  font-weight: 700;
+}
+
+.range-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hist-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .hist-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.hist-kpi-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hist-kpi-card .kpi-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.hist-kpi-card .kpi-val {
+  font-size: 20px;
+  font-weight: 800;
+  font-family: monospace;
+}
+
+.hist-kpi-card .kpi-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.hist-kpi-empty {
+  padding: 14px 18px;
+  border-radius: 12px;
+}
+
+.empty-kpi-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.empty-kpi-icon {
+  font-size: 24px;
+  opacity: 0.85;
+}
+
+.empty-kpi-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.empty-kpi-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.empty-kpi-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.hist-chart-wrapper {
+  padding: 16px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hist-chart-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 180px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.hist-chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 36px 20px;
+  background: rgba(10, 15, 30, 0.4);
+  border-radius: 10px;
+  border: 1px dashed var(--border-subtle);
+  min-height: 190px;
+  gap: 8px;
+}
+
+.empty-chart-illustration {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.empty-chart-icon {
+  font-size: 26px;
+}
+
+.empty-pulse-badge {
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.empty-chart-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.empty-chart-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 480px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.hist-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chart-title-group h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.chart-title-group .hist-chart-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.hist-chart-legend {
+  display: flex;
+  gap: 10px;
+}
+
+.legend-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.hist-chart-container {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: rgba(10, 15, 30, 0.6);
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.hist-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 15, 30, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  z-index: 10;
+}
+
+.hist-y-axis {
+  position: absolute;
+  top: 15px;
+  bottom: 30px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.hist-y-axis .y-tick {
+  font-size: 9px;
+  font-family: monospace;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.hist-svg-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.hist-x-axis {
+  position: absolute;
+  left: 50px;
+  right: 60px;
+  bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.hist-x-axis .x-tick {
+  font-size: 9px;
+  font-family: monospace;
+  color: var(--text-muted);
+}
+
+.hist-rich-tooltip {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  backdrop-filter: blur(12px);
+  padding: 10px 14px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 190px;
+}
+
+.tooltip-time-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+}
+
+.tooltip-series-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.tooltip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.tooltip-label {
+  color: var(--text-muted);
+}
+
+.tooltip-val {
+  font-family: monospace;
+  margin-left: auto;
+}
+
+/* Incidents Section */
+.node-incidents-section {
+  padding: 16px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.incidents-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inc-title-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inc-title-group h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.inc-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.incidents-table-wrapper {
+  overflow-x: auto;
+}
+
+.incidents-mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.incidents-mini-table th {
+  text-align: left;
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.incidents-mini-table td {
+  padding: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.inc-type-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inc-type-name {
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.inc-msg-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.inc-meta-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.inc-tag {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.inc-empty-state {
+  text-align: center;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.inc-empty-icon {
+  font-size: 24px;
+}
+
+.inc-empty-state h5 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.inc-empty-state p {
+  font-size: 11px;
+  margin: 0;
+  max-width: 400px;
+}
 </style>
+
 

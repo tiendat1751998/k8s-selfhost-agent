@@ -257,7 +257,18 @@ func run() error {
 			}
 		}()
 	}
+
+	nodeMetricsRepo := postgres.NewNodeMetricsRepo(pgClient)
+	nodeHistoryWorker := usecaseMetrics.NewNodeHistoryWorker(metricsCollector, nodeMetricsRepo, incRepo, log)
+	go func() {
+		if err := nodeHistoryWorker.Start(ctx); err != nil {
+			log.Error("node history worker stopped with error", zap.Error(err))
+		}
+	}()
+
 	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log, tpsCollector)
+	overviewHandler.SetNodeMetricsRepo(nodeMetricsRepo)
+	overviewHandler.SetIncidentRepo(incRepo)
 
 	userRepo := postgres.NewUserRepo(pgClient)
 	refreshTokenRepo := postgres.NewRefreshTokenRepo(pgClient)

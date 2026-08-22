@@ -367,7 +367,18 @@ func run() error {
 			return dockerWatcher.Start(egCtx)
 		})
 	}
+
+	nodeMetricsRepo := postgres.NewNodeMetricsRepo(pgClient.Pool())
+	nodeHistoryWorker := usecaseMetrics.NewNodeHistoryWorker(metricsCollector, nodeMetricsRepo, incRepo, log)
+	go func() {
+		if err := nodeHistoryWorker.Start(egCtx); err != nil {
+			log.Error("node history worker stopped with error", zap.Error(err))
+		}
+	}()
+
 	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log, tpsCollector)
+	overviewHandler.SetNodeMetricsRepo(nodeMetricsRepo)
+	overviewHandler.SetIncidentRepo(incRepo)
 
 	sloCollector := usecaseSLO.NewSLOCollector(dockerClient, obsRepo, log)
 	go sloCollector.Start(egCtx)
