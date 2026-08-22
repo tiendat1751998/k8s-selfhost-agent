@@ -11,27 +11,38 @@ import (
 
 // OverviewHandler provides HTTP REST endpoints for retrieving platform infrastructure overview metrics.
 type OverviewHandler struct {
-	collector *metrics.Collector
-	logger    *zap.Logger
+	collector    *metrics.Collector
+	tpsCollector *metrics.TPSCollector
+	logger       *zap.Logger
 }
 
 // MetricsHandler is an alias for OverviewHandler for compatibility.
 type MetricsHandler = OverviewHandler
 
 // NewOverviewHandler creates a new OverviewHandler instance.
-func NewOverviewHandler(collector *metrics.Collector, logger *zap.Logger) *OverviewHandler {
+func NewOverviewHandler(collector *metrics.Collector, logger *zap.Logger, tpsCollector ...*metrics.TPSCollector) *OverviewHandler {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	var tc *metrics.TPSCollector
+	if len(tpsCollector) > 0 {
+		tc = tpsCollector[0]
+	}
 	return &OverviewHandler{
-		collector: collector,
-		logger:    logger,
+		collector:    collector,
+		tpsCollector: tc,
+		logger:       logger,
 	}
 }
 
 // NewMetricsHandler creates a new MetricsHandler (alias constructor for NewOverviewHandler).
-func NewMetricsHandler(collector *metrics.Collector, logger *zap.Logger) *MetricsHandler {
-	return NewOverviewHandler(collector, logger)
+func NewMetricsHandler(collector *metrics.Collector, logger *zap.Logger, tpsCollector ...*metrics.TPSCollector) *MetricsHandler {
+	return NewOverviewHandler(collector, logger, tpsCollector...)
+}
+
+// SetTPSCollector sets or updates the TPSCollector instance.
+func (h *OverviewHandler) SetTPSCollector(tc *metrics.TPSCollector) {
+	h.tpsCollector = tc
 }
 
 // RegisterRoutes registers the overview metrics routes on a chi.Router.
@@ -40,6 +51,7 @@ func (h *OverviewHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/nodes", h.GetNodeMetrics)
 	r.Get("/alerts", h.GetAlerts)
 	r.Get("/containers", h.GetContainerMetrics)
+	r.Get("/tps", h.GetTPS)
 }
 
 // GetOverview handles GET /api/v1/overview
@@ -101,3 +113,21 @@ func (h *OverviewHandler) GetContainerMetrics(w http.ResponseWriter, r *http.Req
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": snapshot.Containers})
 }
+
+// GetTPS handles GET /api/v1/overview/tps
+// Returns aggregated throughput metrics across network, HTTP, database, messaging, and containers.
+func (h *OverviewHandler) GetTPS(w http.ResponseWriter, r *http.Request) {
+	if h.tpsCollector != nil {
+		snapshot := h.tpsCollector.GetLastSnapshot()
+		if snapshot != nil {
+			writeJSON(w, http.StatusOK, snapshot)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, metrics.TPSSnapshot{
+		PerNode:  make([]metrics.NodeTPS, 0),
+		Services: make([]metrics.ServiceTPS, 0),
+	})
+}
+

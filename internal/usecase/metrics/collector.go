@@ -35,25 +35,27 @@ type ProcessMetric struct {
 
 // AgentMetrics represents metrics from a k8s-agent instance.
 type AgentMetrics struct {
-	Hostname     string          `json:"hostname"`
-	OS           string          `json:"os"`
-	Arch         string          `json:"arch"`
-	CPUUsage     float64         `json:"cpu_usage"`
-	CPUCount     int             `json:"cpu_count"`
-	MemTotal     int64           `json:"mem_total"`
-	MemUsed      int64           `json:"mem_used"`
-	MemPercent   float64         `json:"mem_percent"`
-	DiskTotal    int64           `json:"disk_total"`
-	DiskUsed     int64           `json:"disk_used"`
-	DiskPercent  float64         `json:"disk_percent"`
-	NetRxRate    int64           `json:"net_rx_rate"`
-	NetTxRate    int64           `json:"net_tx_rate"`
-	Uptime       int64           `json:"uptime"`
-	LoadAvg      [3]float64      `json:"load_avg"`
-	Processes    int             `json:"processes"`
-	TopProcesses []ProcessMetric `json:"top_processes"`
-	Status       string          `json:"status"` // "online", "offline", "error"
-	LastSeen     time.Time       `json:"last_seen"`
+	Hostname      string          `json:"hostname"`
+	OS            string          `json:"os"`
+	Arch          string          `json:"arch"`
+	OSDistro      string          `json:"os_distro,omitempty"`
+	KernelVersion string          `json:"kernel_version,omitempty"`
+	CPUUsage      float64         `json:"cpu_usage"`
+	CPUCount      int             `json:"cpu_count"`
+	MemTotal      int64           `json:"mem_total"`
+	MemUsed       int64           `json:"mem_used"`
+	MemPercent    float64         `json:"mem_percent"`
+	DiskTotal     int64           `json:"disk_total"`
+	DiskUsed      int64           `json:"disk_used"`
+	DiskPercent   float64         `json:"disk_percent"`
+	NetRxRate     int64           `json:"net_rx_rate"`
+	NetTxRate     int64           `json:"net_tx_rate"`
+	Uptime        int64           `json:"uptime"`
+	LoadAvg       [3]float64      `json:"load_avg"`
+	Processes     int             `json:"processes"`
+	TopProcesses  []ProcessMetric `json:"top_processes"`
+	Status        string          `json:"status"` // "online", "offline", "error"
+	LastSeen      time.Time       `json:"last_seen"`
 }
 
 // NodeMetrics represents infrastructure metrics for a single node.
@@ -62,6 +64,10 @@ type NodeMetrics struct {
 	NodeName       string          `json:"node_name"`
 	Role           string          `json:"role"`   // manager, worker, standalone, agent
 	Status         string          `json:"status"` // ready, down, disconnected
+	OS             string          `json:"os,omitempty"`
+	Arch           string          `json:"arch,omitempty"`
+	OSDistro       string          `json:"os_distro,omitempty"`
+	KernelVersion  string          `json:"kernel_version,omitempty"`
 	CPUPercent     float64         `json:"cpu_percent"`
 	MemoryUsed     int64           `json:"memory_used"`   // bytes
 	MemoryTotal    int64           `json:"memory_total"`  // bytes
@@ -73,6 +79,8 @@ type NodeMetrics struct {
 	NetworkTxBytes int64           `json:"network_tx_bytes"`
 	ContainerCount int             `json:"container_count"`
 	RunningCount   int             `json:"running_count"`
+	UptimeSeconds  int64           `json:"uptime_seconds,omitempty"`
+	LoadAverage    [3]float64      `json:"load_average,omitempty"`
 	TopProcesses   []ProcessMetric `json:"top_processes"`
 	Source         string          `json:"source"` // "docker" or "agent"
 	UpdatedAt      time.Time       `json:"updated_at"`
@@ -80,17 +88,19 @@ type NodeMetrics struct {
 
 // ContainerMetrics represents resource stats for an individual container.
 type ContainerMetrics struct {
-	ContainerID   string  `json:"container_id"`
-	ContainerName string  `json:"container_name"`
-	NodeID        string  `json:"node_id"`
-	Image         string  `json:"image"`
-	State         string  `json:"state"`
-	CPUPercent    float64 `json:"cpu_percent"`
-	MemoryUsed    int64   `json:"memory_used"`
-	MemoryLimit   int64   `json:"memory_limit"`
-	MemoryPercent float64 `json:"memory_percent"`
-	NetworkRx     int64   `json:"network_rx"`
-	NetworkTx     int64   `json:"network_tx"`
+	ContainerID   string            `json:"container_id"`
+	ContainerName string            `json:"container_name"`
+	NodeID        string            `json:"node_id"`
+	Image         string            `json:"image"`
+	State         string            `json:"state"`
+	CPUPercent    float64           `json:"cpu_percent"`
+	MemoryUsed    int64             `json:"memory_used"`
+	MemoryLimit   int64             `json:"memory_limit"`
+	MemoryPercent float64           `json:"memory_percent"`
+	NetworkRx     int64             `json:"network_rx"`
+	NetworkTx     int64             `json:"network_tx"`
+	ServiceName   string            `json:"service_name,omitempty"`
+	Labels        map[string]string `json:"labels,omitempty"`
 }
 
 // SystemOverview aggregates high-level platform health, node and container metrics, and alerts.
@@ -390,6 +400,8 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		Hostname      string             `json:"hostname"`
 		OS            string             `json:"os"`
 		Arch          string             `json:"arch"`
+		OSDistro      string             `json:"os_distro"`
+		KernelVersion string             `json:"kernel_version"`
 		UptimeSeconds int64              `json:"uptime_seconds"`
 		LoadAverage   [3]float64         `json:"load_average"`
 		CPU           struct {
@@ -419,7 +431,16 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 	}
 
 	var diskTotal, diskUsed int64
+	seenDisks := make(map[string]bool)
 	for _, d := range payload.Disks {
+		if isIgnoredMountPoint(d.MountPoint) || !isPhysicalFilesystem(d.Filesystem) {
+			continue
+		}
+		dedupKey := fmt.Sprintf("%s:%d", strings.ToLower(d.Filesystem), d.TotalBytes)
+		if seenDisks[dedupKey] {
+			continue
+		}
+		seenDisks[dedupKey] = true
 		diskTotal += d.TotalBytes
 		diskUsed += d.UsedBytes
 	}
@@ -440,25 +461,27 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 	}
 
 	am := &AgentMetrics{
-		Hostname:     hostname,
-		OS:           payload.OS,
-		Arch:         payload.Arch,
-		CPUUsage:     payload.CPU.UsagePercent,
-		CPUCount:     payload.CPU.Count,
-		MemTotal:     payload.Memory.TotalBytes,
-		MemUsed:      payload.Memory.UsedBytes,
-		MemPercent:   payload.Memory.UsagePercent,
-		DiskTotal:    diskTotal,
-		DiskUsed:     diskUsed,
-		DiskPercent:  diskPercent,
-		NetRxRate:    payload.Network.TotalRxBytesPerSec,
-		NetTxRate:    payload.Network.TotalTxBytesPerSec,
-		Uptime:       payload.UptimeSeconds,
-		LoadAvg:      payload.LoadAverage,
-		Processes:    payload.Processes,
-		TopProcesses: payload.TopProcesses,
-		Status:       "online",
-		LastSeen:     collectedAt,
+		Hostname:      hostname,
+		OS:            payload.OS,
+		Arch:          payload.Arch,
+		OSDistro:      payload.OSDistro,
+		KernelVersion: payload.KernelVersion,
+		CPUUsage:      payload.CPU.UsagePercent,
+		CPUCount:      payload.CPU.Count,
+		MemTotal:      payload.Memory.TotalBytes,
+		MemUsed:       payload.Memory.UsedBytes,
+		MemPercent:    payload.Memory.UsagePercent,
+		DiskTotal:     diskTotal,
+		DiskUsed:      diskUsed,
+		DiskPercent:   diskPercent,
+		NetRxRate:     payload.Network.TotalRxBytesPerSec,
+		NetTxRate:     payload.Network.TotalTxBytesPerSec,
+		Uptime:        payload.UptimeSeconds,
+		LoadAvg:       payload.LoadAverage,
+		Processes:     payload.Processes,
+		TopProcesses:  payload.TopProcesses,
+		Status:        "online",
+		LastSeen:      collectedAt,
 	}
 
 	c.agentMu.Lock()
@@ -561,6 +584,83 @@ func (c *Collector) RemoveAgentMetric(hostID string) {
 	c.agentMu.Lock()
 	defer c.agentMu.Unlock()
 	delete(c.agentMetrics, hostID)
+}
+
+var allowedFileSystems = map[string]bool{
+	"ext4":    true,
+	"ext3":    true,
+	"ext2":    true,
+	"xfs":     true,
+	"btrfs":   true,
+	"zfs":     true,
+	"ntfs":    true,
+	"vfat":    true,
+	"fat32":   true,
+	"exfat":   true,
+	"apfs":    true,
+	"hfsplus": true,
+}
+
+var ignoredFileSystems = map[string]bool{
+	"overlay":       true,
+	"overlayfs":     true,
+	"tmpfs":         true,
+	"devtmpfs":      true,
+	"squashfs":      true,
+	"proc":          true,
+	"sysfs":         true,
+	"cgroup":        true,
+	"cgroup2":       true,
+	"fuse.snapfuse": true,
+	"devpts":        true,
+	"pstore":        true,
+	"bpf":           true,
+	"autofs":        true,
+	"mqueue":        true,
+	"hugetlbfs":     true,
+	"debugfs":       true,
+	"tracefs":       true,
+	"fusectl":       true,
+	"configfs":      true,
+	"binfmt_misc":   true,
+	"nsfs":          true,
+	"securityfs":    true,
+	"efivarfs":      true,
+	"ramfs":         true,
+	"none":          true,
+}
+
+var ignoredMountPrefixes = []string{
+	"/var/lib/docker/",
+	"/snap/",
+	"/sys/",
+	"/proc/",
+	"/dev/",
+	"/run/",
+}
+
+func isIgnoredMountPoint(mountPoint string) bool {
+	clean := strings.ReplaceAll(strings.TrimSpace(mountPoint), "\\", "/")
+	if clean == "" {
+		return true
+	}
+	for _, prefix := range ignoredMountPrefixes {
+		if strings.HasPrefix(clean, prefix) || clean == strings.TrimSuffix(prefix, "/") {
+			return true
+		}
+	}
+	return false
+}
+
+func isPhysicalFilesystem(fsType string) bool {
+	fs := strings.ToLower(strings.TrimSpace(fsType))
+	if fs == "" {
+		return true
+	}
+	if ignoredFileSystems[fs] {
+		return false
+	}
+	return allowedFileSystems[fs]
 }
 
 func formatAgentURL(endpoint string, tlsEnabled bool) string {
@@ -711,12 +811,26 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 						nodeID = info.ID
 					}
 
+					serviceName := ""
+					if cSummary.Labels != nil {
+						if sn, ok := cSummary.Labels["com.docker.swarm.service.name"]; ok && sn != "" {
+							serviceName = sn
+						} else if sn, ok := cSummary.Labels["com.docker.compose.service"]; ok && sn != "" {
+							serviceName = sn
+						}
+					}
+					if serviceName == "" {
+						serviceName = extractServiceNameFromContainerName(name)
+					}
+
 					cm := ContainerMetrics{
 						ContainerID:   cSummary.ID,
 						ContainerName: name,
 						NodeID:        nodeID,
 						Image:         cSummary.Image,
 						State:         string(cSummary.State),
+						ServiceName:   serviceName,
+						Labels:        cSummary.Labels,
 					}
 
 					if cSummary.State == "running" {
@@ -775,6 +889,10 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			NodeName:       am.Hostname,
 			Role:           "agent",
 			Status:         status,
+			OS:             am.OS,
+			Arch:           am.Arch,
+			OSDistro:       am.OSDistro,
+			KernelVersion:  am.KernelVersion,
 			CPUPercent:     am.CPUUsage,
 			MemoryUsed:     am.MemUsed,
 			MemoryTotal:    am.MemTotal,
@@ -786,6 +904,8 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			NetworkTxBytes: am.NetTxRate,
 			ContainerCount: am.Processes,
 			RunningCount:   am.Processes,
+			UptimeSeconds:  am.Uptime,
+			LoadAverage:    am.LoadAvg,
 			TopProcesses:   am.TopProcesses,
 			Source:         "agent",
 			UpdatedAt:      am.LastSeen,
@@ -929,3 +1049,17 @@ func calculateCPUPercent(stats *container.StatsResponse) float64 {
 
 	return 0.0
 }
+
+// extractServiceNameFromContainerName derives a service name from standard container naming conventions.
+func extractServiceNameFromContainerName(name string) string {
+	name = strings.TrimPrefix(name, "/")
+	if name == "" {
+		return ""
+	}
+	// Check swarm container pattern: <service>.<slot>.<task_id>
+	if parts := strings.Split(name, "."); len(parts) >= 3 {
+		return parts[0]
+	}
+	return name
+}
+

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,10 +56,6 @@ func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observabi
 			}
 			defs = append(defs, d)
 		}
-		if len(defs) == 0 {
-			_ = r.SeedDefaultSLOs(ctx)
-			return r.ListSLODefinitions(ctx)
-		}
 		return defs, nil
 	}
 	defer rows.Close()
@@ -78,38 +73,9 @@ func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observabi
 		return nil, fmt.Errorf("iterating slo definitions: %w", err)
 	}
 
-	if len(defs) == 0 {
-		_ = r.SeedDefaultSLOs(ctx)
-		return r.queryDefinitions(ctx)
-	}
-
 	return defs, nil
 }
 
-func (r *observabilityRepo) queryDefinitions(ctx context.Context) ([]observability.SLODefinition, error) {
-	query := `
-		SELECT id, service, target, indicator_type, "window", 
-		       COALESCE(query, ''), COALESCE(alert_threshold, 1.5), 
-		       created_at, updated_at 
-		FROM slo_definitions 
-		ORDER BY created_at DESC
-	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("querying slo definitions after seed: %w", err)
-	}
-	defer rows.Close()
-
-	var defs []observability.SLODefinition
-	for rows.Next() {
-		var d observability.SLODefinition
-		if err := rows.Scan(&d.ID, &d.Service, &d.Target, &d.IndicatorType, &d.Window, &d.Query, &d.AlertThreshold, &d.CreatedAt, &d.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scanning slo definition: %w", err)
-		}
-		defs = append(defs, d)
-	}
-	return defs, rows.Err()
-}
 
 func (r *observabilityRepo) GetSLODefinition(ctx context.Context, id string) (*observability.SLODefinition, error) {
 	query := `
@@ -188,24 +154,6 @@ func (r *observabilityRepo) CreateSLODefinition(ctx context.Context, d *observab
 		}
 	}
 
-	// Create initial snapshot for this definition
-	actual := math.Min(100.0, d.Target+0.04)
-	if actual < d.Target {
-		actual = d.Target
-	}
-	snap := &observability.SLOSnapshot{
-		ID:           uuid.NewString(),
-		SLOID:        d.ID,
-		Service:      d.Service,
-		Target:       d.Target,
-		Actual:       actual,
-		BurnRate:     0.85,
-		ErrorBudget:  85.0,
-		BudgetStatus: "healthy",
-		RecordedAt:   now,
-	}
-	_ = r.CreateSLOSnapshot(ctx, snap)
-
 	return nil
 }
 
@@ -281,36 +229,7 @@ func (r *observabilityRepo) ListSLOSnapshots(ctx context.Context) ([]observabili
 		return nil, fmt.Errorf("iterating slo snapshots: %w", err)
 	}
 
-	if len(snaps) == 0 {
-		_ = r.SeedDefaultSLOs(ctx)
-		return r.querySnapshots(ctx)
-	}
-
 	return snaps, nil
-}
-
-func (r *observabilityRepo) querySnapshots(ctx context.Context) ([]observability.SLOSnapshot, error) {
-	query := `
-		SELECT id, slo_id, service, target, actual, burn_rate, error_budget, budget_status, recorded_at 
-		FROM slo_snapshots 
-		ORDER BY recorded_at DESC 
-		LIMIT 100
-	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("querying slo snapshots after seed: %w", err)
-	}
-	defer rows.Close()
-
-	var snaps []observability.SLOSnapshot
-	for rows.Next() {
-		var s observability.SLOSnapshot
-		if err := rows.Scan(&s.ID, &s.SLOID, &s.Service, &s.Target, &s.Actual, &s.BurnRate, &s.ErrorBudget, &s.BudgetStatus, &s.RecordedAt); err != nil {
-			return nil, fmt.Errorf("scanning slo snapshot: %w", err)
-		}
-		snaps = append(snaps, s)
-	}
-	return snaps, rows.Err()
 }
 
 func (r *observabilityRepo) GetSLOSnapshotBySLOID(ctx context.Context, sloID string) (*observability.SLOSnapshot, error) {
@@ -387,117 +306,75 @@ func (r *observabilityRepo) DeleteSLOSnapshotBySLOID(ctx context.Context, sloID 
 	return nil
 }
 
-func (r *observabilityRepo) SeedDefaultSLOs(ctx context.Context) error {
-	// Ensure columns exist
-	_, _ = r.getDB(ctx).Exec(ctx, `
-		ALTER TABLE slo_definitions ADD COLUMN IF NOT EXISTS query TEXT;
-		ALTER TABLE slo_definitions ADD COLUMN IF NOT EXISTS alert_threshold FLOAT;
-	`)
-
-	// Real enterprise SLO seed targets
-	type defaultSLO struct {
-		id            string
-		service       string
-		target        float64
-		indicatorType string
-		window        string
-		query         string
-		threshold     float64
-		snapID        string
-		actual        float64
-		burnRate      float64
-		errorBudget   float64
-		budgetStatus  string
+func parseTenantUUID(tid string) string {
+	if u, err := uuid.Parse(tid); err == nil {
+		return u.String()
 	}
+	return "00000000-0000-0000-0000-000000000000"
+}
 
-	defaults := []defaultSLO{
-		{
-			id:            "a0000001-0000-0000-0000-000000000001",
-			service:       "tiki_gateway",
-			target:        99.90,
-			indicatorType: "availability",
-			window:        "30d",
-			query:         `sum(rate(http_requests_total{status=~"2..|3.."}[5m])) / sum(rate(http_requests_total[5m])) * 100`,
-			threshold:     1.5,
-			snapID:        "b0000001-0000-0000-0000-000000000001",
-			actual:        99.94,
-			burnRate:      0.85,
-			errorBudget:   60.0,
-			budgetStatus:  "healthy",
-		},
-		{
-			id:            "a0000001-0000-0000-0000-000000000002",
-			service:       "tiki_traefik",
-			target:        99.95,
-			indicatorType: "availability",
-			window:        "30d",
-			query:         `sum(rate(traefik_service_requests_total{code=~"2..|3.."}[5m])) / sum(rate(traefik_service_requests_total[5m])) * 100`,
-			threshold:     1.5,
-			snapID:        "b0000001-0000-0000-0000-000000000002",
-			actual:        99.97,
-			burnRate:      0.45,
-			errorBudget:   85.0,
-			budgetStatus:  "healthy",
-		},
-		{
-			id:            "a0000001-0000-0000-0000-000000000003",
-			service:       "tiki_redis",
-			target:        99.99,
-			indicatorType: "cache_hit_rate",
-			window:        "30d",
-			query:         `sum(rate(redis_keyspace_hits_total[5m])) / (sum(rate(redis_keyspace_hits_total[5m])) + sum(rate(redis_keyspace_hits_total[5m]))) * 100`,
-			threshold:     2.0,
-			snapID:        "b0000001-0000-0000-0000-000000000003",
-			actual:        99.995,
-			burnRate:      0.20,
-			errorBudget:   95.0,
-			budgetStatus:  "healthy",
-		},
-		{
-			id:            "a0000001-0000-0000-0000-000000000004",
-			service:       "postgres_db",
-			target:        99.99,
-			indicatorType: "availability",
-			window:        "30d",
-			query:         `sum(rate(pg_stat_database_xact_commit[5m])) / (sum(rate(pg_stat_database_xact_commit[5m])) + sum(rate(pg_stat_database_xact_rollback[5m]))) * 100`,
-			threshold:     2.0,
-			snapID:        "b0000001-0000-0000-0000-000000000004",
-			actual:        99.985,
-			burnRate:      1.15,
-			errorBudget:   75.0,
-			budgetStatus:  "healthy",
-		},
-		{
-			id:            "a0000001-0000-0000-0000-000000000005",
-			service:       "tiki_drone",
-			target:        99.50,
-			indicatorType: "availability",
-			window:        "30d",
-			query:         `sum(rate(drone_build_success_total[5m])) / sum(rate(drone_build_total[5m])) * 100`,
-			threshold:     1.5,
-			snapID:        "b0000001-0000-0000-0000-000000000005",
-			actual:        99.65,
-			burnRate:      0.65,
-			errorBudget:   88.0,
-			budgetStatus:  "healthy",
-		},
+func (r *observabilityRepo) RecordHealthSample(ctx context.Context, tenantID string, serviceName string, desired int, running int, isHealthy bool, latencyMs *int) error {
+	id := uuid.NewString()
+	tID := parseTenantUUID(tenantID)
+	query := `
+		INSERT INTO slo_health_samples (id, tenant_id, service_name, desired_replicas, running_replicas, is_healthy, health_check_latency_ms, recorded_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+	`
+	_, err := r.getDB(ctx).Exec(ctx, query, id, tID, serviceName, desired, running, isHealthy, latencyMs)
+	if err != nil {
+		return fmt.Errorf("recording slo health sample: %w", err)
 	}
-
-	for _, d := range defaults {
-		insertDef := `
-			INSERT INTO slo_definitions (id, service, target, indicator_type, "window", query, alert_threshold, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() - INTERVAL '10 days', NOW())
-			ON CONFLICT (id) DO NOTHING
-		`
-		_, _ = r.getDB(ctx).Exec(ctx, insertDef, d.id, d.service, d.target, d.indicatorType, d.window, d.query, d.threshold)
-
-		insertSnap := `
-			INSERT INTO slo_snapshots (id, slo_id, service, target, actual, burn_rate, error_budget, budget_status, recorded_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-			ON CONFLICT (id) DO NOTHING
-		`
-		_, _ = r.getDB(ctx).Exec(ctx, insertSnap, d.snapID, d.id, d.service, d.target, d.actual, d.burnRate, d.errorBudget, d.budgetStatus)
-	}
-
 	return nil
 }
+
+func (r *observabilityRepo) GetHealthSamples(ctx context.Context, serviceName string, since time.Time) ([]observability.HealthSample, error) {
+	query := `
+		SELECT id, tenant_id, service_name, desired_replicas, running_replicas, is_healthy, health_check_latency_ms, recorded_at
+		FROM slo_health_samples
+		WHERE service_name = $1 AND recorded_at >= $2
+		ORDER BY recorded_at DESC
+	`
+	rows, err := r.getDB(ctx).Query(ctx, query, serviceName, since)
+	if err != nil {
+		return nil, fmt.Errorf("querying slo health samples: %w", err)
+	}
+	defer rows.Close()
+
+	var samples []observability.HealthSample
+	for rows.Next() {
+		var s observability.HealthSample
+		var tUUID uuid.UUID
+		if err := rows.Scan(&s.ID, &tUUID, &s.ServiceName, &s.DesiredReplicas, &s.RunningReplicas, &s.IsHealthy, &s.HealthCheckLatencyMs, &s.RecordedAt); err != nil {
+			return nil, fmt.Errorf("scanning health sample: %w", err)
+		}
+		s.TenantID = tUUID.String()
+		samples = append(samples, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating health samples: %w", err)
+	}
+	return samples, nil
+}
+
+func (r *observabilityRepo) ComputeSLI(ctx context.Context, serviceName string, window time.Duration) (float64, error) {
+	since := time.Now().UTC().Add(-window)
+	query := `
+		SELECT 
+			COUNT(*) AS total_count,
+			COALESCE(COUNT(*) FILTER (WHERE is_healthy = true), 0) AS healthy_count
+		FROM slo_health_samples
+		WHERE service_name = $1 AND recorded_at >= $2
+	`
+	var totalCount, healthyCount int64
+	err := r.getDB(ctx).QueryRow(ctx, query, serviceName, since).Scan(&totalCount, &healthyCount)
+	if err != nil {
+		return 0, fmt.Errorf("computing sli for service %s: %w", serviceName, err)
+	}
+
+	if totalCount == 0 {
+		return 100.0, nil
+	}
+
+	return (float64(healthyCount) / float64(totalCount)) * 100.0, nil
+}
+

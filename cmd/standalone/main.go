@@ -4,15 +4,20 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/pkg/stdcopy"
 	"go.uber.org/zap"
 
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
@@ -28,6 +33,8 @@ import (
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 	usecaseAgent "github.com/datdt/k8sselfhost/internal/usecase/agent"
 	usecaseAuth "github.com/datdt/k8sselfhost/internal/usecase/auth"
+	usecaseCapacity "github.com/datdt/k8sselfhost/internal/usecase/capacity"
+	usecaseCost "github.com/datdt/k8sselfhost/internal/usecase/cost"
 	usecaseDeployment "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
 	usecaseMetrics "github.com/datdt/k8sselfhost/internal/usecase/metrics"
@@ -39,10 +46,12 @@ import (
 	usecaseScaffold "github.com/datdt/k8sselfhost/internal/usecase/scaffold"
 	usecaseEcosystem "github.com/datdt/k8sselfhost/internal/usecase/ecosystem"
 	usecaseRCA "github.com/datdt/k8sselfhost/internal/usecase/rca"
+	usecaseSLO "github.com/datdt/k8sselfhost/internal/usecase/slo"
 	"github.com/datdt/k8sselfhost/internal/adapter/event"
 	"github.com/datdt/k8sselfhost/internal/pkg/httputil"
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/notifier"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
@@ -172,7 +181,6 @@ func run() error {
 	incRepo := postgres.NewIncidentRepo(pgClient)
 	reportRepo := postgres.NewReportRepo(pgClient)
 	prRepo := postgres.NewPRRepo(pgClient)
-	costRepo := postgres.NewCostRepo(pgClient)
 	backupRepo := postgres.NewBackupRepo(pgClient)
 	cloudAccountRepo := postgres.NewCloudAccountRepo(pgClient)
 	cloudHandler := adapthttp.NewCloudHandler(cloudAccountRepo, nil, log)
@@ -186,7 +194,11 @@ func run() error {
 	scaffoldService := usecaseScaffold.NewService(scaffoldRepo, catalogRepo, usecaseScaffold.NewEngine())
 	scaffoldHandler := adapthttp.NewScaffoldHandler(scaffoldService, log)
 	ecosystemRepo := postgres.NewEcosystemRepo(pgClient)
-	ecosystemUsecase := usecaseEcosystem.NewUsecase(ecosystemRepo, settingsRepo, httputil.NewSafeHTTPClient(5*time.Second), log)
+	var ecoOpts []usecaseEcosystem.Option
+	if dockerClient != nil {
+		ecoOpts = append(ecoOpts, usecaseEcosystem.WithDockerClient(dockerClient))
+	}
+	ecosystemUsecase := usecaseEcosystem.NewUsecase(ecosystemRepo, settingsRepo, httputil.NewSafeHTTPClient(5*time.Second), log, ecoOpts...)
 	ecosystemHandler := adapthttp.NewEcosystemHandler(ecosystemUsecase, log)
 	computeHostRepo := postgres.NewComputeHostRepo(pgClient)
 
@@ -204,7 +216,32 @@ func run() error {
 		usecaseMetrics.WithIncidentRepo(incRepo),
 	)
 	go metricsCollector.Start(ctx)
-	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log)
+
+	tpsCollector := usecaseMetrics.NewTPSCollector(
+		metricsCollector,
+		pgClient,
+		log,
+		usecaseMetrics.WithTraefikURL(usecaseMetrics.DeriveTraefikURL(cfg.Docker.Host)),
+		usecaseMetrics.WithNATSMonitorURL(usecaseMetrics.DeriveNATSMonitorURL(cfg.NATS.URL)),
+		usecaseMetrics.WithTPSRequestCountFn(mw.GetRequestCount),
+	)
+	go tpsCollector.Start(ctx)
+
+	if dockerClient != nil {
+		dockerEventWatcher := event.NewDockerEventWatcher(
+			dockerClient,
+			incRepo,
+			bridge,
+			log,
+			event.WithDockerClusterName("fleet-primary"),
+		)
+		go func() {
+			if err := dockerEventWatcher.Start(ctx); err != nil {
+				log.Error("docker event watcher stopped with error", zap.Error(err))
+			}
+		}()
+	}
+	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log, tpsCollector)
 
 	userRepo := postgres.NewUserRepo(pgClient)
 	refreshTokenRepo := postgres.NewRefreshTokenRepo(pgClient)
@@ -225,20 +262,25 @@ func run() error {
 	_ = usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers)
 	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
 
-	var capacityHandler *adapthttp.CapacityHandler
+	costCalculator := usecaseCost.NewCalculator(computeHostRepo, metricsCollector)
+	capacityForecaster := usecaseCapacity.NewForecaster(
+		metricsCollector,
+		usecaseCapacity.WithComputeHostRepo(computeHostRepo),
+		usecaseCapacity.WithRepository(postgres.NewCapacityRepo(pgClient)),
+	)
+	capacityHandler := adapthttp.NewCapacityHandler(capacityForecaster)
+
 	var explorerHandler *adapthttp.ExplorerHandler
 	var healthCenterHandler *adapthttp.HealthCenterHandler
 	var deploymentsHandler *adapthttp.DeploymentHandler
 	var k8sHandler *adapthttp.K8sResourceHandler
 
 	if k8sAvailable {
-		capacityHandler = adapthttp.NewCapacityHandler(infraK8s.NewCapacityRepo(k8sClient, clientManager))
 		explorerHandler = adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
 		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager))
 		deploymentsHandler = adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
 		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(k8sClient, clientManager), auditRepo)
 	} else {
-		capacityHandler = adapthttp.NewCapacityHandler(postgres.NewCapacityRepo(pgClient))
 		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(nil, clientManager), auditRepo)
 	}
 
@@ -248,11 +290,101 @@ func run() error {
 	go healthChecker.Start(ctx, 1*time.Minute)
 
 	obsRepo := postgres.NewObservabilityRepo(pgClient)
+	sloCollector := usecaseSLO.NewSLOCollector(dockerClient, obsRepo, log)
+	go sloCollector.Start(ctx)
+
+	sloUpdater := usecaseSLO.NewSLOSnapshotUpdater(obsRepo, log)
+	go sloUpdater.Start(ctx)
+
 	rcaCollector := event.NewCollector(k8sClient)
 	rcaPipeline := usecaseRCA.NewPipeline(rcaCollector, registry, reportRepo, incRepo, obsRepo)
 
 	dashboardHandler := adapthttp.NewHandler(incRepo, reportRepo, prRepo, nil, gitopsController)
 	dashboardHandler.SetRCAPipeline(rcaPipeline)
+
+	logAggregator := logging.NewLogAggregator(2000)
+	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator)
+
+	// Stream real Docker container logs into log aggregator
+	if dockerClient != nil {
+		go func() {
+			containers, err := dockerClient.ContainerList(ctx, container.ListOptions{})
+			if err != nil {
+				log.Warn("Failed to list Docker containers for log streaming", zap.Error(err))
+				return
+			}
+
+			for _, c := range containers {
+				cID := c.ID
+				cName := cID
+				if len(cID) > 12 {
+					cName = cID[:12]
+				}
+				if len(c.Names) > 0 {
+					cName = strings.TrimPrefix(c.Names[0], "/")
+				}
+
+				go func(id, name string) {
+					reader, logErr := dockerClient.ContainerLogs(ctx, id, container.LogsOptions{
+						ShowStdout: true,
+						ShowStderr: true,
+						Follow:     true,
+						Tail:       "25",
+					})
+					if logErr != nil {
+						log.Debug("Failed to open Docker log stream", zap.String("container", name), zap.Error(logErr))
+						return
+					}
+					defer reader.Close()
+
+					stdoutReader, stdoutWriter := io.Pipe()
+					stderrReader, stderrWriter := io.Pipe()
+
+					go func() {
+						scanner := bufio.NewScanner(stdoutReader)
+						for scanner.Scan() {
+							line := strings.TrimSpace(scanner.Text())
+							if line == "" {
+								continue
+							}
+							logAggregator.Ingest(logging.LogEntry{
+								Timestamp: time.Now().UTC(),
+								Namespace: "docker",
+								Pod:       name,
+								Container: name,
+								Stream:    "stdout",
+								Level:     detectLogLevel(line, "INFO"),
+								Message:   line,
+							})
+						}
+					}()
+
+					go func() {
+						scanner := bufio.NewScanner(stderrReader)
+						for scanner.Scan() {
+							line := strings.TrimSpace(scanner.Text())
+							if line == "" {
+								continue
+							}
+							logAggregator.Ingest(logging.LogEntry{
+								Timestamp: time.Now().UTC(),
+								Namespace: "docker",
+								Pod:       name,
+								Container: name,
+								Stream:    "stderr",
+								Level:     detectLogLevel(line, "WARN"),
+								Message:   line,
+							})
+						}
+					}()
+
+					_, _ = stdcopy.StdCopy(stdoutWriter, stderrWriter, reader)
+					_ = stdoutWriter.Close()
+					_ = stderrWriter.Close()
+				}(cID, cName)
+			}
+		}()
+	}
 
 	platformHandlers := &adapthttp.PlatformHandlers{
 		Dashboard:     dashboardHandler,
@@ -263,7 +395,7 @@ func run() error {
 		Compliance:    adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(pgClient)),
 		Tagging:       adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(pgClient)),
 		Runbook:       adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(pgClient), auditRepo),
-		Observability: adapthttp.NewObservabilityHandler(postgres.NewObservabilityRepo(pgClient)),
+		Observability: adapthttp.NewObservabilityHandler(obsRepo),
 		Capacity:      capacityHandler,
 		Changes:       adapthttp.NewChangeHandler(postgres.NewChangesRepo(pgClient)),
 		Promotion:     adapthttp.NewPromotionHandler(usecasePromotion.NewUsecase(postgres.NewPromotionRepo(pgClient), dockerRepo, auditRepo)),
@@ -278,7 +410,7 @@ func run() error {
 		AI:            adapthttp.NewAIHandler(registry),
 		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo),
 		Search:        adapthttp.NewSearchHandler(searchUsecase),
-		Cost:          adapthttp.NewCostHandler(costRepo),
+		Cost:          adapthttp.NewCostHandler(costCalculator),
 		Backup:        adapthttp.NewBackupHandler(usecaseBackup.NewUsecase(backupRepo)),
 		Agents:        adapthttp.NewAgentHandler(agentRepo, orchestrator),
 		Deployments:   deploymentsHandler,
@@ -291,6 +423,7 @@ func run() error {
 		Scaffolder:    scaffoldHandler,
 		Plugin:        pluginHandler,
 		Ecosystem:     ecosystemHandler,
+		LogStream:     logStreamHandler,
 	}
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)
@@ -332,5 +465,19 @@ func run() error {
 
 
 
-// local wsBridge removed, using adapthttp.WSBridge
+func detectLogLevel(msg string, defaultLvl string) string {
+	upper := strings.ToUpper(msg)
+	switch {
+	case strings.Contains(upper, "ERROR") || strings.Contains(upper, "FATAL") || strings.Contains(upper, "PANIC"):
+		return "ERROR"
+	case strings.Contains(upper, "WARN"):
+		return "WARN"
+	case strings.Contains(upper, "DEBUG") || strings.Contains(upper, "TRACE"):
+		return "DEBUG"
+	case strings.Contains(upper, "INFO"):
+		return "INFO"
+	default:
+		return defaultLvl
+	}
+}
 

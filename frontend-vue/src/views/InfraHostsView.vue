@@ -832,7 +832,9 @@ function openHostDrawer(host: ComputeHost) {
             </div>
             <div v-if="hostTestResults[host.id].agent_info" class="agent-telemetry-mini">
               <span v-if="hostTestResults[host.id].agent_info?.hostname">🖥️ {{ hostTestResults[host.id].agent_info?.hostname }}</span>
-              <span v-if="hostTestResults[host.id].agent_info?.os">🐧 {{ hostTestResults[host.id].agent_info?.os }} ({{ hostTestResults[host.id].agent_info?.arch }})</span>
+              <span v-if="hostTestResults[host.id].agent_info?.os_distro || hostTestResults[host.id].agent_info?.os">
+                🐧 {{ hostTestResults[host.id].agent_info?.os_distro || hostTestResults[host.id].agent_info?.os }} ({{ hostTestResults[host.id].agent_info?.arch }})
+              </span>
               <span v-if="hostTestResults[host.id].agent_info?.uptime || hostTestResults[host.id].agent_info?.uptime_seconds">⏱️ {{ formatUptime(hostTestResults[host.id].agent_info?.uptime || hostTestResults[host.id].agent_info?.uptime_seconds) }}</span>
             </div>
           </div>
@@ -1146,8 +1148,10 @@ function openHostDrawer(host: ComputeHost) {
           <div class="modal-test-msg">{{ modalTestResult.message }}</div>
           <div v-if="modalTestResult.agent_info" class="agent-telemetry-mini" style="margin-top: 6px;">
             <span v-if="modalTestResult.agent_info.hostname">🖥️ {{ modalTestResult.agent_info.hostname }}</span>
-            <span v-if="modalTestResult.agent_info.os">🐧 {{ modalTestResult.agent_info.os }} ({{ modalTestResult.agent_info.arch }})</span>
-            <span v-if="modalTestResult.agent_info.uptime">⏱️ {{ formatUptime(modalTestResult.agent_info.uptime) }}</span>
+            <span v-if="modalTestResult.agent_info.os_distro || modalTestResult.agent_info.os">
+              🐧 {{ modalTestResult.agent_info.os_distro || modalTestResult.agent_info.os }} ({{ modalTestResult.agent_info.arch }})
+            </span>
+            <span v-if="modalTestResult.agent_info.uptime || modalTestResult.agent_info.uptime_seconds">⏱️ {{ formatUptime(modalTestResult.agent_info.uptime || modalTestResult.agent_info.uptime_seconds) }}</span>
           </div>
         </div>
 
@@ -1246,8 +1250,12 @@ function openHostDrawer(host: ComputeHost) {
               <span class="telemetry-val font-bold text-cyan">{{ hostTestResults[selectedHost.id].agent_info?.hostname }}</span>
             </div>
             <div class="telemetry-item">
-              <span class="telemetry-lbl">OS / ARCHITECTURE:</span>
-              <span class="telemetry-val">{{ hostTestResults[selectedHost.id].agent_info?.os }} ({{ hostTestResults[selectedHost.id].agent_info?.arch }})</span>
+              <span class="telemetry-lbl">OS / DISTRO:</span>
+              <span class="telemetry-val">{{ hostTestResults[selectedHost.id].agent_info?.os_distro || hostTestResults[selectedHost.id].agent_info?.os }} ({{ hostTestResults[selectedHost.id].agent_info?.arch }})</span>
+            </div>
+            <div v-if="hostTestResults[selectedHost.id].agent_info?.kernel_version" class="telemetry-item">
+              <span class="telemetry-lbl">KERNEL:</span>
+              <span class="telemetry-val font-mono">{{ hostTestResults[selectedHost.id].agent_info?.kernel_version }}</span>
             </div>
             <div class="telemetry-item">
               <span class="telemetry-lbl">UPTIME:</span>

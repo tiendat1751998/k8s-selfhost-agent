@@ -266,8 +266,8 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// Fallback to query parameter "token" ONLY for WebSocket paths (/ws, /ws/...)
-		if token == "" && (r.URL.Path == "/ws" || strings.HasPrefix(r.URL.Path, "/ws/")) {
+		// Fallback to query parameter "token" ONLY for WebSocket paths (/ws, /ws/..., /api/v1/logs/stream)
+		if token == "" && (r.URL.Path == "/ws" || strings.HasPrefix(r.URL.Path, "/ws/") || r.URL.Path == "/api/v1/logs/stream" || strings.HasPrefix(r.URL.Path, "/api/v1/logs/stream")) {
 			token = r.URL.Query().Get("token")
 		}
 

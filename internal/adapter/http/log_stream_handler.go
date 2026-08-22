@@ -25,6 +25,11 @@ func NewLogStreamHandler(aggregator *logging.LogAggregator) *LogStreamHandler {
 }
 
 func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.aggregator == nil {
+		http.Error(w, "log aggregator unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Get().Error("failed to upgrade websocket for log streaming", zap.Error(err))

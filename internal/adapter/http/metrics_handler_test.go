@@ -139,3 +139,57 @@ func TestMetricsHandler_AliasConstructor(t *testing.T) {
 		t.Fatal("expected non-nil handler")
 	}
 }
+
+func TestOverviewHandler_GetTPS(t *testing.T) {
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
+	tpsCollector := metrics.NewTPSCollector(collector, nil, zap.NewNop())
+	handler := NewOverviewHandler(collector, zap.NewNop(), tpsCollector)
+
+	r := chi.NewRouter()
+	r.Route("/overview", handler.RegisterRoutes)
+
+	// 1. With configured TPS collector
+	{
+		req := httptest.NewRequest(http.MethodGet, "/overview/tps", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+
+		var resp metrics.TPSSnapshot
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode TPS response: %v", err)
+		}
+
+		if resp.PerNode == nil {
+			t.Errorf("expected non-nil PerNode array")
+		}
+	}
+
+	// 2. With nil TPS collector (fallback)
+	{
+		handlerWithoutTPS := NewOverviewHandler(collector, zap.NewNop())
+		r2 := chi.NewRouter()
+		r2.Route("/overview", handlerWithoutTPS.RegisterRoutes)
+
+		req := httptest.NewRequest(http.MethodGet, "/overview/tps", nil)
+		w := httptest.NewRecorder()
+		r2.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+
+		var resp metrics.TPSSnapshot
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode fallback TPS response: %v", err)
+		}
+
+		if resp.PerNode == nil {
+			t.Errorf("expected non-nil PerNode array")
+		}
+	}
+}
+

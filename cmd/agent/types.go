@@ -58,6 +58,8 @@ type MetricsResponse struct {
 	Hostname      string          `json:"hostname"`
 	OS            string          `json:"os"`
 	Arch          string          `json:"arch"`
+	OSDistro      string          `json:"os_distro,omitempty"`
+	KernelVersion string          `json:"kernel_version,omitempty"`
 	UptimeSeconds int64           `json:"uptime_seconds"`
 	LoadAverage   [3]float64      `json:"load_average"`
 	CPU           CPUMetrics      `json:"cpu"`

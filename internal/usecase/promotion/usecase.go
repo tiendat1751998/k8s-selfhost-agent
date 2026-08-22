@@ -234,9 +234,40 @@ func (u *Usecase) handlePostComplete(ctx context.Context, promo *promotion.Promo
 		containers, err := u.dockerRepo.ListContainers(ctx)
 		if err == nil {
 			if matchedCnt := matchContainer(containers, promo.Service); matchedCnt != nil {
+				targetImage := resolveTargetImage(matchedCnt.Image, promo.Version)
 				details["standalone_container"] = true
 				details["container_id"] = matchedCnt.ID
 				details["container_name"] = matchedCnt.Name
+				details["target_image"] = targetImage
+				details["previous_image"] = matchedCnt.Image
+
+				updateErr := u.dockerRepo.UpdateContainerImage(ctx, matchedCnt.ID, targetImage)
+				if updateErr != nil {
+					details["docker_update_error"] = updateErr.Error()
+					if u.logger != nil {
+						u.logger.Error("failed to update standalone container image upon promotion completion",
+							zap.String("container_id", matchedCnt.ID),
+							zap.String("target_image", targetImage),
+							zap.Error(updateErr))
+					}
+					if u.auditRepo != nil {
+						if recErr := u.auditRepo.RecordAction(ctx, actor, "promote_docker_container", "docker_container", matchedCnt.ID, matchedCnt.Name, "failed", details, "", ""); recErr != nil {
+							if u.logger != nil {
+								u.logger.Warn("failed to record audit action for failed docker container promotion", zap.Error(recErr))
+							}
+						}
+					}
+					return
+				}
+
+				if u.auditRepo != nil {
+					if recErr := u.auditRepo.RecordAction(ctx, actor, "promote_docker_container", "docker_container", matchedCnt.ID, matchedCnt.Name, "success", details, "", ""); recErr != nil {
+						if u.logger != nil {
+							u.logger.Warn("failed to record audit action for successful docker container promotion", zap.Error(recErr))
+						}
+					}
+				}
+				return
 			}
 		}
 	}

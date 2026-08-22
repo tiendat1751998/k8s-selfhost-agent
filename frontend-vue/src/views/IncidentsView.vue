@@ -27,6 +27,7 @@ const selectedIncident = ref<Incident | null>(null)
 const selectedReport = ref<RCAReport | null>(null)
 const activePR = ref<PullRequest | null>(null)
 const loadingReport = ref(false)
+const reportError = ref<string | null>(null)
 
 // PR Generation Modal
 const showPRModal = ref(false)
@@ -212,73 +213,14 @@ async function selectIncident(inc: Incident) {
   selectedReport.value = null
   activePR.value = null
 
+  reportError.value = null
   try {
     try {
       const report = await incidentsApi.getReport(inc.id)
       selectedReport.value = report
-    } catch {
-      // Synthesize realistic RCA if not ready
-      if (inc.type === 'NodeNotReady') {
-        selectedReport.value = {
-          id: `rca-${inc.id.slice(0, 8)}`,
-          incident_id: inc.id,
-          root_cause: `Host node unreachable: Kubelet stopped posting status. Underlying systemd unit kubelet.service terminated or network partition on ${inc.pod_name}.`,
-          evidence: [
-            `NodeCondition Ready is False (reason: KubeletNotReady)`,
-            `Heartbeat lease failed on endpoint /api/v1/namespaces/kube-node-lease/leases/${inc.pod_name}`,
-            `Ping latency >5000ms from cluster control-plane`,
-            `Container runtime containerd unreachable via socket /run/containerd/containerd.sock`
-          ],
-          confidence: 0.98,
-          risk_level: 'critical',
-          remediation: `Cordon node ${inc.pod_name}, evict critical workloads to secondary pool, and trigger automated kubelet recovery daemon.`,
-          rollback_plan: `Uncordon node ${inc.pod_name} once Ready condition is restored and verified by healthcheck probes.`,
-          llm_model: 'Claude 3.5 Sonnet / SRE Multi-Agent Swarm',
-          prompt_tokens: 2150,
-          response_tokens: 480,
-          created_at: new Date().toISOString()
-        }
-      } else if (inc.type === 'CrashLoopBackOff') {
-        selectedReport.value = {
-          id: `rca-${inc.id.slice(0, 8)}`,
-          incident_id: inc.id,
-          root_cause: `PostgreSQL connection refused: ${inc.pod_name} failed to handshake with postgres-master:5432. Dial error: connection refused.`,
-          evidence: [
-            `Container logs: [FATAL] dial tcp 10.96.12.44:5432: connect: connection refused`,
-            `Liveness probe failed: HTTP GET /healthz returned status code 503`,
-            `Crash loop restart count: 8 within 10 minutes`,
-            `PostgreSQL statefulset pods experiencing failover`
-          ],
-          confidence: 0.95,
-          risk_level: 'high',
-          remediation: `Update database connection retry timeout and pool backoff settings in ConfigMap and route to read-replica fallback.`,
-          rollback_plan: `Revert ConfigMap updates if ${inc.pod_name} fails database schema version handshake.`,
-          llm_model: 'Claude 3.5 Sonnet / SRE Multi-Agent Swarm',
-          prompt_tokens: 1920,
-          response_tokens: 440,
-          created_at: new Date().toISOString()
-        }
-      } else {
-        selectedReport.value = {
-          id: `rca-${inc.id.slice(0, 8)}`,
-          incident_id: inc.id,
-          root_cause: `Memory pressure limit exceeded during JVM heap allocation on ${inc.pod_name}. cgroup limit hit.`,
-          evidence: [
-            `Container restart count: 4 (exit code 137 OOMKilled)`,
-            `cgroup memory usage reached 512Mi limit for >60s`,
-            `Prometheus alert rule KubeContainerOOMKilled triggered`,
-            `Correlated upstream spike: +320 RPS on /api/v2/checkout`
-          ],
-          confidence: 0.96,
-          risk_level: inc.severity === 'critical' ? 'critical' : 'high',
-          remediation: `Increase container memory limits in Deployment manifest from 512Mi to 1024Mi and adjust JVM -XX:MaxRAMPercentage=75.`,
-          rollback_plan: `Revert memory limits commit via GitOps repository if node allocatable memory falls below 15%.`,
-          llm_model: 'Claude 3.5 Sonnet / SRE Multi-Agent Swarm',
-          prompt_tokens: 1840,
-          response_tokens: 420,
-          created_at: new Date().toISOString()
-        }
-      }
+    } catch (err: unknown) {
+      selectedReport.value = null
+      reportError.value = err instanceof Error ? err.message : 'No RCA report generated yet'
     }
 
     try {
@@ -385,7 +327,7 @@ function formatTime(d?: string) {
 
       <div class="header-actions">
         <button class="btn btn-primary" @click="showSimulateModal = true">
-          <span>⚡ Simulate Incident</span>
+          <span>⚡ Simulate Incident (Debug / Demo Mode)</span>
         </button>
         <button class="btn btn-secondary" :disabled="loading" @click="fetchIncidents">
           <span>{{ loading ? '⏳ Querying...' : '🔄 Refresh Feed' }}</span>
@@ -477,7 +419,7 @@ function formatTime(d?: string) {
               Cluster telemetry is nominal. Inject a test anomaly scenario to evaluate autonomous AI diagnostics and GitOps remediation.
             </p>
             <button class="btn btn-primary btn-sm empty-simulate-btn" @click="showSimulateModal = true">
-              <span>⚡ Inject Test Incident (Simulation)</span>
+              <span>⚡ Inject Test Incident (Debug / Demo Mode)</span>
             </button>
           </div>
 
@@ -562,7 +504,7 @@ function formatTime(d?: string) {
               </div>
 
               <!-- Confidence Gauge -->
-              <div class="confidence-gauge">
+              <div v-if="selectedReport" class="confidence-gauge">
                 <div class="gauge-dial font-mono">
                   <span class="gauge-pct">{{ Math.round((selectedReport?.confidence || 0.94) * 100) }}%</span>
                   <span class="gauge-label">Confidence</span>
@@ -570,19 +512,27 @@ function formatTime(d?: string) {
               </div>
             </div>
 
-            <div class="rca-explanation font-mono">
-              {{ selectedReport?.root_cause || selectedIncident.message }}
+            <div v-if="loadingReport" class="rca-loading text-muted font-mono" style="padding: 16px;">
+              ⏳ Loading Root Cause Analysis...
             </div>
+            <div v-else-if="selectedReport" class="rca-body">
+              <div class="rca-explanation font-mono">
+                {{ selectedReport.root_cause || selectedIncident.message }}
+              </div>
 
-            <!-- Evidence List -->
-            <div class="evidence-box">
-              <h4 class="evidence-title">Telemetry Evidence & Alert Correlation</h4>
-              <div class="evidence-grid">
-                <div v-for="(ev, idx) in (selectedReport?.evidence || [])" :key="idx" class="evidence-tag font-mono">
-                  <span class="ev-bullet">▸</span>
-                  <span>{{ ev }}</span>
+              <!-- Evidence List -->
+              <div v-if="selectedReport.evidence && selectedReport.evidence.length > 0" class="evidence-box">
+                <h4 class="evidence-title">Telemetry Evidence & Alert Correlation</h4>
+                <div class="evidence-grid">
+                  <div v-for="(ev, idx) in selectedReport.evidence" :key="idx" class="evidence-tag font-mono">
+                    <span class="ev-bullet">▸</span>
+                    <span>{{ ev }}</span>
+                  </div>
                 </div>
               </div>
+            </div>
+            <div v-else class="empty-rca-box text-muted font-mono" style="padding: 16px; font-size: 13px;">
+              <span>{{ reportError || 'No RCA report generated yet. Click "🤖 AI Root Cause" above to run diagnostics.' }}</span>
             </div>
           </div>
 
@@ -606,45 +556,21 @@ function formatTime(d?: string) {
 
             <!-- Unified Diff Code Viewer -->
             <div class="diff-code-box font-mono">
-              <template v-if="selectedIncident.type === 'NodeNotReady'">
-                <div class="diff-line diff-meta">@@ -12,6 +12,8 @@ spec:</div>
-                <div class="diff-line diff-context">  unschedulable: false</div>
-                <div class="diff-line diff-add">+  drainTimeoutSeconds: 300</div>
-                <div class="diff-line diff-add">+  autoRemediation:</div>
-                <div class="diff-line diff-add">+    restartKubelet: true</div>
-                <div class="diff-line diff-add">+    resyncTimeout: 60s</div>
+              <template v-if="activePR?.files_changed && activePR.files_changed.length > 0">
+                <div v-for="file in activePR.files_changed" :key="file.path" class="file-diff-block">
+                  <div class="diff-line diff-meta">--- {{ file.path }} ({{ file.action }})</div>
+                  <pre class="diff-file-content">{{ file.content }}</pre>
+                </div>
               </template>
-              <template v-else-if="selectedIncident.type === 'CrashLoopBackOff'">
-                <div class="diff-line diff-meta">@@ -28,7 +28,8 @@ spec:</div>
-                <div class="diff-line diff-context">      containers:</div>
-                <div class="diff-line diff-context">      - name: {{ (selectedIncident.pod_name || 'workload').split('-')[0] }}</div>
-                <div class="diff-line diff-context">        env:</div>
-                <div class="diff-line diff-del">-       - name: DB_CONNECT_TIMEOUT</div>
-                <div class="diff-line diff-del">-         value: "5s"</div>
-                <div class="diff-line diff-add">+       - name: DB_CONNECT_TIMEOUT</div>
-                <div class="diff-line diff-add">+         value: "30s"</div>
-                <div class="diff-line diff-add">+       - name: DB_MAX_RETRIES</div>
-                <div class="diff-line diff-add">+         value: "10"</div>
-              </template>
-              <template v-else>
-                <div class="diff-line diff-meta">@@ -42,7 +42,8 @@ resources:</div>
-                <div class="diff-line diff-context">      requests:</div>
-                <div class="diff-line diff-context">        cpu: 250m</div>
-                <div class="diff-line diff-del">-       memory: 512Mi</div>
-                <div class="diff-line diff-add">+       memory: 1024Mi</div>
-                <div class="diff-line diff-context">      limits:</div>
-                <div class="diff-line diff-context">        cpu: 1000m</div>
-                <div class="diff-line diff-del">-       memory: 512Mi</div>
-                <div class="diff-line diff-add">+       memory: 1024Mi</div>
-                <div class="diff-line diff-add">+   - name: JAVA_TOOL_OPTIONS</div>
-                <div class="diff-line diff-add">+     value: "-XX:MaxRAMPercentage=75.0"</div>
-              </template>
+              <div v-else class="no-diff-box text-muted">
+                No diff available
+              </div>
             </div>
 
             <!-- Bottom Action Controls -->
             <div class="diff-footer">
               <div class="remediation-note font-mono text-muted">
-                Remediation: {{ selectedReport?.remediation }}
+                Remediation: {{ selectedReport?.remediation || 'Remediation plan will be generated during AI root cause analysis.' }}
               </div>
 
               <div class="remediation-btn-group">
@@ -724,11 +650,15 @@ function formatTime(d?: string) {
     <ModalDrawer
       v-model:show="showSimulateModal"
       mode="modal"
-      title="⚡ Incident Simulation & Telemetry Injection"
-      subtitle="Inject synthetic Kubernetes cluster anomalies to test Autonomous RCA and GitOps remediation"
+      title="⚡ Incident Simulation & Telemetry Injection (Debug / Demo Mode)"
+      subtitle="[Debug / Demo Mode] Inject synthetic Kubernetes cluster anomalies to test Autonomous RCA and GitOps remediation"
       max-width="640px"
     >
       <div class="simulation-modal-body">
+        <div class="debug-demo-banner">
+          <span class="badge badge-amber font-mono">⚠️ DEBUG / DEMO MODE</span>
+          <span class="debug-banner-text">Synthetic cluster failure scenarios for demonstration and debugging</span>
+        </div>
         <p class="simulation-guide-text">
           Select a quick-start failure scenario below to trigger synthetic cluster metrics, container lifecycle events, and autonomous root-cause reasoning.
         </p>
@@ -1488,5 +1418,43 @@ function formatTime(d?: string) {
 .sim-action-btn {
   white-space: nowrap;
   font-weight: 600;
+}
+
+.no-diff-box {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.file-diff-block {
+  margin-bottom: 16px;
+}
+
+.diff-file-content {
+  margin: 4px 0 0 0;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  overflow-x: auto;
+}
+
+.debug-demo-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+}
+
+.debug-banner-text {
+  font-size: 12px;
+  color: #fbbf24;
 }
 </style>

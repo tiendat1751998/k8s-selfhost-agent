@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -326,20 +327,22 @@ func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 	)
 
 	collector.SetAgentMetric("agent-node-1", &AgentMetrics{
-		Hostname:    "agent-server-1",
-		OS:          "linux",
-		Arch:        "amd64",
-		CPUUsage:    85.0,
-		CPUCount:    4,
-		MemTotal:    8 * 1024 * 1024 * 1024,
-		MemUsed:     4 * 1024 * 1024 * 1024,
-		MemPercent:  50.0,
-		DiskTotal:   100 * 1024 * 1024 * 1024,
-		DiskUsed:    20 * 1024 * 1024 * 1024,
-		DiskPercent: 20.0,
-		NetRxRate:   1024,
-		NetTxRate:   2048,
-		Processes:   10,
+		Hostname:      "agent-server-1",
+		OS:            "linux",
+		Arch:          "amd64",
+		OSDistro:      "Ubuntu 22.04.3 LTS",
+		KernelVersion: "5.15.0-91-generic",
+		CPUUsage:      85.0,
+		CPUCount:      4,
+		MemTotal:      8 * 1024 * 1024 * 1024,
+		MemUsed:       4 * 1024 * 1024 * 1024,
+		MemPercent:    50.0,
+		DiskTotal:     100 * 1024 * 1024 * 1024,
+		DiskUsed:      20 * 1024 * 1024 * 1024,
+		DiskPercent:   20.0,
+		NetRxRate:     1024,
+		NetTxRate:     2048,
+		Processes:     10,
 		TopProcesses: []ProcessMetric{
 			{
 				PID:              413,
@@ -358,15 +361,17 @@ func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 		LastSeen:    time.Now().UTC(),
 	})
 	collector.SetAgentMetric("agent-node-2", &AgentMetrics{
-		Hostname:    "agent-server-2",
-		OS:          "linux",
-		Arch:        "amd64",
-		CPUUsage:    10.0,
-		CPUCount:    4,
-		MemTotal:    8 * 1024 * 1024 * 1024,
-		MemUsed:     2 * 1024 * 1024 * 1024,
-		MemPercent:  25.0,
-		DiskTotal:   100 * 1024 * 1024 * 1024,
+		Hostname:      "agent-server-2",
+		OS:            "linux",
+		Arch:          "amd64",
+		OSDistro:      "Debian 12",
+		KernelVersion: "6.1.0-18-amd64",
+		CPUUsage:      10.0,
+		CPUCount:      4,
+		MemTotal:      8 * 1024 * 1024 * 1024,
+		MemUsed:       2 * 1024 * 1024 * 1024,
+		MemPercent:    25.0,
+		DiskTotal:     100 * 1024 * 1024 * 1024,
 		DiskUsed:    10 * 1024 * 1024 * 1024,
 		DiskPercent: 10.0,
 		NetRxRate:   0,
@@ -421,6 +426,12 @@ func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 	}
 	if foundNode1.TopProcesses[0].PID != 413 || foundNode1.TopProcesses[0].Name != "nginx" {
 		t.Errorf("unexpected top process in node metrics: %+v", foundNode1.TopProcesses[0])
+	}
+	if foundNode1.OSDistro != "Ubuntu 22.04.3 LTS" {
+		t.Errorf("expected OSDistro 'Ubuntu 22.04.3 LTS', got '%s'", foundNode1.OSDistro)
+	}
+	if foundNode1.KernelVersion != "5.15.0-91-generic" {
+		t.Errorf("expected KernelVersion '5.15.0-91-generic', got '%s'", foundNode1.KernelVersion)
 	}
 }
 
@@ -553,6 +564,8 @@ func TestCollector_ScrapeAgent_Online(t *testing.T) {
 		"hostname":       "db-server-01",
 		"os":             "linux",
 		"arch":           "amd64",
+		"os_distro":      "Ubuntu 22.04.3 LTS",
+		"kernel_version": "5.15.0-91-generic",
 		"uptime_seconds": 1234567,
 		"load_average":   []float64{0.5, 0.3, 0.2},
 		"cpu": map[string]interface{}{
@@ -648,6 +661,12 @@ func TestCollector_ScrapeAgent_Online(t *testing.T) {
 	if m.Hostname != "db-server-01" {
 		t.Errorf("expected hostname 'db-server-01', got '%s'", m.Hostname)
 	}
+	if m.OSDistro != "Ubuntu 22.04.3 LTS" {
+		t.Errorf("expected OSDistro 'Ubuntu 22.04.3 LTS', got '%s'", m.OSDistro)
+	}
+	if m.KernelVersion != "5.15.0-91-generic" {
+		t.Errorf("expected KernelVersion '5.15.0-91-generic', got '%s'", m.KernelVersion)
+	}
 	if m.CPUUsage != 23.5 {
 		t.Errorf("expected CPUUsage 23.5, got %f", m.CPUUsage)
 	}
@@ -673,6 +692,123 @@ func TestCollector_ScrapeAgent_Online(t *testing.T) {
 
 	if !recorded || statusEntry.status != "connected" {
 		t.Errorf("expected repo status 'connected', got recorded=%v status=%s", recorded, statusEntry.status)
+	}
+}
+
+func TestCollector_ScrapeAgent_DiskFilteringAndDeduplication(t *testing.T) {
+	agentResp := map[string]interface{}{
+		"hostname":       "worker1",
+		"os":             "linux",
+		"arch":           "amd64",
+		"uptime_seconds": 86400,
+		"load_average":   [3]float64{0.5, 0.4, 0.3},
+		"cpu": map[string]interface{}{
+			"count":         4,
+			"usage_percent": 15.0,
+		},
+		"memory": map[string]interface{}{
+			"total_bytes":     int64(16000000000),
+			"used_bytes":      int64(8000000000),
+			"available_bytes": int64(8000000000),
+			"usage_percent":   50.0,
+		},
+		"disks": []map[string]interface{}{
+			{
+				"mount_point":   "/",
+				"total_bytes":   int64(102971269120),
+				"used_bytes":    int64(31782694912),
+				"usage_percent": 30.86,
+				"filesystem":    "ext4",
+			},
+			{
+				"mount_point":   "/boot",
+				"total_bytes":   int64(2040373248),
+				"used_bytes":    int64(204037324),
+				"usage_percent": 10.0,
+				"filesystem":    "ext4",
+			},
+			{
+				"mount_point":   "/var/lib/docker/rootfs/overlayfs/1",
+				"total_bytes":   int64(102971269120),
+				"used_bytes":    int64(31782694912),
+				"usage_percent": 30.86,
+				"filesystem":    "overlay",
+			},
+			{
+				"mount_point":   "/var/lib/docker/rootfs/overlayfs/2",
+				"total_bytes":   int64(102971269120),
+				"used_bytes":    int64(31782694912),
+				"usage_percent": 30.86,
+				"filesystem":    "overlay",
+			},
+			{
+				"mount_point":   "/run",
+				"total_bytes":   int64(102971269120),
+				"used_bytes":    int64(1024),
+				"usage_percent": 0.01,
+				"filesystem":    "tmpfs",
+			},
+			{
+				"mount_point":   "/snap/core/123",
+				"total_bytes":   int64(50000000),
+				"used_bytes":    int64(50000000),
+				"usage_percent": 100.0,
+				"filesystem":    "squashfs",
+			},
+			{
+				"mount_point":   "/mnt/duplicate_root",
+				"total_bytes":   int64(102971269120),
+				"used_bytes":    int64(31782694912),
+				"usage_percent": 30.86,
+				"filesystem":    "ext4",
+			},
+		},
+		"network": map[string]interface{}{
+			"total_rx_bytes_per_sec": 1000,
+			"total_tx_bytes_per_sec": 500,
+		},
+		"processes": 50,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(agentResp)
+	}))
+	defer srv.Close()
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-worker-1",
+				Name:     "worker1",
+				HostType: "agent",
+				Endpoint: srv.URL,
+			},
+		},
+	}
+
+	collector := NewCollector(nil, hostRepo, nil, zap.NewNop(), WithHTTPClient(srv.Client()))
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[0])
+
+	metricsMap := collector.GetAgentMetrics()
+	m, ok := metricsMap["host-worker-1"]
+	if !ok {
+		t.Fatalf("expected metrics for host-worker-1")
+	}
+
+	expectedTotal := int64(102971269120 + 2040373248)
+	expectedUsed := int64(31782694912 + 204037324)
+
+	if m.DiskTotal != expectedTotal {
+		t.Errorf("expected DiskTotal %d, got %d", expectedTotal, m.DiskTotal)
+	}
+	if m.DiskUsed != expectedUsed {
+		t.Errorf("expected DiskUsed %d, got %d", expectedUsed, m.DiskUsed)
+	}
+
+	expectedPct := math.Round((float64(expectedUsed)/float64(expectedTotal))*10000) / 100
+	if m.DiskPercent != expectedPct {
+		t.Errorf("expected DiskPercent %f, got %f", expectedPct, m.DiskPercent)
 	}
 }
 

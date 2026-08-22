@@ -72,6 +72,10 @@ func (r *testDockerRepo) UpdateServiceImage(ctx context.Context, serviceID strin
 	return nil
 }
 
+func (r *testDockerRepo) UpdateContainerImage(ctx context.Context, containerID string, image string) error {
+	return nil
+}
+
 func (r *testDockerRepo) GetSwarmJoinTokens(ctx context.Context) (*domain.SwarmTokens, error) {
 	if r.tokensErr != nil {
 		return nil, r.tokensErr

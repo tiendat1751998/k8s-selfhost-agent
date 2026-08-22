@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +28,20 @@ var upgrader = websocket.Upgrader{
 		if err != nil {
 			return false
 		}
-		return u.Host == r.Host
+		if u.Host == r.Host {
+			return true
+		}
+		allowedOriginsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
+		if allowedOriginsEnv == "" {
+			allowedOriginsEnv = "http://localhost:3000,http://localhost:5173"
+		}
+		for _, o := range strings.Split(allowedOriginsEnv, ",") {
+			o = strings.TrimSpace(o)
+			if o == "*" || o == origin {
+				return true
+			}
+		}
+		return false
 	},
 }
 

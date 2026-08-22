@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/ecosystem"
@@ -26,22 +28,30 @@ type Usecase interface {
 	DeleteTool(ctx context.Context, tenantID, id string) error
 }
 
+// DockerAPIClient defines the Docker API subset required for container inspection and version detection.
+type DockerAPIClient interface {
+	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
+	ServerVersion(ctx context.Context) (types.Version, error)
+}
+
 type cacheEntry struct {
 	tools     []ecosystem.DetectedTool
 	expiresAt time.Time
 }
 
 type toolProbeSpec struct {
-	Name       string
-	Category   string
-	SettingKey string
-	ProbePath  string
-	ParserFunc func(resp *http.Response, body []byte) (version string, health string, metadata map[string]string)
+	Name          string
+	Category      string
+	SettingKey    string
+	ProbePath     string
+	MatchKeywords []string
+	ParserFunc    func(resp *http.Response, body []byte) (version string, health string, metadata map[string]string)
 }
 
 type detectorUsecase struct {
 	ecoRepo      ecosystem.Repository
 	settingsRepo settings.Repository
+	dockerClient DockerAPIClient
 	httpClient   *http.Client
 	logger       *zap.Logger
 
@@ -50,12 +60,32 @@ type detectorUsecase struct {
 	cacheTTL time.Duration
 }
 
+// Option configures detector usecase behavior.
+type Option func(*detectorUsecase)
+
+// WithDockerClient configures a Docker API client for live container inspection.
+func WithDockerClient(dockerClient DockerAPIClient) Option {
+	return func(u *detectorUsecase) {
+		u.dockerClient = dockerClient
+	}
+}
+
+// WithCacheTTL configures the in-memory cache TTL.
+func WithCacheTTL(ttl time.Duration) Option {
+	return func(u *detectorUsecase) {
+		if ttl > 0 {
+			u.cacheTTL = ttl
+		}
+	}
+}
+
 // NewUsecase constructs a new ecosystem detector usecase.
 func NewUsecase(
 	ecoRepo ecosystem.Repository,
 	settingsRepo settings.Repository,
 	httpClient *http.Client,
 	logger *zap.Logger,
+	opts ...Option,
 ) Usecase {
 	if logger == nil {
 		logger = zap.NewNop()
@@ -64,7 +94,7 @@ func NewUsecase(
 		httpClient = httputil.NewSafeHTTPClient(5 * time.Second)
 	}
 
-	return &detectorUsecase{
+	u := &detectorUsecase{
 		ecoRepo:      ecoRepo,
 		settingsRepo: settingsRepo,
 		httpClient:   httpClient,
@@ -72,18 +102,102 @@ func NewUsecase(
 		cache:        make(map[string]cacheEntry),
 		cacheTTL:     5 * time.Minute,
 	}
+
+	for _, opt := range opts {
+		opt(u)
+	}
+
+	return u
+}
+
+// extractImageTag extracts the tag portion from a Docker container image string.
+// Examples:
+// - "redis:8-alpine" -> "8-alpine"
+// - "docker.io/library/postgres:16.3-alpine" -> "16.3-alpine"
+// - "registry.local:5000/repo/app:v1.2.0@sha256:abc..." -> "v1.2.0"
+// - "postgres" -> "unknown"
+func extractImageTag(image string) string {
+	image = strings.TrimSpace(image)
+	if image == "" {
+		return "unknown"
+	}
+	// Strip digest (@sha256:...)
+	if idx := strings.Index(image, "@"); idx != -1 {
+		image = image[:idx]
+	}
+	// Extract the repository and tag part after the last slash to avoid confusing host:port with a tag
+	lastSlash := strings.LastIndex(image, "/")
+	repoAndTag := image
+	if lastSlash != -1 {
+		repoAndTag = image[lastSlash+1:]
+	}
+	// Find tag after the last colon
+	if colonIdx := strings.LastIndex(repoAndTag, ":"); colonIdx != -1 {
+		tag := strings.TrimSpace(repoAndTag[colonIdx+1:])
+		if tag != "" {
+			return tag
+		}
+	}
+	return "unknown"
+}
+
+// matchCategoryForImageOrName infers the ecosystem category based on container image and name keywords.
+func matchCategoryForImageOrName(image, name string) string {
+	combined := strings.ToLower(image + " " + name)
+	switch {
+	case strings.Contains(combined, "postgres") || strings.Contains(combined, "mysql") ||
+		strings.Contains(combined, "mariadb") || strings.Contains(combined, "mongo") ||
+		strings.Contains(combined, "redis") || strings.Contains(combined, "cockroach") ||
+		strings.Contains(combined, "cassandra") || strings.Contains(combined, "scylla") ||
+		strings.Contains(combined, "clickhouse") || strings.Contains(combined, "elasticsearch") ||
+		strings.Contains(combined, "opensearch") || strings.Contains(combined, "minio"):
+		return ecosystem.CategoryDatabase
+	case strings.Contains(combined, "nats") || strings.Contains(combined, "kafka") ||
+		strings.Contains(combined, "rabbitmq") || strings.Contains(combined, "pulsar") ||
+		strings.Contains(combined, "mosquitto") || strings.Contains(combined, "emqx"):
+		return ecosystem.CategoryMessaging
+	case strings.Contains(combined, "traefik") || strings.Contains(combined, "envoy") ||
+		strings.Contains(combined, "istio") || strings.Contains(combined, "nginx") ||
+		strings.Contains(combined, "kong") || strings.Contains(combined, "haproxy") ||
+		strings.Contains(combined, "caddy") || strings.Contains(combined, "linkerd"):
+		return ecosystem.CategoryMesh
+	case strings.Contains(combined, "drone") || strings.Contains(combined, "argocd") ||
+		strings.Contains(combined, "argo") || strings.Contains(combined, "flux") ||
+		strings.Contains(combined, "tekton") || strings.Contains(combined, "jenkins") ||
+		strings.Contains(combined, "gitea") || strings.Contains(combined, "gitlab"):
+		return ecosystem.CategoryGitOps
+	case strings.Contains(combined, "trivy") || strings.Contains(combined, "falco") ||
+		strings.Contains(combined, "clair") || strings.Contains(combined, "grype") ||
+		strings.Contains(combined, "cosign"):
+		return ecosystem.CategorySecurity
+	case strings.Contains(combined, "prometheus") || strings.Contains(combined, "grafana") ||
+		strings.Contains(combined, "jaeger") || strings.Contains(combined, "loki") ||
+		strings.Contains(combined, "tempo") || strings.Contains(combined, "alertmanager") ||
+		strings.Contains(combined, "victoriametrics") || strings.Contains(combined, "thanos"):
+		return ecosystem.CategoryMonitoring
+	case strings.Contains(combined, "vault") || strings.Contains(combined, "sealed-secrets"):
+		return ecosystem.CategorySecrets
+	case strings.Contains(combined, "kyverno") || strings.Contains(combined, "gatekeeper") ||
+		strings.Contains(combined, "opa"):
+		return ecosystem.CategoryPolicy
+	case strings.Contains(combined, "cert-manager") || strings.Contains(combined, "cert_manager"):
+		return ecosystem.CategoryCertificates
+	default:
+		return ecosystem.CategoryCompute
+	}
 }
 
 // knownToolSpecs contains standard probes for well-known infrastructure & cloud-native ecosystem tools.
 var knownToolSpecs = []toolProbeSpec{
 	{
-		Name:       "Docker Engine",
-		Category:   ecosystem.CategoryCompute,
-		SettingKey: "docker_url",
-		ProbePath:  "/version",
+		Name:          "Docker Engine",
+		Category:      ecosystem.CategoryCompute,
+		SettingKey:    "docker_url",
+		ProbePath:     "/version",
+		MatchKeywords: []string{"docker"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
 			if resp.StatusCode != http.StatusOK {
-				return "27.0.0", ecosystem.HealthHealthy, map[string]string{
+				return "", ecosystem.HealthDegraded, map[string]string{
 					"engine":         "docker-daemon",
 					"storage_driver": "overlay2",
 					"cluster":        "primary-cluster",
@@ -94,11 +208,7 @@ var knownToolSpecs = []toolProbeSpec{
 				ApiVersion string `json:"ApiVersion"`
 			}
 			_ = json.Unmarshal(body, &payload)
-			ver := payload.Version
-			if ver == "" {
-				ver = "27.0.0"
-			}
-			return ver, ecosystem.HealthHealthy, map[string]string{
+			return payload.Version, ecosystem.HealthHealthy, map[string]string{
 				"engine":         "docker-daemon",
 				"storage_driver": "overlay2",
 				"cluster":        "primary-cluster",
@@ -106,12 +216,18 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "PostgreSQL 16",
-		Category:   ecosystem.CategoryDatabase,
-		SettingKey: "postgres_url",
-		ProbePath:  "/healthz",
+		Name:          "PostgreSQL 16",
+		Category:      ecosystem.CategoryDatabase,
+		SettingKey:    "postgres_url",
+		ProbePath:     "/healthz",
+		MatchKeywords: []string{"postgres", "postgresql"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
-			return "16.3", ecosystem.HealthHealthy, map[string]string{
+			if resp.StatusCode != http.StatusOK {
+				return "", ecosystem.HealthDegraded, map[string]string{
+					"engine": "postgresql",
+				}
+			}
+			return "", ecosystem.HealthHealthy, map[string]string{
 				"engine":    "postgresql",
 				"port":      "5432",
 				"mode":      "read-write",
@@ -120,12 +236,18 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "Redis 8",
-		Category:   ecosystem.CategoryDatabase,
-		SettingKey: "redis_url",
-		ProbePath:  "/ping",
+		Name:          "Redis 8",
+		Category:      ecosystem.CategoryDatabase,
+		SettingKey:    "redis_url",
+		ProbePath:     "/ping",
+		MatchKeywords: []string{"redis"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
-			return "8.0-M02", ecosystem.HealthHealthy, map[string]string{
+			if resp.StatusCode != http.StatusOK {
+				return "", ecosystem.HealthDegraded, map[string]string{
+					"engine": "redis",
+				}
+			}
+			return "", ecosystem.HealthHealthy, map[string]string{
 				"engine":      "redis",
 				"mode":        "standalone",
 				"port":        "6379",
@@ -134,12 +256,18 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "NATS JetStream",
-		Category:   ecosystem.CategoryMessaging,
-		SettingKey: "nats_url",
-		ProbePath:  "/varz",
+		Name:          "NATS JetStream",
+		Category:      ecosystem.CategoryMessaging,
+		SettingKey:    "nats_url",
+		ProbePath:     "/varz",
+		MatchKeywords: []string{"nats"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
-			ver := "v2.10.18"
+			if resp.StatusCode != http.StatusOK {
+				return "", ecosystem.HealthDegraded, map[string]string{
+					"engine": "nats",
+				}
+			}
+			ver := ""
 			var payload struct {
 				Version string `json:"version"`
 			}
@@ -155,12 +283,18 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "Traefik v3.1",
-		Category:   ecosystem.CategoryMesh,
-		SettingKey: "traefik_url",
-		ProbePath:  "/ping",
+		Name:          "Traefik v3.1",
+		Category:      ecosystem.CategoryMesh,
+		SettingKey:    "traefik_url",
+		ProbePath:     "/ping",
+		MatchKeywords: []string{"traefik"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
-			return "v3.1.2", ecosystem.HealthHealthy, map[string]string{
+			if resp.StatusCode != http.StatusOK {
+				return "", ecosystem.HealthDegraded, map[string]string{
+					"router": "traefik",
+				}
+			}
+			return "", ecosystem.HealthHealthy, map[string]string{
 				"router":    "traefik",
 				"port":      "8080",
 				"dashboard": "enabled",
@@ -169,12 +303,18 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "Drone CI",
-		Category:   ecosystem.CategoryGitOps,
-		SettingKey: "drone_url",
-		ProbePath:  "/version",
+		Name:          "Drone CI",
+		Category:      ecosystem.CategoryGitOps,
+		SettingKey:    "drone_url",
+		ProbePath:     "/version",
+		MatchKeywords: []string{"drone"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
-			ver := "v2.24.0"
+			if resp.StatusCode != http.StatusOK {
+				return "", ecosystem.HealthDegraded, map[string]string{
+					"runner": "docker-runner",
+				}
+			}
+			ver := ""
 			var payload struct {
 				Version string `json:"version"`
 			}
@@ -189,10 +329,11 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "ArgoCD",
-		Category:   ecosystem.CategoryGitOps,
-		SettingKey: "argocd_url",
-		ProbePath:  "/api/version",
+		Name:          "ArgoCD",
+		Category:      ecosystem.CategoryGitOps,
+		SettingKey:    "argocd_url",
+		ProbePath:     "/api/version",
+		MatchKeywords: []string{"argocd", "argo-cd"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
 			if resp.StatusCode != http.StatusOK {
 				return "", ecosystem.HealthDegraded, map[string]string{
@@ -220,10 +361,11 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "Trivy",
-		Category:   ecosystem.CategorySecurity,
-		SettingKey: "trivy_url",
-		ProbePath:  "/healthz",
+		Name:          "Trivy",
+		Category:      ecosystem.CategorySecurity,
+		SettingKey:    "trivy_url",
+		ProbePath:     "/healthz",
+		MatchKeywords: []string{"trivy"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
 			if resp.StatusCode != http.StatusOK {
 				return "", ecosystem.HealthDegraded, map[string]string{
@@ -238,10 +380,11 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "Grafana",
-		Category:   ecosystem.CategoryMonitoring,
-		SettingKey: "grafana_url",
-		ProbePath:  "/api/health",
+		Name:          "Grafana",
+		Category:      ecosystem.CategoryMonitoring,
+		SettingKey:    "grafana_url",
+		ProbePath:     "/api/health",
+		MatchKeywords: []string{"grafana"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
 			if resp.StatusCode != http.StatusOK {
 				return "", ecosystem.HealthDegraded, map[string]string{
@@ -270,10 +413,11 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "Vault",
-		Category:   ecosystem.CategorySecrets,
-		SettingKey: "vault_url",
-		ProbePath:  "/v1/sys/health",
+		Name:          "Vault",
+		Category:      ecosystem.CategorySecrets,
+		SettingKey:    "vault_url",
+		ProbePath:     "/v1/sys/health",
+		MatchKeywords: []string{"vault"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
 			var payload struct {
 				Initialized   bool   `json:"initialized"`
@@ -296,10 +440,11 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "Prometheus",
-		Category:   ecosystem.CategoryMonitoring,
-		SettingKey: "prometheus_url",
-		ProbePath:  "/-/healthy",
+		Name:          "Prometheus",
+		Category:      ecosystem.CategoryMonitoring,
+		SettingKey:    "prometheus_url",
+		ProbePath:     "/-/healthy",
+		MatchKeywords: []string{"prometheus"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
 			if resp.StatusCode != http.StatusOK {
 				return "", ecosystem.HealthDegraded, map[string]string{
@@ -314,10 +459,11 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "Kyverno",
-		Category:   ecosystem.CategoryPolicy,
-		SettingKey: "kyverno_url",
-		ProbePath:  "/healthz",
+		Name:          "Kyverno",
+		Category:      ecosystem.CategoryPolicy,
+		SettingKey:    "kyverno_url",
+		ProbePath:     "/healthz",
+		MatchKeywords: []string{"kyverno"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
 			if resp.StatusCode != http.StatusOK {
 				return "", ecosystem.HealthDegraded, map[string]string{
@@ -332,10 +478,11 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "Istio",
-		Category:   ecosystem.CategoryMesh,
-		SettingKey: "istio_url",
-		ProbePath:  "/healthz/ready",
+		Name:          "Istio",
+		Category:      ecosystem.CategoryMesh,
+		SettingKey:    "istio_url",
+		ProbePath:     "/healthz/ready",
+		MatchKeywords: []string{"istio", "pilot"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
 			if resp.StatusCode != http.StatusOK {
 				return "", ecosystem.HealthDegraded, map[string]string{
@@ -350,10 +497,11 @@ var knownToolSpecs = []toolProbeSpec{
 		},
 	},
 	{
-		Name:       "cert-manager",
-		Category:   ecosystem.CategoryCertificates,
-		SettingKey: "cert_manager_url",
-		ProbePath:  "/livez",
+		Name:          "cert-manager",
+		Category:      ecosystem.CategoryCertificates,
+		SettingKey:    "cert_manager_url",
+		ProbePath:     "/livez",
+		MatchKeywords: []string{"cert-manager", "cert_manager"},
 		ParserFunc: func(resp *http.Response, body []byte) (string, string, map[string]string) {
 			if resp.StatusCode != http.StatusOK {
 				return "", ecosystem.HealthDegraded, map[string]string{
@@ -369,14 +517,98 @@ var knownToolSpecs = []toolProbeSpec{
 	},
 }
 
+type matchedDockerContainer struct {
+	SpecIndex   int
+	Container   container.Summary
+	ImageTag    string
+	MatchedTool string
+	Category    string
+}
+
+// queryDocker inspects running containers and server version from the Docker API.
+func (u *detectorUsecase) queryDocker(ctx context.Context) (string, map[string]matchedDockerContainer, []matchedDockerContainer) {
+	matched := make(map[string]matchedDockerContainer)
+	var unmatched []matchedDockerContainer
+	var dockerEngineVersion string
+
+	if u.dockerClient == nil {
+		return "", matched, nil
+	}
+
+	// 1. Query Docker Engine daemon version
+	ver, err := u.dockerClient.ServerVersion(ctx)
+	if err == nil {
+		dockerEngineVersion = ver.Version
+	}
+
+	// 2. Query running Docker containers
+	containers, err := u.dockerClient.ContainerList(ctx, container.ListOptions{})
+	if err != nil {
+		u.logger.Warn("failed to list docker containers for ecosystem detection", zap.Error(err))
+		return dockerEngineVersion, matched, nil
+	}
+
+	for _, c := range containers {
+		tag := extractImageTag(c.Image)
+		imageLower := strings.ToLower(c.Image)
+		nameLower := ""
+		if len(c.Names) > 0 {
+			nameLower = strings.ToLower(strings.TrimPrefix(c.Names[0], "/"))
+		}
+
+		foundSpec := false
+		for i, spec := range knownToolSpecs {
+			if spec.Name == "Docker Engine" {
+				continue
+			}
+			for _, kw := range spec.MatchKeywords {
+				if strings.Contains(imageLower, kw) || (nameLower != "" && strings.Contains(nameLower, kw)) {
+					matched[spec.Name] = matchedDockerContainer{
+						SpecIndex:   i,
+						Container:   c,
+						ImageTag:    tag,
+						MatchedTool: spec.Name,
+						Category:    spec.Category,
+					}
+					foundSpec = true
+					break
+				}
+			}
+			if foundSpec {
+				break
+			}
+		}
+
+		if !foundSpec {
+			cat := matchCategoryForImageOrName(c.Image, nameLower)
+			toolName := nameLower
+			if toolName == "" {
+				toolName = c.Image
+			}
+			unmatched = append(unmatched, matchedDockerContainer{
+				SpecIndex:   -1,
+				Container:   c,
+				ImageTag:    tag,
+				MatchedTool: toolName,
+				Category:    cat,
+			})
+		}
+	}
+
+	return dockerEngineVersion, matched, unmatched
+}
+
 // Scan reads configured integration URLs from platform settings, probes them concurrently,
-// persists detection results, and updates the in-memory cache.
+// queries live Docker container metadata, persists detection results, and updates the in-memory cache.
 func (u *detectorUsecase) Scan(ctx context.Context, tenantID string) ([]ecosystem.DetectedTool, error) {
 	if tenantID == "" {
 		tenantID = "default-tenant"
 	}
 
-	// 1. Read integrations settings
+	// 1. Query Docker daemon and running containers
+	dockerEngineVer, matchedContainers, unmatchedContainers := u.queryDocker(ctx)
+
+	// 2. Read integrations settings
 	settingsMap := make(map[string]string)
 	if u.settingsRepo != nil {
 		items, err := u.settingsRepo.GetByCategory(ctx, tenantID, settings.CategoryIntegrations)
@@ -389,7 +621,7 @@ func (u *detectorUsecase) Scan(ctx context.Context, tenantID string) ([]ecosyste
 		}
 	}
 
-	// 2. Concurrently probe each tool spec
+	// 3. Concurrently probe each tool spec
 	detected := make([]ecosystem.DetectedTool, len(knownToolSpecs))
 	var wg sync.WaitGroup
 
@@ -398,14 +630,49 @@ func (u *detectorUsecase) Scan(ctx context.Context, tenantID string) ([]ecosyste
 		go func(idx int, toolSpec toolProbeSpec) {
 			defer wg.Done()
 			configuredURL := settingsMap[toolSpec.SettingKey]
-			tool := u.probeTool(ctx, toolSpec, configuredURL, tenantID)
+
+			var dockerMatch *matchedDockerContainer
+			if m, ok := matchedContainers[toolSpec.Name]; ok {
+				dockerMatch = &m
+			}
+
+			tool := u.probeTool(ctx, toolSpec, configuredURL, tenantID, dockerEngineVer, dockerMatch)
 			detected[idx] = tool
 		}(i, spec)
 	}
 
 	wg.Wait()
 
-	// 3. Load existing tools to retain manual entries
+	// 4. Add running containers that did not match known specs
+	for _, uc := range unmatchedContainers {
+		cName := uc.MatchedTool
+		if len(uc.Container.Names) > 0 {
+			cName = strings.TrimPrefix(uc.Container.Names[0], "/")
+		}
+		cID := uc.Container.ID
+		if len(cID) > 12 {
+			cID = cID[:12]
+		}
+		detected = append(detected, ecosystem.DetectedTool{
+			Name:        cName,
+			Category:    uc.Category,
+			Status:      ecosystem.StatusDetected,
+			Version:     uc.ImageTag,
+			Endpoint:    fmt.Sprintf("docker://%s", cID),
+			Source:      ecosystem.SourceK8sDiscovery,
+			Health:      ecosystem.HealthHealthy,
+			LastChecked: time.Now().UTC(),
+			TenantID:    tenantID,
+			Metadata: map[string]string{
+				"container_id": uc.Container.ID,
+				"image":        uc.Container.Image,
+				"state":        uc.Container.State,
+				"status":       uc.Container.Status,
+			},
+		})
+	}
+
+	// 5. Load existing tools to retain manual entries
 	var finalTools []ecosystem.DetectedTool
 	if u.ecoRepo != nil {
 		existing, err := u.ecoRepo.GetAll(ctx, tenantID)
@@ -420,7 +687,7 @@ func (u *detectorUsecase) Scan(ctx context.Context, tenantID string) ([]ecosyste
 
 	finalTools = append(finalTools, detected...)
 
-	// 4. Persist results in DB
+	// 6. Persist results in DB
 	if u.ecoRepo != nil {
 		if err := u.ecoRepo.BulkUpsert(ctx, finalTools); err != nil {
 			u.logger.Error("failed to bulk upsert detected tools", zap.Error(err), zap.String("tenant_id", tenantID))
@@ -428,7 +695,7 @@ func (u *detectorUsecase) Scan(ctx context.Context, tenantID string) ([]ecosyste
 		}
 	}
 
-	// 5. Update in-memory cache
+	// 7. Update in-memory cache
 	u.cacheMu.Lock()
 	u.cache[tenantID] = cacheEntry{
 		tools:     finalTools,
@@ -439,7 +706,13 @@ func (u *detectorUsecase) Scan(ctx context.Context, tenantID string) ([]ecosyste
 	return finalTools, nil
 }
 
-func (u *detectorUsecase) probeTool(ctx context.Context, toolSpec toolProbeSpec, baseURL, tenantID string) ecosystem.DetectedTool {
+func (u *detectorUsecase) probeTool(
+	ctx context.Context,
+	toolSpec toolProbeSpec,
+	baseURL, tenantID string,
+	dockerEngineVersion string,
+	dockerMatch *matchedDockerContainer,
+) ecosystem.DetectedTool {
 	dt := ecosystem.DetectedTool{
 		Name:        toolSpec.Name,
 		Category:    toolSpec.Category,
@@ -449,6 +722,66 @@ func (u *detectorUsecase) probeTool(ctx context.Context, toolSpec toolProbeSpec,
 		Metadata:    make(map[string]string),
 	}
 
+	// Case 1: Docker Engine daemon
+	if toolSpec.Name == "Docker Engine" {
+		if dockerEngineVersion != "" {
+			dt.Version = dockerEngineVersion
+			dt.Status = ecosystem.StatusDetected
+			dt.Health = ecosystem.HealthHealthy
+			dt.Source = ecosystem.SourceK8sDiscovery
+			dt.Endpoint = "unix:///var/run/docker.sock"
+			dt.Metadata["engine"] = "docker-daemon"
+			dt.Metadata["storage_driver"] = "overlay2"
+			dt.Metadata["cluster"] = "primary-cluster"
+			return dt
+		}
+	}
+
+	// Case 2: Matched running Docker container
+	if dockerMatch != nil {
+		dt.Version = dockerMatch.ImageTag
+		dt.Status = ecosystem.StatusDetected
+		dt.Health = ecosystem.HealthHealthy
+		dt.Source = ecosystem.SourceK8sDiscovery
+		cID := dockerMatch.Container.ID
+		if len(cID) > 12 {
+			cID = cID[:12]
+		}
+		dt.Endpoint = fmt.Sprintf("docker://%s", cID)
+		dt.Metadata["container_id"] = dockerMatch.Container.ID
+		dt.Metadata["image"] = dockerMatch.Container.Image
+		dt.Metadata["state"] = dockerMatch.Container.State
+		dt.Metadata["status"] = dockerMatch.Container.Status
+
+		// Enrich via HTTP probe if endpoint is configured
+		if baseURL != "" {
+			probeURL := strings.TrimRight(baseURL, "/") + toolSpec.ProbePath
+			reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+
+			req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, probeURL, nil)
+			if err == nil {
+				if resp, err := u.httpClient.Do(req); err == nil {
+					defer resp.Body.Close()
+					body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+					pVer, pHealth, pMeta := toolSpec.ParserFunc(resp, body)
+					if pVer != "" {
+						dt.Version = pVer
+					}
+					if pHealth != "" {
+						dt.Health = pHealth
+					}
+					for k, v := range pMeta {
+						dt.Metadata[k] = v
+					}
+					dt.Endpoint = baseURL
+				}
+			}
+		}
+		return dt
+	}
+
+	// Case 3: Probe endpoint via HTTP
 	defaultInternalEndpoints := map[string]string{
 		"docker_url":   "http://127.0.0.1:2375",
 		"postgres_url": "http://127.0.0.1:5432",
@@ -469,6 +802,7 @@ func (u *detectorUsecase) probeTool(ctx context.Context, toolSpec toolProbeSpec,
 	if baseURL == "" {
 		dt.Status = ecosystem.StatusNotConfigured
 		dt.Health = ecosystem.HealthUnknown
+		dt.Version = "unknown"
 		dt.Endpoint = ""
 		return dt
 	}
@@ -481,32 +815,27 @@ func (u *detectorUsecase) probeTool(ctx context.Context, toolSpec toolProbeSpec,
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, probeURL, nil)
 	if err != nil {
-		version, health, meta := toolSpec.ParserFunc(&http.Response{StatusCode: http.StatusOK}, nil)
-		dt.Version = version
-		dt.Health = health
-		dt.Status = ecosystem.StatusDetected
-		for k, v := range meta {
-			dt.Metadata[k] = v
-		}
+		dt.Status = ecosystem.StatusUnreachable
+		dt.Health = ecosystem.HealthDegraded
+		dt.Version = "unknown"
 		return dt
 	}
 
 	resp, err := u.httpClient.Do(req)
 	if err != nil {
-		version, health, meta := toolSpec.ParserFunc(&http.Response{StatusCode: http.StatusOK}, nil)
-		dt.Version = version
-		dt.Health = health
-		dt.Status = ecosystem.StatusDetected
-		for k, v := range meta {
-			dt.Metadata[k] = v
-		}
+		dt.Status = ecosystem.StatusUnreachable
+		dt.Health = ecosystem.HealthDegraded
+		dt.Version = "unknown"
 		return dt
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1MB limit
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 
 	version, health, meta := toolSpec.ParserFunc(resp, body)
+	if version == "" {
+		version = "unknown"
+	}
 	dt.Version = version
 	dt.Health = health
 	if dt.Health == ecosystem.HealthHealthy || dt.Health == ecosystem.HealthDegraded {

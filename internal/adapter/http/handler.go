@@ -323,6 +323,8 @@ type simulateIncidentRequest struct {
 }
 
 // SimulateIncident handles POST /api/v1/incidents/simulate
+// NOTE: This endpoint is strictly for development, debugging, and demo simulations.
+// In production environments, incidents are generated event-driven from Docker/K8s events.
 func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 	var req simulateIncidentRequest
 	if r.Body != nil {
@@ -344,7 +346,6 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 		incType      incident.Type
 		severity     incident.Severity
 		message      string
-		rawData      map[string]string
 		rootCause    string
 		evidence     []string
 		confidence   float64
@@ -365,26 +366,15 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 		}
 		incType = incident.TypeNodeNotReady
 		severity = incident.SeverityCritical
-		message = fmt.Sprintf("Infrastructure host '%s' is unreachable: agent at http://10.10.10.152:9100 is down (connection refused)", podName)
-		rawData = map[string]string{
-			"node_status":          "NotReady",
-			"agent_endpoint":       "http://10.10.10.152:9100",
-			"consecutive_failures": "3",
-			"heartbeat_missed":     "45s",
-		}
-		rootCause = fmt.Sprintf("Compute node '%s' host agent stopped responding. Kernel panic or network interface failure on host eth0.", podName)
-		evidence = []string{
-			"Node heartbeat timeout after 40 seconds",
-			"TCP health check to agent:9100 failed with ECONNREFUSED",
-			"Kubelet cAdvisor metrics stream disrupted",
-			"12 pods rescheduled to adjacent worker nodes",
-		}
+		message = fmt.Sprintf("Infrastructure host '%s' is unreachable: agent health check failed", podName)
+		rootCause = fmt.Sprintf("Compute node '%s' host agent stopped responding.", podName)
+		evidence = []string{fmt.Sprintf("Host '%s' TCP health check failed with connection refused", podName)}
 		confidence = 0.92
 		riskLevel = report.RiskCritical
-		remediation = fmt.Sprintf("Reboot host '%s' via IPMI/BMC controller, verify network switch port status, and restart k8s-agent daemon.", podName)
-		rollbackPlan = "Drain node and cordon until hardware diagnostics pass."
+		remediation = fmt.Sprintf("Reboot host '%s' via BMC/IPMI and restart agent service.", podName)
+		rollbackPlan = "Drain and cordon node until diagnostics complete."
 		filePath = fmt.Sprintf("infrastructure/hosts/%s.yaml", podName)
-		fileContent = fmt.Sprintf("apiVersion: v1\nkind: NodeConfig\nmetadata:\n  name: %s\nspec:\n  healthCheckInterval: 5s\n  agent:\n    restartPolicy: Always\n", podName)
+		fileContent = fmt.Sprintf("apiVersion: v1\nkind: NodeConfig\nmetadata:\n  name: %s\n", podName)
 
 	case "crash_loop", "crash_loop_backoff", "crashloopbackoff":
 		if namespace == "" {
@@ -395,23 +385,12 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 		}
 		incType = incident.TypeCrashLoopBackOff
 		severity = incident.SeverityHigh
-		message = fmt.Sprintf("Pod '%s' is in CrashLoopBackOff: application panicked on initialization with exit code 1", podName)
-		rawData = map[string]string{
-			"exit_code":     "1",
-			"restart_count": "5",
-			"reason":        "CrashLoopBackOff",
-			"error_message": "DB_CONNECTION_TIMEOUT: failed to connect to database at postgres:5432",
-		}
-		rootCause = fmt.Sprintf("Application '%s' failed to start due to missing environment variable DB_PASSWORD and database connection timeout.", podName)
-		evidence = []string{
-			"Container exited with status 1 immediately after exec",
-			"Log output: panic: DB_PASSWORD not found in environment",
-			"Backoff restart delay increased to 5m0s",
-			"0/1 containers ready in pod",
-		}
+		message = fmt.Sprintf("Pod '%s' is in CrashLoopBackOff: repeated crash loop detected", podName)
+		rootCause = fmt.Sprintf("Application '%s' failed initialization.", podName)
+		evidence = []string{fmt.Sprintf("Container in '%s' exited with non-zero status repeatedly", podName)}
 		confidence = 0.98
 		riskLevel = report.RiskMedium
-		remediation = fmt.Sprintf("Inject missing secret ref 'db-credentials' into Deployment spec for %s and trigger rolling update.", podName)
+		remediation = fmt.Sprintf("Inspect application configuration and deployment spec for %s.", podName)
 		rollbackPlan = fmt.Sprintf("kubectl rollout undo deployment/%s -n %s", extractDeploymentName(podName), namespace)
 		filePath = fmt.Sprintf("k8s/%s/%s/deployment.yaml", namespace, extractDeploymentName(podName))
 		fileContent = "envFrom:\n  - secretRef:\n      name: db-credentials\n"
@@ -425,25 +404,34 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 		}
 		incType = incident.TypeResourceExhaust
 		severity = incident.SeverityHigh
-		message = fmt.Sprintf("Pod '%s' CPU throttling reached 88%% with high latency SLA breaches", podName)
-		rawData = map[string]string{
-			"cpu_throttled_percent": "88.4",
-			"cpu_limit":             "500m",
-			"p99_latency_ms":        "4500",
-		}
-		rootCause = fmt.Sprintf("Compute capacity saturation on %s due to un-indexed MongoDB query causing 100%% CPU spin.", podName)
-		evidence = []string{
-			"CFS quota throttled 88.4% of execution cycles",
-			"p99 response time increased from 120ms to 4500ms",
-			"CPU usage pegged at 500m limit for > 10m",
-			"Active worker thread pool exhausted",
-		}
+		message = fmt.Sprintf("Pod '%s' CPU throttling reached critical threshold", podName)
+		rootCause = fmt.Sprintf("Compute capacity saturation on %s.", podName)
+		evidence = []string{"CFS quota throttled execution cycles exceeding warning threshold"}
 		confidence = 0.91
 		riskLevel = report.RiskHigh
-		remediation = "Increase CPU request/limit to 2000m and configure HorizontalPodAutoscaler targetCPUUtilizationPercentage to 70."
+		remediation = "Increase CPU request/limit in Deployment manifest and adjust HPA."
 		rollbackPlan = fmt.Sprintf("kubectl scale deployment %s --replicas=4", extractDeploymentName(podName))
 		filePath = fmt.Sprintf("k8s/%s/%s/deployment.yaml", namespace, extractDeploymentName(podName))
-		fileContent = "resources:\n  limits:\n    cpu: 2000m\n  requests:\n    cpu: 1000m\n"
+		fileContent = "resources:\n  limits:\n    cpu: 2000m\n"
+
+	case "service_unhealthy", "unhealthy":
+		if namespace == "" {
+			namespace = "production"
+		}
+		if podName == "" {
+			podName = "api-gateway"
+		}
+		incType = incident.TypeServiceUnhealthy
+		severity = incident.SeverityHigh
+		message = fmt.Sprintf("Service '%s' failed health check probes", podName)
+		rootCause = fmt.Sprintf("Service '%s' health probe failed.", podName)
+		evidence = []string{"Health endpoint returned 503 Service Unavailable"}
+		confidence = 0.94
+		riskLevel = report.RiskHigh
+		remediation = "Verify downstream service dependencies and restart unhealthy containers."
+		rollbackPlan = fmt.Sprintf("docker service update --rollback %s", podName)
+		filePath = fmt.Sprintf("docker-compose.%s.yaml", namespace)
+		fileContent = "healthcheck:\n  test: [\"CMD\", \"curl\", \"-f\", \"http://localhost/healthz\"]\n"
 
 	default: // "oom_killed", "oom", or default
 		if namespace == "" {
@@ -454,27 +442,15 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 		}
 		incType = incident.TypeOOMKilled
 		severity = incident.SeverityCritical
-		message = fmt.Sprintf("Container 'app' in pod '%s' terminated with exit code 137 (OOMKilled). Memory limit exceeded 512MiB threshold.", podName)
-		rawData = map[string]string{
-			"exit_code":          "137",
-			"reason":             "OOMKilled",
-			"last_memory_bytes":  "536870912",
-			"memory_limit_bytes": "536870912",
-			"container":          "app",
-		}
-		rootCause = fmt.Sprintf("Memory leak detected in %s/%s during high traffic burst. JVM heap allocation exceeded container cgroup memory limit (512Mi).", namespace, podName)
-		evidence = []string{
-			"Process received SIGKILL signal (Exit Code 137)",
-			"Memory usage reached 512.0 MiB (100% of cgroup limit)",
-			"Kernel OOM-killer invoked for process pid 42",
-			"Traffic spiked by 320% in the last 15 minutes",
-		}
+		message = fmt.Sprintf("Container in pod '%s' terminated with exit code 137 (OOMKilled)", podName)
+		rootCause = fmt.Sprintf("Memory limit exceeded in %s/%s.", namespace, podName)
+		evidence = []string{"Process received SIGKILL (Exit Code 137), exceeding cgroup limit"}
 		confidence = 0.95
 		riskLevel = report.RiskHigh
-		remediation = fmt.Sprintf("Increase container memory limit from 512Mi to 1024Mi and configure -XX:MaxRAMPercentage=75.0 in Deployment manifest for %s.", podName)
+		remediation = fmt.Sprintf("Increase container memory limit in Deployment manifest for %s.", podName)
 		rollbackPlan = fmt.Sprintf("kubectl rollout undo deployment/%s -n %s", extractDeploymentName(podName), namespace)
 		filePath = fmt.Sprintf("k8s/%s/%s/deployment.yaml", namespace, extractDeploymentName(podName))
-		fileContent = "resources:\n  limits:\n    memory: 1024Mi\n  requests:\n    memory: 512Mi\n"
+		fileContent = "resources:\n  limits:\n    memory: 1024Mi\n"
 	}
 
 	inc, err := incident.New(clusterName, namespace, podName, incType, severity, message)
@@ -482,9 +458,8 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to create incident entity", err)
 		return
 	}
-	for k, v := range rawData {
-		inc.AddRawData(k, v)
-	}
+	inc.AddRawData("simulated", "true")
+	inc.AddRawData("scenario", scenario)
 
 	if err := h.incidentRepo.Create(r.Context(), inc); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to persist incident", err)

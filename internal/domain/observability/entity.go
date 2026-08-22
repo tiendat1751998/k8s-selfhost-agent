@@ -28,3 +28,16 @@ type SLOSnapshot struct {
 	BudgetStatus string    `json:"budget_status"` // healthy | warning | critical
 	RecordedAt   time.Time `json:"recorded_at"`
 }
+
+// HealthSample represents a point-in-time service health check sample.
+type HealthSample struct {
+	ID                   string    `json:"id"`
+	TenantID             string    `json:"tenant_id"`
+	ServiceName          string    `json:"service_name"`
+	DesiredReplicas      int       `json:"desired_replicas"`
+	RunningReplicas      int       `json:"running_replicas"`
+	IsHealthy            bool      `json:"is_healthy"`
+	HealthCheckLatencyMs *int      `json:"health_check_latency_ms,omitempty"`
+	RecordedAt           time.Time `json:"recorded_at"`
+}
+

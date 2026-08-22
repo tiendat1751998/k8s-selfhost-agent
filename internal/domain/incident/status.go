@@ -15,6 +15,7 @@ const (
 	TypeHPAFailure       Type = "HPAFailure"
 	TypeResourceExhaust  Type = "ResourceExhaustion"
 	TypeIngressFailure   Type = "IngressFailure"
+	TypeServiceUnhealthy Type = "ServiceUnhealthy"
 )
 
 // validTypes is the set of all valid incident types.
@@ -30,6 +31,7 @@ var validTypes = map[Type]bool{
 	TypeHPAFailure:       true,
 	TypeResourceExhaust:  true,
 	TypeIngressFailure:   true,
+	TypeServiceUnhealthy: true,
 }
 
 // IsValid returns true if the Type is a recognized incident type.

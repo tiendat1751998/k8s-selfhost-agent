@@ -102,6 +102,7 @@ type Repository interface {
 	CreateService(ctx context.Context, name string, image string, replicas int, port int) error
 	GetLogs(ctx context.Context, targetID string, targetType string) (string, error)
 	UpdateServiceImage(ctx context.Context, serviceID string, image string) error
+	UpdateContainerImage(ctx context.Context, containerID string, image string) error
 
 	GetSwarmJoinTokens(ctx context.Context) (*SwarmTokens, error)
 	DrainNode(ctx context.Context, nodeID string) error

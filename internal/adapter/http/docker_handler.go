@@ -950,6 +950,8 @@ func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int
 					Hostname      string `json:"hostname"`
 					OS            string `json:"os"`
 					Arch          string `json:"arch"`
+					OSDistro      string `json:"os_distro"`
+					KernelVersion string `json:"kernel_version"`
 					UptimeSeconds int64  `json:"uptime_seconds"`
 				}
 				if err := json.NewDecoder(metricsResp.Body).Decode(&metricsData); err == nil {
@@ -961,6 +963,12 @@ func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int
 					}
 					if metricsData.Arch != "" {
 						agentInfo["arch"] = metricsData.Arch
+					}
+					if metricsData.OSDistro != "" {
+						agentInfo["os_distro"] = metricsData.OSDistro
+					}
+					if metricsData.KernelVersion != "" {
+						agentInfo["kernel_version"] = metricsData.KernelVersion
 					}
 					agentInfo["uptime"] = metricsData.UptimeSeconds
 					agentInfo["uptime_seconds"] = metricsData.UptimeSeconds

@@ -7,21 +7,25 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/observability"
 )
 
+
 type mockObservabilityRepo struct {
-	defs  map[string]observability.SLODefinition
-	snaps map[string]observability.SLOSnapshot
+	defs    map[string]observability.SLODefinition
+	snaps   map[string]observability.SLOSnapshot
+	samples []observability.HealthSample
 }
 
 func newMockObservabilityRepo() *mockObservabilityRepo {
 	return &mockObservabilityRepo{
-		defs:  make(map[string]observability.SLODefinition),
-		snaps: make(map[string]observability.SLOSnapshot),
+		defs:    make(map[string]observability.SLODefinition),
+		snaps:   make(map[string]observability.SLOSnapshot),
+		samples: make([]observability.HealthSample, 0),
 	}
 }
 
@@ -86,9 +90,46 @@ func (m *mockObservabilityRepo) DeleteSLOSnapshotBySLOID(ctx context.Context, sl
 	return nil
 }
 
-func (m *mockObservabilityRepo) SeedDefaultSLOs(ctx context.Context) error {
+func (m *mockObservabilityRepo) RecordHealthSample(ctx context.Context, tenantID string, serviceName string, desired int, running int, isHealthy bool, latencyMs *int) error {
+	m.samples = append(m.samples, observability.HealthSample{
+		ID:                   "sample-1",
+		TenantID:             tenantID,
+		ServiceName:          serviceName,
+		DesiredReplicas:      desired,
+		RunningReplicas:      running,
+		IsHealthy:            isHealthy,
+		HealthCheckLatencyMs: latencyMs,
+	})
 	return nil
 }
+
+func (m *mockObservabilityRepo) GetHealthSamples(ctx context.Context, serviceName string, since time.Time) ([]observability.HealthSample, error) {
+	var res []observability.HealthSample
+	for _, s := range m.samples {
+		if s.ServiceName == serviceName {
+			res = append(res, s)
+		}
+	}
+	return res, nil
+}
+
+func (m *mockObservabilityRepo) ComputeSLI(ctx context.Context, serviceName string, window time.Duration) (float64, error) {
+	total := 0
+	healthy := 0
+	for _, s := range m.samples {
+		if s.ServiceName == serviceName {
+			total++
+			if s.IsHealthy {
+				healthy++
+			}
+		}
+	}
+	if total == 0 {
+		return 100.0, nil
+	}
+	return (float64(healthy) / float64(total)) * 100.0, nil
+}
+
 
 func TestObservabilityHandler_CRUD(t *testing.T) {
 	repo := newMockObservabilityRepo()

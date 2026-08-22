@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/ecosystem"
@@ -348,5 +350,220 @@ func TestDetector_ManualToolCRUD(t *testing.T) {
 
 	if err := uc.DeleteTool(ctx, "tenant-manual", manualTool.ID); err != nil {
 		t.Fatalf("DeleteTool failed: %v", err)
+	}
+}
+
+type mockDockerClient struct {
+	serverVer  string
+	containers []container.Summary
+}
+
+func (m *mockDockerClient) ServerVersion(ctx context.Context) (types.Version, error) {
+	return types.Version{Version: m.serverVer}, nil
+}
+
+func (m *mockDockerClient) ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error) {
+	return m.containers, nil
+}
+
+func TestDetector_DockerLiveContainers(t *testing.T) {
+	mockDocker := &mockDockerClient{
+		serverVer: "28.5.2",
+		containers: []container.Summary{
+			{
+				ID:     "c111111111111",
+				Image:  "postgres:16.4-alpine",
+				Names:  []string{"/k8sselfhost-postgres-1"},
+				State:  "running",
+				Status: "Up 4 hours",
+			},
+			{
+				ID:     "c222222222222",
+				Image:  "redis:8.0-alpine",
+				Names:  []string{"/k8sselfhost-redis-1"},
+				State:  "running",
+				Status: "Up 4 hours",
+			},
+			{
+				ID:     "c333333333333",
+				Image:  "nats:2.10.19-alpine",
+				Names:  []string{"/nats-jetstream"},
+				State:  "running",
+				Status: "Up 4 hours",
+			},
+			{
+				ID:     "c444444444444",
+				Image:  "traefik:v3.2.0",
+				Names:  []string{"/traefik-proxy"},
+				State:  "running",
+				Status: "Up 4 hours",
+			},
+			{
+				ID:     "c555555555555",
+				Image:  "drone/drone:2.24.1",
+				Names:  []string{"/drone-server"},
+				State:  "running",
+				Status: "Up 4 hours",
+			},
+			{
+				ID:     "c666666666666",
+				Image:  "custom/kafka-broker:3.6.1",
+				Names:  []string{"/custom-kafka"},
+				State:  "running",
+				Status: "Up 4 hours",
+			},
+		},
+	}
+
+	ecoRepo := newMockEcosystemRepo()
+	settingsRepo := &mockSettingsRepo{
+		settings: []settings.Setting{
+			{Category: settings.CategoryIntegrations, Key: "vault_url", Value: "http://127.0.0.1:59999", TenantID: "docker-tenant"},
+		},
+	}
+	uc := usecaseEcosystem.NewUsecase(
+		ecoRepo,
+		settingsRepo,
+		http.DefaultClient,
+		zap.NewNop(),
+		usecaseEcosystem.WithDockerClient(mockDocker),
+	)
+
+	ctx := context.Background()
+	tools, err := uc.Scan(ctx, "docker-tenant")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	toolMap := make(map[string]ecosystem.DetectedTool)
+	for _, tool := range tools {
+		toolMap[tool.Name] = tool
+	}
+
+	// 1. Docker Engine
+	dockerTool, ok := toolMap["Docker Engine"]
+	if !ok {
+		t.Fatalf("Docker Engine missing")
+	}
+	if dockerTool.Version != "28.5.2" || dockerTool.Status != ecosystem.StatusDetected || dockerTool.Health != ecosystem.HealthHealthy {
+		t.Errorf("expected Docker Engine version 28.5.2 healthy, got %+v", dockerTool)
+	}
+
+	// 2. PostgreSQL
+	pgTool, ok := toolMap["PostgreSQL 16"]
+	if !ok {
+		t.Fatalf("PostgreSQL 16 missing")
+	}
+	if pgTool.Version != "16.4-alpine" || pgTool.Status != ecosystem.StatusDetected || pgTool.Health != ecosystem.HealthHealthy {
+		t.Errorf("expected PostgreSQL 16 version 16.4-alpine healthy, got %+v", pgTool)
+	}
+
+	// 3. Redis
+	redisTool, ok := toolMap["Redis 8"]
+	if !ok {
+		t.Fatalf("Redis 8 missing")
+	}
+	if redisTool.Version != "8.0-alpine" || redisTool.Status != ecosystem.StatusDetected || redisTool.Health != ecosystem.HealthHealthy {
+		t.Errorf("expected Redis 8 version 8.0-alpine healthy, got %+v", redisTool)
+	}
+
+	// 4. NATS
+	natsTool, ok := toolMap["NATS JetStream"]
+	if !ok {
+		t.Fatalf("NATS JetStream missing")
+	}
+	if natsTool.Version != "2.10.19-alpine" || natsTool.Status != ecosystem.StatusDetected || natsTool.Health != ecosystem.HealthHealthy {
+		t.Errorf("expected NATS version 2.10.19-alpine healthy, got %+v", natsTool)
+	}
+
+	// 5. Traefik
+	traefikTool, ok := toolMap["Traefik v3.1"]
+	if !ok {
+		t.Fatalf("Traefik v3.1 missing")
+	}
+	if traefikTool.Version != "v3.2.0" || traefikTool.Status != ecosystem.StatusDetected || traefikTool.Health != ecosystem.HealthHealthy {
+		t.Errorf("expected Traefik version v3.2.0 healthy, got %+v", traefikTool)
+	}
+
+	// 6. Drone
+	droneTool, ok := toolMap["Drone CI"]
+	if !ok {
+		t.Fatalf("Drone CI missing")
+	}
+	if droneTool.Version != "2.24.1" || droneTool.Status != ecosystem.StatusDetected || droneTool.Health != ecosystem.HealthHealthy {
+		t.Errorf("expected Drone CI version 2.24.1 healthy, got %+v", droneTool)
+	}
+
+	// 7. Unmatched Kafka container
+	kafkaTool, ok := toolMap["custom-kafka"]
+	if !ok {
+		t.Fatalf("custom-kafka container missing from detected tools")
+	}
+	if kafkaTool.Version != "3.6.1" || kafkaTool.Category != ecosystem.CategoryMessaging || kafkaTool.Status != ecosystem.StatusDetected {
+		t.Errorf("expected custom-kafka version 3.6.1 messaging category, got %+v", kafkaTool)
+	}
+
+	// 8. Non-running tool with failed probe (Vault)
+	vaultTool, ok := toolMap["Vault"]
+	if !ok {
+		t.Fatalf("Vault missing")
+	}
+	if vaultTool.Version != "unknown" || vaultTool.Status != ecosystem.StatusUnreachable || vaultTool.Health != ecosystem.HealthDegraded {
+		t.Errorf("expected non-running Vault to be unreachable with version unknown, got %+v", vaultTool)
+	}
+
+	// 9. Unconfigured tool (Istio)
+	istioTool, ok := toolMap["Istio"]
+	if !ok {
+		t.Fatalf("Istio missing")
+	}
+	if istioTool.Version != "unknown" || istioTool.Status != ecosystem.StatusNotConfigured || istioTool.Health != ecosystem.HealthUnknown {
+		t.Errorf("expected unconfigured Istio to be not_configured with version unknown, got %+v", istioTool)
+	}
+}
+
+func TestDetector_ExtractImageTag(t *testing.T) {
+	mockDocker := &mockDockerClient{
+		serverVer: "27.0.0",
+		containers: []container.Summary{
+			{Image: "redis:8-alpine", Names: []string{"/redis"}},
+			{Image: "docker.io/library/postgres:16.3-alpine", Names: []string{"/postgres"}},
+			{Image: "registry.example.com:5000/org/app:v1.2.3@sha256:abcdef", Names: []string{"/app"}},
+			{Image: "nats", Names: []string{"/nats"}},
+		},
+	}
+
+	ecoRepo := newMockEcosystemRepo()
+	settingsRepo := &mockSettingsRepo{}
+	uc := usecaseEcosystem.NewUsecase(
+		ecoRepo,
+		settingsRepo,
+		http.DefaultClient,
+		zap.NewNop(),
+		usecaseEcosystem.WithDockerClient(mockDocker),
+	)
+
+	ctx := context.Background()
+	tools, err := uc.Scan(ctx, "tag-tenant")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	toolMap := make(map[string]ecosystem.DetectedTool)
+	for _, tool := range tools {
+		toolMap[tool.Name] = tool
+	}
+
+	if r, ok := toolMap["Redis 8"]; !ok || r.Version != "8-alpine" {
+		t.Errorf("expected Redis 8 version 8-alpine, got %+v", r)
+	}
+	if p, ok := toolMap["PostgreSQL 16"]; !ok || p.Version != "16.3-alpine" {
+		t.Errorf("expected PostgreSQL 16 version 16.3-alpine, got %+v", p)
+	}
+	if a, ok := toolMap["app"]; !ok || a.Version != "v1.2.3" {
+		t.Errorf("expected app version v1.2.3, got %+v", a)
+	}
+	if n, ok := toolMap["NATS JetStream"]; !ok || n.Version != "unknown" {
+		t.Errorf("expected untagged NATS version unknown, got %+v", n)
 	}
 }

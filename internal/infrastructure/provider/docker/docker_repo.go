@@ -5,10 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	dockerImage "github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -279,6 +282,10 @@ func (r *realDockerRepo) CreateService(ctx context.Context, name string, image s
 func (r *realDockerRepo) UpdateServiceImage(ctx context.Context, serviceID string, image string) error {
 	service, _, err := r.cli.ServiceInspectWithRaw(ctx, serviceID, types.ServiceInspectOptions{})
 	if err != nil {
+		// If service inspect fails, check if serviceID is a standalone container
+		if _, inspectErr := r.cli.ContainerInspect(ctx, serviceID); inspectErr == nil {
+			return r.UpdateContainerImage(ctx, serviceID, image)
+		}
 		return fmt.Errorf("inspecting service for image update: %w", err)
 	}
 
@@ -292,6 +299,54 @@ func (r *realDockerRepo) UpdateServiceImage(ctx context.Context, serviceID strin
 	if err != nil {
 		return fmt.Errorf("updating service image: %w", err)
 	}
+	return nil
+}
+
+func (r *realDockerRepo) UpdateContainerImage(ctx context.Context, containerID string, targetImage string) error {
+	inspectData, err := r.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return fmt.Errorf("inspecting container %s: %w", containerID, err)
+	}
+
+	// Pull new image if possible (ignore pull errors if local image exists)
+	reader, pullErr := r.cli.ImagePull(ctx, targetImage, dockerImage.PullOptions{})
+	if pullErr == nil && reader != nil {
+		_, _ = io.Copy(io.Discard, reader)
+		_ = reader.Close()
+	}
+
+	name := strings.TrimPrefix(inspectData.Name, "/")
+	config := inspectData.Config
+	config.Image = targetImage
+
+	hostConfig := inspectData.HostConfig
+	var netConfig *network.NetworkingConfig
+	if inspectData.NetworkSettings != nil && len(inspectData.NetworkSettings.Networks) > 0 {
+		netConfig = &network.NetworkingConfig{
+			EndpointsConfig: inspectData.NetworkSettings.Networks,
+		}
+	}
+
+	// Stop old container (10s timeout)
+	timeout := 10
+	_ = r.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout})
+
+	// Remove old container
+	if err := r.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true}); err != nil {
+		return fmt.Errorf("removing old container %s: %w", containerID, err)
+	}
+
+	// Create new container with identical configs and updated image
+	createResp, err := r.cli.ContainerCreate(ctx, config, hostConfig, netConfig, nil, name)
+	if err != nil {
+		return fmt.Errorf("creating updated container %s with image %s: %w", name, targetImage, err)
+	}
+
+	// Start new container
+	if err := r.cli.ContainerStart(ctx, createResp.ID, container.StartOptions{}); err != nil {
+		return fmt.Errorf("starting updated container %s: %w", createResp.ID, err)
+	}
+
 	return nil
 }
 
