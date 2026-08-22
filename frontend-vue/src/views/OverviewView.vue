@@ -981,6 +981,8 @@ export interface DeepDiveServiceItem {
   memory_percent: number
   rx_bytes_per_sec: number
   tx_bytes_per_sec: number
+  total_rx_bytes?: number
+  total_tx_bytes?: number
   requests_per_sec: number
   error_rate: number
   avg_latency_ms: number
@@ -1012,6 +1014,8 @@ const allClusterServices = computed<DeepDiveServiceItem[]>(() => {
         memory_percent: s.memory_percent || 0,
         rx_bytes_per_sec: s.rx_bytes_per_sec || 0,
         tx_bytes_per_sec: s.tx_bytes_per_sec || 0,
+        total_rx_bytes: s.total_rx_bytes || 0,
+        total_tx_bytes: s.total_tx_bytes || 0,
         requests_per_sec: s.requests_per_sec || 0,
         error_rate: s.error_rate || 0,
         avg_latency_ms: s.avg_latency_ms || 0,
@@ -1031,8 +1035,10 @@ const allClusterServices = computed<DeepDiveServiceItem[]>(() => {
         cpu_percent: c.cpu_percent || 0,
         memory_used_mb: (c.memory_used || 0) / (1024 * 1024),
         memory_percent: c.memory_percent || 0,
-        rx_bytes_per_sec: c.network_rx || 0,
-        tx_bytes_per_sec: c.network_tx || 0,
+        rx_bytes_per_sec: c.network_rx_rate || 0,
+        tx_bytes_per_sec: c.network_tx_rate || 0,
+        total_rx_bytes: c.network_rx || 0,
+        total_tx_bytes: c.network_tx || 0,
         requests_per_sec: 0,
         error_rate: 0,
         avg_latency_ms: 0,
@@ -2066,11 +2072,11 @@ onUnmounted(() => {
                       {{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}
                     </span>
                   </td>
-                  <td class="col-svc-rx font-mono">
-                    <span class="text-cyan smooth-value">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
+                  <td class="col-svc-rx font-mono" :title="'Live: ' + formatIoRate(svc.rx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_rx_bytes || 0) + ' received'">
+                    <span class="text-cyan smooth-value" :title="'Live: ' + formatIoRate(svc.rx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_rx_bytes || 0) + ' received'">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
                   </td>
-                  <td class="col-svc-tx font-mono">
-                    <span class="text-violet smooth-value">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+                  <td class="col-svc-tx font-mono" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_tx_bytes || 0) + ' sent'">
+                    <span class="text-violet smooth-value" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_tx_bytes || 0) + ' sent'">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
                   </td>
                   <td class="col-svc-rps font-mono">
                     <span class="smooth-value" :class="(svc.requests_per_sec || 0) > 0 ? 'text-emerald font-bold' : 'text-muted'">
@@ -2710,8 +2716,8 @@ onUnmounted(() => {
                   <!-- 5. Bandwidth (Rx and Tx) -->
                   <td class="col-bw font-mono">
                     <div class="bandwidth-stack">
-                      <span class="bw-rx text-cyan">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
-                      <span class="bw-tx text-violet">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+                      <span class="bw-rx text-cyan" :title="'Live: ' + formatIoRate(svc.rx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_rx_bytes || 0) + ' received'">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
+                      <span class="bw-tx text-violet" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_tx_bytes || 0) + ' sent'">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
                     </div>
                   </td>
 

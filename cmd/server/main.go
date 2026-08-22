@@ -340,6 +340,10 @@ func run() error {
 		lbProvider = infraLB.NewTraefikProvider(lbURL)
 	}
 
+	if provider, ok := lbProvider.(*infraLB.TraefikProvider); ok {
+		go provider.StartBackgroundScraper(egCtx)
+	}
+
 	tpsCollector := usecaseMetrics.NewTPSCollector(
 		metricsCollector,
 		pgClient.Pool(),
