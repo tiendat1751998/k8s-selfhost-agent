@@ -2,16 +2,21 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/nats-io/nats.go"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
@@ -41,12 +46,16 @@ import (
 	usecaseAlert "github.com/datdt/k8sselfhost/internal/usecase/alert"
 	usecaseAuth "github.com/datdt/k8sselfhost/internal/usecase/auth"
 	usecaseBackup "github.com/datdt/k8sselfhost/internal/usecase/backup"
+	usecaseCapacity "github.com/datdt/k8sselfhost/internal/usecase/capacity"
 	usecaseCluster "github.com/datdt/k8sselfhost/internal/usecase/cluster"
+	usecaseCost "github.com/datdt/k8sselfhost/internal/usecase/cost"
 	usecaseDeployment "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
 	usecaseMetrics "github.com/datdt/k8sselfhost/internal/usecase/metrics"
 	usecasePromotion "github.com/datdt/k8sselfhost/internal/usecase/promotion"
 	usecaseSearch "github.com/datdt/k8sselfhost/internal/usecase/search"
+	usecaseSLO "github.com/datdt/k8sselfhost/internal/usecase/slo"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	"github.com/datdt/k8sselfhost/internal/pkg/telemetry"
@@ -319,7 +328,36 @@ func run() error {
 		usecaseMetrics.WithIncidentRepo(incRepo),
 	)
 	go metricsCollector.Start(egCtx)
-	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log)
+
+	tpsCollector := usecaseMetrics.NewTPSCollector(
+		metricsCollector,
+		pgClient.Pool(),
+		log,
+		usecaseMetrics.WithTraefikURL(usecaseMetrics.DeriveTraefikURL(cfg.Docker.Host)),
+		usecaseMetrics.WithNATSMonitorURL(usecaseMetrics.DeriveNATSMonitorURL(cfg.NATS.URL)),
+		usecaseMetrics.WithTPSRequestCountFn(mw.GetRequestCount),
+	)
+	go tpsCollector.Start(egCtx)
+
+	if dockerClient != nil {
+		dockerWatcher := event.NewDockerEventWatcher(
+			dockerClient,
+			incRepo,
+			bridge,
+			log,
+			event.WithDockerClusterName("fleet-primary"),
+		)
+		eg.Go(func() error {
+			return dockerWatcher.Start(egCtx)
+		})
+	}
+	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log, tpsCollector)
+
+	sloCollector := usecaseSLO.NewSLOCollector(dockerClient, obsRepo, log)
+	go sloCollector.Start(egCtx)
+
+	sloUpdater := usecaseSLO.NewSLOSnapshotUpdater(obsRepo, log)
+	go sloUpdater.Start(egCtx)
 
 	// Postgres-backed repos
 	driftRepo := postgres.NewDriftRepo(pgClient.Pool())
@@ -335,7 +373,6 @@ func run() error {
 	reportingRepo := postgres.NewReportingRepo(pgClient.Pool())
 	notificationRepo := postgres.NewNotificationRepo(pgClient.Pool())
 	fleetRepo := postgres.NewFleetRepo(pgClient.Pool())
-	costRepo := postgres.NewCostRepo(pgClient.Pool())
 	backupRepo := postgres.NewBackupRepo(pgClient.Pool())
 	backupEngine := infraBackup.NewEngine(
 		backupRepo,
@@ -386,21 +423,111 @@ func run() error {
 	gitopsController := usecaseGitops.NewController(prRepo, incRepo, txManager)
 	tenancyRepo := postgres.NewTenancyRepo(pgClient.Pool())
 
-	var capacityHandler *adapthttp.CapacityHandler
+	costCalculator := usecaseCost.NewCalculator(computeHostRepo, metricsCollector)
+	capacityForecaster := usecaseCapacity.NewForecaster(
+		metricsCollector,
+		usecaseCapacity.WithComputeHostRepo(computeHostRepo),
+		usecaseCapacity.WithRepository(postgres.NewCapacityRepo(pgClient.Pool())),
+	)
+	capacityHandler := adapthttp.NewCapacityHandler(capacityForecaster)
+
 	var explorerHandler *adapthttp.ExplorerHandler
 	var healthCenterHandler *adapthttp.HealthCenterHandler
 	var deploymentsHandler *adapthttp.DeploymentHandler
 	var k8sHandler *adapthttp.K8sResourceHandler
 
 	if k8sAvailable {
-		capacityHandler = adapthttp.NewCapacityHandler(infraK8s.NewCapacityRepo(k8sClient, clientManager))
 		explorerHandler = adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
 		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager))
 		deploymentsHandler = adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
 		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(k8sClient, clientManager), auditRepo)
 	} else {
-		capacityHandler = adapthttp.NewCapacityHandler(postgres.NewCapacityRepo(pgClient.Pool()))
 		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(nil, clientManager), auditRepo)
+	}
+
+	logAggregator := logging.NewLogAggregator(2000)
+	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator)
+
+	// Stream real Docker container logs into log aggregator
+	if dockerClient != nil {
+		go func() {
+			containers, err := dockerClient.ContainerList(egCtx, container.ListOptions{All: true})
+			if err != nil {
+				log.Warn("Failed to list Docker containers for log streaming", zap.Error(err))
+				return
+			}
+
+			for _, c := range containers {
+				cID := c.ID
+				cName := cID
+				if len(cID) > 12 {
+					cName = cID[:12]
+				}
+				if len(c.Names) > 0 {
+					cName = strings.TrimPrefix(c.Names[0], "/")
+				}
+				ns := getContainerNamespace(cName)
+
+				go func(id, name, namespace string) {
+					reader, logErr := dockerClient.ContainerLogs(egCtx, id, container.LogsOptions{
+						ShowStdout: true,
+						ShowStderr: true,
+						Follow:     true,
+						Tail:       "50",
+					})
+					if logErr != nil {
+						log.Debug("Failed to open Docker log stream", zap.String("container", name), zap.Error(logErr))
+						return
+					}
+					defer reader.Close()
+
+					stdoutReader, stdoutWriter := io.Pipe()
+					stderrReader, stderrWriter := io.Pipe()
+
+					go func() {
+						scanner := bufio.NewScanner(stdoutReader)
+						for scanner.Scan() {
+							line := strings.TrimSpace(scanner.Text())
+							if line == "" {
+								continue
+							}
+							logAggregator.Ingest(logging.LogEntry{
+								Timestamp: time.Now().UTC(),
+								Namespace: namespace,
+								Pod:       name,
+								Container: name,
+								Stream:    "stdout",
+								Level:     detectLogLevel(line, "INFO"),
+								Message:   line,
+							})
+						}
+					}()
+
+					go func() {
+						scanner := bufio.NewScanner(stderrReader)
+						for scanner.Scan() {
+							line := strings.TrimSpace(scanner.Text())
+							if line == "" {
+								continue
+							}
+							logAggregator.Ingest(logging.LogEntry{
+								Timestamp: time.Now().UTC(),
+								Namespace: namespace,
+								Pod:       name,
+								Container: name,
+								Stream:    "stderr",
+								Level:     detectLogLevel(line, "WARN"),
+								Message:   line,
+							})
+						}
+					}()
+
+					_, _ = stdcopy.StdCopy(stdoutWriter, stderrWriter, reader)
+					_ = stdoutWriter.Close()
+					_ = stderrWriter.Close()
+				}(cID, cName, ns)
+			}
+		}()
 	}
 
 	platformHandlers := &adapthttp.PlatformHandlers{
@@ -427,7 +554,7 @@ func run() error {
 		Timeline:      adapthttp.NewTimelineHandler(timelineRepo),
 		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo),
 		Search:        adapthttp.NewSearchHandler(searchUsecase),
-		Cost:          adapthttp.NewCostHandler(costRepo),
+		Cost:          adapthttp.NewCostHandler(costCalculator),
 		Backup:        adapthttp.NewBackupHandler(backupUsecase),
 		Agents:        adapthttp.NewAgentHandler(agentRepo, orchestrator),
 		Deployments:   deploymentsHandler,
@@ -435,6 +562,7 @@ func run() error {
 		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
 		K8s:           k8sHandler,
 		Cloud:         cloudHandler,
+		LogStream:     logStreamHandler,
 	}
 	if err := initializeWelcomeMessage(egCtx, pgClient.Pool(), wsHub); err != nil {
 		log.Error("failed to initialize WebSocket welcome config message", zap.Error(err))
@@ -674,5 +802,35 @@ func initializeWelcomeMessage(ctx context.Context, db *pgxpool.Pool, hub *adapth
 	}()
 
 	return nil
+}
+
+func detectLogLevel(msg string, defaultLvl string) string {
+	upper := strings.ToUpper(msg)
+	switch {
+	case strings.Contains(upper, "ERROR") || strings.Contains(upper, "FATAL") || strings.Contains(upper, "PANIC") || strings.Contains(upper, "ERR"):
+		return "ERROR"
+	case strings.Contains(upper, "WARN"):
+		return "WARN"
+	case strings.Contains(upper, "DEBUG") || strings.Contains(upper, "TRACE"):
+		return "DEBUG"
+	case strings.Contains(upper, "INFO"):
+		return "INFO"
+	default:
+		return defaultLvl
+	}
+}
+
+func getContainerNamespace(name string) string {
+	lower := strings.ToLower(name)
+	if strings.Contains(lower, "log") || strings.Contains(lower, "nats") {
+		return "logging"
+	}
+	if strings.Contains(lower, "vault") {
+		return "vault"
+	}
+	if strings.Contains(lower, "stage") || strings.Contains(lower, "staging") {
+		return "staging"
+	}
+	return "production"
 }
 

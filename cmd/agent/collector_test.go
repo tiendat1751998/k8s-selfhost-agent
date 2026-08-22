@@ -138,6 +138,68 @@ tmpfs /run tmpfs rw 0 0
 	}
 }
 
+func TestCollectDisk_FilterAndDeduplicate(t *testing.T) {
+	tempDir := t.TempDir()
+	mountsFile := filepath.Join(tempDir, "mounts")
+
+	mountsContent := `/dev/sda1 / ext4 rw,relatime 0 0
+/dev/sda1 /mnt/bind_root ext4 rw,relatime 0 0
+/dev/sdb1 /boot ext4 rw,relatime 0 0
+overlay /var/lib/docker/overlay2/abc/merged overlay rw 0 0
+overlay /var/lib/docker/overlay2/def/merged overlay rw 0 0
+tmpfs /dev/shm tmpfs rw 0 0
+squashfs /snap/core/123 squashfs ro 0 0
+fuse.snapfuse /snap/bare/5 fuse.snapfuse ro 0 0
+/dev/sdc1 /data xfs rw,relatime 0 0
+`
+	if err := os.WriteFile(mountsFile, []byte(mountsContent), 0644); err != nil {
+		t.Fatalf("failed to write mounts fixture: %v", err)
+	}
+
+	mockDiskFn := func(mountPoint string) (int64, int64, error) {
+		switch mountPoint {
+		case "/":
+			return 102971269120, 31782694912, nil
+		case "/mnt/bind_root":
+			return 102971269120, 31782694912, nil
+		case "/boot":
+			return 2040373248, 204037324, nil
+		case "/data":
+			return 200 * 1024 * 1024 * 1024, 50 * 1024 * 1024 * 1024, nil
+		case "/var/lib/docker/overlay2/abc/merged":
+			return 102971269120, 31782694912, nil
+		default:
+			return 0, 0, nil
+		}
+	}
+
+	collector := NewSystemCollector(tempDir, mountsFile, mockDiskFn)
+	resp, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	// Should only have 3 disks: "/", "/boot", and "/data" (overlay, tmpfs, snap, and duplicate /mnt/bind_root filtered)
+	if len(resp.Disks) != 3 {
+		t.Fatalf("expected 3 disks, got %d: %+v", len(resp.Disks), resp.Disks)
+	}
+
+	expectedMounts := map[string]string{
+		"/":     "ext4",
+		"/boot": "ext4",
+		"/data": "xfs",
+	}
+
+	for _, d := range resp.Disks {
+		fs, ok := expectedMounts[d.MountPoint]
+		if !ok {
+			t.Errorf("unexpected mount point kept: %s", d.MountPoint)
+		} else if d.Filesystem != fs {
+			t.Errorf("for mount point %s expected fs %s, got %s", d.MountPoint, fs, d.Filesystem)
+		}
+	}
+}
+
 func TestCollectNetwork(t *testing.T) {
 	tempDir := t.TempDir()
 	netDir := filepath.Join(tempDir, "net")
@@ -450,3 +512,76 @@ func TestAuthToken_Valid(t *testing.T) {
 		t.Errorf("expected top_processes in authenticated response")
 	}
 }
+
+func TestCollectOSInfo_Fixtures(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// 1. os-release fixture
+	osReleaseFile := filepath.Join(tempDir, "os-release")
+	osReleaseContent := `NAME="Ubuntu"
+VERSION="22.04.3 LTS (Jammy Jellyfish)"
+ID=ubuntu
+ID_LIKE=debian
+PRETTY_NAME="Ubuntu 22.04.3 LTS"
+VERSION_ID="22.04"
+`
+	if err := os.WriteFile(osReleaseFile, []byte(osReleaseContent), 0644); err != nil {
+		t.Fatalf("failed to write os-release fixture: %v", err)
+	}
+
+	// 2. sys/kernel/osrelease fixture
+	sysKernelDir := filepath.Join(tempDir, "sys", "kernel")
+	if err := os.MkdirAll(sysKernelDir, 0755); err != nil {
+		t.Fatalf("failed to create sys/kernel dir: %v", err)
+	}
+	osReleaseProc := filepath.Join(sysKernelDir, "osrelease")
+	if err := os.WriteFile(osReleaseProc, []byte("5.15.0-91-generic\n"), 0644); err != nil {
+		t.Fatalf("failed to write kernel osrelease fixture: %v", err)
+	}
+
+	collector := NewSystemCollector(tempDir, "", nil, WithOSReleasePath(osReleaseFile))
+	resp, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if resp.OSDistro != "Ubuntu 22.04.3 LTS" {
+		t.Errorf("expected OSDistro 'Ubuntu 22.04.3 LTS', got '%s'", resp.OSDistro)
+	}
+	if resp.KernelVersion != "5.15.0-91-generic" {
+		t.Errorf("expected KernelVersion '5.15.0-91-generic', got '%s'", resp.KernelVersion)
+	}
+}
+
+func TestCollectOSInfo_ProcVersionFallback(t *testing.T) {
+	tempDir := t.TempDir()
+
+	osReleaseFile := filepath.Join(tempDir, "os-release")
+	osReleaseContent := `NAME="Debian GNU/Linux"
+VERSION_ID="12"
+VERSION="12 (bookworm)"
+`
+	if err := os.WriteFile(osReleaseFile, []byte(osReleaseContent), 0644); err != nil {
+		t.Fatalf("failed to write os-release fixture: %v", err)
+	}
+
+	versionProc := filepath.Join(tempDir, "version")
+	versionContent := "Linux version 6.1.0-18-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.76-1 (2024-02-01)\n"
+	if err := os.WriteFile(versionProc, []byte(versionContent), 0644); err != nil {
+		t.Fatalf("failed to write version fixture: %v", err)
+	}
+
+	collector := NewSystemCollector(tempDir, "", nil, WithOSReleasePath(osReleaseFile))
+	resp, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if resp.OSDistro != "Debian GNU/Linux 12 (bookworm)" {
+		t.Errorf("expected OSDistro 'Debian GNU/Linux 12 (bookworm)', got '%s'", resp.OSDistro)
+	}
+	if resp.KernelVersion != "6.1.0-18-amd64" {
+		t.Errorf("expected KernelVersion '6.1.0-18-amd64', got '%s'", resp.KernelVersion)
+	}
+}
+

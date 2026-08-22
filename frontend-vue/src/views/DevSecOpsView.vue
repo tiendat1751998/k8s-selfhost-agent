@@ -145,7 +145,7 @@
               </td>
               <td>
                 <span class="badge" :class="getSeverityBadgeClass(violation.severity)">
-                  {{ violation.severity }}
+                  {{ violation.severity?.toUpperCase() }}
                 </span>
               </td>
               <td>
@@ -180,7 +180,7 @@
         <div class="modal-header">
           <div class="modal-title-group">
             <span class="badge" :class="getSeverityBadgeClass(selectedViolation.severity)">
-              {{ selectedViolation.severity }} SEVERITY
+              {{ selectedViolation.severity?.toUpperCase() }} SEVERITY
             </span>
             <h3 class="modal-title">{{ selectedViolation.rule_id }}: {{ selectedViolation.resource_name }}</h3>
           </div>
@@ -240,14 +240,14 @@ onMounted(() => {
   securityStore.fetchAll()
 })
 
-const criticalCount = computed(() => securityStore.violations.filter(v => v.severity === 'CRITICAL').length)
-const highCount = computed(() => securityStore.violations.filter(v => v.severity === 'HIGH').length)
-const mediumCount = computed(() => securityStore.violations.filter(v => v.severity === 'MEDIUM').length)
-const lowCount = computed(() => securityStore.violations.filter(v => v.severity === 'LOW').length)
+const criticalCount = computed(() => securityStore.violations.filter(v => (v.severity || '').toUpperCase() === 'CRITICAL').length)
+const highCount = computed(() => securityStore.violations.filter(v => (v.severity || '').toUpperCase() === 'HIGH').length)
+const mediumCount = computed(() => securityStore.violations.filter(v => (v.severity || '').toUpperCase() === 'MEDIUM').length)
+const lowCount = computed(() => securityStore.violations.filter(v => (v.severity || '').toUpperCase() === 'LOW').length)
 const totalViolationsCount = computed(() => securityStore.totalViolations || securityStore.violations.length)
 
-const totalRulesCount = computed(() => securityStore.frameworks.reduce((acc, f) => acc + (f.total_rules || 0), 0))
-const passingRulesCount = computed(() => securityStore.frameworks.reduce((acc, f) => acc + (f.passing_rules || 0), 0))
+const totalRulesCount = computed(() => securityStore.frameworks.reduce((acc, f) => acc + (f.total_rules || f.total_checks || 0), 0))
+const passingRulesCount = computed(() => securityStore.frameworks.reduce((acc, f) => acc + (f.passing_rules || f.passed_checks || 0), 0))
 const complianceScore = computed(() => {
   if (totalRulesCount.value === 0) return '—'
   return `${((passingRulesCount.value / totalRulesCount.value) * 100).toFixed(1)}%`
@@ -268,16 +268,18 @@ const severities = computed(() => [
 
 const filteredViolations = computed(() => {
   return securityStore.violations.filter(v => {
-    if (activeFilter.value !== 'ALL' && v.severity !== activeFilter.value) {
+    const vSev = (v.severity || '').toUpperCase()
+    const active = activeFilter.value.toUpperCase()
+    if (active !== 'ALL' && vSev !== active) {
       return false
     }
     if (searchQuery.value) {
       const q = searchQuery.value.toLowerCase()
-      const matchName = v.resource_name?.toLowerCase().includes(q)
-      const matchType = v.resource_type?.toLowerCase().includes(q)
-      const matchRule = v.rule_id?.toLowerCase().includes(q)
-      const matchDesc = v.description?.toLowerCase().includes(q)
-      const matchNs = v.namespace?.toLowerCase().includes(q)
+      const matchName = (v.resource_name || v.resource || '').toLowerCase().includes(q)
+      const matchType = (v.resource_type || '').toLowerCase().includes(q)
+      const matchRule = (v.rule_id || v.policy || '').toLowerCase().includes(q)
+      const matchDesc = (v.description || v.message || '').toLowerCase().includes(q)
+      const matchNs = (v.namespace || '').toLowerCase().includes(q)
       return matchName || matchType || matchRule || matchDesc || matchNs
     }
     return true
@@ -287,15 +289,15 @@ const filteredViolations = computed(() => {
 function getResourceIcon(resourceType: string): string {
   const t = (resourceType || '').toLowerCase()
   if (t.includes('image') || t.includes('container')) return '🐳'
-  if (t.includes('pod') || t.includes('deployment')) return '☸️'
+  if (t.includes('pod') || t.includes('deployment') || t.includes('statefulset') || t.includes('daemonset')) return '☸️'
   if (t.includes('secret') || t.includes('vault')) return '🔐'
   if (t.includes('ingress') || t.includes('service')) return '🌐'
-  if (t.includes('rbac') || t.includes('role')) return '🛡️'
+  if (t.includes('rbac') || t.includes('role') || t.includes('serviceaccount')) return '🛡️'
   return '📦'
 }
 
 function getSeverityBadgeClass(severity: string): string {
-  switch (severity) {
+  switch ((severity || '').toUpperCase()) {
     case 'CRITICAL': return 'badge-rose'
     case 'HIGH': return 'badge-amber'
     case 'MEDIUM': return 'badge-violet'

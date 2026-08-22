@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"math"
 	"os"
 	"os/user"
@@ -35,6 +36,7 @@ type procStatSnapshot struct {
 type SystemCollector struct {
 	procPath      string
 	mountsPath    string
+	osReleasePath string
 	diskUsageFn   DiskUsageFunc
 	interval      time.Duration
 	prevCPUTotal  uint64
@@ -72,6 +74,15 @@ func WithMountsPath(m string) CollectorOption {
 	}
 }
 
+// WithOSReleasePath configures the os-release file path (useful for testing).
+func WithOSReleasePath(p string) CollectorOption {
+	return func(c *SystemCollector) {
+		if p != "" {
+			c.osReleasePath = p
+		}
+	}
+}
+
 // WithDiskUsageFunc overrides the disk stat retrieval function.
 func WithDiskUsageFunc(fn DiskUsageFunc) CollectorOption {
 	return func(c *SystemCollector) {
@@ -105,6 +116,7 @@ func NewSystemCollector(procPath, mountsPath string, diskUsageFn DiskUsageFunc, 
 	c := &SystemCollector{
 		procPath:      procPath,
 		mountsPath:    mountsPath,
+		osReleasePath: "/etc/os-release",
 		diskUsageFn:   diskUsageFn,
 		interval:      5 * time.Second,
 		prevNetStats:  make(map[string]netDevStat),
@@ -127,13 +139,14 @@ func (c *SystemCollector) Collect() (*MetricsResponse, error) {
 
 	now := time.Now().UTC()
 
-	// 1. Hostname, OS, Arch
+	// 1. Hostname, OS, Arch, Distro, Kernel
 	hostname, err := os.Hostname()
 	if err != nil || hostname == "" {
 		hostname = "unknown"
 	}
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
+	osDistro, kernelVersion := c.collectOSInfo()
 
 	// 2. Uptime
 	uptime := c.collectUptime()
@@ -163,6 +176,8 @@ func (c *SystemCollector) Collect() (*MetricsResponse, error) {
 		Hostname:      hostname,
 		OS:            osName,
 		Arch:          arch,
+		OSDistro:      osDistro,
+		KernelVersion: kernelVersion,
 		UptimeSeconds: uptime,
 		LoadAverage:   loadAvg,
 		CPU:           cpuMetrics,
@@ -389,35 +404,87 @@ func (c *SystemCollector) collectMemory() MemoryMetrics {
 	}
 }
 
+var allowedFileSystems = map[string]bool{
+	"ext4":    true,
+	"ext3":    true,
+	"ext2":    true,
+	"xfs":     true,
+	"btrfs":   true,
+	"zfs":     true,
+	"ntfs":    true,
+	"vfat":    true,
+	"fat32":   true,
+	"exfat":   true,
+	"apfs":    true,
+	"hfsplus": true,
+}
+
 var ignoredFileSystems = map[string]bool{
-	"proc":        true,
-	"sysfs":       true,
-	"devpts":      true,
-	"cgroup":      true,
-	"cgroup2":     true,
-	"pstore":      true,
-	"bpf":         true,
-	"autofs":      true,
-	"mqueue":      true,
-	"hugetlbfs":   true,
-	"debugfs":     true,
-	"tracefs":     true,
-	"fusectl":     true,
-	"configfs":    true,
-	"binfmt_misc": true,
-	"nsfs":        true,
-	"securityfs":  true,
-	"devtmpfs":    true,
-	"efivarfs":    true,
-	"tmpfs":       true,
-	"squashfs":    true,
-	"ramfs":       true,
-	"none":        true,
+	"proc":          true,
+	"sysfs":         true,
+	"devpts":        true,
+	"cgroup":        true,
+	"cgroup2":       true,
+	"pstore":        true,
+	"bpf":           true,
+	"autofs":        true,
+	"mqueue":        true,
+	"hugetlbfs":     true,
+	"debugfs":       true,
+	"tracefs":       true,
+	"fusectl":       true,
+	"configfs":      true,
+	"binfmt_misc":   true,
+	"nsfs":          true,
+	"securityfs":    true,
+	"devtmpfs":      true,
+	"efivarfs":      true,
+	"tmpfs":         true,
+	"squashfs":      true,
+	"ramfs":         true,
+	"none":          true,
+	"overlay":       true,
+	"overlayfs":     true,
+	"fuse.snapfuse": true,
+}
+
+var ignoredMountPrefixes = []string{
+	"/var/lib/docker/",
+	"/snap/",
+	"/sys/",
+	"/proc/",
+	"/dev/",
+	"/run/",
+}
+
+func isIgnoredMountPoint(mountPoint string) bool {
+	clean := filepath.ToSlash(strings.TrimSpace(mountPoint))
+	if clean == "" {
+		return true
+	}
+	for _, prefix := range ignoredMountPrefixes {
+		if strings.HasPrefix(clean, prefix) || clean == strings.TrimSuffix(prefix, "/") {
+			return true
+		}
+	}
+	return false
+}
+
+func isPhysicalFilesystem(fsType string) bool {
+	fs := strings.ToLower(strings.TrimSpace(fsType))
+	if fs == "" {
+		return true
+	}
+	if ignoredFileSystems[fs] {
+		return false
+	}
+	return allowedFileSystems[fs]
 }
 
 func (c *SystemCollector) collectDisks() []DiskMetrics {
 	disks := make([]DiskMetrics, 0)
 	seenMounts := make(map[string]bool)
+	seenDevices := make(map[string]bool)
 
 	file, err := os.Open(c.mountsPath)
 	if err == nil {
@@ -429,7 +496,7 @@ func (c *SystemCollector) collectDisks() []DiskMetrics {
 				mountPoint := fields[1]
 				fsType := fields[2]
 
-				if ignoredFileSystems[fsType] || seenMounts[mountPoint] {
+				if isIgnoredMountPoint(mountPoint) || !isPhysicalFilesystem(fsType) || seenMounts[mountPoint] {
 					continue
 				}
 				if !strings.HasPrefix(mountPoint, "/") {
@@ -438,6 +505,11 @@ func (c *SystemCollector) collectDisks() []DiskMetrics {
 
 				total, used, err := c.diskUsageFn(mountPoint)
 				if err == nil && total > 0 {
+					dedupKey := fmt.Sprintf("%s:%d", strings.ToLower(fsType), total)
+					if seenDevices[dedupKey] {
+						continue
+					}
+					seenDevices[dedupKey] = true
 					seenMounts[mountPoint] = true
 					pct := math.Round((float64(used)/float64(total))*10000) / 100
 					disks = append(disks, DiskMetrics{
@@ -1025,3 +1097,141 @@ func (c *SystemCollector) fallbackTopProcesses(limit int, totalMem int64) []Proc
 	}
 	return mockProcesses
 }
+
+// collectOSInfo retrieves the operating system distribution and kernel version.
+func (c *SystemCollector) collectOSInfo() (string, string) {
+	distro := c.readOSDistro()
+	kernel := c.readKernelVersion()
+
+	if distro == "" {
+		switch runtime.GOOS {
+		case "windows":
+			distro = "Windows"
+		case "darwin":
+			distro = "macOS"
+		default:
+			distro = "Linux"
+		}
+	}
+
+	if kernel == "" {
+		switch runtime.GOOS {
+		case "windows":
+			kernel = runtime.GOARCH
+		case "darwin":
+			kernel = runtime.GOARCH
+		default:
+			kernel = "unknown"
+		}
+	}
+
+	return distro, kernel
+}
+
+func (c *SystemCollector) readOSDistro() string {
+	paths := []string{c.osReleasePath, "/usr/lib/os-release", "/etc/lsb-release"}
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(data), "\n")
+		var name, version, prettyName, distribDesc string
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			key := strings.TrimSpace(parts[0])
+			val := strings.Trim(strings.TrimSpace(parts[1]), `"'`)
+			switch key {
+			case "PRETTY_NAME":
+				prettyName = val
+			case "DISTRIB_DESCRIPTION":
+				distribDesc = val
+			case "NAME":
+				name = val
+			case "VERSION":
+				version = val
+			case "VERSION_ID":
+				if version == "" {
+					version = val
+				}
+			}
+		}
+		if prettyName != "" {
+			return prettyName
+		}
+		if distribDesc != "" {
+			return distribDesc
+		}
+		if name != "" && version != "" {
+			return name + " " + version
+		}
+		if name != "" {
+			return name
+		}
+	}
+
+	// Fallback to /etc/redhat-release
+	if data, err := os.ReadFile("/etc/redhat-release"); err == nil {
+		content := strings.TrimSpace(string(data))
+		if content != "" {
+			return content
+		}
+	}
+
+	// Fallback to /etc/debian_version
+	if data, err := os.ReadFile("/etc/debian_version"); err == nil {
+		content := strings.TrimSpace(string(data))
+		if content != "" {
+			return "Debian " + content
+		}
+	}
+
+	return ""
+}
+
+func (c *SystemCollector) readKernelVersion() string {
+	candidates := []string{
+		filepath.Join(c.procPath, "sys", "kernel", "osrelease"),
+		"/proc/sys/kernel/osrelease",
+	}
+	for _, p := range candidates {
+		if p == "" {
+			continue
+		}
+		if data, err := os.ReadFile(p); err == nil {
+			k := strings.TrimSpace(string(data))
+			if k != "" {
+				return k
+			}
+		}
+	}
+
+	verCandidates := []string{
+		filepath.Join(c.procPath, "version"),
+		"/proc/version",
+	}
+	for _, p := range verCandidates {
+		if p == "" {
+			continue
+		}
+		if data, err := os.ReadFile(p); err == nil {
+			fields := strings.Fields(string(data))
+			if len(fields) >= 3 && fields[0] == "Linux" && fields[1] == "version" {
+				return fields[2]
+			}
+		}
+	}
+
+	return ""
+}
+

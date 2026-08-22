@@ -7,7 +7,7 @@ func TestType_IsValid(t *testing.T) {
 		TypeCrashLoopBackOff, TypeOOMKilled, TypeImagePullBackOff,
 		TypeFailedScheduling, TypeNodeNotReady, TypeProbeFailed,
 		TypeNetworkFailure, TypeStorageFailure, TypeHPAFailure,
-		TypeResourceExhaust, TypeIngressFailure,
+		TypeResourceExhaust, TypeIngressFailure, TypeServiceUnhealthy,
 	}
 
 	for _, typ := range validTypes {

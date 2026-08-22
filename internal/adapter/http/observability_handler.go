@@ -223,45 +223,108 @@ func (h *ObservabilityHandler) TriggerBurnAlert(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	def, defErr := h.repo.GetSLODefinition(r.Context(), id)
+	if defErr != nil || def == nil {
+		writeError(w, http.StatusNotFound, "SLO definition not found", defErr)
+		return
+	}
+
+	window := parseWindowDuration(def.Window)
+	actualSLI, computeErr := h.repo.ComputeSLI(r.Context(), def.Service, window)
+	if computeErr != nil {
+		actualSLI = 100.0
+	}
+
+	target := def.Target
+	if target <= 0 {
+		target = 99.9
+	}
+	allowedUnhealthy := 100.0 - target
+	if allowedUnhealthy <= 0 {
+		allowedUnhealthy = 0.01
+	}
+	unhealthyActual := 100.0 - actualSLI
+	if unhealthyActual < 0 {
+		unhealthyActual = 0
+	}
+	burnRate := unhealthyActual / allowedUnhealthy
+	errorBudget := (1.0 - (unhealthyActual / allowedUnhealthy)) * 100.0
+	if errorBudget < 0 {
+		errorBudget = 0
+	}
+	if errorBudget > 100 {
+		errorBudget = 100
+	}
+
+	budgetStatus := "healthy"
+	if burnRate > 2.0 {
+		budgetStatus = "critical"
+	} else if burnRate > 1.0 {
+		budgetStatus = "warning"
+	}
+
 	snap, err := h.repo.GetSLOSnapshotBySLOID(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to retrieve SLO snapshot", err)
 		return
 	}
 
+	now := time.Now().UTC()
 	if snap == nil {
-		def, defErr := h.repo.GetSLODefinition(r.Context(), id)
-		if defErr != nil || def == nil {
-			writeError(w, http.StatusNotFound, "SLO definition not found", defErr)
-			return
-		}
 		snap = &observability.SLOSnapshot{
 			ID:           uuid.NewString(),
 			SLOID:        def.ID,
 			Service:      def.Service,
 			Target:       def.Target,
-			Actual:       math.Max(90.0, def.Target-0.45),
-			BurnRate:     3.45,
-			ErrorBudget:  8.5,
-			BudgetStatus: "critical",
-			RecordedAt:   time.Now().UTC(),
+			Actual:       math.Round(actualSLI*1000) / 1000,
+			BurnRate:     math.Round(burnRate*100) / 100,
+			ErrorBudget:  math.Round(errorBudget*10) / 10,
+			BudgetStatus: budgetStatus,
+			RecordedAt:   now,
 		}
 		_ = h.repo.CreateSLOSnapshot(r.Context(), snap)
 	} else {
-		snap.BurnRate = 3.25
-		snap.Actual = math.Max(90.0, snap.Target-0.35)
-		snap.ErrorBudget = 12.0
-		snap.BudgetStatus = "critical"
-		snap.RecordedAt = time.Now().UTC()
+		snap.Service = def.Service
+		snap.Target = def.Target
+		snap.Actual = math.Round(actualSLI*1000) / 1000
+		snap.BurnRate = math.Round(burnRate*100) / 100
+		snap.ErrorBudget = math.Round(errorBudget*10) / 10
+		snap.BudgetStatus = budgetStatus
+		snap.RecordedAt = now
 		_ = h.repo.UpdateSLOSnapshot(r.Context(), snap)
+	}
+
+	message := fmt.Sprintf("SLO Burn Alert evaluated for service %s: burn rate %.2fx (actual SLI: %.2f%%, budget: %.1f%%, status: %s)", snap.Service, snap.BurnRate, snap.Actual, snap.ErrorBudget, snap.BudgetStatus)
+	if snap.BurnRate >= def.AlertThreshold || snap.BudgetStatus == "critical" {
+		message = fmt.Sprintf("SLO Burn Alert triggered for service %s: fast burn rate %.2fx exceeds threshold %.2fx (actual SLI: %.2f%%)", snap.Service, snap.BurnRate, def.AlertThreshold, snap.Actual)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,
-		"message":  fmt.Sprintf("SLO Burn Alert triggered for service %s: fast burn rate %.2fx exceeds threshold", snap.Service, snap.BurnRate),
+		"message":  message,
 		"snapshot": snap,
 	})
 }
+
+func parseWindowDuration(windowStr string) time.Duration {
+	windowStr = strings.TrimSpace(strings.ToLower(windowStr))
+	if windowStr == "" {
+		return 30 * 24 * time.Hour
+	}
+	if strings.HasSuffix(windowStr, "d") {
+		daysStr := strings.TrimSuffix(windowStr, "d")
+		var days int
+		if _, err := fmt.Sscanf(daysStr, "%d", &days); err == nil && days > 0 {
+			return time.Duration(days) * 24 * time.Hour
+		}
+	}
+	d, err := time.ParseDuration(windowStr)
+	if err == nil && d > 0 {
+		return d
+	}
+	return 30 * 24 * time.Hour
+}
+
 
 // ListSLOSnapshots handles GET /api/v1/observability/slo
 func (h *ObservabilityHandler) ListSLOSnapshots(w http.ResponseWriter, r *http.Request) {

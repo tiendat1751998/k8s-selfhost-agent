@@ -56,6 +56,7 @@ type PlatformHandlers struct {
 	Scaffolder    *ScaffoldHandler
 	Plugin        *PluginHandler
 	Ecosystem     *EcosystemHandler
+	LogStream     *LogStreamHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -115,7 +116,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 		r.With(mw.JWTAuthMiddleware).Get("/ws", wsHub.ServeWS)
 	}
 
-	// Unauthenticated API routes
+	// Auth API routes
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		if platform != nil && platform.Auth != nil {
 			r.Post("/login", platform.Auth.Login)
@@ -123,6 +124,15 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			r.Post("/refresh", platform.Auth.RefreshToken)
 			r.Post("/recovery/verify", platform.Auth.VerifyRecoveryCode)
 			r.Post("/logout", platform.Auth.Logout)
+
+			// Authenticated TOTP routes
+			r.Group(func(r chi.Router) {
+				r.Use(mw.JWTAuthMiddleware)
+				r.Post("/totp/setup", platform.Auth.SetupTOTP)
+				r.Post("/totp/verify-setup", platform.Auth.VerifyTOTPSetup)
+				r.Post("/totp/disable", platform.Auth.DisableTOTP)
+				r.Get("/totp/status", platform.Auth.TOTPStatus)
+			})
 		}
 	})
 
@@ -267,13 +277,6 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			if platform.AI != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/ai", platform.AI.RegisterRoutes)
 			}
-			if platform.Auth != nil {
-				r.Post("/auth/logout", platform.Auth.Logout)
-				r.Post("/auth/totp/setup", platform.Auth.SetupTOTP)
-				r.Post("/auth/totp/verify-setup", platform.Auth.VerifyTOTPSetup)
-				r.Post("/auth/totp/disable", platform.Auth.DisableTOTP)
-				r.Get("/auth/totp/status", platform.Auth.TOTPStatus)
-			}
 			if platform.Search != nil {
 				r.Get("/search", platform.Search.Search)
 			}
@@ -309,6 +312,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Ecosystem != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/ecosystem", platform.Ecosystem.RegisterRoutes)
+			}
+			if platform.LogStream != nil {
+				r.Get("/logs/stream", platform.LogStream.ServeHTTP)
 			}
 		}
 	})

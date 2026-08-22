@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,50 +13,48 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Required environment variables:
-//   DB_HOST     - PostgreSQL host (e.g., "localhost")
-//   DB_PORT     - PostgreSQL port (e.g., "5432")
-//   DB_USER     - PostgreSQL user
-//   DB_PASSWORD - PostgreSQL password
-//   DB_NAME     - PostgreSQL database name
-//
-// Optional environment variables:
-//   DB_SSLMODE  - SSL mode (default: "disable")
+// Environment variables supported (with fallback):
+//   DB_HOST / K8S_POSTGRES_HOST         - PostgreSQL host (default: "localhost")
+//   DB_PORT / K8S_POSTGRES_PORT         - PostgreSQL port (default: "5432")
+//   DB_USER / K8S_POSTGRES_USER         - PostgreSQL user (default: "myuser")
+//   DB_PASSWORD / K8S_POSTGRES_PASSWORD - PostgreSQL password (default: "mysecretpassword")
+//   DB_NAME / K8S_POSTGRES_DBNAME       - PostgreSQL database name (default: "mydatabase")
+//   DB_SSLMODE / K8S_POSTGRES_SSLMODE   - SSL mode (default: "disable")
+
+func getEnv(primary, secondary, fallback string) string {
+	if v := os.Getenv(primary); v != "" {
+		return v
+	}
+	if v := os.Getenv(secondary); v != "" {
+		return v
+	}
+	return fallback
+}
 
 func main() {
-	required := map[string]string{
-		"DB_HOST":     os.Getenv("DB_HOST"),
-		"DB_PORT":     os.Getenv("DB_PORT"),
-		"DB_USER":     os.Getenv("DB_USER"),
-		"DB_PASSWORD": os.Getenv("DB_PASSWORD"),
-		"DB_NAME":     os.Getenv("DB_NAME"),
-	}
+	downFlag := flag.Bool("down", false, "Run down migrations instead of up migrations")
+	flag.Parse()
 
-	var missing []string
-	for k, v := range required {
-		if v == "" {
-			missing = append(missing, k)
-		}
-	}
-	if len(missing) > 0 {
-		sort.Strings(missing)
-		fmt.Fprintf(os.Stderr, "Missing required environment variables: %s\n", strings.Join(missing, ", "))
-		os.Exit(1)
-	}
-
-	sslMode := os.Getenv("DB_SSLMODE")
-	if sslMode == "" {
-		sslMode = "disable"
-	}
+	host := getEnv("DB_HOST", "K8S_POSTGRES_HOST", "localhost")
+	port := getEnv("DB_PORT", "K8S_POSTGRES_PORT", "5432")
+	user := getEnv("DB_USER", "K8S_POSTGRES_USER", "myuser")
+	password := getEnv("DB_PASSWORD", "K8S_POSTGRES_PASSWORD", "mysecretpassword")
+	dbName := getEnv("DB_NAME", "K8S_POSTGRES_DBNAME", "mydatabase")
+	sslMode := getEnv("DB_SSLMODE", "K8S_POSTGRES_SSLMODE", "disable")
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		required["DB_USER"], required["DB_PASSWORD"],
-		required["DB_HOST"], required["DB_PORT"],
-		required["DB_NAME"], sslMode,
+		user, password, host, port, dbName, sslMode,
 	)
 
-	fmt.Printf("Connecting to PostgreSQL at %s:%s...\n", required["DB_HOST"], required["DB_PORT"])
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	pattern := "migrations/*.up.sql"
+	directionName := "UP"
+	if *downFlag || (len(os.Args) > 1 && os.Args[1] == "down") {
+		pattern = "migrations/*.down.sql"
+		directionName = "DOWN"
+	}
+
+	fmt.Printf("Connecting to PostgreSQL at %s:%s (database: %s)...\n", host, port, dbName)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	pool, err := pgxpool.New(ctx, dsn)
@@ -71,14 +70,20 @@ func main() {
 	}
 	fmt.Println("Connected successfully!")
 
-	fmt.Println("Running migrations...")
-	files, err := filepath.Glob("migrations/*.up.sql")
+	fmt.Printf("Running %s migrations...\n", directionName)
+	files, err := filepath.Glob(pattern)
 	if err != nil {
 		fmt.Printf("Failed to read migrations directory: %v\n", err)
 		os.Exit(1)
 	}
 
 	sort.Strings(files)
+	if directionName == "DOWN" {
+		// Reverse order for down migrations
+		for i, j := 0, len(files)-1; i < j; i, j = i+1, j-1 {
+			files[i], files[j] = files[j], files[i]
+		}
+	}
 
 	for _, file := range files {
 		content, err := os.ReadFile(file)
@@ -88,8 +93,7 @@ func main() {
 		}
 
 		fmt.Printf("Applying %s... ", filepath.Base(file))
-		
-		// Split multiple statements if necessary, but Exec usually handles simple multiple statements
+
 		_, err = pool.Exec(ctx, string(content))
 		if err != nil {
 			if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate key") {
@@ -101,5 +105,5 @@ func main() {
 			fmt.Println("Success.")
 		}
 	}
-	fmt.Println("Setup complete!")
+	fmt.Printf("Migrations %s complete!\n", directionName)
 }

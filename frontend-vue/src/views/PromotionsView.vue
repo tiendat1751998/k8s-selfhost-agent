@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import MetricCard from '../components/ui/MetricCard.vue'
 import DataTable, { type Column } from '../components/ui/DataTable.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
@@ -9,7 +9,8 @@ import {
   dockerApi,
   type Promotion,
   type Environment,
-  type CreatePromotionPayload
+  type CreatePromotionPayload,
+  type ComputeHost
 } from '../api/compute'
 import { useAuthStore } from '../stores/authStore'
 
@@ -19,8 +20,12 @@ export interface RunningServiceOption {
   id: string
   name: string
   image: string
-  type: 'swarm' | 'container'
+  type: 'swarm' | 'container' | 'k8s'
+  host: string // e.g. 'k8smater (10.10.10.133)' or compute host name & IP
+  hostEndpoint?: string // e.g. '10.10.10.133'
   status?: string
+  replicas?: number
+  ports?: string[]
 }
 
 const loading = ref(false)
@@ -31,6 +36,11 @@ const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(nul
 
 const promotions = ref<Promotion[]>([])
 const runningServices = ref<RunningServiceOption[]>([])
+
+// Searchable Combobox State
+const serviceSearchQuery = ref('')
+const isServiceDropdownOpen = ref(false)
+const comboboxRef = ref<HTMLElement | null>(null)
 
 function getDefaultRequester(): string {
   return authStore.user?.email || authStore.user?.role || 'admin'
@@ -50,6 +60,52 @@ const selectedService = computed(() => {
   return runningServices.value.find(s => s.name === newPromotion.value.service)
 })
 
+const filteredServices = computed(() => {
+  const q = serviceSearchQuery.value.trim().toLowerCase()
+  if (!q) return runningServices.value
+  return runningServices.value.filter(s =>
+    s.name.toLowerCase().includes(q) ||
+    s.image.toLowerCase().includes(q) ||
+    s.host.toLowerCase().includes(q) ||
+    s.type.toLowerCase().includes(q) ||
+    (s.hostEndpoint && s.hostEndpoint.toLowerCase().includes(q)) ||
+    (s.ports && s.ports.some(p => p.toLowerCase().includes(q)))
+  )
+})
+
+function selectService(svc: RunningServiceOption) {
+  newPromotion.value.service = svc.name
+  serviceSearchQuery.value = svc.name
+  isServiceDropdownOpen.value = false
+}
+
+function clearServiceSearch() {
+  serviceSearchQuery.value = ''
+  newPromotion.value.service = ''
+  isServiceDropdownOpen.value = true
+}
+
+function onSearchInput() {
+  isServiceDropdownOpen.value = true
+  const q = serviceSearchQuery.value.trim().toLowerCase()
+  const matched = runningServices.value.find(s => s.name.toLowerCase() === q)
+  if (matched) {
+    newPromotion.value.service = matched.name
+  } else {
+    newPromotion.value.service = serviceSearchQuery.value.trim()
+  }
+}
+
+function onSearchFocus() {
+  isServiceDropdownOpen.value = true
+}
+
+function handleClickOutside(e: MouseEvent) {
+  if (comboboxRef.value && !comboboxRef.value.contains(e.target as Node)) {
+    isServiceDropdownOpen.value = false
+  }
+}
+
 async function fetchPromotions() {
   loading.value = true
   error.value = null
@@ -68,10 +124,25 @@ async function fetchPromotions() {
 async function loadServices() {
   loadingServices.value = true
   try {
-    const [svcRes, contRes] = await Promise.allSettled([
+    const [svcRes, contRes, hostsRes] = await Promise.allSettled([
       dockerApi.getServices(),
-      dockerApi.getContainers()
+      dockerApi.getContainers(),
+      dockerApi.listHosts()
     ])
+
+    const hostsList: ComputeHost[] = (hostsRes.status === 'fulfilled' && Array.isArray(hostsRes.value))
+      ? hostsRes.value
+      : []
+
+    // Format host name and endpoint helper
+    const formatHostDisplay = (host: ComputeHost): string => {
+      const cleanEndpoint = (host.endpoint || '').replace(/^tcp:\/\/|^https?:\/\//, '').replace(/:\d+$/, '')
+      return cleanEndpoint ? `${host.name} (${cleanEndpoint})` : (host.name || 'Unknown Host')
+    }
+
+    const primaryHost = hostsList.find(h => h.host_type === 'docker' || h.status === 'connected') || hostsList[0]
+    const defaultHostDisplay = primaryHost ? formatHostDisplay(primaryHost) : 'k8smater (10.10.10.133)'
+    const defaultHostEndpoint = primaryHost?.endpoint ? primaryHost.endpoint.replace(/^tcp:\/\/|^https?:\/\//, '').replace(/:\d+$/, '') : '10.10.10.133'
 
     const servicesList: RunningServiceOption[] = []
     const seenNames = new Set<string>()
@@ -88,7 +159,11 @@ async function loadServices() {
             name: s.name,
             image: s.image || 'unknown:latest',
             type: 'swarm',
-            status: s.replicas > 0 ? 'running' : 'stopped'
+            host: `${defaultHostDisplay} [Swarm Cluster]`,
+            hostEndpoint: defaultHostEndpoint,
+            status: (s.replicas ?? 0) > 0 ? 'running' : 'stopped',
+            replicas: s.replicas ?? 1,
+            ports: Array.isArray(s.ports) ? s.ports : []
           })
         }
       }
@@ -106,12 +181,29 @@ async function loadServices() {
         if (isSwarmTask || seenNames.has(cleanName)) continue
 
         seenNames.add(cleanName)
+
+        // Parse ports from container
+        let portsList: string[] = []
+        if (Array.isArray((c as any).ports)) {
+          portsList = (c as any).ports.map((p: any) =>
+            typeof p === 'string' ? p : `${p.PublicPort || p.public_port || ''}:${p.PrivatePort || p.private_port || ''}/${p.Type || p.type || 'tcp'}`
+          ).filter(Boolean)
+        } else if (typeof (c as any).ports === 'string' && (c as any).ports) {
+          portsList = [(c as any).ports]
+        }
+
+        const isRunning = (c.state || '').toLowerCase() === 'running' || (c.status || '').toLowerCase().includes('up')
+
         servicesList.push({
           id: c.id || cleanName,
           name: cleanName,
           image: c.image || 'unknown:latest',
           type: 'container',
-          status: c.state || c.status || 'running'
+          host: defaultHostDisplay,
+          hostEndpoint: defaultHostEndpoint,
+          status: c.state || c.status || 'running',
+          replicas: isRunning ? 1 : 0,
+          ports: portsList
         })
       }
     }
@@ -121,6 +213,7 @@ async function loadServices() {
     // Set initial selection if available
     if (servicesList.length > 0 && !newPromotion.value.service) {
       newPromotion.value.service = servicesList[0].name
+      serviceSearchQuery.value = servicesList[0].name
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to load running services'
@@ -141,12 +234,21 @@ function openCreateModal() {
   if (runningServices.value.length > 0 && !newPromotion.value.service) {
     newPromotion.value.service = runningServices.value[0].name
   }
+  if (newPromotion.value.service) {
+    serviceSearchQuery.value = newPromotion.value.service
+  }
+  isServiceDropdownOpen.value = false
   newPromotion.value.requester = getDefaultRequester()
   showCreateModal.value = true
 }
 
 onMounted(async () => {
+  document.addEventListener('click', handleClickOutside)
   await refreshAll()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 const pendingCount = computed(() => promotions.value.filter(p => p.status === 'pending').length)
@@ -199,8 +301,10 @@ async function handleCreatePromotion() {
     newPromotion.value.version = ''
     if (runningServices.value.length > 0) {
       newPromotion.value.service = runningServices.value[0].name
+      serviceSearchQuery.value = runningServices.value[0].name
     } else {
       newPromotion.value.service = ''
+      serviceSearchQuery.value = ''
     }
     await fetchPromotions()
   } catch (err: unknown) {
@@ -477,37 +581,139 @@ function formatDate(d?: string) {
     >
       <div class="modal-form">
         <div class="form-group">
-          <label class="form-label">Service Name</label>
-          <div v-if="loadingServices" class="input-loading-hint font-mono">
-            <span>⏳ Fetching running services from Docker / Swarm...</span>
-          </div>
-          <select 
-            v-else 
-            v-model="newPromotion.service" 
-            class="input-glass"
-          >
-            <option value="" disabled>Select an active service...</option>
-            <option 
-              v-for="svc in runningServices" 
-              :key="svc.id" 
-              :value="svc.name"
-            >
-              {{ svc.name }} ({{ svc.type === 'swarm' ? 'Swarm Service' : 'Container' }})
-            </option>
-          </select>
-        </div>
-
-        <!-- Currently Running Image Reference -->
-        <div v-if="selectedService" class="active-image-card glass-panel">
-          <div class="active-image-meta">
-            <span class="active-image-label">Currently Running Image:</span>
-            <span class="active-badge font-mono" :class="selectedService.type === 'swarm' ? 'badge-swarm' : 'badge-docker'">
-              {{ selectedService.type === 'swarm' ? 'Docker Swarm' : 'Standalone Container' }}
+          <div class="form-label-row">
+            <label class="form-label">Service Name</label>
+            <span v-if="runningServices.length > 0" class="service-count-pill font-mono">
+              {{ runningServices.length }} Workload{{ runningServices.length === 1 ? '' : 's' }} Available
             </span>
           </div>
-          <div class="active-image-val font-mono">
-            <span class="image-icon">📦</span>
-            <span class="text-cyan font-bold">{{ selectedService.image }}</span>
+
+          <div v-if="loadingServices" class="input-loading-hint font-mono">
+            <span>⏳ Fetching running services & host placement topology...</span>
+          </div>
+
+          <!-- Searchable Interactive Service Combobox -->
+          <div v-else ref="comboboxRef" class="combobox-wrapper">
+            <div class="combobox-input-box">
+              <input 
+                v-model="serviceSearchQuery" 
+                type="text" 
+                class="input-glass combobox-input font-mono"
+                placeholder="🔍 Type to search service name, image, or host server..."
+                autocomplete="off"
+                @focus="onSearchFocus"
+                @input="onSearchInput"
+                @keydown.escape="isServiceDropdownOpen = false"
+              />
+              <button
+                v-if="serviceSearchQuery"
+                type="button"
+                class="combobox-btn combobox-clear"
+                title="Clear selection"
+                @click.stop="clearServiceSearch"
+              >
+                ✕
+              </button>
+              <button
+                type="button"
+                class="combobox-btn combobox-toggle"
+                title="Toggle service list"
+                @click.stop="isServiceDropdownOpen = !isServiceDropdownOpen"
+              >
+                <span class="dropdown-chevron" :class="{ 'chevron-open': isServiceDropdownOpen }">▾</span>
+              </button>
+            </div>
+
+            <!-- Real-time Filtered Workloads Dropdown -->
+            <div 
+              v-if="isServiceDropdownOpen" 
+              class="combobox-dropdown glass-panel"
+            >
+              <div v-if="filteredServices.length === 0" class="combobox-empty font-mono">
+                <span>⚠️ No workloads matching "{{ serviceSearchQuery }}" found</span>
+              </div>
+
+              <div
+                v-for="svc in filteredServices"
+                :key="svc.id + '-' + svc.name"
+                class="combobox-option"
+                :class="{ 'is-selected': svc.name === newPromotion.service }"
+                @click="selectService(svc)"
+              >
+                <!-- Line 1: Workload Name + Type Badge + Status indicator (🟢 Replicas) -->
+                <div class="option-line-1">
+                  <span class="option-name font-mono">{{ svc.name }}</span>
+                  <div class="option-tags">
+                    <span 
+                      class="workload-type-badge font-mono"
+                      :class="svc.type === 'swarm' ? 'badge-swarm' : (svc.type === 'k8s' ? 'badge-k8s' : 'badge-docker')"
+                    >
+                      {{ svc.type === 'swarm' ? 'Swarm' : (svc.type === 'k8s' ? 'K8s' : 'Container') }}
+                    </span>
+                    <span 
+                      class="option-status-pill font-mono"
+                      :class="svc.status === 'running' || (svc.replicas ?? 0) > 0 ? 'status-active' : 'status-inactive'"
+                    >
+                      <span class="status-dot"></span>
+                      <span>{{ svc.replicas ?? 1 }} Rep</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Line 2: 🖥️ Server: {host} | 📦 Image: {image} | 🔌 Ports: {ports} -->
+                <div class="option-line-2 font-mono">
+                  <span class="option-meta-part">
+                    <span class="meta-label">🖥️ Server:</span>
+                    <span class="meta-val text-host">{{ svc.host }}</span>
+                  </span>
+                  <span class="meta-bar">|</span>
+                  <span class="option-meta-part">
+                    <span class="meta-label">📦 Image:</span>
+                    <span class="meta-val text-cyan">{{ svc.image }}</span>
+                  </span>
+                  <span class="meta-bar">|</span>
+                  <span class="option-meta-part">
+                    <span class="meta-label">🔌 Ports:</span>
+                    <span class="meta-val text-amber">{{ svc.ports && svc.ports.length > 0 ? svc.ports.join(', ') : 'None' }}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upgraded Currently Running Image & Placement Preview Card -->
+        <div v-if="selectedService" class="placement-preview-card glass-panel">
+          <div class="placement-header">
+            <div class="placement-title font-mono">
+              <span class="placement-icon">🌐</span>
+              <span>WORKLOAD TOPOLOGY & PLACEMENT</span>
+            </div>
+            <span class="active-badge font-mono" :class="selectedService.type === 'swarm' ? 'badge-swarm' : (selectedService.type === 'k8s' ? 'badge-k8s' : 'badge-docker')">
+              {{ selectedService.type === 'swarm' ? 'Docker Swarm Service' : (selectedService.type === 'k8s' ? 'Kubernetes Workload' : 'Standalone Container') }}
+            </span>
+          </div>
+
+          <div class="placement-details-grid font-mono">
+            <div class="placement-grid-row">
+              <span class="placement-row-key">🖥️ Host Server:</span>
+              <span class="placement-row-val text-host font-bold">{{ selectedService.host }}</span>
+            </div>
+
+            <div class="placement-grid-row">
+              <span class="placement-row-key">📦 Active Running Image:</span>
+              <span class="placement-row-val text-cyan font-bold">{{ selectedService.image }}</span>
+            </div>
+
+            <div class="placement-grid-row">
+              <span class="placement-row-key">⚙️ Replicas & Ports:</span>
+              <span class="placement-row-val">
+                <span class="text-emerald font-bold">{{ selectedService.replicas ?? 1 }} Replica(s)</span>
+                <span class="placement-sep">•</span>
+                <span class="text-muted">Ports:</span>
+                <span class="text-amber">{{ selectedService.ports && selectedService.ports.length > 0 ? selectedService.ports.join(', ') : 'None' }}</span>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -821,29 +1027,213 @@ function formatDate(d?: string) {
 .text-muted { color: var(--text-muted); }
 .btn-xs { padding: 4px 8px; font-size: 11px; }
 
-.active-image-card {
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.active-image-meta {
+.form-label-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.active-image-label {
+.service-count-pill {
+  font-size: 10px;
+  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.combobox-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.combobox-input-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.combobox-input {
+  width: 100%;
+  padding-right: 64px;
+}
+
+.combobox-btn {
+  position: absolute;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.combobox-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.combobox-clear {
+  right: 32px;
+  font-size: 11px;
+}
+
+.combobox-toggle {
+  right: 8px;
+  font-size: 14px;
+}
+
+.dropdown-chevron {
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.chevron-open {
+  transform: rotate(180deg);
+}
+
+.combobox-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 60;
+  background: rgba(11, 15, 25, 0.97);
+  border: 1px solid var(--border-medium);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.combobox-empty {
+  padding: 16px 12px;
+  text-align: center;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.combobox-option {
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.combobox-option:hover {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.combobox-option.is-selected {
+  background: rgba(6, 182, 212, 0.16);
+  border-color: rgba(6, 182, 212, 0.45);
+}
+
+.option-line-1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.option-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.option-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workload-type-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.option-status-pill {
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.status-active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-inactive {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.option-line-2 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.option-meta-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-label {
+  color: var(--text-muted);
+}
+
+.meta-val {
+  color: var(--text-secondary);
+}
+
+.meta-bar {
+  color: rgba(255, 255, 255, 0.15);
+  font-size: 10px;
+}
+
+.text-host {
+  color: #38bdf8;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+}
+
+.text-amber {
+  color: #fbbf24;
 }
 
 .active-badge {
@@ -865,16 +1255,76 @@ function formatDate(d?: string) {
   border: 1px solid rgba(168, 85, 247, 0.3);
 }
 
-.active-image-val {
-  font-size: 12px;
+.badge-k8s {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.placement-preview-card {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.placement-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.placement-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.placement-icon {
+  font-size: 13px;
+}
+
+.placement-details-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.placement-grid-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
   word-break: break-all;
 }
 
-.image-icon {
-  font-size: 13px;
+.placement-row-key {
+  color: var(--text-muted);
+  font-weight: 600;
+  min-width: 140px;
+}
+
+.placement-row-val {
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.placement-sep {
+  color: rgba(255, 255, 255, 0.2);
 }
 
 .form-hint {

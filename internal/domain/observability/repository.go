@@ -1,6 +1,9 @@
 package observability
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Repository defines the data access interface for observability data.
 type Repository interface {
@@ -18,6 +21,9 @@ type Repository interface {
 	UpdateSLOSnapshot(ctx context.Context, s *SLOSnapshot) error
 	DeleteSLOSnapshotBySLOID(ctx context.Context, sloID string) error
 
-	// Seed helper
-	SeedDefaultSLOs(ctx context.Context) error
+	// Health Samples & Real Telemetry
+	RecordHealthSample(ctx context.Context, tenantID string, serviceName string, desired int, running int, isHealthy bool, latencyMs *int) error
+	GetHealthSamples(ctx context.Context, serviceName string, since time.Time) ([]HealthSample, error)
+	ComputeSLI(ctx context.Context, serviceName string, window time.Duration) (float64, error)
 }
+

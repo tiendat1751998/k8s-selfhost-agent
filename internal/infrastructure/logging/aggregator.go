@@ -1,7 +1,9 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +17,41 @@ type LogEntry struct {
 	Stream    string    `json:"stream"` // stdout, stderr
 	Level     string    `json:"level"`  // INFO, WARN, ERROR, DEBUG
 	Message   string    `json:"message"`
+}
+
+func (e LogEntry) MarshalJSON() ([]byte, error) {
+	type Alias LogEntry
+	tStr := e.Timestamp.Format("15:04:05.000")
+	if e.Timestamp.IsZero() {
+		tStr = time.Now().UTC().Format("15:04:05.000")
+	}
+	return json.Marshal(&struct {
+		Alias
+		Time string `json:"time"`
+		Msg  string `json:"msg"`
+	}{
+		Alias: Alias(e),
+		Time:  tStr,
+		Msg:   e.Message,
+	})
+}
+
+func (e *LogEntry) UnmarshalJSON(data []byte) error {
+	type Alias LogEntry
+	aux := &struct {
+		Time string `json:"time"`
+		Msg  string `json:"msg"`
+		*Alias
+	}{
+		Alias: (*Alias)(e),
+	}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	if e.Message == "" && aux.Msg != "" {
+		e.Message = aux.Msg
+	}
+	return nil
 }
 
 type RingBuffer struct {
@@ -246,12 +283,27 @@ func (a *LogAggregator) Subscribe(subID string, filter LogFilter, chSize int) (*
 	a.mu.Lock()
 	a.subscribers[subID] = sub
 	var historical []LogEntry
-	k := a.key(filter.Namespace, filter.Pod)
-	if buf, exists := a.buffers[k]; exists {
-		for _, e := range buf.GetAll() {
-			if filter.Matches(e) {
-				historical = append(historical, e)
+	if filter.Namespace != "" && filter.Pod != "" {
+		k := a.key(filter.Namespace, filter.Pod)
+		if buf, exists := a.buffers[k]; exists {
+			for _, e := range buf.GetAll() {
+				if filter.Matches(e) {
+					historical = append(historical, e)
+				}
 			}
+		}
+	} else {
+		for _, buf := range a.buffers {
+			for _, e := range buf.GetAll() {
+				if filter.Matches(e) {
+					historical = append(historical, e)
+				}
+			}
+		}
+		if len(historical) > 1 {
+			sort.Slice(historical, func(i, j int) bool {
+				return historical[i].Timestamp.Before(historical[j].Timestamp)
+			})
 		}
 	}
 	a.mu.Unlock()

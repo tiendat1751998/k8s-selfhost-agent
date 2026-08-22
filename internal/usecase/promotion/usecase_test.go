@@ -377,15 +377,18 @@ func TestUsecase_StateTransitions(t *testing.T) {
 
 // Mocks for Docker and Audit domain interfaces
 type mockDockerRepoForUsecase struct {
-	services        []domainDocker.Service
-	containers      []domainDocker.Container
-	updatedServices map[string]string
-	updateErr       error
+	services          []domainDocker.Service
+	containers        []domainDocker.Container
+	updatedServices   map[string]string
+	updatedContainers map[string]string
+	updateErr         error
+	containerErr      error
 }
 
 func newMockDockerRepoForUsecase() *mockDockerRepoForUsecase {
 	return &mockDockerRepoForUsecase{
-		updatedServices: make(map[string]string),
+		updatedServices:   make(map[string]string),
+		updatedContainers: make(map[string]string),
 	}
 }
 
@@ -424,6 +427,13 @@ func (m *mockDockerRepoForUsecase) UpdateServiceImage(ctx context.Context, servi
 		return m.updateErr
 	}
 	m.updatedServices[serviceID] = image
+	return nil
+}
+func (m *mockDockerRepoForUsecase) UpdateContainerImage(ctx context.Context, containerID string, image string) error {
+	if m.containerErr != nil {
+		return m.containerErr
+	}
+	m.updatedContainers[containerID] = image
 	return nil
 }
 func (m *mockDockerRepoForUsecase) GetSwarmJoinTokens(ctx context.Context) (*domainDocker.SwarmTokens, error) {
@@ -626,16 +636,56 @@ func TestUsecase_Complete_StandaloneContainer_AuditLogged(t *testing.T) {
 		t.Errorf("expected 0 updated swarm services, got %d", len(dockerMock.updatedServices))
 	}
 
+	// Container update SHOULD be triggered
+	if dockerMock.updatedContainers["cnt-standalone-1"] != "alpine:3.20" {
+		t.Errorf("expected standalone container image 'alpine:3.20', got '%s'", dockerMock.updatedContainers["cnt-standalone-1"])
+	}
+
 	// Audit record should be logged
 	if len(auditMock.records) != 1 {
 		t.Fatalf("expected 1 audit record, got %d", len(auditMock.records))
 	}
 	rec := auditMock.records[0]
-	if rec.Action != "complete" || rec.TargetType != "promotion" || rec.TargetName != "my-container" {
+	if rec.Action != "promote_docker_container" || rec.Result != "success" || rec.TargetName != "/my-container" {
 		t.Errorf("unexpected audit record: %+v", rec)
 	}
 	if isStandalone, ok := rec.Details["standalone_container"].(bool); !ok || !isStandalone {
 		t.Errorf("expected standalone_container detail to be true, got %v", rec.Details["standalone_container"])
+	}
+}
+
+func TestUsecase_Complete_StandaloneContainer_Error_Handled(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockPromotionRepo()
+	dockerMock := newMockDockerRepoForUsecase()
+	auditMock := &mockAuditRepoForUsecase{}
+
+	dockerMock.containers = []domainDocker.Container{
+		{ID: "cnt-err-1", Name: "/my-container", Image: "alpine:3.19"},
+	}
+	dockerMock.containerErr = errors.New("cannot create container: name collision")
+
+	uc := NewUsecase(repo, dockerMock, auditMock)
+
+	promo, _ := uc.Create(ctx, &domainPromo.Promotion{
+		Service: "my-container",
+		Version: "alpine:3.20",
+		FromEnv: domainPromo.EnvQA,
+		ToEnv:   domainPromo.EnvProduction,
+	})
+	_ = uc.Approve(ctx, promo.ID, "bob")
+
+	err := uc.Complete(ctx, promo.ID)
+	if err != nil {
+		t.Fatalf("complete returned unexpected error: %v", err)
+	}
+
+	if len(auditMock.records) != 1 {
+		t.Fatalf("expected 1 audit record, got %d", len(auditMock.records))
+	}
+	rec := auditMock.records[0]
+	if rec.Action != "promote_docker_container" || rec.Result != "failed" {
+		t.Errorf("expected failed docker container audit record, got %+v", rec)
 	}
 }
 

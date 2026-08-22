@@ -178,6 +178,15 @@ func TestJWTAuth_WebSocketQueryTokenAllowed(t *testing.T) {
 	if wWSSub.Code != http.StatusOK {
 		t.Errorf("expected status 200 for query token on /ws/events, got %d", wWSSub.Code)
 	}
+
+	// /api/v1/logs/stream with query param token should also be allowed
+	rLogStream := httptest.NewRequest(http.MethodGet, "/api/v1/logs/stream?token="+token, nil)
+	wLogStream := httptest.NewRecorder()
+	handler.ServeHTTP(wLogStream, rLogStream)
+
+	if wLogStream.Code != http.StatusOK {
+		t.Errorf("expected status 200 for query token on /api/v1/logs/stream, got %d", wLogStream.Code)
+	}
 }
 
 func TestJWTAuth_TenantClaim(t *testing.T) {

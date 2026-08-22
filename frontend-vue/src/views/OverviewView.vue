@@ -3,11 +3,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   overviewApi,
+  tpsApi,
   type SystemOverview,
   type NodeMetrics,
   type ContainerMetrics,
   type MetricAlert,
   type ProcessMetric,
+  type TpsSnapshot,
 } from '../api/overview'
 import { useWebSocket } from '../composables/useWebSocket'
 import CircularGauge from '../components/ui/CircularGauge.vue'
@@ -24,6 +26,13 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const lastUpdated = ref<Date>(new Date())
 const isLiveWs = ref(false)
+
+// TPS (Transactions Per Second) Metrics State
+const tpsData = ref<TpsSnapshot | null>(null)
+const tpsLoading = ref(true)
+const tpsError = ref<string | null>(null)
+const tpsLastUpdated = ref<Date | null>(null)
+let tpsAbortController: AbortController | null = null
 
 // History buffer for sparklines & 5-minute trends (up to 30 data points)
 interface TrendPoint {
@@ -95,9 +104,167 @@ async function fetchOverview() {
   }
 }
 
+async function fetchTpsMetrics() {
+  if (tpsAbortController) {
+    tpsAbortController.abort()
+  }
+  tpsAbortController = new AbortController()
+
+  try {
+    const data = await tpsApi.getSnapshot()
+    if (data) {
+      tpsData.value = data
+      tpsError.value = null
+      tpsLastUpdated.value = new Date()
+    }
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') return
+    tpsError.value = err instanceof Error ? err.message : 'Failed to retrieve throughput metrics'
+  } finally {
+    tpsLoading.value = false
+  }
+}
+
+
+// ==========================================
+// 1b. NODE ORDERING & PERSISTENCE
+// ==========================================
+const NODE_ORDER_STORAGE_KEY = 'k8s_overview_node_order'
+
+function loadSavedNodeOrder(): string[] {
+  try {
+    const raw = localStorage.getItem(NODE_ORDER_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === 'string' && item.length > 0)
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to parse saved node order from localStorage:', err)
+  }
+  return []
+}
+
+function saveSavedNodeOrder(order: string[]) {
+  try {
+    localStorage.setItem(NODE_ORDER_STORAGE_KEY, JSON.stringify(order))
+  } catch (err) {
+    console.warn('Failed to save node order to localStorage:', err)
+  }
+}
+
+const nodeOrderKeys = ref<string[]>(loadSavedNodeOrder())
+const hasCustomNodeOrder = computed(() => {
+  return nodeOrderKeys.value.length > 0 && localStorage.getItem(NODE_ORDER_STORAGE_KEY) !== null
+})
+
+// Drag and drop state
+const draggedNodeId = ref<string | null>(null)
+const dragOverNodeId = ref<string | null>(null)
+let hasDragged = false
+
+function onDragStart(e: DragEvent, node: NodeMetrics) {
+  hasDragged = true
+  draggedNodeId.value = node.node_id
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', node.node_id)
+  }
+}
+
+function onDragOver(e: DragEvent, node: NodeMetrics) {
+  if (!draggedNodeId.value || draggedNodeId.value === node.node_id) return
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = 'move'
+  }
+  dragOverNodeId.value = node.node_id
+}
+
+function onDragEnter(node: NodeMetrics) {
+  if (!draggedNodeId.value || draggedNodeId.value === node.node_id) return
+  dragOverNodeId.value = node.node_id
+}
+
+function onDragLeave(e: DragEvent, node: NodeMetrics) {
+  const currentTarget = e.currentTarget as HTMLElement | null
+  const relatedTarget = e.relatedTarget as Node | null
+  if (currentTarget && relatedTarget && !currentTarget.contains(relatedTarget)) {
+    if (dragOverNodeId.value === node.node_id) {
+      dragOverNodeId.value = null
+    }
+  }
+}
+
+function onDrop(targetNode: NodeMetrics) {
+  if (draggedNodeId.value && draggedNodeId.value !== targetNode.node_id) {
+    reorderNodes(draggedNodeId.value, targetNode.node_id)
+  }
+  draggedNodeId.value = null
+  dragOverNodeId.value = null
+}
+
+function onDragEnd() {
+  draggedNodeId.value = null
+  dragOverNodeId.value = null
+  setTimeout(() => {
+    hasDragged = false
+  }, 50)
+}
+
+function reorderNodes(draggedId: string, targetId: string) {
+  if (!draggedId || !targetId || draggedId === targetId) return
+
+  // Build full order list including all current nodes in case any was missing
+  const currentNodes = overview.value?.nodes || []
+  const order = [...nodeOrderKeys.value]
+  for (const n of currentNodes) {
+    const k = n.node_id || n.node_name
+    if (k && !order.includes(k)) {
+      order.push(k)
+    }
+  }
+
+  const fromIndex = order.indexOf(draggedId)
+  const toIndex = order.indexOf(targetId)
+
+  if (fromIndex !== -1 && toIndex !== -1) {
+    order.splice(fromIndex, 1)
+    order.splice(toIndex, 0, draggedId)
+    nodeOrderKeys.value = order
+    saveSavedNodeOrder(order)
+  }
+}
+
+function resetNodeOrder() {
+  localStorage.removeItem(NODE_ORDER_STORAGE_KEY)
+  const currentNodes = overview.value?.nodes || []
+  nodeOrderKeys.value = currentNodes.map(n => n.node_id || n.node_name).filter(Boolean)
+}
+
+function handleNodeCardClick(node: NodeMetrics) {
+  if (hasDragged) return
+  inspectNode(node)
+}
+
 function updateOverviewState(data: SystemOverview) {
   overview.value = data
   lastUpdated.value = new Date()
+
+  // Maintain stable ordering: add any newly discovered nodes to the end without changing existing node positions
+  const currentKeySet = new Set(nodeOrderKeys.value)
+  let orderModified = false
+  for (const n of data.nodes || []) {
+    const key = n.node_id || n.node_name
+    if (key && !currentKeySet.has(key)) {
+      nodeOrderKeys.value.push(key)
+      currentKeySet.add(key)
+      orderModified = true
+    }
+  }
+  if (orderModified && nodeOrderKeys.value.length > 0) {
+    saveSavedNodeOrder(nodeOrderKeys.value)
+  }
 
   // Push to trend history
   const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -112,37 +279,6 @@ function updateOverviewState(data: SystemOverview) {
   trendHistory.value.push(newPoint)
   if (trendHistory.value.length > 30) {
     trendHistory.value.shift()
-  }
-
-  // Generate simulated activity entries matching real reqs/s
-  simulateActivity(data.requests_per_sec || 12)
-}
-
-function simulateActivity(reqs: number) {
-  const routes = [
-    { method: 'GET', path: '/api/v1/workloads', status: 200 },
-    { method: 'POST', path: '/api/v1/telemetry/push', status: 200 },
-    { method: 'GET', path: '/api/v1/fleet/health', status: 200 },
-    { method: 'GET', path: '/metrics', status: 200 },
-    { method: 'POST', path: '/api/v1/auth/verify', status: 200 },
-    { method: 'GET', path: '/api/v1/hosts', status: 200 },
-    { method: 'GET', path: '/api/v1/governance/drift', status: 200 },
-  ]
-  const count = Math.min(3, Math.max(1, Math.floor(reqs / 40)))
-  for (let i = 0; i < count; i++) {
-    const route = routes[Math.floor(Math.random() * routes.length)]
-    const now = new Date()
-    recentActivity.value.unshift({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      method: route.method,
-      path: route.path,
-      status: route.status,
-      duration: Math.floor(Math.random() * 24) + 4,
-    })
-  }
-  if (recentActivity.value.length > 15) {
-    recentActivity.value = recentActivity.value.slice(0, 15)
   }
 }
 
@@ -159,7 +295,41 @@ useWebSocket({
 // ==========================================
 // 3. COMPUTED METRICS & DERIVED STATE
 // ==========================================
-const nodes = computed<NodeMetrics[]>(() => overview.value?.nodes || [])
+const orderedNodes = computed<NodeMetrics[]>(() => {
+  const incoming = overview.value?.nodes || []
+  if (incoming.length === 0) return []
+
+  const nodeMap = new Map<string, NodeMetrics>()
+  for (const n of incoming) {
+    const key = n.node_id || n.node_name
+    nodeMap.set(key, n)
+  }
+
+  const result: NodeMetrics[] = []
+  const seen = new Set<string>()
+
+  // 1. Follow saved / current order
+  for (const key of nodeOrderKeys.value) {
+    const node = nodeMap.get(key)
+    if (node) {
+      result.push(node)
+      seen.add(key)
+    }
+  }
+
+  // 2. Append any incoming nodes not in saved order to the end
+  for (const n of incoming) {
+    const key = n.node_id || n.node_name
+    if (!seen.has(key)) {
+      result.push(n)
+      seen.add(key)
+    }
+  }
+
+  return result
+})
+
+const nodes = computed<NodeMetrics[]>(() => orderedNodes.value)
 const totalContainers = computed(() => overview.value?.total_containers || 0)
 const runningContainers = computed(() => overview.value?.running_containers || 0)
 
@@ -321,6 +491,14 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[]): string {
   return loadAvg.map(n => (typeof n === 'number' ? n.toFixed(2) : String(n))).join(', ')
 }
 
+function formatOsSummary(node?: NodeMetrics | null): string {
+  if (!node) return 'Linux | amd64'
+  const distro = node.os_distro || (node.os ? node.os.toUpperCase() : 'Linux')
+  const kernel = node.kernel_version ? `Linux ${node.kernel_version}` : (node.os || 'Linux')
+  const arch = node.arch || 'amd64'
+  return `${distro} | ${kernel} | ${arch}`
+}
+
 function formatIoRate(bytesPerSec?: number): string {
   if (!bytesPerSec || bytesPerSec <= 0 || isNaN(bytesPerSec)) return '0 B/s'
   return `${formatBytes(bytesPerSec)}/s`
@@ -446,15 +624,54 @@ const trendChartMemPath = computed(() => {
     .join(' ')
 })
 
+function getHttpLatencyColor(latencyMs?: number): string {
+  if (latencyMs === undefined || latencyMs === null || isNaN(latencyMs)) return 'text-muted'
+  if (latencyMs > 500) return 'text-rose'
+  if (latencyMs > 100) return 'text-amber'
+  return 'text-emerald'
+}
+
+function getHttpErrorRateClass(errorRate?: number): string {
+  if (errorRate === undefined || errorRate === null || isNaN(errorRate)) return 'badge-muted'
+  if (errorRate > 5) return 'badge-rose'
+  return 'badge-emerald'
+}
+
+function getDbCacheHitClass(hitRatio?: number): string {
+  if (hitRatio === undefined || hitRatio === null || isNaN(hitRatio)) return 'badge-muted'
+  const pct = hitRatio <= 1.0 ? hitRatio * 100 : hitRatio
+  if (pct >= 95) return 'badge-emerald'
+  if (pct >= 90) return 'badge-amber'
+  return 'badge-rose'
+}
+
+function formatCacheHitRatio(ratio?: number): string {
+  if (ratio === undefined || ratio === null || isNaN(ratio)) return '--'
+  const pct = ratio <= 1.0 ? ratio * 100 : ratio
+  return pct.toFixed(1) + '%'
+}
+
+const sortedServices = computed(() => {
+  if (!tpsData.value?.services) return []
+  return [...tpsData.value.services].sort((a, b) => {
+    if (b.cpu_percent !== a.cpu_percent) {
+      return b.cpu_percent - a.cpu_percent
+    }
+    return b.memory_used_mb - a.memory_used_mb
+  })
+})
+
 // ==========================================
 // 5. LIFECYCLE & CLEANUP
 // ==========================================
 onMounted(() => {
   fetchOverview()
+  fetchTpsMetrics()
 
   // Polling fallback every 5 seconds if WebSocket is delayed
   fallbackInterval = setInterval(() => {
     fetchOverview()
+    fetchTpsMetrics()
   }, 5000)
 })
 
@@ -467,7 +684,12 @@ onUnmounted(() => {
     abortController.abort()
     abortController = null
   }
+  if (tpsAbortController) {
+    tpsAbortController.abort()
+    tpsAbortController = null
+  }
 })
+
 </script>
 
 <template>
@@ -490,8 +712,8 @@ onUnmounted(() => {
       </div>
 
       <div class="header-actions">
-        <button class="btn btn-secondary" @click="fetchOverview" :disabled="loading">
-          <span class="btn-icon" :class="{ 'spin-icon': loading }">🔄</span>
+        <button class="btn btn-secondary" @click="() => { fetchOverview(); fetchTpsMetrics() }" :disabled="loading">
+          <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
           <span>Refresh</span>
         </button>
         <button class="btn btn-secondary" @click="router.push('/deployments')">
@@ -756,6 +978,14 @@ onUnmounted(() => {
 
           <div class="filter-meta-text">
             <span>Showing {{ filteredTopologyNodes.length }} of {{ nodes.length }} servers</span>
+            <button
+              v-if="hasCustomNodeOrder"
+              class="btn-reset-order"
+              @click="resetNodeOrder"
+              title="Reset nodes to default ordering"
+            >
+              ↺ Reset Layout
+            </button>
           </div>
         </div>
 
@@ -774,12 +1004,27 @@ onUnmounted(() => {
             v-for="node in filteredTopologyNodes"
             :key="node.node_id"
             class="node-card glass-panel cursor-pointer"
-            :class="[getNodeCardClass(node), { 'is-busiest': node.node_id === busiestNodeId }]"
-            @click="inspectNode(node)"
+            :class="[
+              getNodeCardClass(node),
+              {
+                'is-busiest': node.node_id === busiestNodeId,
+                'is-dragging': draggedNodeId === node.node_id,
+                'is-drag-over': dragOverNodeId === node.node_id && draggedNodeId !== node.node_id,
+              }
+            ]"
+            draggable="true"
+            @dragstart="onDragStart($event, node)"
+            @dragover.prevent="onDragOver($event, node)"
+            @dragenter.prevent="onDragEnter(node)"
+            @dragleave="onDragLeave($event, node)"
+            @drop.prevent="onDrop(node)"
+            @dragend="onDragEnd"
+            @click="handleNodeCardClick(node)"
           >
             <!-- Card Top: Name, Source Badge, Role & Status -->
             <div class="node-card-header">
               <div class="node-identity">
+                <span class="drag-handle" title="Drag to reorder server card">⋮⋮</span>
                 <span
                   class="node-status-dot"
                   :class="node.status === 'ready' || node.status === 'online' ? 'status-green' : 'status-red'"
@@ -787,6 +1032,10 @@ onUnmounted(() => {
                 <span class="node-name" :title="node.node_name">{{ node.node_name }}</span>
               </div>
               <div class="node-badge-row">
+                <!-- OS Distro Badge -->
+                <span class="badge badge-slate font-mono" :title="formatOsSummary(node)">
+                  🐧 {{ node.os_distro || (node.os ? node.os.toUpperCase() : 'Linux') }}
+                </span>
                 <!-- Source Badge -->
                 <span class="badge badge-indigo">
                   📡 K8S-AGENT
@@ -873,8 +1122,419 @@ onUnmounted(() => {
         </div>
       </section>
 
+      <!-- SECTION: REAL-TIME THROUGHPUT MONITOR (TPS) -->
+      <section class="tps-monitor-section">
+        <div class="section-title-bar">
+          <div class="section-title-group">
+            <h2 class="section-title">📊 Real-Time Throughput Monitor</h2>
+            <span class="section-subtitle">
+              Unified ingress, edge gateway, database transactions, messaging & per-node wire throughput
+            </span>
+          </div>
+          <div class="tps-header-meta">
+            <span class="badge badge-indigo">
+              <span class="pulse-dot"></span>
+              Auto-Refresh 5s
+            </span>
+            <span class="tps-sync-time" v-if="tpsLastUpdated">
+              Updated: {{ tpsLastUpdated.toLocaleTimeString() }}
+            </span>
+          </div>
+        </div>
+
+        <!-- 4 CATEGORY CARDS GRID -->
+        <div class="tps-cards-grid">
+          <!-- Card 1: Network I/O -->
+          <div class="tps-card glass-panel">
+            <div class="tps-card-top">
+              <div class="tps-card-identity">
+                <span class="tps-icon">🌐</span>
+                <span class="tps-label">Network I/O</span>
+              </div>
+              <span class="badge badge-cyan">WIRE STREAM</span>
+            </div>
+
+            <div class="tps-highlight-row">
+              <div class="tps-big-stat">
+                <span class="tps-big-num font-mono">
+                  {{ tpsData?.network ? formatBytes(tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec) : '--' }}
+                </span>
+                <span class="tps-big-unit">/s total</span>
+              </div>
+            </div>
+
+            <div class="tps-metrics-block">
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">Total Rx</span>
+                <span class="tps-metric-val text-cyan font-mono">
+                  ↓ {{ tpsData?.network ? formatBytes(tpsData.network.total_rx_bytes_per_sec) + '/s' : '--' }}
+                </span>
+              </div>
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">Total Tx</span>
+                <span class="tps-metric-val text-violet font-mono">
+                  ↑ {{ tpsData?.network ? formatBytes(tpsData.network.total_tx_bytes_per_sec) + '/s' : '--' }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Sparkline / Bar indicator -->
+            <div class="tps-indicator-wrap">
+              <div class="tps-ratio-bar">
+                <div
+                  class="tps-bar-rx"
+                  :style="{
+                    width: `${
+                      tpsData?.network && (tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec > 0)
+                        ? (tpsData.network.total_rx_bytes_per_sec / (tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec)) * 100
+                        : 50
+                    }%`
+                  }"
+                  title="Rx Bandwidth Share"
+                ></div>
+                <div
+                  class="tps-bar-tx"
+                  :style="{
+                    width: `${
+                      tpsData?.network && (tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec > 0)
+                        ? (tpsData.network.total_tx_bytes_per_sec / (tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec)) * 100
+                        : 50
+                    }%`
+                  }"
+                  title="Tx Bandwidth Share"
+                ></div>
+              </div>
+              <div class="tps-ratio-labels font-mono">
+                <span>Rx Share</span>
+                <span>Tx Share</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: HTTP Gateway (Traefik) -->
+          <div class="tps-card glass-panel">
+            <div class="tps-card-top">
+              <div class="tps-card-identity">
+                <span class="tps-icon">🔗</span>
+                <span class="tps-label">HTTP Gateway (Traefik)</span>
+              </div>
+              <span
+                class="badge"
+                :class="getHttpErrorRateClass(tpsData?.http?.error_rate)"
+              >
+                {{ tpsData?.http ? tpsData.http.error_rate.toFixed(1) + '% Err' : '--' }}
+              </span>
+            </div>
+
+            <div class="tps-highlight-row">
+              <div class="tps-big-stat">
+                <span class="tps-big-num font-mono">
+                  {{ tpsData?.http ? tpsData.http.requests_per_sec.toFixed(1) : '--' }}
+                </span>
+                <span class="tps-big-unit">req/s</span>
+              </div>
+              <div class="tps-badge-group">
+                <span class="tps-sub-badge font-mono">
+                  ⚡ {{ tpsData?.http?.active_connections ?? '--' }} conn
+                </span>
+              </div>
+            </div>
+
+            <div class="tps-metrics-block">
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">Active Connections</span>
+                <span class="tps-metric-val font-mono">
+                  {{ tpsData?.http?.active_connections ?? '--' }}
+                </span>
+              </div>
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">Error Rate</span>
+                <span
+                  class="tps-metric-val font-mono"
+                  :class="(tpsData?.http?.error_rate ?? 0) > 5 ? 'text-rose font-bold' : 'text-emerald'"
+                >
+                  {{ tpsData?.http ? tpsData.http.error_rate.toFixed(1) + '%' : '--' }}
+                </span>
+              </div>
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">Avg Latency</span>
+                <span
+                  class="tps-metric-val font-mono"
+                  :class="getHttpLatencyColor(tpsData?.http?.avg_latency_ms)"
+                >
+                  {{ tpsData?.http?.avg_latency_ms != null ? tpsData.http.avg_latency_ms.toFixed(1) + 'ms' : '--' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Database (PostgreSQL) -->
+          <div class="tps-card glass-panel">
+            <div class="tps-card-top">
+              <div class="tps-card-identity">
+                <span class="tps-icon">🗄️</span>
+                <span class="tps-label">Database (PostgreSQL)</span>
+              </div>
+              <span
+                class="badge"
+                :class="getDbCacheHitClass(tpsData?.database?.cache_hit_ratio)"
+              >
+                {{ formatCacheHitRatio(tpsData?.database?.cache_hit_ratio) }} Hit
+              </span>
+            </div>
+
+            <div class="tps-highlight-row">
+              <div class="tps-big-stat">
+                <span class="tps-big-num font-mono">
+                  {{ tpsData?.database ? tpsData.database.transactions_per_sec.toFixed(1) : '--' }}
+                </span>
+                <span class="tps-big-unit">tx/s</span>
+              </div>
+              <div class="tps-badge-group">
+                <span class="tps-sub-badge font-mono">
+                  🔌 {{ tpsData?.database?.active_connections ?? '--' }} conn
+                </span>
+              </div>
+            </div>
+
+            <div class="tps-metrics-block">
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">Reads</span>
+                <span class="tps-metric-val text-cyan font-mono">
+                  {{ tpsData?.database ? tpsData.database.reads_per_sec.toFixed(1) + ' rows/s' : '--' }}
+                </span>
+              </div>
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">Writes</span>
+                <span class="tps-metric-val text-amber font-mono">
+                  {{ tpsData?.database ? tpsData.database.writes_per_sec.toFixed(1) + ' rows/s' : '--' }}
+                </span>
+              </div>
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">Cache Hit</span>
+                <span
+                  class="tps-metric-val font-mono"
+                  :class="
+                    ((tpsData?.database?.cache_hit_ratio ?? 0) <= 1.0 ? (tpsData?.database?.cache_hit_ratio ?? 0) * 100 : (tpsData?.database?.cache_hit_ratio ?? 0)) >= 95
+                      ? 'text-emerald'
+                      : ((tpsData?.database?.cache_hit_ratio ?? 0) <= 1.0 ? (tpsData?.database?.cache_hit_ratio ?? 0) * 100 : (tpsData?.database?.cache_hit_ratio ?? 0)) >= 90
+                      ? 'text-amber'
+                      : 'text-rose'
+                  "
+                >
+                  {{ formatCacheHitRatio(tpsData?.database?.cache_hit_ratio) }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 4: Messaging (NATS) -->
+          <div class="tps-card glass-panel">
+            <div class="tps-card-top">
+              <div class="tps-card-identity">
+                <span class="tps-icon">📨</span>
+                <span class="tps-label">Messaging (NATS)</span>
+              </div>
+              <span class="badge" :class="tpsData?.messaging?.connections ? 'badge-emerald' : 'badge-muted'">PUB/SUB</span>
+            </div>
+
+            <div class="tps-highlight-row">
+              <div class="tps-big-stat">
+                <span class="tps-big-num font-mono">
+                  {{ tpsData?.messaging ? (tpsData.messaging.in_msgs_per_sec + tpsData.messaging.out_msgs_per_sec).toFixed(1) : '--' }}
+                </span>
+                <span class="tps-big-unit">msg/s</span>
+              </div>
+              <div class="tps-badge-group">
+                <span class="tps-sub-badge font-mono">
+                  👥 {{ tpsData?.messaging?.connections != null ? (tpsData.messaging.connections > 0 ? tpsData.messaging.connections + ' conn' : '0 conn') : 'N/A' }}
+                </span>
+              </div>
+            </div>
+
+            <div class="tps-metrics-block">
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">In Rate</span>
+                <span class="tps-metric-val text-cyan font-mono">
+                  {{ tpsData?.messaging ? tpsData.messaging.in_msgs_per_sec.toFixed(1) + ' msg/s' : '--' }}
+                </span>
+              </div>
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">Out Rate</span>
+                <span class="tps-metric-val text-violet font-mono">
+                  {{ tpsData?.messaging ? tpsData.messaging.out_msgs_per_sec.toFixed(1) + ' msg/s' : '--' }}
+                </span>
+              </div>
+              <div class="tps-metric-row">
+                <span class="tps-metric-key">Bandwidth</span>
+                <span class="tps-metric-val font-mono">
+                  <span class="text-cyan">↓{{ tpsData?.messaging ? formatBytes(tpsData.messaging.in_bytes_per_sec) : '--' }}</span>
+                  <span class="text-muted"> / </span>
+                  <span class="text-violet">↑{{ tpsData?.messaging ? formatBytes(tpsData.messaging.out_bytes_per_sec) : '--' }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PER-NODE NETWORK TABLE -->
+        <div class="tps-table-card glass-panel">
+          <div class="tps-table-header">
+            <div class="tps-table-title-group">
+              <span class="tps-table-icon">🖧</span>
+              <h3 class="tps-table-title">Per-Node Network Throughput</h3>
+              <span class="badge badge-cyan" v-if="tpsData?.per_node?.length">
+                {{ tpsData.per_node.length }} Nodes Active
+              </span>
+            </div>
+            <span class="tps-table-sub">Live wire telemetry and process counts across cluster compute nodes</span>
+          </div>
+
+          <div class="table-scroll-wrapper" v-if="tpsData?.per_node && tpsData.per_node.length > 0">
+            <table class="tps-table">
+              <thead>
+                <tr>
+                  <th class="col-tps-node">Node</th>
+                  <th class="col-tps-rx">↓ Rx</th>
+                  <th class="col-tps-tx">↑ Tx</th>
+                  <th class="col-tps-proc">Processes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="node in tpsData.per_node"
+                  :key="node.node_id || node.node_name"
+                  class="tps-row"
+                >
+                  <td class="col-tps-node">
+                    <div class="tps-node-cell">
+                      <span class="node-indicator-dot bg-emerald"></span>
+                      <span class="tps-node-name">{{ node.node_name }}</span>
+                      <span
+                        v-if="node.node_id && node.node_id !== node.node_name"
+                        class="tps-node-sub font-mono"
+                      >
+                        {{ node.node_id.slice(0, 8) }}
+                      </span>
+                    </div>
+                  </td>
+                  <td class="col-tps-rx font-mono">
+                    <span class="tps-rx-badge">
+                      ↓ {{ formatBytes(node.rx_bytes_per_sec) }}/s
+                    </span>
+                  </td>
+                  <td class="col-tps-tx font-mono">
+                    <span class="tps-tx-badge">
+                      ↑ {{ formatBytes(node.tx_bytes_per_sec) }}/s
+                    </span>
+                  </td>
+                  <td class="col-tps-proc">
+                    <span class="badge badge-indigo font-mono">
+                      {{ node.processes }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else-if="tpsLoading" class="tps-table-empty">
+            <span>Loading per-node throughput metrics...</span>
+          </div>
+          <div v-else class="tps-table-empty">
+            <span>No per-node network telemetry currently available.</span>
+          </div>
+        </div>
+
+        <!-- PER-SERVICE THROUGHPUT TABLE -->
+        <div class="tps-table-card glass-panel">
+          <div class="tps-table-header">
+            <div class="tps-table-title-group">
+              <span class="tps-table-icon">📦</span>
+              <h3 class="tps-table-title">Service Throughput</h3>
+              <span class="badge badge-cyan" v-if="sortedServices.length">
+                {{ sortedServices.length }} Services Active
+              </span>
+            </div>
+            <span class="tps-table-sub">Live container resource utilization and network throughput per Docker/Swarm service</span>
+          </div>
+
+          <div class="table-scroll-wrapper" v-if="sortedServices && sortedServices.length > 0">
+            <table class="tps-table">
+              <thead>
+                <tr>
+                  <th class="col-tps-service">Service</th>
+                  <th class="col-tps-replicas">Replicas</th>
+                  <th class="col-tps-cpu">CPU</th>
+                  <th class="col-tps-mem">Memory</th>
+                  <th class="col-tps-rx">↓ Rx</th>
+                  <th class="col-tps-tx">↑ Tx</th>
+                  <th class="col-tps-status">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="svc in sortedServices"
+                  :key="svc.service_name"
+                  class="tps-row"
+                >
+                  <td class="col-tps-service">
+                    <div class="tps-node-cell">
+                      <span
+                        class="node-indicator-dot"
+                        :class="svc.status === 'healthy' ? 'bg-emerald' : svc.status === 'degraded' ? 'bg-amber' : 'bg-rose'"
+                      ></span>
+                      <span class="tps-node-name font-mono">{{ svc.service_name }}</span>
+                    </div>
+                  </td>
+                  <td class="col-tps-replicas font-mono">
+                    <span class="badge badge-indigo">
+                      {{ svc.container_count }}
+                    </span>
+                  </td>
+                  <td class="col-tps-cpu font-mono">
+                    <span :class="svc.cpu_percent > 80 ? 'text-rose' : svc.cpu_percent > 50 ? 'text-amber' : 'text-emerald'">
+                      {{ svc.cpu_percent.toFixed(1) }}%
+                    </span>
+                  </td>
+                  <td class="col-tps-mem font-mono">
+                    <span :class="svc.memory_percent > 85 ? 'text-rose' : svc.memory_percent > 70 ? 'text-amber' : 'text-cyan'">
+                      {{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}
+                    </span>
+                  </td>
+                  <td class="col-tps-rx font-mono">
+                    <span class="tps-rx-badge">
+                      ↓ {{ formatBytes(svc.rx_bytes_per_sec) }}/s
+                    </span>
+                  </td>
+                  <td class="col-tps-tx font-mono">
+                    <span class="tps-tx-badge">
+                      ↑ {{ formatBytes(svc.tx_bytes_per_sec) }}/s
+                    </span>
+                  </td>
+                  <td class="col-tps-status">
+                    <span
+                      class="badge"
+                      :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
+                    >
+                      {{ svc.status === 'healthy' ? '🟢 Healthy' : svc.status === 'degraded' ? '🟡 Degraded' : '🔴 Down' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else-if="tpsLoading" class="tps-table-empty">
+            <span>Loading per-service throughput metrics...</span>
+          </div>
+          <div v-else class="tps-table-empty">
+            <span>No per-service throughput telemetry currently available.</span>
+          </div>
+        </div>
+      </section>
+
       <!-- SECTION 3 & 5: SPLIT CONTAINER GRID & LIVE ACTIVITY / TRENDS -->
       <div class="dashboard-split-layout">
+
         <!-- SECTION 3: CONTAINER GRID -->
         <section class="container-grid-section glass-panel">
           <div class="split-header">
@@ -1084,6 +1744,14 @@ onUnmounted(() => {
 
             <div class="activity-items-list">
               <div
+                v-if="recentActivity.length === 0"
+                class="empty-activity text-muted"
+                style="padding: 24px; text-align: center; font-size: 13px;"
+              >
+                No recent activity
+              </div>
+              <div
+                v-else
                 v-for="item in recentActivity"
                 :key="item.id"
                 class="activity-log-row animate-fade-in"
@@ -1233,13 +1901,24 @@ onUnmounted(() => {
                 <span class="badge badge-cyan" v-if="selectedNode.source">
                   {{ selectedNode.source.toUpperCase() }}
                 </span>
+                <span class="badge badge-slate font-mono" :title="formatOsSummary(selectedNode)">
+                  🐧 {{ formatOsSummary(selectedNode) }}
+                </span>
               </div>
             </div>
 
             <div class="node-quick-stats">
               <div class="quick-stat-item">
-                <span class="qs-label">OS / ARCH</span>
-                <span class="qs-val">{{ selectedNode.os || 'Linux' }} / {{ selectedNode.arch || 'amd64' }}</span>
+                <span class="qs-label">OS DISTRO</span>
+                <span class="qs-val" :title="selectedNode.os_distro || selectedNode.os || 'Linux'">{{ selectedNode.os_distro || selectedNode.os || 'Linux' }}</span>
+              </div>
+              <div class="quick-stat-item">
+                <span class="qs-label">KERNEL VERSION</span>
+                <span class="qs-val font-mono" :title="selectedNode.kernel_version || 'Linux'">{{ selectedNode.kernel_version || 'Linux' }}</span>
+              </div>
+              <div class="quick-stat-item">
+                <span class="qs-label">ARCHITECTURE</span>
+                <span class="qs-val font-mono">{{ selectedNode.arch || 'amd64' }}</span>
               </div>
               <div class="quick-stat-item">
                 <span class="qs-label">UPTIME</span>
@@ -1247,7 +1926,7 @@ onUnmounted(() => {
               </div>
               <div class="quick-stat-item">
                 <span class="qs-label">LOAD AVG</span>
-                <span class="qs-val font-mono">{{ formatLoadAvg(selectedNode.load_avg) }}</span>
+                <span class="qs-val font-mono">{{ formatLoadAvg(selectedNode.load_avg || selectedNode.load_average) }}</span>
               </div>
             </div>
           </div>
@@ -1998,9 +2677,33 @@ onUnmounted(() => {
 }
 
 .filter-meta-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 11px;
   color: var(--text-muted);
   font-family: var(--font-mono);
+}
+
+.btn-reset-order {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--accent-cyan, #38bdf8);
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-reset-order:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #fff;
 }
 
 .empty-topology-state {
@@ -2031,6 +2734,37 @@ onUnmounted(() => {
   gap: 16px;
 }
 
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted, #94a3b8);
+  font-size: 13px;
+  letter-spacing: -2px;
+  cursor: grab;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+  user-select: none;
+  opacity: 0.5;
+}
+
+.node-card:hover .drag-handle {
+  opacity: 0.95;
+  color: var(--text-primary, #f8fafc);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.drag-handle:hover {
+  opacity: 1;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
 .node-card {
   padding: 18px;
   border-radius: 14px;
@@ -2038,12 +2772,35 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 14px;
   position: relative;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.2s ease;
+  cursor: grab;
 }
 
 .node-card:hover {
   transform: translateY(-2px);
   border-color: rgba(56, 189, 248, 0.3);
+}
+
+.node-card:active {
+  cursor: grabbing;
+}
+
+.node-card.is-dragging {
+  opacity: 0.35;
+  transform: scale(0.97);
+  border: 2px dashed rgba(56, 189, 248, 0.6) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  cursor: grabbing;
+}
+
+.node-card.is-drag-over {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.5), 0 8px 25px rgba(56, 189, 248, 0.25) !important;
+  transform: translateY(-4px) scale(1.02);
+  background: rgba(56, 189, 248, 0.08);
 }
 
 .node-overloaded {
@@ -3464,4 +4221,284 @@ onUnmounted(() => {
   padding-top: 10px;
   border-top: 1px solid var(--border-subtle);
 }
+
+/* ==========================================
+   REAL-TIME THROUGHPUT MONITOR (TPS) STYLES
+   ========================================== */
+.tps-monitor-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.tps-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tps-sync-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.tps-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.tps-card {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-radius: 14px;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tps-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-medium);
+  box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.4);
+}
+
+.tps-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tps-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tps-icon {
+  font-size: 16px;
+}
+
+.tps-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.tps-highlight-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tps-big-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.tps-big-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.tps-big-unit {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.tps-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tps-sub-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+}
+
+.tps-metrics-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tps-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.tps-metric-key {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.tps-metric-val {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.tps-indicator-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.tps-ratio-bar {
+  display: flex;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tps-bar-rx {
+  background: linear-gradient(90deg, #06b6d4, #38bdf8);
+  transition: width 0.4s ease;
+  min-width: 4px;
+}
+
+.tps-bar-tx {
+  background: linear-gradient(90deg, #8b5cf6, #a855f7);
+  transition: width 0.4s ease;
+  min-width: 4px;
+}
+
+.tps-ratio-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.tps-table-card {
+  padding: 16px 20px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tps-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tps-table-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tps-table-icon {
+  font-size: 16px;
+}
+
+.tps-table-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.tps-table-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.tps-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+
+.tps-table th {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tps-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+}
+
+.tps-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tps-node-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.node-indicator-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tps-node-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tps-node-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.tps-rx-badge {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.tps-tx-badge {
+  color: #a78bfa;
+  font-weight: 600;
+}
+
+.tps-table-empty {
+  padding: 24px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 </style>
+

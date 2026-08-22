@@ -483,6 +483,8 @@ export interface AgentInfo {
   hostname?: string
   os?: string
   arch?: string
+  os_distro?: string
+  kernel_version?: string
   uptime?: number
   uptime_seconds?: number
 }
@@ -519,9 +521,12 @@ export interface NodeMetrics {
   running_count: number
   os?: string
   arch?: string
+  os_distro?: string
+  kernel_version?: string
   uptime?: number
   uptime_seconds?: number
   load_avg?: [number, number, number] | number[]
+  load_average?: [number, number, number] | number[]
   top_processes?: ProcessMetric[]
 }
 
@@ -748,8 +753,10 @@ export const sloApi = {
     return res as SLODefinition
   },
 
-  async listSnapshots(): Promise<SLOSnapshot[]> {
-    const res = await api.get<ApiResponse<SLOSnapshot[]> | SLOSnapshot[]>('/observability/slo')
+  async listSnapshots(window?: string): Promise<SLOSnapshot[]> {
+    const params: Record<string, string> = {}
+    if (window) params.window = window
+    const res = await api.get<ApiResponse<SLOSnapshot[]> | SLOSnapshot[]>('/observability/slo', params)
     if (Array.isArray(res)) return res
     return res.data || []
   },
@@ -1019,3 +1026,76 @@ export const explorerApi = {
     return api.post<{ status: string }>('/explorer/sync', resource)
   },
 }
+
+// ==========================================
+// 12. Real-Time Throughput (TPS) Metrics
+// ==========================================
+
+export interface TpsNetworkMetrics {
+  total_rx_bytes_per_sec: number
+  total_tx_bytes_per_sec: number
+}
+
+export interface TpsHttpMetrics {
+  requests_per_sec: number
+  active_connections: number
+  total_requests: number
+  error_rate: number
+  avg_latency_ms: number
+}
+
+export interface TpsDatabaseMetrics {
+  transactions_per_sec: number
+  reads_per_sec: number
+  writes_per_sec: number
+  active_connections: number
+  cache_hit_ratio: number
+}
+
+export interface TpsMessagingMetrics {
+  in_msgs_per_sec: number
+  out_msgs_per_sec: number
+  in_bytes_per_sec: number
+  out_bytes_per_sec: number
+  connections: number
+}
+
+export interface TpsNodeMetrics {
+  node_name: string
+  node_id: string
+  rx_bytes_per_sec: number
+  tx_bytes_per_sec: number
+  processes: number
+}
+
+export interface TpsServiceMetrics {
+  service_name: string
+  container_count: number
+  cpu_percent: number
+  memory_used_mb: number
+  memory_percent: number
+  rx_bytes_per_sec: number
+  tx_bytes_per_sec: number
+  status: string
+}
+
+export interface TpsSnapshot {
+  timestamp: string
+  network: TpsNetworkMetrics
+  http: TpsHttpMetrics
+  database: TpsDatabaseMetrics
+  messaging: TpsMessagingMetrics
+  per_node: TpsNodeMetrics[]
+  services?: TpsServiceMetrics[]
+}
+
+export const tpsApi = {
+  async getSnapshot(): Promise<TpsSnapshot> {
+    const res = await api.get<TpsSnapshot | { data: TpsSnapshot }>('/overview/tps')
+    if (res && typeof res === 'object' && 'data' in res && res.data) {
+      return res.data
+    }
+    return res as TpsSnapshot
+  },
+}
+

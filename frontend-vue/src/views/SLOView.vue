@@ -5,6 +5,7 @@ import DataTable, { type Column } from '../components/ui/DataTable.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import {
   sloApi,
+  dockerApi,
   type SLODefinition,
   type SLOSnapshot,
   type CreateSLOPayload
@@ -23,15 +24,6 @@ const snapshots = ref<SLOSnapshot[]>([])
 type TimeWindowFilter = '1h' | '6h' | '24h' | '30d'
 const selectedWindowFilter = ref<TimeWindowFilter>('30d')
 
-const windowMultiplier = computed(() => {
-  switch (selectedWindowFilter.value) {
-    case '1h': return 1.85
-    case '6h': return 1.35
-    case '24h': return 1.15
-    case '30d': default: return 1.0
-  }
-})
-
 // Modals
 const showCreateModal = ref(false)
 const showInspectModal = ref(false)
@@ -40,22 +32,72 @@ const selectedInspectSLO = ref<{
   snap?: SLOSnapshot
 } | null>(null)
 
-// Real cluster services catalog
-const realServices = [
-  { id: 'tiki_gateway', name: 'tiki_gateway', desc: 'Edge API Gateway & Traffic Ingress' },
-  { id: 'tiki_traefik', name: 'tiki_traefik', desc: 'Ingress Proxy & Mesh Router' },
-  { id: 'tiki_redis', name: 'tiki_redis', desc: 'In-Memory Cache & Session Store' },
-  { id: 'postgres_db', name: 'postgres_db', desc: 'PostgreSQL ACID Relational Database' },
-  { id: 'tiki_drone', name: 'tiki_drone', desc: 'Drone CI/CD Build Pipeline Runner' },
-  { id: 'tiki_cart', name: 'tiki_cart', desc: 'Shopping Cart State Engine' },
-  { id: 'tiki_product', name: 'tiki_product', desc: 'Catalog Search & Inventory API' },
-  { id: 'nats', name: 'nats', desc: 'JetStream Event Streaming Bus' },
-  { id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' },
-]
+// Real cluster services catalog fetched dynamically from Docker API
+interface ServiceOption {
+  id: string
+  name: string
+  desc: string
+}
+
+const realServices = ref<ServiceOption[]>([
+  { id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' }
+])
+const loadingServices = ref(false)
+
+async function fetchRealServices() {
+  loadingServices.value = true
+  try {
+    const [servicesRes, containersRes] = await Promise.allSettled([
+      dockerApi.listServices(),
+      dockerApi.listContainers(),
+    ])
+    const found = new Map<string, ServiceOption>()
+
+    if (servicesRes.status === 'fulfilled' && Array.isArray(servicesRes.value)) {
+      for (const s of servicesRes.value) {
+        if (s.name) {
+          found.set(s.name, {
+            id: s.name,
+            name: s.name,
+            desc: s.image ? `Docker Service (${s.image})` : 'Docker Swarm Service'
+          })
+        }
+      }
+    }
+
+    if (containersRes.status === 'fulfilled' && Array.isArray(containersRes.value)) {
+      for (const c of containersRes.value) {
+        const name = c.name.replace(/^\//, '')
+        if (name && !found.has(name)) {
+          found.set(name, {
+            id: name,
+            name: name,
+            desc: c.image ? `Container (${c.image})` : `Container (${c.status || 'running'})`
+          })
+        }
+      }
+    }
+
+    const list = Array.from(found.values())
+    list.push({ id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' })
+    realServices.value = list
+
+    if (list.length > 0 && (!newSLO.selectedService || !list.some(s => s.id === newSLO.selectedService))) {
+      newSLO.selectedService = list[0].id
+    }
+  } catch (err) {
+    console.error('Failed to fetch Docker services:', err)
+    realServices.value = [
+      { id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' }
+    ]
+  } finally {
+    loadingServices.value = false
+  }
+}
 
 // Create SLO form state
 const newSLO = reactive({
-  selectedService: 'tiki_gateway',
+  selectedService: 'custom',
   customServiceName: '',
   indicator_type: 'availability',
   target: 99.90,
@@ -66,10 +108,6 @@ const newSLO = reactive({
 
 function getPromQLTemplate(service: string, indicator: string): string {
   if (indicator === 'latency') {
-    if (service === 'tiki_gateway') return 'histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service="tiki_gateway"}[5m])) by (le)) * 1000 < 120'
-    if (service === 'tiki_traefik') return 'histogram_quantile(0.99, sum(rate(traefik_entrypoint_request_duration_seconds_bucket[5m])) by (le)) * 1000 < 45'
-    if (service === 'tiki_redis') return 'avg(rate(redis_command_duration_seconds[5m])) * 1000 < 5'
-    if (service === 'postgres_db') return 'avg(rate(pg_stat_activity_duration_seconds[5m])) * 1000 < 10'
     return `histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service="${service}"}[5m])) by (le)) * 1000 < 100`
   }
   if (indicator === 'cache_hit_rate') {
@@ -79,11 +117,6 @@ function getPromQLTemplate(service: string, indicator: string): string {
     return `(1 - sum(rate(http_requests_total{service="${service}",status=~"5.."}[5m])) / sum(rate(http_requests_total{service="${service}"}[5m]))) * 100`
   }
   // Availability default
-  if (service === 'tiki_gateway') return 'sum(rate(http_requests_total{status=~"2..|3.."}[5m])) / sum(rate(http_requests_total[5m])) * 100'
-  if (service === 'tiki_traefik') return 'sum(rate(traefik_service_requests_total{code=~"2..|3.."}[5m])) / sum(rate(traefik_service_requests_total[5m])) * 100'
-  if (service === 'tiki_redis') return 'sum(rate(redis_keyspace_hits_total[5m])) / (sum(rate(redis_keyspace_hits_total[5m])) + sum(rate(redis_keyspace_misses_total[5m]))) * 100'
-  if (service === 'postgres_db') return 'sum(rate(pg_stat_database_xact_commit[5m])) / (sum(rate(pg_stat_database_xact_commit[5m])) + sum(rate(pg_stat_database_xact_rollback[5m]))) * 100'
-  if (service === 'tiki_drone') return 'sum(rate(drone_build_success_total[5m])) / sum(rate(drone_build_total[5m])) * 100'
   return `sum(rate(http_requests_total{service="${service}",status=~"2..|3.."}[5m])) / sum(rate(http_requests_total{service="${service}"}[5m])) * 100`
 }
 
@@ -99,7 +132,7 @@ async function fetchSLOData() {
   try {
     const [defsRes, snapRes] = await Promise.allSettled([
       sloApi.listDefinitions(),
-      sloApi.listSnapshots()
+      sloApi.listSnapshots(selectedWindowFilter.value)
     ])
 
     if (defsRes.status === 'fulfilled') {
@@ -116,8 +149,14 @@ async function fetchSLOData() {
   }
 }
 
+function setWindowFilter(filter: TimeWindowFilter) {
+  selectedWindowFilter.value = filter
+  fetchSLOData()
+}
+
 onMounted(() => {
   fetchSLOData()
+  fetchRealServices()
 })
 
 // Metrics
@@ -128,7 +167,7 @@ const criticalSLOs = computed(() => snapshots.value.filter(s => s.budget_status 
 
 const avgBurnRate = computed(() => {
   if (snapshots.value.length === 0) return '—'
-  const total = snapshots.value.reduce((acc, s) => acc + ((s.burn_rate || 0) * windowMultiplier.value), 0)
+  const total = snapshots.value.reduce((acc, s) => acc + (s.burn_rate || 0), 0)
   return `${(total / snapshots.value.length).toFixed(2)}x`
 })
 
@@ -152,7 +191,7 @@ function formatPercent(val?: number): string {
 
 function getEffectiveBurnRate(rawRate?: number): number {
   if (rawRate === undefined || rawRate === null) return 0
-  return rawRate * windowMultiplier.value
+  return rawRate
 }
 
 function getBurnRateColor(rate: number): string {
@@ -324,28 +363,28 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
         <button
           class="pill-btn"
           :class="{ active: selectedWindowFilter === '1h' }"
-          @click="selectedWindowFilter = '1h'"
+          @click="setWindowFilter('1h')"
         >
           <span>⚡ 1h Fast Burn (14.4x)</span>
         </button>
         <button
           class="pill-btn"
           :class="{ active: selectedWindowFilter === '6h' }"
-          @click="selectedWindowFilter = '6h'"
+          @click="setWindowFilter('6h')"
         >
           <span>⏳ 6h Slow Burn (6.0x)</span>
         </button>
         <button
           class="pill-btn"
           :class="{ active: selectedWindowFilter === '24h' }"
-          @click="selectedWindowFilter = '24h'"
+          @click="setWindowFilter('24h')"
         >
           <span>📊 24h Multi-Window (2.0x)</span>
         </button>
         <button
           class="pill-btn"
           :class="{ active: selectedWindowFilter === '30d' }"
-          @click="selectedWindowFilter = '30d'"
+          @click="setWindowFilter('30d')"
         >
           <span>🗓️ 30d Overall (1.0x)</span>
         </button>
