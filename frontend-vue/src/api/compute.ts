@@ -268,6 +268,10 @@ export interface DeploymentApp {
   paused?: boolean
   node?: string
   created?: string
+  cpuLimit?: string
+  cpuReservation?: string
+  memoryLimit?: string
+  memoryReservation?: string
 }
 
 export interface DeploymentTemplate {
@@ -279,6 +283,18 @@ export interface DeploymentTemplate {
   cpu: string
   mem: string
   strategy?: string
+}
+
+export interface UpdateResourcesPayload {
+  type?: string
+  cluster?: string
+  namespace?: string
+  name: string
+  replicas?: number
+  memory_limit?: string // e.g. "2GiB", "512MiB"
+  memory_reservation?: string // e.g. "512MiB"
+  cpu_limit?: string // e.g. "2", "4"
+  cpu_reservation?: string // e.g. "500m"
 }
 
 export interface ScaleDeploymentPayload {
@@ -836,6 +852,10 @@ export const deploymentsApi = {
 
   async scale(payload: ScaleDeploymentPayload): Promise<{ status: string }> {
     return api.post<{ status: string }>('/deployments/scale', payload)
+  },
+
+  async updateResources(payload: UpdateResourcesPayload): Promise<{ status: string }> {
+    return api.post<{ status: string }>('/deployments/resources', payload)
   },
 
   async restart(payload: RestartDeploymentPayload): Promise<{ status: string }> {

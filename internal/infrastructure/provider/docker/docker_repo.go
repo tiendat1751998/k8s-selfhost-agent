@@ -454,4 +454,42 @@ func (r *realDockerRepo) GetSwarmInfo(ctx context.Context) (*domainDocker.SwarmI
 	}, nil
 }
 
+func (r *realDockerRepo) UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64) error {
+	service, _, err := r.cli.ServiceInspectWithRaw(ctx, serviceID, types.ServiceInspectOptions{})
+	if err != nil {
+		return fmt.Errorf("inspecting service for resource update: %w", err)
+	}
+
+	spec := service.Spec
+	if spec.TaskTemplate.Resources == nil {
+		spec.TaskTemplate.Resources = &swarm.ResourceRequirements{}
+	}
+
+	if memoryLimitBytes > 0 || nanoCPUs > 0 {
+		if spec.TaskTemplate.Resources.Limits == nil {
+			spec.TaskTemplate.Resources.Limits = &swarm.Limit{}
+		}
+		if memoryLimitBytes > 0 {
+			spec.TaskTemplate.Resources.Limits.MemoryBytes = memoryLimitBytes
+		}
+		if nanoCPUs > 0 {
+			spec.TaskTemplate.Resources.Limits.NanoCPUs = nanoCPUs
+		}
+	}
+
+	if memoryReservBytes > 0 {
+		if spec.TaskTemplate.Resources.Reservations == nil {
+			spec.TaskTemplate.Resources.Reservations = &swarm.Resources{}
+		}
+		spec.TaskTemplate.Resources.Reservations.MemoryBytes = memoryReservBytes
+	}
+
+	_, err = r.cli.ServiceUpdate(ctx, serviceID, service.Version, spec, types.ServiceUpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("updating service resources: %w", err)
+	}
+	return nil
+}
+
+
 
