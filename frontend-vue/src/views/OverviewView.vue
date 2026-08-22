@@ -1162,7 +1162,7 @@ onUnmounted(() => {
           <div class="section-title-group">
             <h2 class="section-title">📊 Real-Time Throughput Monitor</h2>
             <span class="section-subtitle">
-              Unified ingress, edge gateway, database transactions, messaging & per-node wire throughput
+              Unified ingress, edge gateway, database transactions & messaging
             </span>
           </div>
           <div class="tps-header-meta">
@@ -1411,73 +1411,6 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- PER-NODE NETWORK TABLE -->
-        <div class="tps-table-card glass-panel">
-          <div class="tps-table-header">
-            <div class="tps-table-title-group">
-              <span class="tps-table-icon">🖧</span>
-              <h3 class="tps-table-title">Per-Node Network Throughput</h3>
-              <span class="badge badge-cyan" v-if="tpsData?.per_node?.length">
-                {{ tpsData.per_node.length }} Nodes Active
-              </span>
-            </div>
-            <span class="tps-table-sub">Live wire telemetry and process counts across cluster compute nodes</span>
-          </div>
-
-          <div class="table-scroll-wrapper" v-if="tpsData?.per_node && tpsData.per_node.length > 0">
-            <table class="tps-table">
-              <thead>
-                <tr>
-                  <th class="col-tps-node">Node</th>
-                  <th class="col-tps-rx">↓ Rx</th>
-                  <th class="col-tps-tx">↑ Tx</th>
-                  <th class="col-tps-proc">Processes</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="node in tpsData.per_node"
-                  :key="node.node_id || node.node_name"
-                  class="tps-row"
-                >
-                  <td class="col-tps-node">
-                    <div class="tps-node-cell">
-                      <span class="node-indicator-dot bg-emerald"></span>
-                      <span class="tps-node-name">{{ node.node_name }}</span>
-                      <span
-                        v-if="node.node_id && node.node_id !== node.node_name"
-                        class="tps-node-sub font-mono"
-                      >
-                        {{ node.node_id.slice(0, 8) }}
-                      </span>
-                    </div>
-                  </td>
-                  <td class="col-tps-rx font-mono">
-                    <span class="tps-rx-badge">
-                      ↓ {{ formatBytes(node.rx_bytes_per_sec) }}/s
-                    </span>
-                  </td>
-                  <td class="col-tps-tx font-mono">
-                    <span class="tps-tx-badge">
-                      ↑ {{ formatBytes(node.tx_bytes_per_sec) }}/s
-                    </span>
-                  </td>
-                  <td class="col-tps-proc">
-                    <span class="badge badge-indigo font-mono">
-                      {{ node.processes }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-else-if="tpsLoading" class="tps-table-empty">
-            <span>Loading per-node throughput metrics...</span>
-          </div>
-          <div v-else class="tps-table-empty">
-            <span>No per-node network telemetry currently available.</span>
-          </div>
-        </div>
 
       </section>
 
@@ -4585,108 +4518,11 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
-.tps-table-card {
-  padding: 16px 20px;
-  border-radius: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.tps-table-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.tps-table-title-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tps-table-icon {
-  font-size: 16px;
-}
-
-.tps-table-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.tps-table-sub {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.tps-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-  font-size: 12px;
-}
-
-.tps-table th {
-  padding: 8px 12px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.tps-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  vertical-align: middle;
-}
-
-.tps-row:hover {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.tps-node-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .node-indicator-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
-}
-
-.tps-node-name {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.tps-node-sub {
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-.tps-rx-badge {
-  color: #38bdf8;
-  font-weight: 600;
-}
-
-.tps-tx-badge {
-  color: #a78bfa;
-  font-weight: 600;
-}
-
-.tps-table-empty {
-  padding: 24px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-muted);
 }
 </style>
 
