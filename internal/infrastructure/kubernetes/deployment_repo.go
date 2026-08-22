@@ -329,6 +329,67 @@ func (r *deploymentRepo) Create(ctx context.Context, app deployment.Application)
 	return fmt.Errorf("unsupported target type: %s", app.Type)
 }
 
+func (r *deploymentRepo) UpdateResources(ctx context.Context, targetType, targetCluster, namespace, name string, memoryLimitBytes, memoryReservBytes, nanoCPUs int64, replicas int) error {
+	if targetType == "kubernetes" || targetType == "" {
+		client, err := r.getK8sClient(ctx, targetCluster)
+		if err != nil {
+			return err
+		}
+		if namespace == "" {
+			namespace = "default"
+		}
+		dep, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("getting deployment %s: %w", name, err)
+		}
+		if replicas >= 0 {
+			rep := int32(replicas)
+			dep.Spec.Replicas = &rep
+		}
+		if len(dep.Spec.Template.Spec.Containers) > 0 {
+			c := &dep.Spec.Template.Spec.Containers[0]
+			if c.Resources.Limits == nil {
+				c.Resources.Limits = make(corev1.ResourceList)
+			}
+			if c.Resources.Requests == nil {
+				c.Resources.Requests = make(corev1.ResourceList)
+			}
+			if memoryLimitBytes > 0 {
+				c.Resources.Limits[corev1.ResourceMemory] = *resource.NewQuantity(memoryLimitBytes, resource.BinarySI)
+			}
+			if memoryReservBytes > 0 {
+				c.Resources.Requests[corev1.ResourceMemory] = *resource.NewQuantity(memoryReservBytes, resource.BinarySI)
+			}
+			if nanoCPUs > 0 {
+				c.Resources.Limits[corev1.ResourceCPU] = *resource.NewScaledQuantity(nanoCPUs, resource.Nano)
+			}
+		}
+		_, err = client.AppsV1().Deployments(namespace).Update(ctx, dep, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("updating deployment %s resources: %w", name, err)
+		}
+		return nil
+	} else if targetType == "swarm" || targetType == "docker" {
+		repo, err := r.getDockerClient(ctx, targetCluster)
+		if err != nil {
+			return err
+		}
+		err = repo.UpdateServiceResources(ctx, name, memoryLimitBytes, memoryReservBytes, nanoCPUs)
+		if err != nil {
+			return err
+		}
+		if replicas >= 0 {
+			err = repo.ScaleService(ctx, name, replicas)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("unsupported target type: %s", targetType)
+}
+
+
 func (r *deploymentRepo) mapK8sDeployment(d v1.Deployment, clusterName string) deployment.Application {
 	replicas := 0
 	if d.Spec.Replicas != nil {

@@ -359,7 +359,7 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 
 		if elapsed > 0 {
 			prev, hasPrev := p.prevStats[cleanName]
-			if hasPrev {
+			if hasPrev && prev.totalRequests > 0 {
 				reqDelta := sample.totalRequests - prev.totalRequests
 				if reqDelta < 0 {
 					reqDelta = 0
@@ -445,7 +445,7 @@ func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.Aggr
 	var errRate float64
 	var avgLatencyMs float64
 
-	if !p.prevAggregateTime.IsZero() {
+	if !p.prevAggregateTime.IsZero() && p.prevAggregateStats.totalRequests > 0 {
 		elapsed := now.Sub(p.prevAggregateTime).Seconds()
 		if elapsed > 0 {
 			reqDelta := entrypoint.totalRequests - p.prevAggregateStats.totalRequests
