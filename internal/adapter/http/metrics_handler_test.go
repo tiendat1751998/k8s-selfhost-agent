@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
+	"github.com/datdt/k8sselfhost/internal/domain/incident"
+	"github.com/datdt/k8sselfhost/internal/domain/nodemetrics"
 	"github.com/datdt/k8sselfhost/internal/usecase/metrics"
 )
 
@@ -267,6 +270,215 @@ func TestOverviewHandler_FiveContainers_K8sMaterEndpoints(t *testing.T) {
 		if len(snap.Services) != 5 {
 			t.Errorf("expected 5 services, got %d", len(snap.Services))
 		}
+	}
+}
+
+type mockNodeMetricsRepoHttp struct {
+	rollups []nodemetrics.NodeMetricRollup
+}
+
+func (m *mockNodeMetricsRepoHttp) InsertBatch(ctx context.Context, rollups []nodemetrics.NodeMetricRollup) error {
+	m.rollups = append(m.rollups, rollups...)
+	return nil
+}
+
+func (m *mockNodeMetricsRepoHttp) QueryHistory(ctx context.Context, q nodemetrics.NodeHistoryQuery) ([]nodemetrics.NodeMetricRollup, error) {
+	return m.rollups, nil
+}
+
+func (m *mockNodeMetricsRepoHttp) GetSummary(ctx context.Context, q nodemetrics.NodeHistoryQuery) (*nodemetrics.NodeHistoricalSummary, error) {
+	return &nodemetrics.NodeHistoricalSummary{
+		NodeID:         q.NodeID,
+		AvgCPUPercent:  28.5,
+		PeakCPUPercent: 62.0,
+		TotalSamples:   len(m.rollups),
+	}, nil
+}
+
+func (m *mockNodeMetricsRepoHttp) DownsampleAndPrune(ctx context.Context, olderThan7Days, olderThan90Days time.Time) error {
+	return nil
+}
+
+func TestOverviewHandler_GetNodeHistory(t *testing.T) {
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
+	handler := NewOverviewHandler(collector, zap.NewNop())
+
+	mockRepo := &mockNodeMetricsRepoHttp{
+		rollups: []nodemetrics.NodeMetricRollup{
+			{
+				NodeID:     "k8smater",
+				NodeName:   "k8smater",
+				CPUPercent: 28.5,
+				CPUPeak:    62.0,
+				Status:     "online",
+				Resolution: "1m",
+				RecordedAt: time.Now().UTC(),
+			},
+		},
+	}
+	handler.SetNodeMetricsRepo(mockRepo)
+
+	r := chi.NewRouter()
+	r.Route("/overview", handler.RegisterRoutes)
+
+	req := httptest.NewRequest(http.MethodGet, "/overview/nodes/k8smater/history?range=24h", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		NodeID     string                             `json:"node_id"`
+		Range      string                             `json:"range"`
+		Resolution string                             `json:"resolution"`
+		Summary    *nodemetrics.NodeHistoricalSummary `json:"summary"`
+		History    []nodemetrics.NodeMetricRollup     `json:"history"`
+		Incidents  []*incident.Incident               `json:"incidents"`
+	}
+
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode history response: %v", err)
+	}
+
+	if resp.NodeID != "k8smater" {
+		t.Errorf("expected node_id = k8smater, got %s", resp.NodeID)
+	}
+	if len(resp.History) != 1 {
+		t.Errorf("expected 1 history record, got %d", len(resp.History))
+	}
+	if resp.Summary == nil || resp.Summary.PeakCPUPercent != 62.0 {
+		t.Errorf("expected valid summary with PeakCPUPercent=62.0, got %+v", resp.Summary)
+	}
+	if resp.Incidents == nil {
+		t.Errorf("expected non-nil incidents slice, got nil")
+	}
+}
+
+func TestOverviewHandler_GetNodeHistory_UUID_And_Incidents(t *testing.T) {
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
+	handler := NewOverviewHandler(collector, zap.NewNop())
+
+	nodeUUID := "46adc366-b85b-45e7-8233-e69e6ceeb195"
+	mockRepo := &mockNodeMetricsRepoHttp{
+		rollups: []nodemetrics.NodeMetricRollup{
+			{
+				NodeID:     nodeUUID,
+				NodeName:   "k8smater",
+				CPUPercent: 42.0,
+				CPUPeak:    85.0,
+				Status:     "online",
+				Resolution: "1m",
+				RecordedAt: time.Now().UTC(),
+			},
+		},
+	}
+	handler.SetNodeMetricsRepo(mockRepo)
+
+	mockIncRepo := newMockIncidentRepo()
+	testInc, _ := incident.New("default-cluster", "infrastructure", "k8smater", incident.TypeNodeNotReady, incident.SeverityCritical, "Node went offline")
+	testInc.AddRawData("node_id", nodeUUID)
+	testInc.AddRawData("node_name", "k8smater")
+	_ = mockIncRepo.Create(context.Background(), testInc)
+	handler.SetIncidentRepo(mockIncRepo)
+
+	r := chi.NewRouter()
+	r.Route("/overview", handler.RegisterRoutes)
+
+	req := httptest.NewRequest(http.MethodGet, "/overview/nodes/"+nodeUUID+"/history?range=24h", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		NodeID     string                             `json:"node_id"`
+		Range      string                             `json:"range"`
+		Resolution string                             `json:"resolution"`
+		Summary    *nodemetrics.NodeHistoricalSummary `json:"summary"`
+		History    []nodemetrics.NodeMetricRollup     `json:"history"`
+		Incidents  []*incident.Incident               `json:"incidents"`
+	}
+
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.NodeID != nodeUUID {
+		t.Errorf("expected node_id = %s, got %s", nodeUUID, resp.NodeID)
+	}
+	if resp.Range != "24h" {
+		t.Errorf("expected range = 24h, got %s", resp.Range)
+	}
+	if resp.Resolution != "1m" {
+		t.Errorf("expected resolution = 1m, got %s", resp.Resolution)
+	}
+	if len(resp.History) != 1 {
+		t.Errorf("expected 1 history record, got %d", len(resp.History))
+	}
+	if resp.Summary == nil {
+		t.Fatal("expected non-nil summary")
+	}
+	if len(resp.Incidents) != 1 {
+		t.Fatalf("expected 1 incident, got %d", len(resp.Incidents))
+	}
+	if resp.Incidents[0].RawData["node_id"] != nodeUUID {
+		t.Errorf("expected incident node_id match, got %v", resp.Incidents[0].RawData)
+	}
+}
+
+func TestOverviewHandler_GetNodeHistory_NilRepo_ReturnsEmptySliceAndZeroSummary(t *testing.T) {
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
+	handler := NewOverviewHandler(collector, zap.NewNop())
+	// No repo set
+
+	r := chi.NewRouter()
+	r.Route("/overview", handler.RegisterRoutes)
+
+	req := httptest.NewRequest(http.MethodGet, "/overview/nodes/46adc366-b85b-45e7-8233-e69e6ceeb195/history?range=1h", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		NodeID     string                             `json:"node_id"`
+		Range      string                             `json:"range"`
+		Resolution string                             `json:"resolution"`
+		Summary    *nodemetrics.NodeHistoricalSummary `json:"summary"`
+		History    []nodemetrics.NodeMetricRollup     `json:"history"`
+		Incidents  []*incident.Incident               `json:"incidents"`
+	}
+
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.NodeID != "46adc366-b85b-45e7-8233-e69e6ceeb195" {
+		t.Errorf("expected node_id = 46adc366-b85b-45e7-8233-e69e6ceeb195, got %s", resp.NodeID)
+	}
+	if resp.Range != "1h" {
+		t.Errorf("expected range = 1h, got %s", resp.Range)
+	}
+	if resp.Resolution != "1m" {
+		t.Errorf("expected resolution = 1m, got %s", resp.Resolution)
+	}
+	if resp.History == nil || len(resp.History) != 0 {
+		t.Errorf("expected empty non-nil history slice, got %+v", resp.History)
+	}
+	if resp.Incidents == nil || len(resp.Incidents) != 0 {
+		t.Errorf("expected empty non-nil incidents slice, got %+v", resp.Incidents)
+	}
+	if resp.Summary == nil {
+		t.Fatal("expected non-nil zeroed summary, got nil")
+	}
+	if resp.Summary.NodeID != "46adc366-b85b-45e7-8233-e69e6ceeb195" {
+		t.Errorf("expected summary node_id = 46adc366-b85b-45e7-8233-e69e6ceeb195, got %s", resp.Summary.NodeID)
 	}
 }
 

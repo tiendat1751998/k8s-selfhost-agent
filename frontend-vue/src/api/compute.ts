@@ -1137,3 +1137,65 @@ export const tpsApi = {
   },
 }
 
+// ==========================================
+// 15. Node Historical Telemetry & Rollups
+// ==========================================
+
+export interface NodeMetricRollup {
+  id: string
+  tenant_id: string
+  node_id: string
+  node_name: string
+  cpu_percent: number
+  cpu_peak: number
+  mem_used_bytes: number
+  mem_total_bytes: number
+  mem_percent: number
+  disk_used_bytes: number
+  disk_total_bytes: number
+  disk_percent: number
+  rx_bytes_per_sec: number
+  tx_bytes_per_sec: number
+  process_count: number
+  container_count: number
+  status: string
+  resolution: string
+  recorded_at: string
+}
+
+export interface NodeHistoricalSummary {
+  node_id: string
+  node_name: string
+  avg_cpu_percent: number
+  peak_cpu_percent: number
+  avg_mem_percent: number
+  peak_mem_percent: number
+  peak_rx_bytes_sec: number
+  peak_tx_bytes_sec: number
+  uptime_percent: number
+  offline_count: number
+  total_samples: number
+  window_start: string
+  window_end: string
+}
+
+export interface NodeHistoryResponse {
+  node_id: string
+  range: string
+  resolution: string
+  summary: NodeHistoricalSummary | null
+  history: NodeMetricRollup[]
+  incidents: Incident[]
+}
+
+export const nodeHistoryApi = {
+  async getNodeHistory(nodeId: string, range = '24h'): Promise<NodeHistoryResponse> {
+    const res = await api.get<NodeHistoryResponse | { data: NodeHistoryResponse }>(`/overview/nodes/${encodeURIComponent(nodeId)}/history?range=${range}`)
+    if (res && typeof res === 'object' && 'data' in res && (res as any).data && Array.isArray((res as any).data.history)) {
+      return (res as any).data as NodeHistoryResponse
+    }
+    return res as NodeHistoryResponse
+  },
+}
+
+

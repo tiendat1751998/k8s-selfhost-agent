@@ -2,18 +2,24 @@ package http
 
 import (
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
+	"github.com/datdt/k8sselfhost/internal/domain/incident"
+	"github.com/datdt/k8sselfhost/internal/domain/nodemetrics"
 	"github.com/datdt/k8sselfhost/internal/usecase/metrics"
 )
 
 // OverviewHandler provides HTTP REST endpoints for retrieving platform infrastructure overview metrics.
 type OverviewHandler struct {
-	collector    *metrics.Collector
-	tpsCollector *metrics.TPSCollector
-	logger       *zap.Logger
+	collector       *metrics.Collector
+	tpsCollector    *metrics.TPSCollector
+	nodeMetricsRepo nodemetrics.Repository
+	incidentRepo    incident.Repository
+	logger          *zap.Logger
 }
 
 // MetricsHandler is an alias for OverviewHandler for compatibility.
@@ -45,10 +51,21 @@ func (h *OverviewHandler) SetTPSCollector(tc *metrics.TPSCollector) {
 	h.tpsCollector = tc
 }
 
+// SetNodeMetricsRepo sets the node metrics repository for historical telemetry.
+func (h *OverviewHandler) SetNodeMetricsRepo(repo nodemetrics.Repository) {
+	h.nodeMetricsRepo = repo
+}
+
+// SetIncidentRepo sets the incident repository for node audit trails.
+func (h *OverviewHandler) SetIncidentRepo(repo incident.Repository) {
+	h.incidentRepo = repo
+}
+
 // RegisterRoutes registers the overview metrics routes on a chi.Router.
 func (h *OverviewHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.GetOverview)
 	r.Get("/nodes", h.GetNodeMetrics)
+	r.Get("/nodes/{id}/history", h.GetNodeHistory)
 	r.Get("/alerts", h.GetAlerts)
 	r.Get("/containers", h.GetContainerMetrics)
 	r.Get("/tps", h.GetTPS)
@@ -128,6 +145,116 @@ func (h *OverviewHandler) GetTPS(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, metrics.TPSSnapshot{
 		PerNode:  make([]metrics.NodeTPS, 0),
 		Services: make([]metrics.ServiceTPS, 0),
+	})
+}
+
+// GetNodeHistory handles GET /api/v1/overview/nodes/{id}/history?range=1h|24h|7d|30d
+// Returns time-series telemetry rollups, summary statistics, and related node incidents.
+func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request) {
+	nodeID := chi.URLParam(r, "id")
+	if nodeID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "node id is required"})
+		return
+	}
+
+	rangeParam := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("range")))
+	if rangeParam == "" {
+		rangeParam = "24h"
+	}
+
+	now := time.Now().UTC()
+	var startTime time.Time
+	var resolution string
+
+	switch rangeParam {
+	case "1h":
+		startTime = now.Add(-1 * time.Hour)
+		resolution = "1m"
+	case "7d":
+		startTime = now.Add(-7 * 24 * time.Hour)
+		resolution = "1h"
+	case "30d":
+		startTime = now.Add(-30 * 24 * time.Hour)
+		resolution = "1h"
+	case "24h":
+		fallthrough
+	default:
+		rangeParam = "24h"
+		startTime = now.Add(-24 * time.Hour)
+		resolution = "1m"
+	}
+
+	ctx := r.Context()
+	var history []nodemetrics.NodeMetricRollup
+	var summary *nodemetrics.NodeHistoricalSummary
+
+	if h.nodeMetricsRepo != nil {
+		q := nodemetrics.NodeHistoryQuery{
+			NodeID:     nodeID,
+			Resolution: resolution,
+			StartTime:  startTime,
+			EndTime:    now,
+			Limit:      500,
+		}
+		var err error
+		history, err = h.nodeMetricsRepo.QueryHistory(ctx, q)
+		if err != nil {
+			h.logger.Warn("Failed to query node history", zap.String("node_id", nodeID), zap.Error(err))
+		}
+		// If 1h query returned empty for 7d/30d, fallback to 1m resolution
+		if len(history) == 0 && resolution == "1h" {
+			q.Resolution = "1m"
+			history, _ = h.nodeMetricsRepo.QueryHistory(ctx, q)
+		}
+
+		summary, err = h.nodeMetricsRepo.GetSummary(ctx, q)
+		if err != nil {
+			h.logger.Warn("Failed to get node summary", zap.String("node_id", nodeID), zap.Error(err))
+		}
+	}
+
+	if history == nil {
+		history = make([]nodemetrics.NodeMetricRollup, 0)
+	}
+
+	if summary == nil {
+		summary = &nodemetrics.NodeHistoricalSummary{
+			NodeID:      nodeID,
+			NodeName:    nodeID,
+			WindowStart: startTime,
+			WindowEnd:   now,
+		}
+	}
+
+	// Fetch related incidents for this node if incident repo is available
+	var incidentsList []*incident.Incident
+	if h.incidentRepo != nil {
+		allIncs, _, err := h.incidentRepo.List(ctx, incident.Filter{
+			Limit: 30,
+		})
+		if err == nil {
+			for _, inc := range allIncs {
+				if inc == nil {
+					continue
+				}
+				if strings.EqualFold(inc.PodName, nodeID) ||
+					(inc.RawData != nil && (strings.EqualFold(inc.RawData["node_id"], nodeID) || strings.EqualFold(inc.RawData["node_name"], nodeID))) {
+					incidentsList = append(incidentsList, inc)
+				}
+			}
+		}
+	}
+	if incidentsList == nil {
+		incidentsList = make([]*incident.Incident, 0)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"node_id":    nodeID,
+		"range":      rangeParam,
+		"resolution": resolution,
+		"summary":    summary,
+		"history":    history,
+		"incidents":  incidentsList,
 	})
 }
 
