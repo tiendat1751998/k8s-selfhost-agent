@@ -472,22 +472,25 @@ function setCpuLimitPreset(preset: string) {
     targetCpuLimit.value = '0.5'
   } else {
     const num = preset.replace(/[^0-9.]/g, '')
-    targetCpuLimit.value = num || '1'
+    targetCpuLimit.value = num ? `${num} Cores` : '1 Core'
   }
 }
 
 function isCpuLimitActive(preset: string): boolean {
   if (preset.includes('0.5')) {
-    return targetCpuLimit.value === '0.5' || targetCpuLimit.value === '500m'
+    return targetCpuLimit.value === '0.5' || targetCpuLimit.value === '500m' || targetCpuLimit.value === '0.5 Core'
   }
   const num = preset.replace(/[^0-9.]/g, '')
-  return targetCpuLimit.value === num || targetCpuLimit.value === `${num} Core` || targetCpuLimit.value === `${num} Cores`
+  return targetCpuLimit.value === num || 
+         targetCpuLimit.value === `${num} Core` || 
+         targetCpuLimit.value === `${num} Cores` ||
+         targetCpuLimit.value === `${parseInt(num || '1') * 1000}m`
 }
 
 function setCpuReservationPreset(preset: string) {
   if (preset.includes('Core')) {
     const num = preset.replace(/[^0-9.]/g, '') || '1'
-    targetCpuReservation.value = num
+    targetCpuReservation.value = `${num} Core`
   } else {
     targetCpuReservation.value = preset.trim()
   }

@@ -136,6 +136,10 @@ export const deploymentsApi = {
       }
       return list.map(d => ({
         ...d,
+        cpuLimit: d.cpuLimit || (d as any).cpu_limit || d.cpu,
+        cpuReservation: d.cpuReservation || (d as any).cpu_reservation,
+        memoryLimit: d.memoryLimit || (d as any).memory_limit || d.memory,
+        memoryReservation: d.memoryReservation || (d as any).memory_reservation,
         strategy: d.strategy || 'RollingUpdate',
         canaryWeight: d.canaryWeight !== undefined ? d.canaryWeight : 0,
         canaryVersion: d.canaryVersion,

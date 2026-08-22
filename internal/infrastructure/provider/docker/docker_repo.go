@@ -117,7 +117,7 @@ func (r *realDockerRepo) ListServices(ctx context.Context) ([]domainDocker.Servi
 		if s.Spec.Mode.Replicated != nil && s.Spec.Mode.Replicated.Replicas != nil {
 			replicas = int(*s.Spec.Mode.Replicated.Replicas)
 		}
-		
+
 		var ports []string
 		if s.Endpoint.Ports != nil {
 			for _, p := range s.Endpoint.Ports {
@@ -125,13 +125,29 @@ func (r *realDockerRepo) ListServices(ctx context.Context) ([]domainDocker.Servi
 			}
 		}
 
+		var memLimit int64
+		var memReserv int64
+		var nanoCPUs int64
+		if s.Spec.TaskTemplate.Resources != nil {
+			if s.Spec.TaskTemplate.Resources.Limits != nil {
+				memLimit = s.Spec.TaskTemplate.Resources.Limits.MemoryBytes
+				nanoCPUs = s.Spec.TaskTemplate.Resources.Limits.NanoCPUs
+			}
+			if s.Spec.TaskTemplate.Resources.Reservations != nil {
+				memReserv = s.Spec.TaskTemplate.Resources.Reservations.MemoryBytes
+			}
+		}
+
 		result = append(result, domainDocker.Service{
-			ID:        s.ID,
-			Name:      s.Spec.Name,
-			Image:     s.Spec.TaskTemplate.ContainerSpec.Image,
-			Replicas:  replicas,
-			Ports:     ports,
-			UpdatedAt: s.UpdatedAt,
+			ID:                s.ID,
+			Name:              s.Spec.Name,
+			Image:             s.Spec.TaskTemplate.ContainerSpec.Image,
+			Replicas:          replicas,
+			Ports:             ports,
+			MemoryLimitBytes:  memLimit,
+			MemoryReservBytes: memReserv,
+			NanoCPUs:          nanoCPUs,
+			UpdatedAt:         s.UpdatedAt,
 		})
 	}
 	return result, nil

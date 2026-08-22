@@ -28,12 +28,15 @@ type Node struct {
 
 // Service represents a Docker Swarm service.
 type Service struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Image     string    `json:"image"`
-	Replicas  int       `json:"replicas"`
-	Ports     []string  `json:"ports"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Image             string    `json:"image"`
+	Replicas          int       `json:"replicas"`
+	Ports             []string  `json:"ports"`
+	MemoryLimitBytes  int64     `json:"memory_limit_bytes,omitempty"`
+	MemoryReservBytes int64     `json:"memory_reserv_bytes,omitempty"`
+	NanoCPUs          int64     `json:"nano_cpus,omitempty"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // SwarmTokens contains cluster join tokens and manager connection address.
