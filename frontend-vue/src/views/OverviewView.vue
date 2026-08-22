@@ -7,7 +7,6 @@ import {
   type SystemOverview,
   type NodeMetrics,
   type NetworkInterface,
-  type ContainerMetrics,
   type MetricAlert,
   type ProcessMetric,
   type TpsSnapshot,
@@ -16,7 +15,6 @@ import {
 import { useWebSocket } from '../composables/useWebSocket'
 import CircularGauge from '../components/ui/CircularGauge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
-import { formatContainerName, formatImageName } from '../utils/dockerFormat'
 
 const router = useRouter()
 
@@ -52,13 +50,6 @@ const showNodeDrawer = ref(false)
 const processSearch = ref('')
 const processSortBy = ref<'cpu' | 'mem' | 'disk' | 'name' | 'pid'>('cpu')
 
-// Container filtering & selection
-const containerSearch = ref('')
-const selectedNodeFilter = ref<string>('all')
-const containerSortBy = ref<'cpu' | 'memory' | 'name'>('cpu')
-const selectedContainer = ref<ContainerMetrics | null>(null)
-const showContainerDrawer = ref(false)
-
 // Topology filtering & selection
 type TopologyFilter = 'all' | 'online' | 'offline'
 const selectedTopologyFilter = ref<TopologyFilter>('all')
@@ -69,17 +60,6 @@ const dismissedAlerts = ref<Set<string>>(new Set())
 // Polling fallback timer
 let fallbackInterval: ReturnType<typeof setInterval> | null = null
 let abortController: AbortController | null = null
-
-// Live request activity simulation based on reqs/s
-interface ActivityLog {
-  id: string
-  time: string
-  method: string
-  path: string
-  status: number
-  duration: number
-}
-const recentActivity = ref<ActivityLog[]>([])
 
 // ==========================================
 // 2. DATA FETCHING & WEBSOCKET
@@ -459,41 +439,6 @@ const filteredNodeProcesses = computed<ProcessMetric[]>(() => {
   return list
 })
 
-// Filtered and sorted containers
-const filteredContainers = computed<ContainerMetrics[]>(() => {
-  let list = overview.value?.containers || []
-
-  if (selectedNodeFilter.value !== 'all') {
-    list = list.filter(c => c.node_id === selectedNodeFilter.value)
-  }
-
-  if (containerSearch.value.trim()) {
-    const q = containerSearch.value.toLowerCase().trim()
-    list = list.filter(c => {
-      const formatted = formatContainerName(c.container_name)
-      const formattedImg = formatImageName(c.image)
-      return (
-        c.container_name.toLowerCase().includes(q) ||
-        formatted.serviceName.toLowerCase().includes(q) ||
-        (formatted.slotBadgeText && formatted.slotBadgeText.toLowerCase().includes(q)) ||
-        c.image.toLowerCase().includes(q) ||
-        formattedImg.display.toLowerCase().includes(q) ||
-        c.node_id.toLowerCase().includes(q)
-      )
-    })
-  }
-
-  const sorted = [...list]
-  if (containerSortBy.value === 'cpu') {
-    sorted.sort((a, b) => (b.cpu_percent || 0) - (a.cpu_percent || 0))
-  } else if (containerSortBy.value === 'memory') {
-    sorted.sort((a, b) => (b.memory_percent || 0) - (a.memory_percent || 0))
-  } else if (containerSortBy.value === 'name') {
-    sorted.sort((a, b) => a.container_name.localeCompare(b.container_name))
-  }
-
-  return sorted
-})
 
 // ==========================================
 // 4. FORMATTING & HELPER FUNCTIONS
@@ -606,16 +551,6 @@ function dismissAlert(alert: MetricAlert) {
   dismissedAlerts.value.add(`${alert.node_id}-${alert.type}`)
 }
 
-function inspectContainer(c: ContainerMetrics) {
-  selectedContainer.value = c
-  showContainerDrawer.value = true
-}
-
-function getNodeName(nodeId: string): string {
-  const n = nodes.value.find(node => node.node_id === nodeId)
-  return n ? n.node_name : nodeId
-}
-
 // Sparkline SVG coordinates generator
 const sparklinePoints = computed(() => {
   const history = trendHistory.value
@@ -666,33 +601,6 @@ const trendChartMemPath = computed(() => {
     })
     .join(' ')
 })
-
-function getHttpLatencyColor(latencyMs?: number): string {
-  if (latencyMs === undefined || latencyMs === null || isNaN(latencyMs)) return 'text-muted'
-  if (latencyMs > 500) return 'text-rose'
-  if (latencyMs > 100) return 'text-amber'
-  return 'text-emerald'
-}
-
-function getHttpErrorRateClass(errorRate?: number): string {
-  if (errorRate === undefined || errorRate === null || isNaN(errorRate)) return 'badge-muted'
-  if (errorRate > 5) return 'badge-rose'
-  return 'badge-emerald'
-}
-
-function getDbCacheHitClass(hitRatio?: number): string {
-  if (hitRatio === undefined || hitRatio === null || isNaN(hitRatio)) return 'badge-muted'
-  const pct = hitRatio <= 1.0 ? hitRatio * 100 : hitRatio
-  if (pct >= 95) return 'badge-emerald'
-  if (pct >= 90) return 'badge-amber'
-  return 'badge-rose'
-}
-
-function formatCacheHitRatio(ratio?: number): string {
-  if (ratio === undefined || ratio === null || isNaN(ratio)) return '--'
-  const pct = ratio <= 1.0 ? ratio * 100 : ratio
-  return pct.toFixed(1) + '%'
-}
 
 
 // ==========================================
@@ -946,6 +854,68 @@ onUnmounted(() => {
         </div>
       </section>
 
+      <!-- SECTION: 5-MIN SATURATION TRENDS -->
+      <section class="trend-chart-card glass-panel">
+        <div class="trend-chart-header">
+          <div class="trend-title-wrap" style="display: flex; align-items: center; gap: 8px;">
+            <h3 class="sidebar-card-title">📈 5-Min Saturation Trends</h3>
+            <span class="badge badge-indigo">LIVE HISTORICAL BUFFER</span>
+          </div>
+          <div class="trend-legend">
+            <span class="legend-line cpu-legend">CPU Saturation</span>
+            <span class="legend-line mem-legend">RAM Usage</span>
+          </div>
+        </div>
+
+        <!-- SVG Multi-Line Chart -->
+        <div class="trend-svg-box">
+          <svg viewBox="0 0 300 80" class="trend-svg" preserveAspectRatio="none">
+            <!-- Grid Lines -->
+            <line x1="0" y1="20" x2="300" y2="20" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
+            <line x1="0" y1="45" x2="300" y2="45" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
+            <line x1="0" y1="70" x2="300" y2="70" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
+
+            <!-- Memory Path (Cyan) -->
+            <path
+              v-if="trendChartMemPath"
+              :d="trendChartMemPath"
+              fill="none"
+              stroke="#06b6d4"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+
+            <!-- CPU Path (Violet) -->
+            <path
+              v-if="trendChartCpuPath"
+              :d="trendChartCpuPath"
+              fill="none"
+              stroke="#8b5cf6"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+        </div>
+        <div class="trend-footer-stats">
+          <div class="stat-pair">
+            <span class="stat-k">Current CPU</span>
+            <span class="stat-v text-violet smooth-value">{{ formatPercent(overview.total_cpu_percent) }}</span>
+          </div>
+          <div class="stat-pair">
+            <span class="stat-k">Current RAM</span>
+            <span class="stat-v text-cyan smooth-value">{{ formatPercent(overview.total_mem_percent) }}</span>
+          </div>
+          <div class="stat-pair">
+            <span class="stat-k">Cluster Storage</span>
+            <span class="stat-v text-emerald smooth-value">{{ formatPercent(overview.total_disk_percent) }}</span>
+          </div>
+          <div class="stat-pair">
+            <span class="stat-k">Edge Throughput</span>
+            <span class="stat-v font-mono text-cyan smooth-value">{{ Math.round(overview.requests_per_sec) }} req/s</span>
+          </div>
+        </div>
+      </section>
+
       <!-- SECTION 2: INFRASTRUCTURE SERVER TOPOLOGY -->
       <section class="topology-section">
         <div class="section-title-bar">
@@ -1155,596 +1125,9 @@ onUnmounted(() => {
           </div>
         </div>
       </section>
-
-      <!-- SECTION: REAL-TIME THROUGHPUT MONITOR (TPS) -->
-      <section class="tps-monitor-section">
-        <div class="section-title-bar">
-          <div class="section-title-group">
-            <h2 class="section-title">📊 Real-Time Throughput Monitor</h2>
-            <span class="section-subtitle">
-              Unified ingress, edge gateway, database transactions & messaging
-            </span>
-          </div>
-          <div class="tps-header-meta">
-            <span class="badge badge-indigo">
-              <span class="pulse-dot"></span>
-              Auto-Refresh 5s
-            </span>
-            <span class="tps-sync-time" v-if="tpsLastUpdated">
-              Updated: {{ tpsLastUpdated.toLocaleTimeString() }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 4 CATEGORY CARDS GRID -->
-        <div class="tps-cards-grid">
-          <!-- Card 1: Network I/O -->
-          <div class="tps-card glass-panel">
-            <div class="tps-card-top">
-              <div class="tps-card-identity">
-                <span class="tps-icon">🌐</span>
-                <span class="tps-label">Network I/O</span>
-              </div>
-              <span class="badge badge-cyan">WIRE STREAM</span>
-            </div>
-
-            <div class="tps-highlight-row">
-              <div class="tps-big-stat">
-                <span class="tps-big-num font-mono smooth-value">
-                  {{ tpsData?.network ? formatBytes(tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec) : '--' }}
-                </span>
-                <span class="tps-big-unit">/s total</span>
-              </div>
-            </div>
-
-            <div class="tps-metrics-block">
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">Total Rx</span>
-                <span class="tps-metric-val text-cyan font-mono smooth-value">
-                  ↓ {{ tpsData?.network ? formatBytes(tpsData.network.total_rx_bytes_per_sec) + '/s' : '--' }}
-                </span>
-              </div>
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">Total Tx</span>
-                <span class="tps-metric-val text-violet font-mono smooth-value">
-                  ↑ {{ tpsData?.network ? formatBytes(tpsData.network.total_tx_bytes_per_sec) + '/s' : '--' }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Sparkline / Bar indicator -->
-            <div class="tps-indicator-wrap">
-              <div class="tps-ratio-bar">
-                <div
-                  class="tps-bar-rx smooth-bar"
-                  :style="{
-                    width: `${
-                      tpsData?.network && (tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec > 0)
-                        ? (tpsData.network.total_rx_bytes_per_sec / (tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec)) * 100
-                        : 50
-                    }%`
-                  }"
-                  title="Rx Bandwidth Share"
-                ></div>
-                <div
-                  class="tps-bar-tx smooth-bar"
-                  :style="{
-                    width: `${
-                      tpsData?.network && (tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec > 0)
-                        ? (tpsData.network.total_tx_bytes_per_sec / (tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec)) * 100
-                        : 50
-                    }%`
-                  }"
-                  title="Tx Bandwidth Share"
-                ></div>
-              </div>
-              <div class="tps-ratio-labels font-mono">
-                <span>Rx Share</span>
-                <span>Tx Share</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Card 2: HTTP Gateway (Traefik) -->
-          <div class="tps-card glass-panel">
-            <div class="tps-card-top">
-              <div class="tps-card-identity">
-                <span class="tps-icon">🔗</span>
-                <span class="tps-label">HTTP Gateway (Traefik)</span>
-              </div>
-              <span
-                class="badge smooth-value"
-                :class="getHttpErrorRateClass(tpsData?.http?.error_rate)"
-              >
-                {{ tpsData?.http ? tpsData.http.error_rate.toFixed(1) + '% Err' : '--' }}
-              </span>
-            </div>
-
-            <div class="tps-highlight-row">
-              <div class="tps-big-stat">
-                <span class="tps-big-num font-mono smooth-value">
-                  {{ tpsData?.http ? tpsData.http.requests_per_sec.toFixed(1) : '--' }}
-                </span>
-                <span class="tps-big-unit">req/s</span>
-              </div>
-              <div class="tps-badge-group">
-                <span class="tps-sub-badge font-mono smooth-value">
-                  ⚡ {{ tpsData?.http?.active_connections ?? '--' }} conn
-                </span>
-              </div>
-            </div>
-
-            <div class="tps-metrics-block">
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">Active Connections</span>
-                <span class="tps-metric-val font-mono smooth-value">
-                  {{ tpsData?.http?.active_connections ?? '--' }}
-                </span>
-              </div>
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">Error Rate</span>
-                <span
-                  class="tps-metric-val font-mono smooth-value"
-                  :class="(tpsData?.http?.error_rate ?? 0) > 5 ? 'text-rose font-bold' : 'text-emerald'"
-                >
-                  {{ tpsData?.http ? tpsData.http.error_rate.toFixed(1) + '%' : '--' }}
-                </span>
-              </div>
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">Avg Latency</span>
-                <span
-                  class="tps-metric-val font-mono smooth-value"
-                  :class="getHttpLatencyColor(tpsData?.http?.avg_latency_ms)"
-                >
-                  {{ tpsData?.http?.avg_latency_ms != null ? tpsData.http.avg_latency_ms.toFixed(1) + 'ms' : '--' }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Card 3: Database (PostgreSQL) -->
-          <div class="tps-card glass-panel">
-            <div class="tps-card-top">
-              <div class="tps-card-identity">
-                <span class="tps-icon">🗄️</span>
-                <span class="tps-label">Database (PostgreSQL)</span>
-              </div>
-              <span
-                class="badge smooth-value"
-                :class="getDbCacheHitClass(tpsData?.database?.cache_hit_ratio)"
-              >
-                {{ formatCacheHitRatio(tpsData?.database?.cache_hit_ratio) }} Hit
-              </span>
-            </div>
-
-            <div class="tps-highlight-row">
-              <div class="tps-big-stat">
-                <span class="tps-big-num font-mono smooth-value">
-                  {{ tpsData?.database ? tpsData.database.transactions_per_sec.toFixed(1) : '--' }}
-                </span>
-                <span class="tps-big-unit">tx/s</span>
-              </div>
-              <div class="tps-badge-group">
-                <span class="tps-sub-badge font-mono smooth-value">
-                  🔌 {{ tpsData?.database?.active_connections ?? '--' }} conn
-                </span>
-              </div>
-            </div>
-
-            <div class="tps-metrics-block">
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">Reads</span>
-                <span class="tps-metric-val text-cyan font-mono smooth-value">
-                  {{ tpsData?.database ? tpsData.database.reads_per_sec.toFixed(1) + ' rows/s' : '--' }}
-                </span>
-              </div>
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">Writes</span>
-                <span class="tps-metric-val text-amber font-mono smooth-value">
-                  {{ tpsData?.database ? tpsData.database.writes_per_sec.toFixed(1) + ' rows/s' : '--' }}
-                </span>
-              </div>
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">Cache Hit</span>
-                <span
-                  class="tps-metric-val font-mono smooth-value"
-                  :class="
-                    ((tpsData?.database?.cache_hit_ratio ?? 0) <= 1.0 ? (tpsData?.database?.cache_hit_ratio ?? 0) * 100 : (tpsData?.database?.cache_hit_ratio ?? 0)) >= 95
-                      ? 'text-emerald'
-                      : ((tpsData?.database?.cache_hit_ratio ?? 0) <= 1.0 ? (tpsData?.database?.cache_hit_ratio ?? 0) * 100 : (tpsData?.database?.cache_hit_ratio ?? 0)) >= 90
-                      ? 'text-amber'
-                      : 'text-rose'
-                  "
-                >
-                  {{ formatCacheHitRatio(tpsData?.database?.cache_hit_ratio) }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Card 4: Messaging (NATS) -->
-          <div class="tps-card glass-panel">
-            <div class="tps-card-top">
-              <div class="tps-card-identity">
-                <span class="tps-icon">📨</span>
-                <span class="tps-label">Messaging (NATS)</span>
-              </div>
-              <span class="badge smooth-value" :class="tpsData?.messaging?.connections ? 'badge-emerald' : 'badge-muted'">PUB/SUB</span>
-            </div>
-
-            <div class="tps-highlight-row">
-              <div class="tps-big-stat">
-                <span class="tps-big-num font-mono smooth-value">
-                  {{ tpsData?.messaging ? (tpsData.messaging.in_msgs_per_sec + tpsData.messaging.out_msgs_per_sec).toFixed(1) : '--' }}
-                </span>
-                <span class="tps-big-unit">msg/s</span>
-              </div>
-              <div class="tps-badge-group">
-                <span class="tps-sub-badge font-mono smooth-value">
-                  👥 {{ tpsData?.messaging?.connections != null ? (tpsData.messaging.connections > 0 ? tpsData.messaging.connections + ' conn' : '0 conn') : 'N/A' }}
-                </span>
-              </div>
-            </div>
-
-            <div class="tps-metrics-block">
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">In Rate</span>
-                <span class="tps-metric-val text-cyan font-mono smooth-value">
-                  {{ tpsData?.messaging ? tpsData.messaging.in_msgs_per_sec.toFixed(1) + ' msg/s' : '--' }}
-                </span>
-              </div>
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">Out Rate</span>
-                <span class="tps-metric-val text-violet font-mono smooth-value">
-                  {{ tpsData?.messaging ? tpsData.messaging.out_msgs_per_sec.toFixed(1) + ' msg/s' : '--' }}
-                </span>
-              </div>
-              <div class="tps-metric-row">
-                <span class="tps-metric-key">Bandwidth</span>
-                <span class="tps-metric-val font-mono smooth-value">
-                  <span class="text-cyan smooth-value">↓{{ tpsData?.messaging ? formatBytes(tpsData.messaging.in_bytes_per_sec) : '--' }}</span>
-                  <span class="text-muted"> / </span>
-                  <span class="text-violet smooth-value">↑{{ tpsData?.messaging ? formatBytes(tpsData.messaging.out_bytes_per_sec) : '--' }}</span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-
-      </section>
-
-      <!-- SECTION 3 & 5: SPLIT CONTAINER GRID & LIVE ACTIVITY / TRENDS -->
-      <div class="dashboard-split-layout">
-
-        <!-- SECTION 3: CONTAINER GRID -->
-        <section class="container-grid-section glass-panel">
-          <div class="split-header">
-            <div class="split-title-group">
-              <div class="flex items-center gap-2">
-                <h2 class="section-title">Active Workload Containers</h2>
-                <button class="btn btn-secondary btn-xs" @click="router.push('/deployments')" title="Open Deployment & Workload Orchestrator">
-                  <span>🚀 Manage Workloads ➔</span>
-                </button>
-              </div>
-              <span class="section-subtitle">
-                Showing {{ filteredContainers.length }} workloads
-                <span v-if="selectedNodeFilter !== 'all'">on node "{{ getNodeName(selectedNodeFilter) }}"</span>
-              </span>
-            </div>
-
-            <!-- Filters -->
-            <div class="container-filters">
-              <div class="search-box">
-                <span class="search-icon">🔍</span>
-                <input
-                  v-model="containerSearch"
-                  type="text"
-                  placeholder="Search container or image..."
-                  class="input-search"
-                />
-                <button v-if="containerSearch" class="btn-clear-search" @click="containerSearch = ''">✕</button>
-              </div>
-
-              <!-- Node Filter Selector -->
-              <select v-model="selectedNodeFilter" class="select-filter">
-                <option value="all">All Nodes ({{ nodes.length }})</option>
-                <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
-                  {{ node.node_name }} ({{ node.container_count }})
-                </option>
-              </select>
-
-              <!-- Sort Selector -->
-              <select v-model="containerSortBy" class="select-filter">
-                <option value="cpu">Sort: CPU (Hottest First)</option>
-                <option value="memory">Sort: Memory</option>
-                <option value="name">Sort: Name</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Containers List / Table -->
-          <div class="containers-table-wrapper">
-            <table class="containers-table" v-if="filteredContainers.length > 0">
-              <thead>
-                <tr>
-                  <th>Container Name</th>
-                  <th>Image</th>
-                  <th>Node</th>
-                  <th>Status</th>
-                  <th>CPU Usage</th>
-                  <th>RAM Usage</th>
-                  <th>Network</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="c in filteredContainers"
-                  :key="c.container_id"
-                  class="container-row"
-                  @click="inspectContainer(c)"
-                >
-                  <td class="col-name" :title="c.container_name">
-                    <div class="container-name-row">
-                      <span class="container-primary-name">{{ formatContainerName(c.container_name).serviceName }}</span>
-                      <span
-                        v-if="formatContainerName(c.container_name).slotBadgeText"
-                        class="slot-badge font-mono"
-                        :title="`Full Task Name: ${c.container_name}`"
-                      >
-                        {{ formatContainerName(c.container_name).slotBadgeText }}
-                      </span>
-                    </div>
-                    <span class="container-id-sub">{{ c.container_id.slice(0, 12) }}</span>
-                  </td>
-                  <td class="col-image" :title="c.image">
-                    <span class="image-text">{{ formatImageName(c.image).display }}</span>
-                  </td>
-                  <td class="col-node">
-                    <span class="badge badge-cyan">{{ getNodeName(c.node_id) }}</span>
-                  </td>
-                  <td class="col-state">
-                    <span
-                      class="badge"
-                      :class="c.state === 'running' ? 'badge-emerald' : 'badge-rose'"
-                    >
-                      {{ c.state.toUpperCase() }}
-                    </span>
-                  </td>
-                  <td class="col-cpu">
-                    <div class="usage-metric-cell">
-                      <span class="usage-text smooth-value">{{ formatPercent(c.cpu_percent) }}</span>
-                      <div class="mini-bar-track">
-                        <div
-                          class="mini-bar-fill smooth-bar"
-                          :class="`bg-${getUtilizationColor(c.cpu_percent)}`"
-                          :style="{ width: `${Math.min(100, c.cpu_percent)}%` }"
-                        ></div>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="col-ram">
-                    <div class="usage-metric-cell">
-                      <span class="usage-text smooth-value">{{ formatBytes(c.memory_used) }}</span>
-                      <div class="mini-bar-track">
-                        <div
-                          class="mini-bar-fill smooth-bar"
-                          :class="`bg-${getUtilizationColor(c.memory_percent)}`"
-                          :style="{ width: `${Math.min(100, c.memory_percent)}%` }"
-                        ></div>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="col-net font-mono">
-                    ↑{{ formatBytes(c.network_tx) }} ↓{{ formatBytes(c.network_rx) }}
-                  </td>
-                  <td class="col-action">
-                    <button class="btn-inspect" @click.stop="inspectContainer(c)">
-                      Inspect
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div v-else class="empty-filter-state">
-              <span>No containers match current filters.</span>
-              <button class="btn-reset-filters" @click="containerSearch = ''; selectedNodeFilter = 'all'">
-                Reset Filters
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <!-- SECTION 5: LIVE ACTIVITY FEED & 5-MIN TRENDS -->
-        <aside class="trends-activity-sidebar">
-          <!-- 5-Minute Trend Chart Card -->
-          <div class="trend-chart-card glass-panel">
-            <div class="trend-chart-header">
-              <h3 class="sidebar-card-title">5-Min Saturation Trends</h3>
-              <div class="trend-legend">
-                <span class="legend-line cpu-legend">CPU</span>
-                <span class="legend-line mem-legend">RAM</span>
-              </div>
-            </div>
-
-            <!-- SVG Multi-Line Chart -->
-            <div class="trend-svg-box">
-              <svg viewBox="0 0 300 80" class="trend-svg" preserveAspectRatio="none">
-                <!-- Grid Lines -->
-                <line x1="0" y1="20" x2="300" y2="20" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
-                <line x1="0" y1="45" x2="300" y2="45" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
-                <line x1="0" y1="70" x2="300" y2="70" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
-
-                <!-- Memory Path (Cyan) -->
-                <path
-                  v-if="trendChartMemPath"
-                  :d="trendChartMemPath"
-                  fill="none"
-                  stroke="#06b6d4"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                />
-
-                <!-- CPU Path (Violet) -->
-                <path
-                  v-if="trendChartCpuPath"
-                  :d="trendChartCpuPath"
-                  fill="none"
-                  stroke="#8b5cf6"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                />
-              </svg>
-            </div>
-            <div class="trend-footer-stats">
-              <div class="stat-pair">
-                <span class="stat-k">Current CPU</span>
-                <span class="stat-v text-violet smooth-value">{{ formatPercent(overview.total_cpu_percent) }}</span>
-              </div>
-              <div class="stat-pair">
-                <span class="stat-k">Current RAM</span>
-                <span class="stat-v text-cyan smooth-value">{{ formatPercent(overview.total_mem_percent) }}</span>
-              </div>
-              <div class="stat-pair">
-                <span class="stat-k">Storage</span>
-                <span class="stat-v text-emerald smooth-value">{{ formatPercent(overview.total_disk_percent) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Live Ingress Activity Feed -->
-          <div class="activity-feed-card glass-panel">
-            <div class="activity-header">
-              <div class="activity-title-group">
-                <span class="live-dot pulse-active"></span>
-                <h3 class="sidebar-card-title">Live Ingress Activity</h3>
-              </div>
-              <span class="badge badge-emerald">Streaming</span>
-            </div>
-
-            <div class="activity-items-list">
-              <div
-                v-if="recentActivity.length === 0"
-                class="empty-activity text-muted"
-                style="padding: 24px; text-align: center; font-size: 13px;"
-              >
-                No recent activity
-              </div>
-              <div
-                v-else
-                v-for="item in recentActivity"
-                :key="item.id"
-                class="activity-log-row animate-fade-in"
-              >
-                <div class="activity-meta">
-                  <span class="activity-method" :class="`method-${item.method.toLowerCase()}`">{{ item.method }}</span>
-                  <span class="activity-path" :title="item.path">{{ item.path }}</span>
-                </div>
-                <div class="activity-timing">
-                  <span class="activity-status" :class="item.status === 200 ? 'status-ok' : 'status-err'">
-                    {{ item.status }}
-                  </span>
-                  <span class="activity-dur">{{ item.duration }}ms</span>
-                  <span class="activity-time">{{ item.time }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </aside>
-      </div>
     </div>
 
-    <!-- CONTAINER DETAILS MODAL DRAWER -->
-    <ModalDrawer
-      :show="showContainerDrawer"
-      mode="drawer"
-      title="Container Metric Details"
-      @close="showContainerDrawer = false"
-      @update:show="showContainerDrawer = $event"
-    >
-      <div v-if="selectedContainer" class="drawer-container-details">
-        <div class="drawer-header-card glass-panel">
-          <div class="drawer-title-row">
-            <div class="drawer-title-wrap">
-              <h3 class="drawer-container-title" :title="selectedContainer.container_name">
-                {{ formatContainerName(selectedContainer.container_name).serviceName }}
-              </h3>
-              <span
-                v-if="formatContainerName(selectedContainer.container_name).slotBadgeText"
-                class="slot-badge font-mono"
-                :title="`Full Task Name: ${selectedContainer.container_name}`"
-              >
-                {{ formatContainerName(selectedContainer.container_name).slotBadgeText }}
-              </span>
-            </div>
-            <span class="badge" :class="selectedContainer.state === 'running' ? 'badge-emerald' : 'badge-rose'">
-              {{ selectedContainer.state.toUpperCase() }}
-            </span>
-          </div>
-          <span class="drawer-sub-image font-mono" :title="selectedContainer.image">
-            {{ formatImageName(selectedContainer.image).display }}
-          </span>
-        </div>
 
-        <div class="drawer-metrics-grid">
-          <div class="drawer-metric-box glass-panel">
-            <span class="box-label">CPU Saturation</span>
-            <span class="box-value smooth-value" :class="`text-${getUtilizationColor(selectedContainer.cpu_percent)}`">
-              {{ formatPercent(selectedContainer.cpu_percent) }}
-            </span>
-            <div class="mini-bar-track">
-              <div
-                class="mini-bar-fill smooth-bar"
-                :class="`bg-${getUtilizationColor(selectedContainer.cpu_percent)}`"
-                :style="{ width: `${Math.min(100, selectedContainer.cpu_percent)}%` }"
-              ></div>
-            </div>
-          </div>
-
-          <div class="drawer-metric-box glass-panel">
-            <span class="box-label">Memory Used / Limit</span>
-            <span class="box-value text-cyan smooth-value">
-              {{ formatBytes(selectedContainer.memory_used) }}
-            </span>
-            <span class="box-sub">Limit: {{ formatBytes(selectedContainer.memory_limit) }} ({{ formatPercent(selectedContainer.memory_percent) }})</span>
-          </div>
-        </div>
-
-        <div class="drawer-meta-list glass-panel">
-          <div class="drawer-meta-row" v-if="formatContainerName(selectedContainer.container_name).isSwarmTask">
-            <span class="dm-label">Full Swarm Task</span>
-            <span class="dm-val font-mono">{{ selectedContainer.container_name }}</span>
-          </div>
-          <div class="drawer-meta-row">
-            <span class="dm-label">Container ID</span>
-            <span class="dm-val font-mono">{{ selectedContainer.container_id }}</span>
-          </div>
-          <div class="drawer-meta-row">
-            <span class="dm-label">Host Node ID</span>
-            <span class="dm-val">{{ getNodeName(selectedContainer.node_id) }} ({{ selectedContainer.node_id }})</span>
-          </div>
-          <div class="drawer-meta-row">
-            <span class="dm-label">Network Ingress (RX)</span>
-            <span class="dm-val font-mono">{{ formatBytes(selectedContainer.network_rx) }}</span>
-          </div>
-          <div class="drawer-meta-row">
-            <span class="dm-label">Network Egress (TX)</span>
-            <span class="dm-val font-mono">{{ formatBytes(selectedContainer.network_tx) }}</span>
-          </div>
-        </div>
-
-        <div class="drawer-actions">
-          <button class="btn btn-secondary w-full" @click="router.push('/hosts')">
-            Manage in Infrastructure Hosts
-          </button>
-          <button class="btn btn-secondary w-full" @click="router.push('/logs')">
-            Stream Container Logs
-          </button>
-        </div>
-      </div>
-    </ModalDrawer>
 
     <!-- NODE DIAGNOSTICS & TOP PROCESSES INSPECTOR DRAWER -->
     <ModalDrawer
