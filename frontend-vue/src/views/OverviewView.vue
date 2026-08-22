@@ -44,6 +44,25 @@ interface TrendPoint {
 }
 const trendHistory = ref<TrendPoint[]>([])
 
+// Interactive Hover Tooltips on 5-Min Saturation Trends Chart
+const hoveredTrendIndex = ref<number | null>(null)
+const trendTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+const isTrendHovered = ref(false)
+
+// Cluster Telemetry & Throughput Deep-Dive Modal State
+const showDeepDiveModal = ref(false)
+const showModalCpu = ref(true)
+const showModalMem = ref(true)
+const showModalReqs = ref(true)
+const hoveredModalIndex = ref<number | null>(null)
+const modalTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+const isModalHovered = ref(false)
+
+// Deep-Dive Modal Services Table State
+const modalServiceSearch = ref('')
+const modalServiceSortBy = ref<'traffic' | 'rps' | 'bandwidth' | 'cpu' | 'mem' | 'name' | 'node' | 'status'>('traffic')
+const modalServiceSortOrder = ref<'asc' | 'desc'>('desc')
+
 // Node diagnostics inspector drawer
 const selectedNodeId = ref<string | null>(null)
 const showNodeDrawer = ref(false)
@@ -680,6 +699,427 @@ const trendChartMemPath = computed(() => {
     .join(' ')
 })
 
+// ==========================================
+// 4b. 5-MIN TRENDS HOVER & TOOLTIP COMPUTEDS
+// ==========================================
+const hoveredTrendPoint = computed<TrendPoint | null>(() => {
+  if (hoveredTrendIndex.value === null || !trendHistory.value[hoveredTrendIndex.value]) {
+    return null
+  }
+  return trendHistory.value[hoveredTrendIndex.value]
+})
+
+const hoveredTrendElapsed = computed<string>(() => {
+  if (hoveredTrendIndex.value === null || trendHistory.value.length === 0) return ''
+  const offsetFromEnd = (trendHistory.value.length - 1 - hoveredTrendIndex.value) * 10
+  if (offsetFromEnd <= 0) return 'Live / Now'
+  const mins = Math.floor(offsetFromEnd / 60)
+  const secs = offsetFromEnd % 60
+  if (mins > 0 && secs > 0) return `-${mins}m ${secs}s ago`
+  if (mins > 0) return `-${mins}m ago`
+  return `-${secs}s ago`
+})
+
+const trendHoverCoords = computed(() => {
+  if (hoveredTrendIndex.value === null || trendHistory.value.length < 2) return null
+  const history = trendHistory.value
+  const width = 300
+  const height = 80
+  const step = width / (history.length - 1)
+  const idx = hoveredTrendIndex.value
+  const pt = history[idx]
+  if (!pt) return null
+  const x = idx * step
+  const yCpu = height - (Math.min(100, Math.max(0, pt.cpu)) / 100) * (height - 10) - 5
+  const yMem = height - (Math.min(100, Math.max(0, pt.mem)) / 100) * (height - 10) - 5
+  return { x, yCpu, yMem }
+})
+
+const trendTooltipStyle = computed(() => {
+  if (!trendTooltipPos.value) return {}
+  const { x, y } = trendTooltipPos.value
+  const isRightSide = x > 150
+  return {
+    left: isRightSide ? `${x - 12}px` : `${x + 12}px`,
+    top: `${Math.min(55, Math.max(25, y))}px`,
+    transform: isRightSide ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
+    pointerEvents: 'none' as const,
+  }
+})
+
+function handleTrendChartHover(event: MouseEvent) {
+  const history = trendHistory.value
+  if (history.length < 2) return
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
+  const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
+  const ratio = mouseX / rect.width
+  const idx = Math.round(ratio * (history.length - 1))
+  hoveredTrendIndex.value = Math.max(0, Math.min(history.length - 1, idx))
+  trendTooltipPos.value = { x: mouseX, y: mouseY }
+  isTrendHovered.value = true
+}
+
+function handleTrendChartLeave() {
+  isTrendHovered.value = false
+  hoveredTrendIndex.value = null
+}
+
+function openDeepDiveModal() {
+  showDeepDiveModal.value = true
+}
+
+function closeDeepDiveModal() {
+  showDeepDiveModal.value = false
+}
+
+// ==========================================
+// 4c. DEEP-DIVE TELEMETRY MODAL COMPUTEDS
+// ==========================================
+// Section 1: Historical Summary Statistics
+const peakThroughput = computed(() => {
+  return Math.max(
+    ...trendHistory.value.map(p => p.reqs || 0),
+    Math.round(effectiveHttpRps.value || 0)
+  )
+})
+
+const avgThroughput = computed(() => {
+  if (!trendHistory.value.length) return Math.round(effectiveHttpRps.value || 0)
+  const sum = trendHistory.value.reduce((acc, p) => acc + (p.reqs || 0), 0)
+  return Math.round(sum / trendHistory.value.length)
+})
+
+const peakCpu = computed(() => {
+  if (!trendHistory.value.length) return Math.round(overview.value?.total_cpu_percent || 0)
+  return Math.max(...trendHistory.value.map(p => p.cpu || 0), Math.round(overview.value?.total_cpu_percent || 0))
+})
+
+const avgCpu = computed(() => {
+  if (!trendHistory.value.length) return Math.round(overview.value?.total_cpu_percent || 0)
+  const sum = trendHistory.value.reduce((acc, p) => acc + (p.cpu || 0), 0)
+  return Math.round(sum / trendHistory.value.length)
+})
+
+const peakRam = computed(() => {
+  if (!trendHistory.value.length) return Math.round(overview.value?.total_mem_percent || 0)
+  return Math.max(...trendHistory.value.map(p => p.mem || 0), Math.round(overview.value?.total_mem_percent || 0))
+})
+
+const avgRam = computed(() => {
+  if (!trendHistory.value.length) return Math.round(overview.value?.total_mem_percent || 0)
+  const sum = trendHistory.value.reduce((acc, p) => acc + (p.mem || 0), 0)
+  return Math.round(sum / trendHistory.value.length)
+})
+
+// Section 2: Expanded High-Resolution SVG Multi-Series Chart
+const maxModalReqs = computed(() => {
+  return Math.max(10, ...trendHistory.value.map(p => p.reqs || 0), Math.round(effectiveHttpRps.value || 0))
+})
+
+const modalChartCpuPath = computed(() => {
+  const history = trendHistory.value
+  if (history.length < 2) return ''
+  const step = 650 / (history.length - 1)
+  return history
+    .map((h, i) => {
+      const x = 50 + i * step
+      const y = 190 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 170
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const modalChartCpuArea = computed(() => {
+  if (!modalChartCpuPath.value || trendHistory.value.length < 2) return ''
+  const history = trendHistory.value
+  const firstX = 50
+  const lastX = 50 + (history.length - 1) * (650 / (history.length - 1))
+  return `${modalChartCpuPath.value} L ${lastX.toFixed(1)} 190 L ${firstX.toFixed(1)} 190 Z`
+})
+
+const modalChartMemPath = computed(() => {
+  const history = trendHistory.value
+  if (history.length < 2) return ''
+  const step = 650 / (history.length - 1)
+  return history
+    .map((h, i) => {
+      const x = 50 + i * step
+      const y = 190 - (Math.min(100, Math.max(0, h.mem)) / 100) * 170
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const modalChartMemArea = computed(() => {
+  if (!modalChartMemPath.value || trendHistory.value.length < 2) return ''
+  const history = trendHistory.value
+  const firstX = 50
+  const lastX = 50 + (history.length - 1) * (650 / (history.length - 1))
+  return `${modalChartMemPath.value} L ${lastX.toFixed(1)} 190 L ${firstX.toFixed(1)} 190 Z`
+})
+
+const modalChartReqsPath = computed(() => {
+  const history = trendHistory.value
+  if (history.length < 2) return ''
+  const step = 650 / (history.length - 1)
+  const maxR = maxModalReqs.value
+  return history
+    .map((h, i) => {
+      const x = 50 + i * step
+      const y = 190 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 170
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const modalChartReqsArea = computed(() => {
+  if (!modalChartReqsPath.value || trendHistory.value.length < 2) return ''
+  const history = trendHistory.value
+  const firstX = 50
+  const lastX = 50 + (history.length - 1) * (650 / (history.length - 1))
+  return `${modalChartReqsPath.value} L ${lastX.toFixed(1)} 190 L ${firstX.toFixed(1)} 190 Z`
+})
+
+const hoveredModalPoint = computed<TrendPoint | null>(() => {
+  if (hoveredModalIndex.value === null || !trendHistory.value[hoveredModalIndex.value]) {
+    return null
+  }
+  return trendHistory.value[hoveredModalIndex.value]
+})
+
+const hoveredModalElapsed = computed<string>(() => {
+  if (hoveredModalIndex.value === null || trendHistory.value.length === 0) return ''
+  const offsetFromEnd = (trendHistory.value.length - 1 - hoveredModalIndex.value) * 10
+  if (offsetFromEnd <= 0) return 'Live / Now'
+  const mins = Math.floor(offsetFromEnd / 60)
+  const secs = offsetFromEnd % 60
+  if (mins > 0 && secs > 0) return `-${mins}m ${secs}s ago`
+  if (mins > 0) return `-${mins}m ago`
+  return `-${secs}s ago`
+})
+
+const modalHoverCoords = computed(() => {
+  if (hoveredModalIndex.value === null || trendHistory.value.length < 2) return null
+  const history = trendHistory.value
+  const step = 650 / (history.length - 1)
+  const idx = hoveredModalIndex.value
+  const pt = history[idx]
+  if (!pt) return null
+  const x = 50 + idx * step
+  const maxR = maxModalReqs.value
+  const yCpu = 190 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 170
+  const yMem = 190 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 170
+  const yReq = 190 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 170
+  return { x, yCpu, yMem, yReq }
+})
+
+const modalTooltipStyle = computed(() => {
+  if (!modalTooltipPos.value) return {}
+  const { x, y } = modalTooltipPos.value
+  const isRightSide = x > 380
+  return {
+    left: isRightSide ? `${x - 16}px` : `${x + 16}px`,
+    top: `${Math.min(160, Math.max(35, y))}px`,
+    transform: isRightSide ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
+    pointerEvents: 'none' as const,
+  }
+})
+
+const modalTimeAxisMarkers = computed(() => {
+  const history = trendHistory.value
+  if (history.length === 0) return []
+  if (history.length === 1) return [{ x: 50, time: history[0].time }]
+  
+  const count = Math.min(5, history.length)
+  const markers = []
+  const step = 650 / (history.length - 1)
+  for (let i = 0; i < count; i++) {
+    const idx = Math.round((i / (count - 1)) * (history.length - 1))
+    markers.push({
+      x: 50 + idx * step,
+      time: history[idx].time,
+    })
+  }
+  return markers
+})
+
+function handleModalChartHover(event: MouseEvent) {
+  const history = trendHistory.value
+  if (history.length < 2) return
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
+  const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
+  
+  const scaleX = rect.width / 760
+  const svgX = mouseX / scaleX
+  const boundedSvgX = Math.max(50, Math.min(700, svgX))
+  const ratio = (boundedSvgX - 50) / 650
+  const idx = Math.round(ratio * (history.length - 1))
+  hoveredModalIndex.value = Math.max(0, Math.min(history.length - 1, idx))
+  modalTooltipPos.value = { x: mouseX, y: mouseY }
+  isModalHovered.value = true
+}
+
+function handleModalChartLeave() {
+  isModalHovered.value = false
+  hoveredModalIndex.value = null
+}
+
+// ==========================================
+// 4d. DEEP-DIVE SERVICES BREAKDOWN COMPUTEDS
+// ==========================================
+export interface DeepDiveServiceItem {
+  service_name: string
+  node_id: string
+  node_name: string
+  container_count: number
+  cpu_percent: number
+  memory_used_mb: number
+  memory_percent: number
+  rx_bytes_per_sec: number
+  tx_bytes_per_sec: number
+  requests_per_sec: number
+  error_rate: number
+  avg_latency_ms: number
+  status: string
+  traffic_percent: number
+}
+
+const allClusterServices = computed<DeepDiveServiceItem[]>(() => {
+  const nodeMap = new Map<string, string>()
+  for (const n of nodes.value || []) {
+    if (n.node_id) nodeMap.set(n.node_id.toLowerCase(), n.node_name)
+    if (n.node_name) nodeMap.set(n.node_name.toLowerCase(), n.node_name)
+  }
+
+  let list: DeepDiveServiceItem[] = []
+
+  if (tpsData.value?.services && tpsData.value.services.length > 0) {
+    list = tpsData.value.services.map(s => {
+      const nId = (s.node_id || '').toLowerCase()
+      const nName = (s.node_name || '').toLowerCase()
+      const resolvedNodeName = nodeMap.get(nId) || nodeMap.get(nName) || s.node_name || s.node_id || 'k8smaster'
+      return {
+        service_name: s.service_name || 'unknown-service',
+        node_id: s.node_id || '',
+        node_name: resolvedNodeName,
+        container_count: s.container_count || 1,
+        cpu_percent: s.cpu_percent || 0,
+        memory_used_mb: s.memory_used_mb || 0,
+        memory_percent: s.memory_percent || 0,
+        rx_bytes_per_sec: s.rx_bytes_per_sec || 0,
+        tx_bytes_per_sec: s.tx_bytes_per_sec || 0,
+        requests_per_sec: s.requests_per_sec || 0,
+        error_rate: s.error_rate || 0,
+        avg_latency_ms: s.avg_latency_ms || 0,
+        status: s.status || 'healthy',
+        traffic_percent: 0,
+      }
+    })
+  } else if (overview.value?.containers && overview.value.containers.length > 0) {
+    list = overview.value.containers.map(c => {
+      const nId = (c.node_id || '').toLowerCase()
+      const resolvedNodeName = nodeMap.get(nId) || c.node_id || 'k8smaster'
+      return {
+        service_name: c.container_name || c.container_id,
+        node_id: c.node_id || '',
+        node_name: resolvedNodeName,
+        container_count: 1,
+        cpu_percent: c.cpu_percent || 0,
+        memory_used_mb: (c.memory_used || 0) / (1024 * 1024),
+        memory_percent: c.memory_percent || 0,
+        rx_bytes_per_sec: c.network_rx || 0,
+        tx_bytes_per_sec: c.network_tx || 0,
+        requests_per_sec: 0,
+        error_rate: 0,
+        avg_latency_ms: 0,
+        status: c.state === 'running' ? 'healthy' : 'degraded',
+        traffic_percent: 0,
+      }
+    })
+  }
+
+  const totalRps = list.reduce((acc, s) => acc + s.requests_per_sec, 0)
+  const totalBandwidth = list.reduce((acc, s) => acc + s.rx_bytes_per_sec + s.tx_bytes_per_sec, 0)
+
+  return list.map(s => {
+    let trafficShare = 0
+    if (totalRps > 0) {
+      trafficShare = (s.requests_per_sec / totalRps) * 100
+    } else if (totalBandwidth > 0) {
+      trafficShare = ((s.rx_bytes_per_sec + s.tx_bytes_per_sec) / totalBandwidth) * 100
+    } else if (list.length > 0) {
+      trafficShare = 100 / list.length
+    }
+    return {
+      ...s,
+      traffic_percent: Math.min(100, Math.max(0, Math.round(trafficShare * 10) / 10)),
+    }
+  })
+})
+
+const filteredAndSortedClusterServices = computed(() => {
+  let list = [...allClusterServices.value]
+
+  if (modalServiceSearch.value.trim()) {
+    const q = modalServiceSearch.value.toLowerCase().trim()
+    list = list.filter(s =>
+      s.service_name.toLowerCase().includes(q) ||
+      s.node_name.toLowerCase().includes(q) ||
+      s.status.toLowerCase().includes(q)
+    )
+  }
+
+  const sortKey = modalServiceSortBy.value
+  const isAsc = modalServiceSortOrder.value === 'asc'
+  const multiplier = isAsc ? 1 : -1
+
+  list.sort((a, b) => {
+    if (sortKey === 'traffic') {
+      if (b.traffic_percent !== a.traffic_percent) return (a.traffic_percent - b.traffic_percent) * multiplier
+      return (a.requests_per_sec - b.requests_per_sec) * multiplier
+    }
+    if (sortKey === 'rps') {
+      return (a.requests_per_sec - b.requests_per_sec) * multiplier
+    }
+    if (sortKey === 'bandwidth') {
+      const aBw = a.rx_bytes_per_sec + a.tx_bytes_per_sec
+      const bBw = b.rx_bytes_per_sec + b.tx_bytes_per_sec
+      return (aBw - bBw) * multiplier
+    }
+    if (sortKey === 'cpu') {
+      return (a.cpu_percent - b.cpu_percent) * multiplier
+    }
+    if (sortKey === 'mem') {
+      return (a.memory_used_mb - b.memory_used_mb) * multiplier
+    }
+    if (sortKey === 'name') {
+      return a.service_name.localeCompare(b.service_name) * multiplier
+    }
+    if (sortKey === 'node') {
+      return a.node_name.localeCompare(b.node_name) * multiplier
+    }
+    if (sortKey === 'status') {
+      return a.status.localeCompare(b.status) * multiplier
+    }
+    return 0
+  })
+
+  return list
+})
+
+function toggleModalSort(key: typeof modalServiceSortBy.value) {
+  if (modalServiceSortBy.value === key) {
+    modalServiceSortOrder.value = modalServiceSortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    modalServiceSortBy.value = key
+    modalServiceSortOrder.value = 'desc'
+  }
+}
+
 
 // ==========================================
 // 5. LIFECYCLE & CLEANUP
@@ -1018,20 +1458,29 @@ onUnmounted(() => {
       </section>
 
       <!-- SECTION: 5-MIN SATURATION TRENDS -->
-      <section class="trend-chart-card glass-panel">
+      <section class="trend-chart-card glass-panel trend-card-clickable" @click="openDeepDiveModal">
         <div class="trend-chart-header">
           <div class="trend-title-wrap" style="display: flex; align-items: center; gap: 8px;">
             <h3 class="sidebar-card-title">📈 5-Min Saturation Trends</h3>
             <span class="badge badge-indigo">LIVE HISTORICAL BUFFER</span>
           </div>
-          <div class="trend-legend">
-            <span class="legend-line cpu-legend">CPU Saturation</span>
-            <span class="legend-line mem-legend">RAM Usage</span>
+          <div class="trend-header-actions" style="display: flex; align-items: center; gap: 10px;">
+            <div class="trend-legend">
+              <span class="legend-line cpu-legend">CPU Saturation</span>
+              <span class="legend-line mem-legend">RAM Usage</span>
+            </div>
+            <button class="trend-expand-badge" type="button" title="Click to open cluster telemetry deep-dive modal">
+              🔍 Click to expand deep-dive
+            </button>
           </div>
         </div>
 
-        <!-- SVG Multi-Line Chart -->
-        <div class="trend-svg-box">
+        <!-- SVG Multi-Line Chart with Interactive Hover Crosshair & Tooltip -->
+        <div
+          class="trend-svg-box"
+          @mousemove="handleTrendChartHover"
+          @mouseleave="handleTrendChartLeave"
+        >
           <svg viewBox="0 0 300 80" class="trend-svg" preserveAspectRatio="none">
             <!-- Grid Lines -->
             <line x1="0" y1="20" x2="300" y2="20" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
@@ -1057,20 +1506,91 @@ onUnmounted(() => {
               stroke-width="2"
               stroke-linecap="round"
             />
+
+            <!-- Interactive Hover Crosshair & Dots -->
+            <g v-if="isTrendHovered && trendHoverCoords" class="trend-hover-layer">
+              <!-- Vertical Crosshair line snapping to nearest X -->
+              <line
+                :x1="trendHoverCoords.x"
+                y1="0"
+                :x2="trendHoverCoords.x"
+                y2="80"
+                stroke="rgba(255, 255, 255, 0.45)"
+                stroke-dasharray="3,2"
+                stroke-width="1.2"
+              />
+              <!-- Active Point Marker for CPU (Violet Glowing) -->
+              <circle
+                :cx="trendHoverCoords.x"
+                :cy="trendHoverCoords.yCpu"
+                r="4.5"
+                fill="#8b5cf6"
+                stroke="#ffffff"
+                stroke-width="1.5"
+                class="trend-hover-point"
+              />
+              <!-- Active Point Marker for RAM (Cyan Glowing) -->
+              <circle
+                :cx="trendHoverCoords.x"
+                :cy="trendHoverCoords.yMem"
+                r="4.5"
+                fill="#06b6d4"
+                stroke="#ffffff"
+                stroke-width="1.5"
+                class="trend-hover-point"
+              />
+            </g>
           </svg>
+
+          <!-- Floating Rich Tooltip Box -->
+          <div
+            v-if="isTrendHovered && hoveredTrendPoint"
+            class="trend-rich-tooltip glass-panel animate-fade-in"
+            :style="trendTooltipStyle"
+          >
+            <div class="trend-tooltip-header">
+              <span class="tooltip-time-icon">🕒</span>
+              <span class="tooltip-time font-mono">{{ hoveredTrendPoint.time }}</span>
+              <span class="tooltip-time-badge font-mono" v-if="hoveredTrendElapsed">{{ hoveredTrendElapsed }}</span>
+            </div>
+            <div class="trend-tooltip-body">
+              <div class="tooltip-row">
+                <div class="tooltip-label">
+                  <span class="tooltip-dot bg-violet"></span>
+                  <span>CPU Saturation:</span>
+                </div>
+                <span class="tooltip-value font-mono text-violet font-bold">{{ hoveredTrendPoint.cpu }}%</span>
+              </div>
+              <div class="tooltip-row">
+                <div class="tooltip-label">
+                  <span class="tooltip-dot bg-cyan"></span>
+                  <span>RAM Usage:</span>
+                </div>
+                <span class="tooltip-value font-mono text-cyan font-bold">{{ hoveredTrendPoint.mem }}%</span>
+              </div>
+              <div class="tooltip-row">
+                <div class="tooltip-label">
+                  <span class="tooltip-dot bg-emerald"></span>
+                  <span>Throughput:</span>
+                </div>
+                <span class="tooltip-value font-mono text-emerald font-bold">{{ hoveredTrendPoint.reqs.toLocaleString() }} req/s</span>
+              </div>
+            </div>
+          </div>
         </div>
+
         <div class="trend-footer-stats">
           <div class="stat-pair">
             <span class="stat-k">Current CPU</span>
-            <span class="stat-v text-violet smooth-value">{{ formatPercent(overview.total_cpu_percent) }}</span>
+            <span class="stat-v text-violet smooth-value">{{ formatPercent(overview?.total_cpu_percent) }}</span>
           </div>
           <div class="stat-pair">
             <span class="stat-k">Current RAM</span>
-            <span class="stat-v text-cyan smooth-value">{{ formatPercent(overview.total_mem_percent) }}</span>
+            <span class="stat-v text-cyan smooth-value">{{ formatPercent(overview?.total_mem_percent) }}</span>
           </div>
           <div class="stat-pair">
             <span class="stat-k">Cluster Storage</span>
-            <span class="stat-v text-emerald smooth-value">{{ formatPercent(overview.total_disk_percent) }}</span>
+            <span class="stat-v text-emerald smooth-value">{{ formatPercent(overview?.total_disk_percent) }}</span>
           </div>
           <div class="stat-pair">
             <span class="stat-k">Edge Throughput</span>
@@ -1746,6 +2266,500 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
+    </ModalDrawer>
+
+    <!-- CLUSTER TELEMETRY & THROUGHPUT DEEP-DIVE MODAL -->
+    <ModalDrawer
+      :show="showDeepDiveModal"
+      mode="modal"
+      maxWidth="1140px"
+      title="📈 Cluster Telemetry & Ingress Deep-Dive (5-Min Rolling Buffer)"
+      subtitle="High-resolution historical resource saturation, throughput telemetry, and top traffic-consuming services"
+      @close="closeDeepDiveModal"
+      @update:show="showDeepDiveModal = $event"
+    >
+      <div class="deep-dive-modal-content">
+        <!-- SECTION 1: Historical Summary Statistics Cards -->
+        <section class="modal-summary-grid">
+          <!-- Card 1: Peak Throughput -->
+          <div class="deep-stat-card glass-panel">
+            <div class="deep-stat-header">
+              <span class="deep-stat-icon">⚡</span>
+              <span class="deep-stat-title">Peak Throughput</span>
+              <span class="badge badge-emerald">5-MIN MAX</span>
+            </div>
+            <div class="deep-stat-body">
+              <span class="deep-stat-value font-mono text-emerald smooth-value">
+                {{ peakThroughput.toLocaleString() }}
+              </span>
+              <span class="deep-stat-unit">req/s</span>
+            </div>
+            <div class="deep-stat-sub">
+              <span>Maximum recorded gateway traffic spike</span>
+            </div>
+          </div>
+
+          <!-- Card 2: Average Throughput -->
+          <div class="deep-stat-card glass-panel">
+            <div class="deep-stat-header">
+              <span class="deep-stat-icon">📊</span>
+              <span class="deep-stat-title">Average Throughput</span>
+              <span class="badge badge-indigo">5-MIN MEAN</span>
+            </div>
+            <div class="deep-stat-body">
+              <span class="deep-stat-value font-mono text-cyan smooth-value">
+                {{ avgThroughput.toLocaleString() }}
+              </span>
+              <span class="deep-stat-unit">req/s</span>
+            </div>
+            <div class="deep-stat-sub">
+              <span>Mean ingress load sustained</span>
+            </div>
+          </div>
+
+          <!-- Card 3: Peak CPU Saturation -->
+          <div class="deep-stat-card glass-panel">
+            <div class="deep-stat-header">
+              <span class="deep-stat-icon">🔥</span>
+              <span class="deep-stat-title">Peak CPU Saturation</span>
+              <span class="badge badge-rose">5-MIN MAX</span>
+            </div>
+            <div class="deep-stat-body">
+              <span class="deep-stat-value font-mono text-violet smooth-value">
+                {{ peakCpu }}%
+              </span>
+              <span class="deep-stat-unit" :class="peakCpu >= 80 ? 'text-rose' : 'text-muted'">
+                {{ peakCpu >= 80 ? 'HIGH' : peakCpu >= 60 ? 'ELEVATED' : 'NOMINAL' }}
+              </span>
+            </div>
+            <div class="deep-stat-sub">
+              <span>Avg: {{ avgCpu }}% · Peak compute pressure</span>
+            </div>
+          </div>
+
+          <!-- Card 4: Average RAM Usage -->
+          <div class="deep-stat-card glass-panel">
+            <div class="deep-stat-header">
+              <span class="deep-stat-icon">🧠</span>
+              <span class="deep-stat-title">Average RAM Usage</span>
+              <span class="badge badge-cyan">5-MIN MEAN</span>
+            </div>
+            <div class="deep-stat-body">
+              <span class="deep-stat-value font-mono text-cyan smooth-value">
+                {{ avgRam }}%
+              </span>
+              <span class="deep-stat-unit" :class="avgRam >= 80 ? 'text-rose' : 'text-muted'">
+                {{ avgRam >= 80 ? 'HIGH' : avgRam >= 60 ? 'ELEVATED' : 'NOMINAL' }}
+              </span>
+            </div>
+            <div class="deep-stat-sub">
+              <span>Peak: {{ peakRam }}% · Memory allocation</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 2: High-Resolution Expanded Multi-Series Chart -->
+        <section class="modal-chart-section glass-panel">
+          <div class="modal-chart-top-bar">
+            <div class="chart-title-group">
+              <h4 class="modal-section-title">
+                <span>📉 High-Resolution Multi-Series Telemetry</span>
+              </h4>
+              <span class="text-muted text-xs">Rolling 30-sample sliding window across CPU, RAM, and gateway RPS</span>
+            </div>
+
+            <!-- Series Toggles -->
+            <div class="series-toggles-group">
+              <button
+                type="button"
+                class="series-toggle-btn"
+                :class="{ 'toggle-active cpu-active': showModalCpu }"
+                @click="showModalCpu = !showModalCpu"
+              >
+                <span class="toggle-dot bg-violet"></span>
+                <span>CPU %</span>
+              </button>
+
+              <button
+                type="button"
+                class="series-toggle-btn"
+                :class="{ 'toggle-active mem-active': showModalMem }"
+                @click="showModalMem = !showModalMem"
+              >
+                <span class="toggle-dot bg-cyan"></span>
+                <span>RAM %</span>
+              </button>
+
+              <button
+                type="button"
+                class="series-toggle-btn"
+                :class="{ 'toggle-active reqs-active': showModalReqs }"
+                @click="showModalReqs = !showModalReqs"
+              >
+                <span class="toggle-dot bg-emerald"></span>
+                <span>Throughput (req/s)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Expanded SVG Chart Canvas with Hover Crosshair & Tooltip -->
+          <div
+            class="modal-svg-canvas-box"
+            @mousemove="handleModalChartHover"
+            @mouseleave="handleModalChartLeave"
+          >
+            <svg viewBox="0 0 760 220" class="modal-expanded-svg" preserveAspectRatio="none">
+              <!-- Defs for Gradients -->
+              <defs>
+                <linearGradient id="deepCpuGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.35" />
+                  <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0" />
+                </linearGradient>
+                <linearGradient id="deepMemGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.30" />
+                  <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+                </linearGradient>
+                <linearGradient id="deepReqGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#10b981" stop-opacity="0.30" />
+                  <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              <!-- Horizontal Grid Lines & Left/Right Y-Axis Labels -->
+              <!-- 100% -->
+              <line x1="50" y1="20" x2="700" y2="20" stroke="rgba(255, 255, 255, 0.08)" stroke-dasharray="3,3" />
+              <text x="44" y="24" class="svg-axis-label text-left" text-anchor="end">100%</text>
+              <text x="706" y="24" class="svg-axis-label text-right" text-anchor="start">{{ maxModalReqs }} req/s</text>
+
+              <!-- 75% -->
+              <line x1="50" y1="62.5" x2="700" y2="62.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+              <text x="44" y="66.5" class="svg-axis-label text-left" text-anchor="end">75%</text>
+              <text x="706" y="66.5" class="svg-axis-label text-right" text-anchor="start">{{ Math.round(maxModalReqs * 0.75) }}</text>
+
+              <!-- 50% -->
+              <line x1="50" y1="105" x2="700" y2="105" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+              <text x="44" y="109" class="svg-axis-label text-left" text-anchor="end">50%</text>
+              <text x="706" y="109" class="svg-axis-label text-right" text-anchor="start">{{ Math.round(maxModalReqs * 0.5) }}</text>
+
+              <!-- 25% -->
+              <line x1="50" y1="147.5" x2="700" y2="147.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+              <text x="44" y="151.5" class="svg-axis-label text-left" text-anchor="end">25%</text>
+              <text x="706" y="151.5" class="svg-axis-label text-right" text-anchor="start">{{ Math.round(maxModalReqs * 0.25) }}</text>
+
+              <!-- 0% Baseline -->
+              <line x1="50" y1="190" x2="700" y2="190" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.2" />
+              <text x="44" y="194" class="svg-axis-label text-left" text-anchor="end">0%</text>
+              <text x="706" y="194" class="svg-axis-label text-right" text-anchor="start">0</text>
+
+              <!-- X-Axis Timestamps -->
+              <g class="svg-x-axis-group">
+                <text
+                  v-for="(marker, mIdx) in modalTimeAxisMarkers"
+                  :key="mIdx"
+                  :x="marker.x"
+                  y="212"
+                  class="svg-axis-label text-center font-mono"
+                  text-anchor="middle"
+                >
+                  {{ marker.time }}
+                </text>
+              </g>
+
+              <!-- Series 1: CPU Area & Line -->
+              <g v-if="showModalCpu && modalChartCpuPath">
+                <path :d="modalChartCpuArea" fill="url(#deepCpuGrad)" />
+                <path :d="modalChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              </g>
+
+              <!-- Series 2: RAM Area & Line -->
+              <g v-if="showModalMem && modalChartMemPath">
+                <path :d="modalChartMemArea" fill="url(#deepMemGrad)" />
+                <path :d="modalChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              </g>
+
+              <!-- Series 3: Throughput Area & Line -->
+              <g v-if="showModalReqs && modalChartReqsPath">
+                <path :d="modalChartReqsArea" fill="url(#deepReqGrad)" />
+                <path :d="modalChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              </g>
+
+              <!-- Interactive Hover Crosshair & Series Markers -->
+              <g v-if="isModalHovered && modalHoverCoords" class="modal-hover-overlay">
+                <!-- Vertical Guide Line -->
+                <line
+                  :x1="modalHoverCoords.x"
+                  y1="20"
+                  :x2="modalHoverCoords.x"
+                  y2="190"
+                  stroke="rgba(255, 255, 255, 0.6)"
+                  stroke-dasharray="4,3"
+                  stroke-width="1.5"
+                />
+
+                <!-- CPU Point Marker -->
+                <circle
+                  v-if="showModalCpu"
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yCpu"
+                  r="5"
+                  fill="#8b5cf6"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                  class="trend-pulse-dot"
+                />
+
+                <!-- RAM Point Marker -->
+                <circle
+                  v-if="showModalMem"
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yMem"
+                  r="5"
+                  fill="#06b6d4"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                  class="trend-pulse-dot"
+                />
+
+                <!-- Reqs Point Marker -->
+                <circle
+                  v-if="showModalReqs"
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yReq"
+                  r="5"
+                  fill="#10b981"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                  class="trend-pulse-dot"
+                />
+              </g>
+            </svg>
+
+            <!-- Expanded Floating Tooltip Box -->
+            <div
+              v-if="isModalHovered && hoveredModalPoint"
+              class="modal-rich-tooltip glass-panel animate-fade-in"
+              :style="modalTooltipStyle"
+            >
+              <div class="trend-tooltip-header">
+                <span class="tooltip-time-icon">🕒</span>
+                <span class="tooltip-time font-mono">{{ hoveredModalPoint.time }}</span>
+                <span class="tooltip-time-badge font-mono" v-if="hoveredModalElapsed">{{ hoveredModalElapsed }}</span>
+              </div>
+              <div class="trend-tooltip-body">
+                <div class="tooltip-row" v-if="showModalCpu">
+                  <div class="tooltip-label">
+                    <span class="tooltip-dot bg-violet"></span>
+                    <span>CPU Saturation:</span>
+                  </div>
+                  <span class="tooltip-value font-mono text-violet font-bold">{{ hoveredModalPoint.cpu }}%</span>
+                </div>
+                <div class="tooltip-row" v-if="showModalMem">
+                  <div class="tooltip-label">
+                    <span class="tooltip-dot bg-cyan"></span>
+                    <span>RAM Usage:</span>
+                  </div>
+                  <span class="tooltip-value font-mono text-cyan font-bold">{{ hoveredModalPoint.mem }}%</span>
+                </div>
+                <div class="tooltip-row" v-if="showModalReqs">
+                  <div class="tooltip-label">
+                    <span class="tooltip-dot bg-emerald"></span>
+                    <span>Throughput:</span>
+                  </div>
+                  <span class="tooltip-value font-mono text-emerald font-bold">{{ hoveredModalPoint.reqs.toLocaleString() }} req/s</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 3: 📦 Top Traffic & Request-Consuming Services Breakdown -->
+        <section class="modal-breakdown-section glass-panel">
+          <div class="breakdown-header-bar">
+            <div class="breakdown-title-wrap">
+              <h4 class="modal-section-title">
+                <span>📦 Top Traffic & Request-Consuming Services</span>
+              </h4>
+              <span class="badge badge-cyan font-mono">
+                {{ filteredAndSortedClusterServices.length }} {{ filteredAndSortedClusterServices.length === 1 ? 'SERVICE' : 'SERVICES' }}
+              </span>
+            </div>
+
+            <!-- Search & Filters -->
+            <div class="breakdown-actions-bar">
+              <div class="table-search-input-wrap">
+                <span class="search-icon">🔍</span>
+                <input
+                  v-model="modalServiceSearch"
+                  type="text"
+                  placeholder="Filter service, node, or status..."
+                  class="table-search-field"
+                />
+                <button
+                  v-if="modalServiceSearch"
+                  class="btn-clear-search"
+                  type="button"
+                  @click="modalServiceSearch = ''"
+                >✕</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Services Breakdown Table -->
+          <div class="breakdown-table-wrapper" v-if="filteredAndSortedClusterServices.length > 0">
+            <table class="breakdown-table">
+              <thead>
+                <tr>
+                  <th class="th-svc cursor-pointer" @click="toggleModalSort('name')">
+                    <div class="th-content">
+                      <span>SERVICE</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'name' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-node cursor-pointer" @click="toggleModalSort('node')">
+                    <div class="th-content">
+                      <span>HOST NODE</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'node' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-traffic cursor-pointer" @click="toggleModalSort('traffic')">
+                    <div class="th-content">
+                      <span>TRAFFIC CONTRIBUTION</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'traffic' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-rps cursor-pointer" @click="toggleModalSort('rps')">
+                    <div class="th-content">
+                      <span>REQ / S</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'rps' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-bw cursor-pointer" @click="toggleModalSort('bandwidth')">
+                    <div class="th-content">
+                      <span>BANDWIDTH</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'bandwidth' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-res cursor-pointer" @click="toggleModalSort('cpu')">
+                    <div class="th-content">
+                      <span>CPU & MEMORY</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'cpu' || modalServiceSortBy === 'mem' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-status cursor-pointer" @click="toggleModalSort('status')">
+                    <div class="th-content">
+                      <span>STATUS</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'status' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="svc in filteredAndSortedClusterServices"
+                  :key="svc.service_name + '-' + svc.node_name"
+                  class="breakdown-row"
+                >
+                  <!-- 1. Service Name with Dot Badge -->
+                  <td class="col-svc">
+                    <div class="service-identity">
+                      <span
+                        class="node-indicator-dot"
+                        :class="svc.status === 'healthy' ? 'bg-emerald' : svc.status === 'degraded' ? 'bg-amber' : 'bg-rose'"
+                      ></span>
+                      <div class="service-name-wrap">
+                        <span class="service-title font-mono">{{ svc.service_name }}</span>
+                        <span class="service-replica-tag" v-if="svc.container_count > 1">
+                          {{ svc.container_count }} replicas
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+
+                  <!-- 2. Host Node Name -->
+                  <td class="col-node">
+                    <div class="node-cell-wrap">
+                      <span class="node-server-icon">🖥️</span>
+                      <span class="node-server-name font-mono">{{ svc.node_name }}</span>
+                    </div>
+                  </td>
+
+                  <!-- 3. Traffic Contribution Bar -->
+                  <td class="col-traffic">
+                    <div class="traffic-bar-cell">
+                      <div class="traffic-track">
+                        <div
+                          class="traffic-fill"
+                          :style="{ width: `${Math.max(4, Math.min(100, svc.traffic_percent))}%` }"
+                        ></div>
+                      </div>
+                      <span class="traffic-label font-mono font-bold">{{ svc.traffic_percent.toFixed(1) }}%</span>
+                    </div>
+                  </td>
+
+                  <!-- 4. Req / s -->
+                  <td class="col-rps font-mono">
+                    <span
+                      class="smooth-value"
+                      :class="svc.requests_per_sec > 0 ? 'text-emerald font-bold' : 'text-muted'"
+                    >
+                      {{ svc.requests_per_sec > 0 ? svc.requests_per_sec.toFixed(1) : '0.0' }}
+                    </span>
+                    <span class="text-xs text-muted" v-if="svc.requests_per_sec > 0"> rps</span>
+                  </td>
+
+                  <!-- 5. Bandwidth (Rx and Tx) -->
+                  <td class="col-bw font-mono">
+                    <div class="bandwidth-stack">
+                      <span class="bw-rx text-cyan">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
+                      <span class="bw-tx text-violet">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+                    </div>
+                  </td>
+
+                  <!-- 6. CPU & Memory Footprint -->
+                  <td class="col-res font-mono">
+                    <div class="res-stack">
+                      <span
+                        class="smooth-value"
+                        :class="svc.cpu_percent > 80 ? 'text-rose font-bold' : svc.cpu_percent > 50 ? 'text-amber' : 'text-violet'"
+                      >
+                        {{ svc.cpu_percent.toFixed(1) }}% CPU
+                      </span>
+                      <span class="text-cyan text-xs">
+                        {{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}
+                      </span>
+                    </div>
+                  </td>
+
+                  <!-- 7. Status Badge -->
+                  <td class="col-status">
+                    <span
+                      class="badge smooth-value"
+                      :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
+                    >
+                      {{ svc.status === 'healthy' ? '● HEALTHY' : svc.status === 'degraded' ? '● DEGRADED' : '● DOWN' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Empty Search State -->
+          <div v-else class="breakdown-empty-state">
+            <span class="empty-icon">🔍</span>
+            <p class="empty-text">No services found matching "{{ modalServiceSearch }}"</p>
+            <button class="btn btn-secondary btn-sm" type="button" @click="modalServiceSearch = ''">
+              Clear Search Filter
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <template #footer="{ close }">
+        <button class="btn btn-secondary" type="button" @click="close">
+          <span>Close Deep-Dive</span>
+        </button>
+      </template>
     </ModalDrawer>
   </div>
 </template>
@@ -3117,10 +4131,43 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.trend-card-clickable {
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.trend-card-clickable:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(56, 189, 248, 0.15);
+}
+
 .trend-chart-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.trend-expand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-cyan, #38bdf8);
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.trend-expand-badge:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: rgba(56, 189, 248, 0.6);
+  color: #fff;
+  transform: scale(1.03);
 }
 
 .trend-legend {
@@ -3154,16 +4201,93 @@ onUnmounted(() => {
 }
 
 .trend-svg-box {
+  position: relative;
   width: 100%;
   height: 80px;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .trend-svg {
   width: 100%;
   height: 100%;
+  display: block;
+}
+
+.trend-hover-point {
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.8));
+}
+
+.trend-pulse-dot {
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.8));
+}
+
+.trend-rich-tooltip {
+  position: absolute;
+  z-index: 120;
+  min-width: 190px;
+  background: rgba(13, 19, 33, 0.96);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 16px rgba(56, 189, 248, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trend-tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+}
+
+.tooltip-time {
+  font-weight: 700;
+  color: #fff;
+}
+
+.tooltip-time-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.trend-tooltip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tooltip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.tooltip-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+}
+
+.tooltip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
 .trend-footer-stats {
@@ -4394,6 +5518,420 @@ onUnmounted(() => {
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+/* ==========================================
+   CLUSTER TELEMETRY DEEP-DIVE MODAL STYLES
+   ========================================== */
+.deep-dive-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.modal-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.deep-stat-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.2s ease;
+}
+
+.deep-stat-card:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+  transform: translateY(-1px);
+}
+
+.deep-stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.deep-stat-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.deep-stat-body {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.deep-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.deep-stat-unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.deep-stat-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Modal Chart Section */
+.modal-chart-section {
+  padding: 18px 20px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border-subtle);
+}
+
+.modal-chart-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.modal-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.chart-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.series-toggles-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.series-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.series-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.series-toggle-btn.toggle-active.cpu-active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #c4b5fd;
+}
+
+.series-toggle-btn.toggle-active.mem-active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: rgba(6, 182, 212, 0.5);
+  color: #67e8f9;
+}
+
+.series-toggle-btn.toggle-active.reqs-active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #6ee7b7;
+}
+
+.toggle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.modal-svg-canvas-box {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.modal-expanded-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.svg-axis-label {
+  font-size: 10px;
+  fill: var(--text-muted, #94a3b8);
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+}
+
+.modal-rich-tooltip {
+  position: absolute;
+  z-index: 120;
+  min-width: 220px;
+  background: rgba(13, 19, 33, 0.97);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8), 0 0 20px rgba(56, 189, 248, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Modal Breakdown Table Section */
+.modal-breakdown-section {
+  padding: 18px 20px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border-subtle);
+}
+
+.breakdown-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.breakdown-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.breakdown-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.table-search-input-wrap .search-icon {
+  position: absolute;
+  left: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.table-search-field {
+  padding: 6px 30px 6px 30px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: #fff;
+  min-width: 240px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.table-search-field:focus {
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.btn-clear-search:hover {
+  color: #fff;
+}
+
+.breakdown-table-wrapper {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+
+.breakdown-table thead tr {
+  background: rgba(15, 23, 42, 0.8);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.breakdown-table th {
+  padding: 10px 14px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.breakdown-table th.cursor-pointer:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.th-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sort-icon {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.breakdown-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+
+.breakdown-row:hover {
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.breakdown-table td {
+  padding: 10px 14px;
+  vertical-align: middle;
+}
+
+.service-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-name-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.service-title {
+  font-weight: 700;
+  color: #fff;
+}
+
+.service-replica-tag {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.node-cell-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.traffic-bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.traffic-track {
+  flex: 1;
+  height: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.traffic-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #06b6d4, #8b5cf6);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.traffic-label {
+  font-size: 11px;
+  color: #38bdf8;
+  width: 44px;
+  text-align: right;
+}
+
+.bandwidth-stack,
+.res-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+}
+
+.breakdown-empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .modal-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 580px) {
+  .modal-summary-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
 
