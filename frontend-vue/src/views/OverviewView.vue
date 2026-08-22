@@ -98,6 +98,15 @@ async function fetchTpsMetrics() {
       tpsData.value = data
       tpsError.value = null
       tpsLastUpdated.value = new Date()
+
+      // Keep latest trend history point aligned with accurate live throughput
+      if (trendHistory.value.length > 0) {
+        const lastIdx = trendHistory.value.length - 1
+        const rps = data.http?.requests_per_sec ?? 0
+        if (rps > 0 || trendHistory.value[lastIdx].reqs === 0) {
+          trendHistory.value[lastIdx].reqs = Math.round(rps)
+        }
+      }
     }
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'AbortError') return
@@ -255,7 +264,7 @@ function updateOverviewState(data: SystemOverview) {
     cpu: Math.round(data.total_cpu_percent || 0),
     mem: Math.round(data.total_mem_percent || 0),
     disk: Math.round(data.total_disk_percent || 0),
-    reqs: Math.round(data.requests_per_sec || 0),
+    reqs: Math.round(effectiveHttpRps.value || data.requests_per_sec || 0),
   }
 
   trendHistory.value.push(newPoint)
@@ -312,8 +321,68 @@ const orderedNodes = computed<NodeMetrics[]>(() => {
 })
 
 const nodes = computed<NodeMetrics[]>(() => orderedNodes.value)
-const totalContainers = computed(() => overview.value?.total_containers || 0)
-const runningContainers = computed(() => overview.value?.running_containers || 0)
+
+// Sum container counts across all active nodes with fallback to overview container summary
+const totalContainers = computed(() => {
+  const nodeSum = (nodes.value || []).reduce((acc, n) => acc + (n.container_count || 0), 0)
+  if (nodeSum > 0) return nodeSum
+  if (overview.value?.total_containers && overview.value.total_containers > 0) {
+    return overview.value.total_containers
+  }
+  return overview.value?.containers?.length || 0
+})
+
+const runningContainers = computed(() => {
+  const nodeSum = (nodes.value || []).reduce((acc, n) => acc + (n.running_count || n.container_count || 0), 0)
+  if (nodeSum > 0) return nodeSum
+  if (overview.value?.running_containers && overview.value.running_containers > 0) {
+    return overview.value.running_containers
+  }
+  return overview.value?.containers?.filter(c => c.state === 'running')?.length || 0
+})
+
+// Unified live HTTP throughput across TPS snapshot, services, and system overview
+const effectiveHttpRps = computed(() => {
+  const tpsRps = tpsData.value?.http?.requests_per_sec
+  if (tpsRps !== undefined && tpsRps !== null && tpsRps > 0) {
+    return tpsRps
+  }
+  if (tpsData.value?.services && tpsData.value.services.length > 0) {
+    const sum = tpsData.value.services.reduce((acc, s) => acc + (s.requests_per_sec || 0), 0)
+    if (sum > 0) return sum
+  }
+  return overview.value?.requests_per_sec || 0
+})
+
+// Request Flow Animation Bar Metrics & State
+const httpActiveConns = computed(() => tpsData.value?.http?.active_connections ?? 0)
+const httpQueuedReqs = computed(() => tpsData.value?.http?.queued_requests ?? 0)
+const httpErrorRate = computed(() => tpsData.value?.http?.error_rate ?? 0)
+const isFlowIdle = computed(() => effectiveHttpRps.value <= 0)
+
+const flowHealthColor = computed<'emerald' | 'amber' | 'rose'>(() => {
+  if (httpErrorRate.value >= 5) return 'rose'
+  if (httpQueuedReqs.value > 0 || httpErrorRate.value > 0) return 'amber'
+  return 'emerald'
+})
+
+const flowStatusClass = computed(() => {
+  return `flow-theme-${flowHealthColor.value}`
+})
+
+const flowStatusLabel = computed(() => {
+  if (isFlowIdle.value) return 'INGRESS IDLE'
+  if (httpErrorRate.value >= 5) return 'HIGH ERROR RATE'
+  if (httpQueuedReqs.value > 0) return 'TRAFFIC QUEUED'
+  return 'LIVE REQUEST FLOW'
+})
+
+const flowAnimationDuration = computed(() => {
+  const rps = effectiveHttpRps.value
+  if (rps <= 0) return 6.0
+  // Map RPS to duration: higher req/s = faster animation (lower duration)
+  return Math.max(0.4, Math.min(3.5, 3.0 / Math.pow(Math.max(1, rps), 0.45)))
+})
 
 const activeAlerts = computed<MetricAlert[]>(() => {
   const alerts = overview.value?.alerts || []
@@ -555,7 +624,7 @@ function dismissAlert(alert: MetricAlert) {
 const sparklinePoints = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const maxReqs = Math.max(...history.map(h => h.reqs), 10)
+  const maxReqs = Math.max(...history.map(h => h.reqs), Math.max(10, Math.round(effectiveHttpRps.value)))
   const width = 120
   const height = 32
   const step = width / (history.length - 1)
@@ -734,21 +803,29 @@ onUnmounted(() => {
 
     <!-- MAIN DASHBOARD CONTENT -->
     <div v-else-if="overview" class="dashboard-body">
-      <!-- SECTION 1: SUMMARY HUD (TOP BAR) -->
-      <section class="summary-hud-grid">
+      <!-- SECTION 1: SUMMARY HUD (SINGLE-ROW COMPACT FLEXBOX) -->
+      <section class="summary-hud-row">
         <!-- Card 1: Nodes -->
         <div class="hud-card glass-panel">
           <div class="hud-card-top">
             <span class="hud-label">Nodes Online</span>
             <span
               class="status-indicator-dot"
-              :class="overview.healthy_nodes === overview.total_nodes ? 'status-green' : 'status-amber'"
+              :class="overview.healthy_nodes === overview.total_nodes && overview.total_nodes > 0 ? 'status-green' : 'status-amber'"
             ></span>
           </div>
           <div class="hud-value-row">
-            <span class="hud-value smooth-value">{{ overview.healthy_nodes }} <span class="hud-total">/ {{ overview.total_nodes }}</span></span>
-            <span class="badge smooth-value" :class="overview.healthy_nodes === overview.total_nodes ? 'badge-emerald' : 'badge-amber'">
-              {{ overview.healthy_nodes === overview.total_nodes ? '100% HEALTHY' : 'DEGRADED' }}
+            <span
+              class="hud-value smooth-value"
+              :class="overview.healthy_nodes === overview.total_nodes && overview.total_nodes > 0 ? 'text-emerald' : overview.healthy_nodes > 0 ? 'text-amber' : 'text-rose'"
+            >
+              {{ overview.healthy_nodes }}<span class="hud-total">/{{ overview.total_nodes }}</span>
+            </span>
+            <span
+              class="badge smooth-value"
+              :class="overview.healthy_nodes === overview.total_nodes && overview.total_nodes > 0 ? 'badge-emerald' : 'badge-amber'"
+            >
+              {{ overview.healthy_nodes === overview.total_nodes && overview.total_nodes > 0 ? '100% HEALTHY' : 'DEGRADED' }}
             </span>
           </div>
           <div class="hud-progress-track">
@@ -766,8 +843,15 @@ onUnmounted(() => {
             <span class="hud-icon">📦</span>
           </div>
           <div class="hud-value-row">
-            <span class="hud-value smooth-value">{{ runningContainers }} <span class="hud-total">/ {{ totalContainers }}</span></span>
-            <span class="badge badge-cyan">RUNNING</span>
+            <span
+              class="hud-value smooth-value"
+              :class="runningContainers === totalContainers && totalContainers > 0 ? 'text-emerald' : runningContainers > 0 ? 'text-cyan' : 'text-rose'"
+            >
+              {{ runningContainers }}<span class="hud-total">/{{ totalContainers }}</span>
+            </span>
+            <span class="badge badge-cyan smooth-value">
+              {{ runningContainers > 0 ? `${runningContainers} RUNNING` : 'STOPPED' }}
+            </span>
           </div>
           <div class="hud-progress-track">
             <div
@@ -786,7 +870,9 @@ onUnmounted(() => {
             </span>
           </div>
           <div class="hud-value-row">
-            <span class="hud-value smooth-value">{{ Math.round(overview.total_cpu_percent) }}%</span>
+            <span class="hud-value smooth-value" :class="`text-${getUtilizationColor(overview.total_cpu_percent)}`">
+              {{ Math.round(overview.total_cpu_percent) }}%
+            </span>
             <span class="badge smooth-value" :class="`badge-${getUtilizationColor(overview.total_cpu_percent)}`">
               {{ overview.total_cpu_percent >= 80 ? 'CRITICAL' : overview.total_cpu_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
             </span>
@@ -809,7 +895,9 @@ onUnmounted(() => {
             </span>
           </div>
           <div class="hud-value-row">
-            <span class="hud-value smooth-value">{{ Math.round(overview.total_mem_percent) }}%</span>
+            <span class="hud-value smooth-value" :class="`text-${getUtilizationColor(overview.total_mem_percent)}`">
+              {{ Math.round(overview.total_mem_percent) }}%
+            </span>
             <span class="badge smooth-value" :class="`badge-${getUtilizationColor(overview.total_mem_percent)}`">
               {{ overview.total_mem_percent >= 80 ? 'CRITICAL' : overview.total_mem_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
             </span>
@@ -827,11 +915,13 @@ onUnmounted(() => {
         <div class="hud-card glass-panel hud-card-throughput">
           <div class="hud-card-top">
             <span class="hud-label">Throughput</span>
-            <span class="badge badge-violet">LIVE EDGE</span>
+            <span class="badge badge-violet smooth-value">LIVE EDGE</span>
           </div>
           <div class="hud-value-row">
             <div class="throughput-details">
-              <span class="hud-value smooth-value">{{ Math.round(overview.requests_per_sec) }}</span>
+              <span class="hud-value smooth-value" :class="effectiveHttpRps > 0 ? 'text-violet' : 'text-primary'">
+                {{ effectiveHttpRps >= 100 ? Math.round(effectiveHttpRps) : (effectiveHttpRps > 0 ? effectiveHttpRps.toFixed(1) : '0') }}
+              </span>
               <span class="hud-unit">req/s</span>
             </div>
             <!-- SVG Sparkline -->
@@ -850,6 +940,74 @@ onUnmounted(() => {
           </div>
           <div class="hud-card-footer-text">
             <span>Aggregated API gateway ingress stream</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 1B: LIVE REQUEST FLOW ANIMATION BAR -->
+      <section
+        class="request-flow-bar glass-panel smooth-value"
+        :class="flowStatusClass"
+        :style="{ '--flow-duration': `${flowAnimationDuration}s` }"
+      >
+        <!-- Animated Background Stream -->
+        <div class="flow-track-background">
+          <div class="flow-stream" :class="{ 'flow-paused': isFlowIdle }">
+            <div class="flow-dot dot-1"></div>
+            <div class="flow-dot dot-2"></div>
+            <div class="flow-dot dot-3"></div>
+            <div class="flow-dot dot-4"></div>
+            <div class="flow-dot dot-5"></div>
+            <div class="flow-dot dot-6"></div>
+          </div>
+        </div>
+
+        <div class="flow-bar-content">
+          <!-- Animated Glyphs & Status Tag -->
+          <div class="flow-indicator-group">
+            <div class="flow-glyphs" :class="{ 'flow-paused': isFlowIdle }">
+              <span class="flow-glyph-dot dot-a">●</span>
+              <span class="flow-glyph-dot dot-b">●</span>
+              <span class="flow-glyph-dot dot-c">●</span>
+              <span class="flow-glyph-arrow">→</span>
+            </div>
+            <span class="flow-badge" :class="`flow-badge-${flowHealthColor}`">
+              <span class="flow-status-dot" :class="{ 'pulse-active': !isFlowIdle }"></span>
+              {{ flowStatusLabel }}
+            </span>
+          </div>
+
+          <!-- Live Metrics Items -->
+          <div class="flow-metrics-group">
+            <div class="flow-metric-item">
+              <span class="flow-metric-icon">🌐</span>
+              <span class="flow-metric-value font-mono">{{ httpActiveConns }}</span>
+              <span class="flow-metric-label">active connections</span>
+            </div>
+
+            <div class="flow-metric-divider"></div>
+
+            <div class="flow-metric-item" :class="{ 'metric-warning': httpQueuedReqs > 0 }">
+              <span class="flow-metric-icon">⏳</span>
+              <span class="flow-metric-value font-mono">{{ httpQueuedReqs }}</span>
+              <span class="flow-metric-label">queued</span>
+            </div>
+
+            <div class="flow-metric-divider"></div>
+
+            <div class="flow-metric-item">
+              <span class="flow-metric-icon">⚡</span>
+              <span class="flow-metric-value font-mono text-cyan">{{ effectiveHttpRps >= 100 ? Math.round(effectiveHttpRps) : (effectiveHttpRps > 0 ? effectiveHttpRps.toFixed(1) : '0.0') }}</span>
+              <span class="flow-metric-label">req/s</span>
+            </div>
+
+            <div class="flow-metric-divider"></div>
+
+            <div class="flow-metric-item" :class="httpErrorRate >= 5 ? 'metric-critical' : httpErrorRate > 0 ? 'metric-warning' : ''">
+              <span class="flow-metric-icon">{{ httpErrorRate >= 5 ? '❌' : httpErrorRate > 0 ? '⚠️' : '🛡️' }}</span>
+              <span class="flow-metric-value font-mono">{{ httpErrorRate.toFixed(1) }}%</span>
+              <span class="flow-metric-label">errors</span>
+            </div>
           </div>
         </div>
       </section>
@@ -911,7 +1069,7 @@ onUnmounted(() => {
           </div>
           <div class="stat-pair">
             <span class="stat-k">Edge Throughput</span>
-            <span class="stat-v font-mono text-cyan smooth-value">{{ Math.round(overview.requests_per_sec) }} req/s</span>
+            <span class="stat-v font-mono text-cyan smooth-value">{{ effectiveHttpRps >= 100 ? Math.round(effectiveHttpRps) : (effectiveHttpRps > 0 ? effectiveHttpRps.toFixed(1) : '0') }} req/s</span>
           </div>
         </div>
       </section>
@@ -1799,39 +1957,60 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* SECTION 1: Summary HUD */
-.summary-hud-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 16px;
+/* SECTION 1: Summary HUD (Single-Row Flexbox) */
+.summary-hud-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
 }
 
-.hud-card {
-  padding: 16px 18px;
+.summary-hud-row .hud-card {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  border-radius: 14px;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 12px;
+  background: var(--glass-bg, rgba(26, 31, 46, 0.7));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.summary-hud-row .hud-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
 .hud-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
 }
 
 .hud-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+  color: var(--text-secondary, #94a3b8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status-indicator-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .status-green { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.6); }
@@ -1842,26 +2021,28 @@ onUnmounted(() => {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .hud-value {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--text-primary);
   font-family: var(--font-sans);
+  line-height: 1.1;
   transition: color 0.5s ease;
 }
 
 .hud-total {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--text-muted, #64748b);
+  letter-spacing: normal;
 }
 
 .hud-badge-tag {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   font-family: var(--font-mono);
   transition: color 0.5s ease;
@@ -1881,25 +2062,22 @@ onUnmounted(() => {
   transition: width 0.8s ease-in-out, background-color 0.5s ease;
 }
 
-.hud-card-throughput {
-  grid-column: span 1;
-}
-
 .throughput-details {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 3px;
 }
 
 .hud-unit {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
   font-weight: 600;
 }
 
 .sparkline-container {
-  width: 100px;
-  height: 28px;
+  width: 76px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 .sparkline-svg {
@@ -1908,8 +2086,272 @@ onUnmounted(() => {
 }
 
 .hud-card-footer-text {
+  font-size: 9.5px;
+  color: var(--text-muted, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* SECTION 1B: LIVE REQUEST FLOW ANIMATION BAR */
+.request-flow-bar {
+  position: relative;
+  overflow: hidden;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: border-color 0.5s ease, box-shadow 0.5s ease;
+}
+
+/* Status Themes */
+.request-flow-bar.flow-theme-emerald {
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.08), 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.request-flow-bar.flow-theme-amber {
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.12), 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.request-flow-bar.flow-theme-rose {
+  border-color: rgba(244, 63, 94, 0.5);
+  box-shadow: 0 0 25px rgba(244, 63, 94, 0.18), 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Particle / Laser Track in Background */
+.flow-track-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.flow-stream {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  animation: flowParticleStream var(--flow-duration, 2.5s) linear infinite;
+}
+
+.flow-paused {
+  animation-play-state: paused !important;
+  opacity: 0.25;
+}
+
+.flow-dot {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  filter: blur(1px);
+}
+
+.flow-theme-emerald .flow-dot {
+  background: #10b981;
+  box-shadow: 0 0 12px #10b981, 0 0 24px rgba(16, 185, 129, 0.6);
+}
+.flow-theme-amber .flow-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 12px #f59e0b, 0 0 24px rgba(245, 158, 11, 0.6);
+}
+.flow-theme-rose .flow-dot {
+  background: #f43f5e;
+  box-shadow: 0 0 12px #f43f5e, 0 0 24px rgba(244, 63, 94, 0.6);
+}
+
+.flow-dot.dot-1 { left: 0%; opacity: 0.2; }
+.flow-dot.dot-2 { left: 20%; opacity: 0.5; }
+.flow-dot.dot-3 { left: 40%; opacity: 0.8; }
+.flow-dot.dot-4 { left: 60%; opacity: 0.9; }
+.flow-dot.dot-5 { left: 80%; opacity: 0.6; }
+.flow-dot.dot-6 { left: 100%; opacity: 0.2; }
+
+@keyframes flowParticleStream {
+  0% {
+    transform: translateX(-30%);
+  }
+  100% {
+    transform: translateX(30%);
+  }
+}
+
+/* Content Layout */
+.flow-bar-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.flow-indicator-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.flow-glyphs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.flow-theme-emerald .flow-glyphs { color: #10b981; }
+.flow-theme-amber .flow-glyphs { color: #f59e0b; }
+.flow-theme-rose .flow-glyphs { color: #f43f5e; }
+
+.flow-glyph-dot {
+  animation: glyphPulse var(--flow-duration, 2.5s) ease-in-out infinite;
+}
+.flow-glyph-dot.dot-a { animation-delay: 0s; }
+.flow-glyph-dot.dot-b { animation-delay: calc(var(--flow-duration, 2.5s) * 0.25); }
+.flow-glyph-dot.dot-c { animation-delay: calc(var(--flow-duration, 2.5s) * 0.5); }
+
+.flow-glyph-arrow {
+  font-size: 14px;
+  font-weight: 800;
+  margin-left: 2px;
+}
+
+@keyframes glyphPulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+}
+
+.flow-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 10px;
-  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.flow-badge-emerald {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.flow-badge-amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.flow-badge-rose {
+  background: rgba(244, 63, 94, 0.15);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.flow-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.flow-metrics-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.flow-metric-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.flow-metric-icon {
+  font-size: 13px;
+}
+
+.flow-metric-value {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.flow-metric-label {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 11px;
+}
+
+.flow-metric-item.metric-warning .flow-metric-value,
+.flow-metric-item.metric-warning .flow-metric-label {
+  color: #f59e0b;
+}
+
+.flow-metric-item.metric-critical .flow-metric-value,
+.flow-metric-item.metric-critical .flow-metric-label {
+  color: #f43f5e;
+}
+
+.flow-metric-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Responsive HUD and Flow bar */
+@media (max-width: 1100px) {
+  .summary-hud-row {
+    flex-wrap: wrap;
+  }
+  .summary-hud-row .hud-card {
+    flex: 1 1 calc(33.333% - 12px);
+    min-width: 180px;
+  }
+}
+
+@media (max-width: 700px) {
+  .summary-hud-row .hud-card {
+    flex: 1 1 calc(50% - 12px);
+  }
+  .flow-bar-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .flow-metrics-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 480px) {
+  .summary-hud-row .hud-card {
+    flex: 1 1 100%;
+  }
 }
 
 /* SECTION 2: Topology Visualizer */

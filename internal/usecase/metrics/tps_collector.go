@@ -55,6 +55,7 @@ type NetworkTPS struct {
 type HTTPTPS struct {
 	RequestsPerSec    float64 `json:"requests_per_sec"`
 	ActiveConnections int     `json:"active_connections"`
+	QueuedRequests    int     `json:"queued_requests"`
 	TotalRequests     int64   `json:"total_requests"`
 	ErrorRate         float64 `json:"error_rate"` // % of 4xx+5xx
 	AvgLatencyMs      float64 `json:"avg_latency_ms,omitempty"`
@@ -299,6 +300,38 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 
 	// Enrich per-service TPS metrics with load balancer request stats
 	services = c.enrichServicesWithLBStats(ctx, services, httpTPS)
+
+	// If LB provider or gateway services report request activity, enrich aggregate HTTP TPS
+	var sumLBRPS float64
+	var sumLBErrors float64
+	var countLBServices int
+	for _, s := range services {
+		if s.RequestsPerSec > 0 {
+			sumLBRPS += s.RequestsPerSec
+			countLBServices++
+			sumLBErrors += s.ErrorRate
+		}
+	}
+	if sumLBRPS > httpTPS.RequestsPerSec {
+		httpTPS.RequestsPerSec = math.Round(sumLBRPS*100) / 100
+		if countLBServices > 0 && httpTPS.ErrorRate == 0 {
+			httpTPS.ErrorRate = math.Round((sumLBErrors/float64(countLBServices))*100) / 100
+		}
+	} else if httpTPS.RequestsPerSec == 0 {
+		var gatewayRx int64
+		for _, s := range services {
+			low := strings.ToLower(s.ServiceName)
+			if strings.Contains(low, "gateway") || strings.Contains(low, "traefik") || strings.Contains(low, "web") || strings.Contains(low, "proxy") || strings.Contains(low, "ingress") {
+				gatewayRx += s.RxBytesPerSec
+			}
+		}
+		if gatewayRx > 0 {
+			estimatedRps := float64(gatewayRx) / 1500.0
+			if estimatedRps > 0 {
+				httpTPS.RequestsPerSec = math.Round(estimatedRps*100) / 100
+			}
+		}
+	}
 
 	// 3. Database TPS (pg_stat_database)
 	dbTPS := c.collectDatabaseTPS(ctx, now)
@@ -609,6 +642,7 @@ func (c *TPSCollector) collectHTTPTPS(ctx context.Context, now time.Time) HTTPTP
 	var totalReqs int64
 	var errorCount int64
 	var activeConns int
+	var queuedReqs int
 
 	if c.traefikAPIURL != "" {
 		reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -623,7 +657,8 @@ func (c *TPSCollector) collectHTTPTPS(ctx context.Context, now time.Time) HTTPTP
 					var ov traefikOverview
 					if decodeErr := json.NewDecoder(resp.Body).Decode(&ov); decodeErr == nil {
 						activeConns = ov.HTTP.Services.Total + ov.HTTP.Routers.Total
-						errorCount = int64(ov.HTTP.Routers.Errors)
+						errorCount = int64(ov.HTTP.Routers.Errors + ov.HTTP.Services.Errors)
+						queuedReqs = ov.HTTP.Routers.Warnings + ov.HTTP.Services.Warnings
 					}
 				}
 			} else {
@@ -692,6 +727,7 @@ func (c *TPSCollector) collectHTTPTPS(ctx context.Context, now time.Time) HTTPTP
 	c.mu.Unlock()
 
 	httpTPS.ActiveConnections = activeConns
+	httpTPS.QueuedRequests = queuedReqs
 	httpTPS.TotalRequests = totalReqs
 	return httpTPS
 }

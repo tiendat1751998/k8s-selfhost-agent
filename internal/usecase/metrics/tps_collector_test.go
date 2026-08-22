@@ -333,6 +333,12 @@ func TestTPSCollector_Collect_AllSources(t *testing.T) {
 	if snap1.Database.CacheHitRatio != 0.99 {
 		t.Errorf("expected DB CacheHitRatio = 0.99, got %f", snap1.Database.CacheHitRatio)
 	}
+	if snap1.HTTP.ActiveConnections != 2 {
+		t.Errorf("expected HTTP ActiveConnections = 2, got %d", snap1.HTTP.ActiveConnections)
+	}
+	if snap1.HTTP.QueuedRequests != 0 {
+		t.Errorf("expected HTTP QueuedRequests = 0, got %d", snap1.HTTP.QueuedRequests)
+	}
 	if snap1.Messaging.InMsgsPerSec != 150.5 {
 		t.Errorf("expected NATS InMsgsPerSec = 150.5, got %f", snap1.Messaging.InMsgsPerSec)
 	}

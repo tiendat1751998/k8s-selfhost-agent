@@ -122,6 +122,7 @@ export interface TpsNetworkMetrics {
 export interface TpsHttpMetrics {
   requests_per_sec: number
   active_connections: number
+  queued_requests: number
   total_requests: number
   error_rate: number
   avg_latency_ms: number
