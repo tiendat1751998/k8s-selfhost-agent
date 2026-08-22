@@ -436,7 +436,7 @@ func (m *mockDockerRepoForUsecase) UpdateContainerImage(ctx context.Context, con
 	m.updatedContainers[containerID] = image
 	return nil
 }
-func (m *mockDockerRepoForUsecase) UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64) error {
+func (m *mockDockerRepoForUsecase) UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64, replicas int) error {
 	return nil
 }
 func (m *mockDockerRepoForUsecase) GetSwarmJoinTokens(ctx context.Context) (*domainDocker.SwarmTokens, error) {

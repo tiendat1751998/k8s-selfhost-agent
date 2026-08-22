@@ -549,7 +549,7 @@ async function handleApplyResources() {
       type: selectedApp.value.type,
       cluster: selectedApp.value.target,
       namespace: selectedApp.value.namespace,
-      name: selectedApp.value.rawId || selectedApp.value.name,
+      name: selectedApp.value.name,
       replicas: targetReplicas.value,
       memory_limit: targetMemoryLimit.value,
       memory_reservation: targetMemoryReservation.value,

@@ -374,17 +374,7 @@ func (r *deploymentRepo) UpdateResources(ctx context.Context, targetType, target
 		if err != nil {
 			return err
 		}
-		err = repo.UpdateServiceResources(ctx, name, memoryLimitBytes, memoryReservBytes, nanoCPUs)
-		if err != nil {
-			return err
-		}
-		if replicas >= 0 {
-			err = repo.ScaleService(ctx, name, replicas)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
+		return repo.UpdateServiceResources(ctx, name, memoryLimitBytes, memoryReservBytes, nanoCPUs, replicas)
 	}
 	return fmt.Errorf("unsupported target type: %s", targetType)
 }
