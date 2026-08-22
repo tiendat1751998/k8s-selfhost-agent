@@ -13,6 +13,12 @@ export interface ProcessMetric {
   state: string
 }
 
+export interface NetworkInterface {
+  name: string
+  rx_bytes_per_sec: number
+  tx_bytes_per_sec: number
+}
+
 export interface NodeMetrics {
   node_id: string
   node_name: string
@@ -28,6 +34,7 @@ export interface NodeMetrics {
   disk_percent: number
   network_rx_bytes: number
   network_tx_bytes: number
+  network_interfaces?: NetworkInterface[]
   container_count: number
   running_count: number
   os?: string
@@ -146,6 +153,8 @@ export interface TpsNodeMetrics {
 
 export interface TpsServiceMetrics {
   service_name: string
+  node_id?: string
+  node_name?: string
   container_count: number
   cpu_percent: number
   memory_used_mb: number

@@ -311,11 +311,20 @@ func TestTPSCollector_Collect_AllSources(t *testing.T) {
 	if snap1.Services[0].ServiceName != "postgres_db" {
 		t.Errorf("expected first service = postgres_db, got %s", snap1.Services[0].ServiceName)
 	}
+	if snap1.Services[0].NodeID != "host-1" {
+		t.Errorf("expected postgres_db NodeID = host-1, got %s", snap1.Services[0].NodeID)
+	}
+	if snap1.Services[0].NodeName != "worker-node-1" {
+		t.Errorf("expected postgres_db NodeName = worker-node-1, got %s", snap1.Services[0].NodeName)
+	}
 	if snap1.Services[0].Status != "healthy" {
 		t.Errorf("expected postgres_db status = healthy, got %s", snap1.Services[0].Status)
 	}
 	if snap1.Services[0].MemoryUsedMB != 256.0 {
 		t.Errorf("expected postgres_db MemoryUsedMB = 256.0, got %f", snap1.Services[0].MemoryUsedMB)
+	}
+	if snap1.Services[1].NodeID != "host-1" {
+		t.Errorf("expected tiki_cart NodeID = host-1, got %s", snap1.Services[1].NodeID)
 	}
 	if snap1.Database.ActiveConnections != 12 {
 		t.Errorf("expected DB ActiveConnections = 12, got %d", snap1.Database.ActiveConnections)
@@ -480,5 +489,80 @@ func TestTPSCollector_Start_Stop(t *testing.T) {
 	}
 
 	collector.Stop()
+}
+
+func TestTPSCollector_NodeMapping(t *testing.T) {
+	provider := &mockMetricsProvider{
+		agentMetrics: map[string]*AgentMetrics{
+			"host-uuid-k8smater": {
+				Hostname: "k8smater",
+			},
+			"host-uuid-worker1": {
+				Hostname: "worker1",
+			},
+		},
+		snapshot: &SystemOverview{
+			Nodes: []NodeMetrics{
+				{
+					NodeID:   "host-uuid-k8smater",
+					NodeName: "k8smater",
+				},
+				{
+					NodeID:   "host-uuid-worker1",
+					NodeName: "worker1",
+				},
+			},
+			Containers: []ContainerMetrics{
+				{
+					ContainerID:   "c1",
+					ContainerName: "tiki_redis.1.123",
+					ServiceName:   "tiki_redis",
+					NodeID:        "host-uuid-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    2.5,
+					MemoryUsed:    1024 * 1024 * 50,
+					MemoryLimit:   1024 * 1024 * 500,
+				},
+				{
+					ContainerID:   "c2",
+					ContainerName: "nats",
+					ServiceName:   "nats",
+					NodeID:        "",
+					NodeName:      "",
+					Labels: map[string]string{
+						"com.docker.swarm.node.id": "swarm-node-worker1",
+					},
+					State:       "running",
+					CPUPercent:  1.0,
+					MemoryUsed:  1024 * 1024 * 20,
+					MemoryLimit: 1024 * 1024 * 200,
+				},
+			},
+		},
+	}
+
+	collector := NewTPSCollector(provider, nil, zap.NewNop())
+	snap, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if len(snap.Services) != 2 {
+		t.Fatalf("expected 2 services, got %d", len(snap.Services))
+	}
+
+	svcMap := make(map[string]ServiceTPS)
+	for _, s := range snap.Services {
+		svcMap[s.ServiceName] = s
+	}
+
+	redis, ok := svcMap["tiki_redis"]
+	if !ok {
+		t.Fatal("expected tiki_redis service in snapshot")
+	}
+	if redis.NodeID != "host-uuid-k8smater" || redis.NodeName != "k8smater" {
+		t.Errorf("tiki_redis node mismatch: NodeID=%q NodeName=%q, want host-uuid-k8smater/k8smater", redis.NodeID, redis.NodeName)
+	}
 }
 
