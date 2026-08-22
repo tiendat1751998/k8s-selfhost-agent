@@ -103,7 +103,7 @@ type Repository interface {
 	GetLogs(ctx context.Context, targetID string, targetType string) (string, error)
 	UpdateServiceImage(ctx context.Context, serviceID string, image string) error
 	UpdateContainerImage(ctx context.Context, containerID string, image string) error
-	UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64) error
+	UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64, replicas int) error
 
 	GetSwarmJoinTokens(ctx context.Context) (*SwarmTokens, error)
 	DrainNode(ctx context.Context, nodeID string) error

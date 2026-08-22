@@ -454,39 +454,60 @@ func (r *realDockerRepo) GetSwarmInfo(ctx context.Context) (*domainDocker.SwarmI
 	}, nil
 }
 
-func (r *realDockerRepo) UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64) error {
+func (r *realDockerRepo) UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64, replicas int) error {
 	service, _, err := r.cli.ServiceInspectWithRaw(ctx, serviceID, types.ServiceInspectOptions{})
-	if err != nil {
-		return fmt.Errorf("inspecting service for resource update: %w", err)
+	if err == nil {
+		spec := service.Spec
+		if spec.TaskTemplate.Resources == nil {
+			spec.TaskTemplate.Resources = &swarm.ResourceRequirements{}
+		}
+
+		if memoryLimitBytes > 0 || nanoCPUs > 0 {
+			if spec.TaskTemplate.Resources.Limits == nil {
+				spec.TaskTemplate.Resources.Limits = &swarm.Limit{}
+			}
+			if memoryLimitBytes > 0 {
+				spec.TaskTemplate.Resources.Limits.MemoryBytes = memoryLimitBytes
+			}
+			if nanoCPUs > 0 {
+				spec.TaskTemplate.Resources.Limits.NanoCPUs = nanoCPUs
+			}
+		}
+
+		if memoryReservBytes > 0 {
+			if spec.TaskTemplate.Resources.Reservations == nil {
+				spec.TaskTemplate.Resources.Reservations = &swarm.Resources{}
+			}
+			spec.TaskTemplate.Resources.Reservations.MemoryBytes = memoryReservBytes
+		}
+
+		if replicas >= 0 && spec.Mode.Replicated != nil {
+			targetReplicas := uint64(replicas)
+			spec.Mode.Replicated.Replicas = &targetReplicas
+		}
+
+		_, err = r.cli.ServiceUpdate(ctx, serviceID, service.Version, spec, types.ServiceUpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("updating swarm service %s resources: %w", serviceID, err)
+		}
+		return nil
 	}
 
-	spec := service.Spec
-	if spec.TaskTemplate.Resources == nil {
-		spec.TaskTemplate.Resources = &swarm.ResourceRequirements{}
+	// Fallback to standalone Docker container update
+	updateResources := container.Resources{}
+	if memoryLimitBytes > 0 {
+		updateResources.Memory = memoryLimitBytes
 	}
-
-	if memoryLimitBytes > 0 || nanoCPUs > 0 {
-		if spec.TaskTemplate.Resources.Limits == nil {
-			spec.TaskTemplate.Resources.Limits = &swarm.Limit{}
-		}
-		if memoryLimitBytes > 0 {
-			spec.TaskTemplate.Resources.Limits.MemoryBytes = memoryLimitBytes
-		}
-		if nanoCPUs > 0 {
-			spec.TaskTemplate.Resources.Limits.NanoCPUs = nanoCPUs
-		}
-	}
-
 	if memoryReservBytes > 0 {
-		if spec.TaskTemplate.Resources.Reservations == nil {
-			spec.TaskTemplate.Resources.Reservations = &swarm.Resources{}
-		}
-		spec.TaskTemplate.Resources.Reservations.MemoryBytes = memoryReservBytes
+		updateResources.MemoryReservation = memoryReservBytes
+	}
+	if nanoCPUs > 0 {
+		updateResources.NanoCPUs = nanoCPUs
 	}
 
-	_, err = r.cli.ServiceUpdate(ctx, serviceID, service.Version, spec, types.ServiceUpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("updating service resources: %w", err)
+	_, updateErr := r.cli.ContainerUpdate(ctx, serviceID, container.UpdateConfig{Resources: updateResources})
+	if updateErr != nil {
+		return fmt.Errorf("updating workload %s resources (swarm error: %v, container error: %w)", serviceID, err, updateErr)
 	}
 	return nil
 }
