@@ -279,8 +279,8 @@ function updateOverviewState(data: SystemOverview) {
     saveSavedNodeOrder(nodeOrderKeys.value)
   }
 
-  // Push to trend history
-  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  // Push to trend history with clean 24h compact timestamp
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
   const newPoint: TrendPoint = {
     time: timeStr,
     cpu: Math.round(data.total_cpu_percent || 0),
@@ -714,11 +714,11 @@ const trendChartMaxReqs = computed(() => {
 const trendChartCpuPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const step = 665 / (history.length - 1)
+  const step = 1000 / (history.length - 1)
   return history
     .map((h, i) => {
-      const x = 45 + i * step
-      const y = 170 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 150
+      const x = i * step
+      const y = 196 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 192
       return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
@@ -726,20 +726,17 @@ const trendChartCpuPath = computed(() => {
 
 const trendChartCpuArea = computed(() => {
   if (!trendChartCpuPath.value || trendHistory.value.length < 2) return ''
-  const history = trendHistory.value
-  const firstX = 45
-  const lastX = 45 + (history.length - 1) * (665 / (history.length - 1))
-  return `${trendChartCpuPath.value} L ${lastX.toFixed(1)} 170 L ${firstX.toFixed(1)} 170 Z`
+  return `${trendChartCpuPath.value} L 1000 196 L 0 196 Z`
 })
 
 const trendChartMemPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const step = 665 / (history.length - 1)
+  const step = 1000 / (history.length - 1)
   return history
     .map((h, i) => {
-      const x = 45 + i * step
-      const y = 170 - (Math.min(100, Math.max(0, h.mem)) / 100) * 150
+      const x = i * step
+      const y = 196 - (Math.min(100, Math.max(0, h.mem)) / 100) * 192
       return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
@@ -747,21 +744,18 @@ const trendChartMemPath = computed(() => {
 
 const trendChartMemArea = computed(() => {
   if (!trendChartMemPath.value || trendHistory.value.length < 2) return ''
-  const history = trendHistory.value
-  const firstX = 45
-  const lastX = 45 + (history.length - 1) * (665 / (history.length - 1))
-  return `${trendChartMemPath.value} L ${lastX.toFixed(1)} 170 L ${firstX.toFixed(1)} 170 Z`
+  return `${trendChartMemPath.value} L 1000 196 L 0 196 Z`
 })
 
 const trendChartReqsPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const step = 665 / (history.length - 1)
+  const step = 1000 / (history.length - 1)
   const maxR = trendChartMaxReqs.value
   return history
     .map((h, i) => {
-      const x = 45 + i * step
-      const y = 170 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 150
+      const x = i * step
+      const y = 196 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 192
       return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
@@ -769,24 +763,21 @@ const trendChartReqsPath = computed(() => {
 
 const trendChartReqsArea = computed(() => {
   if (!trendChartReqsPath.value || trendHistory.value.length < 2) return ''
-  const history = trendHistory.value
-  const firstX = 45
-  const lastX = 45 + (history.length - 1) * (665 / (history.length - 1))
-  return `${trendChartReqsPath.value} L ${lastX.toFixed(1)} 170 L ${firstX.toFixed(1)} 170 Z`
+  return `${trendChartReqsPath.value} L 1000 196 L 0 196 Z`
 })
 
 const trendTimeAxisMarkers = computed(() => {
   const history = trendHistory.value
   if (history.length === 0) return []
-  if (history.length === 1) return [{ x: 45, time: history[0].time }]
+  if (history.length === 1) return [{ x: 0, time: history[0].time }]
   
   const count = Math.min(5, history.length)
   const markers = []
-  const step = 665 / (history.length - 1)
+  const step = 1000 / (history.length - 1)
   for (let i = 0; i < count; i++) {
     const idx = Math.round((i / (count - 1)) * (history.length - 1))
     markers.push({
-      x: 45 + idx * step,
+      x: idx * step,
       time: history[idx].time,
     })
   }
@@ -814,15 +805,15 @@ const hoveredTrendElapsed = computed<string>(() => {
 const trendHoverCoords = computed(() => {
   if (hoveredTrendIndex.value === null || trendHistory.value.length < 2) return null
   const history = trendHistory.value
-  const step = 665 / (history.length - 1)
+  const step = 1000 / (history.length - 1)
   const idx = hoveredTrendIndex.value
   const pt = history[idx]
   if (!pt) return null
-  const x = 45 + idx * step
+  const x = idx * step
   const maxR = trendChartMaxReqs.value
-  const yCpu = 170 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 150
-  const yMem = 170 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 150
-  const yReq = 170 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 150
+  const yCpu = 196 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 192
+  const yMem = 196 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 192
+  const yReq = 196 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 192
   return { x, yCpu, yMem, yReq }
 })
 
@@ -846,10 +837,7 @@ function handleTrendChartHover(event: MouseEvent) {
   const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
   const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
   
-  const scaleX = rect.width / 760
-  const svgX = mouseX / scaleX
-  const boundedSvgX = Math.max(45, Math.min(710, svgX))
-  const ratio = (boundedSvgX - 45) / 665
+  const ratio = mouseX / rect.width
   const idx = Math.round(ratio * (history.length - 1))
   hoveredTrendIndex.value = Math.max(0, Math.min(history.length - 1, idx))
   trendTooltipPos.value = { x: mouseX, y: mouseY }
@@ -1572,184 +1560,176 @@ onUnmounted(() => {
           <div class="trend-title-wrap">
             <div style="display: flex; align-items: center; gap: 8px;">
               <h3 class="sidebar-card-title">📈 5-Min Saturation Trends</h3>
-              <span class="badge badge-indigo">LIVE BUFFER</span>
+              <span class="badge badge-indigo font-mono">LIVE BUFFER</span>
             </div>
-            <span class="trend-chart-subtitle text-muted text-xs">
+            <span class="trend-chart-subtitle">
               Rolling 30-sample sliding window across CPU, RAM, and gateway RPS
             </span>
           </div>
-          <div class="trend-header-actions" style="display: flex; align-items: center; gap: 14px;">
+          <div class="trend-header-actions">
             <div class="trend-legend">
-              <span class="legend-line cpu-legend">CPU Saturation</span>
-              <span class="legend-line mem-legend">RAM Usage</span>
-              <span class="legend-line reqs-legend">Throughput (req/s)</span>
+              <span class="legend-pill pill-cpu"><span class="legend-dot-circle bg-violet"></span>CPU Saturation</span>
+              <span class="legend-pill pill-mem"><span class="legend-dot-circle bg-cyan"></span>RAM Usage</span>
+              <span class="legend-pill pill-reqs"><span class="legend-dot-circle bg-emerald"></span>Throughput (req/s)</span>
             </div>
             <button class="trend-expand-badge" type="button" title="Click to open cluster telemetry deep-dive modal">
-              🔍 Click to expand deep-dive
+              🔍 Deep-Dive
             </button>
           </div>
         </div>
 
-        <!-- High-Resolution Expanded SVG Chart Canvas with Left/Right Y-Axes & X-Axis Timestamps -->
-        <div
-          class="trend-svg-box trend-svg-highres"
-          @mousemove="handleTrendChartHover"
-          @mouseleave="handleTrendChartLeave"
-        >
-          <svg viewBox="0 0 760 200" class="trend-svg" preserveAspectRatio="none">
-            <!-- Gradients -->
-            <defs>
-              <linearGradient id="mainCpuGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30" />
-                <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0" />
-              </linearGradient>
-              <linearGradient id="mainMemGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.25" />
-                <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
-              </linearGradient>
-              <linearGradient id="mainReqGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#10b981" stop-opacity="0.25" />
-                <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
-              </linearGradient>
-            </defs>
+        <!-- HTML-Overlay Grid Layout Chart with Zero Distortion -->
+        <div class="trend-chart-frame">
+          <div class="trend-chart-body">
+            <!-- Left Y-Axis (Percentages) -->
+            <div class="trend-y-axis y-axis-left font-mono">
+              <span class="y-tick">100%</span>
+              <span class="y-tick">75%</span>
+              <span class="y-tick">50%</span>
+              <span class="y-tick">25%</span>
+              <span class="y-tick">0%</span>
+            </div>
 
-            <!-- Horizontal Grid Lines & Left/Right Y-Axis Labels -->
-            <!-- 100% -->
-            <line x1="45" y1="20" x2="710" y2="20" stroke="rgba(255, 255, 255, 0.08)" stroke-dasharray="3,3" />
-            <text x="38" y="24" class="svg-axis-label text-left font-mono" text-anchor="end">100%</text>
-            <text x="716" y="24" class="svg-axis-label text-right font-mono" text-anchor="start">{{ trendChartMaxReqs }} req/s</text>
+            <!-- Chart Plot Canvas -->
+            <div
+              class="trend-plot-canvas"
+              @mousemove="handleTrendChartHover"
+              @mouseleave="handleTrendChartLeave"
+            >
+              <svg viewBox="0 0 1000 200" class="trend-plot-svg" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="mainCpuGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.35" />
+                    <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="mainMemGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.30" />
+                    <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="mainReqGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.30" />
+                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+                  </linearGradient>
+                </defs>
 
-            <!-- 75% -->
-            <line x1="45" y1="57.5" x2="710" y2="57.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
-            <text x="38" y="61.5" class="svg-axis-label text-left font-mono" text-anchor="end">75%</text>
-            <text x="716" y="61.5" class="svg-axis-label text-right font-mono" text-anchor="start">{{ Math.round(trendChartMaxReqs * 0.75) }}</text>
+                <!-- 5 Horizontal Grid Lines -->
+                <line x1="0" y1="4" x2="1000" y2="4" stroke="rgba(255, 255, 255, 0.08)" stroke-dasharray="3,3" />
+                <line x1="0" y1="51.5" x2="1000" y2="51.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+                <line x1="0" y1="99" x2="1000" y2="99" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+                <line x1="0" y1="146.5" x2="1000" y2="146.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+                <line x1="0" y1="196" x2="1000" y2="196" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.2" />
 
-            <!-- 50% -->
-            <line x1="45" y1="95" x2="710" y2="95" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
-            <text x="38" y="99" class="svg-axis-label text-left font-mono" text-anchor="end">50%</text>
-            <text x="716" y="99" class="svg-axis-label text-right font-mono" text-anchor="start">{{ Math.round(trendChartMaxReqs * 0.5) }}</text>
+                <!-- Series 1: CPU Area & Line (Violet) -->
+                <g v-if="trendChartCpuPath">
+                  <path :d="trendChartCpuArea" fill="url(#mainCpuGrad)" />
+                  <path :d="trendChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
 
-            <!-- 25% -->
-            <line x1="45" y1="132.5" x2="710" y2="132.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
-            <text x="38" y="136.5" class="svg-axis-label text-left font-mono" text-anchor="end">25%</text>
-            <text x="716" y="136.5" class="svg-axis-label text-right font-mono" text-anchor="start">{{ Math.round(trendChartMaxReqs * 0.25) }}</text>
+                <!-- Series 2: RAM Area & Line (Cyan) -->
+                <g v-if="trendChartMemPath">
+                  <path :d="trendChartMemArea" fill="url(#mainMemGrad)" />
+                  <path :d="trendChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
 
-            <!-- 0% Baseline -->
-            <line x1="45" y1="170" x2="710" y2="170" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.2" />
-            <text x="38" y="174" class="svg-axis-label text-left font-mono" text-anchor="end">0%</text>
-            <text x="716" y="174" class="svg-axis-label text-right font-mono" text-anchor="start">0</text>
+                <!-- Series 3: Throughput Area & Line (Emerald) -->
+                <g v-if="trendChartReqsPath">
+                  <path :d="trendChartReqsArea" fill="url(#mainReqGrad)" />
+                  <path :d="trendChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
 
-            <!-- X-Axis Timestamps -->
-            <g class="svg-x-axis-group">
-              <text
-                v-for="(marker, mIdx) in trendTimeAxisMarkers"
-                :key="mIdx"
-                :x="marker.x"
-                y="192"
-                class="svg-axis-label text-center font-mono"
-                text-anchor="middle"
+                <!-- Interactive Hover Crosshair & Series Markers -->
+                <g v-if="isTrendHovered && trendHoverCoords" class="trend-hover-layer">
+                  <line
+                    :x1="trendHoverCoords.x"
+                    y1="4"
+                    :x2="trendHoverCoords.x"
+                    y2="196"
+                    stroke="rgba(255, 255, 255, 0.65)"
+                    stroke-dasharray="4,3"
+                    stroke-width="1.5"
+                  />
+                  <circle
+                    :cx="trendHoverCoords.x"
+                    :cy="trendHoverCoords.yCpu"
+                    r="4.5"
+                    fill="#8b5cf6"
+                    stroke="#ffffff"
+                    stroke-width="1.5"
+                    class="trend-hover-point"
+                  />
+                  <circle
+                    :cx="trendHoverCoords.x"
+                    :cy="trendHoverCoords.yMem"
+                    r="4.5"
+                    fill="#06b6d4"
+                    stroke="#ffffff"
+                    stroke-width="1.5"
+                    class="trend-hover-point"
+                  />
+                  <circle
+                    :cx="trendHoverCoords.x"
+                    :cy="trendHoverCoords.yReq"
+                    r="4.5"
+                    fill="#10b981"
+                    stroke="#ffffff"
+                    stroke-width="1.5"
+                    class="trend-hover-point"
+                  />
+                </g>
+              </svg>
+
+              <!-- Floating Rich Tooltip Box -->
+              <div
+                v-if="isTrendHovered && hoveredTrendPoint"
+                class="trend-rich-tooltip glass-panel animate-fade-in"
+                :style="trendTooltipStyle"
               >
-                {{ marker.time }}
-              </text>
-            </g>
-
-            <!-- Series 1: CPU Area & Line (Violet) -->
-            <g v-if="trendChartCpuPath">
-              <path :d="trendChartCpuArea" fill="url(#mainCpuGrad)" />
-              <path :d="trendChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-            </g>
-
-            <!-- Series 2: RAM Area & Line (Cyan) -->
-            <g v-if="trendChartMemPath">
-              <path :d="trendChartMemArea" fill="url(#mainMemGrad)" />
-              <path :d="trendChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-            </g>
-
-            <!-- Series 3: Throughput Area & Line (Emerald) -->
-            <g v-if="trendChartReqsPath">
-              <path :d="trendChartReqsArea" fill="url(#mainReqGrad)" />
-              <path :d="trendChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-            </g>
-
-            <!-- Interactive Hover Crosshair & Series Markers -->
-            <g v-if="isTrendHovered && trendHoverCoords" class="trend-hover-layer">
-              <!-- Vertical Crosshair line snapping to nearest X -->
-              <line
-                :x1="trendHoverCoords.x"
-                y1="20"
-                :x2="trendHoverCoords.x"
-                y2="170"
-                stroke="rgba(255, 255, 255, 0.55)"
-                stroke-dasharray="3,2"
-                stroke-width="1.2"
-              />
-              <!-- Active Point Marker for CPU (Violet Glowing) -->
-              <circle
-                :cx="trendHoverCoords.x"
-                :cy="trendHoverCoords.yCpu"
-                r="4.5"
-                fill="#8b5cf6"
-                stroke="#ffffff"
-                stroke-width="1.5"
-                class="trend-hover-point"
-              />
-              <!-- Active Point Marker for RAM (Cyan Glowing) -->
-              <circle
-                :cx="trendHoverCoords.x"
-                :cy="trendHoverCoords.yMem"
-                r="4.5"
-                fill="#06b6d4"
-                stroke="#ffffff"
-                stroke-width="1.5"
-                class="trend-hover-point"
-              />
-              <!-- Active Point Marker for Throughput (Emerald Glowing) -->
-              <circle
-                :cx="trendHoverCoords.x"
-                :cy="trendHoverCoords.yReq"
-                r="4.5"
-                fill="#10b981"
-                stroke="#ffffff"
-                stroke-width="1.5"
-                class="trend-hover-point"
-              />
-            </g>
-          </svg>
-
-          <!-- Floating Rich Tooltip Box -->
-          <div
-            v-if="isTrendHovered && hoveredTrendPoint"
-            class="trend-rich-tooltip glass-panel animate-fade-in"
-            :style="trendTooltipStyle"
-          >
-            <div class="trend-tooltip-header">
-              <span class="tooltip-time-icon">🕒</span>
-              <span class="tooltip-time font-mono">{{ hoveredTrendPoint.time }}</span>
-              <span class="tooltip-time-badge font-mono" v-if="hoveredTrendElapsed">{{ hoveredTrendElapsed }}</span>
-            </div>
-            <div class="trend-tooltip-body">
-              <div class="tooltip-row">
-                <div class="tooltip-label">
-                  <span class="tooltip-dot bg-violet"></span>
-                  <span>CPU Saturation:</span>
+                <div class="trend-tooltip-header">
+                  <span class="tooltip-time-icon">🕒</span>
+                  <span class="tooltip-time font-mono">{{ hoveredTrendPoint.time }}</span>
+                  <span class="tooltip-time-badge font-mono" v-if="hoveredTrendElapsed">{{ hoveredTrendElapsed }}</span>
                 </div>
-                <span class="tooltip-value font-mono text-violet font-bold">{{ hoveredTrendPoint.cpu }}%</span>
-              </div>
-              <div class="tooltip-row">
-                <div class="tooltip-label">
-                  <span class="tooltip-dot bg-cyan"></span>
-                  <span>RAM Usage:</span>
+                <div class="trend-tooltip-body">
+                  <div class="tooltip-row">
+                    <div class="tooltip-label">
+                      <span class="tooltip-dot bg-violet"></span>
+                      <span>CPU Saturation:</span>
+                    </div>
+                    <span class="tooltip-value font-mono text-violet font-bold">{{ hoveredTrendPoint.cpu }}%</span>
+                  </div>
+                  <div class="tooltip-row">
+                    <div class="tooltip-label">
+                      <span class="tooltip-dot bg-cyan"></span>
+                      <span>RAM Usage:</span>
+                    </div>
+                    <span class="tooltip-value font-mono text-cyan font-bold">{{ hoveredTrendPoint.mem }}%</span>
+                  </div>
+                  <div class="tooltip-row">
+                    <div class="tooltip-label">
+                      <span class="tooltip-dot bg-emerald"></span>
+                      <span>Throughput:</span>
+                    </div>
+                    <span class="tooltip-value font-mono text-emerald font-bold">{{ hoveredTrendPoint.reqs.toLocaleString() }} req/s</span>
+                  </div>
                 </div>
-                <span class="tooltip-value font-mono text-cyan font-bold">{{ hoveredTrendPoint.mem }}%</span>
-              </div>
-              <div class="tooltip-row">
-                <div class="tooltip-label">
-                  <span class="tooltip-dot bg-emerald"></span>
-                  <span>Throughput:</span>
-                </div>
-                <span class="tooltip-value font-mono text-emerald font-bold">{{ hoveredTrendPoint.reqs.toLocaleString() }} req/s</span>
               </div>
             </div>
+
+            <!-- Right Y-Axis (Throughput RPS) -->
+            <div class="trend-y-axis y-axis-right font-mono">
+              <span class="y-tick tick-accent">{{ trendChartMaxReqs.toLocaleString() }} req/s</span>
+              <span class="y-tick tick-accent">{{ Math.round(trendChartMaxReqs * 0.75).toLocaleString() }}</span>
+              <span class="y-tick tick-accent">{{ Math.round(trendChartMaxReqs * 0.5).toLocaleString() }}</span>
+              <span class="y-tick tick-accent">{{ Math.round(trendChartMaxReqs * 0.25).toLocaleString() }}</span>
+              <span class="y-tick tick-accent">0</span>
+            </div>
+          </div>
+
+          <!-- Bottom X-Axis (Timestamps) -->
+          <div class="trend-x-axis font-mono">
+            <span v-for="(marker, mIdx) in trendTimeAxisMarkers" :key="mIdx" class="x-tick">
+              {{ marker.time }}
+            </span>
           </div>
         </div>
 
@@ -4414,87 +4394,147 @@ onUnmounted(() => {
   transform: scale(1.03);
 }
 
+.trend-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.trend-chart-subtitle {
+  font-size: 11.5px;
+  color: var(--text-secondary, #94a3b8);
+  letter-spacing: normal;
+}
+
+.trend-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .trend-legend {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 10px;
-  font-weight: 700;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.legend-line {
-  display: flex;
+.legend-pill {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  user-select: none;
 }
 
-.cpu-legend::before {
-  content: '';
-  width: 10px;
-  height: 2px;
-  background: #8b5cf6;
-  display: inline-block;
+.pill-cpu {
+  color: #c4b5fd;
+  border-color: rgba(139, 92, 246, 0.25);
+  background: rgba(139, 92, 246, 0.08);
 }
 
-.mem-legend::before {
-  content: '';
-  width: 10px;
-  height: 2px;
-  background: #06b6d4;
-  display: inline-block;
+.pill-mem {
+  color: #67e8f9;
+  border-color: rgba(6, 182, 212, 0.25);
+  background: rgba(6, 182, 212, 0.08);
 }
 
-.reqs-legend::before {
-  content: '';
-  width: 10px;
-  height: 2px;
-  background: #10b981;
-  display: inline-block;
+.pill-reqs {
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.08);
 }
 
-.trend-svg-box {
+.legend-dot-circle {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* HTML-Overlay Grid Layout Chart */
+.trend-chart-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(8, 14, 26, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px 8px 14px;
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.trend-chart-body {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  height: 180px;
   position: relative;
-  width: 100%;
-  height: 80px;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 8px;
-  overflow: visible;
 }
 
-.trend-svg-box.trend-svg-highres {
-  height: 185px;
-  background: rgba(8, 14, 26, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 10px;
-  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+.trend-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  user-select: none;
+  flex-shrink: 0;
 }
 
-.trend-svg {
+.y-axis-left {
+  width: 38px;
+  text-align: right;
+}
+
+.y-axis-right {
+  min-width: 65px;
+  text-align: left;
+}
+
+.y-tick {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.y-tick.tick-accent {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.trend-plot-canvas {
+  flex: 1;
+  position: relative;
+  height: 100%;
+  min-width: 0;
+}
+
+.trend-plot-svg {
   width: 100%;
   height: 100%;
   display: block;
 }
 
-.svg-axis-label {
-  font-size: 10px;
-  fill: #64748b;
-  font-family: var(--font-mono, monospace);
+.trend-x-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-left: 48px;
+  margin-right: 75px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.x-tick {
+  font-size: 10.5px;
   font-weight: 500;
-  user-select: none;
-}
-
-.svg-axis-label.text-left {
-  fill: #94a3b8;
-}
-
-.svg-axis-label.text-right {
-  fill: #10b981;
-  font-weight: 600;
-}
-
-.svg-axis-label.text-center {
-  fill: #64748b;
-  font-size: 9.5px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
 }
 
 .trend-hover-point {
