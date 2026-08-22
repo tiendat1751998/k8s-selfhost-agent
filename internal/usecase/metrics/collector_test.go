@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/system"
 	"go.uber.org/zap"
 
@@ -56,6 +57,7 @@ type mockDockerAPI struct {
 	statsMap   map[string]container.StatsResponse
 	info       system.Info
 	diskUsage  types.DiskUsage
+	nodes      []swarm.Node
 }
 
 func (m *mockDockerAPI) ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error) {
@@ -80,6 +82,10 @@ func (m *mockDockerAPI) Info(ctx context.Context) (system.Info, error) {
 
 func (m *mockDockerAPI) DiskUsage(ctx context.Context, options types.DiskUsageOptions) (types.DiskUsage, error) {
 	return m.diskUsage, nil
+}
+
+func (m *mockDockerAPI) NodeList(ctx context.Context, options swarm.NodeListOptions) ([]swarm.Node, error) {
+	return m.nodes, nil
 }
 
 type mockComputeHostRepo struct {
@@ -340,9 +346,12 @@ func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 		DiskTotal:     100 * 1024 * 1024 * 1024,
 		DiskUsed:      20 * 1024 * 1024 * 1024,
 		DiskPercent:   20.0,
-		NetRxRate:     1024,
-		NetTxRate:     2048,
-		Processes:     10,
+		NetRxRate: 1024,
+		NetTxRate: 2048,
+		NetworkInterfaces: []NetworkInterface{
+			{Name: "eth0", RxBytesPerSec: 1024, TxBytesPerSec: 2048},
+		},
+		Processes: 10,
 		TopProcesses: []ProcessMetric{
 			{
 				PID:              413,
@@ -357,8 +366,8 @@ func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 				State:            "running",
 			},
 		},
-		Status:      "online",
-		LastSeen:    time.Now().UTC(),
+		Status:   "online",
+		LastSeen: time.Now().UTC(),
 	})
 	collector.SetAgentMetric("agent-node-2", &AgentMetrics{
 		Hostname:      "agent-server-2",
@@ -372,13 +381,13 @@ func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 		MemUsed:       2 * 1024 * 1024 * 1024,
 		MemPercent:    25.0,
 		DiskTotal:     100 * 1024 * 1024 * 1024,
-		DiskUsed:    10 * 1024 * 1024 * 1024,
-		DiskPercent: 10.0,
-		NetRxRate:   0,
-		NetTxRate:   0,
-		Processes:   5,
-		Status:      "offline",
-		LastSeen:    time.Now().UTC(),
+		DiskUsed:      10 * 1024 * 1024 * 1024,
+		DiskPercent:   10.0,
+		NetRxRate:     0,
+		NetTxRate:     0,
+		Processes:     5,
+		Status:        "offline",
+		LastSeen:      time.Now().UTC(),
 	})
 
 	overview, err := collector.CollectOnce(context.Background())
@@ -432,6 +441,9 @@ func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 	}
 	if foundNode1.KernelVersion != "5.15.0-91-generic" {
 		t.Errorf("expected KernelVersion '5.15.0-91-generic', got '%s'", foundNode1.KernelVersion)
+	}
+	if len(foundNode1.NetworkInterfaces) != 1 || foundNode1.NetworkInterfaces[0].Name != "eth0" {
+		t.Errorf("expected 1 network interface eth0 on agent-node-1, got %+v", foundNode1.NetworkInterfaces)
 	}
 }
 
@@ -684,6 +696,12 @@ func TestCollector_ScrapeAgent_Online(t *testing.T) {
 	}
 	if m.TopProcesses[0].PID != 101 || m.TopProcesses[0].Name != "nginx" || m.TopProcesses[0].CPUPercent != 12.5 {
 		t.Errorf("unexpected top process parsed: %+v", m.TopProcesses[0])
+	}
+	if len(m.NetworkInterfaces) != 1 {
+		t.Fatalf("expected 1 network interface in agent metrics, got %d", len(m.NetworkInterfaces))
+	}
+	if m.NetworkInterfaces[0].Name != "eth0" || m.NetworkInterfaces[0].RxBytesPerSec != 1024000 || m.NetworkInterfaces[0].TxBytesPerSec != 512000 {
+		t.Errorf("unexpected network interface parsed: %+v", m.NetworkInterfaces[0])
 	}
 
 	hostRepo.mu.Lock()
@@ -1450,6 +1468,122 @@ func TestCollector_TopProcesses_ScrapeAndTransfer(t *testing.T) {
 	}
 	if len(unmarshaled.Nodes[0].TopProcesses) != 2 {
 		t.Fatalf("expected 2 top processes after JSON roundtrip, got %d", len(unmarshaled.Nodes[0].TopProcesses))
+	}
+}
+
+func TestCollector_SwarmContainerNodeMapping(t *testing.T) {
+	mockDocker := &mockDockerAPI{
+		info: system.Info{
+			ID:   "docker-daemon-id",
+			Name: "k8smater",
+			Swarm: swarm.Info{
+				NodeID: "swarm-mgr-id",
+			},
+		},
+		nodes: []swarm.Node{
+			{
+				ID: "swarm-mgr-id",
+				Description: swarm.NodeDescription{
+					Hostname: "k8smater",
+				},
+				Status: swarm.NodeStatus{
+					Addr:  "10.10.10.133",
+					State: swarm.NodeStateReady,
+				},
+			},
+			{
+				ID: "swarm-w1-id",
+				Description: swarm.NodeDescription{
+					Hostname: "worker1",
+				},
+				Status: swarm.NodeStatus{
+					Addr:  "10.10.10.150",
+					State: swarm.NodeStateReady,
+				},
+			},
+		},
+		containers: []container.Summary{
+			{
+				ID:    "c-redis-123",
+				Names: []string{"/tiki_redis.1.abc"},
+				Labels: map[string]string{
+					"com.docker.swarm.node.id":      "swarm-mgr-id",
+					"com.docker.swarm.service.name": "tiki_redis",
+				},
+				State: "running",
+			},
+			{
+				ID:    "c-web-456",
+				Names: []string{"/tiki_web.1.def"},
+				Labels: map[string]string{
+					"com.docker.swarm.node.id":      "swarm-w1-id",
+					"com.docker.swarm.service.name": "tiki_web",
+				},
+				State: "running",
+			},
+			{
+				ID:    "c-db-789",
+				Names: []string{"/postgres_db"},
+				Labels: map[string]string{
+					"com.docker.compose.service": "db",
+				},
+				State: "running",
+			},
+		},
+	}
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-uuid-k8smater",
+				Name:     "k8smater",
+				Endpoint: "http://10.10.10.133:9100",
+			},
+			{
+				ID:       "host-uuid-worker1",
+				Name:     "worker1",
+				Endpoint: "http://10.10.10.150:9100",
+			},
+		},
+	}
+
+	collector := NewCollector(mockDocker, hostRepo, nil, zap.NewNop())
+	overview, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("CollectOnce failed: %v", err)
+	}
+
+	if len(overview.Containers) != 3 {
+		t.Fatalf("expected 3 containers, got %d", len(overview.Containers))
+	}
+
+	cMap := make(map[string]ContainerMetrics)
+	for _, c := range overview.Containers {
+		cMap[c.ServiceName] = c
+	}
+
+	redis, ok := cMap["tiki_redis"]
+	if !ok {
+		t.Fatal("expected tiki_redis container")
+	}
+	if redis.NodeID != "host-uuid-k8smater" || redis.NodeName != "k8smater" {
+		t.Errorf("tiki_redis node mismatch: NodeID=%q NodeName=%q, want host-uuid-k8smater/k8smater", redis.NodeID, redis.NodeName)
+	}
+
+	web, ok := cMap["tiki_web"]
+	if !ok {
+		t.Fatal("expected tiki_web container")
+	}
+	if web.NodeID != "host-uuid-worker1" || web.NodeName != "worker1" {
+		t.Errorf("tiki_web node mismatch: NodeID=%q NodeName=%q, want host-uuid-worker1/worker1", web.NodeID, web.NodeName)
+	}
+
+	db, ok := cMap["db"]
+	if !ok {
+		t.Fatal("expected db container")
+	}
+	if db.NodeID != "host-uuid-k8smater" || db.NodeName != "k8smater" {
+		t.Errorf("db node mismatch: NodeID=%q NodeName=%q, want host-uuid-k8smater/k8smater", db.NodeID, db.NodeName)
 	}
 }
 

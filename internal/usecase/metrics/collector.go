@@ -12,6 +12,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/system"
 	"go.uber.org/zap"
 
@@ -33,57 +34,66 @@ type ProcessMetric struct {
 	State            string  `json:"state"`
 }
 
+// NetworkInterface holds throughput metrics for a specific network interface.
+type NetworkInterface struct {
+	Name          string `json:"name"`
+	RxBytesPerSec int64  `json:"rx_bytes_per_sec"`
+	TxBytesPerSec int64  `json:"tx_bytes_per_sec"`
+}
+
 // AgentMetrics represents metrics from a k8s-agent instance.
 type AgentMetrics struct {
-	Hostname      string          `json:"hostname"`
-	OS            string          `json:"os"`
-	Arch          string          `json:"arch"`
-	OSDistro      string          `json:"os_distro,omitempty"`
-	KernelVersion string          `json:"kernel_version,omitempty"`
-	CPUUsage      float64         `json:"cpu_usage"`
-	CPUCount      int             `json:"cpu_count"`
-	MemTotal      int64           `json:"mem_total"`
-	MemUsed       int64           `json:"mem_used"`
-	MemPercent    float64         `json:"mem_percent"`
-	DiskTotal     int64           `json:"disk_total"`
-	DiskUsed      int64           `json:"disk_used"`
-	DiskPercent   float64         `json:"disk_percent"`
-	NetRxRate     int64           `json:"net_rx_rate"`
-	NetTxRate     int64           `json:"net_tx_rate"`
-	Uptime        int64           `json:"uptime"`
-	LoadAvg       [3]float64      `json:"load_avg"`
-	Processes     int             `json:"processes"`
-	TopProcesses  []ProcessMetric `json:"top_processes"`
-	Status        string          `json:"status"` // "online", "offline", "error"
-	LastSeen      time.Time       `json:"last_seen"`
+	Hostname          string             `json:"hostname"`
+	OS                string             `json:"os"`
+	Arch              string             `json:"arch"`
+	OSDistro          string             `json:"os_distro"`
+	KernelVersion     string             `json:"kernel_version"`
+	CPUUsage          float64            `json:"cpu_usage"`
+	CPUCount          int                `json:"cpu_count"`
+	MemTotal          int64              `json:"mem_total"`
+	MemUsed           int64              `json:"mem_used"`
+	MemPercent        float64            `json:"mem_percent"`
+	DiskTotal         int64              `json:"disk_total"`
+	DiskUsed          int64              `json:"disk_used"`
+	DiskPercent       float64            `json:"disk_percent"`
+	NetRxRate         int64              `json:"net_rx_rate"`
+	NetTxRate         int64              `json:"net_tx_rate"`
+	NetworkInterfaces []NetworkInterface `json:"network_interfaces,omitempty"`
+	Uptime            int64              `json:"uptime"`
+	LoadAvg           [3]float64         `json:"load_avg"`
+	Processes         int                `json:"processes"`
+	TopProcesses      []ProcessMetric    `json:"top_processes"`
+	Status            string             `json:"status"` // "online", "offline", "error"
+	LastSeen          time.Time          `json:"last_seen"`
 }
 
 // NodeMetrics represents infrastructure metrics for a single node.
 type NodeMetrics struct {
-	NodeID         string          `json:"node_id"`
-	NodeName       string          `json:"node_name"`
-	Role           string          `json:"role"`   // manager, worker, standalone, agent
-	Status         string          `json:"status"` // ready, down, disconnected
-	OS             string          `json:"os,omitempty"`
-	Arch           string          `json:"arch,omitempty"`
-	OSDistro       string          `json:"os_distro,omitempty"`
-	KernelVersion  string          `json:"kernel_version,omitempty"`
-	CPUPercent     float64         `json:"cpu_percent"`
-	MemoryUsed     int64           `json:"memory_used"`   // bytes
-	MemoryTotal    int64           `json:"memory_total"`  // bytes
-	MemoryPercent  float64         `json:"memory_percent"`
-	DiskUsed       int64           `json:"disk_used"`     // bytes
-	DiskTotal      int64           `json:"disk_total"`    // bytes
-	DiskPercent    float64         `json:"disk_percent"`
-	NetworkRxBytes int64           `json:"network_rx_bytes"`
-	NetworkTxBytes int64           `json:"network_tx_bytes"`
-	ContainerCount int             `json:"container_count"`
-	RunningCount   int             `json:"running_count"`
-	UptimeSeconds  int64           `json:"uptime_seconds,omitempty"`
-	LoadAverage    [3]float64      `json:"load_average,omitempty"`
-	TopProcesses   []ProcessMetric `json:"top_processes"`
-	Source         string          `json:"source"` // "docker" or "agent"
-	UpdatedAt      time.Time       `json:"updated_at"`
+	NodeID            string             `json:"node_id"`
+	NodeName          string             `json:"node_name"`
+	Role              string             `json:"role"`   // manager, worker, standalone, agent
+	Status            string             `json:"status"` // ready, down, disconnected
+	OS                string             `json:"os"`
+	Arch              string             `json:"arch"`
+	OSDistro          string             `json:"os_distro"`
+	KernelVersion     string             `json:"kernel_version"`
+	CPUPercent        float64            `json:"cpu_percent"`
+	MemoryUsed        int64              `json:"memory_used"`   // bytes
+	MemoryTotal       int64              `json:"memory_total"`  // bytes
+	MemoryPercent     float64            `json:"memory_percent"`
+	DiskUsed          int64              `json:"disk_used"`     // bytes
+	DiskTotal         int64              `json:"disk_total"`    // bytes
+	DiskPercent       float64            `json:"disk_percent"`
+	NetworkRxBytes    int64              `json:"network_rx_bytes"`
+	NetworkTxBytes    int64              `json:"network_tx_bytes"`
+	NetworkInterfaces []NetworkInterface `json:"network_interfaces,omitempty"`
+	ContainerCount    int                `json:"container_count"`
+	RunningCount      int                `json:"running_count"`
+	UptimeSeconds     int64              `json:"uptime_seconds,omitempty"`
+	LoadAverage       [3]float64         `json:"load_average,omitempty"`
+	TopProcesses      []ProcessMetric    `json:"top_processes"`
+	Source            string             `json:"source"` // "docker" or "agent"
+	UpdatedAt         time.Time          `json:"updated_at"`
 }
 
 // ContainerMetrics represents resource stats for an individual container.
@@ -91,6 +101,7 @@ type ContainerMetrics struct {
 	ContainerID   string            `json:"container_id"`
 	ContainerName string            `json:"container_name"`
 	NodeID        string            `json:"node_id"`
+	NodeName      string            `json:"node_name,omitempty"`
 	Image         string            `json:"image"`
 	State         string            `json:"state"`
 	CPUPercent    float64           `json:"cpu_percent"`
@@ -139,6 +150,11 @@ type Thresholds struct {
 // Broadcaster is an interface for broadcasting messages across real-time channels (e.g. WebSockets).
 type Broadcaster interface {
 	Broadcast(msgType string, data interface{})
+}
+
+// SwarmNodeLister defines optional Swarm node listing support on Docker client.
+type SwarmNodeLister interface {
+	NodeList(ctx context.Context, options swarm.NodeListOptions) ([]swarm.Node, error)
 }
 
 // DockerAPIClient defines the Docker API subset required for metrics polling.
@@ -252,9 +268,13 @@ func NewCollector(dockerClient DockerAPIClient, computeHostRepo docker.ComputeHo
 func (c *Collector) Start(ctx context.Context) {
 	c.logger.Info("Starting Docker infrastructure metrics collector", zap.Duration("interval", c.interval))
 
-	// Initial poll of agents and docker immediately
-	go c.pollAgentHosts(ctx)
+	// Initial scrape of agents before running initial collection snapshot
+	if c.computeHostRepo != nil {
+		c.scrapeAllAgents(ctx)
+	}
 	c.runCollection(ctx)
+
+	go c.pollAgentHosts(ctx)
 
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
@@ -295,8 +315,6 @@ func (c *Collector) pollAgentHosts(ctx context.Context) {
 		return
 	}
 
-	c.scrapeAllAgents(ctx)
-
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
 
@@ -308,6 +326,7 @@ func (c *Collector) pollAgentHosts(ctx context.Context) {
 			return
 		case <-ticker.C:
 			c.scrapeAllAgents(ctx)
+			c.runCollection(ctx)
 		}
 	}
 }
@@ -416,6 +435,11 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		} `json:"memory"`
 		Disks   []agentDiskPayload `json:"disks"`
 		Network struct {
+			Interfaces []struct {
+				Name          string `json:"name"`
+				RxBytesPerSec int64  `json:"rx_bytes_per_sec"`
+				TxBytesPerSec int64  `json:"tx_bytes_per_sec"`
+			} `json:"interfaces"`
 			TotalRxBytesPerSec int64 `json:"total_rx_bytes_per_sec"`
 			TotalTxBytesPerSec int64 `json:"total_tx_bytes_per_sec"`
 		} `json:"network"`
@@ -459,29 +483,47 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 	if hostname == "" {
 		hostname = host.Name
 	}
+	osName := payload.OS
+	if osName == "" {
+		osName = "linux"
+	}
+	arch := payload.Arch
+	if arch == "" {
+		arch = "amd64"
+	}
+
+	var ifaces []NetworkInterface
+	for _, iface := range payload.Network.Interfaces {
+		ifaces = append(ifaces, NetworkInterface{
+			Name:          iface.Name,
+			RxBytesPerSec: iface.RxBytesPerSec,
+			TxBytesPerSec: iface.TxBytesPerSec,
+		})
+	}
 
 	am := &AgentMetrics{
-		Hostname:      hostname,
-		OS:            payload.OS,
-		Arch:          payload.Arch,
-		OSDistro:      payload.OSDistro,
-		KernelVersion: payload.KernelVersion,
-		CPUUsage:      payload.CPU.UsagePercent,
-		CPUCount:      payload.CPU.Count,
-		MemTotal:      payload.Memory.TotalBytes,
-		MemUsed:       payload.Memory.UsedBytes,
-		MemPercent:    payload.Memory.UsagePercent,
-		DiskTotal:     diskTotal,
-		DiskUsed:      diskUsed,
-		DiskPercent:   diskPercent,
-		NetRxRate:     payload.Network.TotalRxBytesPerSec,
-		NetTxRate:     payload.Network.TotalTxBytesPerSec,
-		Uptime:        payload.UptimeSeconds,
-		LoadAvg:       payload.LoadAverage,
-		Processes:     payload.Processes,
-		TopProcesses:  payload.TopProcesses,
-		Status:        "online",
-		LastSeen:      collectedAt,
+		Hostname:          hostname,
+		OS:                osName,
+		Arch:              arch,
+		OSDistro:          payload.OSDistro,
+		KernelVersion:     payload.KernelVersion,
+		CPUUsage:          payload.CPU.UsagePercent,
+		CPUCount:          payload.CPU.Count,
+		MemTotal:          payload.Memory.TotalBytes,
+		MemUsed:           payload.Memory.UsedBytes,
+		MemPercent:        payload.Memory.UsagePercent,
+		DiskTotal:         diskTotal,
+		DiskUsed:          diskUsed,
+		DiskPercent:       diskPercent,
+		NetRxRate:         payload.Network.TotalRxBytesPerSec,
+		NetTxRate:         payload.Network.TotalTxBytesPerSec,
+		NetworkInterfaces: ifaces,
+		Uptime:            payload.UptimeSeconds,
+		LoadAvg:           payload.LoadAverage,
+		Processes:         payload.Processes,
+		TopProcesses:      payload.TopProcesses,
+		Status:            "online",
+		LastSeen:          collectedAt,
 	}
 
 	c.agentMu.Lock()
@@ -565,6 +607,9 @@ func (c *Collector) GetAgentMetrics() map[string]*AgentMetrics {
 			metricCopy := *v
 			if v.TopProcesses != nil {
 				metricCopy.TopProcesses = append([]ProcessMetric(nil), v.TopProcesses...)
+			}
+			if v.NetworkInterfaces != nil {
+				metricCopy.NetworkInterfaces = append([]NetworkInterface(nil), v.NetworkInterfaces...)
 			}
 			res[k] = &metricCopy
 		}
@@ -781,6 +826,55 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 		}
 
 		if len(containersList) > 0 {
+			// Build known hosts list from agent metrics and compute host repository
+			var knownHosts []nodeHostMapping
+			c.agentMu.RLock()
+			for hID, am := range c.agentMetrics {
+				if am != nil {
+					knownHosts = append(knownHosts, nodeHostMapping{
+						id:   hID,
+						name: am.Hostname,
+					})
+				}
+			}
+			c.agentMu.RUnlock()
+
+			if c.computeHostRepo != nil {
+				if dbHosts, err := c.computeHostRepo.ListAll(ctx); err == nil {
+					seen := make(map[string]bool)
+					for _, kh := range knownHosts {
+						seen[kh.id] = true
+					}
+					for _, dh := range dbHosts {
+						if !seen[dh.ID] {
+							knownHosts = append(knownHosts, nodeHostMapping{
+								id:       dh.ID,
+								name:     dh.Name,
+								endpoint: dh.Endpoint,
+							})
+						} else {
+							for i := range knownHosts {
+								if knownHosts[i].id == dh.ID && knownHosts[i].endpoint == "" {
+									knownHosts[i].endpoint = dh.Endpoint
+								}
+							}
+						}
+					}
+				}
+			}
+
+			var swarmNodes []swarm.Node
+			if lister, ok := c.dockerClient.(SwarmNodeLister); ok {
+				if sn, err := lister.NodeList(ctx, swarm.NodeListOptions{}); err == nil {
+					swarmNodes = sn
+				}
+			}
+
+			swarmNodeMap := make(map[string]swarm.Node, len(swarmNodes))
+			for _, sn := range swarmNodes {
+				swarmNodeMap[sn.ID] = sn
+			}
+
 			type rawContainerStat struct {
 				cm ContainerMetrics
 			}
@@ -801,14 +895,57 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 						}
 					}
 
-					nodeID := ""
+					swarmNodeID := ""
 					if cSummary.Labels != nil {
 						if nid, ok := cSummary.Labels["com.docker.swarm.node.id"]; ok {
-							nodeID = nid
+							swarmNodeID = nid
 						}
 					}
-					if nodeID == "" {
-						nodeID = info.ID
+
+					var resolvedNodeID, resolvedNodeName string
+
+					if swarmNodeID != "" {
+						if sn, ok := swarmNodeMap[swarmNodeID]; ok {
+							resolvedNodeID, resolvedNodeName = matchHost(knownHosts, sn.Description.Hostname, sn.Status.Addr, "")
+							if resolvedNodeName == "" {
+								resolvedNodeName = sn.Description.Hostname
+							}
+							if resolvedNodeID == "" {
+								resolvedNodeID = swarmNodeID
+							}
+						} else if info.Swarm.NodeID != "" && swarmNodeID == info.Swarm.NodeID {
+							resolvedNodeID, resolvedNodeName = matchHost(knownHosts, info.Name, "", info.Name)
+							if resolvedNodeName == "" {
+								resolvedNodeName = info.Name
+							}
+							if resolvedNodeID == "" {
+								resolvedNodeID = swarmNodeID
+							}
+						} else {
+							resolvedNodeID = swarmNodeID
+						}
+					}
+
+					if resolvedNodeID == "" || resolvedNodeName == "" {
+						hID, hName := matchHost(knownHosts, info.Name, "", info.Name)
+						if resolvedNodeID == "" {
+							if hID != "" {
+								resolvedNodeID = hID
+							} else if info.ID != "" {
+								resolvedNodeID = info.ID
+							} else if swarmNodeID != "" {
+								resolvedNodeID = swarmNodeID
+							}
+						}
+						if resolvedNodeName == "" {
+							if hName != "" {
+								resolvedNodeName = hName
+							} else if info.Name != "" {
+								resolvedNodeName = info.Name
+							} else {
+								resolvedNodeName = resolvedNodeID
+							}
+						}
 					}
 
 					serviceName := ""
@@ -826,7 +963,8 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 					cm := ContainerMetrics{
 						ContainerID:   cSummary.ID,
 						ContainerName: name,
-						NodeID:        nodeID,
+						NodeID:        resolvedNodeID,
+						NodeName:      resolvedNodeName,
 						Image:         cSummary.Image,
 						State:         string(cSummary.State),
 						ServiceName:   serviceName,
@@ -885,30 +1023,31 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 		}
 
 		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
-			NodeID:         hostID,
-			NodeName:       am.Hostname,
-			Role:           "agent",
-			Status:         status,
-			OS:             am.OS,
-			Arch:           am.Arch,
-			OSDistro:       am.OSDistro,
-			KernelVersion:  am.KernelVersion,
-			CPUPercent:     am.CPUUsage,
-			MemoryUsed:     am.MemUsed,
-			MemoryTotal:    am.MemTotal,
-			MemoryPercent:  am.MemPercent,
-			DiskUsed:       am.DiskUsed,
-			DiskTotal:      am.DiskTotal,
-			DiskPercent:    am.DiskPercent,
-			NetworkRxBytes: am.NetRxRate,
-			NetworkTxBytes: am.NetTxRate,
-			ContainerCount: am.Processes,
-			RunningCount:   am.Processes,
-			UptimeSeconds:  am.Uptime,
-			LoadAverage:    am.LoadAvg,
-			TopProcesses:   am.TopProcesses,
-			Source:         "agent",
-			UpdatedAt:      am.LastSeen,
+			NodeID:            hostID,
+			NodeName:          am.Hostname,
+			Role:              "agent",
+			Status:            status,
+			OS:                am.OS,
+			Arch:              am.Arch,
+			OSDistro:          am.OSDistro,
+			KernelVersion:     am.KernelVersion,
+			CPUPercent:        am.CPUUsage,
+			MemoryUsed:        am.MemUsed,
+			MemoryTotal:       am.MemTotal,
+			MemoryPercent:     am.MemPercent,
+			DiskUsed:          am.DiskUsed,
+			DiskTotal:         am.DiskTotal,
+			DiskPercent:       am.DiskPercent,
+			NetworkRxBytes:    am.NetRxRate,
+			NetworkTxBytes:    am.NetTxRate,
+			NetworkInterfaces: am.NetworkInterfaces,
+			ContainerCount:    am.Processes,
+			RunningCount:      am.Processes,
+			UptimeSeconds:     am.Uptime,
+			LoadAverage:       am.LoadAvg,
+			TopProcesses:      am.TopProcesses,
+			Source:            "agent",
+			UpdatedAt:         am.LastSeen,
 		})
 	}
 	c.agentMu.RUnlock()
@@ -1061,5 +1200,60 @@ func extractServiceNameFromContainerName(name string) string {
 		return parts[0]
 	}
 	return name
+}
+
+type nodeHostMapping struct {
+	id       string
+	name     string
+	endpoint string
+}
+
+func normalizeNodeName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.TrimPrefix(name, "k8s")
+	name = strings.TrimPrefix(name, "node-")
+	name = strings.TrimPrefix(name, "host-")
+	return name
+}
+
+func matchHost(hosts []nodeHostMapping, swarmHostname string, swarmAddr string, defaultName string) (string, string) {
+	sHost := strings.ToLower(strings.TrimSpace(swarmHostname))
+	sNorm := normalizeNodeName(swarmHostname)
+	sAddr := strings.TrimSpace(swarmAddr)
+	dHost := strings.ToLower(strings.TrimSpace(defaultName))
+	dNorm := normalizeNodeName(defaultName)
+
+	// 1. Exact match by name
+	for _, h := range hosts {
+		hLower := strings.ToLower(strings.TrimSpace(h.name))
+		if (sHost != "" && hLower == sHost) || (dHost != "" && hLower == dHost) {
+			return h.id, h.name
+		}
+	}
+
+	// 2. Normalized name match (e.g. k8sworker3 <-> worker3)
+	for _, h := range hosts {
+		hNorm := normalizeNodeName(h.name)
+		if (sNorm != "" && hNorm == sNorm) || (dNorm != "" && hNorm == dNorm) {
+			return h.id, h.name
+		}
+		if sNorm != "" && len(sNorm) >= 3 && (strings.Contains(hNorm, sNorm) || strings.Contains(sNorm, hNorm)) {
+			return h.id, h.name
+		}
+		if dNorm != "" && len(dNorm) >= 3 && (strings.Contains(hNorm, dNorm) || strings.Contains(dNorm, hNorm)) {
+			return h.id, h.name
+		}
+	}
+
+	// 3. IP / Endpoint match
+	if sAddr != "" {
+		for _, h := range hosts {
+			if h.endpoint != "" && strings.Contains(h.endpoint, sAddr) {
+				return h.id, h.name
+			}
+		}
+	}
+
+	return "", ""
 }
 

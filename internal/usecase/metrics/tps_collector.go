@@ -29,6 +29,8 @@ type TPSSnapshot struct {
 // ServiceTPS holds aggregated throughput and resource metrics for a Docker/Swarm service.
 type ServiceTPS struct {
 	ServiceName    string  `json:"service_name"`
+	NodeID         string  `json:"node_id,omitempty"`
+	NodeName       string  `json:"node_name,omitempty"`
 	ContainerCount int     `json:"container_count"`
 	CPUPercent     float64 `json:"cpu_percent"`
 	MemoryUsedMB   float64 `json:"memory_used_mb"`
@@ -316,10 +318,17 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 		return NetworkTPS{}, perNode, services
 	}
 
+	nodeNameMap := make(map[string]string)
+	nodeIDByName := make(map[string]string)
 	agentMap := c.metricsProvider.GetAgentMetrics()
 	for hostID, am := range agentMap {
 		if am == nil {
 			continue
+		}
+		if am.Hostname != "" {
+			nodeNameMap[hostID] = am.Hostname
+			nodeIDByName[strings.ToLower(strings.TrimSpace(am.Hostname))] = hostID
+			nodeIDByName[normalizeNodeName(am.Hostname)] = hostID
 		}
 		var diskRead, diskWrite int64
 		for _, p := range am.TopProcesses {
@@ -343,6 +352,14 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 
 	snapshot := c.metricsProvider.GetLastSnapshot()
 	if snapshot != nil {
+		for _, nm := range snapshot.Nodes {
+			if nm.NodeID != "" && nm.NodeName != "" {
+				nodeNameMap[nm.NodeID] = nm.NodeName
+				nodeIDByName[strings.ToLower(strings.TrimSpace(nm.NodeName))] = nm.NodeID
+				nodeIDByName[normalizeNodeName(nm.NodeName)] = nm.NodeID
+			}
+		}
+
 		// If agentMap was empty, populate nodes from SystemOverview snapshot
 		if len(agentMap) == 0 {
 			for _, nm := range snapshot.Nodes {
@@ -410,10 +427,12 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 		c.prevContainerTime = now
 		c.mu.Unlock()
 
-		// Group containers by service
+		// Group containers by service and node
 		if len(snapshot.Containers) > 0 {
 			type serviceAcc struct {
 				name          string
+				nodeID        string
+				nodeName      string
 				totalCount    int
 				runningCount  int
 				totalCPU      float64
@@ -432,11 +451,62 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 					sName = "unknown"
 				}
 
-				acc, ok := serviceMap[sName]
+				nodeID := cm.NodeID
+				nodeName := cm.NodeName
+
+				if nodeID == "" && cm.Labels != nil {
+					if nid, ok := cm.Labels["com.docker.swarm.node.id"]; ok {
+						nodeID = nid
+					}
+				}
+
+				if nodeName == "" && nodeID != "" {
+					if name, ok := nodeNameMap[nodeID]; ok {
+						nodeName = name
+					}
+				}
+
+				if nodeName != "" {
+					if id, ok := nodeIDByName[strings.ToLower(strings.TrimSpace(nodeName))]; ok {
+						nodeID = id
+					} else if id, ok := nodeIDByName[normalizeNodeName(nodeName)]; ok {
+						nodeID = id
+					}
+				}
+
+				if nodeName == "" && nodeID != "" {
+					if id, ok := nodeIDByName[strings.ToLower(strings.TrimSpace(nodeID))]; ok {
+						nodeName = nodeNameMap[id]
+						nodeID = id
+					} else if id, ok := nodeIDByName[normalizeNodeName(nodeID)]; ok {
+						nodeName = nodeNameMap[id]
+						nodeID = id
+					}
+				}
+
+				if (nodeID == "" || nodeName == "") && len(snapshot.Nodes) == 1 {
+					if nodeID == "" {
+						nodeID = snapshot.Nodes[0].NodeID
+					}
+					if nodeName == "" {
+						nodeName = snapshot.Nodes[0].NodeName
+					}
+				}
+
+				if nodeName == "" && nodeID != "" {
+					nodeName = nodeID
+				}
+
+				groupKey := sName + "|" + nodeID
+				acc, ok := serviceMap[groupKey]
 				if !ok {
-					acc = &serviceAcc{name: sName}
-					serviceMap[sName] = acc
-					serviceOrder = append(serviceOrder, sName)
+					acc = &serviceAcc{
+						name:     sName,
+						nodeID:   nodeID,
+						nodeName: nodeName,
+					}
+					serviceMap[groupKey] = acc
+					serviceOrder = append(serviceOrder, groupKey)
 				}
 
 				acc.totalCount++
@@ -450,8 +520,8 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 				acc.txRate += containerTxRates[cm.ContainerID]
 			}
 
-			for _, sName := range serviceOrder {
-				acc := serviceMap[sName]
+			for _, groupKey := range serviceOrder {
+				acc := serviceMap[groupKey]
 				var memPercent float64
 				if acc.totalMemLimit > 0 {
 					memPercent = math.Round((float64(acc.totalMemBytes)/float64(acc.totalMemLimit))*10000) / 100
@@ -466,6 +536,8 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 
 				services = append(services, ServiceTPS{
 					ServiceName:    acc.name,
+					NodeID:         acc.nodeID,
+					NodeName:       acc.nodeName,
 					ContainerCount: acc.totalCount,
 					CPUPercent:     math.Round(acc.totalCPU*100) / 100,
 					MemoryUsedMB:   math.Round((float64(acc.totalMemBytes)/(1024*1024))*100) / 100,

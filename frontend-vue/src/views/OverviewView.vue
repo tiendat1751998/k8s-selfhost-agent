@@ -6,10 +6,12 @@ import {
   tpsApi,
   type SystemOverview,
   type NodeMetrics,
+  type NetworkInterface,
   type ContainerMetrics,
   type MetricAlert,
   type ProcessMetric,
   type TpsSnapshot,
+  type TpsServiceMetrics,
 } from '../api/overview'
 import { useWebSocket } from '../composables/useWebSocket'
 import CircularGauge from '../components/ui/CircularGauge.vue'
@@ -386,6 +388,47 @@ const selectedNode = computed<NodeMetrics | null>(() => {
   return nodes.value.find(n => n.node_id === selectedNodeId.value) || null
 })
 
+// Filtered network interfaces for selected node (excluding lo and veth*)
+const filteredNodeInterfaces = computed<NetworkInterface[]>(() => {
+  const ifaces = selectedNode.value?.network_interfaces || []
+  return ifaces.filter(iface => {
+    const name = (iface.name || '').toLowerCase()
+    if (name === 'lo' || name.startsWith('lo:') || name.startsWith('veth')) {
+      return false
+    }
+    return true
+  })
+})
+
+// Filtered and sorted services running on selected node
+const nodeServices = computed<TpsServiceMetrics[]>(() => {
+  if (!selectedNode.value || !tpsData.value?.services) return []
+  const nodeId = (selectedNode.value.node_id || '').toLowerCase().trim()
+  const nodeName = (selectedNode.value.node_name || '').toLowerCase().trim()
+  const isSingleNode = (overview.value?.nodes?.length || 0) === 1
+
+  return tpsData.value.services.filter(s => {
+    const sNodeId = (s.node_id || '').toLowerCase().trim()
+    const sNodeName = (s.node_name || '').toLowerCase().trim()
+
+    if (sNodeId && (sNodeId === nodeId || sNodeId === nodeName)) return true
+    if (sNodeName && (sNodeName === nodeName || sNodeName === nodeId)) return true
+    if (sNodeName && nodeName) {
+      if (nodeName === sNodeName || nodeName.includes(sNodeName) || sNodeName.includes(nodeName)) return true
+      const normS = sNodeName.replace(/^(k8s|node-)/, '')
+      const normN = nodeName.replace(/^(k8s|node-)/, '')
+      if (normS && normN && (normS === normN || normS.includes(normN) || normN.includes(normS))) return true
+    }
+    if (isSingleNode && (!s.node_id || sNodeId === nodeId || sNodeId === nodeName)) return true
+    return false
+  }).sort((a, b) => {
+    if (b.cpu_percent !== a.cpu_percent) {
+      return b.cpu_percent - a.cpu_percent
+    }
+    return b.memory_used_mb - a.memory_used_mb
+  })
+})
+
 // Filtered and sorted processes for selected node
 const filteredNodeProcesses = computed<ProcessMetric[]>(() => {
   if (!selectedNode.value?.top_processes) return []
@@ -651,15 +694,6 @@ function formatCacheHitRatio(ratio?: number): string {
   return pct.toFixed(1) + '%'
 }
 
-const sortedServices = computed(() => {
-  if (!tpsData.value?.services) return []
-  return [...tpsData.value.services].sort((a, b) => {
-    if (b.cpu_percent !== a.cpu_percent) {
-      return b.cpu_percent - a.cpu_percent
-    }
-    return b.memory_used_mb - a.memory_used_mb
-  })
-})
 
 // ==========================================
 // 5. LIFECYCLE & CLEANUP
@@ -1445,91 +1479,6 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- PER-SERVICE THROUGHPUT TABLE -->
-        <div class="tps-table-card glass-panel">
-          <div class="tps-table-header">
-            <div class="tps-table-title-group">
-              <span class="tps-table-icon">📦</span>
-              <h3 class="tps-table-title">Service Throughput</h3>
-              <span class="badge badge-cyan" v-if="sortedServices.length">
-                {{ sortedServices.length }} Services Active
-              </span>
-            </div>
-            <span class="tps-table-sub">Live container resource utilization and network throughput per Docker/Swarm service</span>
-          </div>
-
-          <div class="table-scroll-wrapper" v-if="sortedServices && sortedServices.length > 0">
-            <table class="tps-table">
-              <thead>
-                <tr>
-                  <th class="col-tps-service">Service</th>
-                  <th class="col-tps-replicas">Replicas</th>
-                  <th class="col-tps-cpu">CPU</th>
-                  <th class="col-tps-mem">Memory</th>
-                  <th class="col-tps-rx">↓ Rx</th>
-                  <th class="col-tps-tx">↑ Tx</th>
-                  <th class="col-tps-status">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="svc in sortedServices"
-                  :key="svc.service_name"
-                  class="tps-row"
-                >
-                  <td class="col-tps-service">
-                    <div class="tps-node-cell">
-                      <span
-                        class="node-indicator-dot"
-                        :class="svc.status === 'healthy' ? 'bg-emerald' : svc.status === 'degraded' ? 'bg-amber' : 'bg-rose'"
-                      ></span>
-                      <span class="tps-node-name font-mono">{{ svc.service_name }}</span>
-                    </div>
-                  </td>
-                  <td class="col-tps-replicas font-mono">
-                    <span class="badge badge-indigo">
-                      {{ svc.container_count }}
-                    </span>
-                  </td>
-                  <td class="col-tps-cpu font-mono">
-                    <span :class="svc.cpu_percent > 80 ? 'text-rose' : svc.cpu_percent > 50 ? 'text-amber' : 'text-emerald'">
-                      {{ svc.cpu_percent.toFixed(1) }}%
-                    </span>
-                  </td>
-                  <td class="col-tps-mem font-mono">
-                    <span :class="svc.memory_percent > 85 ? 'text-rose' : svc.memory_percent > 70 ? 'text-amber' : 'text-cyan'">
-                      {{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}
-                    </span>
-                  </td>
-                  <td class="col-tps-rx font-mono">
-                    <span class="tps-rx-badge">
-                      ↓ {{ formatBytes(svc.rx_bytes_per_sec) }}/s
-                    </span>
-                  </td>
-                  <td class="col-tps-tx font-mono">
-                    <span class="tps-tx-badge">
-                      ↑ {{ formatBytes(svc.tx_bytes_per_sec) }}/s
-                    </span>
-                  </td>
-                  <td class="col-tps-status">
-                    <span
-                      class="badge"
-                      :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
-                    >
-                      {{ svc.status === 'healthy' ? '🟢 Healthy' : svc.status === 'degraded' ? '🟡 Degraded' : '🔴 Down' }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-else-if="tpsLoading" class="tps-table-empty">
-            <span>Loading per-service throughput metrics...</span>
-          </div>
-          <div v-else class="tps-table-empty">
-            <span>No per-service throughput telemetry currently available.</span>
-          </div>
-        </div>
       </section>
 
       <!-- SECTION 3 & 5: SPLIT CONTAINER GRID & LIVE ACTIVITY / TRENDS -->
@@ -2026,7 +1975,120 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 3. 🔥 Top Resource-Consuming Apps & Processes Table -->
+        <!-- 3. 📡 Network Interface Throughput Section -->
+        <div class="node-net-interfaces-section glass-panel">
+          <div class="hud-section-header">
+            <div class="node-section-title-group">
+              <h4 class="hud-section-heading">
+                <span class="heading-icon">📡</span> Network Interface Throughput
+              </h4>
+              <span class="badge badge-cyan font-mono" v-if="filteredNodeInterfaces.length > 0">
+                {{ filteredNodeInterfaces.length }} {{ filteredNodeInterfaces.length === 1 ? 'interface' : 'interfaces' }}
+              </span>
+            </div>
+            <span class="badge badge-violet font-mono">BANDWIDTH</span>
+          </div>
+
+          <div class="interfaces-table-wrapper" v-if="filteredNodeInterfaces.length > 0">
+            <table class="interfaces-table">
+              <thead>
+                <tr>
+                  <th class="th-iface">Interface</th>
+                  <th class="th-rx">↓ Rx</th>
+                  <th class="th-tx">↑ Tx</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="iface in filteredNodeInterfaces" :key="iface.name" class="iface-row">
+                  <td class="col-iface-name font-mono">
+                    <span class="iface-tag font-mono">{{ iface.name }}</span>
+                  </td>
+                  <td class="col-iface-rx font-mono">
+                    <span class="text-cyan">↓ {{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
+                  </td>
+                  <td class="col-iface-tx font-mono">
+                    <span class="text-violet">↑ {{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="node-section-empty">
+            <span class="text-muted text-xs">No active network interfaces detected for this node</span>
+          </div>
+        </div>
+
+        <!-- 4. 📦 Apps & Services on this Node Section -->
+        <div class="node-services-section glass-panel">
+          <div class="hud-section-header">
+            <div class="node-section-title-group">
+              <h4 class="hud-section-heading">
+                <span class="heading-icon">📦</span> Apps & Services on this Node
+              </h4>
+              <span class="badge badge-cyan font-mono" v-if="nodeServices.length > 0">
+                {{ nodeServices.length }} {{ nodeServices.length === 1 ? 'service' : 'services' }}
+              </span>
+            </div>
+            <span class="badge badge-indigo font-mono">THROUGHPUT</span>
+          </div>
+
+          <div class="services-table-wrapper" v-if="nodeServices.length > 0">
+            <table class="node-services-table">
+              <thead>
+                <tr>
+                  <th class="th-svc-name">Service</th>
+                  <th class="th-svc-cpu">CPU</th>
+                  <th class="th-svc-mem">Memory</th>
+                  <th class="th-svc-rx">↓ Rx</th>
+                  <th class="th-svc-tx">↑ Tx</th>
+                  <th class="th-svc-status">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="svc in nodeServices" :key="svc.service_name + (svc.node_id || '')" class="node-svc-row">
+                  <td class="col-svc-name">
+                    <div class="svc-name-cell">
+                      <span
+                        class="node-indicator-dot"
+                        :class="svc.status === 'healthy' ? 'bg-emerald' : svc.status === 'degraded' ? 'bg-amber' : 'bg-rose'"
+                      ></span>
+                      <span class="svc-title font-mono">{{ svc.service_name }}</span>
+                    </div>
+                  </td>
+                  <td class="col-svc-cpu font-mono">
+                    <span :class="svc.cpu_percent > 80 ? 'text-rose' : svc.cpu_percent > 50 ? 'text-amber' : 'text-emerald'">
+                      {{ svc.cpu_percent.toFixed(1) }}%
+                    </span>
+                  </td>
+                  <td class="col-svc-mem font-mono">
+                    <span :class="svc.memory_percent > 85 ? 'text-rose' : svc.memory_percent > 70 ? 'text-amber' : 'text-cyan'">
+                      {{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}
+                    </span>
+                  </td>
+                  <td class="col-svc-rx font-mono">
+                    <span class="text-cyan">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
+                  </td>
+                  <td class="col-svc-tx font-mono">
+                    <span class="text-violet">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+                  </td>
+                  <td class="col-svc-status">
+                    <span
+                      class="badge"
+                      :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
+                    >
+                      {{ svc.status === 'healthy' ? '● HEALTHY' : svc.status === 'degraded' ? '● DEGRADED' : '● DOWN' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="node-section-empty">
+            <span class="text-muted text-xs">No containerized services detected on this node</span>
+          </div>
+        </div>
+
+        <!-- 5. 🔥 Top Resource-Consuming Apps & Processes Table -->
         <div class="processes-section glass-panel">
           <div class="processes-header">
             <div class="proc-title-group">
@@ -3859,6 +3921,132 @@ onUnmounted(() => {
 .net-val {
   color: var(--text-primary);
   font-weight: 600;
+}
+
+/* Network Interface & Services Sections in Node Drawer */
+.node-net-interfaces-section,
+.node-services-section {
+  padding: 18px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.node-section-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.interfaces-table-wrapper,
+.services-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.interfaces-table,
+.node-services-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+
+.interfaces-table thead tr,
+.node-services-table thead tr {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.interfaces-table th,
+.node-services-table th {
+  padding: 10px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.interfaces-table tbody tr,
+.node-services-table tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+
+.interfaces-table tbody tr:last-child,
+.node-services-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.interfaces-table tbody tr:hover,
+.node-services-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.interfaces-table td,
+.node-services-table td {
+  padding: 10px 12px;
+  vertical-align: middle;
+}
+
+.col-iface-name {
+  width: 40%;
+}
+
+.col-iface-rx,
+.col-iface-tx {
+  width: 30%;
+}
+
+.iface-tag {
+  font-size: 11px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+.col-svc-name {
+  min-width: 160px;
+}
+
+.svc-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.svc-title {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.col-svc-cpu,
+.col-svc-mem,
+.col-svc-rx,
+.col-svc-tx {
+  white-space: nowrap;
+}
+
+.col-svc-status {
+  white-space: nowrap;
+  width: 110px;
+}
+
+.node-section-empty {
+  padding: 18px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  border: 1px dashed var(--border-subtle);
 }
 
 /* Processes Section */
