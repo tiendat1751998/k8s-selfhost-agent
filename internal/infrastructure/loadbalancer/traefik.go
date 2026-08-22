@@ -68,6 +68,11 @@ type traefikOverviewDTO struct {
 	} `json:"http"`
 }
 
+const (
+	promMetricsCacheTTL = 800 * time.Millisecond
+	defaultEMAAlpha     = 0.6
+)
+
 // TraefikProvider implements domainLB.Provider for Traefik edge reverse proxy.
 type TraefikProvider struct {
 	apiURL     string
@@ -78,6 +83,14 @@ type TraefikProvider struct {
 	prevTime           time.Time
 	prevAggregateStats entrypointSample
 	prevAggregateTime  time.Time
+	prevSmoothedRPS    float64
+	zeroDeltaCount     int
+
+	// Cached Prometheus metrics to share across GetAggregateStats and GetServiceStats within the same cycle
+	cachedPromStats      map[string]serviceSample
+	cachedPromEntrypoint entrypointSample
+	cachedPromTime       time.Time
+	cachedPromErr        error
 }
 
 // Option configures TraefikProvider.
@@ -166,8 +179,8 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 		return nil, fmt.Errorf("fetching traefik services: %w", err)
 	}
 
-	// 2. Attempt to fetch Prometheus metrics if exposed
-	promStats, _, promErr := p.fetchPrometheusMetrics(ctx)
+	// 2. Attempt to fetch Prometheus metrics if exposed (cached per cycle)
+	promStats, _, promErr := p.getPrometheusMetrics(ctx)
 
 	// 3. Aggregate stats per service
 	currSamples := make(map[string]serviceSample)
@@ -247,8 +260,8 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.AggregateStats, error) {
 	now := time.Now().UTC()
 
-	// 1. Fetch Prometheus metrics from Traefik
-	_, entrypoint, err := p.fetchPrometheusMetrics(ctx)
+	// 1. Fetch Prometheus metrics from Traefik (cached per cycle)
+	_, entrypoint, err := p.getPrometheusMetrics(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetching traefik prometheus metrics: %w", err)
 	}
@@ -267,7 +280,34 @@ func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.Aggr
 			if reqDelta < 0 {
 				reqDelta = 0
 			}
-			rps = math.Round((float64(reqDelta)/elapsed)*100) / 100
+			rawRPS := float64(reqDelta) / elapsed
+
+			// Exponential Moving Average (EMA) smoothing for stable live reporting
+			var smoothedRPS float64
+			if reqDelta > 0 {
+				p.zeroDeltaCount = 0
+				if p.prevSmoothedRPS == 0 || math.Abs(rawRPS-p.prevSmoothedRPS) < 0.01 {
+					smoothedRPS = rawRPS
+				} else {
+					smoothedRPS = defaultEMAAlpha*rawRPS + (1.0-defaultEMAAlpha)*p.prevSmoothedRPS
+				}
+			} else {
+				p.zeroDeltaCount++
+				if p.zeroDeltaCount >= 2 {
+					// Decay smoothly to 0 after consecutive idle cycles
+					smoothedRPS = (1.0 - defaultEMAAlpha) * p.prevSmoothedRPS
+					if smoothedRPS < 0.05 {
+						smoothedRPS = 0
+					}
+				} else {
+					smoothedRPS = (1.0 - defaultEMAAlpha) * p.prevSmoothedRPS
+					if smoothedRPS < 0.05 {
+						smoothedRPS = 0
+					}
+				}
+			}
+			p.prevSmoothedRPS = smoothedRPS
+			rps = math.Round(smoothedRPS*100) / 100
 
 			errDelta := (entrypoint.status4xx + entrypoint.status5xx) - (p.prevAggregateStats.status4xx + p.prevAggregateStats.status5xx)
 			if errDelta < 0 {
@@ -295,6 +335,44 @@ func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.Aggr
 		ErrorRate:           errRate,
 		AvgLatencyMs:        avgLatencyMs,
 	}, nil
+}
+
+// getPrometheusMetrics returns cached Prometheus metrics if recent (< promMetricsCacheTTL),
+// or fetches fresh metrics from Traefik /metrics endpoint.
+func (p *TraefikProvider) getPrometheusMetrics(ctx context.Context) (map[string]serviceSample, entrypointSample, error) {
+	p.mu.Lock()
+	if !p.cachedPromTime.IsZero() && time.Since(p.cachedPromTime) < promMetricsCacheTTL && p.cachedPromErr == nil {
+		stats := p.cachedPromStats
+		ep := p.cachedPromEntrypoint
+		p.mu.Unlock()
+		return stats, ep, nil
+	}
+	p.mu.Unlock()
+
+	stats, ep, err := p.fetchPrometheusMetrics(ctx)
+
+	p.mu.Lock()
+	if err == nil {
+		p.cachedPromStats = stats
+		p.cachedPromEntrypoint = ep
+		p.cachedPromTime = time.Now().UTC()
+		p.cachedPromErr = nil
+	} else {
+		p.cachedPromErr = err
+	}
+	p.mu.Unlock()
+
+	return stats, ep, err
+}
+
+// InvalidateMetricsCache clears any cached Prometheus metrics snapshot.
+func (p *TraefikProvider) InvalidateMetricsCache() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.cachedPromTime = time.Time{}
+	p.cachedPromStats = nil
+	p.cachedPromEntrypoint = entrypointSample{}
+	p.cachedPromErr = nil
 }
 
 // fetchHTTPServices retrieves the list of active services from /api/http/services.

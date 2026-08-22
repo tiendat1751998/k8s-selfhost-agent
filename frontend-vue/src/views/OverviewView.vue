@@ -102,10 +102,8 @@ async function fetchTpsMetrics() {
       // Keep latest trend history point aligned with accurate live throughput
       if (trendHistory.value.length > 0) {
         const lastIdx = trendHistory.value.length - 1
-        const rps = data.http?.requests_per_sec ?? 0
-        if (rps > 0 || trendHistory.value[lastIdx].reqs === 0) {
-          trendHistory.value[lastIdx].reqs = Math.round(rps)
-        }
+        const rps = effectiveHttpRps.value
+        trendHistory.value[lastIdx].reqs = Math.round(rps)
       }
     }
   } catch (err: unknown) {
@@ -114,6 +112,11 @@ async function fetchTpsMetrics() {
   } finally {
     tpsLoading.value = false
   }
+}
+
+async function pollClusterMetrics() {
+  await fetchOverview()
+  await fetchTpsMetrics()
 }
 
 
@@ -324,6 +327,9 @@ const nodes = computed<NodeMetrics[]>(() => orderedNodes.value)
 
 // Sum container counts across all active nodes with fallback to overview container summary
 const totalContainers = computed(() => {
+  if (overview.value?.total_containers !== undefined && overview.value.total_containers >= 0 && (overview.value.containers?.length || 0) > 0) {
+    return overview.value.total_containers
+  }
   const nodeSum = (nodes.value || []).reduce((acc, n) => acc + (n.container_count || 0), 0)
   if (nodeSum > 0) return nodeSum
   if (overview.value?.total_containers && overview.value.total_containers > 0) {
@@ -333,7 +339,10 @@ const totalContainers = computed(() => {
 })
 
 const runningContainers = computed(() => {
-  const nodeSum = (nodes.value || []).reduce((acc, n) => acc + (n.running_count || n.container_count || 0), 0)
+  if (overview.value?.running_containers !== undefined && overview.value.running_containers >= 0 && (overview.value.containers?.length || 0) > 0) {
+    return overview.value.running_containers
+  }
+  const nodeSum = (nodes.value || []).reduce((acc, n) => acc + (n.running_count ?? (n.container_count || 0)), 0)
   if (nodeSum > 0) return nodeSum
   if (overview.value?.running_containers && overview.value.running_containers > 0) {
     return overview.value.running_containers
@@ -676,14 +685,10 @@ const trendChartMemPath = computed(() => {
 // 5. LIFECYCLE & CLEANUP
 // ==========================================
 onMounted(() => {
-  fetchOverview()
-  fetchTpsMetrics()
+  pollClusterMetrics()
 
   // Polling fallback every 5 seconds if WebSocket is delayed
-  fallbackInterval = setInterval(() => {
-    fetchOverview()
-    fetchTpsMetrics()
-  }, 5000)
+  fallbackInterval = setInterval(pollClusterMetrics, 5000)
 })
 
 onUnmounted(() => {
@@ -723,7 +728,7 @@ onUnmounted(() => {
       </div>
 
       <div class="header-actions">
-        <button class="btn btn-secondary" @click="() => { fetchOverview(); fetchTpsMetrics() }" :disabled="loading">
+        <button class="btn btn-secondary" @click="pollClusterMetrics" :disabled="loading">
           <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
           <span>Refresh</span>
         </button>
@@ -787,7 +792,7 @@ onUnmounted(() => {
         <h3>Telemetry Connection Interrupted</h3>
         <p>{{ error }}</p>
       </div>
-      <button class="btn btn-primary" @click="fetchOverview">Retry Telemetry Sync</button>
+      <button class="btn btn-primary" @click="pollClusterMetrics">Retry Telemetry Sync</button>
     </div>
 
     <!-- EMPTY STATE -->
@@ -1257,7 +1262,7 @@ onUnmounted(() => {
               </div>
               <div class="meta-item">
                 <span class="meta-label">Processes</span>
-                <span class="meta-val smooth-value">{{ node.running_count || node.container_count || 0 }}</span>
+                <span class="meta-val smooth-value">{{ node.processes ?? node.running_count ?? node.container_count ?? 0 }}</span>
               </div>
             </div>
 
@@ -1443,7 +1448,7 @@ onUnmounted(() => {
                 </div>
               </div>
               <div class="hw-gauge-sub">
-                <span>Containers: {{ selectedNode.running_count || selectedNode.container_count || 0 }}</span>
+                <span>Containers: {{ selectedNode.running_count ?? selectedNode.container_count ?? 0 }}</span>
               </div>
             </div>
           </div>
