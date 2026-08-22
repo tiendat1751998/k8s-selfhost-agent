@@ -193,3 +193,81 @@ func TestOverviewHandler_GetTPS(t *testing.T) {
 	}
 }
 
+func TestOverviewHandler_FiveContainers_K8sMaterEndpoints(t *testing.T) {
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
+	collector.SetAgentMetric("host-k8smater", &metrics.AgentMetrics{
+		Hostname: "k8smater",
+		Status:   "online",
+	})
+	overview, _ := collector.CollectOnce(context.Background())
+	// Inject 5 containers
+	overview.Containers = []metrics.ContainerMetrics{
+		{ContainerID: "c1", ContainerName: "tiki_traefik", ServiceName: "tiki_traefik", NodeID: "host-k8smater", NodeName: "k8smater", State: "running"},
+		{ContainerID: "c2", ContainerName: "nats", ServiceName: "nats", NodeID: "host-k8smater", NodeName: "k8smater", State: "running"},
+		{ContainerID: "c3", ContainerName: "tiki_redis", ServiceName: "tiki_redis", NodeID: "host-k8smater", NodeName: "k8smater", State: "running"},
+		{ContainerID: "c4", ContainerName: "postgres_db", ServiceName: "postgres_db", NodeID: "host-k8smater", NodeName: "k8smater", State: "running"},
+		{ContainerID: "c5", ContainerName: "registry", ServiceName: "registry", NodeID: "host-k8smater", NodeName: "k8smater", State: "running"},
+	}
+	overview.TotalContainers = 5
+	overview.RunningContainers = 5
+	if len(overview.Nodes) > 0 {
+		overview.Nodes[0].ContainerCount = 5
+		overview.Nodes[0].RunningCount = 5
+	}
+	collector.SetLastSnapshot(overview)
+
+	tpsCollector := metrics.NewTPSCollector(collector, nil, zap.NewNop())
+	_, _ = tpsCollector.Collect(context.Background())
+
+	handler := NewOverviewHandler(collector, zap.NewNop(), tpsCollector)
+	r := chi.NewRouter()
+	r.Route("/overview", handler.RegisterRoutes)
+
+	// 1. Verify GET /overview
+	{
+		req := httptest.NewRequest(http.MethodGet, "/overview", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /overview returned status %d", w.Code)
+		}
+
+		var snap metrics.SystemOverview
+		if err := json.NewDecoder(w.Body).Decode(&snap); err != nil {
+			t.Fatalf("failed to decode overview: %v", err)
+		}
+
+		if snap.TotalContainers != 5 {
+			t.Errorf("expected TotalContainers = 5, got %d", snap.TotalContainers)
+		}
+		if snap.RunningContainers != 5 {
+			t.Errorf("expected RunningContainers = 5, got %d", snap.RunningContainers)
+		}
+		if len(snap.Containers) != 5 {
+			t.Errorf("expected 5 containers, got %d", len(snap.Containers))
+		}
+	}
+
+	// 2. Verify GET /overview/tps
+	{
+		req := httptest.NewRequest(http.MethodGet, "/overview/tps", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /overview/tps returned status %d", w.Code)
+		}
+
+		var snap metrics.TPSSnapshot
+		if err := json.NewDecoder(w.Body).Decode(&snap); err != nil {
+			t.Fatalf("failed to decode tps: %v", err)
+		}
+
+		if len(snap.Services) != 5 {
+			t.Errorf("expected 5 services, got %d", len(snap.Services))
+		}
+	}
+}
+
+

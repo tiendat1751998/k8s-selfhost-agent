@@ -53,11 +53,14 @@ func (m *mockBroadcaster) getMessages() []struct {
 }
 
 type mockDockerAPI struct {
-	containers []container.Summary
-	statsMap   map[string]container.StatsResponse
-	info       system.Info
-	diskUsage  types.DiskUsage
-	nodes      []swarm.Node
+	containers     []container.Summary
+	statsMap       map[string]container.StatsResponse
+	info           system.Info
+	diskUsage      types.DiskUsage
+	diskUsageCalls int
+	nodes          []swarm.Node
+	onStats        func(ctx context.Context, containerID string)
+	mu             sync.Mutex
 }
 
 func (m *mockDockerAPI) ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error) {
@@ -65,6 +68,9 @@ func (m *mockDockerAPI) ContainerList(ctx context.Context, options container.Lis
 }
 
 func (m *mockDockerAPI) ContainerStats(ctx context.Context, containerID string, stream bool) (container.StatsResponseReader, error) {
+	if m.onStats != nil {
+		m.onStats(ctx, containerID)
+	}
 	stats, ok := m.statsMap[containerID]
 	if !ok {
 		stats = container.StatsResponse{}
@@ -81,6 +87,9 @@ func (m *mockDockerAPI) Info(ctx context.Context) (system.Info, error) {
 }
 
 func (m *mockDockerAPI) DiskUsage(ctx context.Context, options types.DiskUsageOptions) (types.DiskUsage, error) {
+	m.mu.Lock()
+	m.diskUsageCalls++
+	m.mu.Unlock()
 	return m.diskUsage, nil
 }
 
@@ -1586,5 +1595,264 @@ func TestCollector_SwarmContainerNodeMapping(t *testing.T) {
 		t.Errorf("db node mismatch: NodeID=%q NodeName=%q, want host-uuid-k8smater/k8smater", db.NodeID, db.NodeName)
 	}
 }
+
+func TestCollector_CollectOnce_DoesNotCallDiskUsage(t *testing.T) {
+	mockDocker := &mockDockerAPI{
+		info: system.Info{
+			ID:   "engine-test",
+			Name: "k8smater",
+		},
+		containers: []container.Summary{
+			{
+				ID:    "c1",
+				Names: []string{"/tiki_traefik"},
+				Image: "traefik:v3.0",
+				State: "running",
+			},
+		},
+	}
+
+	collector := NewCollector(mockDocker, nil, nil, zap.NewNop())
+	overview, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("CollectOnce failed: %v", err)
+	}
+
+	if overview == nil {
+		t.Fatal("overview is nil")
+	}
+
+	// Verify DiskUsage was NOT called in CollectOnce
+	mockDocker.mu.Lock()
+	calls := mockDocker.diskUsageCalls
+	mockDocker.mu.Unlock()
+
+	if calls != 0 {
+		t.Errorf("expected 0 DiskUsage calls during fast CollectOnce, got %d", calls)
+	}
+}
+
+func TestCollector_ContainerStats_PerContainerTimeout(t *testing.T) {
+	var capturedDeadline time.Time
+	var deadlineSet bool
+
+	mockDocker := &mockDockerAPI{
+		info: system.Info{
+			ID:   "engine-test",
+			Name: "k8smater",
+		},
+		containers: []container.Summary{
+			{
+				ID:    "c1",
+				Names: []string{"/tiki_traefik"},
+				Image: "traefik:v3.0",
+				State: "running",
+			},
+		},
+		onStats: func(ctx context.Context, containerID string) {
+			if d, ok := ctx.Deadline(); ok {
+				capturedDeadline = d
+				deadlineSet = true
+			}
+		},
+	}
+
+	collector := NewCollector(mockDocker, nil, nil, zap.NewNop())
+	overview, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("CollectOnce failed: %v", err)
+	}
+
+	if len(overview.Containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(overview.Containers))
+	}
+
+	if !deadlineSet {
+		t.Error("expected ContainerStats to receive a context with deadline/timeout")
+	} else {
+		remaining := time.Until(capturedDeadline)
+		if remaining <= 0 || remaining > 3*time.Second {
+			t.Errorf("expected ~2s per-container timeout, got remaining duration: %v", remaining)
+		}
+	}
+}
+
+func TestCollector_FiveContainers_K8sMater(t *testing.T) {
+	mockDocker := &mockDockerAPI{
+		info: system.Info{
+			ID:   "engine-k8smater",
+			Name: "k8smater",
+		},
+		containers: []container.Summary{
+			{
+				ID:    "c-traefik",
+				Names: []string{"/tiki_traefik"},
+				Image: "traefik:v3.0",
+				State: "running",
+			},
+			{
+				ID:    "c-nats",
+				Names: []string{"/nats"},
+				Image: "nats:latest",
+				State: "running",
+			},
+			{
+				ID:    "c-redis",
+				Names: []string{"/tiki_redis"},
+				Image: "redis:alpine",
+				State: "running",
+			},
+			{
+				ID:    "c-postgres",
+				Names: []string{"/postgres_db"},
+				Image: "postgres:16",
+				State: "running",
+			},
+			{
+				ID:    "c-registry",
+				Names: []string{"/registry"},
+				Image: "registry:2",
+				State: "running",
+			},
+		},
+		statsMap: map[string]container.StatsResponse{
+			"c-traefik": {
+				CPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 50000000},
+					SystemUsage: 1000000000,
+					OnlineCPUs:  2,
+				},
+				PreCPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 0},
+					SystemUsage: 500000000,
+				},
+				MemoryStats: container.MemoryStats{Usage: 128 * 1024 * 1024, Limit: 1024 * 1024 * 1024},
+			},
+			"c-nats": {
+				CPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 30000000},
+					SystemUsage: 1000000000,
+					OnlineCPUs:  2,
+				},
+				PreCPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 0},
+					SystemUsage: 500000000,
+				},
+				MemoryStats: container.MemoryStats{Usage: 64 * 1024 * 1024, Limit: 1024 * 1024 * 1024},
+			},
+			"c-redis": {
+				CPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 20000000},
+					SystemUsage: 1000000000,
+					OnlineCPUs:  2,
+				},
+				PreCPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 0},
+					SystemUsage: 500000000,
+				},
+				MemoryStats: container.MemoryStats{Usage: 32 * 1024 * 1024, Limit: 1024 * 1024 * 1024},
+			},
+			"c-postgres": {
+				CPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 40000000},
+					SystemUsage: 1000000000,
+					OnlineCPUs:  2,
+				},
+				PreCPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 0},
+					SystemUsage: 500000000,
+				},
+				MemoryStats: container.MemoryStats{Usage: 256 * 1024 * 1024, Limit: 1024 * 1024 * 1024},
+			},
+			"c-registry": {
+				CPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 10000000},
+					SystemUsage: 1000000000,
+					OnlineCPUs:  2,
+				},
+				PreCPUStats: container.CPUStats{
+					CPUUsage:    container.CPUUsage{TotalUsage: 0},
+					SystemUsage: 500000000,
+				},
+				MemoryStats: container.MemoryStats{Usage: 48 * 1024 * 1024, Limit: 1024 * 1024 * 1024},
+			},
+		},
+	}
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-k8smater",
+				Name:     "k8smater",
+				Endpoint: "http://10.10.10.133:9100",
+			},
+		},
+	}
+
+	collector := NewCollector(mockDocker, hostRepo, nil, zap.NewNop())
+	collector.SetAgentMetric("host-k8smater", &AgentMetrics{
+		Hostname:      "k8smater",
+		OS:            "linux",
+		Arch:          "amd64",
+		CPUUsage:      15.5,
+		CPUCount:      4,
+		MemTotal:      8 * 1024 * 1024 * 1024,
+		MemUsed:       2 * 1024 * 1024 * 1024,
+		MemPercent:    25.0,
+		DiskTotal:     100 * 1024 * 1024 * 1024,
+		DiskUsed:      20 * 1024 * 1024 * 1024,
+		DiskPercent:   20.0,
+		Processes:     50,
+		Status:        "online",
+		LastSeen:      time.Now().UTC(),
+	})
+
+	overview, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("CollectOnce failed: %v", err)
+	}
+
+	if overview.TotalContainers != 5 {
+		t.Errorf("expected TotalContainers = 5, got %d", overview.TotalContainers)
+	}
+	if overview.RunningContainers != 5 {
+		t.Errorf("expected RunningContainers = 5, got %d", overview.RunningContainers)
+	}
+	if len(overview.Containers) != 5 {
+		t.Fatalf("expected 5 containers in snapshot, got %d", len(overview.Containers))
+	}
+	if len(overview.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(overview.Nodes))
+	}
+
+	node := overview.Nodes[0]
+	if node.NodeName != "k8smater" {
+		t.Errorf("expected node name k8smater, got %s", node.NodeName)
+	}
+	if node.ContainerCount != 5 {
+		t.Errorf("expected node ContainerCount = 5, got %d", node.ContainerCount)
+	}
+	if node.RunningCount != 5 {
+		t.Errorf("expected node RunningCount = 5, got %d", node.RunningCount)
+	}
+
+	expectedServices := map[string]bool{
+		"tiki_traefik": true,
+		"nats":         true,
+		"tiki_redis":   true,
+		"postgres_db":  true,
+		"registry":     true,
+	}
+
+	for _, cm := range overview.Containers {
+		if !expectedServices[cm.ServiceName] {
+			t.Errorf("unexpected service name: %s", cm.ServiceName)
+		}
+		if cm.NodeID != "host-k8smater" || cm.NodeName != "k8smater" {
+			t.Errorf("container %s node mismatch: NodeID=%q NodeName=%q, want host-k8smater/k8smater", cm.ServiceName, cm.NodeID, cm.NodeName)
+		}
+	}
+}
+
 
 

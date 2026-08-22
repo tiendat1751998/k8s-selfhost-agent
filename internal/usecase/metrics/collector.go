@@ -180,6 +180,9 @@ type Collector struct {
 	thresholds      Thresholds
 	requestCountFn  func() int64
 
+	dockerDiskPercent float64
+	dockerDiskMu      sync.RWMutex
+
 	lastSnapshot *SystemOverview
 	lastReqCount int64
 	lastReqTime  time.Time
@@ -273,6 +276,11 @@ func (c *Collector) Start(ctx context.Context) {
 	if c.computeHostRepo != nil {
 		c.scrapeAllAgents(ctx)
 	}
+
+	if c.dockerClient != nil {
+		go c.pollDockerDiskUsage(ctx)
+	}
+
 	c.runCollection(ctx)
 
 	go c.pollAgentHosts(ctx)
@@ -308,6 +316,84 @@ func (c *Collector) GetLastSnapshot() *SystemOverview {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.lastSnapshot
+}
+
+// SetLastSnapshot sets the cached SystemOverview metrics snapshot (useful for testing or initial hydration).
+func (c *Collector) SetLastSnapshot(s *SystemOverview) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastSnapshot = s
+}
+
+// pollDockerDiskUsage periodically updates Docker daemon layer disk usage in the background (every 60s)
+// to avoid blocking the fast 5s CollectOnce tick.
+func (c *Collector) pollDockerDiskUsage(ctx context.Context) {
+	if c.dockerClient == nil {
+		return
+	}
+	c.updateDockerDiskUsage(ctx)
+
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.stopCh:
+			return
+		case <-ticker.C:
+			c.updateDockerDiskUsage(ctx)
+		}
+	}
+}
+
+func (c *Collector) updateDockerDiskUsage(ctx context.Context) {
+	if c.dockerClient == nil {
+		return
+	}
+	duCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	du, duErr := c.dockerClient.DiskUsage(duCtx, types.DiskUsageOptions{})
+	if duErr != nil {
+		c.logger.Debug("Failed to fetch Docker disk usage", zap.Error(duErr))
+		return
+	}
+
+	var diskUsed int64
+	diskUsed += du.LayersSize
+	for _, img := range du.Images {
+		if img != nil {
+			diskUsed += img.Size
+		}
+	}
+	for _, cnt := range du.Containers {
+		if cnt != nil {
+			diskUsed += cnt.SizeRw
+		}
+	}
+	for _, vol := range du.Volumes {
+		if vol != nil && vol.UsageData != nil {
+			diskUsed += vol.UsageData.Size
+		}
+	}
+	for _, bc := range du.BuildCache {
+		if bc != nil {
+			diskUsed += bc.Size
+		}
+	}
+
+	if diskUsed > 0 {
+		diskTotal := int64(100 * 1024 * 1024 * 1024) // 100 GiB baseline
+		if diskUsed > diskTotal {
+			diskTotal = diskUsed * 2
+		}
+		pct := (float64(diskUsed) / float64(diskTotal)) * 100.0
+		c.dockerDiskMu.Lock()
+		c.dockerDiskPercent = pct
+		c.dockerDiskMu.Unlock()
+	}
 }
 
 // pollAgentHosts periodically polls all registered compute host agents.
@@ -777,48 +863,16 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 
 	containerMetricsList := make([]ContainerMetrics, 0)
 	var runningContainersCount int
-	var diskPercent float64
+
+	c.dockerDiskMu.RLock()
+	diskPercent := c.dockerDiskPercent
+	c.dockerDiskMu.RUnlock()
 
 	// 2. Fetch Docker Containers & Stats if Docker client is available
 	if c.dockerClient != nil {
 		info, infoErr := c.dockerClient.Info(ctx)
 		if infoErr != nil {
 			c.logger.Debug("Failed to fetch Docker daemon info", zap.Error(infoErr))
-		}
-
-		var diskUsed int64
-		var diskTotal int64
-		du, duErr := c.dockerClient.DiskUsage(ctx, types.DiskUsageOptions{})
-		if duErr == nil {
-			diskUsed += du.LayersSize
-			for _, img := range du.Images {
-				if img != nil {
-					diskUsed += img.Size
-				}
-			}
-			for _, cnt := range du.Containers {
-				if cnt != nil {
-					diskUsed += cnt.SizeRw
-				}
-			}
-			for _, vol := range du.Volumes {
-				if vol != nil && vol.UsageData != nil {
-					diskUsed += vol.UsageData.Size
-				}
-			}
-			for _, bc := range du.BuildCache {
-				if bc != nil {
-					diskUsed += bc.Size
-				}
-			}
-		}
-
-		if diskUsed > 0 {
-			diskTotal = 100 * 1024 * 1024 * 1024 // 100 GiB baseline
-			if diskUsed > diskTotal {
-				diskTotal = diskUsed * 2
-			}
-			diskPercent = (float64(diskUsed) / float64(diskTotal)) * 100.0
 		}
 
 		containersList, listErr := c.dockerClient.ContainerList(ctx, container.ListOptions{All: true})
@@ -932,6 +986,8 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 						if resolvedNodeID == "" {
 							if hID != "" {
 								resolvedNodeID = hID
+							} else if len(knownHosts) == 1 {
+								resolvedNodeID = knownHosts[0].id
 							} else if info.ID != "" {
 								resolvedNodeID = info.ID
 							} else if swarmNodeID != "" {
@@ -941,6 +997,8 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 						if resolvedNodeName == "" {
 							if hName != "" {
 								resolvedNodeName = hName
+							} else if len(knownHosts) == 1 {
+								resolvedNodeName = knownHosts[0].name
 							} else if info.Name != "" {
 								resolvedNodeName = info.Name
 							} else {
@@ -973,9 +1031,9 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 					}
 
 					if cSummary.State == "running" {
-						statsReader, err := c.dockerClient.ContainerStats(ctx, cSummary.ID, false)
+						statCtx, statCancel := context.WithTimeout(ctx, 2*time.Second)
+						statsReader, err := c.dockerClient.ContainerStats(statCtx, cSummary.ID, false)
 						if err == nil && statsReader.Body != nil {
-							defer statsReader.Body.Close()
 							var stats container.StatsResponse
 							if decodeErr := json.NewDecoder(statsReader.Body).Decode(&stats); decodeErr == nil {
 								cm.CPUPercent = calculateCPUPercent(&stats)
@@ -992,7 +1050,9 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 								cm.NetworkRx = rx
 								cm.NetworkTx = tx
 							}
+							statsReader.Body.Close()
 						}
+						statCancel()
 					}
 
 					statCh <- rawContainerStat{cm: cm}

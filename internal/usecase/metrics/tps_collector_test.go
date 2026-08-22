@@ -777,3 +777,126 @@ func TestNormalizeServiceNameForLB(t *testing.T) {
 	}
 }
 
+func TestTPSCollector_FiveContainers_K8sMaterServices(t *testing.T) {
+	provider := &mockMetricsProvider{
+		snapshot: &SystemOverview{
+			Nodes: []NodeMetrics{
+				{
+					NodeID:         "host-k8smater",
+					NodeName:       "k8smater",
+					Status:         "ready",
+					ContainerCount: 5,
+					RunningCount:   5,
+				},
+			},
+			Containers: []ContainerMetrics{
+				{
+					ContainerID:   "c-traefik",
+					ContainerName: "tiki_traefik",
+					ServiceName:   "tiki_traefik",
+					NodeID:        "host-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    5.0,
+					MemoryUsed:    128 * 1024 * 1024,
+					MemoryLimit:   1024 * 1024 * 1024,
+					NetworkRx:     1000,
+					NetworkTx:     2000,
+				},
+				{
+					ContainerID:   "c-nats",
+					ContainerName: "nats",
+					ServiceName:   "nats",
+					NodeID:        "host-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    3.0,
+					MemoryUsed:    64 * 1024 * 1024,
+					MemoryLimit:   1024 * 1024 * 1024,
+					NetworkRx:     500,
+					NetworkTx:     600,
+				},
+				{
+					ContainerID:   "c-redis",
+					ContainerName: "tiki_redis",
+					ServiceName:   "tiki_redis",
+					NodeID:        "host-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    2.0,
+					MemoryUsed:    32 * 1024 * 1024,
+					MemoryLimit:   1024 * 1024 * 1024,
+					NetworkRx:     300,
+					NetworkTx:     400,
+				},
+				{
+					ContainerID:   "c-postgres",
+					ContainerName: "postgres_db",
+					ServiceName:   "postgres_db",
+					NodeID:        "host-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    4.0,
+					MemoryUsed:    256 * 1024 * 1024,
+					MemoryLimit:   1024 * 1024 * 1024,
+					NetworkRx:     800,
+					NetworkTx:     900,
+				},
+				{
+					ContainerID:   "c-registry",
+					ContainerName: "registry",
+					ServiceName:   "registry",
+					NodeID:        "host-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    1.0,
+					MemoryUsed:    48 * 1024 * 1024,
+					MemoryLimit:   1024 * 1024 * 1024,
+					NetworkRx:     100,
+					NetworkTx:     200,
+				},
+			},
+		},
+		agentMetrics: map[string]*AgentMetrics{
+			"host-k8smater": {
+				Hostname: "k8smater",
+				Status:   "online",
+			},
+		},
+	}
+
+	collector := NewTPSCollector(provider, nil, zap.NewNop())
+	snap, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if len(snap.Services) != 5 {
+		t.Fatalf("expected 5 services in TPSSnapshot, got %d", len(snap.Services))
+	}
+
+	expectedServices := map[string]bool{
+		"tiki_traefik": true,
+		"nats":         true,
+		"tiki_redis":   true,
+		"postgres_db":  true,
+		"registry":     true,
+	}
+
+	for _, svc := range snap.Services {
+		if !expectedServices[svc.ServiceName] {
+			t.Errorf("unexpected service name: %s", svc.ServiceName)
+		}
+		if svc.NodeID != "host-k8smater" || svc.NodeName != "k8smater" {
+			t.Errorf("service %s node mismatch: NodeID=%q NodeName=%q, want host-k8smater/k8smater", svc.ServiceName, svc.NodeID, svc.NodeName)
+		}
+		if svc.Status != "healthy" {
+			t.Errorf("service %s expected status healthy, got %s", svc.ServiceName, svc.Status)
+		}
+		if svc.ContainerCount != 1 {
+			t.Errorf("service %s expected container count 1, got %d", svc.ServiceName, svc.ContainerCount)
+		}
+	}
+}
+
+
