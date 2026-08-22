@@ -181,3 +181,97 @@ type ServiceRequestStatsTest struct {
 	Status5xx      int64
 	ErrorRate      float64
 }
+
+func TestTraefikProvider_GetAggregateStats(t *testing.T) {
+	promMetrics1 := strings.Join([]string{
+		`# HELP traefik_entrypoint_requests_total How many HTTP requests processed on an entrypoint, partitioned by status code, protocol, and method.`,
+		`# TYPE traefik_entrypoint_requests_total counter`,
+		`traefik_entrypoint_requests_total{code="200",entrypoint="web",method="GET",protocol="http"} 1000`,
+		`traefik_entrypoint_requests_total{code="404",entrypoint="web",method="GET",protocol="http"} 20`,
+		`traefik_entrypoint_requests_total{code="503",entrypoint="web",method="GET",protocol="http"} 80`,
+		`traefik_entrypoint_requests_total{code="200",entrypoint="traefik",method="GET",protocol="http"} 500`,
+		`traefik_open_connections{entrypoint="web",protocol="TCP"} 15`,
+		`traefik_open_connections{entrypoint="traefik",protocol="TCP"} 2`,
+		`traefik_entrypoint_request_duration_seconds_sum{entrypoint="web"} 5.5`,
+		`traefik_entrypoint_request_duration_seconds_count{entrypoint="web"} 1100`,
+	}, "\n")
+
+	promMetrics2 := strings.Join([]string{
+		`traefik_entrypoint_requests_total{code="200",entrypoint="web",method="GET",protocol="http"} 2000`,
+		`traefik_entrypoint_requests_total{code="404",entrypoint="web",method="GET",protocol="http"} 30`,
+		`traefik_entrypoint_requests_total{code="503",entrypoint="web",method="GET",protocol="http"} 170`,
+		`traefik_entrypoint_requests_total{code="200",entrypoint="traefik",method="GET",protocol="http"} 600`,
+		`traefik_open_connections{entrypoint="web",protocol="TCP"} 25`,
+		`traefik_open_connections{entrypoint="traefik",protocol="TCP"} 2`,
+		`traefik_entrypoint_request_duration_seconds_sum{entrypoint="web"} 11.0`,
+		`traefik_entrypoint_request_duration_seconds_count{entrypoint="web"} 2200`,
+	}, "\n")
+
+	iteration := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/metrics" {
+			w.Header().Set("Content-Type", "text/plain")
+			if iteration == 0 {
+				w.Write([]byte(promMetrics1))
+			} else {
+				w.Write([]byte(promMetrics2))
+			}
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	provider := NewTraefikProvider(ts.URL, WithHTTPClient(ts.Client()))
+
+	// First collection (initializes baseline)
+	agg1, err := provider.GetAggregateStats(context.Background())
+	if err != nil {
+		t.Fatalf("first GetAggregateStats failed: %v", err)
+	}
+
+	// Entrypoint "web" total = 1000 + 20 + 80 = 1100 (ignoring "traefik" entrypoint 500)
+	if agg1.TotalRequests != 1100 {
+		t.Errorf("expected TotalRequests = 1100, got %d", agg1.TotalRequests)
+	}
+	// Active connections should be 15 (ignoring "traefik" entrypoint 2)
+	if agg1.ActiveConnections != 15 {
+		t.Errorf("expected ActiveConnections = 15, got %d", agg1.ActiveConnections)
+	}
+	if agg1.TotalRequestsPerSec != 0 {
+		t.Errorf("expected initial TotalRequestsPerSec = 0, got %f", agg1.TotalRequestsPerSec)
+	}
+
+	// Advance iteration and simulate 2 seconds elapsed
+	iteration = 1
+	provider.mu.Lock()
+	provider.prevAggregateTime = time.Now().UTC().Add(-2 * time.Second)
+	provider.mu.Unlock()
+
+	// Second collection
+	agg2, err := provider.GetAggregateStats(context.Background())
+	if err != nil {
+		t.Fatalf("second GetAggregateStats failed: %v", err)
+	}
+
+	// Total requests: 2000 + 30 + 170 = 2200
+	if agg2.TotalRequests != 2200 {
+		t.Errorf("expected TotalRequests = 2200, got %d", agg2.TotalRequests)
+	}
+	// Delta requests: 2200 - 1100 = 1100 in 2s -> ~550 RPS
+	if agg2.TotalRequestsPerSec < 500 || agg2.TotalRequestsPerSec > 600 {
+		t.Errorf("expected TotalRequestsPerSec ~ 550, got %f", agg2.TotalRequestsPerSec)
+	}
+	// Active connections = 25
+	if agg2.ActiveConnections != 25 {
+		t.Errorf("expected ActiveConnections = 25, got %d", agg2.ActiveConnections)
+	}
+	// Delta errors: (30+170) - (20+80) = 200 - 100 = 100 errors out of 1100 delta reqs -> ~9.09%
+	if agg2.ErrorRate < 9.0 || agg2.ErrorRate > 9.2 {
+		t.Errorf("expected ErrorRate ~ 9.09%%, got %f", agg2.ErrorRate)
+	}
+	// Delta latency: (11.0 - 5.5) / (2200 - 1100) = 5.5 / 1100 = 0.005s = 5ms
+	if agg2.AvgLatencyMs < 4.9 || agg2.AvgLatencyMs > 5.1 {
+		t.Errorf("expected AvgLatencyMs ~ 5.0ms, got %f", agg2.AvgLatencyMs)
+	}
+}

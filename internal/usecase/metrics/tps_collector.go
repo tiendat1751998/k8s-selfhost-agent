@@ -298,6 +298,24 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 	// 2. HTTP TPS (Traefik API)
 	httpTPS := c.collectHTTPTPS(ctx, now)
 
+	// 2b. Override with Load Balancer aggregate stats from Prometheus entrypoints when available
+	if c.lbProvider != nil {
+		aggStats, err := c.lbProvider.GetAggregateStats(ctx)
+		if err == nil && aggStats != nil {
+			httpTPS.RequestsPerSec = aggStats.TotalRequestsPerSec
+			httpTPS.ActiveConnections = aggStats.ActiveConnections
+			httpTPS.ErrorRate = aggStats.ErrorRate
+			if aggStats.AvgLatencyMs > 0 {
+				httpTPS.AvgLatencyMs = aggStats.AvgLatencyMs
+			}
+			if aggStats.TotalRequests > 0 {
+				httpTPS.TotalRequests = aggStats.TotalRequests
+			}
+		} else if err != nil {
+			c.logger.Debug("Failed to get load balancer aggregate stats", zap.Error(err))
+		}
+	}
+
 	// Enrich per-service TPS metrics with load balancer request stats
 	services = c.enrichServicesWithLBStats(ctx, services, httpTPS)
 
