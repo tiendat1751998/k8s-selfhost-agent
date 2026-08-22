@@ -324,8 +324,20 @@ func TestTPSCollector_Collect_AllSources(t *testing.T) {
 	if snap1.Services[0].MemoryUsedMB != 256.0 {
 		t.Errorf("expected postgres_db MemoryUsedMB = 256.0, got %f", snap1.Services[0].MemoryUsedMB)
 	}
+	if snap1.Services[0].TotalRxBytes != 200000 {
+		t.Errorf("expected postgres_db TotalRxBytes = 200000, got %d", snap1.Services[0].TotalRxBytes)
+	}
+	if snap1.Services[0].TotalTxBytes != 100000 {
+		t.Errorf("expected postgres_db TotalTxBytes = 100000, got %d", snap1.Services[0].TotalTxBytes)
+	}
 	if snap1.Services[1].NodeID != "host-1" {
 		t.Errorf("expected tiki_cart NodeID = host-1, got %s", snap1.Services[1].NodeID)
+	}
+	if snap1.Services[1].TotalRxBytes != 100000 {
+		t.Errorf("expected tiki_cart TotalRxBytes = 100000, got %d", snap1.Services[1].TotalRxBytes)
+	}
+	if snap1.Services[1].TotalTxBytes != 50000 {
+		t.Errorf("expected tiki_cart TotalTxBytes = 50000, got %d", snap1.Services[1].TotalTxBytes)
 	}
 	if snap1.Database.ActiveConnections != 12 {
 		t.Errorf("expected DB ActiveConnections = 12, got %d", snap1.Database.ActiveConnections)
@@ -1200,6 +1212,76 @@ func TestIsServiceHelpers(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("isCacheService(%q) = %v, want %v", tt.name, got, tt.want)
 		}
+	}
+}
+
+func TestTPSCollector_IntelligentContainerNetworkFallback(t *testing.T) {
+	provider := &mockMetricsProvider{
+		snapshot: &SystemOverview{
+			Containers: []ContainerMetrics{
+				{
+					ContainerID:   "c-traefik",
+					ContainerName: "tiki_traefik",
+					ServiceName:   "tiki_traefik",
+					State:         "running",
+					CPUPercent:    85.0,
+					NetworkRx:     12000000,
+					NetworkRxRate: 1200000, // 1.2 MB/s = ~1000 RPS (1,200,000 / 1200)
+					NetworkTx:     24000000,
+					NetworkTxRate: 2400000,
+				},
+				{
+					ContainerID:   "c-backend",
+					ContainerName: "tiki_gateway",
+					ServiceName:   "tiki_gateway",
+					State:         "running",
+					CPUPercent:    50.0,
+					NetworkRx:     6000000,
+					NetworkRxRate: 600000,
+					NetworkTx:     6000000,
+					NetworkTxRate: 600000,
+				},
+			},
+		},
+	}
+
+	// Load balancer provider returns error (simulating timeout under 1000+ connections)
+	lbMock := &mockLBProvider{
+		err: errors.New("management port 8080 timed out under load"),
+	}
+
+	reqCount := int64(5) // Internal API request counter only reports 5
+	collector := NewTPSCollector(
+		provider,
+		nil,
+		zap.NewNop(),
+		WithLoadBalancerProvider(lbMock),
+		WithTPSRequestCountFn(func() int64 { return reqCount }),
+	)
+
+	snap, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	// Throughput should estimate real traffic (1,200,000 / 1200 = 1000 RPS) rather than 5 req/s
+	if snap.HTTP.RequestsPerSec != 1000.0 {
+		t.Errorf("expected HTTP RequestsPerSec = 1000.0 via container network fallback, got %f", snap.HTTP.RequestsPerSec)
+	}
+
+	// Verify tiki_traefik in Services also reflects 1000 RPS
+	var traefikSvc *ServiceTPS
+	for i := range snap.Services {
+		if snap.Services[i].ServiceName == "tiki_traefik" {
+			traefikSvc = &snap.Services[i]
+			break
+		}
+	}
+	if traefikSvc == nil {
+		t.Fatal("expected tiki_traefik service in snapshot")
+	}
+	if traefikSvc.RequestsPerSec != 1000.0 {
+		t.Errorf("expected tiki_traefik RequestsPerSec = 1000.0, got %f", traefikSvc.RequestsPerSec)
 	}
 }
 

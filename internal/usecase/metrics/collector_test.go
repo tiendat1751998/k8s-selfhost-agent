@@ -1854,5 +1854,81 @@ func TestCollector_FiveContainers_K8sMater(t *testing.T) {
 	}
 }
 
+func TestCollector_ContainerNetworkRates(t *testing.T) {
+	mockDocker := &mockDockerAPI{
+		containers: []container.Summary{
+			{
+				ID:    "cnt-net-1",
+				Names: []string{"/api-server"},
+				Image: "golang:1.22",
+				State: "running",
+			},
+		},
+		statsMap: map[string]container.StatsResponse{
+			"cnt-net-1": {
+				Networks: map[string]container.NetworkStats{
+					"eth0": {RxBytes: 100000, TxBytes: 50000},
+				},
+			},
+		},
+	}
+
+	collector := NewCollector(mockDocker, nil, nil, zap.NewNop())
+
+	// First collection
+	overview1, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("first CollectOnce failed: %v", err)
+	}
+
+	if len(overview1.Containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(overview1.Containers))
+	}
+	c1 := overview1.Containers[0]
+	if c1.NetworkRx != 100000 {
+		t.Errorf("expected NetworkRx = 100000, got %d", c1.NetworkRx)
+	}
+	if c1.NetworkTx != 50000 {
+		t.Errorf("expected NetworkTx = 50000, got %d", c1.NetworkTx)
+	}
+	if c1.NetworkRxRate != 0 {
+		t.Errorf("expected initial NetworkRxRate = 0, got %d", c1.NetworkRxRate)
+	}
+	if c1.NetworkTxRate != 0 {
+		t.Errorf("expected initial NetworkTxRate = 0, got %d", c1.NetworkTxRate)
+	}
+
+	// Update container stats
+	time.Sleep(50 * time.Millisecond)
+	mockDocker.statsMap["cnt-net-1"] = container.StatsResponse{
+		Networks: map[string]container.NetworkStats{
+			"eth0": {RxBytes: 200000, TxBytes: 100000},
+		},
+	}
+
+	// Second collection
+	overview2, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("second CollectOnce failed: %v", err)
+	}
+
+	if len(overview2.Containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(overview2.Containers))
+	}
+	c2 := overview2.Containers[0]
+	if c2.NetworkRx != 200000 {
+		t.Errorf("expected NetworkRx = 200000, got %d", c2.NetworkRx)
+	}
+	if c2.NetworkTx != 100000 {
+		t.Errorf("expected NetworkTx = 100000, got %d", c2.NetworkTx)
+	}
+	if c2.NetworkRxRate <= 0 {
+		t.Errorf("expected positive NetworkRxRate on second collect, got %d", c2.NetworkRxRate)
+	}
+	if c2.NetworkTxRate <= 0 {
+		t.Errorf("expected positive NetworkTxRate on second collect, got %d", c2.NetworkTxRate)
+	}
+}
+
 
 

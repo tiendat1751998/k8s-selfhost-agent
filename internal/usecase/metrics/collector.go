@@ -111,6 +111,8 @@ type ContainerMetrics struct {
 	MemoryPercent float64           `json:"memory_percent"`
 	NetworkRx     int64             `json:"network_rx"`
 	NetworkTx     int64             `json:"network_tx"`
+	NetworkRxRate int64             `json:"network_rx_rate,omitempty"` // Real-time Rx rate in Bytes/sec
+	NetworkTxRate int64             `json:"network_tx_rate,omitempty"` // Real-time Tx rate in Bytes/sec
 	ServiceName   string            `json:"service_name,omitempty"`
 	Labels        map[string]string `json:"labels,omitempty"`
 }
@@ -183,11 +185,13 @@ type Collector struct {
 	dockerDiskPercent float64
 	dockerDiskMu      sync.RWMutex
 
-	lastSnapshot *SystemOverview
-	lastReqCount int64
-	lastReqTime  time.Time
-	mu           sync.RWMutex
-	stopCh       chan struct{}
+	lastSnapshot       *SystemOverview
+	lastReqCount       int64
+	lastReqTime        time.Time
+	prevContainerStats map[string]containerNetRaw
+	prevContainerTime  time.Time
+	mu                 sync.RWMutex
+	stopCh             chan struct{}
 }
 
 // Option configures Collector behavior.
@@ -246,13 +250,14 @@ func NewCollector(dockerClient DockerAPIClient, computeHostRepo docker.ComputeHo
 	}
 
 	c := &Collector{
-		dockerClient:    dockerClient,
-		computeHostRepo: computeHostRepo,
-		httpClient:      &http.Client{Timeout: 5 * time.Second},
-		agentMetrics:    make(map[string]*AgentMetrics),
-		broadcaster:     broadcaster,
-		logger:          logger,
-		interval:        5 * time.Second,
+		dockerClient:       dockerClient,
+		computeHostRepo:    computeHostRepo,
+		httpClient:         &http.Client{Timeout: 5 * time.Second},
+		agentMetrics:       make(map[string]*AgentMetrics),
+		broadcaster:        broadcaster,
+		logger:             logger,
+		interval:           5 * time.Second,
+		prevContainerStats: make(map[string]containerNetRaw),
 		thresholds: Thresholds{
 			CPUWarning:    80.0,
 			MemoryWarning: 85.0,
@@ -1068,6 +1073,36 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 					runningContainersCount++
 				}
 			}
+
+			c.mu.Lock()
+			elapsed := 0.0
+			if !c.prevContainerTime.IsZero() {
+				elapsed = now.Sub(c.prevContainerTime).Seconds()
+			}
+
+			currMap := make(map[string]containerNetRaw, len(containerMetricsList))
+			for i := range containerMetricsList {
+				cm := &containerMetricsList[i]
+				currMap[cm.ContainerID] = containerNetRaw{
+					rxBytes: cm.NetworkRx,
+					txBytes: cm.NetworkTx,
+				}
+				if elapsed > 0 && cm.State == "running" {
+					if prev, ok := c.prevContainerStats[cm.ContainerID]; ok {
+						rxDelta := cm.NetworkRx - prev.rxBytes
+						txDelta := cm.NetworkTx - prev.txBytes
+						if rxDelta > 0 {
+							cm.NetworkRxRate = int64(float64(rxDelta) / elapsed)
+						}
+						if txDelta > 0 {
+							cm.NetworkTxRate = int64(float64(txDelta) / elapsed)
+						}
+					}
+				}
+			}
+			c.prevContainerStats = currMap
+			c.prevContainerTime = now
+			c.mu.Unlock()
 		}
 	}
 

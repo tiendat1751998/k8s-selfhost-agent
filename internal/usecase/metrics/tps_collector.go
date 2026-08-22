@@ -38,6 +38,8 @@ type ServiceTPS struct {
 	MemoryPercent  float64 `json:"memory_percent"`
 	RxBytesPerSec  int64   `json:"rx_bytes_per_sec"`
 	TxBytesPerSec  int64   `json:"tx_bytes_per_sec"`
+	TotalRxBytes   int64   `json:"total_rx_bytes,omitempty"` // Lifetime cumulative Rx bytes
+	TotalTxBytes   int64   `json:"total_tx_bytes,omitempty"` // Lifetime cumulative Tx bytes
 	RequestsPerSec float64 `json:"requests_per_sec"`
 	ErrorRate      float64 `json:"error_rate"`
 	AvgLatencyMs   float64 `json:"avg_latency_ms"`
@@ -299,10 +301,14 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 	httpTPS := c.collectHTTPTPS(ctx, now)
 
 	// 2b. Override with Load Balancer aggregate stats from Prometheus entrypoints when available
+	lbReportedRPS := false
 	if c.lbProvider != nil {
 		aggStats, err := c.lbProvider.GetAggregateStats(ctx)
 		if err == nil && aggStats != nil {
-			httpTPS.RequestsPerSec = aggStats.TotalRequestsPerSec
+			if aggStats.TotalRequestsPerSec > 0 {
+				httpTPS.RequestsPerSec = aggStats.TotalRequestsPerSec
+				lbReportedRPS = true
+			}
 			httpTPS.ActiveConnections = aggStats.ActiveConnections
 			httpTPS.ErrorRate = aggStats.ErrorRate
 			if aggStats.AvgLatencyMs > 0 {
@@ -316,18 +322,32 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 		}
 	}
 
-	if httpTPS.RequestsPerSec == 0 {
-		var gatewayRx int64
+	// Intelligent Container Network Fallback:
+	// If load balancer reports 0 or errors, check if the Traefik container has active container network traffic (> 10000 Bytes/sec)
+	if !lbReportedRPS || httpTPS.RequestsPerSec == 0 {
+		var traefikRx int64
 		for _, s := range services {
-			low := strings.ToLower(s.ServiceName)
-			if strings.Contains(low, "gateway") || strings.Contains(low, "traefik") || strings.Contains(low, "web") || strings.Contains(low, "proxy") || strings.Contains(low, "ingress") {
-				gatewayRx += s.RxBytesPerSec
+			if isTraefikService(s.ServiceName) {
+				traefikRx += s.RxBytesPerSec
 			}
 		}
-		if gatewayRx > 0 {
-			estimatedRps := float64(gatewayRx) / 1500.0
-			if estimatedRps > 0 {
-				httpTPS.RequestsPerSec = math.Round(estimatedRps*100) / 100
+		if traefikRx > 10000 {
+			// Estimate real HTTP throughput: ~1.2 KB average request size
+			estimatedRPS := math.Round((float64(traefikRx)/1200.0)*100) / 100
+			httpTPS.RequestsPerSec = estimatedRPS
+		} else if httpTPS.RequestsPerSec == 0 {
+			var gatewayRx int64
+			for _, s := range services {
+				low := strings.ToLower(s.ServiceName)
+				if strings.Contains(low, "gateway") || strings.Contains(low, "traefik") || strings.Contains(low, "web") || strings.Contains(low, "proxy") || strings.Contains(low, "ingress") {
+					gatewayRx += s.RxBytesPerSec
+				}
+			}
+			if gatewayRx > 0 {
+				estimatedRps := float64(gatewayRx) / 1500.0
+				if estimatedRps > 0 {
+					httpTPS.RequestsPerSec = math.Round(estimatedRps*100) / 100
+				}
 			}
 		}
 	}
@@ -512,6 +532,8 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 				totalMemLimit int64
 				rxRate        int64
 				txRate        int64
+				totalRxBytes  int64
+				totalTxBytes  int64
 			}
 
 			serviceMap := make(map[string]*serviceAcc)
@@ -588,8 +610,19 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 				acc.totalCPU += cm.CPUPercent
 				acc.totalMemBytes += cm.MemoryUsed
 				acc.totalMemLimit += cm.MemoryLimit
-				acc.rxRate += containerRxRates[cm.ContainerID]
-				acc.txRate += containerTxRates[cm.ContainerID]
+
+				rxRate := cm.NetworkRxRate
+				if rxRate == 0 {
+					rxRate = containerRxRates[cm.ContainerID]
+				}
+				txRate := cm.NetworkTxRate
+				if txRate == 0 {
+					txRate = containerTxRates[cm.ContainerID]
+				}
+				acc.rxRate += rxRate
+				acc.txRate += txRate
+				acc.totalRxBytes += cm.NetworkRx
+				acc.totalTxBytes += cm.NetworkTx
 			}
 
 			for _, groupKey := range serviceOrder {
@@ -616,6 +649,8 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 					MemoryPercent:  memPercent,
 					RxBytesPerSec:  acc.rxRate,
 					TxBytesPerSec:  acc.txRate,
+					TotalRxBytes:   acc.totalRxBytes,
+					TotalTxBytes:   acc.totalTxBytes,
 					Status:         status,
 				})
 			}
