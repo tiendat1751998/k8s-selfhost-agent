@@ -434,6 +434,10 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 					diskRead += p.ReadBytesPerSec
 					diskWrite += p.WriteBytesPerSec
 				}
+				procCount := nm.Processes
+				if procCount == 0 {
+					procCount = nm.ContainerCount
+				}
 				node := NodeTPS{
 					NodeName:        nm.NodeName,
 					NodeID:          nm.NodeID,
@@ -441,7 +445,7 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 					TxBytesPerSec:   nm.NetworkTxBytes,
 					DiskReadPerSec:  diskRead,
 					DiskWritePerSec: diskWrite,
-					Processes:       nm.ContainerCount,
+					Processes:       procCount,
 				}
 				perNode = append(perNode, node)
 				totalRx += nm.NetworkRxBytes

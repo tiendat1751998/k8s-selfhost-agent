@@ -37,6 +37,7 @@ export interface NodeMetrics {
   network_interfaces?: NetworkInterface[]
   container_count: number
   running_count: number
+  processes?: number
   os?: string
   arch?: string
   os_distro?: string

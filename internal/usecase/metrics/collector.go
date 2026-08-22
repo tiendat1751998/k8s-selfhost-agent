@@ -89,6 +89,7 @@ type NodeMetrics struct {
 	NetworkInterfaces []NetworkInterface `json:"network_interfaces,omitempty"`
 	ContainerCount    int                `json:"container_count"`
 	RunningCount      int                `json:"running_count"`
+	Processes         int                `json:"processes,omitempty"`
 	UptimeSeconds     int64              `json:"uptime_seconds,omitempty"`
 	LoadAverage       [3]float64         `json:"load_average,omitempty"`
 	TopProcesses      []ProcessMetric    `json:"top_processes"`
@@ -1022,6 +1023,25 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			status = "down"
 		}
 
+		// Count actual containers running on this node
+		var nodeContainerCount, nodeRunningCount int
+		for _, cm := range containerMetricsList {
+			matches := false
+			if (cm.NodeID != "" && cm.NodeID == hostID) ||
+				(cm.NodeName != "" && (cm.NodeName == am.Hostname || cm.NodeName == hostID)) {
+				matches = true
+			} else if len(c.agentMetrics) == 1 {
+				matches = true
+			}
+
+			if matches {
+				nodeContainerCount++
+				if cm.State == "running" {
+					nodeRunningCount++
+				}
+			}
+		}
+
 		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
 			NodeID:            hostID,
 			NodeName:          am.Hostname,
@@ -1041,8 +1061,9 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			NetworkRxBytes:    am.NetRxRate,
 			NetworkTxBytes:    am.NetTxRate,
 			NetworkInterfaces: am.NetworkInterfaces,
-			ContainerCount:    am.Processes,
-			RunningCount:      am.Processes,
+			ContainerCount:    nodeContainerCount,
+			RunningCount:      nodeRunningCount,
+			Processes:         am.Processes,
 			UptimeSeconds:     am.Uptime,
 			LoadAverage:       am.LoadAvg,
 			TopProcesses:      am.TopProcesses,
