@@ -441,16 +441,6 @@ const peakCpuNode = computed<NodeMetrics | null>(() => {
   return [...nodes.value].sort((a, b) => (b.cpu_percent || 0) - (a.cpu_percent || 0))[0] || null
 })
 
-const clusterRxRate = computed(() => {
-  if (tpsData.value?.network?.total_rx_bytes_per_sec) return tpsData.value.network.total_rx_bytes_per_sec
-  return nodes.value.reduce((acc, n) => acc + (n.network_rx_bytes || 0), 0)
-})
-
-const clusterTxRate = computed(() => {
-  if (tpsData.value?.network?.total_tx_bytes_per_sec) return tpsData.value.network.total_tx_bytes_per_sec
-  return nodes.value.reduce((acc, n) => acc + (n.network_tx_bytes || 0), 0)
-})
-
 const clusterAvgLatencyMs = computed(() => {
   return tpsData.value?.http?.avg_latency_ms || 0
 })
@@ -685,24 +675,6 @@ function getAlertRecommendation(alert: MetricAlert): string {
 function dismissAlert(alert: MetricAlert) {
   dismissedAlerts.value.add(`${alert.node_id}-${alert.type}`)
 }
-
-// Sparkline SVG coordinates generator
-const sparklinePoints = computed(() => {
-  const history = trendHistory.value
-  if (history.length < 2) return ''
-  const maxReqs = Math.max(...history.map(h => h.reqs), Math.max(10, Math.round(effectiveHttpRps.value)))
-  const width = 120
-  const height = 32
-  const step = width / (history.length - 1)
-
-  return history
-    .map((h, i) => {
-      const x = i * step
-      const y = height - (h.reqs / maxReqs) * (height - 4) - 2
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    })
-    .join(' ')
-})
 
 // ==========================================
 // 4b. 5-MIN HIGH-RESOLUTION SATURATION TRENDS COMPUTEDS
@@ -1418,6 +1390,9 @@ onUnmounted(() => {
               :style="{ width: `${Math.min(100, overview.total_cpu_percent)}%` }"
             ></div>
           </div>
+          <div class="hud-card-footer-text font-mono" v-if="peakCpuNode">
+            <span class="text-violet">🔥 Peak: {{ peakCpuNode.node_name }} ({{ Math.round(peakCpuNode.cpu_percent) }}%)</span>
+          </div>
         </div>
 
         <!-- Card 4: Avg RAM -->
@@ -1443,37 +1418,36 @@ onUnmounted(() => {
               :style="{ width: `${Math.min(100, overview.total_mem_percent)}%` }"
             ></div>
           </div>
+          <div class="hud-card-footer-text font-mono">
+            <span class="text-cyan">🧠 {{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}</span>
+          </div>
         </div>
 
-        <!-- Card 5: Request Throughput with Sparkline -->
-        <div class="hud-card glass-panel hud-card-throughput">
+        <!-- Card 5: Cluster Storage -->
+        <div class="hud-card glass-panel">
           <div class="hud-card-top">
-            <span class="hud-label">Throughput</span>
-            <span class="badge badge-violet smooth-value">LIVE EDGE</span>
+            <span class="hud-label">Cluster Storage</span>
+            <span class="hud-badge-tag smooth-value" :class="`text-${getUtilizationColor(overview.total_disk_percent)}`">
+              {{ formatPercent(overview.total_disk_percent) }}
+            </span>
           </div>
           <div class="hud-value-row">
-            <div class="throughput-details">
-              <span class="hud-value smooth-value" :class="effectiveHttpRps > 0 ? 'text-violet' : 'text-primary'">
-                {{ effectiveHttpRps >= 100 ? Math.round(effectiveHttpRps).toLocaleString() : (effectiveHttpRps > 0 ? effectiveHttpRps.toFixed(1) : '0') }}
-              </span>
-              <span class="hud-unit">req/s</span>
-            </div>
-            <!-- SVG Sparkline -->
-            <div class="sparkline-container" v-if="sparklinePoints">
-              <svg viewBox="0 0 120 32" class="sparkline-svg">
-                <polyline
-                  fill="none"
-                  stroke="#8b5cf6"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  :points="sparklinePoints"
-                />
-              </svg>
-            </div>
+            <span class="hud-value smooth-value" :class="`text-${getUtilizationColor(overview.total_disk_percent)}`">
+              {{ Math.round(overview.total_disk_percent) }}%
+            </span>
+            <span class="badge smooth-value" :class="`badge-${getUtilizationColor(overview.total_disk_percent)}`">
+              {{ overview.total_disk_percent >= 80 ? 'CRITICAL' : overview.total_disk_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
+            </span>
           </div>
-          <div class="hud-card-footer-text">
-            <span>Aggregated API gateway ingress stream</span>
+          <div class="hud-progress-track">
+            <div
+              class="hud-progress-fill smooth-bar"
+              :class="`bg-${getUtilizationColor(overview.total_disk_percent)}`"
+              :style="{ width: `${Math.min(100, overview.total_disk_percent)}%` }"
+            ></div>
+          </div>
+          <div class="hud-card-footer-text font-mono">
+            <span class="text-emerald">💾 {{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }}</span>
           </div>
         </div>
       </section>
@@ -1729,37 +1703,6 @@ onUnmounted(() => {
           <div class="trend-x-axis font-mono">
             <span v-for="(marker, mIdx) in trendTimeAxisMarkers" :key="mIdx" class="x-tick">
               {{ marker.time }}
-            </span>
-          </div>
-        </div>
-
-        <div class="trend-footer-stats">
-          <div class="stat-pair">
-            <span class="stat-k">Current CPU</span>
-            <span class="stat-v text-violet smooth-value font-mono">
-              {{ formatPercent(overview?.total_cpu_percent) }}
-              <span class="stat-sub" v-if="peakCpuNode">({{ peakCpuNode.node_name }} {{ Math.round(peakCpuNode.cpu_percent) }}%)</span>
-            </span>
-          </div>
-          <div class="stat-pair">
-            <span class="stat-k">Current RAM</span>
-            <span class="stat-v text-cyan smooth-value font-mono">
-              {{ formatPercent(overview?.total_mem_percent) }}
-              <span class="stat-sub">({{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }})</span>
-            </span>
-          </div>
-          <div class="stat-pair">
-            <span class="stat-k">Cluster Storage</span>
-            <span class="stat-v text-emerald smooth-value font-mono">
-              {{ formatPercent(overview?.total_disk_percent) }}
-              <span class="stat-sub">({{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }})</span>
-            </span>
-          </div>
-          <div class="stat-pair">
-            <span class="stat-k">Edge Throughput</span>
-            <span class="stat-v font-mono text-emerald smooth-value">
-              {{ effectiveHttpRps >= 100 ? Math.round(effectiveHttpRps).toLocaleString() : (effectiveHttpRps > 0 ? effectiveHttpRps.toFixed(1) : '0') }} req/s
-              <span class="stat-sub">(↓ {{ formatIoRate(clusterRxRate) }} ↑ {{ formatIoRate(clusterTxRate) }})</span>
             </span>
           </div>
         </div>
