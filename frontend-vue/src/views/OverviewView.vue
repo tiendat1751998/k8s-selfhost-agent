@@ -1974,6 +1974,8 @@ onUnmounted(() => {
                   <th class="th-svc-mem">Memory</th>
                   <th class="th-svc-rx">↓ Rx</th>
                   <th class="th-svc-tx">↑ Tx</th>
+                  <th class="th-svc-rps">Req/s</th>
+                  <th class="th-svc-err">Err %</th>
                   <th class="th-svc-status">Status</th>
                 </tr>
               </thead>
@@ -2003,6 +2005,16 @@ onUnmounted(() => {
                   </td>
                   <td class="col-svc-tx font-mono">
                     <span class="text-violet">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+                  </td>
+                  <td class="col-svc-rps font-mono">
+                    <span :class="(svc.requests_per_sec || 0) > 0 ? 'text-emerald font-bold' : 'text-muted'">
+                      {{ (svc.requests_per_sec !== undefined && svc.requests_per_sec !== null) ? svc.requests_per_sec.toFixed(1) : '0.0' }}
+                    </span>
+                  </td>
+                  <td class="col-svc-err font-mono">
+                    <span :class="(svc.error_rate || 0) > 5 ? 'text-rose font-bold' : (svc.error_rate || 0) > 0 ? 'text-amber' : 'text-muted'">
+                      {{ (svc.error_rate !== undefined && svc.error_rate !== null) ? svc.error_rate.toFixed(1) + '%' : '0.0%' }}
+                    </span>
                   </td>
                   <td class="col-svc-status">
                     <span
@@ -3965,7 +3977,9 @@ onUnmounted(() => {
 .col-svc-cpu,
 .col-svc-mem,
 .col-svc-rx,
-.col-svc-tx {
+.col-svc-tx,
+.col-svc-rps,
+.col-svc-err {
   white-space: nowrap;
 }
 

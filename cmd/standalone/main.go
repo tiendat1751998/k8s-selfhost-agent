@@ -26,6 +26,8 @@ import (
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	infraDocker "github.com/datdt/k8sselfhost/internal/infrastructure/provider/docker"
 	domainDocker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	domainLB "github.com/datdt/k8sselfhost/internal/domain/loadbalancer"
+	infraLB "github.com/datdt/k8sselfhost/internal/infrastructure/loadbalancer"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
@@ -217,11 +219,21 @@ func run() error {
 	)
 	go metricsCollector.Start(ctx)
 
+	lbURL := cfg.LoadBalancer.URL
+	if lbURL == "" {
+		lbURL = usecaseMetrics.DeriveTraefikURL(cfg.Docker.Host)
+	}
+	var lbProvider domainLB.Provider
+	if cfg.LoadBalancer.Provider == "traefik" || cfg.LoadBalancer.Provider == "" {
+		lbProvider = infraLB.NewTraefikProvider(lbURL)
+	}
+
 	tpsCollector := usecaseMetrics.NewTPSCollector(
 		metricsCollector,
 		pgClient,
 		log,
-		usecaseMetrics.WithTraefikURL(usecaseMetrics.DeriveTraefikURL(cfg.Docker.Host)),
+		usecaseMetrics.WithLoadBalancerProvider(lbProvider),
+		usecaseMetrics.WithTraefikURL(lbURL),
 		usecaseMetrics.WithNATSMonitorURL(usecaseMetrics.DeriveNATSMonitorURL(cfg.NATS.URL)),
 		usecaseMetrics.WithTPSRequestCountFn(mw.GetRequestCount),
 	)

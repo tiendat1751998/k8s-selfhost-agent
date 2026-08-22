@@ -11,14 +11,21 @@ import (
 
 // Config holds the complete application configuration.
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Postgres PostgresConfig `mapstructure:"postgres"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	NATS     NATSConfig     `mapstructure:"nats"`
-	LLM      LLMConfig      `mapstructure:"llm"`
-	Telemetry TelemetryConfig `mapstructure:"telemetry"`
-	Log       LogConfig       `mapstructure:"log"`
-	Docker    DockerConfig    `mapstructure:"docker"`
+	Server       ServerConfig       `mapstructure:"server"`
+	Postgres     PostgresConfig     `mapstructure:"postgres"`
+	Redis        RedisConfig        `mapstructure:"redis"`
+	NATS         NATSConfig         `mapstructure:"nats"`
+	LLM          LLMConfig          `mapstructure:"llm"`
+	Telemetry    TelemetryConfig    `mapstructure:"telemetry"`
+	Log          LogConfig          `mapstructure:"log"`
+	Docker       DockerConfig       `mapstructure:"docker"`
+	LoadBalancer LoadBalancerConfig `mapstructure:"load_balancer"`
+}
+
+// LoadBalancerConfig holds load balancer integration settings.
+type LoadBalancerConfig struct {
+	Provider string `mapstructure:"provider"`
+	URL      string `mapstructure:"url"`
 }
 
 // ServerConfig holds HTTP server settings.
@@ -157,6 +164,8 @@ func Load() (*Config, error) {
 	v.SetDefault("telemetry.environment", "development")
 
 	v.SetDefault("log.level", "info")
+	v.SetDefault("load_balancer.provider", "traefik")
+	v.SetDefault("load_balancer.url", "")
 
 	// Environment variables
 	v.SetEnvPrefix("K8S")
