@@ -305,10 +305,8 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 	if c.lbProvider != nil {
 		aggStats, err := c.lbProvider.GetAggregateStats(ctx)
 		if err == nil && aggStats != nil {
-			if aggStats.TotalRequestsPerSec > 0 {
-				httpTPS.RequestsPerSec = aggStats.TotalRequestsPerSec
-				lbReportedRPS = true
-			}
+			httpTPS.RequestsPerSec = aggStats.TotalRequestsPerSec
+			lbReportedRPS = true
 			httpTPS.ActiveConnections = aggStats.ActiveConnections
 			httpTPS.ErrorRate = aggStats.ErrorRate
 			if aggStats.AvgLatencyMs > 0 {
@@ -322,9 +320,8 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 		}
 	}
 
-	// Intelligent Container Network Fallback:
-	// If load balancer reports 0 or errors, check if the Traefik container has active container network traffic (> 10000 Bytes/sec)
-	if !lbReportedRPS || httpTPS.RequestsPerSec == 0 {
+	// Fallback only if Load Balancer is NOT available or errored:
+	if !lbReportedRPS {
 		var traefikRx int64
 		for _, s := range services {
 			if isTraefikService(s.ServiceName) {
@@ -335,20 +332,6 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 			// Estimate real HTTP throughput: ~1.2 KB average request size
 			estimatedRPS := math.Round((float64(traefikRx)/1200.0)*100) / 100
 			httpTPS.RequestsPerSec = estimatedRPS
-		} else if httpTPS.RequestsPerSec == 0 {
-			var gatewayRx int64
-			for _, s := range services {
-				low := strings.ToLower(s.ServiceName)
-				if strings.Contains(low, "gateway") || strings.Contains(low, "traefik") || strings.Contains(low, "web") || strings.Contains(low, "proxy") || strings.Contains(low, "ingress") {
-					gatewayRx += s.RxBytesPerSec
-				}
-			}
-			if gatewayRx > 0 {
-				estimatedRps := float64(gatewayRx) / 1500.0
-				if estimatedRps > 0 {
-					httpTPS.RequestsPerSec = math.Round(estimatedRps*100) / 100
-				}
-			}
 		}
 	}
 
@@ -1142,15 +1125,9 @@ func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services [
 
 		// 1. Ingress gateway mapping (tiki_traefik / traefik)
 		if isTraefikService(sName) {
-			if httpTPS.RequestsPerSec > 0 {
-				services[i].RequestsPerSec = httpTPS.RequestsPerSec
-				services[i].ErrorRate = httpTPS.ErrorRate
-				services[i].AvgLatencyMs = httpTPS.AvgLatencyMs
-			} else if matched && stat.RequestsPerSec > 0 {
-				services[i].RequestsPerSec = stat.RequestsPerSec
-				services[i].ErrorRate = stat.ErrorRate
-				services[i].AvgLatencyMs = stat.AvgLatencyMs
-			}
+			services[i].RequestsPerSec = httpTPS.RequestsPerSec
+			services[i].ErrorRate = httpTPS.ErrorRate
+			services[i].AvgLatencyMs = httpTPS.AvgLatencyMs
 			continue
 		}
 

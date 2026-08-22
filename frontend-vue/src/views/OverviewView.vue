@@ -283,10 +283,10 @@ function updateOverviewState(data: SystemOverview) {
   const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
   const newPoint: TrendPoint = {
     time: timeStr,
-    cpu: Math.round(data.total_cpu_percent || 0),
-    mem: Math.round(data.total_mem_percent || 0),
-    disk: Math.round(data.total_disk_percent || 0),
-    reqs: Math.round(effectiveHttpRps.value || data.requests_per_sec || 0),
+    cpu: Math.min(100, Math.max(0, Math.round(data.total_cpu_percent || 0))),
+    mem: Math.min(100, Math.max(0, Math.round(data.total_mem_percent || 0))),
+    disk: Math.min(100, Math.max(0, Math.round(data.total_disk_percent || 0))),
+    reqs: Math.max(0, Math.round(effectiveHttpRps.value || data.requests_per_sec || 0)),
   }
 
   trendHistory.value.push(newPoint)
