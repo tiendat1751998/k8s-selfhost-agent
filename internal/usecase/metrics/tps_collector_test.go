@@ -574,12 +574,20 @@ func TestTPSCollector_NodeMapping(t *testing.T) {
 }
 
 type mockLBProvider struct {
-	stats []domainLB.ServiceRequestStats
-	err   error
+	stats    []domainLB.ServiceRequestStats
+	aggStats *domainLB.AggregateStats
+	err      error
 }
 
 func (m *mockLBProvider) GetServiceStats(ctx context.Context) ([]domainLB.ServiceRequestStats, error) {
 	return m.stats, m.err
+}
+
+func (m *mockLBProvider) GetAggregateStats(ctx context.Context) (*domainLB.AggregateStats, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.aggStats, nil
 }
 
 func (m *mockLBProvider) HealthCheck(ctx context.Context) error {
@@ -641,6 +649,13 @@ func TestTPSCollector_WithLoadBalancerProvider(t *testing.T) {
 				AvgLatencyMs:   5.1,
 			},
 		},
+		aggStats: &domainLB.AggregateStats{
+			TotalRequests:       2300,
+			TotalRequestsPerSec: 60.7,
+			ActiveConnections:   20,
+			ErrorRate:           0.87,
+			AvgLatencyMs:        8.5,
+		},
 	}
 
 	collector := NewTPSCollector(
@@ -648,11 +663,29 @@ func TestTPSCollector_WithLoadBalancerProvider(t *testing.T) {
 		nil,
 		zap.NewNop(),
 		WithLoadBalancerProvider(lbMock),
+		WithTPSRequestCountFn(func() int64 { return 100 }),
 	)
 
 	snap, err := collector.Collect(context.Background())
 	if err != nil {
 		t.Fatalf("Collect failed: %v", err)
+	}
+
+	// HTTP TPS should be overridden by LB AggregateStats
+	if snap.HTTP.RequestsPerSec != 60.7 {
+		t.Errorf("expected HTTP RequestsPerSec = 60.7, got %f", snap.HTTP.RequestsPerSec)
+	}
+	if snap.HTTP.ActiveConnections != 20 {
+		t.Errorf("expected HTTP ActiveConnections = 20, got %d", snap.HTTP.ActiveConnections)
+	}
+	if snap.HTTP.ErrorRate != 0.87 {
+		t.Errorf("expected HTTP ErrorRate = 0.87, got %f", snap.HTTP.ErrorRate)
+	}
+	if snap.HTTP.AvgLatencyMs != 8.5 {
+		t.Errorf("expected HTTP AvgLatencyMs = 8.5, got %f", snap.HTTP.AvgLatencyMs)
+	}
+	if snap.HTTP.TotalRequests != 2300 {
+		t.Errorf("expected HTTP TotalRequests = 2300, got %d", snap.HTTP.TotalRequests)
 	}
 
 	if len(snap.Services) != 2 {
@@ -684,6 +717,43 @@ func TestTPSCollector_WithLoadBalancerProvider(t *testing.T) {
 	}
 	if web.RequestsPerSec != 18.2 {
 		t.Errorf("expected web RequestsPerSec = 18.2, got %f", web.RequestsPerSec)
+	}
+}
+
+func TestTPSCollector_FallbackWhenLBProviderFails(t *testing.T) {
+	lbFailing := &mockLBProvider{
+		err: errors.New("connection refused to loadbalancer"),
+	}
+
+	reqCount := int64(100)
+	collector := NewTPSCollector(
+		nil,
+		nil,
+		zap.NewNop(),
+		WithLoadBalancerProvider(lbFailing),
+		WithTPSRequestCountFn(func() int64 { return reqCount }),
+	)
+
+	// First collection
+	snap1, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("expected Collect to succeed gracefully on LB error: %v", err)
+	}
+	if snap1.HTTP.RequestsPerSec != 0 {
+		t.Errorf("expected initial RequestsPerSec = 0, got %f", snap1.HTTP.RequestsPerSec)
+	}
+
+	// Advance time and req count
+	time.Sleep(50 * time.Millisecond)
+	reqCount = 200
+
+	// Second collection falls back to requestCountFn
+	snap2, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("second Collect failed: %v", err)
+	}
+	if snap2.HTTP.RequestsPerSec <= 0 {
+		t.Errorf("expected fallback RequestsPerSec > 0, got %f", snap2.HTTP.RequestsPerSec)
 	}
 }
 

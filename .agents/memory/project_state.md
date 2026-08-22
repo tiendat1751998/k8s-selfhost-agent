@@ -1,22 +1,14 @@
-﻿# K8sControl Project State — Session Update 2026-08-19T16:35
+# K8sControl Project State — Session Update 2026-08-22T12:18
 
 ## Git State (master)
-9d3573c feat(hosts): dedicated Infrastructure Hosts page + multi-type support + full CRUD
-9586bde fix(metrics): ListAll bypass tenant for agent scraping
-e2654ce fix(hosts): rename Docker Host to Infrastructure Host + agent test
-071a976 fix(deploy): remove sudo from deploy script
-243127b docs: deployment guide + deploy script
-c534f3c feat(metrics): scrape k8s-agent hosts + merge overview
-3c81f3d feat(agent): lightweight monitoring agent binary
-545841e feat(frontend): TOTP 2FA login + setup wizard + token refresh
-0041b49 feat(auth): TOTP 2FA + JWT refresh tokens + recovery codes
-62bba6c security(docker): swarm join tokens protection
-5668ef0 feat(docker): node management APIs + multi-host + swarm tokens
-2c7ab2e feat(frontend): real-time overview with topology + gauges
-e229a5f feat(metrics): Docker stats collector + WebSocket + overview API
-684d70f feat(ecosystem): auto-detector + dashboard
-432f1f9 feat(plugins): plugin registry + marketplace
-e98e229 security(P1-P2): tenant isolation + UUID validation
+Latest: `62409be` feat: optimize HUD + live request flow animation bar
+Previous commits this session:
+- `151cc30` feat(ui): smooth CSS transitions for real-time data updates
+- `1ee8c30` refactor(overview): clean layout - remove TPS cards + containers table, move 5-min trends up
+- `73042c1` feat: LoadBalancerProvider abstraction + per-service request metrics
+- `c79a487` refactor(overview): remove Per-Node Network Throughput table
+- `3940e4f` feat: per-node service mapping, OS distro fix, remove service table from overview
+- `db887f6` (prior session end)
 
 ## Repo
 GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
@@ -28,6 +20,16 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 - JWT: k8s-selfhost-enterprise-jwt-secret-2026
 - Encryption: 0123456789abcdef0123456789abcdef
 
+## Infrastructure Topology (10.10.10.*)
+- k8smater: 10.10.10.133 (Swarm Manager + Docker Registry 10.10.10.133:5000) — Ubuntu 24.04.1 LTS, kernel 6.8.0-137-generic
+- worker1: 10.10.10.150 — Ubuntu 24.04.1 LTS, kernel 6.8.0-137-generic
+- worker2: 10.10.10.151 — Ubuntu 24.04.1 LTS, kernel 6.8.0-124-generic
+- k8sworker3: 10.10.10.152 (currently DOWN)
+- masterdb: 10.10.10.200 — Ubuntu 24.04.1 LTS, kernel 6.8.0-117-generic
+- workerdb1: 10.10.10.201 — Ubuntu 24.04.1 LTS, kernel 6.8.0-124-generic
+- SSH username: datdt
+- Agent deploy path: ~/k8s-agent, systemd user service (systemctl --user)
+
 ## Architecture
 - Backend: Go + chi, port 8080, Clean Architecture
 - Frontend: Vue3 + Vite + Pinia, port 3000
@@ -38,24 +40,114 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 - JWT: access 15min + partial 5min (MFA) + refresh 7d httpOnly
 - TOTP: pquerna/otp, AES-GCM encrypted, bcrypt recovery codes
 
-## Migrations 033-041
+### TPS Architecture
+- **TPSCollector** (`internal/usecase/metrics/tps_collector.go`, ~1120 lines): 5s background loop
+  - Network I/O: k8s-agent aggregation
+  - HTTP Gateway: Traefik via LoadBalancerProvider
+  - Database: PostgreSQL pg_stat_database via pgxpool
+  - NATS Messaging: /varz endpoint
+  - Container Network: Docker stats aggregation
+- **LoadBalancerProvider** interface (`internal/domain/loadbalancer/provider.go`):
+  - `GetServiceStats()` → per-service request stats
+  - `HealthCheck()`, `Name()`
+  - Implementations: TraefikProvider (`internal/infrastructure/loadbalancer/traefik.go`)
+  - Designed to swap Traefik/Nginx/HAProxy without code changes
+- **TraefikProvider**: Parses `/api/http/services` + `/metrics` (Prometheus format)
+  - `traefik_service_requests_total` per service per status code
+  - `traefik_entrypoint_requests_total` for aggregate RPS
+  - `traefik_entrypoint_open_connections` for active connections
+  - Delta RPS calculation with previous sample tracking
+
+### Agent Architecture
+- **Agent Collector** (`cmd/agent/collector.go`, ~1238 lines):
+  - `readTopProcesses()` scans /proc/[pid]/{stat,cmdline,status,io}
+  - `readOSDistro()` tries /etc/os-release, /usr/lib/os-release, /etc/lsb-release
+  - `readKernelVersion()` reads /proc/sys/kernel/osrelease
+  - Disk filtering: physical FS whitelist + mount blacklist + device dedup
+  - Per-interface network stats (ens33, docker0, docker_gwbridge, etc.)
+
+### Overview Page Architecture
+- **Summary HUD**: Compact single-row flexbox, color-coded (green/amber/rose)
+  - NODES ONLINE, CONTAINERS, AVG CPU, AVG MEMORY, THROUGHPUT
+- **Request Flow Animation Bar**: Animated particles proportional to req/s
+  - Active connections, queued requests, error rate, health coloring
+- **5-Min Saturation Trends**: SVG chart moved to below HUD
+- **Node Cards**: Drag-and-drop, stable sort, localStorage persistence
+- **Node Inspect Drawer** (click node card):
+  - OS Distro, Kernel Version, Architecture, Uptime, Load Avg
+  - Hardware Saturation Telemetry (CPU, RAM, Disk, Network)
+  - 📡 Network Interface Throughput (per interface: ens33, docker0...)
+  - 📦 Apps & Services on this Node (5 services on k8smater, filtered by Swarm node mapping)
+    - Columns: Service, CPU, Memory, ↓ Rx, ↑ Tx, Req/s, Err %, Status
+  - 🔥 Top Processes (10 active, sortable, filterable)
+- **Removed sections**: Service Throughput table, Per-Node Network table, Active Workload Containers, TPS category cards — all moved to inspect drawer
+- **Smooth CSS transitions**: `.smooth-value`, `.smooth-bar`, `.smooth-opacity` prevent jarring number jumps
+
+## Build & Deploy Commands
+- Frontend: `cmd.exe /c "npm run dev"` in frontend-vue → port 3000
+- Backend build: `go build -o standalone.exe ./cmd/standalone/...`
+- Backend start: `Start-Process -FilePath '.\standalone.exe' -WorkingDirectory 'd:\project\k8sseflhost' -WindowStyle Hidden`
+- Agent binary (Linux): `cmd.exe /c "set GOOS=linux&& set GOARCH=amd64&& go build -o k8s-agent-linux ./cmd/agent/..."`
+- Deploy agents: Push to git → on k8smater: `cd ~/k8s-selfhost-agent && git pull && sh deploy-agent.sh datdt@<IP>`
+
+## Config Files
+- `config.yaml`: load_balancer.provider=traefik, load_balancer.url (from Docker host)
+- Traefik: Docker Swarm service `tiki_traefik` with `--metrics.prometheus=true --metrics.prometheus.entryPoint=traefik`
+- NATS: Container with `-m 8222` for HTTP monitoring
+
+## Migrations 033-051
 033:cloud_accounts 034:platform_settings 035:service_catalog 036:admin_pw
 037:plugins 038:scaffold_templates 039:ecosystem_tools 040:compute_hosts
-041:user_mfa+refresh_tokens
+041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
-## Completed Features
-- Cloud Provider Connector, Platform Settings, Service Catalog
-- Security Audit 18/18, Plugin System, Scaffolder Templates
-- Ecosystem Auto-Detector, Real-time Overview Dashboard
-- Node Management (swarm tokens, drain/activate/remove)
-- TOTP 2FA + JWT Refresh (2-step login, QR wizard, recovery codes)
-- K8s-Agent Binary (cmd/agent/, deploy-agent.sh)
-- Agent Host Scraping (ListAll bypass tenant)
-- Dedicated Infrastructure Hosts Management View (/hosts, full CRUD, 7 host types: agent, docker, k8s, prometheus, git, database, custom)
+## Completed Features (this session 2026-08-22)
+- OS Distro + Kernel Version on all nodes (agent + backend + frontend)
+- Top Processes fix for worker1/worker2 (agent redeploy)
+- Per-node network interface throughput in inspect drawer
+- Per-node apps & services with Docker Swarm node mapping
+- Per-service request metrics (Req/s, Err %) via LoadBalancerProvider
+- LoadBalancerProvider abstraction (Traefik first, swap to Nginx/HAProxy)
+- Overview cleanup: removed Service Throughput, Per-Node Network, Active Containers, TPS cards
+- 5-Min Saturation Trends moved to top
+- HUD optimization: compact layout, color-coded, animated request flow bar
+- Smooth CSS transitions for real-time data
+- Traefik Prometheus metrics enabled (--metrics.prometheus=true)
 
-## Next Roadmap Candidates (Non-K8s)
-1. **AI SRE / RCA Engine + Ecosystem Tools Integration**: Ingest real metrics/logs/alerts from Prometheus, Postgres, Docker & detected ecosystem tools into AI diagnostic pipeline.
-2. **Edge Agent Command & Remote Diagnostics**: Secure script execution / remote diagnostics capability on k8s-agent nodes.
+## Active/In-Progress Work
+
+### IN-PROGRESS: Fix Traefik RPS calculation (subagent 9c7ef747)
+- **Problem**: HTTP RPS shows 0.4 req/s even during load test (wrk generating thousands of requests)
+- **Root cause**: `collectHTTPTPS()` uses `mw.GetRequestCount()` = backend API requests, NOT Traefik proxy traffic
+- **Fix**: Parse `traefik_entrypoint_requests_total` from Prometheus `/metrics` for real aggregate RPS
+- **Subagent**: `9c7ef747-f744-4070-81b7-c635c2cd26f6` (backend-coder, "Traefik RPS Fix Engineer")
+- **Status**: Dispatched, running. User running `wrk -t2 -c20 -d180s http://10.10.10.133/` to test
+- **After fix**: Rebuild server, verify RPS shows hundreds during load test
+
+### ALSO IN-PROGRESS: HUD animation bar (subagent ade214ae) — COMPLETED
+- Request flow animation with RPS-proportional particle speed
+- Active connections, queued requests, error rate display
+
+## Key Failures & Constraints
+- Agent deployment: Windows → git push → k8smater git pull → deploy-agent.sh (no direct SCP)
+- systemctl --user for agent service
+- NATS needs `-m 8222` for HTTP monitoring
+- Traefik API (/api/overview, /api/http/services) = config only, NO request counts
+- Traefik Prometheus /metrics = real request counts (enabled this session)
+- PostgreSQL cache_hit_ratio: backend 0.0-1.0, frontend ×100 for %
+
+## User Rules (BINDING)
+- Orchestrator-only: main thread NEVER writes code, ALL via subagents
+- Zero tolerance for fake/mock data
+- Vietnamese language, casual tone
+- Always start BOTH backend (8080) AND frontend (3000)
+- Use Chrome DevTools MCP for QA verification
+
+## Next Roadmap Candidates
+1. Complete Traefik RPS fix (in-progress subagent)
+2. Per-app latency metrics (avg response time from Traefik service_request_duration)
+3. AI SRE / RCA Engine + Ecosystem Tools Integration
+4. Edge Agent Command & Remote Diagnostics
+5. Cost model (deferred by user)
 
 ## BLOCKED (waiting K8s cluster hardware)
 Pod Terminal, Helm Catalog, GitOps Visual, Real-time Logs,

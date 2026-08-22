@@ -27,6 +27,17 @@ type serviceSample struct {
 	latencyCount  int64
 }
 
+// entrypointSample tracks raw counters across entrypoints for delta RPS and error calculations.
+type entrypointSample struct {
+	totalRequests int64
+	status2xx     int64
+	status4xx     int64
+	status5xx     int64
+	latencySumSec float64
+	latencyCount  int64
+	openConns     int
+}
+
 // traefikServiceDTO represents a service definition from Traefik /api/http/services.
 type traefikServiceDTO struct {
 	Name         string            `json:"name"`
@@ -62,9 +73,11 @@ type TraefikProvider struct {
 	apiURL     string
 	httpClient *http.Client
 
-	mu        sync.Mutex
-	prevStats map[string]serviceSample
-	prevTime  time.Time
+	mu                 sync.Mutex
+	prevStats          map[string]serviceSample
+	prevTime           time.Time
+	prevAggregateStats entrypointSample
+	prevAggregateTime  time.Time
 }
 
 // Option configures TraefikProvider.
@@ -154,7 +167,7 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 	}
 
 	// 2. Attempt to fetch Prometheus metrics if exposed
-	promStats, promErr := p.fetchPrometheusMetrics(ctx)
+	promStats, _, promErr := p.fetchPrometheusMetrics(ctx)
 
 	// 3. Aggregate stats per service
 	currSamples := make(map[string]serviceSample)
@@ -230,6 +243,60 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 	return statsList, nil
 }
 
+// GetAggregateStats queries Traefik Prometheus metrics to retrieve entrypoint aggregate throughput.
+func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.AggregateStats, error) {
+	now := time.Now().UTC()
+
+	// 1. Fetch Prometheus metrics from Traefik
+	_, entrypoint, err := p.fetchPrometheusMetrics(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("fetching traefik prometheus metrics: %w", err)
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	var rps float64
+	var errRate float64
+	var avgLatencyMs float64
+
+	if !p.prevAggregateTime.IsZero() {
+		elapsed := now.Sub(p.prevAggregateTime).Seconds()
+		if elapsed > 0 {
+			reqDelta := entrypoint.totalRequests - p.prevAggregateStats.totalRequests
+			if reqDelta < 0 {
+				reqDelta = 0
+			}
+			rps = math.Round((float64(reqDelta)/elapsed)*100) / 100
+
+			errDelta := (entrypoint.status4xx + entrypoint.status5xx) - (p.prevAggregateStats.status4xx + p.prevAggregateStats.status5xx)
+			if errDelta < 0 {
+				errDelta = 0
+			}
+			if reqDelta > 0 {
+				errRate = math.Round((float64(errDelta)/float64(reqDelta))*10000) / 100
+			}
+
+			latDelta := entrypoint.latencySumSec - p.prevAggregateStats.latencySumSec
+			latCountDelta := entrypoint.latencyCount - p.prevAggregateStats.latencyCount
+			if latDelta > 0 && latCountDelta > 0 {
+				avgLatencyMs = math.Round((latDelta/float64(latCountDelta))*100000) / 100
+			}
+		}
+	}
+
+	p.prevAggregateStats = entrypoint
+	p.prevAggregateTime = now
+
+	return &domainLB.AggregateStats{
+		TotalRequests:       entrypoint.totalRequests,
+		TotalRequestsPerSec: rps,
+		ActiveConnections:   entrypoint.openConns,
+		ErrorRate:           errRate,
+		AvgLatencyMs:        avgLatencyMs,
+	}, nil
+}
+
 // fetchHTTPServices retrieves the list of active services from /api/http/services.
 func (p *TraefikProvider) fetchHTTPServices(ctx context.Context) ([]traefikServiceDTO, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -259,31 +326,32 @@ func (p *TraefikProvider) fetchHTTPServices(ctx context.Context) ([]traefikServi
 }
 
 // fetchPrometheusMetrics attempts to parse prometheus metrics from /metrics endpoint if present.
-func (p *TraefikProvider) fetchPrometheusMetrics(ctx context.Context) (map[string]serviceSample, error) {
+func (p *TraefikProvider) fetchPrometheusMetrics(ctx context.Context) (map[string]serviceSample, entrypointSample, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, p.apiURL+"/metrics", nil)
 	if err != nil {
-		return nil, err
+		return nil, entrypointSample{}, err
 	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, entrypointSample{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("metrics returned status %d", resp.StatusCode)
+		return nil, entrypointSample{}, fmt.Errorf("metrics returned status %d", resp.StatusCode)
 	}
 
 	return parsePrometheusMetrics(resp.Body)
 }
 
-// parsePrometheusMetrics parses Prometheus plain text format to extract Traefik per-service counters.
-func parsePrometheusMetrics(r io.Reader) (map[string]serviceSample, error) {
+// parsePrometheusMetrics parses Prometheus plain text format to extract Traefik per-service and entrypoint counters.
+func parsePrometheusMetrics(r io.Reader) (map[string]serviceSample, entrypointSample, error) {
 	stats := make(map[string]serviceSample)
+	var entrypoint entrypointSample
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
@@ -292,10 +360,12 @@ func parsePrometheusMetrics(r io.Reader) (map[string]serviceSample, error) {
 			continue
 		}
 
-		// Parse requests total: traefik_service_requests_total{code="200",method="GET",protocol="http",service="gateway@file"} 142
+		// Service requests: traefik_service_requests_total{code="200",method="GET",protocol="http",service="gateway@file"} 142
 		if strings.HasPrefix(line, "traefik_service_requests_total") {
-			service, code, val := parsePrometheusMetricLine(line)
+			labels, val := parsePrometheusMetricLineData(line)
+			service := labels["service"]
 			if service != "" {
+				code := parseCode(labels["code"])
 				s := stats[service]
 				s.totalRequests += int64(val)
 				if code >= 200 && code < 300 {
@@ -309,9 +379,10 @@ func parsePrometheusMetrics(r io.Reader) (map[string]serviceSample, error) {
 			}
 		}
 
-		// Parse duration sum: traefik_service_request_duration_seconds_sum{code="200",service="gateway@file"} 1.452
+		// Service latency sum: traefik_service_request_duration_seconds_sum{code="200",service="gateway@file"} 1.452
 		if strings.HasPrefix(line, "traefik_service_request_duration_seconds_sum") {
-			service, _, val := parsePrometheusMetricLine(line)
+			labels, val := parsePrometheusMetricLineData(line)
+			service := labels["service"]
 			if service != "" {
 				s := stats[service]
 				s.latencySumSec += val
@@ -319,47 +390,100 @@ func parsePrometheusMetrics(r io.Reader) (map[string]serviceSample, error) {
 			}
 		}
 
-		// Parse duration count: traefik_service_request_duration_seconds_count{code="200",service="gateway@file"} 142
+		// Service latency count: traefik_service_request_duration_seconds_count{code="200",service="gateway@file"} 142
 		if strings.HasPrefix(line, "traefik_service_request_duration_seconds_count") {
-			service, _, val := parsePrometheusMetricLine(line)
+			labels, val := parsePrometheusMetricLineData(line)
+			service := labels["service"]
 			if service != "" {
 				s := stats[service]
 				s.latencyCount += int64(val)
 				stats[service] = s
 			}
 		}
-	}
 
-	return stats, scanner.Err()
-}
+		// Entrypoint requests: traefik_entrypoint_requests_total{code="200",entrypoint="web",method="GET",protocol="http"} 24324
+		if strings.HasPrefix(line, "traefik_entrypoint_requests_total") {
+			labels, val := parsePrometheusMetricLineData(line)
+			ep := labels["entrypoint"]
+			if !isInternalEntrypoint(ep) {
+				code := parseCode(labels["code"])
+				entrypoint.totalRequests += int64(val)
+				if code >= 200 && code < 300 {
+					entrypoint.status2xx += int64(val)
+				} else if code >= 400 && code < 500 {
+					entrypoint.status4xx += int64(val)
+				} else if code >= 500 && code < 600 {
+					entrypoint.status5xx += int64(val)
+				}
+			}
+		}
 
-// parsePrometheusMetricLine extracts service label, code label, and floating point value.
-func parsePrometheusMetricLine(line string) (service string, code int, value float64) {
-	// Sample line: traefik_service_requests_total{code="200",method="GET",protocol="http",service="gateway@file"} 142
-	openIdx := strings.Index(line, "{")
-	closeIdx := strings.LastIndex(line, "}")
-	if openIdx == -1 || closeIdx == -1 || closeIdx <= openIdx {
-		return "", 0, 0
-	}
+		// Entrypoint latency sum: traefik_entrypoint_request_duration_seconds_sum{entrypoint="web"} 12.5
+		if strings.HasPrefix(line, "traefik_entrypoint_request_duration_seconds_sum") {
+			labels, val := parsePrometheusMetricLineData(line)
+			ep := labels["entrypoint"]
+			if !isInternalEntrypoint(ep) {
+				entrypoint.latencySumSec += val
+			}
+		}
 
-	labelsStr := line[openIdx+1 : closeIdx]
-	valStr := strings.TrimSpace(line[closeIdx+1:])
+		// Entrypoint latency count: traefik_entrypoint_request_duration_seconds_count{entrypoint="web"} 24324
+		if strings.HasPrefix(line, "traefik_entrypoint_request_duration_seconds_count") {
+			labels, val := parsePrometheusMetricLineData(line)
+			ep := labels["entrypoint"]
+			if !isInternalEntrypoint(ep) {
+				entrypoint.latencyCount += int64(val)
+			}
+		}
 
-	v, err := strconv.ParseFloat(valStr, 64)
-	if err != nil {
-		return "", 0, 0
-	}
-	value = v
-
-	labels := parseLabels(labelsStr)
-	service = labels["service"]
-	if cStr, ok := labels["code"]; ok {
-		if c, err := strconv.Atoi(cStr); err == nil {
-			code = c
+		// Active open connections: traefik_open_connections{entrypoint="web",protocol="TCP"} 5 or traefik_entrypoint_open_connections{entrypoint="web"} 5
+		if strings.HasPrefix(line, "traefik_open_connections") || strings.HasPrefix(line, "traefik_entrypoint_open_connections") {
+			labels, val := parsePrometheusMetricLineData(line)
+			ep := labels["entrypoint"]
+			if !isInternalEntrypoint(ep) {
+				entrypoint.openConns += int(val)
+			}
 		}
 	}
 
-	return service, code, value
+	return stats, entrypoint, scanner.Err()
+}
+
+// parsePrometheusMetricLineData extracts labels map and floating point metric value.
+func parsePrometheusMetricLineData(line string) (map[string]string, float64) {
+	openIdx := strings.Index(line, "{")
+	closeIdx := strings.LastIndex(line, "}")
+	if openIdx != -1 && closeIdx != -1 && closeIdx > openIdx {
+		labelsStr := line[openIdx+1 : closeIdx]
+		valStr := strings.TrimSpace(line[closeIdx+1:])
+		v, err := strconv.ParseFloat(valStr, 64)
+		if err != nil {
+			return nil, 0
+		}
+		return parseLabels(labelsStr), v
+	}
+
+	parts := strings.Fields(line)
+	if len(parts) >= 2 {
+		v, err := strconv.ParseFloat(parts[1], 64)
+		if err == nil {
+			return map[string]string{}, v
+		}
+	}
+	return nil, 0
+}
+
+func parseCode(codeStr string) int {
+	if codeStr == "" {
+		return 0
+	}
+	c, _ := strconv.Atoi(codeStr)
+	return c
+}
+
+func isInternalEntrypoint(ep string) bool {
+	ep = strings.ToLower(strings.TrimSpace(ep))
+	return ep == "traefik" || ep == "dashboard" || ep == "internal" || ep == "metrics"
 }
 
 // parseLabels parses comma-separated key="value" pairs.
