@@ -838,14 +838,14 @@ onUnmounted(() => {
             ></span>
           </div>
           <div class="hud-value-row">
-            <span class="hud-value">{{ overview.healthy_nodes }} <span class="hud-total">/ {{ overview.total_nodes }}</span></span>
-            <span class="badge" :class="overview.healthy_nodes === overview.total_nodes ? 'badge-emerald' : 'badge-amber'">
+            <span class="hud-value smooth-value">{{ overview.healthy_nodes }} <span class="hud-total">/ {{ overview.total_nodes }}</span></span>
+            <span class="badge smooth-value" :class="overview.healthy_nodes === overview.total_nodes ? 'badge-emerald' : 'badge-amber'">
               {{ overview.healthy_nodes === overview.total_nodes ? '100% HEALTHY' : 'DEGRADED' }}
             </span>
           </div>
           <div class="hud-progress-track">
             <div
-              class="hud-progress-fill bg-emerald"
+              class="hud-progress-fill bg-emerald smooth-bar"
               :style="{ width: `${overview.total_nodes ? (overview.healthy_nodes / overview.total_nodes) * 100 : 0}%` }"
             ></div>
           </div>
@@ -858,12 +858,12 @@ onUnmounted(() => {
             <span class="hud-icon">📦</span>
           </div>
           <div class="hud-value-row">
-            <span class="hud-value">{{ runningContainers }} <span class="hud-total">/ {{ totalContainers }}</span></span>
+            <span class="hud-value smooth-value">{{ runningContainers }} <span class="hud-total">/ {{ totalContainers }}</span></span>
             <span class="badge badge-cyan">RUNNING</span>
           </div>
           <div class="hud-progress-track">
             <div
-              class="hud-progress-fill bg-cyan"
+              class="hud-progress-fill bg-cyan smooth-bar"
               :style="{ width: `${totalContainers ? (runningContainers / totalContainers) * 100 : 0}%` }"
             ></div>
           </div>
@@ -873,19 +873,19 @@ onUnmounted(() => {
         <div class="hud-card glass-panel">
           <div class="hud-card-top">
             <span class="hud-label">Avg CPU Saturation</span>
-            <span class="hud-badge-tag" :class="`text-${getUtilizationColor(overview.total_cpu_percent)}`">
+            <span class="hud-badge-tag smooth-value" :class="`text-${getUtilizationColor(overview.total_cpu_percent)}`">
               {{ formatPercent(overview.total_cpu_percent) }}
             </span>
           </div>
           <div class="hud-value-row">
-            <span class="hud-value">{{ Math.round(overview.total_cpu_percent) }}%</span>
-            <span class="badge" :class="`badge-${getUtilizationColor(overview.total_cpu_percent)}`">
+            <span class="hud-value smooth-value">{{ Math.round(overview.total_cpu_percent) }}%</span>
+            <span class="badge smooth-value" :class="`badge-${getUtilizationColor(overview.total_cpu_percent)}`">
               {{ overview.total_cpu_percent >= 80 ? 'CRITICAL' : overview.total_cpu_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
             </span>
           </div>
           <div class="hud-progress-track">
             <div
-              class="hud-progress-fill"
+              class="hud-progress-fill smooth-bar"
               :class="`bg-${getUtilizationColor(overview.total_cpu_percent)}`"
               :style="{ width: `${Math.min(100, overview.total_cpu_percent)}%` }"
             ></div>
@@ -896,19 +896,19 @@ onUnmounted(() => {
         <div class="hud-card glass-panel">
           <div class="hud-card-top">
             <span class="hud-label">Avg Memory Saturation</span>
-            <span class="hud-badge-tag" :class="`text-${getUtilizationColor(overview.total_mem_percent)}`">
+            <span class="hud-badge-tag smooth-value" :class="`text-${getUtilizationColor(overview.total_mem_percent)}`">
               {{ formatPercent(overview.total_mem_percent) }}
             </span>
           </div>
           <div class="hud-value-row">
-            <span class="hud-value">{{ Math.round(overview.total_mem_percent) }}%</span>
-            <span class="badge" :class="`badge-${getUtilizationColor(overview.total_mem_percent)}`">
+            <span class="hud-value smooth-value">{{ Math.round(overview.total_mem_percent) }}%</span>
+            <span class="badge smooth-value" :class="`badge-${getUtilizationColor(overview.total_mem_percent)}`">
               {{ overview.total_mem_percent >= 80 ? 'CRITICAL' : overview.total_mem_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
             </span>
           </div>
           <div class="hud-progress-track">
             <div
-              class="hud-progress-fill"
+              class="hud-progress-fill smooth-bar"
               :class="`bg-${getUtilizationColor(overview.total_mem_percent)}`"
               :style="{ width: `${Math.min(100, overview.total_mem_percent)}%` }"
             ></div>
@@ -923,7 +923,7 @@ onUnmounted(() => {
           </div>
           <div class="hud-value-row">
             <div class="throughput-details">
-              <span class="hud-value">{{ Math.round(overview.requests_per_sec) }}</span>
+              <span class="hud-value smooth-value">{{ Math.round(overview.requests_per_sec) }}</span>
               <span class="hud-unit">req/s</span>
             </div>
             <!-- SVG Sparkline -->
@@ -1037,7 +1037,7 @@ onUnmounted(() => {
           <div
             v-for="node in filteredTopologyNodes"
             :key="node.node_id"
-            class="node-card glass-panel cursor-pointer"
+            class="node-card glass-panel cursor-pointer smooth-opacity"
             :class="[
               getNodeCardClass(node),
               {
@@ -1115,21 +1115,21 @@ onUnmounted(() => {
             <div class="node-meta-grid">
               <div class="meta-item">
                 <span class="meta-label">Memory</span>
-                <span class="meta-val">{{ formatBytes(node.memory_used) }} / {{ formatBytes(node.memory_total) }}</span>
+                <span class="meta-val smooth-value">{{ formatBytes(node.memory_used) }} / {{ formatBytes(node.memory_total) }}</span>
               </div>
               <div class="meta-item">
                 <span class="meta-label">Disk Storage</span>
-                <span class="meta-val">{{ formatBytes(node.disk_used) }} / {{ formatBytes(node.disk_total) }}</span>
+                <span class="meta-val smooth-value">{{ formatBytes(node.disk_used) }} / {{ formatBytes(node.disk_total) }}</span>
               </div>
               <div class="meta-item">
                 <span class="meta-label">Network I/O</span>
-                <span class="meta-val font-mono">
+                <span class="meta-val font-mono smooth-value">
                   ↑ {{ formatBytes(node.network_tx_bytes) }}/s  ↓ {{ formatBytes(node.network_rx_bytes) }}/s
                 </span>
               </div>
               <div class="meta-item">
                 <span class="meta-label">Processes</span>
-                <span class="meta-val">{{ node.running_count || node.container_count || 0 }}</span>
+                <span class="meta-val smooth-value">{{ node.running_count || node.container_count || 0 }}</span>
               </div>
             </div>
 
@@ -1190,7 +1190,7 @@ onUnmounted(() => {
 
             <div class="tps-highlight-row">
               <div class="tps-big-stat">
-                <span class="tps-big-num font-mono">
+                <span class="tps-big-num font-mono smooth-value">
                   {{ tpsData?.network ? formatBytes(tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec) : '--' }}
                 </span>
                 <span class="tps-big-unit">/s total</span>
@@ -1200,13 +1200,13 @@ onUnmounted(() => {
             <div class="tps-metrics-block">
               <div class="tps-metric-row">
                 <span class="tps-metric-key">Total Rx</span>
-                <span class="tps-metric-val text-cyan font-mono">
+                <span class="tps-metric-val text-cyan font-mono smooth-value">
                   ↓ {{ tpsData?.network ? formatBytes(tpsData.network.total_rx_bytes_per_sec) + '/s' : '--' }}
                 </span>
               </div>
               <div class="tps-metric-row">
                 <span class="tps-metric-key">Total Tx</span>
-                <span class="tps-metric-val text-violet font-mono">
+                <span class="tps-metric-val text-violet font-mono smooth-value">
                   ↑ {{ tpsData?.network ? formatBytes(tpsData.network.total_tx_bytes_per_sec) + '/s' : '--' }}
                 </span>
               </div>
@@ -1216,7 +1216,7 @@ onUnmounted(() => {
             <div class="tps-indicator-wrap">
               <div class="tps-ratio-bar">
                 <div
-                  class="tps-bar-rx"
+                  class="tps-bar-rx smooth-bar"
                   :style="{
                     width: `${
                       tpsData?.network && (tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec > 0)
@@ -1227,7 +1227,7 @@ onUnmounted(() => {
                   title="Rx Bandwidth Share"
                 ></div>
                 <div
-                  class="tps-bar-tx"
+                  class="tps-bar-tx smooth-bar"
                   :style="{
                     width: `${
                       tpsData?.network && (tpsData.network.total_rx_bytes_per_sec + tpsData.network.total_tx_bytes_per_sec > 0)
@@ -1253,7 +1253,7 @@ onUnmounted(() => {
                 <span class="tps-label">HTTP Gateway (Traefik)</span>
               </div>
               <span
-                class="badge"
+                class="badge smooth-value"
                 :class="getHttpErrorRateClass(tpsData?.http?.error_rate)"
               >
                 {{ tpsData?.http ? tpsData.http.error_rate.toFixed(1) + '% Err' : '--' }}
@@ -1262,13 +1262,13 @@ onUnmounted(() => {
 
             <div class="tps-highlight-row">
               <div class="tps-big-stat">
-                <span class="tps-big-num font-mono">
+                <span class="tps-big-num font-mono smooth-value">
                   {{ tpsData?.http ? tpsData.http.requests_per_sec.toFixed(1) : '--' }}
                 </span>
                 <span class="tps-big-unit">req/s</span>
               </div>
               <div class="tps-badge-group">
-                <span class="tps-sub-badge font-mono">
+                <span class="tps-sub-badge font-mono smooth-value">
                   ⚡ {{ tpsData?.http?.active_connections ?? '--' }} conn
                 </span>
               </div>
@@ -1277,14 +1277,14 @@ onUnmounted(() => {
             <div class="tps-metrics-block">
               <div class="tps-metric-row">
                 <span class="tps-metric-key">Active Connections</span>
-                <span class="tps-metric-val font-mono">
+                <span class="tps-metric-val font-mono smooth-value">
                   {{ tpsData?.http?.active_connections ?? '--' }}
                 </span>
               </div>
               <div class="tps-metric-row">
                 <span class="tps-metric-key">Error Rate</span>
                 <span
-                  class="tps-metric-val font-mono"
+                  class="tps-metric-val font-mono smooth-value"
                   :class="(tpsData?.http?.error_rate ?? 0) > 5 ? 'text-rose font-bold' : 'text-emerald'"
                 >
                   {{ tpsData?.http ? tpsData.http.error_rate.toFixed(1) + '%' : '--' }}
@@ -1293,7 +1293,7 @@ onUnmounted(() => {
               <div class="tps-metric-row">
                 <span class="tps-metric-key">Avg Latency</span>
                 <span
-                  class="tps-metric-val font-mono"
+                  class="tps-metric-val font-mono smooth-value"
                   :class="getHttpLatencyColor(tpsData?.http?.avg_latency_ms)"
                 >
                   {{ tpsData?.http?.avg_latency_ms != null ? tpsData.http.avg_latency_ms.toFixed(1) + 'ms' : '--' }}
@@ -1310,7 +1310,7 @@ onUnmounted(() => {
                 <span class="tps-label">Database (PostgreSQL)</span>
               </div>
               <span
-                class="badge"
+                class="badge smooth-value"
                 :class="getDbCacheHitClass(tpsData?.database?.cache_hit_ratio)"
               >
                 {{ formatCacheHitRatio(tpsData?.database?.cache_hit_ratio) }} Hit
@@ -1319,13 +1319,13 @@ onUnmounted(() => {
 
             <div class="tps-highlight-row">
               <div class="tps-big-stat">
-                <span class="tps-big-num font-mono">
+                <span class="tps-big-num font-mono smooth-value">
                   {{ tpsData?.database ? tpsData.database.transactions_per_sec.toFixed(1) : '--' }}
                 </span>
                 <span class="tps-big-unit">tx/s</span>
               </div>
               <div class="tps-badge-group">
-                <span class="tps-sub-badge font-mono">
+                <span class="tps-sub-badge font-mono smooth-value">
                   🔌 {{ tpsData?.database?.active_connections ?? '--' }} conn
                 </span>
               </div>
@@ -1334,20 +1334,20 @@ onUnmounted(() => {
             <div class="tps-metrics-block">
               <div class="tps-metric-row">
                 <span class="tps-metric-key">Reads</span>
-                <span class="tps-metric-val text-cyan font-mono">
+                <span class="tps-metric-val text-cyan font-mono smooth-value">
                   {{ tpsData?.database ? tpsData.database.reads_per_sec.toFixed(1) + ' rows/s' : '--' }}
                 </span>
               </div>
               <div class="tps-metric-row">
                 <span class="tps-metric-key">Writes</span>
-                <span class="tps-metric-val text-amber font-mono">
+                <span class="tps-metric-val text-amber font-mono smooth-value">
                   {{ tpsData?.database ? tpsData.database.writes_per_sec.toFixed(1) + ' rows/s' : '--' }}
                 </span>
               </div>
               <div class="tps-metric-row">
                 <span class="tps-metric-key">Cache Hit</span>
                 <span
-                  class="tps-metric-val font-mono"
+                  class="tps-metric-val font-mono smooth-value"
                   :class="
                     ((tpsData?.database?.cache_hit_ratio ?? 0) <= 1.0 ? (tpsData?.database?.cache_hit_ratio ?? 0) * 100 : (tpsData?.database?.cache_hit_ratio ?? 0)) >= 95
                       ? 'text-emerald'
@@ -1369,18 +1369,18 @@ onUnmounted(() => {
                 <span class="tps-icon">📨</span>
                 <span class="tps-label">Messaging (NATS)</span>
               </div>
-              <span class="badge" :class="tpsData?.messaging?.connections ? 'badge-emerald' : 'badge-muted'">PUB/SUB</span>
+              <span class="badge smooth-value" :class="tpsData?.messaging?.connections ? 'badge-emerald' : 'badge-muted'">PUB/SUB</span>
             </div>
 
             <div class="tps-highlight-row">
               <div class="tps-big-stat">
-                <span class="tps-big-num font-mono">
+                <span class="tps-big-num font-mono smooth-value">
                   {{ tpsData?.messaging ? (tpsData.messaging.in_msgs_per_sec + tpsData.messaging.out_msgs_per_sec).toFixed(1) : '--' }}
                 </span>
                 <span class="tps-big-unit">msg/s</span>
               </div>
               <div class="tps-badge-group">
-                <span class="tps-sub-badge font-mono">
+                <span class="tps-sub-badge font-mono smooth-value">
                   👥 {{ tpsData?.messaging?.connections != null ? (tpsData.messaging.connections > 0 ? tpsData.messaging.connections + ' conn' : '0 conn') : 'N/A' }}
                 </span>
               </div>
@@ -1389,22 +1389,22 @@ onUnmounted(() => {
             <div class="tps-metrics-block">
               <div class="tps-metric-row">
                 <span class="tps-metric-key">In Rate</span>
-                <span class="tps-metric-val text-cyan font-mono">
+                <span class="tps-metric-val text-cyan font-mono smooth-value">
                   {{ tpsData?.messaging ? tpsData.messaging.in_msgs_per_sec.toFixed(1) + ' msg/s' : '--' }}
                 </span>
               </div>
               <div class="tps-metric-row">
                 <span class="tps-metric-key">Out Rate</span>
-                <span class="tps-metric-val text-violet font-mono">
+                <span class="tps-metric-val text-violet font-mono smooth-value">
                   {{ tpsData?.messaging ? tpsData.messaging.out_msgs_per_sec.toFixed(1) + ' msg/s' : '--' }}
                 </span>
               </div>
               <div class="tps-metric-row">
                 <span class="tps-metric-key">Bandwidth</span>
-                <span class="tps-metric-val font-mono">
-                  <span class="text-cyan">↓{{ tpsData?.messaging ? formatBytes(tpsData.messaging.in_bytes_per_sec) : '--' }}</span>
+                <span class="tps-metric-val font-mono smooth-value">
+                  <span class="text-cyan smooth-value">↓{{ tpsData?.messaging ? formatBytes(tpsData.messaging.in_bytes_per_sec) : '--' }}</span>
                   <span class="text-muted"> / </span>
-                  <span class="text-violet">↑{{ tpsData?.messaging ? formatBytes(tpsData.messaging.out_bytes_per_sec) : '--' }}</span>
+                  <span class="text-violet smooth-value">↑{{ tpsData?.messaging ? formatBytes(tpsData.messaging.out_bytes_per_sec) : '--' }}</span>
                 </span>
               </div>
             </div>
@@ -1514,10 +1514,10 @@ onUnmounted(() => {
                   </td>
                   <td class="col-cpu">
                     <div class="usage-metric-cell">
-                      <span class="usage-text">{{ formatPercent(c.cpu_percent) }}</span>
+                      <span class="usage-text smooth-value">{{ formatPercent(c.cpu_percent) }}</span>
                       <div class="mini-bar-track">
                         <div
-                          class="mini-bar-fill"
+                          class="mini-bar-fill smooth-bar"
                           :class="`bg-${getUtilizationColor(c.cpu_percent)}`"
                           :style="{ width: `${Math.min(100, c.cpu_percent)}%` }"
                         ></div>
@@ -1526,10 +1526,10 @@ onUnmounted(() => {
                   </td>
                   <td class="col-ram">
                     <div class="usage-metric-cell">
-                      <span class="usage-text">{{ formatBytes(c.memory_used) }}</span>
+                      <span class="usage-text smooth-value">{{ formatBytes(c.memory_used) }}</span>
                       <div class="mini-bar-track">
                         <div
-                          class="mini-bar-fill"
+                          class="mini-bar-fill smooth-bar"
                           :class="`bg-${getUtilizationColor(c.memory_percent)}`"
                           :style="{ width: `${Math.min(100, c.memory_percent)}%` }"
                         ></div>
@@ -1601,15 +1601,15 @@ onUnmounted(() => {
             <div class="trend-footer-stats">
               <div class="stat-pair">
                 <span class="stat-k">Current CPU</span>
-                <span class="stat-v text-violet">{{ formatPercent(overview.total_cpu_percent) }}</span>
+                <span class="stat-v text-violet smooth-value">{{ formatPercent(overview.total_cpu_percent) }}</span>
               </div>
               <div class="stat-pair">
                 <span class="stat-k">Current RAM</span>
-                <span class="stat-v text-cyan">{{ formatPercent(overview.total_mem_percent) }}</span>
+                <span class="stat-v text-cyan smooth-value">{{ formatPercent(overview.total_mem_percent) }}</span>
               </div>
               <div class="stat-pair">
                 <span class="stat-k">Storage</span>
-                <span class="stat-v text-emerald">{{ formatPercent(overview.total_disk_percent) }}</span>
+                <span class="stat-v text-emerald smooth-value">{{ formatPercent(overview.total_disk_percent) }}</span>
               </div>
             </div>
           </div>
@@ -1691,12 +1691,12 @@ onUnmounted(() => {
         <div class="drawer-metrics-grid">
           <div class="drawer-metric-box glass-panel">
             <span class="box-label">CPU Saturation</span>
-            <span class="box-value" :class="`text-${getUtilizationColor(selectedContainer.cpu_percent)}`">
+            <span class="box-value smooth-value" :class="`text-${getUtilizationColor(selectedContainer.cpu_percent)}`">
               {{ formatPercent(selectedContainer.cpu_percent) }}
             </span>
             <div class="mini-bar-track">
               <div
-                class="mini-bar-fill"
+                class="mini-bar-fill smooth-bar"
                 :class="`bg-${getUtilizationColor(selectedContainer.cpu_percent)}`"
                 :style="{ width: `${Math.min(100, selectedContainer.cpu_percent)}%` }"
               ></div>
@@ -1705,7 +1705,7 @@ onUnmounted(() => {
 
           <div class="drawer-metric-box glass-panel">
             <span class="box-label">Memory Used / Limit</span>
-            <span class="box-value text-cyan">
+            <span class="box-value text-cyan smooth-value">
               {{ formatBytes(selectedContainer.memory_used) }}
             </span>
             <span class="box-sub">Limit: {{ formatBytes(selectedContainer.memory_limit) }} ({{ formatPercent(selectedContainer.memory_percent) }})</span>
@@ -1828,20 +1828,20 @@ onUnmounted(() => {
             <div class="hw-gauge-card glass-panel">
               <div class="hw-gauge-top">
                 <span class="hw-gauge-label">CPU LOAD</span>
-                <span class="hw-gauge-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
+                <span class="hw-gauge-value smooth-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
                   {{ formatPercent(selectedNode.cpu_percent) }}
                 </span>
               </div>
               <div class="hw-progress-track">
                 <div
-                  class="hw-progress-fill"
+                  class="hw-progress-fill smooth-bar"
                   :class="`bg-${getUtilizationColor(selectedNode.cpu_percent)}`"
                   :style="{ width: `${Math.min(100, selectedNode.cpu_percent)}%` }"
                 ></div>
               </div>
               <div class="hw-gauge-sub">
                 <span>Saturation:</span>
-                <strong :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
+                <strong class="smooth-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
                   {{ selectedNode.cpu_percent >= 80 ? 'CRITICAL' : selectedNode.cpu_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
                 </strong>
               </div>
@@ -1851,13 +1851,13 @@ onUnmounted(() => {
             <div class="hw-gauge-card glass-panel">
               <div class="hw-gauge-top">
                 <span class="hw-gauge-label">MEMORY USAGE</span>
-                <span class="hw-gauge-value text-cyan">
+                <span class="hw-gauge-value text-cyan smooth-value">
                   {{ formatPercent(selectedNode.memory_percent) }}
                 </span>
               </div>
               <div class="hw-progress-track">
                 <div
-                  class="hw-progress-fill bg-cyan"
+                  class="hw-progress-fill bg-cyan smooth-bar"
                   :style="{ width: `${Math.min(100, selectedNode.memory_percent)}%` }"
                 ></div>
               </div>
@@ -1870,13 +1870,13 @@ onUnmounted(() => {
             <div class="hw-gauge-card glass-panel">
               <div class="hw-gauge-top">
                 <span class="hw-gauge-label">DISK STORAGE</span>
-                <span class="hw-gauge-value text-emerald">
+                <span class="hw-gauge-value text-emerald smooth-value">
                   {{ formatPercent(selectedNode.disk_percent) }}
                 </span>
               </div>
               <div class="hw-progress-track">
                 <div
-                  class="hw-progress-fill bg-emerald"
+                  class="hw-progress-fill bg-emerald smooth-bar"
                   :style="{ width: `${Math.min(100, selectedNode.disk_percent)}%` }"
                 ></div>
               </div>
@@ -1894,11 +1894,11 @@ onUnmounted(() => {
               <div class="hw-net-rates font-mono">
                 <div class="net-rate-item">
                   <span class="net-icon text-cyan">↓ RX:</span>
-                  <span class="net-val">{{ formatIoRate(selectedNode.network_rx_bytes) }}</span>
+                  <span class="net-val smooth-value">{{ formatIoRate(selectedNode.network_rx_bytes) }}</span>
                 </div>
                 <div class="net-rate-item">
                   <span class="net-icon text-violet">↑ TX:</span>
-                  <span class="net-val">{{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
+                  <span class="net-val smooth-value">{{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
                 </div>
               </div>
               <div class="hw-gauge-sub">
@@ -1937,10 +1937,10 @@ onUnmounted(() => {
                     <span class="iface-tag font-mono">{{ iface.name }}</span>
                   </td>
                   <td class="col-iface-rx font-mono">
-                    <span class="text-cyan">↓ {{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
+                    <span class="text-cyan smooth-value">↓ {{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
                   </td>
                   <td class="col-iface-tx font-mono">
-                    <span class="text-violet">↑ {{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
+                    <span class="text-violet smooth-value">↑ {{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
                   </td>
                 </tr>
               </tbody>
@@ -1991,34 +1991,34 @@ onUnmounted(() => {
                     </div>
                   </td>
                   <td class="col-svc-cpu font-mono">
-                    <span :class="svc.cpu_percent > 80 ? 'text-rose' : svc.cpu_percent > 50 ? 'text-amber' : 'text-emerald'">
+                    <span class="smooth-value" :class="svc.cpu_percent > 80 ? 'text-rose' : svc.cpu_percent > 50 ? 'text-amber' : 'text-emerald'">
                       {{ svc.cpu_percent.toFixed(1) }}%
                     </span>
                   </td>
                   <td class="col-svc-mem font-mono">
-                    <span :class="svc.memory_percent > 85 ? 'text-rose' : svc.memory_percent > 70 ? 'text-amber' : 'text-cyan'">
+                    <span class="smooth-value" :class="svc.memory_percent > 85 ? 'text-rose' : svc.memory_percent > 70 ? 'text-amber' : 'text-cyan'">
                       {{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}
                     </span>
                   </td>
                   <td class="col-svc-rx font-mono">
-                    <span class="text-cyan">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
+                    <span class="text-cyan smooth-value">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
                   </td>
                   <td class="col-svc-tx font-mono">
-                    <span class="text-violet">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+                    <span class="text-violet smooth-value">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
                   </td>
                   <td class="col-svc-rps font-mono">
-                    <span :class="(svc.requests_per_sec || 0) > 0 ? 'text-emerald font-bold' : 'text-muted'">
+                    <span class="smooth-value" :class="(svc.requests_per_sec || 0) > 0 ? 'text-emerald font-bold' : 'text-muted'">
                       {{ (svc.requests_per_sec !== undefined && svc.requests_per_sec !== null) ? svc.requests_per_sec.toFixed(1) : '0.0' }}
                     </span>
                   </td>
                   <td class="col-svc-err font-mono">
-                    <span :class="(svc.error_rate || 0) > 5 ? 'text-rose font-bold' : (svc.error_rate || 0) > 0 ? 'text-amber' : 'text-muted'">
+                    <span class="smooth-value" :class="(svc.error_rate || 0) > 5 ? 'text-rose font-bold' : (svc.error_rate || 0) > 0 ? 'text-amber' : 'text-muted'">
                       {{ (svc.error_rate !== undefined && svc.error_rate !== null) ? svc.error_rate.toFixed(1) + '%' : '0.0%' }}
                     </span>
                   </td>
                   <td class="col-svc-status">
                     <span
-                      class="badge"
+                      class="badge smooth-value"
                       :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
                     >
                       {{ svc.status === 'healthy' ? '● HEALTHY' : svc.status === 'degraded' ? '● DEGRADED' : '● DOWN' }}
@@ -2117,7 +2117,7 @@ onUnmounted(() => {
                   <td class="col-proc-cpu">
                     <div class="proc-cpu-box">
                       <div class="proc-cpu-val-row">
-                        <span class="proc-cpu-val" :class="`text-${getProcessCpuColor(proc.cpu_percent)}`">
+                        <span class="proc-cpu-val smooth-value" :class="`text-${getProcessCpuColor(proc.cpu_percent)}`">
                           {{ formatPercent(proc.cpu_percent) }}
                         </span>
                         <span v-if="proc.cpu_percent >= 70" class="badge badge-rose badge-hot-pulse">
@@ -2126,7 +2126,7 @@ onUnmounted(() => {
                       </div>
                       <div class="proc-mini-track">
                         <div
-                          class="proc-mini-fill"
+                          class="proc-mini-fill smooth-bar"
                           :class="`bg-${getProcessCpuColor(proc.cpu_percent)}`"
                           :style="{ width: `${Math.min(100, proc.cpu_percent)}%` }"
                         ></div>
@@ -2137,7 +2137,7 @@ onUnmounted(() => {
                   <!-- Memory -->
                   <td class="col-proc-mem">
                     <div class="proc-mem-box">
-                      <span class="proc-mem-val">{{ formatBytes(proc.memory_bytes) }}</span>
+                      <span class="proc-mem-val smooth-value">{{ formatBytes(proc.memory_bytes) }}</span>
                       <span class="proc-mem-pct font-mono" v-if="proc.memory_percent">
                         ({{ formatPercent(proc.memory_percent) }})
                       </span>
@@ -2205,6 +2205,21 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* ==========================================
+   SMOOTH REAL-TIME TRANSITIONS UTILITY CLASSES
+   ========================================== */
+.smooth-value {
+  transition: color 0.5s ease;
+}
+
+.smooth-bar {
+  transition: width 0.8s ease-in-out, background-color 0.5s ease;
+}
+
+.smooth-opacity {
+  transition: opacity 0.3s ease;
+}
+
 .overview-dashboard {
   display: flex;
   flex-direction: column;
@@ -2453,6 +2468,7 @@ onUnmounted(() => {
   letter-spacing: -0.03em;
   color: var(--text-primary);
   font-family: var(--font-sans);
+  transition: color 0.5s ease;
 }
 
 .hud-total {
@@ -2465,6 +2481,7 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 700;
   font-family: var(--font-mono);
+  transition: color 0.5s ease;
 }
 
 .hud-progress-track {
@@ -2478,7 +2495,7 @@ onUnmounted(() => {
 .hud-progress-fill {
   height: 100%;
   border-radius: 999px;
-  transition: width 0.5s ease;
+  transition: width 0.8s ease-in-out, background-color 0.5s ease;
 }
 
 .hud-card-throughput {
@@ -2779,10 +2796,10 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 14px;
   position: relative;
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+  transition: opacity 0.3s ease,
+              transform 0.3s ease,
               box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.2s ease;
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: grab;
 }
 
@@ -2915,6 +2932,7 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary);
+  transition: color 0.5s ease;
 }
 
 .node-card-footer {
@@ -3193,6 +3211,7 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 600;
   font-family: var(--font-mono);
+  transition: color 0.5s ease;
 }
 
 .mini-bar-track {
@@ -3206,7 +3225,7 @@ onUnmounted(() => {
 .mini-bar-fill {
   height: 100%;
   border-radius: 999px;
-  transition: width 0.3s ease;
+  transition: width 0.8s ease-in-out, background-color 0.5s ease;
 }
 
 .btn-inspect {
@@ -3340,6 +3359,7 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 700;
   font-family: var(--font-mono);
+  transition: color 0.5s ease;
 }
 
 .text-violet { color: #8b5cf6; }
@@ -3541,7 +3561,7 @@ onUnmounted(() => {
 }
 
 .box-label { font-size: 10px; text-transform: uppercase; color: var(--text-muted); }
-.box-value { font-size: 20px; font-weight: 800; font-family: var(--font-mono); }
+.box-value { font-size: 20px; font-weight: 800; font-family: var(--font-mono); transition: color 0.5s ease; }
 .box-sub { font-size: 10px; color: var(--text-muted); }
 
 .drawer-meta-list {
@@ -3819,6 +3839,7 @@ onUnmounted(() => {
   font-size: 18px;
   font-weight: 800;
   font-family: var(--font-mono);
+  transition: color 0.5s ease;
 }
 
 .hw-progress-track {
@@ -3832,7 +3853,7 @@ onUnmounted(() => {
 .hw-progress-fill {
   height: 100%;
   border-radius: 999px;
-  transition: width 0.4s ease;
+  transition: width 0.8s ease-in-out, background-color 0.5s ease;
 }
 
 .hw-gauge-sub {
@@ -3866,6 +3887,7 @@ onUnmounted(() => {
 .net-val {
   color: var(--text-primary);
   font-weight: 600;
+  transition: color 0.5s ease;
 }
 
 /* Network Interface & Services Sections in Node Drawer */
@@ -4226,6 +4248,7 @@ onUnmounted(() => {
   font-weight: 700;
   font-family: var(--font-mono);
   font-size: 11px;
+  transition: color 0.5s ease;
 }
 
 .badge-hot-pulse {
@@ -4250,7 +4273,7 @@ onUnmounted(() => {
 .proc-mini-fill {
   height: 100%;
   border-radius: 999px;
-  transition: width 0.3s ease;
+  transition: width 0.8s ease-in-out, background-color 0.5s ease;
 }
 
 .col-proc-mem {
@@ -4268,6 +4291,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-mono);
+  transition: color 0.5s ease;
 }
 
 .proc-mem-pct {
@@ -4445,6 +4469,7 @@ onUnmounted(() => {
   font-weight: 800;
   color: var(--text-primary);
   letter-spacing: -0.02em;
+  transition: color 0.5s ease;
 }
 
 .tps-big-unit {
@@ -4467,6 +4492,7 @@ onUnmounted(() => {
   padding: 2px 8px;
   border-radius: 6px;
   border: 1px solid var(--border-subtle);
+  transition: color 0.5s ease;
 }
 
 .tps-metrics-block {
@@ -4495,6 +4521,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--text-primary);
   font-size: 12px;
+  transition: color 0.5s ease;
 }
 
 .tps-indicator-wrap {
@@ -4515,13 +4542,13 @@ onUnmounted(() => {
 
 .tps-bar-rx {
   background: linear-gradient(90deg, #06b6d4, #38bdf8);
-  transition: width 0.4s ease;
+  transition: width 0.8s ease-in-out, background-color 0.5s ease;
   min-width: 4px;
 }
 
 .tps-bar-tx {
   background: linear-gradient(90deg, #8b5cf6, #a855f7);
-  transition: width 0.4s ease;
+  transition: width 0.8s ease-in-out, background-color 0.5s ease;
   min-width: 4px;
 }
 
