@@ -2,8 +2,10 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `5b3ce8f` feat(drawer): align network I/O row, stack NIC in/out rates, and implement high-scale service search & pagination
+Latest: `ea4031b` style(drawer): polish page size pill, network interface margins, and top processes search/sort controls
 Previous commits this session:
+- `335d385` fix(metrics): guard container network delta baseline to eliminate lifetime byte rate spikes
+- `5b3ce8f` feat(drawer): align network I/O row, stack NIC in/out rates, and implement high-scale service search & pagination
 - `9190deb` fix(overview): standardize drawer network I/O card, eliminate badge wrapping, and gap bandwidth rates
 - `b35b541` feat(ui): overhaul overview css, node card 2-row layout, and typography
 - `78d7110` test(metrics): add unit test for agent scrape normalization and top processes fallback
