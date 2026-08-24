@@ -212,7 +212,9 @@ func (r *realDockerRepo) GetLogs(ctx context.Context, targetID string, targetTyp
 }
 
 func (r *realDockerRepo) GetLogsWithOptions(ctx context.Context, targetID string, targetType string, tail string, since string) (string, error) {
-	if tail == "" {
+	if tail == "all" || tail == "0" {
+		tail = "all"
+	} else if tail == "" {
 		tail = "100"
 	}
 	options := container.LogsOptions{
