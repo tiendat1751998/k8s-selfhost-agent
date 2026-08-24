@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1929,6 +1930,214 @@ func TestCollector_ContainerNetworkRates(t *testing.T) {
 		t.Errorf("expected positive NetworkTxRate on second collect, got %d", c2.NetworkTxRate)
 	}
 }
+
+func TestCollector_ScrapeAgent_NormalizationAndTopProcessesFallback(t *testing.T) {
+	// 1. Mock server returning incomplete older agent response (like worker1)
+	olderAgentResp := map[string]interface{}{
+		"hostname":       "worker1",
+		"os":             "linux",
+		"arch":           "amd64",
+		"uptime_seconds": 148464,
+		"load_average":   []float64{0.2, 0.13, 0.09},
+		"cpu": map[string]interface{}{
+			"count":         2,
+			"usage_percent": 3.25,
+		},
+		"memory": map[string]interface{}{
+			"total_bytes":     int64(3066900480),
+			"used_bytes":      int64(600031232),
+			"available_bytes": int64(2466869248),
+			"usage_percent":   19.56,
+		},
+		"disks": []map[string]interface{}{
+			{
+				"mount_point":   "/",
+				"total_bytes":   int64(102971269120),
+				"used_bytes":    int64(29913952256),
+				"usage_percent": 29.05,
+				"filesystem":    "ext4",
+			},
+		},
+		"network": map[string]interface{}{
+			"interfaces": []map[string]interface{}{
+				{"name": "ens33", "rx_bytes_per_sec": 716, "tx_bytes_per_sec": 1186},
+			},
+			"total_rx_bytes_per_sec": 716,
+			"total_tx_bytes_per_sec": 1186,
+		},
+		"processes": 225,
+		// OSDistro, KernelVersion, and TopProcesses omitted!
+	}
+
+	// 2. Mock server returning complete updated agent response (like k8smater / worker2)
+	updatedAgentResp := map[string]interface{}{
+		"hostname":       "worker2",
+		"os":             "linux",
+		"arch":           "amd64",
+		"os_distro":      "Ubuntu 24.04.1 LTS",
+		"kernel_version": "6.8.0-124-generic",
+		"uptime_seconds": 409438,
+		"load_average":   []float64{0.34, 0.23, 0.19},
+		"cpu": map[string]interface{}{
+			"count":         2,
+			"usage_percent": 2.88,
+		},
+		"memory": map[string]interface{}{
+			"total_bytes":     int64(3066937344),
+			"used_bytes":      int64(1022898176),
+			"available_bytes": int64(2044039168),
+			"usage_percent":   33.35,
+		},
+		"disks": []map[string]interface{}{
+			{
+				"mount_point":   "/",
+				"total_bytes":   int64(102971269120),
+				"used_bytes":    int64(30860283904),
+				"usage_percent": 29.97,
+				"filesystem":    "ext4",
+			},
+		},
+		"network": map[string]interface{}{
+			"interfaces": []map[string]interface{}{
+				{"name": "ens33", "rx_bytes_per_sec": 2638, "tx_bytes_per_sec": 6536},
+			},
+			"total_rx_bytes_per_sec": 3904,
+			"total_tx_bytes_per_sec": 7478,
+		},
+		"processes": 241,
+		"top_processes": []map[string]interface{}{
+			{
+				"pid":            1286,
+				"name":           "dockerd",
+				"command_line":   "/usr/bin/dockerd",
+				"user":           "root",
+				"cpu_percent":    3.62,
+				"memory_bytes":   int64(116166656),
+				"memory_percent": 3.79,
+				"state":          "sleeping",
+			},
+		},
+	}
+
+	srv1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(olderAgentResp)
+	}))
+	defer srv1.Close()
+
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(updatedAgentResp)
+	}))
+	defer srv2.Close()
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-worker-1",
+				Name:     "worker1",
+				HostType: "agent",
+				Endpoint: srv1.URL,
+			},
+			{
+				ID:       "host-worker-2",
+				Name:     "worker2",
+				HostType: "agent",
+				Endpoint: srv2.URL,
+			},
+			{
+				ID:       "host-offline",
+				Name:     "worker3",
+				HostType: "agent",
+				Endpoint: "http://127.0.0.1:59998",
+			},
+		},
+	}
+
+	collector := NewCollector(nil, hostRepo, nil, zap.NewNop(), WithHTTPClient(srv1.Client()))
+
+	// Scrape host-worker-1
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[0])
+	// Scrape host-worker-2
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[1])
+	// Scrape offline host
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[2])
+
+	agentMap := collector.GetAgentMetrics()
+
+	// Verify worker1 normalized fallback
+	m1 := agentMap["host-worker-1"]
+	if m1 == nil {
+		t.Fatalf("expected metrics for host-worker-1")
+	}
+	if m1.OSDistro != "Linux" {
+		t.Errorf("expected worker1 OSDistro 'Linux', got '%s'", m1.OSDistro)
+	}
+	if m1.KernelVersion != "Linux" {
+		t.Errorf("expected worker1 KernelVersion 'Linux', got '%s'", m1.KernelVersion)
+	}
+	if m1.TopProcesses == nil {
+		t.Fatalf("expected non-nil TopProcesses for worker1")
+	}
+
+	// Verify worker2 preserved values
+	m2 := agentMap["host-worker-2"]
+	if m2 == nil {
+		t.Fatalf("expected metrics for host-worker-2")
+	}
+	if m2.OSDistro != "Ubuntu 24.04.1 LTS" {
+		t.Errorf("expected worker2 OSDistro 'Ubuntu 24.04.1 LTS', got '%s'", m2.OSDistro)
+	}
+	if m2.KernelVersion != "6.8.0-124-generic" {
+		t.Errorf("expected worker2 KernelVersion '6.8.0-124-generic', got '%s'", m2.KernelVersion)
+	}
+	if len(m2.TopProcesses) != 1 || m2.TopProcesses[0].Name != "dockerd" {
+		t.Errorf("unexpected top processes on worker2: %+v", m2.TopProcesses)
+	}
+
+	// Verify offline node fallback
+	m3 := agentMap["host-offline"]
+	if m3 == nil {
+		t.Fatalf("expected metrics for host-offline")
+	}
+	if m3.Status != "offline" {
+		t.Errorf("expected host-offline status 'offline', got '%s'", m3.Status)
+	}
+	if m3.OSDistro != "Linux" {
+		t.Errorf("expected host-offline OSDistro 'Linux', got '%s'", m3.OSDistro)
+	}
+	if m3.KernelVersion != "Linux" {
+		t.Errorf("expected host-offline KernelVersion 'Linux', got '%s'", m3.KernelVersion)
+	}
+	if m3.TopProcesses == nil {
+		t.Fatalf("expected non-nil TopProcesses for host-offline")
+	}
+
+	// Verify CollectOnce NodeMetrics mapping
+	overview, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("CollectOnce failed: %v", err)
+	}
+	if len(overview.Nodes) != 3 {
+		t.Fatalf("expected 3 nodes in overview, got %d", len(overview.Nodes))
+	}
+
+	for _, n := range overview.Nodes {
+		if n.TopProcesses == nil {
+			t.Errorf("expected non-nil TopProcesses for node %s", n.NodeName)
+		}
+		if n.OSDistro == "" || strings.EqualFold(n.OSDistro, "linux") && n.OSDistro != "Linux" {
+			t.Errorf("invalid OSDistro '%s' for node %s", n.OSDistro, n.NodeName)
+		}
+		if n.KernelVersion == "" {
+			t.Errorf("empty KernelVersion for node %s", n.NodeName)
+		}
+		if n.NetworkInterfaces == nil {
+			t.Errorf("expected non-nil NetworkInterfaces for node %s", n.NodeName)
+		}
+	}
+}
+
 
 
 

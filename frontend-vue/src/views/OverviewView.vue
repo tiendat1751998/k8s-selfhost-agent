@@ -795,12 +795,49 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[]): string {
   return loadAvg.map(n => (typeof n === 'number' ? n.toFixed(2) : String(n))).join(', ')
 }
 
+function formatTitleCase(str?: string): string {
+  if (!str) return ''
+  const trimmed = str.trim()
+  if (!trimmed) return ''
+  if (trimmed.toLowerCase() === 'linux') return 'Linux'
+  if (trimmed.toLowerCase() === 'darwin') return 'macOS'
+  if (trimmed.toLowerCase() === 'windows') return 'Windows'
+  if (trimmed === trimmed.toLowerCase()) {
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+  }
+  return trimmed
+}
+
+function formatDistro(distro?: string, os?: string): string {
+  const raw = distro || os || 'Linux'
+  return formatTitleCase(raw)
+}
+
+function formatKernelVersion(kernel?: string, os?: string): string {
+  if (!kernel || !kernel.trim()) return formatTitleCase(os) || 'Linux'
+  const k = kernel.trim()
+  if (k.toLowerCase() === 'linux') return 'Linux'
+  return k
+}
+
 function formatOsSummary(node?: NodeMetrics | null): string {
-  if (!node) return 'Linux | amd64'
-  const distro = node.os_distro || (node.os ? node.os.toUpperCase() : 'Linux')
-  const kernel = node.kernel_version ? `Linux ${node.kernel_version}` : (node.os || 'Linux')
+  if (!node) return 'Linux (amd64)'
   const arch = node.arch || 'amd64'
-  return `${distro} | ${kernel} | ${arch}`
+  const distro = formatDistro(node.os_distro, node.os)
+  const kernel = node.kernel_version?.trim() || ''
+
+  if (
+    distro.toLowerCase() === 'linux' &&
+    (!kernel || kernel.toLowerCase() === 'linux' || kernel.toLowerCase() === distro.toLowerCase())
+  ) {
+    return `Linux (${arch})`
+  }
+
+  if (kernel && kernel.toLowerCase() !== 'linux' && kernel.toLowerCase() !== distro.toLowerCase()) {
+    return `${distro} | ${kernel} | ${arch}`
+  }
+
+  return `${distro} (${arch})`
 }
 
 function formatIoRate(bytesPerSec?: number): string {
@@ -2152,10 +2189,7 @@ onUnmounted(() => {
                   {{ selectedNode.status === 'ready' || selectedNode.status === 'online' ? '● ONLINE' : '● OFFLINE' }}
                 </span>
                 <span class="badge badge-indigo">
-                  📡 {{ selectedNode.role ? selectedNode.role.toUpperCase() : 'K8S-AGENT' }}
-                </span>
-                <span class="badge badge-cyan" v-if="selectedNode.source">
-                  {{ selectedNode.source.toUpperCase() }}
+                  📡 {{ (selectedNode.role || selectedNode.source || 'K8S-AGENT').toUpperCase() }}
                 </span>
                 <span class="badge badge-slate font-mono" :title="formatOsSummary(selectedNode)">
                   🐧 {{ formatOsSummary(selectedNode) }}
@@ -2166,11 +2200,11 @@ onUnmounted(() => {
             <div class="node-quick-stats">
               <div class="quick-stat-item">
                 <span class="qs-label">OS DISTRO</span>
-                <span class="qs-val" :title="selectedNode.os_distro || selectedNode.os || 'Linux'">{{ selectedNode.os_distro || selectedNode.os || 'Linux' }}</span>
+                <span class="qs-val" :title="formatDistro(selectedNode.os_distro, selectedNode.os)">{{ formatDistro(selectedNode.os_distro, selectedNode.os) }}</span>
               </div>
               <div class="quick-stat-item">
                 <span class="qs-label">KERNEL VERSION</span>
-                <span class="qs-val font-mono" :title="selectedNode.kernel_version || 'Linux'">{{ selectedNode.kernel_version || 'Linux' }}</span>
+                <span class="qs-val font-mono" :title="formatKernelVersion(selectedNode.kernel_version, selectedNode.os)">{{ formatKernelVersion(selectedNode.kernel_version, selectedNode.os) }}</span>
               </div>
               <div class="quick-stat-item">
                 <span class="qs-label">ARCHITECTURE</span>
@@ -2282,15 +2316,15 @@ onUnmounted(() => {
               </div>
 
               <!-- NETWORK I/O HUD -->
-              <div class="hw-gauge-card glass-panel">
+              <div class="hw-gauge-card glass-panel hw-gauge-card-net">
                 <div class="hw-gauge-top">
                   <span class="hw-gauge-label">NETWORK I/O</span>
-                  <span class="hw-gauge-value text-purple smooth-value">
+                  <span class="hw-gauge-value text-purple smooth-value hw-net-rx-value">
                     ↓ {{ formatIoRate(selectedNode.network_rx_bytes) }}
                   </span>
                 </div>
                 <div class="hw-gauge-sub-row">
-                  <span>↑ TX:</span>
+                  <span class="hw-net-sub-label">↑ TX:</span>
                   <span class="net-val smooth-value">{{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
                 </div>
                 <div class="hw-gauge-sub">
@@ -2306,7 +2340,7 @@ onUnmounted(() => {
               <h4 class="hud-section-heading">
                 <span class="heading-icon">📡</span> Network Interface Throughput
               </h4>
-              <span class="badge badge-cyan font-mono">{{ filteredNodeInterfaces.length }} interfaces</span>
+              <span class="badge badge-cyan font-mono">{{ filteredNodeInterfaces.length }} {{ filteredNodeInterfaces.length === 1 ? 'interface' : 'interfaces' }}</span>
             </div>
             <div class="interfaces-grid">
               <div
@@ -2315,15 +2349,19 @@ onUnmounted(() => {
                 class="iface-card glass-panel"
               >
                 <div class="iface-top">
-                  <span class="iface-name font-mono">🌐 {{ iface.name }}</span>
+                  <div class="iface-name-group">
+                    <span class="iface-icon">🌐</span>
+                    <span class="iface-name font-mono">{{ iface.name }}</span>
+                  </div>
+                  <span class="iface-nic-tag font-mono">NIC</span>
                 </div>
-                <div class="iface-rates">
-                  <div class="iface-rate-item">
-                    <span class="rate-label">↓ RX</span>
+                <div class="iface-rates-grid">
+                  <div class="iface-rate-pill rx-pill">
+                    <span class="rate-badge rx-badge">↓ RX</span>
                     <span class="rate-val text-cyan font-mono">{{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
                   </div>
-                  <div class="iface-rate-item">
-                    <span class="rate-label">↑ TX</span>
+                  <div class="iface-rate-pill tx-pill">
+                    <span class="rate-badge tx-badge">↑ TX</span>
                     <span class="rate-val text-purple font-mono">{{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
                   </div>
                 </div>
@@ -2497,16 +2535,32 @@ onUnmounted(() => {
             </div>
 
             <div class="proc-empty-state glass-panel" v-else>
-              <span class="proc-empty-icon">📡</span>
+              <div class="radar-glow-container">
+                <div class="radar-beacon"></div>
+                <span class="proc-empty-icon">📡</span>
+              </div>
               <h5 class="proc-empty-title">
                 {{ processSearch ? 'No Processes Matching Filter' : 'No Process Telemetry Streamed' }}
               </h5>
               <p class="proc-empty-desc" v-if="processSearch">
-                No active processes matched "{{ processSearch }}". Try searching for a different process name or PID.
+                No active processes matched "<span class="text-cyan font-mono">{{ processSearch }}</span>". Try searching for a different process name or PID.
               </p>
-              <p class="proc-empty-desc" v-else>
-                Node telemetry is online but process inspector stream is pending or waiting for agent collector broadcast. Ensure <code>k8s-agent</code> is running.
-              </p>
+              <div class="proc-empty-telemetry-hint" v-else>
+                <p class="proc-empty-desc">
+                  Host metrics are active, but high-resolution process inspection stream is pending agent collector broadcast.
+                </p>
+                <div class="troubleshooting-hint-box">
+                  <div class="hint-header">
+                    <span class="hint-icon">💡</span>
+                    <strong class="hint-title">Troubleshooting & Activation</strong>
+                  </div>
+                  <ul class="hint-list">
+                    <li>Verify <code>k8s-agent</code> daemon is running on this node.</li>
+                    <li>Ensure agent has process collection permissions (e.g. host <code>/proc</code> mount).</li>
+                    <li>Processes will populate automatically upon receiving telemetry broadcast.</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -5428,7 +5482,7 @@ onUnmounted(() => {
 
 .hardware-gauges-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
 }
 
@@ -5444,6 +5498,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .hw-gauge-label {
@@ -5452,6 +5507,7 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .hw-gauge-value {
@@ -5459,6 +5515,15 @@ onUnmounted(() => {
   font-weight: 800;
   font-family: var(--font-mono);
   transition: color 0.5s ease;
+  white-space: nowrap;
+}
+
+.hw-gauge-card-net .hw-net-rx-value {
+  font-size: 1.1rem;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
 }
 
 .hw-progress-track {
@@ -5482,6 +5547,20 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 4px;
+}
+
+.hw-gauge-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.hw-net-sub-label {
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .hw-net-rates {
@@ -5510,7 +5589,122 @@ onUnmounted(() => {
 }
 
 /* Network Interface & Services Sections in Node Drawer */
-.node-net-interfaces-section,
+.network-interfaces-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.interfaces-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .interfaces-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.iface-card {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.iface-card:hover {
+  border-color: var(--border-medium);
+  transform: translateY(-1px);
+}
+
+.iface-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.iface-name-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.iface-icon {
+  font-size: 13px;
+}
+
+.iface-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.iface-nic-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.iface-rates-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.iface-rate-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.iface-rate-pill.rx-pill {
+  background: rgba(6, 182, 212, 0.08);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+}
+
+.iface-rate-pill.tx-pill {
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+.rate-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.rx-badge {
+  background: rgba(6, 182, 212, 0.2);
+  color: #38bdf8;
+}
+
+.tx-badge {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+
+.rate-val {
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .node-services-section {
   padding: 18px;
   border-radius: 14px;
@@ -5526,7 +5720,6 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
-.interfaces-table-wrapper,
 .services-table-wrapper {
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
@@ -5534,22 +5727,19 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.2);
 }
 
-.interfaces-table,
-.node-services-table {
+.services-mini-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
   font-size: 12px;
 }
 
-.interfaces-table thead tr,
-.node-services-table thead tr {
+.services-mini-table thead tr {
   background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.interfaces-table th,
-.node-services-table th {
+.services-mini-table th {
   padding: 10px 12px;
   font-size: 10px;
   font-weight: 700;
@@ -5559,44 +5749,22 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.interfaces-table tbody tr,
-.node-services-table tbody tr {
+.services-mini-table tbody tr {
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   transition: background 0.15s ease;
 }
 
-.interfaces-table tbody tr:last-child,
-.node-services-table tbody tr:last-child {
+.services-mini-table tbody tr:last-child {
   border-bottom: none;
 }
 
-.interfaces-table tbody tr:hover,
-.node-services-table tbody tr:hover {
+.services-mini-table tbody tr:hover {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.interfaces-table td,
-.node-services-table td {
+.services-mini-table td {
   padding: 10px 12px;
   vertical-align: middle;
-}
-
-.col-iface-name {
-  width: 40%;
-}
-
-.col-iface-rx,
-.col-iface-tx {
-  width: 30%;
-}
-
-.iface-tag {
-  font-size: 11px;
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-subtle);
 }
 
 .col-svc-name {
@@ -5942,43 +6110,138 @@ onUnmounted(() => {
 
 /* Empty State */
 .proc-empty-state {
-  padding: 36px 20px;
+  padding: 36px 24px;
   text-align: center;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px dashed var(--border-medium);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px dashed rgba(56, 189, 248, 0.25);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.radar-glow-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
+}
+
+.radar-beacon {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.25) 0%, rgba(6, 182, 212, 0) 70%);
+  animation: radar-beacon-pulse 2.4s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes radar-beacon-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
 }
 
 .proc-empty-icon {
   font-size: 32px;
-  filter: drop-shadow(0 0 8px rgba(6, 182, 212, 0.4));
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 0 12px rgba(6, 182, 212, 0.6));
+  animation: icon-float 3s ease-in-out infinite alternate;
+}
+
+@keyframes icon-float {
+  0% { transform: translateY(0px); }
+  100% { transform: translateY(-4px); }
 }
 
 .proc-empty-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
 .proc-empty-desc {
-  font-size: 12px;
-  color: var(--text-muted);
-  max-width: 460px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  max-width: 480px;
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
-.proc-empty-desc code {
+.proc-empty-telemetry-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+}
+
+.troubleshooting-hint-box {
+  width: 100%;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hint-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hint-icon {
+  font-size: 14px;
+}
+
+.hint-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.hint-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.hint-list code {
   font-family: var(--font-mono);
   background: rgba(255, 255, 255, 0.08);
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 4px;
   color: var(--accent-cyan);
+  font-size: 11px;
 }
 
 .proc-empty-actions {

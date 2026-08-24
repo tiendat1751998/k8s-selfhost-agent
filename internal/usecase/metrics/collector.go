@@ -584,6 +584,9 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		arch = "amd64"
 	}
 
+	distro := normalizeOSDistro(payload.OSDistro, osName)
+	kernel := normalizeKernelVersion(payload.KernelVersion, osName)
+
 	var ifaces []NetworkInterface
 	for _, iface := range payload.Network.Interfaces {
 		ifaces = append(ifaces, NetworkInterface{
@@ -592,13 +595,21 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 			TxBytesPerSec: iface.TxBytesPerSec,
 		})
 	}
+	if ifaces == nil {
+		ifaces = make([]NetworkInterface, 0)
+	}
+
+	topProcs := payload.TopProcesses
+	if topProcs == nil {
+		topProcs = make([]ProcessMetric, 0)
+	}
 
 	am := &AgentMetrics{
 		Hostname:          hostname,
 		OS:                osName,
 		Arch:              arch,
-		OSDistro:          payload.OSDistro,
-		KernelVersion:     payload.KernelVersion,
+		OSDistro:          distro,
+		KernelVersion:     kernel,
 		CPUUsage:          payload.CPU.UsagePercent,
 		CPUCount:          payload.CPU.Count,
 		MemTotal:          payload.Memory.TotalBytes,
@@ -613,7 +624,7 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		Uptime:            payload.UptimeSeconds,
 		LoadAvg:           payload.LoadAverage,
 		Processes:         payload.Processes,
-		TopProcesses:      payload.TopProcesses,
+		TopProcesses:      topProcs,
 		Status:            "online",
 		LastSeen:          collectedAt,
 	}
@@ -654,14 +665,32 @@ func (c *Collector) recordAgentFailure(ctx context.Context, host docker.ComputeH
 	am, exists := c.agentMetrics[host.ID]
 	if !exists {
 		am = &AgentMetrics{
-			Hostname: host.Name,
-			Status:   "offline",
-			LastSeen: now,
+			Hostname:          host.Name,
+			OS:                "linux",
+			Arch:              "amd64",
+			OSDistro:          "Linux",
+			KernelVersion:     "Linux",
+			TopProcesses:      make([]ProcessMetric, 0),
+			NetworkInterfaces: make([]NetworkInterface, 0),
+			Status:            "offline",
+			LastSeen:          now,
 		}
 		c.agentMetrics[host.ID] = am
 	} else {
 		am.Status = "offline"
 		am.LastSeen = now
+		if am.OSDistro == "" {
+			am.OSDistro = normalizeOSDistro(am.OSDistro, am.OS)
+		}
+		if am.KernelVersion == "" {
+			am.KernelVersion = normalizeKernelVersion(am.KernelVersion, am.OS)
+		}
+		if am.TopProcesses == nil {
+			am.TopProcesses = make([]ProcessMetric, 0)
+		}
+		if am.NetworkInterfaces == nil {
+			am.NetworkInterfaces = make([]NetworkInterface, 0)
+		}
 	}
 	c.agentMu.Unlock()
 
@@ -697,11 +726,15 @@ func (c *Collector) GetAgentMetrics() map[string]*AgentMetrics {
 	for k, v := range c.agentMetrics {
 		if v != nil {
 			metricCopy := *v
-			if v.TopProcesses != nil {
+			if len(v.TopProcesses) > 0 {
 				metricCopy.TopProcesses = append([]ProcessMetric(nil), v.TopProcesses...)
+			} else {
+				metricCopy.TopProcesses = make([]ProcessMetric, 0)
 			}
-			if v.NetworkInterfaces != nil {
+			if len(v.NetworkInterfaces) > 0 {
 				metricCopy.NetworkInterfaces = append([]NetworkInterface(nil), v.NetworkInterfaces...)
+			} else {
+				metricCopy.NetworkInterfaces = make([]NetworkInterface, 0)
 			}
 			res[k] = &metricCopy
 		}
@@ -817,6 +850,36 @@ func formatAgentURL(endpoint string, tlsEnabled bool) string {
 		u = strings.TrimSuffix(u, "/") + "/metrics"
 	}
 	return u
+}
+
+func normalizeOSDistro(distro, osName string) string {
+	d := strings.TrimSpace(distro)
+	o := strings.TrimSpace(osName)
+	if d != "" && !strings.EqualFold(d, "linux") && !strings.EqualFold(d, "unknown") {
+		return d
+	}
+	if strings.EqualFold(o, "darwin") || strings.EqualFold(d, "darwin") {
+		return "macOS"
+	}
+	if strings.EqualFold(o, "windows") || strings.EqualFold(d, "windows") {
+		return "Windows"
+	}
+	return "Linux"
+}
+
+func normalizeKernelVersion(kernel, osName string) string {
+	k := strings.TrimSpace(kernel)
+	o := strings.TrimSpace(osName)
+	if k != "" && !strings.EqualFold(k, "unknown") {
+		return k
+	}
+	if strings.EqualFold(o, "darwin") {
+		return "Darwin"
+	}
+	if strings.EqualFold(o, "windows") {
+		return "Windows NT"
+	}
+	return "Linux"
 }
 
 func (c *Collector) runCollection(ctx context.Context) {
@@ -1137,15 +1200,35 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			}
 		}
 
+		osName := am.OS
+		if osName == "" {
+			osName = "linux"
+		}
+		arch := am.Arch
+		if arch == "" {
+			arch = "amd64"
+		}
+		distro := normalizeOSDistro(am.OSDistro, osName)
+		kernel := normalizeKernelVersion(am.KernelVersion, osName)
+
+		topProcs := am.TopProcesses
+		if topProcs == nil {
+			topProcs = make([]ProcessMetric, 0)
+		}
+		ifaces := am.NetworkInterfaces
+		if ifaces == nil {
+			ifaces = make([]NetworkInterface, 0)
+		}
+
 		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
 			NodeID:            hostID,
 			NodeName:          am.Hostname,
 			Role:              "agent",
 			Status:            status,
-			OS:                am.OS,
-			Arch:              am.Arch,
-			OSDistro:          am.OSDistro,
-			KernelVersion:     am.KernelVersion,
+			OS:                osName,
+			Arch:              arch,
+			OSDistro:          distro,
+			KernelVersion:     kernel,
 			CPUPercent:        am.CPUUsage,
 			MemoryUsed:        am.MemUsed,
 			MemoryTotal:       am.MemTotal,
@@ -1155,13 +1238,13 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			DiskPercent:       am.DiskPercent,
 			NetworkRxBytes:    am.NetRxRate,
 			NetworkTxBytes:    am.NetTxRate,
-			NetworkInterfaces: am.NetworkInterfaces,
+			NetworkInterfaces: ifaces,
 			ContainerCount:    nodeContainerCount,
 			RunningCount:      nodeRunningCount,
 			Processes:         am.Processes,
 			UptimeSeconds:     am.Uptime,
 			LoadAverage:       am.LoadAvg,
-			TopProcesses:      am.TopProcesses,
+			TopProcesses:      topProcs,
 			Source:            "agent",
 			UpdatedAt:         am.LastSeen,
 		})
