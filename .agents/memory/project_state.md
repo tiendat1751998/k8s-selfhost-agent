@@ -2,7 +2,7 @@
 
 ## Git State
 Branch: `feat/telemetry-peak-envelope-and-spike-markers` (pushed to origin)
-Latest: `feat(telemetry): initialize branch for dual-layer peak envelope and spike markers`
+Latest: `a402f09` fix(logs): remove accidental chart click handler and add clear window reset button in log toolbar
 Previous commits this session:
 - `272468f` docs: update project state memory with consolidated time toolbar
 - `2d6ffb8` feat(telemetry): consolidate time presets into unified pill bar and streamline custom range picker
