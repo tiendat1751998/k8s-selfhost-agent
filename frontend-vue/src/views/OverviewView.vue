@@ -79,7 +79,9 @@ const hoveredNodeHistIndex = ref<number | null>(null)
 const nodeHistTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const isNodeHistHovered = ref(false)
 const processSearch = ref('')
-const processSortBy = ref<'cpu' | 'mem' | 'disk' | 'name' | 'pid'>('cpu')
+const processSortBy = ref<'cpu' | 'mem' | 'rps' | 'bandwidth' | 'name' | 'pid'>('cpu')
+const processPageSize = ref(10)
+const processCurrentPage = ref(1)
 
 // High-scale Node Services state
 const serviceSearch = ref('')
@@ -635,10 +637,113 @@ function toggleServiceSort(key: 'cpu_percent' | 'memory_used_mb' | 'requests_per
   }
 }
 
+export interface UnifiedProcessItem {
+  pid: number | string
+  name: string
+  command_line?: string
+  user?: string
+  cpu_percent: number
+  memory_bytes: number
+  memory_percent?: number
+  requests_per_sec: number
+  error_rate: number
+  rx_bytes_per_sec: number
+  tx_bytes_per_sec: number
+  state: string
+  is_container: boolean
+  container_name?: string
+}
+
+// Unified processes + container workloads for selected node
+const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
+  const procs = selectedNode.value?.top_processes || []
+  const services = rawNodeServices.value || []
+  const matchedServices = new Set<string>()
+
+  const list: UnifiedProcessItem[] = procs.map(p => {
+    const pName = (p.name || '').toLowerCase()
+    const pCmd = (p.command_line || '').toLowerCase()
+
+    // Find matching container service
+    const matchedSvc = services.find(s => {
+      const sName = (s.service_name || '').toLowerCase()
+      const sClean = sName.replace(/^(tiki_|k8s_|docker_)/, '')
+      return (
+        sName === pName ||
+        pName.includes(sClean) ||
+        pCmd.includes(sName) ||
+        pCmd.includes(sClean) ||
+        (sClean === 'redis' && (pName.includes('redis') || pCmd.includes('redis'))) ||
+        (sClean === 'traefik' && (pName.includes('traefik') || pCmd.includes('traefik'))) ||
+        (sClean === 'nats' && (pName.includes('nats') || pCmd.includes('nats'))) ||
+        ((sClean === 'postgres' || sClean === 'db') && (pName.includes('postgres') || pCmd.includes('postgres')))
+      )
+    })
+
+    if (matchedSvc) {
+      matchedServices.add(matchedSvc.service_name)
+      return {
+        pid: p.pid,
+        name: matchedSvc.service_name,
+        command_line: p.command_line || p.name,
+        user: p.user || 'root',
+        cpu_percent: Math.max(p.cpu_percent || 0, matchedSvc.cpu_percent || 0),
+        memory_bytes: Math.max(p.memory_bytes || 0, (matchedSvc.memory_used_mb || 0) * 1024 * 1024),
+        memory_percent: p.memory_percent,
+        requests_per_sec: matchedSvc.requests_per_sec || 0,
+        error_rate: matchedSvc.error_rate || 0,
+        rx_bytes_per_sec: matchedSvc.rx_bytes_per_sec || p.read_bytes_per_sec || 0,
+        tx_bytes_per_sec: matchedSvc.tx_bytes_per_sec || p.write_bytes_per_sec || 0,
+        state: matchedSvc.status === 'healthy' || matchedSvc.status === 'running' ? 'healthy' : (p.state || 'running'),
+        is_container: true,
+        container_name: matchedSvc.service_name,
+      }
+    }
+
+    return {
+      pid: p.pid,
+      name: p.name,
+      command_line: p.command_line,
+      user: p.user || 'root',
+      cpu_percent: p.cpu_percent || 0,
+      memory_bytes: p.memory_bytes || 0,
+      memory_percent: p.memory_percent,
+      requests_per_sec: 0,
+      error_rate: 0,
+      rx_bytes_per_sec: p.read_bytes_per_sec || 0,
+      tx_bytes_per_sec: p.write_bytes_per_sec || 0,
+      state: p.state || 'running',
+      is_container: false,
+    }
+  })
+
+  // Append any container services that didn't match an OS PID
+  for (const s of services) {
+    if (!matchedServices.has(s.service_name)) {
+      list.unshift({
+        pid: 'CTR',
+        name: s.service_name,
+        command_line: `Container Service: ${s.service_name}`,
+        user: 'docker',
+        cpu_percent: s.cpu_percent || 0,
+        memory_bytes: (s.memory_used_mb || 0) * 1024 * 1024,
+        requests_per_sec: s.requests_per_sec || 0,
+        error_rate: s.error_rate || 0,
+        rx_bytes_per_sec: s.rx_bytes_per_sec || 0,
+        tx_bytes_per_sec: s.tx_bytes_per_sec || 0,
+        state: s.status || 'healthy',
+        is_container: true,
+        container_name: s.service_name,
+      })
+    }
+  }
+
+  return list
+})
+
 // Filtered and sorted processes for selected node
-const filteredNodeProcesses = computed<ProcessMetric[]>(() => {
-  if (!selectedNode.value?.top_processes) return []
-  let list = [...selectedNode.value.top_processes]
+const filteredNodeProcesses = computed<UnifiedProcessItem[]>(() => {
+  let list = [...unifiedNodeProcesses.value]
 
   if (processSearch.value.trim()) {
     const q = processSearch.value.toLowerCase().trim()
@@ -646,7 +751,7 @@ const filteredNodeProcesses = computed<ProcessMetric[]>(() => {
       p.name.toLowerCase().includes(q) ||
       (p.command_line && p.command_line.toLowerCase().includes(q)) ||
       (p.user && p.user.toLowerCase().includes(q)) ||
-      String(p.pid).includes(q)
+      String(p.pid).toLowerCase().includes(q)
     )
   }
 
@@ -654,15 +759,30 @@ const filteredNodeProcesses = computed<ProcessMetric[]>(() => {
     list.sort((a, b) => (b.cpu_percent || 0) - (a.cpu_percent || 0))
   } else if (processSortBy.value === 'mem') {
     list.sort((a, b) => (b.memory_bytes || 0) - (a.memory_bytes || 0))
-  } else if (processSortBy.value === 'disk') {
-    list.sort((a, b) => ((b.read_bytes_per_sec || 0) + (b.write_bytes_per_sec || 0)) - ((a.read_bytes_per_sec || 0) + (a.write_bytes_per_sec || 0)))
+  } else if (processSortBy.value === 'rps') {
+    list.sort((a, b) => (b.requests_per_sec || 0) - (a.requests_per_sec || 0))
+  } else if (processSortBy.value === 'bandwidth') {
+    list.sort((a, b) => ((b.rx_bytes_per_sec || 0) + (b.tx_bytes_per_sec || 0)) - ((a.rx_bytes_per_sec || 0) + (a.tx_bytes_per_sec || 0)))
   } else if (processSortBy.value === 'pid') {
-    list.sort((a, b) => a.pid - b.pid)
+    list.sort((a, b) => {
+      const pA = typeof a.pid === 'number' ? a.pid : 999999
+      const pB = typeof b.pid === 'number' ? b.pid : 999999
+      return pA - pB
+    })
   } else if (processSortBy.value === 'name') {
     list.sort((a, b) => a.name.localeCompare(b.name))
   }
 
   return list
+})
+
+const totalProcessPages = computed(() => {
+  return Math.ceil(filteredNodeProcesses.value.length / processPageSize.value) || 1
+})
+
+const paginatedNodeProcesses = computed(() => {
+  const start = (processCurrentPage.value - 1) * processPageSize.value
+  return filteredNodeProcesses.value.slice(start, start + processPageSize.value)
 })
 
 
@@ -693,6 +813,8 @@ function inspectNode(node: NodeMetrics) {
   selectedNodeId.value = node.node_id || node.node_name || ''
   processSearch.value = ''
   processSortBy.value = 'cpu'
+  processCurrentPage.value = 1
+  processPageSize.value = 10
   serviceSearch.value = ''
   serviceStatusFilter.value = 'all'
   serviceSortKey.value = 'cpu_percent'
@@ -2480,198 +2602,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Containerized Services on this Node -->
-          <div class="node-services-section" v-if="rawNodeServices.length > 0">
-            <div class="proc-header-row">
-              <div class="proc-title-group">
-                <h4 class="proc-section-heading">
-                  <span class="heading-icon">📦</span> Apps & Services on this Node
-                </h4>
-                <span class="badge badge-emerald font-mono">{{ rawNodeServices.length }} active</span>
-              </div>
-
-              <!-- Quick Status Filter Chips -->
-              <div class="service-filter-chips">
-                <button
-                  class="chip-btn"
-                  :class="{ active: serviceStatusFilter === 'all' }"
-                  @click="serviceStatusFilter = 'all'; serviceCurrentPage = 1"
-                >
-                  All ({{ nodeServicesSummary.total }})
-                </button>
-                <button
-                  class="chip-btn chip-healthy"
-                  :class="{ active: serviceStatusFilter === 'healthy' }"
-                  @click="serviceStatusFilter = 'healthy'; serviceCurrentPage = 1"
-                >
-                  🟢 Healthy ({{ nodeServicesSummary.healthy }})
-                </button>
-                <button
-                  v-if="nodeServicesSummary.degraded > 0"
-                  class="chip-btn chip-degraded"
-                  :class="{ active: serviceStatusFilter === 'degraded' }"
-                  @click="serviceStatusFilter = 'degraded'; serviceCurrentPage = 1"
-                >
-                  ⚠️ Degraded ({{ nodeServicesSummary.degraded }})
-                </button>
-                <button
-                  v-if="nodeServicesSummary.traffic > 0"
-                  class="chip-btn chip-traffic"
-                  :class="{ active: serviceStatusFilter === 'traffic' }"
-                  @click="serviceStatusFilter = 'traffic'; serviceCurrentPage = 1"
-                >
-                  ⚡ Active ({{ nodeServicesSummary.traffic }})
-                </button>
-              </div>
-            </div>
-
-            <!-- Search Bar -->
-            <div class="proc-controls">
-              <div class="proc-search-box">
-                <span class="search-icon">🔍</span>
-                <input
-                  v-model="serviceSearch"
-                  type="text"
-                  placeholder="Filter by service name, status..."
-                  class="input-proc-search"
-                  @input="serviceCurrentPage = 1"
-                />
-                <button v-if="serviceSearch" class="btn-clear-search" @click="serviceSearch = ''; serviceCurrentPage = 1">✕</button>
-              </div>
-            </div>
-
-            <div class="services-table-wrapper">
-              <table class="services-mini-table">
-                <thead>
-                  <tr>
-                    <th class="cursor-pointer" @click="toggleServiceSort('service_name')">
-                      Service <span class="sort-indicator">{{ serviceSortKey === 'service_name' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
-                    </th>
-                    <th class="cursor-pointer" @click="toggleServiceSort('cpu_percent')">
-                      CPU % <span class="sort-indicator">{{ serviceSortKey === 'cpu_percent' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
-                    </th>
-                    <th class="cursor-pointer" @click="toggleServiceSort('memory_used_mb')">
-                      Memory <span class="sort-indicator">{{ serviceSortKey === 'memory_used_mb' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
-                    </th>
-                    <th class="cursor-pointer" @click="toggleServiceSort('requests_per_sec')">
-                      Req/s <span class="sort-indicator">{{ serviceSortKey === 'requests_per_sec' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
-                    </th>
-                    <th>Err %</th>
-                    <th class="cursor-pointer" @click="toggleServiceSort('bandwidth')">
-                      Bandwidth <span class="sort-indicator">{{ serviceSortKey === 'bandwidth' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
-                    </th>
-                    <th class="th-status-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="svc in paginatedNodeServices" :key="svc.service_name">
-                    <td class="col-svc-name">
-                      <span class="svc-bullet">●</span>
-                      <strong>{{ svc.service_name }}</strong>
-                    </td>
-                    <td class="font-mono text-purple">{{ formatPercent(svc.cpu_percent) }}</td>
-                    <td class="font-mono text-cyan">{{ formatBytes(svc.memory_used_mb * 1024 * 1024) }}</td>
-                    <td class="font-mono text-emerald">
-                      <span v-if="svc.requests_per_sec !== undefined && svc.requests_per_sec > 0">
-                        ⚡ {{ svc.requests_per_sec.toLocaleString() }}
-                      </span>
-                      <span v-else class="text-slate opacity-40">0</span>
-                    </td>
-                    <td class="font-mono">
-                      <span v-if="svc.error_rate !== undefined && svc.error_rate > 0" class="text-rose font-bold">
-                        {{ svc.error_rate.toFixed(1) }}%
-                      </span>
-                      <span v-else class="text-slate opacity-40">0.0%</span>
-                    </td>
-                    <td class="font-mono text-slate">
-                      <span class="bw-split">
-                        <span class="bw-rx text-cyan" :title="'Live: ' + formatIoRate(svc.rx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_rx_bytes || 0) + ' received'">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
-                        <span class="bw-tx text-purple" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_tx_bytes || 0) + ' sent'">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
-                      </span>
-                    </td>
-                    <td class="td-status-right">
-                      <span class="badge" :class="svc.status === 'healthy' || svc.status === 'running' ? 'badge-emerald' : 'badge-amber'">
-                        {{ (svc.status || 'running').toUpperCase() }}
-                      </span>
-                    </td>
-                  </tr>
-                  <tr v-if="paginatedNodeServices.length === 0">
-                    <td colspan="7" class="empty-services-row">
-                      <div class="empty-services-msg">
-                        <span>🔍 No services match filter "{{ serviceSearch }}"</span>
-                        <button class="btn-clear-inline" @click="serviceSearch = ''; serviceStatusFilter = 'all'">Reset filters</button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Pagination & Page Size Footer (At Bottom) -->
-            <div class="proc-pagination">
-              <div class="pagination-info">
-                Showing
-                <span class="text-cyan font-mono font-bold">{{ filteredAndSortedNodeServices.length === 0 ? 0 : (serviceCurrentPage - 1) * servicePageSize + 1 }}–{{ Math.min(serviceCurrentPage * servicePageSize, filteredAndSortedNodeServices.length) }}</span>
-                of
-                <span class="text-slate font-mono font-bold">{{ filteredAndSortedNodeServices.length }}</span>
-                services
-              </div>
-
-              <!-- Page Size Selector (Bottom) -->
-              <div class="page-size-group">
-                <span class="page-size-label font-mono">PAGE SIZE:</span>
-                <div class="page-size-pill">
-                  <button
-                    v-for="size in [10, 25, 50, 100]"
-                    :key="size"
-                    class="btn-page-size font-mono"
-                    :class="{ active: servicePageSize === size }"
-                    @click="servicePageSize = size; serviceCurrentPage = 1"
-                  >
-                    {{ size }}
-                  </button>
-                </div>
-              </div>
-
-              <div class="pagination-actions" v-if="totalServicePages > 1">
-                <button
-                  class="btn-page"
-                  :disabled="serviceCurrentPage <= 1"
-                  @click="serviceCurrentPage = 1"
-                  title="First Page"
-                >
-                  «
-                </button>
-                <button
-                  class="btn-page"
-                  :disabled="serviceCurrentPage <= 1"
-                  @click="serviceCurrentPage--"
-                >
-                  ‹ Prev
-                </button>
-                <span class="page-indicator font-mono">
-                  Page {{ serviceCurrentPage }} / {{ totalServicePages }}
-                </span>
-                <button
-                  class="btn-page"
-                  :disabled="serviceCurrentPage >= totalServicePages"
-                  @click="serviceCurrentPage++"
-                >
-                  Next ›
-                </button>
-                <button
-                  class="btn-page"
-                  :disabled="serviceCurrentPage >= totalServicePages"
-                  @click="serviceCurrentPage = totalServicePages"
-                  title="Last Page"
-                >
-                  »
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Top Resource-Consuming Processes -->
+          <!-- Unified Top Resource & Workload Processes -->
           <div class="node-processes-section">
             <div class="proc-header-row">
               <div class="proc-title-group">
@@ -2689,16 +2620,18 @@ onUnmounted(() => {
                   type="text"
                   placeholder="Filter by name, PID, user, cmd..."
                   class="input-proc-search"
+                  @input="processCurrentPage = 1"
                 />
-                <button v-if="processSearch" class="btn-clear-search" @click="processSearch = ''">✕</button>
+                <button v-if="processSearch" class="btn-clear-search" @click="processSearch = ''; processCurrentPage = 1">✕</button>
               </div>
 
               <div class="proc-sort-group">
-                <select v-model="processSortBy" class="select-proc-sort">
+                <select v-model="processSortBy" class="select-proc-sort" @change="processCurrentPage = 1">
                   <option value="cpu">Sort: CPU % (High to Low)</option>
                   <option value="mem">Sort: Memory</option>
-                  <option value="disk">Sort: Disk I/O Rate</option>
-                  <option value="name">Sort: Process Name</option>
+                  <option value="rps">Sort: Ingress Req/s</option>
+                  <option value="bandwidth">Sort: Bandwidth (Rx/Tx)</option>
+                  <option value="name">Sort: App Name</option>
                   <option value="pid">Sort: PID</option>
                 </select>
               </div>
@@ -2713,23 +2646,30 @@ onUnmounted(() => {
                     <th class="th-user">User</th>
                     <th class="th-cpu">CPU %</th>
                     <th class="th-mem">Memory</th>
-                    <th class="th-disk">Disk I/O</th>
+                    <th class="th-rps">Req/s</th>
+                    <th class="th-err">Err %</th>
+                    <th class="th-bw">Bandwidth</th>
                     <th class="th-state">State</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr
-                    v-for="proc in filteredNodeProcesses"
-                    :key="proc.pid"
+                    v-for="proc in paginatedNodeProcesses"
+                    :key="proc.pid + '-' + proc.name"
                     class="proc-row"
-                    :class="{ 'proc-row-hot': proc.cpu_percent >= 70 }"
+                    :class="{ 'proc-row-hot': proc.cpu_percent >= 70, 'proc-row-container': proc.is_container }"
                   >
                     <td class="col-proc-pid">
-                      <span class="pid-tag font-mono">#{{ proc.pid }}</span>
+                      <span class="pid-tag font-mono" :class="{ 'pid-tag-ctr': proc.pid === 'CTR' }">
+                        {{ typeof proc.pid === 'number' ? '#' + proc.pid : proc.pid }}
+                      </span>
                     </td>
                     <td class="col-proc-app">
                       <div class="proc-app-info" :title="proc.command_line ? `${proc.name}\nCommand: ${proc.command_line}` : proc.name">
-                        <span class="proc-name">{{ proc.name }}</span>
+                        <span class="proc-name">
+                          <span v-if="proc.is_container" class="ctr-icon" title="Container Workload">📦</span>
+                          {{ proc.name }}
+                        </span>
                         <span class="proc-cmd-line font-mono" v-if="proc.command_line">
                           {{ proc.command_line }}
                         </span>
@@ -2765,9 +2705,22 @@ onUnmounted(() => {
                         </span>
                       </div>
                     </td>
-                    <td class="col-proc-disk">
-                      <span class="font-mono text-slate">
-                        ↓ {{ formatIoRate(proc.read_bytes_per_sec) }}
+                    <td class="col-proc-rps font-mono text-emerald">
+                      <span v-if="proc.requests_per_sec > 0">
+                        ⚡ {{ proc.requests_per_sec.toLocaleString() }}
+                      </span>
+                      <span v-else class="text-slate opacity-40">0</span>
+                    </td>
+                    <td class="col-proc-err font-mono">
+                      <span v-if="proc.error_rate > 0" class="text-rose font-bold">
+                        {{ proc.error_rate.toFixed(1) }}%
+                      </span>
+                      <span v-else class="text-slate opacity-40">0.0%</span>
+                    </td>
+                    <td class="col-proc-bw font-mono text-slate">
+                      <span class="bw-split">
+                        <span class="bw-rx text-cyan" :title="'Real-time Download / Read: ' + formatIoRate(proc.rx_bytes_per_sec)">↓ {{ formatIoRate(proc.rx_bytes_per_sec) }}</span>
+                        <span class="bw-tx text-purple" :title="'Real-time Upload / Write: ' + formatIoRate(proc.tx_bytes_per_sec)">↑ {{ formatIoRate(proc.tx_bytes_per_sec) }}</span>
                       </span>
                     </td>
                     <td class="col-proc-state">
@@ -2776,6 +2729,69 @@ onUnmounted(() => {
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            <!-- Unified Page Size & Pagination Footer -->
+            <div class="proc-pagination" v-if="filteredNodeProcesses.length > 0">
+              <div class="pagination-info">
+                Showing
+                <span class="text-cyan font-mono font-bold">{{ filteredNodeProcesses.length === 0 ? 0 : (processCurrentPage - 1) * processPageSize + 1 }}–{{ Math.min(processCurrentPage * processPageSize, filteredNodeProcesses.length) }}</span>
+                of
+                <span class="text-slate font-mono font-bold">{{ filteredNodeProcesses.length }}</span>
+                processes & workloads
+              </div>
+
+              <!-- Page Size Selector -->
+              <div class="page-size-group">
+                <span class="page-size-label font-mono">PAGE SIZE:</span>
+                <div class="page-size-pill">
+                  <button
+                    v-for="size in [10, 25, 50, 100]"
+                    :key="size"
+                    class="btn-page-size font-mono"
+                    :class="{ active: processPageSize === size }"
+                    @click="processPageSize = size; processCurrentPage = 1"
+                  >
+                    {{ size }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="pagination-actions" v-if="totalProcessPages > 1">
+                <button
+                  class="btn-page"
+                  :disabled="processCurrentPage <= 1"
+                  @click="processCurrentPage = 1"
+                  title="First Page"
+                >
+                  «
+                </button>
+                <button
+                  class="btn-page"
+                  :disabled="processCurrentPage <= 1"
+                  @click="processCurrentPage--"
+                >
+                  ‹ Prev
+                </button>
+                <span class="page-indicator font-mono">
+                  Page {{ processCurrentPage }} / {{ totalProcessPages }}
+                </span>
+                <button
+                  class="btn-page"
+                  :disabled="processCurrentPage >= totalProcessPages"
+                  @click="processCurrentPage++"
+                >
+                  Next ›
+                </button>
+                <button
+                  class="btn-page"
+                  :disabled="processCurrentPage >= totalProcessPages"
+                  @click="processCurrentPage = totalProcessPages"
+                  title="Last Page"
+                >
+                  »
+                </button>
+              </div>
             </div>
 
             <div class="proc-empty-state glass-panel" v-else>
@@ -6487,9 +6503,24 @@ onUnmounted(() => {
   border: 1px solid var(--border-subtle);
 }
 
+.pid-tag-ctr {
+  background: rgba(56, 189, 248, 0.15) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+}
+
 .col-proc-app {
-  min-width: 130px;
-  max-width: 240px;
+  min-width: 110px;
+  max-width: 160px;
+}
+
+.ctr-icon {
+  font-size: 11px;
+  margin-right: 3px;
+}
+
+.proc-row-container {
+  background: rgba(56, 189, 248, 0.02);
 }
 
 .proc-app-info {
@@ -6514,12 +6545,12 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 230px;
+  max-width: 150px;
 }
 
 .col-proc-user {
   white-space: nowrap;
-  width: 60px;
+  width: 55px;
 }
 
 .user-badge {
@@ -6531,8 +6562,8 @@ onUnmounted(() => {
 }
 
 .col-proc-cpu {
-  width: 85px;
-  min-width: 80px;
+  width: 80px;
+  min-width: 75px;
   white-space: nowrap;
 }
 
@@ -6584,7 +6615,7 @@ onUnmounted(() => {
 .col-proc-mem {
   white-space: nowrap;
   width: 85px;
-  min-width: 80px;
+  min-width: 75px;
 }
 
 .proc-mem-box {
@@ -6606,17 +6637,27 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
-.col-proc-disk {
+.col-proc-rps {
   white-space: nowrap;
-  font-size: 11px;
-  width: 75px;
-  min-width: 70px;
+  width: 65px;
+  font-size: 11.5px;
+}
+
+.col-proc-err {
+  white-space: nowrap;
+  width: 55px;
+  font-size: 11.5px;
+}
+
+.col-proc-bw {
+  white-space: nowrap;
+  width: 140px;
 }
 
 .col-proc-state {
   white-space: nowrap;
-  width: 75px;
-  min-width: 70px;
+  width: 85px;
+  min-width: 80px;
   text-align: right;
 }
 
