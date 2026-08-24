@@ -2,9 +2,10 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `2d6ffb8` feat(telemetry): consolidate time presets into unified pill bar and streamline custom range picker
+Latest: `46e7f5e` fix(telemetry): fix 24h timeline truncation by lifting query limits to fetch all 1440 1-minute samples
 Previous commits this session:
-- `6363152` style(telemetry): move cpu/ram kpi cards to top and integrate time controls directly into hardware saturation chart
+- `272468f` docs: update project state memory with consolidated time toolbar
+- `2d6ffb8` feat(telemetry): consolidate time presets into unified pill bar and streamline custom range picker
 - `5d6feff` feat(telemetry): add custom date-time range selection and point-in-time log sync for node historical telemetry
 - `2dccd81` fix(logs): support all-lines tail depth and accurate log level classification for errors, warnings, and search
 - `1e3855a` docs: update project state with live log streaming feature
