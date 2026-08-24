@@ -13,8 +13,24 @@ import (
 	"time"
 )
 
-func setupHandler(collector *SystemCollector, authToken string) http.Handler {
+func setupHandler(collector *SystemCollector, authToken string, logServers ...*LogServer) http.Handler {
+	var ls *LogServer
+	if len(logServers) > 0 && logServers[0] != nil {
+		ls = logServers[0]
+	} else {
+		ls = NewLogServer()
+	}
+
 	mux := http.NewServeMux()
+
+	isAuthorized := func(r *http.Request) bool {
+		if authToken == "" {
+			return true
+		}
+		authHeader := r.Header.Get("Authorization")
+		expected := "Bearer " + authToken
+		return authHeader == expected
+	}
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -23,21 +39,65 @@ func setupHandler(collector *SystemCollector, authToken string) http.Handler {
 	})
 
 	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-		if authToken != "" {
-			authHeader := r.Header.Get("Authorization")
-			expected := "Bearer " + authToken
-			if authHeader != expected {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
-				return
-			}
+		if !isAuthorized(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
 		}
 
 		metrics := collector.GetLastMetrics()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(metrics)
+	})
+
+	mux.HandleFunc("/logs/services", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+			return
+		}
+		if !isAuthorized(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+		ls.HandleGetServices(w, r)
+	})
+
+	mux.HandleFunc("/logs/search", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+			return
+		}
+		if !isAuthorized(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+		ls.HandleSearchLogs(w, r)
+	})
+
+	mux.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+			return
+		}
+		if !isAuthorized(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+		ls.HandleGetLogs(w, r)
 	})
 
 	return mux
@@ -48,11 +108,13 @@ func main() {
 		port      int
 		interval  time.Duration
 		authToken string
+		logDir    string
 	)
 
-	flag.IntVar(&port, "port", 9100, "Port for metrics HTTP server")
+	flag.IntVar(&port, "port", 9100, "Port for metrics and logs HTTP server")
 	flag.DurationVar(&interval, "interval", 5*time.Second, "Metrics collection interval")
 	flag.StringVar(&authToken, "auth-token", "", "Optional Bearer token for authentication")
+	flag.StringVar(&logDir, "log-dir", "/var/log", "Directory for local log file scanning")
 	flag.Parse()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -62,16 +124,18 @@ func main() {
 		slog.Int("port", port),
 		slog.Duration("interval", interval),
 		slog.Bool("auth_enabled", authToken != ""),
+		slog.String("log_dir", logDir),
 	)
 
 	collector := NewSystemCollector("", "", nil, WithCollectionInterval(interval))
+	logServer := NewLogServer(WithLogDir(logDir))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	go collector.Start(ctx)
 
-	handler := setupHandler(collector, authToken)
+	handler := setupHandler(collector, authToken, logServer)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", port),
 		Handler:      handler,

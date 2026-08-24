@@ -243,11 +243,18 @@ export const dockerApi = {
     return api.post<{ status: string }>(`/docker/containers/${id}/toggle`, { action })
   },
 
-  async getLogs(id: string, type?: string, tail?: number | string, since?: string): Promise<{ logs: string }> {
+  async getLogs(id: string, type?: string, tail?: number | string, since?: string, until?: string, q?: string, level?: string, nodeId?: string): Promise<{ logs: string }> {
     const params: Record<string, string> = { id }
     if (type) params.type = type
     if (tail !== undefined && tail !== null && tail !== '') params.tail = String(tail)
     if (since) params.since = since
+    if (until) params.until = until
+    if (q) params.q = q
+    if (level) params.level = level
+    if (nodeId) {
+      params.node_id = nodeId
+      params.node_name = nodeId
+    }
     return api.get<{ logs: string }>('/docker/logs', params)
   },
 }
