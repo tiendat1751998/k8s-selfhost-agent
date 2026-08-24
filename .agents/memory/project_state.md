@@ -2,8 +2,9 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `ea4031b` style(drawer): polish page size pill, network interface margins, and top processes search/sort controls
+Latest: `b11ebc4` style(overview): expand drawer width to 980px, relocate page size to bottom footer, and fit state column without horizontal scroll
 Previous commits this session:
+- `ea4031b` style(drawer): polish page size pill, network interface margins, and top processes search/sort controls
 - `335d385` fix(metrics): guard container network delta baseline to eliminate lifetime byte rate spikes
 - `5b3ce8f` feat(drawer): align network I/O row, stack NIC in/out rates, and implement high-scale service search & pagination
 - `9190deb` fix(overview): standardize drawer network I/O card, eliminate badge wrapping, and gap bandwidth rates
