@@ -170,7 +170,7 @@ func parseNodeHistoryTime(s string, fallback time.Time) time.Time {
 	return fallback
 }
 
-// GetNodeHistory handles GET /api/v1/overview/nodes/{id}/history?range=1h|24h|7d|30d|custom&from=...&to=...
+// GetNodeHistory handles GET /api/v1/overview/nodes/{id}/history?range=1h|3h|6h|24h|7d|30d|custom&from=...&to=...
 // Returns time-series telemetry rollups, summary statistics, and related node incidents.
 func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request) {
 	nodeID := chi.URLParam(r, "id")
@@ -214,6 +214,14 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 		switch rangeParam {
 		case "1h":
 			startTime = now.Add(-1 * time.Hour)
+			resolution = "1m"
+			limit = 500
+		case "3h":
+			startTime = now.Add(-3 * time.Hour)
+			resolution = "1m"
+			limit = 500
+		case "6h":
+			startTime = now.Add(-6 * time.Hour)
 			resolution = "1m"
 			limit = 500
 		case "7d":
