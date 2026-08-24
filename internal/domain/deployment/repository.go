@@ -11,4 +11,6 @@ type Repository interface {
 	Restart(ctx context.Context, targetType, targetCluster, namespace, name string) error
 	Delete(ctx context.Context, targetType, targetCluster, namespace, name string) error
 	Create(ctx context.Context, app Application) error
+	UpdateResources(ctx context.Context, targetType, targetCluster, namespace, name string, memoryLimitBytes, memoryReservBytes, nanoCPUs int64, replicas int) error
 }
+

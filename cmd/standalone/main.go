@@ -228,6 +228,10 @@ func run() error {
 		lbProvider = infraLB.NewTraefikProvider(lbURL)
 	}
 
+	if provider, ok := lbProvider.(*infraLB.TraefikProvider); ok {
+		go provider.StartBackgroundScraper(ctx)
+	}
+
 	tpsCollector := usecaseMetrics.NewTPSCollector(
 		metricsCollector,
 		pgClient,
@@ -253,7 +257,18 @@ func run() error {
 			}
 		}()
 	}
+
+	nodeMetricsRepo := postgres.NewNodeMetricsRepo(pgClient)
+	nodeHistoryWorker := usecaseMetrics.NewNodeHistoryWorker(metricsCollector, nodeMetricsRepo, incRepo, log)
+	go func() {
+		if err := nodeHistoryWorker.Start(ctx); err != nil {
+			log.Error("node history worker stopped with error", zap.Error(err))
+		}
+	}()
+
 	overviewHandler := adapthttp.NewOverviewHandler(metricsCollector, log, tpsCollector)
+	overviewHandler.SetNodeMetricsRepo(nodeMetricsRepo)
+	overviewHandler.SetIncidentRepo(incRepo)
 
 	userRepo := postgres.NewUserRepo(pgClient)
 	refreshTokenRepo := postgres.NewRefreshTokenRepo(pgClient)
@@ -287,10 +302,11 @@ func run() error {
 	var deploymentsHandler *adapthttp.DeploymentHandler
 	var k8sHandler *adapthttp.K8sResourceHandler
 
+	deploymentsHandler = adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
+	explorerHandler = adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
+
 	if k8sAvailable {
-		explorerHandler = adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
 		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager))
-		deploymentsHandler = adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
 		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(k8sClient, clientManager), auditRepo)
 	} else {
 		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(nil, clientManager), auditRepo)

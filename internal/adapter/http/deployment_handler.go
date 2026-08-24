@@ -26,6 +26,7 @@ func (h *DeploymentHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/templates", h.ListTemplates)
 	r.Post("/", h.CreateDeployment)
 	r.Post("/scale", h.ScaleDeployment)
+	r.Post("/resources", h.UpdateResources)
 	r.Post("/restart", h.RestartDeployment)
 	r.Post("/delete", h.DeleteDeployment)
 }
@@ -79,6 +80,61 @@ func (h *DeploymentHandler) ScaleDeployment(w http.ResponseWriter, r *http.Reque
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "scaled"})
 }
+
+type updateResourcesRequest struct {
+	Type              string `json:"type"`
+	Cluster           string `json:"cluster"`
+	Namespace         string `json:"namespace"`
+	Name              string `json:"name"`
+	Replicas          int    `json:"replicas"`
+	MemoryLimit       string `json:"memory_limit"`
+	MemoryReservation string `json:"memory_reservation"`
+	CPULimit          string `json:"cpu_limit"`
+	CPUReservation    string `json:"cpu_reservation"`
+}
+
+func (r *updateResourcesRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "deployment name is required")
+	}
+	if strings.TrimSpace(r.Namespace) == "" && r.Type != "docker" && r.Type != "swarm" {
+		ve.Add("namespace", "namespace is required")
+	}
+	if r.Replicas < -1 || r.Replicas > 100 {
+		ve.Add("replicas", "replicas must be between 0 and 100")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
+// UpdateResources handles POST /api/v1/deployments/resources
+func (h *DeploymentHandler) UpdateResources(w http.ResponseWriter, r *http.Request) {
+	req, ok := decodeJSON[updateResourcesRequest](w, r)
+	if !ok {
+		return
+	}
+
+	err := h.usecase.UpdateResources(r.Context(), deploymentUsecase.UpdateResourcesRequest{
+		Type:              req.Type,
+		Cluster:           req.Cluster,
+		Namespace:         req.Namespace,
+		Name:              req.Name,
+		Replicas:          req.Replicas,
+		MemoryLimit:       req.MemoryLimit,
+		MemoryReservation: req.MemoryReservation,
+		CPULimit:          req.CPULimit,
+		CPUReservation:    req.CPUReservation,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update deployment resources", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
 
 type restartDeploymentRequest struct {
 	Type      string `json:"type"`

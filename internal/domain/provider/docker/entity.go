@@ -28,12 +28,15 @@ type Node struct {
 
 // Service represents a Docker Swarm service.
 type Service struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Image     string    `json:"image"`
-	Replicas  int       `json:"replicas"`
-	Ports     []string  `json:"ports"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Image             string    `json:"image"`
+	Replicas          int       `json:"replicas"`
+	Ports             []string  `json:"ports"`
+	MemoryLimitBytes  int64     `json:"memory_limit_bytes,omitempty"`
+	MemoryReservBytes int64     `json:"memory_reserv_bytes,omitempty"`
+	NanoCPUs          int64     `json:"nano_cpus,omitempty"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // SwarmTokens contains cluster join tokens and manager connection address.
@@ -101,8 +104,10 @@ type Repository interface {
 	RestartService(ctx context.Context, serviceID string) error
 	CreateService(ctx context.Context, name string, image string, replicas int, port int) error
 	GetLogs(ctx context.Context, targetID string, targetType string) (string, error)
+	GetLogsWithOptions(ctx context.Context, targetID string, targetType string, tail string, since string) (string, error)
 	UpdateServiceImage(ctx context.Context, serviceID string, image string) error
 	UpdateContainerImage(ctx context.Context, containerID string, image string) error
+	UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64, replicas int) error
 
 	GetSwarmJoinTokens(ctx context.Context) (*SwarmTokens, error)
 	DrainNode(ctx context.Context, nodeID string) error

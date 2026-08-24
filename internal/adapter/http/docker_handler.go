@@ -19,6 +19,7 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/agent"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
@@ -131,6 +132,7 @@ type DockerHandler struct {
 	logger           *zap.Logger
 	tokenLimiter     *TokenViewLimiter
 	metricsCollector AgentMetricRemover
+	logClient        agent.LogClientInterface
 }
 
 // NewDockerHandler creates a new Docker HTTP handler with optional dependencies.
@@ -139,6 +141,7 @@ func NewDockerHandler(repo docker.Repository, args ...interface{}) *DockerHandle
 		repo:         repo,
 		logger:       logger.Get(),
 		tokenLimiter: NewTokenViewLimiter(defaultMaxTokenViews, defaultTokenViewWindow),
+		logClient:    agent.NewAgentLogClient(),
 	}
 	for _, arg := range args {
 		switch v := arg.(type) {
@@ -156,6 +159,14 @@ func NewDockerHandler(repo docker.Repository, args ...interface{}) *DockerHandle
 			}
 		case AgentMetricRemover:
 			h.metricsCollector = v
+		case agent.LogClientInterface:
+			if v != nil {
+				h.logClient = v
+			}
+		case *agent.AgentLogClient:
+			if v != nil {
+				h.logClient = v
+			}
 		}
 	}
 	return h
@@ -184,6 +195,7 @@ func (h *DockerHandler) RegisterRoutes(r chi.Router) {
 
 	// Logs
 	r.Get("/logs", h.GetLogs)
+	r.Post("/logs/cluster-search", h.SearchClusterLogs)
 
 	// Compute Hosts
 	r.Get("/hosts", h.ListHosts)
@@ -478,27 +490,138 @@ func (h *DockerHandler) ToggleContainer(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "toggled"})
 }
 
-// GetLogs handles GET /api/v1/docker/logs
+// GetLogs handles GET /api/v1/docker/logs?id=<id>&type=<type>&tail=<tail>&since=<since>&until=<until>&q=<q>&level=<level>&node_id=<node_id>&node_name=<node_name>&host=<host>
 func (h *DockerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
-	if h.repo == nil {
-		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
-		return
-	}
 	id := r.URL.Query().Get("id")
 	targetType := r.URL.Query().Get("type")
+	tail := r.URL.Query().Get("tail")
+	since := r.URL.Query().Get("since")
+	until := r.URL.Query().Get("until")
+	q := r.URL.Query().Get("q")
+	level := r.URL.Query().Get("level")
+
+	nodeID := r.URL.Query().Get("node_id")
+	nodeName := r.URL.Query().Get("node_name")
+	hostParam := r.URL.Query().Get("host")
 
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "missing required query parameter: id", nil)
 		return
 	}
 
-	logs, err := h.repo.GetLogs(r.Context(), id, targetType)
+	// Check if a compute host is targeted and fetch directly from its k8s-agent endpoint
+	if h.hostRepo != nil && h.logClient != nil && (nodeID != "" || nodeName != "" || hostParam != "") {
+		var targetHost *docker.ComputeHost
+		targetKey := nodeID
+		if targetKey == "" {
+			targetKey = nodeName
+		}
+		if targetKey == "" {
+			targetKey = hostParam
+		}
+
+		if nodeID != "" {
+			targetHost, _ = h.hostRepo.GetByID(r.Context(), nodeID)
+		}
+		if targetHost == nil {
+			tenantID := tenancy.TenantIDFromContext(r.Context())
+			hosts, _ := h.hostRepo.List(r.Context(), tenantID)
+			if len(hosts) == 0 {
+				hosts, _ = h.hostRepo.ListAll(r.Context())
+			}
+			for i := range hosts {
+				if hosts[i].ID == targetKey || hosts[i].Name == targetKey || hosts[i].Endpoint == targetKey {
+					targetHost = &hosts[i]
+					break
+				}
+			}
+		}
+
+		if targetHost != nil && targetHost.Endpoint != "" {
+			token := ""
+			if targetHost.Labels != nil {
+				if t, ok := targetHost.Labels["auth_token"]; ok && t != "" {
+					token = t
+				} else if t, ok := targetHost.Labels["token"]; ok && t != "" {
+					token = t
+				}
+			}
+
+			agentLogs, err := h.logClient.GetNodeLogs(r.Context(), targetHost.Endpoint, token, id, tail, since, until, q, level)
+			if err == nil {
+				writeJSON(w, http.StatusOK, map[string]string{"logs": agentLogs})
+				return
+			}
+
+			if h.logger != nil {
+				h.logger.Warn("Failed to fetch logs from agent host, falling back to direct Docker API",
+					zap.String("host", targetHost.Name),
+					zap.String("endpoint", targetHost.Endpoint),
+					zap.Error(err),
+				)
+			}
+		}
+	}
+
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
+		return
+	}
+
+	var logs string
+	var err error
+	if tail != "" || since != "" {
+		logs, err = h.repo.GetLogsWithOptions(r.Context(), id, targetType, tail, since)
+	} else {
+		logs, err = h.repo.GetLogs(r.Context(), id, targetType)
+	}
+
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get logs", err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"logs": logs})
+}
+
+// SearchClusterLogs handles POST /api/v1/docker/logs/cluster-search
+func (h *DockerHandler) SearchClusterLogs(w http.ResponseWriter, r *http.Request) {
+	if h.hostRepo == nil {
+		writeError(w, http.StatusServiceUnavailable, "compute host service unavailable", nil)
+		return
+	}
+	if h.logClient == nil {
+		writeError(w, http.StatusServiceUnavailable, "log client service unavailable", nil)
+		return
+	}
+
+	req, ok := decodeJSON[agent.SearchLogsRequest](w, r)
+	if !ok {
+		return
+	}
+
+	tenantID := tenancy.TenantIDFromContext(r.Context())
+	hosts, err := h.hostRepo.List(r.Context(), tenantID)
+	if err != nil || len(hosts) == 0 {
+		allHosts, errAll := h.hostRepo.ListAll(r.Context())
+		if errAll == nil && len(allHosts) > 0 {
+			hosts = allHosts
+		} else if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list compute hosts", err)
+			return
+		}
+	}
+
+	results, err := h.logClient.SearchClusterLogs(r.Context(), hosts, *req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to search cluster logs", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"data":  results,
+		"total": len(results),
+	})
 }
 
 // Compute Host Request DTOs
@@ -966,9 +1089,13 @@ func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int
 					}
 					if metricsData.OSDistro != "" {
 						agentInfo["os_distro"] = metricsData.OSDistro
+					} else if metricsData.OS != "" {
+						agentInfo["os_distro"] = strings.ToUpper(metricsData.OS[:1]) + strings.ToLower(metricsData.OS[1:])
 					}
 					if metricsData.KernelVersion != "" {
 						agentInfo["kernel_version"] = metricsData.KernelVersion
+					} else if metricsData.OS != "" {
+						agentInfo["kernel_version"] = strings.ToUpper(metricsData.OS[:1]) + strings.ToLower(metricsData.OS[1:])
 					}
 					agentInfo["uptime"] = metricsData.UptimeSeconds
 					agentInfo["uptime_seconds"] = metricsData.UptimeSeconds

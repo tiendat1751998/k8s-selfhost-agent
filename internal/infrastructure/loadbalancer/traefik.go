@@ -68,16 +68,43 @@ type traefikOverviewDTO struct {
 	} `json:"http"`
 }
 
+const (
+	promMetricsCacheTTL = 800 * time.Millisecond
+	defaultEMAAlpha     = 0.6
+	defaultScrapeTimeout = 10 * time.Second
+)
+
 // TraefikProvider implements domainLB.Provider for Traefik edge reverse proxy.
 type TraefikProvider struct {
-	apiURL     string
-	httpClient *http.Client
+	apiURL       string
+	httpClient   *http.Client
+	scrapeClient *http.Client
 
-	mu                 sync.Mutex
-	prevStats          map[string]serviceSample
-	prevTime           time.Time
-	prevAggregateStats entrypointSample
-	prevAggregateTime  time.Time
+	scrapeInterval time.Duration
+	scrapeTimeout  time.Duration
+
+	mu                         sync.Mutex
+	scraperStarted             bool
+	stopCh                     chan struct{}
+	prevStats                  map[string]serviceSample
+	prevTime                   time.Time
+	prevAggregateStats         entrypointSample
+	prevAggregateTime          time.Time
+	prevSmoothedRPS            float64
+	zeroDeltaCount             int
+	lastSuccessfulSample       entrypointSample
+	lastSuccessfulServices     map[string]serviceSample
+	lastSuccessfulHTTPServices []traefikServiceDTO
+	lastScrapeTime             time.Time
+	lastScrapeErr              error
+	lastCalculatedAggregate    *domainLB.AggregateStats
+	lastCalculatedServices     []domainLB.ServiceRequestStats
+
+	// Cached Prometheus metrics to share across GetAggregateStats and GetServiceStats within the same cycle
+	cachedPromStats      map[string]serviceSample
+	cachedPromEntrypoint entrypointSample
+	cachedPromTime       time.Time
+	cachedPromErr        error
 }
 
 // Option configures TraefikProvider.
@@ -88,6 +115,25 @@ func WithHTTPClient(client *http.Client) Option {
 	return func(p *TraefikProvider) {
 		if client != nil {
 			p.httpClient = client
+			p.scrapeClient = client
+		}
+	}
+}
+
+// WithScrapeInterval sets the background metrics polling interval.
+func WithScrapeInterval(d time.Duration) Option {
+	return func(p *TraefikProvider) {
+		if d > 0 {
+			p.scrapeInterval = d
+		}
+	}
+}
+
+// WithScrapeTimeout sets the HTTP timeout for Traefik metrics scraping.
+func WithScrapeTimeout(d time.Duration) Option {
+	return func(p *TraefikProvider) {
+		if d > 0 {
+			p.scrapeTimeout = d
 		}
 	}
 }
@@ -99,12 +145,27 @@ func NewTraefikProvider(apiURL string, opts ...Option) *TraefikProvider {
 		trimmed = "http://localhost:8080"
 	}
 
+	transport := &http.Transport{
+		MaxIdleConns:        10,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+		DisableKeepAlives:   false,
+	}
+
 	p := &TraefikProvider{
 		apiURL: trimmed,
 		httpClient: &http.Client{
-			Timeout: 4 * time.Second,
+			Timeout:   defaultScrapeTimeout,
+			Transport: transport,
 		},
-		prevStats: make(map[string]serviceSample),
+		scrapeClient: &http.Client{
+			Timeout:   defaultScrapeTimeout,
+			Transport: transport,
+		},
+		scrapeInterval: 4 * time.Second,
+		scrapeTimeout:  defaultScrapeTimeout,
+		prevStats:      make(map[string]serviceSample),
+		stopCh:         make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -117,6 +178,93 @@ func NewTraefikProvider(apiURL string, opts ...Option) *TraefikProvider {
 // Name returns the provider name identifier.
 func (p *TraefikProvider) Name() string {
 	return "traefik"
+}
+
+// StartBackgroundScraper starts a continuous background scraping loop for Traefik metrics and services.
+func (p *TraefikProvider) StartBackgroundScraper(ctx context.Context) {
+	p.mu.Lock()
+	if p.scraperStarted {
+		p.mu.Unlock()
+		return
+	}
+	p.scraperStarted = true
+	stopCh := p.stopCh
+	interval := p.scrapeInterval
+	if interval <= 0 {
+		interval = 4 * time.Second
+	}
+	p.mu.Unlock()
+
+	// Initial immediate scrape
+	p.scrapeOnce(ctx)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			p.scrapeOnce(ctx)
+		}
+	}
+}
+
+// StopBackgroundScraper stops the background scraping loop.
+func (p *TraefikProvider) StopBackgroundScraper() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.scraperStarted {
+		select {
+		case <-p.stopCh:
+		default:
+			close(p.stopCh)
+		}
+		p.scraperStarted = false
+		p.stopCh = make(chan struct{})
+	}
+}
+
+// scrapeOnce executes a single scrape iteration of Prometheus metrics and HTTP services.
+func (p *TraefikProvider) scrapeOnce(ctx context.Context) {
+	timeout := p.scrapeTimeout
+	if timeout <= 0 {
+		timeout = defaultScrapeTimeout
+	}
+	scrapeCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// 1. Scrape Prometheus metrics
+	promStats, entrypoint, promErr := p.fetchPrometheusMetricsWithClient(scrapeCtx, p.scrapeClient)
+
+	// 2. Scrape HTTP services
+	services, srvErr := p.fetchHTTPServicesWithClient(scrapeCtx, p.scrapeClient)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	now := time.Now().UTC()
+	if promErr == nil {
+		p.lastSuccessfulSample = entrypoint
+		p.lastSuccessfulServices = promStats
+		p.lastScrapeTime = now
+		p.lastScrapeErr = nil
+
+		p.cachedPromStats = promStats
+		p.cachedPromEntrypoint = entrypoint
+		p.cachedPromTime = now
+		p.cachedPromErr = nil
+	} else {
+		p.lastScrapeErr = promErr
+		p.cachedPromErr = promErr
+	}
+
+	if srvErr == nil {
+		p.lastSuccessfulHTTPServices = services
+	}
 }
 
 // HealthCheck verifies connectivity to Traefik API.
@@ -160,14 +308,21 @@ func (p *TraefikProvider) HealthCheck(ctx context.Context) error {
 func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.ServiceRequestStats, error) {
 	now := time.Now().UTC()
 
-	// 1. Fetch service list from Traefik HTTP services API
+	// 1. Fetch service list from Traefik HTTP services API (cached or fresh)
 	services, err := p.fetchHTTPServices(ctx)
 	if err != nil {
+		p.mu.Lock()
+		if len(p.lastCalculatedServices) > 0 {
+			svcs := p.lastCalculatedServices
+			p.mu.Unlock()
+			return svcs, nil
+		}
+		p.mu.Unlock()
 		return nil, fmt.Errorf("fetching traefik services: %w", err)
 	}
 
-	// 2. Attempt to fetch Prometheus metrics if exposed
-	promStats, _, promErr := p.fetchPrometheusMetrics(ctx)
+	// 2. Attempt to fetch Prometheus metrics if exposed (cached per cycle / background)
+	promStats, _, promErr := p.getPrometheusMetrics(ctx)
 
 	// 3. Aggregate stats per service
 	currSamples := make(map[string]serviceSample)
@@ -192,6 +347,8 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 			} else if ps, ok := promStats[cleanName]; ok {
 				sample = ps
 			}
+		} else if prev, ok := p.prevStats[cleanName]; ok {
+			sample = prev
 		}
 
 		currSamples[cleanName] = sample
@@ -202,7 +359,7 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 
 		if elapsed > 0 {
 			prev, hasPrev := p.prevStats[cleanName]
-			if hasPrev {
+			if hasPrev && prev.totalRequests > 0 {
 				reqDelta := sample.totalRequests - prev.totalRequests
 				if reqDelta < 0 {
 					reqDelta = 0
@@ -239,6 +396,7 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 
 	p.prevStats = currSamples
 	p.prevTime = now
+	p.lastCalculatedServices = statsList
 
 	return statsList, nil
 }
@@ -247,9 +405,36 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.AggregateStats, error) {
 	now := time.Now().UTC()
 
-	// 1. Fetch Prometheus metrics from Traefik
-	_, entrypoint, err := p.fetchPrometheusMetrics(ctx)
+	// 1. Fetch Prometheus metrics from Traefik (cached per cycle / background)
+	_, entrypoint, err := p.getPrometheusMetrics(ctx)
 	if err != nil {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		// If Traefik is temporarily unresponsive under extreme load, maintain the last calculated RPS with smooth EMA decay
+		if !p.prevAggregateTime.IsZero() && p.prevSmoothedRPS > 0 {
+			decayedRPS := (1.0 - defaultEMAAlpha*0.5) * p.prevSmoothedRPS
+			if decayedRPS < 0.05 {
+				decayedRPS = 0
+			}
+			p.prevSmoothedRPS = decayedRPS
+			rps := math.Round(decayedRPS*100) / 100
+			agg := &domainLB.AggregateStats{
+				TotalRequests:       p.prevAggregateStats.totalRequests,
+				TotalRequestsPerSec: rps,
+				ActiveConnections:   p.prevAggregateStats.openConns,
+				ErrorRate:           0,
+				AvgLatencyMs:        0,
+			}
+			if p.lastCalculatedAggregate != nil {
+				agg.ErrorRate = p.lastCalculatedAggregate.ErrorRate
+				agg.AvgLatencyMs = p.lastCalculatedAggregate.AvgLatencyMs
+				if agg.ActiveConnections == 0 {
+					agg.ActiveConnections = p.lastCalculatedAggregate.ActiveConnections
+				}
+			}
+			p.lastCalculatedAggregate = agg
+			return agg, nil
+		}
 		return nil, fmt.Errorf("fetching traefik prometheus metrics: %w", err)
 	}
 
@@ -260,14 +445,41 @@ func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.Aggr
 	var errRate float64
 	var avgLatencyMs float64
 
-	if !p.prevAggregateTime.IsZero() {
+	if !p.prevAggregateTime.IsZero() && p.prevAggregateStats.totalRequests > 0 {
 		elapsed := now.Sub(p.prevAggregateTime).Seconds()
 		if elapsed > 0 {
 			reqDelta := entrypoint.totalRequests - p.prevAggregateStats.totalRequests
 			if reqDelta < 0 {
 				reqDelta = 0
 			}
-			rps = math.Round((float64(reqDelta)/elapsed)*100) / 100
+			rawRPS := float64(reqDelta) / elapsed
+
+			// Exponential Moving Average (EMA) smoothing for stable live reporting
+			var smoothedRPS float64
+			if reqDelta > 0 {
+				p.zeroDeltaCount = 0
+				if p.prevSmoothedRPS == 0 || math.Abs(rawRPS-p.prevSmoothedRPS) < 0.01 {
+					smoothedRPS = rawRPS
+				} else {
+					smoothedRPS = defaultEMAAlpha*rawRPS + (1.0-defaultEMAAlpha)*p.prevSmoothedRPS
+				}
+			} else {
+				p.zeroDeltaCount++
+				if p.zeroDeltaCount >= 2 {
+					// Decay smoothly to 0 after consecutive idle cycles
+					smoothedRPS = (1.0 - defaultEMAAlpha) * p.prevSmoothedRPS
+					if smoothedRPS < 0.05 {
+						smoothedRPS = 0
+					}
+				} else {
+					smoothedRPS = (1.0 - defaultEMAAlpha) * p.prevSmoothedRPS
+					if smoothedRPS < 0.05 {
+						smoothedRPS = 0
+					}
+				}
+			}
+			p.prevSmoothedRPS = smoothedRPS
+			rps = math.Round(smoothedRPS*100) / 100
 
 			errDelta := (entrypoint.status4xx + entrypoint.status5xx) - (p.prevAggregateStats.status4xx + p.prevAggregateStats.status5xx)
 			if errDelta < 0 {
@@ -287,19 +499,103 @@ func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.Aggr
 
 	p.prevAggregateStats = entrypoint
 	p.prevAggregateTime = now
-
-	return &domainLB.AggregateStats{
+	res := &domainLB.AggregateStats{
 		TotalRequests:       entrypoint.totalRequests,
 		TotalRequestsPerSec: rps,
 		ActiveConnections:   entrypoint.openConns,
 		ErrorRate:           errRate,
 		AvgLatencyMs:        avgLatencyMs,
-	}, nil
+	}
+	p.lastCalculatedAggregate = res
+
+	return res, nil
+}
+
+// getPrometheusMetrics returns cached Prometheus metrics if recent (< promMetricsCacheTTL or background scrape),
+// or fetches fresh metrics from Traefik /metrics endpoint.
+func (p *TraefikProvider) getPrometheusMetrics(ctx context.Context) (map[string]serviceSample, entrypointSample, error) {
+	p.mu.Lock()
+	if !p.cachedPromTime.IsZero() && time.Since(p.cachedPromTime) < promMetricsCacheTTL && p.cachedPromErr == nil {
+		stats := p.cachedPromStats
+		ep := p.cachedPromEntrypoint
+		p.mu.Unlock()
+		return stats, ep, nil
+	}
+	if p.scraperStarted {
+		if !p.lastScrapeTime.IsZero() {
+			stats := p.lastSuccessfulServices
+			ep := p.lastSuccessfulSample
+			p.mu.Unlock()
+			return stats, ep, nil
+		}
+		if p.lastScrapeErr != nil {
+			err := p.lastScrapeErr
+			p.mu.Unlock()
+			return nil, entrypointSample{}, err
+		}
+	}
+	p.mu.Unlock()
+
+	stats, ep, err := p.fetchPrometheusMetrics(ctx)
+
+	p.mu.Lock()
+	if err == nil {
+		p.cachedPromStats = stats
+		p.cachedPromEntrypoint = ep
+		p.cachedPromTime = time.Now().UTC()
+		p.cachedPromErr = nil
+		p.lastSuccessfulSample = ep
+		p.lastSuccessfulServices = stats
+		p.lastScrapeTime = p.cachedPromTime
+		p.lastScrapeErr = nil
+	} else {
+		p.cachedPromErr = err
+	}
+	p.mu.Unlock()
+
+	return stats, ep, err
+}
+
+// InvalidateMetricsCache clears any cached Prometheus metrics snapshot.
+func (p *TraefikProvider) InvalidateMetricsCache() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.cachedPromTime = time.Time{}
+	p.cachedPromStats = nil
+	p.cachedPromEntrypoint = entrypointSample{}
+	p.cachedPromErr = nil
+	p.lastScrapeTime = time.Time{}
+	p.lastSuccessfulSample = entrypointSample{}
+	p.lastSuccessfulServices = nil
+	p.lastScrapeErr = nil
 }
 
 // fetchHTTPServices retrieves the list of active services from /api/http/services.
 func (p *TraefikProvider) fetchHTTPServices(ctx context.Context) ([]traefikServiceDTO, error) {
-	reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	p.mu.Lock()
+	if p.scraperStarted && len(p.lastSuccessfulHTTPServices) > 0 {
+		svcs := p.lastSuccessfulHTTPServices
+		p.mu.Unlock()
+		return svcs, nil
+	}
+	p.mu.Unlock()
+
+	return p.fetchHTTPServicesWithClient(ctx, p.httpClient)
+}
+
+func (p *TraefikProvider) fetchHTTPServicesWithClient(ctx context.Context, client *http.Client) ([]traefikServiceDTO, error) {
+	if client == nil {
+		client = p.scrapeClient
+		if client == nil {
+			client = p.httpClient
+		}
+	}
+
+	timeout := p.scrapeTimeout
+	if timeout <= 0 {
+		timeout = defaultScrapeTimeout
+	}
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, p.apiURL+"/api/http/services", nil)
@@ -307,8 +603,15 @@ func (p *TraefikProvider) fetchHTTPServices(ctx context.Context) ([]traefikServi
 		return nil, err
 	}
 
-	resp, err := p.httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
+		p.mu.Lock()
+		if len(p.lastSuccessfulHTTPServices) > 0 {
+			svcs := p.lastSuccessfulHTTPServices
+			p.mu.Unlock()
+			return svcs, nil
+		}
+		p.mu.Unlock()
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -322,12 +625,31 @@ func (p *TraefikProvider) fetchHTTPServices(ctx context.Context) ([]traefikServi
 		return nil, fmt.Errorf("decoding traefik services JSON: %w", err)
 	}
 
+	p.mu.Lock()
+	p.lastSuccessfulHTTPServices = services
+	p.mu.Unlock()
+
 	return services, nil
 }
 
 // fetchPrometheusMetrics attempts to parse prometheus metrics from /metrics endpoint if present.
 func (p *TraefikProvider) fetchPrometheusMetrics(ctx context.Context) (map[string]serviceSample, entrypointSample, error) {
-	reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	return p.fetchPrometheusMetricsWithClient(ctx, p.httpClient)
+}
+
+func (p *TraefikProvider) fetchPrometheusMetricsWithClient(ctx context.Context, client *http.Client) (map[string]serviceSample, entrypointSample, error) {
+	if client == nil {
+		client = p.scrapeClient
+		if client == nil {
+			client = p.httpClient
+		}
+	}
+
+	timeout := p.scrapeTimeout
+	if timeout <= 0 {
+		timeout = defaultScrapeTimeout
+	}
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, p.apiURL+"/metrics", nil)
@@ -335,7 +657,7 @@ func (p *TraefikProvider) fetchPrometheusMetrics(ctx context.Context) (map[strin
 		return nil, entrypointSample{}, err
 	}
 
-	resp, err := p.httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, entrypointSample{}, err
 	}

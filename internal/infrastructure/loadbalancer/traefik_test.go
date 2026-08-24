@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -149,6 +150,7 @@ func TestTraefikProvider_GetServiceStats(t *testing.T) {
 
 	// Advance iteration and simulate elapsed time
 	iteration = 1
+	provider.InvalidateMetricsCache()
 	provider.mu.Lock()
 	provider.prevTime = time.Now().UTC().Add(-2 * time.Second)
 	provider.mu.Unlock()
@@ -244,6 +246,7 @@ func TestTraefikProvider_GetAggregateStats(t *testing.T) {
 
 	// Advance iteration and simulate 2 seconds elapsed
 	iteration = 1
+	provider.InvalidateMetricsCache()
 	provider.mu.Lock()
 	provider.prevAggregateTime = time.Now().UTC().Add(-2 * time.Second)
 	provider.mu.Unlock()
@@ -273,5 +276,247 @@ func TestTraefikProvider_GetAggregateStats(t *testing.T) {
 	// Delta latency: (11.0 - 5.5) / (2200 - 1100) = 5.5 / 1100 = 0.005s = 5ms
 	if agg2.AvgLatencyMs < 4.9 || agg2.AvgLatencyMs > 5.1 {
 		t.Errorf("expected AvgLatencyMs ~ 5.0ms, got %f", agg2.AvgLatencyMs)
+	}
+}
+
+func TestTraefikProvider_EMASmoothing(t *testing.T) {
+	currentTotal := 1000
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/metrics" {
+			w.Header().Set("Content-Type", "text/plain")
+			line := strings.Join([]string{
+				`traefik_entrypoint_requests_total{code="200",entrypoint="web",method="GET",protocol="http"} ` + strconv.Itoa(currentTotal),
+				`traefik_open_connections{entrypoint="web",protocol="TCP"} 5`,
+			}, "\n")
+			w.Write([]byte(line))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	provider := NewTraefikProvider(ts.URL, WithHTTPClient(ts.Client()))
+
+	// Cycle 1: Baseline
+	agg, err := provider.GetAggregateStats(context.Background())
+	if err != nil || agg.TotalRequestsPerSec != 0 {
+		t.Fatalf("expected initial 0 RPS, got %f, err: %v", agg.TotalRequestsPerSec, err)
+	}
+
+	// Cycle 2: +100 reqs in 1s -> rawRPS = 100 -> initial smoothed = 100
+	currentTotal += 100
+	provider.InvalidateMetricsCache()
+	provider.mu.Lock()
+	provider.prevAggregateTime = time.Now().UTC().Add(-1 * time.Second)
+	provider.mu.Unlock()
+
+	agg, err = provider.GetAggregateStats(context.Background())
+	if err != nil || agg.TotalRequestsPerSec != 100 {
+		t.Fatalf("expected initial smoothed RPS = 100, got %f", agg.TotalRequestsPerSec)
+	}
+
+	// Cycle 3: +200 reqs in 1s -> rawRPS = 200 -> smoothed = 0.6*200 + 0.4*100 = 120 + 40 = 160
+	currentTotal += 200
+	provider.InvalidateMetricsCache()
+	provider.mu.Lock()
+	provider.prevAggregateTime = time.Now().UTC().Add(-1 * time.Second)
+	provider.mu.Unlock()
+
+	agg, err = provider.GetAggregateStats(context.Background())
+	if err != nil || agg.TotalRequestsPerSec != 160 {
+		t.Fatalf("expected smoothed RPS = 160, got %f", agg.TotalRequestsPerSec)
+	}
+
+	// Cycle 4: 0 reqs in 1s -> 1st idle cycle -> smoothed = 0.4 * 160 = 64
+	provider.InvalidateMetricsCache()
+	provider.mu.Lock()
+	provider.prevAggregateTime = time.Now().UTC().Add(-1 * time.Second)
+	provider.mu.Unlock()
+
+	agg, err = provider.GetAggregateStats(context.Background())
+	if err != nil || agg.TotalRequestsPerSec != 64 {
+		t.Fatalf("expected 1st idle cycle smoothed RPS = 64, got %f", agg.TotalRequestsPerSec)
+	}
+
+	// Cycle 5: 0 reqs in 1s -> 2nd consecutive idle cycle -> smoothed = 0.4 * 64 = 25.6
+	provider.InvalidateMetricsCache()
+	provider.mu.Lock()
+	provider.prevAggregateTime = time.Now().UTC().Add(-1 * time.Second)
+	provider.mu.Unlock()
+
+	agg, err = provider.GetAggregateStats(context.Background())
+	if err != nil || agg.TotalRequestsPerSec != 25.6 {
+		t.Fatalf("expected 2nd idle cycle smoothed RPS = 25.6, got %f", agg.TotalRequestsPerSec)
+	}
+}
+
+func TestTraefikProvider_MetricsCycleCaching(t *testing.T) {
+	requestCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/metrics" {
+			requestCount++
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte(`traefik_entrypoint_requests_total{code="200",entrypoint="web",method="GET",protocol="http"} 500`))
+			return
+		}
+		if r.URL.Path == "/api/http/services" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[]`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	provider := NewTraefikProvider(ts.URL, WithHTTPClient(ts.Client()))
+
+	// First call to GetAggregateStats: fetches /metrics
+	_, err := provider.GetAggregateStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetAggregateStats failed: %v", err)
+	}
+
+	// Immediate call to GetServiceStats: should use cached metrics snapshot, requestCount still 1
+	_, err = provider.GetServiceStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetServiceStats failed: %v", err)
+	}
+
+	if requestCount != 1 {
+		t.Fatalf("expected 1 scrape to /metrics within cycle cache window, got %d", requestCount)
+	}
+}
+
+func TestTraefikProvider_BackgroundScraper(t *testing.T) {
+	servicesJSON := `[{"name": "gateway@file", "status": "enabled"}]`
+	promMetrics := strings.Join([]string{
+		`traefik_entrypoint_requests_total{code="200",entrypoint="web",method="GET",protocol="http"} 1500`,
+		`traefik_service_requests_total{code="200",method="GET",protocol="http",service="gateway@file"} 1500`,
+		`traefik_open_connections{entrypoint="web",protocol="TCP"} 10`,
+	}, "\n")
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/metrics":
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte(promMetrics))
+		case "/api/http/services":
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(servicesJSON))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	provider := NewTraefikProvider(
+		ts.URL,
+		WithHTTPClient(ts.Client()),
+		WithScrapeInterval(20*time.Millisecond),
+		WithScrapeTimeout(2*time.Second),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go provider.StartBackgroundScraper(ctx)
+
+	// Wait for scraper to perform at least 1 cycle
+	time.Sleep(50 * time.Millisecond)
+
+	// Calls should return cached data immediately (0ms blocking time)
+	agg, err := provider.GetAggregateStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetAggregateStats failed: %v", err)
+	}
+	if agg.TotalRequests != 1500 {
+		t.Errorf("expected TotalRequests = 1500, got %d", agg.TotalRequests)
+	}
+	if agg.ActiveConnections != 10 {
+		t.Errorf("expected ActiveConnections = 10, got %d", agg.ActiveConnections)
+	}
+
+	services, err := provider.GetServiceStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetServiceStats failed: %v", err)
+	}
+	if len(services) != 1 || services[0].ServiceName != "gateway" {
+		t.Fatalf("expected 1 service 'gateway', got %+v", services)
+	}
+
+	// Stop scraper
+	provider.StopBackgroundScraper()
+}
+
+func TestTraefikProvider_HighLatencyScraping(t *testing.T) {
+	promMetrics := strings.Join([]string{
+		`traefik_entrypoint_requests_total{code="200",entrypoint="web",method="GET",protocol="http"} 5000`,
+		`traefik_open_connections{entrypoint="web",protocol="TCP"} 50`,
+	}, "\n")
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/metrics" {
+			// Simulate high latency under load (e.g. 50ms in test, matching 10s timeout design)
+			time.Sleep(50 * time.Millisecond)
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte(promMetrics))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	provider := NewTraefikProvider(
+		ts.URL,
+		WithHTTPClient(ts.Client()),
+		WithScrapeTimeout(5*time.Second),
+	)
+
+	agg, err := provider.GetAggregateStats(context.Background())
+	if err != nil {
+		t.Fatalf("expected high latency scrape to succeed with 5s timeout, got err: %v", err)
+	}
+	if agg.TotalRequests != 5000 {
+		t.Errorf("expected TotalRequests = 5000, got %d", agg.TotalRequests)
+	}
+}
+
+func TestTraefikProvider_UnresponsiveDegradationWithEMADecay(t *testing.T) {
+	// Server returns 500 internal server error simulating choking under 1000+ connections
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "server overloaded", http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	provider := NewTraefikProvider(
+		ts.URL,
+		WithHTTPClient(ts.Client()),
+	)
+
+	// Manually set baseline state simulating previous successful live traffic (100 RPS)
+	provider.mu.Lock()
+	provider.prevAggregateStats = entrypointSample{
+		totalRequests: 10000,
+		openConns:     25,
+	}
+	provider.prevAggregateTime = time.Now().UTC().Add(-2 * time.Second)
+	provider.prevSmoothedRPS = 100.0
+	provider.mu.Unlock()
+
+	// Call GetAggregateStats when server is failing
+	agg, err := provider.GetAggregateStats(context.Background())
+	if err != nil {
+		t.Fatalf("expected graceful degradation without error when server is choked, got: %v", err)
+	}
+
+	// Should not drop to 0 instantly, but decay smoothly from 100
+	if agg.TotalRequestsPerSec <= 0 || agg.TotalRequestsPerSec >= 100 {
+		t.Errorf("expected decayed RequestsPerSec between 0 and 100, got %f", agg.TotalRequestsPerSec)
+	}
+	if agg.TotalRequests != 10000 {
+		t.Errorf("expected last known TotalRequests = 10000, got %d", agg.TotalRequests)
+	}
+	if agg.ActiveConnections != 25 {
+		t.Errorf("expected last known ActiveConnections = 25, got %d", agg.ActiveConnections)
 	}
 }

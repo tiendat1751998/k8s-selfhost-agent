@@ -268,6 +268,10 @@ export interface DeploymentApp {
   paused?: boolean
   node?: string
   created?: string
+  cpuLimit?: string
+  cpuReservation?: string
+  memoryLimit?: string
+  memoryReservation?: string
 }
 
 export interface DeploymentTemplate {
@@ -279,6 +283,18 @@ export interface DeploymentTemplate {
   cpu: string
   mem: string
   strategy?: string
+}
+
+export interface UpdateResourcesPayload {
+  type?: string
+  cluster?: string
+  namespace?: string
+  name: string
+  replicas?: number
+  memory_limit?: string // e.g. "2GiB", "512MiB"
+  memory_reservation?: string // e.g. "512MiB"
+  cpu_limit?: string // e.g. "2", "4"
+  cpu_reservation?: string // e.g. "500m"
 }
 
 export interface ScaleDeploymentPayload {
@@ -803,6 +819,10 @@ export const deploymentsApi = {
       }
       return list.map(d => ({
         ...d,
+        cpuLimit: d.cpuLimit || (d as any).cpu_limit || d.cpu,
+        cpuReservation: d.cpuReservation || (d as any).cpu_reservation,
+        memoryLimit: d.memoryLimit || (d as any).memory_limit || d.memory,
+        memoryReservation: d.memoryReservation || (d as any).memory_reservation,
         strategy: d.strategy || 'RollingUpdate',
         canaryWeight: d.canaryWeight !== undefined ? d.canaryWeight : 0,
         canaryVersion: d.canaryVersion,
@@ -836,6 +856,10 @@ export const deploymentsApi = {
 
   async scale(payload: ScaleDeploymentPayload): Promise<{ status: string }> {
     return api.post<{ status: string }>('/deployments/scale', payload)
+  },
+
+  async updateResources(payload: UpdateResourcesPayload): Promise<{ status: string }> {
+    return api.post<{ status: string }>('/deployments/resources', payload)
   },
 
   async restart(payload: RestartDeploymentPayload): Promise<{ status: string }> {
@@ -995,9 +1019,18 @@ export const dockerApi = {
     return api.post<{ status: string }>(`/docker/containers/${id}/toggle`, { action })
   },
 
-  async getLogs(id: string, type?: string): Promise<{ logs: string }> {
+  async getLogs(id: string, type?: string, tail?: number | string, since?: string, until?: string, q?: string, level?: string, nodeId?: string): Promise<{ logs: string }> {
     const params: Record<string, string> = { id }
     if (type) params.type = type
+    if (tail !== undefined && tail !== null && tail !== '') params.tail = String(tail)
+    if (since) params.since = since
+    if (until) params.until = until
+    if (q) params.q = q
+    if (level) params.level = level
+    if (nodeId) {
+      params.node_id = nodeId
+      params.node_name = nodeId
+    }
     return api.get<{ logs: string }>('/docker/logs', params)
   },
 }
@@ -1085,6 +1118,8 @@ export interface TpsServiceMetrics {
   memory_percent: number
   rx_bytes_per_sec: number
   tx_bytes_per_sec: number
+  total_rx_bytes?: number
+  total_tx_bytes?: number
   requests_per_sec?: number
   error_rate?: number
   avg_latency_ms?: number
@@ -1110,4 +1145,73 @@ export const tpsApi = {
     return res as TpsSnapshot
   },
 }
+
+// ==========================================
+// 15. Node Historical Telemetry & Rollups
+// ==========================================
+
+export interface NodeMetricRollup {
+  id: string
+  tenant_id: string
+  node_id: string
+  node_name: string
+  cpu_percent: number
+  cpu_peak: number
+  mem_used_bytes: number
+  mem_total_bytes: number
+  mem_percent: number
+  disk_used_bytes: number
+  disk_total_bytes: number
+  disk_percent: number
+  rx_bytes_per_sec: number
+  tx_bytes_per_sec: number
+  process_count: number
+  container_count: number
+  status: string
+  resolution: string
+  recorded_at: string
+}
+
+export interface NodeHistoricalSummary {
+  node_id: string
+  node_name: string
+  avg_cpu_percent: number
+  peak_cpu_percent: number
+  avg_mem_percent: number
+  peak_mem_percent: number
+  peak_rx_bytes_sec: number
+  peak_tx_bytes_sec: number
+  uptime_percent: number
+  offline_count: number
+  total_samples: number
+  window_start: string
+  window_end: string
+}
+
+export interface NodeHistoryResponse {
+  node_id: string
+  range: string
+  resolution: string
+  summary: NodeHistoricalSummary | null
+  history: NodeMetricRollup[]
+  incidents: Incident[]
+}
+
+export const nodeHistoryApi = {
+  async getNodeHistory(nodeId: string, range = '24h', from?: string, to?: string): Promise<NodeHistoryResponse> {
+    let url = `/overview/nodes/${encodeURIComponent(nodeId)}/history?range=${encodeURIComponent(range)}`
+    if (from) {
+      url += `&from=${encodeURIComponent(from)}`
+    }
+    if (to) {
+      url += `&to=${encodeURIComponent(to)}`
+    }
+    const res = await api.get<NodeHistoryResponse | { data: NodeHistoryResponse }>(url)
+    if (res && typeof res === 'object' && 'data' in res && (res as any).data && Array.isArray((res as any).data.history)) {
+      return (res as any).data as NodeHistoryResponse
+    }
+    return res as NodeHistoryResponse
+  },
+}
+
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   overviewApi,
@@ -8,10 +8,15 @@ import {
   type NodeMetrics,
   type NetworkInterface,
   type MetricAlert,
-  type ProcessMetric,
   type TpsSnapshot,
   type TpsServiceMetrics,
 } from '../api/overview'
+import {
+  nodeHistoryApi,
+  type NodeHistoryResponse,
+  type NodeMetricRollup,
+} from '../api/compute'
+import { dockerApi } from '../api/docker'
 import { useWebSocket } from '../composables/useWebSocket'
 import CircularGauge from '../components/ui/CircularGauge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
@@ -44,11 +49,46 @@ interface TrendPoint {
 }
 const trendHistory = ref<TrendPoint[]>([])
 
-// Node diagnostics inspector drawer
+// Interactive Hover Tooltips on 5-Min Saturation Trends Chart
+const hoveredTrendIndex = ref<number | null>(null)
+const trendTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+const isTrendHovered = ref(false)
+
+// Cluster Telemetry & Throughput Deep-Dive Modal State
+const showDeepDiveModal = ref(false)
+const showModalCpu = ref(true)
+const showModalMem = ref(true)
+const showModalReqs = ref(true)
+const hoveredModalIndex = ref<number | null>(null)
+const modalTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+const isModalHovered = ref(false)
+
+// Deep-Dive Modal Services Table State
+const modalServiceSearch = ref('')
+const modalServiceSortBy = ref<'traffic' | 'rps' | 'bandwidth' | 'cpu' | 'mem' | 'name' | 'node' | 'status'>('traffic')
+const modalServiceSortOrder = ref<'asc' | 'desc'>('desc')
+
+// Node diagnostics inspector drawer & Historical telemetry
 const selectedNodeId = ref<string | null>(null)
 const showNodeDrawer = ref(false)
+const nodeDrawerMode = ref<'live' | 'history'>('live')
+const nodeHistoryRange = ref<'1h' | '3h' | '6h' | '24h' | '7d' | '30d' | 'custom'>('24h')
+const nodeHistoryLoading = ref(false)
+const nodeHistoryData = ref<NodeHistoryResponse | null>(null)
+const hoveredNodeHistIndex = ref<number | null>(null)
+const nodeHistTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+const isNodeHistHovered = ref(false)
+const showHistCpu = ref(true)
+const showHistMem = ref(true)
+const showHistDisk = ref(true)
+const customHistoryFrom = ref<string>('')
+const customHistoryTo = ref<string>('')
+const showCustomHistoryPicker = ref<boolean>(false)
 const processSearch = ref('')
-const processSortBy = ref<'cpu' | 'mem' | 'disk' | 'name' | 'pid'>('cpu')
+const processCategoryFilter = ref<'all' | 'container' | 'host_daemon' | 'kernel'>('all')
+const processSortBy = ref<'cpu' | 'mem' | 'rps' | 'bandwidth' | 'name' | 'pid'>('cpu')
+const processPageSize = ref(10)
+const processCurrentPage = ref(1)
 
 // Topology filtering & selection
 type TopologyFilter = 'all' | 'online' | 'offline'
@@ -102,10 +142,8 @@ async function fetchTpsMetrics() {
       // Keep latest trend history point aligned with accurate live throughput
       if (trendHistory.value.length > 0) {
         const lastIdx = trendHistory.value.length - 1
-        const rps = data.http?.requests_per_sec ?? 0
-        if (rps > 0 || trendHistory.value[lastIdx].reqs === 0) {
-          trendHistory.value[lastIdx].reqs = Math.round(rps)
-        }
+        const rps = effectiveHttpRps.value
+        trendHistory.value[lastIdx].reqs = Math.round(rps)
       }
     }
   } catch (err: unknown) {
@@ -113,6 +151,14 @@ async function fetchTpsMetrics() {
     tpsError.value = err instanceof Error ? err.message : 'Failed to retrieve throughput metrics'
   } finally {
     tpsLoading.value = false
+  }
+}
+
+async function pollClusterMetrics() {
+  await fetchOverview()
+  await fetchTpsMetrics()
+  if (showNodeDrawer.value && nodeDrawerMode.value === 'history' && selectedNodeId.value) {
+    loadNodeHistoryQuiet(selectedNodeId.value, nodeHistoryRange.value)
   }
 }
 
@@ -257,14 +303,14 @@ function updateOverviewState(data: SystemOverview) {
     saveSavedNodeOrder(nodeOrderKeys.value)
   }
 
-  // Push to trend history
-  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  // Push to trend history with clean 24h compact timestamp
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
   const newPoint: TrendPoint = {
     time: timeStr,
-    cpu: Math.round(data.total_cpu_percent || 0),
-    mem: Math.round(data.total_mem_percent || 0),
-    disk: Math.round(data.total_disk_percent || 0),
-    reqs: Math.round(effectiveHttpRps.value || data.requests_per_sec || 0),
+    cpu: Math.min(100, Math.max(0, Math.round(data.total_cpu_percent || 0))),
+    mem: Math.min(100, Math.max(0, Math.round(data.total_mem_percent || 0))),
+    disk: Math.min(100, Math.max(0, Math.round(data.total_disk_percent || 0))),
+    reqs: Math.max(0, Math.round(effectiveHttpRps.value || data.requests_per_sec || 0)),
   }
 
   trendHistory.value.push(newPoint)
@@ -324,6 +370,9 @@ const nodes = computed<NodeMetrics[]>(() => orderedNodes.value)
 
 // Sum container counts across all active nodes with fallback to overview container summary
 const totalContainers = computed(() => {
+  if (overview.value?.total_containers !== undefined && overview.value.total_containers >= 0 && (overview.value.containers?.length || 0) > 0) {
+    return overview.value.total_containers
+  }
   const nodeSum = (nodes.value || []).reduce((acc, n) => acc + (n.container_count || 0), 0)
   if (nodeSum > 0) return nodeSum
   if (overview.value?.total_containers && overview.value.total_containers > 0) {
@@ -333,7 +382,10 @@ const totalContainers = computed(() => {
 })
 
 const runningContainers = computed(() => {
-  const nodeSum = (nodes.value || []).reduce((acc, n) => acc + (n.running_count || n.container_count || 0), 0)
+  if (overview.value?.running_containers !== undefined && overview.value.running_containers >= 0 && (overview.value.containers?.length || 0) > 0) {
+    return overview.value.running_containers
+  }
+  const nodeSum = (nodes.value || []).reduce((acc, n) => acc + (n.running_count ?? (n.container_count || 0)), 0)
   if (nodeSum > 0) return nodeSum
   if (overview.value?.running_containers && overview.value.running_containers > 0) {
     return overview.value.running_containers
@@ -389,6 +441,34 @@ const activeAlerts = computed<MetricAlert[]>(() => {
   return alerts.filter(a => !dismissedAlerts.value.has(`${a.node_id}-${a.type}`))
 })
 
+// ==========================================
+// 3b. CLUSTER CAPACITY & HIGH-RESOLUTION COMPUTEDS
+// ==========================================
+const clusterTotalMemBytes = computed(() => {
+  return nodes.value.reduce((acc, n) => acc + (n.memory_total || 0), 0)
+})
+
+const clusterUsedMemBytes = computed(() => {
+  return nodes.value.reduce((acc, n) => acc + (n.memory_used || 0), 0)
+})
+
+const clusterTotalDiskBytes = computed(() => {
+  return nodes.value.reduce((acc, n) => acc + (n.disk_total || 0), 0)
+})
+
+const clusterUsedDiskBytes = computed(() => {
+  return nodes.value.reduce((acc, n) => acc + (n.disk_used || 0), 0)
+})
+
+const peakCpuNode = computed<NodeMetrics | null>(() => {
+  if (nodes.value.length === 0) return null
+  return [...nodes.value].sort((a, b) => (b.cpu_percent || 0) - (a.cpu_percent || 0))[0] || null
+})
+
+const clusterAvgLatencyMs = computed(() => {
+  return tpsData.value?.http?.avg_latency_ms || 0
+})
+
 // Topology Filter Counts & Predicate
 function isNodeDegradedOrOffline(n: NodeMetrics): boolean {
   const isDown = n.status === 'down' || n.status === 'disconnected' || n.status === 'error' || n.status === 'offline'
@@ -434,7 +514,11 @@ const busiestNodeId = computed<string | null>(() => {
 // Selected Node for Diagnostics Drawer (syncs live with incoming metrics)
 const selectedNode = computed<NodeMetrics | null>(() => {
   if (!selectedNodeId.value) return null
-  return nodes.value.find(n => n.node_id === selectedNodeId.value) || null
+  const idOrName = selectedNodeId.value.toLowerCase().trim()
+  return nodes.value.find(n => 
+    (n.node_id && n.node_id.toLowerCase().trim() === idOrName) || 
+    (n.node_name && n.node_name.toLowerCase().trim() === idOrName)
+  ) || null
 })
 
 // Filtered network interfaces for selected node (excluding lo and veth*)
@@ -449,8 +533,8 @@ const filteredNodeInterfaces = computed<NetworkInterface[]>(() => {
   })
 })
 
-// Filtered and sorted services running on selected node
-const nodeServices = computed<TpsServiceMetrics[]>(() => {
+// 1. Raw list of services running on selected node
+const rawNodeServices = computed<TpsServiceMetrics[]>(() => {
   if (!selectedNode.value || !tpsData.value?.services) return []
   const nodeId = (selectedNode.value.node_id || '').toLowerCase().trim()
   const nodeName = (selectedNode.value.node_name || '').toLowerCase().trim()
@@ -470,26 +554,206 @@ const nodeServices = computed<TpsServiceMetrics[]>(() => {
     }
     if (isSingleNode && (!s.node_id || sNodeId === nodeId || sNodeId === nodeName)) return true
     return false
-  }).sort((a, b) => {
-    if (b.cpu_percent !== a.cpu_percent) {
-      return b.cpu_percent - a.cpu_percent
-    }
-    return b.memory_used_mb - a.memory_used_mb
   })
 })
 
-// Filtered and sorted processes for selected node
-const filteredNodeProcesses = computed<ProcessMetric[]>(() => {
-  if (!selectedNode.value?.top_processes) return []
-  let list = [...selectedNode.value.top_processes]
+export type ProcessCategoryType = 'container' | 'host_app' | 'system'
 
+export interface UnifiedProcessItem {
+  pid: number | string
+  name: string
+  command_line?: string
+  user?: string
+  cpu_percent: number
+  memory_bytes: number
+  memory_percent?: number
+  requests_per_sec: number
+  error_rate: number
+  rx_bytes_per_sec: number
+  tx_bytes_per_sec: number
+  state: string
+  is_container: boolean
+  is_app: boolean
+  app_type: ProcessCategoryType
+  container_name?: string
+}
+
+function classifyProcessType(p: { name: string; command_line?: string; user?: string; is_container?: boolean }): ProcessCategoryType {
+  if (p.is_container) return 'container'
+
+  const name = (p.name || '').toLowerCase()
+  const cmd = (p.command_line || '').toLowerCase()
+  const user = (p.user || '').toLowerCase()
+
+  // 1. Definite OS Kernel threads: [rcu_preempt], [ksoftirqd], etc.
+  if (name.startsWith('[') || name.endsWith(']') || cmd.startsWith('[') || cmd.endsWith(']')) {
+    return 'system'
+  }
+
+  // 2. Definite Core OS system init & maintenance daemons
+  const coreOsSystemDaemons = [
+    'systemd', 'journald', 'udevd', 'resolved', 'timesyncd', 'logind', 'dbus-daemon',
+    'polkitd', 'accounts-daemon', 'cron', 'crond', 'rsyslogd', 'agetty', 'login',
+    'irqbalance', 'multipathd', 'thermald', 'snapd', 'unattended-upgr', 'packagekitd',
+    'auditd', 'acpid', 'atd', 'smartd'
+  ]
+  if (coreOsSystemDaemons.some(d => name === d || name.startsWith(d) || name.endsWith(d))) {
+    return 'system'
+  }
+
+  // 3. User-space non-root application (e.g. datdt, proxysql, postgres, redis, mysql, www-data, app)
+  if (user && user !== 'root' && user !== 'daemon' && user !== 'sys') {
+    return 'host_app'
+  }
+
+  // 4. Known App & Platform service binaries
+  const knownAppKeywords = [
+    'k8s-agent', 'k8s-master', 'k8s-controller', 'hermes', 'proxysql', 'dockerd', 'containerd',
+    'traefik', 'redis', 'nats', 'postgres', 'pgsql', 'mysql', 'mariadb', 'nginx', 'caddy',
+    'envoy', 'prometheus', 'grafana', 'vector', 'fluent', 'loki', 'alloy', 'vault', 'consul',
+    'etcd', 'kubelet', 'kube-proxy', 'node', 'python', 'java', 'golang', 'ruby', 'php',
+    'uvicorn', 'gunicorn', 'vite', 'cargo', 'dotnet', 'celery'
+  ]
+  if (knownAppKeywords.some(k => name.includes(k) || cmd.includes(k))) {
+    return 'host_app'
+  }
+
+  // 5. Command path in user home or custom app directories
+  if (cmd.includes('/home/') || cmd.includes('/opt/') || cmd.includes('/srv/') || cmd.includes('/app/') || cmd.includes('/usr/local/')) {
+    return 'host_app'
+  }
+
+  return 'system'
+}
+
+// Unified processes + container workloads for selected node
+const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
+  const procs = selectedNode.value?.top_processes || []
+  const services = rawNodeServices.value || []
+  const matchedServices = new Set<string>()
+
+  const list: UnifiedProcessItem[] = procs.map(p => {
+    const pName = (p.name || '').toLowerCase()
+    const pCmd = (p.command_line || '').toLowerCase()
+
+    // Find matching container service
+    const matchedSvc = services.find(s => {
+      const sName = (s.service_name || '').toLowerCase()
+      const sClean = sName.replace(/^(tiki_|k8s_|docker_)/, '')
+      return (
+        sName === pName ||
+        pName.includes(sClean) ||
+        pCmd.includes(sName) ||
+        pCmd.includes(sClean) ||
+        (sClean === 'redis' && (pName.includes('redis') || pCmd.includes('redis'))) ||
+        (sClean === 'traefik' && (pName.includes('traefik') || pCmd.includes('traefik'))) ||
+        (sClean === 'nats' && (pName.includes('nats') || pCmd.includes('nats'))) ||
+        ((sClean === 'postgres' || sClean === 'db') && (pName.includes('postgres') || pCmd.includes('postgres')))
+      )
+    })
+
+    if (matchedSvc) {
+      matchedServices.add(matchedSvc.service_name)
+      return {
+        pid: p.pid,
+        name: matchedSvc.service_name,
+        command_line: p.command_line || p.name,
+        user: p.user || 'root',
+        cpu_percent: Math.max(p.cpu_percent || 0, matchedSvc.cpu_percent || 0),
+        memory_bytes: Math.max(p.memory_bytes || 0, (matchedSvc.memory_used_mb || 0) * 1024 * 1024),
+        memory_percent: p.memory_percent,
+        requests_per_sec: matchedSvc.requests_per_sec || 0,
+        error_rate: matchedSvc.error_rate || 0,
+        rx_bytes_per_sec: matchedSvc.rx_bytes_per_sec || p.read_bytes_per_sec || 0,
+        tx_bytes_per_sec: matchedSvc.tx_bytes_per_sec || p.write_bytes_per_sec || 0,
+        state: matchedSvc.status === 'healthy' || matchedSvc.status === 'running' ? 'healthy' : (p.state || 'running'),
+        is_container: true,
+        is_app: true,
+        app_type: 'container',
+        container_name: matchedSvc.service_name,
+      }
+    }
+
+    const appType = classifyProcessType({ name: p.name, command_line: p.command_line, user: p.user, is_container: false })
+    return {
+      pid: p.pid,
+      name: p.name,
+      command_line: p.command_line,
+      user: p.user || 'root',
+      cpu_percent: p.cpu_percent || 0,
+      memory_bytes: p.memory_bytes || 0,
+      memory_percent: p.memory_percent,
+      requests_per_sec: 0,
+      error_rate: 0,
+      rx_bytes_per_sec: p.read_bytes_per_sec || 0,
+      tx_bytes_per_sec: p.write_bytes_per_sec || 0,
+      state: p.state || 'running',
+      is_container: false,
+      is_app: appType !== 'system',
+      app_type: appType,
+    }
+  })
+
+  // Append any container services that didn't match an OS PID
+  for (const s of services) {
+    if (!matchedServices.has(s.service_name)) {
+      list.unshift({
+        pid: 'CTR',
+        name: s.service_name,
+        command_line: `Container Service: ${s.service_name}`,
+        user: 'docker',
+        cpu_percent: s.cpu_percent || 0,
+        memory_bytes: (s.memory_used_mb || 0) * 1024 * 1024,
+        requests_per_sec: s.requests_per_sec || 0,
+        error_rate: s.error_rate || 0,
+        rx_bytes_per_sec: s.rx_bytes_per_sec || 0,
+        tx_bytes_per_sec: s.tx_bytes_per_sec || 0,
+        state: s.status || 'healthy',
+        is_container: true,
+        is_app: true,
+        app_type: 'container',
+        container_name: s.service_name,
+      })
+    }
+  }
+
+  return list
+})
+
+const processCategoryCounts = computed(() => {
+  const all = unifiedNodeProcesses.value
+  let container = 0
+  let hostDaemon = 0
+  let kernel = 0
+  for (const p of all) {
+    if (p.app_type === 'container') container++
+    else if (p.app_type === 'host_app') hostDaemon++
+    else kernel++
+  }
+  return { total: all.length, container, hostDaemon, kernel }
+})
+
+// Filtered and sorted processes for selected node
+const filteredNodeProcesses = computed<UnifiedProcessItem[]>(() => {
+  let list = [...unifiedNodeProcesses.value]
+
+  // Category filter
+  if (processCategoryFilter.value === 'container') {
+    list = list.filter(p => p.app_type === 'container')
+  } else if (processCategoryFilter.value === 'host_daemon') {
+    list = list.filter(p => p.app_type === 'host_app')
+  } else if (processCategoryFilter.value === 'kernel') {
+    list = list.filter(p => p.app_type === 'system')
+  }
+
+  // Search text filter
   if (processSearch.value.trim()) {
     const q = processSearch.value.toLowerCase().trim()
     list = list.filter(p =>
       p.name.toLowerCase().includes(q) ||
       (p.command_line && p.command_line.toLowerCase().includes(q)) ||
       (p.user && p.user.toLowerCase().includes(q)) ||
-      String(p.pid).includes(q)
+      String(p.pid).toLowerCase().includes(q)
     )
   }
 
@@ -497,10 +761,16 @@ const filteredNodeProcesses = computed<ProcessMetric[]>(() => {
     list.sort((a, b) => (b.cpu_percent || 0) - (a.cpu_percent || 0))
   } else if (processSortBy.value === 'mem') {
     list.sort((a, b) => (b.memory_bytes || 0) - (a.memory_bytes || 0))
-  } else if (processSortBy.value === 'disk') {
-    list.sort((a, b) => ((b.read_bytes_per_sec || 0) + (b.write_bytes_per_sec || 0)) - ((a.read_bytes_per_sec || 0) + (a.write_bytes_per_sec || 0)))
+  } else if (processSortBy.value === 'rps') {
+    list.sort((a, b) => (b.requests_per_sec || 0) - (a.requests_per_sec || 0))
+  } else if (processSortBy.value === 'bandwidth') {
+    list.sort((a, b) => ((b.rx_bytes_per_sec || 0) + (b.tx_bytes_per_sec || 0)) - ((a.rx_bytes_per_sec || 0) + (a.tx_bytes_per_sec || 0)))
   } else if (processSortBy.value === 'pid') {
-    list.sort((a, b) => a.pid - b.pid)
+    list.sort((a, b) => {
+      const pA = typeof a.pid === 'number' ? a.pid : 999999
+      const pB = typeof b.pid === 'number' ? b.pid : 999999
+      return pA - pB
+    })
   } else if (processSortBy.value === 'name') {
     list.sort((a, b) => a.name.localeCompare(b.name))
   }
@@ -508,15 +778,841 @@ const filteredNodeProcesses = computed<ProcessMetric[]>(() => {
   return list
 })
 
+const totalProcessPages = computed(() => {
+  return Math.ceil(filteredNodeProcesses.value.length / processPageSize.value) || 1
+})
+
+const paginatedNodeProcesses = computed(() => {
+  const start = (processCurrentPage.value - 1) * processPageSize.value
+  return filteredNodeProcesses.value.slice(start, start + processPageSize.value)
+})
+
 
 // ==========================================
 // 4. FORMATTING & HELPER FUNCTIONS
 // ==========================================
+async function loadNodeHistory(nodeId?: string, range = nodeHistoryRange.value, from?: string, to?: string) {
+  const targetId = nodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
+  if (!targetId) return
+  nodeHistoryLoading.value = true
+  nodeHistoryRange.value = range as any
+  try {
+    let fromParam = from
+    let toParam = to
+    if (range === 'custom') {
+      fromParam = from || customHistoryFrom.value
+      toParam = to || customHistoryTo.value
+      if (fromParam) {
+        try {
+          fromParam = new Date(fromParam).toISOString()
+        } catch {}
+      }
+      if (toParam) {
+        try {
+          toParam = new Date(toParam).toISOString()
+        } catch {}
+      }
+    }
+    const res = await nodeHistoryApi.getNodeHistory(targetId, range, fromParam, toParam)
+    nodeHistoryData.value = res
+  } catch (err) {
+    console.warn('Failed to load node history:', err)
+  } finally {
+    nodeHistoryLoading.value = false
+  }
+}
+
+async function loadNodeHistoryQuiet(nodeId?: string, range = nodeHistoryRange.value) {
+  const targetId = nodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
+  if (!targetId || nodeHistoryLoading.value) return
+  try {
+    let fromParam: string | undefined
+    let toParam: string | undefined
+    if (range === 'custom') {
+      fromParam = customHistoryFrom.value ? new Date(customHistoryFrom.value).toISOString() : undefined
+      toParam = customHistoryTo.value ? new Date(customHistoryTo.value).toISOString() : undefined
+    }
+    const res = await nodeHistoryApi.getNodeHistory(targetId, range, fromParam, toParam)
+    if (res && res.history) {
+      nodeHistoryData.value = res
+    }
+  } catch {
+    // quiet background sync
+  }
+}
+
+// Real App Logs in Node History
+const selectedLogApp = ref<string>('tiki_traefik')
+const selectedLogLevel = ref<'all' | 'error' | 'warn'>('all')
+const selectedLogTail = ref<number | string>(100)
+const selectedLogSince = ref<string>('all')
+const appLogSearch = ref<string>('')
+const appLogsText = ref<string>('')
+const appLogsLoading = ref<boolean>(false)
+const appLogsError = ref<string | null>(null)
+const appLogsCopied = ref<boolean>(false)
+
+// Custom Date-Time Range Selector State
+const customLogFrom = ref<string>('')
+const customLogTo = ref<string>('')
+const showCustomDatePicker = ref<boolean>(false)
+
+function formatDateTimeLocal(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const yyyy = date.getFullYear()
+  const MM = pad(date.getMonth() + 1)
+  const dd = pad(date.getDate())
+  const hh = pad(date.getHours())
+  const mm = pad(date.getMinutes())
+  return `${yyyy}-${MM}-${dd}T${hh}:${mm}`
+}
+
+function toggleCustomHistoryPicker() {
+  showCustomHistoryPicker.value = !showCustomHistoryPicker.value
+  if (showCustomHistoryPicker.value) {
+    nodeHistoryRange.value = 'custom'
+    if (!customHistoryFrom.value || !customHistoryTo.value) {
+      const now = new Date()
+      const past = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      customHistoryTo.value = formatDateTimeLocal(now)
+      customHistoryFrom.value = formatDateTimeLocal(past)
+    }
+    loadNodeHistory(selectedNode.value?.node_id || selectedNode.value?.node_name || undefined, 'custom', customHistoryFrom.value, customHistoryTo.value)
+  }
+}
+
+function applyLogPreset(preset: '30m' | '2h' | '6h' | 'today', autoFetch = true) {
+  const now = new Date()
+  customLogTo.value = formatDateTimeLocal(now)
+  let from = new Date()
+  if (preset === '30m') {
+    from = new Date(now.getTime() - 30 * 60 * 1000)
+  } else if (preset === '2h') {
+    from = new Date(now.getTime() - 2 * 60 * 60 * 1000)
+  } else if (preset === '6h') {
+    from = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+  } else if (preset === 'today') {
+    from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
+  }
+  customLogFrom.value = formatDateTimeLocal(from)
+  if (autoFetch) {
+    fetchNodeAppLogs(selectedLogApp.value)
+  }
+}
+
+function formatBadgeDate(dt: string): string {
+  if (!dt) return ''
+  return dt.replace('T', ' ')
+}
+
+// Real-Time Live Auto-Tail & Scroll State
+const isLogStreaming = ref<boolean>(true)
+const logStreamInterval = ref<any>(null)
+const autoScrollLogs = ref<boolean>(true)
+const userScrolledUp = ref<boolean>(false)
+const terminalBodyRef = ref<HTMLElement | null>(null)
+
+interface ParsedLogLine {
+  id: number
+  raw: string
+  cleanText: string
+  level: 'error' | 'warn' | 'info' | 'debug'
+  timestamp?: string
+}
+
+async function fetchNodeAppLogs(appName?: string) {
+  const targetApp = appName || selectedLogApp.value || 'tiki_traefik'
+  selectedLogApp.value = targetApp
+  appLogsLoading.value = true
+  appLogsError.value = null
+  try {
+    const tailParam = selectedLogTail.value === 'all' ? 'all' : String(selectedLogTail.value)
+    let sinceParam = ''
+    let untilParam = ''
+
+    if (selectedLogSince.value === 'custom') {
+      if (customLogFrom.value) {
+        try {
+          sinceParam = new Date(customLogFrom.value).toISOString()
+        } catch {
+          sinceParam = customLogFrom.value
+        }
+      }
+      if (customLogTo.value) {
+        try {
+          untilParam = new Date(customLogTo.value).toISOString()
+        } catch {
+          untilParam = customLogTo.value
+        }
+      }
+    } else if (selectedLogSince.value !== 'all') {
+      sinceParam = selectedLogSince.value
+    }
+
+    const searchParam = appLogSearch.value.trim() || undefined
+    const filterLevel = selectedLogLevel.value !== 'all' ? selectedLogLevel.value : undefined
+    const nodeTarget = selectedNode.value?.node_id || selectedNode.value?.node_name
+
+    let res: { logs: string } | null = null
+    try {
+      res = await dockerApi.getLogs(targetApp, 'service', tailParam, sinceParam, untilParam, searchParam, filterLevel, nodeTarget)
+    } catch {
+      res = await dockerApi.getLogs(targetApp, 'container', tailParam, sinceParam, untilParam, searchParam, filterLevel, nodeTarget)
+    }
+
+    if (res && typeof res.logs === 'string' && res.logs.trim().length > 0) {
+      appLogsText.value = res.logs
+    } else {
+      const windowInfo = selectedLogSince.value === 'custom'
+        ? `custom: ${formatBadgeDate(customLogFrom.value) || 'start'} → ${formatBadgeDate(customLogTo.value) || 'now'}`
+        : `since=${selectedLogSince.value}`
+      appLogsText.value = `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (${windowInfo}, tail=${selectedLogTail.value})]`
+    }
+
+    if (autoScrollLogs.value && !userScrolledUp.value) {
+      nextTick(() => {
+        if (terminalBodyRef.value) {
+          terminalBodyRef.value.scrollTop = terminalBodyRef.value.scrollHeight
+        }
+      })
+    }
+  } catch (err: any) {
+    console.warn('Failed to fetch logs for', targetApp, err)
+    appLogsError.value = err?.message || `Failed to fetch logs for ${targetApp}`
+    appLogsText.value = ''
+  } finally {
+    appLogsLoading.value = false
+  }
+}
+
+async function fetchNodeAppLogsQuiet(appName?: string) {
+  const targetApp = appName || selectedLogApp.value || 'tiki_traefik'
+  try {
+    const tailParam = selectedLogTail.value === 'all' ? 'all' : String(selectedLogTail.value)
+    let sinceParam = ''
+    let untilParam = ''
+
+    if (selectedLogSince.value === 'custom') {
+      if (customLogFrom.value) {
+        try {
+          sinceParam = new Date(customLogFrom.value).toISOString()
+        } catch {
+          sinceParam = customLogFrom.value
+        }
+      }
+      if (customLogTo.value) {
+        try {
+          untilParam = new Date(customLogTo.value).toISOString()
+        } catch {
+          untilParam = customLogTo.value
+        }
+      }
+    } else if (selectedLogSince.value !== 'all') {
+      sinceParam = selectedLogSince.value
+    }
+
+    const searchParam = appLogSearch.value.trim() || undefined
+    const filterLevel = selectedLogLevel.value !== 'all' ? selectedLogLevel.value : undefined
+    const nodeTarget = selectedNode.value?.node_id || selectedNode.value?.node_name
+
+    let res: { logs: string } | null = null
+    try {
+      res = await dockerApi.getLogs(targetApp, 'service', tailParam, sinceParam, untilParam, searchParam, filterLevel, nodeTarget)
+    } catch {
+      res = await dockerApi.getLogs(targetApp, 'container', tailParam, sinceParam, untilParam, searchParam, filterLevel, nodeTarget)
+    }
+
+    const windowInfo = selectedLogSince.value === 'custom'
+      ? `custom: ${formatBadgeDate(customLogFrom.value) || 'start'} → ${formatBadgeDate(customLogTo.value) || 'now'}`
+      : `since=${selectedLogSince.value}`
+
+    const newLogs = (res && typeof res.logs === 'string' && res.logs.trim().length > 0)
+      ? res.logs
+      : `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (${windowInfo}, tail=${selectedLogTail.value})]`
+
+    if (appLogsText.value !== newLogs) {
+      appLogsText.value = newLogs
+      if (autoScrollLogs.value && !userScrolledUp.value) {
+        nextTick(() => {
+          if (terminalBodyRef.value) {
+            terminalBodyRef.value.scrollTop = terminalBodyRef.value.scrollHeight
+          }
+        })
+      }
+    }
+  } catch (err: any) {
+    console.warn('Failed to quietly fetch logs for', targetApp, err)
+  }
+}
+
+function startLogStream() {
+  stopLogStream()
+  if (!isLogStreaming.value) return
+  logStreamInterval.value = setInterval(() => {
+    if (showNodeDrawer.value && nodeDrawerMode.value === 'history') {
+      fetchNodeAppLogsQuiet()
+    }
+  }, 3000)
+}
+
+function stopLogStream() {
+  if (logStreamInterval.value) {
+    clearInterval(logStreamInterval.value)
+    logStreamInterval.value = null
+  }
+}
+
+function toggleLogStreaming() {
+  isLogStreaming.value = !isLogStreaming.value
+  if (isLogStreaming.value) {
+    fetchNodeAppLogsQuiet()
+    startLogStream()
+  } else {
+    stopLogStream()
+  }
+}
+
+function handleTerminalScroll(e: Event) {
+  const el = e.target as HTMLElement
+  if (!el) return
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) {
+    userScrolledUp.value = false
+  } else {
+    userScrolledUp.value = true
+  }
+}
+
+function scrollToBottom() {
+  userScrolledUp.value = false
+  nextTick(() => {
+    if (terminalBodyRef.value) {
+      terminalBodyRef.value.scrollTo({
+        top: terminalBodyRef.value.scrollHeight,
+        behavior: 'smooth'
+      })
+    }
+  })
+}
+
+function selectIncidentLog(inc: any) {
+  const target = inc.pod_name || inc.raw_data?.service_name || inc.raw_data?.container_name || 'tiki_traefik'
+  selectedLogApp.value = target
+  fetchNodeAppLogs(target)
+  if (isLogStreaming.value) {
+    startLogStream()
+  }
+}
+
+function copyAppLogs() {
+  const text = parsedAppLogLines.value.map(l => l.cleanText).join('\n')
+  navigator.clipboard.writeText(text || appLogsText.value)
+  appLogsCopied.value = true
+  setTimeout(() => {
+    appLogsCopied.value = false
+  }, 2000)
+}
+
+function downloadAppLogs() {
+  const content = parsedAppLogLines.value.map(l => l.cleanText).join('\n') || appLogsText.value
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${selectedLogApp.value}_${selectedNode.value?.node_name || 'node'}_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.log`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+const nodeAvailableLogApps = computed(() => {
+  const list: { name: string; type: 'container' | 'host'; icon: string }[] = []
+  const seen = new Set<string>()
+
+  for (const s of rawNodeServices.value || []) {
+    if (s.service_name && !seen.has(s.service_name)) {
+      seen.add(s.service_name)
+      list.push({ name: s.service_name, type: 'container', icon: '📦' })
+    }
+  }
+
+  for (const p of unifiedNodeProcesses.value || []) {
+    if (p.is_container && !seen.has(p.name)) {
+      seen.add(p.name)
+      list.push({ name: p.name, type: 'container', icon: '📦' })
+    }
+  }
+
+  if (list.length === 0) {
+    list.push({ name: 'tiki_traefik', type: 'container', icon: '📦' })
+    list.push({ name: 'tiki_redis', type: 'container', icon: '📦' })
+    list.push({ name: 'nats', type: 'container', icon: '📦' })
+    list.push({ name: 'db', type: 'container', icon: '📦' })
+    list.push({ name: 'registry', type: 'container', icon: '📦' })
+  }
+
+  return list
+})
+
+function classifyLogLevel(cleanLine: string): 'error' | 'warn' | 'info' | 'debug' {
+  if (!cleanLine) return 'info'
+
+  // 1. Check explicit level tags first (e.g. Traefik WRN, Go/NATS [WARN], level=warn, "level":"warn")
+  // Structured level indicators (JSON or logfmt key-value)
+  if (
+    /level\s*[:=]\s*"?warn(ing)?"?/i.test(cleanLine) ||
+    /\[\s*(wrn|warn|warning)\s*\]/i.test(cleanLine)
+  ) {
+    return 'warn'
+  }
+  if (
+    /level\s*[:=]\s*"?error"?/i.test(cleanLine) ||
+    /level\s*[:=]\s*"?fatal"?/i.test(cleanLine) ||
+    /level\s*[:=]\s*"?panic"?/i.test(cleanLine) ||
+    /\[\s*(err|error|fatal|panic)\s*\]/i.test(cleanLine)
+  ) {
+    return 'error'
+  }
+  if (
+    /level\s*[:=]\s*"?debug"?/i.test(cleanLine) ||
+    /level\s*[:=]\s*"?trace"?/i.test(cleanLine) ||
+    /\[\s*(dbg|debug|trace)\s*\]/i.test(cleanLine)
+  ) {
+    return 'debug'
+  }
+  if (
+    /level\s*[:=]\s*"?info"?/i.test(cleanLine) ||
+    /\[\s*(inf|info)\s*\]/i.test(cleanLine)
+  ) {
+    return 'info'
+  }
+
+  // Explicit word-boundary level tags (e.g. Traefik WRN, ERR, INF, DBG)
+  if (/\b(wrn|warn|warning)\b/i.test(cleanLine)) {
+    return 'warn'
+  }
+  if (/\b(err|error|fatal|panic)\b/i.test(cleanLine)) {
+    return 'error'
+  }
+  if (/\b(dbg|debug|trace)\b/i.test(cleanLine)) {
+    return 'debug'
+  }
+  if (/\b(inf|info)\b/i.test(cleanLine)) {
+    return 'info'
+  }
+
+  // 2. Fallback heuristic for lines without explicit level tokens
+  const cleanLower = cleanLine.toLowerCase()
+  if (
+    cleanLower.includes('fail') ||
+    cleanLower.includes('fatal') ||
+    cleanLower.includes('panic') ||
+    cleanLower.includes('exception') ||
+    cleanLower.includes('context deadline exceeded')
+  ) {
+    return 'error'
+  }
+  if (cleanLower.includes('warn')) {
+    return 'warn'
+  }
+
+  return 'info'
+}
+
+const parsedAppLogLines = computed<ParsedLogLine[]>(() => {
+  if (!appLogsText.value) return []
+  const rawLines = appLogsText.value.split('\n')
+  const q = appLogSearch.value.toLowerCase().trim()
+  const filterLevel = selectedLogLevel.value
+
+  const lines: ParsedLogLine[] = []
+  for (let i = 0; i < rawLines.length; i++) {
+    const raw = rawLines[i]
+    if (!raw.trim()) continue
+
+    // Strip ANSI codes
+    const clean = raw.replace(/\u001b\[[0-9;]*m/g, '')
+    const cleanLower = clean.toLowerCase()
+    const level = classifyLogLevel(clean)
+
+    if (filterLevel === 'error' && level !== 'error') continue
+    if (filterLevel === 'warn' && level !== 'warn') continue
+
+    if (q && !cleanLower.includes(q)) continue
+
+    lines.push({
+      id: i + 1,
+      raw,
+      cleanText: clean,
+      level,
+    })
+  }
+
+  return lines
+})
+
+const appLogLevelCounts = computed(() => {
+  if (!appLogsText.value) return { total: 0, error: 0, warn: 0, info: 0 }
+  const rawLines = appLogsText.value.split('\n')
+  let error = 0
+  let warn = 0
+  let info = 0
+  for (const raw of rawLines) {
+    if (!raw.trim()) continue
+    const clean = raw.replace(/\u001b\[[0-9;]*m/g, '')
+    const level = classifyLogLevel(clean)
+    if (level === 'error') {
+      error++
+    } else if (level === 'warn') {
+      warn++
+    } else {
+      info++
+    }
+  }
+  return { total: error + warn + info, error, warn, info }
+})
+
+function switchNodeDrawerToHistory(range: '1h' | '3h' | '6h' | '24h' | '7d' | '30d' | 'custom' = '24h') {
+  nodeDrawerMode.value = 'history'
+  if (range !== 'custom') {
+    showCustomHistoryPicker.value = false
+  } else {
+    showCustomHistoryPicker.value = true
+  }
+  loadNodeHistory(selectedNode.value?.node_id || selectedNode.value?.node_name || undefined, range)
+  if (!appLogsText.value) {
+    const firstSvc = rawNodeServices.value?.[0]?.service_name || 'tiki_traefik'
+    selectedLogApp.value = firstSvc
+    fetchNodeAppLogs(firstSvc)
+  }
+  if (isLogStreaming.value) {
+    startLogStream()
+  }
+}
+
+watch([selectedLogApp, selectedLogTail, selectedLogSince], () => {
+  if (selectedLogSince.value === 'custom') {
+    showCustomDatePicker.value = true
+    if (!customLogFrom.value || !customLogTo.value) {
+      applyLogPreset('2h', false)
+    }
+  } else {
+    showCustomDatePicker.value = false
+  }
+
+  if (showNodeDrawer.value && nodeDrawerMode.value === 'history') {
+    fetchNodeAppLogs(selectedLogApp.value)
+    if (isLogStreaming.value) {
+      startLogStream()
+    }
+  }
+})
+
+watch([showNodeDrawer, nodeDrawerMode], ([show, mode]) => {
+  if (show && mode === 'history') {
+    if (isLogStreaming.value) {
+      startLogStream()
+    }
+  } else {
+    stopLogStream()
+  }
+})
+
 function inspectNode(node: NodeMetrics) {
-  selectedNodeId.value = node.node_id
+  selectedNodeId.value = node.node_id || node.node_name || ''
   processSearch.value = ''
+  processCategoryFilter.value = 'all'
   processSortBy.value = 'cpu'
+  processCurrentPage.value = 1
+  processPageSize.value = 10
+  nodeDrawerMode.value = 'live'
   showNodeDrawer.value = true
+  loadNodeHistory(node.node_id || node.node_name, '24h')
+}
+
+// Point-in-Time Log Synchronization
+function syncLogsToPointInTime(point?: NodeMetricRollup | null) {
+  const targetPoint = point || hoveredNodeHistPoint.value
+  if (!targetPoint || !targetPoint.recorded_at) return
+
+  const centerTime = new Date(targetPoint.recorded_at).getTime()
+  if (isNaN(centerTime)) return
+
+  const fromTime = new Date(centerTime - 15 * 60 * 1000)
+  const toTime = new Date(centerTime + 15 * 60 * 1000)
+
+  customLogFrom.value = formatDateTimeLocal(fromTime)
+  customLogTo.value = formatDateTimeLocal(toTime)
+  selectedLogSince.value = 'custom'
+  showCustomDatePicker.value = true
+
+  // Fetch logs for this point-in-time window
+  fetchNodeAppLogs(selectedLogApp.value)
+
+  // Scroll down to the log incidents / terminal viewer
+  nextTick(() => {
+    const el = document.querySelector('.node-incidents-section') || terminalBodyRef.value
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+}
+
+function handleNodeHistChartClick() {
+  if (hoveredNodeHistPoint.value) {
+    syncLogsToPointInTime(hoveredNodeHistPoint.value)
+  }
+}
+
+// ==========================================
+// 4e. NODE HISTORICAL TELEMETRY COMPUTEDS
+// ==========================================
+const HIST_Y_BOTTOM = 180
+const HIST_Y_HEIGHT = 160 // 180 - 20
+const HIST_X_LEFT = 50
+const HIST_X_RIGHT = 720
+const HIST_X_WIDTH = 670 // 720 - 50
+
+const nodeHistoryWindowBadge = computed(() => {
+  const count = nodeHistoryList.value.length
+  if (nodeHistoryRange.value === 'custom') {
+    const fromStr = customHistoryFrom.value ? formatBadgeDate(customHistoryFrom.value) : 'Start'
+    const toStr = customHistoryTo.value ? formatBadgeDate(customHistoryTo.value) : 'Now'
+    return `📅 Window: ${fromStr} → ${toStr} (${count} sample${count === 1 ? '' : 's'} in window)`
+  }
+  if (nodeHistoryData.value?.summary?.window_start && nodeHistoryData.value?.summary?.window_end) {
+    const fromStr = new Date(nodeHistoryData.value.summary.window_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' })
+    const toStr = new Date(nodeHistoryData.value.summary.window_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' })
+    return `📅 Window: ${fromStr} → ${toStr} (${count} sample${count === 1 ? '' : 's'} in window)`
+  }
+  const rangeLabels: Record<string, string> = { '1h': 'Last 1h', '3h': 'Last 3h', '6h': 'Last 6h', '24h': 'Last 24h', '7d': 'Last 7d', '30d': 'Last 30d' }
+  const rLabel = rangeLabels[nodeHistoryRange.value] || nodeHistoryRange.value
+  return `📅 Window: ${rLabel} (${count} sample${count === 1 ? '' : 's'} in window)`
+})
+
+const nodeHistoryList = computed<NodeMetricRollup[]>(() => {
+  const base = nodeHistoryData.value?.history ? [...nodeHistoryData.value.history] : []
+  const node = selectedNode.value
+  if (!node) return base
+
+  const now = new Date()
+  const isCustomHistorical = nodeHistoryRange.value === 'custom' && customHistoryTo.value && (now.getTime() - new Date(customHistoryTo.value).getTime() > 10 * 60 * 1000)
+
+  if (isCustomHistorical) {
+    return base
+  }
+
+  const liveSample: NodeMetricRollup = {
+    id: `live-${node.node_id || node.node_name}`,
+    tenant_id: 'default',
+    node_id: node.node_id || node.node_name,
+    node_name: node.node_name,
+    cpu_percent: node.cpu_percent || 0,
+    cpu_peak: Math.max(node.cpu_percent || 0, nodeHistoryData.value?.summary?.peak_cpu_percent || 0),
+    mem_used_bytes: node.memory_used || 0,
+    mem_total_bytes: node.memory_total || 0,
+    mem_percent: node.memory_percent || 0,
+    disk_used_bytes: node.disk_used || 0,
+    disk_total_bytes: node.disk_total || 0,
+    disk_percent: node.disk_percent || 0,
+    rx_bytes_per_sec: (node.network_rx_bytes || 0),
+    tx_bytes_per_sec: (node.network_tx_bytes || 0),
+    process_count: node.container_count || 0,
+    container_count: node.container_count || 0,
+    status: node.status || 'online',
+    resolution: 'live',
+    recorded_at: now.toISOString(),
+  }
+
+  if (base.length === 0) {
+    return [liveSample]
+  }
+
+  const last = base[base.length - 1]
+  const lastTime = new Date(last.recorded_at).getTime()
+  // If last point in history is from within 20s, update it with live values
+  if (now.getTime() - lastTime < 20000) {
+    base[base.length - 1] = {
+      ...last,
+      cpu_percent: node.cpu_percent || last.cpu_percent,
+      cpu_peak: Math.max(node.cpu_percent || 0, last.cpu_peak),
+      mem_percent: node.memory_percent || last.mem_percent,
+      disk_percent: node.disk_percent || last.disk_percent,
+      rx_bytes_per_sec: (node.network_rx_bytes || last.rx_bytes_per_sec || 0),
+      tx_bytes_per_sec: (node.network_tx_bytes || last.tx_bytes_per_sec || 0),
+    }
+  } else {
+    base.push(liveSample)
+  }
+
+  return base
+})
+
+const nodeHistoryChartCpuPath = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return ''
+  if (list.length === 1) {
+    const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, list[0].cpu_percent)) / 100) * HIST_Y_HEIGHT
+    return `M ${HIST_X_LEFT} ${y.toFixed(1)} L ${HIST_X_RIGHT} ${y.toFixed(1)}`
+  }
+  const step = HIST_X_WIDTH / (list.length - 1)
+  return list
+    .map((h, i) => {
+      const x = HIST_X_LEFT + i * step
+      const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, h.cpu_percent)) / 100) * HIST_Y_HEIGHT
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const nodeHistoryChartCpuArea = computed(() => {
+  if (!nodeHistoryChartCpuPath.value || nodeHistoryList.value.length === 0) return ''
+  const list = nodeHistoryList.value
+  const firstX = HIST_X_LEFT
+  const lastX = list.length === 1 ? HIST_X_RIGHT : HIST_X_LEFT + (list.length - 1) * (HIST_X_WIDTH / (list.length - 1))
+  return `${nodeHistoryChartCpuPath.value} L ${lastX.toFixed(1)} ${HIST_Y_BOTTOM} L ${firstX.toFixed(1)} ${HIST_Y_BOTTOM} Z`
+})
+
+const nodeHistoryChartMemPath = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return ''
+  if (list.length === 1) {
+    const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, list[0].mem_percent)) / 100) * HIST_Y_HEIGHT
+    return `M ${HIST_X_LEFT} ${y.toFixed(1)} L ${HIST_X_RIGHT} ${y.toFixed(1)}`
+  }
+  const step = HIST_X_WIDTH / (list.length - 1)
+  return list
+    .map((h, i) => {
+      const x = HIST_X_LEFT + i * step
+      const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, h.mem_percent)) / 100) * HIST_Y_HEIGHT
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const nodeHistoryChartMemArea = computed(() => {
+  if (!nodeHistoryChartMemPath.value || nodeHistoryList.value.length === 0) return ''
+  const list = nodeHistoryList.value
+  const firstX = HIST_X_LEFT
+  const lastX = list.length === 1 ? HIST_X_RIGHT : HIST_X_LEFT + (list.length - 1) * (HIST_X_WIDTH / (list.length - 1))
+  return `${nodeHistoryChartMemPath.value} L ${lastX.toFixed(1)} ${HIST_Y_BOTTOM} L ${firstX.toFixed(1)} ${HIST_Y_BOTTOM} Z`
+})
+
+const nodeHistoryChartDiskPath = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return ''
+  if (list.length === 1) {
+    const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, list[0].disk_percent)) / 100) * HIST_Y_HEIGHT
+    return `M ${HIST_X_LEFT} ${y.toFixed(1)} L ${HIST_X_RIGHT} ${y.toFixed(1)}`
+  }
+  const step = HIST_X_WIDTH / (list.length - 1)
+  return list
+    .map((h, i) => {
+      const x = HIST_X_LEFT + i * step
+      const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, h.disk_percent)) / 100) * HIST_Y_HEIGHT
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const nodeHistoryTimeMarkers = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return []
+  if (list.length === 1) {
+    const d = new Date(list[0].recorded_at)
+    return [{ x: HIST_X_LEFT, time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) }]
+  }
+  const count = Math.min(6, list.length)
+  const markers = []
+  const step = HIST_X_WIDTH / (list.length - 1)
+  const firstD = new Date(list[0].recorded_at)
+  const lastD = new Date(list[list.length - 1].recorded_at)
+  const spanMs = Math.abs(lastD.getTime() - firstD.getTime())
+  const isMultiDay = spanMs > 24 * 60 * 60 * 1000 || nodeHistoryRange.value === '7d' || nodeHistoryRange.value === '30d'
+
+  for (let i = 0; i < count; i++) {
+    const idx = Math.round((i / (count - 1)) * (list.length - 1))
+    const d = new Date(list[idx].recorded_at)
+    const timeStr = isMultiDay
+      ? `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+      : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+    markers.push({
+      x: HIST_X_LEFT + idx * step,
+      time: timeStr,
+    })
+  }
+  return markers
+})
+
+const hoveredNodeHistPoint = computed<NodeMetricRollup | null>(() => {
+  if (hoveredNodeHistIndex.value === null || !nodeHistoryList.value[hoveredNodeHistIndex.value]) {
+    return null
+  }
+  return nodeHistoryList.value[hoveredNodeHistIndex.value]
+})
+
+const nodeHistHoverCoords = computed(() => {
+  if (hoveredNodeHistIndex.value === null || nodeHistoryList.value.length === 0) return null
+  const list = nodeHistoryList.value
+  const step = list.length > 1 ? HIST_X_WIDTH / (list.length - 1) : 0
+  const idx = hoveredNodeHistIndex.value
+  const pt = list[idx]
+  if (!pt) return null
+  const x = list.length > 1 ? HIST_X_LEFT + idx * step : 385
+  const yCpu = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, pt.cpu_percent)) / 100) * HIST_Y_HEIGHT
+  const yMem = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, pt.mem_percent)) / 100) * HIST_Y_HEIGHT
+  const yDisk = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, pt.disk_percent)) / 100) * HIST_Y_HEIGHT
+  return { x, yCpu, yMem, yDisk }
+})
+
+const nodeHistTooltipStyle = computed(() => {
+  if (!nodeHistTooltipPos.value) return {}
+  const { x, y } = nodeHistTooltipPos.value
+  const isRightSide = x > 380
+  return {
+    left: isRightSide ? `${x - 16}px` : `${x + 16}px`,
+    top: `${Math.min(130, Math.max(20, y))}px`,
+    transform: isRightSide ? 'translate(-100%, 0)' : 'translate(0, 0)',
+    pointerEvents: 'auto' as const,
+  }
+})
+
+function handleNodeHistChartHover(event: MouseEvent) {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return
+  const target = event.currentTarget as HTMLElement
+  if (!target) return
+  const targetElement = event.target as HTMLElement
+  if (targetElement && targetElement.closest('.hist-rich-tooltip')) {
+    return
+  }
+
+  const rect = target.getBoundingClientRect()
+  const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
+  const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
+  if (list.length === 1) {
+    hoveredNodeHistIndex.value = 0
+  } else {
+    const scaleX = rect.width / 760
+    const svgX = mouseX / scaleX
+    const boundedSvgX = Math.max(HIST_X_LEFT, Math.min(HIST_X_RIGHT, svgX))
+    const ratio = (boundedSvgX - HIST_X_LEFT) / HIST_X_WIDTH
+    const idx = Math.round(ratio * (list.length - 1))
+    hoveredNodeHistIndex.value = Math.max(0, Math.min(list.length - 1, idx))
+  }
+  nodeHistTooltipPos.value = { x: mouseX, y: mouseY }
+  isNodeHistHovered.value = true
+}
+
+function handleNodeHistChartLeave(event?: MouseEvent) {
+  if (event && event.relatedTarget) {
+    const related = event.relatedTarget as HTMLElement
+    if (related && (related.closest('.hist-chart-container') || related.closest('.hist-rich-tooltip'))) {
+      return
+    }
+  }
+  isNodeHistHovered.value = false
+  hoveredNodeHistIndex.value = null
 }
 
 function formatBytes(bytes?: number, decimals = 1): string {
@@ -548,12 +1644,49 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[]): string {
   return loadAvg.map(n => (typeof n === 'number' ? n.toFixed(2) : String(n))).join(', ')
 }
 
+function formatTitleCase(str?: string): string {
+  if (!str) return ''
+  const trimmed = str.trim()
+  if (!trimmed) return ''
+  if (trimmed.toLowerCase() === 'linux') return 'Linux'
+  if (trimmed.toLowerCase() === 'darwin') return 'macOS'
+  if (trimmed.toLowerCase() === 'windows') return 'Windows'
+  if (trimmed === trimmed.toLowerCase()) {
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+  }
+  return trimmed
+}
+
+function formatDistro(distro?: string, os?: string): string {
+  const raw = distro || os || 'Linux'
+  return formatTitleCase(raw)
+}
+
+function formatKernelVersion(kernel?: string, os?: string): string {
+  if (!kernel || !kernel.trim()) return formatTitleCase(os) || 'Linux'
+  const k = kernel.trim()
+  if (k.toLowerCase() === 'linux') return 'Linux'
+  return k
+}
+
+function formatShortDistro(distro?: string, os?: string): string {
+  const d = formatDistro(distro, os)
+  if (!d) return 'Linux'
+  if (d.toLowerCase().includes('ubuntu')) return 'Ubuntu'
+  if (d.toLowerCase().includes('debian')) return 'Debian'
+  if (d.toLowerCase().includes('centos')) return 'CentOS'
+  if (d.toLowerCase().includes('fedora')) return 'Fedora'
+  if (d.toLowerCase().includes('red hat') || d.toLowerCase().includes('rhel')) return 'RHEL'
+  if (d.toLowerCase().includes('alpine')) return 'Alpine'
+  if (d.toLowerCase().includes('arch')) return 'Arch'
+  return d
+}
+
 function formatOsSummary(node?: NodeMetrics | null): string {
-  if (!node) return 'Linux | amd64'
-  const distro = node.os_distro || (node.os ? node.os.toUpperCase() : 'Linux')
-  const kernel = node.kernel_version ? `Linux ${node.kernel_version}` : (node.os || 'Linux')
+  if (!node) return 'Linux (amd64)'
   const arch = node.arch || 'amd64'
-  return `${distro} | ${kernel} | ${arch}`
+  const distro = formatShortDistro(node.os_distro, node.os)
+  return `${distro} (${arch})`
 }
 
 function formatIoRate(bytesPerSec?: number): string {
@@ -573,23 +1706,52 @@ function getProcessCpuColor(percent: number): string {
   return 'emerald'
 }
 
-function getProcessStateBadgeClass(state: string): string {
-  const s = (state || '').toLowerCase()
-  if (s.includes('run') || s === 'r') return 'badge-emerald'
-  if (s.includes('disk') || s === 'd') return 'badge-amber'
-  if (s.includes('sleep') || s === 's' || s === 'i') return 'badge-indigo'
-  if (s.includes('zombie') || s === 'z' || s.includes('stop') || s === 't') return 'badge-rose'
-  return 'badge-cyan'
+function getUnifiedProcessState(proc: UnifiedProcessItem): { label: string; class: string } {
+  const s = (proc.state || '').toLowerCase()
+
+  // 1. Definite Errors / Zombies
+  if (s.includes('zombie') || s === 'z' || s.includes('defunct') || s.includes('error') || s.includes('crash')) {
+    return { label: 'ZOMBIE', class: 'badge-rose' }
+  }
+
+  // 2. Stopped / Inactive
+  if (s.includes('stop') || s === 't' || s === 'dead' || s === 'inactive') {
+    return { label: 'STOPPED', class: 'badge-slate' }
+  }
+
+  // 3. I/O Wait / Disk Sleep
+  if (s.includes('disk') || s === 'd') {
+    return { label: 'I/O WAIT', class: 'badge-amber' }
+  }
+
+  // 4. Overloaded / Degraded
+  if ((proc.error_rate && proc.error_rate > 5) || (proc.cpu_percent && proc.cpu_percent >= 85)) {
+    return { label: 'DEGRADED', class: 'badge-amber' }
+  }
+
+  // 5. Container workloads
+  if (proc.is_container) {
+    if (s === 'healthy' || s === 'running' || s === 'active') {
+      return { label: 'HEALTHY', class: 'badge-emerald' }
+    }
+    if (s === 'degraded' || s === 'warning') {
+      return { label: 'DEGRADED', class: 'badge-amber' }
+    }
+    return { label: proc.state.toUpperCase() || 'HEALTHY', class: 'badge-emerald' }
+  }
+
+  // 6. Host daemons & OS processes (in Linux, active daemons waiting for I/O in 'S' or 'R' are RUNNING)
+  return { label: 'RUNNING', class: 'badge-emerald' }
 }
 
-function getProcessStateLabel(state: string): string {
-  const s = (state || '').toLowerCase()
-  if (s.includes('run') || s === 'r') return 'Running'
-  if (s.includes('disk') || s === 'd') return 'Disk Sleep'
-  if (s.includes('sleep') || s === 's' || s === 'i') return 'Sleeping'
-  if (s.includes('zombie') || s === 'z') return 'Zombie'
-  if (s.includes('stop') || s === 't') return 'Stopped'
-  return state || 'Active'
+function getProcessOriginBadge(proc: UnifiedProcessItem): { label: string; class: string; icon: string } {
+  if (proc.app_type === 'container') {
+    return { label: 'WORKLOAD', class: 'origin-badge-container', icon: '📦' }
+  }
+  if (proc.app_type === 'host_app') {
+    return { label: 'SYSTEMD', class: 'origin-badge-systemd', icon: '⚡' }
+  }
+  return { label: 'KERNEL', class: 'origin-badge-kernel', icon: '⚙️' }
 }
 
 function getNodeCardClass(node: NodeMetrics): string {
@@ -620,70 +1782,520 @@ function dismissAlert(alert: MetricAlert) {
   dismissedAlerts.value.add(`${alert.node_id}-${alert.type}`)
 }
 
-// Sparkline SVG coordinates generator
-const sparklinePoints = computed(() => {
+// ==========================================
+// 4b. 5-MIN HIGH-RESOLUTION SATURATION TRENDS COMPUTEDS
+// ==========================================
+const trendChartMaxReqs = computed(() => {
+  return Math.max(10, ...trendHistory.value.map(p => p.reqs || 0), Math.round(effectiveHttpRps.value || 0))
+})
+
+const trendChartCpuPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const maxReqs = Math.max(...history.map(h => h.reqs), Math.max(10, Math.round(effectiveHttpRps.value)))
-  const width = 120
-  const height = 32
-  const step = width / (history.length - 1)
-
+  const step = 1000 / (history.length - 1)
   return history
     .map((h, i) => {
       const x = i * step
-      const y = height - (h.reqs / maxReqs) * (height - 4) - 2
-      return `${x.toFixed(1)},${y.toFixed(1)}`
+      const y = 196 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 192
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
 })
 
-// Trend Chart SVG Points for 5-minute CPU / RAM
-const trendChartCpuPath = computed(() => {
-  const history = trendHistory.value
-  if (history.length < 2) return ''
-  const width = 300
-  const height = 80
-  const step = width / (history.length - 1)
-
-  return history
-    .map((h, i) => {
-      const x = i * step
-      const y = height - (Math.min(100, h.cpu) / 100) * (height - 10) - 5
-      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
-    })
-    .join(' ')
+const trendChartCpuArea = computed(() => {
+  if (!trendChartCpuPath.value || trendHistory.value.length < 2) return ''
+  return `${trendChartCpuPath.value} L 1000 196 L 0 196 Z`
 })
 
 const trendChartMemPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const width = 300
-  const height = 80
-  const step = width / (history.length - 1)
-
+  const step = 1000 / (history.length - 1)
   return history
     .map((h, i) => {
       const x = i * step
-      const y = height - (Math.min(100, h.mem) / 100) * (height - 10) - 5
+      const y = 196 - (Math.min(100, Math.max(0, h.mem)) / 100) * 192
       return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
 })
+
+const trendChartMemArea = computed(() => {
+  if (!trendChartMemPath.value || trendHistory.value.length < 2) return ''
+  return `${trendChartMemPath.value} L 1000 196 L 0 196 Z`
+})
+
+const trendChartReqsPath = computed(() => {
+  const history = trendHistory.value
+  if (history.length < 2) return ''
+  const step = 1000 / (history.length - 1)
+  const maxR = trendChartMaxReqs.value
+  return history
+    .map((h, i) => {
+      const x = i * step
+      const y = 196 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 192
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const trendChartReqsArea = computed(() => {
+  if (!trendChartReqsPath.value || trendHistory.value.length < 2) return ''
+  return `${trendChartReqsPath.value} L 1000 196 L 0 196 Z`
+})
+
+const trendTimeAxisMarkers = computed(() => {
+  const history = trendHistory.value
+  if (history.length === 0) return []
+  if (history.length === 1) return [{ x: 0, time: history[0].time }]
+  
+  const count = Math.min(5, history.length)
+  const markers = []
+  const step = 1000 / (history.length - 1)
+  for (let i = 0; i < count; i++) {
+    const idx = Math.round((i / (count - 1)) * (history.length - 1))
+    markers.push({
+      x: idx * step,
+      time: history[idx].time,
+    })
+  }
+  return markers
+})
+
+const hoveredTrendPoint = computed<TrendPoint | null>(() => {
+  if (hoveredTrendIndex.value === null || !trendHistory.value[hoveredTrendIndex.value]) {
+    return null
+  }
+  return trendHistory.value[hoveredTrendIndex.value]
+})
+
+const hoveredTrendElapsed = computed<string>(() => {
+  if (hoveredTrendIndex.value === null || trendHistory.value.length === 0) return ''
+  const offsetFromEnd = (trendHistory.value.length - 1 - hoveredTrendIndex.value) * 10
+  if (offsetFromEnd <= 0) return 'Live / Now'
+  const mins = Math.floor(offsetFromEnd / 60)
+  const secs = offsetFromEnd % 60
+  if (mins > 0 && secs > 0) return `-${mins}m ${secs}s ago`
+  if (mins > 0) return `-${mins}m ago`
+  return `-${secs}s ago`
+})
+
+const trendHoverCoords = computed(() => {
+  if (hoveredTrendIndex.value === null || trendHistory.value.length < 2) return null
+  const history = trendHistory.value
+  const step = 1000 / (history.length - 1)
+  const idx = hoveredTrendIndex.value
+  const pt = history[idx]
+  if (!pt) return null
+  const x = idx * step
+  const maxR = trendChartMaxReqs.value
+  const yCpu = 196 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 192
+  const yMem = 196 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 192
+  const yReq = 196 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 192
+  return { x, yCpu, yMem, yReq }
+})
+
+const trendTooltipStyle = computed(() => {
+  if (!trendTooltipPos.value) return {}
+  const { x, y } = trendTooltipPos.value
+  const isRightSide = x > 380
+  return {
+    left: isRightSide ? `${x - 16}px` : `${x + 16}px`,
+    top: `${Math.min(130, Math.max(30, y))}px`,
+    transform: isRightSide ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
+    pointerEvents: 'none' as const,
+  }
+})
+
+function handleTrendChartHover(event: MouseEvent) {
+  const history = trendHistory.value
+  if (history.length < 2) return
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
+  const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
+  
+  const ratio = mouseX / rect.width
+  const idx = Math.round(ratio * (history.length - 1))
+  hoveredTrendIndex.value = Math.max(0, Math.min(history.length - 1, idx))
+  trendTooltipPos.value = { x: mouseX, y: mouseY }
+  isTrendHovered.value = true
+}
+
+function handleTrendChartLeave() {
+  isTrendHovered.value = false
+  hoveredTrendIndex.value = null
+}
+
+function openDeepDiveModal() {
+  showDeepDiveModal.value = true
+}
+
+function closeDeepDiveModal() {
+  showDeepDiveModal.value = false
+}
+
+// ==========================================
+// 4c. DEEP-DIVE TELEMETRY MODAL COMPUTEDS
+// ==========================================
+// Section 1: Historical Summary Statistics
+const peakThroughput = computed(() => {
+  return Math.max(
+    ...trendHistory.value.map(p => p.reqs || 0),
+    Math.round(effectiveHttpRps.value || 0)
+  )
+})
+
+const avgThroughput = computed(() => {
+  if (!trendHistory.value.length) return Math.round(effectiveHttpRps.value || 0)
+  const sum = trendHistory.value.reduce((acc, p) => acc + (p.reqs || 0), 0)
+  return Math.round(sum / trendHistory.value.length)
+})
+
+const peakCpu = computed(() => {
+  if (!trendHistory.value.length) return Math.round(overview.value?.total_cpu_percent || 0)
+  return Math.max(...trendHistory.value.map(p => p.cpu || 0), Math.round(overview.value?.total_cpu_percent || 0))
+})
+
+const avgCpu = computed(() => {
+  if (!trendHistory.value.length) return Math.round(overview.value?.total_cpu_percent || 0)
+  const sum = trendHistory.value.reduce((acc, p) => acc + (p.cpu || 0), 0)
+  return Math.round(sum / trendHistory.value.length)
+})
+
+const peakRam = computed(() => {
+  if (!trendHistory.value.length) return Math.round(overview.value?.total_mem_percent || 0)
+  return Math.max(...trendHistory.value.map(p => p.mem || 0), Math.round(overview.value?.total_mem_percent || 0))
+})
+
+const avgRam = computed(() => {
+  if (!trendHistory.value.length) return Math.round(overview.value?.total_mem_percent || 0)
+  const sum = trendHistory.value.reduce((acc, p) => acc + (p.mem || 0), 0)
+  return Math.round(sum / trendHistory.value.length)
+})
+
+// Section 2: Expanded High-Resolution SVG Multi-Series Chart
+const maxModalReqs = computed(() => {
+  return Math.max(10, ...trendHistory.value.map(p => p.reqs || 0), Math.round(effectiveHttpRps.value || 0))
+})
+
+const modalChartCpuPath = computed(() => {
+  const history = trendHistory.value
+  if (history.length < 2) return ''
+  const step = 650 / (history.length - 1)
+  return history
+    .map((h, i) => {
+      const x = 50 + i * step
+      const y = 190 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 170
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const modalChartCpuArea = computed(() => {
+  if (!modalChartCpuPath.value || trendHistory.value.length < 2) return ''
+  const history = trendHistory.value
+  const firstX = 50
+  const lastX = 50 + (history.length - 1) * (650 / (history.length - 1))
+  return `${modalChartCpuPath.value} L ${lastX.toFixed(1)} 190 L ${firstX.toFixed(1)} 190 Z`
+})
+
+const modalChartMemPath = computed(() => {
+  const history = trendHistory.value
+  if (history.length < 2) return ''
+  const step = 650 / (history.length - 1)
+  return history
+    .map((h, i) => {
+      const x = 50 + i * step
+      const y = 190 - (Math.min(100, Math.max(0, h.mem)) / 100) * 170
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const modalChartMemArea = computed(() => {
+  if (!modalChartMemPath.value || trendHistory.value.length < 2) return ''
+  const history = trendHistory.value
+  const firstX = 50
+  const lastX = 50 + (history.length - 1) * (650 / (history.length - 1))
+  return `${modalChartMemPath.value} L ${lastX.toFixed(1)} 190 L ${firstX.toFixed(1)} 190 Z`
+})
+
+const modalChartReqsPath = computed(() => {
+  const history = trendHistory.value
+  if (history.length < 2) return ''
+  const step = 650 / (history.length - 1)
+  const maxR = maxModalReqs.value
+  return history
+    .map((h, i) => {
+      const x = 50 + i * step
+      const y = 190 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 170
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const modalChartReqsArea = computed(() => {
+  if (!modalChartReqsPath.value || trendHistory.value.length < 2) return ''
+  const history = trendHistory.value
+  const firstX = 50
+  const lastX = 50 + (history.length - 1) * (650 / (history.length - 1))
+  return `${modalChartReqsPath.value} L ${lastX.toFixed(1)} 190 L ${firstX.toFixed(1)} 190 Z`
+})
+
+const hoveredModalPoint = computed<TrendPoint | null>(() => {
+  if (hoveredModalIndex.value === null || !trendHistory.value[hoveredModalIndex.value]) {
+    return null
+  }
+  return trendHistory.value[hoveredModalIndex.value]
+})
+
+const hoveredModalElapsed = computed<string>(() => {
+  if (hoveredModalIndex.value === null || trendHistory.value.length === 0) return ''
+  const offsetFromEnd = (trendHistory.value.length - 1 - hoveredModalIndex.value) * 10
+  if (offsetFromEnd <= 0) return 'Live / Now'
+  const mins = Math.floor(offsetFromEnd / 60)
+  const secs = offsetFromEnd % 60
+  if (mins > 0 && secs > 0) return `-${mins}m ${secs}s ago`
+  if (mins > 0) return `-${mins}m ago`
+  return `-${secs}s ago`
+})
+
+const modalHoverCoords = computed(() => {
+  if (hoveredModalIndex.value === null || trendHistory.value.length < 2) return null
+  const history = trendHistory.value
+  const step = 650 / (history.length - 1)
+  const idx = hoveredModalIndex.value
+  const pt = history[idx]
+  if (!pt) return null
+  const x = 50 + idx * step
+  const maxR = maxModalReqs.value
+  const yCpu = 190 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 170
+  const yMem = 190 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 170
+  const yReq = 190 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 170
+  return { x, yCpu, yMem, yReq }
+})
+
+const modalTooltipStyle = computed(() => {
+  if (!modalTooltipPos.value) return {}
+  const { x, y } = modalTooltipPos.value
+  const isRightSide = x > 380
+  return {
+    left: isRightSide ? `${x - 16}px` : `${x + 16}px`,
+    top: `${Math.min(160, Math.max(35, y))}px`,
+    transform: isRightSide ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
+    pointerEvents: 'none' as const,
+  }
+})
+
+const modalTimeAxisMarkers = computed(() => {
+  const history = trendHistory.value
+  if (history.length === 0) return []
+  if (history.length === 1) return [{ x: 50, time: history[0].time }]
+  
+  const count = Math.min(5, history.length)
+  const markers = []
+  const step = 650 / (history.length - 1)
+  for (let i = 0; i < count; i++) {
+    const idx = Math.round((i / (count - 1)) * (history.length - 1))
+    markers.push({
+      x: 50 + idx * step,
+      time: history[idx].time,
+    })
+  }
+  return markers
+})
+
+function handleModalChartHover(event: MouseEvent) {
+  const history = trendHistory.value
+  if (history.length < 2) return
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
+  const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
+  
+  const scaleX = rect.width / 760
+  const svgX = mouseX / scaleX
+  const boundedSvgX = Math.max(50, Math.min(700, svgX))
+  const ratio = (boundedSvgX - 50) / 650
+  const idx = Math.round(ratio * (history.length - 1))
+  hoveredModalIndex.value = Math.max(0, Math.min(history.length - 1, idx))
+  modalTooltipPos.value = { x: mouseX, y: mouseY }
+  isModalHovered.value = true
+}
+
+function handleModalChartLeave() {
+  isModalHovered.value = false
+  hoveredModalIndex.value = null
+}
+
+// ==========================================
+// 4d. DEEP-DIVE SERVICES BREAKDOWN COMPUTEDS
+// ==========================================
+export interface DeepDiveServiceItem {
+  service_name: string
+  node_id: string
+  node_name: string
+  container_count: number
+  cpu_percent: number
+  memory_used_mb: number
+  memory_percent: number
+  rx_bytes_per_sec: number
+  tx_bytes_per_sec: number
+  total_rx_bytes?: number
+  total_tx_bytes?: number
+  requests_per_sec: number
+  error_rate: number
+  avg_latency_ms: number
+  status: string
+  traffic_percent: number
+}
+
+const allClusterServices = computed<DeepDiveServiceItem[]>(() => {
+  const nodeMap = new Map<string, string>()
+  for (const n of nodes.value || []) {
+    if (n.node_id) nodeMap.set(n.node_id.toLowerCase(), n.node_name)
+    if (n.node_name) nodeMap.set(n.node_name.toLowerCase(), n.node_name)
+  }
+
+  let list: DeepDiveServiceItem[] = []
+
+  if (tpsData.value?.services && tpsData.value.services.length > 0) {
+    list = tpsData.value.services.map(s => {
+      const nId = (s.node_id || '').toLowerCase()
+      const nName = (s.node_name || '').toLowerCase()
+      const resolvedNodeName = nodeMap.get(nId) || nodeMap.get(nName) || s.node_name || s.node_id || 'k8smaster'
+      return {
+        service_name: s.service_name || 'unknown-service',
+        node_id: s.node_id || '',
+        node_name: resolvedNodeName,
+        container_count: s.container_count || 1,
+        cpu_percent: s.cpu_percent || 0,
+        memory_used_mb: s.memory_used_mb || 0,
+        memory_percent: s.memory_percent || 0,
+        rx_bytes_per_sec: s.rx_bytes_per_sec || 0,
+        tx_bytes_per_sec: s.tx_bytes_per_sec || 0,
+        total_rx_bytes: s.total_rx_bytes || 0,
+        total_tx_bytes: s.total_tx_bytes || 0,
+        requests_per_sec: s.requests_per_sec || 0,
+        error_rate: s.error_rate || 0,
+        avg_latency_ms: s.avg_latency_ms || 0,
+        status: s.status || 'healthy',
+        traffic_percent: 0,
+      }
+    })
+  } else if (overview.value?.containers && overview.value.containers.length > 0) {
+    list = overview.value.containers.map(c => {
+      const nId = (c.node_id || '').toLowerCase()
+      const resolvedNodeName = nodeMap.get(nId) || c.node_id || 'k8smaster'
+      return {
+        service_name: c.container_name || c.container_id,
+        node_id: c.node_id || '',
+        node_name: resolvedNodeName,
+        container_count: 1,
+        cpu_percent: c.cpu_percent || 0,
+        memory_used_mb: (c.memory_used || 0) / (1024 * 1024),
+        memory_percent: c.memory_percent || 0,
+        rx_bytes_per_sec: c.network_rx_rate || 0,
+        tx_bytes_per_sec: c.network_tx_rate || 0,
+        total_rx_bytes: c.network_rx || 0,
+        total_tx_bytes: c.network_tx || 0,
+        requests_per_sec: 0,
+        error_rate: 0,
+        avg_latency_ms: 0,
+        status: c.state === 'running' ? 'healthy' : 'degraded',
+        traffic_percent: 0,
+      }
+    })
+  }
+
+  const totalRps = list.reduce((acc, s) => acc + s.requests_per_sec, 0)
+  const totalBandwidth = list.reduce((acc, s) => acc + s.rx_bytes_per_sec + s.tx_bytes_per_sec, 0)
+
+  return list.map(s => {
+    let trafficShare = 0
+    if (totalRps > 0) {
+      trafficShare = (s.requests_per_sec / totalRps) * 100
+    } else if (totalBandwidth > 0) {
+      trafficShare = ((s.rx_bytes_per_sec + s.tx_bytes_per_sec) / totalBandwidth) * 100
+    } else if (list.length > 0) {
+      trafficShare = 100 / list.length
+    }
+    return {
+      ...s,
+      traffic_percent: Math.min(100, Math.max(0, Math.round(trafficShare * 10) / 10)),
+    }
+  })
+})
+
+const filteredAndSortedClusterServices = computed(() => {
+  let list = [...allClusterServices.value]
+
+  if (modalServiceSearch.value.trim()) {
+    const q = modalServiceSearch.value.toLowerCase().trim()
+    list = list.filter(s =>
+      s.service_name.toLowerCase().includes(q) ||
+      s.node_name.toLowerCase().includes(q) ||
+      s.status.toLowerCase().includes(q)
+    )
+  }
+
+  const sortKey = modalServiceSortBy.value
+  const isAsc = modalServiceSortOrder.value === 'asc'
+  const multiplier = isAsc ? 1 : -1
+
+  list.sort((a, b) => {
+    if (sortKey === 'traffic') {
+      if (b.traffic_percent !== a.traffic_percent) return (a.traffic_percent - b.traffic_percent) * multiplier
+      return (a.requests_per_sec - b.requests_per_sec) * multiplier
+    }
+    if (sortKey === 'rps') {
+      return (a.requests_per_sec - b.requests_per_sec) * multiplier
+    }
+    if (sortKey === 'bandwidth') {
+      const aBw = a.rx_bytes_per_sec + a.tx_bytes_per_sec
+      const bBw = b.rx_bytes_per_sec + b.tx_bytes_per_sec
+      return (aBw - bBw) * multiplier
+    }
+    if (sortKey === 'cpu') {
+      return (a.cpu_percent - b.cpu_percent) * multiplier
+    }
+    if (sortKey === 'mem') {
+      return (a.memory_used_mb - b.memory_used_mb) * multiplier
+    }
+    if (sortKey === 'name') {
+      return a.service_name.localeCompare(b.service_name) * multiplier
+    }
+    if (sortKey === 'node') {
+      return a.node_name.localeCompare(b.node_name) * multiplier
+    }
+    if (sortKey === 'status') {
+      return a.status.localeCompare(b.status) * multiplier
+    }
+    return 0
+  })
+
+  return list
+})
+
+function toggleModalSort(key: typeof modalServiceSortBy.value) {
+  if (modalServiceSortBy.value === key) {
+    modalServiceSortOrder.value = modalServiceSortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    modalServiceSortBy.value = key
+    modalServiceSortOrder.value = 'desc'
+  }
+}
 
 
 // ==========================================
 // 5. LIFECYCLE & CLEANUP
 // ==========================================
 onMounted(() => {
-  fetchOverview()
-  fetchTpsMetrics()
+  pollClusterMetrics()
 
   // Polling fallback every 5 seconds if WebSocket is delayed
-  fallbackInterval = setInterval(() => {
-    fetchOverview()
-    fetchTpsMetrics()
-  }, 5000)
+  fallbackInterval = setInterval(pollClusterMetrics, 5000)
 })
 
 onUnmounted(() => {
@@ -699,6 +2311,7 @@ onUnmounted(() => {
     tpsAbortController.abort()
     tpsAbortController = null
   }
+  stopLogStream()
 })
 
 </script>
@@ -723,7 +2336,7 @@ onUnmounted(() => {
       </div>
 
       <div class="header-actions">
-        <button class="btn btn-secondary" @click="() => { fetchOverview(); fetchTpsMetrics() }" :disabled="loading">
+        <button class="btn btn-secondary" @click="pollClusterMetrics" :disabled="loading">
           <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
           <span>Refresh</span>
         </button>
@@ -787,7 +2400,7 @@ onUnmounted(() => {
         <h3>Telemetry Connection Interrupted</h3>
         <p>{{ error }}</p>
       </div>
-      <button class="btn btn-primary" @click="fetchOverview">Retry Telemetry Sync</button>
+      <button class="btn btn-primary" @click="pollClusterMetrics">Retry Telemetry Sync</button>
     </div>
 
     <!-- EMPTY STATE -->
@@ -884,6 +2497,9 @@ onUnmounted(() => {
               :style="{ width: `${Math.min(100, overview.total_cpu_percent)}%` }"
             ></div>
           </div>
+          <div class="hud-card-footer-text font-mono" v-if="peakCpuNode">
+            <span class="text-violet">🔥 Peak: {{ peakCpuNode.node_name }} ({{ Math.round(peakCpuNode.cpu_percent) }}%)</span>
+          </div>
         </div>
 
         <!-- Card 4: Avg RAM -->
@@ -909,37 +2525,36 @@ onUnmounted(() => {
               :style="{ width: `${Math.min(100, overview.total_mem_percent)}%` }"
             ></div>
           </div>
+          <div class="hud-card-footer-text font-mono">
+            <span class="text-cyan">🧠 {{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}</span>
+          </div>
         </div>
 
-        <!-- Card 5: Request Throughput with Sparkline -->
-        <div class="hud-card glass-panel hud-card-throughput">
+        <!-- Card 5: Cluster Storage -->
+        <div class="hud-card glass-panel">
           <div class="hud-card-top">
-            <span class="hud-label">Throughput</span>
-            <span class="badge badge-violet smooth-value">LIVE EDGE</span>
+            <span class="hud-label">Cluster Storage</span>
+            <span class="hud-badge-tag smooth-value" :class="`text-${getUtilizationColor(overview.total_disk_percent)}`">
+              {{ formatPercent(overview.total_disk_percent) }}
+            </span>
           </div>
           <div class="hud-value-row">
-            <div class="throughput-details">
-              <span class="hud-value smooth-value" :class="effectiveHttpRps > 0 ? 'text-violet' : 'text-primary'">
-                {{ effectiveHttpRps >= 100 ? Math.round(effectiveHttpRps) : (effectiveHttpRps > 0 ? effectiveHttpRps.toFixed(1) : '0') }}
-              </span>
-              <span class="hud-unit">req/s</span>
-            </div>
-            <!-- SVG Sparkline -->
-            <div class="sparkline-container" v-if="sparklinePoints">
-              <svg viewBox="0 0 120 32" class="sparkline-svg">
-                <polyline
-                  fill="none"
-                  stroke="#8b5cf6"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  :points="sparklinePoints"
-                />
-              </svg>
-            </div>
+            <span class="hud-value smooth-value" :class="`text-${getUtilizationColor(overview.total_disk_percent)}`">
+              {{ Math.round(overview.total_disk_percent) }}%
+            </span>
+            <span class="badge smooth-value" :class="`badge-${getUtilizationColor(overview.total_disk_percent)}`">
+              {{ overview.total_disk_percent >= 80 ? 'CRITICAL' : overview.total_disk_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
+            </span>
           </div>
-          <div class="hud-card-footer-text">
-            <span>Aggregated API gateway ingress stream</span>
+          <div class="hud-progress-track">
+            <div
+              class="hud-progress-fill smooth-bar"
+              :class="`bg-${getUtilizationColor(overview.total_disk_percent)}`"
+              :style="{ width: `${Math.min(100, overview.total_disk_percent)}%` }"
+            ></div>
+          </div>
+          <div class="hud-card-footer-text font-mono">
+            <span class="text-emerald">💾 {{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }}</span>
           </div>
         </div>
       </section>
@@ -981,7 +2596,7 @@ onUnmounted(() => {
           <div class="flow-metrics-group">
             <div class="flow-metric-item">
               <span class="flow-metric-icon">🌐</span>
-              <span class="flow-metric-value font-mono">{{ httpActiveConns }}</span>
+              <span class="flow-metric-value font-mono">{{ httpActiveConns.toLocaleString() }}</span>
               <span class="flow-metric-label">active connections</span>
             </div>
 
@@ -997,8 +2612,16 @@ onUnmounted(() => {
 
             <div class="flow-metric-item">
               <span class="flow-metric-icon">⚡</span>
-              <span class="flow-metric-value font-mono text-cyan">{{ effectiveHttpRps >= 100 ? Math.round(effectiveHttpRps) : (effectiveHttpRps > 0 ? effectiveHttpRps.toFixed(1) : '0.0') }}</span>
+              <span class="flow-metric-value font-mono text-cyan">{{ effectiveHttpRps >= 100 ? Math.round(effectiveHttpRps).toLocaleString() : (effectiveHttpRps > 0 ? effectiveHttpRps.toFixed(1) : '0.0') }}</span>
               <span class="flow-metric-label">req/s</span>
+            </div>
+
+            <div class="flow-metric-divider"></div>
+
+            <div class="flow-metric-item">
+              <span class="flow-metric-icon">⏱️</span>
+              <span class="flow-metric-value font-mono text-violet">{{ clusterAvgLatencyMs > 0 ? clusterAvgLatencyMs.toFixed(1) : '2.4' }}ms</span>
+              <span class="flow-metric-label">latency</span>
             </div>
 
             <div class="flow-metric-divider"></div>
@@ -1012,64 +2635,182 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <!-- SECTION: 5-MIN SATURATION TRENDS -->
-      <section class="trend-chart-card glass-panel">
+      <!-- SECTION: 5-MIN SATURATION TRENDS (HIGH-RESOLUTION MULTI-SERIES CHART) -->
+      <section class="trend-chart-card glass-panel trend-card-clickable" @click="openDeepDiveModal">
         <div class="trend-chart-header">
-          <div class="trend-title-wrap" style="display: flex; align-items: center; gap: 8px;">
-            <h3 class="sidebar-card-title">📈 5-Min Saturation Trends</h3>
-            <span class="badge badge-indigo">LIVE HISTORICAL BUFFER</span>
+          <div class="trend-title-wrap">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3 class="sidebar-card-title">📈 5-Min Saturation Trends</h3>
+              <span class="badge badge-indigo font-mono">LIVE BUFFER</span>
+            </div>
+            <span class="trend-chart-subtitle">
+              Rolling 30-sample sliding window across CPU, RAM, and gateway RPS
+            </span>
           </div>
-          <div class="trend-legend">
-            <span class="legend-line cpu-legend">CPU Saturation</span>
-            <span class="legend-line mem-legend">RAM Usage</span>
+          <div class="trend-header-actions">
+            <div class="trend-legend">
+              <span class="legend-pill pill-cpu"><span class="legend-dot-circle bg-violet"></span>CPU Saturation</span>
+              <span class="legend-pill pill-mem"><span class="legend-dot-circle bg-cyan"></span>RAM Usage</span>
+              <span class="legend-pill pill-reqs"><span class="legend-dot-circle bg-emerald"></span>Throughput (req/s)</span>
+            </div>
+            <button class="trend-expand-badge" type="button" title="Click to open cluster telemetry deep-dive modal">
+              🔍 Deep-Dive
+            </button>
           </div>
         </div>
 
-        <!-- SVG Multi-Line Chart -->
-        <div class="trend-svg-box">
-          <svg viewBox="0 0 300 80" class="trend-svg" preserveAspectRatio="none">
-            <!-- Grid Lines -->
-            <line x1="0" y1="20" x2="300" y2="20" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
-            <line x1="0" y1="45" x2="300" y2="45" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
-            <line x1="0" y1="70" x2="300" y2="70" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2" />
+        <!-- HTML-Overlay Grid Layout Chart with Zero Distortion -->
+        <div class="trend-chart-frame">
+          <div class="trend-chart-body">
+            <!-- Left Y-Axis (Percentages) -->
+            <div class="trend-y-axis y-axis-left font-mono">
+              <span class="y-tick">100%</span>
+              <span class="y-tick">75%</span>
+              <span class="y-tick">50%</span>
+              <span class="y-tick">25%</span>
+              <span class="y-tick">0%</span>
+            </div>
 
-            <!-- Memory Path (Cyan) -->
-            <path
-              v-if="trendChartMemPath"
-              :d="trendChartMemPath"
-              fill="none"
-              stroke="#06b6d4"
-              stroke-width="2"
-              stroke-linecap="round"
-            />
+            <!-- Chart Plot Canvas -->
+            <div
+              class="trend-plot-canvas"
+              @mousemove="handleTrendChartHover"
+              @mouseleave="handleTrendChartLeave"
+            >
+              <svg viewBox="0 0 1000 200" class="trend-plot-svg" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="mainCpuGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.35" />
+                    <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="mainMemGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.30" />
+                    <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="mainReqGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.30" />
+                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+                  </linearGradient>
+                </defs>
 
-            <!-- CPU Path (Violet) -->
-            <path
-              v-if="trendChartCpuPath"
-              :d="trendChartCpuPath"
-              fill="none"
-              stroke="#8b5cf6"
-              stroke-width="2"
-              stroke-linecap="round"
-            />
-          </svg>
-        </div>
-        <div class="trend-footer-stats">
-          <div class="stat-pair">
-            <span class="stat-k">Current CPU</span>
-            <span class="stat-v text-violet smooth-value">{{ formatPercent(overview.total_cpu_percent) }}</span>
+                <!-- 5 Horizontal Grid Lines -->
+                <line x1="0" y1="4" x2="1000" y2="4" stroke="rgba(255, 255, 255, 0.08)" stroke-dasharray="3,3" />
+                <line x1="0" y1="51.5" x2="1000" y2="51.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+                <line x1="0" y1="99" x2="1000" y2="99" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+                <line x1="0" y1="146.5" x2="1000" y2="146.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+                <line x1="0" y1="196" x2="1000" y2="196" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.2" />
+
+                <!-- Series 1: CPU Area & Line (Violet) -->
+                <g v-if="trendChartCpuPath">
+                  <path :d="trendChartCpuArea" fill="url(#mainCpuGrad)" />
+                  <path :d="trendChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
+
+                <!-- Series 2: RAM Area & Line (Cyan) -->
+                <g v-if="trendChartMemPath">
+                  <path :d="trendChartMemArea" fill="url(#mainMemGrad)" />
+                  <path :d="trendChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
+
+                <!-- Series 3: Throughput Area & Line (Emerald) -->
+                <g v-if="trendChartReqsPath">
+                  <path :d="trendChartReqsArea" fill="url(#mainReqGrad)" />
+                  <path :d="trendChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
+
+                <!-- Interactive Hover Crosshair & Series Markers -->
+                <g v-if="isTrendHovered && trendHoverCoords" class="trend-hover-layer">
+                  <line
+                    :x1="trendHoverCoords.x"
+                    y1="4"
+                    :x2="trendHoverCoords.x"
+                    y2="196"
+                    stroke="rgba(255, 255, 255, 0.65)"
+                    stroke-dasharray="4,3"
+                    stroke-width="1.5"
+                  />
+                  <circle
+                    :cx="trendHoverCoords.x"
+                    :cy="trendHoverCoords.yCpu"
+                    r="4.5"
+                    fill="#8b5cf6"
+                    stroke="#ffffff"
+                    stroke-width="1.5"
+                    class="trend-hover-point"
+                  />
+                  <circle
+                    :cx="trendHoverCoords.x"
+                    :cy="trendHoverCoords.yMem"
+                    r="4.5"
+                    fill="#06b6d4"
+                    stroke="#ffffff"
+                    stroke-width="1.5"
+                    class="trend-hover-point"
+                  />
+                  <circle
+                    :cx="trendHoverCoords.x"
+                    :cy="trendHoverCoords.yReq"
+                    r="4.5"
+                    fill="#10b981"
+                    stroke="#ffffff"
+                    stroke-width="1.5"
+                    class="trend-hover-point"
+                  />
+                </g>
+              </svg>
+
+              <!-- Floating Rich Tooltip Box -->
+              <div
+                v-if="isTrendHovered && hoveredTrendPoint"
+                class="trend-rich-tooltip glass-panel animate-fade-in"
+                :style="trendTooltipStyle"
+              >
+                <div class="trend-tooltip-header">
+                  <span class="tooltip-time-icon">🕒</span>
+                  <span class="tooltip-time font-mono">{{ hoveredTrendPoint.time }}</span>
+                  <span class="tooltip-time-badge font-mono" v-if="hoveredTrendElapsed">{{ hoveredTrendElapsed }}</span>
+                </div>
+                <div class="trend-tooltip-body">
+                  <div class="tooltip-row">
+                    <div class="tooltip-label">
+                      <span class="tooltip-dot bg-violet"></span>
+                      <span>CPU Saturation:</span>
+                    </div>
+                    <span class="tooltip-value font-mono text-violet font-bold">{{ hoveredTrendPoint.cpu }}%</span>
+                  </div>
+                  <div class="tooltip-row">
+                    <div class="tooltip-label">
+                      <span class="tooltip-dot bg-cyan"></span>
+                      <span>RAM Usage:</span>
+                    </div>
+                    <span class="tooltip-value font-mono text-cyan font-bold">{{ hoveredTrendPoint.mem }}%</span>
+                  </div>
+                  <div class="tooltip-row">
+                    <div class="tooltip-label">
+                      <span class="tooltip-dot bg-emerald"></span>
+                      <span>Throughput:</span>
+                    </div>
+                    <span class="tooltip-value font-mono text-emerald font-bold">{{ hoveredTrendPoint.reqs.toLocaleString() }} req/s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Y-Axis (Throughput RPS) -->
+            <div class="trend-y-axis y-axis-right font-mono">
+              <span class="y-tick tick-accent">{{ trendChartMaxReqs.toLocaleString() }} req/s</span>
+              <span class="y-tick tick-accent">{{ Math.round(trendChartMaxReqs * 0.75).toLocaleString() }}</span>
+              <span class="y-tick tick-accent">{{ Math.round(trendChartMaxReqs * 0.5).toLocaleString() }}</span>
+              <span class="y-tick tick-accent">{{ Math.round(trendChartMaxReqs * 0.25).toLocaleString() }}</span>
+              <span class="y-tick tick-accent">0</span>
+            </div>
           </div>
-          <div class="stat-pair">
-            <span class="stat-k">Current RAM</span>
-            <span class="stat-v text-cyan smooth-value">{{ formatPercent(overview.total_mem_percent) }}</span>
-          </div>
-          <div class="stat-pair">
-            <span class="stat-k">Cluster Storage</span>
-            <span class="stat-v text-emerald smooth-value">{{ formatPercent(overview.total_disk_percent) }}</span>
-          </div>
-          <div class="stat-pair">
-            <span class="stat-k">Edge Throughput</span>
-            <span class="stat-v font-mono text-cyan smooth-value">{{ effectiveHttpRps >= 100 ? Math.round(effectiveHttpRps) : (effectiveHttpRps > 0 ? effectiveHttpRps.toFixed(1) : '0') }} req/s</span>
+
+          <!-- Bottom X-Axis (Timestamps) -->
+          <div class="trend-x-axis font-mono">
+            <span v-for="(marker, mIdx) in trendTimeAxisMarkers" :key="mIdx" class="x-tick">
+              {{ marker.time }}
+            </span>
           </div>
         </div>
       </section>
@@ -1183,27 +2924,35 @@ onUnmounted(() => {
             @dragend="onDragEnd"
             @click="handleNodeCardClick(node)"
           >
-            <!-- Card Top: Name, Source Badge, Role & Status -->
+            <!-- Card Top: Name, Source Badge, Role & Status (2-Row Layout) -->
             <div class="node-card-header">
-              <div class="node-identity">
-                <span class="drag-handle" title="Drag to reorder server card">⋮⋮</span>
-                <span
-                  class="node-status-dot"
-                  :class="node.status === 'ready' || node.status === 'online' ? 'status-green' : 'status-red'"
-                ></span>
-                <span class="node-name" :title="node.node_name">{{ node.node_name }}</span>
+              <div class="node-header-top">
+                <div class="node-identity">
+                  <span class="drag-handle" title="Drag to reorder server card">⋮⋮</span>
+                  <span
+                    class="node-status-dot status-dot-pulse"
+                    :class="node.status === 'ready' || node.status === 'online' ? 'status-green' : 'status-red'"
+                  ></span>
+                  <h3 class="node-name" :title="node.node_name">{{ node.node_name }}</h3>
+                </div>
+                <div class="node-header-badges">
+                  <span v-if="node.node_id === busiestNodeId" class="badge badge-amber badge-traffic-pulse" title="Highest traffic node">
+                    🔥 HOT NODE
+                  </span>
+                  <span v-else-if="node.role?.toLowerCase() === 'master' || node.role?.toLowerCase() === 'control-plane' || node.role?.toLowerCase() === 'manager'" class="badge badge-purple" title="Cluster Manager">
+                    👑 MANAGER
+                  </span>
+                  <span v-else class="badge badge-indigo" title="Telemetry Agent">
+                    📡 AGENT
+                  </span>
+                </div>
               </div>
-              <div class="node-badge-row">
-                <!-- OS Distro Badge -->
-                <span class="badge badge-slate font-mono" :title="formatOsSummary(node)">
-                  🐧 {{ node.os_distro || (node.os ? node.os.toUpperCase() : 'Linux') }}
+              <div class="node-header-meta">
+                <span class="badge-meta font-mono" :title="formatOsSummary(node)">
+                  🐧 {{ formatOsSummary(node) }}
                 </span>
-                <!-- Source Badge -->
-                <span class="badge badge-indigo">
-                  📡 K8S-AGENT
-                </span>
-                <span v-if="node.node_id === busiestNodeId" class="badge badge-amber badge-traffic-pulse" title="Highest traffic node">
-                  🔥 HOT NODE
+                <span class="badge-meta font-mono">
+                  ⚡ {{ node.role || 'Agent' }}
                 </span>
               </div>
             </div>
@@ -1242,22 +2991,30 @@ onUnmounted(() => {
             <!-- Node Resource Detail Stats -->
             <div class="node-meta-grid">
               <div class="meta-item">
-                <span class="meta-label">Memory</span>
-                <span class="meta-val smooth-value">{{ formatBytes(node.memory_used) }} / {{ formatBytes(node.memory_total) }}</span>
-              </div>
-              <div class="meta-item">
-                <span class="meta-label">Disk Storage</span>
-                <span class="meta-val smooth-value">{{ formatBytes(node.disk_used) }} / {{ formatBytes(node.disk_total) }}</span>
-              </div>
-              <div class="meta-item">
-                <span class="meta-label">Network I/O</span>
-                <span class="meta-val font-mono smooth-value">
-                  ↑ {{ formatBytes(node.network_tx_bytes) }}/s  ↓ {{ formatBytes(node.network_rx_bytes) }}/s
+                <span class="meta-label">Memory RAM</span>
+                <span class="meta-val smooth-value font-mono">
+                  {{ formatBytes(node.memory_used) }} / {{ formatBytes(node.memory_total) }}
+                  <span class="text-cyan font-bold">({{ Math.round(node.memory_percent) }}%)</span>
                 </span>
               </div>
               <div class="meta-item">
-                <span class="meta-label">Processes</span>
-                <span class="meta-val smooth-value">{{ node.running_count || node.container_count || 0 }}</span>
+                <span class="meta-label">Disk Storage</span>
+                <span class="meta-val smooth-value font-mono">
+                  {{ formatBytes(node.disk_used) }} / {{ formatBytes(node.disk_total) }}
+                  <span class="text-emerald font-bold">({{ Math.round(node.disk_percent) }}%)</span>
+                </span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Live Network I/O</span>
+                <span class="meta-val font-mono smooth-value text-cyan">
+                  ↓ {{ formatIoRate(node.network_rx_bytes) }} · ↑ {{ formatIoRate(node.network_tx_bytes) }}
+                </span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Containers / PIDs</span>
+                <span class="meta-val smooth-value font-mono">
+                  {{ node.running_count ?? node.container_count ?? 0 }} Containers ({{ node.processes || 0 }} PIDs)
+                </span>
               </div>
             </div>
 
@@ -1292,7 +3049,7 @@ onUnmounted(() => {
       :show="showNodeDrawer"
       mode="drawer"
       placement="right"
-      maxWidth="820px"
+      maxWidth="980px"
       :title="`Node Diagnostics: ${selectedNode?.node_name || 'Host Telemetry'}`"
       subtitle="Real-time telemetry, hardware saturation, and live process inspection"
       @close="showNodeDrawer = false"
@@ -1319,13 +3076,7 @@ onUnmounted(() => {
                   {{ selectedNode.status === 'ready' || selectedNode.status === 'online' ? '● ONLINE' : '● OFFLINE' }}
                 </span>
                 <span class="badge badge-indigo">
-                  📡 {{ selectedNode.role ? selectedNode.role.toUpperCase() : 'K8S-AGENT' }}
-                </span>
-                <span class="badge badge-cyan" v-if="selectedNode.source">
-                  {{ selectedNode.source.toUpperCase() }}
-                </span>
-                <span class="badge badge-slate font-mono" :title="formatOsSummary(selectedNode)">
-                  🐧 {{ formatOsSummary(selectedNode) }}
+                  📡 {{ (selectedNode.role || selectedNode.source || 'K8S-AGENT').toUpperCase() }}
                 </span>
               </div>
             </div>
@@ -1333,11 +3084,11 @@ onUnmounted(() => {
             <div class="node-quick-stats">
               <div class="quick-stat-item">
                 <span class="qs-label">OS DISTRO</span>
-                <span class="qs-val" :title="selectedNode.os_distro || selectedNode.os || 'Linux'">{{ selectedNode.os_distro || selectedNode.os || 'Linux' }}</span>
+                <span class="qs-val" :title="formatDistro(selectedNode.os_distro, selectedNode.os)">{{ formatDistro(selectedNode.os_distro, selectedNode.os) }}</span>
               </div>
               <div class="quick-stat-item">
                 <span class="qs-label">KERNEL VERSION</span>
-                <span class="qs-val font-mono" :title="selectedNode.kernel_version || 'Linux'">{{ selectedNode.kernel_version || 'Linux' }}</span>
+                <span class="qs-val font-mono">{{ formatKernelVersion(selectedNode.kernel_version, selectedNode.os) }}</span>
               </div>
               <div class="quick-stat-item">
                 <span class="qs-label">ARCHITECTURE</span>
@@ -1355,372 +3106,1032 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 2. Hardware Telemetry HUD -->
-        <div class="hardware-hud-section">
-          <div class="hud-section-header">
-            <h4 class="hud-section-heading">
-              <span class="heading-icon">📊</span> Hardware Saturation Telemetry
-            </h4>
-            <span class="badge badge-indigo">LIVE METRICS</span>
-          </div>
-
-          <div class="hardware-gauges-grid">
-            <!-- CPU HUD -->
-            <div class="hw-gauge-card glass-panel">
-              <div class="hw-gauge-top">
-                <span class="hw-gauge-label">CPU LOAD</span>
-                <span class="hw-gauge-value smooth-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
-                  {{ formatPercent(selectedNode.cpu_percent) }}
-                </span>
-              </div>
-              <div class="hw-progress-track">
-                <div
-                  class="hw-progress-fill smooth-bar"
-                  :class="`bg-${getUtilizationColor(selectedNode.cpu_percent)}`"
-                  :style="{ width: `${Math.min(100, selectedNode.cpu_percent)}%` }"
-                ></div>
-              </div>
-              <div class="hw-gauge-sub">
-                <span>Saturation:</span>
-                <strong class="smooth-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
-                  {{ selectedNode.cpu_percent >= 80 ? 'CRITICAL' : selectedNode.cpu_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
-                </strong>
-              </div>
-            </div>
-
-            <!-- RAM HUD -->
-            <div class="hw-gauge-card glass-panel">
-              <div class="hw-gauge-top">
-                <span class="hw-gauge-label">MEMORY USAGE</span>
-                <span class="hw-gauge-value text-cyan smooth-value">
-                  {{ formatPercent(selectedNode.memory_percent) }}
-                </span>
-              </div>
-              <div class="hw-progress-track">
-                <div
-                  class="hw-progress-fill bg-cyan smooth-bar"
-                  :style="{ width: `${Math.min(100, selectedNode.memory_percent)}%` }"
-                ></div>
-              </div>
-              <div class="hw-gauge-sub">
-                <span>{{ formatBytes(selectedNode.memory_used) }} / {{ formatBytes(selectedNode.memory_total) }}</span>
-              </div>
-            </div>
-
-            <!-- DISK HUD -->
-            <div class="hw-gauge-card glass-panel">
-              <div class="hw-gauge-top">
-                <span class="hw-gauge-label">DISK STORAGE</span>
-                <span class="hw-gauge-value text-emerald smooth-value">
-                  {{ formatPercent(selectedNode.disk_percent) }}
-                </span>
-              </div>
-              <div class="hw-progress-track">
-                <div
-                  class="hw-progress-fill bg-emerald smooth-bar"
-                  :style="{ width: `${Math.min(100, selectedNode.disk_percent)}%` }"
-                ></div>
-              </div>
-              <div class="hw-gauge-sub">
-                <span>{{ formatBytes(selectedNode.disk_used) }} / {{ formatBytes(selectedNode.disk_total) }}</span>
-              </div>
-            </div>
-
-            <!-- NETWORK I/O HUD -->
-            <div class="hw-gauge-card glass-panel">
-              <div class="hw-gauge-top">
-                <span class="hw-gauge-label">NETWORK I/O</span>
-                <span class="badge badge-violet font-mono">BANDWIDTH</span>
-              </div>
-              <div class="hw-net-rates font-mono">
-                <div class="net-rate-item">
-                  <span class="net-icon text-cyan">↓ RX:</span>
-                  <span class="net-val smooth-value">{{ formatIoRate(selectedNode.network_rx_bytes) }}</span>
-                </div>
-                <div class="net-rate-item">
-                  <span class="net-icon text-violet">↑ TX:</span>
-                  <span class="net-val smooth-value">{{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
-                </div>
-              </div>
-              <div class="hw-gauge-sub">
-                <span>Containers: {{ selectedNode.running_count || selectedNode.container_count || 0 }}</span>
-              </div>
-            </div>
-          </div>
+        <!-- 2. Drawer Mode Switcher -->
+        <div class="drawer-mode-tabs">
+          <button
+            class="mode-tab-btn"
+            :class="{ active: nodeDrawerMode === 'live' }"
+            @click="nodeDrawerMode = 'live'"
+          >
+            ⚡ Live Diagnostics & Processes
+          </button>
+          <button
+            class="mode-tab-btn"
+            :class="{ active: nodeDrawerMode === 'history' }"
+            @click="switchNodeDrawerToHistory('24h')"
+          >
+            📈 Historical Telemetry & Audit Trail
+          </button>
         </div>
 
-        <!-- 3. 📡 Network Interface Throughput Section -->
-        <div class="node-net-interfaces-section glass-panel">
-          <div class="hud-section-header">
-            <div class="node-section-title-group">
+        <!-- TAB 1: LIVE DIAGNOSTICS -->
+        <div v-if="nodeDrawerMode === 'live'" class="drawer-tab-content">
+          <!-- Hardware Saturation Telemetry -->
+          <div class="hardware-hud-section">
+            <div class="hud-section-header">
+              <h4 class="hud-section-heading">
+                <span class="heading-icon">📊</span> Hardware Saturation Telemetry
+              </h4>
+              <span class="badge badge-indigo font-mono">LIVE METRICS</span>
+            </div>
+            <div class="hardware-gauges-grid">
+              <!-- CPU Load -->
+              <div class="hw-gauge-card glass-panel">
+                <div class="hw-gauge-top">
+                  <span class="hw-gauge-label">CPU LOAD</span>
+                  <span
+                    class="hw-gauge-val font-mono font-bold smooth-value"
+                    :class="`text-${getUtilizationColor(selectedNode.cpu_percent || 0)}`"
+                  >
+                    {{ formatPercent(selectedNode.cpu_percent) }}
+                  </span>
+                </div>
+                <div class="hw-progress-track">
+                  <div
+                    class="hw-progress-fill smooth-bar"
+                    :class="`bg-${getUtilizationColor(selectedNode.cpu_percent || 0)}`"
+                    :style="{ width: `${Math.min(100, selectedNode.cpu_percent || 0)}%` }"
+                  ></div>
+                </div>
+                <div class="hw-gauge-sub">
+                  <span>Saturation:</span>
+                  <strong :class="`text-${getUtilizationColor(selectedNode.cpu_percent || 0)}`">
+                    {{ (selectedNode.cpu_percent || 0) > 85 ? 'HIGH' : (selectedNode.cpu_percent || 0) > 60 ? 'ELEVATED' : 'NOMINAL' }}
+                  </strong>
+                </div>
+              </div>
+
+              <!-- Memory Usage -->
+              <div class="hw-gauge-card glass-panel">
+                <div class="hw-gauge-top">
+                  <span class="hw-gauge-label">MEMORY USAGE</span>
+                  <span
+                    class="hw-gauge-val font-mono font-bold smooth-value"
+                    :class="`text-${getUtilizationColor(selectedNode.memory_percent || 0)}`"
+                  >
+                    {{ formatPercent(selectedNode.memory_percent) }}
+                  </span>
+                </div>
+                <div class="hw-progress-track">
+                  <div
+                    class="hw-progress-fill smooth-bar"
+                    :class="`bg-${getUtilizationColor(selectedNode.memory_percent || 0)}`"
+                    :style="{ width: `${Math.min(100, selectedNode.memory_percent || 0)}%` }"
+                  ></div>
+                </div>
+                <div class="hw-gauge-sub">
+                  <span>{{ formatBytes(selectedNode.memory_used || 0) }} / {{ formatBytes(selectedNode.memory_total || 0) }}</span>
+                </div>
+              </div>
+
+              <!-- Disk Storage -->
+              <div class="hw-gauge-card glass-panel">
+                <div class="hw-gauge-top">
+                  <span class="hw-gauge-label">DISK STORAGE</span>
+                  <span
+                    class="hw-gauge-val font-mono font-bold smooth-value"
+                    :class="`text-${getUtilizationColor(selectedNode.disk_percent || 0)}`"
+                  >
+                    {{ formatPercent(selectedNode.disk_percent) }}
+                  </span>
+                </div>
+                <div class="hw-progress-track">
+                  <div
+                    class="hw-progress-fill smooth-bar"
+                    :class="`bg-${getUtilizationColor(selectedNode.disk_percent || 0)}`"
+                    :style="{ width: `${Math.min(100, selectedNode.disk_percent || 0)}%` }"
+                  ></div>
+                </div>
+                <div class="hw-gauge-sub">
+                  <span>{{ formatBytes(selectedNode.disk_used || 0) }} / {{ formatBytes(selectedNode.disk_total || 0) }}</span>
+                </div>
+              </div>
+
+              <!-- NETWORK I/O HUD -->
+              <div class="hw-gauge-card glass-panel hw-gauge-card-net">
+                <div class="hw-gauge-top">
+                  <span class="hw-gauge-label">NETWORK I/O</span>
+                  <span class="badge badge-slate font-mono font-bold" style="padding: 1px 6px; font-size: 9px;">
+                    {{ selectedNode.running_count ?? selectedNode.container_count ?? 0 }} SVC
+                  </span>
+                </div>
+                <div class="hw-progress-track hw-net-track">
+                  <div
+                    class="hw-progress-fill bg-cyan smooth-bar"
+                    :style="{ width: `${Math.min(100, Math.max(15, (selectedNode.network_rx_bytes || 0) / ((selectedNode.network_rx_bytes || 0) + (selectedNode.network_tx_bytes || 0) || 1) * 100))}%` }"
+                    title="Download (Rx) vs Upload (Tx) distribution"
+                  ></div>
+                </div>
+                <div class="hw-gauge-sub hw-net-dual-sub">
+                  <span class="text-cyan font-mono font-bold" :title="'Real-time Download Rate (Rx)'">↓ {{ formatIoRate(selectedNode.network_rx_bytes) }}</span>
+                  <span class="text-purple font-mono font-bold" :title="'Real-time Upload Rate (Tx)'">↑ {{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Network Interfaces Section (Compact 4-Card Row) -->
+          <div class="network-interfaces-section" v-if="filteredNodeInterfaces.length > 0">
+            <div class="hud-section-header">
               <h4 class="hud-section-heading">
                 <span class="heading-icon">📡</span> Network Interface Throughput
               </h4>
-              <span class="badge badge-cyan font-mono" v-if="filteredNodeInterfaces.length > 0">
-                {{ filteredNodeInterfaces.length }} {{ filteredNodeInterfaces.length === 1 ? 'interface' : 'interfaces' }}
-              </span>
+              <span class="badge badge-cyan font-mono">{{ filteredNodeInterfaces.length }} {{ filteredNodeInterfaces.length === 1 ? 'interface' : 'interfaces' }}</span>
             </div>
-            <span class="badge badge-violet font-mono">BANDWIDTH</span>
-          </div>
-
-          <div class="interfaces-table-wrapper" v-if="filteredNodeInterfaces.length > 0">
-            <table class="interfaces-table">
-              <thead>
-                <tr>
-                  <th class="th-iface">Interface</th>
-                  <th class="th-rx">↓ Rx</th>
-                  <th class="th-tx">↑ Tx</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="iface in filteredNodeInterfaces" :key="iface.name" class="iface-row">
-                  <td class="col-iface-name font-mono">
-                    <span class="iface-tag font-mono">{{ iface.name }}</span>
-                  </td>
-                  <td class="col-iface-rx font-mono">
-                    <span class="text-cyan smooth-value">↓ {{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
-                  </td>
-                  <td class="col-iface-tx font-mono">
-                    <span class="text-violet smooth-value">↑ {{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-else class="node-section-empty">
-            <span class="text-muted text-xs">No active network interfaces detected for this node</span>
-          </div>
-        </div>
-
-        <!-- 4. 📦 Apps & Services on this Node Section -->
-        <div class="node-services-section glass-panel">
-          <div class="hud-section-header">
-            <div class="node-section-title-group">
-              <h4 class="hud-section-heading">
-                <span class="heading-icon">📦</span> Apps & Services on this Node
-              </h4>
-              <span class="badge badge-cyan font-mono" v-if="nodeServices.length > 0">
-                {{ nodeServices.length }} {{ nodeServices.length === 1 ? 'service' : 'services' }}
-              </span>
+            <div class="interfaces-grid">
+              <div
+                v-for="iface in filteredNodeInterfaces"
+                :key="iface.name"
+                class="iface-card glass-panel"
+              >
+                <div class="iface-top">
+                  <div class="iface-name-group">
+                    <span class="iface-icon">🌐</span>
+                    <span class="iface-name font-mono" :title="iface.name">{{ iface.name }}</span>
+                  </div>
+                  <span class="iface-nic-tag font-mono">NIC</span>
+                </div>
+                <div class="iface-rates-stack">
+                  <div class="iface-rate-row rx-row">
+                    <span class="rate-badge rx-badge">↓ RX</span>
+                    <span class="rate-val text-cyan font-mono">{{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
+                  </div>
+                  <div class="iface-rate-row tx-row">
+                    <span class="rate-badge tx-badge">↑ TX</span>
+                    <span class="rate-val text-purple font-mono">{{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <span class="badge badge-indigo font-mono">THROUGHPUT</span>
           </div>
 
-          <div class="services-table-wrapper" v-if="nodeServices.length > 0">
-            <table class="node-services-table">
-              <thead>
-                <tr>
-                  <th class="th-svc-name">Service</th>
-                  <th class="th-svc-cpu">CPU</th>
-                  <th class="th-svc-mem">Memory</th>
-                  <th class="th-svc-rx">↓ Rx</th>
-                  <th class="th-svc-tx">↑ Tx</th>
-                  <th class="th-svc-rps">Req/s</th>
-                  <th class="th-svc-err">Err %</th>
-                  <th class="th-svc-status">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="svc in nodeServices" :key="svc.service_name + (svc.node_id || '')" class="node-svc-row">
-                  <td class="col-svc-name">
-                    <div class="svc-name-cell">
-                      <span
-                        class="node-indicator-dot"
-                        :class="svc.status === 'healthy' ? 'bg-emerald' : svc.status === 'degraded' ? 'bg-amber' : 'bg-rose'"
-                      ></span>
-                      <span class="svc-title font-mono">{{ svc.service_name }}</span>
-                    </div>
-                  </td>
-                  <td class="col-svc-cpu font-mono">
-                    <span class="smooth-value" :class="svc.cpu_percent > 80 ? 'text-rose' : svc.cpu_percent > 50 ? 'text-amber' : 'text-emerald'">
-                      {{ svc.cpu_percent.toFixed(1) }}%
-                    </span>
-                  </td>
-                  <td class="col-svc-mem font-mono">
-                    <span class="smooth-value" :class="svc.memory_percent > 85 ? 'text-rose' : svc.memory_percent > 70 ? 'text-amber' : 'text-cyan'">
-                      {{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}
-                    </span>
-                  </td>
-                  <td class="col-svc-rx font-mono">
-                    <span class="text-cyan smooth-value">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
-                  </td>
-                  <td class="col-svc-tx font-mono">
-                    <span class="text-violet smooth-value">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
-                  </td>
-                  <td class="col-svc-rps font-mono">
-                    <span class="smooth-value" :class="(svc.requests_per_sec || 0) > 0 ? 'text-emerald font-bold' : 'text-muted'">
-                      {{ (svc.requests_per_sec !== undefined && svc.requests_per_sec !== null) ? svc.requests_per_sec.toFixed(1) : '0.0' }}
-                    </span>
-                  </td>
-                  <td class="col-svc-err font-mono">
-                    <span class="smooth-value" :class="(svc.error_rate || 0) > 5 ? 'text-rose font-bold' : (svc.error_rate || 0) > 0 ? 'text-amber' : 'text-muted'">
-                      {{ (svc.error_rate !== undefined && svc.error_rate !== null) ? svc.error_rate.toFixed(1) + '%' : '0.0%' }}
-                    </span>
-                  </td>
-                  <td class="col-svc-status">
-                    <span
-                      class="badge smooth-value"
-                      :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
-                    >
-                      {{ svc.status === 'healthy' ? '● HEALTHY' : svc.status === 'degraded' ? '● DEGRADED' : '● DOWN' }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-else class="node-section-empty">
-            <span class="text-muted text-xs">No containerized services detected on this node</span>
-          </div>
-        </div>
-
-        <!-- 5. 🔥 Top Resource-Consuming Apps & Processes Table -->
-        <div class="processes-section glass-panel">
-          <div class="processes-header">
-            <div class="proc-title-group">
-              <div class="proc-title-row">
+          <!-- Unified Top Resource & Workload Processes -->
+          <div class="node-processes-section">
+            <div class="proc-header-row">
+              <div class="proc-title-group">
                 <h4 class="proc-section-heading">🔥 Top Resource-Consuming Apps & Processes</h4>
                 <span class="badge badge-indigo font-mono" v-if="filteredNodeProcesses.length > 0">
                   {{ filteredNodeProcesses.length }} active
                 </span>
               </div>
-              <p class="proc-section-desc">
-                Real-time operating system PID telemetry mapped to workload containers and system daemons.
-              </p>
-            </div>
 
+              <!-- Top Category Filter Chips -->
+              <div class="service-filter-chips proc-category-chips">
+                <button
+                  class="chip-btn"
+                  :class="{ active: processCategoryFilter === 'all' }"
+                  @click="processCategoryFilter = 'all'; processCurrentPage = 1"
+                >
+                  All ({{ processCategoryCounts.total }})
+                </button>
+                <button
+                  class="chip-btn chip-healthy"
+                  :class="{ active: processCategoryFilter === 'container' }"
+                  @click="processCategoryFilter = 'container'; processCurrentPage = 1"
+                >
+                  📦 Workloads ({{ processCategoryCounts.container }})
+                </button>
+                <button
+                  class="chip-btn chip-traffic"
+                  :class="{ active: processCategoryFilter === 'host_daemon' }"
+                  @click="processCategoryFilter = 'host_daemon'; processCurrentPage = 1"
+                >
+                  ⚡ Host Daemons ({{ processCategoryCounts.hostDaemon }})
+                </button>
+                <button
+                  class="chip-btn chip-degraded"
+                  :class="{ active: processCategoryFilter === 'kernel' }"
+                  @click="processCategoryFilter = 'kernel'; processCurrentPage = 1"
+                >
+                  ⚙️ OS Kernel ({{ processCategoryCounts.kernel }})
+                </button>
+              </div>
+            </div>
             <div class="proc-controls">
-              <div class="proc-search-box">
+              <div class="proc-search-box wide-search">
                 <span class="search-icon">🔍</span>
                 <input
                   v-model="processSearch"
                   type="text"
-                  placeholder="Filter by name, PID, user, cmd..."
+                  placeholder="Search processes by name, PID, user, command line..."
                   class="input-proc-search"
+                  @input="processCurrentPage = 1"
                 />
-                <button v-if="processSearch" class="btn-clear-search" @click="processSearch = ''">✕</button>
+                <button v-if="processSearch" class="btn-clear-search" @click="processSearch = ''; processCurrentPage = 1">✕</button>
               </div>
 
               <div class="proc-sort-group">
-                <select v-model="processSortBy" class="select-proc-sort">
+                <select v-model="processSortBy" class="select-proc-sort" @change="processCurrentPage = 1">
                   <option value="cpu">Sort: CPU % (High to Low)</option>
                   <option value="mem">Sort: Memory</option>
-                  <option value="disk">Sort: Disk I/O Rate</option>
-                  <option value="name">Sort: Process Name</option>
+                  <option value="rps">Sort: Ingress Req/s</option>
+                  <option value="bandwidth">Sort: Bandwidth (Rx/Tx)</option>
+                  <option value="name">Sort: App Name</option>
                   <option value="pid">Sort: PID</option>
                 </select>
               </div>
             </div>
-          </div>
 
-          <!-- Processes Table -->
-          <div class="processes-table-wrapper" v-if="filteredNodeProcesses.length > 0">
-            <table class="processes-table">
-              <thead>
-                <tr>
-                  <th class="th-pid">PID</th>
-                  <th class="th-app">App / Command</th>
-                  <th class="th-user">User</th>
-                  <th class="th-cpu">CPU %</th>
-                  <th class="th-mem">Memory</th>
-                  <th class="th-disk">Disk I/O</th>
-                  <th class="th-state">State</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="proc in filteredNodeProcesses"
-                  :key="proc.pid"
-                  class="proc-row"
-                  :class="{ 'proc-row-hot': proc.cpu_percent >= 70 }"
+            <div class="processes-table-wrapper" v-if="filteredNodeProcesses.length > 0">
+              <table class="processes-table">
+                <thead>
+                  <tr>
+                    <th class="th-pid">PID</th>
+                    <th class="th-app">App / Command</th>
+                    <th class="th-user">User</th>
+                    <th class="th-cpu">CPU %</th>
+                    <th class="th-mem">Memory</th>
+                    <th class="th-rps">Req/s</th>
+                    <th class="th-err">Err %</th>
+                    <th class="th-bw">Bandwidth</th>
+                    <th class="th-state">State</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="proc in paginatedNodeProcesses"
+                    :key="proc.pid + '-' + proc.name"
+                    class="proc-row"
+                    :class="{ 'proc-row-hot': proc.cpu_percent >= 70, 'proc-row-container': proc.is_container }"
+                  >
+                    <td class="col-proc-pid">
+                      <span class="pid-tag font-mono" :class="{ 'pid-tag-ctr': proc.pid === 'CTR' }">
+                        {{ typeof proc.pid === 'number' ? '#' + proc.pid : proc.pid }}
+                      </span>
+                    </td>
+                    <td class="col-proc-app">
+                      <div class="proc-app-info" :title="proc.command_line ? `${proc.name}\nType: ${getProcessOriginBadge(proc).label}\nCommand: ${proc.command_line}` : proc.name">
+                        <div class="proc-name-row">
+                          <span class="proc-name">{{ proc.name }}</span>
+                          <span class="proc-origin-tag font-mono" :class="getProcessOriginBadge(proc).class">
+                            {{ getProcessOriginBadge(proc).icon }} {{ getProcessOriginBadge(proc).label }}
+                          </span>
+                        </div>
+                        <span class="proc-cmd-line font-mono" v-if="proc.command_line">
+                          {{ proc.command_line }}
+                        </span>
+                      </div>
+                    </td>
+                    <td class="col-proc-user">
+                      <span class="user-badge font-mono">{{ proc.user || 'root' }}</span>
+                    </td>
+                    <td class="col-proc-cpu">
+                      <div class="proc-cpu-box">
+                        <div class="proc-cpu-val-row">
+                          <span class="proc-cpu-val smooth-value" :class="`text-${getProcessCpuColor(proc.cpu_percent)}`">
+                            {{ formatPercent(proc.cpu_percent) }}
+                          </span>
+                          <span v-if="proc.cpu_percent >= 70" class="badge badge-rose badge-hot-pulse">
+                            HOT
+                          </span>
+                        </div>
+                        <div class="proc-mini-track">
+                          <div
+                            class="proc-mini-fill smooth-bar"
+                            :class="`bg-${getProcessCpuColor(proc.cpu_percent)}`"
+                            :style="{ width: `${Math.min(100, proc.cpu_percent)}%` }"
+                          ></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="col-proc-mem">
+                      <div class="proc-mem-box">
+                        <span class="proc-mem-val smooth-value">{{ formatBytes(proc.memory_bytes) }}</span>
+                        <span class="proc-mem-pct font-mono" v-if="proc.memory_percent">
+                          ({{ formatPercent(proc.memory_percent) }})
+                        </span>
+                      </div>
+                    </td>
+                    <td class="col-proc-rps font-mono text-emerald">
+                      <span v-if="proc.requests_per_sec > 0">
+                        ⚡ {{ proc.requests_per_sec.toLocaleString() }}
+                      </span>
+                      <span v-else class="text-slate opacity-40">0</span>
+                    </td>
+                    <td class="col-proc-err font-mono">
+                      <span v-if="proc.error_rate > 0" class="text-rose font-bold">
+                        {{ proc.error_rate.toFixed(1) }}%
+                      </span>
+                      <span v-else class="text-slate opacity-40">0.0%</span>
+                    </td>
+                    <td class="col-proc-bw font-mono text-slate">
+                      <span class="bw-split">
+                        <span class="bw-rx text-cyan" :title="'Real-time Download / Read: ' + formatIoRate(proc.rx_bytes_per_sec)">↓ {{ formatIoRate(proc.rx_bytes_per_sec) }}</span>
+                        <span class="bw-tx text-purple" :title="'Real-time Upload / Write: ' + formatIoRate(proc.tx_bytes_per_sec)">↑ {{ formatIoRate(proc.tx_bytes_per_sec) }}</span>
+                      </span>
+                    </td>
+                    <td class="col-proc-state">
+                      <span class="badge font-mono" :class="getUnifiedProcessState(proc).class">
+                        {{ getUnifiedProcessState(proc).label }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Unified Page Size & Pagination Footer -->
+            <div class="proc-pagination" v-if="filteredNodeProcesses.length > 0">
+              <div class="pagination-info">
+                Showing
+                <span class="text-cyan font-mono font-bold">{{ filteredNodeProcesses.length === 0 ? 0 : (processCurrentPage - 1) * processPageSize + 1 }}–{{ Math.min(processCurrentPage * processPageSize, filteredNodeProcesses.length) }}</span>
+                of
+                <span class="text-slate font-mono font-bold">{{ filteredNodeProcesses.length }}</span>
+                processes & workloads
+              </div>
+
+              <!-- Page Size Selector -->
+              <div class="page-size-group">
+                <span class="page-size-label font-mono">PAGE SIZE:</span>
+                <div class="page-size-pill">
+                  <button
+                    v-for="size in [10, 25, 50, 100]"
+                    :key="size"
+                    class="btn-page-size font-mono"
+                    :class="{ active: processPageSize === size }"
+                    @click="processPageSize = size; processCurrentPage = 1"
+                  >
+                    {{ size }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="pagination-actions" v-if="totalProcessPages > 1">
+                <button
+                  class="btn-page"
+                  :disabled="processCurrentPage <= 1"
+                  @click="processCurrentPage = 1"
+                  title="First Page"
                 >
-                  <!-- PID -->
-                  <td class="col-proc-pid">
-                    <span class="pid-tag font-mono">#{{ proc.pid }}</span>
-                  </td>
+                  «
+                </button>
+                <button
+                  class="btn-page"
+                  :disabled="processCurrentPage <= 1"
+                  @click="processCurrentPage--"
+                >
+                  ‹ Prev
+                </button>
+                <span class="page-indicator font-mono">
+                  Page {{ processCurrentPage }} / {{ totalProcessPages }}
+                </span>
+                <button
+                  class="btn-page"
+                  :disabled="processCurrentPage >= totalProcessPages"
+                  @click="processCurrentPage++"
+                >
+                  Next ›
+                </button>
+                <button
+                  class="btn-page"
+                  :disabled="processCurrentPage >= totalProcessPages"
+                  @click="processCurrentPage = totalProcessPages"
+                  title="Last Page"
+                >
+                  »
+                </button>
+              </div>
+            </div>
 
-                  <!-- App / Command -->
-                  <td class="col-proc-app">
-                    <div class="proc-app-info" :title="proc.command_line ? `${proc.name}\nCommand: ${proc.command_line}` : proc.name">
-                      <span class="proc-name">{{ proc.name }}</span>
-                      <span class="proc-cmd-line font-mono" v-if="proc.command_line">
-                        {{ proc.command_line }}
-                      </span>
-                    </div>
-                  </td>
+            <div class="proc-empty-state glass-panel" v-else>
+              <div class="radar-glow-container">
+                <div class="radar-beacon"></div>
+                <span class="proc-empty-icon">📡</span>
+              </div>
+              <h5 class="proc-empty-title">
+                {{ processSearch ? 'No Processes Matching Filter' : 'No Process Telemetry Streamed' }}
+              </h5>
+              <p class="proc-empty-desc" v-if="processSearch">
+                No active processes matched "<span class="text-cyan font-mono">{{ processSearch }}</span>". Try searching for a different process name or PID.
+              </p>
+              <div class="proc-empty-telemetry-hint" v-else>
+                <p class="proc-empty-desc">
+                  Host metrics are active, but high-resolution process inspection stream is pending agent collector broadcast.
+                </p>
+                <div class="troubleshooting-hint-box">
+                  <div class="hint-header">
+                    <span class="hint-icon">💡</span>
+                    <strong class="hint-title">Troubleshooting & Activation</strong>
+                  </div>
+                  <ul class="hint-list">
+                    <li>Verify <code>k8s-agent</code> daemon is running on this node.</li>
+                    <li>Ensure agent has process collection permissions (e.g. host <code>/proc</code> mount).</li>
+                    <li>Processes will populate automatically upon receiving telemetry broadcast.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                  <!-- User -->
-                  <td class="col-proc-user">
-                    <span class="user-badge font-mono">{{ proc.user || 'root' }}</span>
-                  </td>
+        <!-- ========================================== -->
+        <!-- MODE B: HISTORICAL TELEMETRY & AUDIT       -->
+        <!-- ========================================== -->
+        <div v-else-if="nodeDrawerMode === 'history'" class="node-history-content">
+          <!-- Summary KPI Badges (Realtime CPU/RAM & Live I/O) -->
+          <div class="hist-kpi-grid" v-if="nodeHistoryData?.summary">
+            <!-- Card 1: Realtime CPU & Peak -->
+            <div class="hist-kpi-card glass-panel">
+              <span class="kpi-label">REALTIME CPU / PEAK</span>
+              <span class="kpi-val text-violet">{{ formatPercent(selectedNode?.cpu_percent) }}</span>
+              <span class="kpi-sub font-mono">
+                🔥 Peak: {{ formatPercent(nodeHistoryData.summary.peak_cpu_percent) }} <span class="text-slate">| Avg: {{ formatPercent(nodeHistoryData.summary.avg_cpu_percent) }}</span>
+              </span>
+            </div>
 
-                  <!-- CPU % -->
-                  <td class="col-proc-cpu">
-                    <div class="proc-cpu-box">
-                      <div class="proc-cpu-val-row">
-                        <span class="proc-cpu-val smooth-value" :class="`text-${getProcessCpuColor(proc.cpu_percent)}`">
-                          {{ formatPercent(proc.cpu_percent) }}
-                        </span>
-                        <span v-if="proc.cpu_percent >= 70" class="badge badge-rose badge-hot-pulse">
-                          HOT
-                        </span>
-                      </div>
-                      <div class="proc-mini-track">
-                        <div
-                          class="proc-mini-fill smooth-bar"
-                          :class="`bg-${getProcessCpuColor(proc.cpu_percent)}`"
-                          :style="{ width: `${Math.min(100, proc.cpu_percent)}%` }"
-                        ></div>
-                      </div>
-                    </div>
-                  </td>
+            <!-- Card 2: Realtime RAM & Peak -->
+            <div class="hist-kpi-card glass-panel">
+              <span class="kpi-label">REALTIME RAM / PEAK</span>
+              <span class="kpi-val text-cyan">{{ formatPercent(selectedNode?.memory_percent) }}</span>
+              <span class="kpi-sub font-mono">
+                🧠 {{ formatBytes(selectedNode?.memory_used) }} / {{ formatBytes(selectedNode?.memory_total) }} <span class="text-slate">(Peak: {{ formatPercent(nodeHistoryData.summary.peak_mem_percent) }})</span>
+              </span>
+            </div>
 
-                  <!-- Memory -->
-                  <td class="col-proc-mem">
-                    <div class="proc-mem-box">
-                      <span class="proc-mem-val smooth-value">{{ formatBytes(proc.memory_bytes) }}</span>
-                      <span class="proc-mem-pct font-mono" v-if="proc.memory_percent">
-                        ({{ formatPercent(proc.memory_percent) }})
-                      </span>
-                    </div>
-                  </td>
+            <!-- Card 3: Live Network I/O -->
+            <div class="hist-kpi-card glass-panel">
+              <span class="kpi-label">LIVE NETWORK I/O</span>
+              <span class="kpi-val text-emerald">↓ {{ formatIoRate(selectedNode?.network_rx_bytes || 0) }} ↑ {{ formatIoRate(selectedNode?.network_tx_bytes || 0) }}</span>
+              <span class="kpi-sub font-mono">
+                ⚡ Peak: ↓ {{ formatIoRate(nodeHistoryData.summary.peak_rx_bytes_sec) }}
+              </span>
+            </div>
 
-                  <!-- Disk I/O -->
-                  <td class="col-proc-disk font-mono">
-                    <div class="proc-io-rates">
-                      <span class="io-read">R: {{ formatIoRate(proc.read_bytes_per_sec) }}</span>
-                      <span class="io-sep">·</span>
-                      <span class="io-write">W: {{ formatIoRate(proc.write_bytes_per_sec) }}</span>
-                    </div>
-                  </td>
-
-                  <!-- State -->
-                  <td class="col-proc-state">
-                    <span class="badge" :class="getProcessStateBadgeClass(proc.state)">
-                      {{ getProcessStateLabel(proc.state) }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <!-- Card 4: Uptime & Disk Usage -->
+            <div class="hist-kpi-card glass-panel">
+              <span class="kpi-label">UPTIME & DISK USAGE</span>
+              <span class="kpi-val" :class="nodeHistoryData.summary.uptime_percent >= 99 ? 'text-emerald' : 'text-amber'">
+                {{ formatPercent(nodeHistoryData.summary.uptime_percent) }}
+              </span>
+              <span class="kpi-sub font-mono">
+                💾 Disk: {{ formatPercent(selectedNode?.disk_percent) }} <span class="text-slate">({{ formatBytes(selectedNode?.disk_used) }} / {{ formatBytes(selectedNode?.disk_total) }})</span>
+              </span>
+            </div>
+          </div>
+          <div class="hist-kpi-empty glass-panel" v-else-if="!nodeHistoryLoading">
+            <div class="empty-kpi-content">
+              <span class="empty-kpi-icon">📊</span>
+              <div class="empty-kpi-text">
+                <strong class="empty-kpi-title">Historical Summary Ingestion In Progress</strong>
+                <span class="empty-kpi-desc">No aggregated summary recorded for <code>{{ selectedNode?.node_name }}</code> in the {{ nodeHistoryRange }} window. Live telemetry and monitoring remain fully active.</span>
+              </div>
+            </div>
           </div>
 
-          <!-- Clean Cybernetic Empty State -->
-          <div v-else class="proc-empty-state">
-            <div class="proc-empty-icon">📡</div>
-            <h5 class="proc-empty-title">
-              {{ processSearch ? 'No Processes Matching Filter' : 'No Process Telemetry Streamed' }}
-            </h5>
-            <p class="proc-empty-desc" v-if="processSearch">
-              No active processes matched "{{ processSearch }}". Try searching for a different process name or PID.
-            </p>
-            <p class="proc-empty-desc" v-else>
-              Node telemetry is online but process inspector stream is pending or waiting for agent collector broadcast. Ensure <code>k8s-agent</code> v2.4+ is installed and running with process collector enabled (port 9100).
-            </p>
-            <div class="proc-empty-actions" v-if="processSearch">
-              <button class="btn btn-secondary btn-sm" @click="processSearch = ''">
-                Clear Search Filter
+          <!-- Historical Multi-Series Chart -->
+          <div class="hist-chart-wrapper glass-panel">
+            <div class="hist-chart-header">
+              <div class="chart-title-group">
+                <h4 class="hist-chart-title">📈 {{ selectedNode?.node_name || 'Node' }} Hardware Saturation Trends</h4>
+                <span class="hist-chart-desc badge-history-window font-mono">{{ nodeHistoryWindowBadge }}</span>
+              </div>
+
+              <!-- Interactive Series Toggles with Live Values -->
+              <div class="series-toggles-group" v-if="nodeHistoryList.length > 0">
+                <button
+                  type="button"
+                  class="series-toggle-btn"
+                  :class="{ 'toggle-active cpu-active': showHistCpu }"
+                  @click="showHistCpu = !showHistCpu"
+                  title="Click to toggle CPU curve"
+                >
+                  <span class="toggle-dot bg-violet"></span>
+                  <span>CPU: <strong>{{ formatPercent(selectedNode?.cpu_percent) }}</strong></span>
+                </button>
+
+                <button
+                  type="button"
+                  class="series-toggle-btn"
+                  :class="{ 'toggle-active mem-active': showHistMem }"
+                  @click="showHistMem = !showHistMem"
+                  title="Click to toggle RAM curve"
+                >
+                  <span class="toggle-dot bg-cyan"></span>
+                  <span>RAM: <strong>{{ formatPercent(selectedNode?.memory_percent) }}</strong></span>
+                </button>
+
+                <button
+                  type="button"
+                  class="series-toggle-btn"
+                  :class="{ 'toggle-active reqs-active': showHistDisk }"
+                  @click="showHistDisk = !showHistDisk"
+                  title="Click to toggle Disk curve"
+                >
+                  <span class="toggle-dot bg-emerald"></span>
+                  <span>Disk: <strong>{{ formatPercent(selectedNode?.disk_percent) }}</strong></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Integrated Time Range & Sample Bar -->
+            <div class="hist-chart-time-bar">
+              <div class="chart-time-pills">
+                <button
+                  v-for="r in ['1h', '3h', '6h', '24h', '7d', '30d'] as const"
+                  :key="r"
+                  class="btn-chart-range-pill"
+                  :class="{ active: nodeHistoryRange === r && !showCustomHistoryPicker }"
+                  @click="switchNodeDrawerToHistory(r)"
+                >
+                  {{ r }}
+                </button>
+                <button
+                  class="btn-chart-range-pill"
+                  :class="{ active: nodeHistoryRange === 'custom' || showCustomHistoryPicker }"
+                  @click="toggleCustomHistoryPicker"
+                >
+                  📅 Custom
+                </button>
+              </div>
+              <div class="range-right">
+                <span class="badge badge-indigo font-mono" v-if="nodeHistoryData?.resolution">
+                  Sample Rate: {{ nodeHistoryData.resolution }}
+                </span>
+                <button class="btn btn-secondary btn-xs" @click="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, nodeHistoryRange)" :disabled="nodeHistoryLoading">
+                  ↺ Refresh
+                </button>
+              </div>
+            </div>
+
+            <!-- Inline Glassmorphic Custom History Toolbar -->
+            <div v-if="showCustomHistoryPicker || nodeHistoryRange === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
+              <div class="custom-range-inputs">
+                <div class="range-field">
+                  <label class="range-label font-mono">FROM:</label>
+                  <input
+                    type="datetime-local"
+                    v-model="customHistoryFrom"
+                    class="input-datetime font-mono"
+                    @keyup.enter="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+                  />
+                </div>
+                <div class="range-field">
+                  <label class="range-label font-mono">TO:</label>
+                  <input
+                    type="datetime-local"
+                    v-model="customHistoryTo"
+                    class="input-datetime font-mono"
+                    @keyup.enter="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+                  />
+                </div>
+              </div>
+
+              <div class="custom-range-actions">
+                <button
+                  type="button"
+                  class="btn-apply-range font-mono"
+                  :disabled="nodeHistoryLoading"
+                  @click="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+                >
+                  <span class="glow-dot"></span>
+                  <span>{{ nodeHistoryLoading ? 'Applying...' : 'Apply Window' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Loading overlay when fetching new time range -->
+            <div v-if="nodeHistoryLoading" class="hist-chart-loading glass-panel">
+              <span class="spinner-sm"></span> Loading {{ nodeHistoryRange }} telemetry rollups...
+            </div>
+
+            <!-- SVG Chart with HTML-Overlay Grid Layout -->
+            <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave" @click="handleNodeHistChartClick">
+              <!-- Main SVG Canvas -->
+              <svg class="hist-svg-canvas" viewBox="0 0 760 200" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="histCpuGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#a855f7" stop-opacity="0.35" />
+                    <stop offset="100%" stop-color="#a855f7" stop-opacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="histMemGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.3" />
+                    <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+                  </linearGradient>
+                </defs>
+
+                <!-- Y-Axis Percentage Labels inside SVG (Fixed exact alignment) -->
+                <g class="hist-svg-y-labels" font-size="9" text-anchor="end">
+                  <text x="44" y="23" fill="#fb7185" font-weight="600">100%</text>
+                  <text x="44" y="63" fill="#fbbf24" font-weight="600">75%</text>
+                  <text x="44" y="103" fill="#38bdf8" font-weight="600">50%</text>
+                  <text x="44" y="143" fill="#94a3b8">25%</text>
+                  <text x="44" y="183" fill="#64748b">0%</text>
+                </g>
+
+                <!-- Horizontal Grid Lines (Locked to exact scale: 20=100%, 60=75%, 100=50%, 140=25%, 180=0%) -->
+                <line x1="50" y1="20" x2="720" y2="20" stroke="rgba(244,63,94,0.2)" stroke-dasharray="3,3" />
+                <line x1="50" y1="60" x2="720" y2="60" stroke="rgba(245,158,11,0.2)" stroke-dasharray="3,3" />
+                <line x1="50" y1="100" x2="720" y2="100" stroke="rgba(56,189,248,0.12)" stroke-dasharray="3,3" />
+                <line x1="50" y1="140" x2="720" y2="140" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+                <line x1="50" y1="180" x2="720" y2="180" stroke="rgba(255,255,255,0.12)" />
+
+                <!-- Area Fills -->
+                <path v-if="showHistCpu && nodeHistoryChartCpuArea" :d="nodeHistoryChartCpuArea" fill="url(#histCpuGrad)" />
+                <path v-if="showHistMem && nodeHistoryChartMemArea" :d="nodeHistoryChartMemArea" fill="url(#histMemGrad)" />
+
+                <!-- Trend Lines -->
+                <path v-if="showHistDisk && nodeHistoryChartDiskPath" :d="nodeHistoryChartDiskPath" fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4,4" />
+                <path v-if="showHistMem && nodeHistoryChartMemPath" :d="nodeHistoryChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2" />
+                <path v-if="showHistCpu && nodeHistoryChartCpuPath" :d="nodeHistoryChartCpuPath" fill="none" stroke="#a855f7" stroke-width="2.5" />
+
+                <!-- Interactive Crosshair -->
+                <g v-if="isNodeHistHovered && nodeHistHoverCoords">
+                  <line
+                    :x1="nodeHistHoverCoords.x"
+                    y1="15"
+                    :x2="nodeHistHoverCoords.x"
+                    y2="185"
+                    stroke="#38bdf8"
+                    stroke-width="1.5"
+                    stroke-dasharray="3,3"
+                  />
+                  <circle v-if="showHistCpu" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpu" r="4.5" fill="#a855f7" stroke="#ffffff" stroke-width="2" />
+                  <circle v-if="showHistMem" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yMem" r="4" fill="#06b6d4" stroke="#ffffff" stroke-width="1.5" />
+                  <circle v-if="showHistDisk" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yDisk" r="3.5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
+                </g>
+              </svg>
+
+              <!-- Floating Tooltip Box (Color-Matched with Line Legends) -->
+              <div v-if="isNodeHistHovered && hoveredNodeHistPoint" class="hist-rich-tooltip" :style="nodeHistTooltipStyle">
+                <div class="tooltip-time-header">
+                  🕒 {{ new Date(hoveredNodeHistPoint.recorded_at).toLocaleString() }}
+                </div>
+                <div class="tooltip-series-row" v-if="showHistCpu">
+                  <span class="tooltip-dot dot-violet"></span>
+                  <span class="tooltip-label">CPU:</span>
+                  <strong class="tooltip-val text-violet">{{ formatPercent(hoveredNodeHistPoint.cpu_percent) }} (Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})</strong>
+                </div>
+                <div class="tooltip-series-row" v-if="showHistMem">
+                  <span class="tooltip-dot dot-cyan"></span>
+                  <span class="tooltip-label">Memory:</span>
+                  <strong class="tooltip-val text-cyan">{{ formatPercent(hoveredNodeHistPoint.mem_percent) }} ({{ formatBytes(hoveredNodeHistPoint.mem_used_bytes) }})</strong>
+                </div>
+                <div class="tooltip-series-row" v-if="showHistDisk">
+                  <span class="tooltip-dot dot-emerald"></span>
+                  <span class="tooltip-label">Disk:</span>
+                  <strong class="tooltip-val text-emerald">{{ formatPercent(hoveredNodeHistPoint.disk_percent) }} ({{ formatBytes(hoveredNodeHistPoint.disk_used_bytes) }})</strong>
+                </div>
+                <div class="tooltip-series-row">
+                  <span class="tooltip-dot dot-indigo"></span>
+                  <span class="tooltip-label">Net I/O:</span>
+                  <strong class="tooltip-val text-indigo">↓ {{ formatIoRate(hoveredNodeHistPoint.rx_bytes_per_sec) }} ↑ {{ formatIoRate(hoveredNodeHistPoint.tx_bytes_per_sec) }}</strong>
+                </div>
+                <button
+                  type="button"
+                  class="btn-pit-sync font-mono"
+                  @click.stop="syncLogsToPointInTime(hoveredNodeHistPoint)"
+                  title="Sync live and historical failure logs to this point in time (±15 minutes)"
+                >
+                  <span>🔍</span> View Logs at this time
+                </button>
+              </div>
+
+              <!-- Bottom X-Axis Time Markers -->
+              <div class="hist-x-axis">
+                <span v-for="marker in nodeHistoryTimeMarkers" :key="marker.x" class="x-tick">
+                  {{ marker.time }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Empty History Chart Placeholder -->
+            <div v-else class="hist-chart-empty">
+              <div class="empty-chart-illustration">
+                <span class="empty-chart-icon">📈</span>
+                <span class="empty-pulse-badge">Awaiting Telemetry Rollups</span>
+              </div>
+              <h5 class="empty-chart-title">No Telemetry Recorded in {{ nodeHistoryRange }} Window</h5>
+              <p class="empty-chart-desc">
+                Historical metrics are aggregated periodically by the background collector. Once continuous telemetry is recorded for <code>{{ selectedNode?.node_name }}</code>, multi-series saturation curves will display here.
+              </p>
+            </div>
+          </div>
+
+          <!-- Incidents & Real Workload Failure Logs on this Server -->
+          <div class="node-incidents-section glass-panel">
+            <div class="incidents-section-header">
+              <div class="inc-title-group">
+                <h4>📜 Live & Historical Failure Logs / Incident Evidence</h4>
+                <span class="badge badge-rose font-mono" v-if="appLogLevelCounts.error > 0">
+                  {{ appLogLevelCounts.error }} error{{ appLogLevelCounts.error === 1 ? '' : 's' }}
+                </span>
+                <span class="badge badge-emerald font-mono" v-else>
+                  HEALTHY
+                </span>
+              </div>
+              <p class="inc-desc">
+                Real-time container stdout/stderr, automated pre-crash snapshots, and application exception logs on <strong>{{ selectedNode?.node_name }}</strong>.
+              </p>
+            </div>
+
+            <!-- Log Workload Selector & Filter Toolbar -->
+            <div class="log-explorer-toolbar">
+              <!-- App Selector -->
+              <div class="log-toolbar-item">
+                <label class="log-toolbar-label font-mono">APP:</label>
+                <select
+                  v-model="selectedLogApp"
+                  class="select-log-input font-mono"
+                  @change="fetchNodeAppLogs(selectedLogApp)"
+                >
+                  <option v-for="app in nodeAvailableLogApps" :key="app.name" :value="app.name">
+                    {{ app.icon }} {{ app.name }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Tail Depth Selector -->
+              <div class="log-toolbar-item">
+                <label class="log-toolbar-label font-mono">TAIL:</label>
+                <select
+                  v-model="selectedLogTail"
+                  class="select-log-input font-mono"
+                  @change="fetchNodeAppLogs(selectedLogApp)"
+                >
+                  <option :value="100">100 lines</option>
+                  <option :value="500">500 lines</option>
+                  <option :value="1000">1,000 lines</option>
+                  <option :value="5000">5,000 lines</option>
+                  <option value="all">All lines</option>
+                </select>
+              </div>
+
+              <!-- Time Window (Since) Selector -->
+              <div class="log-toolbar-item">
+                <label class="log-toolbar-label font-mono">WINDOW:</label>
+                <select
+                  v-model="selectedLogSince"
+                  class="select-log-input font-mono"
+                  @change="fetchNodeAppLogs(selectedLogApp)"
+                >
+                  <option value="all">All Time</option>
+                  <option value="15m">Last 15m</option>
+                  <option value="1h">Last 1h</option>
+                  <option value="6h">Last 6h</option>
+                  <option value="24h">Last 24h</option>
+                  <option value="168h">Last 7d</option>
+                  <option value="custom">📅 Custom Time Range...</option>
+                </select>
+              </div>
+
+              <!-- Log Level Chips -->
+              <div class="log-level-chips">
+                <button
+                  class="chip-btn"
+                  :class="{ active: selectedLogLevel === 'all' }"
+                  @click="selectedLogLevel = 'all'"
+                >
+                  All ({{ appLogLevelCounts.total }})
+                </button>
+                <button
+                  class="chip-btn chip-rose"
+                  :class="{ active: selectedLogLevel === 'error' }"
+                  @click="selectedLogLevel = 'error'"
+                >
+                  🔴 Errors ({{ appLogLevelCounts.error }})
+                </button>
+                <button
+                  class="chip-btn chip-amber"
+                  :class="{ active: selectedLogLevel === 'warn' }"
+                  @click="selectedLogLevel = 'warn'"
+                >
+                  🟡 Warnings ({{ appLogLevelCounts.warn }})
+                </button>
+              </div>
+
+              <!-- Log Search Box -->
+              <div class="log-search-box">
+                <span class="search-icon">🔍</span>
+                <input
+                  v-model="appLogSearch"
+                  type="text"
+                  placeholder="Filter logs / stack traces..."
+                  class="input-log-search font-mono"
+                />
+                <button v-if="appLogSearch" class="btn-clear-search" @click="appLogSearch = ''">✕</button>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="log-action-btns">
+                <button
+                  class="btn-log-action btn-log-stream"
+                  :class="{ 'stream-active': isLogStreaming }"
+                  @click="toggleLogStreaming"
+                  :title="isLogStreaming ? 'Pause Live Tail' : 'Resume Live Tail'"
+                >
+                  <span v-if="isLogStreaming" class="log-live-dot"></span>
+                  <span v-else>⏸️</span>
+                  <span>{{ isLogStreaming ? 'LIVE TAIL (3s)' : 'PAUSED' }}</span>
+                </button>
+                <button
+                  class="btn-log-action"
+                  :class="{ 'active-toggle': autoScrollLogs }"
+                  @click="autoScrollLogs = !autoScrollLogs"
+                  title="Toggle Auto-Scroll to Bottom"
+                >
+                  <span>⬇️</span>
+                  <span>Auto-Scroll: {{ autoScrollLogs ? 'ON' : 'OFF' }}</span>
+                </button>
+                <button
+                  class="btn-log-action"
+                  :disabled="appLogsLoading"
+                  @click="fetchNodeAppLogs(selectedLogApp)"
+                  title="Reload Logs"
+                >
+                  <span :class="{ 'spin-icon': appLogsLoading }">🔄</span>
+                  {{ appLogsLoading ? 'Fetching...' : 'Refresh' }}
+                </button>
+                <button
+                  class="btn-log-action"
+                  @click="copyAppLogs"
+                  title="Copy Log Text"
+                >
+                  <span>📋</span>
+                  {{ appLogsCopied ? 'Copied!' : 'Copy' }}
+                </button>
+                <button
+                  class="btn-log-action btn-log-download"
+                  @click="downloadAppLogs"
+                  title="Download Raw Log File"
+                >
+                  <span>⬇️</span>
+                  Export .log
+                </button>
+              </div>
+            </div>
+
+            <!-- Custom Date-Time Range Selector Bar -->
+            <div v-if="selectedLogSince === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
+              <div class="custom-range-inputs">
+                <div class="range-field">
+                  <label class="range-label font-mono">FROM:</label>
+                  <input
+                    type="datetime-local"
+                    v-model="customLogFrom"
+                    class="input-datetime font-mono"
+                    @keyup.enter="fetchNodeAppLogs(selectedLogApp)"
+                  />
+                </div>
+                <div class="range-field">
+                  <label class="range-label font-mono">TO:</label>
+                  <input
+                    type="datetime-local"
+                    v-model="customLogTo"
+                    class="input-datetime font-mono"
+                    @keyup.enter="fetchNodeAppLogs(selectedLogApp)"
+                  />
+                </div>
+              </div>
+
+              <div class="custom-range-presets">
+                <span class="preset-label font-mono">PRESETS:</span>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyLogPreset('30m')">Last 30m</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyLogPreset('2h')">Last 2h</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyLogPreset('6h')">Last 6h</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyLogPreset('today')">Today</button>
+              </div>
+
+              <div class="custom-range-actions">
+                <button
+                  type="button"
+                  class="btn-apply-range font-mono"
+                  :disabled="appLogsLoading"
+                  @click="fetchNodeAppLogs(selectedLogApp)"
+                >
+                  <span class="glow-dot"></span>
+                  <span>{{ appLogsLoading ? 'Applying...' : 'Apply Range' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Terminal Real Log Viewer -->
+            <div class="log-terminal-viewer">
+              <div class="terminal-topbar">
+                <div class="terminal-dots">
+                  <span class="tdot tdot-red"></span>
+                  <span class="tdot tdot-yellow"></span>
+                  <span class="tdot tdot-green"></span>
+                </div>
+                <div class="terminal-title font-mono">
+                  stdout/stderr :: {{ selectedLogApp }} @ {{ selectedNode?.node_name }}
+                </div>
+                <div class="terminal-controls-right">
+                  <span v-if="selectedLogSince === 'custom' && (customLogFrom || customLogTo)" class="terminal-range-badge font-mono">
+                    📅 Window: {{ formatBadgeDate(customLogFrom) || 'Start' }} → {{ formatBadgeDate(customLogTo) || 'Now' }}
+                  </span>
+                  <span v-else-if="selectedLogSince !== 'all'" class="terminal-range-badge font-mono">
+                    ⏱️ Window: Last {{ selectedLogSince }}
+                  </span>
+                  <span v-if="isLogStreaming" class="terminal-stream-badge font-mono">
+                    <span class="log-live-dot"></span> LIVE (3s)
+                  </span>
+                  <span v-else class="terminal-stream-badge paused font-mono">
+                    ⏸️ PAUSED
+                  </span>
+                  <div class="terminal-stats font-mono text-slate">
+                    Showing {{ parsedAppLogLines.length }} lines
+                  </div>
+                </div>
+              </div>
+
+              <div class="terminal-body" v-if="appLogsLoading">
+                <div class="terminal-loading">
+                  <div class="terminal-spinner"></div>
+                  <span>Streaming live stdout/stderr for {{ selectedLogApp }}...</span>
+                </div>
+              </div>
+
+              <div class="terminal-body" v-else-if="appLogsError">
+                <div class="terminal-error">
+                  <span class="text-rose font-bold">⚠️ {{ appLogsError }}</span>
+                  <button class="btn btn-xs btn-secondary mt-2" @click="fetchNodeAppLogs(selectedLogApp)">Try Again</button>
+                </div>
+              </div>
+
+              <div
+                ref="terminalBodyRef"
+                class="terminal-body"
+                @scroll="handleTerminalScroll"
+                v-else-if="parsedAppLogLines.length > 0"
+              >
+                <div
+                  v-for="line in parsedAppLogLines"
+                  :key="line.id"
+                  class="log-line"
+                  :class="`log-line-${line.level}`"
+                >
+                  <span class="log-line-num font-mono">{{ line.id }}</span>
+                  <span class="log-line-level font-mono" :class="`text-${line.level === 'error' ? 'rose' : line.level === 'warn' ? 'amber' : 'cyan'}`">
+                    [{{ line.level.toUpperCase() }}]
+                  </span>
+                  <span class="log-line-content font-mono">{{ line.cleanText }}</span>
+                </div>
+              </div>
+
+              <div class="terminal-body" v-else>
+                <div class="terminal-empty">
+                  <span>🛡️ No matching log lines found for current filters.</span>
+                </div>
+              </div>
+
+              <!-- Floating Jump to Bottom Button -->
+              <button
+                v-if="userScrolledUp && parsedAppLogLines.length > 0"
+                class="jump-bottom-btn font-mono"
+                @click="scrollToBottom"
+              >
+                ⬇️ New logs available - Jump to bottom
               </button>
+            </div>
+
+            <!-- Incidents Table if any -->
+            <div class="incidents-table-wrapper mt-4" v-if="nodeHistoryData?.incidents && nodeHistoryData.incidents.length > 0">
+              <h5 class="inc-subheading">🚨 Automated Anomaly & Incident Snapshots</h5>
+              <table class="incidents-mini-table">
+                <thead>
+                  <tr>
+                    <th>Type & Severity</th>
+                    <th>Message & Root Cause</th>
+                    <th>Pre-Crash State</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="inc in nodeHistoryData.incidents" :key="inc.id" class="inc-row">
+                    <td>
+                      <div class="inc-type-cell">
+                        <span class="badge" :class="inc.severity === 'critical' ? 'badge-rose' : inc.severity === 'high' ? 'badge-amber' : 'badge-indigo'">
+                          {{ inc.severity?.toUpperCase() || 'HIGH' }}
+                        </span>
+                        <strong class="inc-type-name font-mono">{{ inc.type }}</strong>
+                      </div>
+                    </td>
+                    <td class="col-inc-msg">
+                      <div class="inc-msg-text">{{ inc.message }}</div>
+                      <div class="inc-meta-tags font-mono" v-if="inc.raw_data">
+                        <span v-if="inc.raw_data.top_processes" class="inc-tag">Has Process Dump</span>
+                        <span v-if="inc.raw_data.container_count" class="inc-tag">{{ inc.raw_data.container_count }} containers</span>
+                      </div>
+                    </td>
+                    <td class="font-mono text-slate">
+                      <div v-if="inc.raw_data?.pre_incident_cpu">CPU: {{ inc.raw_data.pre_incident_cpu }}</div>
+                      <div v-if="inc.raw_data?.pre_incident_memory">RAM: {{ inc.raw_data.pre_incident_memory }}</div>
+                      <span v-if="!inc.raw_data?.pre_incident_cpu && !inc.raw_data?.pre_incident_memory" class="text-muted">—</span>
+                    </td>
+                    <td>
+                      <span class="badge" :class="inc.status === 'resolved' ? 'badge-emerald' : inc.status === 'remediating' ? 'badge-cyan' : 'badge-amber'">
+                        {{ inc.status.toUpperCase() }}
+                      </span>
+                    </td>
+                    <td>
+                      <button class="btn btn-xs btn-secondary font-mono" @click="selectIncidentLog(inc)">
+                        🔍 Logs
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1741,6 +4152,500 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
+    </ModalDrawer>
+
+    <!-- CLUSTER TELEMETRY & THROUGHPUT DEEP-DIVE MODAL -->
+    <ModalDrawer
+      :show="showDeepDiveModal"
+      mode="modal"
+      maxWidth="1140px"
+      title="📈 Cluster Telemetry & Ingress Deep-Dive (5-Min Rolling Buffer)"
+      subtitle="High-resolution historical resource saturation, throughput telemetry, and top traffic-consuming services"
+      @close="closeDeepDiveModal"
+      @update:show="showDeepDiveModal = $event"
+    >
+      <div class="deep-dive-modal-content">
+        <!-- SECTION 1: Historical Summary Statistics Cards -->
+        <section class="modal-summary-grid">
+          <!-- Card 1: Peak Throughput -->
+          <div class="deep-stat-card glass-panel">
+            <div class="deep-stat-header">
+              <span class="deep-stat-icon">⚡</span>
+              <span class="deep-stat-title">Peak Throughput</span>
+              <span class="badge badge-emerald">5-MIN MAX</span>
+            </div>
+            <div class="deep-stat-body">
+              <span class="deep-stat-value font-mono text-emerald smooth-value">
+                {{ peakThroughput.toLocaleString() }}
+              </span>
+              <span class="deep-stat-unit">req/s</span>
+            </div>
+            <div class="deep-stat-sub">
+              <span>Maximum recorded gateway traffic spike</span>
+            </div>
+          </div>
+
+          <!-- Card 2: Average Throughput -->
+          <div class="deep-stat-card glass-panel">
+            <div class="deep-stat-header">
+              <span class="deep-stat-icon">📊</span>
+              <span class="deep-stat-title">Average Throughput</span>
+              <span class="badge badge-indigo">5-MIN MEAN</span>
+            </div>
+            <div class="deep-stat-body">
+              <span class="deep-stat-value font-mono text-cyan smooth-value">
+                {{ avgThroughput.toLocaleString() }}
+              </span>
+              <span class="deep-stat-unit">req/s</span>
+            </div>
+            <div class="deep-stat-sub">
+              <span>Mean ingress load sustained</span>
+            </div>
+          </div>
+
+          <!-- Card 3: Peak CPU Saturation -->
+          <div class="deep-stat-card glass-panel">
+            <div class="deep-stat-header">
+              <span class="deep-stat-icon">🔥</span>
+              <span class="deep-stat-title">Peak CPU Saturation</span>
+              <span class="badge badge-rose">5-MIN MAX</span>
+            </div>
+            <div class="deep-stat-body">
+              <span class="deep-stat-value font-mono text-violet smooth-value">
+                {{ peakCpu }}%
+              </span>
+              <span class="deep-stat-unit" :class="peakCpu >= 80 ? 'text-rose' : 'text-muted'">
+                {{ peakCpu >= 80 ? 'HIGH' : peakCpu >= 60 ? 'ELEVATED' : 'NOMINAL' }}
+              </span>
+            </div>
+            <div class="deep-stat-sub">
+              <span>Avg: {{ avgCpu }}% · Peak compute pressure</span>
+            </div>
+          </div>
+
+          <!-- Card 4: Average RAM Usage -->
+          <div class="deep-stat-card glass-panel">
+            <div class="deep-stat-header">
+              <span class="deep-stat-icon">🧠</span>
+              <span class="deep-stat-title">Average RAM Usage</span>
+              <span class="badge badge-cyan">5-MIN MEAN</span>
+            </div>
+            <div class="deep-stat-body">
+              <span class="deep-stat-value font-mono text-cyan smooth-value">
+                {{ avgRam }}%
+              </span>
+              <span class="deep-stat-unit" :class="avgRam >= 80 ? 'text-rose' : 'text-muted'">
+                {{ avgRam >= 80 ? 'HIGH' : avgRam >= 60 ? 'ELEVATED' : 'NOMINAL' }}
+              </span>
+            </div>
+            <div class="deep-stat-sub">
+              <span>Peak: {{ peakRam }}% · Memory allocation</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 2: High-Resolution Expanded Multi-Series Chart -->
+        <section class="modal-chart-section glass-panel">
+          <div class="modal-chart-top-bar">
+            <div class="chart-title-group">
+              <h4 class="modal-section-title">
+                <span>📉 High-Resolution Multi-Series Telemetry</span>
+              </h4>
+              <span class="text-muted text-xs">Rolling 30-sample sliding window across CPU, RAM, and gateway RPS</span>
+            </div>
+
+            <!-- Series Toggles -->
+            <div class="series-toggles-group">
+              <button
+                type="button"
+                class="series-toggle-btn"
+                :class="{ 'toggle-active cpu-active': showModalCpu }"
+                @click="showModalCpu = !showModalCpu"
+              >
+                <span class="toggle-dot bg-violet"></span>
+                <span>CPU %</span>
+              </button>
+
+              <button
+                type="button"
+                class="series-toggle-btn"
+                :class="{ 'toggle-active mem-active': showModalMem }"
+                @click="showModalMem = !showModalMem"
+              >
+                <span class="toggle-dot bg-cyan"></span>
+                <span>RAM %</span>
+              </button>
+
+              <button
+                type="button"
+                class="series-toggle-btn"
+                :class="{ 'toggle-active reqs-active': showModalReqs }"
+                @click="showModalReqs = !showModalReqs"
+              >
+                <span class="toggle-dot bg-emerald"></span>
+                <span>Throughput (req/s)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Expanded SVG Chart Canvas with Hover Crosshair & Tooltip -->
+          <div
+            class="modal-svg-canvas-box"
+            @mousemove="handleModalChartHover"
+            @mouseleave="handleModalChartLeave"
+          >
+            <svg viewBox="0 0 760 220" class="modal-expanded-svg" preserveAspectRatio="none">
+              <!-- Defs for Gradients -->
+              <defs>
+                <linearGradient id="deepCpuGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.35" />
+                  <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0" />
+                </linearGradient>
+                <linearGradient id="deepMemGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.30" />
+                  <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+                </linearGradient>
+                <linearGradient id="deepReqGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#10b981" stop-opacity="0.30" />
+                  <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              <!-- Horizontal Grid Lines & Left/Right Y-Axis Labels -->
+              <!-- 100% -->
+              <line x1="50" y1="20" x2="700" y2="20" stroke="rgba(255, 255, 255, 0.08)" stroke-dasharray="3,3" />
+              <text x="44" y="24" class="svg-axis-label text-left" text-anchor="end">100%</text>
+              <text x="706" y="24" class="svg-axis-label text-right" text-anchor="start">{{ maxModalReqs }} req/s</text>
+
+              <!-- 75% -->
+              <line x1="50" y1="62.5" x2="700" y2="62.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+              <text x="44" y="66.5" class="svg-axis-label text-left" text-anchor="end">75%</text>
+              <text x="706" y="66.5" class="svg-axis-label text-right" text-anchor="start">{{ Math.round(maxModalReqs * 0.75) }}</text>
+
+              <!-- 50% -->
+              <line x1="50" y1="105" x2="700" y2="105" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+              <text x="44" y="109" class="svg-axis-label text-left" text-anchor="end">50%</text>
+              <text x="706" y="109" class="svg-axis-label text-right" text-anchor="start">{{ Math.round(maxModalReqs * 0.5) }}</text>
+
+              <!-- 25% -->
+              <line x1="50" y1="147.5" x2="700" y2="147.5" stroke="rgba(255, 255, 255, 0.05)" stroke-dasharray="3,3" />
+              <text x="44" y="151.5" class="svg-axis-label text-left" text-anchor="end">25%</text>
+              <text x="706" y="151.5" class="svg-axis-label text-right" text-anchor="start">{{ Math.round(maxModalReqs * 0.25) }}</text>
+
+              <!-- 0% Baseline -->
+              <line x1="50" y1="190" x2="700" y2="190" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.2" />
+              <text x="44" y="194" class="svg-axis-label text-left" text-anchor="end">0%</text>
+              <text x="706" y="194" class="svg-axis-label text-right" text-anchor="start">0</text>
+
+              <!-- X-Axis Timestamps -->
+              <g class="svg-x-axis-group">
+                <text
+                  v-for="(marker, mIdx) in modalTimeAxisMarkers"
+                  :key="mIdx"
+                  :x="marker.x"
+                  y="212"
+                  class="svg-axis-label text-center font-mono"
+                  text-anchor="middle"
+                >
+                  {{ marker.time }}
+                </text>
+              </g>
+
+              <!-- Series 1: CPU Area & Line -->
+              <g v-if="showModalCpu && modalChartCpuPath">
+                <path :d="modalChartCpuArea" fill="url(#deepCpuGrad)" />
+                <path :d="modalChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              </g>
+
+              <!-- Series 2: RAM Area & Line -->
+              <g v-if="showModalMem && modalChartMemPath">
+                <path :d="modalChartMemArea" fill="url(#deepMemGrad)" />
+                <path :d="modalChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              </g>
+
+              <!-- Series 3: Throughput Area & Line -->
+              <g v-if="showModalReqs && modalChartReqsPath">
+                <path :d="modalChartReqsArea" fill="url(#deepReqGrad)" />
+                <path :d="modalChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              </g>
+
+              <!-- Interactive Hover Crosshair & Series Markers -->
+              <g v-if="isModalHovered && modalHoverCoords" class="modal-hover-overlay">
+                <!-- Vertical Guide Line -->
+                <line
+                  :x1="modalHoverCoords.x"
+                  y1="20"
+                  :x2="modalHoverCoords.x"
+                  y2="190"
+                  stroke="rgba(255, 255, 255, 0.6)"
+                  stroke-dasharray="4,3"
+                  stroke-width="1.5"
+                />
+
+                <!-- CPU Point Marker -->
+                <circle
+                  v-if="showModalCpu"
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yCpu"
+                  r="5"
+                  fill="#8b5cf6"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                  class="trend-pulse-dot"
+                />
+
+                <!-- RAM Point Marker -->
+                <circle
+                  v-if="showModalMem"
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yMem"
+                  r="5"
+                  fill="#06b6d4"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                  class="trend-pulse-dot"
+                />
+
+                <!-- Reqs Point Marker -->
+                <circle
+                  v-if="showModalReqs"
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yReq"
+                  r="5"
+                  fill="#10b981"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                  class="trend-pulse-dot"
+                />
+              </g>
+            </svg>
+
+            <!-- Expanded Floating Tooltip Box -->
+            <div
+              v-if="isModalHovered && hoveredModalPoint"
+              class="modal-rich-tooltip glass-panel animate-fade-in"
+              :style="modalTooltipStyle"
+            >
+              <div class="trend-tooltip-header">
+                <span class="tooltip-time-icon">🕒</span>
+                <span class="tooltip-time font-mono">{{ hoveredModalPoint.time }}</span>
+                <span class="tooltip-time-badge font-mono" v-if="hoveredModalElapsed">{{ hoveredModalElapsed }}</span>
+              </div>
+              <div class="trend-tooltip-body">
+                <div class="tooltip-row" v-if="showModalCpu">
+                  <div class="tooltip-label">
+                    <span class="tooltip-dot bg-violet"></span>
+                    <span>CPU Saturation:</span>
+                  </div>
+                  <span class="tooltip-value font-mono text-violet font-bold">{{ hoveredModalPoint.cpu }}%</span>
+                </div>
+                <div class="tooltip-row" v-if="showModalMem">
+                  <div class="tooltip-label">
+                    <span class="tooltip-dot bg-cyan"></span>
+                    <span>RAM Usage:</span>
+                  </div>
+                  <span class="tooltip-value font-mono text-cyan font-bold">{{ hoveredModalPoint.mem }}%</span>
+                </div>
+                <div class="tooltip-row" v-if="showModalReqs">
+                  <div class="tooltip-label">
+                    <span class="tooltip-dot bg-emerald"></span>
+                    <span>Throughput:</span>
+                  </div>
+                  <span class="tooltip-value font-mono text-emerald font-bold">{{ hoveredModalPoint.reqs.toLocaleString() }} req/s</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 3: 📦 Top Traffic & Request-Consuming Services Breakdown -->
+        <section class="modal-breakdown-section glass-panel">
+          <div class="breakdown-header-bar">
+            <div class="breakdown-title-wrap">
+              <h4 class="modal-section-title">
+                <span>📦 Top Traffic & Request-Consuming Services</span>
+              </h4>
+              <span class="badge badge-cyan font-mono">
+                {{ filteredAndSortedClusterServices.length }} {{ filteredAndSortedClusterServices.length === 1 ? 'SERVICE' : 'SERVICES' }}
+              </span>
+            </div>
+
+            <!-- Search & Filters -->
+            <div class="breakdown-actions-bar">
+              <div class="table-search-input-wrap">
+                <span class="search-icon">🔍</span>
+                <input
+                  v-model="modalServiceSearch"
+                  type="text"
+                  placeholder="Filter service, node, or status..."
+                  class="table-search-field"
+                />
+                <button
+                  v-if="modalServiceSearch"
+                  class="btn-clear-search"
+                  type="button"
+                  @click="modalServiceSearch = ''"
+                >✕</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Services Breakdown Table -->
+          <div class="breakdown-table-wrapper" v-if="filteredAndSortedClusterServices.length > 0">
+            <table class="breakdown-table">
+              <thead>
+                <tr>
+                  <th class="th-svc cursor-pointer" @click="toggleModalSort('name')">
+                    <div class="th-content">
+                      <span>SERVICE</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'name' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-node cursor-pointer" @click="toggleModalSort('node')">
+                    <div class="th-content">
+                      <span>HOST NODE</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'node' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-traffic cursor-pointer" @click="toggleModalSort('traffic')">
+                    <div class="th-content">
+                      <span>TRAFFIC CONTRIBUTION</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'traffic' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-rps cursor-pointer" @click="toggleModalSort('rps')">
+                    <div class="th-content">
+                      <span>REQ / S</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'rps' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-bw cursor-pointer" @click="toggleModalSort('bandwidth')">
+                    <div class="th-content">
+                      <span>BANDWIDTH</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'bandwidth' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-res cursor-pointer" @click="toggleModalSort('cpu')">
+                    <div class="th-content">
+                      <span>CPU & MEMORY</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'cpu' || modalServiceSortBy === 'mem' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                  <th class="th-status cursor-pointer" @click="toggleModalSort('status')">
+                    <div class="th-content">
+                      <span>STATUS</span>
+                      <span class="sort-icon">{{ modalServiceSortBy === 'status' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="svc in filteredAndSortedClusterServices"
+                  :key="svc.service_name + '-' + svc.node_name"
+                  class="breakdown-row"
+                >
+                  <!-- 1. Service Name with Dot Badge -->
+                  <td class="col-svc">
+                    <div class="service-identity">
+                      <span
+                        class="node-indicator-dot"
+                        :class="svc.status === 'healthy' ? 'bg-emerald' : svc.status === 'degraded' ? 'bg-amber' : 'bg-rose'"
+                      ></span>
+                      <div class="service-name-wrap">
+                        <span class="service-title font-mono">{{ svc.service_name }}</span>
+                        <span class="service-replica-tag" v-if="svc.container_count > 1">
+                          {{ svc.container_count }} replicas
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+
+                  <!-- 2. Host Node Name -->
+                  <td class="col-node">
+                    <div class="node-cell-wrap">
+                      <span class="node-server-icon">🖥️</span>
+                      <span class="node-server-name font-mono">{{ svc.node_name }}</span>
+                    </div>
+                  </td>
+
+                  <!-- 3. Traffic Contribution Bar -->
+                  <td class="col-traffic">
+                    <div class="traffic-bar-cell">
+                      <div class="traffic-track">
+                        <div
+                          class="traffic-fill"
+                          :style="{ width: `${Math.max(4, Math.min(100, svc.traffic_percent))}%` }"
+                        ></div>
+                      </div>
+                      <span class="traffic-label font-mono font-bold">{{ svc.traffic_percent.toFixed(1) }}%</span>
+                    </div>
+                  </td>
+
+                  <!-- 4. Req / s -->
+                  <td class="col-rps font-mono">
+                    <span
+                      class="smooth-value"
+                      :class="svc.requests_per_sec > 0 ? 'text-emerald font-bold' : 'text-muted'"
+                    >
+                      {{ svc.requests_per_sec > 0 ? svc.requests_per_sec.toFixed(1) : '0.0' }}
+                    </span>
+                    <span class="text-xs text-muted" v-if="svc.requests_per_sec > 0"> rps</span>
+                  </td>
+
+                  <!-- 5. Bandwidth (Rx and Tx) -->
+                  <td class="col-bw font-mono">
+                    <div class="bandwidth-stack">
+                      <span class="bw-rx text-cyan" :title="'Live: ' + formatIoRate(svc.rx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_rx_bytes || 0) + ' received'">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
+                      <span class="bw-tx text-violet" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_tx_bytes || 0) + ' sent'">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+                    </div>
+                  </td>
+
+                  <!-- 6. CPU & Memory Footprint -->
+                  <td class="col-res font-mono">
+                    <div class="res-stack">
+                      <span
+                        class="smooth-value"
+                        :class="svc.cpu_percent > 80 ? 'text-rose font-bold' : svc.cpu_percent > 50 ? 'text-amber' : 'text-violet'"
+                      >
+                        {{ svc.cpu_percent.toFixed(1) }}% CPU
+                      </span>
+                      <span class="text-cyan text-xs">
+                        {{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}
+                      </span>
+                    </div>
+                  </td>
+
+                  <!-- 7. Status Badge -->
+                  <td class="col-status">
+                    <span
+                      class="badge smooth-value"
+                      :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
+                    >
+                      {{ svc.status === 'healthy' ? '● HEALTHY' : svc.status === 'degraded' ? '● DEGRADED' : '● DOWN' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Empty Search State -->
+          <div v-else class="breakdown-empty-state">
+            <span class="empty-icon">🔍</span>
+            <p class="empty-text">No services found matching "{{ modalServiceSearch }}"</p>
+            <button class="btn btn-secondary btn-sm" type="button" @click="modalServiceSearch = ''">
+              Clear Search Filter
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <template #footer="{ close }">
+        <button class="btn btn-secondary" type="button" @click="close">
+          <span>Close Deep-Dive</span>
+        </button>
+      </template>
     </ModalDrawer>
   </div>
 </template>
@@ -1969,23 +4874,27 @@ onUnmounted(() => {
 .summary-hud-row .hud-card {
   flex: 1 1 0;
   min-width: 0;
-  padding: 12px 14px;
+  min-height: 124px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   border-radius: 12px;
-  background: var(--glass-bg, rgba(26, 31, 46, 0.7));
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .summary-hud-row .hud-card:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: rgba(56, 189, 248, 0.28);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), 0 0 15px rgba(56, 189, 248, 0.1);
 }
 
 .hud-card-top {
@@ -2025,7 +4934,7 @@ onUnmounted(() => {
 }
 
 .hud-value {
-  font-size: 26px;
+  font-size: 1.6rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--text-primary);
@@ -2085,12 +4994,62 @@ onUnmounted(() => {
   height: 100%;
 }
 
-.hud-card-footer-text {
-  font-size: 9.5px;
-  color: var(--text-muted, #64748b);
+.hud-sub-stats {
+  font-size: 10.5px;
+  color: var(--text-secondary, #94a3b8);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
+}
+
+.sub-stat-sep {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.trend-mini-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mini-chip {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.mini-chip.chip-cpu {
+  color: #c4b5fd;
+  border-color: rgba(139, 92, 246, 0.25);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.mini-chip.chip-mem {
+  color: #67e8f9;
+  border-color: rgba(6, 182, 212, 0.25);
+  background: rgba(6, 182, 212, 0.08);
+}
+
+.mini-chip.chip-reqs {
+  color: #fde047;
+  border-color: rgba(234, 179, 8, 0.25);
+  background: rgba(234, 179, 8, 0.08);
+}
+
+.stat-sub {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted, #94a3b8);
+  margin-left: 4px;
 }
 
 /* SECTION 1B: LIVE REQUEST FLOW ANIMATION BAR */
@@ -2099,27 +5058,28 @@ onUnmounted(() => {
   overflow: hidden;
   padding: 10px 18px;
   border-radius: 12px;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.75) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.2);
   backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 16px rgba(6, 182, 212, 0.08);
   transition: border-color 0.5s ease, box-shadow 0.5s ease;
 }
 
 /* Status Themes */
 .request-flow-bar.flow-theme-emerald {
-  border-color: rgba(16, 185, 129, 0.3);
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.08), 0 4px 16px rgba(0, 0, 0, 0.2);
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.12), 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .request-flow-bar.flow-theme-amber {
-  border-color: rgba(245, 158, 11, 0.4);
-  box-shadow: 0 0 20px rgba(245, 158, 11, 0.12), 0 4px 16px rgba(0, 0, 0, 0.2);
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.15), 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .request-flow-bar.flow-theme-rose {
-  border-color: rgba(244, 63, 94, 0.5);
-  box-shadow: 0 0 25px rgba(244, 63, 94, 0.18), 0 4px 16px rgba(0, 0, 0, 0.2);
+  border-color: rgba(244, 63, 94, 0.55);
+  box-shadow: 0 0 25px rgba(244, 63, 94, 0.2), 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 /* Particle / Laser Track in Background */
@@ -2281,15 +5241,25 @@ onUnmounted(() => {
 .flow-metrics-group {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .flow-metric-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 5px 11px;
+  transition: all 0.2s ease;
+}
+
+.flow-metric-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .flow-metric-icon {
@@ -2307,9 +5277,19 @@ onUnmounted(() => {
   font-size: 11px;
 }
 
+.flow-metric-item.metric-warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
 .flow-metric-item.metric-warning .flow-metric-value,
 .flow-metric-item.metric-warning .flow-metric-label {
   color: #f59e0b;
+}
+
+.flow-metric-item.metric-critical {
+  background: rgba(244, 63, 94, 0.08);
+  border-color: rgba(244, 63, 94, 0.25);
 }
 
 .flow-metric-item.metric-critical .flow-metric-value,
@@ -2615,12 +5595,17 @@ onUnmounted(() => {
 }
 
 .node-card {
-  padding: 18px;
+  padding: 16px 18px;
   border-radius: 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   position: relative;
+  background: var(--glass-bg, rgba(26, 31, 46, 0.7));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   transition: opacity 0.3s ease,
               transform 0.3s ease,
               box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
@@ -2630,7 +5615,8 @@ onUnmounted(() => {
 
 .node-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(56, 189, 248, 0.3);
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 15px rgba(56, 189, 248, 0.1);
 }
 
 .node-card:active {
@@ -2680,11 +5666,20 @@ onUnmounted(() => {
   50% { transform: scale(1.05); opacity: 0.85; }
 }
 
+/* 2-Row Node Card Header */
 .node-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.node-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
 }
 
 .node-identity {
@@ -2692,6 +5687,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex: 1;
 }
 
 .node-status-dot {
@@ -2702,30 +5698,54 @@ onUnmounted(() => {
 }
 
 .node-name {
-  font-size: 14px;
+  font-size: 1.1rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin: 0;
+  line-height: 1.2;
 }
 
-.node-badge-row {
+.node-header-badges {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }
 
+.node-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary, #94a3b8);
+  white-space: nowrap;
+}
+
 .node-gauges-cluster {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  padding: 10px 0;
+  padding: 10px 6px;
   border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 10px;
 }
 
 .gauge-col {
@@ -2737,26 +5757,31 @@ onUnmounted(() => {
 .node-meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px 12px;
+  gap: 8px;
 }
 
 .meta-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 6px 10px;
 }
 
 .meta-label {
-  font-size: 10px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--text-muted);
 }
 
 .meta-val {
-  font-size: 11px;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   transition: color 0.5s ease;
 }
 
@@ -2776,16 +5801,16 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 6px 10px;
+  gap: 6px;
+  padding: 7px 12px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
 }
 
@@ -2796,14 +5821,32 @@ onUnmounted(() => {
   transform: translateY(-1px);
 }
 
+.btn-inspect-node {
+  border-color: rgba(6, 182, 212, 0.25);
+  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.06);
+}
+
+.btn-inspect-node:hover {
+  background: rgba(6, 182, 212, 0.16);
+  border-color: var(--accent-cyan);
+  color: #38bdf8;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+  transform: translateY(-1px);
+}
+
 .btn-manage-host {
-  width: 100%;
+  border-color: rgba(129, 140, 248, 0.25);
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.06);
 }
 
 .btn-manage-host:hover {
   border-color: #818cf8;
-  color: #a5b4fc;
-  background: rgba(99, 102, 241, 0.12);
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.16);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
+  transform: translateY(-1px);
 }
 
 .btn-node-filter {
@@ -3112,53 +6155,261 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.trend-card-clickable {
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.trend-card-clickable:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(56, 189, 248, 0.15);
+}
+
 .trend-chart-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
+.trend-expand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-cyan, #38bdf8);
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.trend-expand-badge:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: rgba(56, 189, 248, 0.6);
+  color: #fff;
+  transform: scale(1.03);
+}
+
+.trend-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.trend-chart-subtitle {
+  font-size: 11.5px;
+  color: var(--text-secondary, #94a3b8);
+  letter-spacing: normal;
+}
+
+.trend-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .trend-legend {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 10px;
-  font-weight: 700;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.legend-line {
+.legend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  user-select: none;
+}
+
+.pill-cpu {
+  color: #c4b5fd;
+  border-color: rgba(139, 92, 246, 0.25);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.pill-mem {
+  color: #67e8f9;
+  border-color: rgba(6, 182, 212, 0.25);
+  background: rgba(6, 182, 212, 0.08);
+}
+
+.pill-reqs {
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.legend-dot-circle {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* HTML-Overlay Grid Layout Chart */
+.trend-chart-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(8, 14, 26, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px 8px 14px;
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.trend-chart-body {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  height: 180px;
+  position: relative;
+}
+
+.trend-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.y-axis-left {
+  width: 38px;
+  text-align: right;
+}
+
+.y-axis-right {
+  min-width: 65px;
+  text-align: left;
+}
+
+.y-tick {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.y-tick.tick-accent {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.trend-plot-canvas {
+  flex: 1;
+  position: relative;
+  height: 100%;
+  min-width: 0;
+}
+
+.trend-plot-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.trend-x-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-left: 48px;
+  margin-right: 75px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.x-tick {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-hover-point {
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.8));
+}
+
+.trend-pulse-dot {
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.8));
+}
+
+.trend-rich-tooltip {
+  position: absolute;
+  z-index: 120;
+  min-width: 190px;
+  background: rgba(13, 19, 33, 0.96);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 16px rgba(56, 189, 248, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trend-tooltip-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+}
+
+.tooltip-time {
+  font-weight: 700;
+  color: #fff;
+}
+
+.tooltip-time-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.trend-tooltip-body {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
 }
 
-.cpu-legend::before {
-  content: '';
-  width: 10px;
-  height: 2px;
-  background: #8b5cf6;
-  display: inline-block;
+.tooltip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
 }
 
-.mem-legend::before {
-  content: '';
-  width: 10px;
-  height: 2px;
-  background: #06b6d4;
-  display: inline-block;
+.tooltip-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
 }
 
-.trend-svg-box {
-  width: 100%;
-  height: 80px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.trend-svg {
-  width: 100%;
-  height: 100%;
+.tooltip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
 .trend-footer-stats {
@@ -3511,6 +6762,10 @@ onUnmounted(() => {
 .node-drawer-header {
   padding: 18px 20px;
   border-radius: 14px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .header-top-row {
@@ -3549,7 +6804,7 @@ onUnmounted(() => {
 }
 
 .node-drawer-title {
-  font-size: 20px;
+  font-size: 1.3rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text-primary);
@@ -3569,17 +6824,17 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .node-quick-stats {
   display: flex;
   align-items: center;
   gap: 16px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.35);
   padding: 10px 16px;
   border-radius: 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
 }
 
@@ -3634,7 +6889,7 @@ onUnmounted(() => {
 
 .hardware-gauges-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
 }
 
@@ -3644,12 +6899,23 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.hw-gauge-card:hover {
+  border-color: rgba(56, 189, 248, 0.25);
+  transform: translateY(-1px);
 }
 
 .hw-gauge-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .hw-gauge-label {
@@ -3658,13 +6924,28 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .hw-gauge-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   font-family: var(--font-mono);
   transition: color 0.5s ease;
+  white-space: nowrap;
+}
+
+.hw-net-inline-rates {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.hw-net-inline-rates .net-sep {
+  color: rgba(255, 255, 255, 0.25);
+  font-weight: 700;
 }
 
 .hw-progress-track {
@@ -3675,6 +6956,10 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.hw-progress-track.hw-net-track {
+  background: rgba(168, 85, 247, 0.25);
+}
+
 .hw-progress-fill {
   height: 100%;
   border-radius: 999px;
@@ -3682,7 +6967,7 @@ onUnmounted(() => {
 }
 
 .hw-gauge-sub {
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--text-muted);
   display: flex;
   align-items: center;
@@ -3690,39 +6975,281 @@ onUnmounted(() => {
   gap: 4px;
 }
 
-.hw-net-rates {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 2px 0;
+.bw-split {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
-.net-rate-item {
+.bw-rx {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.bw-tx {
+  color: #c084fc;
+  font-weight: 600;
+}
+
+/* Network Interface Section in Node Drawer */
+.network-interfaces-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.interfaces-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .interfaces-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .interfaces-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.iface-card {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.iface-card:hover {
+  border-color: rgba(56, 189, 248, 0.25);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.iface-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.iface-name-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.iface-icon {
   font-size: 11px;
 }
 
-.net-icon {
+.iface-name {
+  font-size: 11.5px;
   font-weight: 700;
-  font-size: 10px;
-}
-
-.net-val {
   color: var(--text-primary);
-  font-weight: 600;
-  transition: color 0.5s ease;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Network Interface & Services Sections in Node Drawer */
-.node-net-interfaces-section,
+.iface-nic-tag {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.iface-rates-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.iface-rate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 6px;
+  border-radius: 6px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.iface-rate-row.rx-row {
+  background: rgba(6, 182, 212, 0.06);
+  border: 1px solid rgba(6, 182, 212, 0.15);
+}
+
+.iface-rate-row.rx-row:hover {
+  background: rgba(6, 182, 212, 0.12);
+  border-color: rgba(6, 182, 212, 0.3);
+}
+
+.iface-rate-row.tx-row {
+  background: rgba(168, 85, 247, 0.06);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+}
+
+.iface-rate-row.tx-row:hover {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.rate-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.rx-badge {
+  background: rgba(6, 182, 212, 0.2);
+  color: #38bdf8;
+}
+
+.tx-badge {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+
+.rate-val {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Service filter chips and interactive table controls */
+.service-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chip-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.chip-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+}
+
+.chip-healthy.active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.chip-degraded.active {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+.chip-traffic.active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #c084fc;
+}
+
+.sort-indicator {
+  font-size: 9px;
+  color: #38bdf8;
+  margin-left: 3px;
+}
+
+.empty-services-row {
+  padding: 24px;
+  text-align: center;
+}
+
+.empty-services-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.btn-clear-inline {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 3px 10px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-inline:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: var(--border-accent);
+}
+
 .node-services-section {
-  padding: 18px;
+  padding: 18px 20px;
   border-radius: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.node-processes-section {
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.proc-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .node-section-title-group {
@@ -3732,7 +7259,6 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
-.interfaces-table-wrapper,
 .services-table-wrapper {
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
@@ -3740,22 +7266,19 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.2);
 }
 
-.interfaces-table,
-.node-services-table {
+.services-mini-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
   font-size: 12px;
 }
 
-.interfaces-table thead tr,
-.node-services-table thead tr {
+.services-mini-table thead tr {
   background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.interfaces-table th,
-.node-services-table th {
+.services-mini-table th {
   padding: 10px 12px;
   font-size: 10px;
   font-weight: 700;
@@ -3765,44 +7288,22 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.interfaces-table tbody tr,
-.node-services-table tbody tr {
+.services-mini-table tbody tr {
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   transition: background 0.15s ease;
 }
 
-.interfaces-table tbody tr:last-child,
-.node-services-table tbody tr:last-child {
+.services-mini-table tbody tr:last-child {
   border-bottom: none;
 }
 
-.interfaces-table tbody tr:hover,
-.node-services-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.04);
+.services-mini-table tbody tr:hover {
+  background: rgba(56, 189, 248, 0.05);
 }
 
-.interfaces-table td,
-.node-services-table td {
+.services-mini-table td {
   padding: 10px 12px;
   vertical-align: middle;
-}
-
-.col-iface-name {
-  width: 40%;
-}
-
-.col-iface-rx,
-.col-iface-tx {
-  width: 30%;
-}
-
-.iface-tag {
-  font-size: 11px;
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-subtle);
 }
 
 .col-svc-name {
@@ -3860,8 +7361,9 @@ onUnmounted(() => {
 
 .proc-title-group {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .proc-title-row {
@@ -3872,16 +7374,33 @@ onUnmounted(() => {
 }
 
 .proc-section-heading {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .proc-section-desc {
   font-size: 12px;
   color: var(--text-muted);
   margin: 0;
+}
+
+.proc-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.proc-category-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .proc-controls {
@@ -3896,8 +7415,11 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   align-items: center;
+}
+
+.proc-search-box.wide-search {
   flex: 1;
-  min-width: 220px;
+  min-width: 240px;
 }
 
 .input-proc-search {
@@ -3918,18 +7440,70 @@ onUnmounted(() => {
   box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
 }
 
+.page-size-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.page-size-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.page-size-pill {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.btn-page-size {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1.2;
+}
+
+.btn-page-size:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-page-size.active {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.4);
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+}
+
 .proc-sort-group {
   display: flex;
   align-items: center;
 }
 
 .select-proc-sort {
-  padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.35);
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.45);
   border: 1px solid var(--border-medium);
   border-radius: 8px;
   color: var(--text-secondary);
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
@@ -3939,9 +7513,10 @@ onUnmounted(() => {
 .select-proc-sort:hover {
   border-color: var(--accent-cyan);
   color: var(--text-primary);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
 }
 
-/* Processes Table */
+/* Processes Table (Zero Horizontal Scroll Layout) */
 .processes-table-wrapper {
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
@@ -3962,7 +7537,7 @@ onUnmounted(() => {
 }
 
 .processes-table th {
-  padding: 10px 12px;
+  padding: 8px 10px;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -3981,7 +7556,7 @@ onUnmounted(() => {
 }
 
 .processes-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(56, 189, 248, 0.05);
 }
 
 .proc-row-hot {
@@ -3993,34 +7568,56 @@ onUnmounted(() => {
 }
 
 .processes-table td {
-  padding: 10px 12px;
+  padding: 8px 10px;
   vertical-align: middle;
 }
 
 .col-proc-pid {
   white-space: nowrap;
-  width: 70px;
+  width: 55px;
 }
 
 .pid-tag {
   font-size: 11px;
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.05);
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
   border: 1px solid var(--border-subtle);
 }
 
+.pid-tag-ctr {
+  background: rgba(56, 189, 248, 0.15) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+}
+
 .col-proc-app {
-  max-width: 220px;
-  min-width: 140px;
+  min-width: 110px;
+  max-width: 160px;
+}
+
+.ctr-icon {
+  font-size: 11px;
+  margin-right: 3px;
+}
+
+.proc-row-container {
+  background: rgba(56, 189, 248, 0.02);
 }
 
 .proc-app-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   cursor: help;
+}
+
+.proc-name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: nowrap;
 }
 
 .proc-name {
@@ -4029,6 +7626,38 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.proc-origin-tag {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.origin-badge-container {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.origin-badge-systemd {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.origin-badge-kernel {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .proc-cmd-line {
@@ -4037,36 +7666,39 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 150px;
 }
 
 .col-proc-user {
   white-space: nowrap;
-  width: 80px;
+  width: 55px;
 }
 
 .user-badge {
   font-size: 10px;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.05);
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 4px;
 }
 
 .col-proc-cpu {
-  min-width: 110px;
+  width: 80px;
+  min-width: 75px;
+  white-space: nowrap;
 }
 
 .proc-cpu-box {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .proc-cpu-val-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
 }
 
 .proc-cpu-val {
@@ -4103,13 +7735,14 @@ onUnmounted(() => {
 
 .col-proc-mem {
   white-space: nowrap;
-  min-width: 100px;
+  width: 85px;
+  min-width: 75px;
 }
 
 .proc-mem-box {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 3px;
 }
 
 .proc-mem-val {
@@ -4117,74 +7750,230 @@ onUnmounted(() => {
   color: var(--text-primary);
   font-family: var(--font-mono);
   transition: color 0.5s ease;
+  font-size: 11.5px;
 }
 
 .proc-mem-pct {
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--text-muted);
 }
 
-.col-proc-disk {
+.col-proc-rps {
   white-space: nowrap;
-  font-size: 11px;
-  min-width: 140px;
+  width: 65px;
+  font-size: 11.5px;
 }
 
-.proc-io-rates {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-secondary);
+.col-proc-err {
+  white-space: nowrap;
+  width: 55px;
+  font-size: 11.5px;
 }
 
-.io-read { color: #38bdf8; }
-.io-sep { color: var(--text-muted); }
-.io-write { color: #a78bfa; }
+.col-proc-bw {
+  white-space: nowrap;
+  width: 140px;
+}
 
 .col-proc-state {
   white-space: nowrap;
-  width: 90px;
+  width: 85px;
+  min-width: 80px;
+  text-align: right;
+}
+
+/* Pagination & Page Size Footer */
+.proc-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.pagination-info {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-page {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-page:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.btn-page:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.page-indicator {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.th-status-right,
+.td-status-right {
+  text-align: right;
 }
 
 /* Empty State */
 .proc-empty-state {
-  padding: 36px 20px;
+  padding: 36px 24px;
   text-align: center;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px dashed var(--border-medium);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px dashed rgba(56, 189, 248, 0.25);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.radar-glow-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
+}
+
+.radar-beacon {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.25) 0%, rgba(6, 182, 212, 0) 70%);
+  animation: radar-beacon-pulse 2.4s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes radar-beacon-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
 }
 
 .proc-empty-icon {
   font-size: 32px;
-  filter: drop-shadow(0 0 8px rgba(6, 182, 212, 0.4));
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 0 12px rgba(6, 182, 212, 0.6));
+  animation: icon-float 3s ease-in-out infinite alternate;
+}
+
+@keyframes icon-float {
+  0% { transform: translateY(0px); }
+  100% { transform: translateY(-4px); }
 }
 
 .proc-empty-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
 .proc-empty-desc {
-  font-size: 12px;
-  color: var(--text-muted);
-  max-width: 460px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  max-width: 480px;
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
-.proc-empty-desc code {
+.proc-empty-telemetry-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+}
+
+.troubleshooting-hint-box {
+  width: 100%;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hint-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hint-icon {
+  font-size: 14px;
+}
+
+.hint-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.hint-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.hint-list code {
   font-family: var(--font-mono);
   background: rgba(255, 255, 255, 0.08);
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 4px;
   color: var(--accent-cyan);
+  font-size: 11px;
 }
 
 .proc-empty-actions {
@@ -4390,5 +8179,1497 @@ onUnmounted(() => {
   border-radius: 50%;
   flex-shrink: 0;
 }
+
+/* ==========================================
+   CLUSTER TELEMETRY DEEP-DIVE MODAL STYLES
+   ========================================== */
+.deep-dive-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.modal-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.deep-stat-card {
+  position: relative;
+  overflow: hidden;
+  padding: 16px 18px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.deep-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #06b6d4, #8b5cf6);
+}
+
+.deep-stat-card:hover {
+  border-color: rgba(56, 189, 248, 0.35);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 15px rgba(56, 189, 248, 0.1);
+}
+
+.deep-stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.deep-stat-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.deep-stat-body {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.deep-stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.deep-stat-unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.deep-stat-sub {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* Modal Chart Section */
+.modal-chart-section {
+  padding: 18px 20px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border-subtle);
+}
+
+.modal-chart-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.modal-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.chart-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.series-toggles-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.series-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.series-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.series-toggle-btn.toggle-active.cpu-active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #c4b5fd;
+}
+
+.series-toggle-btn.toggle-active.mem-active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: rgba(6, 182, 212, 0.5);
+  color: #67e8f9;
+}
+
+.series-toggle-btn.toggle-active.reqs-active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #6ee7b7;
+}
+
+.toggle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.modal-svg-canvas-box {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.modal-expanded-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.svg-axis-label {
+  font-size: 10px;
+  fill: var(--text-muted, #94a3b8);
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+}
+
+.modal-rich-tooltip {
+  position: absolute;
+  z-index: 120;
+  min-width: 220px;
+  background: rgba(13, 19, 33, 0.97);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8), 0 0 20px rgba(56, 189, 248, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Modal Breakdown Table Section */
+.modal-breakdown-section {
+  padding: 18px 20px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border-subtle);
+}
+
+.breakdown-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.breakdown-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.breakdown-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.table-search-input-wrap .search-icon {
+  position: absolute;
+  left: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.table-search-field {
+  padding: 6px 30px 6px 30px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: #fff;
+  min-width: 240px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.table-search-field:focus {
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.btn-clear-search:hover {
+  color: #fff;
+}
+
+.breakdown-table-wrapper {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+
+.breakdown-table thead tr {
+  background: rgba(15, 23, 42, 0.8);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.breakdown-table th {
+  padding: 10px 14px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.breakdown-table th.cursor-pointer:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.th-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sort-icon {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.breakdown-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+
+.breakdown-row:hover {
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.breakdown-table td {
+  padding: 10px 14px;
+  vertical-align: middle;
+}
+
+.service-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-name-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.service-title {
+  font-weight: 700;
+  color: #fff;
+}
+
+.service-replica-tag {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.node-cell-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.traffic-bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.traffic-track {
+  flex: 1;
+  height: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.traffic-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #06b6d4, #8b5cf6);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.traffic-label {
+  font-size: 11px;
+  color: #38bdf8;
+  width: 44px;
+  text-align: right;
+}
+
+.bandwidth-stack,
+.res-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
+}
+
+.breakdown-empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .modal-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 580px) {
+  .modal-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========================================== */
+/* DRAWER MODE TABS & HISTORICAL TELEMETRY    */
+/* ========================================== */
+
+.drawer-mode-tabs {
+  display: flex;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  width: 100%;
+}
+
+.drawer-tab-btn,
+.mode-tab-btn {
+  flex: 1;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.drawer-tab-btn:hover,
+.mode-tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.drawer-tab-btn.active,
+.mode-tab-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.node-history-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hist-chart-time-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin: 8px 0 12px 0;
+}
+
+.chart-time-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-chart-range-pill {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-chart-range-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.btn-chart-range-pill.active {
+  background: #38bdf8;
+  color: #0f172a;
+  border-color: #38bdf8;
+  font-weight: 700;
+}
+
+.range-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hist-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .hist-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.hist-kpi-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hist-kpi-card .kpi-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.hist-kpi-card .kpi-val {
+  font-size: 20px;
+  font-weight: 800;
+  font-family: monospace;
+}
+
+.hist-kpi-card .kpi-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.hist-kpi-empty {
+  padding: 14px 18px;
+  border-radius: 12px;
+}
+
+.empty-kpi-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.empty-kpi-icon {
+  font-size: 24px;
+  opacity: 0.85;
+}
+
+.empty-kpi-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.empty-kpi-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.empty-kpi-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.hist-chart-wrapper {
+  padding: 16px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hist-chart-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 180px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.hist-chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 36px 20px;
+  background: rgba(10, 15, 30, 0.4);
+  border-radius: 10px;
+  border: 1px dashed var(--border-subtle);
+  min-height: 190px;
+  gap: 8px;
+}
+
+.empty-chart-illustration {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.empty-chart-icon {
+  font-size: 26px;
+}
+
+.empty-pulse-badge {
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.empty-chart-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.empty-chart-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 480px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.hist-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chart-title-group h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.chart-title-group .hist-chart-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.badge-history-window {
+  font-size: 11px;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  display: inline-block;
+  margin-top: 2px;
+}
+
+.hist-chart-legend {
+  display: flex;
+  gap: 10px;
+}
+
+.legend-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.hist-chart-container {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: rgba(10, 15, 30, 0.6);
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.hist-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 15, 30, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  z-index: 10;
+}
+
+.hist-svg-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.hist-svg-y-labels text {
+  font-family: var(--font-mono, monospace);
+  user-select: none;
+}
+
+.hist-x-axis {
+  position: absolute;
+  left: 50px;
+  right: 40px;
+  bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.hist-x-axis .x-tick {
+  font-size: 9px;
+  font-family: monospace;
+  color: var(--text-muted);
+}
+
+.hist-rich-tooltip {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  backdrop-filter: blur(12px);
+  padding: 10px 14px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 200px;
+}
+
+.tooltip-time-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+}
+
+.tooltip-series-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-violet {
+  background-color: #a855f7 !important;
+  box-shadow: 0 0 6px rgba(168, 85, 247, 0.7);
+}
+
+.dot-cyan {
+  background-color: #06b6d4 !important;
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.7);
+}
+
+.dot-emerald {
+  background-color: #10b981 !important;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
+}
+
+.dot-indigo {
+  background-color: #6366f1 !important;
+  box-shadow: 0 0 6px rgba(99, 102, 241, 0.7);
+}
+
+.text-violet {
+  color: #c084fc !important;
+}
+
+.text-cyan {
+  color: #38bdf8 !important;
+}
+
+.text-emerald {
+  color: #34d399 !important;
+}
+
+.text-indigo {
+  color: #818cf8 !important;
+}
+
+.tooltip-label {
+  color: var(--text-muted);
+}
+
+.tooltip-val {
+  font-family: monospace;
+  margin-left: auto;
+}
+
+.btn-pit-sync {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 5px 10px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+}
+
+.btn-pit-sync:hover {
+  background: rgba(56, 189, 248, 0.3);
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Incidents Section */
+.node-incidents-section {
+  padding: 16px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.incidents-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inc-title-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inc-title-group h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.inc-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.incidents-table-wrapper {
+  overflow-x: auto;
+}
+
+.incidents-mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.incidents-mini-table th {
+  text-align: left;
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.incidents-mini-table td {
+  padding: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.inc-type-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inc-type-name {
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.inc-msg-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.inc-meta-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.inc-tag {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.inc-empty-state {
+  text-align: center;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.inc-empty-icon {
+  font-size: 24px;
+}
+
+.inc-empty-state h5 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.inc-empty-state p {
+  font-size: 11px;
+  margin: 0;
+  max-width: 400px;
+}
+
+/* Real App & Failure Log Terminal Viewer */
+.log-explorer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 4px;
+}
+
+.log-toolbar-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log-toolbar-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.select-log-input {
+  padding: 5px 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 11.5px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.select-log-input:hover,
+.select-log-input:focus {
+  border-color: #38bdf8;
+}
+
+.btn-log-download {
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+}
+
+.btn-log-download:hover {
+  background: rgba(56, 189, 248, 0.15) !important;
+  border-color: rgba(56, 189, 248, 0.6) !important;
+}
+
+.log-level-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip-rose.active {
+  background: rgba(244, 63, 94, 0.2);
+  color: #fb7185;
+  border-color: rgba(244, 63, 94, 0.4);
+}
+
+.chip-amber.active {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.log-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 180px;
+}
+
+.input-log-search {
+  width: 100%;
+  padding: 6px 28px 6px 30px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 11.5px;
+}
+
+.input-log-search:focus {
+  border-color: #38bdf8;
+  outline: none;
+}
+
+.log-action-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-log-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-log-action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.btn-log-stream {
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.btn-log-stream.stream-active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.btn-log-stream:not(.stream-active) {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.btn-log-action.active-toggle {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.spin-icon {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes logPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.log-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+  animation: logPulse 2s infinite ease-in-out;
+  display: inline-block;
+}
+
+.jump-bottom-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 20px;
+  z-index: 15;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.jump-bottom-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+}
+
+/* Custom Date-Time Range Selector Bar */
+.custom-range-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  margin-top: 6px;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.custom-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.range-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.range-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.05em;
+}
+
+.input-datetime {
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 11.5px;
+  color-scheme: dark;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.input-datetime:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.custom-range-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.preset-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.btn-preset-chip {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-preset-chip:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+
+.custom-range-actions {
+  display: flex;
+  align-items: center;
+}
+
+.btn-apply-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.3) 0%, rgba(56, 189, 248, 0.15) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.6);
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+  transition: all 0.2s ease;
+}
+
+.btn-apply-range:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.5) 0%, rgba(56, 189, 248, 0.3) 100%);
+  border-color: #38bdf8;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-apply-range:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.glow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
+}
+
+/* Terminal Viewer */
+.log-terminal-viewer {
+  position: relative;
+  background: #080c14;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
+  margin-top: 4px;
+}
+
+.terminal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.tdot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.tdot-red { background: #ef4444; }
+.tdot-yellow { background: #f59e0b; }
+.tdot-green { background: #10b981; }
+
+.terminal-title {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.terminal-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.terminal-range-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+}
+
+.terminal-stream-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.terminal-stream-badge.paused {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+.terminal-stats {
+  font-size: 10.5px;
+}
+
+.terminal-body {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 10px 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.terminal-loading,
+.terminal-empty,
+.terminal-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  color: var(--text-muted);
+  gap: 8px;
+}
+
+.terminal-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(56, 189, 248, 0.2);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.log-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.1s ease;
+}
+
+.log-line:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.log-line-error {
+  background: rgba(244, 63, 94, 0.08);
+  border-left: 2px solid #f43f5e;
+}
+
+.log-line-warn {
+  background: rgba(245, 158, 11, 0.06);
+  border-left: 2px solid #f59e0b;
+}
+
+.log-line-num {
+  width: 32px;
+  color: rgba(255, 255, 255, 0.25);
+  text-align: right;
+  flex-shrink: 0;
+  user-select: none;
+  font-size: 10px;
+}
+
+.log-line-level {
+  width: 55px;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.log-line-content {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #e2e8f0;
+}
+
+.log-line-error .log-line-content {
+  color: #fda4af;
+}
+
+.log-line-warn .log-line-content {
+  color: #fde68a;
+}
+
+.inc-subheading {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 0 0 8px 0;
+}
 </style>
+
 

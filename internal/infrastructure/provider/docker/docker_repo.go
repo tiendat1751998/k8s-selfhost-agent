@@ -117,7 +117,7 @@ func (r *realDockerRepo) ListServices(ctx context.Context) ([]domainDocker.Servi
 		if s.Spec.Mode.Replicated != nil && s.Spec.Mode.Replicated.Replicas != nil {
 			replicas = int(*s.Spec.Mode.Replicated.Replicas)
 		}
-		
+
 		var ports []string
 		if s.Endpoint.Ports != nil {
 			for _, p := range s.Endpoint.Ports {
@@ -125,13 +125,29 @@ func (r *realDockerRepo) ListServices(ctx context.Context) ([]domainDocker.Servi
 			}
 		}
 
+		var memLimit int64
+		var memReserv int64
+		var nanoCPUs int64
+		if s.Spec.TaskTemplate.Resources != nil {
+			if s.Spec.TaskTemplate.Resources.Limits != nil {
+				memLimit = s.Spec.TaskTemplate.Resources.Limits.MemoryBytes
+				nanoCPUs = s.Spec.TaskTemplate.Resources.Limits.NanoCPUs
+			}
+			if s.Spec.TaskTemplate.Resources.Reservations != nil {
+				memReserv = s.Spec.TaskTemplate.Resources.Reservations.MemoryBytes
+			}
+		}
+
 		result = append(result, domainDocker.Service{
-			ID:        s.ID,
-			Name:      s.Spec.Name,
-			Image:     s.Spec.TaskTemplate.ContainerSpec.Image,
-			Replicas:  replicas,
-			Ports:     ports,
-			UpdatedAt: s.UpdatedAt,
+			ID:                s.ID,
+			Name:              s.Spec.Name,
+			Image:             s.Spec.TaskTemplate.ContainerSpec.Image,
+			Replicas:          replicas,
+			Ports:             ports,
+			MemoryLimitBytes:  memLimit,
+			MemoryReservBytes: memReserv,
+			NanoCPUs:          nanoCPUs,
+			UpdatedAt:         s.UpdatedAt,
 		})
 	}
 	return result, nil
@@ -192,10 +208,20 @@ func (r *realDockerRepo) ToggleContainer(ctx context.Context, containerID string
 }
 
 func (r *realDockerRepo) GetLogs(ctx context.Context, targetID string, targetType string) (string, error) {
+	return r.GetLogsWithOptions(ctx, targetID, targetType, "100", "")
+}
+
+func (r *realDockerRepo) GetLogsWithOptions(ctx context.Context, targetID string, targetType string, tail string, since string) (string, error) {
+	if tail == "all" || tail == "0" {
+		tail = "all"
+	} else if tail == "" {
+		tail = "100"
+	}
 	options := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
-		Tail:       "100",
+		Tail:       tail,
+		Since:      since,
 	}
 
 	var reader io.ReadCloser
@@ -453,5 +479,64 @@ func (r *realDockerRepo) GetSwarmInfo(ctx context.Context) (*domainDocker.SwarmI
 		IsManager:    isManager,
 	}, nil
 }
+
+func (r *realDockerRepo) UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64, replicas int) error {
+	service, _, err := r.cli.ServiceInspectWithRaw(ctx, serviceID, types.ServiceInspectOptions{})
+	if err == nil {
+		spec := service.Spec
+		if spec.TaskTemplate.Resources == nil {
+			spec.TaskTemplate.Resources = &swarm.ResourceRequirements{}
+		}
+
+		if memoryLimitBytes > 0 || nanoCPUs > 0 {
+			if spec.TaskTemplate.Resources.Limits == nil {
+				spec.TaskTemplate.Resources.Limits = &swarm.Limit{}
+			}
+			if memoryLimitBytes > 0 {
+				spec.TaskTemplate.Resources.Limits.MemoryBytes = memoryLimitBytes
+			}
+			if nanoCPUs > 0 {
+				spec.TaskTemplate.Resources.Limits.NanoCPUs = nanoCPUs
+			}
+		}
+
+		if memoryReservBytes > 0 {
+			if spec.TaskTemplate.Resources.Reservations == nil {
+				spec.TaskTemplate.Resources.Reservations = &swarm.Resources{}
+			}
+			spec.TaskTemplate.Resources.Reservations.MemoryBytes = memoryReservBytes
+		}
+
+		if replicas >= 0 && spec.Mode.Replicated != nil {
+			targetReplicas := uint64(replicas)
+			spec.Mode.Replicated.Replicas = &targetReplicas
+		}
+
+		_, err = r.cli.ServiceUpdate(ctx, serviceID, service.Version, spec, types.ServiceUpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("updating swarm service %s resources: %w", serviceID, err)
+		}
+		return nil
+	}
+
+	// Fallback to standalone Docker container update
+	updateResources := container.Resources{}
+	if memoryLimitBytes > 0 {
+		updateResources.Memory = memoryLimitBytes
+	}
+	if memoryReservBytes > 0 {
+		updateResources.MemoryReservation = memoryReservBytes
+	}
+	if nanoCPUs > 0 {
+		updateResources.NanoCPUs = nanoCPUs
+	}
+
+	_, updateErr := r.cli.ContainerUpdate(ctx, serviceID, container.UpdateConfig{Resources: updateResources})
+	if updateErr != nil {
+		return fmt.Errorf("updating workload %s resources (swarm error: %v, container error: %w)", serviceID, err, updateErr)
+	}
+	return nil
+}
+
 
 
