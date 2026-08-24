@@ -2,8 +2,9 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `f242e98` feat(telemetry): add historical log tail depth, time window filter, and export log download
+Latest: `29d457c` feat(drawer): enrich Hardware Saturation Trends with live metric strip, series toggles, and peak KPIs
 Previous commits this session:
+- `f242e98` feat(telemetry): add historical log tail depth, time window filter, and export log download
 - `145fedf` docs: update project state with real log terminal feature
 - `1817aa5` feat(drawer): add real workload failure log terminal viewer with ANSI parsing and level filter
 - `f131860` feat(drawer): add 3-group process categorization (Workloads, Systemd Daemons, OS Kernel) with origin tags and SRE state indicators
