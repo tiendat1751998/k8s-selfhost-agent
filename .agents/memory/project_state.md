@@ -2,8 +2,10 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `03c18cc` feat(drawer): intelligently classify host platform apps (k8s-agent, hermes, proxysql, dockerd) as apps & services vs core kernel OS daemons
+Latest: `520e069` feat(drawer): separate Docker/K8s vs Host/System categories, widen search bar, and fix mode tab switcher symmetry
 Previous commits this session:
+- `1c35175` docs: update project state with host app classification
+- `03c18cc` feat(drawer): intelligently classify host platform apps (k8s-agent, hermes, proxysql, dockerd) as apps & services vs core kernel OS daemons
 - `28fbe8c` docs: update project state with category filter and compact network cards
 - `dc5bce0` feat(drawer): add app vs system category filters, compact search input, and 4-column compact network interfaces
 - `c8c5e2c` docs: update project state with unified process & workload table
