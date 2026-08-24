@@ -79,7 +79,7 @@ const hoveredNodeHistIndex = ref<number | null>(null)
 const nodeHistTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const isNodeHistHovered = ref(false)
 const processSearch = ref('')
-const processCategoryFilter = ref<'all' | 'workloads' | 'system'>('all')
+const processCategoryFilter = ref<'all' | 'docker' | 'system'>('all')
 const processSortBy = ref<'cpu' | 'mem' | 'rps' | 'bandwidth' | 'name' | 'pid'>('cpu')
 const processPageSize = ref(10)
 const processCurrentPage = ref(1)
@@ -803,13 +803,13 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
 
 const processCategoryCounts = computed(() => {
   const all = unifiedNodeProcesses.value
-  let apps = 0
+  let docker = 0
   let system = 0
   for (const p of all) {
-    if (p.is_app) apps++
+    if (p.is_container) docker++
     else system++
   }
-  return { total: all.length, apps, system }
+  return { total: all.length, docker, system }
 })
 
 // Filtered and sorted processes for selected node
@@ -817,10 +817,10 @@ const filteredNodeProcesses = computed<UnifiedProcessItem[]>(() => {
   let list = [...unifiedNodeProcesses.value]
 
   // Category filter
-  if (processCategoryFilter.value === 'workloads') {
-    list = list.filter(p => p.is_app)
+  if (processCategoryFilter.value === 'docker') {
+    list = list.filter(p => p.is_container)
   } else if (processCategoryFilter.value === 'system') {
-    list = list.filter(p => !p.is_app)
+    list = list.filter(p => !p.is_container)
   }
 
   // Search text filter
@@ -2526,14 +2526,14 @@ onUnmounted(() => {
         <!-- 2. Drawer Mode Switcher -->
         <div class="drawer-mode-tabs">
           <button
-            class="drawer-tab-btn"
+            class="mode-tab-btn"
             :class="{ active: nodeDrawerMode === 'live' }"
             @click="nodeDrawerMode = 'live'"
           >
             ⚡ Live Diagnostics & Processes
           </button>
           <button
-            class="drawer-tab-btn"
+            class="mode-tab-btn"
             :class="{ active: nodeDrawerMode === 'history' }"
             @click="switchNodeDrawerToHistory('24h')"
           >
@@ -2692,7 +2692,7 @@ onUnmounted(() => {
                 </span>
               </div>
 
-              <!-- Workload & System Filter Chips -->
+              <!-- Top Category Filter Chips -->
               <div class="service-filter-chips proc-category-chips">
                 <button
                   class="chip-btn"
@@ -2703,27 +2703,27 @@ onUnmounted(() => {
                 </button>
                 <button
                   class="chip-btn chip-healthy"
-                  :class="{ active: processCategoryFilter === 'workloads' }"
-                  @click="processCategoryFilter = 'workloads'; processCurrentPage = 1"
+                  :class="{ active: processCategoryFilter === 'docker' }"
+                  @click="processCategoryFilter = 'docker'; processCurrentPage = 1"
                 >
-                  📦 Apps & Services ({{ processCategoryCounts.apps }})
+                  📦 Docker / K8s ({{ processCategoryCounts.docker }})
                 </button>
                 <button
                   class="chip-btn chip-traffic"
                   :class="{ active: processCategoryFilter === 'system' }"
                   @click="processCategoryFilter = 'system'; processCurrentPage = 1"
                 >
-                  ⚙️ System & OS ({{ processCategoryCounts.system }})
+                  ⚙️ Host & System ({{ processCategoryCounts.system }})
                 </button>
               </div>
             </div>
             <div class="proc-controls">
-              <div class="proc-search-box compact-search">
+              <div class="proc-search-box wide-search">
                 <span class="search-icon">🔍</span>
                 <input
                   v-model="processSearch"
                   type="text"
-                  placeholder="Filter name, PID, user, cmd..."
+                  placeholder="Search processes by name, PID, user, command line..."
                   class="input-proc-search"
                   @input="processCurrentPage = 1"
                 />
@@ -6469,10 +6469,9 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.proc-search-box.compact-search {
-  flex: 0 1 240px;
-  max-width: 240px;
-  min-width: 170px;
+.proc-search-box.wide-search {
+  flex: 1;
+  min-width: 240px;
 }
 
 .input-proc-search {
@@ -7639,13 +7638,15 @@ onUnmounted(() => {
   padding: 4px;
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
+  width: 100%;
 }
 
+.drawer-tab-btn,
 .mode-tab-btn {
   flex: 1;
   padding: 8px 14px;
   border-radius: 8px;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);
   font-size: 13px;
@@ -7653,17 +7654,23 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
+.drawer-tab-btn:hover,
 .mode-tab-btn:hover {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.05);
 }
 
+.drawer-tab-btn.active,
 .mode-tab-btn.active {
   background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-color: rgba(56, 189, 248, 0.3);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
