@@ -81,6 +81,14 @@ const isNodeHistHovered = ref(false)
 const processSearch = ref('')
 const processSortBy = ref<'cpu' | 'mem' | 'disk' | 'name' | 'pid'>('cpu')
 
+// High-scale Node Services state
+const serviceSearch = ref('')
+const serviceStatusFilter = ref<'all' | 'healthy' | 'degraded' | 'traffic'>('all')
+const serviceSortKey = ref<'cpu_percent' | 'memory_used_mb' | 'requests_per_sec' | 'bandwidth' | 'service_name'>('cpu_percent')
+const serviceSortOrder = ref<'asc' | 'desc'>('desc')
+const serviceCurrentPage = ref(1)
+const servicePageSize = ref(15)
+
 // Topology filtering & selection
 type TopologyFilter = 'all' | 'online' | 'offline'
 const selectedTopologyFilter = ref<TopologyFilter>('all')
@@ -517,8 +525,8 @@ const filteredNodeInterfaces = computed<NetworkInterface[]>(() => {
   })
 })
 
-// Filtered and sorted services running on selected node
-const nodeServices = computed<TpsServiceMetrics[]>(() => {
+// 1. Raw list of services running on selected node
+const rawNodeServices = computed<TpsServiceMetrics[]>(() => {
   if (!selectedNode.value || !tpsData.value?.services) return []
   const nodeId = (selectedNode.value.node_id || '').toLowerCase().trim()
   const nodeName = (selectedNode.value.node_name || '').toLowerCase().trim()
@@ -538,13 +546,90 @@ const nodeServices = computed<TpsServiceMetrics[]>(() => {
     }
     if (isSingleNode && (!s.node_id || sNodeId === nodeId || sNodeId === nodeName)) return true
     return false
-  }).sort((a, b) => {
-    if (b.cpu_percent !== a.cpu_percent) {
-      return b.cpu_percent - a.cpu_percent
-    }
-    return b.memory_used_mb - a.memory_used_mb
   })
 })
+
+// Keep nodeServices alias for backwards compatibility
+const nodeServices = rawNodeServices
+
+// 2. High-scale summary statistics (for instant filter badges)
+const nodeServicesSummary = computed(() => {
+  const all = rawNodeServices.value
+  let healthy = 0
+  let degraded = 0
+  let traffic = 0
+  for (const s of all) {
+    if (s.status === 'healthy' || s.status === 'running') healthy++
+    else degraded++
+    if (s.requests_per_sec && s.requests_per_sec > 0) traffic++
+  }
+  return { total: all.length, healthy, degraded, traffic }
+})
+
+// 3. Filtered and sorted services (O(N) with memoization)
+const filteredAndSortedNodeServices = computed<TpsServiceMetrics[]>(() => {
+  let list = [...rawNodeServices.value]
+
+  // Filter by search text
+  if (serviceSearch.value.trim()) {
+    const q = serviceSearch.value.toLowerCase().trim()
+    list = list.filter(s =>
+      s.service_name.toLowerCase().includes(q) ||
+      (s.status && s.status.toLowerCase().includes(q))
+    )
+  }
+
+  // Filter by status tab
+  if (serviceStatusFilter.value === 'healthy') {
+    list = list.filter(s => s.status === 'healthy' || s.status === 'running')
+  } else if (serviceStatusFilter.value === 'degraded') {
+    list = list.filter(s => s.status !== 'healthy' && s.status !== 'running')
+  } else if (serviceStatusFilter.value === 'traffic') {
+    list = list.filter(s => s.requests_per_sec && s.requests_per_sec > 0)
+  }
+
+  // Sort
+  const k = serviceSortKey.value
+  const isAsc = serviceSortOrder.value === 'asc'
+  list.sort((a, b) => {
+    let diff = 0
+    if (k === 'service_name') {
+      diff = a.service_name.localeCompare(b.service_name)
+    } else if (k === 'cpu_percent') {
+      diff = (a.cpu_percent || 0) - (b.cpu_percent || 0)
+    } else if (k === 'memory_used_mb') {
+      diff = (a.memory_used_mb || 0) - (b.memory_used_mb || 0)
+    } else if (k === 'requests_per_sec') {
+      diff = (a.requests_per_sec || 0) - (b.requests_per_sec || 0)
+    } else if (k === 'bandwidth') {
+      const aBw = (a.rx_bytes_per_sec || 0) + (a.tx_bytes_per_sec || 0)
+      const bBw = (b.rx_bytes_per_sec || 0) + (b.tx_bytes_per_sec || 0)
+      diff = aBw - bBw
+    }
+    return isAsc ? diff : -diff
+  })
+
+  return list
+})
+
+// 4. Paginated Slice (mounts only 10-100 DOM rows even if 1,000 services exist)
+const totalServicePages = computed(() => {
+  return Math.ceil(filteredAndSortedNodeServices.value.length / servicePageSize.value) || 1
+})
+
+const paginatedNodeServices = computed(() => {
+  const start = (serviceCurrentPage.value - 1) * servicePageSize.value
+  return filteredAndSortedNodeServices.value.slice(start, start + servicePageSize.value)
+})
+
+function toggleServiceSort(key: 'cpu_percent' | 'memory_used_mb' | 'requests_per_sec' | 'bandwidth' | 'service_name') {
+  if (serviceSortKey.value === key) {
+    serviceSortOrder.value = serviceSortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    serviceSortKey.value = key
+    serviceSortOrder.value = 'desc'
+  }
+}
 
 // Filtered and sorted processes for selected node
 const filteredNodeProcesses = computed<ProcessMetric[]>(() => {
@@ -604,6 +689,11 @@ function inspectNode(node: NodeMetrics) {
   selectedNodeId.value = node.node_id
   processSearch.value = ''
   processSortBy.value = 'cpu'
+  serviceSearch.value = ''
+  serviceStatusFilter.value = 'all'
+  serviceSortKey.value = 'cpu_percent'
+  serviceSortOrder.value = 'desc'
+  serviceCurrentPage.value = 1
   nodeDrawerMode.value = 'live'
   showNodeDrawer.value = true
   loadNodeHistory(node.node_id || node.node_name, '24h')
@@ -2324,26 +2414,26 @@ onUnmounted(() => {
               <div class="hw-gauge-card glass-panel hw-gauge-card-net">
                 <div class="hw-gauge-top">
                   <span class="hw-gauge-label">NETWORK I/O</span>
-                  <span class="hw-gauge-value text-cyan smooth-value font-mono hw-net-val">
-                    ↓ {{ formatIoRate(selectedNode.network_rx_bytes) }}
+                  <span class="badge badge-slate font-mono font-bold" style="padding: 1px 6px; font-size: 9px;">
+                    {{ selectedNode.running_count ?? selectedNode.container_count ?? 0 }} SVC
                   </span>
                 </div>
                 <div class="hw-progress-track hw-net-track">
                   <div
                     class="hw-progress-fill bg-cyan smooth-bar"
                     :style="{ width: `${Math.min(100, Math.max(15, (selectedNode.network_rx_bytes || 0) / ((selectedNode.network_rx_bytes || 0) + (selectedNode.network_tx_bytes || 0) || 1) * 100))}%` }"
-                    title="Download (Rx) share"
+                    title="Download (Rx) vs Upload (Tx) distribution"
                   ></div>
                 </div>
-                <div class="hw-gauge-sub">
-                  <span class="text-purple font-mono font-semibold">↑ {{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
-                  <span>{{ selectedNode.running_count ?? selectedNode.container_count ?? 0 }} Containers</span>
+                <div class="hw-gauge-sub hw-net-dual-sub">
+                  <span class="text-cyan font-mono font-bold" :title="'Real-time Download Rate (Rx)'">↓ {{ formatIoRate(selectedNode.network_rx_bytes) }}</span>
+                  <span class="text-purple font-mono font-bold" :title="'Real-time Upload Rate (Tx)'">↑ {{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Network Interfaces Section -->
+          <!-- Network Interfaces Section (Stacked IN/OUT) -->
           <div class="network-interfaces-section" v-if="filteredNodeInterfaces.length > 0">
             <div class="hud-section-header">
               <h4 class="hud-section-heading">
@@ -2364,13 +2454,13 @@ onUnmounted(() => {
                   </div>
                   <span class="iface-nic-tag font-mono">NIC</span>
                 </div>
-                <div class="iface-rates-grid">
-                  <div class="iface-rate-pill rx-pill">
-                    <span class="rate-badge rx-badge">↓ RX</span>
+                <div class="iface-rates-stack">
+                  <div class="iface-rate-row rx-row">
+                    <span class="rate-badge rx-badge">↓ RX (IN)</span>
                     <span class="rate-val text-cyan font-mono">{{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
                   </div>
-                  <div class="iface-rate-pill tx-pill">
-                    <span class="rate-badge tx-badge">↑ TX</span>
+                  <div class="iface-rate-row tx-row">
+                    <span class="rate-badge tx-badge">↑ TX (OUT)</span>
                     <span class="rate-val text-purple font-mono">{{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
                   </div>
                 </div>
@@ -2378,29 +2468,106 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Containerized Services on this Node -->
-          <div class="node-services-section" v-if="nodeServices.length > 0">
-            <div class="hud-section-header">
-              <h4 class="hud-section-heading">
-                <span class="heading-icon">📦</span> Apps & Services on this Node
-              </h4>
-              <span class="badge badge-emerald font-mono">{{ nodeServices.length }} running</span>
+          <!-- Containerized Services on this Node (High-Scale 1,000+ Services Optimized) -->
+          <div class="node-services-section" v-if="rawNodeServices.length > 0">
+            <div class="proc-header-row">
+              <div class="proc-title-group">
+                <h4 class="proc-section-heading">
+                  <span class="heading-icon">📦</span> Apps & Services on this Node
+                </h4>
+                <span class="badge badge-emerald font-mono">{{ rawNodeServices.length }} active</span>
+              </div>
+
+              <!-- Quick Status Filter Chips -->
+              <div class="service-filter-chips">
+                <button
+                  class="chip-btn"
+                  :class="{ active: serviceStatusFilter === 'all' }"
+                  @click="serviceStatusFilter = 'all'; serviceCurrentPage = 1"
+                >
+                  All ({{ nodeServicesSummary.total }})
+                </button>
+                <button
+                  class="chip-btn chip-healthy"
+                  :class="{ active: serviceStatusFilter === 'healthy' }"
+                  @click="serviceStatusFilter = 'healthy'; serviceCurrentPage = 1"
+                >
+                  🟢 Healthy ({{ nodeServicesSummary.healthy }})
+                </button>
+                <button
+                  v-if="nodeServicesSummary.degraded > 0"
+                  class="chip-btn chip-degraded"
+                  :class="{ active: serviceStatusFilter === 'degraded' }"
+                  @click="serviceStatusFilter = 'degraded'; serviceCurrentPage = 1"
+                >
+                  ⚠️ Degraded ({{ nodeServicesSummary.degraded }})
+                </button>
+                <button
+                  v-if="nodeServicesSummary.traffic > 0"
+                  class="chip-btn chip-traffic"
+                  :class="{ active: serviceStatusFilter === 'traffic' }"
+                  @click="serviceStatusFilter = 'traffic'; serviceCurrentPage = 1"
+                >
+                  ⚡ Active ({{ nodeServicesSummary.traffic }})
+                </button>
+              </div>
             </div>
+
+            <!-- Search Bar & Page Size Control -->
+            <div class="proc-controls">
+              <div class="proc-search-box">
+                <span class="search-icon">🔍</span>
+                <input
+                  v-model="serviceSearch"
+                  type="text"
+                  placeholder="Filter by service name, status..."
+                  class="input-proc-search"
+                  @input="serviceCurrentPage = 1"
+                />
+                <button v-if="serviceSearch" class="btn-clear-search" @click="serviceSearch = ''; serviceCurrentPage = 1">✕</button>
+              </div>
+
+              <div class="proc-sort-group">
+                <span class="sort-label">PAGE SIZE:</span>
+                <div class="sort-btn-pill">
+                  <button
+                    v-for="size in [10, 25, 50, 100]"
+                    :key="size"
+                    class="btn-sort-opt"
+                    :class="{ active: servicePageSize === size }"
+                    @click="servicePageSize = size; serviceCurrentPage = 1"
+                  >
+                    {{ size }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div class="services-table-wrapper">
               <table class="services-mini-table">
                 <thead>
                   <tr>
-                    <th>Service</th>
-                    <th>CPU %</th>
-                    <th>Memory</th>
-                    <th>Req/s</th>
+                    <th class="cursor-pointer" @click="toggleServiceSort('service_name')">
+                      Service <span class="sort-indicator">{{ serviceSortKey === 'service_name' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
+                    </th>
+                    <th class="cursor-pointer" @click="toggleServiceSort('cpu_percent')">
+                      CPU % <span class="sort-indicator">{{ serviceSortKey === 'cpu_percent' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
+                    </th>
+                    <th class="cursor-pointer" @click="toggleServiceSort('memory_used_mb')">
+                      Memory <span class="sort-indicator">{{ serviceSortKey === 'memory_used_mb' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
+                    </th>
+                    <th class="cursor-pointer" @click="toggleServiceSort('requests_per_sec')">
+                      Req/s <span class="sort-indicator">{{ serviceSortKey === 'requests_per_sec' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
+                    </th>
                     <th>Err %</th>
-                    <th>Bandwidth</th>
+                    <th class="cursor-pointer" @click="toggleServiceSort('bandwidth')">
+                      Bandwidth <span class="sort-indicator">{{ serviceSortKey === 'bandwidth' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
+                    </th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="svc in nodeServices" :key="svc.service_name">
+                  <tr v-for="svc in paginatedNodeServices" :key="svc.service_name">
                     <td class="col-svc-name">
                       <span class="svc-bullet">●</span>
                       <strong>{{ svc.service_name }}</strong>
@@ -2426,13 +2593,67 @@ onUnmounted(() => {
                       </span>
                     </td>
                     <td>
-                      <span class="badge" :class="svc.status === 'healthy' ? 'badge-emerald' : 'badge-amber'">
-                        {{ svc.status.toUpperCase() }}
+                      <span class="badge" :class="svc.status === 'healthy' || svc.status === 'running' ? 'badge-emerald' : 'badge-amber'">
+                        {{ (svc.status || 'running').toUpperCase() }}
                       </span>
+                    </td>
+                  </tr>
+                  <tr v-if="paginatedNodeServices.length === 0">
+                    <td colspan="7" class="empty-services-row">
+                      <div class="empty-services-msg">
+                        <span>🔍 No services match filter "{{ serviceSearch }}"</span>
+                        <button class="btn-clear-inline" @click="serviceSearch = ''; serviceStatusFilter = 'all'">Reset filters</button>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            <!-- Pagination Controls for 1,000+ Services -->
+            <div class="proc-pagination" v-if="filteredAndSortedNodeServices.length > servicePageSize">
+              <div class="pagination-info">
+                Showing
+                <span class="text-cyan font-mono font-bold">{{ (serviceCurrentPage - 1) * servicePageSize + 1 }}–{{ Math.min(serviceCurrentPage * servicePageSize, filteredAndSortedNodeServices.length) }}</span>
+                of
+                <span class="text-slate font-mono font-bold">{{ filteredAndSortedNodeServices.length }}</span>
+                services
+              </div>
+              <div class="pagination-actions">
+                <button
+                  class="btn-page"
+                  :disabled="serviceCurrentPage <= 1"
+                  @click="serviceCurrentPage = 1"
+                  title="First Page"
+                >
+                  «
+                </button>
+                <button
+                  class="btn-page"
+                  :disabled="serviceCurrentPage <= 1"
+                  @click="serviceCurrentPage--"
+                >
+                  ‹ Prev
+                </button>
+                <span class="page-indicator font-mono">
+                  Page {{ serviceCurrentPage }} / {{ totalServicePages }}
+                </span>
+                <button
+                  class="btn-page"
+                  :disabled="serviceCurrentPage >= totalServicePages"
+                  @click="serviceCurrentPage++"
+                >
+                  Next ›
+                </button>
+                <button
+                  class="btn-page"
+                  :disabled="serviceCurrentPage >= totalServicePages"
+                  @click="serviceCurrentPage = totalServicePages"
+                  title="Last Page"
+                >
+                  »
+                </button>
+              </div>
             </div>
           </div>
 
@@ -5629,10 +5850,17 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.hw-net-val {
-  font-size: 13.5px !important;
-  color: #38bdf8 !important;
+.hw-net-inline-rates {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
   white-space: nowrap;
+}
+
+.hw-net-inline-rates .net-sep {
+  color: rgba(255, 255, 255, 0.25);
+  font-weight: 700;
 }
 
 .hw-progress-track {
@@ -5750,35 +5978,45 @@ onUnmounted(() => {
   border: 1px solid var(--border-subtle);
 }
 
-.iface-rates-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.iface-rates-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.iface-rate-pill {
+.iface-rate-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
   padding: 6px 10px;
   border-radius: 8px;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.iface-rate-pill.rx-pill {
-  background: rgba(6, 182, 212, 0.08);
-  border: 1px solid rgba(6, 182, 212, 0.2);
+.iface-rate-row.rx-row {
+  background: rgba(6, 182, 212, 0.06);
+  border: 1px solid rgba(6, 182, 212, 0.15);
 }
 
-.iface-rate-pill.tx-pill {
-  background: rgba(168, 85, 247, 0.08);
-  border: 1px solid rgba(168, 85, 247, 0.2);
+.iface-rate-row.rx-row:hover {
+  background: rgba(6, 182, 212, 0.12);
+  border-color: rgba(6, 182, 212, 0.3);
+}
+
+.iface-rate-row.tx-row {
+  background: rgba(168, 85, 247, 0.06);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+}
+
+.iface-rate-row.tx-row:hover {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.3);
 }
 
 .rate-badge {
   font-size: 10px;
   font-weight: 700;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 4px;
   white-space: nowrap;
 }
@@ -5797,6 +6035,93 @@ onUnmounted(() => {
   font-size: 11.5px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+/* Service filter chips and interactive table controls */
+.service-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chip-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.chip-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+}
+
+.chip-healthy.active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.chip-degraded.active {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+.chip-traffic.active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #c084fc;
+}
+
+.sort-indicator {
+  font-size: 9px;
+  color: #38bdf8;
+  margin-left: 3px;
+}
+
+.empty-services-row {
+  padding: 24px;
+  text-align: center;
+}
+
+.empty-services-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.btn-clear-inline {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 3px 10px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-inline:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: var(--border-accent);
 }
 
 .node-services-section {
