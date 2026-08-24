@@ -2,8 +2,10 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `531ff6a` fix(overview): resolve drawer network wrapping, duplicate badges, and os formatting
+Latest: `b35b541` feat(ui): overhaul overview css, node card 2-row layout, and typography
 Previous commits this session:
+- `78d7110` test(metrics): add unit test for agent scrape normalization and top processes fallback
+- `531ff6a` fix(overview): resolve drawer network wrapping, duplicate badges, and os formatting
 - `285812e` fix(overview): optimize drawer network table, format os info, and enrich agent scrape
 - `bcf081b` test: update docker handler unit tests with mock UpdateServiceResources
 - `29f449a` feat: implement workload scale and hardware resource limits tuning (RAM/CPU)
