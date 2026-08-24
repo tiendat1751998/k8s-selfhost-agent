@@ -79,6 +79,7 @@ const hoveredNodeHistIndex = ref<number | null>(null)
 const nodeHistTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const isNodeHistHovered = ref(false)
 const processSearch = ref('')
+const processCategoryFilter = ref<'all' | 'workloads' | 'system'>('all')
 const processSortBy = ref<'cpu' | 'mem' | 'rps' | 'bandwidth' | 'name' | 'pid'>('cpu')
 const processPageSize = ref(10)
 const processCurrentPage = ref(1)
@@ -741,10 +742,29 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
   return list
 })
 
+const processCategoryCounts = computed(() => {
+  const all = unifiedNodeProcesses.value
+  let workloads = 0
+  let system = 0
+  for (const p of all) {
+    if (p.is_container) workloads++
+    else system++
+  }
+  return { total: all.length, workloads, system }
+})
+
 // Filtered and sorted processes for selected node
 const filteredNodeProcesses = computed<UnifiedProcessItem[]>(() => {
   let list = [...unifiedNodeProcesses.value]
 
+  // Category filter
+  if (processCategoryFilter.value === 'workloads') {
+    list = list.filter(p => p.is_container)
+  } else if (processCategoryFilter.value === 'system') {
+    list = list.filter(p => !p.is_container)
+  }
+
+  // Search text filter
   if (processSearch.value.trim()) {
     const q = processSearch.value.toLowerCase().trim()
     list = list.filter(p =>
@@ -812,6 +832,7 @@ function switchNodeDrawerToHistory(range: '1h' | '24h' | '7d' | '30d' = '24h') {
 function inspectNode(node: NodeMetrics) {
   selectedNodeId.value = node.node_id || node.node_name || ''
   processSearch.value = ''
+  processCategoryFilter.value = 'all'
   processSortBy.value = 'cpu'
   processCurrentPage.value = 1
   processPageSize.value = 10
@@ -2567,7 +2588,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Network Interfaces Section (Stacked IN/OUT) -->
+          <!-- Network Interfaces Section (Compact 4-Card Row) -->
           <div class="network-interfaces-section" v-if="filteredNodeInterfaces.length > 0">
             <div class="hud-section-header">
               <h4 class="hud-section-heading">
@@ -2584,17 +2605,17 @@ onUnmounted(() => {
                 <div class="iface-top">
                   <div class="iface-name-group">
                     <span class="iface-icon">🌐</span>
-                    <span class="iface-name font-mono">{{ iface.name }}</span>
+                    <span class="iface-name font-mono" :title="iface.name">{{ iface.name }}</span>
                   </div>
                   <span class="iface-nic-tag font-mono">NIC</span>
                 </div>
                 <div class="iface-rates-stack">
                   <div class="iface-rate-row rx-row">
-                    <span class="rate-badge rx-badge">↓ RX (IN)</span>
+                    <span class="rate-badge rx-badge">↓ RX</span>
                     <span class="rate-val text-cyan font-mono">{{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
                   </div>
                   <div class="iface-rate-row tx-row">
-                    <span class="rate-badge tx-badge">↑ TX (OUT)</span>
+                    <span class="rate-badge tx-badge">↑ TX</span>
                     <span class="rate-val text-purple font-mono">{{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
                   </div>
                 </div>
@@ -2611,14 +2632,39 @@ onUnmounted(() => {
                   {{ filteredNodeProcesses.length }} active
                 </span>
               </div>
+
+              <!-- Workload & System Filter Chips -->
+              <div class="service-filter-chips proc-category-chips">
+                <button
+                  class="chip-btn"
+                  :class="{ active: processCategoryFilter === 'all' }"
+                  @click="processCategoryFilter = 'all'; processCurrentPage = 1"
+                >
+                  All ({{ processCategoryCounts.total }})
+                </button>
+                <button
+                  class="chip-btn chip-healthy"
+                  :class="{ active: processCategoryFilter === 'workloads' }"
+                  @click="processCategoryFilter = 'workloads'; processCurrentPage = 1"
+                >
+                  📦 Workloads ({{ processCategoryCounts.workloads }})
+                </button>
+                <button
+                  class="chip-btn chip-traffic"
+                  :class="{ active: processCategoryFilter === 'system' }"
+                  @click="processCategoryFilter = 'system'; processCurrentPage = 1"
+                >
+                  ⚙️ System ({{ processCategoryCounts.system }})
+                </button>
+              </div>
             </div>
             <div class="proc-controls">
-              <div class="proc-search-box">
+              <div class="proc-search-box compact-search">
                 <span class="search-icon">🔍</span>
                 <input
                   v-model="processSearch"
                   type="text"
-                  placeholder="Filter by name, PID, user, cmd..."
+                  placeholder="Filter name, PID, user, cmd..."
                   class="input-proc-search"
                   @input="processCurrentPage = 1"
                 />
@@ -5937,35 +5983,41 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-/* Network Interface & Services Sections in Node Drawer */
+/* Network Interface Section in Node Drawer */
 .network-interfaces-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .interfaces-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
+  .interfaces-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
   .interfaces-grid {
     grid-template-columns: 1fr;
   }
 }
 
 .iface-card {
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
   background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -5984,25 +6036,30 @@ onUnmounted(() => {
 .iface-name-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  min-width: 0;
 }
 
 .iface-icon {
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .iface-name {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--text-primary);
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .iface-nic-tag {
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-muted);
   border: 1px solid var(--border-subtle);
@@ -6011,15 +6068,15 @@ onUnmounted(() => {
 .iface-rates-stack {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
 }
 
 .iface-rate-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: 3px 6px;
+  border-radius: 6px;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
@@ -6044,10 +6101,10 @@ onUnmounted(() => {
 }
 
 .rate-badge {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
   white-space: nowrap;
 }
 
@@ -6062,7 +6119,7 @@ onUnmounted(() => {
 }
 
 .rate-val {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -6323,6 +6380,20 @@ onUnmounted(() => {
   margin: 0;
 }
 
+.proc-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.proc-category-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .proc-controls {
   display: flex;
   align-items: center;
@@ -6335,8 +6406,12 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1;
-  min-width: 220px;
+}
+
+.proc-search-box.compact-search {
+  flex: 0 1 240px;
+  max-width: 240px;
+  min-width: 170px;
 }
 
 .input-proc-search {
