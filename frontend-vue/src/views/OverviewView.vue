@@ -79,7 +79,7 @@ const hoveredNodeHistIndex = ref<number | null>(null)
 const nodeHistTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const isNodeHistHovered = ref(false)
 const processSearch = ref('')
-const processCategoryFilter = ref<'all' | 'docker' | 'system'>('all')
+const processCategoryFilter = ref<'all' | 'container' | 'host_daemon' | 'kernel'>('all')
 const processSortBy = ref<'cpu' | 'mem' | 'rps' | 'bandwidth' | 'name' | 'pid'>('cpu')
 const processPageSize = ref(10)
 const processCurrentPage = ref(1)
@@ -803,13 +803,15 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
 
 const processCategoryCounts = computed(() => {
   const all = unifiedNodeProcesses.value
-  let docker = 0
-  let system = 0
+  let container = 0
+  let hostDaemon = 0
+  let kernel = 0
   for (const p of all) {
-    if (p.is_container) docker++
-    else system++
+    if (p.app_type === 'container') container++
+    else if (p.app_type === 'host_app') hostDaemon++
+    else kernel++
   }
-  return { total: all.length, docker, system }
+  return { total: all.length, container, hostDaemon, kernel }
 })
 
 // Filtered and sorted processes for selected node
@@ -817,10 +819,12 @@ const filteredNodeProcesses = computed<UnifiedProcessItem[]>(() => {
   let list = [...unifiedNodeProcesses.value]
 
   // Category filter
-  if (processCategoryFilter.value === 'docker') {
-    list = list.filter(p => p.is_container)
-  } else if (processCategoryFilter.value === 'system') {
-    list = list.filter(p => !p.is_container)
+  if (processCategoryFilter.value === 'container') {
+    list = list.filter(p => p.app_type === 'container')
+  } else if (processCategoryFilter.value === 'host_daemon') {
+    list = list.filter(p => p.app_type === 'host_app')
+  } else if (processCategoryFilter.value === 'kernel') {
+    list = list.filter(p => p.app_type === 'system')
   }
 
   // Search text filter
@@ -1153,23 +1157,52 @@ function getProcessCpuColor(percent: number): string {
   return 'emerald'
 }
 
-function getProcessStateBadgeClass(state: string): string {
-  const s = (state || '').toLowerCase()
-  if (s.includes('run') || s === 'r') return 'badge-emerald'
-  if (s.includes('disk') || s === 'd') return 'badge-amber'
-  if (s.includes('sleep') || s === 's' || s === 'i') return 'badge-indigo'
-  if (s.includes('zombie') || s === 'z' || s.includes('stop') || s === 't') return 'badge-rose'
-  return 'badge-cyan'
+function getUnifiedProcessState(proc: UnifiedProcessItem): { label: string; class: string } {
+  const s = (proc.state || '').toLowerCase()
+
+  // 1. Definite Errors / Zombies
+  if (s.includes('zombie') || s === 'z' || s.includes('defunct') || s.includes('error') || s.includes('crash')) {
+    return { label: 'ZOMBIE', class: 'badge-rose' }
+  }
+
+  // 2. Stopped / Inactive
+  if (s.includes('stop') || s === 't' || s === 'dead' || s === 'inactive') {
+    return { label: 'STOPPED', class: 'badge-slate' }
+  }
+
+  // 3. I/O Wait / Disk Sleep
+  if (s.includes('disk') || s === 'd') {
+    return { label: 'I/O WAIT', class: 'badge-amber' }
+  }
+
+  // 4. Overloaded / Degraded
+  if ((proc.error_rate && proc.error_rate > 5) || (proc.cpu_percent && proc.cpu_percent >= 85)) {
+    return { label: 'DEGRADED', class: 'badge-amber' }
+  }
+
+  // 5. Container workloads
+  if (proc.is_container) {
+    if (s === 'healthy' || s === 'running' || s === 'active') {
+      return { label: 'HEALTHY', class: 'badge-emerald' }
+    }
+    if (s === 'degraded' || s === 'warning') {
+      return { label: 'DEGRADED', class: 'badge-amber' }
+    }
+    return { label: proc.state.toUpperCase() || 'HEALTHY', class: 'badge-emerald' }
+  }
+
+  // 6. Host daemons & OS processes (in Linux, active daemons waiting for I/O in 'S' or 'R' are RUNNING)
+  return { label: 'RUNNING', class: 'badge-emerald' }
 }
 
-function getProcessStateLabel(state: string): string {
-  const s = (state || '').toLowerCase()
-  if (s.includes('run') || s === 'r') return 'Running'
-  if (s.includes('disk') || s === 'd') return 'Disk Sleep'
-  if (s.includes('sleep') || s === 's' || s === 'i') return 'Sleeping'
-  if (s.includes('zombie') || s === 'z') return 'Zombie'
-  if (s.includes('stop') || s === 't') return 'Stopped'
-  return state || 'Active'
+function getProcessOriginBadge(proc: UnifiedProcessItem): { label: string; class: string; icon: string } {
+  if (proc.app_type === 'container') {
+    return { label: 'WORKLOAD', class: 'origin-badge-container', icon: '📦' }
+  }
+  if (proc.app_type === 'host_app') {
+    return { label: 'SYSTEMD', class: 'origin-badge-systemd', icon: '⚡' }
+  }
+  return { label: 'KERNEL', class: 'origin-badge-kernel', icon: '⚙️' }
 }
 
 function getNodeCardClass(node: NodeMetrics): string {
@@ -2703,17 +2736,24 @@ onUnmounted(() => {
                 </button>
                 <button
                   class="chip-btn chip-healthy"
-                  :class="{ active: processCategoryFilter === 'docker' }"
-                  @click="processCategoryFilter = 'docker'; processCurrentPage = 1"
+                  :class="{ active: processCategoryFilter === 'container' }"
+                  @click="processCategoryFilter = 'container'; processCurrentPage = 1"
                 >
-                  📦 Docker / K8s ({{ processCategoryCounts.docker }})
+                  📦 Workloads ({{ processCategoryCounts.container }})
                 </button>
                 <button
                   class="chip-btn chip-traffic"
-                  :class="{ active: processCategoryFilter === 'system' }"
-                  @click="processCategoryFilter = 'system'; processCurrentPage = 1"
+                  :class="{ active: processCategoryFilter === 'host_daemon' }"
+                  @click="processCategoryFilter = 'host_daemon'; processCurrentPage = 1"
                 >
-                  ⚙️ Host & System ({{ processCategoryCounts.system }})
+                  ⚡ Host Daemons ({{ processCategoryCounts.hostDaemon }})
+                </button>
+                <button
+                  class="chip-btn chip-degraded"
+                  :class="{ active: processCategoryFilter === 'kernel' }"
+                  @click="processCategoryFilter = 'kernel'; processCurrentPage = 1"
+                >
+                  ⚙️ OS Kernel ({{ processCategoryCounts.kernel }})
                 </button>
               </div>
             </div>
@@ -2770,13 +2810,13 @@ onUnmounted(() => {
                       </span>
                     </td>
                     <td class="col-proc-app">
-                      <div class="proc-app-info" :title="proc.command_line ? `${proc.name}\nCommand: ${proc.command_line}` : proc.name">
-                        <span class="proc-name">
-                          <span v-if="proc.app_type === 'container'" class="ctr-icon" title="Container Workload">📦</span>
-                          <span v-else-if="proc.app_type === 'host_app'" class="ctr-icon" title="Host Application / Platform Service">⚡</span>
-                          <span v-else class="ctr-icon opacity-40" title="OS Kernel / System Process">⚙️</span>
-                          {{ proc.name }}
-                        </span>
+                      <div class="proc-app-info" :title="proc.command_line ? `${proc.name}\nType: ${getProcessOriginBadge(proc).label}\nCommand: ${proc.command_line}` : proc.name">
+                        <div class="proc-name-row">
+                          <span class="proc-name">{{ proc.name }}</span>
+                          <span class="proc-origin-tag font-mono" :class="getProcessOriginBadge(proc).class">
+                            {{ getProcessOriginBadge(proc).icon }} {{ getProcessOriginBadge(proc).label }}
+                          </span>
+                        </div>
                         <span class="proc-cmd-line font-mono" v-if="proc.command_line">
                           {{ proc.command_line }}
                         </span>
@@ -2831,7 +2871,9 @@ onUnmounted(() => {
                       </span>
                     </td>
                     <td class="col-proc-state">
-                      <span class="badge font-mono" :class="getProcessStateBadgeClass(proc.state)">{{ getProcessStateLabel(proc.state) }}</span>
+                      <span class="badge font-mono" :class="getUnifiedProcessState(proc).class">
+                        {{ getUnifiedProcessState(proc).label }}
+                      </span>
                     </td>
                   </tr>
                 </tbody>
@@ -6665,6 +6707,13 @@ onUnmounted(() => {
   cursor: help;
 }
 
+.proc-name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
 .proc-name {
   font-weight: 700;
   color: var(--text-primary);
@@ -6672,6 +6721,37 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 12px;
+}
+
+.proc-origin-tag {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.origin-badge-container {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.origin-badge-systemd {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.origin-badge-kernel {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .proc-cmd-line {
