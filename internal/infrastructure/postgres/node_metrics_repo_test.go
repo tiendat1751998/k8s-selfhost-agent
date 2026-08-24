@@ -169,3 +169,91 @@ func TestNodeMetricsRepo_InsertAndQuery(t *testing.T) {
 	// Cleanup
 	_, _ = pool.Exec(ctx, "DELETE FROM node_metric_rollups WHERE node_id = $1", testNodeID)
 }
+
+func TestNodeMetricsRepo_QueryHistory_24h_1440Points(t *testing.T) {
+	pool := getNodeMetricsTestPool(t)
+	defer pool.Close()
+
+	repo := postgres.NewNodeMetricsRepo(pool)
+	ctx := context.Background()
+	testNodeID := "test-node-24h-" + uuid.NewString()[:8]
+
+	now := time.Now().UTC().Truncate(time.Minute)
+	var samples []nodemetrics.NodeMetricRollup
+	// Generate 1440 1-minute samples (a full 24-hour day)
+	for i := 1439; i >= 0; i-- {
+		samples = append(samples, nodemetrics.NodeMetricRollup{
+			NodeID:         testNodeID,
+			NodeName:       "Test Full Day Master",
+			CPUPercent:     20.0 + float64(i%50),
+			CPUPeak:        30.0 + float64(i%50),
+			MemUsedBytes:   8 * 1024 * 1024 * 1024,
+			MemTotalBytes:  16 * 1024 * 1024 * 1024,
+			MemPercent:     50.0,
+			DiskUsedBytes:  50 * 1024 * 1024 * 1024,
+			DiskTotalBytes: 200 * 1024 * 1024 * 1024,
+			DiskPercent:    25.0,
+			RxBytesPerSec:  1024000,
+			TxBytesPerSec:  512000,
+			ProcessCount:   150,
+			ContainerCount: 5,
+			Status:         "online",
+			Resolution:     "1m",
+			RecordedAt:     now.Add(-time.Duration(i) * time.Minute),
+		})
+	}
+
+	// Insert in batches of 200 to keep transaction manageable
+	batchSize := 200
+	for i := 0; i < len(samples); i += batchSize {
+		end := i + batchSize
+		if end > len(samples) {
+			end = len(samples)
+		}
+		if err := repo.InsertBatch(ctx, samples[i:end]); err != nil {
+			t.Fatalf("InsertBatch failed at batch %d: %v", i, err)
+		}
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM node_metric_rollups WHERE node_id = $1", testNodeID)
+	}()
+
+	// 1. Query with Limit=1500: should return all 1440 points
+	history1500, err := repo.QueryHistory(ctx, nodemetrics.NodeHistoryQuery{
+		NodeID:     testNodeID,
+		Resolution: "1m",
+		StartTime:  now.Add(-24 * time.Hour),
+		EndTime:    now.Add(1 * time.Minute),
+		Limit:      1500,
+	})
+	if err != nil {
+		t.Fatalf("QueryHistory with limit=1500 failed: %v", err)
+	}
+	if len(history1500) != 1440 {
+		t.Fatalf("expected 1440 points with limit=1500, got %d", len(history1500))
+	}
+
+	// 2. Query with Limit=0 (default limit=1500): should return all 1440 points without truncation
+	historyDefault, err := repo.QueryHistory(ctx, nodemetrics.NodeHistoryQuery{
+		NodeID:     testNodeID,
+		Resolution: "1m",
+		StartTime:  now.Add(-24 * time.Hour),
+		EndTime:    now.Add(1 * time.Minute),
+		Limit:      0,
+	})
+	if err != nil {
+		t.Fatalf("QueryHistory with default limit failed: %v", err)
+	}
+	if len(historyDefault) != 1440 {
+		t.Fatalf("expected 1440 points with default limit (1500), got %d (truncation bug still present!)", len(historyDefault))
+	}
+
+	// Verify points are in chronological order (ASC)
+	for i := 1; i < len(historyDefault); i++ {
+		if historyDefault[i].RecordedAt.Before(historyDefault[i-1].RecordedAt) {
+			t.Fatalf("history records not in chronological order: index %d (%v) before index %d (%v)",
+				i, historyDefault[i].RecordedAt, i-1, historyDefault[i-1].RecordedAt)
+		}
+	}
+}

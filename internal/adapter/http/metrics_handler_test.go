@@ -574,7 +574,7 @@ func TestOverviewHandler_GetNodeHistory_CustomRange_FormatsAndResolutions(t *tes
 			url:                "/overview/nodes/node-1/history?from=2026-08-24T10:00:00Z&to=2026-08-24T12:00:00Z",
 			expectedRange:      "custom",
 			expectedResolution: "1m",
-			expectedLimit:      500,
+			expectedLimit:      1500,
 		},
 		{
 			name:               "5 days duration -> 1h resolution",
@@ -595,7 +595,7 @@ func TestOverviewHandler_GetNodeHistory_CustomRange_FormatsAndResolutions(t *tes
 			url:                "/overview/nodes/node-1/history?from=2026-08-24T14:00:00Z&to=2026-08-24T10:00:00Z",
 			expectedRange:      "custom",
 			expectedResolution: "1m",
-			expectedLimit:      500,
+			expectedLimit:      1500,
 			checkTimes: func(t *testing.T, from, to string, q nodemetrics.NodeHistoryQuery) {
 				if from != "2026-08-24T10:00:00Z" || to != "2026-08-24T14:00:00Z" {
 					t.Errorf("expected times swapped to 10:00 and 14:00, got from=%s to=%s", from, to)
@@ -607,7 +607,7 @@ func TestOverviewHandler_GetNodeHistory_CustomRange_FormatsAndResolutions(t *tes
 			url:                "/overview/nodes/node-1/history?range=custom",
 			expectedRange:      "custom",
 			expectedResolution: "1m",
-			expectedLimit:      500,
+			expectedLimit:      1500,
 		},
 	}
 
@@ -728,6 +728,119 @@ func TestOverviewHandler_GetNodeHistory_Ranges_3h_and_6h(t *testing.T) {
 				t.Errorf("expected StartTime between %v and %v, got %v", expectedStartMin, expectedStartMax, mockRepo.lastQuery.StartTime)
 			}
 		})
+	}
+}
+
+func TestOverviewHandler_GetNodeHistory_AllRanges_LimitAndResolution(t *testing.T) {
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
+	handler := NewOverviewHandler(collector, zap.NewNop())
+
+	mockRepo := &mockNodeMetricsRepoHttp{
+		rollups: []nodemetrics.NodeMetricRollup{
+			{
+				NodeID:     "node-test",
+				NodeName:   "node-test",
+				CPUPercent: 20.0,
+				Status:     "online",
+				Resolution: "1h",
+				RecordedAt: time.Now().UTC(),
+			},
+		},
+	}
+	handler.SetNodeMetricsRepo(mockRepo)
+
+	r := chi.NewRouter()
+	r.Route("/overview", handler.RegisterRoutes)
+
+	tests := []struct {
+		rangeParam         string
+		expectedResolution string
+		expectedLimit      int
+	}{
+		{rangeParam: "1h", expectedResolution: "1m", expectedLimit: 500},
+		{rangeParam: "3h", expectedResolution: "1m", expectedLimit: 500},
+		{rangeParam: "6h", expectedResolution: "1m", expectedLimit: 500},
+		{rangeParam: "24h", expectedResolution: "1m", expectedLimit: 1500},
+		{rangeParam: "", expectedResolution: "1m", expectedLimit: 1500}, // default is 24h
+		{rangeParam: "7d", expectedResolution: "1h", expectedLimit: 500},
+		{rangeParam: "30d", expectedResolution: "1h", expectedLimit: 1000},
+	}
+
+	for _, tc := range tests {
+		url := "/overview/nodes/node-test/history"
+		if tc.rangeParam != "" {
+			url += "?range=" + tc.rangeParam
+		}
+		t.Run("range="+tc.rangeParam, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected status 200, got %d", w.Code)
+			}
+
+			if mockRepo.lastQuery.Resolution != tc.expectedResolution {
+				t.Errorf("expected resolution %s, got %s", tc.expectedResolution, mockRepo.lastQuery.Resolution)
+			}
+			if mockRepo.lastQuery.Limit != tc.expectedLimit {
+				t.Errorf("expected limit %d, got %d", tc.expectedLimit, mockRepo.lastQuery.Limit)
+			}
+		})
+	}
+}
+
+func TestOverviewHandler_GetNodeHistory_24h_1440Points_NoTruncation(t *testing.T) {
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
+	handler := NewOverviewHandler(collector, zap.NewNop())
+
+	now := time.Now().UTC()
+	var mockPoints []nodemetrics.NodeMetricRollup
+	for i := 1439; i >= 0; i-- {
+		mockPoints = append(mockPoints, nodemetrics.NodeMetricRollup{
+			NodeID:     "node-full-day",
+			NodeName:   "worker-full-day",
+			CPUPercent: float64(10 + (i % 50)),
+			CPUPeak:    float64(20 + (i % 50)),
+			Status:     "online",
+			Resolution: "1m",
+			RecordedAt: now.Add(-time.Duration(i) * time.Minute),
+		})
+	}
+
+	mockRepo := &mockNodeMetricsRepoHttp{
+		rollups: mockPoints,
+	}
+	handler.SetNodeMetricsRepo(mockRepo)
+
+	r := chi.NewRouter()
+	r.Route("/overview", handler.RegisterRoutes)
+
+	req := httptest.NewRequest(http.MethodGet, "/overview/nodes/node-full-day/history?range=24h", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		NodeID     string                             `json:"node_id"`
+		Range      string                             `json:"range"`
+		Resolution string                             `json:"resolution"`
+		Summary    *nodemetrics.NodeHistoricalSummary `json:"summary"`
+		History    []nodemetrics.NodeMetricRollup     `json:"history"`
+	}
+
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if mockRepo.lastQuery.Limit != 1500 {
+		t.Errorf("expected repo limit to be 1500 for 24h, got %d", mockRepo.lastQuery.Limit)
+	}
+	if len(resp.History) != 1440 {
+		t.Errorf("expected 1440 samples returned without truncation, got %d", len(resp.History))
 	}
 }
 

@@ -186,7 +186,7 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 	now := time.Now().UTC()
 	var startTime, endTime time.Time
 	var resolution string
-	limit := 500
+	limit := 1500
 
 	if fromParam != "" || rangeParam == "custom" {
 		rangeParam = "custom"
@@ -196,12 +196,9 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 			startTime, endTime = endTime, startTime
 		}
 		duration := endTime.Sub(startTime)
-		if duration <= 2*time.Hour {
+		if duration <= 24*time.Hour {
 			resolution = "1m"
-			limit = 500
-		} else if duration <= 24*time.Hour {
-			resolution = "1m"
-			limit = 500
+			limit = 1500
 		} else if duration <= 7*24*time.Hour {
 			resolution = "1h"
 			limit = 500
@@ -238,7 +235,7 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 			rangeParam = "24h"
 			startTime = now.Add(-24 * time.Hour)
 			resolution = "1m"
-			limit = 500
+			limit = 1500
 		}
 	}
 
