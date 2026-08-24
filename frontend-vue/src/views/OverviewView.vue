@@ -79,6 +79,9 @@ const nodeHistoryData = ref<NodeHistoryResponse | null>(null)
 const hoveredNodeHistIndex = ref<number | null>(null)
 const nodeHistTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const isNodeHistHovered = ref(false)
+const showHistCpu = ref(true)
+const showHistMem = ref(true)
+const showHistDisk = ref(true)
 const processSearch = ref('')
 const processCategoryFilter = ref<'all' | 'container' | 'host_daemon' | 'kernel'>('all')
 const processSortBy = ref<'cpu' | 'mem' | 'rps' | 'bandwidth' | 'name' | 'pid'>('cpu')
@@ -3236,10 +3239,88 @@ onUnmounted(() => {
                 <h4 class="hist-chart-title">📈 {{ selectedNode?.node_name || 'Node' }} Hardware Saturation Trends</h4>
                 <span class="hist-chart-desc">{{ nodeHistoryList.length }} recorded samples in {{ nodeHistoryRange }} window</span>
               </div>
-              <div class="hist-chart-legend" v-if="nodeHistoryList.length > 0">
-                <span class="legend-pill"><span class="legend-dot bg-purple"></span> CPU %</span>
-                <span class="legend-pill"><span class="legend-dot bg-cyan"></span> Memory %</span>
-                <span class="legend-pill"><span class="legend-dot bg-emerald"></span> Disk %</span>
+
+              <!-- Interactive Series Toggles with Live Values -->
+              <div class="series-toggles-group" v-if="nodeHistoryList.length > 0">
+                <button
+                  type="button"
+                  class="series-toggle-btn"
+                  :class="{ 'toggle-active cpu-active': showHistCpu }"
+                  @click="showHistCpu = !showHistCpu"
+                  title="Click to toggle CPU saturation curve"
+                >
+                  <span class="toggle-dot bg-violet"></span>
+                  <span>CPU: <strong>{{ formatPercent(selectedNode?.cpu_percent) }}</strong></span>
+                </button>
+
+                <button
+                  type="button"
+                  class="series-toggle-btn"
+                  :class="{ 'toggle-active mem-active': showHistMem }"
+                  @click="showHistMem = !showHistMem"
+                  title="Click to toggle Memory saturation curve"
+                >
+                  <span class="toggle-dot bg-cyan"></span>
+                  <span>RAM: <strong>{{ formatPercent(selectedNode?.memory_percent) }}</strong></span>
+                </button>
+
+                <button
+                  type="button"
+                  class="series-toggle-btn"
+                  :class="{ 'toggle-active reqs-active': showHistDisk }"
+                  @click="showHistDisk = !showHistDisk"
+                  title="Click to toggle Disk saturation curve"
+                >
+                  <span class="toggle-dot bg-emerald"></span>
+                  <span>Disk: <strong>{{ formatPercent(selectedNode?.disk_percent) }}</strong></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- High-Density Hardware Metrics Strip -->
+            <div class="hist-metric-strip">
+              <div class="metric-strip-item">
+                <span class="strip-icon">⚡</span>
+                <div class="strip-data font-mono">
+                  <span class="strip-label">CPU SATURATION</span>
+                  <span class="strip-val text-purple">
+                    <strong>{{ formatPercent(selectedNode?.cpu_percent) }}</strong>
+                    <small class="text-slate"> (Avg: {{ formatPercent(nodeHistoryData?.summary?.avg_cpu_percent) }} | Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_cpu_percent) }})</small>
+                  </span>
+                </div>
+              </div>
+
+              <div class="metric-strip-item">
+                <span class="strip-icon">🧠</span>
+                <div class="strip-data font-mono">
+                  <span class="strip-label">MEMORY USAGE</span>
+                  <span class="strip-val text-cyan">
+                    <strong>{{ formatPercent(selectedNode?.memory_percent) }}</strong>
+                    <small class="text-slate"> ({{ formatBytes(selectedNode?.memory_used) }} / {{ formatBytes(selectedNode?.memory_total) }} | Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_mem_percent) }})</small>
+                  </span>
+                </div>
+              </div>
+
+              <div class="metric-strip-item">
+                <span class="strip-icon">💾</span>
+                <div class="strip-data font-mono">
+                  <span class="strip-label">DISK STORAGE</span>
+                  <span class="strip-val text-emerald">
+                    <strong>{{ formatPercent(selectedNode?.disk_percent) }}</strong>
+                    <small class="text-slate"> ({{ formatBytes(selectedNode?.disk_used) }} / {{ formatBytes(selectedNode?.disk_total) }})</small>
+                  </span>
+                </div>
+              </div>
+
+              <div class="metric-strip-item">
+                <span class="strip-icon">🌐</span>
+                <div class="strip-data font-mono">
+                  <span class="strip-label">LIVE NETWORK I/O</span>
+                  <span class="strip-val text-indigo">
+                    <strong>↓ {{ formatIoRate(selectedNode?.network_rx_rate || 0) }} ↑ {{ formatIoRate(selectedNode?.network_tx_rate || 0) }}</strong>
+                    <small class="text-slate" v-if="nodeHistoryData?.summary?.peak_rx_bytes_sec"> (Peak: ↓ {{ formatIoRate(nodeHistoryData.summary.peak_rx_bytes_sec) }})</small>
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -3252,9 +3333,9 @@ onUnmounted(() => {
             <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave">
               <!-- Left Y-Axis: 0 - 100% -->
               <div class="hist-y-axis left">
-                <span class="y-tick">100%</span>
-                <span class="y-tick">75%</span>
-                <span class="y-tick">50%</span>
+                <span class="y-tick text-rose">100%</span>
+                <span class="y-tick text-amber">75%</span>
+                <span class="y-tick text-cyan">50%</span>
                 <span class="y-tick">25%</span>
                 <span class="y-tick">0%</span>
               </div>
@@ -3273,20 +3354,20 @@ onUnmounted(() => {
                 </defs>
 
                 <!-- Horizontal Grid Lines -->
-                <line x1="50" y1="20" x2="700" y2="20" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
-                <line x1="50" y1="62.5" x2="700" y2="62.5" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+                <line x1="50" y1="20" x2="700" y2="20" stroke="rgba(244,63,94,0.15)" stroke-dasharray="3,3" />
+                <line x1="50" y1="62.5" x2="700" y2="62.5" stroke="rgba(245,158,11,0.15)" stroke-dasharray="3,3" />
                 <line x1="50" y1="105" x2="700" y2="105" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
                 <line x1="50" y1="147.5" x2="700" y2="147.5" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
                 <line x1="50" y1="190" x2="700" y2="190" stroke="rgba(255,255,255,0.12)" />
 
                 <!-- Area Fills -->
-                <path v-if="nodeHistoryChartCpuArea" :d="nodeHistoryChartCpuArea" fill="url(#histCpuGrad)" />
-                <path v-if="nodeHistoryChartMemArea" :d="nodeHistoryChartMemArea" fill="url(#histMemGrad)" />
+                <path v-if="showHistCpu && nodeHistoryChartCpuArea" :d="nodeHistoryChartCpuArea" fill="url(#histCpuGrad)" />
+                <path v-if="showHistMem && nodeHistoryChartMemArea" :d="nodeHistoryChartMemArea" fill="url(#histMemGrad)" />
 
                 <!-- Trend Lines -->
-                <path v-if="nodeHistoryChartDiskPath" :d="nodeHistoryChartDiskPath" fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4,4" />
-                <path v-if="nodeHistoryChartMemPath" :d="nodeHistoryChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2" />
-                <path v-if="nodeHistoryChartCpuPath" :d="nodeHistoryChartCpuPath" fill="none" stroke="#a855f7" stroke-width="2.5" />
+                <path v-if="showHistDisk && nodeHistoryChartDiskPath" :d="nodeHistoryChartDiskPath" fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4,4" />
+                <path v-if="showHistMem && nodeHistoryChartMemPath" :d="nodeHistoryChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2" />
+                <path v-if="showHistCpu && nodeHistoryChartCpuPath" :d="nodeHistoryChartCpuPath" fill="none" stroke="#a855f7" stroke-width="2.5" />
 
                 <!-- Interactive Crosshair -->
                 <g v-if="isNodeHistHovered && nodeHistHoverCoords">
@@ -3299,8 +3380,8 @@ onUnmounted(() => {
                     stroke-width="1.5"
                     stroke-dasharray="3,3"
                   />
-                  <circle :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpu" r="4.5" fill="#a855f7" stroke="#ffffff" stroke-width="2" />
-                  <circle :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yMem" r="4" fill="#06b6d4" stroke="#ffffff" stroke-width="1.5" />
+                  <circle v-if="showHistCpu" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpu" r="4.5" fill="#a855f7" stroke="#ffffff" stroke-width="2" />
+                  <circle v-if="showHistMem" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yMem" r="4" fill="#06b6d4" stroke="#ffffff" stroke-width="1.5" />
                 </g>
               </svg>
 
@@ -8338,6 +8419,51 @@ onUnmounted(() => {
 .chart-title-group .hist-chart-desc {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.hist-metric-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.45);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 4px;
+}
+
+.metric-strip-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.strip-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.strip-data {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.strip-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.strip-val {
+  font-size: 11.5px;
+  line-height: 1.2;
+}
+
+.strip-val small {
+  font-size: 10px;
+  font-weight: 400;
 }
 
 .hist-chart-legend {
