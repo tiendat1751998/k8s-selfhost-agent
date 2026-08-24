@@ -2,8 +2,10 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `dc5bce0` feat(drawer): add app vs system category filters, compact search input, and 4-column compact network interfaces
+Latest: `03c18cc` feat(drawer): intelligently classify host platform apps (k8s-agent, hermes, proxysql, dockerd) as apps & services vs core kernel OS daemons
 Previous commits this session:
+- `28fbe8c` docs: update project state with category filter and compact network cards
+- `dc5bce0` feat(drawer): add app vs system category filters, compact search input, and 4-column compact network interfaces
 - `c8c5e2c` docs: update project state with unified process & workload table
 - `74adfdb` feat(overview): unify workloads & processes into single high-density table with req/s, err %, bandwidth, state, and pagination
 - `b11ebc4` style(overview): expand drawer width to 980px, relocate page size to bottom footer, and fit state column without horizontal scroll
