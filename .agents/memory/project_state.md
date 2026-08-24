@@ -2,8 +2,10 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `74adfdb` feat(overview): unify workloads & processes into single high-density table with req/s, err %, bandwidth, state, and pagination
+Latest: `dc5bce0` feat(drawer): add app vs system category filters, compact search input, and 4-column compact network interfaces
 Previous commits this session:
+- `c8c5e2c` docs: update project state with unified process & workload table
+- `74adfdb` feat(overview): unify workloads & processes into single high-density table with req/s, err %, bandwidth, state, and pagination
 - `b11ebc4` style(overview): expand drawer width to 980px, relocate page size to bottom footer, and fit state column without horizontal scroll
 - `ea4031b` style(drawer): polish page size pill, network interface margins, and top processes search/sort controls
 - `335d385` fix(metrics): guard container network delta baseline to eliminate lifetime byte rate spikes
