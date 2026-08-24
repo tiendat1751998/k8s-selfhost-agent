@@ -510,7 +510,11 @@ const busiestNodeId = computed<string | null>(() => {
 // Selected Node for Diagnostics Drawer (syncs live with incoming metrics)
 const selectedNode = computed<NodeMetrics | null>(() => {
   if (!selectedNodeId.value) return null
-  return nodes.value.find(n => n.node_id === selectedNodeId.value) || null
+  const idOrName = selectedNodeId.value.toLowerCase().trim()
+  return nodes.value.find(n => 
+    (n.node_id && n.node_id.toLowerCase().trim() === idOrName) || 
+    (n.node_name && n.node_name.toLowerCase().trim() === idOrName)
+  ) || null
 })
 
 // Filtered network interfaces for selected node (excluding lo and veth*)
@@ -686,7 +690,7 @@ function switchNodeDrawerToHistory(range: '1h' | '24h' | '7d' | '30d' = '24h') {
 }
 
 function inspectNode(node: NodeMetrics) {
-  selectedNodeId.value = node.node_id
+  selectedNodeId.value = node.node_id || node.node_name || ''
   processSearch.value = ''
   processSortBy.value = 'cpu'
   serviceSearch.value = ''
@@ -2260,7 +2264,7 @@ onUnmounted(() => {
       :show="showNodeDrawer"
       mode="drawer"
       placement="right"
-      maxWidth="820px"
+      maxWidth="980px"
       :title="`Node Diagnostics: ${selectedNode?.node_name || 'Host Telemetry'}`"
       subtitle="Real-time telemetry, hardware saturation, and live process inspection"
       @close="showNodeDrawer = false"
@@ -2299,7 +2303,7 @@ onUnmounted(() => {
               </div>
               <div class="quick-stat-item">
                 <span class="qs-label">KERNEL VERSION</span>
-                <span class="qs-val font-mono" :title="formatKernelVersion(selectedNode.kernel_version, selectedNode.os)">{{ formatKernelVersion(selectedNode.kernel_version, selectedNode.os) }}</span>
+                <span class="qs-val font-mono">{{ selectedNode.kernel_version || '6.8.0-generic' }}</span>
               </div>
               <div class="quick-stat-item">
                 <span class="qs-label">ARCHITECTURE</span>
@@ -2317,17 +2321,17 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Mode Switcher: Live Diagnostics vs Historical Telemetry -->
+        <!-- 2. Drawer Mode Switcher -->
         <div class="drawer-mode-tabs">
           <button
-            class="mode-tab-btn"
+            class="drawer-tab-btn"
             :class="{ active: nodeDrawerMode === 'live' }"
             @click="nodeDrawerMode = 'live'"
           >
             ⚡ Live Diagnostics & Processes
           </button>
           <button
-            class="mode-tab-btn"
+            class="drawer-tab-btn"
             :class="{ active: nodeDrawerMode === 'history' }"
             @click="switchNodeDrawerToHistory('24h')"
           >
@@ -2335,78 +2339,86 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- ========================================== -->
-        <!-- MODE A: LIVE DIAGNOSTICS & PROCESSES       -->
-        <!-- ========================================== -->
-        <div v-if="nodeDrawerMode === 'live'" class="node-live-content">
-          <!-- 2. Hardware Telemetry HUD -->
+        <!-- TAB 1: LIVE DIAGNOSTICS -->
+        <div v-if="nodeDrawerMode === 'live'" class="drawer-tab-content">
+          <!-- Hardware Saturation Telemetry -->
           <div class="hardware-hud-section">
             <div class="hud-section-header">
               <h4 class="hud-section-heading">
                 <span class="heading-icon">📊</span> Hardware Saturation Telemetry
               </h4>
-              <span class="badge badge-indigo">LIVE METRICS</span>
+              <span class="badge badge-indigo font-mono">LIVE METRICS</span>
             </div>
-
             <div class="hardware-gauges-grid">
-              <!-- CPU HUD -->
+              <!-- CPU Load -->
               <div class="hw-gauge-card glass-panel">
                 <div class="hw-gauge-top">
                   <span class="hw-gauge-label">CPU LOAD</span>
-                  <span class="hw-gauge-value smooth-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
+                  <span
+                    class="hw-gauge-val font-mono font-bold smooth-value"
+                    :class="`text-${getUtilizationColor(selectedNode.cpu_percent || 0)}`"
+                  >
                     {{ formatPercent(selectedNode.cpu_percent) }}
                   </span>
                 </div>
                 <div class="hw-progress-track">
                   <div
                     class="hw-progress-fill smooth-bar"
-                    :class="`bg-${getUtilizationColor(selectedNode.cpu_percent)}`"
-                    :style="{ width: `${Math.min(100, selectedNode.cpu_percent)}%` }"
+                    :class="`bg-${getUtilizationColor(selectedNode.cpu_percent || 0)}`"
+                    :style="{ width: `${Math.min(100, selectedNode.cpu_percent || 0)}%` }"
                   ></div>
                 </div>
                 <div class="hw-gauge-sub">
                   <span>Saturation:</span>
-                  <strong class="smooth-value" :class="`text-${getUtilizationColor(selectedNode.cpu_percent)}`">
-                    {{ selectedNode.cpu_percent >= 80 ? 'CRITICAL' : selectedNode.cpu_percent >= 60 ? 'ELEVATED' : 'NOMINAL' }}
+                  <strong :class="`text-${getUtilizationColor(selectedNode.cpu_percent || 0)}`">
+                    {{ (selectedNode.cpu_percent || 0) > 85 ? 'HIGH' : (selectedNode.cpu_percent || 0) > 60 ? 'ELEVATED' : 'NOMINAL' }}
                   </strong>
                 </div>
               </div>
 
-              <!-- RAM HUD -->
+              <!-- Memory Usage -->
               <div class="hw-gauge-card glass-panel">
                 <div class="hw-gauge-top">
                   <span class="hw-gauge-label">MEMORY USAGE</span>
-                  <span class="hw-gauge-value text-cyan smooth-value">
+                  <span
+                    class="hw-gauge-val font-mono font-bold smooth-value"
+                    :class="`text-${getUtilizationColor(selectedNode.memory_percent || 0)}`"
+                  >
                     {{ formatPercent(selectedNode.memory_percent) }}
                   </span>
                 </div>
                 <div class="hw-progress-track">
                   <div
-                    class="hw-progress-fill bg-cyan smooth-bar"
-                    :style="{ width: `${Math.min(100, selectedNode.memory_percent)}%` }"
+                    class="hw-progress-fill smooth-bar"
+                    :class="`bg-${getUtilizationColor(selectedNode.memory_percent || 0)}`"
+                    :style="{ width: `${Math.min(100, selectedNode.memory_percent || 0)}%` }"
                   ></div>
                 </div>
                 <div class="hw-gauge-sub">
-                  <span>{{ formatBytes(selectedNode.memory_used) }} / {{ formatBytes(selectedNode.memory_total) }}</span>
+                  <span>{{ formatBytes(selectedNode.memory_used || 0) }} / {{ formatBytes(selectedNode.memory_total || 0) }}</span>
                 </div>
               </div>
 
-              <!-- DISK HUD -->
+              <!-- Disk Storage -->
               <div class="hw-gauge-card glass-panel">
                 <div class="hw-gauge-top">
                   <span class="hw-gauge-label">DISK STORAGE</span>
-                  <span class="hw-gauge-value text-emerald smooth-value">
+                  <span
+                    class="hw-gauge-val font-mono font-bold smooth-value"
+                    :class="`text-${getUtilizationColor(selectedNode.disk_percent || 0)}`"
+                  >
                     {{ formatPercent(selectedNode.disk_percent) }}
                   </span>
                 </div>
                 <div class="hw-progress-track">
                   <div
-                    class="hw-progress-fill bg-emerald smooth-bar"
-                    :style="{ width: `${Math.min(100, selectedNode.disk_percent)}%` }"
+                    class="hw-progress-fill smooth-bar"
+                    :class="`bg-${getUtilizationColor(selectedNode.disk_percent || 0)}`"
+                    :style="{ width: `${Math.min(100, selectedNode.disk_percent || 0)}%` }"
                   ></div>
                 </div>
                 <div class="hw-gauge-sub">
-                  <span>{{ formatBytes(selectedNode.disk_used) }} / {{ formatBytes(selectedNode.disk_total) }}</span>
+                  <span>{{ formatBytes(selectedNode.disk_used || 0) }} / {{ formatBytes(selectedNode.disk_total || 0) }}</span>
                 </div>
               </div>
 
@@ -2468,7 +2480,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Containerized Services on this Node (High-Scale 1,000+ Services Optimized) -->
+          <!-- Containerized Services on this Node -->
           <div class="node-services-section" v-if="rawNodeServices.length > 0">
             <div class="proc-header-row">
               <div class="proc-title-group">
@@ -2513,7 +2525,7 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- Search Bar & Page Size Control -->
+            <!-- Search Bar -->
             <div class="proc-controls">
               <div class="proc-search-box">
                 <span class="search-icon">🔍</span>
@@ -2525,21 +2537,6 @@ onUnmounted(() => {
                   @input="serviceCurrentPage = 1"
                 />
                 <button v-if="serviceSearch" class="btn-clear-search" @click="serviceSearch = ''; serviceCurrentPage = 1">✕</button>
-              </div>
-
-              <div class="page-size-group">
-                <span class="page-size-label font-mono">PAGE SIZE:</span>
-                <div class="page-size-pill">
-                  <button
-                    v-for="size in [10, 25, 50, 100]"
-                    :key="size"
-                    class="btn-page-size font-mono"
-                    :class="{ active: servicePageSize === size }"
-                    @click="servicePageSize = size; serviceCurrentPage = 1"
-                  >
-                    {{ size }}
-                  </button>
-                </div>
               </div>
             </div>
 
@@ -2563,7 +2560,7 @@ onUnmounted(() => {
                     <th class="cursor-pointer" @click="toggleServiceSort('bandwidth')">
                       Bandwidth <span class="sort-indicator">{{ serviceSortKey === 'bandwidth' ? (serviceSortOrder === 'asc' ? '▲' : '▼') : '' }}</span>
                     </th>
-                    <th>Status</th>
+                    <th class="th-status-right">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2592,7 +2589,7 @@ onUnmounted(() => {
                         <span class="bw-tx text-purple" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_tx_bytes || 0) + ' sent'">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
                       </span>
                     </td>
-                    <td>
+                    <td class="td-status-right">
                       <span class="badge" :class="svc.status === 'healthy' || svc.status === 'running' ? 'badge-emerald' : 'badge-amber'">
                         {{ (svc.status || 'running').toUpperCase() }}
                       </span>
@@ -2610,16 +2607,33 @@ onUnmounted(() => {
               </table>
             </div>
 
-            <!-- Pagination Controls for 1,000+ Services -->
-            <div class="proc-pagination" v-if="filteredAndSortedNodeServices.length > servicePageSize">
+            <!-- Pagination & Page Size Footer (At Bottom) -->
+            <div class="proc-pagination">
               <div class="pagination-info">
                 Showing
-                <span class="text-cyan font-mono font-bold">{{ (serviceCurrentPage - 1) * servicePageSize + 1 }}–{{ Math.min(serviceCurrentPage * servicePageSize, filteredAndSortedNodeServices.length) }}</span>
+                <span class="text-cyan font-mono font-bold">{{ filteredAndSortedNodeServices.length === 0 ? 0 : (serviceCurrentPage - 1) * servicePageSize + 1 }}–{{ Math.min(serviceCurrentPage * servicePageSize, filteredAndSortedNodeServices.length) }}</span>
                 of
                 <span class="text-slate font-mono font-bold">{{ filteredAndSortedNodeServices.length }}</span>
                 services
               </div>
-              <div class="pagination-actions">
+
+              <!-- Page Size Selector (Bottom) -->
+              <div class="page-size-group">
+                <span class="page-size-label font-mono">PAGE SIZE:</span>
+                <div class="page-size-pill">
+                  <button
+                    v-for="size in [10, 25, 50, 100]"
+                    :key="size"
+                    class="btn-page-size font-mono"
+                    :class="{ active: servicePageSize === size }"
+                    @click="servicePageSize = size; serviceCurrentPage = 1"
+                  >
+                    {{ size }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="pagination-actions" v-if="totalServicePages > 1">
                 <button
                   class="btn-page"
                   :disabled="serviceCurrentPage <= 1"
@@ -6403,7 +6417,7 @@ onUnmounted(() => {
   box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
 }
 
-/* Processes Table */
+/* Processes Table (Zero Horizontal Scroll Layout) */
 .processes-table-wrapper {
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
@@ -6424,7 +6438,7 @@ onUnmounted(() => {
 }
 
 .processes-table th {
-  padding: 10px 12px;
+  padding: 8px 10px;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -6455,33 +6469,33 @@ onUnmounted(() => {
 }
 
 .processes-table td {
-  padding: 10px 12px;
+  padding: 8px 10px;
   vertical-align: middle;
 }
 
 .col-proc-pid {
   white-space: nowrap;
-  width: 70px;
+  width: 55px;
 }
 
 .pid-tag {
   font-size: 11px;
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.05);
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
   border: 1px solid var(--border-subtle);
 }
 
 .col-proc-app {
-  max-width: 220px;
-  min-width: 140px;
+  min-width: 130px;
+  max-width: 240px;
 }
 
 .proc-app-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   cursor: help;
 }
 
@@ -6491,6 +6505,7 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 12px;
 }
 
 .proc-cmd-line {
@@ -6499,36 +6514,39 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 230px;
 }
 
 .col-proc-user {
   white-space: nowrap;
-  width: 80px;
+  width: 60px;
 }
 
 .user-badge {
   font-size: 10px;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.05);
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 4px;
 }
 
 .col-proc-cpu {
-  min-width: 110px;
+  width: 85px;
+  min-width: 80px;
+  white-space: nowrap;
 }
 
 .proc-cpu-box {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .proc-cpu-val-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
 }
 
 .proc-cpu-val {
@@ -6565,13 +6583,14 @@ onUnmounted(() => {
 
 .col-proc-mem {
   white-space: nowrap;
-  min-width: 100px;
+  width: 85px;
+  min-width: 80px;
 }
 
 .proc-mem-box {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 3px;
 }
 
 .proc-mem-val {
@@ -6579,33 +6598,84 @@ onUnmounted(() => {
   color: var(--text-primary);
   font-family: var(--font-mono);
   transition: color 0.5s ease;
+  font-size: 11.5px;
 }
 
 .proc-mem-pct {
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--text-muted);
 }
 
 .col-proc-disk {
   white-space: nowrap;
   font-size: 11px;
-  min-width: 140px;
+  width: 75px;
+  min-width: 70px;
 }
-
-.proc-io-rates {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-secondary);
-}
-
-.io-read { color: #38bdf8; }
-.io-sep { color: var(--text-muted); }
-.io-write { color: #a78bfa; }
 
 .col-proc-state {
   white-space: nowrap;
-  width: 90px;
+  width: 75px;
+  min-width: 70px;
+  text-align: right;
+}
+
+/* Pagination & Page Size Footer */
+.proc-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.pagination-info {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-page {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-page:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.btn-page:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.page-indicator {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.th-status-right,
+.td-status-right {
+  text-align: right;
 }
 
 /* Empty State */
