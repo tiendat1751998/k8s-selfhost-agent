@@ -132,8 +132,8 @@ func (r *nodeMetricsRepo) QueryHistory(ctx context.Context, q nodemetrics.NodeHi
 		resolution = "1m"
 	}
 	limit := q.Limit
-	if limit <= 0 || limit > 1000 {
-		limit = 300
+	if limit <= 0 || limit > 5000 {
+		limit = 1500
 	}
 
 	query := `
