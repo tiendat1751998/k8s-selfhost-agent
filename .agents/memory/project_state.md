@@ -1,8 +1,8 @@
 # K8sControl Project State — Session Update 2026-08-24T15:20
 
 ## Git State
-Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `46e7f5e` fix(telemetry): fix 24h timeline truncation by lifting query limits to fetch all 1440 1-minute samples
+Branch: `feat/telemetry-peak-envelope-and-spike-markers` (pushed to origin)
+Latest: `feat(telemetry): initialize branch for dual-layer peak envelope and spike markers`
 Previous commits this session:
 - `272468f` docs: update project state memory with consolidated time toolbar
 - `2d6ffb8` feat(telemetry): consolidate time presets into unified pill bar and streamline custom range picker
