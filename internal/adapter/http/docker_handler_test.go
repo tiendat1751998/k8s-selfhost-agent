@@ -857,5 +857,54 @@ func TestDockerHandler_DeleteHost_EvictsAgentMetric(t *testing.T) {
 	}
 }
 
+func TestDockerHandler_GetLogs(t *testing.T) {
+	repo := &testDockerRepo{}
+	handler := NewDockerHandler(repo)
 
+	r := chi.NewRouter()
+	r.Route("/docker", handler.RegisterRoutes)
 
+	t.Run("Get Logs Success - Default", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=c1&type=container", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp["logs"] != "mock logs" {
+			t.Errorf("expected 'mock logs', got '%s'", resp["logs"])
+		}
+	})
+
+	t.Run("Get Logs Success - Tail All", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=c1&type=service&tail=all&since=15m", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp["logs"] != "mock logs" {
+			t.Errorf("expected 'mock logs', got '%s'", resp["logs"])
+		}
+	})
+
+	t.Run("Get Logs - Missing ID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?type=container", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d", w.Code)
+		}
+	})
+}

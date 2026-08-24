@@ -939,7 +939,7 @@ async function fetchNodeAppLogs(appName?: string) {
   appLogsLoading.value = true
   appLogsError.value = null
   try {
-    const tailParam = selectedLogTail.value === 'all' ? '' : selectedLogTail.value
+    const tailParam = selectedLogTail.value === 'all' ? 'all' : String(selectedLogTail.value)
     const sinceParam = selectedLogSince.value === 'all' ? '' : selectedLogSince.value
 
     let res: { logs: string } | null = null
@@ -974,7 +974,7 @@ async function fetchNodeAppLogs(appName?: string) {
 async function fetchNodeAppLogsQuiet(appName?: string) {
   const targetApp = appName || selectedLogApp.value || 'tiki_traefik'
   try {
-    const tailParam = selectedLogTail.value === 'all' ? '' : selectedLogTail.value
+    const tailParam = selectedLogTail.value === 'all' ? 'all' : String(selectedLogTail.value)
     const sinceParam = selectedLogSince.value === 'all' ? '' : selectedLogSince.value
 
     let res: { logs: string } | null = null
@@ -1112,6 +1112,71 @@ const nodeAvailableLogApps = computed(() => {
   return list
 })
 
+function classifyLogLevel(cleanLine: string): 'error' | 'warn' | 'info' | 'debug' {
+  if (!cleanLine) return 'info'
+
+  // 1. Check explicit level tags first (e.g. Traefik WRN, Go/NATS [WARN], level=warn, "level":"warn")
+  // Structured level indicators (JSON or logfmt key-value)
+  if (
+    /level\s*[:=]\s*"?warn(ing)?"?/i.test(cleanLine) ||
+    /\[\s*(wrn|warn|warning)\s*\]/i.test(cleanLine)
+  ) {
+    return 'warn'
+  }
+  if (
+    /level\s*[:=]\s*"?error"?/i.test(cleanLine) ||
+    /level\s*[:=]\s*"?fatal"?/i.test(cleanLine) ||
+    /level\s*[:=]\s*"?panic"?/i.test(cleanLine) ||
+    /\[\s*(err|error|fatal|panic)\s*\]/i.test(cleanLine)
+  ) {
+    return 'error'
+  }
+  if (
+    /level\s*[:=]\s*"?debug"?/i.test(cleanLine) ||
+    /level\s*[:=]\s*"?trace"?/i.test(cleanLine) ||
+    /\[\s*(dbg|debug|trace)\s*\]/i.test(cleanLine)
+  ) {
+    return 'debug'
+  }
+  if (
+    /level\s*[:=]\s*"?info"?/i.test(cleanLine) ||
+    /\[\s*(inf|info)\s*\]/i.test(cleanLine)
+  ) {
+    return 'info'
+  }
+
+  // Explicit word-boundary level tags (e.g. Traefik WRN, ERR, INF, DBG)
+  if (/\b(wrn|warn|warning)\b/i.test(cleanLine)) {
+    return 'warn'
+  }
+  if (/\b(err|error|fatal|panic)\b/i.test(cleanLine)) {
+    return 'error'
+  }
+  if (/\b(dbg|debug|trace)\b/i.test(cleanLine)) {
+    return 'debug'
+  }
+  if (/\b(inf|info)\b/i.test(cleanLine)) {
+    return 'info'
+  }
+
+  // 2. Fallback heuristic for lines without explicit level tokens
+  const cleanLower = cleanLine.toLowerCase()
+  if (
+    cleanLower.includes('fail') ||
+    cleanLower.includes('fatal') ||
+    cleanLower.includes('panic') ||
+    cleanLower.includes('exception') ||
+    cleanLower.includes('context deadline exceeded')
+  ) {
+    return 'error'
+  }
+  if (cleanLower.includes('warn')) {
+    return 'warn'
+  }
+
+  return 'info'
+}
+
 const parsedAppLogLines = computed<ParsedLogLine[]>(() => {
   if (!appLogsText.value) return []
   const rawLines = appLogsText.value.split('\n')
@@ -1126,26 +1191,10 @@ const parsedAppLogLines = computed<ParsedLogLine[]>(() => {
     // Strip ANSI codes
     const clean = raw.replace(/\u001b\[[0-9;]*m/g, '')
     const cleanLower = clean.toLowerCase()
-
-    let level: 'error' | 'warn' | 'info' | 'debug' = 'info'
-    if (
-      cleanLower.includes('error') ||
-      cleanLower.includes('err') ||
-      cleanLower.includes('fail') ||
-      cleanLower.includes('fatal') ||
-      cleanLower.includes('panic') ||
-      cleanLower.includes('exception') ||
-      cleanLower.includes('context deadline exceeded')
-    ) {
-      level = 'error'
-    } else if (cleanLower.includes('warn') || cleanLower.includes('wrn')) {
-      level = 'warn'
-    } else if (cleanLower.includes('debug') || cleanLower.includes('dbg') || cleanLower.includes('trace')) {
-      level = 'debug'
-    }
+    const level = classifyLogLevel(clean)
 
     if (filterLevel === 'error' && level !== 'error') continue
-    if (filterLevel === 'warn' && level !== 'error' && level !== 'warn') continue
+    if (filterLevel === 'warn' && level !== 'warn') continue
 
     if (q && !cleanLower.includes(q)) continue
 
@@ -1168,18 +1217,11 @@ const appLogLevelCounts = computed(() => {
   let info = 0
   for (const raw of rawLines) {
     if (!raw.trim()) continue
-    const cleanLower = raw.replace(/\u001b\[[0-9;]*m/g, '').toLowerCase()
-    if (
-      cleanLower.includes('error') ||
-      cleanLower.includes('err') ||
-      cleanLower.includes('fail') ||
-      cleanLower.includes('fatal') ||
-      cleanLower.includes('panic') ||
-      cleanLower.includes('exception') ||
-      cleanLower.includes('context deadline exceeded')
-    ) {
+    const clean = raw.replace(/\u001b\[[0-9;]*m/g, '')
+    const level = classifyLogLevel(clean)
+    if (level === 'error') {
       error++
-    } else if (cleanLower.includes('warn') || cleanLower.includes('wrn')) {
+    } else if (level === 'warn') {
       warn++
     } else {
       info++
