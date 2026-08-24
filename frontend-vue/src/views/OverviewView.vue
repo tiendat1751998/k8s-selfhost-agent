@@ -2527,13 +2527,13 @@ onUnmounted(() => {
                 <button v-if="serviceSearch" class="btn-clear-search" @click="serviceSearch = ''; serviceCurrentPage = 1">✕</button>
               </div>
 
-              <div class="proc-sort-group">
-                <span class="sort-label">PAGE SIZE:</span>
-                <div class="sort-btn-pill">
+              <div class="page-size-group">
+                <span class="page-size-label font-mono">PAGE SIZE:</span>
+                <div class="page-size-pill">
                   <button
                     v-for="size in [10, 25, 50, 100]"
                     :key="size"
-                    class="btn-sort-opt"
+                    class="btn-page-size font-mono"
                     :class="{ active: servicePageSize === size }"
                     @click="servicePageSize = size; serviceCurrentPage = 1"
                   >
@@ -6125,11 +6125,35 @@ onUnmounted(() => {
 }
 
 .node-services-section {
-  padding: 18px;
+  padding: 18px 20px;
   border-radius: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.node-processes-section {
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.proc-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .node-section-title-group {
@@ -6241,8 +6265,9 @@ onUnmounted(() => {
 
 .proc-title-group {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .proc-title-row {
@@ -6253,10 +6278,13 @@ onUnmounted(() => {
 }
 
 .proc-section-heading {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .proc-section-desc {
@@ -6299,18 +6327,70 @@ onUnmounted(() => {
   box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
 }
 
+.page-size-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.page-size-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.page-size-pill {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.btn-page-size {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1.2;
+}
+
+.btn-page-size:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-page-size.active {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.4);
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+}
+
 .proc-sort-group {
   display: flex;
   align-items: center;
 }
 
 .select-proc-sort {
-  padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.35);
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.45);
   border: 1px solid var(--border-medium);
   border-radius: 8px;
   color: var(--text-secondary);
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
@@ -6320,6 +6400,7 @@ onUnmounted(() => {
 .select-proc-sort:hover {
   border-color: var(--accent-cyan);
   color: var(--text-primary);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
 }
 
 /* Processes Table */
