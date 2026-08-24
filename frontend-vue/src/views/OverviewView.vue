@@ -17,6 +17,7 @@ import {
   type NodeHistoryResponse,
   type NodeMetricRollup,
 } from '../api/compute'
+import { dockerApi } from '../api/docker'
 import { useWebSocket } from '../composables/useWebSocket'
 import CircularGauge from '../components/ui/CircularGauge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
@@ -887,9 +888,178 @@ async function loadNodeHistory(nodeId?: string, range = nodeHistoryRange.value) 
   }
 }
 
+// Real App Logs in Node History
+const selectedLogApp = ref<string>('tiki_traefik')
+const selectedLogLevel = ref<'all' | 'error' | 'warn'>('all')
+const appLogSearch = ref<string>('')
+const appLogsText = ref<string>('')
+const appLogsLoading = ref<boolean>(false)
+const appLogsError = ref<string | null>(null)
+const appLogsCopied = ref<boolean>(false)
+
+interface ParsedLogLine {
+  id: number
+  raw: string
+  cleanText: string
+  level: 'error' | 'warn' | 'info' | 'debug'
+  timestamp?: string
+}
+
+async function fetchNodeAppLogs(appName?: string) {
+  const targetApp = appName || selectedLogApp.value || 'tiki_traefik'
+  selectedLogApp.value = targetApp
+  appLogsLoading.value = true
+  appLogsError.value = null
+  try {
+    let res: { logs: string } | null = null
+    try {
+      res = await dockerApi.getLogs(targetApp, 'service')
+    } catch {
+      res = await dockerApi.getLogs(targetApp, 'container')
+    }
+
+    if (res && typeof res.logs === 'string' && res.logs.trim().length > 0) {
+      appLogsText.value = res.logs
+    } else {
+      appLogsText.value = `[Info: Service ${targetApp} is running. No recent error/stdout logs recorded in current buffer]`
+    }
+  } catch (err: any) {
+    console.warn('Failed to fetch logs for', targetApp, err)
+    appLogsError.value = err?.message || `Failed to fetch logs for ${targetApp}`
+    appLogsText.value = ''
+  } finally {
+    appLogsLoading.value = false
+  }
+}
+
+function selectIncidentLog(inc: any) {
+  const target = inc.pod_name || inc.raw_data?.service_name || inc.raw_data?.container_name || 'tiki_traefik'
+  selectedLogApp.value = target
+  fetchNodeAppLogs(target)
+}
+
+function copyAppLogs() {
+  const text = parsedAppLogLines.value.map(l => l.cleanText).join('\n')
+  navigator.clipboard.writeText(text || appLogsText.value)
+  appLogsCopied.value = true
+  setTimeout(() => {
+    appLogsCopied.value = false
+  }, 2000)
+}
+
+const nodeAvailableLogApps = computed(() => {
+  const list: { name: string; type: 'container' | 'host'; icon: string }[] = []
+  const seen = new Set<string>()
+
+  for (const s of rawNodeServices.value || []) {
+    if (s.service_name && !seen.has(s.service_name)) {
+      seen.add(s.service_name)
+      list.push({ name: s.service_name, type: 'container', icon: '📦' })
+    }
+  }
+
+  for (const p of unifiedNodeProcesses.value || []) {
+    if (p.is_container && !seen.has(p.name)) {
+      seen.add(p.name)
+      list.push({ name: p.name, type: 'container', icon: '📦' })
+    }
+  }
+
+  if (list.length === 0) {
+    list.push({ name: 'tiki_traefik', type: 'container', icon: '📦' })
+    list.push({ name: 'tiki_redis', type: 'container', icon: '📦' })
+    list.push({ name: 'nats', type: 'container', icon: '📦' })
+    list.push({ name: 'db', type: 'container', icon: '📦' })
+    list.push({ name: 'registry', type: 'container', icon: '📦' })
+  }
+
+  return list
+})
+
+const parsedAppLogLines = computed<ParsedLogLine[]>(() => {
+  if (!appLogsText.value) return []
+  const rawLines = appLogsText.value.split('\n')
+  const q = appLogSearch.value.toLowerCase().trim()
+  const filterLevel = selectedLogLevel.value
+
+  const lines: ParsedLogLine[] = []
+  for (let i = 0; i < rawLines.length; i++) {
+    const raw = rawLines[i]
+    if (!raw.trim()) continue
+
+    // Strip ANSI codes
+    const clean = raw.replace(/\u001b\[[0-9;]*m/g, '')
+    const cleanLower = clean.toLowerCase()
+
+    let level: 'error' | 'warn' | 'info' | 'debug' = 'info'
+    if (
+      cleanLower.includes('error') ||
+      cleanLower.includes('err') ||
+      cleanLower.includes('fail') ||
+      cleanLower.includes('fatal') ||
+      cleanLower.includes('panic') ||
+      cleanLower.includes('exception') ||
+      cleanLower.includes('context deadline exceeded')
+    ) {
+      level = 'error'
+    } else if (cleanLower.includes('warn') || cleanLower.includes('wrn')) {
+      level = 'warn'
+    } else if (cleanLower.includes('debug') || cleanLower.includes('dbg') || cleanLower.includes('trace')) {
+      level = 'debug'
+    }
+
+    if (filterLevel === 'error' && level !== 'error') continue
+    if (filterLevel === 'warn' && level !== 'error' && level !== 'warn') continue
+
+    if (q && !cleanLower.includes(q)) continue
+
+    lines.push({
+      id: i + 1,
+      raw,
+      cleanText: clean,
+      level,
+    })
+  }
+
+  return lines
+})
+
+const appLogLevelCounts = computed(() => {
+  if (!appLogsText.value) return { total: 0, error: 0, warn: 0, info: 0 }
+  const rawLines = appLogsText.value.split('\n')
+  let error = 0
+  let warn = 0
+  let info = 0
+  for (const raw of rawLines) {
+    if (!raw.trim()) continue
+    const cleanLower = raw.replace(/\u001b\[[0-9;]*m/g, '').toLowerCase()
+    if (
+      cleanLower.includes('error') ||
+      cleanLower.includes('err') ||
+      cleanLower.includes('fail') ||
+      cleanLower.includes('fatal') ||
+      cleanLower.includes('panic') ||
+      cleanLower.includes('exception') ||
+      cleanLower.includes('context deadline exceeded')
+    ) {
+      error++
+    } else if (cleanLower.includes('warn') || cleanLower.includes('wrn')) {
+      warn++
+    } else {
+      info++
+    }
+  }
+  return { total: error + warn + info, error, warn, info }
+})
+
 function switchNodeDrawerToHistory(range: '1h' | '24h' | '7d' | '30d' = '24h') {
   nodeDrawerMode.value = 'history'
   loadNodeHistory(selectedNode.value?.node_id || selectedNode.value?.node_name || undefined, range)
+  if (!appLogsText.value) {
+    const firstSvc = rawNodeServices.value?.[0]?.service_name || 'tiki_traefik'
+    selectedLogApp.value = firstSvc
+    fetchNodeAppLogs(firstSvc)
+  }
 }
 
 function inspectNode(node: NodeMetrics) {
@@ -3164,21 +3334,152 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Incidents & Failure Evidence Table on this Server -->
+          <!-- Incidents & Real Workload Failure Logs on this Server -->
           <div class="node-incidents-section glass-panel">
             <div class="incidents-section-header">
               <div class="inc-title-group">
-                <h4>📜 Failure Logs & Incident Evidence on this Server</h4>
-                <span class="badge badge-rose font-mono" v-if="nodeHistoryData?.incidents && nodeHistoryData.incidents.length > 0">
-                  {{ nodeHistoryData.incidents.length }} incident{{ nodeHistoryData.incidents.length === 1 ? '' : 's' }}
+                <h4>📜 Live & Historical Failure Logs / Incident Evidence</h4>
+                <span class="badge badge-rose font-mono" v-if="appLogLevelCounts.error > 0">
+                  {{ appLogLevelCounts.error }} error{{ appLogLevelCounts.error === 1 ? '' : 's' }}
+                </span>
+                <span class="badge badge-emerald font-mono" v-else>
+                  HEALTHY
                 </span>
               </div>
               <p class="inc-desc">
-                Automated pre-crash hardware snapshots, OOM kills, process dumps, and degradation logs.
+                Real-time container stdout/stderr, automated pre-crash snapshots, and application exception logs on <strong>{{ selectedNode?.node_name }}</strong>.
               </p>
             </div>
 
-            <div class="incidents-table-wrapper" v-if="nodeHistoryData?.incidents && nodeHistoryData.incidents.length > 0">
+            <!-- Log Workload Selector & Filter Toolbar -->
+            <div class="log-explorer-toolbar">
+              <div class="log-app-select-group">
+                <label class="log-toolbar-label font-mono">APP / WORKLOAD:</label>
+                <select
+                  v-model="selectedLogApp"
+                  class="select-log-app font-mono"
+                  @change="fetchNodeAppLogs(selectedLogApp)"
+                >
+                  <option v-for="app in nodeAvailableLogApps" :key="app.name" :value="app.name">
+                    {{ app.icon }} {{ app.name }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Log Level Chips -->
+              <div class="log-level-chips">
+                <button
+                  class="chip-btn"
+                  :class="{ active: selectedLogLevel === 'all' }"
+                  @click="selectedLogLevel = 'all'"
+                >
+                  All ({{ appLogLevelCounts.total }})
+                </button>
+                <button
+                  class="chip-btn chip-rose"
+                  :class="{ active: selectedLogLevel === 'error' }"
+                  @click="selectedLogLevel = 'error'"
+                >
+                  🔴 Errors ({{ appLogLevelCounts.error }})
+                </button>
+                <button
+                  class="chip-btn chip-amber"
+                  :class="{ active: selectedLogLevel === 'warn' }"
+                  @click="selectedLogLevel = 'warn'"
+                >
+                  🟡 Warnings ({{ appLogLevelCounts.warn }})
+                </button>
+              </div>
+
+              <!-- Log Search Box -->
+              <div class="log-search-box">
+                <span class="search-icon">🔍</span>
+                <input
+                  v-model="appLogSearch"
+                  type="text"
+                  placeholder="Filter logs / stack traces..."
+                  class="input-log-search font-mono"
+                />
+                <button v-if="appLogSearch" class="btn-clear-search" @click="appLogSearch = ''">✕</button>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="log-action-btns">
+                <button
+                  class="btn-log-action"
+                  :disabled="appLogsLoading"
+                  @click="fetchNodeAppLogs(selectedLogApp)"
+                  title="Reload Logs"
+                >
+                  <span :class="{ 'spin-icon': appLogsLoading }">🔄</span>
+                  {{ appLogsLoading ? 'Fetching...' : 'Refresh' }}
+                </button>
+                <button
+                  class="btn-log-action"
+                  @click="copyAppLogs"
+                  title="Copy Log Text"
+                >
+                  <span>📋</span>
+                  {{ appLogsCopied ? 'Copied!' : 'Copy' }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Terminal Real Log Viewer -->
+            <div class="log-terminal-viewer">
+              <div class="terminal-topbar">
+                <div class="terminal-dots">
+                  <span class="tdot tdot-red"></span>
+                  <span class="tdot tdot-yellow"></span>
+                  <span class="tdot tdot-green"></span>
+                </div>
+                <div class="terminal-title font-mono">
+                  stdout/stderr :: {{ selectedLogApp }} @ {{ selectedNode?.node_name }}
+                </div>
+                <div class="terminal-stats font-mono text-slate">
+                  Showing {{ parsedAppLogLines.length }} lines
+                </div>
+              </div>
+
+              <div class="terminal-body" v-if="appLogsLoading">
+                <div class="terminal-loading">
+                  <div class="terminal-spinner"></div>
+                  <span>Streaming live stdout/stderr for {{ selectedLogApp }}...</span>
+                </div>
+              </div>
+
+              <div class="terminal-body" v-else-if="appLogsError">
+                <div class="terminal-error">
+                  <span class="text-rose font-bold">⚠️ {{ appLogsError }}</span>
+                  <button class="btn btn-xs btn-secondary mt-2" @click="fetchNodeAppLogs(selectedLogApp)">Try Again</button>
+                </div>
+              </div>
+
+              <div class="terminal-body" v-else-if="parsedAppLogLines.length > 0">
+                <div
+                  v-for="line in parsedAppLogLines"
+                  :key="line.id"
+                  class="log-line"
+                  :class="`log-line-${line.level}`"
+                >
+                  <span class="log-line-num font-mono">{{ line.id }}</span>
+                  <span class="log-line-level font-mono" :class="`text-${line.level === 'error' ? 'rose' : line.level === 'warn' ? 'amber' : 'cyan'}`">
+                    [{{ line.level.toUpperCase() }}]
+                  </span>
+                  <span class="log-line-content font-mono">{{ line.cleanText }}</span>
+                </div>
+              </div>
+
+              <div class="terminal-body" v-else>
+                <div class="terminal-empty">
+                  <span>🛡️ No matching log lines found for current filters.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Incidents Table if any -->
+            <div class="incidents-table-wrapper mt-4" v-if="nodeHistoryData?.incidents && nodeHistoryData.incidents.length > 0">
+              <h5 class="inc-subheading">🚨 Automated Anomaly & Incident Snapshots</h5>
               <table class="incidents-mini-table">
                 <thead>
                   <tr>
@@ -3186,7 +3487,7 @@ onUnmounted(() => {
                     <th>Message & Root Cause</th>
                     <th>Pre-Crash State</th>
                     <th>Status</th>
-                    <th>Timestamp</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3216,16 +3517,14 @@ onUnmounted(() => {
                         {{ inc.status.toUpperCase() }}
                       </span>
                     </td>
-                    <td class="font-mono text-slate">{{ new Date(inc.created_at).toLocaleString() }}</td>
+                    <td>
+                      <button class="btn btn-xs btn-secondary font-mono" @click="selectIncidentLog(inc)">
+                        🔍 Logs
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
-            </div>
-
-            <div class="inc-empty-state" v-else>
-              <span class="inc-empty-icon">🛡️</span>
-              <h5>Zero Critical Anomalies Recorded</h5>
-              <p>No crash loops, OOM events, or node degradation incidents have occurred on {{ selectedNode?.node_name }} during this time window.</p>
             </div>
           </div>
         </div>
@@ -8223,6 +8522,257 @@ onUnmounted(() => {
   font-size: 11px;
   margin: 0;
   max-width: 400px;
+}
+
+/* Real App & Failure Log Terminal Viewer */
+.log-explorer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 4px;
+}
+
+.log-app-select-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log-toolbar-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.select-log-app {
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+.select-log-app:hover,
+.select-log-app:focus {
+  border-color: #38bdf8;
+}
+
+.log-level-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip-rose.active {
+  background: rgba(244, 63, 94, 0.2);
+  color: #fb7185;
+  border-color: rgba(244, 63, 94, 0.4);
+}
+
+.chip-amber.active {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.log-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 180px;
+}
+
+.input-log-search {
+  width: 100%;
+  padding: 6px 28px 6px 30px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 11.5px;
+}
+
+.input-log-search:focus {
+  border-color: #38bdf8;
+  outline: none;
+}
+
+.log-action-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-log-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-log-action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.spin-icon {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+/* Terminal Viewer */
+.log-terminal-viewer {
+  background: #080c14;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
+  margin-top: 4px;
+}
+
+.terminal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.tdot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.tdot-red { background: #ef4444; }
+.tdot-yellow { background: #f59e0b; }
+.tdot-green { background: #10b981; }
+
+.terminal-title {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.terminal-stats {
+  font-size: 10.5px;
+}
+
+.terminal-body {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 10px 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.terminal-loading,
+.terminal-empty,
+.terminal-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  color: var(--text-muted);
+  gap: 8px;
+}
+
+.terminal-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(56, 189, 248, 0.2);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.log-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.1s ease;
+}
+
+.log-line:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.log-line-error {
+  background: rgba(244, 63, 94, 0.08);
+  border-left: 2px solid #f43f5e;
+}
+
+.log-line-warn {
+  background: rgba(245, 158, 11, 0.06);
+  border-left: 2px solid #f59e0b;
+}
+
+.log-line-num {
+  width: 32px;
+  color: rgba(255, 255, 255, 0.25);
+  text-align: right;
+  flex-shrink: 0;
+  user-select: none;
+  font-size: 10px;
+}
+
+.log-line-level {
+  width: 55px;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.log-line-content {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #e2e8f0;
+}
+
+.log-line-error .log-line-content {
+  color: #fda4af;
+}
+
+.log-line-warn .log-line-content {
+  color: #fde68a;
+}
+
+.inc-subheading {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 0 0 8px 0;
 }
 </style>
 
