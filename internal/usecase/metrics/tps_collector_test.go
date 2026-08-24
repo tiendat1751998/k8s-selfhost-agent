@@ -324,8 +324,20 @@ func TestTPSCollector_Collect_AllSources(t *testing.T) {
 	if snap1.Services[0].MemoryUsedMB != 256.0 {
 		t.Errorf("expected postgres_db MemoryUsedMB = 256.0, got %f", snap1.Services[0].MemoryUsedMB)
 	}
+	if snap1.Services[0].TotalRxBytes != 200000 {
+		t.Errorf("expected postgres_db TotalRxBytes = 200000, got %d", snap1.Services[0].TotalRxBytes)
+	}
+	if snap1.Services[0].TotalTxBytes != 100000 {
+		t.Errorf("expected postgres_db TotalTxBytes = 100000, got %d", snap1.Services[0].TotalTxBytes)
+	}
 	if snap1.Services[1].NodeID != "host-1" {
 		t.Errorf("expected tiki_cart NodeID = host-1, got %s", snap1.Services[1].NodeID)
+	}
+	if snap1.Services[1].TotalRxBytes != 100000 {
+		t.Errorf("expected tiki_cart TotalRxBytes = 100000, got %d", snap1.Services[1].TotalRxBytes)
+	}
+	if snap1.Services[1].TotalTxBytes != 50000 {
+		t.Errorf("expected tiki_cart TotalTxBytes = 50000, got %d", snap1.Services[1].TotalTxBytes)
 	}
 	if snap1.Database.ActiveConnections != 12 {
 		t.Errorf("expected DB ActiveConnections = 12, got %d", snap1.Database.ActiveConnections)
@@ -776,4 +788,502 @@ func TestNormalizeServiceNameForLB(t *testing.T) {
 		}
 	}
 }
+
+func TestTPSCollector_FiveContainers_K8sMaterServices(t *testing.T) {
+	provider := &mockMetricsProvider{
+		snapshot: &SystemOverview{
+			Nodes: []NodeMetrics{
+				{
+					NodeID:         "host-k8smater",
+					NodeName:       "k8smater",
+					Status:         "ready",
+					ContainerCount: 5,
+					RunningCount:   5,
+				},
+			},
+			Containers: []ContainerMetrics{
+				{
+					ContainerID:   "c-traefik",
+					ContainerName: "tiki_traefik",
+					ServiceName:   "tiki_traefik",
+					NodeID:        "host-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    5.0,
+					MemoryUsed:    128 * 1024 * 1024,
+					MemoryLimit:   1024 * 1024 * 1024,
+					NetworkRx:     1000,
+					NetworkTx:     2000,
+				},
+				{
+					ContainerID:   "c-nats",
+					ContainerName: "nats",
+					ServiceName:   "nats",
+					NodeID:        "host-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    3.0,
+					MemoryUsed:    64 * 1024 * 1024,
+					MemoryLimit:   1024 * 1024 * 1024,
+					NetworkRx:     500,
+					NetworkTx:     600,
+				},
+				{
+					ContainerID:   "c-redis",
+					ContainerName: "tiki_redis",
+					ServiceName:   "tiki_redis",
+					NodeID:        "host-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    2.0,
+					MemoryUsed:    32 * 1024 * 1024,
+					MemoryLimit:   1024 * 1024 * 1024,
+					NetworkRx:     300,
+					NetworkTx:     400,
+				},
+				{
+					ContainerID:   "c-postgres",
+					ContainerName: "postgres_db",
+					ServiceName:   "postgres_db",
+					NodeID:        "host-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    4.0,
+					MemoryUsed:    256 * 1024 * 1024,
+					MemoryLimit:   1024 * 1024 * 1024,
+					NetworkRx:     800,
+					NetworkTx:     900,
+				},
+				{
+					ContainerID:   "c-registry",
+					ContainerName: "registry",
+					ServiceName:   "registry",
+					NodeID:        "host-k8smater",
+					NodeName:      "k8smater",
+					State:         "running",
+					CPUPercent:    1.0,
+					MemoryUsed:    48 * 1024 * 1024,
+					MemoryLimit:   1024 * 1024 * 1024,
+					NetworkRx:     100,
+					NetworkTx:     200,
+				},
+			},
+		},
+		agentMetrics: map[string]*AgentMetrics{
+			"host-k8smater": {
+				Hostname: "k8smater",
+				Status:   "online",
+			},
+		},
+	}
+
+	collector := NewTPSCollector(provider, nil, zap.NewNop())
+	snap, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if len(snap.Services) != 5 {
+		t.Fatalf("expected 5 services in TPSSnapshot, got %d", len(snap.Services))
+	}
+
+	expectedServices := map[string]bool{
+		"tiki_traefik": true,
+		"nats":         true,
+		"tiki_redis":   true,
+		"postgres_db":  true,
+		"registry":     true,
+	}
+
+	for _, svc := range snap.Services {
+		if !expectedServices[svc.ServiceName] {
+			t.Errorf("unexpected service name: %s", svc.ServiceName)
+		}
+		if svc.NodeID != "host-k8smater" || svc.NodeName != "k8smater" {
+			t.Errorf("service %s node mismatch: NodeID=%q NodeName=%q, want host-k8smater/k8smater", svc.ServiceName, svc.NodeID, svc.NodeName)
+		}
+		if svc.Status != "healthy" {
+			t.Errorf("service %s expected status healthy, got %s", svc.ServiceName, svc.Status)
+		}
+		if svc.ContainerCount != 1 {
+			t.Errorf("service %s expected container count 1, got %d", svc.ServiceName, svc.ContainerCount)
+		}
+	}
+}
+
+func TestTPSCollector_EnrichServicesWithLBStats_TraefikAndBackends(t *testing.T) {
+	provider := &mockMetricsProvider{
+		snapshot: &SystemOverview{
+			Containers: []ContainerMetrics{
+				{
+					ContainerID:   "c-traefik",
+					ContainerName: "tiki_traefik",
+					ServiceName:   "tiki_traefik",
+					State:         "running",
+					CPUPercent:    5.0,
+					NetworkRx:     100000,
+					NetworkTx:     200000,
+				},
+				{
+					ContainerID:   "c-db",
+					ContainerName: "postgres_db",
+					ServiceName:   "postgres_db",
+					State:         "running",
+					CPUPercent:    4.0,
+					NetworkRx:     50000,
+					NetworkTx:     60000,
+				},
+				{
+					ContainerID:   "c-nats",
+					ContainerName: "nats",
+					ServiceName:   "nats",
+					State:         "running",
+					CPUPercent:    3.0,
+					NetworkRx:     30000,
+					NetworkTx:     40000,
+				},
+				{
+					ContainerID:   "c-redis",
+					ContainerName: "tiki_redis",
+					ServiceName:   "tiki_redis",
+					State:         "running",
+					CPUPercent:    2.0,
+					NetworkRx:     20000,
+					NetworkTx:     25000,
+				},
+			},
+		},
+		agentMetrics: map[string]*AgentMetrics{
+			"host-1": {
+				Hostname:  "k8smater",
+				NetRxRate: 200000,
+				NetTxRate: 325000,
+			},
+		},
+	}
+
+	lbMock := &mockLBProvider{
+		stats: []domainLB.ServiceRequestStats{
+			{
+				ServiceName:    "web@file",
+				RequestsPerSec: 55.4,
+				ErrorRate:      1.2,
+				AvgLatencyMs:   14.5,
+			},
+			{
+				ServiceName:    "gateway@file",
+				RequestsPerSec: 40.0,
+				ErrorRate:      0.5,
+				AvgLatencyMs:   8.0,
+			},
+		},
+		aggStats: &domainLB.AggregateStats{
+			TotalRequestsPerSec: 95.4,
+			ActiveConnections:   35,
+			ErrorRate:           0.9,
+			AvgLatencyMs:        11.2,
+		},
+	}
+
+	collector := NewTPSCollector(
+		provider,
+		nil,
+		zap.NewNop(),
+		WithLoadBalancerProvider(lbMock),
+	)
+
+	// Set baseline and simulate active DB, Messaging, and Container stats
+	collector.prevDBStats = dbStatsRaw{
+		commit: 1000,
+	}
+	collector.prevDBTime = time.Now().Add(-1 * time.Second)
+	collector.prevNATSStats = natsStatsRaw{
+		inMsgs:  5000,
+		outMsgs: 10000,
+	}
+	collector.prevNATSTime = time.Now().Add(-1 * time.Second)
+	collector.prevContainerStats = map[string]containerNetRaw{
+		"c-traefik": {rxBytes: 50000, txBytes: 100000},
+		"c-db":      {rxBytes: 25000, txBytes: 30000},
+		"c-nats":    {rxBytes: 15000, txBytes: 20000},
+		"c-redis":   {rxBytes: 10000, txBytes: 12000},
+	}
+	collector.prevContainerTime = time.Now().Add(-1 * time.Second)
+
+	snap, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	svcMap := make(map[string]ServiceTPS)
+	for _, s := range snap.Services {
+		svcMap[s.ServiceName] = s
+	}
+
+	// 1. Verify tiki_traefik receives aggregate Traefik stats
+	traefik, ok := svcMap["tiki_traefik"]
+	if !ok {
+		t.Fatal("expected tiki_traefik in services")
+	}
+	if traefik.RequestsPerSec != 95.4 {
+		t.Errorf("expected tiki_traefik RequestsPerSec = 95.4, got %f", traefik.RequestsPerSec)
+	}
+	if traefik.ErrorRate != 0.9 {
+		t.Errorf("expected tiki_traefik ErrorRate = 0.9, got %f", traefik.ErrorRate)
+	}
+	if traefik.AvgLatencyMs != 11.2 {
+		t.Errorf("expected tiki_traefik AvgLatencyMs = 11.2, got %f", traefik.AvgLatencyMs)
+	}
+
+	// 2. Direct test with enrichServicesWithLBStats directly supplying DB and Messaging TPS
+	dbTPS := DatabaseTPS{TransactionsPerSec: 45.0}
+	msgTPS := MessagingTPS{InMsgsPerSec: 100.0, OutMsgsPerSec: 150.0}
+	httpTPS := HTTPTPS{RequestsPerSec: 95.4, ErrorRate: 0.9, AvgLatencyMs: 11.2}
+
+	enriched := collector.enrichServicesWithLBStats(context.Background(), snap.Services, httpTPS, dbTPS, msgTPS)
+	enrichedMap := make(map[string]ServiceTPS)
+	for _, s := range enriched {
+		enrichedMap[s.ServiceName] = s
+	}
+
+	// Verify postgres_db receives Database TPS
+	dbSvc, ok := enrichedMap["postgres_db"]
+	if !ok {
+		t.Fatal("expected postgres_db in enriched services")
+	}
+	if dbSvc.RequestsPerSec != 45.0 {
+		t.Errorf("expected postgres_db RequestsPerSec = 45.0, got %f", dbSvc.RequestsPerSec)
+	}
+
+	// Verify nats receives Messaging TPS (In + Out)
+	natsSvc, ok := enrichedMap["nats"]
+	if !ok {
+		t.Fatal("expected nats in enriched services")
+	}
+	if natsSvc.RequestsPerSec != 250.0 {
+		t.Errorf("expected nats RequestsPerSec = 250.0, got %f", natsSvc.RequestsPerSec)
+	}
+
+	// Verify tiki_redis receives proportional traffic when active
+	redisSvc, ok := enrichedMap["tiki_redis"]
+	if !ok {
+		t.Fatal("expected tiki_redis in enriched services")
+	}
+	if redisSvc.RequestsPerSec <= 0 {
+		t.Errorf("expected tiki_redis RequestsPerSec > 0, got %f", redisSvc.RequestsPerSec)
+	}
+}
+
+func TestTPSCollector_EnrichServicesWithLBStats_TraefikServiceMatching(t *testing.T) {
+	lbMock := &mockLBProvider{
+		stats: []domainLB.ServiceRequestStats{
+			{
+				ServiceName:    "web@file",
+				RequestsPerSec: 35.0,
+				ErrorRate:      2.5,
+				AvgLatencyMs:   18.0,
+			},
+		},
+		aggStats: nil, // no aggregate stats, only per-service
+	}
+
+	provider := &mockMetricsProvider{
+		snapshot: &SystemOverview{
+			Containers: []ContainerMetrics{
+				{
+					ContainerID:   "c-traefik",
+					ContainerName: "tiki_traefik",
+					ServiceName:   "tiki_traefik",
+					State:         "running",
+					CPUPercent:    5.0,
+					NetworkRx:     50000,
+					NetworkTx:     100000,
+				},
+			},
+		},
+	}
+
+	collector := NewTPSCollector(
+		provider,
+		nil,
+		zap.NewNop(),
+		WithLoadBalancerProvider(lbMock),
+	)
+
+	snap, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if len(snap.Services) != 1 {
+		t.Fatalf("expected 1 service, got %d", len(snap.Services))
+	}
+
+	traefik := snap.Services[0]
+	if traefik.ServiceName != "tiki_traefik" {
+		t.Errorf("expected service tiki_traefik, got %s", traefik.ServiceName)
+	}
+	if traefik.RequestsPerSec != 35.0 {
+		t.Errorf("expected tiki_traefik RequestsPerSec = 35.0, got %f", traefik.RequestsPerSec)
+	}
+	if traefik.ErrorRate != 2.5 {
+		t.Errorf("expected tiki_traefik ErrorRate = 2.5, got %f", traefik.ErrorRate)
+	}
+}
+
+func TestIsServiceHelpers(t *testing.T) {
+	traefikTests := []struct {
+		name string
+		want bool
+	}{
+		{"tiki_traefik", true},
+		{"traefik", true},
+		{"traefik_proxy", true},
+		{"ingress", true},
+		{"ingress-controller", true},
+		{"k8s_traefik", true},
+		{"tiki_redis", false},
+		{"nats", false},
+		{"postgres_db", false},
+	}
+
+	for _, tt := range traefikTests {
+		got := isTraefikService(tt.name)
+		if got != tt.want {
+			t.Errorf("isTraefikService(%q) = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+
+	dbTests := []struct {
+		name string
+		want bool
+	}{
+		{"postgres_db", true},
+		{"db", true},
+		{"database", true},
+		{"tiki_db", true},
+		{"postgres", true},
+		{"mysql_db", true},
+		{"tiki_redis", false},
+		{"dashboard", false},
+		{"tiki_traefik", false},
+	}
+
+	for _, tt := range dbTests {
+		got := isDatabaseService(tt.name)
+		if got != tt.want {
+			t.Errorf("isDatabaseService(%q) = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+
+	msgTests := []struct {
+		name string
+		want bool
+	}{
+		{"nats", true},
+		{"tiki_nats", true},
+		{"kafka", true},
+		{"rabbitmq", true},
+		{"message_broker", true},
+		{"tiki_redis", false},
+		{"tiki_traefik", false},
+	}
+
+	for _, tt := range msgTests {
+		got := isMessagingService(tt.name)
+		if got != tt.want {
+			t.Errorf("isMessagingService(%q) = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+
+	cacheTests := []struct {
+		name string
+		want bool
+	}{
+		{"tiki_redis", true},
+		{"redis", true},
+		{"memcached", true},
+		{"tiki_traefik", false},
+		{"postgres_db", false},
+	}
+
+	for _, tt := range cacheTests {
+		got := isCacheService(tt.name)
+		if got != tt.want {
+			t.Errorf("isCacheService(%q) = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestTPSCollector_IntelligentContainerNetworkFallback(t *testing.T) {
+	provider := &mockMetricsProvider{
+		snapshot: &SystemOverview{
+			Containers: []ContainerMetrics{
+				{
+					ContainerID:   "c-traefik",
+					ContainerName: "tiki_traefik",
+					ServiceName:   "tiki_traefik",
+					State:         "running",
+					CPUPercent:    85.0,
+					NetworkRx:     12000000,
+					NetworkRxRate: 1200000, // 1.2 MB/s = ~1000 RPS (1,200,000 / 1200)
+					NetworkTx:     24000000,
+					NetworkTxRate: 2400000,
+				},
+				{
+					ContainerID:   "c-backend",
+					ContainerName: "tiki_gateway",
+					ServiceName:   "tiki_gateway",
+					State:         "running",
+					CPUPercent:    50.0,
+					NetworkRx:     6000000,
+					NetworkRxRate: 600000,
+					NetworkTx:     6000000,
+					NetworkTxRate: 600000,
+				},
+			},
+		},
+	}
+
+	// Load balancer provider returns error (simulating timeout under 1000+ connections)
+	lbMock := &mockLBProvider{
+		err: errors.New("management port 8080 timed out under load"),
+	}
+
+	reqCount := int64(5) // Internal API request counter only reports 5
+	collector := NewTPSCollector(
+		provider,
+		nil,
+		zap.NewNop(),
+		WithLoadBalancerProvider(lbMock),
+		WithTPSRequestCountFn(func() int64 { return reqCount }),
+	)
+
+	snap, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	// Throughput should estimate real traffic (1,200,000 / 1200 = 1000 RPS) rather than 5 req/s
+	if snap.HTTP.RequestsPerSec != 1000.0 {
+		t.Errorf("expected HTTP RequestsPerSec = 1000.0 via container network fallback, got %f", snap.HTTP.RequestsPerSec)
+	}
+
+	// Verify tiki_traefik in Services also reflects 1000 RPS
+	var traefikSvc *ServiceTPS
+	for i := range snap.Services {
+		if snap.Services[i].ServiceName == "tiki_traefik" {
+			traefikSvc = &snap.Services[i]
+			break
+		}
+	}
+	if traefikSvc == nil {
+		t.Fatal("expected tiki_traefik service in snapshot")
+	}
+	if traefikSvc.RequestsPerSec != 1000.0 {
+		t.Errorf("expected tiki_traefik RequestsPerSec = 1000.0, got %f", traefikSvc.RequestsPerSec)
+	}
+}
+
+
 

@@ -38,6 +38,8 @@ type ServiceTPS struct {
 	MemoryPercent  float64 `json:"memory_percent"`
 	RxBytesPerSec  int64   `json:"rx_bytes_per_sec"`
 	TxBytesPerSec  int64   `json:"tx_bytes_per_sec"`
+	TotalRxBytes   int64   `json:"total_rx_bytes,omitempty"` // Lifetime cumulative Rx bytes
+	TotalTxBytes   int64   `json:"total_tx_bytes,omitempty"` // Lifetime cumulative Tx bytes
 	RequestsPerSec float64 `json:"requests_per_sec"`
 	ErrorRate      float64 `json:"error_rate"`
 	AvgLatencyMs   float64 `json:"avg_latency_ms"`
@@ -299,10 +301,12 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 	httpTPS := c.collectHTTPTPS(ctx, now)
 
 	// 2b. Override with Load Balancer aggregate stats from Prometheus entrypoints when available
+	lbReportedRPS := false
 	if c.lbProvider != nil {
 		aggStats, err := c.lbProvider.GetAggregateStats(ctx)
 		if err == nil && aggStats != nil {
 			httpTPS.RequestsPerSec = aggStats.TotalRequestsPerSec
+			lbReportedRPS = true
 			httpTPS.ActiveConnections = aggStats.ActiveConnections
 			httpTPS.ErrorRate = aggStats.ErrorRate
 			if aggStats.AvgLatencyMs > 0 {
@@ -316,15 +320,36 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 		}
 	}
 
-	// Enrich per-service TPS metrics with load balancer request stats
-	services = c.enrichServicesWithLBStats(ctx, services, httpTPS)
+	// Fallback only if Load Balancer is NOT available or errored:
+	if !lbReportedRPS {
+		var traefikRx int64
+		for _, s := range services {
+			if isTraefikService(s.ServiceName) {
+				traefikRx += s.RxBytesPerSec
+			}
+		}
+		if traefikRx > 10000 {
+			// Estimate real HTTP throughput: ~1.2 KB average request size
+			estimatedRPS := math.Round((float64(traefikRx)/1200.0)*100) / 100
+			httpTPS.RequestsPerSec = estimatedRPS
+		}
+	}
+
+	// 3. Database TPS (pg_stat_database)
+	dbTPS := c.collectDatabaseTPS(ctx, now)
+
+	// 4. Messaging TPS (NATS /varz)
+	msgTPS := c.collectMessagingTPS(ctx, now)
+
+	// Enrich per-service TPS metrics with load balancer request stats and backend metrics
+	services = c.enrichServicesWithLBStats(ctx, services, httpTPS, dbTPS, msgTPS)
 
 	// If LB provider or gateway services report request activity, enrich aggregate HTTP TPS
 	var sumLBRPS float64
 	var sumLBErrors float64
 	var countLBServices int
 	for _, s := range services {
-		if s.RequestsPerSec > 0 {
+		if !isTraefikService(s.ServiceName) && s.RequestsPerSec > 0 {
 			sumLBRPS += s.RequestsPerSec
 			countLBServices++
 			sumLBErrors += s.ErrorRate
@@ -335,27 +360,7 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 		if countLBServices > 0 && httpTPS.ErrorRate == 0 {
 			httpTPS.ErrorRate = math.Round((sumLBErrors/float64(countLBServices))*100) / 100
 		}
-	} else if httpTPS.RequestsPerSec == 0 {
-		var gatewayRx int64
-		for _, s := range services {
-			low := strings.ToLower(s.ServiceName)
-			if strings.Contains(low, "gateway") || strings.Contains(low, "traefik") || strings.Contains(low, "web") || strings.Contains(low, "proxy") || strings.Contains(low, "ingress") {
-				gatewayRx += s.RxBytesPerSec
-			}
-		}
-		if gatewayRx > 0 {
-			estimatedRps := float64(gatewayRx) / 1500.0
-			if estimatedRps > 0 {
-				httpTPS.RequestsPerSec = math.Round(estimatedRps*100) / 100
-			}
-		}
 	}
-
-	// 3. Database TPS (pg_stat_database)
-	dbTPS := c.collectDatabaseTPS(ctx, now)
-
-	// 4. Messaging TPS (NATS /varz)
-	msgTPS := c.collectMessagingTPS(ctx, now)
 
 	snapshot := &TPSSnapshot{
 		Timestamp: now,
@@ -434,6 +439,10 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 					diskRead += p.ReadBytesPerSec
 					diskWrite += p.WriteBytesPerSec
 				}
+				procCount := nm.Processes
+				if procCount == 0 {
+					procCount = nm.ContainerCount
+				}
 				node := NodeTPS{
 					NodeName:        nm.NodeName,
 					NodeID:          nm.NodeID,
@@ -441,7 +450,7 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 					TxBytesPerSec:   nm.NetworkTxBytes,
 					DiskReadPerSec:  diskRead,
 					DiskWritePerSec: diskWrite,
-					Processes:       nm.ContainerCount,
+					Processes:       procCount,
 				}
 				perNode = append(perNode, node)
 				totalRx += nm.NetworkRxBytes
@@ -462,16 +471,24 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 
 		if elapsed > 0 {
 			for _, cm := range snapshot.Containers {
-				if prev, ok := c.prevContainerStats[cm.ContainerID]; ok {
+				if prev, ok := c.prevContainerStats[cm.ContainerID]; ok && prev.rxBytes > 0 && cm.NetworkRx >= prev.rxBytes {
 					rxDelta := cm.NetworkRx - prev.rxBytes
-					txDelta := cm.NetworkTx - prev.txBytes
 					if rxDelta > 0 {
-						containerRxDelta += rxDelta
-						containerRxRates[cm.ContainerID] = int64(float64(rxDelta) / elapsed)
+						rate := int64(float64(rxDelta) / elapsed)
+						if rate < 10*1024*1024*1024 {
+							containerRxDelta += rxDelta
+							containerRxRates[cm.ContainerID] = rate
+						}
 					}
+				}
+				if prev, ok := c.prevContainerStats[cm.ContainerID]; ok && prev.txBytes > 0 && cm.NetworkTx >= prev.txBytes {
+					txDelta := cm.NetworkTx - prev.txBytes
 					if txDelta > 0 {
-						containerTxDelta += txDelta
-						containerTxRates[cm.ContainerID] = int64(float64(txDelta) / elapsed)
+						rate := int64(float64(txDelta) / elapsed)
+						if rate < 10*1024*1024*1024 {
+							containerTxDelta += txDelta
+							containerTxRates[cm.ContainerID] = rate
+						}
 					}
 				}
 			}
@@ -506,6 +523,8 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 				totalMemLimit int64
 				rxRate        int64
 				txRate        int64
+				totalRxBytes  int64
+				totalTxBytes  int64
 			}
 
 			serviceMap := make(map[string]*serviceAcc)
@@ -582,8 +601,19 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 				acc.totalCPU += cm.CPUPercent
 				acc.totalMemBytes += cm.MemoryUsed
 				acc.totalMemLimit += cm.MemoryLimit
-				acc.rxRate += containerRxRates[cm.ContainerID]
-				acc.txRate += containerTxRates[cm.ContainerID]
+
+				rxRate := cm.NetworkRxRate
+				if rxRate == 0 {
+					rxRate = containerRxRates[cm.ContainerID]
+				}
+				txRate := cm.NetworkTxRate
+				if txRate == 0 {
+					txRate = containerTxRates[cm.ContainerID]
+				}
+				acc.rxRate += rxRate
+				acc.txRate += txRate
+				acc.totalRxBytes += cm.NetworkRx
+				acc.totalTxBytes += cm.NetworkTx
 			}
 
 			for _, groupKey := range serviceOrder {
@@ -610,6 +640,8 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 					MemoryPercent:  memPercent,
 					RxBytesPerSec:  acc.rxRate,
 					TxBytesPerSec:  acc.txRate,
+					TotalRxBytes:   acc.totalRxBytes,
+					TotalTxBytes:   acc.totalTxBytes,
 					Status:         status,
 				})
 			}
@@ -1041,8 +1073,9 @@ func extractServiceName(cm ContainerMetrics) string {
 	return name
 }
 
-// enrichServicesWithLBStats merges per-service LoadBalancer request statistics into ServiceTPS metrics.
-func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services []ServiceTPS, httpTPS HTTPTPS) []ServiceTPS {
+// enrichServicesWithLBStats merges per-service LoadBalancer request statistics into ServiceTPS metrics
+// and maps aliases so Traefik ingress and backend services (DB, Messaging) receive accurate stats.
+func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services []ServiceTPS, httpTPS HTTPTPS, dbTPS DatabaseTPS, msgTPS MessagingTPS) []ServiceTPS {
 	var lbStats []domainLB.ServiceRequestStats
 	if c.lbProvider != nil {
 		stats, err := c.lbProvider.GetServiceStats(ctx)
@@ -1053,16 +1086,30 @@ func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services [
 		}
 	}
 
+	// If httpTPS has 0 RequestsPerSec but lbStats has non-zero stats, sum them up
+	var sumFromLBStats float64
+	var errRateFromLBStats float64
+	var countWithRPS int
+	for _, s := range lbStats {
+		if s.RequestsPerSec > 0 {
+			sumFromLBStats += s.RequestsPerSec
+			errRateFromLBStats += s.ErrorRate
+			countWithRPS++
+		}
+	}
+	if sumFromLBStats > 0 && httpTPS.RequestsPerSec == 0 {
+		httpTPS.RequestsPerSec = math.Round(sumFromLBStats*100) / 100
+		if countWithRPS > 0 && httpTPS.ErrorRate == 0 {
+			httpTPS.ErrorRate = math.Round((errRateFromLBStats/float64(countWithRPS))*100) / 100
+		}
+	}
+
 	// Map normalized and raw service names to LB stats
-	statMap := make(map[string]domainLB.ServiceRequestStats, len(lbStats))
-	hasAnyLBRPS := false
+	statMap := make(map[string]domainLB.ServiceRequestStats, len(lbStats)*2)
 	for _, s := range lbStats {
 		norm := normalizeServiceNameForLB(s.ServiceName)
 		statMap[norm] = s
 		statMap[strings.ToLower(strings.TrimSpace(s.ServiceName))] = s
-		if s.RequestsPerSec > 0 {
-			hasAnyLBRPS = true
-		}
 	}
 
 	// Calculate total Rx traffic across all container services for fallback proportional estimation
@@ -1077,33 +1124,40 @@ func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services [
 		sName := services[i].ServiceName
 		norm := normalizeServiceNameForLB(sName)
 
-		matched := false
-		if stat, ok := statMap[norm]; ok {
-			matched = true
+		stat, matched := findMatchingLBStat(sName, norm, statMap)
+		if matched {
 			services[i].RequestsPerSec = stat.RequestsPerSec
 			services[i].ErrorRate = stat.ErrorRate
 			services[i].AvgLatencyMs = stat.AvgLatencyMs
-		} else if stat, ok := statMap[strings.ToLower(strings.TrimSpace(sName))]; ok {
-			matched = true
-			services[i].RequestsPerSec = stat.RequestsPerSec
-			services[i].ErrorRate = stat.ErrorRate
-			services[i].AvgLatencyMs = stat.AvgLatencyMs
-		} else {
-			// Substring / fuzzy match
-			for k, stat := range statMap {
-				if norm != "" && k != "" && (strings.Contains(norm, k) || strings.Contains(k, norm)) {
-					matched = true
-					services[i].RequestsPerSec = stat.RequestsPerSec
-					services[i].ErrorRate = stat.ErrorRate
-					services[i].AvgLatencyMs = stat.AvgLatencyMs
-					break
-				}
-			}
 		}
 
-		// Fallback: If no direct LB per-service RPS was reported and aggregate HTTP RequestsPerSec > 0,
-		// estimate per-service RPS proportionally from Docker container network throughput
-		if (!matched || services[i].RequestsPerSec == 0) && !hasAnyLBRPS && httpTPS.RequestsPerSec > 0 {
+		// 1. Ingress gateway mapping (tiki_traefik / traefik)
+		if isTraefikService(sName) {
+			services[i].RequestsPerSec = httpTPS.RequestsPerSec
+			services[i].ErrorRate = httpTPS.ErrorRate
+			services[i].AvgLatencyMs = httpTPS.AvgLatencyMs
+			continue
+		}
+
+		// 2. Database service mapping (postgres_db / db)
+		if isDatabaseService(sName) && services[i].RequestsPerSec == 0 {
+			if dbTPS.TransactionsPerSec > 0 {
+				services[i].RequestsPerSec = math.Round(dbTPS.TransactionsPerSec*100) / 100
+			}
+			continue
+		}
+
+		// 3. Messaging service mapping (nats)
+		if isMessagingService(sName) && services[i].RequestsPerSec == 0 {
+			msgRate := msgTPS.InMsgsPerSec + msgTPS.OutMsgsPerSec
+			if msgRate > 0 {
+				services[i].RequestsPerSec = math.Round(msgRate*100) / 100
+			}
+			continue
+		}
+
+		// 4. Proportional fallback for backend services with active network traffic
+		if services[i].RequestsPerSec == 0 && httpTPS.RequestsPerSec > 0 {
 			if totalRxTraffic > 0 && services[i].RxBytesPerSec > 0 {
 				ratio := float64(services[i].RxBytesPerSec) / float64(totalRxTraffic)
 				services[i].RequestsPerSec = math.Round(httpTPS.RequestsPerSec*ratio*100) / 100
@@ -1118,6 +1172,80 @@ func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services [
 	}
 
 	return services
+}
+
+// findMatchingLBStat searches for matching load balancer statistics using exact, normalized, alias, and fuzzy matching.
+func findMatchingLBStat(sName string, norm string, statMap map[string]domainLB.ServiceRequestStats) (domainLB.ServiceRequestStats, bool) {
+	if stat, ok := statMap[norm]; ok {
+		return stat, true
+	}
+	rawLower := strings.ToLower(strings.TrimSpace(sName))
+	if stat, ok := statMap[rawLower]; ok {
+		return stat, true
+	}
+
+	var aliases []string
+	switch {
+	case isTraefikService(sName):
+		aliases = []string{"traefik", "web", "websecure", "gateway", "web@file", "gateway@file", "websecure@file", "traefik@file"}
+	case norm == "web" || strings.Contains(rawLower, "web"):
+		aliases = []string{"web", "web@file", "websecure", "tiki_web", "frontend"}
+	case norm == "gateway" || strings.Contains(rawLower, "gateway"):
+		aliases = []string{"gateway", "gateway@file", "tiki_gateway", "api-gateway"}
+	case isCacheService(sName):
+		aliases = []string{"redis", "tiki_redis", "redis-cache"}
+	case isDatabaseService(sName):
+		aliases = []string{"db", "postgres_db", "database", "postgres", "postgresql", "psql"}
+	case isMessagingService(sName):
+		aliases = []string{"nats", "tiki_nats", "message_broker", "broker"}
+	}
+
+	for _, alias := range aliases {
+		if stat, ok := statMap[alias]; ok {
+			return stat, true
+		}
+		if stat, ok := statMap[normalizeServiceNameForLB(alias)]; ok {
+			return stat, true
+		}
+	}
+
+	for k, stat := range statMap {
+		if norm != "" && k != "" && (strings.Contains(norm, k) || strings.Contains(k, norm)) {
+			return stat, true
+		}
+	}
+
+	return domainLB.ServiceRequestStats{}, false
+}
+
+// isTraefikService checks whether a service is the Traefik ingress proxy / gateway.
+func isTraefikService(name string) bool {
+	low := strings.ToLower(strings.TrimSpace(name))
+	norm := normalizeServiceNameForLB(name)
+	return norm == "traefik" || strings.Contains(low, "traefik") || norm == "ingress" || low == "ingress" || low == "ingress-controller"
+}
+
+// isDatabaseService checks whether a service is a database service.
+func isDatabaseService(name string) bool {
+	low := strings.ToLower(strings.TrimSpace(name))
+	norm := normalizeServiceNameForLB(name)
+	return norm == "db" || norm == "database" || norm == "postgres" || norm == "postgres_db" || norm == "postgresql" || norm == "mysql" || norm == "mariadb" ||
+		strings.Contains(low, "postgres") || strings.HasSuffix(low, "_db") || strings.HasSuffix(low, "-db") || low == "db" || low == "database" || strings.Contains(low, "mysql")
+}
+
+// isMessagingService checks whether a service is a messaging or event broker service.
+func isMessagingService(name string) bool {
+	low := strings.ToLower(strings.TrimSpace(name))
+	norm := normalizeServiceNameForLB(name)
+	return norm == "nats" || norm == "kafka" || norm == "rabbitmq" ||
+		strings.Contains(low, "nats") || strings.Contains(low, "kafka") || strings.Contains(low, "rabbitmq") || strings.Contains(low, "broker")
+}
+
+// isCacheService checks whether a service is a cache or in-memory store.
+func isCacheService(name string) bool {
+	low := strings.ToLower(strings.TrimSpace(name))
+	norm := normalizeServiceNameForLB(name)
+	return norm == "redis" || norm == "memcached" || strings.Contains(low, "redis") || strings.Contains(low, "memcached")
 }
 
 // normalizeServiceNameForLB normalizes a service name by stripping load balancer and cluster prefixes/suffixes.

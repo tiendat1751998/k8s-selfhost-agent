@@ -1,14 +1,42 @@
-# K8sControl Project State — Session Update 2026-08-22T12:18
+# K8sControl Project State — Session Update 2026-08-24T15:20
 
-## Git State (master)
-Latest: `62409be` feat: optimize HUD + live request flow animation bar
+## Git State
+Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
+Latest: `46e7f5e` fix(telemetry): fix 24h timeline truncation by lifting query limits to fetch all 1440 1-minute samples
 Previous commits this session:
-- `151cc30` feat(ui): smooth CSS transitions for real-time data updates
-- `1ee8c30` refactor(overview): clean layout - remove TPS cards + containers table, move 5-min trends up
-- `73042c1` feat: LoadBalancerProvider abstraction + per-service request metrics
-- `c79a487` refactor(overview): remove Per-Node Network Throughput table
-- `3940e4f` feat: per-node service mapping, OS distro fix, remove service table from overview
-- `db887f6` (prior session end)
+- `272468f` docs: update project state memory with consolidated time toolbar
+- `2d6ffb8` feat(telemetry): consolidate time presets into unified pill bar and streamline custom range picker
+- `5d6feff` feat(telemetry): add custom date-time range selection and point-in-time log sync for node historical telemetry
+- `2dccd81` fix(logs): support all-lines tail depth and accurate log level classification for errors, warnings, and search
+- `1e3855a` docs: update project state with live log streaming feature
+- `b1b989f` feat(drawer): add real-time live auto-tail log streaming with pause/resume and smart auto-scroll
+- `90b916e` fix(drawer): dynamically stream realtime node telemetry into saturation curves and auto-sync history buffer
+- `a6b79bf` docs: update project state with drawer KPI & chart calibration
+- `4f2bb1a` fix(drawer): integrate realtime metrics into top KPI cards, calibrate SVG percentage scaling, and sync tooltip series colors
+- `29d457c` feat(drawer): enrich Hardware Saturation Trends with live metric strip, series toggles, and peak KPIs
+- `145fedf` docs: update project state with real log terminal feature
+- `1817aa5` feat(drawer): add real workload failure log terminal viewer with ANSI parsing and level filter
+- `f131860` feat(drawer): add 3-group process categorization (Workloads, Systemd Daemons, OS Kernel) with origin tags and SRE state indicators
+- `1680b7b` docs: update project state with tab and search layout polish
+- `520e069` feat(drawer): separate Docker/K8s vs Host/System categories, widen search bar, and fix mode tab switcher symmetry
+- `1c35175` docs: update project state with host app classification
+- `03c18cc` feat(drawer): intelligently classify host platform apps (k8s-agent, hermes, proxysql, dockerd) as apps & services vs core kernel OS daemons
+- `28fbe8c` docs: update project state with category filter and compact network cards
+- `dc5bce0` feat(drawer): add app vs system category filters, compact search input, and 4-column compact network interfaces
+- `c8c5e2c` docs: update project state with unified process & workload table
+- `74adfdb` feat(overview): unify workloads & processes into single high-density table with req/s, err %, bandwidth, state, and pagination
+- `b11ebc4` style(overview): expand drawer width to 980px, relocate page size to bottom footer, and fit state column without horizontal scroll
+- `ea4031b` style(drawer): polish page size pill, network interface margins, and top processes search/sort controls
+- `335d385` fix(metrics): guard container network delta baseline to eliminate lifetime byte rate spikes
+- `5b3ce8f` feat(drawer): align network I/O row, stack NIC in/out rates, and implement high-scale service search & pagination
+- `9190deb` fix(overview): standardize drawer network I/O card, eliminate badge wrapping, and gap bandwidth rates
+- `b35b541` feat(ui): overhaul overview css, node card 2-row layout, and typography
+- `78d7110` test(metrics): add unit test for agent scrape normalization and top processes fallback
+- `531ff6a` fix(overview): resolve drawer network wrapping, duplicate badges, and os formatting
+- `285812e` fix(overview): optimize drawer network table, format os info, and enrich agent scrape
+- `bcf081b` test: update docker handler unit tests with mock UpdateServiceResources
+- `29f449a` feat: implement workload scale and hardware resource limits tuning (RAM/CPU)
+- `62409be` feat: optimize HUD + live request flow animation bar
 
 ## Repo
 GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)

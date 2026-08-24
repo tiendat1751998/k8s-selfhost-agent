@@ -89,6 +89,7 @@ type NodeMetrics struct {
 	NetworkInterfaces []NetworkInterface `json:"network_interfaces,omitempty"`
 	ContainerCount    int                `json:"container_count"`
 	RunningCount      int                `json:"running_count"`
+	Processes         int                `json:"processes,omitempty"`
 	UptimeSeconds     int64              `json:"uptime_seconds,omitempty"`
 	LoadAverage       [3]float64         `json:"load_average,omitempty"`
 	TopProcesses      []ProcessMetric    `json:"top_processes"`
@@ -110,6 +111,8 @@ type ContainerMetrics struct {
 	MemoryPercent float64           `json:"memory_percent"`
 	NetworkRx     int64             `json:"network_rx"`
 	NetworkTx     int64             `json:"network_tx"`
+	NetworkRxRate int64             `json:"network_rx_rate,omitempty"` // Real-time Rx rate in Bytes/sec
+	NetworkTxRate int64             `json:"network_tx_rate,omitempty"` // Real-time Tx rate in Bytes/sec
 	ServiceName   string            `json:"service_name,omitempty"`
 	Labels        map[string]string `json:"labels,omitempty"`
 }
@@ -179,11 +182,16 @@ type Collector struct {
 	thresholds      Thresholds
 	requestCountFn  func() int64
 
-	lastSnapshot *SystemOverview
-	lastReqCount int64
-	lastReqTime  time.Time
-	mu           sync.RWMutex
-	stopCh       chan struct{}
+	dockerDiskPercent float64
+	dockerDiskMu      sync.RWMutex
+
+	lastSnapshot       *SystemOverview
+	lastReqCount       int64
+	lastReqTime        time.Time
+	prevContainerStats map[string]containerNetRaw
+	prevContainerTime  time.Time
+	mu                 sync.RWMutex
+	stopCh             chan struct{}
 }
 
 // Option configures Collector behavior.
@@ -242,13 +250,14 @@ func NewCollector(dockerClient DockerAPIClient, computeHostRepo docker.ComputeHo
 	}
 
 	c := &Collector{
-		dockerClient:    dockerClient,
-		computeHostRepo: computeHostRepo,
-		httpClient:      &http.Client{Timeout: 5 * time.Second},
-		agentMetrics:    make(map[string]*AgentMetrics),
-		broadcaster:     broadcaster,
-		logger:          logger,
-		interval:        5 * time.Second,
+		dockerClient:       dockerClient,
+		computeHostRepo:    computeHostRepo,
+		httpClient:         &http.Client{Timeout: 5 * time.Second},
+		agentMetrics:       make(map[string]*AgentMetrics),
+		broadcaster:        broadcaster,
+		logger:             logger,
+		interval:           5 * time.Second,
+		prevContainerStats: make(map[string]containerNetRaw),
 		thresholds: Thresholds{
 			CPUWarning:    80.0,
 			MemoryWarning: 85.0,
@@ -272,6 +281,11 @@ func (c *Collector) Start(ctx context.Context) {
 	if c.computeHostRepo != nil {
 		c.scrapeAllAgents(ctx)
 	}
+
+	if c.dockerClient != nil {
+		go c.pollDockerDiskUsage(ctx)
+	}
+
 	c.runCollection(ctx)
 
 	go c.pollAgentHosts(ctx)
@@ -307,6 +321,84 @@ func (c *Collector) GetLastSnapshot() *SystemOverview {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.lastSnapshot
+}
+
+// SetLastSnapshot sets the cached SystemOverview metrics snapshot (useful for testing or initial hydration).
+func (c *Collector) SetLastSnapshot(s *SystemOverview) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastSnapshot = s
+}
+
+// pollDockerDiskUsage periodically updates Docker daemon layer disk usage in the background (every 60s)
+// to avoid blocking the fast 5s CollectOnce tick.
+func (c *Collector) pollDockerDiskUsage(ctx context.Context) {
+	if c.dockerClient == nil {
+		return
+	}
+	c.updateDockerDiskUsage(ctx)
+
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.stopCh:
+			return
+		case <-ticker.C:
+			c.updateDockerDiskUsage(ctx)
+		}
+	}
+}
+
+func (c *Collector) updateDockerDiskUsage(ctx context.Context) {
+	if c.dockerClient == nil {
+		return
+	}
+	duCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	du, duErr := c.dockerClient.DiskUsage(duCtx, types.DiskUsageOptions{})
+	if duErr != nil {
+		c.logger.Debug("Failed to fetch Docker disk usage", zap.Error(duErr))
+		return
+	}
+
+	var diskUsed int64
+	diskUsed += du.LayersSize
+	for _, img := range du.Images {
+		if img != nil {
+			diskUsed += img.Size
+		}
+	}
+	for _, cnt := range du.Containers {
+		if cnt != nil {
+			diskUsed += cnt.SizeRw
+		}
+	}
+	for _, vol := range du.Volumes {
+		if vol != nil && vol.UsageData != nil {
+			diskUsed += vol.UsageData.Size
+		}
+	}
+	for _, bc := range du.BuildCache {
+		if bc != nil {
+			diskUsed += bc.Size
+		}
+	}
+
+	if diskUsed > 0 {
+		diskTotal := int64(100 * 1024 * 1024 * 1024) // 100 GiB baseline
+		if diskUsed > diskTotal {
+			diskTotal = diskUsed * 2
+		}
+		pct := (float64(diskUsed) / float64(diskTotal)) * 100.0
+		c.dockerDiskMu.Lock()
+		c.dockerDiskPercent = pct
+		c.dockerDiskMu.Unlock()
+	}
 }
 
 // pollAgentHosts periodically polls all registered compute host agents.
@@ -492,6 +584,9 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		arch = "amd64"
 	}
 
+	distro := normalizeOSDistro(payload.OSDistro, osName)
+	kernel := normalizeKernelVersion(payload.KernelVersion, osName)
+
 	var ifaces []NetworkInterface
 	for _, iface := range payload.Network.Interfaces {
 		ifaces = append(ifaces, NetworkInterface{
@@ -500,13 +595,21 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 			TxBytesPerSec: iface.TxBytesPerSec,
 		})
 	}
+	if ifaces == nil {
+		ifaces = make([]NetworkInterface, 0)
+	}
+
+	topProcs := payload.TopProcesses
+	if topProcs == nil {
+		topProcs = make([]ProcessMetric, 0)
+	}
 
 	am := &AgentMetrics{
 		Hostname:          hostname,
 		OS:                osName,
 		Arch:              arch,
-		OSDistro:          payload.OSDistro,
-		KernelVersion:     payload.KernelVersion,
+		OSDistro:          distro,
+		KernelVersion:     kernel,
 		CPUUsage:          payload.CPU.UsagePercent,
 		CPUCount:          payload.CPU.Count,
 		MemTotal:          payload.Memory.TotalBytes,
@@ -521,7 +624,7 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		Uptime:            payload.UptimeSeconds,
 		LoadAvg:           payload.LoadAverage,
 		Processes:         payload.Processes,
-		TopProcesses:      payload.TopProcesses,
+		TopProcesses:      topProcs,
 		Status:            "online",
 		LastSeen:          collectedAt,
 	}
@@ -562,14 +665,32 @@ func (c *Collector) recordAgentFailure(ctx context.Context, host docker.ComputeH
 	am, exists := c.agentMetrics[host.ID]
 	if !exists {
 		am = &AgentMetrics{
-			Hostname: host.Name,
-			Status:   "offline",
-			LastSeen: now,
+			Hostname:          host.Name,
+			OS:                "linux",
+			Arch:              "amd64",
+			OSDistro:          "Linux",
+			KernelVersion:     "Linux",
+			TopProcesses:      make([]ProcessMetric, 0),
+			NetworkInterfaces: make([]NetworkInterface, 0),
+			Status:            "offline",
+			LastSeen:          now,
 		}
 		c.agentMetrics[host.ID] = am
 	} else {
 		am.Status = "offline"
 		am.LastSeen = now
+		if am.OSDistro == "" {
+			am.OSDistro = normalizeOSDistro(am.OSDistro, am.OS)
+		}
+		if am.KernelVersion == "" {
+			am.KernelVersion = normalizeKernelVersion(am.KernelVersion, am.OS)
+		}
+		if am.TopProcesses == nil {
+			am.TopProcesses = make([]ProcessMetric, 0)
+		}
+		if am.NetworkInterfaces == nil {
+			am.NetworkInterfaces = make([]NetworkInterface, 0)
+		}
 	}
 	c.agentMu.Unlock()
 
@@ -605,11 +726,15 @@ func (c *Collector) GetAgentMetrics() map[string]*AgentMetrics {
 	for k, v := range c.agentMetrics {
 		if v != nil {
 			metricCopy := *v
-			if v.TopProcesses != nil {
+			if len(v.TopProcesses) > 0 {
 				metricCopy.TopProcesses = append([]ProcessMetric(nil), v.TopProcesses...)
+			} else {
+				metricCopy.TopProcesses = make([]ProcessMetric, 0)
 			}
-			if v.NetworkInterfaces != nil {
+			if len(v.NetworkInterfaces) > 0 {
 				metricCopy.NetworkInterfaces = append([]NetworkInterface(nil), v.NetworkInterfaces...)
+			} else {
+				metricCopy.NetworkInterfaces = make([]NetworkInterface, 0)
 			}
 			res[k] = &metricCopy
 		}
@@ -727,6 +852,36 @@ func formatAgentURL(endpoint string, tlsEnabled bool) string {
 	return u
 }
 
+func normalizeOSDistro(distro, osName string) string {
+	d := strings.TrimSpace(distro)
+	o := strings.TrimSpace(osName)
+	if d != "" && !strings.EqualFold(d, "linux") && !strings.EqualFold(d, "unknown") {
+		return d
+	}
+	if strings.EqualFold(o, "darwin") || strings.EqualFold(d, "darwin") {
+		return "macOS"
+	}
+	if strings.EqualFold(o, "windows") || strings.EqualFold(d, "windows") {
+		return "Windows"
+	}
+	return "Linux"
+}
+
+func normalizeKernelVersion(kernel, osName string) string {
+	k := strings.TrimSpace(kernel)
+	o := strings.TrimSpace(osName)
+	if k != "" && !strings.EqualFold(k, "unknown") {
+		return k
+	}
+	if strings.EqualFold(o, "darwin") {
+		return "Darwin"
+	}
+	if strings.EqualFold(o, "windows") {
+		return "Windows NT"
+	}
+	return "Linux"
+}
+
 func (c *Collector) runCollection(ctx context.Context) {
 	timeout := c.interval - 500*time.Millisecond
 	if timeout <= 0 {
@@ -776,48 +931,16 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 
 	containerMetricsList := make([]ContainerMetrics, 0)
 	var runningContainersCount int
-	var diskPercent float64
+
+	c.dockerDiskMu.RLock()
+	diskPercent := c.dockerDiskPercent
+	c.dockerDiskMu.RUnlock()
 
 	// 2. Fetch Docker Containers & Stats if Docker client is available
 	if c.dockerClient != nil {
 		info, infoErr := c.dockerClient.Info(ctx)
 		if infoErr != nil {
 			c.logger.Debug("Failed to fetch Docker daemon info", zap.Error(infoErr))
-		}
-
-		var diskUsed int64
-		var diskTotal int64
-		du, duErr := c.dockerClient.DiskUsage(ctx, types.DiskUsageOptions{})
-		if duErr == nil {
-			diskUsed += du.LayersSize
-			for _, img := range du.Images {
-				if img != nil {
-					diskUsed += img.Size
-				}
-			}
-			for _, cnt := range du.Containers {
-				if cnt != nil {
-					diskUsed += cnt.SizeRw
-				}
-			}
-			for _, vol := range du.Volumes {
-				if vol != nil && vol.UsageData != nil {
-					diskUsed += vol.UsageData.Size
-				}
-			}
-			for _, bc := range du.BuildCache {
-				if bc != nil {
-					diskUsed += bc.Size
-				}
-			}
-		}
-
-		if diskUsed > 0 {
-			diskTotal = 100 * 1024 * 1024 * 1024 // 100 GiB baseline
-			if diskUsed > diskTotal {
-				diskTotal = diskUsed * 2
-			}
-			diskPercent = (float64(diskUsed) / float64(diskTotal)) * 100.0
 		}
 
 		containersList, listErr := c.dockerClient.ContainerList(ctx, container.ListOptions{All: true})
@@ -931,6 +1054,8 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 						if resolvedNodeID == "" {
 							if hID != "" {
 								resolvedNodeID = hID
+							} else if len(knownHosts) == 1 {
+								resolvedNodeID = knownHosts[0].id
 							} else if info.ID != "" {
 								resolvedNodeID = info.ID
 							} else if swarmNodeID != "" {
@@ -940,6 +1065,8 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 						if resolvedNodeName == "" {
 							if hName != "" {
 								resolvedNodeName = hName
+							} else if len(knownHosts) == 1 {
+								resolvedNodeName = knownHosts[0].name
 							} else if info.Name != "" {
 								resolvedNodeName = info.Name
 							} else {
@@ -972,9 +1099,9 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 					}
 
 					if cSummary.State == "running" {
-						statsReader, err := c.dockerClient.ContainerStats(ctx, cSummary.ID, false)
+						statCtx, statCancel := context.WithTimeout(ctx, 2*time.Second)
+						statsReader, err := c.dockerClient.ContainerStats(statCtx, cSummary.ID, false)
 						if err == nil && statsReader.Body != nil {
-							defer statsReader.Body.Close()
 							var stats container.StatsResponse
 							if decodeErr := json.NewDecoder(statsReader.Body).Decode(&stats); decodeErr == nil {
 								cm.CPUPercent = calculateCPUPercent(&stats)
@@ -991,7 +1118,9 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 								cm.NetworkRx = rx
 								cm.NetworkTx = tx
 							}
+							statsReader.Body.Close()
 						}
+						statCancel()
 					}
 
 					statCh <- rawContainerStat{cm: cm}
@@ -1007,6 +1136,44 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 					runningContainersCount++
 				}
 			}
+
+			c.mu.Lock()
+			elapsed := 0.0
+			if !c.prevContainerTime.IsZero() {
+				elapsed = now.Sub(c.prevContainerTime).Seconds()
+			}
+
+			currMap := make(map[string]containerNetRaw, len(containerMetricsList))
+			for i := range containerMetricsList {
+				cm := &containerMetricsList[i]
+				currMap[cm.ContainerID] = containerNetRaw{
+					rxBytes: cm.NetworkRx,
+					txBytes: cm.NetworkTx,
+				}
+				if elapsed > 0 && cm.State == "running" {
+					if prev, ok := c.prevContainerStats[cm.ContainerID]; ok && prev.rxBytes > 0 && cm.NetworkRx >= prev.rxBytes {
+						rxDelta := cm.NetworkRx - prev.rxBytes
+						if rxDelta > 0 {
+							rate := int64(float64(rxDelta) / elapsed)
+							if rate < 10*1024*1024*1024 {
+								cm.NetworkRxRate = rate
+							}
+						}
+					}
+					if prev, ok := c.prevContainerStats[cm.ContainerID]; ok && prev.txBytes > 0 && cm.NetworkTx >= prev.txBytes {
+						txDelta := cm.NetworkTx - prev.txBytes
+						if txDelta > 0 {
+							rate := int64(float64(txDelta) / elapsed)
+							if rate < 10*1024*1024*1024 {
+								cm.NetworkTxRate = rate
+							}
+						}
+					}
+				}
+			}
+			c.prevContainerStats = currMap
+			c.prevContainerTime = now
+			c.mu.Unlock()
 		}
 	}
 
@@ -1022,15 +1189,54 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			status = "down"
 		}
 
+		// Count actual containers running on this node
+		var nodeContainerCount, nodeRunningCount int
+		for _, cm := range containerMetricsList {
+			matches := false
+			if (cm.NodeID != "" && cm.NodeID == hostID) ||
+				(cm.NodeName != "" && (cm.NodeName == am.Hostname || cm.NodeName == hostID)) {
+				matches = true
+			} else if len(c.agentMetrics) == 1 {
+				matches = true
+			}
+
+			if matches {
+				nodeContainerCount++
+				if cm.State == "running" {
+					nodeRunningCount++
+				}
+			}
+		}
+
+		osName := am.OS
+		if osName == "" {
+			osName = "linux"
+		}
+		arch := am.Arch
+		if arch == "" {
+			arch = "amd64"
+		}
+		distro := normalizeOSDistro(am.OSDistro, osName)
+		kernel := normalizeKernelVersion(am.KernelVersion, osName)
+
+		topProcs := am.TopProcesses
+		if topProcs == nil {
+			topProcs = make([]ProcessMetric, 0)
+		}
+		ifaces := am.NetworkInterfaces
+		if ifaces == nil {
+			ifaces = make([]NetworkInterface, 0)
+		}
+
 		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
 			NodeID:            hostID,
 			NodeName:          am.Hostname,
 			Role:              "agent",
 			Status:            status,
-			OS:                am.OS,
-			Arch:              am.Arch,
-			OSDistro:          am.OSDistro,
-			KernelVersion:     am.KernelVersion,
+			OS:                osName,
+			Arch:              arch,
+			OSDistro:          distro,
+			KernelVersion:     kernel,
 			CPUPercent:        am.CPUUsage,
 			MemoryUsed:        am.MemUsed,
 			MemoryTotal:       am.MemTotal,
@@ -1040,12 +1246,13 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			DiskPercent:       am.DiskPercent,
 			NetworkRxBytes:    am.NetRxRate,
 			NetworkTxBytes:    am.NetTxRate,
-			NetworkInterfaces: am.NetworkInterfaces,
-			ContainerCount:    am.Processes,
-			RunningCount:      am.Processes,
+			NetworkInterfaces: ifaces,
+			ContainerCount:    nodeContainerCount,
+			RunningCount:      nodeRunningCount,
+			Processes:         am.Processes,
 			UptimeSeconds:     am.Uptime,
 			LoadAverage:       am.LoadAvg,
-			TopProcesses:      am.TopProcesses,
+			TopProcesses:      topProcs,
 			Source:            "agent",
 			UpdatedAt:         am.LastSeen,
 		})

@@ -9,7 +9,8 @@ import {
   deploymentsApi,
   dockerApi,
   type DeploymentApp,
-  type DeploymentTemplate
+  type DeploymentTemplate,
+  type UpdateResourcesPayload
 } from '../api/compute'
 import { formatContainerName, formatImageName } from '../utils/dockerFormat'
 
@@ -49,6 +50,13 @@ const logsTerminalRef = ref<HTMLElement | null>(null)
 
 const showScaleModal = ref(false)
 const targetReplicas = ref(1)
+const scaleModalTab = ref<'horizontal' | 'vertical'>('horizontal')
+const targetMemoryLimit = ref('1GiB')
+const customMemLimitValue = ref<number | string>(1)
+const customMemLimitUnit = ref<'MiB' | 'GiB'>('GiB')
+const targetMemoryReservation = ref('256MiB')
+const targetCpuLimit = ref('1')
+const targetCpuReservation = ref('250m')
 
 const showStrategyModal = ref(false)
 const canarySliderWeight = ref(20)
@@ -430,9 +438,100 @@ function openFullLogs(app?: DeploymentApp | null) {
   })
 }
 
+function setMemoryLimitPreset(preset: string) {
+  const clean = preset.replace(/\s+/g, '')
+  targetMemoryLimit.value = clean
+  if (clean.endsWith('GiB')) {
+    customMemLimitValue.value = parseFloat(clean.replace('GiB', '')) || 1
+    customMemLimitUnit.value = 'GiB'
+  } else if (clean.endsWith('MiB')) {
+    customMemLimitValue.value = parseFloat(clean.replace('MiB', '')) || 512
+    customMemLimitUnit.value = 'MiB'
+  }
+}
+
+function onCustomMemLimitInput() {
+  const val = customMemLimitValue.value
+  if (val !== '' && val !== null && val !== undefined) {
+    targetMemoryLimit.value = `${val}${customMemLimitUnit.value}`
+  }
+}
+
+function setCustomMemLimitUnit(unit: 'MiB' | 'GiB') {
+  customMemLimitUnit.value = unit
+  const val = customMemLimitValue.value || 1
+  targetMemoryLimit.value = `${val}${unit}`
+}
+
+function setMemoryReservationPreset(preset: string) {
+  targetMemoryReservation.value = preset.replace(/\s+/g, '')
+}
+
+function setCpuLimitPreset(preset: string) {
+  if (preset.includes('0.5')) {
+    targetCpuLimit.value = '0.5'
+  } else {
+    const num = preset.replace(/[^0-9.]/g, '')
+    targetCpuLimit.value = num ? `${num} Cores` : '1 Core'
+  }
+}
+
+function isCpuLimitActive(preset: string): boolean {
+  if (preset.includes('0.5')) {
+    return targetCpuLimit.value === '0.5' || targetCpuLimit.value === '500m' || targetCpuLimit.value === '0.5 Core'
+  }
+  const num = preset.replace(/[^0-9.]/g, '')
+  return targetCpuLimit.value === num || 
+         targetCpuLimit.value === `${num} Core` || 
+         targetCpuLimit.value === `${num} Cores` ||
+         targetCpuLimit.value === `${parseInt(num || '1') * 1000}m`
+}
+
+function setCpuReservationPreset(preset: string) {
+  if (preset.includes('Core')) {
+    const num = preset.replace(/[^0-9.]/g, '') || '1'
+    targetCpuReservation.value = `${num} Core`
+  } else {
+    targetCpuReservation.value = preset.trim()
+  }
+}
+
+function isCpuResActive(preset: string): boolean {
+  if (preset.includes('Core')) {
+    const num = preset.replace(/[^0-9.]/g, '') || '1'
+    return targetCpuReservation.value === num || targetCpuReservation.value === `${num} Core` || targetCpuReservation.value === '1000m'
+  }
+  return targetCpuReservation.value === preset.trim()
+}
+
 function openScaleModal(app: DeploymentApp) {
   selectedApp.value = app
-  targetReplicas.value = app.replicas || 1
+  targetReplicas.value = app.replicas !== undefined ? app.replicas : 1
+
+  const mem = (app.memoryLimit || app.memory || '1GiB').trim()
+  if (/gi/i.test(mem)) {
+    const num = parseFloat(mem.replace(/[^0-9.]/g, '')) || 1
+    customMemLimitValue.value = num
+    customMemLimitUnit.value = 'GiB'
+    targetMemoryLimit.value = `${num}GiB`
+  } else if (/mi/i.test(mem)) {
+    const num = parseFloat(mem.replace(/[^0-9.]/g, '')) || 512
+    customMemLimitValue.value = num
+    customMemLimitUnit.value = 'MiB'
+    targetMemoryLimit.value = `${num}MiB`
+  } else {
+    customMemLimitValue.value = 1
+    customMemLimitUnit.value = 'GiB'
+    targetMemoryLimit.value = '1GiB'
+  }
+
+  targetMemoryReservation.value = app.memoryReservation ? app.memoryReservation.replace(/\s+/g, '') : '256MiB'
+
+  const cpu = (app.cpuLimit || app.cpu || '1').trim()
+  targetCpuLimit.value = cpu
+  targetCpuReservation.value = app.cpuReservation ? app.cpuReservation.trim() : '250m'
+
+  scaleModalTab.value = 'horizontal'
   showScaleModal.value = true
 }
 
@@ -445,29 +544,34 @@ function openStrategyModal(app: DeploymentApp) {
 // ==========================================
 // 5. LIFECYCLE & MUTATION HANDLERS
 // ==========================================
-async function handleScale() {
+async function handleApplyResources() {
   if (!selectedApp.value) return
-  actionLoading.value = 'scale'
+  actionLoading.value = 'resources'
   try {
-    if (selectedApp.value.type === 'swarm') {
-      await dockerApi.scaleService(selectedApp.value.rawId || selectedApp.value.name, targetReplicas.value)
-    } else {
-      await deploymentsApi.scale({
-        type: selectedApp.value.type,
-        cluster: selectedApp.value.target,
-        namespace: selectedApp.value.namespace,
-        name: selectedApp.value.rawId || selectedApp.value.name,
-        replicas: targetReplicas.value
-      })
+    const payload: UpdateResourcesPayload = {
+      type: selectedApp.value.type,
+      cluster: selectedApp.value.target,
+      namespace: selectedApp.value.namespace,
+      name: selectedApp.value.name,
+      replicas: targetReplicas.value,
+      memory_limit: targetMemoryLimit.value,
+      memory_reservation: targetMemoryReservation.value,
+      cpu_limit: targetCpuLimit.value,
+      cpu_reservation: targetCpuReservation.value,
     }
+    await deploymentsApi.updateResources(payload)
+
     selectedApp.value.replicas = targetReplicas.value
     selectedApp.value.readyReplicas = targetReplicas.value
     selectedApp.value.availableReplicas = targetReplicas.value
-    showToast(`Scaled ${selectedApp.value.name} to ${targetReplicas.value} replicas!`, 'success')
+    selectedApp.value.memory = targetMemoryLimit.value
+    selectedApp.value.cpu = targetCpuLimit.value
+
+    showToast(`✅ Workload ${selectedApp.value.name} updated: Memory ${targetMemoryLimit.value}, CPU ${targetCpuLimit.value}, Replicas ${targetReplicas.value}`, 'success')
     showScaleModal.value = false
     await fetchDeployments()
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Scaling operation failed'
+    const msg = err instanceof Error ? err.message : 'Resource tuning operation failed'
     showToast(msg, 'error')
   } finally {
     actionLoading.value = null
@@ -1217,48 +1321,253 @@ function copyToClipboard(text: string) {
     </div>
 
     <!-- ========================================== -->
-    <!-- MODAL 1: SCALE WORKLOAD REPLICAS           -->
+    <!-- MODAL 1: SCALE & RESOURCE TUNING           -->
     <!-- ========================================== -->
     <ModalDrawer
       v-model:show="showScaleModal"
       mode="modal"
-      :title="`Scale Workload: ${formatContainerName(selectedApp?.name).serviceName || ''}`"
-      subtitle="Dynamically adjust horizontal pod replica count and capacity"
-      max-width="480px"
+      :title="`Scale & Resource Tuning: ${formatContainerName(selectedApp?.name).serviceName || selectedApp?.name || ''}`"
+      subtitle="Adjust horizontal replicas and vertical CPU/RAM hardware allocations in real time"
+      max-width="640px"
     >
       <div v-if="selectedApp" class="scale-modal-content">
+        <!-- Target Scope Banner -->
         <div class="scale-info-row font-mono">
-          <span class="text-muted">Target Scope:</span>
-          <span class="text-cyan">{{ selectedApp.namespace }}/{{ formatContainerName(selectedApp.name).serviceName }} ({{ selectedApp.type }})</span>
+          <div class="scope-item">
+            <span class="text-muted">Target Scope:</span>
+            <span class="text-cyan font-semibold">{{ selectedApp.namespace }}/{{ formatContainerName(selectedApp.name).serviceName || selectedApp.name }}</span>
+          </div>
+          <div class="scope-badges">
+            <span class="scope-type-badge">{{ selectedApp.type }}</span>
+            <span class="scope-cluster-badge">{{ selectedApp.target || 'default-cluster' }}</span>
+          </div>
         </div>
 
-        <div class="scale-slider-wrap">
-          <div class="replicas-display">
-            <span class="replicas-number font-mono">{{ targetReplicas }}</span>
-            <span class="replicas-label">Target Desired Pods</span>
+        <!-- Tab Switcher -->
+        <div class="scale-tab-switcher">
+          <button 
+            class="scale-tab-btn" 
+            :class="{ active: scaleModalTab === 'horizontal' }"
+            @click="scaleModalTab = 'horizontal'"
+          >
+            <span class="tab-icon">🌐</span>
+            <span class="tab-title">Horizontal Scaling (Replicas)</span>
+            <span class="tab-badge font-mono">{{ targetReplicas }} Pods</span>
+          </button>
+          <button 
+            class="scale-tab-btn" 
+            :class="{ active: scaleModalTab === 'vertical' }"
+            @click="scaleModalTab = 'vertical'"
+          >
+            <span class="tab-icon">⚡</span>
+            <span class="tab-title">Vertical Resources (CPU & RAM)</span>
+            <span class="tab-badge font-mono">{{ targetMemoryLimit }} / {{ targetCpuLimit }}C</span>
+          </button>
+        </div>
+
+        <!-- TAB 1: HORIZONTAL SCALING (REPLICAS) -->
+        <div v-if="scaleModalTab === 'horizontal'" class="scale-section-wrap animate-fade-in">
+          <div class="section-subhead">
+            <span class="subhead-title">Horizontal Pod Replicas</span>
+            <span class="subhead-desc text-muted">Dynamically scale instance count across cluster worker nodes</span>
           </div>
 
-          <input 
-            v-model.number="targetReplicas" 
-            type="range" 
-            min="0" 
-            max="30" 
-            class="scale-range" 
-          />
+          <div class="scale-slider-wrap">
+            <div class="replicas-display">
+              <span class="replicas-number font-mono">{{ targetReplicas }}</span>
+              <span class="replicas-label font-mono">Target Desired Pods</span>
+            </div>
 
-          <div class="range-marks font-mono">
-            <span>0 (Suspended)</span>
-            <span>10</span>
-            <span>20</span>
-            <span>30</span>
+            <input 
+              v-model.number="targetReplicas" 
+              type="range" 
+              min="0" 
+              max="30" 
+              class="scale-range" 
+            />
+
+            <div class="range-marks font-mono">
+              <span>0 (Suspended)</span>
+              <span>10</span>
+              <span>20</span>
+              <span>30</span>
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="scale-presets">
+              <button 
+                class="preset-btn" 
+                :class="{ active: targetReplicas === 1 }"
+                @click="targetReplicas = 1"
+              >1 Pod</button>
+              <button 
+                class="preset-btn" 
+                :class="{ active: targetReplicas === 3 }"
+                @click="targetReplicas = 3"
+              >3 HA</button>
+              <button 
+                class="preset-btn" 
+                :class="{ active: targetReplicas === 5 }"
+                @click="targetReplicas = 5"
+              >5 Pods</button>
+              <button 
+                class="preset-btn" 
+                :class="{ active: targetReplicas === 10 }"
+                @click="targetReplicas = 10"
+              >10 Pods</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: VERTICAL RESOURCE TUNING (CPU & RAM) -->
+        <div v-if="scaleModalTab === 'vertical'" class="scale-section-wrap vertical-tuning-wrap animate-fade-in">
+          <!-- 1. RAM Memory Limit -->
+          <div class="resource-block">
+            <div class="resource-header">
+              <div class="resource-label-group">
+                <span class="resource-name">RAM Memory Limit</span>
+                <span class="resource-hint text-muted">Hard allocation limit before container OOM kill</span>
+              </div>
+              <span class="current-resource-val font-mono text-cyan">{{ targetMemoryLimit }}</span>
+            </div>
+
+            <div class="presets-row">
+              <button 
+                v-for="preset in ['256 MiB', '512 MiB', '1 GiB', '2 GiB', '4 GiB', '8 GiB']" 
+                :key="preset"
+                class="preset-btn"
+                :class="{ active: targetMemoryLimit === preset.replace(/\s+/g, '') }"
+                @click="setMemoryLimitPreset(preset)"
+              >
+                {{ preset }}
+              </button>
+            </div>
+
+            <!-- Custom RAM Limit Input with Unit Toggle -->
+            <div class="custom-input-row">
+              <span class="custom-label">Custom RAM Limit:</span>
+              <div class="custom-input-group">
+                <input 
+                  v-model.number="customMemLimitValue" 
+                  type="number" 
+                  min="1" 
+                  placeholder="e.g. 1024"
+                  class="custom-number-input font-mono"
+                  @input="onCustomMemLimitInput"
+                />
+                <div class="unit-toggle-group">
+                  <button 
+                    type="button"
+                    class="unit-btn" 
+                    :class="{ active: customMemLimitUnit === 'MiB' }"
+                    @click="setCustomMemLimitUnit('MiB')"
+                  >MiB</button>
+                  <button 
+                    type="button"
+                    class="unit-btn" 
+                    :class="{ active: customMemLimitUnit === 'GiB' }"
+                    @click="setCustomMemLimitUnit('GiB')"
+                  >GiB</button>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Quick Presets -->
-          <div class="scale-presets">
-            <button class="preset-btn" @click="targetReplicas = 1">1 Pod</button>
-            <button class="preset-btn" @click="targetReplicas = 3">3 (HA)</button>
-            <button class="preset-btn" @click="targetReplicas = 5">5 Pods</button>
-            <button class="preset-btn" @click="targetReplicas = 10">10 Pods</button>
+          <!-- 2. RAM Memory Reservation -->
+          <div class="resource-block">
+            <div class="resource-header">
+              <div class="resource-label-group">
+                <span class="resource-name">RAM Reservation</span>
+                <span class="resource-hint text-muted">Guaranteed baseline RAM reserved per pod</span>
+              </div>
+              <span class="current-resource-val font-mono text-emerald">{{ targetMemoryReservation }}</span>
+            </div>
+
+            <div class="presets-row">
+              <button 
+                v-for="preset in ['128 MiB', '256 MiB', '512 MiB', '1 GiB']" 
+                :key="preset"
+                class="preset-btn"
+                :class="{ active: targetMemoryReservation === preset.replace(/\s+/g, '') }"
+                @click="setMemoryReservationPreset(preset)"
+              >
+                {{ preset }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. CPU Core Limit -->
+          <div class="resource-block">
+            <div class="resource-header">
+              <div class="resource-label-group">
+                <span class="resource-name">CPU Core Limit</span>
+                <span class="resource-hint text-muted">Maximum compute throttling ceiling</span>
+              </div>
+              <span class="current-resource-val font-mono text-amber">{{ targetCpuLimit.endsWith('Core') || targetCpuLimit.endsWith('Cores') || targetCpuLimit.endsWith('m') ? targetCpuLimit : `${targetCpuLimit} Cores` }}</span>
+            </div>
+
+            <div class="presets-row">
+              <button 
+                v-for="preset in ['0.5 Core', '1 Core', '2 Cores', '4 Cores', '8 Cores']" 
+                :key="preset"
+                class="preset-btn"
+                :class="{ active: isCpuLimitActive(preset) }"
+                @click="setCpuLimitPreset(preset)"
+              >
+                {{ preset }}
+              </button>
+            </div>
+
+            <div class="custom-input-row">
+              <span class="custom-label">Custom CPU Limit:</span>
+              <div class="custom-input-group single-field">
+                <input 
+                  v-model="targetCpuLimit" 
+                  type="text" 
+                  placeholder="e.g. 2, 4, 500m"
+                  class="custom-number-input font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. CPU Core Reservation -->
+          <div class="resource-block">
+            <div class="resource-header">
+              <div class="resource-label-group">
+                <span class="resource-name">CPU Core Reservation</span>
+                <span class="resource-hint text-muted">Guaranteed compute capacity requested on node</span>
+              </div>
+              <span class="current-resource-val font-mono text-indigo">{{ targetCpuReservation }}</span>
+            </div>
+
+            <div class="presets-row">
+              <button 
+                v-for="preset in ['100m', '250m', '500m', '1 Core']" 
+                :key="preset"
+                class="preset-btn"
+                :class="{ active: isCpuResActive(preset) }"
+                @click="setCpuReservationPreset(preset)"
+              >
+                {{ preset }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Configuration Summary Footer Bar -->
+        <div class="scale-summary-bar font-mono">
+          <div class="summary-chip">
+            <span class="chip-label">Replicas:</span>
+            <span class="chip-val text-cyan">{{ targetReplicas }} Pods</span>
+          </div>
+          <div class="summary-chip">
+            <span class="chip-label">RAM (Max / Res):</span>
+            <span class="chip-val text-emerald">{{ targetMemoryLimit }} / {{ targetMemoryReservation }}</span>
+          </div>
+          <div class="summary-chip">
+            <span class="chip-label">CPU (Max / Res):</span>
+            <span class="chip-val text-amber">{{ targetCpuLimit }} / {{ targetCpuReservation }}</span>
           </div>
         </div>
       </div>
@@ -1267,10 +1576,11 @@ function copyToClipboard(text: string) {
         <button class="btn btn-secondary" @click="close">Cancel</button>
         <button 
           class="btn btn-primary" 
-          :disabled="actionLoading === 'scale'" 
-          @click="handleScale"
+          :disabled="actionLoading === 'resources' || actionLoading === 'scale'" 
+          @click="handleApplyResources"
         >
-          <span>{{ actionLoading === 'scale' ? 'Scaling Fleet...' : 'Apply Scale ➔' }}</span>
+          <span v-if="actionLoading === 'resources' || actionLoading === 'scale'" class="spinner-inline"></span>
+          <span>{{ (actionLoading === 'resources' || actionLoading === 'scale') ? 'Applying Resource Configuration...' : 'Apply Resource Configuration ➔' }}</span>
         </button>
       </template>
     </ModalDrawer>
@@ -2390,20 +2700,129 @@ function copyToClipboard(text: string) {
   color: #fb7185;
 }
 
-/* Modals & Drawers Content */
+/* Modals & Drawers Content - Scale & Resource Tuning */
 .scale-modal-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .scale-info-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   font-size: 12px;
+}
+
+.scope-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scope-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scope-type-badge {
+  padding: 2px 6px;
+  background: rgba(6, 182, 212, 0.15);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: #38bdf8;
+  border-radius: 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.scope-cluster-badge {
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.scale-tab-switcher {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.scale-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.scale-tab-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.scale-tab-btn.active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: rgba(6, 182, 212, 0.4);
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.tab-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.scale-tab-btn.active .tab-badge {
+  background: rgba(6, 182, 212, 0.25);
+  color: #a5f3fc;
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+.scale-section-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.section-subhead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subhead-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.subhead-desc {
+  font-size: 11px;
 }
 
 .scale-slider-wrap {
@@ -2413,6 +2832,7 @@ function copyToClipboard(text: string) {
   gap: 14px;
   padding: 20px;
   background: rgba(11, 15, 25, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 14px;
 }
 
@@ -2426,17 +2846,21 @@ function copyToClipboard(text: string) {
   font-size: 44px;
   font-weight: 800;
   color: var(--accent-cyan);
+  line-height: 1;
 }
 
 .replicas-label {
   font-size: 11px;
   color: var(--text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
 }
 
 .scale-range {
   width: 100%;
   accent-color: var(--accent-cyan);
+  cursor: pointer;
 }
 
 .range-marks {
@@ -2449,22 +2873,203 @@ function copyToClipboard(text: string) {
 
 .scale-presets {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  justify-content: center;
 }
 
 .preset-btn {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   font-size: 11px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.15s ease-in-out;
 }
 
 .preset-btn:hover {
-  background: rgba(6, 182, 212, 0.2);
+  background: rgba(6, 182, 212, 0.15);
+  border-color: rgba(6, 182, 212, 0.35);
   color: #fff;
+}
+
+.preset-btn.active {
+  background: rgba(6, 182, 212, 0.25);
+  border-color: var(--accent-cyan);
+  color: #38bdf8;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+}
+
+/* Vertical Resource Tuning */
+.vertical-tuning-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 440px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.resource-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: rgba(11, 15, 25, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.resource-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.resource-label-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.resource-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.resource-hint {
+  font-size: 10px;
+}
+
+.current-resource-val {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.presets-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.custom-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.custom-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.custom-input-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.custom-input-group.single-field {
+  width: 140px;
+}
+
+.custom-number-input {
+  width: 110px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.custom-number-input:focus {
+  border-color: var(--accent-cyan);
+}
+
+.unit-toggle-group {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.unit-btn {
+  padding: 3px 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.unit-btn.active {
+  background: rgba(6, 182, 212, 0.3);
+  color: #38bdf8;
+}
+
+.scale-summary-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.summary-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chip-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.chip-val {
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.spinner-inline {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 6px;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Strategy Modal Content */

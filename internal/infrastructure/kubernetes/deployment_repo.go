@@ -329,6 +329,57 @@ func (r *deploymentRepo) Create(ctx context.Context, app deployment.Application)
 	return fmt.Errorf("unsupported target type: %s", app.Type)
 }
 
+func (r *deploymentRepo) UpdateResources(ctx context.Context, targetType, targetCluster, namespace, name string, memoryLimitBytes, memoryReservBytes, nanoCPUs int64, replicas int) error {
+	if targetType == "kubernetes" || targetType == "" {
+		client, err := r.getK8sClient(ctx, targetCluster)
+		if err != nil {
+			return err
+		}
+		if namespace == "" {
+			namespace = "default"
+		}
+		dep, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("getting deployment %s: %w", name, err)
+		}
+		if replicas >= 0 {
+			rep := int32(replicas)
+			dep.Spec.Replicas = &rep
+		}
+		if len(dep.Spec.Template.Spec.Containers) > 0 {
+			c := &dep.Spec.Template.Spec.Containers[0]
+			if c.Resources.Limits == nil {
+				c.Resources.Limits = make(corev1.ResourceList)
+			}
+			if c.Resources.Requests == nil {
+				c.Resources.Requests = make(corev1.ResourceList)
+			}
+			if memoryLimitBytes > 0 {
+				c.Resources.Limits[corev1.ResourceMemory] = *resource.NewQuantity(memoryLimitBytes, resource.BinarySI)
+			}
+			if memoryReservBytes > 0 {
+				c.Resources.Requests[corev1.ResourceMemory] = *resource.NewQuantity(memoryReservBytes, resource.BinarySI)
+			}
+			if nanoCPUs > 0 {
+				c.Resources.Limits[corev1.ResourceCPU] = *resource.NewScaledQuantity(nanoCPUs, resource.Nano)
+			}
+		}
+		_, err = client.AppsV1().Deployments(namespace).Update(ctx, dep, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("updating deployment %s resources: %w", name, err)
+		}
+		return nil
+	} else if targetType == "swarm" || targetType == "docker" {
+		repo, err := r.getDockerClient(ctx, targetCluster)
+		if err != nil {
+			return err
+		}
+		return repo.UpdateServiceResources(ctx, name, memoryLimitBytes, memoryReservBytes, nanoCPUs, replicas)
+	}
+	return fmt.Errorf("unsupported target type: %s", targetType)
+}
+
+
 func (r *deploymentRepo) mapK8sDeployment(d v1.Deployment, clusterName string) deployment.Application {
 	replicas := 0
 	if d.Spec.Replicas != nil {
@@ -364,7 +415,9 @@ func (r *deploymentRepo) mapK8sDeployment(d v1.Deployment, clusterName string) d
 	}
 
 	cpuReq := "100m"
-	memReq := "128Mi"
+	memReq := "128MiB"
+	cpuLimit := "1 Core"
+	memLimit := "512MiB"
 	if len(d.Spec.Template.Spec.Containers) > 0 {
 		res := d.Spec.Template.Spec.Containers[0].Resources
 		if !res.Requests.Cpu().IsZero() {
@@ -372,6 +425,12 @@ func (r *deploymentRepo) mapK8sDeployment(d v1.Deployment, clusterName string) d
 		}
 		if !res.Requests.Memory().IsZero() {
 			memReq = res.Requests.Memory().String()
+		}
+		if !res.Limits.Cpu().IsZero() {
+			cpuLimit = res.Limits.Cpu().String()
+		}
+		if !res.Limits.Memory().IsZero() {
+			memLimit = res.Limits.Memory().String()
 		}
 	}
 
@@ -387,20 +446,24 @@ func (r *deploymentRepo) mapK8sDeployment(d v1.Deployment, clusterName string) d
 	}
 
 	return deployment.Application{
-		Name:      d.Name,
-		Team:      team,
-		Env:       env,
-		Image:     image,
-		Target:    clusterName,
-		Namespace: d.Namespace,
-		Type:      "kubernetes",
-		Replicas:  replicas,
-		Status:    status,
-		CPU:       cpuReq,
-		Memory:    memReq,
-		Port:      port,
-		NetType:   netType,
-		Volume:    volume,
+		Name:              d.Name,
+		Team:              team,
+		Env:               env,
+		Image:             image,
+		Target:            clusterName,
+		Namespace:         d.Namespace,
+		Type:              "kubernetes",
+		Replicas:          replicas,
+		Status:            status,
+		CPU:               cpuLimit,
+		Memory:            memLimit,
+		CPULimit:          cpuLimit,
+		CPUReservation:    cpuReq,
+		MemoryLimit:       memLimit,
+		MemoryReservation: memReq,
+		Port:              port,
+		NetType:           netType,
+		Volume:            volume,
 	}
 }
 
@@ -429,21 +492,61 @@ func (r *deploymentRepo) mapSwarmService(s domainDocker.Service, clusterName str
 		}
 	}
 
+	memLimitStr := "1GiB"
+	if s.MemoryLimitBytes > 0 {
+		if s.MemoryLimitBytes%(1024*1024*1024) == 0 {
+			memLimitStr = fmt.Sprintf("%dGiB", s.MemoryLimitBytes/(1024*1024*1024))
+		} else if s.MemoryLimitBytes%(1024*1024) == 0 {
+			memLimitStr = fmt.Sprintf("%dMiB", s.MemoryLimitBytes/(1024*1024))
+		} else {
+			memLimitStr = fmt.Sprintf("%dMiB", s.MemoryLimitBytes/(1024*1024))
+		}
+	}
+
+	memReservStr := "256MiB"
+	if s.MemoryReservBytes > 0 {
+		if s.MemoryReservBytes%(1024*1024*1024) == 0 {
+			memReservStr = fmt.Sprintf("%dGiB", s.MemoryReservBytes/(1024*1024*1024))
+		} else if s.MemoryReservBytes%(1024*1024) == 0 {
+			memReservStr = fmt.Sprintf("%dMiB", s.MemoryReservBytes/(1024*1024))
+		} else {
+			memReservStr = fmt.Sprintf("%dMiB", s.MemoryReservBytes/(1024*1024))
+		}
+	}
+
+	cpuLimitStr := "1 Core"
+	if s.NanoCPUs > 0 {
+		if s.NanoCPUs%1000000000 == 0 {
+			cores := s.NanoCPUs / 1000000000
+			if cores == 1 {
+				cpuLimitStr = "1 Core"
+			} else {
+				cpuLimitStr = fmt.Sprintf("%d Cores", cores)
+			}
+		} else {
+			cpuLimitStr = fmt.Sprintf("%dm", s.NanoCPUs/1000000)
+		}
+	}
+
 	return deployment.Application{
-		Name:      s.Name,
-		Team:      team,
-		Env:       env,
-		Image:     s.Image,
-		Target:    clusterName,
-		Namespace: "",
-		Type:      "swarm",
-		Replicas:  s.Replicas,
-		Status:    status,
-		CPU:       "500m",
-		Memory:    "1Gi",
-		Port:      port,
-		NetType:   "NodePort",
-		Volume:    "none",
+		Name:              s.Name,
+		Team:              team,
+		Env:               env,
+		Image:             s.Image,
+		Target:            clusterName,
+		Namespace:         "",
+		Type:              "swarm",
+		Replicas:          s.Replicas,
+		Status:            status,
+		CPU:               cpuLimitStr,
+		Memory:            memLimitStr,
+		CPULimit:          cpuLimitStr,
+		CPUReservation:    "250m",
+		MemoryLimit:       memLimitStr,
+		MemoryReservation: memReservStr,
+		Port:              port,
+		NetType:           "NodePort",
+		Volume:            "none",
 	}
 }
 

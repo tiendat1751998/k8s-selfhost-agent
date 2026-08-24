@@ -37,6 +37,7 @@ export interface NodeMetrics {
   network_interfaces?: NetworkInterface[]
   container_count: number
   running_count: number
+  processes?: number
   os?: string
   arch?: string
   os_distro?: string
@@ -60,6 +61,8 @@ export interface ContainerMetrics {
   memory_percent: number
   network_rx: number
   network_tx: number
+  network_rx_rate?: number
+  network_tx_rate?: number
 }
 
 export interface MetricAlert {
@@ -162,6 +165,8 @@ export interface TpsServiceMetrics {
   memory_percent: number
   rx_bytes_per_sec: number
   tx_bytes_per_sec: number
+  total_rx_bytes?: number
+  total_tx_bytes?: number
   requests_per_sec?: number
   error_rate?: number
   avg_latency_ms?: number

@@ -20,7 +20,14 @@
 
 ## 3. Rules and Memory
 
-- Rules reside in `.agents/rules/`.
+- Rules reside in `.agents/rules/` (including `git-branching.md`, `subagent-orchestration.md`, `vbc-verification.md`).
 - Architectural decisions and task progress must be logged in `.agents/memory/decision_log.jsonl` and `.agents/tasks/`.
 - **Project State Memory**: Every session MUST load `.agents/memory/project_state.md` to restore full architectural context, completed modules, and active tasks.
+
+## 4. Git Branching & Protected Master (Universal Invariant)
+
+- **Zero Direct Master Pushes**: NEVER commit or push directly to `master`.
+- **Branch Naming**: Always create and checkout `feat/<name>` or `fix/<name>` before coding.
+- **Push & Merge Protocol**: Push only to the remote branch (`git push -u origin <branch>`), verify thoroughly, and wait for confirmation before merging to `master`.
+
 

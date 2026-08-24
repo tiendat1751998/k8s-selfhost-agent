@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	domain "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/agent"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
@@ -68,11 +70,19 @@ func (r *testDockerRepo) GetLogs(ctx context.Context, targetID string, targetTyp
 	return "mock logs", nil
 }
 
+func (r *testDockerRepo) GetLogsWithOptions(ctx context.Context, targetID string, targetType string, tail string, since string) (string, error) {
+	return "mock logs", nil
+}
+
 func (r *testDockerRepo) UpdateServiceImage(ctx context.Context, serviceID string, image string) error {
 	return nil
 }
 
 func (r *testDockerRepo) UpdateContainerImage(ctx context.Context, containerID string, image string) error {
+	return nil
+}
+
+func (r *testDockerRepo) UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64, replicas int) error {
 	return nil
 }
 
@@ -849,5 +859,224 @@ func TestDockerHandler_DeleteHost_EvictsAgentMetric(t *testing.T) {
 	}
 }
 
+func TestDockerHandler_GetLogs(t *testing.T) {
+	repo := &testDockerRepo{}
+	handler := NewDockerHandler(repo)
 
+	r := chi.NewRouter()
+	r.Route("/docker", handler.RegisterRoutes)
 
+	t.Run("Get Logs Success - Default", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=c1&type=container", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp["logs"] != "mock logs" {
+			t.Errorf("expected 'mock logs', got '%s'", resp["logs"])
+		}
+	})
+
+	t.Run("Get Logs Success - Tail All", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=c1&type=service&tail=all&since=15m", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp["logs"] != "mock logs" {
+			t.Errorf("expected 'mock logs', got '%s'", resp["logs"])
+		}
+	})
+
+	t.Run("Get Logs - Missing ID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?type=container", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("Get Logs - Routed to Node Agent", func(t *testing.T) {
+		agentSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Authorization") != "Bearer secret-token-node" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("2026-08-24T12:00:00Z [traefik] direct node logs"))
+		}))
+		defer agentSrv.Close()
+
+		hostRepo := newMockComputeHostRepo()
+		_ = hostRepo.Create(context.Background(), &domain.ComputeHost{
+			ID:       "node-123",
+			Name:     "worker-1",
+			HostType: "agent",
+			Endpoint: agentSrv.URL,
+			Status:   "connected",
+			TenantID: "tenant-1",
+			Labels:   map[string]string{"auth_token": "secret-token-node"},
+		})
+
+		logClient := agent.NewAgentLogClient()
+		agentHandler := NewDockerHandler(repo, hostRepo, logClient)
+		agentRouter := chi.NewRouter()
+		agentRouter.Route("/docker", agentHandler.RegisterRoutes)
+
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=traefik&node_id=node-123", nil)
+		req = req.WithContext(context.WithValue(req.Context(), tenancy.TenantIDKey, "tenant-1"))
+		w := httptest.NewRecorder()
+		agentRouter.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if !strings.Contains(resp["logs"], "direct node logs") {
+			t.Errorf("expected logs from agent 'direct node logs', got '%s'", resp["logs"])
+		}
+	})
+
+	t.Run("Get Logs - Fallback to Docker API when Agent Fails", func(t *testing.T) {
+		failingAgentSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("agent crashed"))
+		}))
+		defer failingAgentSrv.Close()
+
+		hostRepo := newMockComputeHostRepo()
+		_ = hostRepo.Create(context.Background(), &domain.ComputeHost{
+			ID:       "failing-node",
+			Name:     "worker-failing",
+			HostType: "agent",
+			Endpoint: failingAgentSrv.URL,
+			Status:   "connected",
+			TenantID: "tenant-1",
+		})
+
+		logClient := agent.NewAgentLogClient()
+		agentHandler := NewDockerHandler(repo, hostRepo, logClient)
+		agentRouter := chi.NewRouter()
+		agentRouter.Route("/docker", agentHandler.RegisterRoutes)
+
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=traefik&node_id=failing-node", nil)
+		req = req.WithContext(context.WithValue(req.Context(), tenancy.TenantIDKey, "tenant-1"))
+		w := httptest.NewRecorder()
+		agentRouter.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200 via fallback, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp["logs"] != "mock logs" {
+			t.Errorf("expected fallback 'mock logs', got '%s'", resp["logs"])
+		}
+	})
+}
+
+func TestDockerHandler_SearchClusterLogs(t *testing.T) {
+	node1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"results": []agent.LogSearchResult{
+				{
+					Timestamp: time.Date(2026, 8, 24, 10, 0, 0, 0, time.UTC),
+					Service:   "traefik",
+					Message:   "node1 cluster match",
+					Level:     "error",
+				},
+			},
+		})
+	}))
+	defer node1.Close()
+
+	node2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"results": []agent.LogSearchResult{
+				{
+					Timestamp: time.Date(2026, 8, 24, 10, 5, 0, 0, time.UTC),
+					Service:   "postgres",
+					Message:   "node2 cluster match",
+					Level:     "error",
+				},
+			},
+		})
+	}))
+	defer node2.Close()
+
+	hostRepo := newMockComputeHostRepo()
+	_ = hostRepo.Create(context.Background(), &domain.ComputeHost{
+		ID:       "node-1",
+		Name:     "worker-1",
+		HostType: "agent",
+		Endpoint: node1.URL,
+		Status:   "connected",
+		TenantID: "tenant-test",
+	})
+	_ = hostRepo.Create(context.Background(), &domain.ComputeHost{
+		ID:       "node-2",
+		Name:     "worker-2",
+		HostType: "agent",
+		Endpoint: node2.URL,
+		Status:   "connected",
+		TenantID: "tenant-test",
+	})
+
+	repo := &testDockerRepo{}
+	logClient := agent.NewAgentLogClient()
+	handler := NewDockerHandler(repo, hostRepo, logClient)
+	router := chi.NewRouter()
+	router.Route("/docker", handler.RegisterRoutes)
+
+	searchReq := agent.SearchLogsRequest{
+		Query: "cluster match",
+		Level: "error",
+		Limit: 10,
+	}
+	bodyBytes, _ := json.Marshal(searchReq)
+
+	req := httptest.NewRequest(http.MethodPost, "/docker/logs/cluster-search", bytes.NewReader(bodyBytes))
+	req = req.WithContext(context.WithValue(req.Context(), tenancy.TenantIDKey, "tenant-test"))
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Data  []agent.LogSearchResult `json:"data"`
+		Total int                     `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode search response: %v", err)
+	}
+
+	if resp.Total != 2 || len(resp.Data) != 2 {
+		t.Fatalf("expected 2 search results, got %d", resp.Total)
+	}
+	if resp.Data[0].Message != "node1 cluster match" || resp.Data[1].Message != "node2 cluster match" {
+		t.Errorf("unexpected ordered results: %+v", resp.Data)
+	}
+}
