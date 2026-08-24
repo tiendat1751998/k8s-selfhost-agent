@@ -2,8 +2,9 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `f131860` feat(drawer): add 3-group process categorization (Workloads, Systemd Daemons, OS Kernel) with origin tags and SRE state indicators
+Latest: `1817aa5` feat(drawer): add real workload failure log terminal viewer with ANSI parsing and level filter
 Previous commits this session:
+- `f131860` feat(drawer): add 3-group process categorization (Workloads, Systemd Daemons, OS Kernel) with origin tags and SRE state indicators
 - `1680b7b` docs: update project state with tab and search layout polish
 - `520e069` feat(drawer): separate Docker/K8s vs Host/System categories, widen search bar, and fix mode tab switcher symmetry
 - `1c35175` docs: update project state with host app classification
