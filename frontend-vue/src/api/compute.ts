@@ -1198,8 +1198,15 @@ export interface NodeHistoryResponse {
 }
 
 export const nodeHistoryApi = {
-  async getNodeHistory(nodeId: string, range = '24h'): Promise<NodeHistoryResponse> {
-    const res = await api.get<NodeHistoryResponse | { data: NodeHistoryResponse }>(`/overview/nodes/${encodeURIComponent(nodeId)}/history?range=${range}`)
+  async getNodeHistory(nodeId: string, range = '24h', from?: string, to?: string): Promise<NodeHistoryResponse> {
+    let url = `/overview/nodes/${encodeURIComponent(nodeId)}/history?range=${encodeURIComponent(range)}`
+    if (from) {
+      url += `&from=${encodeURIComponent(from)}`
+    }
+    if (to) {
+      url += `&to=${encodeURIComponent(to)}`
+    }
+    const res = await api.get<NodeHistoryResponse | { data: NodeHistoryResponse }>(url)
     if (res && typeof res === 'object' && 'data' in res && (res as any).data && Array.isArray((res as any).data.history)) {
       return (res as any).data as NodeHistoryResponse
     }
