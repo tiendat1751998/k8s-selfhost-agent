@@ -478,7 +478,7 @@ func (h *DockerHandler) ToggleContainer(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "toggled"})
 }
 
-// GetLogs handles GET /api/v1/docker/logs
+// GetLogs handles GET /api/v1/docker/logs?id=<id>&type=<type>&tail=<tail>&since=<since>
 func (h *DockerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	if h.repo == nil {
 		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
@@ -486,13 +486,22 @@ func (h *DockerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.URL.Query().Get("id")
 	targetType := r.URL.Query().Get("type")
+	tail := r.URL.Query().Get("tail")
+	since := r.URL.Query().Get("since")
 
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "missing required query parameter: id", nil)
 		return
 	}
 
-	logs, err := h.repo.GetLogs(r.Context(), id, targetType)
+	var logs string
+	var err error
+	if tail != "" || since != "" {
+		logs, err = h.repo.GetLogsWithOptions(r.Context(), id, targetType, tail, since)
+	} else {
+		logs, err = h.repo.GetLogs(r.Context(), id, targetType)
+	}
+
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get logs", err)
 		return

@@ -104,6 +104,7 @@ type Repository interface {
 	RestartService(ctx context.Context, serviceID string) error
 	CreateService(ctx context.Context, name string, image string, replicas int, port int) error
 	GetLogs(ctx context.Context, targetID string, targetType string) (string, error)
+	GetLogsWithOptions(ctx context.Context, targetID string, targetType string, tail string, since string) (string, error)
 	UpdateServiceImage(ctx context.Context, serviceID string, image string) error
 	UpdateContainerImage(ctx context.Context, containerID string, image string) error
 	UpdateServiceResources(ctx context.Context, serviceID string, memoryLimitBytes int64, memoryReservBytes int64, nanoCPUs int64, replicas int) error
