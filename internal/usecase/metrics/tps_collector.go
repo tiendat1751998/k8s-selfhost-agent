@@ -471,16 +471,24 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 
 		if elapsed > 0 {
 			for _, cm := range snapshot.Containers {
-				if prev, ok := c.prevContainerStats[cm.ContainerID]; ok {
+				if prev, ok := c.prevContainerStats[cm.ContainerID]; ok && prev.rxBytes > 0 && cm.NetworkRx >= prev.rxBytes {
 					rxDelta := cm.NetworkRx - prev.rxBytes
-					txDelta := cm.NetworkTx - prev.txBytes
 					if rxDelta > 0 {
-						containerRxDelta += rxDelta
-						containerRxRates[cm.ContainerID] = int64(float64(rxDelta) / elapsed)
+						rate := int64(float64(rxDelta) / elapsed)
+						if rate < 10*1024*1024*1024 {
+							containerRxDelta += rxDelta
+							containerRxRates[cm.ContainerID] = rate
+						}
 					}
+				}
+				if prev, ok := c.prevContainerStats[cm.ContainerID]; ok && prev.txBytes > 0 && cm.NetworkTx >= prev.txBytes {
+					txDelta := cm.NetworkTx - prev.txBytes
 					if txDelta > 0 {
-						containerTxDelta += txDelta
-						containerTxRates[cm.ContainerID] = int64(float64(txDelta) / elapsed)
+						rate := int64(float64(txDelta) / elapsed)
+						if rate < 10*1024*1024*1024 {
+							containerTxDelta += txDelta
+							containerTxRates[cm.ContainerID] = rate
+						}
 					}
 				}
 			}
