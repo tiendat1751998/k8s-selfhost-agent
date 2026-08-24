@@ -79,6 +79,8 @@ const hoveredNodeHistIndex = ref<number | null>(null)
 const nodeHistTooltipPos = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const isNodeHistHovered = ref(false)
 const showHistCpu = ref(true)
+const showHistPeakEnvelope = ref<boolean>(true)
+const histViewMode = ref<'both' | 'avg' | 'peak'>('both')
 const showHistMem = ref(true)
 const showHistDisk = ref(true)
 const customHistoryFrom = ref<string>('')
@@ -1465,6 +1467,78 @@ const nodeHistoryChartCpuPath = computed(() => {
     .join(' ')
 })
 
+const nodeHistoryChartCpuPeakPath = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return ''
+  if (list.length === 1) {
+    const peakVal = Math.max(list[0].cpu_peak || 0, list[0].cpu_percent)
+    const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, peakVal)) / 100) * HIST_Y_HEIGHT
+    return `M ${HIST_X_LEFT} ${y.toFixed(1)} L ${HIST_X_RIGHT} ${y.toFixed(1)}`
+  }
+  const step = HIST_X_WIDTH / (list.length - 1)
+  return list
+    .map((h, i) => {
+      const x = HIST_X_LEFT + i * step
+      const peakVal = Math.max(h.cpu_peak || 0, h.cpu_percent)
+      const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, peakVal)) / 100) * HIST_Y_HEIGHT
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const nodeHistoryChartCpuEnvelope = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return ''
+  if (list.length === 1) {
+    const peakVal = Math.max(list[0].cpu_peak || 0, list[0].cpu_percent)
+    const avgVal = list[0].cpu_percent
+    const yPeak = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, peakVal)) / 100) * HIST_Y_HEIGHT
+    const yAvg = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, avgVal)) / 100) * HIST_Y_HEIGHT
+    return `M ${HIST_X_LEFT} ${yPeak.toFixed(1)} L ${HIST_X_RIGHT} ${yPeak.toFixed(1)} L ${HIST_X_RIGHT} ${yAvg.toFixed(1)} L ${HIST_X_LEFT} ${yAvg.toFixed(1)} Z`
+  }
+  const step = HIST_X_WIDTH / (list.length - 1)
+  const peakPoints = list.map((h, i) => {
+    const x = HIST_X_LEFT + i * step
+    const peakVal = Math.max(h.cpu_peak || 0, h.cpu_percent)
+    const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, peakVal)) / 100) * HIST_Y_HEIGHT
+    return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+  })
+  const avgPointsRev = [...list].reverse().map((h, i) => {
+    const origIdx = list.length - 1 - i
+    const x = HIST_X_LEFT + origIdx * step
+    const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, h.cpu_percent)) / 100) * HIST_Y_HEIGHT
+    return `L ${x.toFixed(1)} ${y.toFixed(1)}`
+  })
+  return `${peakPoints.join(' ')} ${avgPointsRev.join(' ')} Z`
+})
+
+const nodeHistorySpikeMarkers = computed(() => {
+  const list = nodeHistoryList.value
+  if (list.length === 0) return []
+  const step = list.length > 1 ? HIST_X_WIDTH / (list.length - 1) : 0
+  const markers: Array<{ index: number; x: number; y: number; time: string; peak: number; avg: number }> = []
+
+  list.forEach((h, i) => {
+    const peak = Math.max(h.cpu_peak || 0, h.cpu_percent)
+    const avg = h.cpu_percent || 0
+    if (peak >= 85.0 || (peak - avg >= 30.0)) {
+      const x = list.length > 1 ? HIST_X_LEFT + i * step : (HIST_X_LEFT + HIST_X_RIGHT) / 2
+      const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, peak)) / 100) * HIST_Y_HEIGHT
+      const d = new Date(h.recorded_at)
+      const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+      markers.push({
+        index: i,
+        x,
+        y,
+        time: timeStr,
+        peak,
+        avg,
+      })
+    }
+  })
+  return markers
+})
+
 const nodeHistoryChartCpuArea = computed(() => {
   if (!nodeHistoryChartCpuPath.value || nodeHistoryList.value.length === 0) return ''
   const list = nodeHistoryList.value
@@ -1559,10 +1633,12 @@ const nodeHistHoverCoords = computed(() => {
   const pt = list[idx]
   if (!pt) return null
   const x = list.length > 1 ? HIST_X_LEFT + idx * step : 385
+  const peakVal = Math.max(pt.cpu_peak || 0, pt.cpu_percent)
   const yCpu = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, pt.cpu_percent)) / 100) * HIST_Y_HEIGHT
+  const yCpuPeak = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, peakVal)) / 100) * HIST_Y_HEIGHT
   const yMem = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, pt.mem_percent)) / 100) * HIST_Y_HEIGHT
   const yDisk = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, pt.disk_percent)) / 100) * HIST_Y_HEIGHT
-  return { x, yCpu, yMem, yDisk }
+  return { x, yCpu, yCpuPeak, yMem, yDisk }
 })
 
 const nodeHistTooltipStyle = computed(() => {
@@ -3551,7 +3627,16 @@ onUnmounted(() => {
             <!-- Card 3: Live Network I/O -->
             <div class="hist-kpi-card glass-panel">
               <span class="kpi-label">LIVE NETWORK I/O</span>
-              <span class="kpi-val text-emerald">↓ {{ formatIoRate(selectedNode?.network_rx_bytes || 0) }} ↑ {{ formatIoRate(selectedNode?.network_tx_bytes || 0) }}</span>
+              <div class="hist-kpi-net-row font-mono">
+                <div class="net-pill net-pill-rx">
+                  <span class="net-pill-arrow">↓</span>
+                  <span class="net-pill-val">{{ formatIoRate(selectedNode?.network_rx_bytes || 0) }}</span>
+                </div>
+                <div class="net-pill net-pill-tx">
+                  <span class="net-pill-arrow">↑</span>
+                  <span class="net-pill-val">{{ formatIoRate(selectedNode?.network_tx_bytes || 0) }}</span>
+                </div>
+              </div>
               <span class="kpi-sub font-mono">
                 ⚡ Peak: ↓ {{ formatIoRate(nodeHistoryData.summary.peak_rx_bytes_sec) }}
               </span>
@@ -3597,6 +3682,17 @@ onUnmounted(() => {
                 >
                   <span class="toggle-dot bg-violet"></span>
                   <span>CPU: <strong>{{ formatPercent(selectedNode?.cpu_percent) }}</strong></span>
+                </button>
+
+                <button
+                  type="button"
+                  class="series-toggle-btn"
+                  :class="{ 'toggle-active peak-active': showHistPeakEnvelope }"
+                  @click="showHistPeakEnvelope = !showHistPeakEnvelope"
+                  title="Toggle Peak Spike Envelope layer"
+                >
+                  <span class="toggle-dot bg-rose"></span>
+                  <span>🔥 Peak Envelope: <strong>{{ showHistPeakEnvelope ? 'ON' : 'OFF' }}</strong></span>
                 </button>
 
                 <button
@@ -3703,6 +3799,11 @@ onUnmounted(() => {
                     <stop offset="0%" stop-color="#a855f7" stop-opacity="0.35" />
                     <stop offset="100%" stop-color="#a855f7" stop-opacity="0.0" />
                   </linearGradient>
+                  <linearGradient id="histCpuPeakEnvelopeGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.45" />
+                    <stop offset="50%" stop-color="#e879f9" stop-opacity="0.25" />
+                    <stop offset="100%" stop-color="#a855f7" stop-opacity="0.05" />
+                  </linearGradient>
                   <linearGradient id="histMemGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.3" />
                     <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
@@ -3726,13 +3827,60 @@ onUnmounted(() => {
                 <line x1="50" y1="180" x2="720" y2="180" stroke="rgba(255,255,255,0.12)" />
 
                 <!-- Area Fills -->
-                <path v-if="showHistCpu && nodeHistoryChartCpuArea" :d="nodeHistoryChartCpuArea" fill="url(#histCpuGrad)" />
+                <path
+                  v-if="showHistCpu && showHistPeakEnvelope && (histViewMode === 'both' || histViewMode === 'peak') && nodeHistoryChartCpuEnvelope"
+                  :d="nodeHistoryChartCpuEnvelope"
+                  fill="url(#histCpuPeakEnvelopeGrad)"
+                  class="chart-envelope-area"
+                />
+                <path v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'avg') && nodeHistoryChartCpuArea" :d="nodeHistoryChartCpuArea" fill="url(#histCpuGrad)" />
                 <path v-if="showHistMem && nodeHistoryChartMemArea" :d="nodeHistoryChartMemArea" fill="url(#histMemGrad)" />
 
                 <!-- Trend Lines -->
                 <path v-if="showHistDisk && nodeHistoryChartDiskPath" :d="nodeHistoryChartDiskPath" fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4,4" />
                 <path v-if="showHistMem && nodeHistoryChartMemPath" :d="nodeHistoryChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2" />
-                <path v-if="showHistCpu && nodeHistoryChartCpuPath" :d="nodeHistoryChartCpuPath" fill="none" stroke="#a855f7" stroke-width="2.5" />
+                <path
+                  v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'peak') && (showHistPeakEnvelope || histViewMode === 'peak') && nodeHistoryChartCpuPeakPath"
+                  :d="nodeHistoryChartCpuPeakPath"
+                  fill="none"
+                  stroke="#e879f9"
+                  stroke-width="1.2"
+                  stroke-dasharray="3,2"
+                  class="chart-peak-line"
+                />
+                <path v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'avg') && nodeHistoryChartCpuPath" :d="nodeHistoryChartCpuPath" fill="none" stroke="#a855f7" stroke-width="2" />
+
+                <!-- Glowing Spike Pins on Prominent Spikes -->
+                <g v-if="showHistCpu && (showHistPeakEnvelope || histViewMode === 'peak')" class="spike-markers-group">
+                  <g
+                    v-for="marker in nodeHistorySpikeMarkers"
+                    :key="'spike-' + marker.index"
+                    class="spike-pin-item"
+                    @mouseenter="hoveredNodeHistIndex = marker.index; isNodeHistHovered = true"
+                    @click.stop="syncLogsToPointInTime(nodeHistoryList[marker.index])"
+                  >
+                    <!-- Outer pulsing ring for critical spike >= 85% -->
+                    <circle
+                      v-if="marker.peak >= 85"
+                      :cx="marker.x"
+                      :cy="marker.y"
+                      r="7"
+                      fill="none"
+                      stroke="#f43f5e"
+                      stroke-width="1.5"
+                      class="spike-marker-pulse"
+                    />
+                    <!-- Core dot -->
+                    <circle
+                      :cx="marker.x"
+                      :cy="marker.y"
+                      :r="marker.peak >= 85 ? 4 : 3"
+                      :fill="marker.peak >= 85 ? '#f43f5e' : '#e879f9'"
+                      stroke="#ffffff"
+                      stroke-width="1.2"
+                    />
+                  </g>
+                </g>
 
                 <!-- Interactive Crosshair -->
                 <g v-if="isNodeHistHovered && nodeHistHoverCoords">
@@ -3745,7 +3893,8 @@ onUnmounted(() => {
                     stroke-width="1.5"
                     stroke-dasharray="3,3"
                   />
-                  <circle v-if="showHistCpu" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpu" r="4.5" fill="#a855f7" stroke="#ffffff" stroke-width="2" />
+                  <circle v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'avg')" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpu" r="4.5" fill="#a855f7" stroke="#ffffff" stroke-width="2" />
+                  <circle v-if="showHistCpu && (showHistPeakEnvelope || histViewMode === 'peak') && hoveredNodeHistPoint && (hoveredNodeHistPoint.cpu_peak || 0) > hoveredNodeHistPoint.cpu_percent" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpuPeak" r="4" fill="#e879f9" stroke="#ffffff" stroke-width="1.5" />
                   <circle v-if="showHistMem" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yMem" r="4" fill="#06b6d4" stroke="#ffffff" stroke-width="1.5" />
                   <circle v-if="showHistDisk" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yDisk" r="3.5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
                 </g>
@@ -3759,7 +3908,15 @@ onUnmounted(() => {
                 <div class="tooltip-series-row" v-if="showHistCpu">
                   <span class="tooltip-dot dot-violet"></span>
                   <span class="tooltip-label">CPU:</span>
-                  <strong class="tooltip-val text-violet">{{ formatPercent(hoveredNodeHistPoint.cpu_percent) }} (Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})</strong>
+                  <strong class="tooltip-val text-violet">
+                    {{ formatPercent(hoveredNodeHistPoint.cpu_percent) }}
+                    <span v-if="(hoveredNodeHistPoint.cpu_peak || 0) > hoveredNodeHistPoint.cpu_percent" class="tooltip-peak-highlight">
+                      (🔥 Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})
+                    </span>
+                  </strong>
+                </div>
+                <div v-if="showHistCpu && (hoveredNodeHistPoint.cpu_peak || 0) >= 85" class="tooltip-spike-alert">
+                  <span class="spike-alert-tag">⚠️ Critical Spike: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }}</span>
                 </div>
                 <div class="tooltip-series-row" v-if="showHistMem">
                   <span class="tooltip-dot dot-cyan"></span>
@@ -4121,7 +4278,7 @@ onUnmounted(() => {
                     </td>
                     <td>
                       <span class="badge" :class="inc.status === 'resolved' ? 'badge-emerald' : inc.status === 'remediating' ? 'badge-cyan' : 'badge-amber'">
-                        {{ inc.status.toUpperCase() }}
+                        {{ (inc.status || 'open').toUpperCase() }}
                       </span>
                     </td>
                     <td>
@@ -8333,6 +8490,12 @@ onUnmounted(() => {
   color: #c4b5fd;
 }
 
+.series-toggle-btn.toggle-active.peak-active {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: rgba(244, 63, 94, 0.5);
+  color: #fda4af;
+}
+
 .series-toggle-btn.toggle-active.mem-active {
   background: rgba(6, 182, 212, 0.15);
   border-color: rgba(6, 182, 212, 0.5);
@@ -8754,6 +8917,51 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
+.hist-kpi-net-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0 2px 0;
+}
+
+.net-pill {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.net-pill-rx {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.net-pill-tx {
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: #22d3ee;
+}
+
+.net-pill-arrow {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.net-pill-val {
+  font-size: 12px;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .hist-kpi-empty {
   padding: 14px 18px;
   border-radius: 12px;
@@ -9065,6 +9273,60 @@ onUnmounted(() => {
   color: #ffffff;
   box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
   transform: translateY(-1px);
+}
+
+.chart-peak-line {
+  filter: drop-shadow(0 0 3px rgba(232, 121, 249, 0.6));
+  pointer-events: none;
+}
+
+.chart-envelope-area {
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.spike-marker-pulse {
+  animation: spikePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  transform-origin: center;
+}
+
+@keyframes spikePulse {
+  0%, 100% {
+    r: 6;
+    opacity: 0.85;
+    stroke-width: 1.5;
+  }
+  50% {
+    r: 9;
+    opacity: 0.2;
+    stroke-width: 2.5;
+  }
+}
+
+.spike-pin-item {
+  cursor: pointer;
+}
+
+.tooltip-peak-highlight {
+  color: #f472b6 !important;
+  font-weight: 700;
+  margin-left: 3px;
+}
+
+.tooltip-spike-alert {
+  margin-top: 2px;
+  display: flex;
+}
+
+.spike-alert-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fecdd3;
+  background: rgba(225, 29, 72, 0.3);
+  border: 1px solid rgba(244, 63, 94, 0.5);
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
 }
 
 /* Incidents Section */
