@@ -638,6 +638,8 @@ function toggleServiceSort(key: 'cpu_percent' | 'memory_used_mb' | 'requests_per
   }
 }
 
+export type ProcessCategoryType = 'container' | 'host_app' | 'system'
+
 export interface UnifiedProcessItem {
   pid: number | string
   name: string
@@ -652,7 +654,57 @@ export interface UnifiedProcessItem {
   tx_bytes_per_sec: number
   state: string
   is_container: boolean
+  is_app: boolean
+  app_type: ProcessCategoryType
   container_name?: string
+}
+
+function classifyProcessType(p: { name: string; command_line?: string; user?: string; is_container?: boolean }): ProcessCategoryType {
+  if (p.is_container) return 'container'
+
+  const name = (p.name || '').toLowerCase()
+  const cmd = (p.command_line || '').toLowerCase()
+  const user = (p.user || '').toLowerCase()
+
+  // 1. Definite OS Kernel threads: [rcu_preempt], [ksoftirqd], etc.
+  if (name.startsWith('[') || name.endsWith(']') || cmd.startsWith('[') || cmd.endsWith(']')) {
+    return 'system'
+  }
+
+  // 2. Definite Core OS system init & maintenance daemons
+  const coreOsSystemDaemons = [
+    'systemd', 'journald', 'udevd', 'resolved', 'timesyncd', 'logind', 'dbus-daemon',
+    'polkitd', 'accounts-daemon', 'cron', 'crond', 'rsyslogd', 'agetty', 'login',
+    'irqbalance', 'multipathd', 'thermald', 'snapd', 'unattended-upgr', 'packagekitd',
+    'auditd', 'acpid', 'atd', 'smartd'
+  ]
+  if (coreOsSystemDaemons.some(d => name === d || name.startsWith(d) || name.endsWith(d))) {
+    return 'system'
+  }
+
+  // 3. User-space non-root application (e.g. datdt, proxysql, postgres, redis, mysql, www-data, app)
+  if (user && user !== 'root' && user !== 'daemon' && user !== 'sys') {
+    return 'host_app'
+  }
+
+  // 4. Known App & Platform service binaries
+  const knownAppKeywords = [
+    'k8s-agent', 'k8s-master', 'k8s-controller', 'hermes', 'proxysql', 'dockerd', 'containerd',
+    'traefik', 'redis', 'nats', 'postgres', 'pgsql', 'mysql', 'mariadb', 'nginx', 'caddy',
+    'envoy', 'prometheus', 'grafana', 'vector', 'fluent', 'loki', 'alloy', 'vault', 'consul',
+    'etcd', 'kubelet', 'kube-proxy', 'node', 'python', 'java', 'golang', 'ruby', 'php',
+    'uvicorn', 'gunicorn', 'vite', 'cargo', 'dotnet', 'celery'
+  ]
+  if (knownAppKeywords.some(k => name.includes(k) || cmd.includes(k))) {
+    return 'host_app'
+  }
+
+  // 5. Command path in user home or custom app directories
+  if (cmd.includes('/home/') || cmd.includes('/opt/') || cmd.includes('/srv/') || cmd.includes('/app/') || cmd.includes('/usr/local/')) {
+    return 'host_app'
+  }
+
+  return 'system'
 }
 
 // Unified processes + container workloads for selected node
@@ -697,10 +749,13 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
         tx_bytes_per_sec: matchedSvc.tx_bytes_per_sec || p.write_bytes_per_sec || 0,
         state: matchedSvc.status === 'healthy' || matchedSvc.status === 'running' ? 'healthy' : (p.state || 'running'),
         is_container: true,
+        is_app: true,
+        app_type: 'container',
         container_name: matchedSvc.service_name,
       }
     }
 
+    const appType = classifyProcessType({ name: p.name, command_line: p.command_line, user: p.user, is_container: false })
     return {
       pid: p.pid,
       name: p.name,
@@ -715,6 +770,8 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
       tx_bytes_per_sec: p.write_bytes_per_sec || 0,
       state: p.state || 'running',
       is_container: false,
+      is_app: appType !== 'system',
+      app_type: appType,
     }
   })
 
@@ -734,6 +791,8 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
         tx_bytes_per_sec: s.tx_bytes_per_sec || 0,
         state: s.status || 'healthy',
         is_container: true,
+        is_app: true,
+        app_type: 'container',
         container_name: s.service_name,
       })
     }
@@ -744,13 +803,13 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
 
 const processCategoryCounts = computed(() => {
   const all = unifiedNodeProcesses.value
-  let workloads = 0
+  let apps = 0
   let system = 0
   for (const p of all) {
-    if (p.is_container) workloads++
+    if (p.is_app) apps++
     else system++
   }
-  return { total: all.length, workloads, system }
+  return { total: all.length, apps, system }
 })
 
 // Filtered and sorted processes for selected node
@@ -759,9 +818,9 @@ const filteredNodeProcesses = computed<UnifiedProcessItem[]>(() => {
 
   // Category filter
   if (processCategoryFilter.value === 'workloads') {
-    list = list.filter(p => p.is_container)
+    list = list.filter(p => p.is_app)
   } else if (processCategoryFilter.value === 'system') {
-    list = list.filter(p => !p.is_container)
+    list = list.filter(p => !p.is_app)
   }
 
   // Search text filter
@@ -2647,14 +2706,14 @@ onUnmounted(() => {
                   :class="{ active: processCategoryFilter === 'workloads' }"
                   @click="processCategoryFilter = 'workloads'; processCurrentPage = 1"
                 >
-                  📦 Workloads ({{ processCategoryCounts.workloads }})
+                  📦 Apps & Services ({{ processCategoryCounts.apps }})
                 </button>
                 <button
                   class="chip-btn chip-traffic"
                   :class="{ active: processCategoryFilter === 'system' }"
                   @click="processCategoryFilter = 'system'; processCurrentPage = 1"
                 >
-                  ⚙️ System ({{ processCategoryCounts.system }})
+                  ⚙️ System & OS ({{ processCategoryCounts.system }})
                 </button>
               </div>
             </div>
@@ -2713,7 +2772,9 @@ onUnmounted(() => {
                     <td class="col-proc-app">
                       <div class="proc-app-info" :title="proc.command_line ? `${proc.name}\nCommand: ${proc.command_line}` : proc.name">
                         <span class="proc-name">
-                          <span v-if="proc.is_container" class="ctr-icon" title="Container Workload">📦</span>
+                          <span v-if="proc.app_type === 'container'" class="ctr-icon" title="Container Workload">📦</span>
+                          <span v-else-if="proc.app_type === 'host_app'" class="ctr-icon" title="Host Application / Platform Service">⚡</span>
+                          <span v-else class="ctr-icon opacity-40" title="OS Kernel / System Process">⚙️</span>
                           {{ proc.name }}
                         </span>
                         <span class="proc-cmd-line font-mono" v-if="proc.command_line">
