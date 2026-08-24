@@ -2,9 +2,10 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `5d6feff` feat(telemetry): add custom date-time range selection and point-in-time log sync for node historical telemetry
+Latest: `2d6ffb8` feat(telemetry): consolidate time presets into unified pill bar and streamline custom range picker
 Previous commits this session:
-- `7cb124c` feat(logs): implement edge-first distributed log architecture, scatter-gather cluster search, and custom date-time range picker
+- `6363152` style(telemetry): move cpu/ram kpi cards to top and integrate time controls directly into hardware saturation chart
+- `5d6feff` feat(telemetry): add custom date-time range selection and point-in-time log sync for node historical telemetry
 - `2dccd81` fix(logs): support all-lines tail depth and accurate log level classification for errors, warnings, and search
 - `1e3855a` docs: update project state with live log streaming feature
 - `b1b989f` feat(drawer): add real-time live auto-tail log streaming with pause/resume and smart auto-scroll
