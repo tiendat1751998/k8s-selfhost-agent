@@ -1,14 +1,13 @@
-# K8sControl Project State — Session Update 2026-08-22T12:18
+# K8sControl Project State — Session Update 2026-08-24T09:12
 
-## Git State (master)
-Latest: `62409be` feat: optimize HUD + live request flow animation bar
+## Git State
+Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
+Latest: `531ff6a` fix(overview): resolve drawer network wrapping, duplicate badges, and os formatting
 Previous commits this session:
-- `151cc30` feat(ui): smooth CSS transitions for real-time data updates
-- `1ee8c30` refactor(overview): clean layout - remove TPS cards + containers table, move 5-min trends up
-- `73042c1` feat: LoadBalancerProvider abstraction + per-service request metrics
-- `c79a487` refactor(overview): remove Per-Node Network Throughput table
-- `3940e4f` feat: per-node service mapping, OS distro fix, remove service table from overview
-- `db887f6` (prior session end)
+- `285812e` fix(overview): optimize drawer network table, format os info, and enrich agent scrape
+- `bcf081b` test: update docker handler unit tests with mock UpdateServiceResources
+- `29f449a` feat: implement workload scale and hardware resource limits tuning (RAM/CPU)
+- `62409be` feat: optimize HUD + live request flow animation bar
 
 ## Repo
 GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
