@@ -3563,85 +3563,6 @@ onUnmounted(() => {
         <!-- MODE B: HISTORICAL TELEMETRY & AUDIT       -->
         <!-- ========================================== -->
         <div v-else-if="nodeDrawerMode === 'history'" class="node-history-content">
-          <!-- Time Range Selector Bar -->
-          <div class="hist-range-selector glass-panel">
-            <div class="range-left">
-              <span class="range-title">📅 Time Window:</span>
-              <div class="range-pills">
-                <button
-                  v-for="r in ['1h', '24h', '7d', '30d'] as const"
-                  :key="r"
-                  class="btn-range-pill"
-                  :class="{ active: nodeHistoryRange === r && !showCustomHistoryPicker }"
-                  @click="switchNodeDrawerToHistory(r)"
-                >
-                  {{ r === '1h' ? '1 Hour' : r === '24h' ? '24 Hours' : r === '7d' ? '7 Days' : '30 Days' }}
-                </button>
-                <button
-                  class="btn-range-pill btn-custom-pill"
-                  :class="{ active: nodeHistoryRange === 'custom' || showCustomHistoryPicker }"
-                  @click="toggleCustomHistoryPicker"
-                >
-                  📅 Custom Range...
-                </button>
-              </div>
-            </div>
-            <div class="range-right">
-              <span class="badge badge-indigo font-mono" v-if="nodeHistoryData?.resolution">
-                Sample Rate: {{ nodeHistoryData.resolution }}
-              </span>
-              <button class="btn btn-secondary btn-xs" @click="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, nodeHistoryRange)" :disabled="nodeHistoryLoading">
-                ↺ Refresh History
-              </button>
-            </div>
-          </div>
-
-          <!-- Inline Glassmorphic Custom History Toolbar -->
-          <div v-if="showCustomHistoryPicker || nodeHistoryRange === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
-            <div class="custom-range-inputs">
-              <div class="range-field">
-                <label class="range-label font-mono">FROM:</label>
-                <input
-                  type="datetime-local"
-                  v-model="customHistoryFrom"
-                  class="input-datetime font-mono"
-                  @keyup.enter="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
-                />
-              </div>
-              <div class="range-field">
-                <label class="range-label font-mono">TO:</label>
-                <input
-                  type="datetime-local"
-                  v-model="customHistoryTo"
-                  class="input-datetime font-mono"
-                  @keyup.enter="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
-                />
-              </div>
-            </div>
-
-            <div class="custom-range-presets">
-              <span class="preset-label font-mono">PRESETS:</span>
-              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('1h')">Last 1h</button>
-              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('3h')">Last 3h</button>
-              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('6h')">Last 6h</button>
-              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('today')">Today</button>
-              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('yesterday')">Yesterday</button>
-              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('3d')">Last 3d</button>
-            </div>
-
-            <div class="custom-range-actions">
-              <button
-                type="button"
-                class="btn-apply-range font-mono"
-                :disabled="nodeHistoryLoading"
-                @click="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
-              >
-                <span class="glow-dot"></span>
-                <span>{{ nodeHistoryLoading ? 'Applying...' : 'Apply Telemetry Window' }}</span>
-              </button>
-            </div>
-          </div>
-
           <!-- Summary KPI Badges (Realtime CPU/RAM & Live I/O) -->
           <div class="hist-kpi-grid" v-if="nodeHistoryData?.summary">
             <!-- Card 1: Realtime CPU & Peak -->
@@ -3733,6 +3654,82 @@ onUnmounted(() => {
                 >
                   <span class="toggle-dot bg-emerald"></span>
                   <span>Disk: <strong>{{ formatPercent(selectedNode?.disk_percent) }}</strong></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Integrated Time Range & Sample Bar -->
+            <div class="hist-chart-time-bar">
+              <div class="chart-time-pills">
+                <button
+                  v-for="r in ['1h', '24h', '7d', '30d'] as const"
+                  :key="r"
+                  class="btn-chart-range-pill"
+                  :class="{ active: nodeHistoryRange === r && !showCustomHistoryPicker }"
+                  @click="switchNodeDrawerToHistory(r)"
+                >
+                  {{ r === '1h' ? '1 Hour' : r === '24h' ? '24 Hours' : r === '7d' ? '7 Days' : '30 Days' }}
+                </button>
+                <button
+                  class="btn-chart-range-pill"
+                  :class="{ active: nodeHistoryRange === 'custom' || showCustomHistoryPicker }"
+                  @click="toggleCustomHistoryPicker"
+                >
+                  📅 Custom Range...
+                </button>
+              </div>
+              <div class="range-right">
+                <span class="badge badge-indigo font-mono" v-if="nodeHistoryData?.resolution">
+                  Sample Rate: {{ nodeHistoryData.resolution }}
+                </span>
+                <button class="btn btn-secondary btn-xs" @click="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, nodeHistoryRange)" :disabled="nodeHistoryLoading">
+                  ↺ Refresh
+                </button>
+              </div>
+            </div>
+
+            <!-- Inline Glassmorphic Custom History Toolbar -->
+            <div v-if="showCustomHistoryPicker || nodeHistoryRange === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
+              <div class="custom-range-inputs">
+                <div class="range-field">
+                  <label class="range-label font-mono">FROM:</label>
+                  <input
+                    type="datetime-local"
+                    v-model="customHistoryFrom"
+                    class="input-datetime font-mono"
+                    @keyup.enter="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+                  />
+                </div>
+                <div class="range-field">
+                  <label class="range-label font-mono">TO:</label>
+                  <input
+                    type="datetime-local"
+                    v-model="customHistoryTo"
+                    class="input-datetime font-mono"
+                    @keyup.enter="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+                  />
+                </div>
+              </div>
+
+              <div class="custom-range-presets">
+                <span class="preset-label font-mono">PRESETS:</span>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('1h')">Last 1h</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('3h')">Last 3h</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('6h')">Last 6h</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('today')">Today</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('yesterday')">Yesterday</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('3d')">Last 3d</button>
+              </div>
+
+              <div class="custom-range-actions">
+                <button
+                  type="button"
+                  class="btn-apply-range font-mono"
+                  :disabled="nodeHistoryLoading"
+                  @click="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+                >
+                  <span class="glow-dot"></span>
+                  <span>{{ nodeHistoryLoading ? 'Applying...' : 'Apply Telemetry Window' }}</span>
                 </button>
               </div>
             </div>
@@ -8714,38 +8711,29 @@ onUnmounted(() => {
   gap: 16px;
 }
 
-.hist-range-selector {
+.hist-chart-time-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  border-radius: 12px;
   flex-wrap: wrap;
   gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin: 8px 0 12px 0;
 }
 
-.range-left {
+.chart-time-pills {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.range-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.range-pills {
-  display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
-.btn-range-pill {
+.btn-chart-range-pill {
   padding: 4px 10px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   border: 1px solid var(--border-subtle);
   background: rgba(255, 255, 255, 0.04);
@@ -8754,23 +8742,12 @@ onUnmounted(() => {
   transition: all 0.2s ease;
 }
 
-.btn-range-pill:hover {
+.btn-chart-range-pill:hover {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
 
-.btn-range-pill.active {
-  background: #38bdf8;
-  color: #0f172a;
-  border-color: #38bdf8;
-  font-weight: 700;
-}
-
-.btn-custom-pill {
-  border-color: rgba(56, 189, 248, 0.35);
-}
-
-.btn-custom-pill.active {
+.btn-chart-range-pill.active {
   background: #38bdf8;
   color: #0f172a;
   border-color: #38bdf8;
