@@ -68,6 +68,10 @@ func (r *testDockerRepo) GetLogs(ctx context.Context, targetID string, targetTyp
 	return "mock logs", nil
 }
 
+func (r *testDockerRepo) GetLogsWithOptions(ctx context.Context, targetID string, targetType string, tail string, since string) (string, error) {
+	return "mock logs", nil
+}
+
 func (r *testDockerRepo) UpdateServiceImage(ctx context.Context, serviceID string, image string) error {
 	return nil
 }

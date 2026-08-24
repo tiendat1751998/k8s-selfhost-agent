@@ -243,9 +243,11 @@ export const dockerApi = {
     return api.post<{ status: string }>(`/docker/containers/${id}/toggle`, { action })
   },
 
-  async getLogs(id: string, type?: string): Promise<{ logs: string }> {
+  async getLogs(id: string, type?: string, tail?: number | string, since?: string): Promise<{ logs: string }> {
     const params: Record<string, string> = { id }
     if (type) params.type = type
+    if (tail !== undefined && tail !== null && tail !== '') params.tail = String(tail)
+    if (since) params.since = since
     return api.get<{ logs: string }>('/docker/logs', params)
   },
 }

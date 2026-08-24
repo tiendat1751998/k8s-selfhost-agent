@@ -208,10 +208,18 @@ func (r *realDockerRepo) ToggleContainer(ctx context.Context, containerID string
 }
 
 func (r *realDockerRepo) GetLogs(ctx context.Context, targetID string, targetType string) (string, error) {
+	return r.GetLogsWithOptions(ctx, targetID, targetType, "100", "")
+}
+
+func (r *realDockerRepo) GetLogsWithOptions(ctx context.Context, targetID string, targetType string, tail string, since string) (string, error) {
+	if tail == "" {
+		tail = "100"
+	}
 	options := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
-		Tail:       "100",
+		Tail:       tail,
+		Since:      since,
 	}
 
 	var reader io.ReadCloser

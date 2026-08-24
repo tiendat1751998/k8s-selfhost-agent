@@ -891,6 +891,8 @@ async function loadNodeHistory(nodeId?: string, range = nodeHistoryRange.value) 
 // Real App Logs in Node History
 const selectedLogApp = ref<string>('tiki_traefik')
 const selectedLogLevel = ref<'all' | 'error' | 'warn'>('all')
+const selectedLogTail = ref<number | string>(100)
+const selectedLogSince = ref<string>('all')
 const appLogSearch = ref<string>('')
 const appLogsText = ref<string>('')
 const appLogsLoading = ref<boolean>(false)
@@ -911,17 +913,20 @@ async function fetchNodeAppLogs(appName?: string) {
   appLogsLoading.value = true
   appLogsError.value = null
   try {
+    const tailParam = selectedLogTail.value === 'all' ? '' : selectedLogTail.value
+    const sinceParam = selectedLogSince.value === 'all' ? '' : selectedLogSince.value
+
     let res: { logs: string } | null = null
     try {
-      res = await dockerApi.getLogs(targetApp, 'service')
+      res = await dockerApi.getLogs(targetApp, 'service', tailParam, sinceParam)
     } catch {
-      res = await dockerApi.getLogs(targetApp, 'container')
+      res = await dockerApi.getLogs(targetApp, 'container', tailParam, sinceParam)
     }
 
     if (res && typeof res.logs === 'string' && res.logs.trim().length > 0) {
       appLogsText.value = res.logs
     } else {
-      appLogsText.value = `[Info: Service ${targetApp} is running. No recent error/stdout logs recorded in current buffer]`
+      appLogsText.value = `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (since=${selectedLogSince.value}, tail=${selectedLogTail.value})]`
     }
   } catch (err: any) {
     console.warn('Failed to fetch logs for', targetApp, err)
@@ -945,6 +950,19 @@ function copyAppLogs() {
   setTimeout(() => {
     appLogsCopied.value = false
   }, 2000)
+}
+
+function downloadAppLogs() {
+  const content = parsedAppLogLines.value.map(l => l.cleanText).join('\n') || appLogsText.value
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${selectedLogApp.value}_${selectedNode.value?.node_name || 'node'}_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.log`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 
 const nodeAvailableLogApps = computed(() => {
@@ -3353,16 +3371,50 @@ onUnmounted(() => {
 
             <!-- Log Workload Selector & Filter Toolbar -->
             <div class="log-explorer-toolbar">
-              <div class="log-app-select-group">
-                <label class="log-toolbar-label font-mono">APP / WORKLOAD:</label>
+              <!-- App Selector -->
+              <div class="log-toolbar-item">
+                <label class="log-toolbar-label font-mono">APP:</label>
                 <select
                   v-model="selectedLogApp"
-                  class="select-log-app font-mono"
+                  class="select-log-input font-mono"
                   @change="fetchNodeAppLogs(selectedLogApp)"
                 >
                   <option v-for="app in nodeAvailableLogApps" :key="app.name" :value="app.name">
                     {{ app.icon }} {{ app.name }}
                   </option>
+                </select>
+              </div>
+
+              <!-- Tail Depth Selector -->
+              <div class="log-toolbar-item">
+                <label class="log-toolbar-label font-mono">TAIL:</label>
+                <select
+                  v-model="selectedLogTail"
+                  class="select-log-input font-mono"
+                  @change="fetchNodeAppLogs(selectedLogApp)"
+                >
+                  <option :value="100">100 lines</option>
+                  <option :value="500">500 lines</option>
+                  <option :value="1000">1,000 lines</option>
+                  <option :value="5000">5,000 lines</option>
+                  <option value="all">All lines</option>
+                </select>
+              </div>
+
+              <!-- Time Window (Since) Selector -->
+              <div class="log-toolbar-item">
+                <label class="log-toolbar-label font-mono">WINDOW:</label>
+                <select
+                  v-model="selectedLogSince"
+                  class="select-log-input font-mono"
+                  @change="fetchNodeAppLogs(selectedLogApp)"
+                >
+                  <option value="all">All Time</option>
+                  <option value="15m">Last 15m</option>
+                  <option value="1h">Last 1h</option>
+                  <option value="6h">Last 6h</option>
+                  <option value="24h">Last 24h</option>
+                  <option value="168h">Last 7d</option>
                 </select>
               </div>
 
@@ -3421,6 +3473,14 @@ onUnmounted(() => {
                 >
                   <span>📋</span>
                   {{ appLogsCopied ? 'Copied!' : 'Copy' }}
+                </button>
+                <button
+                  class="btn-log-action btn-log-download"
+                  @click="downloadAppLogs"
+                  title="Download Raw Log File"
+                >
+                  <span>⬇️</span>
+                  Export .log
                 </button>
               </div>
             </div>
@@ -8537,7 +8597,7 @@ onUnmounted(() => {
   margin-top: 4px;
 }
 
-.log-app-select-group {
+.log-toolbar-item {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -8550,21 +8610,32 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.select-log-app {
-  padding: 6px 10px;
+.select-log-input {
+  padding: 5px 8px;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid var(--border-medium);
   border-radius: 6px;
   color: #38bdf8;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   outline: none;
   cursor: pointer;
+  transition: border-color 0.2s ease;
 }
 
-.select-log-app:hover,
-.select-log-app:focus {
+.select-log-input:hover,
+.select-log-input:focus {
   border-color: #38bdf8;
+}
+
+.btn-log-download {
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+}
+
+.btn-log-download:hover {
+  background: rgba(56, 189, 248, 0.15) !important;
+  border-color: rgba(56, 189, 248, 0.6) !important;
 }
 
 .log-level-chips {

@@ -422,6 +422,9 @@ func (m *mockDockerRepoForUsecase) CreateService(ctx context.Context, name strin
 func (m *mockDockerRepoForUsecase) GetLogs(ctx context.Context, targetID string, targetType string) (string, error) {
 	return "", nil
 }
+func (m *mockDockerRepoForUsecase) GetLogsWithOptions(ctx context.Context, targetID string, targetType string, tail string, since string) (string, error) {
+	return "", nil
+}
 func (m *mockDockerRepoForUsecase) UpdateServiceImage(ctx context.Context, serviceID string, image string) error {
 	if m.updateErr != nil {
 		return m.updateErr
