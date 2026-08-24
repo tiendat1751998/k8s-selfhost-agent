@@ -2,8 +2,9 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `9190deb` fix(overview): standardize drawer network I/O card, eliminate badge wrapping, and gap bandwidth rates
+Latest: `5b3ce8f` feat(drawer): align network I/O row, stack NIC in/out rates, and implement high-scale service search & pagination
 Previous commits this session:
+- `9190deb` fix(overview): standardize drawer network I/O card, eliminate badge wrapping, and gap bandwidth rates
 - `b35b541` feat(ui): overhaul overview css, node card 2-row layout, and typography
 - `78d7110` test(metrics): add unit test for agent scrape normalization and top processes fallback
 - `531ff6a` fix(overview): resolve drawer network wrapping, duplicate badges, and os formatting
