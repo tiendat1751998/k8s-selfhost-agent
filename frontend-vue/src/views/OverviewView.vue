@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   overviewApi,
@@ -918,6 +918,13 @@ const appLogsLoading = ref<boolean>(false)
 const appLogsError = ref<string | null>(null)
 const appLogsCopied = ref<boolean>(false)
 
+// Real-Time Live Auto-Tail & Scroll State
+const isLogStreaming = ref<boolean>(true)
+const logStreamInterval = ref<any>(null)
+const autoScrollLogs = ref<boolean>(true)
+const userScrolledUp = ref<boolean>(false)
+const terminalBodyRef = ref<HTMLElement | null>(null)
+
 interface ParsedLogLine {
   id: number
   raw: string
@@ -947,6 +954,14 @@ async function fetchNodeAppLogs(appName?: string) {
     } else {
       appLogsText.value = `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (since=${selectedLogSince.value}, tail=${selectedLogTail.value})]`
     }
+
+    if (autoScrollLogs.value && !userScrolledUp.value) {
+      nextTick(() => {
+        if (terminalBodyRef.value) {
+          terminalBodyRef.value.scrollTop = terminalBodyRef.value.scrollHeight
+        }
+      })
+    }
   } catch (err: any) {
     console.warn('Failed to fetch logs for', targetApp, err)
     appLogsError.value = err?.message || `Failed to fetch logs for ${targetApp}`
@@ -956,10 +971,94 @@ async function fetchNodeAppLogs(appName?: string) {
   }
 }
 
+async function fetchNodeAppLogsQuiet(appName?: string) {
+  const targetApp = appName || selectedLogApp.value || 'tiki_traefik'
+  try {
+    const tailParam = selectedLogTail.value === 'all' ? '' : selectedLogTail.value
+    const sinceParam = selectedLogSince.value === 'all' ? '' : selectedLogSince.value
+
+    let res: { logs: string } | null = null
+    try {
+      res = await dockerApi.getLogs(targetApp, 'service', tailParam, sinceParam)
+    } catch {
+      res = await dockerApi.getLogs(targetApp, 'container', tailParam, sinceParam)
+    }
+
+    const newLogs = (res && typeof res.logs === 'string' && res.logs.trim().length > 0)
+      ? res.logs
+      : `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (since=${selectedLogSince.value}, tail=${selectedLogTail.value})]`
+
+    if (appLogsText.value !== newLogs) {
+      appLogsText.value = newLogs
+      if (autoScrollLogs.value && !userScrolledUp.value) {
+        nextTick(() => {
+          if (terminalBodyRef.value) {
+            terminalBodyRef.value.scrollTop = terminalBodyRef.value.scrollHeight
+          }
+        })
+      }
+    }
+  } catch (err: any) {
+    console.warn('Failed to quietly fetch logs for', targetApp, err)
+  }
+}
+
+function startLogStream() {
+  stopLogStream()
+  if (!isLogStreaming.value) return
+  logStreamInterval.value = setInterval(() => {
+    if (showNodeDrawer.value && nodeDrawerMode.value === 'history') {
+      fetchNodeAppLogsQuiet()
+    }
+  }, 3000)
+}
+
+function stopLogStream() {
+  if (logStreamInterval.value) {
+    clearInterval(logStreamInterval.value)
+    logStreamInterval.value = null
+  }
+}
+
+function toggleLogStreaming() {
+  isLogStreaming.value = !isLogStreaming.value
+  if (isLogStreaming.value) {
+    fetchNodeAppLogsQuiet()
+    startLogStream()
+  } else {
+    stopLogStream()
+  }
+}
+
+function handleTerminalScroll(e: Event) {
+  const el = e.target as HTMLElement
+  if (!el) return
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) {
+    userScrolledUp.value = false
+  } else {
+    userScrolledUp.value = true
+  }
+}
+
+function scrollToBottom() {
+  userScrolledUp.value = false
+  nextTick(() => {
+    if (terminalBodyRef.value) {
+      terminalBodyRef.value.scrollTo({
+        top: terminalBodyRef.value.scrollHeight,
+        behavior: 'smooth'
+      })
+    }
+  })
+}
+
 function selectIncidentLog(inc: any) {
   const target = inc.pod_name || inc.raw_data?.service_name || inc.raw_data?.container_name || 'tiki_traefik'
   selectedLogApp.value = target
   fetchNodeAppLogs(target)
+  if (isLogStreaming.value) {
+    startLogStream()
+  }
 }
 
 function copyAppLogs() {
@@ -1097,7 +1196,29 @@ function switchNodeDrawerToHistory(range: '1h' | '24h' | '7d' | '30d' = '24h') {
     selectedLogApp.value = firstSvc
     fetchNodeAppLogs(firstSvc)
   }
+  if (isLogStreaming.value) {
+    startLogStream()
+  }
 }
+
+watch([selectedLogApp, selectedLogTail, selectedLogSince], () => {
+  if (showNodeDrawer.value && nodeDrawerMode.value === 'history') {
+    fetchNodeAppLogs(selectedLogApp.value)
+    if (isLogStreaming.value) {
+      startLogStream()
+    }
+  }
+})
+
+watch([showNodeDrawer, nodeDrawerMode], ([show, mode]) => {
+  if (show && mode === 'history') {
+    if (isLogStreaming.value) {
+      startLogStream()
+    }
+  } else {
+    stopLogStream()
+  }
+})
 
 function inspectNode(node: NodeMetrics) {
   selectedNodeId.value = node.node_id || node.node_name || ''
@@ -2022,6 +2143,7 @@ onUnmounted(() => {
     tpsAbortController.abort()
     tpsAbortController = null
   }
+  stopLogStream()
 })
 
 </script>
@@ -3575,6 +3697,25 @@ onUnmounted(() => {
               <!-- Action Buttons -->
               <div class="log-action-btns">
                 <button
+                  class="btn-log-action btn-log-stream"
+                  :class="{ 'stream-active': isLogStreaming }"
+                  @click="toggleLogStreaming"
+                  :title="isLogStreaming ? 'Pause Live Tail' : 'Resume Live Tail'"
+                >
+                  <span v-if="isLogStreaming" class="log-live-dot"></span>
+                  <span v-else>⏸️</span>
+                  <span>{{ isLogStreaming ? 'LIVE TAIL (3s)' : 'PAUSED' }}</span>
+                </button>
+                <button
+                  class="btn-log-action"
+                  :class="{ 'active-toggle': autoScrollLogs }"
+                  @click="autoScrollLogs = !autoScrollLogs"
+                  title="Toggle Auto-Scroll to Bottom"
+                >
+                  <span>⬇️</span>
+                  <span>Auto-Scroll: {{ autoScrollLogs ? 'ON' : 'OFF' }}</span>
+                </button>
+                <button
                   class="btn-log-action"
                   :disabled="appLogsLoading"
                   @click="fetchNodeAppLogs(selectedLogApp)"
@@ -3613,8 +3754,16 @@ onUnmounted(() => {
                 <div class="terminal-title font-mono">
                   stdout/stderr :: {{ selectedLogApp }} @ {{ selectedNode?.node_name }}
                 </div>
-                <div class="terminal-stats font-mono text-slate">
-                  Showing {{ parsedAppLogLines.length }} lines
+                <div class="terminal-controls-right">
+                  <span v-if="isLogStreaming" class="terminal-stream-badge font-mono">
+                    <span class="log-live-dot"></span> LIVE (3s)
+                  </span>
+                  <span v-else class="terminal-stream-badge paused font-mono">
+                    ⏸️ PAUSED
+                  </span>
+                  <div class="terminal-stats font-mono text-slate">
+                    Showing {{ parsedAppLogLines.length }} lines
+                  </div>
                 </div>
               </div>
 
@@ -3632,7 +3781,12 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <div class="terminal-body" v-else-if="parsedAppLogLines.length > 0">
+              <div
+                ref="terminalBodyRef"
+                class="terminal-body"
+                @scroll="handleTerminalScroll"
+                v-else-if="parsedAppLogLines.length > 0"
+              >
                 <div
                   v-for="line in parsedAppLogLines"
                   :key="line.id"
@@ -3652,6 +3806,15 @@ onUnmounted(() => {
                   <span>🛡️ No matching log lines found for current filters.</span>
                 </div>
               </div>
+
+              <!-- Floating Jump to Bottom Button -->
+              <button
+                v-if="userScrolledUp && parsedAppLogLines.length > 0"
+                class="jump-bottom-btn font-mono"
+                @click="scrollToBottom"
+              >
+                ⬇️ New logs available - Jump to bottom
+              </button>
             </div>
 
             <!-- Incidents Table if any -->
@@ -8847,13 +9010,76 @@ onUnmounted(() => {
   border-color: rgba(56, 189, 248, 0.4);
 }
 
+.btn-log-stream {
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.btn-log-stream.stream-active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.btn-log-stream:not(.stream-active) {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.btn-log-action.active-toggle {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
 .spin-icon {
   display: inline-block;
   animation: spin 1s linear infinite;
 }
 
+@keyframes logPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.log-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+  animation: logPulse 2s infinite ease-in-out;
+  display: inline-block;
+}
+
+.jump-bottom-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 20px;
+  z-index: 15;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.jump-bottom-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+}
+
 /* Terminal Viewer */
 .log-terminal-viewer {
+  position: relative;
   background: #080c14;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
@@ -8890,6 +9116,30 @@ onUnmounted(() => {
   font-size: 11.5px;
   color: var(--text-secondary);
   letter-spacing: 0.02em;
+}
+
+.terminal-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.terminal-stream-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.terminal-stream-badge.paused {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
 }
 
 .terminal-stats {
