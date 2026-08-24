@@ -1103,6 +1103,13 @@ function inspectNode(node: NodeMetrics) {
 // ==========================================
 // 4e. NODE HISTORICAL TELEMETRY COMPUTEDS
 // ==========================================
+const HIST_Y_TOP = 20
+const HIST_Y_BOTTOM = 180
+const HIST_Y_HEIGHT = 160 // 180 - 20
+const HIST_X_LEFT = 50
+const HIST_X_RIGHT = 720
+const HIST_X_WIDTH = 670 // 720 - 50
+
 const nodeHistoryList = computed<NodeMetricRollup[]>(() => {
   return nodeHistoryData.value?.history || []
 })
@@ -1111,14 +1118,14 @@ const nodeHistoryChartCpuPath = computed(() => {
   const list = nodeHistoryList.value
   if (list.length === 0) return ''
   if (list.length === 1) {
-    const y = 190 - (Math.min(100, Math.max(0, list[0].cpu_percent)) / 100) * 170
-    return `M 50 ${y.toFixed(1)} L 700 ${y.toFixed(1)}`
+    const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, list[0].cpu_percent)) / 100) * HIST_Y_HEIGHT
+    return `M ${HIST_X_LEFT} ${y.toFixed(1)} L ${HIST_X_RIGHT} ${y.toFixed(1)}`
   }
-  const step = 650 / (list.length - 1)
+  const step = HIST_X_WIDTH / (list.length - 1)
   return list
     .map((h, i) => {
-      const x = 50 + i * step
-      const y = 190 - (Math.min(100, Math.max(0, h.cpu_percent)) / 100) * 170
+      const x = HIST_X_LEFT + i * step
+      const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, h.cpu_percent)) / 100) * HIST_Y_HEIGHT
       return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
@@ -1127,23 +1134,23 @@ const nodeHistoryChartCpuPath = computed(() => {
 const nodeHistoryChartCpuArea = computed(() => {
   if (!nodeHistoryChartCpuPath.value || nodeHistoryList.value.length === 0) return ''
   const list = nodeHistoryList.value
-  const firstX = 50
-  const lastX = list.length === 1 ? 700 : 50 + (list.length - 1) * (650 / (list.length - 1))
-  return `${nodeHistoryChartCpuPath.value} L ${lastX.toFixed(1)} 190 L ${firstX.toFixed(1)} 190 Z`
+  const firstX = HIST_X_LEFT
+  const lastX = list.length === 1 ? HIST_X_RIGHT : HIST_X_LEFT + (list.length - 1) * (HIST_X_WIDTH / (list.length - 1))
+  return `${nodeHistoryChartCpuPath.value} L ${lastX.toFixed(1)} ${HIST_Y_BOTTOM} L ${firstX.toFixed(1)} ${HIST_Y_BOTTOM} Z`
 })
 
 const nodeHistoryChartMemPath = computed(() => {
   const list = nodeHistoryList.value
   if (list.length === 0) return ''
   if (list.length === 1) {
-    const y = 190 - (Math.min(100, Math.max(0, list[0].mem_percent)) / 100) * 170
-    return `M 50 ${y.toFixed(1)} L 700 ${y.toFixed(1)}`
+    const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, list[0].mem_percent)) / 100) * HIST_Y_HEIGHT
+    return `M ${HIST_X_LEFT} ${y.toFixed(1)} L ${HIST_X_RIGHT} ${y.toFixed(1)}`
   }
-  const step = 650 / (list.length - 1)
+  const step = HIST_X_WIDTH / (list.length - 1)
   return list
     .map((h, i) => {
-      const x = 50 + i * step
-      const y = 190 - (Math.min(100, Math.max(0, h.mem_percent)) / 100) * 170
+      const x = HIST_X_LEFT + i * step
+      const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, h.mem_percent)) / 100) * HIST_Y_HEIGHT
       return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
@@ -1152,23 +1159,23 @@ const nodeHistoryChartMemPath = computed(() => {
 const nodeHistoryChartMemArea = computed(() => {
   if (!nodeHistoryChartMemPath.value || nodeHistoryList.value.length === 0) return ''
   const list = nodeHistoryList.value
-  const firstX = 50
-  const lastX = list.length === 1 ? 700 : 50 + (list.length - 1) * (650 / (list.length - 1))
-  return `${nodeHistoryChartMemPath.value} L ${lastX.toFixed(1)} 190 L ${firstX.toFixed(1)} 190 Z`
+  const firstX = HIST_X_LEFT
+  const lastX = list.length === 1 ? HIST_X_RIGHT : HIST_X_LEFT + (list.length - 1) * (HIST_X_WIDTH / (list.length - 1))
+  return `${nodeHistoryChartMemPath.value} L ${lastX.toFixed(1)} ${HIST_Y_BOTTOM} L ${firstX.toFixed(1)} ${HIST_Y_BOTTOM} Z`
 })
 
 const nodeHistoryChartDiskPath = computed(() => {
   const list = nodeHistoryList.value
   if (list.length === 0) return ''
   if (list.length === 1) {
-    const y = 190 - (Math.min(100, Math.max(0, list[0].disk_percent)) / 100) * 170
-    return `M 50 ${y.toFixed(1)} L 700 ${y.toFixed(1)}`
+    const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, list[0].disk_percent)) / 100) * HIST_Y_HEIGHT
+    return `M ${HIST_X_LEFT} ${y.toFixed(1)} L ${HIST_X_RIGHT} ${y.toFixed(1)}`
   }
-  const step = 650 / (list.length - 1)
+  const step = HIST_X_WIDTH / (list.length - 1)
   return list
     .map((h, i) => {
-      const x = 50 + i * step
-      const y = 190 - (Math.min(100, Math.max(0, h.disk_percent)) / 100) * 170
+      const x = HIST_X_LEFT + i * step
+      const y = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, h.disk_percent)) / 100) * HIST_Y_HEIGHT
       return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
@@ -1179,11 +1186,11 @@ const nodeHistoryTimeMarkers = computed(() => {
   if (list.length === 0) return []
   if (list.length === 1) {
     const d = new Date(list[0].recorded_at)
-    return [{ x: 50, time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) }]
+    return [{ x: HIST_X_LEFT, time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) }]
   }
   const count = Math.min(5, list.length)
   const markers = []
-  const step = 650 / (list.length - 1)
+  const step = HIST_X_WIDTH / (list.length - 1)
   for (let i = 0; i < count; i++) {
     const idx = Math.round((i / (count - 1)) * (list.length - 1))
     const d = new Date(list[idx].recorded_at)
@@ -1191,7 +1198,7 @@ const nodeHistoryTimeMarkers = computed(() => {
       ? `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`
       : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
     markers.push({
-      x: 50 + idx * step,
+      x: HIST_X_LEFT + idx * step,
       time: timeStr,
     })
   }
@@ -1208,14 +1215,14 @@ const hoveredNodeHistPoint = computed<NodeMetricRollup | null>(() => {
 const nodeHistHoverCoords = computed(() => {
   if (hoveredNodeHistIndex.value === null || nodeHistoryList.value.length === 0) return null
   const list = nodeHistoryList.value
-  const step = list.length > 1 ? 650 / (list.length - 1) : 0
+  const step = list.length > 1 ? HIST_X_WIDTH / (list.length - 1) : 0
   const idx = hoveredNodeHistIndex.value
   const pt = list[idx]
   if (!pt) return null
-  const x = list.length > 1 ? 50 + idx * step : 375
-  const yCpu = 190 - (Math.min(100, Math.max(0, pt.cpu_percent)) / 100) * 170
-  const yMem = 190 - (Math.min(100, Math.max(0, pt.mem_percent)) / 100) * 170
-  const yDisk = 190 - (Math.min(100, Math.max(0, pt.disk_percent)) / 100) * 170
+  const x = list.length > 1 ? HIST_X_LEFT + idx * step : 385
+  const yCpu = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, pt.cpu_percent)) / 100) * HIST_Y_HEIGHT
+  const yMem = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, pt.mem_percent)) / 100) * HIST_Y_HEIGHT
+  const yDisk = HIST_Y_BOTTOM - (Math.min(100, Math.max(0, pt.disk_percent)) / 100) * HIST_Y_HEIGHT
   return { x, yCpu, yMem, yDisk }
 })
 
@@ -1243,8 +1250,8 @@ function handleNodeHistChartHover(event: MouseEvent) {
   } else {
     const scaleX = rect.width / 760
     const svgX = mouseX / scaleX
-    const boundedSvgX = Math.max(50, Math.min(700, svgX))
-    const ratio = (boundedSvgX - 50) / 650
+    const boundedSvgX = Math.max(HIST_X_LEFT, Math.min(HIST_X_RIGHT, svgX))
+    const ratio = (boundedSvgX - HIST_X_LEFT) / HIST_X_WIDTH
     const idx = Math.round(ratio * (list.length - 1))
     hoveredNodeHistIndex.value = Math.max(0, Math.min(list.length - 1, idx))
   }
@@ -3195,30 +3202,43 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Summary KPI Badges -->
+          <!-- Summary KPI Badges (Realtime CPU/RAM & Live I/O) -->
           <div class="hist-kpi-grid" v-if="nodeHistoryData?.summary">
+            <!-- Card 1: Realtime CPU & Peak -->
             <div class="hist-kpi-card glass-panel">
-              <span class="kpi-label">AVG CPU / PEAK</span>
-              <span class="kpi-val text-purple">{{ formatPercent(nodeHistoryData.summary.avg_cpu_percent) }}</span>
-              <span class="kpi-sub">🔥 Peak: {{ formatPercent(nodeHistoryData.summary.peak_cpu_percent) }}</span>
+              <span class="kpi-label">REALTIME CPU / PEAK</span>
+              <span class="kpi-val text-violet">{{ formatPercent(selectedNode?.cpu_percent) }}</span>
+              <span class="kpi-sub font-mono">
+                🔥 Peak: {{ formatPercent(nodeHistoryData.summary.peak_cpu_percent) }} <span class="text-slate">| Avg: {{ formatPercent(nodeHistoryData.summary.avg_cpu_percent) }}</span>
+              </span>
             </div>
+
+            <!-- Card 2: Realtime RAM & Peak -->
             <div class="hist-kpi-card glass-panel">
-              <span class="kpi-label">AVG MEMORY / PEAK</span>
-              <span class="kpi-val text-cyan">{{ formatPercent(nodeHistoryData.summary.avg_mem_percent) }}</span>
-              <span class="kpi-sub">🧠 Peak: {{ formatPercent(nodeHistoryData.summary.peak_mem_percent) }}</span>
+              <span class="kpi-label">REALTIME RAM / PEAK</span>
+              <span class="kpi-val text-cyan">{{ formatPercent(selectedNode?.memory_percent) }}</span>
+              <span class="kpi-sub font-mono">
+                🧠 {{ formatBytes(selectedNode?.memory_used) }} / {{ formatBytes(selectedNode?.memory_total) }} <span class="text-slate">(Peak: {{ formatPercent(nodeHistoryData.summary.peak_mem_percent) }})</span>
+              </span>
             </div>
+
+            <!-- Card 3: Live Network I/O -->
             <div class="hist-kpi-card glass-panel">
-              <span class="kpi-label">PEAK NETWORK I/O</span>
-              <span class="kpi-val text-emerald">↓ {{ formatIoRate(nodeHistoryData.summary.peak_rx_bytes_sec) }}</span>
-              <span class="kpi-sub">↑ {{ formatIoRate(nodeHistoryData.summary.peak_tx_bytes_sec) }}</span>
+              <span class="kpi-label">LIVE NETWORK I/O</span>
+              <span class="kpi-val text-emerald">↓ {{ formatIoRate(selectedNode?.network_rx_rate || 0) }} ↑ {{ formatIoRate(selectedNode?.network_tx_rate || 0) }}</span>
+              <span class="kpi-sub font-mono">
+                ⚡ Peak: ↓ {{ formatIoRate(nodeHistoryData.summary.peak_rx_bytes_sec) }}
+              </span>
             </div>
+
+            <!-- Card 4: Uptime & Disk Usage -->
             <div class="hist-kpi-card glass-panel">
-              <span class="kpi-label">UPTIME & RELIABILITY</span>
+              <span class="kpi-label">UPTIME & DISK USAGE</span>
               <span class="kpi-val" :class="nodeHistoryData.summary.uptime_percent >= 99 ? 'text-emerald' : 'text-amber'">
                 {{ formatPercent(nodeHistoryData.summary.uptime_percent) }}
               </span>
-              <span class="kpi-sub" :class="nodeHistoryData.summary.offline_count > 0 ? 'text-rose' : 'text-slate'">
-                {{ nodeHistoryData.summary.offline_count > 0 ? `🚨 ${nodeHistoryData.summary.offline_count} offline incident(s)` : '🟢 Zero Downtime' }}
+              <span class="kpi-sub font-mono">
+                💾 Disk: {{ formatPercent(selectedNode?.disk_percent) }} <span class="text-slate">({{ formatBytes(selectedNode?.disk_used) }} / {{ formatBytes(selectedNode?.disk_total) }})</span>
               </span>
             </div>
           </div>
@@ -3247,7 +3267,7 @@ onUnmounted(() => {
                   class="series-toggle-btn"
                   :class="{ 'toggle-active cpu-active': showHistCpu }"
                   @click="showHistCpu = !showHistCpu"
-                  title="Click to toggle CPU saturation curve"
+                  title="Click to toggle CPU curve"
                 >
                   <span class="toggle-dot bg-violet"></span>
                   <span>CPU: <strong>{{ formatPercent(selectedNode?.cpu_percent) }}</strong></span>
@@ -3258,7 +3278,7 @@ onUnmounted(() => {
                   class="series-toggle-btn"
                   :class="{ 'toggle-active mem-active': showHistMem }"
                   @click="showHistMem = !showHistMem"
-                  title="Click to toggle Memory saturation curve"
+                  title="Click to toggle RAM curve"
                 >
                   <span class="toggle-dot bg-cyan"></span>
                   <span>RAM: <strong>{{ formatPercent(selectedNode?.memory_percent) }}</strong></span>
@@ -3269,58 +3289,11 @@ onUnmounted(() => {
                   class="series-toggle-btn"
                   :class="{ 'toggle-active reqs-active': showHistDisk }"
                   @click="showHistDisk = !showHistDisk"
-                  title="Click to toggle Disk saturation curve"
+                  title="Click to toggle Disk curve"
                 >
                   <span class="toggle-dot bg-emerald"></span>
                   <span>Disk: <strong>{{ formatPercent(selectedNode?.disk_percent) }}</strong></span>
                 </button>
-              </div>
-            </div>
-
-            <!-- High-Density Hardware Metrics Strip -->
-            <div class="hist-metric-strip">
-              <div class="metric-strip-item">
-                <span class="strip-icon">⚡</span>
-                <div class="strip-data font-mono">
-                  <span class="strip-label">CPU SATURATION</span>
-                  <span class="strip-val text-purple">
-                    <strong>{{ formatPercent(selectedNode?.cpu_percent) }}</strong>
-                    <small class="text-slate"> (Avg: {{ formatPercent(nodeHistoryData?.summary?.avg_cpu_percent) }} | Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_cpu_percent) }})</small>
-                  </span>
-                </div>
-              </div>
-
-              <div class="metric-strip-item">
-                <span class="strip-icon">🧠</span>
-                <div class="strip-data font-mono">
-                  <span class="strip-label">MEMORY USAGE</span>
-                  <span class="strip-val text-cyan">
-                    <strong>{{ formatPercent(selectedNode?.memory_percent) }}</strong>
-                    <small class="text-slate"> ({{ formatBytes(selectedNode?.memory_used) }} / {{ formatBytes(selectedNode?.memory_total) }} | Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_mem_percent) }})</small>
-                  </span>
-                </div>
-              </div>
-
-              <div class="metric-strip-item">
-                <span class="strip-icon">💾</span>
-                <div class="strip-data font-mono">
-                  <span class="strip-label">DISK STORAGE</span>
-                  <span class="strip-val text-emerald">
-                    <strong>{{ formatPercent(selectedNode?.disk_percent) }}</strong>
-                    <small class="text-slate"> ({{ formatBytes(selectedNode?.disk_used) }} / {{ formatBytes(selectedNode?.disk_total) }})</small>
-                  </span>
-                </div>
-              </div>
-
-              <div class="metric-strip-item">
-                <span class="strip-icon">🌐</span>
-                <div class="strip-data font-mono">
-                  <span class="strip-label">LIVE NETWORK I/O</span>
-                  <span class="strip-val text-indigo">
-                    <strong>↓ {{ formatIoRate(selectedNode?.network_rx_rate || 0) }} ↑ {{ formatIoRate(selectedNode?.network_tx_rate || 0) }}</strong>
-                    <small class="text-slate" v-if="nodeHistoryData?.summary?.peak_rx_bytes_sec"> (Peak: ↓ {{ formatIoRate(nodeHistoryData.summary.peak_rx_bytes_sec) }})</small>
-                  </span>
-                </div>
               </div>
             </div>
 
@@ -3331,34 +3304,34 @@ onUnmounted(() => {
 
             <!-- SVG Chart with HTML-Overlay Grid Layout -->
             <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave">
-              <!-- Left Y-Axis: 0 - 100% -->
-              <div class="hist-y-axis left">
-                <span class="y-tick text-rose">100%</span>
-                <span class="y-tick text-amber">75%</span>
-                <span class="y-tick text-cyan">50%</span>
-                <span class="y-tick">25%</span>
-                <span class="y-tick">0%</span>
-              </div>
-
               <!-- Main SVG Canvas -->
               <svg class="hist-svg-canvas" viewBox="0 0 760 200" preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="histCpuGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#a855f7" stop-opacity="0.3" />
+                    <stop offset="0%" stop-color="#a855f7" stop-opacity="0.35" />
                     <stop offset="100%" stop-color="#a855f7" stop-opacity="0.0" />
                   </linearGradient>
                   <linearGradient id="histMemGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.25" />
+                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.3" />
                     <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
                   </linearGradient>
                 </defs>
 
-                <!-- Horizontal Grid Lines -->
-                <line x1="50" y1="20" x2="700" y2="20" stroke="rgba(244,63,94,0.15)" stroke-dasharray="3,3" />
-                <line x1="50" y1="62.5" x2="700" y2="62.5" stroke="rgba(245,158,11,0.15)" stroke-dasharray="3,3" />
-                <line x1="50" y1="105" x2="700" y2="105" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
-                <line x1="50" y1="147.5" x2="700" y2="147.5" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
-                <line x1="50" y1="190" x2="700" y2="190" stroke="rgba(255,255,255,0.12)" />
+                <!-- Y-Axis Percentage Labels inside SVG (Fixed exact alignment) -->
+                <g class="hist-svg-y-labels" font-size="9" text-anchor="end">
+                  <text x="44" y="23" fill="#fb7185" font-weight="600">100%</text>
+                  <text x="44" y="63" fill="#fbbf24" font-weight="600">75%</text>
+                  <text x="44" y="103" fill="#38bdf8" font-weight="600">50%</text>
+                  <text x="44" y="143" fill="#94a3b8">25%</text>
+                  <text x="44" y="183" fill="#64748b">0%</text>
+                </g>
+
+                <!-- Horizontal Grid Lines (Locked to exact scale: 20=100%, 60=75%, 100=50%, 140=25%, 180=0%) -->
+                <line x1="50" y1="20" x2="720" y2="20" stroke="rgba(244,63,94,0.2)" stroke-dasharray="3,3" />
+                <line x1="50" y1="60" x2="720" y2="60" stroke="rgba(245,158,11,0.2)" stroke-dasharray="3,3" />
+                <line x1="50" y1="100" x2="720" y2="100" stroke="rgba(56,189,248,0.12)" stroke-dasharray="3,3" />
+                <line x1="50" y1="140" x2="720" y2="140" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+                <line x1="50" y1="180" x2="720" y2="180" stroke="rgba(255,255,255,0.12)" />
 
                 <!-- Area Fills -->
                 <path v-if="showHistCpu && nodeHistoryChartCpuArea" :d="nodeHistoryChartCpuArea" fill="url(#histCpuGrad)" />
@@ -3375,38 +3348,39 @@ onUnmounted(() => {
                     :x1="nodeHistHoverCoords.x"
                     y1="15"
                     :x2="nodeHistHoverCoords.x"
-                    y2="190"
+                    y2="185"
                     stroke="#38bdf8"
                     stroke-width="1.5"
                     stroke-dasharray="3,3"
                   />
                   <circle v-if="showHistCpu" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpu" r="4.5" fill="#a855f7" stroke="#ffffff" stroke-width="2" />
                   <circle v-if="showHistMem" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yMem" r="4" fill="#06b6d4" stroke="#ffffff" stroke-width="1.5" />
+                  <circle v-if="showHistDisk" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yDisk" r="3.5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
                 </g>
               </svg>
 
-              <!-- Floating Tooltip Box -->
+              <!-- Floating Tooltip Box (Color-Matched with Line Legends) -->
               <div v-if="isNodeHistHovered && hoveredNodeHistPoint" class="hist-rich-tooltip" :style="nodeHistTooltipStyle">
                 <div class="tooltip-time-header">
                   🕒 {{ new Date(hoveredNodeHistPoint.recorded_at).toLocaleString() }}
                 </div>
-                <div class="tooltip-series-row">
-                  <span class="tooltip-dot bg-purple"></span>
+                <div class="tooltip-series-row" v-if="showHistCpu">
+                  <span class="tooltip-dot dot-violet"></span>
                   <span class="tooltip-label">CPU:</span>
-                  <strong class="tooltip-val text-purple">{{ formatPercent(hoveredNodeHistPoint.cpu_percent) }} (Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})</strong>
+                  <strong class="tooltip-val text-violet">{{ formatPercent(hoveredNodeHistPoint.cpu_percent) }} (Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})</strong>
                 </div>
-                <div class="tooltip-series-row">
-                  <span class="tooltip-dot bg-cyan"></span>
+                <div class="tooltip-series-row" v-if="showHistMem">
+                  <span class="tooltip-dot dot-cyan"></span>
                   <span class="tooltip-label">Memory:</span>
                   <strong class="tooltip-val text-cyan">{{ formatPercent(hoveredNodeHistPoint.mem_percent) }} ({{ formatBytes(hoveredNodeHistPoint.mem_used_bytes) }})</strong>
                 </div>
-                <div class="tooltip-series-row">
-                  <span class="tooltip-dot bg-emerald"></span>
+                <div class="tooltip-series-row" v-if="showHistDisk">
+                  <span class="tooltip-dot dot-emerald"></span>
                   <span class="tooltip-label">Disk:</span>
                   <strong class="tooltip-val text-emerald">{{ formatPercent(hoveredNodeHistPoint.disk_percent) }} ({{ formatBytes(hoveredNodeHistPoint.disk_used_bytes) }})</strong>
                 </div>
                 <div class="tooltip-series-row">
-                  <span class="tooltip-dot bg-indigo"></span>
+                  <span class="tooltip-dot dot-indigo"></span>
                   <span class="tooltip-label">Net I/O:</span>
                   <strong class="tooltip-val text-indigo">↓ {{ formatIoRate(hoveredNodeHistPoint.rx_bytes_per_sec) }} ↑ {{ formatIoRate(hoveredNodeHistPoint.tx_bytes_per_sec) }}</strong>
                 </div>
@@ -8421,51 +8395,6 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
-.hist-metric-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 10px;
-  padding: 10px 14px;
-  background: rgba(15, 23, 42, 0.45);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  margin-top: 4px;
-}
-
-.metric-strip-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.strip-icon {
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-.strip-data {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.strip-label {
-  font-size: 9.5px;
-  font-weight: 700;
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
-}
-
-.strip-val {
-  font-size: 11.5px;
-  line-height: 1.2;
-}
-
-.strip-val small {
-  font-size: 10px;
-  font-weight: 400;
-}
-
 .hist-chart-legend {
   display: flex;
   gap: 10px;
@@ -8508,34 +8437,21 @@ onUnmounted(() => {
   z-index: 10;
 }
 
-.hist-y-axis {
-  position: absolute;
-  top: 15px;
-  bottom: 30px;
-  left: 8px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  pointer-events: none;
-}
-
-.hist-y-axis .y-tick {
-  font-size: 9px;
-  font-family: monospace;
-  color: var(--text-muted);
-  opacity: 0.6;
-}
-
 .hist-svg-canvas {
   width: 100%;
   height: 100%;
   cursor: crosshair;
 }
 
+.hist-svg-y-labels text {
+  font-family: var(--font-mono, monospace);
+  user-select: none;
+}
+
 .hist-x-axis {
   position: absolute;
   left: 50px;
-  right: 60px;
+  right: 40px;
   bottom: 4px;
   display: flex;
   justify-content: space-between;
@@ -8559,8 +8475,8 @@ onUnmounted(() => {
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 190px;
+  gap: 5px;
+  min-width: 200px;
 }
 
 .tooltip-time-header {
@@ -8580,9 +8496,46 @@ onUnmounted(() => {
 }
 
 .tooltip-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-violet {
+  background-color: #a855f7 !important;
+  box-shadow: 0 0 6px rgba(168, 85, 247, 0.7);
+}
+
+.dot-cyan {
+  background-color: #06b6d4 !important;
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.7);
+}
+
+.dot-emerald {
+  background-color: #10b981 !important;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
+}
+
+.dot-indigo {
+  background-color: #6366f1 !important;
+  box-shadow: 0 0 6px rgba(99, 102, 241, 0.7);
+}
+
+.text-violet {
+  color: #c084fc !important;
+}
+
+.text-cyan {
+  color: #38bdf8 !important;
+}
+
+.text-emerald {
+  color: #34d399 !important;
+}
+
+.text-indigo {
+  color: #818cf8 !important;
 }
 
 .tooltip-label {
