@@ -148,7 +148,29 @@ func (h *OverviewHandler) GetTPS(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetNodeHistory handles GET /api/v1/overview/nodes/{id}/history?range=1h|24h|7d|30d
+// parseNodeHistoryTime parses a time string against multiple ISO/RFC formats or returns fallback.
+func parseNodeHistoryTime(s string, fallback time.Time) time.Time {
+	if s == "" {
+		return fallback
+	}
+	formats := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02",
+	}
+	for _, format := range formats {
+		if t, err := time.Parse(format, s); err == nil {
+			return t.UTC()
+		}
+	}
+	return fallback
+}
+
+// GetNodeHistory handles GET /api/v1/overview/nodes/{id}/history?range=1h|24h|7d|30d|custom&from=...&to=...
 // Returns time-series telemetry rollups, summary statistics, and related node incidents.
 func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request) {
 	nodeID := chi.URLParam(r, "id")
@@ -157,31 +179,59 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	fromParam := strings.TrimSpace(r.URL.Query().Get("from"))
+	toParam := strings.TrimSpace(r.URL.Query().Get("to"))
 	rangeParam := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("range")))
-	if rangeParam == "" {
-		rangeParam = "24h"
-	}
 
 	now := time.Now().UTC()
-	var startTime time.Time
+	var startTime, endTime time.Time
 	var resolution string
+	limit := 500
 
-	switch rangeParam {
-	case "1h":
-		startTime = now.Add(-1 * time.Hour)
-		resolution = "1m"
-	case "7d":
-		startTime = now.Add(-7 * 24 * time.Hour)
-		resolution = "1h"
-	case "30d":
-		startTime = now.Add(-30 * 24 * time.Hour)
-		resolution = "1h"
-	case "24h":
-		fallthrough
-	default:
-		rangeParam = "24h"
-		startTime = now.Add(-24 * time.Hour)
-		resolution = "1m"
+	if fromParam != "" || rangeParam == "custom" {
+		rangeParam = "custom"
+		startTime = parseNodeHistoryTime(fromParam, now.Add(-24*time.Hour))
+		endTime = parseNodeHistoryTime(toParam, now)
+		if startTime.After(endTime) {
+			startTime, endTime = endTime, startTime
+		}
+		duration := endTime.Sub(startTime)
+		if duration <= 2*time.Hour {
+			resolution = "1m"
+			limit = 500
+		} else if duration <= 24*time.Hour {
+			resolution = "1m"
+			limit = 500
+		} else if duration <= 7*24*time.Hour {
+			resolution = "1h"
+			limit = 500
+		} else {
+			resolution = "1h"
+			limit = 1000
+		}
+	} else {
+		endTime = now
+		switch rangeParam {
+		case "1h":
+			startTime = now.Add(-1 * time.Hour)
+			resolution = "1m"
+			limit = 500
+		case "7d":
+			startTime = now.Add(-7 * 24 * time.Hour)
+			resolution = "1h"
+			limit = 500
+		case "30d":
+			startTime = now.Add(-30 * 24 * time.Hour)
+			resolution = "1h"
+			limit = 1000
+		case "24h":
+			fallthrough
+		default:
+			rangeParam = "24h"
+			startTime = now.Add(-24 * time.Hour)
+			resolution = "1m"
+			limit = 500
+		}
 	}
 
 	ctx := r.Context()
@@ -193,15 +243,15 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 			NodeID:     nodeID,
 			Resolution: resolution,
 			StartTime:  startTime,
-			EndTime:    now,
-			Limit:      500,
+			EndTime:    endTime,
+			Limit:      limit,
 		}
 		var err error
 		history, err = h.nodeMetricsRepo.QueryHistory(ctx, q)
 		if err != nil {
 			h.logger.Warn("Failed to query node history", zap.String("node_id", nodeID), zap.Error(err))
 		}
-		// If 1h query returned empty for 7d/30d, fallback to 1m resolution
+		// If 1h query returned empty for 7d/30d/custom, fallback to 1m resolution
 		if len(history) == 0 && resolution == "1h" {
 			q.Resolution = "1m"
 			history, _ = h.nodeMetricsRepo.QueryHistory(ctx, q)
@@ -222,7 +272,7 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 			NodeID:      nodeID,
 			NodeName:    nodeID,
 			WindowStart: startTime,
-			WindowEnd:   now,
+			WindowEnd:   endTime,
 		}
 	}
 
@@ -251,6 +301,8 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"node_id":    nodeID,
 		"range":      rangeParam,
+		"from":       startTime.Format(time.RFC3339),
+		"to":         endTime.Format(time.RFC3339),
 		"resolution": resolution,
 		"summary":    summary,
 		"history":    history,

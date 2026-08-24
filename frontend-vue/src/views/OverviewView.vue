@@ -8,7 +8,6 @@ import {
   type NodeMetrics,
   type NetworkInterface,
   type MetricAlert,
-  type ProcessMetric,
   type TpsSnapshot,
   type TpsServiceMetrics,
 } from '../api/overview'
@@ -73,7 +72,7 @@ const modalServiceSortOrder = ref<'asc' | 'desc'>('desc')
 const selectedNodeId = ref<string | null>(null)
 const showNodeDrawer = ref(false)
 const nodeDrawerMode = ref<'live' | 'history'>('live')
-const nodeHistoryRange = ref<'1h' | '24h' | '7d' | '30d'>('24h')
+const nodeHistoryRange = ref<'1h' | '24h' | '7d' | '30d' | 'custom'>('24h')
 const nodeHistoryLoading = ref(false)
 const nodeHistoryData = ref<NodeHistoryResponse | null>(null)
 const hoveredNodeHistIndex = ref<number | null>(null)
@@ -82,19 +81,14 @@ const isNodeHistHovered = ref(false)
 const showHistCpu = ref(true)
 const showHistMem = ref(true)
 const showHistDisk = ref(true)
+const customHistoryFrom = ref<string>('')
+const customHistoryTo = ref<string>('')
+const showCustomHistoryPicker = ref<boolean>(false)
 const processSearch = ref('')
 const processCategoryFilter = ref<'all' | 'container' | 'host_daemon' | 'kernel'>('all')
 const processSortBy = ref<'cpu' | 'mem' | 'rps' | 'bandwidth' | 'name' | 'pid'>('cpu')
 const processPageSize = ref(10)
 const processCurrentPage = ref(1)
-
-// High-scale Node Services state
-const serviceSearch = ref('')
-const serviceStatusFilter = ref<'all' | 'healthy' | 'degraded' | 'traffic'>('all')
-const serviceSortKey = ref<'cpu_percent' | 'memory_used_mb' | 'requests_per_sec' | 'bandwidth' | 'service_name'>('cpu_percent')
-const serviceSortOrder = ref<'asc' | 'desc'>('desc')
-const serviceCurrentPage = ref(1)
-const servicePageSize = ref(15)
 
 // Topology filtering & selection
 type TopologyFilter = 'all' | 'online' | 'offline'
@@ -563,88 +557,6 @@ const rawNodeServices = computed<TpsServiceMetrics[]>(() => {
   })
 })
 
-// Keep nodeServices alias for backwards compatibility
-const nodeServices = rawNodeServices
-
-// 2. High-scale summary statistics (for instant filter badges)
-const nodeServicesSummary = computed(() => {
-  const all = rawNodeServices.value
-  let healthy = 0
-  let degraded = 0
-  let traffic = 0
-  for (const s of all) {
-    if (s.status === 'healthy' || s.status === 'running') healthy++
-    else degraded++
-    if (s.requests_per_sec && s.requests_per_sec > 0) traffic++
-  }
-  return { total: all.length, healthy, degraded, traffic }
-})
-
-// 3. Filtered and sorted services (O(N) with memoization)
-const filteredAndSortedNodeServices = computed<TpsServiceMetrics[]>(() => {
-  let list = [...rawNodeServices.value]
-
-  // Filter by search text
-  if (serviceSearch.value.trim()) {
-    const q = serviceSearch.value.toLowerCase().trim()
-    list = list.filter(s =>
-      s.service_name.toLowerCase().includes(q) ||
-      (s.status && s.status.toLowerCase().includes(q))
-    )
-  }
-
-  // Filter by status tab
-  if (serviceStatusFilter.value === 'healthy') {
-    list = list.filter(s => s.status === 'healthy' || s.status === 'running')
-  } else if (serviceStatusFilter.value === 'degraded') {
-    list = list.filter(s => s.status !== 'healthy' && s.status !== 'running')
-  } else if (serviceStatusFilter.value === 'traffic') {
-    list = list.filter(s => s.requests_per_sec && s.requests_per_sec > 0)
-  }
-
-  // Sort
-  const k = serviceSortKey.value
-  const isAsc = serviceSortOrder.value === 'asc'
-  list.sort((a, b) => {
-    let diff = 0
-    if (k === 'service_name') {
-      diff = a.service_name.localeCompare(b.service_name)
-    } else if (k === 'cpu_percent') {
-      diff = (a.cpu_percent || 0) - (b.cpu_percent || 0)
-    } else if (k === 'memory_used_mb') {
-      diff = (a.memory_used_mb || 0) - (b.memory_used_mb || 0)
-    } else if (k === 'requests_per_sec') {
-      diff = (a.requests_per_sec || 0) - (b.requests_per_sec || 0)
-    } else if (k === 'bandwidth') {
-      const aBw = (a.rx_bytes_per_sec || 0) + (a.tx_bytes_per_sec || 0)
-      const bBw = (b.rx_bytes_per_sec || 0) + (b.tx_bytes_per_sec || 0)
-      diff = aBw - bBw
-    }
-    return isAsc ? diff : -diff
-  })
-
-  return list
-})
-
-// 4. Paginated Slice (mounts only 10-100 DOM rows even if 1,000 services exist)
-const totalServicePages = computed(() => {
-  return Math.ceil(filteredAndSortedNodeServices.value.length / servicePageSize.value) || 1
-})
-
-const paginatedNodeServices = computed(() => {
-  const start = (serviceCurrentPage.value - 1) * servicePageSize.value
-  return filteredAndSortedNodeServices.value.slice(start, start + servicePageSize.value)
-})
-
-function toggleServiceSort(key: 'cpu_percent' | 'memory_used_mb' | 'requests_per_sec' | 'bandwidth' | 'service_name') {
-  if (serviceSortKey.value === key) {
-    serviceSortOrder.value = serviceSortOrder.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    serviceSortKey.value = key
-    serviceSortOrder.value = 'desc'
-  }
-}
-
 export type ProcessCategoryType = 'container' | 'host_app' | 'system'
 
 export interface UnifiedProcessItem {
@@ -879,13 +791,29 @@ const paginatedNodeProcesses = computed(() => {
 // ==========================================
 // 4. FORMATTING & HELPER FUNCTIONS
 // ==========================================
-async function loadNodeHistory(nodeId?: string, range = nodeHistoryRange.value) {
+async function loadNodeHistory(nodeId?: string, range = nodeHistoryRange.value, from?: string, to?: string) {
   const targetId = nodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
   if (!targetId) return
   nodeHistoryLoading.value = true
   nodeHistoryRange.value = range as any
   try {
-    const res = await nodeHistoryApi.getNodeHistory(targetId, range)
+    let fromParam = from
+    let toParam = to
+    if (range === 'custom') {
+      fromParam = from || customHistoryFrom.value
+      toParam = to || customHistoryTo.value
+      if (fromParam) {
+        try {
+          fromParam = new Date(fromParam).toISOString()
+        } catch {}
+      }
+      if (toParam) {
+        try {
+          toParam = new Date(toParam).toISOString()
+        } catch {}
+      }
+    }
+    const res = await nodeHistoryApi.getNodeHistory(targetId, range, fromParam, toParam)
     nodeHistoryData.value = res
   } catch (err) {
     console.warn('Failed to load node history:', err)
@@ -898,7 +826,13 @@ async function loadNodeHistoryQuiet(nodeId?: string, range = nodeHistoryRange.va
   const targetId = nodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
   if (!targetId || nodeHistoryLoading.value) return
   try {
-    const res = await nodeHistoryApi.getNodeHistory(targetId, range)
+    let fromParam: string | undefined
+    let toParam: string | undefined
+    if (range === 'custom') {
+      fromParam = customHistoryFrom.value ? new Date(customHistoryFrom.value).toISOString() : undefined
+      toParam = customHistoryTo.value ? new Date(customHistoryTo.value).toISOString() : undefined
+    }
+    const res = await nodeHistoryApi.getNodeHistory(targetId, range, fromParam, toParam)
     if (res && res.history) {
       nodeHistoryData.value = res
     }
@@ -931,6 +865,55 @@ function formatDateTimeLocal(date: Date): string {
   const hh = pad(date.getHours())
   const mm = pad(date.getMinutes())
   return `${yyyy}-${MM}-${dd}T${hh}:${mm}`
+}
+
+function applyHistoryPreset(preset: '1h' | '3h' | '6h' | 'today' | 'yesterday' | '3d', autoFetch = true) {
+  const now = new Date()
+  let from = new Date()
+  let to = new Date()
+
+  if (preset === '1h') {
+    from = new Date(now.getTime() - 1 * 60 * 60 * 1000)
+    to = now
+  } else if (preset === '3h') {
+    from = new Date(now.getTime() - 3 * 60 * 60 * 1000)
+    to = now
+  } else if (preset === '6h') {
+    from = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+    to = now
+  } else if (preset === 'today') {
+    from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
+    to = now
+  } else if (preset === 'yesterday') {
+    from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0)
+    to = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59)
+  } else if (preset === '3d') {
+    from = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+    to = now
+  }
+
+  customHistoryFrom.value = formatDateTimeLocal(from)
+  customHistoryTo.value = formatDateTimeLocal(to)
+  showCustomHistoryPicker.value = true
+  nodeHistoryRange.value = 'custom'
+
+  if (autoFetch) {
+    loadNodeHistory(selectedNode.value?.node_id || selectedNode.value?.node_name || undefined, 'custom', customHistoryFrom.value, customHistoryTo.value)
+  }
+}
+
+function toggleCustomHistoryPicker() {
+  showCustomHistoryPicker.value = !showCustomHistoryPicker.value
+  if (showCustomHistoryPicker.value) {
+    nodeHistoryRange.value = 'custom'
+    if (!customHistoryFrom.value || !customHistoryTo.value) {
+      const now = new Date()
+      const past = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      customHistoryTo.value = formatDateTimeLocal(now)
+      customHistoryFrom.value = formatDateTimeLocal(past)
+    }
+    loadNodeHistory(selectedNode.value?.node_id || selectedNode.value?.node_name || undefined, 'custom', customHistoryFrom.value, customHistoryTo.value)
+  }
 }
 
 function applyLogPreset(preset: '30m' | '2h' | '6h' | 'today', autoFetch = true) {
@@ -1324,8 +1307,13 @@ const appLogLevelCounts = computed(() => {
   return { total: error + warn + info, error, warn, info }
 })
 
-function switchNodeDrawerToHistory(range: '1h' | '24h' | '7d' | '30d' = '24h') {
+function switchNodeDrawerToHistory(range: '1h' | '24h' | '7d' | '30d' | 'custom' = '24h') {
   nodeDrawerMode.value = 'history'
+  if (range !== 'custom') {
+    showCustomHistoryPicker.value = false
+  } else {
+    showCustomHistoryPicker.value = true
+  }
   loadNodeHistory(selectedNode.value?.node_id || selectedNode.value?.node_name || undefined, range)
   if (!appLogsText.value) {
     const firstSvc = rawNodeServices.value?.[0]?.service_name || 'tiki_traefik'
@@ -1372,25 +1360,70 @@ function inspectNode(node: NodeMetrics) {
   processSortBy.value = 'cpu'
   processCurrentPage.value = 1
   processPageSize.value = 10
-  serviceSearch.value = ''
-  serviceStatusFilter.value = 'all'
-  serviceSortKey.value = 'cpu_percent'
-  serviceSortOrder.value = 'desc'
-  serviceCurrentPage.value = 1
   nodeDrawerMode.value = 'live'
   showNodeDrawer.value = true
   loadNodeHistory(node.node_id || node.node_name, '24h')
 }
 
+// Point-in-Time Log Synchronization
+function syncLogsToPointInTime(point?: NodeMetricRollup | null) {
+  const targetPoint = point || hoveredNodeHistPoint.value
+  if (!targetPoint || !targetPoint.recorded_at) return
+
+  const centerTime = new Date(targetPoint.recorded_at).getTime()
+  if (isNaN(centerTime)) return
+
+  const fromTime = new Date(centerTime - 15 * 60 * 1000)
+  const toTime = new Date(centerTime + 15 * 60 * 1000)
+
+  customLogFrom.value = formatDateTimeLocal(fromTime)
+  customLogTo.value = formatDateTimeLocal(toTime)
+  selectedLogSince.value = 'custom'
+  showCustomDatePicker.value = true
+
+  // Fetch logs for this point-in-time window
+  fetchNodeAppLogs(selectedLogApp.value)
+
+  // Scroll down to the log incidents / terminal viewer
+  nextTick(() => {
+    const el = document.querySelector('.node-incidents-section') || terminalBodyRef.value
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+}
+
+function handleNodeHistChartClick() {
+  if (hoveredNodeHistPoint.value) {
+    syncLogsToPointInTime(hoveredNodeHistPoint.value)
+  }
+}
+
 // ==========================================
 // 4e. NODE HISTORICAL TELEMETRY COMPUTEDS
 // ==========================================
-const HIST_Y_TOP = 20
 const HIST_Y_BOTTOM = 180
 const HIST_Y_HEIGHT = 160 // 180 - 20
 const HIST_X_LEFT = 50
 const HIST_X_RIGHT = 720
 const HIST_X_WIDTH = 670 // 720 - 50
+
+const nodeHistoryWindowBadge = computed(() => {
+  const count = nodeHistoryList.value.length
+  if (nodeHistoryRange.value === 'custom') {
+    const fromStr = customHistoryFrom.value ? formatBadgeDate(customHistoryFrom.value) : 'Start'
+    const toStr = customHistoryTo.value ? formatBadgeDate(customHistoryTo.value) : 'Now'
+    return `📅 Window: ${fromStr} → ${toStr} (${count} sample${count === 1 ? '' : 's'} in window)`
+  }
+  if (nodeHistoryData.value?.summary?.window_start && nodeHistoryData.value?.summary?.window_end) {
+    const fromStr = new Date(nodeHistoryData.value.summary.window_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' })
+    const toStr = new Date(nodeHistoryData.value.summary.window_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' })
+    return `📅 Window: ${fromStr} → ${toStr} (${count} sample${count === 1 ? '' : 's'} in window)`
+  }
+  const rangeLabels: Record<string, string> = { '1h': 'Last 1 Hour', '24h': 'Last 24 Hours', '7d': 'Last 7 Days', '30d': 'Last 30 Days' }
+  const rLabel = rangeLabels[nodeHistoryRange.value] || nodeHistoryRange.value
+  return `📅 Window: ${rLabel} (${count} sample${count === 1 ? '' : 's'} in window)`
+})
 
 const nodeHistoryList = computed<NodeMetricRollup[]>(() => {
   const base = nodeHistoryData.value?.history ? [...nodeHistoryData.value.history] : []
@@ -1398,7 +1431,15 @@ const nodeHistoryList = computed<NodeMetricRollup[]>(() => {
   if (!node) return base
 
   const now = new Date()
+  const isCustomHistorical = nodeHistoryRange.value === 'custom' && customHistoryTo.value && (now.getTime() - new Date(customHistoryTo.value).getTime() > 10 * 60 * 1000)
+
+  if (isCustomHistorical) {
+    return base
+  }
+
   const liveSample: NodeMetricRollup = {
+    id: `live-${node.node_id || node.node_name}`,
+    tenant_id: 'default',
     node_id: node.node_id || node.node_name,
     node_name: node.node_name,
     cpu_percent: node.cpu_percent || 0,
@@ -1409,9 +1450,9 @@ const nodeHistoryList = computed<NodeMetricRollup[]>(() => {
     disk_used_bytes: node.disk_used || 0,
     disk_total_bytes: node.disk_total || 0,
     disk_percent: node.disk_percent || 0,
-    rx_bytes_sec: node.network_rx_rate || 0,
-    tx_bytes_sec: node.network_tx_rate || 0,
-    process_count: node.processes || 0,
+    rx_bytes_per_sec: (node.network_rx_bytes || 0),
+    tx_bytes_per_sec: (node.network_tx_bytes || 0),
+    process_count: node.container_count || 0,
     container_count: node.container_count || 0,
     status: node.status || 'online',
     resolution: 'live',
@@ -1432,8 +1473,8 @@ const nodeHistoryList = computed<NodeMetricRollup[]>(() => {
       cpu_peak: Math.max(node.cpu_percent || 0, last.cpu_peak),
       mem_percent: node.memory_percent || last.mem_percent,
       disk_percent: node.disk_percent || last.disk_percent,
-      rx_bytes_sec: node.network_rx_rate || last.rx_bytes_sec,
-      tx_bytes_sec: node.network_tx_rate || last.tx_bytes_sec,
+      rx_bytes_per_sec: (node.network_rx_bytes || last.rx_bytes_per_sec || 0),
+      tx_bytes_per_sec: (node.network_tx_bytes || last.tx_bytes_per_sec || 0),
     }
   } else {
     base.push(liveSample)
@@ -1516,14 +1557,19 @@ const nodeHistoryTimeMarkers = computed(() => {
     const d = new Date(list[0].recorded_at)
     return [{ x: HIST_X_LEFT, time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) }]
   }
-  const count = Math.min(5, list.length)
+  const count = Math.min(6, list.length)
   const markers = []
   const step = HIST_X_WIDTH / (list.length - 1)
+  const firstD = new Date(list[0].recorded_at)
+  const lastD = new Date(list[list.length - 1].recorded_at)
+  const spanMs = Math.abs(lastD.getTime() - firstD.getTime())
+  const isMultiDay = spanMs > 24 * 60 * 60 * 1000 || nodeHistoryRange.value === '7d' || nodeHistoryRange.value === '30d'
+
   for (let i = 0; i < count; i++) {
     const idx = Math.round((i / (count - 1)) * (list.length - 1))
     const d = new Date(list[idx].recorded_at)
-    const timeStr = nodeHistoryRange.value === '7d' || nodeHistoryRange.value === '30d'
-      ? `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`
+    const timeStr = isMultiDay
+      ? `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
       : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
     markers.push({
       x: HIST_X_LEFT + idx * step,
@@ -1560,9 +1606,9 @@ const nodeHistTooltipStyle = computed(() => {
   const isRightSide = x > 380
   return {
     left: isRightSide ? `${x - 16}px` : `${x + 16}px`,
-    top: `${Math.min(160, Math.max(35, y))}px`,
-    transform: isRightSide ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
-    pointerEvents: 'none' as const,
+    top: `${Math.min(130, Math.max(20, y))}px`,
+    transform: isRightSide ? 'translate(-100%, 0)' : 'translate(0, 0)',
+    pointerEvents: 'auto' as const,
   }
 })
 
@@ -1570,6 +1616,12 @@ function handleNodeHistChartHover(event: MouseEvent) {
   const list = nodeHistoryList.value
   if (list.length === 0) return
   const target = event.currentTarget as HTMLElement
+  if (!target) return
+  const targetElement = event.target as HTMLElement
+  if (targetElement && targetElement.closest('.hist-rich-tooltip')) {
+    return
+  }
+
   const rect = target.getBoundingClientRect()
   const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
   const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
@@ -1587,7 +1639,13 @@ function handleNodeHistChartHover(event: MouseEvent) {
   isNodeHistHovered.value = true
 }
 
-function handleNodeHistChartLeave() {
+function handleNodeHistChartLeave(event?: MouseEvent) {
+  if (event && event.relatedTarget) {
+    const related = event.relatedTarget as HTMLElement
+    if (related && (related.closest('.hist-chart-container') || related.closest('.hist-rich-tooltip'))) {
+      return
+    }
+  }
   isNodeHistHovered.value = false
   hoveredNodeHistIndex.value = null
 }
@@ -3065,7 +3123,7 @@ onUnmounted(() => {
               </div>
               <div class="quick-stat-item">
                 <span class="qs-label">KERNEL VERSION</span>
-                <span class="qs-val font-mono">{{ selectedNode.kernel_version || '6.8.0-generic' }}</span>
+                <span class="qs-val font-mono">{{ formatKernelVersion(selectedNode.kernel_version, selectedNode.os) }}</span>
               </div>
               <div class="quick-stat-item">
                 <span class="qs-label">ARCHITECTURE</span>
@@ -3514,10 +3572,17 @@ onUnmounted(() => {
                   v-for="r in ['1h', '24h', '7d', '30d'] as const"
                   :key="r"
                   class="btn-range-pill"
-                  :class="{ active: nodeHistoryRange === r }"
+                  :class="{ active: nodeHistoryRange === r && !showCustomHistoryPicker }"
                   @click="switchNodeDrawerToHistory(r)"
                 >
                   {{ r === '1h' ? '1 Hour' : r === '24h' ? '24 Hours' : r === '7d' ? '7 Days' : '30 Days' }}
+                </button>
+                <button
+                  class="btn-range-pill btn-custom-pill"
+                  :class="{ active: nodeHistoryRange === 'custom' || showCustomHistoryPicker }"
+                  @click="toggleCustomHistoryPicker"
+                >
+                  📅 Custom Range...
                 </button>
               </div>
             </div>
@@ -3527,6 +3592,52 @@ onUnmounted(() => {
               </span>
               <button class="btn btn-secondary btn-xs" @click="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, nodeHistoryRange)" :disabled="nodeHistoryLoading">
                 ↺ Refresh History
+              </button>
+            </div>
+          </div>
+
+          <!-- Inline Glassmorphic Custom History Toolbar -->
+          <div v-if="showCustomHistoryPicker || nodeHistoryRange === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
+            <div class="custom-range-inputs">
+              <div class="range-field">
+                <label class="range-label font-mono">FROM:</label>
+                <input
+                  type="datetime-local"
+                  v-model="customHistoryFrom"
+                  class="input-datetime font-mono"
+                  @keyup.enter="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+                />
+              </div>
+              <div class="range-field">
+                <label class="range-label font-mono">TO:</label>
+                <input
+                  type="datetime-local"
+                  v-model="customHistoryTo"
+                  class="input-datetime font-mono"
+                  @keyup.enter="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+                />
+              </div>
+            </div>
+
+            <div class="custom-range-presets">
+              <span class="preset-label font-mono">PRESETS:</span>
+              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('1h')">Last 1h</button>
+              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('3h')">Last 3h</button>
+              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('6h')">Last 6h</button>
+              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('today')">Today</button>
+              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('yesterday')">Yesterday</button>
+              <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('3d')">Last 3d</button>
+            </div>
+
+            <div class="custom-range-actions">
+              <button
+                type="button"
+                class="btn-apply-range font-mono"
+                :disabled="nodeHistoryLoading"
+                @click="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+              >
+                <span class="glow-dot"></span>
+                <span>{{ nodeHistoryLoading ? 'Applying...' : 'Apply Telemetry Window' }}</span>
               </button>
             </div>
           </div>
@@ -3554,7 +3665,7 @@ onUnmounted(() => {
             <!-- Card 3: Live Network I/O -->
             <div class="hist-kpi-card glass-panel">
               <span class="kpi-label">LIVE NETWORK I/O</span>
-              <span class="kpi-val text-emerald">↓ {{ formatIoRate(selectedNode?.network_rx_rate || 0) }} ↑ {{ formatIoRate(selectedNode?.network_tx_rate || 0) }}</span>
+              <span class="kpi-val text-emerald">↓ {{ formatIoRate(selectedNode?.network_rx_bytes || 0) }} ↑ {{ formatIoRate(selectedNode?.network_tx_bytes || 0) }}</span>
               <span class="kpi-sub font-mono">
                 ⚡ Peak: ↓ {{ formatIoRate(nodeHistoryData.summary.peak_rx_bytes_sec) }}
               </span>
@@ -3586,7 +3697,7 @@ onUnmounted(() => {
             <div class="hist-chart-header">
               <div class="chart-title-group">
                 <h4 class="hist-chart-title">📈 {{ selectedNode?.node_name || 'Node' }} Hardware Saturation Trends</h4>
-                <span class="hist-chart-desc">{{ nodeHistoryList.length }} recorded samples in {{ nodeHistoryRange }} window</span>
+                <span class="hist-chart-desc badge-history-window font-mono">{{ nodeHistoryWindowBadge }}</span>
               </div>
 
               <!-- Interactive Series Toggles with Live Values -->
@@ -3632,7 +3743,7 @@ onUnmounted(() => {
             </div>
 
             <!-- SVG Chart with HTML-Overlay Grid Layout -->
-            <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave">
+            <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave" @click="handleNodeHistChartClick">
               <!-- Main SVG Canvas -->
               <svg class="hist-svg-canvas" viewBox="0 0 760 200" preserveAspectRatio="none">
                 <defs>
@@ -3713,6 +3824,14 @@ onUnmounted(() => {
                   <span class="tooltip-label">Net I/O:</span>
                   <strong class="tooltip-val text-indigo">↓ {{ formatIoRate(hoveredNodeHistPoint.rx_bytes_per_sec) }} ↑ {{ formatIoRate(hoveredNodeHistPoint.tx_bytes_per_sec) }}</strong>
                 </div>
+                <button
+                  type="button"
+                  class="btn-pit-sync font-mono"
+                  @click.stop="syncLogsToPointInTime(hoveredNodeHistPoint)"
+                  title="Sync live and historical failure logs to this point in time (±15 minutes)"
+                >
+                  <span>🔍</span> View Logs at this time
+                </button>
               </div>
 
               <!-- Bottom X-Axis Time Markers -->
@@ -8647,6 +8766,17 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
+.btn-custom-pill {
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.btn-custom-pill.active {
+  background: #38bdf8;
+  color: #0f172a;
+  border-color: #38bdf8;
+  font-weight: 700;
+}
+
 .range-right {
   display: flex;
   align-items: center;
@@ -8816,6 +8946,17 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
+.badge-history-window {
+  font-size: 11px;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  display: inline-block;
+  margin-top: 2px;
+}
+
 .hist-chart-legend {
   display: flex;
   gap: 10px;
@@ -8966,6 +9107,32 @@ onUnmounted(() => {
 .tooltip-val {
   font-family: monospace;
   margin-left: auto;
+}
+
+.btn-pit-sync {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 5px 10px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+}
+
+.btn-pit-sync:hover {
+  background: rgba(56, 189, 248, 0.3);
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+  transform: translateY(-1px);
 }
 
 /* Incidents Section */
