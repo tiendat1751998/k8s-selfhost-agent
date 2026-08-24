@@ -2,8 +2,10 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `90b916e` fix(drawer): dynamically stream realtime node telemetry into saturation curves and auto-sync history buffer
+Latest: `b1b989f` feat(drawer): add real-time live auto-tail log streaming with pause/resume and smart auto-scroll
 Previous commits this session:
+- `5ea0683` docs: update project state with real-time saturation curve streaming
+- `90b916e` fix(drawer): dynamically stream realtime node telemetry into saturation curves and auto-sync history buffer
 - `a6b79bf` docs: update project state with drawer KPI & chart calibration
 - `4f2bb1a` fix(drawer): integrate realtime metrics into top KPI cards, calibrate SVG percentage scaling, and sync tooltip series colors
 - `29d457c` feat(drawer): enrich Hardware Saturation Trends with live metric strip, series toggles, and peak KPIs
