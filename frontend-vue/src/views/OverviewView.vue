@@ -72,7 +72,7 @@ const modalServiceSortOrder = ref<'asc' | 'desc'>('desc')
 const selectedNodeId = ref<string | null>(null)
 const showNodeDrawer = ref(false)
 const nodeDrawerMode = ref<'live' | 'history'>('live')
-const nodeHistoryRange = ref<'1h' | '24h' | '7d' | '30d' | 'custom'>('24h')
+const nodeHistoryRange = ref<'1h' | '3h' | '6h' | '24h' | '7d' | '30d' | 'custom'>('24h')
 const nodeHistoryLoading = ref(false)
 const nodeHistoryData = ref<NodeHistoryResponse | null>(null)
 const hoveredNodeHistIndex = ref<number | null>(null)
@@ -867,41 +867,6 @@ function formatDateTimeLocal(date: Date): string {
   return `${yyyy}-${MM}-${dd}T${hh}:${mm}`
 }
 
-function applyHistoryPreset(preset: '1h' | '3h' | '6h' | 'today' | 'yesterday' | '3d', autoFetch = true) {
-  const now = new Date()
-  let from = new Date()
-  let to = new Date()
-
-  if (preset === '1h') {
-    from = new Date(now.getTime() - 1 * 60 * 60 * 1000)
-    to = now
-  } else if (preset === '3h') {
-    from = new Date(now.getTime() - 3 * 60 * 60 * 1000)
-    to = now
-  } else if (preset === '6h') {
-    from = new Date(now.getTime() - 6 * 60 * 60 * 1000)
-    to = now
-  } else if (preset === 'today') {
-    from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
-    to = now
-  } else if (preset === 'yesterday') {
-    from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0)
-    to = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59)
-  } else if (preset === '3d') {
-    from = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
-    to = now
-  }
-
-  customHistoryFrom.value = formatDateTimeLocal(from)
-  customHistoryTo.value = formatDateTimeLocal(to)
-  showCustomHistoryPicker.value = true
-  nodeHistoryRange.value = 'custom'
-
-  if (autoFetch) {
-    loadNodeHistory(selectedNode.value?.node_id || selectedNode.value?.node_name || undefined, 'custom', customHistoryFrom.value, customHistoryTo.value)
-  }
-}
-
 function toggleCustomHistoryPicker() {
   showCustomHistoryPicker.value = !showCustomHistoryPicker.value
   if (showCustomHistoryPicker.value) {
@@ -1307,7 +1272,7 @@ const appLogLevelCounts = computed(() => {
   return { total: error + warn + info, error, warn, info }
 })
 
-function switchNodeDrawerToHistory(range: '1h' | '24h' | '7d' | '30d' | 'custom' = '24h') {
+function switchNodeDrawerToHistory(range: '1h' | '3h' | '6h' | '24h' | '7d' | '30d' | 'custom' = '24h') {
   nodeDrawerMode.value = 'history'
   if (range !== 'custom') {
     showCustomHistoryPicker.value = false
@@ -1420,7 +1385,7 @@ const nodeHistoryWindowBadge = computed(() => {
     const toStr = new Date(nodeHistoryData.value.summary.window_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' })
     return `📅 Window: ${fromStr} → ${toStr} (${count} sample${count === 1 ? '' : 's'} in window)`
   }
-  const rangeLabels: Record<string, string> = { '1h': 'Last 1 Hour', '24h': 'Last 24 Hours', '7d': 'Last 7 Days', '30d': 'Last 30 Days' }
+  const rangeLabels: Record<string, string> = { '1h': 'Last 1h', '3h': 'Last 3h', '6h': 'Last 6h', '24h': 'Last 24h', '7d': 'Last 7d', '30d': 'Last 30d' }
   const rLabel = rangeLabels[nodeHistoryRange.value] || nodeHistoryRange.value
   return `📅 Window: ${rLabel} (${count} sample${count === 1 ? '' : 's'} in window)`
 })
@@ -3662,20 +3627,20 @@ onUnmounted(() => {
             <div class="hist-chart-time-bar">
               <div class="chart-time-pills">
                 <button
-                  v-for="r in ['1h', '24h', '7d', '30d'] as const"
+                  v-for="r in ['1h', '3h', '6h', '24h', '7d', '30d'] as const"
                   :key="r"
                   class="btn-chart-range-pill"
                   :class="{ active: nodeHistoryRange === r && !showCustomHistoryPicker }"
                   @click="switchNodeDrawerToHistory(r)"
                 >
-                  {{ r === '1h' ? '1 Hour' : r === '24h' ? '24 Hours' : r === '7d' ? '7 Days' : '30 Days' }}
+                  {{ r }}
                 </button>
                 <button
                   class="btn-chart-range-pill"
                   :class="{ active: nodeHistoryRange === 'custom' || showCustomHistoryPicker }"
                   @click="toggleCustomHistoryPicker"
                 >
-                  📅 Custom Range...
+                  📅 Custom
                 </button>
               </div>
               <div class="range-right">
@@ -3711,16 +3676,6 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <div class="custom-range-presets">
-                <span class="preset-label font-mono">PRESETS:</span>
-                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('1h')">Last 1h</button>
-                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('3h')">Last 3h</button>
-                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('6h')">Last 6h</button>
-                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('today')">Today</button>
-                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('yesterday')">Yesterday</button>
-                <button type="button" class="btn-preset-chip font-mono" @click="applyHistoryPreset('3d')">Last 3d</button>
-              </div>
-
               <div class="custom-range-actions">
                 <button
                   type="button"
@@ -3729,7 +3684,7 @@ onUnmounted(() => {
                   @click="loadNodeHistory(selectedNode?.node_id || selectedNode?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
                 >
                   <span class="glow-dot"></span>
-                  <span>{{ nodeHistoryLoading ? 'Applying...' : 'Apply Telemetry Window' }}</span>
+                  <span>{{ nodeHistoryLoading ? 'Applying...' : 'Apply Window' }}</span>
                 </button>
               </div>
             </div>
@@ -9431,6 +9386,7 @@ onUnmounted(() => {
   border: 1px solid rgba(56, 189, 248, 0.25);
   border-radius: 8px;
   margin-top: 6px;
+  margin-bottom: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 

@@ -647,4 +647,88 @@ func TestOverviewHandler_GetNodeHistory_CustomRange_FormatsAndResolutions(t *tes
 	}
 }
 
+func TestOverviewHandler_GetNodeHistory_Ranges_3h_and_6h(t *testing.T) {
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
+	handler := NewOverviewHandler(collector, zap.NewNop())
+
+	mockRepo := &mockNodeMetricsRepoHttp{}
+	handler.SetNodeMetricsRepo(mockRepo)
+
+	r := chi.NewRouter()
+	r.Route("/overview", handler.RegisterRoutes)
+
+	tests := []struct {
+		rangeParam         string
+		expectedDuration   time.Duration
+		expectedResolution string
+		expectedLimit      int
+	}{
+		{
+			rangeParam:         "3h",
+			expectedDuration:   3 * time.Hour,
+			expectedResolution: "1m",
+			expectedLimit:      500,
+		},
+		{
+			rangeParam:         "6h",
+			expectedDuration:   6 * time.Hour,
+			expectedResolution: "1m",
+			expectedLimit:      500,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run("range="+tc.rangeParam, func(t *testing.T) {
+			beforeReq := time.Now().UTC()
+			req := httptest.NewRequest(http.MethodGet, "/overview/nodes/worker-node-1/history?range="+tc.rangeParam, nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			afterReq := time.Now().UTC()
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected status 200, got %d", w.Code)
+			}
+
+			var resp struct {
+				NodeID     string `json:"node_id"`
+				Range      string `json:"range"`
+				From       string `json:"from"`
+				To         string `json:"to"`
+				Resolution string `json:"resolution"`
+			}
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if resp.NodeID != "worker-node-1" {
+				t.Errorf("expected node_id worker-node-1, got %s", resp.NodeID)
+			}
+			if resp.Range != tc.rangeParam {
+				t.Errorf("expected range %s, got %s", tc.rangeParam, resp.Range)
+			}
+			if resp.Resolution != tc.expectedResolution {
+				t.Errorf("expected resolution %s, got %s", tc.expectedResolution, resp.Resolution)
+			}
+
+			if mockRepo.lastQuery.Resolution != tc.expectedResolution {
+				t.Errorf("expected repo query resolution %s, got %s", tc.expectedResolution, mockRepo.lastQuery.Resolution)
+			}
+			if mockRepo.lastQuery.Limit != tc.expectedLimit {
+				t.Errorf("expected repo query limit %d, got %d", tc.expectedLimit, mockRepo.lastQuery.Limit)
+			}
+
+			queryDuration := mockRepo.lastQuery.EndTime.Sub(mockRepo.lastQuery.StartTime)
+			if queryDuration != tc.expectedDuration {
+				t.Errorf("expected query duration %v, got %v", tc.expectedDuration, queryDuration)
+			}
+
+			expectedStartMin := beforeReq.Add(-tc.expectedDuration)
+			expectedStartMax := afterReq.Add(-tc.expectedDuration)
+			if mockRepo.lastQuery.StartTime.Before(expectedStartMin) || mockRepo.lastQuery.StartTime.After(expectedStartMax) {
+				t.Errorf("expected StartTime between %v and %v, got %v", expectedStartMin, expectedStartMax, mockRepo.lastQuery.StartTime)
+			}
+		})
+	}
+}
+
 
