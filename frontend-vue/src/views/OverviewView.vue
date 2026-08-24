@@ -163,6 +163,9 @@ async function fetchTpsMetrics() {
 async function pollClusterMetrics() {
   await fetchOverview()
   await fetchTpsMetrics()
+  if (showNodeDrawer.value && nodeDrawerMode.value === 'history' && selectedNodeId.value) {
+    loadNodeHistoryQuiet(selectedNodeId.value, nodeHistoryRange.value)
+  }
 }
 
 
@@ -891,6 +894,19 @@ async function loadNodeHistory(nodeId?: string, range = nodeHistoryRange.value) 
   }
 }
 
+async function loadNodeHistoryQuiet(nodeId?: string, range = nodeHistoryRange.value) {
+  const targetId = nodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
+  if (!targetId || nodeHistoryLoading.value) return
+  try {
+    const res = await nodeHistoryApi.getNodeHistory(targetId, range)
+    if (res && res.history) {
+      nodeHistoryData.value = res
+    }
+  } catch {
+    // quiet background sync
+  }
+}
+
 // Real App Logs in Node History
 const selectedLogApp = ref<string>('tiki_traefik')
 const selectedLogLevel = ref<'all' | 'error' | 'warn'>('all')
@@ -1111,7 +1127,53 @@ const HIST_X_RIGHT = 720
 const HIST_X_WIDTH = 670 // 720 - 50
 
 const nodeHistoryList = computed<NodeMetricRollup[]>(() => {
-  return nodeHistoryData.value?.history || []
+  const base = nodeHistoryData.value?.history ? [...nodeHistoryData.value.history] : []
+  const node = selectedNode.value
+  if (!node) return base
+
+  const now = new Date()
+  const liveSample: NodeMetricRollup = {
+    node_id: node.node_id || node.node_name,
+    node_name: node.node_name,
+    cpu_percent: node.cpu_percent || 0,
+    cpu_peak: Math.max(node.cpu_percent || 0, nodeHistoryData.value?.summary?.peak_cpu_percent || 0),
+    mem_used_bytes: node.memory_used || 0,
+    mem_total_bytes: node.memory_total || 0,
+    mem_percent: node.memory_percent || 0,
+    disk_used_bytes: node.disk_used || 0,
+    disk_total_bytes: node.disk_total || 0,
+    disk_percent: node.disk_percent || 0,
+    rx_bytes_sec: node.network_rx_rate || 0,
+    tx_bytes_sec: node.network_tx_rate || 0,
+    process_count: node.processes || 0,
+    container_count: node.container_count || 0,
+    status: node.status || 'online',
+    resolution: 'live',
+    recorded_at: now.toISOString(),
+  }
+
+  if (base.length === 0) {
+    return [liveSample]
+  }
+
+  const last = base[base.length - 1]
+  const lastTime = new Date(last.recorded_at).getTime()
+  // If last point in history is from within 20s, update it with live values
+  if (now.getTime() - lastTime < 20000) {
+    base[base.length - 1] = {
+      ...last,
+      cpu_percent: node.cpu_percent || last.cpu_percent,
+      cpu_peak: Math.max(node.cpu_percent || 0, last.cpu_peak),
+      mem_percent: node.memory_percent || last.mem_percent,
+      disk_percent: node.disk_percent || last.disk_percent,
+      rx_bytes_sec: node.network_rx_rate || last.rx_bytes_sec,
+      tx_bytes_sec: node.network_tx_rate || last.tx_bytes_sec,
+    }
+  } else {
+    base.push(liveSample)
+  }
+
+  return base
 })
 
 const nodeHistoryChartCpuPath = computed(() => {
