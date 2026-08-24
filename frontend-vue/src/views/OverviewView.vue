@@ -2199,9 +2199,6 @@ onUnmounted(() => {
                 <span class="badge badge-indigo">
                   📡 {{ (selectedNode.role || selectedNode.source || 'K8S-AGENT').toUpperCase() }}
                 </span>
-                <span class="badge badge-slate font-mono" :title="formatOsSummary(selectedNode)">
-                  🐧 {{ formatOsSummary(selectedNode) }}
-                </span>
               </div>
             </div>
 
@@ -2327,16 +2324,20 @@ onUnmounted(() => {
               <div class="hw-gauge-card glass-panel hw-gauge-card-net">
                 <div class="hw-gauge-top">
                   <span class="hw-gauge-label">NETWORK I/O</span>
-                  <span class="hw-gauge-value text-purple smooth-value hw-net-rx-value">
+                  <span class="hw-gauge-value text-cyan smooth-value font-mono hw-net-val">
                     ↓ {{ formatIoRate(selectedNode.network_rx_bytes) }}
                   </span>
                 </div>
-                <div class="hw-gauge-sub-row">
-                  <span class="hw-net-sub-label">↑ TX:</span>
-                  <span class="net-val smooth-value">{{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
+                <div class="hw-progress-track hw-net-track">
+                  <div
+                    class="hw-progress-fill bg-cyan smooth-bar"
+                    :style="{ width: `${Math.min(100, Math.max(15, (selectedNode.network_rx_bytes || 0) / ((selectedNode.network_rx_bytes || 0) + (selectedNode.network_tx_bytes || 0) || 1) * 100))}%` }"
+                    title="Download (Rx) share"
+                  ></div>
                 </div>
                 <div class="hw-gauge-sub">
-                  <span>Containers: {{ selectedNode.running_count ?? selectedNode.container_count ?? 0 }}</span>
+                  <span class="text-purple font-mono font-semibold">↑ {{ formatIoRate(selectedNode.network_tx_bytes) }}</span>
+                  <span>{{ selectedNode.running_count ?? selectedNode.container_count ?? 0 }} Containers</span>
                 </div>
               </div>
             </div>
@@ -5621,19 +5622,17 @@ onUnmounted(() => {
 }
 
 .hw-gauge-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   font-family: var(--font-mono);
   transition: color 0.5s ease;
   white-space: nowrap;
 }
 
-.hw-gauge-card-net .hw-net-rx-value {
-  font-size: 1.1rem;
+.hw-net-val {
+  font-size: 13.5px !important;
+  color: #38bdf8 !important;
   white-space: nowrap;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
 }
 
 .hw-progress-track {
@@ -5644,6 +5643,10 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.hw-progress-track.hw-net-track {
+  background: rgba(168, 85, 247, 0.25);
+}
+
 .hw-progress-fill {
   height: 100%;
   border-radius: 999px;
@@ -5651,7 +5654,7 @@ onUnmounted(() => {
 }
 
 .hw-gauge-sub {
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--text-muted);
   display: flex;
   align-items: center;
@@ -5659,43 +5662,21 @@ onUnmounted(() => {
   gap: 4px;
 }
 
-.hw-gauge-sub-row {
-  display: flex;
+.bw-split {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-muted);
+  gap: 8px;
   white-space: nowrap;
 }
 
-.hw-net-sub-label {
+.bw-rx {
+  color: #38bdf8;
   font-weight: 600;
-  color: var(--text-secondary);
 }
 
-.hw-net-rates {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 2px 0;
-}
-
-.net-rate-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-}
-
-.net-icon {
-  font-weight: 700;
-  font-size: 10px;
-}
-
-.net-val {
-  color: var(--text-primary);
+.bw-tx {
+  color: #c084fc;
   font-weight: 600;
-  transition: color 0.5s ease;
 }
 
 /* Network Interface & Services Sections in Node Drawer */
