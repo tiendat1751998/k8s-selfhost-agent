@@ -99,7 +99,7 @@ const glowColor = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
 .gauge-container {
@@ -117,28 +117,28 @@ const glowColor = computed(() => {
 
 .gauge-bg {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.08);
+  stroke: rgba(255, 255, 255, 0.06);
 }
 
 .gauge-fill {
   fill: none;
   stroke-linecap: round;
-  transition: stroke-dasharray 0.6s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.4s ease;
+  transition: stroke-dasharray 0.8s ease-in-out, stroke 0.5s ease, filter 0.4s ease;
 }
 
 .gauge-text {
-  font-family: var(--font-mono);
-  font-size: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 8.5px;
   font-weight: 700;
   text-anchor: middle;
   transition: fill 0.3s ease;
 }
 
 .gauge-label {
-  font-size: 10px;
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--text-muted);
 }
 
@@ -149,9 +149,11 @@ const glowColor = computed(() => {
 @keyframes gauge-pulse {
   0%, 100% {
     opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(244, 63, 94, 0.6));
   }
   50% {
     opacity: 0.65;
+    filter: drop-shadow(0 0 2px rgba(244, 63, 94, 0.2));
   }
 }
 </style>
