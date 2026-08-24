@@ -2,9 +2,10 @@
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `29d457c` feat(drawer): enrich Hardware Saturation Trends with live metric strip, series toggles, and peak KPIs
+Latest: `4f2bb1a` fix(drawer): integrate realtime metrics into top KPI cards, calibrate SVG percentage scaling, and sync tooltip series colors
 Previous commits this session:
-- `f242e98` feat(telemetry): add historical log tail depth, time window filter, and export log download
+- `1b74aa6` docs: update project state with saturation trends metric strip
+- `29d457c` feat(drawer): enrich Hardware Saturation Trends with live metric strip, series toggles, and peak KPIs
 - `145fedf` docs: update project state with real log terminal feature
 - `1817aa5` feat(drawer): add real workload failure log terminal viewer with ANSI parsing and level filter
 - `f131860` feat(drawer): add 3-group process categorization (Workloads, Systemd Daemons, OS Kernel) with origin tags and SRE state indicators
