@@ -820,23 +820,23 @@ function formatKernelVersion(kernel?: string, os?: string): string {
   return k
 }
 
+function formatShortDistro(distro?: string, os?: string): string {
+  const d = formatDistro(distro, os)
+  if (!d) return 'Linux'
+  if (d.toLowerCase().includes('ubuntu')) return 'Ubuntu'
+  if (d.toLowerCase().includes('debian')) return 'Debian'
+  if (d.toLowerCase().includes('centos')) return 'CentOS'
+  if (d.toLowerCase().includes('fedora')) return 'Fedora'
+  if (d.toLowerCase().includes('red hat') || d.toLowerCase().includes('rhel')) return 'RHEL'
+  if (d.toLowerCase().includes('alpine')) return 'Alpine'
+  if (d.toLowerCase().includes('arch')) return 'Arch'
+  return d
+}
+
 function formatOsSummary(node?: NodeMetrics | null): string {
   if (!node) return 'Linux (amd64)'
   const arch = node.arch || 'amd64'
-  const distro = formatDistro(node.os_distro, node.os)
-  const kernel = node.kernel_version?.trim() || ''
-
-  if (
-    distro.toLowerCase() === 'linux' &&
-    (!kernel || kernel.toLowerCase() === 'linux' || kernel.toLowerCase() === distro.toLowerCase())
-  ) {
-    return `Linux (${arch})`
-  }
-
-  if (kernel && kernel.toLowerCase() !== 'linux' && kernel.toLowerCase() !== distro.toLowerCase()) {
-    return `${distro} | ${kernel} | ${arch}`
-  }
-
+  const distro = formatShortDistro(node.os_distro, node.os)
   return `${distro} (${arch})`
 }
 
@@ -2045,27 +2045,35 @@ onUnmounted(() => {
             @dragend="onDragEnd"
             @click="handleNodeCardClick(node)"
           >
-            <!-- Card Top: Name, Source Badge, Role & Status -->
+            <!-- Card Top: Name, Source Badge, Role & Status (2-Row Layout) -->
             <div class="node-card-header">
-              <div class="node-identity">
-                <span class="drag-handle" title="Drag to reorder server card">⋮⋮</span>
-                <span
-                  class="node-status-dot"
-                  :class="node.status === 'ready' || node.status === 'online' ? 'status-green' : 'status-red'"
-                ></span>
-                <span class="node-name" :title="node.node_name">{{ node.node_name }}</span>
+              <div class="node-header-top">
+                <div class="node-identity">
+                  <span class="drag-handle" title="Drag to reorder server card">⋮⋮</span>
+                  <span
+                    class="node-status-dot status-dot-pulse"
+                    :class="node.status === 'ready' || node.status === 'online' ? 'status-green' : 'status-red'"
+                  ></span>
+                  <h3 class="node-name" :title="node.node_name">{{ node.node_name }}</h3>
+                </div>
+                <div class="node-header-badges">
+                  <span v-if="node.node_id === busiestNodeId" class="badge badge-amber badge-traffic-pulse" title="Highest traffic node">
+                    🔥 HOT NODE
+                  </span>
+                  <span v-else-if="node.role?.toLowerCase() === 'master' || node.role?.toLowerCase() === 'control-plane' || node.role?.toLowerCase() === 'manager'" class="badge badge-purple" title="Cluster Manager">
+                    👑 MANAGER
+                  </span>
+                  <span v-else class="badge badge-indigo" title="Telemetry Agent">
+                    📡 AGENT
+                  </span>
+                </div>
               </div>
-              <div class="node-badge-row">
-                <!-- OS Distro Badge -->
-                <span class="badge badge-slate font-mono" :title="formatOsSummary(node)">
-                  🐧 {{ node.os_distro || (node.os ? node.os.toUpperCase() : 'Linux') }}
+              <div class="node-header-meta">
+                <span class="badge-meta font-mono" :title="formatOsSummary(node)">
+                  🐧 {{ formatOsSummary(node) }}
                 </span>
-                <!-- Source Badge -->
-                <span class="badge badge-indigo">
-                  📡 K8S-AGENT
-                </span>
-                <span v-if="node.node_id === busiestNodeId" class="badge badge-amber badge-traffic-pulse" title="Highest traffic node">
-                  🔥 HOT NODE
+                <span class="badge-meta font-mono">
+                  ⚡ {{ node.role || 'Agent' }}
                 </span>
               </div>
             </div>
@@ -3559,23 +3567,27 @@ onUnmounted(() => {
 .summary-hud-row .hud-card {
   flex: 1 1 0;
   min-width: 0;
-  padding: 12px 14px;
+  min-height: 124px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   border-radius: 12px;
-  background: var(--glass-bg, rgba(26, 31, 46, 0.7));
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .summary-hud-row .hud-card:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: rgba(56, 189, 248, 0.28);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), 0 0 15px rgba(56, 189, 248, 0.1);
 }
 
 .hud-card-top {
@@ -3615,7 +3627,7 @@ onUnmounted(() => {
 }
 
 .hud-value {
-  font-size: 26px;
+  font-size: 1.6rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--text-primary);
@@ -3739,27 +3751,28 @@ onUnmounted(() => {
   overflow: hidden;
   padding: 10px 18px;
   border-radius: 12px;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.75) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.2);
   backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 16px rgba(6, 182, 212, 0.08);
   transition: border-color 0.5s ease, box-shadow 0.5s ease;
 }
 
 /* Status Themes */
 .request-flow-bar.flow-theme-emerald {
-  border-color: rgba(16, 185, 129, 0.3);
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.08), 0 4px 16px rgba(0, 0, 0, 0.2);
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.12), 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .request-flow-bar.flow-theme-amber {
-  border-color: rgba(245, 158, 11, 0.4);
-  box-shadow: 0 0 20px rgba(245, 158, 11, 0.12), 0 4px 16px rgba(0, 0, 0, 0.2);
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.15), 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .request-flow-bar.flow-theme-rose {
-  border-color: rgba(244, 63, 94, 0.5);
-  box-shadow: 0 0 25px rgba(244, 63, 94, 0.18), 0 4px 16px rgba(0, 0, 0, 0.2);
+  border-color: rgba(244, 63, 94, 0.55);
+  box-shadow: 0 0 25px rgba(244, 63, 94, 0.2), 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 /* Particle / Laser Track in Background */
@@ -3921,15 +3934,25 @@ onUnmounted(() => {
 .flow-metrics-group {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .flow-metric-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 5px 11px;
+  transition: all 0.2s ease;
+}
+
+.flow-metric-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .flow-metric-icon {
@@ -3947,9 +3970,19 @@ onUnmounted(() => {
   font-size: 11px;
 }
 
+.flow-metric-item.metric-warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
 .flow-metric-item.metric-warning .flow-metric-value,
 .flow-metric-item.metric-warning .flow-metric-label {
   color: #f59e0b;
+}
+
+.flow-metric-item.metric-critical {
+  background: rgba(244, 63, 94, 0.08);
+  border-color: rgba(244, 63, 94, 0.25);
 }
 
 .flow-metric-item.metric-critical .flow-metric-value,
@@ -4255,12 +4288,17 @@ onUnmounted(() => {
 }
 
 .node-card {
-  padding: 18px;
+  padding: 16px 18px;
   border-radius: 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   position: relative;
+  background: var(--glass-bg, rgba(26, 31, 46, 0.7));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   transition: opacity 0.3s ease,
               transform 0.3s ease,
               box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
@@ -4270,7 +4308,8 @@ onUnmounted(() => {
 
 .node-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(56, 189, 248, 0.3);
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 15px rgba(56, 189, 248, 0.1);
 }
 
 .node-card:active {
@@ -4320,11 +4359,20 @@ onUnmounted(() => {
   50% { transform: scale(1.05); opacity: 0.85; }
 }
 
+/* 2-Row Node Card Header */
 .node-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.node-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
 }
 
 .node-identity {
@@ -4332,6 +4380,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex: 1;
 }
 
 .node-status-dot {
@@ -4342,30 +4391,54 @@ onUnmounted(() => {
 }
 
 .node-name {
-  font-size: 14px;
+  font-size: 1.1rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin: 0;
+  line-height: 1.2;
 }
 
-.node-badge-row {
+.node-header-badges {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }
 
+.node-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary, #94a3b8);
+  white-space: nowrap;
+}
+
 .node-gauges-cluster {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  padding: 10px 0;
+  padding: 10px 6px;
   border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 10px;
 }
 
 .gauge-col {
@@ -4377,26 +4450,31 @@ onUnmounted(() => {
 .node-meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px 12px;
+  gap: 8px;
 }
 
 .meta-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 6px 10px;
 }
 
 .meta-label {
-  font-size: 10px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--text-muted);
 }
 
 .meta-val {
-  font-size: 11px;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   transition: color 0.5s ease;
 }
 
@@ -4416,16 +4494,16 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 6px 10px;
+  gap: 6px;
+  padding: 7px 12px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
 }
 
@@ -4436,14 +4514,32 @@ onUnmounted(() => {
   transform: translateY(-1px);
 }
 
+.btn-inspect-node {
+  border-color: rgba(6, 182, 212, 0.25);
+  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.06);
+}
+
+.btn-inspect-node:hover {
+  background: rgba(6, 182, 212, 0.16);
+  border-color: var(--accent-cyan);
+  color: #38bdf8;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+  transform: translateY(-1px);
+}
+
 .btn-manage-host {
-  width: 100%;
+  border-color: rgba(129, 140, 248, 0.25);
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.06);
 }
 
 .btn-manage-host:hover {
   border-color: #818cf8;
-  color: #a5b4fc;
-  background: rgba(99, 102, 241, 0.12);
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.16);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
+  transform: translateY(-1px);
 }
 
 .btn-node-filter {
@@ -5359,6 +5455,10 @@ onUnmounted(() => {
 .node-drawer-header {
   padding: 18px 20px;
   border-radius: 14px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .header-top-row {
@@ -5397,7 +5497,7 @@ onUnmounted(() => {
 }
 
 .node-drawer-title {
-  font-size: 20px;
+  font-size: 1.3rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text-primary);
@@ -5417,17 +5517,17 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .node-quick-stats {
   display: flex;
   align-items: center;
   gap: 16px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.35);
   padding: 10px 16px;
   border-radius: 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
 }
 
@@ -5492,6 +5592,16 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.hw-gauge-card:hover {
+  border-color: rgba(56, 189, 248, 0.25);
+  transform: translateY(-1px);
 }
 
 .hw-gauge-top {
@@ -5610,17 +5720,20 @@ onUnmounted(() => {
 .iface-card {
   padding: 12px 14px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-subtle);
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
   gap: 10px;
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .iface-card:hover {
-  border-color: var(--border-medium);
+  border-color: rgba(56, 189, 248, 0.25);
   transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .iface-top {
@@ -5759,7 +5872,7 @@ onUnmounted(() => {
 }
 
 .services-mini-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(56, 189, 248, 0.05);
 }
 
 .services-mini-table td {
@@ -5943,7 +6056,7 @@ onUnmounted(() => {
 }
 
 .processes-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(56, 189, 248, 0.05);
 }
 
 .proc-row-hot {
@@ -6464,19 +6577,37 @@ onUnmounted(() => {
 }
 
 .deep-stat-card {
-  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+  padding: 16px 18px;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid var(--border-subtle);
-  transition: all 0.2s ease;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.deep-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #06b6d4, #8b5cf6);
 }
 
 .deep-stat-card:hover {
-  border-color: rgba(56, 189, 248, 0.3);
+  border-color: rgba(56, 189, 248, 0.35);
   transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 15px rgba(56, 189, 248, 0.1);
 }
 
 .deep-stat-header {
@@ -6500,7 +6631,7 @@ onUnmounted(() => {
 }
 
 .deep-stat-value {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -6512,7 +6643,7 @@ onUnmounted(() => {
 }
 
 .deep-stat-sub {
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--text-muted);
 }
 
@@ -6837,7 +6968,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 11px;
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
 }
 
 .breakdown-empty-state {
