@@ -966,9 +966,13 @@ func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int
 					}
 					if metricsData.OSDistro != "" {
 						agentInfo["os_distro"] = metricsData.OSDistro
+					} else if metricsData.OS != "" {
+						agentInfo["os_distro"] = strings.ToUpper(metricsData.OS[:1]) + strings.ToLower(metricsData.OS[1:])
 					}
 					if metricsData.KernelVersion != "" {
 						agentInfo["kernel_version"] = metricsData.KernelVersion
+					} else if metricsData.OS != "" {
+						agentInfo["kernel_version"] = strings.ToUpper(metricsData.OS[:1]) + strings.ToLower(metricsData.OS[1:])
 					}
 					agentInfo["uptime"] = metricsData.UptimeSeconds
 					agentInfo["uptime_seconds"] = metricsData.UptimeSeconds
