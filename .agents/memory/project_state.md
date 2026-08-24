@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-24T09:12
+# K8sControl Project State — Session Update 2026-08-24T15:20
 
 ## Git State
 Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `2dccd81` fix(logs): support all-lines tail depth and accurate log level classification for errors, warnings, and search
+Latest: `feat(logs): implement edge-first distributed log architecture, scatter-gather cluster search, and custom date-time range picker`
 Previous commits this session:
+- `2dccd81` fix(logs): support all-lines tail depth and accurate log level classification for errors, warnings, and search
 - `1e3855a` docs: update project state with live log streaming feature
 - `b1b989f` feat(drawer): add real-time live auto-tail log streaming with pause/resume and smart auto-scroll
 - `90b916e` fix(drawer): dynamically stream realtime node telemetry into saturation curves and auto-sync history buffer

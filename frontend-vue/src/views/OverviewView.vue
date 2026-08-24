@@ -918,6 +918,45 @@ const appLogsLoading = ref<boolean>(false)
 const appLogsError = ref<string | null>(null)
 const appLogsCopied = ref<boolean>(false)
 
+// Custom Date-Time Range Selector State
+const customLogFrom = ref<string>('')
+const customLogTo = ref<string>('')
+const showCustomDatePicker = ref<boolean>(false)
+
+function formatDateTimeLocal(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const yyyy = date.getFullYear()
+  const MM = pad(date.getMonth() + 1)
+  const dd = pad(date.getDate())
+  const hh = pad(date.getHours())
+  const mm = pad(date.getMinutes())
+  return `${yyyy}-${MM}-${dd}T${hh}:${mm}`
+}
+
+function applyLogPreset(preset: '30m' | '2h' | '6h' | 'today', autoFetch = true) {
+  const now = new Date()
+  customLogTo.value = formatDateTimeLocal(now)
+  let from = new Date()
+  if (preset === '30m') {
+    from = new Date(now.getTime() - 30 * 60 * 1000)
+  } else if (preset === '2h') {
+    from = new Date(now.getTime() - 2 * 60 * 60 * 1000)
+  } else if (preset === '6h') {
+    from = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+  } else if (preset === 'today') {
+    from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
+  }
+  customLogFrom.value = formatDateTimeLocal(from)
+  if (autoFetch) {
+    fetchNodeAppLogs(selectedLogApp.value)
+  }
+}
+
+function formatBadgeDate(dt: string): string {
+  if (!dt) return ''
+  return dt.replace('T', ' ')
+}
+
 // Real-Time Live Auto-Tail & Scroll State
 const isLogStreaming = ref<boolean>(true)
 const logStreamInterval = ref<any>(null)
@@ -940,19 +979,46 @@ async function fetchNodeAppLogs(appName?: string) {
   appLogsError.value = null
   try {
     const tailParam = selectedLogTail.value === 'all' ? 'all' : String(selectedLogTail.value)
-    const sinceParam = selectedLogSince.value === 'all' ? '' : selectedLogSince.value
+    let sinceParam = ''
+    let untilParam = ''
+
+    if (selectedLogSince.value === 'custom') {
+      if (customLogFrom.value) {
+        try {
+          sinceParam = new Date(customLogFrom.value).toISOString()
+        } catch {
+          sinceParam = customLogFrom.value
+        }
+      }
+      if (customLogTo.value) {
+        try {
+          untilParam = new Date(customLogTo.value).toISOString()
+        } catch {
+          untilParam = customLogTo.value
+        }
+      }
+    } else if (selectedLogSince.value !== 'all') {
+      sinceParam = selectedLogSince.value
+    }
+
+    const searchParam = appLogSearch.value.trim() || undefined
+    const filterLevel = selectedLogLevel.value !== 'all' ? selectedLogLevel.value : undefined
+    const nodeTarget = selectedNode.value?.node_id || selectedNode.value?.node_name
 
     let res: { logs: string } | null = null
     try {
-      res = await dockerApi.getLogs(targetApp, 'service', tailParam, sinceParam)
+      res = await dockerApi.getLogs(targetApp, 'service', tailParam, sinceParam, untilParam, searchParam, filterLevel, nodeTarget)
     } catch {
-      res = await dockerApi.getLogs(targetApp, 'container', tailParam, sinceParam)
+      res = await dockerApi.getLogs(targetApp, 'container', tailParam, sinceParam, untilParam, searchParam, filterLevel, nodeTarget)
     }
 
     if (res && typeof res.logs === 'string' && res.logs.trim().length > 0) {
       appLogsText.value = res.logs
     } else {
-      appLogsText.value = `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (since=${selectedLogSince.value}, tail=${selectedLogTail.value})]`
+      const windowInfo = selectedLogSince.value === 'custom'
+        ? `custom: ${formatBadgeDate(customLogFrom.value) || 'start'} → ${formatBadgeDate(customLogTo.value) || 'now'}`
+        : `since=${selectedLogSince.value}`
+      appLogsText.value = `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (${windowInfo}, tail=${selectedLogTail.value})]`
     }
 
     if (autoScrollLogs.value && !userScrolledUp.value) {
@@ -975,18 +1041,46 @@ async function fetchNodeAppLogsQuiet(appName?: string) {
   const targetApp = appName || selectedLogApp.value || 'tiki_traefik'
   try {
     const tailParam = selectedLogTail.value === 'all' ? 'all' : String(selectedLogTail.value)
-    const sinceParam = selectedLogSince.value === 'all' ? '' : selectedLogSince.value
+    let sinceParam = ''
+    let untilParam = ''
+
+    if (selectedLogSince.value === 'custom') {
+      if (customLogFrom.value) {
+        try {
+          sinceParam = new Date(customLogFrom.value).toISOString()
+        } catch {
+          sinceParam = customLogFrom.value
+        }
+      }
+      if (customLogTo.value) {
+        try {
+          untilParam = new Date(customLogTo.value).toISOString()
+        } catch {
+          untilParam = customLogTo.value
+        }
+      }
+    } else if (selectedLogSince.value !== 'all') {
+      sinceParam = selectedLogSince.value
+    }
+
+    const searchParam = appLogSearch.value.trim() || undefined
+    const filterLevel = selectedLogLevel.value !== 'all' ? selectedLogLevel.value : undefined
+    const nodeTarget = selectedNode.value?.node_id || selectedNode.value?.node_name
 
     let res: { logs: string } | null = null
     try {
-      res = await dockerApi.getLogs(targetApp, 'service', tailParam, sinceParam)
+      res = await dockerApi.getLogs(targetApp, 'service', tailParam, sinceParam, untilParam, searchParam, filterLevel, nodeTarget)
     } catch {
-      res = await dockerApi.getLogs(targetApp, 'container', tailParam, sinceParam)
+      res = await dockerApi.getLogs(targetApp, 'container', tailParam, sinceParam, untilParam, searchParam, filterLevel, nodeTarget)
     }
+
+    const windowInfo = selectedLogSince.value === 'custom'
+      ? `custom: ${formatBadgeDate(customLogFrom.value) || 'start'} → ${formatBadgeDate(customLogTo.value) || 'now'}`
+      : `since=${selectedLogSince.value}`
 
     const newLogs = (res && typeof res.logs === 'string' && res.logs.trim().length > 0)
       ? res.logs
-      : `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (since=${selectedLogSince.value}, tail=${selectedLogTail.value})]`
+      : `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (${windowInfo}, tail=${selectedLogTail.value})]`
 
     if (appLogsText.value !== newLogs) {
       appLogsText.value = newLogs
@@ -1244,6 +1338,15 @@ function switchNodeDrawerToHistory(range: '1h' | '24h' | '7d' | '30d' = '24h') {
 }
 
 watch([selectedLogApp, selectedLogTail, selectedLogSince], () => {
+  if (selectedLogSince.value === 'custom') {
+    showCustomDatePicker.value = true
+    if (!customLogFrom.value || !customLogTo.value) {
+      applyLogPreset('2h', false)
+    }
+  } else {
+    showCustomDatePicker.value = false
+  }
+
   if (showNodeDrawer.value && nodeDrawerMode.value === 'history') {
     fetchNodeAppLogs(selectedLogApp.value)
     if (isLogStreaming.value) {
@@ -3696,6 +3799,7 @@ onUnmounted(() => {
                   <option value="6h">Last 6h</option>
                   <option value="24h">Last 24h</option>
                   <option value="168h">Last 7d</option>
+                  <option value="custom">📅 Custom Time Range...</option>
                 </select>
               </div>
 
@@ -3785,6 +3889,50 @@ onUnmounted(() => {
               </div>
             </div>
 
+            <!-- Custom Date-Time Range Selector Bar -->
+            <div v-if="selectedLogSince === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
+              <div class="custom-range-inputs">
+                <div class="range-field">
+                  <label class="range-label font-mono">FROM:</label>
+                  <input
+                    type="datetime-local"
+                    v-model="customLogFrom"
+                    class="input-datetime font-mono"
+                    @keyup.enter="fetchNodeAppLogs(selectedLogApp)"
+                  />
+                </div>
+                <div class="range-field">
+                  <label class="range-label font-mono">TO:</label>
+                  <input
+                    type="datetime-local"
+                    v-model="customLogTo"
+                    class="input-datetime font-mono"
+                    @keyup.enter="fetchNodeAppLogs(selectedLogApp)"
+                  />
+                </div>
+              </div>
+
+              <div class="custom-range-presets">
+                <span class="preset-label font-mono">PRESETS:</span>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyLogPreset('30m')">Last 30m</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyLogPreset('2h')">Last 2h</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyLogPreset('6h')">Last 6h</button>
+                <button type="button" class="btn-preset-chip font-mono" @click="applyLogPreset('today')">Today</button>
+              </div>
+
+              <div class="custom-range-actions">
+                <button
+                  type="button"
+                  class="btn-apply-range font-mono"
+                  :disabled="appLogsLoading"
+                  @click="fetchNodeAppLogs(selectedLogApp)"
+                >
+                  <span class="glow-dot"></span>
+                  <span>{{ appLogsLoading ? 'Applying...' : 'Apply Range' }}</span>
+                </button>
+              </div>
+            </div>
+
             <!-- Terminal Real Log Viewer -->
             <div class="log-terminal-viewer">
               <div class="terminal-topbar">
@@ -3797,6 +3945,12 @@ onUnmounted(() => {
                   stdout/stderr :: {{ selectedLogApp }} @ {{ selectedNode?.node_name }}
                 </div>
                 <div class="terminal-controls-right">
+                  <span v-if="selectedLogSince === 'custom' && (customLogFrom || customLogTo)" class="terminal-range-badge font-mono">
+                    📅 Window: {{ formatBadgeDate(customLogFrom) || 'Start' }} → {{ formatBadgeDate(customLogTo) || 'Now' }}
+                  </span>
+                  <span v-else-if="selectedLogSince !== 'all'" class="terminal-range-badge font-mono">
+                    ⏱️ Window: Last {{ selectedLogSince }}
+                  </span>
                   <span v-if="isLogStreaming" class="terminal-stream-badge font-mono">
                     <span class="log-live-dot"></span> LIVE (3s)
                   </span>
@@ -9119,6 +9273,132 @@ onUnmounted(() => {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
 }
 
+/* Custom Date-Time Range Selector Bar */
+.custom-range-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  margin-top: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.custom-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.range-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.range-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.05em;
+}
+
+.input-datetime {
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 11.5px;
+  color-scheme: dark;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.input-datetime:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.custom-range-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.preset-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.btn-preset-chip {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-preset-chip:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+
+.custom-range-actions {
+  display: flex;
+  align-items: center;
+}
+
+.btn-apply-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.3) 0%, rgba(56, 189, 248, 0.15) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.6);
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+  transition: all 0.2s ease;
+}
+
+.btn-apply-range:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.5) 0%, rgba(56, 189, 248, 0.3) 100%);
+  border-color: #38bdf8;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-apply-range:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.glow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
+}
+
 /* Terminal Viewer */
 .log-terminal-viewer {
   position: relative;
@@ -9164,6 +9444,18 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.terminal-range-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
 }
 
 .terminal-stream-badge {
