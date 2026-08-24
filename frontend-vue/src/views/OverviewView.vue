@@ -968,7 +968,11 @@ async function fetchNodeAppLogs(appName?: string) {
       const windowInfo = selectedLogSince.value === 'custom'
         ? `custom: ${formatBadgeDate(customLogFrom.value) || 'start'} → ${formatBadgeDate(customLogTo.value) || 'now'}`
         : `since=${selectedLogSince.value}`
-      appLogsText.value = `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (${windowInfo}, tail=${selectedLogTail.value})]`
+      if (selectedLogSince.value === 'custom') {
+        appLogsText.value = `[Info: No logs recorded for ${targetApp} in the selected window (${windowInfo}). Select 'All Time' or click 'Clear Window' to view all logs.]`
+      } else {
+        appLogsText.value = `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (${windowInfo}, tail=${selectedLogTail.value})]`
+      }
     }
 
     if (autoScrollLogs.value && !userScrolledUp.value) {
@@ -1028,9 +1032,13 @@ async function fetchNodeAppLogsQuiet(appName?: string) {
       ? `custom: ${formatBadgeDate(customLogFrom.value) || 'start'} → ${formatBadgeDate(customLogTo.value) || 'now'}`
       : `since=${selectedLogSince.value}`
 
+    const emptyNotice = selectedLogSince.value === 'custom'
+      ? `[Info: No logs recorded for ${targetApp} in the selected window (${windowInfo}). Select 'All Time' or click 'Clear Window' to view all logs.]`
+      : `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (${windowInfo}, tail=${selectedLogTail.value})]`
+
     const newLogs = (res && typeof res.logs === 'string' && res.logs.trim().length > 0)
       ? res.logs
-      : `[Info: Service ${targetApp} is running. No logs recorded in the selected time window (${windowInfo}, tail=${selectedLogTail.value})]`
+      : emptyNotice
 
     if (appLogsText.value !== newLogs) {
       appLogsText.value = newLogs
@@ -1358,12 +1366,6 @@ function syncLogsToPointInTime(point?: NodeMetricRollup | null) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   })
-}
-
-function handleNodeHistChartClick() {
-  if (hoveredNodeHistPoint.value) {
-    syncLogsToPointInTime(hoveredNodeHistPoint.value)
-  }
 }
 
 // ==========================================
@@ -3791,7 +3793,7 @@ onUnmounted(() => {
             </div>
 
             <!-- SVG Chart with HTML-Overlay Grid Layout -->
-            <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave" @click="handleNodeHistChartClick">
+            <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave">
               <!-- Main SVG Canvas -->
               <svg class="hist-svg-canvas" viewBox="0 0 760 200" preserveAspectRatio="none">
                 <defs>
@@ -4029,6 +4031,15 @@ onUnmounted(() => {
                   <option value="168h">Last 7d</option>
                   <option value="custom">📅 Custom Time Range...</option>
                 </select>
+                <button
+                  v-if="selectedLogSince === 'custom'"
+                  type="button"
+                  class="btn-clear-window-pill font-mono"
+                  @click="selectedLogSince = 'all'; customLogFrom = ''; customLogTo = ''; fetchNodeAppLogs(selectedLogApp)"
+                  title="Reset time window to show all available logs"
+                >
+                  ✕ Clear Window (Show All)
+                </button>
               </div>
 
               <!-- Log Level Chips -->
@@ -9487,6 +9498,24 @@ onUnmounted(() => {
 .select-log-input:hover,
 .select-log-input:focus {
   border-color: #38bdf8;
+}
+
+.btn-clear-window-pill {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  color: #fb7185;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-window-pill:hover {
+  background: rgba(244, 63, 94, 0.25);
+  border-color: #fb7185;
+  transform: translateY(-1px);
 }
 
 .btn-log-download {
