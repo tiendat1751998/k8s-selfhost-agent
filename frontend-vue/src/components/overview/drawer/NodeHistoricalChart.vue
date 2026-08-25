@@ -124,8 +124,7 @@ function applyPreset(preset: '30m' | '2h' | '6h' | 'today') {
 
   emit('update:customHistFrom', customHistoryFrom.value)
   emit('update:customHistTo', customHistoryTo.value)
-  emit('apply-preset', preset)
-  loadNodeHistory(undefined, 'custom', customHistoryFrom.value, customHistoryTo.value)
+  emit('range-change', 'custom', customHistoryFrom.value, customHistoryTo.value)
 }
 
 // Synthetic / Live Rollup List
@@ -610,7 +609,7 @@ function formatIoRate(bytesPerSec?: number): string {
           <span class="badge badge-indigo font-mono" v-if="nodeHistoryData?.resolution">
             Sample Rate: {{ nodeHistoryData.resolution }}
           </span>
-          <button class="btn btn-secondary btn-xs" @click="loadNodeHistory(node?.node_id || node?.node_name, nodeHistoryRange)" :disabled="nodeHistoryLoading">
+          <button class="btn btn-secondary btn-xs" @click="emit('range-change', nodeHistoryRange)" :disabled="nodeHistoryLoading">
             ↺ Refresh
           </button>
         </div>

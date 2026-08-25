@@ -94,6 +94,14 @@ const nodeAvailableLogApps = computed(() => {
   return list
 })
 
+const nodeAvailableContainerApps = computed(() =>
+  nodeAvailableLogApps.value.filter(app => app.type === 'container')
+)
+
+const nodeAvailableHostApps = computed(() =>
+  nodeAvailableLogApps.value.filter(app => app.type === 'host')
+)
+
 function toIsoTime(val?: string): string | undefined {
   if (!val) return undefined
   try {
@@ -291,10 +299,15 @@ async function fetchNodeAppLogs(appName?: string) {
     if (res && typeof res.logs === 'string' && res.logs.trim().length > 0) {
       appLogsText.value = res.logs
     } else {
-      const windowInfo = selectedLogSince.value === 'custom'
-        ? `between ${customLogFrom.value || 'start'} and ${customLogTo.value || 'now'}`
-        : `in the last ${selectedLogSince.value}`
-      appLogsText.value = `[INFO] No real stdout/stderr lines emitted by '${targetApp}' on node '${props.node?.node_name}' ${windowInfo}. Process is running nominally.`
+      const isHostApp = nodeAvailableLogApps.value.find(a => a.name === targetApp)?.type === 'host'
+      if (isHostApp) {
+        appLogsText.value = `[INFO] Host process '${targetApp}' is running as a system service. Standard stdout/stderr stream is only accessible for Docker containerized workloads (e.g. tiki_redis, my-nginx, db, nats).`
+      } else {
+        const windowInfo = selectedLogSince.value === 'custom'
+          ? `between ${customLogFrom.value || 'start'} and ${customLogTo.value || 'now'}`
+          : `in the last ${selectedLogSince.value}`
+        appLogsText.value = `[INFO] No real stdout/stderr lines emitted by '${targetApp}' on node '${props.node?.node_name}' ${windowInfo}. Process is running nominally.`
+      }
     }
 
     if (autoScrollLogs.value && !userScrolledUp.value) {
@@ -303,8 +316,14 @@ async function fetchNodeAppLogs(appName?: string) {
       })
     }
   } catch (err: any) {
-    appLogsError.value = err.message || 'Failed to fetch logs from agent daemon'
-    appLogsText.value = `[ERROR] Unable to reach agent log collector on node ${props.node?.node_name}: ${err.message}`
+    const isHostApp = nodeAvailableLogApps.value.find(a => a.name === targetApp)?.type === 'host'
+    if (isHostApp) {
+      appLogsError.value = null
+      appLogsText.value = `[INFO] Host process '${targetApp}' is running as a system service. Standard stdout/stderr stream is only accessible for Docker containerized workloads (e.g. tiki_redis, my-nginx, db, nats).`
+    } else {
+      appLogsError.value = err.message || 'Failed to fetch logs from agent daemon'
+      appLogsText.value = `[ERROR] Unable to reach agent log collector on node ${props.node?.node_name}: ${err.message}`
+    }
   } finally {
     appLogsLoading.value = false
   }
@@ -502,146 +521,158 @@ onUnmounted(() => {
 
             <!-- Log Workload Selector & Filter Toolbar -->
             <div class="log-explorer-toolbar">
-              <!-- App Selector -->
-              <div class="log-toolbar-item">
-                <label class="log-toolbar-label font-mono">APP:</label>
-                <select
-                  v-model="selectedLogApp"
-                  class="select-log-input font-mono"
-                  @change="fetchNodeAppLogs(selectedLogApp)"
-                >
-                  <option v-for="app in nodeAvailableLogApps" :key="app.name" :value="app.name">
-                    {{ app.icon }} {{ app.name }}
-                  </option>
-                </select>
+              <!-- Row 1: Filter Selectors, Chips, and Search -->
+              <div class="log-toolbar-row-top">
+                <!-- App Selector -->
+                <div class="log-toolbar-item">
+                  <label class="log-toolbar-label font-mono">APP:</label>
+                  <select
+                    v-model="selectedLogApp"
+                    class="select-log-input font-mono"
+                    @change="fetchNodeAppLogs(selectedLogApp)"
+                  >
+                    <optgroup v-if="nodeAvailableContainerApps.length > 0" label="📦 Container Workloads">
+                      <option v-for="app in nodeAvailableContainerApps" :key="app.name" :value="app.name">
+                        {{ app.icon }} {{ app.name }}
+                      </option>
+                    </optgroup>
+                    <optgroup v-if="nodeAvailableHostApps.length > 0" label="⚙️ Host Services">
+                      <option v-for="app in nodeAvailableHostApps" :key="app.name" :value="app.name">
+                        {{ app.icon }} {{ app.name }}
+                      </option>
+                    </optgroup>
+                  </select>
+                </div>
+
+                <!-- Tail Depth Selector -->
+                <div class="log-toolbar-item">
+                  <label class="log-toolbar-label font-mono">TAIL:</label>
+                  <select
+                    v-model="selectedLogTail"
+                    class="select-log-input font-mono"
+                    @change="fetchNodeAppLogs(selectedLogApp)"
+                  >
+                    <option :value="100">100 lines</option>
+                    <option :value="500">500 lines</option>
+                    <option :value="1000">1,000 lines</option>
+                    <option :value="5000">5,000 lines</option>
+                    <option value="all">All lines</option>
+                  </select>
+                </div>
+
+                <!-- Time Window (Since) Selector -->
+                <div class="log-toolbar-item">
+                  <label class="log-toolbar-label font-mono">WINDOW:</label>
+                  <select
+                    v-model="selectedLogSince"
+                    class="select-log-input font-mono"
+                    @change="onLogSinceChange"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="15m">Last 15m</option>
+                    <option value="1h">Last 1h</option>
+                    <option value="6h">Last 6h</option>
+                    <option value="24h">Last 24h</option>
+                    <option value="168h">Last 7d</option>
+                    <option value="custom">📅 Custom Time Range...</option>
+                  </select>
+                  <button
+                    v-if="selectedLogSince === 'custom' || showCustomDatePicker"
+                    type="button"
+                    class="btn-clear-window-pill font-mono"
+                    @click="selectedLogSince = 'all'; showCustomDatePicker = false; customLogFrom = ''; customLogTo = ''; fetchNodeAppLogs(selectedLogApp)"
+                    title="Reset time window to show all available logs"
+                  >
+                    ✕ Clear Window (Show All)
+                  </button>
+                </div>
+
+                <!-- Log Level Chips -->
+                <div class="log-level-chips">
+                  <button
+                    class="chip-btn"
+                    :class="{ active: selectedLogLevel === 'all' }"
+                    @click="selectedLogLevel = 'all'"
+                  >
+                    All ({{ appLogLevelCounts.total }})
+                  </button>
+                  <button
+                    class="chip-btn chip-rose"
+                    :class="{ active: selectedLogLevel === 'error' }"
+                    @click="selectedLogLevel = 'error'"
+                  >
+                    🔴 Errors ({{ appLogLevelCounts.error }})
+                  </button>
+                  <button
+                    class="chip-btn chip-amber"
+                    :class="{ active: selectedLogLevel === 'warn' }"
+                    @click="selectedLogLevel = 'warn'"
+                  >
+                    🟡 Warnings ({{ appLogLevelCounts.warn }})
+                  </button>
+                </div>
+
+                <!-- Log Search Box -->
+                <div class="log-search-box">
+                  <span class="search-icon">🔍</span>
+                  <input
+                    v-model="appLogSearch"
+                    type="text"
+                    placeholder="Filter logs / stack traces..."
+                    class="input-log-search font-mono"
+                  />
+                  <button v-if="appLogSearch" class="btn-clear-search" @click="appLogSearch = ''">✕</button>
+                </div>
               </div>
 
-              <!-- Tail Depth Selector -->
-              <div class="log-toolbar-item">
-                <label class="log-toolbar-label font-mono">TAIL:</label>
-                <select
-                  v-model="selectedLogTail"
-                  class="select-log-input font-mono"
-                  @change="fetchNodeAppLogs(selectedLogApp)"
-                >
-                  <option :value="100">100 lines</option>
-                  <option :value="500">500 lines</option>
-                  <option :value="1000">1,000 lines</option>
-                  <option :value="5000">5,000 lines</option>
-                  <option value="all">All lines</option>
-                </select>
-              </div>
-
-              <!-- Time Window (Since) Selector -->
-              <div class="log-toolbar-item">
-                <label class="log-toolbar-label font-mono">WINDOW:</label>
-                <select
-                  v-model="selectedLogSince"
-                  class="select-log-input font-mono"
-                  @change="onLogSinceChange"
-                >
-                  <option value="all">All Time</option>
-                  <option value="15m">Last 15m</option>
-                  <option value="1h">Last 1h</option>
-                  <option value="6h">Last 6h</option>
-                  <option value="24h">Last 24h</option>
-                  <option value="168h">Last 7d</option>
-                  <option value="custom">📅 Custom Time Range...</option>
-                </select>
-                <button
-                  v-if="selectedLogSince === 'custom' || showCustomDatePicker"
-                  type="button"
-                  class="btn-clear-window-pill font-mono"
-                  @click="selectedLogSince = 'all'; showCustomDatePicker = false; customLogFrom = ''; customLogTo = ''; fetchNodeAppLogs(selectedLogApp)"
-                  title="Reset time window to show all available logs"
-                >
-                  ✕ Clear Window (Show All)
-                </button>
-              </div>
-
-              <!-- Log Level Chips -->
-              <div class="log-level-chips">
-                <button
-                  class="chip-btn"
-                  :class="{ active: selectedLogLevel === 'all' }"
-                  @click="selectedLogLevel = 'all'"
-                >
-                  All ({{ appLogLevelCounts.total }})
-                </button>
-                <button
-                  class="chip-btn chip-rose"
-                  :class="{ active: selectedLogLevel === 'error' }"
-                  @click="selectedLogLevel = 'error'"
-                >
-                  🔴 Errors ({{ appLogLevelCounts.error }})
-                </button>
-                <button
-                  class="chip-btn chip-amber"
-                  :class="{ active: selectedLogLevel === 'warn' }"
-                  @click="selectedLogLevel = 'warn'"
-                >
-                  🟡 Warnings ({{ appLogLevelCounts.warn }})
-                </button>
-              </div>
-
-              <!-- Log Search Box -->
-              <div class="log-search-box">
-                <span class="search-icon">🔍</span>
-                <input
-                  v-model="appLogSearch"
-                  type="text"
-                  placeholder="Filter logs / stack traces..."
-                  class="input-log-search font-mono"
-                />
-                <button v-if="appLogSearch" class="btn-clear-search" @click="appLogSearch = ''">✕</button>
-              </div>
-
-              <!-- Action Buttons -->
-              <div class="log-action-btns">
-                <button
-                  class="btn-log-action btn-log-stream"
-                  :class="{ 'stream-active': isLogStreaming }"
-                  @click="toggleLogStreaming"
-                  :title="isLogStreaming ? 'Pause Live Tail' : 'Resume Live Tail'"
-                >
-                  <span v-if="isLogStreaming" class="log-live-dot"></span>
-                  <span v-else>⏸️</span>
-                  <span>{{ isLogStreaming ? 'LIVE TAIL (3s)' : 'PAUSED' }}</span>
-                </button>
-                <button
-                  class="btn-log-action"
-                  :class="{ 'active-toggle': autoScrollLogs }"
-                  @click="autoScrollLogs = !autoScrollLogs"
-                  title="Toggle Auto-Scroll to Bottom"
-                >
-                  <span>⬇️</span>
-                  <span>Auto-Scroll: {{ autoScrollLogs ? 'ON' : 'OFF' }}</span>
-                </button>
-                <button
-                  class="btn-log-action"
-                  :disabled="appLogsLoading"
-                  @click="fetchNodeAppLogs(selectedLogApp)"
-                  title="Reload Logs"
-                >
-                  <span :class="{ 'spin-icon': appLogsLoading }">🔄</span>
-                  {{ appLogsLoading ? 'Fetching...' : 'Refresh' }}
-                </button>
-                <button
-                  class="btn-log-action"
-                  @click="copyAppLogs"
-                  title="Copy Log Text"
-                >
-                  <span>📋</span>
-                  {{ appLogsCopied ? 'Copied!' : 'Copy' }}
-                </button>
-                <button
-                  class="btn-log-action btn-log-download"
-                  @click="downloadAppLogs"
-                  title="Download Raw Log File"
-                >
-                  <span>⬇️</span>
-                  Export .log
-                </button>
+              <!-- Row 2: Real-time Streaming & Action Controls -->
+              <div class="log-toolbar-row-bottom">
+                <div class="log-action-btns">
+                  <button
+                    class="btn-log-action btn-log-stream"
+                    :class="{ 'stream-active': isLogStreaming }"
+                    @click="toggleLogStreaming"
+                    :title="isLogStreaming ? 'Pause Live Tail' : 'Resume Live Tail'"
+                  >
+                    <span v-if="isLogStreaming" class="log-live-dot"></span>
+                    <span v-else>⏸️</span>
+                    <span>{{ isLogStreaming ? 'LIVE TAIL (3s)' : 'PAUSED' }}</span>
+                  </button>
+                  <button
+                    class="btn-log-action"
+                    :class="{ 'active-toggle': autoScrollLogs }"
+                    @click="autoScrollLogs = !autoScrollLogs"
+                    title="Toggle Auto-Scroll to Bottom"
+                  >
+                    <span>⬇️</span>
+                    <span>Auto-Scroll: {{ autoScrollLogs ? 'ON' : 'OFF' }}</span>
+                  </button>
+                  <button
+                    class="btn-log-action"
+                    :disabled="appLogsLoading"
+                    @click="fetchNodeAppLogs(selectedLogApp)"
+                    title="Reload Logs"
+                  >
+                    <span :class="{ 'spin-icon': appLogsLoading }">🔄</span>
+                    {{ appLogsLoading ? 'Fetching...' : 'Refresh' }}
+                  </button>
+                  <button
+                    class="btn-log-action"
+                    @click="copyAppLogs"
+                    title="Copy Log Text"
+                  >
+                    <span>📋</span>
+                    {{ appLogsCopied ? 'Copied!' : 'Copy' }}
+                  </button>
+                  <button
+                    class="btn-log-action btn-log-download"
+                    @click="downloadAppLogs"
+                    title="Download Raw Log File"
+                  >
+                    <span>⬇️</span>
+                    Export .log
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -943,14 +974,23 @@ onUnmounted(() => {
 /* Real App & Failure Log Terminal Viewer */
 .log-explorer-toolbar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  flex-wrap: wrap;
   padding: 10px 12px;
   background: rgba(15, 23, 42, 0.5);
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   margin-top: 4px;
+}
+
+.log-toolbar-row-top,
+.log-toolbar-row-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 .log-toolbar-item {
@@ -977,6 +1017,17 @@ onUnmounted(() => {
   outline: none;
   cursor: pointer;
   transition: border-color 0.2s ease;
+}
+
+.select-log-input optgroup {
+  background: #0f172a;
+  color: var(--text-muted, #94a3b8);
+  font-weight: 700;
+}
+
+.select-log-input option {
+  background: #0f172a;
+  color: #f8fafc;
 }
 
 .select-log-input:hover,
@@ -1015,19 +1066,76 @@ onUnmounted(() => {
 .log-level-chips {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
-.chip-rose.active {
-  background: rgba(244, 63, 94, 0.2);
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary, #94a3b8);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.chip-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.chip-btn.active {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+.chip-btn.chip-rose {
+  background: rgba(244, 63, 94, 0.08);
+  border-color: rgba(244, 63, 94, 0.25);
   color: #fb7185;
-  border-color: rgba(244, 63, 94, 0.4);
 }
 
-.chip-amber.active {
-  background: rgba(245, 158, 11, 0.2);
+.chip-btn.chip-rose:hover {
+  background: rgba(244, 63, 94, 0.16);
+  border-color: rgba(244, 63, 94, 0.45);
+  color: #fda4af;
+}
+
+.chip-btn.chip-rose.active {
+  background: rgba(244, 63, 94, 0.22);
+  border-color: #f43f5e;
+  color: #fda4af;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.4);
+}
+
+.chip-btn.chip-amber {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.25);
   color: #fbbf24;
-  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.chip-btn.chip-amber:hover {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fde68a;
+}
+
+.chip-btn.chip-amber.active {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: #f59e0b;
+  color: #fde68a;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
 }
 
 .log-search-box {

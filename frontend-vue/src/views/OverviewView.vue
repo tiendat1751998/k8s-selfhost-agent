@@ -586,23 +586,27 @@ async function loadNodeHistory(nodeIdOrRange?: string, rangeOrFrom?: string, fro
   const targetId = targetNodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
   if (!targetId) return
 
-  if (targetFrom !== undefined && targetFrom !== '') {
-    customHistFrom.value = targetFrom
-  }
-  if (targetTo !== undefined && targetTo !== '') {
-    customHistTo.value = targetTo
+  if (actualRange === 'custom') {
+    if (targetFrom !== undefined && targetFrom !== '') {
+      customHistFrom.value = targetFrom
+    }
+    if (targetTo !== undefined && targetTo !== '') {
+      customHistTo.value = targetTo
+    }
   }
 
   nodeHistoryLoading.value = true
   nodeHistoryRange.value = actualRange
 
-  let reqFrom = actualRange === 'custom' ? (targetFrom || customHistFrom.value) : targetFrom
-  let reqTo = actualRange === 'custom' ? (targetTo || customHistTo.value) : targetTo
+  let reqFrom: string | undefined = undefined
+  let reqTo: string | undefined = undefined
 
   if (actualRange === 'custom') {
     const now = new Date()
     const pad = (n: number) => String(n).padStart(2, '0')
     const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    reqFrom = targetFrom || customHistFrom.value
+    reqTo = targetTo || customHistTo.value
     if (!reqFrom || !reqTo || reqFrom === reqTo) {
       reqFrom = formatDt(new Date(now.getTime() - 24 * 60 * 60 * 1000))
       reqTo = formatDt(now)
@@ -1083,7 +1087,7 @@ onUnmounted(() => {
       v-model:nodeHistoryRange="nodeHistoryRange"
       v-model:customHistFrom="customHistFrom"
       v-model:customHistTo="customHistTo"
-      :initialMode="nodeDrawerMode"
+      v-model:initialMode="nodeDrawerMode"
       @range-change="loadNodeHistory"
       @custom-range-apply="loadNodeHistory(undefined, 'custom', customHistFrom, customHistTo)"
       @apply-preset="applyCustomHistoryPreset"
