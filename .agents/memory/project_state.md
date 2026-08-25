@@ -2,9 +2,10 @@
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `6d3fbd5` perf(logs): implement high-performance virtual scrolling window and memoized parsing for 20k+ log lines
+Latest: `e1b8a74` feat(logs): implement server-side push-down filtering and zero-alloc stream scanner for container logs
 Previous commits this session:
-- `77b90af` docs: update project state memory with network TX peak feature
+- `f63cb23` docs: update project state memory with virtual scrolling optimization
+- `6d3fbd5` perf(logs): implement high-performance virtual scrolling window and memoized parsing for 20k+ log lines
 - `0cf69b1` feat(telemetry): add output TX peak rate to live network IO summary card
 - `a33cfa0` feat(telemetry): dynamic 1h hourly bucket aggregation for 7d/30d queries and redesigned cyber log filter toolbar
 - `8484c3e` fix(overview): fix timezone parsing flatline and log level count filter
