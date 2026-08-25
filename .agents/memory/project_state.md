@@ -2,8 +2,10 @@
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `98d5d52` feat(telemetry): implement smart top resource offender auto-detection and point-in-time log sync
+Latest: `819ce7f` feat(ui): implement custom cyber glass datetime picker with ok/apply confirmation
 Previous commits this session:
+- `98d5d52` feat(telemetry): implement smart top resource offender auto-detection and point-in-time log sync
+- `26d1a6b` docs: update project state memory with smart top offender auto-detection
 - `e1b8a74` feat(logs): implement server-side push-down filtering and zero-alloc stream scanner for container logs
 - `f63cb23` docs: update project state memory with virtual scrolling optimization
 - `6d3fbd5` perf(logs): implement high-performance virtual scrolling window and memoized parsing for 20k+ log lines
