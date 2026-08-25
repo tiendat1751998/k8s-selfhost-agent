@@ -2,8 +2,9 @@
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `2431f0b` fix(drawer): implement custom date-time search and fix bottom scroll cutoff
+Latest: `0558f00` fix(historical-chart): ensure KPI cards and header stay visible in custom range and prevent 0-interval flatlines
 Previous commits this session:
+- `2431f0b` fix(drawer): implement custom date-time search and fix bottom scroll cutoff
 - `88ea205` fix(ui): pin drawer mode tabs, restore header layout, and polish historical KPI cards
 - `1bb06c9` fix(ui): correct OverviewHud and RequestFlowBar template paths
 - `297418b` refactor(ui): modularize OverviewView monolithic component into 9 clean sub-components
