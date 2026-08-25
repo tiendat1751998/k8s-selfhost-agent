@@ -170,6 +170,14 @@ function formatIoRate(bytesPerSec?: number): string {
           {{ formatBytes(node.disk_used) }} / {{ formatBytes(node.disk_total) }}
           <span class="text-emerald font-bold">({{ Math.round(node.disk_percent) }}%)</span>
         </span>
+        <div class="disk-io-streams font-mono">
+          <span class="io-stream rx" title="Physical Disk Read Rate">
+            📖 {{ formatIoRate(node.disk_read_bytes_per_sec || 0) }}
+          </span>
+          <span class="io-stream tx" title="Physical Disk Write Rate">
+            ✍️ {{ formatIoRate(node.disk_write_bytes_per_sec || 0) }}
+          </span>
+        </div>
       </div>
       <div class="meta-item meta-item-network">
         <span class="meta-label">Live Network I/O</span>
@@ -491,6 +499,33 @@ function formatIoRate(bytesPerSec?: number): string {
 
 .net-val {
   letter-spacing: -0.01em;
+}
+
+.disk-io-streams {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 3px;
+}
+
+.io-stream {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.io-stream.rx {
+  color: #38bdf8;
+}
+
+.io-stream.tx {
+  color: #c084fc;
 }
 
 .node-card-footer {

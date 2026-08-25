@@ -41,6 +41,31 @@ type NetworkInterface struct {
 	TxBytesPerSec int64  `json:"tx_bytes_per_sec"`
 }
 
+// DiskIOStats represents real-time I/O performance and latency metrics for a block device.
+type DiskIOStats struct {
+	DeviceName        string  `json:"device_name"`         // e.g. "sda", "nvme0n1", "dm-0"
+	ReadBytesPerSec   int64   `json:"read_bytes_per_sec"`  // Read throughput (Bytes/s)
+	WriteBytesPerSec  int64   `json:"write_bytes_per_sec"` // Write throughput (Bytes/s)
+	ReadIOPS          float64 `json:"read_iops"`           // Read operations per second
+	WriteIOPS         float64 `json:"write_iops"`          // Write operations per second
+	AvgWaitMs         float64 `json:"avg_wait_ms"`         // await (Average I/O wait time in ms)
+	AvgRequestSizeKB  float64 `json:"avg_req_size_kb"`     // avgrq-sz (Average request size in KB)
+	CurrentQueueDepth int64   `json:"current_queue_depth"` // in_flight requests currently queued
+	IoUtilizationPct  float64 `json:"io_utilization_pct"`  // %util (Disk busy time %)
+	IsRootDevice      bool    `json:"is_root_device"`      // true for sda, nvme0n1, false for partitions sda1
+}
+
+// DiskIOMetrics aggregates host-level disk I/O metrics across block devices.
+type DiskIOMetrics struct {
+	TotalReadBytesPerSec  int64         `json:"total_read_bytes_per_sec"`
+	TotalWriteBytesPerSec int64         `json:"total_write_bytes_per_sec"`
+	TotalReadIOPS         float64       `json:"total_read_iops"`
+	TotalWriteIOPS        float64       `json:"total_write_iops"`
+	AvgAwaitMs            float64       `json:"avg_await_ms"`
+	MaxIoUtilizationPct   float64       `json:"max_io_util_pct"`
+	Devices               []DiskIOStats `json:"devices"`
+}
+
 // AgentMetrics represents metrics from a k8s-agent instance.
 type AgentMetrics struct {
 	Hostname          string             `json:"hostname"`
@@ -56,6 +81,7 @@ type AgentMetrics struct {
 	DiskTotal         int64              `json:"disk_total"`
 	DiskUsed          int64              `json:"disk_used"`
 	DiskPercent       float64            `json:"disk_percent"`
+	DiskIO            DiskIOMetrics      `json:"disk_io"`
 	NetRxRate         int64              `json:"net_rx_rate"`
 	NetTxRate         int64              `json:"net_tx_rate"`
 	NetworkInterfaces []NetworkInterface `json:"network_interfaces,omitempty"`
@@ -69,32 +95,39 @@ type AgentMetrics struct {
 
 // NodeMetrics represents infrastructure metrics for a single node.
 type NodeMetrics struct {
-	NodeID            string             `json:"node_id"`
-	NodeName          string             `json:"node_name"`
-	Role              string             `json:"role"`   // manager, worker, standalone, agent
-	Status            string             `json:"status"` // ready, down, disconnected
-	OS                string             `json:"os"`
-	Arch              string             `json:"arch"`
-	OSDistro          string             `json:"os_distro"`
-	KernelVersion     string             `json:"kernel_version"`
-	CPUPercent        float64            `json:"cpu_percent"`
-	MemoryUsed        int64              `json:"memory_used"`   // bytes
-	MemoryTotal       int64              `json:"memory_total"`  // bytes
-	MemoryPercent     float64            `json:"memory_percent"`
-	DiskUsed          int64              `json:"disk_used"`     // bytes
-	DiskTotal         int64              `json:"disk_total"`    // bytes
-	DiskPercent       float64            `json:"disk_percent"`
-	NetworkRxBytes    int64              `json:"network_rx_bytes"`
-	NetworkTxBytes    int64              `json:"network_tx_bytes"`
-	NetworkInterfaces []NetworkInterface `json:"network_interfaces,omitempty"`
-	ContainerCount    int                `json:"container_count"`
-	RunningCount      int                `json:"running_count"`
-	Processes         int                `json:"processes,omitempty"`
-	UptimeSeconds     int64              `json:"uptime_seconds,omitempty"`
-	LoadAverage       [3]float64         `json:"load_average,omitempty"`
-	TopProcesses      []ProcessMetric    `json:"top_processes"`
-	Source            string             `json:"source"` // "docker" or "agent"
-	UpdatedAt         time.Time          `json:"updated_at"`
+	NodeID               string             `json:"node_id"`
+	NodeName             string             `json:"node_name"`
+	Role                 string             `json:"role"`   // manager, worker, standalone, agent
+	Status               string             `json:"status"` // ready, down, disconnected
+	OS                   string             `json:"os"`
+	Arch                 string             `json:"arch"`
+	OSDistro             string             `json:"os_distro"`
+	KernelVersion        string             `json:"kernel_version"`
+	CPUPercent           float64            `json:"cpu_percent"`
+	MemoryUsed           int64              `json:"memory_used"`   // bytes
+	MemoryTotal          int64              `json:"memory_total"`  // bytes
+	MemoryPercent        float64            `json:"memory_percent"`
+	DiskUsed             int64              `json:"disk_used"`     // bytes
+	DiskTotal            int64              `json:"disk_total"`    // bytes
+	DiskPercent          float64            `json:"disk_percent"`
+	DiskReadBytesPerSec  int64              `json:"disk_read_bytes_per_sec"`
+	DiskWriteBytesPerSec int64              `json:"disk_write_bytes_per_sec"`
+	DiskReadIOPS         float64            `json:"disk_read_iops"`
+	DiskWriteIOPS        float64            `json:"disk_write_iops"`
+	DiskAvgAwaitMs       float64            `json:"disk_avg_await_ms"`
+	DiskMaxIoUtilPct     float64            `json:"disk_max_io_util_pct"`
+	DiskDevices          []DiskIOStats      `json:"disk_devices,omitempty"`
+	NetworkRxBytes       int64              `json:"network_rx_bytes"`
+	NetworkTxBytes       int64              `json:"network_tx_bytes"`
+	NetworkInterfaces    []NetworkInterface `json:"network_interfaces,omitempty"`
+	ContainerCount       int                `json:"container_count"`
+	RunningCount         int                `json:"running_count"`
+	Processes            int                `json:"processes,omitempty"`
+	UptimeSeconds        int64              `json:"uptime_seconds,omitempty"`
+	LoadAverage          [3]float64         `json:"load_average,omitempty"`
+	TopProcesses         []ProcessMetric    `json:"top_processes"`
+	Source               string             `json:"source"` // "docker" or "agent"
+	UpdatedAt            time.Time          `json:"updated_at"`
 }
 
 // ContainerMetrics represents resource stats for an individual container.
@@ -119,18 +152,20 @@ type ContainerMetrics struct {
 
 // SystemOverview aggregates high-level platform health, node and container metrics, and alerts.
 type SystemOverview struct {
-	Nodes             []NodeMetrics      `json:"nodes"`
-	Containers        []ContainerMetrics `json:"containers"`
-	TotalNodes        int                `json:"total_nodes"`
-	HealthyNodes      int                `json:"healthy_nodes"`
-	TotalContainers   int                `json:"total_containers"`
-	RunningContainers int                `json:"running_containers"`
-	TotalCPUPercent   float64            `json:"total_cpu_percent"`
-	TotalMemPercent   float64            `json:"total_mem_percent"`
-	TotalDiskPercent  float64            `json:"total_disk_percent"`
-	RequestsPerSec    float64            `json:"requests_per_sec"`
-	Alerts            []MetricAlert      `json:"alerts"`
-	CollectedAt       time.Time          `json:"collected_at"`
+	Nodes                     []NodeMetrics      `json:"nodes"`
+	Containers                []ContainerMetrics `json:"containers"`
+	TotalNodes                int                `json:"total_nodes"`
+	HealthyNodes              int                `json:"healthy_nodes"`
+	TotalContainers           int                `json:"total_containers"`
+	RunningContainers         int                `json:"running_containers"`
+	TotalCPUPercent           float64            `json:"total_cpu_percent"`
+	TotalMemPercent           float64            `json:"total_mem_percent"`
+	TotalDiskPercent          float64            `json:"total_disk_percent"`
+	TotalDiskReadBytesPerSec  int64              `json:"total_disk_read_bytes_per_sec"`
+	TotalDiskWriteBytesPerSec int64              `json:"total_disk_write_bytes_per_sec"`
+	RequestsPerSec            float64            `json:"requests_per_sec"`
+	Alerts                    []MetricAlert      `json:"alerts"`
+	CollectedAt               time.Time          `json:"collected_at"`
 }
 
 // MetricAlert represents an active resource threshold or availability alert.
@@ -526,6 +561,7 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 			UsagePercent   float64 `json:"usage_percent"`
 		} `json:"memory"`
 		Disks   []agentDiskPayload `json:"disks"`
+		DiskIO  DiskIOMetrics      `json:"disk_io"`
 		Network struct {
 			Interfaces []struct {
 				Name          string `json:"name"`
@@ -604,6 +640,12 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		topProcs = make([]ProcessMetric, 0)
 	}
 
+	diskIODevices := payload.DiskIO.Devices
+	if diskIODevices == nil {
+		diskIODevices = make([]DiskIOStats, 0)
+	}
+	payload.DiskIO.Devices = diskIODevices
+
 	am := &AgentMetrics{
 		Hostname:          hostname,
 		OS:                osName,
@@ -618,6 +660,7 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		DiskTotal:         diskTotal,
 		DiskUsed:          diskUsed,
 		DiskPercent:       diskPercent,
+		DiskIO:            payload.DiskIO,
 		NetRxRate:         payload.Network.TotalRxBytesPerSec,
 		NetTxRate:         payload.Network.TotalTxBytesPerSec,
 		NetworkInterfaces: ifaces,
@@ -672,6 +715,7 @@ func (c *Collector) recordAgentFailure(ctx context.Context, host docker.ComputeH
 			KernelVersion:     "Linux",
 			TopProcesses:      make([]ProcessMetric, 0),
 			NetworkInterfaces: make([]NetworkInterface, 0),
+			DiskIO:            DiskIOMetrics{Devices: make([]DiskIOStats, 0)},
 			Status:            "offline",
 			LastSeen:          now,
 		}
@@ -690,6 +734,9 @@ func (c *Collector) recordAgentFailure(ctx context.Context, host docker.ComputeH
 		}
 		if am.NetworkInterfaces == nil {
 			am.NetworkInterfaces = make([]NetworkInterface, 0)
+		}
+		if am.DiskIO.Devices == nil {
+			am.DiskIO.Devices = make([]DiskIOStats, 0)
 		}
 	}
 	c.agentMu.Unlock()
@@ -735,6 +782,11 @@ func (c *Collector) GetAgentMetrics() map[string]*AgentMetrics {
 				metricCopy.NetworkInterfaces = append([]NetworkInterface(nil), v.NetworkInterfaces...)
 			} else {
 				metricCopy.NetworkInterfaces = make([]NetworkInterface, 0)
+			}
+			if len(v.DiskIO.Devices) > 0 {
+				metricCopy.DiskIO.Devices = append([]DiskIOStats(nil), v.DiskIO.Devices...)
+			} else {
+				metricCopy.DiskIO.Devices = make([]DiskIOStats, 0)
 			}
 			res[k] = &metricCopy
 		}
@@ -1227,34 +1279,45 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 		if ifaces == nil {
 			ifaces = make([]NetworkInterface, 0)
 		}
+		diskDevices := am.DiskIO.Devices
+		if diskDevices == nil {
+			diskDevices = make([]DiskIOStats, 0)
+		}
 
 		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
-			NodeID:            hostID,
-			NodeName:          am.Hostname,
-			Role:              "agent",
-			Status:            status,
-			OS:                osName,
-			Arch:              arch,
-			OSDistro:          distro,
-			KernelVersion:     kernel,
-			CPUPercent:        am.CPUUsage,
-			MemoryUsed:        am.MemUsed,
-			MemoryTotal:       am.MemTotal,
-			MemoryPercent:     am.MemPercent,
-			DiskUsed:          am.DiskUsed,
-			DiskTotal:         am.DiskTotal,
-			DiskPercent:       am.DiskPercent,
-			NetworkRxBytes:    am.NetRxRate,
-			NetworkTxBytes:    am.NetTxRate,
-			NetworkInterfaces: ifaces,
-			ContainerCount:    nodeContainerCount,
-			RunningCount:      nodeRunningCount,
-			Processes:         am.Processes,
-			UptimeSeconds:     am.Uptime,
-			LoadAverage:       am.LoadAvg,
-			TopProcesses:      topProcs,
-			Source:            "agent",
-			UpdatedAt:         am.LastSeen,
+			NodeID:               hostID,
+			NodeName:             am.Hostname,
+			Role:                 "agent",
+			Status:               status,
+			OS:                   osName,
+			Arch:                 arch,
+			OSDistro:             distro,
+			KernelVersion:        kernel,
+			CPUPercent:           am.CPUUsage,
+			MemoryUsed:           am.MemUsed,
+			MemoryTotal:          am.MemTotal,
+			MemoryPercent:        am.MemPercent,
+			DiskUsed:             am.DiskUsed,
+			DiskTotal:            am.DiskTotal,
+			DiskPercent:          am.DiskPercent,
+			DiskReadBytesPerSec:  am.DiskIO.TotalReadBytesPerSec,
+			DiskWriteBytesPerSec: am.DiskIO.TotalWriteBytesPerSec,
+			DiskReadIOPS:         am.DiskIO.TotalReadIOPS,
+			DiskWriteIOPS:        am.DiskIO.TotalWriteIOPS,
+			DiskAvgAwaitMs:       am.DiskIO.AvgAwaitMs,
+			DiskMaxIoUtilPct:     am.DiskIO.MaxIoUtilizationPct,
+			DiskDevices:          diskDevices,
+			NetworkRxBytes:       am.NetRxRate,
+			NetworkTxBytes:       am.NetTxRate,
+			NetworkInterfaces:    ifaces,
+			ContainerCount:       nodeContainerCount,
+			RunningCount:         nodeRunningCount,
+			Processes:            am.Processes,
+			UptimeSeconds:        am.Uptime,
+			LoadAverage:          am.LoadAvg,
+			TopProcesses:         topProcs,
+			Source:               "agent",
+			UpdatedAt:            am.LastSeen,
 		})
 	}
 	c.agentMu.RUnlock()
@@ -1264,10 +1327,13 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 	var totalCPU float64
 	var totalMemUsed, totalMemLimit int64
 	var totalDiskUsed, totalDiskLimit int64
+	var totalDiskReadBytesPerSec, totalDiskWriteBytesPerSec int64
 
 	for _, nm := range nodeMetricsList {
 		if nm.Status == "ready" {
 			healthyNodesCount++
+			totalDiskReadBytesPerSec += nm.DiskReadBytesPerSec
+			totalDiskWriteBytesPerSec += nm.DiskWriteBytesPerSec
 		}
 		totalCPU += nm.CPUPercent
 		totalMemUsed += nm.MemoryUsed
@@ -1294,18 +1360,20 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 	}
 
 	overview := &SystemOverview{
-		Nodes:             nodeMetricsList,
-		Containers:        containerMetricsList,
-		TotalNodes:        len(nodeMetricsList),
-		HealthyNodes:      healthyNodesCount,
-		TotalContainers:   len(containerMetricsList),
-		RunningContainers: runningContainersCount,
-		TotalCPUPercent:   math.Round(avgCPU*100) / 100,
-		TotalMemPercent:   math.Round(totalMemPct*100) / 100,
-		TotalDiskPercent:  math.Round(totalDiskPct*100) / 100,
-		RequestsPerSec:    math.Round(rps*100) / 100,
-		Alerts:            make([]MetricAlert, 0),
-		CollectedAt:       now,
+		Nodes:                     nodeMetricsList,
+		Containers:                containerMetricsList,
+		TotalNodes:                len(nodeMetricsList),
+		HealthyNodes:              healthyNodesCount,
+		TotalContainers:           len(containerMetricsList),
+		RunningContainers:         runningContainersCount,
+		TotalCPUPercent:           math.Round(avgCPU*100) / 100,
+		TotalMemPercent:           math.Round(totalMemPct*100) / 100,
+		TotalDiskPercent:          math.Round(totalDiskPct*100) / 100,
+		TotalDiskReadBytesPerSec:  totalDiskReadBytesPerSec,
+		TotalDiskWriteBytesPerSec: totalDiskWriteBytesPerSec,
+		RequestsPerSec:            math.Round(rps*100) / 100,
+		Alerts:                    make([]MetricAlert, 0),
+		CollectedAt:               now,
 	}
 
 	overview.Alerts = c.generateAlerts(overview)

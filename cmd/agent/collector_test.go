@@ -585,3 +585,174 @@ VERSION="12 (bookworm)"
 	}
 }
 
+func TestIsRootBlockDevice(t *testing.T) {
+	tests := []struct {
+		device   string
+		expected bool
+	}{
+		{"sda", true},
+		{"sdb", true},
+		{"sdz", true},
+		{"sdaa", true},
+		{"sda1", false},
+		{"sda2", false},
+		{"vda", true},
+		{"vda1", false},
+		{"xvda", true},
+		{"xvda1", false},
+		{"hda", true},
+		{"hda1", false},
+		{"nvme0n1", true},
+		{"nvme1n1", true},
+		{"nvme0n1p1", false},
+		{"nvme0n1p2", false},
+		{"mmcblk0", true},
+		{"mmcblk0p1", false},
+		{"dm-0", true},
+		{"dm-1", true},
+		{"md0", true},
+		{"md127", true},
+		{"loop0", false},
+		{"loop1", false},
+		{"ram0", false},
+		{"zram0", false},
+		{"sr0", false},
+		{"", false},
+	}
+
+	for _, tc := range tests {
+		got := isRootBlockDevice(tc.device)
+		if got != tc.expected {
+			t.Errorf("isRootBlockDevice(%q) = %v; want %v", tc.device, got, tc.expected)
+		}
+	}
+}
+
+func TestCollectDiskIO(t *testing.T) {
+	tempDir := t.TempDir()
+	diskstatsFile := filepath.Join(tempDir, "diskstats")
+
+	initialDiskstats := `   8       0 sda 1000 100 20000 5000 2000 200 40000 10000 2 1500 20000
+   8       1 sda1 500 50 10000 2500 1000 100 20000 5000 1 750 10000
+ 259       0 nvme0n1 3000 300 60000 3000 4000 400 80000 4000 0 2000 15000
+   7       0 loop0 10 0 100 50 0 0 0 0 0 10 10
+   1       0 ram0 0 0 0 0 0 0 0 0 0 0 0
+`
+	if err := os.WriteFile(diskstatsFile, []byte(initialDiskstats), 0644); err != nil {
+		t.Fatalf("failed to write initial diskstats fixture: %v", err)
+	}
+
+	collector := NewSystemCollector(tempDir, "", nil)
+
+	// Pass 1: sets baseline
+	resp1, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect pass 1 failed: %v", err)
+	}
+
+	if resp1.DiskIO.TotalReadBytesPerSec != 0 || resp1.DiskIO.TotalWriteBytesPerSec != 0 {
+		t.Errorf("expected 0 total throughput on pass 1, got read=%d write=%d", resp1.DiskIO.TotalReadBytesPerSec, resp1.DiskIO.TotalWriteBytesPerSec)
+	}
+	if len(resp1.DiskIO.Devices) != 3 {
+		t.Fatalf("expected 3 non-virtual devices, got %d", len(resp1.DiskIO.Devices))
+	}
+
+	// Updated fixture
+	updatedDiskstats := `   8       0 sda 1100 100 22000 5500 2050 200 41000 10250 5 1900 21000
+   8       1 sda1 550 50 11000 2750 1025 100 20500 5125 1 950 10500
+ 259       0 nvme0n1 3200 300 64000 3400 4100 400 82000 4200 1 2600 16000
+   7       0 loop0 20 0 200 100 0 0 0 0 0 20 20
+   1       0 ram0 0 0 0 0 0 0 0 0 0 0 0
+`
+	if err := os.WriteFile(diskstatsFile, []byte(updatedDiskstats), 0644); err != nil {
+		t.Fatalf("failed to write updated diskstats fixture: %v", err)
+	}
+
+	// Override timestamp to simulate 1.0 second elapsed
+	collector.prevDiskTime = time.Now().UTC().Add(-1 * time.Second)
+
+	// Pass 2: calculate delta
+	resp2, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Collect pass 2 failed: %v", err)
+	}
+
+	diskIO := resp2.DiskIO
+	if len(diskIO.Devices) != 3 {
+		t.Fatalf("expected 3 devices in disk IO stats, got %d", len(diskIO.Devices))
+	}
+
+	// Root totals: sda (read 2000*512=1024000, write 1000*512=512000) + nvme0n1 (read 4000*512=2048000, write 2000*512=1024000)
+	expectedTotalRead := int64(1024000 + 2048000)   // 3072000
+	expectedTotalWrite := int64(512000 + 1024000)  // 1536000
+	expectedReadIOPS := float64(100 + 200)         // 300
+	expectedWriteIOPS := float64(50 + 100)         // 150
+	expectedMaxIoUtil := 60.0                      // max(40.0, 60.0)
+	expectedAvgAwait := 3.0                        // (750ms + 600ms) / (150 + 300 IOs) = 1350 / 450 = 3.0ms
+
+	if diskIO.TotalReadBytesPerSec != expectedTotalRead {
+		t.Errorf("expected TotalReadBytesPerSec %d, got %d", expectedTotalRead, diskIO.TotalReadBytesPerSec)
+	}
+	if diskIO.TotalWriteBytesPerSec != expectedTotalWrite {
+		t.Errorf("expected TotalWriteBytesPerSec %d, got %d", expectedTotalWrite, diskIO.TotalWriteBytesPerSec)
+	}
+	if diskIO.TotalReadIOPS != expectedReadIOPS {
+		t.Errorf("expected TotalReadIOPS %f, got %f", expectedReadIOPS, diskIO.TotalReadIOPS)
+	}
+	if diskIO.TotalWriteIOPS != expectedWriteIOPS {
+		t.Errorf("expected TotalWriteIOPS %f, got %f", expectedWriteIOPS, diskIO.TotalWriteIOPS)
+	}
+	if diskIO.MaxIoUtilizationPct != expectedMaxIoUtil {
+		t.Errorf("expected MaxIoUtilizationPct %f, got %f", expectedMaxIoUtil, diskIO.MaxIoUtilizationPct)
+	}
+	if diskIO.AvgAwaitMs != expectedAvgAwait {
+		t.Errorf("expected AvgAwaitMs %f, got %f", expectedAvgAwait, diskIO.AvgAwaitMs)
+	}
+
+	devMap := make(map[string]DiskIOStats)
+	for _, d := range diskIO.Devices {
+		devMap[d.DeviceName] = d
+	}
+
+	sda, ok := devMap["sda"]
+	if !ok {
+		t.Fatalf("device 'sda' not found")
+	}
+	if !sda.IsRootDevice {
+		t.Errorf("expected sda to be root device")
+	}
+	if sda.ReadBytesPerSec != 1024000 {
+		t.Errorf("expected sda ReadBytesPerSec 1024000, got %d", sda.ReadBytesPerSec)
+	}
+	if sda.WriteBytesPerSec != 512000 {
+		t.Errorf("expected sda WriteBytesPerSec 512000, got %d", sda.WriteBytesPerSec)
+	}
+	if sda.ReadIOPS != 100.0 {
+		t.Errorf("expected sda ReadIOPS 100, got %f", sda.ReadIOPS)
+	}
+	if sda.WriteIOPS != 50.0 {
+		t.Errorf("expected sda WriteIOPS 50, got %f", sda.WriteIOPS)
+	}
+	if sda.AvgWaitMs != 5.0 {
+		t.Errorf("expected sda AvgWaitMs 5.0, got %f", sda.AvgWaitMs)
+	}
+	if sda.AvgRequestSizeKB != 10.0 {
+		t.Errorf("expected sda AvgRequestSizeKB 10.0, got %f", sda.AvgRequestSizeKB)
+	}
+	if sda.CurrentQueueDepth != 5 {
+		t.Errorf("expected sda CurrentQueueDepth 5, got %d", sda.CurrentQueueDepth)
+	}
+	if sda.IoUtilizationPct != 40.0 {
+		t.Errorf("expected sda IoUtilizationPct 40.0, got %f", sda.IoUtilizationPct)
+	}
+
+	sda1, ok := devMap["sda1"]
+	if !ok {
+		t.Fatalf("device 'sda1' not found")
+	}
+	if sda1.IsRootDevice {
+		t.Errorf("expected sda1 not to be root device (partition)")
+	}
+}
+
+

@@ -210,24 +210,50 @@ func (w *NodeHistoryWorker) recordRollup(ctx context.Context) error {
 		}
 		w.prevNodeStatus[nodeID] = status
 
+		var diskDevs []nodemetrics.DiskIOStats
+		if len(n.DiskDevices) > 0 {
+			diskDevs = make([]nodemetrics.DiskIOStats, len(n.DiskDevices))
+			for i, d := range n.DiskDevices {
+				diskDevs[i] = nodemetrics.DiskIOStats{
+					DeviceName:        d.DeviceName,
+					ReadBytesPerSec:   d.ReadBytesPerSec,
+					WriteBytesPerSec:  d.WriteBytesPerSec,
+					ReadIOPS:          d.ReadIOPS,
+					WriteIOPS:         d.WriteIOPS,
+					AvgWaitMs:         d.AvgWaitMs,
+					AvgRequestSizeKB:  d.AvgRequestSizeKB,
+					CurrentQueueDepth: d.CurrentQueueDepth,
+					IoUtilizationPct:  d.IoUtilizationPct,
+					IsRootDevice:      d.IsRootDevice,
+				}
+			}
+		}
+
 		rollup := nodemetrics.NodeMetricRollup{
-			NodeID:         nodeID,
-			NodeName:       n.NodeName,
-			CPUPercent:     n.CPUPercent,
-			CPUPeak:        peak,
-			MemUsedBytes:   n.MemoryUsed,
-			MemTotalBytes:  n.MemoryTotal,
-			MemPercent:     n.MemoryPercent,
-			DiskUsedBytes:  n.DiskUsed,
-			DiskTotalBytes: n.DiskTotal,
-			DiskPercent:    n.DiskPercent,
-			RxBytesPerSec:  n.NetworkRxBytes,
-			TxBytesPerSec:  n.NetworkTxBytes,
-			ProcessCount:   n.Processes,
-			ContainerCount: n.ContainerCount,
-			Status:         status,
-			Resolution:     "1m",
-			RecordedAt:     now,
+			NodeID:               nodeID,
+			NodeName:             n.NodeName,
+			CPUPercent:           n.CPUPercent,
+			CPUPeak:              peak,
+			MemUsedBytes:         n.MemoryUsed,
+			MemTotalBytes:        n.MemoryTotal,
+			MemPercent:           n.MemoryPercent,
+			DiskUsedBytes:        n.DiskUsed,
+			DiskTotalBytes:       n.DiskTotal,
+			DiskPercent:          n.DiskPercent,
+			DiskReadBytesPerSec:  n.DiskReadBytesPerSec,
+			DiskWriteBytesPerSec: n.DiskWriteBytesPerSec,
+			DiskReadIOPS:         n.DiskReadIOPS,
+			DiskWriteIOPS:        n.DiskWriteIOPS,
+			DiskAvgAwaitMs:       n.DiskAvgAwaitMs,
+			DiskMaxIoUtilPct:     n.DiskMaxIoUtilPct,
+			DiskDevices:          diskDevs,
+			RxBytesPerSec:        n.NetworkRxBytes,
+			TxBytesPerSec:        n.NetworkTxBytes,
+			ProcessCount:         n.Processes,
+			ContainerCount:       n.ContainerCount,
+			Status:               status,
+			Resolution:           "1m",
+			RecordedAt:           now,
 		}
 		rollups = append(rollups, rollup)
 	}
