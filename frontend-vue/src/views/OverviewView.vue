@@ -241,6 +241,68 @@ const topologyFilterCounts = computed(() => {
   return { all: all.length, control, worker, hot, overloaded }
 })
 
+// Smooth Catmull-Rom to Monotone Cubic Bézier Spline Curve Generator
+function buildSmoothSpline(points: Array<{ x: number; y: number }>, smoothing = 0.18): string {
+  if (!points || points.length === 0) return ''
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
+  if (points.length === 2) {
+    return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)} L ${points[1].x.toFixed(1)} ${points[1].y.toFixed(1)}`
+  }
+
+  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)]
+    const p1 = points[i]
+    const p2 = points[i + 1]
+    const p3 = points[Math.min(points.length - 1, i + 2)]
+
+    // Controlled Catmull-Rom tangents with bounded smoothing to prevent overshoot
+    const cp1x = p1.x + ((p2.x - p0.x) / 6) * (1 - smoothing)
+    const cp1y = p1.y + ((p2.y - p0.y) / 6) * (1 - smoothing)
+    const cp2x = p2.x - ((p3.x - p1.x) / 6) * (1 - smoothing)
+    const cp2y = p2.y - ((p3.y - p1.y) / 6) * (1 - smoothing)
+
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+  }
+
+  return d
+}
+
+// Compact Rate Formatter (e.g. 14.7k, 8.4k, 500)
+function formatMetricRate(val: number, withUnit = false): string {
+  if (val === undefined || val === null || isNaN(val)) return withUnit ? '0 rps' : '0'
+  let str = ''
+  if (val >= 1000000) {
+    str = `${(val / 1000000).toFixed(1)}M`
+  } else if (val >= 1000) {
+    str = `${(val / 1000).toFixed(1)}k`
+  } else if (val >= 100) {
+    str = Math.round(val).toString()
+  } else if (val > 0) {
+    str = val.toFixed(1)
+  } else {
+    str = '0'
+  }
+  return withUnit ? `${str} rps` : str
+}
+
+// Live latest values for trend chart legend
+const latestTrendCpu = computed(() => {
+  if (!trendHistory.value.length) return 0
+  return trendHistory.value[trendHistory.value.length - 1].cpu || 0
+})
+
+const latestTrendMem = computed(() => {
+  if (!trendHistory.value.length) return 0
+  return trendHistory.value[trendHistory.value.length - 1].mem || 0
+})
+
+const latestTrendReqs = computed(() => {
+  if (!trendHistory.value.length) return effectiveHttpRps.value || 0
+  return trendHistory.value[trendHistory.value.length - 1].reqs || 0
+})
+
 // 5-Min Saturation Trends Chart
 const trendChartMaxReqs = computed(() => {
   return Math.max(10, ...trendHistory.value.map(p => p.reqs || 0), Math.round(effectiveHttpRps.value || 0))
@@ -250,11 +312,11 @@ const trendChartCpuPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
   const step = 1000 / (history.length - 1)
-  return history.map((h, i) => {
-    const x = i * step
-    const y = 196 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 192
-    return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
-  }).join(' ')
+  const points = history.map((h, i) => ({
+    x: i * step,
+    y: Math.max(4, Math.min(196, 196 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 192)),
+  }))
+  return buildSmoothSpline(points)
 })
 
 const trendChartCpuArea = computed(() => {
@@ -266,11 +328,11 @@ const trendChartMemPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
   const step = 1000 / (history.length - 1)
-  return history.map((h, i) => {
-    const x = i * step
-    const y = 196 - (Math.min(100, Math.max(0, h.mem)) / 100) * 192
-    return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
-  }).join(' ')
+  const points = history.map((h, i) => ({
+    x: i * step,
+    y: Math.max(4, Math.min(196, 196 - (Math.min(100, Math.max(0, h.mem)) / 100) * 192)),
+  }))
+  return buildSmoothSpline(points)
 })
 
 const trendChartMemArea = computed(() => {
@@ -283,11 +345,11 @@ const trendChartReqsPath = computed(() => {
   if (history.length < 2) return ''
   const step = 1000 / (history.length - 1)
   const maxR = trendChartMaxReqs.value
-  return history.map((h, i) => {
-    const x = i * step
-    const y = 196 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 192
-    return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
-  }).join(' ')
+  const points = history.map((h, i) => ({
+    x: i * step,
+    y: Math.max(4, Math.min(196, 196 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 192)),
+  }))
+  return buildSmoothSpline(points)
 })
 
 const trendChartReqsArea = computed(() => {
@@ -767,9 +829,9 @@ onUnmounted(() => {
           </div>
           <div class="trend-header-actions">
             <div class="trend-legend">
-              <span class="legend-pill pill-cpu"><span class="legend-dot-circle bg-violet"></span>CPU Saturation</span>
-              <span class="legend-pill pill-mem"><span class="legend-dot-circle bg-cyan"></span>RAM Usage</span>
-              <span class="legend-pill pill-reqs"><span class="legend-dot-circle bg-emerald"></span>Throughput (req/s)</span>
+              <span class="legend-pill pill-cpu"><span class="legend-dot-circle bg-violet"></span>CPU ({{ Math.round(latestTrendCpu) }}%)</span>
+              <span class="legend-pill pill-mem"><span class="legend-dot-circle bg-cyan"></span>RAM ({{ Math.round(latestTrendMem) }}%)</span>
+              <span class="legend-pill pill-reqs"><span class="legend-dot-circle bg-emerald"></span>Throughput ({{ Math.round(latestTrendReqs).toLocaleString() }} req/s)</span>
             </div>
             <button class="trend-expand-badge" type="button" title="Click to open cluster telemetry deep-dive modal">
               🔍 Deep-Dive
@@ -797,38 +859,65 @@ onUnmounted(() => {
             >
               <svg viewBox="0 0 1000 200" preserveAspectRatio="none" class="trend-plot-svg">
                 <defs>
+                  <!-- Glow Filters -->
+                  <filter id="glow-emerald-trend" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                  <filter id="glow-cyan-trend" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                  <filter id="glow-violet-trend" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+
+                  <!-- Multi-Stop Gradients -->
                   <linearGradient id="trendCpuGrad" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.35" />
+                    <stop offset="60%" stop-color="#7c3aed" stop-opacity="0.12" />
                     <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0" />
                   </linearGradient>
                   <linearGradient id="trendMemGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.3" />
+                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.35" />
+                    <stop offset="60%" stop-color="#0891b2" stop-opacity="0.12" />
                     <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
                   </linearGradient>
                   <linearGradient id="trendReqsGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.3" />
+                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.38" />
+                    <stop offset="50%" stop-color="#059669" stop-opacity="0.15" />
                     <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
                   </linearGradient>
                 </defs>
 
                 <!-- 5 Horizontal Grid Lines -->
-                <line x1="0" y1="4" x2="1000" y2="4" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3" />
-                <line x1="0" y1="52" x2="1000" y2="52" stroke="rgba(255,255,255,0.04)" stroke-dasharray="3 3" />
-                <line x1="0" y1="100" x2="1000" y2="100" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3" />
-                <line x1="0" y1="148" x2="1000" y2="148" stroke="rgba(255,255,255,0.04)" stroke-dasharray="3 3" />
-                <line x1="0" y1="196" x2="1000" y2="196" stroke="rgba(255,255,255,0.1)" />
+                <line x1="0" y1="4" x2="1000" y2="4" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
+                <line x1="0" y1="52" x2="1000" y2="52" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
+                <line x1="0" y1="100" x2="1000" y2="100" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
+                <line x1="0" y1="148" x2="1000" y2="148" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
+                <line x1="0" y1="196" x2="1000" y2="196" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
 
                 <!-- Series 1: CPU Area & Line (Violet) -->
                 <path v-if="trendChartCpuArea" :d="trendChartCpuArea" fill="url(#trendCpuGrad)" />
-                <path v-if="trendChartCpuPath" :d="trendChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.5" />
+                <path v-if="trendChartCpuPath" :d="trendChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
 
                 <!-- Series 2: RAM Area & Line (Cyan) -->
                 <path v-if="trendChartMemArea" :d="trendChartMemArea" fill="url(#trendMemGrad)" />
-                <path v-if="trendChartMemPath" :d="trendChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.5" />
+                <path v-if="trendChartMemPath" :d="trendChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
 
                 <!-- Series 3: Throughput Area & Line (Emerald) -->
                 <path v-if="trendChartReqsArea" :d="trendChartReqsArea" fill="url(#trendReqsGrad)" />
-                <path v-if="trendChartReqsPath" :d="trendChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.5" />
+                <path v-if="trendChartReqsPath" :d="trendChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
 
                 <!-- Interactive Hover Crosshair & Series Markers -->
                 <g v-if="trendHoverCoords">
@@ -840,31 +929,65 @@ onUnmounted(() => {
                     stroke="#38bdf8"
                     stroke-width="1.5"
                     stroke-dasharray="3 3"
+                    opacity="0.85"
                   />
-                  <circle
-                    :cx="trendHoverCoords.x"
-                    :cy="trendHoverCoords.yCpu"
-                    r="4"
-                    fill="#8b5cf6"
-                    stroke="#ffffff"
-                    stroke-width="2"
-                  />
-                  <circle
-                    :cx="trendHoverCoords.x"
-                    :cy="trendHoverCoords.yMem"
-                    r="4"
-                    fill="#06b6d4"
-                    stroke="#ffffff"
-                    stroke-width="2"
-                  />
-                  <circle
-                    :cx="trendHoverCoords.x"
-                    :cy="trendHoverCoords.yReq"
-                    r="4"
-                    fill="#10b981"
-                    stroke="#ffffff"
-                    stroke-width="2"
-                  />
+                  <g>
+                    <circle
+                      :cx="trendHoverCoords.x"
+                      :cy="trendHoverCoords.yCpu"
+                      r="6.5"
+                      fill="none"
+                      stroke="#8b5cf6"
+                      stroke-width="1.5"
+                      opacity="0.5"
+                    />
+                    <circle
+                      :cx="trendHoverCoords.x"
+                      :cy="trendHoverCoords.yCpu"
+                      r="3.5"
+                      fill="#8b5cf6"
+                      stroke="#ffffff"
+                      stroke-width="1.5"
+                    />
+                  </g>
+                  <g>
+                    <circle
+                      :cx="trendHoverCoords.x"
+                      :cy="trendHoverCoords.yMem"
+                      r="6.5"
+                      fill="none"
+                      stroke="#06b6d4"
+                      stroke-width="1.5"
+                      opacity="0.5"
+                    />
+                    <circle
+                      :cx="trendHoverCoords.x"
+                      :cy="trendHoverCoords.yMem"
+                      r="3.5"
+                      fill="#06b6d4"
+                      stroke="#ffffff"
+                      stroke-width="1.5"
+                    />
+                  </g>
+                  <g>
+                    <circle
+                      :cx="trendHoverCoords.x"
+                      :cy="trendHoverCoords.yReq"
+                      r="6.5"
+                      fill="none"
+                      stroke="#10b981"
+                      stroke-width="1.5"
+                      opacity="0.5"
+                    />
+                    <circle
+                      :cx="trendHoverCoords.x"
+                      :cy="trendHoverCoords.yReq"
+                      r="3.5"
+                      fill="#10b981"
+                      stroke="#ffffff"
+                      stroke-width="1.5"
+                    />
+                  </g>
                 </g>
               </svg>
 
@@ -897,11 +1020,11 @@ onUnmounted(() => {
 
             <!-- Right Y-Axis (Throughput RPS) -->
             <div class="trend-y-axis y-axis-right font-mono text-emerald">
-              <span class="y-tick">{{ trendChartMaxReqs }}</span>
-              <span class="y-tick">{{ Math.round(trendChartMaxReqs * 0.75) }}</span>
-              <span class="y-tick">{{ Math.round(trendChartMaxReqs * 0.5) }}</span>
-              <span class="y-tick">{{ Math.round(trendChartMaxReqs * 0.25) }}</span>
-              <span class="y-tick">0</span>
+              <span class="y-tick">{{ formatMetricRate(trendChartMaxReqs) }}</span>
+              <span class="y-tick">{{ formatMetricRate(trendChartMaxReqs * 0.75) }}</span>
+              <span class="y-tick">{{ formatMetricRate(trendChartMaxReqs * 0.5) }}</span>
+              <span class="y-tick">{{ formatMetricRate(trendChartMaxReqs * 0.25) }}</span>
+              <span class="y-tick">0 rps</span>
             </div>
           </div>
 
@@ -1270,7 +1393,11 @@ onUnmounted(() => {
 .legend-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary, #94a3b8);
@@ -1280,6 +1407,7 @@ onUnmounted(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
 }
 
 .trend-expand-badge {
@@ -1319,12 +1447,13 @@ onUnmounted(() => {
   font-size: 10px;
   color: var(--text-muted, #64748b);
   user-select: none;
-  width: 32px;
+  width: 34px;
   text-align: right;
   padding-bottom: 2px;
 }
 
 .y-axis-right {
+  width: 44px;
   text-align: left;
 }
 
@@ -1332,9 +1461,10 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   height: 100%;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.35);
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
 }
 
 .trend-plot-svg {
