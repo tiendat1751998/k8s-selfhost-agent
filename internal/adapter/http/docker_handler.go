@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -490,7 +491,7 @@ func (h *DockerHandler) ToggleContainer(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "toggled"})
 }
 
-// GetLogs handles GET /api/v1/docker/logs?id=<id>&type=<type>&tail=<tail>&since=<since>&until=<until>&q=<q>&level=<level>&node_id=<node_id>&node_name=<node_name>&host=<host>
+// GetLogs handles GET /api/v1/docker/logs?id=<id>&type=<type>&tail=<tail>&since=<since>&until=<until>&q=<q>&level=<level>&node_id=<node_id>&node_name=<node_name>&host=<host>&limit=<limit>
 func (h *DockerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	targetType := r.URL.Query().Get("type")
@@ -499,6 +500,14 @@ func (h *DockerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	until := r.URL.Query().Get("until")
 	q := r.URL.Query().Get("q")
 	level := r.URL.Query().Get("level")
+	limitStr := r.URL.Query().Get("limit")
+
+	limit := 0
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
 
 	nodeID := r.URL.Query().Get("node_id")
 	nodeName := r.URL.Query().Get("node_name")
@@ -549,7 +558,8 @@ func (h *DockerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 
 			agentLogs, err := h.logClient.GetNodeLogs(r.Context(), targetHost.Endpoint, token, id, tail, since, until, q, level)
 			if err == nil {
-				writeJSON(w, http.StatusOK, map[string]string{"logs": agentLogs})
+				filteredLogs := FilterLogStream(agentLogs, q, level, limit)
+				writeJSON(w, http.StatusOK, map[string]string{"logs": filteredLogs})
 				return
 			}
 
@@ -581,7 +591,8 @@ func (h *DockerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"logs": logs})
+	filteredLogs := FilterLogStream(logs, q, level, limit)
+	writeJSON(w, http.StatusOK, map[string]string{"logs": filteredLogs})
 }
 
 // SearchClusterLogs handles POST /api/v1/docker/logs/cluster-search
