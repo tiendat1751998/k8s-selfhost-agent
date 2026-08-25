@@ -96,6 +96,15 @@ const nodeAvailableLogApps = computed(() => {
 
 function formatBadgeDate(dt: string): string {
   if (!dt) return ''
+  try {
+    const d = new Date(dt)
+    if (!isNaN(d.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+    }
+  } catch {
+    // fallback
+  }
   return dt.replace('T', ' ')
 }
 
@@ -107,6 +116,20 @@ function formatDateTimeLocal(d: Date): string {
   const hh = pad(d.getHours())
   const mm = pad(d.getMinutes())
   return `${yyyy}-${MM}-${dd}T${hh}:${mm}`
+}
+
+function onLogSinceChange() {
+  if (selectedLogSince.value === 'custom') {
+    showCustomDatePicker.value = true
+    if (!customLogFrom.value) {
+      const now = new Date()
+      customLogFrom.value = formatDateTimeLocal(new Date(now.getTime() - 2 * 60 * 60 * 1000))
+      customLogTo.value = formatDateTimeLocal(now)
+    }
+  } else {
+    showCustomDatePicker.value = false
+  }
+  fetchNodeAppLogs(selectedLogApp.value)
 }
 
 function applyLogPreset(preset: '30m' | '2h' | '6h' | 'today') {
@@ -508,7 +531,7 @@ onUnmounted(() => {
                 <select
                   v-model="selectedLogSince"
                   class="select-log-input font-mono"
-                  @change="fetchNodeAppLogs(selectedLogApp)"
+                  @change="onLogSinceChange"
                 >
                   <option value="all">All Time</option>
                   <option value="15m">Last 15m</option>
@@ -519,10 +542,10 @@ onUnmounted(() => {
                   <option value="custom">📅 Custom Time Range...</option>
                 </select>
                 <button
-                  v-if="selectedLogSince === 'custom'"
+                  v-if="selectedLogSince === 'custom' || showCustomDatePicker"
                   type="button"
                   class="btn-clear-window-pill font-mono"
-                  @click="selectedLogSince = 'all'; customLogFrom = ''; customLogTo = ''; fetchNodeAppLogs(selectedLogApp)"
+                  @click="selectedLogSince = 'all'; showCustomDatePicker = false; customLogFrom = ''; customLogTo = ''; fetchNodeAppLogs(selectedLogApp)"
                   title="Reset time window to show all available logs"
                 >
                   ✕ Clear Window (Show All)
@@ -616,7 +639,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Custom Date-Time Range Selector Bar -->
-            <div v-if="selectedLogSince === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
+            <div v-if="selectedLogSince === 'custom' || showCustomDatePicker" class="custom-log-range-bar glass-panel animate-fadeIn">
               <div class="custom-range-inputs">
                 <div class="range-field">
                   <label class="range-label font-mono">FROM:</label>
@@ -654,7 +677,7 @@ onUnmounted(() => {
                   @click="fetchNodeAppLogs(selectedLogApp)"
                 >
                   <span class="glow-dot"></span>
-                  <span>{{ appLogsLoading ? 'Applying...' : 'Apply Range' }}</span>
+                  <span>{{ appLogsLoading ? 'Fetching...' : 'Apply Range' }}</span>
                 </button>
               </div>
             </div>
@@ -671,7 +694,7 @@ onUnmounted(() => {
                   stdout/stderr :: {{ selectedLogApp }} @ {{ node?.node_name }}
                 </div>
                 <div class="terminal-controls-right">
-                  <span v-if="selectedLogSince === 'custom' && (customLogFrom || customLogTo)" class="terminal-range-badge font-mono">
+                  <span v-if="(selectedLogSince === 'custom' || showCustomDatePicker) && (customLogFrom || customLogTo)" class="terminal-range-badge font-mono">
                     📅 Window: {{ formatBadgeDate(customLogFrom) || 'Start' }} → {{ formatBadgeDate(customLogTo) || 'Now' }}
                   </span>
                   <span v-else-if="selectedLogSince !== 'all'" class="terminal-range-badge font-mono">
@@ -1118,14 +1141,15 @@ onUnmounted(() => {
 }
 
 /* Custom Date-Time Range Selector Bar */
-.custom-range-bar {
+.custom-range-bar,
+.custom-log-range-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 8px 12px;
-  background: rgba(15, 23, 42, 0.65);
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(56, 189, 248, 0.25);
@@ -1157,8 +1181,8 @@ onUnmounted(() => {
 
 .input-datetime {
   color-scheme: dark;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   color: #38bdf8;
   font-size: 11.5px;

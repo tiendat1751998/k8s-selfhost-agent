@@ -38,8 +38,8 @@ const emit = defineEmits<{
   (e: 'update:nodeHistoryRange', range: string): void
   (e: 'update:customHistFrom', val: string): void
   (e: 'update:customHistTo', val: string): void
-  (e: 'range-change', range: string): void
-  (e: 'custom-range-apply'): void
+  (e: 'range-change', range: string, from?: string, to?: string): void
+  (e: 'custom-range-apply', from?: string, to?: string): void
   (e: 'apply-preset', preset: '30m' | '2h' | '6h' | 'today'): void
   (e: 'manage-host', node: NodeMetrics): void
   (e: 'open-incidents'): void
@@ -88,7 +88,7 @@ onUnmounted(() => {
 
 function handleRangeChange(range: string) {
   emit('update:nodeHistoryRange', range)
-  emit('range-change', range)
+  emit('range-change', range, props.customHistFrom, props.customHistTo)
 }
 
 function onSyncPointInTime(point: NodeMetricRollup) {
@@ -188,7 +188,7 @@ function openAiIncidents() {
                     @update:customHistFrom="emit('update:customHistFrom', $event)"
                     @update:customHistTo="emit('update:customHistTo', $event)"
                     @range-change="handleRangeChange"
-                    @custom-range-apply="emit('custom-range-apply')"
+                    @custom-range-apply="emit('custom-range-apply', customHistFrom, customHistTo)"
                     @apply-preset="emit('apply-preset', $event)"
                     @sync-point-in-time="onSyncPointInTime"
                   />
@@ -262,7 +262,7 @@ function openAiIncidents() {
 }
 
 .drawer-body-scroll {
-  padding: 16px 24px;
+  padding: 16px 24px 48px;
   overflow-y: auto;
   flex: 1;
   display: flex;

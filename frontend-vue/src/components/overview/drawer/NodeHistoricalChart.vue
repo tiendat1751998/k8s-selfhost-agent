@@ -69,6 +69,13 @@ const nodeHistoryWindowBadge = computed(() => {
 
 function toggleCustomHistoryPicker() {
   showCustomHistoryPicker.value = !showCustomHistoryPicker.value
+  if (showCustomHistoryPicker.value && !customHistoryFrom.value) {
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    customHistoryFrom.value = formatDt(new Date(now.getTime() - 24 * 60 * 60 * 1000))
+    customHistoryTo.value = formatDt(now)
+  }
 }
 
 function switchNodeDrawerToHistory(range: string) {
@@ -99,6 +106,7 @@ function applyPreset(preset: '30m' | '2h' | '6h' | 'today') {
   emit('update:customHistFrom', customHistoryFrom.value)
   emit('update:customHistTo', customHistoryTo.value)
   emit('apply-preset', preset)
+  loadNodeHistory(undefined, 'custom', customHistoryFrom.value, customHistoryTo.value)
 }
 
 // Synthetic / Live Rollup List
@@ -401,13 +409,14 @@ function handleNodeHistChartLeave(event?: MouseEvent) {
 }
 
 function loadNodeHistory(_nodeId?: string, range = '1h', from?: string, to?: string) {
+  const targetFrom = from || customHistoryFrom.value
+  const targetTo = to || customHistoryTo.value
+  emit('update:nodeHistoryRange', range)
+  emit('update:customHistFrom', targetFrom)
+  emit('update:customHistTo', targetTo)
+  emit('range-change', range)
   if (range === 'custom') {
-    emit('update:customHistFrom', from || customHistoryFrom.value)
-    emit('update:customHistTo', to || customHistoryTo.value)
     emit('custom-range-apply')
-  } else {
-    emit('update:nodeHistoryRange', range)
-    emit('range-change', range)
   }
 }
 
@@ -1106,8 +1115,8 @@ function formatIoRate(bytesPerSec?: number): string {
 
 .input-datetime {
   color-scheme: dark;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   color: #38bdf8;
   font-size: 11.5px;

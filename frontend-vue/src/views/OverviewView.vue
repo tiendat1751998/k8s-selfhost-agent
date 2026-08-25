@@ -542,14 +542,28 @@ async function pollClusterMetrics() {
 }
 
 async function loadNodeHistory(nodeId?: string, range = nodeHistoryRange.value, from?: string, to?: string) {
-  const targetId = nodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
+  const isRangeString = nodeId && ['1h', '3h', '6h', '24h', '7d', '30d', 'custom'].includes(nodeId)
+  const actualNodeId = isRangeString ? undefined : nodeId
+  const actualRange = isRangeString ? nodeId : range
+
+  const targetId = actualNodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
   if (!targetId) return
 
+  if (from !== undefined) {
+    customHistFrom.value = from
+  }
+  if (to !== undefined) {
+    customHistTo.value = to
+  }
+
   nodeHistoryLoading.value = true
-  nodeHistoryRange.value = range
+  nodeHistoryRange.value = actualRange
+
+  const targetFrom = actualRange === 'custom' ? (from || customHistFrom.value) : from
+  const targetTo = actualRange === 'custom' ? (to || customHistTo.value) : to
 
   try {
-    const data = await nodeHistoryApi.getNodeHistory(targetId, range, from, to)
+    const data = await nodeHistoryApi.getNodeHistory(targetId, actualRange, targetFrom, targetTo)
     nodeHistoryData.value = data
   } catch (err: any) {
     console.error('Failed to load historical telemetry for node:', err)
