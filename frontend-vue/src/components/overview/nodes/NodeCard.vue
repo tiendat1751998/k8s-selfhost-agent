@@ -171,11 +171,18 @@ function formatIoRate(bytesPerSec?: number): string {
           <span class="text-emerald font-bold">({{ Math.round(node.disk_percent) }}%)</span>
         </span>
       </div>
-      <div class="meta-item">
+      <div class="meta-item meta-item-network">
         <span class="meta-label">Live Network I/O</span>
-        <span class="meta-val font-mono smooth-value text-cyan">
-          ↓ {{ formatIoRate(node.network_rx_bytes) }} · ↑ {{ formatIoRate(node.network_tx_bytes) }}
-        </span>
+        <div class="net-io-streams font-mono">
+          <div class="net-stream rx" title="Download / Inbound Traffic (Rx)">
+            <span class="net-arrow text-cyan">↓</span>
+            <span class="net-val text-cyan">{{ formatIoRate(node.network_rx_bytes) }}</span>
+          </div>
+          <div class="net-stream tx" title="Upload / Outbound Traffic (Tx)">
+            <span class="net-arrow text-purple">↑</span>
+            <span class="net-val text-purple">{{ formatIoRate(node.network_tx_bytes) }}</span>
+          </div>
+        </div>
       </div>
       <div class="meta-item">
         <span class="meta-label">Containers / PIDs</span>
@@ -459,6 +466,33 @@ function formatIoRate(bytesPerSec?: number): string {
   transition: color 0.5s ease;
 }
 
+.net-io-streams {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 0.77rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.net-stream {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.net-arrow {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.net-val {
+  letter-spacing: -0.01em;
+}
+
 .node-card-footer {
   margin-top: auto;
 }
@@ -527,4 +561,5 @@ function formatIoRate(bytesPerSec?: number): string {
 .font-bold { font-weight: 700; }
 .text-cyan { color: #06b6d4; }
 .text-emerald { color: #10b981; }
+.text-purple { color: #c084fc; }
 </style>
