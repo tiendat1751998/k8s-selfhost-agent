@@ -1,22 +1,33 @@
-# K8sControl Project State — Session Update 2026-08-25T14:22
+# K8sControl Project State — Session Update 2026-08-25T15:40
 
 ## Git State
-Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `df9eee3` fix(chart): remove clumsy peak badge box and streamline apex halo beacon
+Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
+Latest: `f64355a` fix(agent): enhance disk IO collection with sub-device fallback and robust await averaging
 Previous commits this session:
+- `f64355a` fix(agent): enhance disk IO collection with sub-device fallback and robust await averaging
+- `73cdeb0` feat(ui): refine NodeCard with balanced 2x2 telemetry matrix, compact tabular streams, and header container chip
+- `bc1a2a0` feat(tps): harden TPS calculations with counter reset protection, delta cache hit ratio, and max latency tracking
+- `561936c` feat(telemetry): add high-precision Linux disk I/O telemetry, IOPS, await latency, and live dashboard visualization
 - `df9eee3` fix(chart): remove clumsy peak badge box and streamline apex halo beacon
 - `8c59e49` docs(memory): record DEC-050 smooth cubic spline chart upgrade
 - `fb91758` feat(chart): upgrade telemetry saturation curves to smooth monotone cubic splines with neon glow and peak beacons
 - `8f6c28c` feat(header): integrate alert bell, dropdown toast, and telemetry health into top hud
 - `acd1cdb` feat(overview): top-right floating cyber alert toast and alert center modal
 - `7820b2a` feat(overview): persistent alert snooze and mute system with one-click suppression
-- `294de55` feat(ui): compact 4-column network interface grid and streamline cyber datetime picker with elevated z-index
-- `819ce7f` feat(ui): implement custom cyber glass datetime picker with ok/apply confirmation
-- `98d5d52` feat(telemetry): implement smart top resource offender auto-detection and point-in-time log sync
-- `26d1a6b` docs: update project state memory with smart top offender auto-detection
-- `e1b8a74` feat(logs): implement server-side push-down filtering and zero-alloc stream scanner for container logs
-- `f63cb23` docs: update project state memory with virtual scrolling optimization
-- `6d3fbd5` perf(logs): implement high-performance virtual scrolling window and memoized parsing for 20k+ log lines
+
+## Agent Deployment Script Invariant
+- **Single-Node Deployment**: `./deploy-agent.sh user@<ip>`
+  - Automatically compiles Linux binary `k8s-agent` from `cmd/agent/`
+  - Deploys to target host over SCP
+  - Configures non-sudo `systemd --user` service with `loginctl enable-linger`
+  - Restarts `k8s-agent` on port 9100
+- **Node IP Mapping**:
+  - `k8smater`: `10.10.10.133` (Central Control Plane & Swarm Manager)
+  - `masterdb`: `10.10.10.200`
+  - `worker1`: `10.10.10.150`
+  - `worker2`: `10.10.10.151`
+  - `workerdb1`: `10.10.10.201`
+  - `k8sworker3`: `10.10.10.152` (offline)
 
 ## Scalability Roadmap Master Architecture (1,000 - 10,000 Nodes)
 - **Master Plan File**: [`docs/plans/fleet-scalability-roadmap-10k-nodes.md`](file:///d:/project/k8sseflhost/docs/plans/fleet-scalability-roadmap-10k-nodes.md)
