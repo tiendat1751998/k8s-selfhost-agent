@@ -2,8 +2,9 @@
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `88ea205` fix(ui): pin drawer mode tabs, restore header layout, and polish historical KPI cards
+Latest: `2431f0b` fix(drawer): implement custom date-time search and fix bottom scroll cutoff
 Previous commits this session:
+- `88ea205` fix(ui): pin drawer mode tabs, restore header layout, and polish historical KPI cards
 - `1bb06c9` fix(ui): correct OverviewHud and RequestFlowBar template paths
 - `297418b` refactor(ui): modularize OverviewView monolithic component into 9 clean sub-components
 - `272468f` docs: update project state memory with consolidated time toolbar
