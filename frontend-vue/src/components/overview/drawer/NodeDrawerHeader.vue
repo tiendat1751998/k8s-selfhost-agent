@@ -7,6 +7,10 @@ interface Props {
 
 defineProps<Props>()
 
+const emit = defineEmits<{
+  (e: 'close'): void
+}>()
+
 function formatDistro(distro?: string, os?: string): string {
   if (distro && distro.trim().length > 0) return distro.trim()
   if (os && os.trim().length > 0) return os.trim()
@@ -70,27 +74,38 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
         </div>
       </div>
 
-      <div class="node-quick-stats">
-        <div class="quick-stat-item">
-          <span class="qs-label">OS DISTRO</span>
-          <span class="qs-val" :title="formatDistro(node.os_distro, node.os)">{{ formatDistro(node.os_distro, node.os) }}</span>
+      <div class="header-right-group">
+        <div class="node-quick-stats">
+          <div class="quick-stat-item">
+            <span class="qs-label">OS DISTRO</span>
+            <span class="qs-val" :title="formatDistro(node.os_distro, node.os)">{{ formatDistro(node.os_distro, node.os) }}</span>
+          </div>
+          <div class="quick-stat-item">
+            <span class="qs-label">KERNEL VERSION</span>
+            <span class="qs-val font-mono">{{ formatKernelVersion(node.kernel_version, node.os) }}</span>
+          </div>
+          <div class="quick-stat-item">
+            <span class="qs-label">ARCHITECTURE</span>
+            <span class="qs-val font-mono">{{ node.arch || 'amd64' }}</span>
+          </div>
+          <div class="quick-stat-item">
+            <span class="qs-label">UPTIME</span>
+            <span class="qs-val font-mono">{{ formatUptime(node.uptime_seconds || node.uptime) }}</span>
+          </div>
+          <div class="quick-stat-item">
+            <span class="qs-label">LOAD AVG</span>
+            <span class="qs-val font-mono">{{ formatLoadAvg(node.load_avg || node.load_average) }}</span>
+          </div>
         </div>
-        <div class="quick-stat-item">
-          <span class="qs-label">KERNEL VERSION</span>
-          <span class="qs-val font-mono">{{ formatKernelVersion(node.kernel_version, node.os) }}</span>
-        </div>
-        <div class="quick-stat-item">
-          <span class="qs-label">ARCHITECTURE</span>
-          <span class="qs-val font-mono">{{ node.arch || 'amd64' }}</span>
-        </div>
-        <div class="quick-stat-item">
-          <span class="qs-label">UPTIME</span>
-          <span class="qs-val font-mono">{{ formatUptime(node.uptime_seconds || node.uptime) }}</span>
-        </div>
-        <div class="quick-stat-item">
-          <span class="qs-label">LOAD AVG</span>
-          <span class="qs-val font-mono">{{ formatLoadAvg(node.load_avg || node.load_average) }}</span>
-        </div>
+
+        <button
+          class="close-button"
+          title="Close drawer (Esc)"
+          @click="emit('close')"
+          type="button"
+        >
+          <span class="close-icon">✕</span>
+        </button>
       </div>
     </div>
   </div>
@@ -98,12 +113,16 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
 
 <style scoped>
 .node-drawer-header {
-  padding: 18px 20px;
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px 24px;
+  background: rgba(15, 23, 42, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  flex-shrink: 0;
 }
 
 .header-top-row {
@@ -112,7 +131,7 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
   gap: 14px;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 800px) {
   .header-top-row {
     flex-direction: row;
     align-items: center;
@@ -141,11 +160,11 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
   flex-shrink: 0;
 }
 
-.status-green { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.6); }
-.status-red { background: #f43f5e; box-shadow: 0 0 8px rgba(244, 63, 94, 0.6); }
+.status-green { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.7); }
+.status-red { background: #f43f5e; box-shadow: 0 0 8px rgba(244, 63, 94, 0.7); }
 
 .node-drawer-title {
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text-primary, #f8fafc);
@@ -183,12 +202,18 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
 .badge-rose { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
 .badge-indigo { background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); }
 
+.header-right-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .node-quick-stats {
   display: flex;
   align-items: center;
-  gap: 16px;
-  background: rgba(0, 0, 0, 0.35);
-  padding: 10px 16px;
+  gap: 14px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 8px 14px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
@@ -213,6 +238,33 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
   font-size: 12px;
   font-weight: 600;
   color: var(--text-primary, #f8fafc);
+}
+
+.close-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.close-button:hover {
+  background: rgba(244, 63, 94, 0.18);
+  border-color: rgba(244, 63, 94, 0.4);
+  color: #fb7185;
+  transform: translateY(-1px);
+}
+
+.close-icon {
+  font-size: 12px;
+  font-weight: bold;
 }
 
 .font-mono { font-family: var(--font-mono, monospace); }

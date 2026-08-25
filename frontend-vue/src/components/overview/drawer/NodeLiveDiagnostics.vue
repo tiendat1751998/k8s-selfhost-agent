@@ -899,21 +899,29 @@ function formatIoRate(bytesPerSec?: number): string {
 
 .interfaces-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
 }
 
-@media (max-width: 900px) {
-  .interfaces-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .interfaces-grid {
     grid-template-columns: 1fr;
   }
 }
+
+.bg-emerald { background-color: #10b981 !important; }
+.bg-amber { background-color: #f59e0b !important; }
+.bg-rose { background-color: #f43f5e !important; }
+.bg-cyan { background-color: #06b6d4 !important; }
+.bg-purple { background-color: #a855f7 !important; }
+.bg-slate { background-color: #64748b !important; }
+
+.text-emerald { color: #34d399 !important; }
+.text-amber { color: #fbbf24 !important; }
+.text-rose { color: #fb7185 !important; }
+.text-cyan { color: #38bdf8 !important; }
+.text-purple { color: #c084fc !important; }
+.text-slate { color: #94a3b8 !important; }
 
 .iface-card {
   padding: 8px 10px;

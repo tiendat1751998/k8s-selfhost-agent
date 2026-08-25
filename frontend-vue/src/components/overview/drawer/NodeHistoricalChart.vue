@@ -76,6 +76,31 @@ function switchNodeDrawerToHistory(range: string) {
   emit('range-change', range)
 }
 
+function applyPreset(preset: '30m' | '2h' | '6h' | 'today') {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+
+  if (preset === '30m') {
+    customHistoryFrom.value = formatDt(new Date(now.getTime() - 30 * 60 * 1000))
+    customHistoryTo.value = formatDt(now)
+  } else if (preset === '2h') {
+    customHistoryFrom.value = formatDt(new Date(now.getTime() - 2 * 60 * 60 * 1000))
+    customHistoryTo.value = formatDt(now)
+  } else if (preset === '6h') {
+    customHistoryFrom.value = formatDt(new Date(now.getTime() - 6 * 60 * 60 * 1000))
+    customHistoryTo.value = formatDt(now)
+  } else if (preset === 'today') {
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
+    customHistoryFrom.value = formatDt(startOfDay)
+    customHistoryTo.value = formatDt(now)
+  }
+
+  emit('update:customHistFrom', customHistoryFrom.value)
+  emit('update:customHistTo', customHistoryTo.value)
+  emit('apply-preset', preset)
+}
+
 // Synthetic / Live Rollup List
 const nodeHistoryList = computed<NodeMetricRollup[]>(() => {
   const base = props.nodeHistoryData?.history || []
@@ -414,191 +439,190 @@ function formatIoRate(bytesPerSec?: number): string {
 </script>
 
 <template>
-          <!-- Summary KPI Badges (Realtime CPU/RAM & Live I/O) -->
-          <div class="hist-kpi-grid" v-if="nodeHistoryData?.summary">
-            <!-- Card 1: Realtime CPU & Peak -->
-            <div class="hist-kpi-card glass-panel">
-              <span class="kpi-label">REALTIME CPU / PEAK</span>
-              <span class="kpi-val text-violet">{{ formatPercent(node?.cpu_percent) }}</span>
-              <span class="kpi-sub font-mono">
-                🔥 Peak: {{ formatPercent(nodeHistoryData.summary.peak_cpu_percent) }} <span class="text-slate">| Avg: {{ formatPercent(nodeHistoryData.summary.avg_cpu_percent) }}</span>
-              </span>
-            </div>
+  <!-- Summary KPI Badges (Realtime CPU/RAM & Live I/O) -->
+  <div class="hist-kpi-grid">
+    <!-- Card 1: Realtime CPU & Peak -->
+    <div class="hist-kpi-card glass-panel">
+      <span class="kpi-label">REALTIME CPU / PEAK</span>
+      <span class="kpi-val text-violet">{{ formatPercent(node?.cpu_percent) }}</span>
+      <span class="kpi-sub font-mono">
+        🔥 Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_cpu_percent || node?.cpu_percent) }} <span class="text-slate">| Avg: {{ formatPercent(nodeHistoryData?.summary?.avg_cpu_percent || node?.cpu_percent) }}</span>
+      </span>
+    </div>
 
-            <!-- Card 2: Realtime RAM & Peak -->
-            <div class="hist-kpi-card glass-panel">
-              <span class="kpi-label">REALTIME RAM / PEAK</span>
-              <span class="kpi-val text-cyan">{{ formatPercent(node?.memory_percent) }}</span>
-              <span class="kpi-sub font-mono">
-                🧠 {{ formatBytes(node?.memory_used) }} / {{ formatBytes(node?.memory_total) }} <span class="text-slate">(Peak: {{ formatPercent(nodeHistoryData.summary.peak_mem_percent) }})</span>
-              </span>
-            </div>
+    <!-- Card 2: Realtime RAM & Peak -->
+    <div class="hist-kpi-card glass-panel">
+      <span class="kpi-label">REALTIME RAM / PEAK</span>
+      <span class="kpi-val text-cyan">{{ formatPercent(node?.memory_percent) }}</span>
+      <span class="kpi-sub font-mono">
+        🧠 {{ formatBytes(node?.memory_used) }} / {{ formatBytes(node?.memory_total) }} <span class="text-slate">(Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_mem_percent || node?.memory_percent) }})</span>
+      </span>
+    </div>
 
-            <!-- Card 3: Live Network I/O -->
-            <div class="hist-kpi-card glass-panel">
-              <span class="kpi-label">LIVE NETWORK I/O</span>
-              <div class="hist-kpi-net-row font-mono">
-                <div class="net-pill net-pill-rx">
-                  <span class="net-pill-arrow">↓</span>
-                  <span class="net-pill-val">{{ formatIoRate(node?.network_rx_bytes || 0) }}</span>
-                </div>
-                <div class="net-pill net-pill-tx">
-                  <span class="net-pill-arrow">↑</span>
-                  <span class="net-pill-val">{{ formatIoRate(node?.network_tx_bytes || 0) }}</span>
-                </div>
-              </div>
-              <span class="kpi-sub font-mono">
-                ⚡ Peak: ↓ {{ formatIoRate(nodeHistoryData.summary.peak_rx_bytes_sec) }}
-              </span>
-            </div>
+    <!-- Card 3: Live Network I/O -->
+    <div class="hist-kpi-card glass-panel">
+      <span class="kpi-label">LIVE NETWORK I/O</span>
+      <div class="hist-kpi-net-row font-mono">
+        <div class="net-pill net-pill-rx">
+          <span class="net-pill-arrow">↓</span>
+          <span class="net-pill-val">{{ formatIoRate(node?.network_rx_bytes || 0) }}</span>
+        </div>
+        <div class="net-pill net-pill-tx">
+          <span class="net-pill-arrow">↑</span>
+          <span class="net-pill-val">{{ formatIoRate(node?.network_tx_bytes || 0) }}</span>
+        </div>
+      </div>
+      <span class="kpi-sub font-mono">
+        ⚡ Peak: ↓ {{ formatIoRate(nodeHistoryData?.summary?.peak_rx_bytes_sec || node?.network_rx_bytes) }}
+      </span>
+    </div>
 
-            <!-- Card 4: Uptime & Disk Usage -->
-            <div class="hist-kpi-card glass-panel">
-              <span class="kpi-label">UPTIME & DISK USAGE</span>
-              <span class="kpi-val" :class="nodeHistoryData.summary.uptime_percent >= 99 ? 'text-emerald' : 'text-amber'">
-                {{ formatPercent(nodeHistoryData.summary.uptime_percent) }}
-              </span>
-              <span class="kpi-sub font-mono">
-                💾 Disk: {{ formatPercent(node?.disk_percent) }} <span class="text-slate">({{ formatBytes(node?.disk_used) }} / {{ formatBytes(node?.disk_total) }})</span>
-              </span>
-            </div>
-          </div>
-          <div class="hist-kpi-empty glass-panel" v-else-if="!nodeHistoryLoading">
-            <div class="empty-kpi-content">
-              <span class="empty-kpi-icon">📊</span>
-              <div class="empty-kpi-text">
-                <strong class="empty-kpi-title">Historical Summary Ingestion In Progress</strong>
-                <span class="empty-kpi-desc">No aggregated summary recorded for <code>{{ node?.node_name }}</code> in the {{ nodeHistoryRange }} window. Live telemetry and monitoring remain fully active.</span>
-              </div>
-            </div>
-          </div>
+    <!-- Card 4: Uptime & Disk Usage -->
+    <div class="hist-kpi-card glass-panel">
+      <span class="kpi-label">UPTIME & DISK USAGE</span>
+      <span class="kpi-val text-emerald">
+        {{ formatPercent(nodeHistoryData?.summary?.uptime_percent || 99) }}
+      </span>
+      <span class="kpi-sub font-mono">
+        💾 Disk: {{ formatPercent(node?.disk_percent) }} <span class="text-slate">({{ formatBytes(node?.disk_used) }} / {{ formatBytes(node?.disk_total) }})</span>
+      </span>
+    </div>
+  </div>
 
-          <!-- Historical Multi-Series Chart -->
-          <div class="hist-chart-wrapper glass-panel">
-            <div class="hist-chart-header">
-              <div class="chart-title-group">
-                <h4 class="hist-chart-title">📈 {{ node?.node_name || 'Node' }} Hardware Saturation Trends</h4>
-                <span class="hist-chart-desc badge-history-window font-mono">{{ nodeHistoryWindowBadge }}</span>
-              </div>
+  <!-- Historical Multi-Series Chart -->
+  <div class="hist-chart-wrapper glass-panel">
+    <div class="hist-chart-header">
+      <div class="chart-title-group">
+        <h4 class="hist-chart-title">📈 {{ node?.node_name || 'Node' }} Hardware Saturation Trends</h4>
+        <span class="hist-chart-desc badge-history-window font-mono">{{ nodeHistoryWindowBadge }}</span>
+      </div>
 
-              <!-- Interactive Series Toggles with Live Values -->
-              <div class="series-toggles-group" v-if="nodeHistoryList.length > 0">
-                <button
-                  type="button"
-                  class="series-toggle-btn"
-                  :class="{ 'toggle-active cpu-active': showHistCpu }"
-                  @click="showHistCpu = !showHistCpu"
-                  title="Click to toggle CPU curve"
-                >
-                  <span class="toggle-dot bg-violet"></span>
-                  <span>CPU: <strong>{{ formatPercent(node?.cpu_percent) }}</strong></span>
-                </button>
+      <!-- Interactive Series Toggles with Live Values -->
+      <div class="series-toggles-group" v-if="nodeHistoryList.length > 0">
+        <button
+          type="button"
+          class="series-toggle-btn"
+          :class="{ 'toggle-active cpu-active': showHistCpu }"
+          @click="showHistCpu = !showHistCpu"
+          title="Click to toggle CPU curve"
+        >
+          <span class="toggle-dot bg-violet"></span>
+          <span>CPU: <strong>{{ formatPercent(node?.cpu_percent) }}</strong></span>
+        </button>
 
-                <button
-                  type="button"
-                  class="series-toggle-btn"
-                  :class="{ 'toggle-active peak-active': showHistPeakEnvelope }"
-                  @click="showHistPeakEnvelope = !showHistPeakEnvelope"
-                  title="Toggle Peak Spike Envelope layer"
-                >
-                  <span class="toggle-dot bg-rose"></span>
-                  <span>🔥 Peak Envelope: <strong>{{ showHistPeakEnvelope ? 'ON' : 'OFF' }}</strong></span>
-                </button>
+        <button
+          type="button"
+          class="series-toggle-btn"
+          :class="{ 'toggle-active peak-active': showHistPeakEnvelope }"
+          @click="showHistPeakEnvelope = !showHistPeakEnvelope"
+          title="Toggle Peak Spike Envelope layer"
+        >
+          <span class="toggle-dot bg-rose"></span>
+          <span>🔥 Peak Envelope: <strong>{{ showHistPeakEnvelope ? 'ON' : 'OFF' }}</strong></span>
+        </button>
 
-                <button
-                  type="button"
-                  class="series-toggle-btn"
-                  :class="{ 'toggle-active mem-active': showHistMem }"
-                  @click="showHistMem = !showHistMem"
-                  title="Click to toggle RAM curve"
-                >
-                  <span class="toggle-dot bg-cyan"></span>
-                  <span>RAM: <strong>{{ formatPercent(node?.memory_percent) }}</strong></span>
-                </button>
+        <button
+          type="button"
+          class="series-toggle-btn"
+          :class="{ 'toggle-active mem-active': showHistMem }"
+          @click="showHistMem = !showHistMem"
+          title="Click to toggle RAM curve"
+        >
+          <span class="toggle-dot bg-cyan"></span>
+          <span>RAM: <strong>{{ formatPercent(node?.memory_percent) }}</strong></span>
+        </button>
 
-                <button
-                  type="button"
-                  class="series-toggle-btn"
-                  :class="{ 'toggle-active reqs-active': showHistDisk }"
-                  @click="showHistDisk = !showHistDisk"
-                  title="Click to toggle Disk curve"
-                >
-                  <span class="toggle-dot bg-emerald"></span>
-                  <span>Disk: <strong>{{ formatPercent(node?.disk_percent) }}</strong></span>
-                </button>
-              </div>
-            </div>
+        <button
+          type="button"
+          class="series-toggle-btn"
+          :class="{ 'toggle-active reqs-active': showHistDisk }"
+          @click="showHistDisk = !showHistDisk"
+          title="Click to toggle Disk curve"
+        >
+          <span class="toggle-dot bg-emerald"></span>
+          <span>Disk: <strong>{{ formatPercent(node?.disk_percent) }}</strong></span>
+        </button>
+      </div>
+    </div>
 
-            <!-- Integrated Time Range & Sample Bar -->
-            <div class="hist-chart-time-bar">
-              <div class="chart-time-pills">
-                <button
-                  v-for="r in ['1h', '3h', '6h', '24h', '7d', '30d'] as const"
-                  :key="r"
-                  class="btn-chart-range-pill"
-                  :class="{ active: nodeHistoryRange === r && !showCustomHistoryPicker }"
-                  @click="switchNodeDrawerToHistory(r)"
-                >
-                  {{ r }}
-                </button>
-                <button
-                  class="btn-chart-range-pill"
-                  :class="{ active: nodeHistoryRange === 'custom' || showCustomHistoryPicker }"
-                  @click="toggleCustomHistoryPicker"
-                >
-                  📅 Custom
-                </button>
-              </div>
-              <div class="range-right">
-                <span class="badge badge-indigo font-mono" v-if="nodeHistoryData?.resolution">
-                  Sample Rate: {{ nodeHistoryData.resolution }}
-                </span>
-                <button class="btn btn-secondary btn-xs" @click="loadNodeHistory(node?.node_id || node?.node_name, nodeHistoryRange)" :disabled="nodeHistoryLoading">
-                  ↺ Refresh
-                </button>
-              </div>
-            </div>
+    <!-- Integrated Time Range & Sample Bar -->
+    <div class="hist-chart-time-bar">
+      <div class="chart-time-pills">
+        <button
+          v-for="r in ['1h', '3h', '6h', '24h', '7d', '30d'] as const"
+          :key="r"
+          class="btn-chart-range-pill"
+          :class="{ active: nodeHistoryRange === r && !showCustomHistoryPicker }"
+          @click="switchNodeDrawerToHistory(r)"
+        >
+          {{ r }}
+        </button>
+        <button
+          class="btn-chart-range-pill"
+          :class="{ active: nodeHistoryRange === 'custom' || showCustomHistoryPicker }"
+          @click="toggleCustomHistoryPicker"
+        >
+          📅 Custom
+        </button>
+      </div>
+      <div class="range-right">
+        <span class="badge badge-indigo font-mono" v-if="nodeHistoryData?.resolution">
+          Sample Rate: {{ nodeHistoryData.resolution }}
+        </span>
+        <button class="btn btn-secondary btn-xs" @click="loadNodeHistory(node?.node_id || node?.node_name, nodeHistoryRange)" :disabled="nodeHistoryLoading">
+          ↺ Refresh
+        </button>
+      </div>
+    </div>
 
-            <!-- Inline Glassmorphic Custom History Toolbar -->
-            <div v-if="showCustomHistoryPicker || nodeHistoryRange === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
-              <div class="custom-range-inputs">
-                <div class="range-field">
-                  <label class="range-label font-mono">FROM:</label>
-                  <input
-                    type="datetime-local"
-                    v-model="customHistoryFrom"
-                    class="input-datetime font-mono"
-                    @keyup.enter="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
-                  />
-                </div>
-                <div class="range-field">
-                  <label class="range-label font-mono">TO:</label>
-                  <input
-                    type="datetime-local"
-                    v-model="customHistoryTo"
-                    class="input-datetime font-mono"
-                    @keyup.enter="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
-                  />
-                </div>
-              </div>
+    <!-- Inline Glassmorphic Custom History Toolbar -->
+    <div v-if="showCustomHistoryPicker || nodeHistoryRange === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
+      <div class="custom-range-inputs">
+        <div class="range-field">
+          <label class="range-label font-mono">FROM:</label>
+          <input
+            type="datetime-local"
+            v-model="customHistoryFrom"
+            class="input-datetime font-mono"
+            @keyup.enter="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+          />
+        </div>
+        <div class="range-field">
+          <label class="range-label font-mono">TO:</label>
+          <input
+            type="datetime-local"
+            v-model="customHistoryTo"
+            class="input-datetime font-mono"
+            @keyup.enter="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+          />
+        </div>
+      </div>
 
-              <div class="custom-range-actions">
-                <button
-                  type="button"
-                  class="btn-apply-range font-mono"
-                  :disabled="nodeHistoryLoading"
-                  @click="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
-                >
-                  <span class="glow-dot"></span>
-                  <span>{{ nodeHistoryLoading ? 'Applying...' : 'Apply Window' }}</span>
-                </button>
-              </div>
-            </div>
+      <div class="custom-range-presets">
+        <span class="preset-label font-mono">PRESETS:</span>
+        <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('30m')">Last 30m</button>
+        <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('2h')">Last 2h</button>
+        <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('6h')">Last 6h</button>
+        <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('today')">Today</button>
+      </div>
 
-            <!-- Loading overlay when fetching new time range -->
-            <div v-if="nodeHistoryLoading" class="hist-chart-loading glass-panel">
-              <span class="spinner-sm"></span> Loading {{ nodeHistoryRange }} telemetry rollups...
-            </div>
+      <div class="custom-range-actions">
+        <button
+          type="button"
+          class="btn-apply-range font-mono"
+          :disabled="nodeHistoryLoading"
+          @click="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+        >
+          <span class="glow-dot"></span>
+          <span>{{ nodeHistoryLoading ? 'Applying...' : 'Apply Window' }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading overlay when fetching new time range -->
+    <div v-if="nodeHistoryLoading" class="hist-chart-loading glass-panel">
+      <span class="spinner-sm"></span> Loading {{ nodeHistoryRange }} telemetry rollups...
+    </div>
 
             <!-- SVG Chart with HTML-Overlay Grid Layout -->
             <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave">
@@ -778,16 +802,230 @@ function formatIoRate(bytesPerSec?: number): string {
 </template>
 
 <style scoped>
+/* 4 Summary KPI Badges */
+.hist-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .hist-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .hist-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hist-kpi-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 96px;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.hist-kpi-card:hover {
+  border-color: rgba(56, 189, 248, 0.25);
+  transform: translateY(-1px);
+}
+
+.hist-kpi-card .kpi-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #94a3b8);
+}
+
+.hist-kpi-card .kpi-val {
+  font-size: 20px;
+  font-weight: 800;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.2;
+}
+
+.hist-kpi-card .kpi-sub {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hist-kpi-net-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+}
+
+.net-pill {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.net-pill-rx {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.net-pill-tx {
+  background: rgba(6, 182, 212, 0.15);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  color: #22d3ee;
+}
+
+.net-pill-arrow {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.net-pill-val {
+  font-size: 11px;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Historical Chart Wrapper */
+.hist-chart-wrapper {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hist-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chart-title-group h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary, #f8fafc);
+  margin: 0;
+}
+
+.chart-title-group .hist-chart-desc {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.badge-history-window {
+  font-size: 11px;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  display: inline-block;
+  margin-top: 3px;
+}
+
+/* Series Toggles */
+.series-toggles-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.series-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: var(--text-muted, #94a3b8);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.series-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary, #f8fafc);
+}
+
+.series-toggle-btn.toggle-active.cpu-active {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: rgba(168, 85, 247, 0.4);
+  color: #c084fc;
+}
+
+.series-toggle-btn.toggle-active.peak-active {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: rgba(244, 63, 94, 0.4);
+  color: #fb7185;
+}
+
+.series-toggle-btn.toggle-active.mem-active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: rgba(6, 182, 212, 0.4);
+  color: #38bdf8;
+}
+
+.series-toggle-btn.toggle-active.reqs-active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.toggle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.bg-violet { background-color: #a855f7; }
+.bg-rose { background-color: #f43f5e; }
+.bg-cyan { background-color: #06b6d4; }
+.bg-emerald { background-color: #10b981; }
+
+/* Time Range Bar */
 .hist-chart-time-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 6px 0;
+  padding: 8px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  margin: 8px 0 12px 0;
+  margin: 4px 0 8px 0;
 }
 
 .chart-time-pills {
@@ -802,23 +1040,25 @@ function formatIoRate(bytesPerSec?: number): string {
   border-radius: 6px;
   font-size: 11.5px;
   font-weight: 600;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.04);
-  color: var(--text-secondary);
+  color: var(--text-secondary, #94a3b8);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .btn-chart-range-pill:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
+  color: var(--text-primary, #f8fafc);
+  border-color: rgba(56, 189, 248, 0.3);
 }
 
 .btn-chart-range-pill.active {
-  background: #38bdf8;
-  color: #0f172a;
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
   border-color: #38bdf8;
   font-weight: 700;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
 }
 
 .range-right {
@@ -827,132 +1067,133 @@ function formatIoRate(bytesPerSec?: number): string {
   gap: 10px;
 }
 
-.hist-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-@media (max-width: 768px) {
-  .hist-kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.hist-kpi-card {
-  padding: 14px 16px;
-  border-radius: 12px;
+/* Custom Range Toolbar */
+.custom-range-bar {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  margin: 4px 0 8px 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-.hist-kpi-card .kpi-label {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
+.custom-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.hist-kpi-card .kpi-val {
-  font-size: 20px;
-  font-weight: 800;
-  font-family: monospace;
-}
-
-.hist-kpi-card .kpi-sub {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.hist-kpi-net-row {
+.range-field {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 3px 0 2px 0;
 }
 
-.net-pill {
-  flex: 1;
+.range-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.05em;
+}
+
+.input-datetime {
+  color-scheme: dark;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 11.5px;
+  padding: 5px 8px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.input-datetime:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.custom-range-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.preset-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted, #94a3b8);
+}
+
+.btn-preset-chip {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-preset-chip:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+
+.custom-range-actions {
+  display: flex;
+  align-items: center;
+}
+
+.btn-apply-range {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 3px 6px;
+  gap: 6px;
+  padding: 5px 12px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.3) 0%, rgba(56, 189, 248, 0.15) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.6);
   border-radius: 6px;
-  font-size: 13px;
+  color: #38bdf8;
+  font-size: 11.5px;
   font-weight: 700;
-  white-space: nowrap;
-  min-width: 0;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+  transition: all 0.2s ease;
 }
 
-.net-pill-rx {
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #34d399;
+.btn-apply-range:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.5) 0%, rgba(56, 189, 248, 0.3) 100%);
+  border-color: #38bdf8;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+  transform: translateY(-1px);
 }
 
-.net-pill-tx {
-  background: rgba(6, 182, 212, 0.12);
-  border: 1px solid rgba(6, 182, 212, 0.3);
-  color: #22d3ee;
+.btn-apply-range:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.net-pill-arrow {
-  font-size: 12px;
-  font-weight: 800;
+.glow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
 }
 
-.net-pill-val {
-  font-size: 12px;
-  letter-spacing: -0.02em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.hist-kpi-empty {
-  padding: 14px 18px;
-  border-radius: 12px;
-}
-
-.empty-kpi-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.empty-kpi-icon {
-  font-size: 24px;
-  opacity: 0.85;
-}
-
-.empty-kpi-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.empty-kpi-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.empty-kpi-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.hist-chart-wrapper {
-  padding: 16px;
-  border-radius: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
+/* Loading & Empty States */
 .hist-chart-loading {
   display: flex;
   align-items: center;
@@ -960,7 +1201,7 @@ function formatIoRate(bytesPerSec?: number): string {
   gap: 10px;
   min-height: 180px;
   border-radius: 10px;
-  color: var(--text-muted);
+  color: var(--text-muted, #94a3b8);
   font-size: 13px;
 }
 
@@ -973,7 +1214,7 @@ function formatIoRate(bytesPerSec?: number): string {
   padding: 36px 20px;
   background: rgba(10, 15, 30, 0.4);
   border-radius: 10px;
-  border: 1px dashed var(--border-subtle);
+  border: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.1));
   min-height: 190px;
   gap: 8px;
 }
@@ -1003,89 +1244,27 @@ function formatIoRate(bytesPerSec?: number): string {
 .empty-chart-title {
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #94a3b8);
   margin: 0;
 }
 
 .empty-chart-desc {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-muted, #64748b);
   max-width: 480px;
   margin: 0;
   line-height: 1.5;
 }
 
-.hist-chart-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chart-title-group h4 {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.chart-title-group .hist-chart-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.badge-history-window {
-  font-size: 11px;
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.1);
-  padding: 2px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  display: inline-block;
-  margin-top: 2px;
-}
-
-.hist-chart-legend {
-  display: flex;
-  gap: 10px;
-}
-
-.legend-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
+/* SVG Chart Container */
 .hist-chart-container {
   position: relative;
   width: 100%;
   height: 220px;
   background: rgba(10, 15, 30, 0.6);
   border-radius: 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   overflow: hidden;
-}
-
-.hist-loading-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(10, 15, 30, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--text-muted);
-  font-size: 13px;
-  z-index: 10;
 }
 
 .hist-svg-canvas {
@@ -1112,9 +1291,10 @@ function formatIoRate(bytesPerSec?: number): string {
 .hist-x-axis .x-tick {
   font-size: 9px;
   font-family: monospace;
-  color: var(--text-muted);
+  color: var(--text-muted, #64748b);
 }
 
+/* Hover Tooltip */
 .hist-rich-tooltip {
   position: absolute;
   background: rgba(15, 23, 42, 0.95);
@@ -1190,7 +1370,7 @@ function formatIoRate(bytesPerSec?: number): string {
 }
 
 .tooltip-label {
-  color: var(--text-muted);
+  color: var(--text-muted, #94a3b8);
 }
 
 .tooltip-val {
@@ -1278,5 +1458,8 @@ function formatIoRate(bytesPerSec?: number): string {
   letter-spacing: 0.02em;
 }
 
-
+.btn-xs {
+  padding: 3px 8px;
+  font-size: 11px;
+}
 </style>
