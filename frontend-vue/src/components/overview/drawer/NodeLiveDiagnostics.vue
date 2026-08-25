@@ -478,15 +478,14 @@ function formatIoRate(bytesPerSec?: number): string {
                   </div>
                   <span class="iface-nic-tag font-mono">NIC</span>
                 </div>
-                <div class="iface-rates-stack">
-                  <div class="iface-rate-row rx-row">
-                    <span class="rate-badge rx-badge">↓ RX</span>
-                    <span class="rate-val text-cyan font-mono">{{ formatIoRate(iface.rx_bytes_per_sec) }}</span>
-                  </div>
-                  <div class="iface-rate-row tx-row">
-                    <span class="rate-badge tx-badge">↑ TX</span>
-                    <span class="rate-val text-purple font-mono">{{ formatIoRate(iface.tx_bytes_per_sec) }}</span>
-                  </div>
+                <div class="iface-rates-row font-mono">
+                  <span class="iface-rate-item text-cyan" :title="'Download Rate (Rx): ' + formatIoRate(iface.rx_bytes_per_sec)">
+                    <span class="rate-arrow">↓</span> {{ formatIoRate(iface.rx_bytes_per_sec) }}
+                  </span>
+                  <span class="iface-rate-sep">·</span>
+                  <span class="iface-rate-item text-purple" :title="'Upload Rate (Tx): ' + formatIoRate(iface.tx_bytes_per_sec)">
+                    <span class="rate-arrow">↑</span> {{ formatIoRate(iface.tx_bytes_per_sec) }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -899,13 +898,19 @@ function formatIoRate(bytesPerSec?: number): string {
 
 .interfaces-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
   .interfaces-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .interfaces-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -924,15 +929,17 @@ function formatIoRate(bytesPerSec?: number): string {
 .text-slate { color: #94a3b8 !important; }
 
 .iface-card {
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
   background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 46px;
   transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -946,97 +953,71 @@ function formatIoRate(bytesPerSec?: number): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 4px;
 }
 
 .iface-name-group {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
 .iface-icon {
-  font-size: 11px;
+  font-size: 10px;
+  flex-shrink: 0;
 }
 
 .iface-name {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-primary);
-  max-width: 110px;
+  max-width: 90px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .iface-nic-tag {
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  padding: 1px 4px;
+  padding: 1px 3px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-muted);
   border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
-.iface-rates-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.iface-rate-row {
+.iface-rates-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3px 6px;
-  border-radius: 6px;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  gap: 2px;
+  font-size: 9.5px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.iface-rate-row.rx-row {
-  background: rgba(6, 182, 212, 0.06);
-  border: 1px solid rgba(6, 182, 212, 0.15);
+.iface-rate-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
 }
 
-.iface-rate-row.rx-row:hover {
-  background: rgba(6, 182, 212, 0.12);
-  border-color: rgba(6, 182, 212, 0.3);
-}
-
-.iface-rate-row.tx-row {
-  background: rgba(168, 85, 247, 0.06);
-  border: 1px solid rgba(168, 85, 247, 0.15);
-}
-
-.iface-rate-row.tx-row:hover {
-  background: rgba(168, 85, 247, 0.12);
-  border-color: rgba(168, 85, 247, 0.3);
-}
-
-.rate-badge {
+.rate-arrow {
+  font-weight: 800;
   font-size: 9px;
-  font-weight: 700;
-  padding: 1px 4px;
-  border-radius: 3px;
-  white-space: nowrap;
 }
 
-.rx-badge {
-  background: rgba(6, 182, 212, 0.2);
-  color: #38bdf8;
-}
-
-.tx-badge {
-  background: rgba(168, 85, 247, 0.2);
-  color: #c084fc;
-}
-
-.rate-val {
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
+.iface-rate-sep {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 9px;
 }
 
 /* Service filter chips and interactive table controls */

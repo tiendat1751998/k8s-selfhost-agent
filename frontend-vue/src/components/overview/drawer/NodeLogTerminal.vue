@@ -1304,6 +1304,9 @@ onUnmounted(() => {
 /* Custom Date-Time Range Selector Bar */
 .custom-range-bar,
 .custom-log-range-bar {
+  position: relative;
+  z-index: 50;
+  overflow: visible;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1432,6 +1435,7 @@ onUnmounted(() => {
 /* Terminal Viewer */
 .log-terminal-viewer {
   position: relative;
+  z-index: 1;
   background: #080c14;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
