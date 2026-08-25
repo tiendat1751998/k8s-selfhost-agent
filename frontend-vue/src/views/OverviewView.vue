@@ -83,8 +83,25 @@ const defaultOverviewHistDates = (() => {
 const customHistFrom = ref<string>(defaultOverviewHistDates.from)
 const customHistTo = ref<string>(defaultOverviewHistDates.to)
 
-// Slide-down Alerts dismiss state
+// Slide-down Alerts Persistent Muted & Snooze state
+const MUTED_ALERTS_STORAGE_KEY = 'k8s_muted_alerts_v1'
+const SESSION_MUTED_ALERTS_KEY = 'k8s_session_muted_alerts_v1'
+
+export interface MutedAlertConfig {
+  key: string // e.g. "workerdb1-node_down"
+  nodeId?: string
+  nodeName?: string
+  type: string
+  mutedAt: number // timestamp
+  snoozeMode: 'restart' | '1h' | '24h' | 'session' | 'forever'
+  expiresAt?: number // timestamp if time-based
+}
+
 const dismissedAlerts = ref<Set<string>>(new Set())
+const mutedAlertsMap = ref<Record<string, MutedAlertConfig>>({})
+const isAlertsMinimized = ref<boolean>(false)
+const showMutedManagerModal = ref<boolean>(false)
+const openSnoozeDropdownKey = ref<string | null>(null)
 
 // Polling interval IDs
 let pollInterval: any = null
@@ -177,9 +194,43 @@ const clusterAvgLatencyMs = computed(() => {
   return tpsData.value?.http?.avg_latency_ms || 2.4
 })
 
+function getAlertKey(alert: MetricAlert): string {
+  return `${alert.node_name || alert.node_id}-${alert.type}`
+}
+
+function isAlertMuted(alert: MetricAlert): boolean {
+  const keyByName = `${alert.node_name || alert.node_id}-${alert.type}`
+  const keyById = `${alert.node_id}-${alert.type}`
+  const now = Date.now()
+
+  const config = mutedAlertsMap.value[keyByName] || mutedAlertsMap.value[keyById]
+  if (!config) return false
+  if (config.expiresAt && now > config.expiresAt) {
+    return false
+  }
+  return true
+}
+
 const activeAlerts = computed<MetricAlert[]>(() => {
   const alerts = overview.value?.alerts || []
-  return alerts.filter(a => !dismissedAlerts.value.has(`${a.node_id}-${a.type}`))
+  return alerts.filter(a => {
+    const key = getAlertKey(a)
+    const rawKey = `${a.node_id}-${a.type}`
+    if (dismissedAlerts.value.has(key) || dismissedAlerts.value.has(rawKey)) return false
+    if (isAlertMuted(a)) return false
+    return true
+  })
+})
+
+const mutedAlertsList = computed<MutedAlertConfig[]>(() => {
+  const now = Date.now()
+  return Object.values(mutedAlertsMap.value).filter(
+    item => !item.expiresAt || now <= item.expiresAt
+  )
+})
+
+const hasCriticalAlerts = computed<boolean>(() => {
+  return activeAlerts.value.some(a => a.value >= 90 || a.type === 'node_down')
 })
 
 const clusterTotalMemBytes = computed(() => {
@@ -485,8 +536,174 @@ function getAlertRecommendation(alert: MetricAlert): string {
   return 'Review host telemetry and system diagnostics.'
 }
 
+function loadMutedAlerts() {
+  try {
+    const now = Date.now()
+    const valid: Record<string, MutedAlertConfig> = {}
+    let localChanged = false
+
+    // 1. Load persistent local storage
+    const rawLocal = localStorage.getItem(MUTED_ALERTS_STORAGE_KEY)
+    if (rawLocal) {
+      const parsedLocal = JSON.parse(rawLocal) as Record<string, MutedAlertConfig>
+      for (const [key, item] of Object.entries(parsedLocal)) {
+        if (item.expiresAt && now > item.expiresAt) {
+          localChanged = true
+          continue
+        }
+        valid[key] = item
+      }
+    }
+
+    // 2. Load session storage
+    const rawSession = sessionStorage.getItem(SESSION_MUTED_ALERTS_KEY)
+    if (rawSession) {
+      const parsedSession = JSON.parse(rawSession) as Record<string, MutedAlertConfig>
+      for (const [key, item] of Object.entries(parsedSession)) {
+        if (item.expiresAt && now > item.expiresAt) {
+          continue
+        }
+        valid[key] = item
+      }
+    }
+
+    mutedAlertsMap.value = valid
+
+    if (localChanged) {
+      persistMutedAlertsToStorage()
+    }
+  } catch (e) {
+    console.error('Failed to load muted alerts from storage:', e)
+  }
+}
+
+function persistMutedAlertsToStorage() {
+  try {
+    const localEntries: Record<string, MutedAlertConfig> = {}
+    const sessionEntries: Record<string, MutedAlertConfig> = {}
+
+    for (const [key, item] of Object.entries(mutedAlertsMap.value)) {
+      if (item.snoozeMode === 'session') {
+        sessionEntries[key] = item
+      } else {
+        localEntries[key] = item
+      }
+    }
+
+    localStorage.setItem(MUTED_ALERTS_STORAGE_KEY, JSON.stringify(localEntries))
+    sessionStorage.setItem(SESSION_MUTED_ALERTS_KEY, JSON.stringify(sessionEntries))
+  } catch (e) {
+    console.error('Failed to save muted alerts to storage:', e)
+  }
+}
+
+function muteAlert(
+  alert: MetricAlert,
+  mode: 'restart' | '1h' | '24h' | 'session' | 'forever' = 'restart'
+) {
+  const key = getAlertKey(alert)
+  const now = Date.now()
+  let expiresAt: number | undefined
+
+  if (mode === '1h') {
+    expiresAt = now + 60 * 60 * 1000
+  } else if (mode === '24h') {
+    expiresAt = now + 24 * 60 * 60 * 1000
+  }
+
+  const config: MutedAlertConfig = {
+    key,
+    nodeId: alert.node_id,
+    nodeName: alert.node_name,
+    type: alert.type,
+    mutedAt: now,
+    snoozeMode: mode,
+    expiresAt,
+  }
+
+  mutedAlertsMap.value = {
+    ...mutedAlertsMap.value,
+    [key]: config,
+  }
+  persistMutedAlertsToStorage()
+  openSnoozeDropdownKey.value = null
+}
+
+function unmuteAlert(key: string) {
+  const updated = { ...mutedAlertsMap.value }
+  delete updated[key]
+  mutedAlertsMap.value = updated
+  persistMutedAlertsToStorage()
+}
+
+function muteAllActiveAlerts(mode: 'restart' | '1h' | '24h' = 'restart') {
+  const now = Date.now()
+  let expiresAt: number | undefined
+
+  if (mode === '1h') {
+    expiresAt = now + 60 * 60 * 1000
+  } else if (mode === '24h') {
+    expiresAt = now + 24 * 60 * 60 * 1000
+  }
+
+  const newMap = { ...mutedAlertsMap.value }
+  activeAlerts.value.forEach(alert => {
+    const key = getAlertKey(alert)
+    newMap[key] = {
+      key,
+      nodeId: alert.node_id,
+      nodeName: alert.node_name,
+      type: alert.type,
+      mutedAt: now,
+      snoozeMode: mode,
+      expiresAt,
+    }
+  })
+
+  mutedAlertsMap.value = newMap
+  persistMutedAlertsToStorage()
+}
+
+function unmuteAllAlerts() {
+  mutedAlertsMap.value = {}
+  persistMutedAlertsToStorage()
+}
+
 function dismissAlert(alert: MetricAlert) {
   dismissedAlerts.value.add(`${alert.node_id}-${alert.type}`)
+  dismissedAlerts.value.add(getAlertKey(alert))
+}
+
+function toggleSnoozeDropdown(key: string) {
+  if (openSnoozeDropdownKey.value === key) {
+    openSnoozeDropdownKey.value = null
+  } else {
+    openSnoozeDropdownKey.value = key
+  }
+}
+
+function handleDocumentClick(e: MouseEvent) {
+  if (openSnoozeDropdownKey.value) {
+    const target = e.target as HTMLElement
+    if (!target.closest('.snooze-dropdown-wrapper')) {
+      openSnoozeDropdownKey.value = null
+    }
+  }
+}
+
+function formatSnoozeLabel(config: MutedAlertConfig): string {
+  if (config.snoozeMode === 'restart') return 'Until Restart'
+  if (config.snoozeMode === 'forever') return 'Muted Forever'
+  if (config.snoozeMode === 'session') return 'Session Only'
+  if (config.expiresAt) {
+    const diffMs = config.expiresAt - Date.now()
+    if (diffMs <= 0) return 'Expired'
+    const mins = Math.ceil(diffMs / (60 * 1000))
+    if (mins < 60) return `Snoozed (${mins}m rem)`
+    const hours = Math.ceil(mins / 60)
+    return `Snoozed (${hours}h rem)`
+  }
+  return config.snoozeMode
 }
 
 // ==========================================
@@ -663,6 +880,7 @@ useWebSocket({
 // 5. LIFECYCLE & CLEANUP
 // ==========================================
 onMounted(() => {
+  loadMutedAlerts()
   loadCustomOrder()
   pollClusterMetrics()
 
@@ -670,11 +888,14 @@ onMounted(() => {
     fetchOverview()
     fetchTps()
   }, 5000)
+
+  document.addEventListener('click', handleDocumentClick)
 })
 
 onUnmounted(() => {
   if (pollInterval) clearInterval(pollInterval)
   if (trendBufferInterval) clearInterval(trendBufferInterval)
+  document.removeEventListener('click', handleDocumentClick)
 })
 </script>
 
@@ -714,41 +935,182 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <!-- SECTION 4: SLIDE-DOWN ALERT BANNERS -->
-    <transition-group name="alert-slide" tag="section" class="alerts-section" v-if="activeAlerts.length > 0">
-      <div
-        v-for="alert in activeAlerts"
-        :key="`${alert.node_id}-${alert.type}`"
-        class="alert-banner glass-panel"
-        :class="alert.value >= 90 || alert.type === 'node_down' ? 'alert-critical' : 'alert-warning'"
-      >
-        <div class="alert-icon-box">
-          <span class="alert-emoji">⚠️</span>
+    <!-- SECTION 4: SLIDE-DOWN ALERT BANNERS & MUTED ALERTS MANAGER -->
+    <section class="alerts-section" v-if="activeAlerts.length > 0 || mutedAlertsList.length > 0">
+      <!-- Muted Status Chip (when 0 active alerts left, but 1+ alerts are silenced) -->
+      <div v-if="activeAlerts.length === 0 && mutedAlertsList.length > 0" class="muted-alerts-chip glass-panel animate-fade-in">
+        <div class="muted-chip-left">
+          <span class="muted-chip-icon">🔕</span>
+          <span class="muted-chip-text">
+            <strong>{{ mutedAlertsList.length }} alert(s) silenced</strong> (Muted until restart / schedule)
+          </span>
         </div>
-        <div class="alert-content">
-          <div class="alert-title-row">
-            <span class="alert-node-tag">{{ alert.node_name || alert.node_id }}</span>
-            <span class="alert-type-tag">{{ alert.type.toUpperCase() }}</span>
-            <span class="alert-value-tag">{{ Math.round(alert.value) }}% (Threshold: {{ alert.threshold }}%)</span>
-          </div>
-          <p class="alert-message">
-            <strong>{{ alert.message }}:</strong> {{ getAlertRecommendation(alert) }}
-          </p>
-        </div>
-        <div class="alert-actions">
-          <button
-            class="btn-alert-action"
-            @click="router.push({ path: '/hosts', query: { search: alert.node_name || alert.node_id } })"
-            title="Open host in Infrastructure Registry"
-          >
-            <span>⚙️ Open in Registry</span>
+        <div class="muted-chip-actions">
+          <button class="btn-manage-muted" @click="showMutedManagerModal = true">
+            <span>⚙️ Manage / Unmute</span>
           </button>
-          <button class="btn-alert-dismiss" @click="dismissAlert(alert)" title="Dismiss Alert">
-            ✕
+          <button class="btn-unmute-quick" @click="unmuteAllAlerts" title="Restore all silenced alerts">
+            <span>🔔 Unmute All</span>
           </button>
         </div>
       </div>
-    </transition-group>
+
+      <!-- Active Alerts Container -->
+      <div v-if="activeAlerts.length > 0" class="active-alerts-container">
+        <!-- Consolidated Alerts Header Bar -->
+        <div
+          class="alerts-header-bar glass-panel"
+          :class="hasCriticalAlerts ? 'alerts-header-critical' : 'alerts-header-warning'"
+        >
+          <div class="alerts-header-left">
+            <span class="alerts-header-icon">{{ hasCriticalAlerts ? '🚨' : '⚠️' }}</span>
+            <div class="alerts-header-info">
+              <span class="alerts-header-title">Cluster Health Alerts</span>
+              <span class="badge" :class="hasCriticalAlerts ? 'badge-rose' : 'badge-amber'">
+                {{ activeAlerts.length }} Active
+              </span>
+            </div>
+            <button
+              v-if="mutedAlertsList.length > 0"
+              class="badge-muted-counter"
+              @click="showMutedManagerModal = true"
+              title="View and manage muted alerts"
+            >
+              <span>🔕 {{ mutedAlertsList.length }} muted</span>
+            </button>
+          </div>
+
+          <div class="alerts-header-actions">
+            <!-- 1-Click Mute All -->
+            <button
+              class="btn-mute-all"
+              @click="muteAllActiveAlerts('restart')"
+              title="Silence all active node alerts until server restart"
+            >
+              <span class="btn-mute-icon">🔕</span>
+              <span>Mute All (Until Restart)</span>
+            </button>
+
+            <!-- Minimize / Expand Toggle -->
+            <button
+              class="btn-minimize-alerts"
+              @click="isAlertsMinimized = !isAlertsMinimized"
+              :title="isAlertsMinimized ? 'Expand alert cards' : 'Minimize alerts into a compact single-line bar'"
+            >
+              <span>{{ isAlertsMinimized ? '👁️ Expand' : '👁️ Minimize' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Minimized Single-Line Summary Bar -->
+        <div
+          v-if="isAlertsMinimized"
+          class="alerts-minimized-bar glass-panel"
+          @click="isAlertsMinimized = false"
+          title="Click to expand alert details"
+        >
+          <span class="pulse-dot pulse-active" :class="hasCriticalAlerts ? 'text-rose' : 'text-amber'"></span>
+          <span class="minimized-text">
+            <strong>{{ activeAlerts.length }} active alert(s):</strong>
+            {{ activeAlerts.map(a => a.node_name || a.node_id).join(', ') }} &mdash;
+            <span class="minimized-click-hint">Click to expand details</span>
+          </span>
+        </div>
+
+        <!-- Expanded Alert Cards List -->
+        <transition-group v-else name="alert-slide" tag="div" class="alerts-cards-list">
+          <div
+            v-for="alert in activeAlerts"
+            :key="`${alert.node_id}-${alert.type}`"
+            class="alert-banner glass-panel"
+            :class="alert.value >= 90 || alert.type === 'node_down' ? 'alert-critical' : 'alert-warning'"
+          >
+            <div class="alert-icon-box">
+              <span class="alert-emoji">{{ alert.value >= 90 || alert.type === 'node_down' ? '🚨' : '⚠️' }}</span>
+            </div>
+            <div class="alert-content">
+              <div class="alert-title-row">
+                <span class="alert-node-tag">{{ alert.node_name || alert.node_id }}</span>
+                <span class="alert-type-tag">{{ alert.type.toUpperCase() }}</span>
+                <span class="alert-value-tag">{{ Math.round(alert.value) }}% (Threshold: {{ alert.threshold }}%)</span>
+              </div>
+              <p class="alert-message">
+                <strong>{{ alert.message }}:</strong> {{ getAlertRecommendation(alert) }}
+              </p>
+            </div>
+            <div class="alert-actions">
+              <button
+                class="btn-alert-action"
+                @click="router.push({ path: '/hosts', query: { search: alert.node_name || alert.node_id } })"
+                title="Open host in Infrastructure Registry"
+              >
+                <span>⚙️ Open in Registry</span>
+              </button>
+
+              <!-- Snooze / Mute Dropdown & Quick Action -->
+              <div class="snooze-dropdown-wrapper">
+                <button
+                  class="btn-mute-pill"
+                  @click="muteAlert(alert, 'restart')"
+                  title="Silence this alert until server restart"
+                >
+                  <span class="mute-icon">🔕</span>
+                  <span>Mute (Until Restart)</span>
+                </button>
+                <button
+                  class="btn-snooze-caret"
+                  @click.stop="toggleSnoozeDropdown(getAlertKey(alert))"
+                  title="More snooze durations"
+                >
+                  ▾
+                </button>
+
+                <!-- Snooze Options Dropdown Menu -->
+                <div
+                  v-if="openSnoozeDropdownKey === getAlertKey(alert)"
+                  class="snooze-menu glass-panel animate-scale-in"
+                  @click.stop
+                >
+                  <div class="snooze-menu-header">Snooze Duration</div>
+                  <button class="snooze-menu-item" @click="muteAlert(alert, 'restart')">
+                    <span class="snooze-item-icon">🔄</span>
+                    <div class="snooze-item-text">
+                      <span class="snooze-item-title">Until Server Restart</span>
+                      <span class="snooze-item-desc">Muted across page refreshes</span>
+                    </div>
+                  </button>
+                  <button class="snooze-menu-item" @click="muteAlert(alert, '1h')">
+                    <span class="snooze-item-icon">⏱️</span>
+                    <div class="snooze-item-text">
+                      <span class="snooze-item-title">Snooze 1 Hour</span>
+                      <span class="snooze-item-desc">Re-evaluate after 60 mins</span>
+                    </div>
+                  </button>
+                  <button class="snooze-menu-item" @click="muteAlert(alert, '24h')">
+                    <span class="snooze-item-icon">📅</span>
+                    <div class="snooze-item-text">
+                      <span class="snooze-item-title">Snooze 24 Hours</span>
+                      <span class="snooze-item-desc">Re-evaluate after 1 day</span>
+                    </div>
+                  </button>
+                  <button class="snooze-menu-item" @click="muteAlert(alert, 'session')">
+                    <span class="snooze-item-icon">🪟</span>
+                    <div class="snooze-item-text">
+                      <span class="snooze-item-title">Dismiss for Session</span>
+                      <span class="snooze-item-desc">Muted until tab is closed</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <button class="btn-alert-dismiss" @click="dismissAlert(alert)" title="Dismiss Alert">
+                ✕
+              </button>
+            </div>
+          </div>
+        </transition-group>
+      </div>
+    </section>
 
     <!-- LOADING SKELETON -->
     <div v-if="loading && !overview" class="skeleton-hud-grid">
@@ -1104,6 +1466,72 @@ onUnmounted(() => {
       :dockerContainers="overview?.containers || []"
       @close="closeDeepDiveModal"
     />
+
+    <!-- MUTED ALERTS MANAGER MODAL -->
+    <div v-if="showMutedManagerModal" class="modal-backdrop animate-fade-in" @click.self="showMutedManagerModal = false">
+      <div class="muted-manager-modal glass-panel animate-scale-in">
+        <div class="muted-modal-header">
+          <div class="muted-modal-title-group">
+            <div class="muted-modal-icon-badge">🔕</div>
+            <div>
+              <h3 class="muted-modal-title">Muted &amp; Silenced Health Alerts</h3>
+              <p class="muted-modal-subtitle">
+                {{ mutedAlertsList.length }} alert rule(s) currently silenced. Muted alerts will not flash or re-trigger telemetry notifications.
+              </p>
+            </div>
+          </div>
+          <button class="btn-modal-close" @click="showMutedManagerModal = false">✕</button>
+        </div>
+
+        <div class="muted-modal-body">
+          <div v-if="mutedAlertsList.length === 0" class="muted-empty-state">
+            <span class="muted-empty-icon">🔔</span>
+            <p>No alerts currently muted. All telemetry warnings will be displayed in real time.</p>
+          </div>
+
+          <div v-else class="muted-list">
+            <div v-for="item in mutedAlertsList" :key="item.key" class="muted-item-row glass-panel">
+              <div class="muted-item-info">
+                <div class="muted-item-header">
+                  <span class="muted-item-node">{{ item.nodeName || item.nodeId || item.key }}</span>
+                  <span class="alert-type-tag">{{ item.type.toUpperCase() }}</span>
+                  <span class="muted-badge-mode">{{ formatSnoozeLabel(item) }}</span>
+                </div>
+                <div class="muted-item-meta">
+                  <span>Muted at {{ new Date(item.mutedAt).toLocaleTimeString() }}</span>
+                  <span v-if="item.expiresAt" class="muted-expires-text">
+                    &bull; Expires: {{ new Date(item.expiresAt).toLocaleTimeString() }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="muted-item-actions">
+                <button
+                  class="btn-unmute-single"
+                  @click="unmuteAlert(item.key)"
+                  title="Unmute and restore live alerting for this node"
+                >
+                  <span>🔔 Unmute</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="muted-modal-footer">
+          <button
+            v-if="mutedAlertsList.length > 0"
+            class="btn btn-secondary btn-unmute-all-modal"
+            @click="unmuteAllAlerts"
+          >
+            <span>🔔 Unmute All ({{ mutedAlertsList.length }})</span>
+          </button>
+          <button class="btn btn-primary" @click="showMutedManagerModal = false">
+            <span>Done</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1168,8 +1596,275 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
-/* SECTION 4: Alerts */
+/* SECTION 4: Alerts & Muted Alerts Manager */
 .alerts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  transition: all 0.25s ease;
+}
+
+/* Muted Status Chip */
+.muted-alerts-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px dashed rgba(148, 163, 184, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: all 0.25s ease;
+  flex-wrap: wrap;
+}
+
+.muted-chip-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary, #cbd5e1);
+}
+
+.muted-chip-icon {
+  font-size: 18px;
+}
+
+.muted-chip-text strong {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.muted-chip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-manage-muted {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-manage-muted:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-unmute-quick {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-unmute-quick:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.5);
+  transform: translateY(-1px);
+}
+
+/* Active Alerts Container */
+.active-alerts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Consolidated Header Bar */
+.alerts-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: all 0.25s ease;
+  flex-wrap: wrap;
+}
+
+.alerts-header-critical {
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  background: linear-gradient(90deg, rgba(244, 63, 94, 0.18) 0%, rgba(15, 23, 42, 0.85) 100%);
+}
+
+.alerts-header-warning {
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, rgba(15, 23, 42, 0.85) 100%);
+}
+
+.alerts-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.alerts-header-icon {
+  font-size: 18px;
+}
+
+.alerts-header-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alerts-header-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.badge-rose {
+  background: rgba(244, 63, 94, 0.18);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.35);
+}
+
+.badge-amber {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.badge-muted-counter {
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-muted-counter:hover {
+  background: rgba(148, 163, 184, 0.25);
+  color: #fff;
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
+.alerts-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-mute-all {
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #fecdd3;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-mute-all:hover {
+  background: rgba(244, 63, 94, 0.3);
+  border-color: rgba(244, 63, 94, 0.6);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.btn-mute-icon {
+  font-size: 13px;
+}
+
+.btn-minimize-alerts {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary, #cbd5e1);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-minimize-alerts:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* Minimized Single-Line Bar */
+.alerts-minimized-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px dashed rgba(245, 158, 11, 0.4);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary, #cbd5e1);
+  transition: all 0.2s ease;
+}
+
+.alerts-minimized-bar:hover {
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(245, 158, 11, 0.7);
+  color: #fff;
+}
+
+.minimized-text {
+  flex: 1;
+}
+
+.minimized-click-hint {
+  color: #38bdf8;
+  text-decoration: underline;
+  font-style: italic;
+  margin-left: 4px;
+}
+
+.text-rose {
+  color: #f43f5e;
+}
+
+.text-amber {
+  color: #fbbf24;
+}
+
+/* Alert Cards List */
+.alerts-cards-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1272,6 +1967,130 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.15);
 }
 
+/* Snooze Dropdown & Pill */
+.snooze-dropdown-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.btn-mute-pill {
+  background: transparent;
+  border: none;
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 9px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+}
+
+.btn-mute-pill:hover {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fde68a;
+}
+
+.mute-icon {
+  font-size: 12px;
+}
+
+.btn-snooze-caret {
+  background: transparent;
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fbbf24;
+  padding: 0 7px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-snooze-caret:hover {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fff;
+}
+
+.snooze-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 240px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px;
+  z-index: 60;
+  box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.snooze-menu-header {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #94a3b8);
+  padding: 4px 8px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 2px;
+}
+
+.snooze-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary, #f8fafc);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  width: 100%;
+}
+
+.snooze-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.snooze-item-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.snooze-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.snooze-item-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.snooze-item-desc {
+  font-size: 9.5px;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
 .btn-alert-dismiss {
   background: transparent;
   border: none;
@@ -1285,6 +2104,245 @@ onUnmounted(() => {
 .btn-alert-dismiss:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* Muted Alerts Manager Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.muted-manager-modal {
+  width: 92%;
+  max-width: 600px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.muted-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.muted-modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.muted-modal-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.muted-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 2px;
+}
+
+.muted-modal-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary, #94a3b8);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.btn-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-modal-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.muted-modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 50vh;
+}
+
+.muted-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-muted, #94a3b8);
+  font-size: 13px;
+}
+
+.muted-empty-icon {
+  font-size: 28px;
+}
+
+.muted-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.muted-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.2s ease;
+}
+
+.muted-item-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.muted-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.muted-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.muted-item-node {
+  font-weight: 700;
+  font-size: 13px;
+  color: #f8fafc;
+  font-family: var(--font-mono, monospace);
+}
+
+.muted-badge-mode {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+}
+
+.muted-item-meta {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+}
+
+.muted-expires-text {
+  color: #fbbf24;
+}
+
+.muted-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-unmute-single {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f8fafc;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-unmute-single:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #34d399;
+}
+
+.muted-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.btn-unmute-all-modal {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.btn-unmute-all-modal:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #fff;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 /* Skeletons & Error */
