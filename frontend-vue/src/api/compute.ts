@@ -1197,14 +1197,25 @@ export interface NodeHistoryResponse {
   incidents: Incident[]
 }
 
+function toIsoTime(val?: string): string | undefined {
+  if (!val) return undefined
+  try {
+    const d = new Date(val)
+    if (!isNaN(d.getTime())) return d.toISOString()
+  } catch {}
+  return val
+}
+
 export const nodeHistoryApi = {
   async getNodeHistory(nodeId: string, range = '24h', from?: string, to?: string): Promise<NodeHistoryResponse> {
+    const isoFrom = toIsoTime(from) || from
+    const isoTo = toIsoTime(to) || to
     let url = `/overview/nodes/${encodeURIComponent(nodeId)}/history?range=${encodeURIComponent(range)}`
-    if (from) {
-      url += `&from=${encodeURIComponent(from)}`
+    if (isoFrom) {
+      url += `&from=${encodeURIComponent(isoFrom)}`
     }
-    if (to) {
-      url += `&to=${encodeURIComponent(to)}`
+    if (isoTo) {
+      url += `&to=${encodeURIComponent(isoTo)}`
     }
     const res = await api.get<NodeHistoryResponse | { data: NodeHistoryResponse }>(url)
     if (res && typeof res === 'object' && 'data' in res && (res as any).data && Array.isArray((res as any).data.history)) {

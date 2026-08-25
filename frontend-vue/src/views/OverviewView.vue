@@ -551,6 +551,15 @@ async function pollClusterMetrics() {
   await Promise.allSettled([fetchOverview(), fetchTps()])
 }
 
+function toIsoTime(val?: string): string | undefined {
+  if (!val) return undefined
+  try {
+    const d = new Date(val)
+    if (!isNaN(d.getTime())) return d.toISOString()
+  } catch {}
+  return val
+}
+
 async function loadNodeHistory(nodeIdOrRange?: string, rangeOrFrom?: string, fromOrTo?: string, maybeTo?: string) {
   let targetNodeId: string | undefined
   let actualRange = nodeHistoryRange.value
@@ -603,7 +612,7 @@ async function loadNodeHistory(nodeIdOrRange?: string, rangeOrFrom?: string, fro
   }
 
   try {
-    const data = await nodeHistoryApi.getNodeHistory(targetId, actualRange, reqFrom, reqTo)
+    const data = await nodeHistoryApi.getNodeHistory(targetId, actualRange, toIsoTime(reqFrom), toIsoTime(reqTo))
     nodeHistoryData.value = data
   } catch (err: any) {
     console.error('Failed to load historical telemetry for node:', err)

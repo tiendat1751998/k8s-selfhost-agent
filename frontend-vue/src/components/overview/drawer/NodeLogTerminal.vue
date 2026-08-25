@@ -94,6 +94,15 @@ const nodeAvailableLogApps = computed(() => {
   return list
 })
 
+function toIsoTime(val?: string): string | undefined {
+  if (!val) return undefined
+  try {
+    const d = new Date(val)
+    if (!isNaN(d.getTime())) return d.toISOString()
+  } catch {}
+  return val
+}
+
 function formatBadgeDate(dt: string): string {
   if (!dt) return ''
   try {
@@ -156,27 +165,33 @@ function applyLogPreset(preset: '30m' | '2h' | '6h' | 'today') {
 function classifyLogLevel(cleanLine: string): 'error' | 'warn' | 'info' | 'debug' {
   const cleanLower = cleanLine.toLowerCase()
   if (
+    cleanLower.includes('[error]') ||
+    cleanLower.includes('[fatal]') ||
+    cleanLower.includes('[panic]') ||
     cleanLower.includes('error') ||
     cleanLower.includes('fatal') ||
     cleanLower.includes('panic') ||
     cleanLower.includes('exception') ||
+    cleanLower.includes('failed') ||
+    cleanLower.includes('fail') ||
     cleanLower.includes('err ') ||
-    cleanLower.includes('[err]') ||
-    cleanLower.includes('fail')
+    cleanLower.includes('[err]')
   ) {
     return 'error'
   }
   if (
-    cleanLower.includes('warn') ||
+    cleanLower.includes('[warn]') ||
+    cleanLower.includes('[warning]') ||
     cleanLower.includes('warning') ||
-    cleanLower.includes('[warn]')
+    cleanLower.includes('warn') ||
+    cleanLower.includes('timeout')
   ) {
     return 'warn'
   }
   if (
+    cleanLower.includes('[debug]') ||
     cleanLower.includes('debug') ||
-    cleanLower.includes('trace') ||
-    cleanLower.includes('[debug]')
+    cleanLower.includes('trace')
   ) {
     return 'debug'
   }
@@ -253,18 +268,10 @@ async function fetchNodeAppLogs(appName?: string) {
 
     if (selectedLogSince.value === 'custom') {
       if (customLogFrom.value) {
-        try {
-          sinceParam = new Date(customLogFrom.value).toISOString()
-        } catch {
-          sinceParam = customLogFrom.value
-        }
+        sinceParam = toIsoTime(customLogFrom.value) || customLogFrom.value
       }
       if (customLogTo.value) {
-        try {
-          untilParam = new Date(customLogTo.value).toISOString()
-        } catch {
-          untilParam = customLogTo.value
-        }
+        untilParam = toIsoTime(customLogTo.value) || customLogTo.value
       }
     } else if (selectedLogSince.value !== 'all') {
       sinceParam = selectedLogSince.value
@@ -313,10 +320,10 @@ async function fetchNodeAppLogsQuiet(appName?: string) {
 
     if (selectedLogSince.value === 'custom') {
       if (customLogFrom.value) {
-        try { sinceParam = new Date(customLogFrom.value).toISOString() } catch { sinceParam = customLogFrom.value }
+        sinceParam = toIsoTime(customLogFrom.value) || customLogFrom.value
       }
       if (customLogTo.value) {
-        try { untilParam = new Date(customLogTo.value).toISOString() } catch { untilParam = customLogTo.value }
+        untilParam = toIsoTime(customLogTo.value) || customLogTo.value
       }
     } else if (selectedLogSince.value !== 'all') {
       sinceParam = selectedLogSince.value
@@ -707,7 +714,7 @@ onUnmounted(() => {
                     ⏸️ PAUSED
                   </span>
                   <div class="terminal-stats font-mono text-slate">
-                    Showing {{ parsedAppLogLines.length }} lines
+                    Showing {{ parsedAppLogLines.length }} lines (All: {{ appLogLevelCounts.total }} | Errors: {{ appLogLevelCounts.error }} | Warns: {{ appLogLevelCounts.warn }})
                   </div>
                 </div>
               </div>
