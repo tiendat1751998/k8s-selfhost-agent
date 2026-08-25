@@ -308,8 +308,8 @@ const modalTooltipStyle = computed(() => {
   const { x, y } = modalTooltipPos.value
   const isRightSide = x > 380
   return {
-    left: isRightSide ? `${x - 240}px` : `${x + 16}px`,
-    top: `${Math.max(10, y - 40)}px`,
+    left: isRightSide ? `${Math.max(10, x - 240)}px` : `${x + 16}px`,
+    top: y > 95 ? `${Math.max(10, y - 130)}px` : `${Math.min(90, y + 15)}px`,
     pointerEvents: 'none' as const,
   }
 })

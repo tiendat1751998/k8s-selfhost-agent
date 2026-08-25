@@ -448,8 +448,8 @@ const trendTooltipStyle = computed(() => {
   const { x, y } = trendTooltipPos.value
   const isRightSide = x > 380
   return {
-    left: isRightSide ? `${x - 240}px` : `${x + 16}px`,
-    top: `${Math.max(10, y - 40)}px`,
+    left: isRightSide ? `${Math.max(10, x - 235)}px` : `${x + 16}px`,
+    top: y > 75 ? `${Math.max(8, y - 125)}px` : `${Math.min(55, y + 15)}px`,
     pointerEvents: 'none' as const,
   }
 })
