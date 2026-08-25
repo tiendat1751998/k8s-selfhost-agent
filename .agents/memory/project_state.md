@@ -1,9 +1,12 @@
-# K8sControl Project State — Session Update 2026-08-25T13:48
+# K8sControl Project State — Session Update 2026-08-25T14:22
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `8f6c28c` feat(header): integrate alert bell, dropdown toast, and telemetry health into top hud
+Latest: `df9eee3` fix(chart): remove clumsy peak badge box and streamline apex halo beacon
 Previous commits this session:
+- `df9eee3` fix(chart): remove clumsy peak badge box and streamline apex halo beacon
+- `8c59e49` docs(memory): record DEC-050 smooth cubic spline chart upgrade
+- `fb91758` feat(chart): upgrade telemetry saturation curves to smooth monotone cubic splines with neon glow and peak beacons
 - `8f6c28c` feat(header): integrate alert bell, dropdown toast, and telemetry health into top hud
 - `acd1cdb` feat(overview): top-right floating cyber alert toast and alert center modal
 - `7820b2a` feat(overview): persistent alert snooze and mute system with one-click suppression
@@ -14,6 +17,15 @@ Previous commits this session:
 - `e1b8a74` feat(logs): implement server-side push-down filtering and zero-alloc stream scanner for container logs
 - `f63cb23` docs: update project state memory with virtual scrolling optimization
 - `6d3fbd5` perf(logs): implement high-performance virtual scrolling window and memoized parsing for 20k+ log lines
+
+## Scalability Roadmap Master Architecture (1,000 - 10,000 Nodes)
+- **Master Plan File**: [`docs/plans/fleet-scalability-roadmap-10k-nodes.md`](file:///d:/project/k8sseflhost/docs/plans/fleet-scalability-roadmap-10k-nodes.md)
+- **Evolutionary Scaling Phases**:
+  - Phase 1 (100 - 500 Nodes): `@tanstack/vue-virtual` Virtual Scroller in `OverviewView.vue`, Standalone VictoriaMetrics single-binary adapter, Binary WebSocket delta streams.
+  - Phase 2 (500 - 2,000 Nodes): `k8s-agent` gRPC Push over mTLS, NATS JetStream buffer cluster, WebGL Hex-Grid Cluster Density Map.
+  - Phase 3 (2,000 - 5,000 Nodes): Regional Cellular Supernode Relays (eBPF FastPath + WireGuard), Edge Sentinel local autonomous self-healing.
+  - Phase 4 (5,000 - 10,000+ Nodes): 3-Tier TSDB Lifecycle (Hot VM $\rightarrow$ Warm 1m $\rightarrow$ Cold Snappy Parquet on S3/MinIO), Multi-Region Control Plane Federation.
+
 - `0cf69b1` feat(telemetry): add output TX peak rate to live network IO summary card
 - `a33cfa0` feat(telemetry): dynamic 1h hourly bucket aggregation for 7d/30d queries and redesigned cyber log filter toolbar
 - `8484c3e` fix(overview): fix timezone parsing flatline and log level count filter
