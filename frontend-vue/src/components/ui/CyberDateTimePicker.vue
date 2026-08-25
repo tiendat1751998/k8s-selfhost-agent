@@ -371,7 +371,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="cyber-datetime-wrapper" ref="pickerContainerRef">
+  <div class="cyber-datetime-wrapper" :class="{ 'is-open': isOpen, 'is-disabled': disabled }" ref="pickerContainerRef">
     <!-- Trigger Button / Input Display -->
     <div
       class="cyber-trigger-box"
@@ -551,20 +551,24 @@ onUnmounted(() => {
   user-select: none;
 }
 
+.cyber-datetime-wrapper.is-open {
+  z-index: 1000;
+}
+
 /* Trigger Box */
 .cyber-trigger-box {
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-width: 170px;
+  min-width: 165px;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(56, 189, 248, 0.28);
   color: #38bdf8;
   font-family: monospace;
-  font-size: 11.5px;
+  font-size: 11px;
   border-radius: 6px;
-  padding: 5px 10px;
+  padding: 4px 9px;
   cursor: pointer;
   outline: none;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -580,7 +584,7 @@ onUnmounted(() => {
 .cyber-trigger-box.is-open {
   border-color: #38bdf8;
   background: rgba(15, 23, 42, 0.85);
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.35);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
 }
 
 .cyber-trigger-box.is-disabled {
@@ -596,7 +600,7 @@ onUnmounted(() => {
 }
 
 .cyber-cal-icon {
-  font-size: 12px;
+  font-size: 11px;
   filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.5));
 }
 
@@ -624,20 +628,21 @@ onUnmounted(() => {
 /* Dark Glassmorphism Popover Modal */
 .cyber-picker-popup {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 5px);
   left: 0;
-  z-index: 1050;
-  min-width: 480px;
-  background: rgba(13, 20, 36, 0.96);
+  z-index: 99999;
+  width: 395px;
+  max-width: 94vw;
+  background: rgba(10, 16, 30, 0.97);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(56, 189, 248, 0.35);
-  border-radius: 12px;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 25px rgba(56, 189, 248, 0.15);
-  padding: 12px;
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 20px rgba(56, 189, 248, 0.15);
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 /* 1. Header Navigation */
@@ -645,8 +650,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding-bottom: 8px;
+  gap: 6px;
+  padding-bottom: 6px;
   border-bottom: 1px solid rgba(56, 189, 248, 0.15);
   flex-wrap: wrap;
 }
@@ -654,18 +659,19 @@ onUnmounted(() => {
 .month-nav-controls {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .btn-nav-arrow {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(56, 189, 248, 0.2);
   color: #94a3b8;
-  padding: 3px 7px;
-  border-radius: 5px;
-  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 10px;
   cursor: pointer;
   transition: all 0.15s ease;
+  line-height: 1;
 }
 
 .btn-nav-arrow:hover {
@@ -678,21 +684,21 @@ onUnmounted(() => {
 .current-month-year-badge {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
+  gap: 4px;
+  padding: 2px 7px;
   background: rgba(56, 189, 248, 0.1);
   border: 1px solid rgba(56, 189, 248, 0.25);
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 .badge-month {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #e2e8f0;
 }
 
 .badge-year {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #38bdf8;
 }
@@ -700,17 +706,17 @@ onUnmounted(() => {
 .quick-date-chips {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .btn-date-chip {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #cbd5e1;
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-family: monospace;
-  padding: 2px 7px;
-  border-radius: 4px;
+  padding: 2px 5px;
+  border-radius: 3px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -724,36 +730,37 @@ onUnmounted(() => {
 /* 2. Main Two Column Body */
 .popup-main-body {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: stretch;
 }
 
 /* Calendar Column */
 .calendar-column {
-  flex: 1.2;
+  flex: 1.15;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .calendar-week-header {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
+  gap: 2px;
   text-align: center;
 }
 
 .week-name {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
   color: #818cf8;
-  padding: 2px 0;
+  padding: 1px 0;
 }
 
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
+  gap: 2px;
 }
 
 .calendar-cell {
@@ -764,13 +771,14 @@ onUnmounted(() => {
   justify-content: center;
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
+  border-radius: 4px;
   color: #f1f5f9;
-  font-size: 11px;
+  font-size: 10.5px;
   cursor: pointer;
   outline: none;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
   padding: 0;
+  min-height: 24px;
 }
 
 .calendar-cell:hover {
@@ -781,7 +789,7 @@ onUnmounted(() => {
 }
 
 .calendar-cell.other-month {
-  opacity: 0.35;
+  opacity: 0.3;
   color: #64748b;
 }
 
@@ -799,7 +807,7 @@ onUnmounted(() => {
   border-color: #38bdf8 !important;
   color: #0f172a !important;
   font-weight: 800;
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
 }
 
 .today-indicator-dot {
@@ -820,40 +828,40 @@ onUnmounted(() => {
 
 /* Time Column */
 .time-column {
-  flex: 1.1;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: 210px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .time-header-box {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px;
+  padding: 3px 6px;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(56, 189, 248, 0.2);
-  border-radius: 6px;
+  border-radius: 5px;
 }
 
 .time-title {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   color: #94a3b8;
 }
 
 .time-digital-display {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
   color: #38bdf8;
-  text-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
-  letter-spacing: 1px;
+  text-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
+  letter-spacing: 0.5px;
 }
 
 .time-quick-chips {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-wrap: wrap;
 }
 
@@ -861,12 +869,12 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #94a3b8;
-  font-size: 10px;
+  font-size: 9px;
   font-family: monospace;
-  padding: 2px 5px;
-  border-radius: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
 }
 
 .btn-time-chip:hover {
@@ -877,7 +885,7 @@ onUnmounted(() => {
 
 .time-pickers-split {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
 }
 
@@ -885,11 +893,12 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  min-width: 0;
 }
 
 .sub-section-title {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
   color: #64748b;
   font-family: monospace;
@@ -899,10 +908,10 @@ onUnmounted(() => {
 .minutes-scroll-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
-  max-height: 125px;
+  gap: 2px;
+  max-height: 120px;
   overflow-y: auto;
-  padding-right: 2px;
+  padding-right: 1px;
 }
 
 /* Custom mini scrollbars */
@@ -920,14 +929,15 @@ onUnmounted(() => {
 .btn-time-unit {
   background: rgba(15, 23, 42, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 4px;
+  border-radius: 3px;
   color: #cbd5e1;
-  font-size: 10px;
-  padding: 3px 0;
+  font-size: 9.5px;
+  padding: 2px 0;
   text-align: center;
   cursor: pointer;
   outline: none;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
+  line-height: 1.2;
 }
 
 .btn-time-unit:hover {
@@ -941,33 +951,34 @@ onUnmounted(() => {
   border-color: #38bdf8 !important;
   color: #0f172a !important;
   font-weight: 800;
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
 }
 
 .exact-minute-stepper {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  font-size: 9.5px;
+  gap: 3px;
+  margin-top: 3px;
+  font-size: 9px;
   color: #94a3b8;
 }
 
 .exact-min-input {
-  width: 38px;
+  width: 34px;
+  height: 18px;
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(56, 189, 248, 0.3);
-  border-radius: 4px;
+  border-radius: 3px;
   color: #38bdf8;
-  font-size: 10.5px;
-  padding: 1px 4px;
+  font-size: 9.5px;
+  padding: 0 2px;
   outline: none;
   text-align: center;
 }
 
 .exact-min-input:focus {
   border-color: #38bdf8;
-  box-shadow: 0 0 6px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 0 5px rgba(56, 189, 248, 0.3);
 }
 
 /* 3. Footer Bar with OK / Apply */
@@ -975,57 +986,61 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding-top: 8px;
+  gap: 6px;
+  padding-top: 6px;
   border-top: 1px solid rgba(56, 189, 248, 0.15);
-  flex-wrap: wrap;
 }
 
 .footer-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .btn-picker-quicknow {
   background: rgba(56, 189, 248, 0.1);
   border: 1px solid rgba(56, 189, 248, 0.3);
   color: #38bdf8;
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 600;
-  padding: 4px 8px;
-  border-radius: 5px;
+  padding: 3px 6px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
+  white-space: nowrap;
 }
 
 .btn-picker-quicknow:hover {
   background: rgba(56, 189, 248, 0.25);
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.3);
   color: #ffffff;
 }
 
 .preview-tag {
-  font-size: 10px;
+  font-size: 9.5px;
   color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .footer-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .btn-picker-cancel {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #94a3b8;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
 }
 
 .btn-picker-cancel:hover {
@@ -1037,22 +1052,22 @@ onUnmounted(() => {
 .btn-picker-ok {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   background: linear-gradient(135deg, #10b981, #059669);
   border: 1px solid #34d399;
   color: #ffffff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  padding: 4px 12px;
-  border-radius: 5px;
+  padding: 3px 10px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+  transition: all 0.15s ease;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
 }
 
 .btn-picker-ok:hover {
   background: linear-gradient(135deg, #34d399, #10b981);
-  box-shadow: 0 0 15px rgba(52, 211, 153, 0.6);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.6);
   transform: translateY(-1px);
 }
 

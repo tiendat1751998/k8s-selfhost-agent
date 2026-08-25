@@ -1208,6 +1208,9 @@ function formatIoRate(bytesPerSec?: number): string {
 
 /* Custom Range Toolbar */
 .custom-range-bar {
+  position: relative;
+  z-index: 50;
+  overflow: visible;
   display: flex;
   align-items: center;
   justify-content: space-between;
