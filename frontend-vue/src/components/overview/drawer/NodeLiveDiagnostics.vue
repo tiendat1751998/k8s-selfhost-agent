@@ -12,6 +12,8 @@ export interface UnifiedProcessItem {
   cpu_percent: number
   memory_bytes: number
   memory_percent?: number
+  disk_read_bytes_per_sec?: number
+  disk_write_bytes_per_sec?: number
   requests_per_sec: number
   error_rate: number
   rx_bytes_per_sec: number
@@ -38,7 +40,7 @@ const props = withDefaults(defineProps<Props>(), {
 // Process Category & Sorting State
 const processCategoryFilter = ref<'all' | 'container' | 'host_daemon' | 'kernel'>('all')
 const processSearch = ref('')
-const processSortBy = ref<'cpu' | 'mem' | 'rps' | 'bandwidth' | 'pid' | 'name'>('cpu')
+const processSortBy = ref<'cpu' | 'mem' | 'disk' | 'rps' | 'bandwidth' | 'pid' | 'name'>('cpu')
 const processSortOrder = ref<'asc' | 'desc'>('desc')
 const processPageSize = ref<number>(25)
 const processCurrentPage = ref<number>(1)
@@ -160,10 +162,12 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
         cpu_percent: Math.max(p.cpu_percent || 0, matchedSvc.cpu_percent || 0),
         memory_bytes: Math.max(p.memory_bytes || 0, (matchedSvc.memory_used_mb || 0) * 1024 * 1024),
         memory_percent: p.memory_percent,
+        disk_read_bytes_per_sec: p.read_bytes_per_sec || 0,
+        disk_write_bytes_per_sec: p.write_bytes_per_sec || 0,
         requests_per_sec: matchedSvc.requests_per_sec || 0,
         error_rate: matchedSvc.error_rate || 0,
-        rx_bytes_per_sec: matchedSvc.rx_bytes_per_sec || p.read_bytes_per_sec || 0,
-        tx_bytes_per_sec: matchedSvc.tx_bytes_per_sec || p.write_bytes_per_sec || 0,
+        rx_bytes_per_sec: matchedSvc ? (matchedSvc.rx_bytes_per_sec || 0) : 0,
+        tx_bytes_per_sec: matchedSvc ? (matchedSvc.tx_bytes_per_sec || 0) : 0,
         state: matchedSvc.status === 'healthy' || matchedSvc.status === 'running' ? 'healthy' : (p.state || 'running'),
         is_container: true,
         is_app: true,
@@ -181,10 +185,12 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
       cpu_percent: p.cpu_percent || 0,
       memory_bytes: p.memory_bytes || 0,
       memory_percent: p.memory_percent,
+      disk_read_bytes_per_sec: p.read_bytes_per_sec || 0,
+      disk_write_bytes_per_sec: p.write_bytes_per_sec || 0,
       requests_per_sec: 0,
       error_rate: 0,
-      rx_bytes_per_sec: p.read_bytes_per_sec || 0,
-      tx_bytes_per_sec: p.write_bytes_per_sec || 0,
+      rx_bytes_per_sec: 0,
+      tx_bytes_per_sec: 0,
       state: p.state || 'running',
       is_container: false,
       is_app: appType !== 'system',
@@ -202,6 +208,8 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
         user: 'docker',
         cpu_percent: s.cpu_percent || 0,
         memory_bytes: (s.memory_used_mb || 0) * 1024 * 1024,
+        disk_read_bytes_per_sec: 0,
+        disk_write_bytes_per_sec: 0,
         requests_per_sec: s.requests_per_sec || 0,
         error_rate: s.error_rate || 0,
         rx_bytes_per_sec: s.rx_bytes_per_sec || 0,
@@ -262,6 +270,12 @@ const filteredNodeProcesses = computed<UnifiedProcessItem[]>(() => {
     list.sort((a, b) => ((a.cpu_percent || 0) - (b.cpu_percent || 0)) * multiplier)
   } else if (processSortBy.value === 'mem') {
     list.sort((a, b) => ((a.memory_bytes || 0) - (b.memory_bytes || 0)) * multiplier)
+  } else if (processSortBy.value === 'disk') {
+    list.sort((a, b) => {
+      const aDisk = (a.disk_read_bytes_per_sec || 0) + (a.disk_write_bytes_per_sec || 0)
+      const bDisk = (b.disk_read_bytes_per_sec || 0) + (b.disk_write_bytes_per_sec || 0)
+      return (aDisk - bDisk) * multiplier
+    })
   } else if (processSortBy.value === 'rps') {
     list.sort((a, b) => ((a.requests_per_sec || 0) - (b.requests_per_sec || 0)) * multiplier)
   } else if (processSortBy.value === 'bandwidth') {
@@ -300,24 +314,24 @@ function getProcessCpuColor(cpu?: number): string {
   return 'slate'
 }
 
-function getUnifiedProcessState(proc: UnifiedProcessItem): { label: string; class: string } {
+function getUnifiedProcessState(proc: UnifiedProcessItem): { label: string; class: string; dotClass: string } {
   const s = (proc.state || '').toLowerCase()
   if (s === 'healthy' || s === 'running' || s === 'r') {
-    return { label: 'RUNNING', class: 'badge-emerald' }
+    return { label: 'RUNNING', class: 'badge-emerald', dotClass: 'dot-emerald' }
   }
   if (s === 'sleeping' || s === 's') {
-    return { label: 'SLEEP', class: 'badge-indigo' }
+    return { label: 'SLEEP', class: 'badge-indigo', dotClass: 'dot-indigo' }
   }
   if (s === 'zombie' || s === 'z') {
-    return { label: 'ZOMBIE', class: 'badge-rose' }
+    return { label: 'ZOMBIE', class: 'badge-rose', dotClass: 'dot-rose' }
   }
   if (s === 'disk_sleep' || s === 'd') {
-    return { label: 'D-SLEEP', class: 'badge-amber' }
+    return { label: 'D-SLEEP', class: 'badge-amber', dotClass: 'dot-amber' }
   }
   if (s === 'stopped' || s === 't') {
-    return { label: 'STOPPED', class: 'badge-slate' }
+    return { label: 'STOPPED', class: 'badge-slate', dotClass: 'dot-slate' }
   }
-  return { label: s.toUpperCase() || 'ACTIVE', class: 'badge-cyan' }
+  return { label: s.toUpperCase() || 'ACTIVE', class: 'badge-cyan', dotClass: 'dot-cyan' }
 }
 
 function getProcessOriginBadge(proc: UnifiedProcessItem): { label: string; class: string; icon: string } {
@@ -708,6 +722,7 @@ function formatIoRate(bytesPerSec?: number): string {
                 <select v-model="processSortBy" class="select-proc-sort" @change="processCurrentPage = 1">
                   <option value="cpu">Sort: CPU % (High to Low)</option>
                   <option value="mem">Sort: Memory</option>
+                  <option value="disk">Sort: Disk I/O (High to Low)</option>
                   <option value="rps">Sort: Ingress Req/s</option>
                   <option value="bandwidth">Sort: Bandwidth (Rx/Tx)</option>
                   <option value="name">Sort: App Name</option>
@@ -725,6 +740,7 @@ function formatIoRate(bytesPerSec?: number): string {
                     <th class="th-user">User</th>
                     <th class="th-cpu">CPU %</th>
                     <th class="th-mem">Memory</th>
+                    <th class="th-disk">Disk I/O</th>
                     <th class="th-rps">Req/s</th>
                     <th class="th-err">Err %</th>
                     <th class="th-bw">Bandwidth</th>
@@ -786,6 +802,12 @@ function formatIoRate(bytesPerSec?: number): string {
                         </span>
                       </div>
                     </td>
+                    <td class="col-proc-disk font-mono text-slate">
+                      <span class="bw-split">
+                        <span class="bw-rx text-cyan" :title="'Process Disk Read: ' + formatIoRate(proc.disk_read_bytes_per_sec || 0)">📖 {{ formatIoRate(proc.disk_read_bytes_per_sec || 0) }}</span>
+                        <span class="bw-tx text-purple" :title="'Process Disk Write: ' + formatIoRate(proc.disk_write_bytes_per_sec || 0)">✍️ {{ formatIoRate(proc.disk_write_bytes_per_sec || 0) }}</span>
+                      </span>
+                    </td>
                     <td class="col-proc-rps font-mono text-emerald">
                       <span v-if="proc.requests_per_sec > 0">
                         ⚡ {{ proc.requests_per_sec.toLocaleString() }}
@@ -805,7 +827,8 @@ function formatIoRate(bytesPerSec?: number): string {
                       </span>
                     </td>
                     <td class="col-proc-state">
-                      <span class="badge font-mono" :class="getUnifiedProcessState(proc).class">
+                      <span class="badge-state-mini font-mono" :class="getUnifiedProcessState(proc).class">
+                        <span class="state-mini-dot" :class="getUnifiedProcessState(proc).dotClass"></span>
                         {{ getUnifiedProcessState(proc).label }}
                       </span>
                     </td>
@@ -2045,6 +2068,18 @@ function formatIoRate(bytesPerSec?: number): string {
   color: var(--text-muted);
 }
 
+.th-disk {
+  width: 135px;
+  min-width: 130px;
+}
+
+.col-proc-disk {
+  white-space: nowrap;
+  width: 135px;
+  min-width: 130px;
+  font-variant-numeric: tabular-nums;
+}
+
 .col-proc-rps {
   white-space: nowrap;
   width: 65px;
@@ -2057,16 +2092,90 @@ function formatIoRate(bytesPerSec?: number): string {
   font-size: 11.5px;
 }
 
+.th-bw {
+  width: 135px;
+  min-width: 130px;
+}
+
 .col-proc-bw {
   white-space: nowrap;
-  width: 140px;
+  width: 135px;
+  min-width: 130px;
+  font-variant-numeric: tabular-nums;
+}
+
+.th-state {
+  width: 68px;
+  min-width: 68px;
+  text-align: right;
 }
 
 .col-proc-state {
   white-space: nowrap;
-  width: 85px;
-  min-width: 80px;
+  width: 68px;
+  min-width: 68px;
   text-align: right;
+}
+
+.badge-state-mini {
+  font-size: 9.5px;
+  padding: 2px 6px;
+  font-weight: 700;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.state-mini-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.dot-emerald {
+  background: #34d399;
+  box-shadow: 0 0 5px rgba(52, 211, 153, 0.6);
+}
+
+.dot-indigo {
+  background: #818cf8;
+  box-shadow: 0 0 5px rgba(129, 140, 248, 0.5);
+}
+
+.dot-rose {
+  background: #f43f5e;
+  box-shadow: 0 0 5px rgba(244, 63, 94, 0.6);
+}
+
+.dot-amber {
+  background: #f59e0b;
+  box-shadow: 0 0 5px rgba(245, 158, 11, 0.6);
+}
+
+.dot-slate {
+  background: #94a3b8;
+}
+
+.dot-cyan {
+  background: #06b6d4;
+  box-shadow: 0 0 5px rgba(6, 182, 212, 0.6);
+}
+
+.badge-indigo {
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.badge-slate {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
 /* Pagination & Page Size Footer */
