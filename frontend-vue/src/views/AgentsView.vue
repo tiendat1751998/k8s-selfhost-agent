@@ -918,4 +918,118 @@ function formatTime(d: string) {
 .text-emerald { color: var(--accent-emerald); }
 .text-muted { color: var(--text-muted); }
 .btn-xs { padding: 4px 8px; font-size: 11px; }
+
+/* Responsive Overhaul for Mobile & Tablet */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .dag-section {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .dag-legend {
+    display: none;
+  }
+
+  .dag-pipeline-flow {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .dag-node-item {
+    min-width: 140px;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    gap: 6px;
+  }
+
+  .dag-node-card {
+    padding: 8px 10px;
+    gap: 8px;
+    border-radius: 10px;
+  }
+
+  .dag-connector {
+    display: none;
+  }
+
+  .node-icon {
+    font-size: 16px;
+  }
+
+  .node-name {
+    font-size: 11px;
+  }
+
+  .node-role {
+    font-size: 9px;
+  }
+
+  .terminal-console-box {
+    border-radius: 12px;
+  }
+
+  .terminal-header {
+    padding: 10px 12px;
+  }
+
+  .terminal-title {
+    font-size: 10px;
+  }
+
+  .terminal-screen {
+    height: 300px;
+    padding: 10px 12px;
+    font-size: 10px;
+    overflow-x: auto;
+    word-break: break-all;
+  }
+
+  .task-backlog-box {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .task-items-list {
+    max-height: 380px;
+  }
+
+  .task-card-row {
+    padding: 10px 12px;
+    gap: 5px;
+  }
+
+  .task-title-text {
+    font-size: 12px;
+  }
+
+  .task-desc-text {
+    font-size: 11px;
+  }
+
+  .deps-container {
+    flex-wrap: wrap;
+  }
+}
 </style>

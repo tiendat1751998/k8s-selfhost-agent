@@ -37,12 +37,19 @@
   --grad-indigo: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
   --grad-emerald: linear-gradient(135deg, #10b981 0%, #059669 100%);
   --grad-card: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+
+  /* Safe Area Insets for Mobile / PWA Notch & Home Bar */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
 }
 
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
@@ -272,11 +279,31 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
+/* Mobile & Touch Target Improvements */
 @media (max-width: 768px) {
   .data-table,
   .base-table {
-    min-width: 600px;
+    min-width: 540px;
+  }
+
+  /* Improve touch targets on mobile devices */
+  button,
+  .btn,
+  .nav-item,
+  a {
+    touch-action: manipulation;
   }
 }
+
+/* Standalone PWA adjustments */
+@media (display-mode: standalone) {
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+
