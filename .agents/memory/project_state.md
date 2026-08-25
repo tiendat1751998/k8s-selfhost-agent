@@ -2,8 +2,9 @@
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `e1b8a74` feat(logs): implement server-side push-down filtering and zero-alloc stream scanner for container logs
+Latest: `98d5d52` feat(telemetry): implement smart top resource offender auto-detection and point-in-time log sync
 Previous commits this session:
+- `e1b8a74` feat(logs): implement server-side push-down filtering and zero-alloc stream scanner for container logs
 - `f63cb23` docs: update project state memory with virtual scrolling optimization
 - `6d3fbd5` perf(logs): implement high-performance virtual scrolling window and memoized parsing for 20k+ log lines
 - `0cf69b1` feat(telemetry): add output TX peak rate to live network IO summary card
