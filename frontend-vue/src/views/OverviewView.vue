@@ -6,7 +6,6 @@ import {
   tpsApi,
   type SystemOverview,
   type NodeMetrics,
-  type MetricAlert,
   type TpsSnapshot,
 } from '../api/overview'
 import {
@@ -21,10 +20,14 @@ import RequestFlowBar from '../components/overview/hud/RequestFlowBar.vue'
 import NodeCard from '../components/overview/nodes/NodeCard.vue'
 import NodeDiagnosticsDrawer from '../components/overview/drawer/NodeDiagnosticsDrawer.vue'
 import DeepDiveTrafficModal from '../components/overview/modals/DeepDiveTrafficModal.vue'
-import FloatingAlertToast from '../components/overview/alerts/FloatingAlertToast.vue'
-import AlertCenterModal from '../components/overview/alerts/AlertCenterModal.vue'
+import { useAlertStore, type MutedAlertConfig } from '../stores/alertStore'
+import { useAppStore } from '../stores/app'
+
+export type { MutedAlertConfig }
 
 const router = useRouter()
+const appStore = useAppStore()
+const alertStore = useAlertStore()
 
 // ==========================================
 // 1. STATE MANAGEMENT
@@ -84,24 +87,6 @@ const defaultOverviewHistDates = (() => {
 
 const customHistFrom = ref<string>(defaultOverviewHistDates.from)
 const customHistTo = ref<string>(defaultOverviewHistDates.to)
-
-// Slide-down Alerts Persistent Muted & Snooze state
-const MUTED_ALERTS_STORAGE_KEY = 'k8s_muted_alerts_v1'
-const SESSION_MUTED_ALERTS_KEY = 'k8s_session_muted_alerts_v1'
-
-export interface MutedAlertConfig {
-  key: string // e.g. "workerdb1-node_down"
-  nodeId?: string
-  nodeName?: string
-  type: string
-  mutedAt: number // timestamp
-  snoozeMode: 'restart' | '1h' | '24h' | 'session' | 'forever'
-  expiresAt?: number // timestamp if time-based
-}
-
-const dismissedAlerts = ref<Set<string>>(new Set())
-const mutedAlertsMap = ref<Record<string, MutedAlertConfig>>({})
-const showAlertCenterModal = ref<boolean>(false)
 
 // Polling interval IDs
 let pollInterval: any = null
@@ -192,45 +177,6 @@ const httpQueuedReqs = computed(() => tpsData.value?.http?.queued_requests ?? 0)
 const httpErrorRate = computed(() => tpsData.value?.http?.error_rate ?? 0)
 const clusterAvgLatencyMs = computed(() => {
   return tpsData.value?.http?.avg_latency_ms || 2.4
-})
-
-function getAlertKey(alert: MetricAlert): string {
-  return `${alert.node_name || alert.node_id}-${alert.type}`
-}
-
-function isAlertMuted(alert: MetricAlert): boolean {
-  const keyByName = `${alert.node_name || alert.node_id}-${alert.type}`
-  const keyById = `${alert.node_id}-${alert.type}`
-  const now = Date.now()
-
-  const config = mutedAlertsMap.value[keyByName] || mutedAlertsMap.value[keyById]
-  if (!config) return false
-  if (config.expiresAt && now > config.expiresAt) {
-    return false
-  }
-  return true
-}
-
-const activeAlerts = computed<MetricAlert[]>(() => {
-  const alerts = overview.value?.alerts || []
-  return alerts.filter(a => {
-    const key = getAlertKey(a)
-    const rawKey = `${a.node_id}-${a.type}`
-    if (dismissedAlerts.value.has(key) || dismissedAlerts.value.has(rawKey)) return false
-    if (isAlertMuted(a)) return false
-    return true
-  })
-})
-
-const mutedAlertsList = computed<MutedAlertConfig[]>(() => {
-  const now = Date.now()
-  return Object.values(mutedAlertsMap.value).filter(
-    item => !item.expiresAt || now <= item.expiresAt
-  )
-})
-
-const hasCriticalAlerts = computed<boolean>(() => {
-  return activeAlerts.value.some(a => a.value >= 90 || a.type === 'node_down')
 })
 
 const clusterTotalMemBytes = computed(() => {
@@ -527,143 +473,6 @@ function manageNode(node: NodeMetrics) {
   router.push({ path: '/hosts', query: { search: node.node_name } })
 }
 
-function loadMutedAlerts() {
-  try {
-    const now = Date.now()
-    const valid: Record<string, MutedAlertConfig> = {}
-    let localChanged = false
-
-    // 1. Load persistent local storage
-    const rawLocal = localStorage.getItem(MUTED_ALERTS_STORAGE_KEY)
-    if (rawLocal) {
-      const parsedLocal = JSON.parse(rawLocal) as Record<string, MutedAlertConfig>
-      for (const [key, item] of Object.entries(parsedLocal)) {
-        if (item.expiresAt && now > item.expiresAt) {
-          localChanged = true
-          continue
-        }
-        valid[key] = item
-      }
-    }
-
-    // 2. Load session storage
-    const rawSession = sessionStorage.getItem(SESSION_MUTED_ALERTS_KEY)
-    if (rawSession) {
-      const parsedSession = JSON.parse(rawSession) as Record<string, MutedAlertConfig>
-      for (const [key, item] of Object.entries(parsedSession)) {
-        if (item.expiresAt && now > item.expiresAt) {
-          continue
-        }
-        valid[key] = item
-      }
-    }
-
-    mutedAlertsMap.value = valid
-
-    if (localChanged) {
-      persistMutedAlertsToStorage()
-    }
-  } catch (e) {
-    console.error('Failed to load muted alerts from storage:', e)
-  }
-}
-
-function persistMutedAlertsToStorage() {
-  try {
-    const localEntries: Record<string, MutedAlertConfig> = {}
-    const sessionEntries: Record<string, MutedAlertConfig> = {}
-
-    for (const [key, item] of Object.entries(mutedAlertsMap.value)) {
-      if (item.snoozeMode === 'session') {
-        sessionEntries[key] = item
-      } else {
-        localEntries[key] = item
-      }
-    }
-
-    localStorage.setItem(MUTED_ALERTS_STORAGE_KEY, JSON.stringify(localEntries))
-    sessionStorage.setItem(SESSION_MUTED_ALERTS_KEY, JSON.stringify(sessionEntries))
-  } catch (e) {
-    console.error('Failed to save muted alerts to storage:', e)
-  }
-}
-
-function muteAlert(
-  alert: MetricAlert,
-  mode: 'restart' | '1h' | '24h' | 'session' | 'forever' = 'restart'
-) {
-  const key = getAlertKey(alert)
-  const now = Date.now()
-  let expiresAt: number | undefined
-
-  if (mode === '1h') {
-    expiresAt = now + 60 * 60 * 1000
-  } else if (mode === '24h') {
-    expiresAt = now + 24 * 60 * 60 * 1000
-  }
-
-  const config: MutedAlertConfig = {
-    key,
-    nodeId: alert.node_id,
-    nodeName: alert.node_name,
-    type: alert.type,
-    mutedAt: now,
-    snoozeMode: mode,
-    expiresAt,
-  }
-
-  mutedAlertsMap.value = {
-    ...mutedAlertsMap.value,
-    [key]: config,
-  }
-  persistMutedAlertsToStorage()
-}
-
-function unmuteAlert(key: string) {
-  const updated = { ...mutedAlertsMap.value }
-  delete updated[key]
-  mutedAlertsMap.value = updated
-  persistMutedAlertsToStorage()
-}
-
-function muteAllActiveAlerts(mode: 'restart' | '1h' | '24h' = 'restart') {
-  const now = Date.now()
-  let expiresAt: number | undefined
-
-  if (mode === '1h') {
-    expiresAt = now + 60 * 60 * 1000
-  } else if (mode === '24h') {
-    expiresAt = now + 24 * 60 * 60 * 1000
-  }
-
-  const newMap = { ...mutedAlertsMap.value }
-  activeAlerts.value.forEach(alert => {
-    const key = getAlertKey(alert)
-    newMap[key] = {
-      key,
-      nodeId: alert.node_id,
-      nodeName: alert.node_name,
-      type: alert.type,
-      mutedAt: now,
-      snoozeMode: mode,
-      expiresAt,
-    }
-  })
-
-  mutedAlertsMap.value = newMap
-  persistMutedAlertsToStorage()
-}
-
-function unmuteAllAlerts() {
-  mutedAlertsMap.value = {}
-  persistMutedAlertsToStorage()
-}
-
-function dismissAlert(alert: MetricAlert) {
-  dismissedAlerts.value.add(`${alert.node_id}-${alert.type}`)
-  dismissedAlerts.value.add(getAlertKey(alert))
-}
-
 // ==========================================
 // 4. DATA FETCHING & WEBSOCKET
 // ==========================================
@@ -671,6 +480,8 @@ async function fetchOverview() {
   try {
     const data = await overviewApi.getOverview()
     overview.value = data
+    appStore.setMetrics(data)
+    alertStore.syncAlerts(data.alerts || [])
     error.value = null
     lastUpdated.value = new Date()
 
@@ -829,6 +640,8 @@ useWebSocket({
     isLiveWs.value = true
     if (metrics && metrics.nodes) {
       overview.value = { ...overview.value, ...metrics }
+      appStore.setMetrics(overview.value)
+      alertStore.syncAlerts(metrics.alerts || [])
       lastUpdated.value = new Date()
     }
   }
@@ -838,7 +651,6 @@ useWebSocket({
 // 5. LIFECYCLE & CLEANUP
 // ==========================================
 onMounted(() => {
-  loadMutedAlerts()
   loadCustomOrder()
   pollClusterMetrics()
 
@@ -889,16 +701,6 @@ onUnmounted(() => {
         </button>
       </div>
     </header>
-
-    <!-- TOP-RIGHT FLOATING CYBER ALERT TOAST & DOCKED BELL BADGE -->
-    <FloatingAlertToast
-      :activeAlerts="activeAlerts"
-      :mutedAlertsList="mutedAlertsList"
-      :hasCriticalAlerts="hasCriticalAlerts"
-      @open-details="showAlertCenterModal = true"
-      @mute-all="muteAllActiveAlerts"
-      @dismiss-toast="() => {}"
-    />
 
     <!-- LOADING SKELETON -->
     <div v-if="loading && !overview" class="skeleton-hud-grid">
@@ -1253,21 +1055,6 @@ onUnmounted(() => {
       :tpsData="tpsData"
       :dockerContainers="overview?.containers || []"
       @close="closeDeepDiveModal"
-    />
-
-    <!-- CLUSTER ALERT CENTER & TELEMETRY DIAGNOSTICS MODAL -->
-    <AlertCenterModal
-      :show="showAlertCenterModal"
-      :activeAlerts="activeAlerts"
-      :mutedAlertsList="mutedAlertsList"
-      :hasCriticalAlerts="hasCriticalAlerts"
-      @close="showAlertCenterModal = false"
-      @mute-alert="muteAlert"
-      @unmute-alert="unmuteAlert"
-      @mute-all="muteAllActiveAlerts"
-      @unmute-all="unmuteAllAlerts"
-      @dismiss-alert="dismissAlert"
-      @navigate-to-host="(host) => router.push({ path: '/hosts', query: { search: host } })"
     />
   </div>
 </template>
