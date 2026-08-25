@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import CyberDateTimePicker from '../../ui/CyberDateTimePicker.vue'
 import type { NodeMetrics, TpsSnapshot, TpsServiceMetrics } from '../../../api/overview'
 import type { NodeHistoryResponse } from '../../../api/compute'
 import { dockerApi } from '../../../api/docker'
@@ -725,20 +726,18 @@ onUnmounted(() => {
               <div class="custom-range-inputs">
                 <div class="range-field">
                   <label class="range-label font-mono">FROM:</label>
-                  <input
-                    type="datetime-local"
+                  <CyberDateTimePicker
                     v-model="customLogFrom"
-                    class="input-datetime font-mono"
-                    @keyup.enter="fetchNodeAppLogs(selectedLogApp)"
+                    placeholder="From datetime"
+                    @apply="fetchNodeAppLogs(selectedLogApp)"
                   />
                 </div>
                 <div class="range-field">
                   <label class="range-label font-mono">TO:</label>
-                  <input
-                    type="datetime-local"
+                  <CyberDateTimePicker
                     v-model="customLogTo"
-                    class="input-datetime font-mono"
-                    @keyup.enter="fetchNodeAppLogs(selectedLogApp)"
+                    placeholder="To datetime"
+                    @apply="fetchNodeAppLogs(selectedLogApp)"
                   />
                 </div>
               </div>

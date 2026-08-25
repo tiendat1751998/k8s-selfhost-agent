@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import CyberDateTimePicker from '../../ui/CyberDateTimePicker.vue'
 import type { NodeMetrics, TpsSnapshot } from '../../../api/overview'
 import type { NodeMetricRollup, NodeHistoryResponse } from '../../../api/compute'
 
@@ -708,20 +709,18 @@ function formatIoRate(bytesPerSec?: number): string {
         <div class="custom-range-inputs">
           <div class="range-field">
             <label class="range-label font-mono">FROM:</label>
-            <input
-              type="datetime-local"
+            <CyberDateTimePicker
               v-model="customHistoryFrom"
-              class="input-datetime font-mono"
-              @keyup.enter="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+              placeholder="From datetime"
+              @apply="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
             />
           </div>
           <div class="range-field">
             <label class="range-label font-mono">TO:</label>
-            <input
-              type="datetime-local"
+            <CyberDateTimePicker
               v-model="customHistoryTo"
-              class="input-datetime font-mono"
-              @keyup.enter="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+              placeholder="To datetime"
+              @apply="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
             />
           </div>
         </div>
