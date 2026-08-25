@@ -13,6 +13,8 @@ import { overviewApi } from './api/overview'
 import ModalDrawer from './components/ui/ModalDrawer.vue'
 import TopHudAlertBell from './components/layout/TopHudAlertBell.vue'
 import AlertCenterModal from './components/overview/alerts/AlertCenterModal.vue'
+import PwaInstallBanner from './components/common/PwaInstallBanner.vue'
+import { usePwaInstall } from './registerServiceWorker'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +24,7 @@ const securityStore = useSecurityStore()
 const logStore = useLogStore()
 const appStore = useAppStore()
 const alertStore = useAlertStore()
+const { isInstallable, promptInstall } = usePwaInstall()
 
 // State
 const selectedTenant = ref('default-tenant')
@@ -435,6 +438,18 @@ function handleNavigateToHost(nodeNameOrId: string) {
             </span>
           </div>
 
+          <!-- Compact PWA Install Button -->
+          <button 
+            v-if="isInstallable" 
+            class="pwa-install-hud-btn" 
+            @click="promptInstall"
+            title="Install K8sControl PWA App"
+            aria-label="Install App"
+          >
+            <span class="pwa-hud-icon">📲</span>
+            <span class="pwa-hud-label font-mono">INSTALL</span>
+          </button>
+
           <!-- Top HUD Global Alert Bell & Dropdown Toast -->
           <TopHudAlertBell />
 
@@ -520,6 +535,43 @@ function handleNavigateToHost(nodeNameOrId: string) {
       @dismiss-alert="alertStore.dismissAlert"
       @navigate-to-host="handleNavigateToHost"
     />
+
+    <!-- Mobile Bottom Navigation Bar (Docked) -->
+    <nav class="mobile-bottom-bar" aria-label="Mobile Navigation">
+      <router-link to="/" class="mobile-nav-tab" :class="{ 'mobile-tab-active': route.path === '/' }">
+        <span class="tab-icon">📊</span>
+        <span class="tab-label font-mono">Overview</span>
+      </router-link>
+      <router-link to="/agents" class="mobile-nav-tab" :class="{ 'mobile-tab-active': route.path.startsWith('/agents') }">
+        <span class="tab-icon">🤖</span>
+        <span class="tab-label font-mono">Agents</span>
+      </router-link>
+      <router-link to="/fleet" class="mobile-nav-tab" :class="{ 'mobile-tab-active': route.path.startsWith('/fleet') }">
+        <span class="tab-icon">☸️</span>
+        <span class="tab-label font-mono">Fleet</span>
+      </router-link>
+      <router-link to="/deployments" class="mobile-nav-tab" :class="{ 'mobile-tab-active': route.path.startsWith('/deployments') }">
+        <span class="tab-icon">🚀</span>
+        <span class="tab-label font-mono">Deploy</span>
+      </router-link>
+      <button 
+        class="mobile-nav-tab mobile-nav-btn" 
+        :class="{ 'mobile-tab-active': alertStore.showAlertCenterModal }" 
+        @click="alertStore.showAlertCenterModal = true"
+        aria-label="Open Alert Center"
+      >
+        <div class="tab-icon-wrap">
+          <span class="tab-icon">🔔</span>
+          <span v-if="alertStore.activeAlerts.length > 0" class="mobile-badge-count font-mono">
+            {{ alertStore.activeAlerts.length > 99 ? '99+' : alertStore.activeAlerts.length }}
+          </span>
+        </div>
+        <span class="tab-label font-mono">Alerts</span>
+      </button>
+    </nav>
+
+    <!-- PWA Install Floating Banner -->
+    <PwaInstallBanner />
   </div>
 </template>
 
@@ -1144,6 +1196,43 @@ function handleNavigateToHost(nodeNameOrId: string) {
   display: none;
 }
 
+/* PWA HUD Install Button */
+.pwa-install-hud-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  padding: 5px 9px;
+  color: var(--accent-sky);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.15);
+}
+
+.pwa-install-hud-btn:hover {
+  background: rgba(6, 182, 212, 0.22);
+  border-color: var(--accent-sky);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.35);
+  transform: translateY(-1px);
+}
+
+.pwa-hud-icon {
+  font-size: 13px;
+}
+
+.pwa-hud-label {
+  letter-spacing: 0.05em;
+}
+
+/* Mobile Bottom Navigation Bar */
+.mobile-bottom-bar {
+  display: none;
+}
+
 @media (max-width: 1024px) {
   .mobile-menu-btn {
     display: flex;
@@ -1216,6 +1305,14 @@ function handleNavigateToHost(nodeNameOrId: string) {
     display: none;
   }
 
+  .pwa-install-hud-btn .pwa-hud-label {
+    display: none;
+  }
+
+  .pwa-install-hud-btn {
+    padding: 5px 6px;
+  }
+
   .tenant-selector-wrap {
     max-width: 120px;
     padding: 4px 6px;
@@ -1242,7 +1339,90 @@ function handleNavigateToHost(nodeNameOrId: string) {
   }
 
   .page-container {
-    padding: 12px 8px;
+    padding: 12px 8px calc(68px + var(--sab)) 8px;
+  }
+
+  /* Docked Mobile Bottom Navigation Bar */
+  .mobile-bottom-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(56px + var(--sab));
+    padding-bottom: var(--sab);
+    background: rgba(7, 9, 14, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border-medium);
+    z-index: 90;
+    align-items: center;
+    justify-content: space-around;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .mobile-nav-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--text-muted);
+    text-decoration: none;
+    height: 100%;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 4px 0;
+  }
+
+  .mobile-nav-tab:hover,
+  .mobile-nav-tab.mobile-tab-active {
+    color: var(--accent-sky);
+  }
+
+  .mobile-nav-tab.mobile-tab-active .tab-icon {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.5));
+  }
+
+  .tab-icon {
+    font-size: 18px;
+    line-height: 1;
+    transition: transform 0.15s ease, filter 0.15s ease;
+  }
+
+  .tab-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .tab-icon-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-badge-count {
+    position: absolute;
+    top: -4px;
+    right: -10px;
+    background: #f43f5e;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 0 4px;
+    border-radius: 8px;
+    min-width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
   }
 }
 </style>
