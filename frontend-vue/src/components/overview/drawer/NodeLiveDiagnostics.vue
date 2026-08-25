@@ -201,7 +201,7 @@ const unifiedNodeProcesses = computed<UnifiedProcessItem[]>(() => {
   // Append any container services that didn't match an OS PID
   for (const s of services) {
     if (!matchedServices.has(s.service_name)) {
-      list.unshift({
+      list.push({
         pid: 'CTR',
         name: s.service_name,
         command_line: `Container Service: ${s.service_name}`,
@@ -267,22 +267,39 @@ const filteredNodeProcesses = computed<UnifiedProcessItem[]>(() => {
   const multiplier = isAsc ? 1 : -1
 
   if (processSortBy.value === 'cpu') {
-    list.sort((a, b) => ((a.cpu_percent || 0) - (b.cpu_percent || 0)) * multiplier)
+    list.sort((a, b) => {
+      const diff = ((a.cpu_percent || 0) - (b.cpu_percent || 0)) * multiplier
+      if (diff !== 0) return diff
+      return ((b.memory_bytes || 0) - (a.memory_bytes || 0))
+    })
   } else if (processSortBy.value === 'mem') {
-    list.sort((a, b) => ((a.memory_bytes || 0) - (b.memory_bytes || 0)) * multiplier)
+    list.sort((a, b) => {
+      const diff = ((a.memory_bytes || 0) - (b.memory_bytes || 0)) * multiplier
+      if (diff !== 0) return diff
+      return ((b.cpu_percent || 0) - (a.cpu_percent || 0))
+    })
   } else if (processSortBy.value === 'disk') {
     list.sort((a, b) => {
       const aDisk = (a.disk_read_bytes_per_sec || 0) + (a.disk_write_bytes_per_sec || 0)
       const bDisk = (b.disk_read_bytes_per_sec || 0) + (b.disk_write_bytes_per_sec || 0)
-      return (aDisk - bDisk) * multiplier
+      const diff = (aDisk - bDisk) * multiplier
+      if (diff !== 0) return diff
+      // Secondary tie-break by CPU, then Memory
+      return ((b.cpu_percent || 0) - (a.cpu_percent || 0)) || ((b.memory_bytes || 0) - (a.memory_bytes || 0))
     })
   } else if (processSortBy.value === 'rps') {
-    list.sort((a, b) => ((a.requests_per_sec || 0) - (b.requests_per_sec || 0)) * multiplier)
+    list.sort((a, b) => {
+      const diff = ((a.requests_per_sec || 0) - (b.requests_per_sec || 0)) * multiplier
+      if (diff !== 0) return diff
+      return ((b.cpu_percent || 0) - (a.cpu_percent || 0)) || ((b.memory_bytes || 0) - (a.memory_bytes || 0))
+    })
   } else if (processSortBy.value === 'bandwidth') {
     list.sort((a, b) => {
       const aBw = (a.rx_bytes_per_sec || 0) + (a.tx_bytes_per_sec || 0)
       const bBw = (b.rx_bytes_per_sec || 0) + (b.tx_bytes_per_sec || 0)
-      return (aBw - bBw) * multiplier
+      const diff = (aBw - bBw) * multiplier
+      if (diff !== 0) return diff
+      return ((b.cpu_percent || 0) - (a.cpu_percent || 0)) || ((b.memory_bytes || 0) - (a.memory_bytes || 0))
     })
   } else if (processSortBy.value === 'pid') {
     list.sort((a, b) => {
