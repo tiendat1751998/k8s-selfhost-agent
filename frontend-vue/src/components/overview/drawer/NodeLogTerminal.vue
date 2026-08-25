@@ -1156,13 +1156,13 @@ onUnmounted(() => {
 }
 
 .input-datetime {
-  padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  border-radius: 6px;
-  color: #f1f5f9;
-  font-size: 11.5px;
   color-scheme: dark;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 11.5px;
+  padding: 5px 8px;
   outline: none;
   transition: all 0.2s ease;
 }
@@ -1170,7 +1170,7 @@ onUnmounted(() => {
 .input-datetime:focus {
   border-color: #38bdf8;
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.7);
 }
 
 .custom-range-presets {

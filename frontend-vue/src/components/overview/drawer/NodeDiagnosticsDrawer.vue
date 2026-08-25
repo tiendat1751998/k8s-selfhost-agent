@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { NodeMetrics, SystemOverview, TpsSnapshot } from '../../../api/overview'
 import type { NodeHistoryResponse, NodeMetricRollup } from '../../../api/compute'
-import ModalDrawer from '../../ui/ModalDrawer.vue'
 import NodeDrawerHeader from './NodeDrawerHeader.vue'
 import NodeLiveDiagnostics from './NodeLiveDiagnostics.vue'
 import NodeHistoricalChart from './NodeHistoricalChart.vue'
@@ -59,6 +58,34 @@ function handleClose() {
   emit('update:show', false)
 }
 
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.show) {
+    handleClose()
+  }
+}
+
+watch(
+  () => props.show,
+  (isOpen) => {
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = isOpen ? 'hidden' : ''
+    }
+  }
+)
+
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', handleKeydown)
+  }
+})
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('keydown', handleKeydown)
+    document.body.style.overflow = ''
+  }
+})
+
 function handleRangeChange(range: string) {
   emit('update:nodeHistoryRange', range)
   emit('range-change', range)
@@ -91,121 +118,172 @@ function openAiIncidents() {
 </script>
 
 <template>
-  <ModalDrawer
-    :show="show"
-    mode="drawer"
-    maxWidth="1100px"
-    @close="handleClose"
-  >
-    <div v-if="node" class="node-diagnostics-drawer">
-      <!-- 1. Header Information Panel -->
-      <NodeDrawerHeader :node="node" />
+  <Teleport to="body">
+    <Transition name="overlay-fade">
+      <div
+        v-if="show"
+        class="drawer-backdrop"
+        @click.self="handleClose"
+        role="dialog"
+        aria-modal="true"
+      >
+        <Transition name="drawer-slide" appear>
+          <aside
+            v-if="show && node"
+            class="node-diagnostics-drawer glass-panel"
+          >
+            <!-- 1. Header Information Panel at very top -->
+            <NodeDrawerHeader :node="node" @close="handleClose" />
 
-      <!-- 2. Drawer Mode Switcher -->
-      <div class="drawer-mode-tabs">
-        <button
-          type="button"
-          class="mode-tab-btn"
-          :class="{ active: nodeDrawerMode === 'live' }"
-          @click="nodeDrawerMode = 'live'"
-        >
-          <span class="tab-icon">⚡</span>
-          <span>Live Diagnostics &amp; Workloads</span>
-          <span class="tab-pill font-mono">Real-time</span>
-        </button>
+            <!-- 2. Pinned Mode Switcher Tabs (Always visible) -->
+            <div class="drawer-tabs-pinned">
+              <div class="drawer-mode-tabs">
+                <button
+                  type="button"
+                  class="mode-tab-btn"
+                  :class="{ active: nodeDrawerMode === 'live' }"
+                  @click="nodeDrawerMode = 'live'"
+                >
+                  <span class="tab-icon">⚡</span>
+                  <span>Live Diagnostics &amp; Workloads</span>
+                  <span class="tab-pill font-mono">Real-time</span>
+                </button>
 
-        <button
-          type="button"
-          class="mode-tab-btn"
-          :class="{ active: nodeDrawerMode === 'history' }"
-          @click="nodeDrawerMode = 'history'"
-        >
-          <span class="tab-icon">📈</span>
-          <span>Historical Telemetry &amp; Audit</span>
-          <span class="tab-pill font-mono">{{ nodeHistoryRange }}</span>
-        </button>
+                <button
+                  type="button"
+                  class="mode-tab-btn"
+                  :class="{ active: nodeDrawerMode === 'history' }"
+                  @click="nodeDrawerMode = 'history'"
+                >
+                  <span class="tab-icon">📈</span>
+                  <span>Historical Telemetry &amp; Audit</span>
+                  <span class="tab-pill font-mono">{{ nodeHistoryRange }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 3. Scrollable Body containing Tab Content -->
+            <div class="drawer-body-scroll">
+
+              <!-- TAB 1: LIVE DIAGNOSTICS -->
+              <NodeLiveDiagnostics
+                v-if="nodeDrawerMode === 'live'"
+                :node="node"
+                :overview="overview"
+                :tpsData="tpsData"
+              />
+
+              <!-- TAB 2: HISTORICAL TELEMETRY & AUDIT -->
+              <div v-else class="drawer-tab-content">
+                <div class="node-history-content">
+                  <!-- Top: Multi-Series Chart & KPIs -->
+                  <NodeHistoricalChart
+                    :node="node"
+                    :nodeHistoryData="nodeHistoryData"
+                    :nodeHistoryLoading="nodeHistoryLoading"
+                    :nodeHistoryRange="nodeHistoryRange"
+                    :customHistFrom="customHistFrom"
+                    :customHistTo="customHistTo"
+                    @update:nodeHistoryRange="emit('update:nodeHistoryRange', $event)"
+                    @update:customHistFrom="emit('update:customHistFrom', $event)"
+                    @update:customHistTo="emit('update:customHistTo', $event)"
+                    @range-change="handleRangeChange"
+                    @custom-range-apply="emit('custom-range-apply')"
+                    @apply-preset="emit('apply-preset', $event)"
+                    @sync-point-in-time="onSyncPointInTime"
+                  />
+
+                  <!-- Bottom: Log Terminal & Incidents -->
+                  <NodeLogTerminal
+                    ref="logTerminalRef"
+                    :node="node"
+                    :nodeHistoryData="nodeHistoryData"
+                    :tpsData="tpsData"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Drawer Footer Actions -->
+            <div class="node-drawer-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                @click="manageHost"
+              >
+                <span>⚙️ Manage in Registry</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                @click="openAiIncidents"
+              >
+                <span>🤖 AI Incident Diagnostics</span>
+              </button>
+            </div>
+          </aside>
+        </Transition>
       </div>
-
-      <!-- TAB 1: LIVE DIAGNOSTICS -->
-      <NodeLiveDiagnostics
-        v-if="nodeDrawerMode === 'live'"
-        :node="node"
-        :overview="overview"
-        :tpsData="tpsData"
-      />
-
-      <!-- TAB 2: HISTORICAL TELEMETRY & AUDIT -->
-      <div v-else class="drawer-tab-content">
-        <div class="node-history-content">
-          <!-- Top: Multi-Series Chart & KPIs -->
-          <NodeHistoricalChart
-            :node="node"
-            :nodeHistoryData="nodeHistoryData"
-            :nodeHistoryLoading="nodeHistoryLoading"
-            :nodeHistoryRange="nodeHistoryRange"
-            :customHistFrom="customHistFrom"
-            :customHistTo="customHistTo"
-            @update:nodeHistoryRange="emit('update:nodeHistoryRange', $event)"
-            @update:customHistFrom="emit('update:customHistFrom', $event)"
-            @update:customHistTo="emit('update:customHistTo', $event)"
-            @range-change="handleRangeChange"
-            @custom-range-apply="emit('custom-range-apply')"
-            @apply-preset="emit('apply-preset', $event)"
-            @sync-point-in-time="onSyncPointInTime"
-          />
-
-          <!-- Bottom: Log Terminal & Incidents -->
-          <NodeLogTerminal
-            ref="logTerminalRef"
-            :node="node"
-            :nodeHistoryData="nodeHistoryData"
-            :tpsData="tpsData"
-          />
-        </div>
-      </div>
-
-      <!-- 4. Drawer Footer Actions -->
-      <div class="node-drawer-footer">
-        <button
-          type="button"
-          class="btn btn-secondary"
-          @click="manageHost"
-        >
-          <span>⚙️ Manage in Registry</span>
-        </button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          @click="openAiIncidents"
-        >
-          <span>🤖 AI Incident Diagnostics</span>
-        </button>
-      </div>
-    </div>
-  </ModalDrawer>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 12, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .node-diagnostics-drawer {
+  width: 100%;
+  max-width: 1100px;
+  height: 100vh;
+  background: rgba(11, 16, 28, 0.98);
+  border-left: 1px solid var(--border-medium, rgba(255, 255, 255, 0.12));
+  box-shadow: -15px 0 45px rgba(0, 0, 0, 0.75);
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 4px 0 16px;
+  overflow: hidden;
+  z-index: 1001;
+}
+
+.drawer-tabs-pinned {
+  padding: 12px 24px;
+  background: rgba(11, 16, 28, 0.98);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.drawer-body-scroll {
+  padding: 16px 24px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .drawer-mode-tabs {
   display: flex;
   gap: 8px;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.7);
   padding: 4px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   width: 100%;
+  flex-shrink: 0;
 }
 
 .mode-tab-btn {
   flex: 1;
-  padding: 8px 14px;
+  padding: 10px 16px;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
@@ -223,18 +301,22 @@ function openAiIncidents() {
 
 .mode-tab-btn:hover {
   color: var(--text-primary, #f8fafc);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .mode-tab-btn.active {
   background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.3);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25), 0 0 12px rgba(56, 189, 248, 0.15);
+}
+
+.tab-icon {
+  font-size: 14px;
 }
 
 .tab-pill {
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
   font-size: 10px;
   background: rgba(255, 255, 255, 0.08);
@@ -254,12 +336,14 @@ function openAiIncidents() {
 }
 
 .node-drawer-footer {
+  padding: 14px 24px;
+  background: rgba(15, 23, 42, 0.65);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
 }
 
 .btn {
@@ -300,4 +384,25 @@ function openAiIncidents() {
 }
 
 .font-mono { font-family: var(--font-mono, monospace); }
+
+/* Animations */
+.overlay-fade-enter-active,
+.overlay-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+.overlay-fade-enter-from,
+.overlay-fade-leave-to {
+  opacity: 0;
+}
+
+.drawer-slide-enter-active {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.drawer-slide-leave-active {
+  transition: transform 0.22s ease-in;
+}
+.drawer-slide-enter-from,
+.drawer-slide-leave-to {
+  transform: translateX(100%);
+}
 </style>\n
