@@ -491,7 +491,17 @@ function selectIncidentLog(inc: any) {
   fetchNodeAppLogs(selectedLogApp.value)
 }
 
-function syncToTime(from: string, to: string) {
+function syncToTime(from: string, to: string, targetApp?: string) {
+  if (targetApp) {
+    const matched = nodeAvailableLogApps.value.find(
+      app => app.name.toLowerCase() === targetApp.toLowerCase()
+    )
+    if (matched) {
+      selectedLogApp.value = matched.name
+    } else {
+      selectedLogApp.value = targetApp
+    }
+  }
   customLogFrom.value = from
   customLogTo.value = to
   selectedLogSince.value = 'custom'

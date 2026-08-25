@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { NodeMetrics } from '../../../api/overview'
+import type { NodeMetrics, TpsSnapshot } from '../../../api/overview'
 import type { NodeMetricRollup, NodeHistoryResponse } from '../../../api/compute'
 
 interface Props {
   node: NodeMetrics
+  tpsData?: TpsSnapshot | null
   nodeHistoryData?: NodeHistoryResponse | null
   nodeHistoryLoading?: boolean
   nodeHistoryRange?: string
@@ -13,6 +14,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  tpsData: null,
   nodeHistoryData: null,
   nodeHistoryLoading: false,
   nodeHistoryRange: '1h',
@@ -27,7 +29,7 @@ const emit = defineEmits<{
   (e: 'range-change', range: string, from?: string, to?: string): void
   (e: 'custom-range-apply'): void
   (e: 'apply-preset', preset: '30m' | '2h' | '6h' | 'today'): void
-  (e: 'sync-point-in-time', point: NodeMetricRollup): void
+  (e: 'sync-point-in-time', point: NodeMetricRollup, suspectApp?: string): void
 }>()
 
 // Series visibility toggles
@@ -360,6 +362,91 @@ const hoveredNodeHistPoint = computed<NodeMetricRollup | null>(() => {
   return nodeHistoryList.value[hoveredNodeHistIndex.value]
 })
 
+const hoveredPointSuspect = computed<{ name: string; reason: string } | null>(() => {
+  if (!hoveredNodeHistPoint.value) return null
+  const pt = hoveredNodeHistPoint.value
+  const pointTime = new Date(pt.recorded_at).getTime()
+
+  // 1. Check if an incident in props.nodeHistoryData?.incidents occurred within ±15 minutes of hoveredNodeHistPoint.recorded_at
+  if (!isNaN(pointTime) && props.nodeHistoryData?.incidents && props.nodeHistoryData.incidents.length > 0) {
+    const windowMs = 15 * 60 * 1000
+    for (const inc of props.nodeHistoryData.incidents) {
+      const incTimeStr = (inc as any).recorded_at || inc.created_at || (inc as any).timestamp
+      if (!incTimeStr) continue
+      const incTime = new Date(incTimeStr).getTime()
+      if (!isNaN(incTime) && Math.abs(incTime - pointTime) <= windowMs) {
+        const sName = (inc as any).service_name || inc.pod_name || (inc as any).name
+        const sTitle = (inc as any).title || inc.type || inc.message || 'Incident Event'
+        if (sName) {
+          return { name: sName, reason: sTitle }
+        }
+      }
+    }
+  }
+
+  // 2. Otherwise, check props.node?.top_processes and props.tpsData?.services for workloads running on this node:
+  // Pick the workload/process with the highest CPU or Memory usage (ignoring kernel daemons starting with `[`).
+  const nodeId = (props.node?.node_id || '').toLowerCase().trim()
+  const nodeName = (props.node?.node_name || '').toLowerCase().trim()
+
+  const nodeServices = (props.tpsData?.services || []).filter(s => {
+    const sNodeId = (s.node_id || '').toLowerCase().trim()
+    const sNodeName = (s.node_name || '').toLowerCase().trim()
+    if (sNodeId && (sNodeId === nodeId || sNodeId === nodeName)) return true
+    if (sNodeName && (sNodeName === nodeName || sNodeName === nodeId)) return true
+    return false
+  })
+
+  interface OffenderCandidate {
+    name: string
+    cpu_percent: number
+    mem_percent: number
+    score: number
+  }
+  const candidates: OffenderCandidate[] = []
+
+  for (const proc of props.node?.top_processes || []) {
+    const pName = (proc.name || '').trim()
+    if (pName && !pName.startsWith('[')) {
+      const cpu = proc.cpu_percent || 0
+      const mem = proc.memory_percent || 0
+      candidates.push({
+        name: pName,
+        cpu_percent: cpu,
+        mem_percent: mem,
+        score: Math.max(cpu, mem),
+      })
+    }
+  }
+
+  for (const s of nodeServices) {
+    const sName = (s.service_name || '').trim()
+    if (sName && !sName.startsWith('[')) {
+      const cpu = s.cpu_percent || 0
+      const mem = s.memory_percent || 0
+      candidates.push({
+        name: sName,
+        cpu_percent: cpu,
+        mem_percent: mem,
+        score: Math.max(cpu, mem),
+      })
+    }
+  }
+
+  if (candidates.length > 0) {
+    candidates.sort((a, b) => b.score - a.score)
+    const top = candidates[0]
+    if (top && top.name) {
+      return {
+        name: top.name,
+        reason: `CPU: ${Math.round(top.cpu_percent || 0)}%`,
+      }
+    }
+  }
+
+  return null
+})
+
 const nodeHistHoverCoords = computed(() => {
   if (hoveredNodeHistIndex.value === null || !nodeHistoryList.value.length) return null
   const list = nodeHistoryList.value
@@ -452,7 +539,8 @@ function loadNodeHistory(_nodeId?: string, range = '1h', from?: string, to?: str
 function syncLogsToPointInTime(point?: NodeMetricRollup | null) {
   const pt = point || hoveredNodeHistPoint.value
   if (pt) {
-    emit('sync-point-in-time', pt)
+    const suspectName = hoveredPointSuspect.value?.name
+    emit('sync-point-in-time', pt, suspectName)
   }
 }
 
@@ -790,6 +878,11 @@ function formatIoRate(bytesPerSec?: number): string {
           </div>
           <div v-if="showHistCpu && (hoveredNodeHistPoint.cpu_peak || 0) >= 85" class="tooltip-spike-alert">
             <span class="spike-alert-tag">⚠️ Critical Spike: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }}</span>
+          </div>
+          <div v-if="hoveredPointSuspect" class="tooltip-suspect-row">
+            <span class="tooltip-suspect-tag">
+              🔥 Top Offender: <strong class="text-rose">{{ hoveredPointSuspect.name }}</strong> ({{ hoveredPointSuspect.reason }})
+            </span>
           </div>
           <div class="tooltip-series-row" v-if="showHistMem">
             <span class="tooltip-dot dot-cyan"></span>
@@ -1507,6 +1600,30 @@ function formatIoRate(bytesPerSec?: number): string {
   padding: 2px 6px;
   border-radius: 4px;
   letter-spacing: 0.02em;
+}
+
+.tooltip-suspect-row {
+  margin-top: 3px;
+  display: flex;
+}
+
+.tooltip-suspect-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  word-break: break-word;
+}
+
+.text-rose {
+  color: #fb7185;
 }
 
 .btn-xs {
