@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -1284,6 +1285,352 @@ func TestTPSCollector_IntelligentContainerNetworkFallback(t *testing.T) {
 		t.Errorf("expected tiki_traefik RequestsPerSec = 1000.0, got %f", traefikSvc.RequestsPerSec)
 	}
 }
+
+func TestTPSCollector_CounterResetProtection_AllSources(t *testing.T) {
+	// NATS server
+	natsIteration := 0
+	natsSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if natsIteration == 0 {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"in_msgs":     int64(50000),
+				"out_msgs":    int64(60000),
+				"in_bytes":    int64(50000000),
+				"out_bytes":   int64(60000000),
+				"in_rate":     0.0,
+				"out_rate":    0.0,
+				"connections": 10,
+			})
+		} else {
+			// Counter reset
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"in_msgs":     int64(500),
+				"out_msgs":    int64(600),
+				"in_bytes":    int64(500000),
+				"out_bytes":   int64(600000),
+				"in_rate":     0.0,
+				"out_rate":    0.0,
+				"connections": 10,
+			})
+		}
+	}))
+	defer natsSrv.Close()
+
+	// DB mock
+	dbIteration := 0
+	mockDB := &mockDBPool{
+		rowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			dbIteration++
+			if dbIteration == 1 {
+				return &mockDBRow{
+					values: []any{
+						int64(100000), int64(5000), int64(500000), int64(300000),
+						int64(20000), int64(15000), int64(2000), int64(10),
+						int64(10000), int64(90000),
+					},
+				}
+			}
+			// DB restarted, counters reset to small values
+			return &mockDBRow{
+				values: []any{
+					int64(50), int64(2), int64(300), int64(200),
+					int64(10), int64(8), int64(1), int64(10),
+					int64(10), int64(90),
+				},
+			}
+		},
+	}
+
+	provider := &mockMetricsProvider{
+		snapshot: &SystemOverview{
+			Containers: []ContainerMetrics{
+				{
+					ContainerID:   "c-app",
+					ContainerName: "my_app",
+					ServiceName:   "my_app",
+					State:         "running",
+					NetworkRx:     10000000,
+					NetworkTx:     5000000,
+				},
+			},
+		},
+	}
+
+	httpReqs := int64(10000)
+	collector := NewTPSCollector(
+		provider,
+		mockDB,
+		zap.NewNop(),
+		WithNATSMonitorURL(natsSrv.URL),
+		WithTPSRequestCountFn(func() int64 { return httpReqs }),
+	)
+
+	// First baseline collection
+	_, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("first collect failed: %v", err)
+	}
+
+	// Trigger counter resets
+	time.Sleep(50 * time.Millisecond)
+	natsIteration = 1
+	httpReqs = 50
+	provider.snapshot = &SystemOverview{
+		Containers: []ContainerMetrics{
+			{
+				ContainerID:   "c-app",
+				ContainerName: "my_app",
+				ServiceName:   "my_app",
+				State:         "running",
+				NetworkRx:     1000,
+				NetworkTx:     500,
+			},
+		},
+	}
+
+	snap2, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("second collect failed: %v", err)
+	}
+
+	if snap2.HTTP.RequestsPerSec <= 0 {
+		t.Errorf("expected positive HTTP RequestsPerSec after reset, got %f", snap2.HTTP.RequestsPerSec)
+	}
+	if snap2.Database.TransactionsPerSec <= 0 {
+		t.Errorf("expected positive DB TransactionsPerSec after reset, got %f", snap2.Database.TransactionsPerSec)
+	}
+	if snap2.Database.ReadsPerSec <= 0 {
+		t.Errorf("expected positive DB ReadsPerSec after reset, got %f", snap2.Database.ReadsPerSec)
+	}
+	if snap2.Database.WritesPerSec <= 0 {
+		t.Errorf("expected positive DB WritesPerSec after reset, got %f", snap2.Database.WritesPerSec)
+	}
+	if snap2.Messaging.InBytesPerSec <= 0 {
+		t.Errorf("expected positive NATS InBytesPerSec after reset, got %d", snap2.Messaging.InBytesPerSec)
+	}
+	if snap2.Messaging.InMsgsPerSec <= 0 {
+		t.Errorf("expected positive NATS InMsgsPerSec after reset, got %f", snap2.Messaging.InMsgsPerSec)
+	}
+}
+
+func TestTPSCollector_DeltaDatabaseCacheHitRatio(t *testing.T) {
+	dbStep := 0
+	mockDB := &mockDBPool{
+		rowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			dbStep++
+			switch dbStep {
+			case 1:
+				// Baseline: 1000 read, 9000 hit (90%)
+				return &mockDBRow{
+					values: []any{
+						int64(100), int64(0), int64(1000), int64(1000),
+						int64(10), int64(10), int64(0), int64(5),
+						int64(1000), int64(9000),
+					},
+				}
+			case 2:
+				// Active query step: +200 read (1200), +800 hit (9800) -> delta ratio = 800/(800+200) = 80%
+				return &mockDBRow{
+					values: []any{
+						int64(200), int64(0), int64(2000), int64(2000),
+						int64(20), int64(20), int64(0), int64(5),
+						int64(1200), int64(9800),
+					},
+				}
+			default:
+				// Idle step: +0 read (1200), +0 hit (9800) -> delta=0, fallback to cumulative: 9800/(9800+1200) = 0.8909
+				return &mockDBRow{
+					values: []any{
+						int64(200), int64(0), int64(2000), int64(2000),
+						int64(20), int64(20), int64(0), int64(5),
+						int64(1200), int64(9800),
+					},
+				}
+			}
+		},
+	}
+
+	collector := NewTPSCollector(nil, mockDB, zap.NewNop())
+
+	// Step 1: Baseline
+	snap1, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("step 1 failed: %v", err)
+	}
+	if snap1.Database.CacheHitRatio != 0.9000 {
+		t.Errorf("step 1 expected cumulative 0.9000, got %f", snap1.Database.CacheHitRatio)
+	}
+
+	// Step 2: Active queries with 80% delta hit ratio
+	time.Sleep(50 * time.Millisecond)
+	snap2, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("step 2 failed: %v", err)
+	}
+	if snap2.Database.CacheHitRatio != 0.8000 {
+		t.Errorf("step 2 expected delta 0.8000, got %f", snap2.Database.CacheHitRatio)
+	}
+
+	// Step 3: Idle step -> delta total blocks == 0 -> fallback to cumulative
+	time.Sleep(50 * time.Millisecond)
+	snap3, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("step 3 failed: %v", err)
+	}
+	expectedCumulative := 0.8909
+	if math.Abs(snap3.Database.CacheHitRatio-expectedCumulative) > 0.001 {
+		t.Errorf("step 3 expected fallback cumulative ~0.8909, got %f", snap3.Database.CacheHitRatio)
+	}
+}
+
+func TestTPSCollector_MaxLatencyMs_Propagation(t *testing.T) {
+	lbMock := &mockLBProvider{
+		aggStats: &domainLB.AggregateStats{
+			TotalRequests:       10000,
+			TotalRequestsPerSec: 50.0,
+			ActiveConnections:   10,
+			ErrorRate:           0.5,
+			AvgLatencyMs:        15.0,
+			MaxLatencyMs:        24.0,
+		},
+		stats: []domainLB.ServiceRequestStats{
+			{
+				ServiceName:    "gateway",
+				TotalRequests:  5000,
+				RequestsPerSec: 25.0,
+				ErrorRate:      0.2,
+				AvgLatencyMs:   12.0,
+				MaxLatencyMs:   19.2,
+			},
+		},
+	}
+
+	provider := &mockMetricsProvider{
+		snapshot: &SystemOverview{
+			Containers: []ContainerMetrics{
+				{
+					ContainerID:   "c1",
+					ContainerName: "tiki_traefik",
+					ServiceName:   "tiki_traefik",
+					State:         "running",
+					NetworkRx:     1000000,
+					NetworkRxRate: 100000,
+				},
+				{
+					ContainerID:   "c2",
+					ContainerName: "gateway",
+					ServiceName:   "gateway",
+					State:         "running",
+					NetworkRx:     500000,
+					NetworkRxRate: 50000,
+				},
+				{
+					ContainerID:   "c3",
+					ContainerName: "tiki_orders",
+					ServiceName:   "tiki_orders",
+					State:         "running",
+					NetworkRx:     500000,
+					NetworkRxRate: 50000,
+				},
+			},
+		},
+	}
+
+	collector := NewTPSCollector(
+		provider,
+		nil,
+		zap.NewNop(),
+		WithLoadBalancerProvider(lbMock),
+	)
+
+	snap, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	// 1. HTTP TPS should reflect AggregateStats MaxLatencyMs
+	if snap.HTTP.MaxLatencyMs != 24.0 {
+		t.Errorf("expected HTTP MaxLatencyMs = 24.0, got %f", snap.HTTP.MaxLatencyMs)
+	}
+
+	// 2. Services
+	svcMap := make(map[string]ServiceTPS)
+	for _, s := range snap.Services {
+		svcMap[s.ServiceName] = s
+	}
+
+	// Gateway should have matched LB MaxLatencyMs (19.2)
+	if gw, ok := svcMap["gateway"]; !ok || gw.MaxLatencyMs != 19.2 {
+		t.Errorf("expected gateway MaxLatencyMs = 19.2, got %f", gw.MaxLatencyMs)
+	}
+
+	// tiki_traefik should reflect HTTP MaxLatencyMs (24.0)
+	if tr, ok := svcMap["tiki_traefik"]; !ok || tr.MaxLatencyMs != 24.0 {
+		t.Errorf("expected tiki_traefik MaxLatencyMs = 24.0, got %f", tr.MaxLatencyMs)
+	}
+
+	// tiki_orders (fallback backend) should inherit HTTP MaxLatencyMs (24.0)
+	if ord, ok := svcMap["tiki_orders"]; !ok || ord.MaxLatencyMs != 24.0 {
+		t.Errorf("expected tiki_orders MaxLatencyMs = 24.0, got %f", ord.MaxLatencyMs)
+	}
+}
+
+func TestTPSCollector_NoFabricatedRPS_WhenHTTPZero(t *testing.T) {
+	collector := NewTPSCollector(nil, nil, zap.NewNop())
+
+	services := []ServiceTPS{
+		{
+			ServiceName:   "postgres_db",
+			RxBytesPerSec: 50000,
+		},
+		{
+			ServiceName:   "nats",
+			RxBytesPerSec: 30000,
+		},
+		{
+			ServiceName:   "tiki_orders",
+			RxBytesPerSec: 100000,
+		},
+	}
+
+	httpTPS := HTTPTPS{
+		RequestsPerSec: 0,
+		ErrorRate:      0,
+		AvgLatencyMs:   0,
+	}
+
+	dbTPS := DatabaseTPS{
+		TransactionsPerSec: 15.5,
+	}
+
+	msgTPS := MessagingTPS{
+		InMsgsPerSec:  10.0,
+		OutMsgsPerSec: 20.0,
+	}
+
+	enriched := collector.enrichServicesWithLBStats(context.Background(), services, httpTPS, dbTPS, msgTPS)
+
+	svcMap := make(map[string]ServiceTPS)
+	for _, s := range enriched {
+		svcMap[s.ServiceName] = s
+	}
+
+	// DB should be 15.5
+	if db, ok := svcMap["postgres_db"]; !ok || db.RequestsPerSec != 15.5 {
+		t.Errorf("expected postgres_db RequestsPerSec = 15.5, got %f", db.RequestsPerSec)
+	}
+
+	// NATS should be 30.0 (10+20)
+	if nats, ok := svcMap["nats"]; !ok || nats.RequestsPerSec != 30.0 {
+		t.Errorf("expected nats RequestsPerSec = 30.0, got %f", nats.RequestsPerSec)
+	}
+
+	// tiki_orders must be 0 (never fabricated when HTTP is 0)
+	if ord, ok := svcMap["tiki_orders"]; !ok || ord.RequestsPerSec != 0 {
+		t.Errorf("expected tiki_orders RequestsPerSec = 0 when HTTP is 0, got %f", ord.RequestsPerSec)
+	}
+}
+
 
 
 
