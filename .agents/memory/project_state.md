@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-25T16:35
+# K8sControl Project State — Session Update 2026-08-25T16:55
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `013aa9a` fix(frontend): add hierarchical tie-breaking for process sorting and replace container unshift with push
+Latest: `9a614b0` fix(frontend): overhaul mobile responsive layout for trend header, chart x-axis, and top hud
 Previous commits this session:
+- `9a614b0` fix(frontend): overhaul mobile responsive layout for trend header, chart x-axis, and top hud
 - `013aa9a` fix(frontend): add hierarchical tie-breaking for process sorting and replace container unshift with push
 - `9942ce6` feat(frontend): add disk io column and compact state badge in node process table
 - `20a1570` feat(frontend): consolidate ingress metrics into 5-min trend header and streamline request flow bar
@@ -174,6 +175,7 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
 ## Completed Features (Latest Session: 2026-08-25)
+- **Mobile Responsive UI Overhaul for Telemetry & Navigation** (DEC-059)
 - **Hierarchical Tie-Breaking for Process Sorting & Container Push** (DEC-058)
 - **Process Table Real-Time Disk I/O & Compact State Badge Polish** (DEC-057)
 - **Consolidated Ingress Telemetry Header & Streamlined Request Flow Simulator** (DEC-056)
