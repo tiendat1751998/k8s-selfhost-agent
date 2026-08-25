@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-25T13:34
+# K8sControl Project State — Session Update 2026-08-25T13:48
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `acd1cdb` feat(overview): top-right floating cyber alert toast and alert center modal
+Latest: `8f6c28c` feat(header): integrate alert bell, dropdown toast, and telemetry health into top hud
 Previous commits this session:
+- `8f6c28c` feat(header): integrate alert bell, dropdown toast, and telemetry health into top hud
 - `acd1cdb` feat(overview): top-right floating cyber alert toast and alert center modal
 - `7820b2a` feat(overview): persistent alert snooze and mute system with one-click suppression
 - `294de55` feat(ui): compact 4-column network interface grid and streamline cyber datetime picker with elevated z-index
