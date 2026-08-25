@@ -1189,20 +1189,60 @@ function handleNavigateToHost(nodeNameOrId: string) {
 
 @media (max-width: 640px) {
   .top-hud {
-    padding: 0 12px;
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  .hud-left {
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .hud-right {
+    gap: 8px;
+    min-width: 0;
   }
 
   .breadcrumb-nav {
     display: none;
   }
 
+  .command-search-btn {
+    padding: 6px 10px;
+    gap: 0;
+  }
+
+  .command-search-btn .kbd-badge {
+    display: none;
+  }
+
   .tenant-selector-wrap {
-    max-width: 150px;
+    max-width: 120px;
+    padding: 4px 6px;
+    gap: 4px;
+    flex-shrink: 1;
+    min-width: 0;
   }
 
   .tenant-select {
-    max-width: 110px;
+    max-width: 80px;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: 11px;
+  }
+
+  .hud-user {
+    padding-left: 6px;
+    gap: 6px;
+  }
+
+  .user-role {
+    display: none;
+  }
+
+  .page-container {
+    padding: 12px 8px;
   }
 }
 </style>

@@ -402,9 +402,10 @@ const trendTimeAxisMarkers = computed(() => {
     const idx = Math.round((i / (count - 1)) * (history.length - 1))
     const pt = history[idx]
     if (pt) {
+      const formattedTime = (pt.time || '').replace(/\s*[AP]M$/i, '')
       markers.push({
         x: 6 + idx * step,
-        time: pt.time,
+        time: formattedTime,
       })
     }
   }
@@ -586,7 +587,7 @@ async function fetchOverview() {
     lastUpdated.value = new Date()
 
     const now = new Date()
-    const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
     const newPoint: TrendPoint = {
       time: timeLabel,
       cpu: data.total_cpu_percent || 0,
@@ -599,7 +600,7 @@ async function fetchOverview() {
       for (let i = 29; i >= 0; i--) {
         const past = new Date(now.getTime() - i * 10000)
         trendHistory.value.push({
-          time: past.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          time: past.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
           cpu: Math.max(0, newPoint.cpu + (Math.random() * 4 - 2)),
           mem: Math.max(0, newPoint.mem + (Math.random() * 2 - 1)),
           disk: newPoint.disk,
@@ -854,9 +855,22 @@ onUnmounted(() => {
       <section class="trend-chart-card glass-panel trend-card-clickable" @click="openDeepDiveModal">
         <div class="trend-chart-header">
           <div class="trend-title-wrap">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <h3 class="sidebar-card-title">📈 5-Min Saturation Trends</h3>
-              <span class="badge badge-indigo font-mono">LIVE BUFFER</span>
+            <div class="trend-title-top-row">
+              <div class="trend-title-left">
+                <h3 class="sidebar-card-title">
+                  <span class="title-full">📈 5-Min Saturation Trends</span>
+                  <span class="title-mobile">📈 5-Min Trends</span>
+                </h3>
+                <span class="badge badge-indigo font-mono">LIVE BUFFER</span>
+              </div>
+              <button
+                class="trend-expand-badge font-mono trend-btn-mobile"
+                type="button"
+                @click.stop="openDeepDiveModal"
+                title="Click to open cluster telemetry deep-dive modal"
+              >
+                🔍 Deep-Dive
+              </button>
             </div>
             <span class="trend-chart-subtitle">
               Rolling 30-sample sliding window across CPU, RAM, and gateway RPS
@@ -910,13 +924,13 @@ onUnmounted(() => {
               </span>
               <span class="legend-pill pill-reqs">
                 <span class="legend-dot-circle bg-emerald"></span>
-                <span>Throughput ({{ Math.round(latestTrendReqs).toLocaleString() }} req/s)</span>
+                <span><span class="legend-name-full">Throughput </span>({{ Math.round(latestTrendReqs).toLocaleString() }} req/s)</span>
               </span>
             </div>
 
-            <!-- Single Clean Deep-Dive Action Button -->
+            <!-- Single Clean Deep-Dive Action Button (Desktop) -->
             <button
-              class="trend-expand-badge font-mono"
+              class="trend-expand-badge font-mono trend-btn-desktop"
               type="button"
               @click.stop="openDeepDiveModal"
               title="Click to open cluster telemetry deep-dive modal"
@@ -1449,6 +1463,38 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 3px;
+}
+
+.trend-title-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trend-title-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-full {
+  display: inline;
+}
+
+.title-mobile {
+  display: none;
+}
+
+.trend-btn-mobile {
+  display: none;
+}
+
+.trend-btn-desktop {
+  display: inline-flex;
+}
+
+.legend-name-full {
+  display: inline;
 }
 
 .sidebar-card-title {
@@ -1990,5 +2036,253 @@ onUnmounted(() => {
 .alert-slide-leave-to {
   opacity: 0;
   transform: translateY(-12px);
+}
+
+/* ==========================================
+ * MOBILE RESPONSIVE OPTIMIZATIONS (<= 640px)
+ * ========================================== */
+@media (max-width: 640px) {
+  .overview-dashboard {
+    padding: 12px 8px 32px;
+    gap: 14px;
+  }
+
+  .dashboard-header {
+    gap: 12px;
+  }
+
+  .header-titles {
+    gap: 4px;
+  }
+
+  .header-badge-group {
+    gap: 6px;
+    font-size: 10px;
+  }
+
+  .last-sync-text {
+    display: none;
+  }
+
+  .page-title {
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+
+  .page-desc {
+    font-size: 11.5px;
+    line-height: 1.4;
+  }
+
+  .header-actions {
+    width: 100%;
+    gap: 6px;
+  }
+
+  .header-actions .btn {
+    flex: 1 1 calc(50% - 6px);
+    font-size: 11.5px;
+    padding: 6px 8px;
+    white-space: nowrap;
+    justify-content: center;
+  }
+
+  /* Trend Chart Card */
+  .trend-chart-card {
+    padding: 12px 10px;
+    gap: 10px;
+  }
+
+  .trend-chart-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .trend-title-wrap {
+    width: 100%;
+    gap: 4px;
+  }
+
+  /* Row 1: Flex row with 📈 5-Min Trends + LIVE BUFFER (left) and [🔍 Deep-Dive] (right) */
+  .trend-title-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .trend-title-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .title-full {
+    display: none;
+  }
+
+  .title-mobile {
+    display: inline;
+  }
+
+  .sidebar-card-title {
+    font-size: 0.98rem;
+    white-space: nowrap;
+  }
+
+  .trend-btn-desktop {
+    display: none;
+  }
+
+  .trend-btn-mobile {
+    display: inline-flex;
+    padding: 3px 8px;
+    font-size: 10.5px;
+    border-radius: 5px;
+  }
+
+  /* Row 2: Subtitle (compact 10.5px) */
+  .trend-chart-subtitle {
+    font-size: 10.5px;
+    line-height: 1.3;
+  }
+
+  .trend-header-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 6px;
+  }
+
+  /* Row 3: Ingress metrics in sleek 2x2 grid */
+  .trend-ingress-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 5px;
+    width: 100%;
+  }
+
+  .trend-metric-pill {
+    justify-content: center;
+    padding: 4px 6px;
+    font-size: 10.5px;
+    border-radius: 5px;
+  }
+
+  .trend-metric-pill .pill-icon {
+    font-size: 10.5px;
+  }
+
+  .trend-metric-pill .pill-val {
+    font-size: 10.5px;
+  }
+
+  .trend-metric-pill .pill-lbl {
+    font-size: 9.5px;
+  }
+
+  /* Row 4: Legend pills in clean compact flex row */
+  .trend-legend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 4px;
+  }
+
+  .legend-pill {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 3px 4px;
+    font-size: 9.5px;
+    gap: 4px;
+    white-space: nowrap;
+    border-radius: 5px;
+  }
+
+  .legend-name-full {
+    display: none;
+  }
+
+  .legend-dot-circle {
+    width: 5px;
+    height: 5px;
+  }
+
+  /* Chart Canvas & Axes */
+  .trend-chart-body {
+    height: 150px;
+    gap: 4px;
+  }
+
+  .trend-y-axis {
+    width: 26px;
+    font-size: 9px;
+  }
+
+  .y-axis-right {
+    width: 34px;
+    font-size: 9px;
+  }
+
+  .trend-x-axis {
+    padding-left: 28px;
+    padding-right: 36px;
+    font-size: 9.5px;
+  }
+
+  /* Hide 2nd and 4th ticks on mobile, keeping 3 clean ticks (Start, Mid, Now) */
+  .trend-x-axis .x-tick:nth-child(2),
+  .trend-x-axis .x-tick:nth-child(4) {
+    display: none;
+  }
+
+  /* Topology Section */
+  .topology-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .topology-title-group {
+    width: 100%;
+  }
+
+  .topology-mesh-indicator {
+    width: 100%;
+    justify-content: space-between;
+    padding: 6px 10px;
+    font-size: 10.5px;
+  }
+
+  .topology-filter-bar {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .topology-filter-pills {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .topology-filter-pills::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filter-pill-btn {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  .node-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
 }
 </style>\n
