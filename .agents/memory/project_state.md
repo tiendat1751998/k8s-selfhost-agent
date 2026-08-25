@@ -2,9 +2,10 @@
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `0cf69b1` feat(telemetry): add output TX peak rate to live network IO summary card
+Latest: `6d3fbd5` perf(logs): implement high-performance virtual scrolling window and memoized parsing for 20k+ log lines
 Previous commits this session:
-- `548c1ee` docs: update project state memory with telemetry aggregation and cyber log chips
+- `77b90af` docs: update project state memory with network TX peak feature
+- `0cf69b1` feat(telemetry): add output TX peak rate to live network IO summary card
 - `a33cfa0` feat(telemetry): dynamic 1h hourly bucket aggregation for 7d/30d queries and redesigned cyber log filter toolbar
 - `8484c3e` fix(overview): fix timezone parsing flatline and log level count filter
 - `12a6925` fix(overview): reset drawer scroll to top on tab switch
