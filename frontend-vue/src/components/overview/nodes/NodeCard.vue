@@ -118,8 +118,11 @@ function formatIoRate(bytesPerSec?: number): string {
         <span class="badge-meta font-mono" :title="formatOsSummary(node)">
           🐧 {{ formatOsSummary(node) }}
         </span>
-        <span class="badge-meta font-mono">
-          ⚡ {{ node.role || 'Agent' }}
+        <span
+          class="badge-meta font-mono"
+          :title="`${node.running_count ?? node.container_count ?? 0} Active Containers · ${node.processes || 0} Host PIDs`"
+        >
+          📦 {{ node.running_count ?? node.container_count ?? 0 }} ctr · {{ node.processes || 0 }} pids
         </span>
       </div>
     </div>
@@ -155,48 +158,62 @@ function formatIoRate(bytesPerSec?: number): string {
       </div>
     </div>
 
-    <!-- Node Resource Detail Stats -->
+    <!-- Node Resource Detail Stats (Symmetrical 2x2 Balanced Matrix) -->
     <div class="node-meta-grid">
+      <!-- 1. Memory RAM -->
       <div class="meta-item">
-        <span class="meta-label">Memory RAM</span>
-        <span class="meta-val smooth-value font-mono">
-          {{ formatBytes(node.memory_used) }} / {{ formatBytes(node.memory_total) }}
-          <span class="text-cyan font-bold">({{ Math.round(node.memory_percent) }}%)</span>
-        </span>
+        <div class="meta-header-row">
+          <span class="meta-label">Memory RAM</span>
+          <span class="meta-badge text-cyan font-mono">{{ Math.round(node.memory_percent) }}%</span>
+        </div>
+        <div class="meta-val font-mono" :title="`${formatBytes(node.memory_used)} / ${formatBytes(node.memory_total)}`">
+          {{ formatBytes(node.memory_used) }}<span class="meta-sep">/</span>{{ formatBytes(node.memory_total) }}
+        </div>
       </div>
+
+      <!-- 2. Disk Storage -->
       <div class="meta-item">
-        <span class="meta-label">Disk Storage</span>
-        <span class="meta-val smooth-value font-mono">
-          {{ formatBytes(node.disk_used) }} / {{ formatBytes(node.disk_total) }}
-          <span class="text-emerald font-bold">({{ Math.round(node.disk_percent) }}%)</span>
-        </span>
-        <div class="disk-io-streams font-mono">
+        <div class="meta-header-row">
+          <span class="meta-label">Disk Storage</span>
+          <span class="meta-badge text-emerald font-mono">{{ Math.round(node.disk_percent) }}%</span>
+        </div>
+        <div class="meta-val font-mono" :title="`${formatBytes(node.disk_used)} / ${formatBytes(node.disk_total)}`">
+          {{ formatBytes(node.disk_used) }}<span class="meta-sep">/</span>{{ formatBytes(node.disk_total) }}
+        </div>
+      </div>
+
+      <!-- 3. Live Network I/O -->
+      <div class="meta-item">
+        <div class="meta-header-row">
+          <span class="meta-label">Network I/O</span>
+        </div>
+        <div class="io-dual-stream font-mono">
+          <span class="io-stream rx" title="Inbound Traffic (Download / Rx)">
+            <span class="stream-arrow text-cyan">↓</span>
+            <span class="stream-val">{{ formatIoRate(node.network_rx_bytes) }}</span>
+          </span>
+          <span class="io-stream tx" title="Outbound Traffic (Upload / Tx)">
+            <span class="stream-arrow text-purple">↑</span>
+            <span class="stream-val">{{ formatIoRate(node.network_tx_bytes) }}</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- 4. Live Disk I/O Rates -->
+      <div class="meta-item">
+        <div class="meta-header-row">
+          <span class="meta-label">Disk I/O Rate</span>
+        </div>
+        <div class="io-dual-stream font-mono">
           <span class="io-stream rx" title="Physical Disk Read Rate">
-            📖 {{ formatIoRate(node.disk_read_bytes_per_sec || 0) }}
+            <span class="stream-arrow text-sky">📖</span>
+            <span class="stream-val">{{ formatIoRate(node.disk_read_bytes_per_sec || 0) }}</span>
           </span>
           <span class="io-stream tx" title="Physical Disk Write Rate">
-            ✍️ {{ formatIoRate(node.disk_write_bytes_per_sec || 0) }}
+            <span class="stream-arrow text-amber">✍️</span>
+            <span class="stream-val">{{ formatIoRate(node.disk_write_bytes_per_sec || 0) }}</span>
           </span>
         </div>
-      </div>
-      <div class="meta-item meta-item-network">
-        <span class="meta-label">Live Network I/O</span>
-        <div class="net-io-streams font-mono">
-          <div class="net-stream rx" title="Download / Inbound Traffic (Rx)">
-            <span class="net-arrow text-cyan">↓</span>
-            <span class="net-val text-cyan">{{ formatIoRate(node.network_rx_bytes) }}</span>
-          </div>
-          <div class="net-stream tx" title="Upload / Outbound Traffic (Tx)">
-            <span class="net-arrow text-purple">↑</span>
-            <span class="net-val text-purple">{{ formatIoRate(node.network_tx_bytes) }}</span>
-          </div>
-        </div>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Containers / PIDs</span>
-        <span class="meta-val smooth-value font-mono">
-          {{ node.running_count ?? node.container_count ?? 0 }} Containers ({{ node.processes || 0 }} PIDs)
-        </span>
       </div>
     </div>
 
@@ -446,71 +463,80 @@ function formatIoRate(bytesPerSec?: number): string {
 .node-meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 7px;
 }
 
 .meta-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 6px;
-  padding: 6px 10px;
+  justify-content: center;
+  gap: 3px;
+  min-height: 48px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 7px;
+  padding: 5px 9px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.meta-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+.meta-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  line-height: 1;
 }
 
 .meta-label {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-muted, #64748b);
 }
 
+.meta-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  line-height: 1.1;
+}
+
 .meta-val {
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 600;
   color: var(--text-primary, #f8fafc);
-  transition: color 0.5s ease;
-}
-
-.net-io-streams {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  flex-wrap: wrap;
-  font-size: 0.77rem;
-  font-weight: 600;
-  line-height: 1.25;
-}
-
-.net-stream {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  white-space: nowrap;
-}
-
-.net-arrow {
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.net-val {
+  font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
 }
 
-.disk-io-streams {
+.meta-sep {
+  color: var(--text-muted, #64748b);
+  margin: 0 1px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.io-dual-stream {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
-  flex-wrap: wrap;
-  font-size: 0.74rem;
+  gap: 3px;
+  font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.25;
-  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
 .io-stream {
@@ -518,14 +544,19 @@ function formatIoRate(bytesPerSec?: number): string {
   align-items: center;
   gap: 3px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.io-stream.rx {
-  color: #38bdf8;
+.stream-arrow {
+  font-size: 0.76rem;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
-.io-stream.tx {
-  color: #c084fc;
+.stream-val {
+  letter-spacing: -0.01em;
+  color: var(--text-secondary, #cbd5e1);
 }
 
 .node-card-footer {
@@ -595,6 +626,8 @@ function formatIoRate(bytesPerSec?: number): string {
 .font-mono { font-family: var(--font-mono, monospace); }
 .font-bold { font-weight: 700; }
 .text-cyan { color: #06b6d4; }
+.text-sky { color: #38bdf8; }
 .text-emerald { color: #10b981; }
 .text-purple { color: #c084fc; }
+.text-amber { color: #fbbf24; }
 </style>
