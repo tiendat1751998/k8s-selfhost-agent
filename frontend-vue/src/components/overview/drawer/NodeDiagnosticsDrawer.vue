@@ -41,6 +41,7 @@ const emit = defineEmits<{
   (e: 'range-change', range: string, from?: string, to?: string): void
   (e: 'custom-range-apply', from?: string, to?: string): void
   (e: 'apply-preset', preset: '30m' | '2h' | '6h' | 'today'): void
+  (e: 'update:initialMode', val: 'live' | 'history'): void
   (e: 'manage-host', node: NodeMetrics): void
   (e: 'open-incidents'): void
 }>()
@@ -69,6 +70,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 function switchMode(mode: 'live' | 'history') {
   nodeDrawerMode.value = mode
+  emit('update:initialMode', mode)
   resetDrawerScroll()
 }
 
@@ -115,7 +117,7 @@ onUnmounted(() => {
 
 function handleRangeChange(range: string, from?: string, to?: string) {
   emit('update:nodeHistoryRange', range)
-  emit('range-change', range, from || props.customHistFrom, to || props.customHistTo)
+  emit('range-change', range, range === 'custom' ? (from || props.customHistFrom) : undefined, range === 'custom' ? (to || props.customHistTo) : undefined)
 }
 
 function onSyncPointInTime(point: NodeMetricRollup) {
