@@ -512,7 +512,7 @@ function formatIoRate(bytesPerSec?: number): string {
           </div>
         </div>
         <span class="kpi-sub font-mono">
-          ⚡ Peak: ↓ {{ formatIoRate(nodeHistoryData?.summary?.peak_rx_bytes_sec || node?.network_rx_bytes) }}
+          ⚡ Peak: <span class="text-emerald">↓ {{ formatIoRate(nodeHistoryData?.summary?.peak_rx_bytes_sec || node?.network_rx_bytes) }}</span> <span class="text-slate">·</span> <span class="text-cyan">↑ {{ formatIoRate(nodeHistoryData?.summary?.peak_tx_bytes_sec || node?.network_tx_bytes) }}</span>
         </span>
       </div>
 
@@ -1414,6 +1414,10 @@ function formatIoRate(bytesPerSec?: number): string {
 
 .text-indigo {
   color: #818cf8 !important;
+}
+
+.text-slate {
+  color: #64748b !important;
 }
 
 .tooltip-label {
