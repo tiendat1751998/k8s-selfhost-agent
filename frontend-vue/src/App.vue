@@ -5,9 +5,14 @@ import { useAuthStore } from './stores/authStore'
 import { useBackupStore } from './stores/backupStore'
 import { useSecurityStore } from './stores/securityStore'
 import { useLogStore } from './stores/logStore'
+import { useAppStore } from './stores/app'
+import { useAlertStore } from './stores/alertStore'
 import { api } from './api/client'
 import { tenancyApi } from './api/management'
+import { overviewApi } from './api/overview'
 import ModalDrawer from './components/ui/ModalDrawer.vue'
+import TopHudAlertBell from './components/layout/TopHudAlertBell.vue'
+import AlertCenterModal from './components/overview/alerts/AlertCenterModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,6 +20,8 @@ const authStore = useAuthStore()
 const backupStore = useBackupStore()
 const securityStore = useSecurityStore()
 const logStore = useLogStore()
+const appStore = useAppStore()
+const alertStore = useAlertStore()
 
 // State
 const selectedTenant = ref('default-tenant')
@@ -180,37 +187,100 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
+let globalTelemetryInterval: ReturnType<typeof setInterval> | null = null
+
+async function syncGlobalTelemetry() {
+  if (!authStore.isAuthenticated) return
+  try {
+    const data = await overviewApi.getOverview()
+    if (data) {
+      appStore.setMetrics(data)
+      alertStore.syncAlerts(data.alerts || [])
+    }
+  } catch {
+    // Background telemetry fallback
+  }
+}
+
 onMounted(() => {
   if (authStore.isAuthenticated) {
     backupStore.fetchAll().catch(() => {})
     securityStore.fetchAll().catch(() => {})
     loadTenants().catch(() => {})
+    syncGlobalTelemetry().catch(() => {})
   }
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', handleGlobalKeydown)
   }
+  globalTelemetryInterval = setInterval(() => {
+    if (authStore.isAuthenticated) {
+      syncGlobalTelemetry().catch(() => {})
+    }
+  }, 10000)
 })
 
 onUnmounted(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('keydown', handleGlobalKeydown)
   }
+  if (globalTelemetryInterval) {
+    clearInterval(globalTelemetryInterval)
+    globalTelemetryInterval = null
+  }
 })
 
 const isLoginPage = computed(() => route.path === '/login')
 
-const clusterStatus = computed(() => {
-  if (securityStore.error || backupStore.error) return 'DEGRADED'
+// Mesh & Node Health Real-time Calculations
+const downNodes = computed(() => {
+  const nodes = appStore.latestMetrics?.nodes || []
+  return nodes.filter(n => n.status?.toLowerCase() === 'down' || n.status?.toLowerCase() === 'offline')
+})
+
+const downNodeCount = computed(() => downNodes.value.length)
+
+const clusterMeshStatus = computed(() => {
+  if (downNodeCount.value > 0) return 'DEGRADED'
+  if (securityStore.error || backupStore.error || alertStore.hasCriticalAlerts) return 'DEGRADED'
   return 'HEALTHY'
 })
 
-const streamStatus = computed(() => {
+const meshTooltip = computed(() => {
+  if (downNodeCount.value > 0) {
+    const names = downNodes.value.map(n => n.node_name || n.node_id).join(', ')
+    return `Mesh Status: DEGRADED — ${downNodeCount.value} node(s) offline (${names}). Cluster cross-node communication impaired.`
+  }
+  if (securityStore.error || backupStore.error) {
+    return `Mesh Status: DEGRADED — Security audit or backup synchronization encountered error.`
+  }
+  if (alertStore.hasCriticalAlerts) {
+    return `Mesh Status: DEGRADED — Critical resource alerts active in cluster.`
+  }
+  const total = appStore.latestMetrics?.total_nodes || appStore.latestMetrics?.nodes?.length || 0
+  const healthy = appStore.latestMetrics?.healthy_nodes || total
+  return `Mesh Status: HEALTHY — WireGuard/eBPF encrypted mesh operational across ${healthy}/${total || 'all'} connected nodes.`
+})
+
+// Latency & Stream Real-time Calculations
+const streamStatusText = computed(() => {
   return logStore.isConnected ? '<50ms' : 'POLLING'
+})
+
+const latencyTooltip = computed(() => {
+  if (logStore.isConnected) {
+    return 'Telemetry Stream: Live WebSocket connection active (<50ms real-time stream latency). Continuous bidirectional events.'
+  }
+  return 'Telemetry Stream: HTTP 5s Polling Fallback active. WebSocket stream reconnecting in background.'
 })
 
 function handleLogout() {
   authStore.logout()
   router.push('/login')
+}
+
+function handleNavigateToHost(nodeNameOrId: string) {
+  alertStore.closeAlertCenter()
+  router.push({ path: '/hosts', query: { search: nodeNameOrId } })
 }
 </script>
 
@@ -333,27 +403,40 @@ function handleLogout() {
 
         <div class="hud-right">
           <!-- Tenant Selector Dropdown -->
-          <div class="tenant-selector-wrap">
+          <div class="tenant-selector-wrap" title="Workspace / Multi-Tenant Organization">
             <span class="tenant-icon">🏢</span>
-            <select v-model="selectedTenant" @change="handleTenantChange" class="tenant-select font-mono">
+            <select v-model="selectedTenant" @change="handleTenantChange" class="tenant-select font-mono" title="Select active workspace tenant">
               <option v-for="t in tenants" :key="t.id" :value="t.id">
                 {{ t.name }}
               </option>
             </select>
           </div>
 
-          <!-- Cluster Status -->
-          <div class="hud-stat">
-            <span class="pulse-dot" :class="clusterStatus === 'HEALTHY' ? 'pulse-dot-emerald' : 'pulse-dot-amber'"></span>
+          <!-- Mesh Status -->
+          <div class="hud-stat hud-stat-interactive" :title="meshTooltip">
+            <span 
+              class="pulse-dot" 
+              :class="clusterMeshStatus === 'HEALTHY' ? 'pulse-dot-emerald' : (downNodeCount > 0 ? 'pulse-dot-rose' : 'pulse-dot-amber')"
+            ></span>
             <span class="stat-label">Mesh:</span>
-            <span class="stat-value" :class="clusterStatus === 'HEALTHY' ? 'text-emerald' : 'text-amber'">{{ clusterStatus }}</span>
+            <span 
+              class="stat-value" 
+              :class="clusterMeshStatus === 'HEALTHY' ? 'text-emerald' : (downNodeCount > 0 ? 'text-rose font-bold' : 'text-amber')"
+            >
+              {{ downNodeCount > 0 ? `DEGRADED (${downNodeCount} Down)` : clusterMeshStatus }}
+            </span>
           </div>
 
           <!-- Latency -->
-          <div class="hud-stat">
+          <div class="hud-stat hud-stat-interactive" :title="latencyTooltip">
             <span class="stat-label">Latency:</span>
-            <span class="stat-value font-mono text-cyan">{{ streamStatus }}</span>
+            <span class="stat-value font-mono" :class="logStore.isConnected ? 'text-emerald font-semibold' : 'text-cyan'">
+              {{ streamStatusText }}
+            </span>
           </div>
+
+          <!-- Top HUD Global Alert Bell & Dropdown Toast -->
+          <TopHudAlertBell />
 
           <!-- User Profile & Sign Out -->
           <div v-if="authStore.user" class="hud-user">
@@ -422,6 +505,21 @@ function handleLogout() {
         </div>
       </template>
     </ModalDrawer>
+
+    <!-- GLOBAL ALERT CENTER & TELEMETRY DIAGNOSTICS MODAL -->
+    <AlertCenterModal
+      :show="alertStore.showAlertCenterModal"
+      :activeAlerts="alertStore.activeAlerts"
+      :mutedAlertsList="alertStore.mutedAlertsList"
+      :hasCriticalAlerts="alertStore.hasCriticalAlerts"
+      @close="alertStore.closeAlertCenter"
+      @mute-alert="alertStore.muteAlert"
+      @unmute-alert="alertStore.unmuteAlert"
+      @mute-all="alertStore.muteAll"
+      @unmute-all="alertStore.unmuteAll"
+      @dismiss-alert="alertStore.dismissAlert"
+      @navigate-to-host="handleNavigateToHost"
+    />
   </div>
 </template>
 
@@ -847,6 +945,20 @@ function handleLogout() {
   align-items: center;
   gap: 6px;
   font-size: 12px;
+}
+
+.hud-stat-interactive {
+  cursor: help;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+}
+
+.hud-stat-interactive:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-subtle);
 }
 
 .stat-label {

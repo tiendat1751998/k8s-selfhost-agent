@@ -181,6 +181,11 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 10px #f59e0b;
 }
 
+.pulse-dot-rose {
+  background-color: #f43f5e;
+  box-shadow: 0 0 10px #f43f5e;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;

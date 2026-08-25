@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import type { MetricAlert } from '../../../api/overview'
-import type { MutedAlertConfig } from '../../../views/OverviewView.vue'
+import type { MutedAlertConfig } from '../../../stores/alertStore'
 
 interface Props {
   show: boolean
