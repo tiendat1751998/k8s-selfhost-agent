@@ -86,9 +86,9 @@ onUnmounted(() => {
   }
 })
 
-function handleRangeChange(range: string) {
+function handleRangeChange(range: string, from?: string, to?: string) {
   emit('update:nodeHistoryRange', range)
-  emit('range-change', range, props.customHistFrom, props.customHistTo)
+  emit('range-change', range, from || props.customHistFrom, to || props.customHistTo)
 }
 
 function onSyncPointInTime(point: NodeMetricRollup) {

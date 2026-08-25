@@ -70,8 +70,18 @@ const nodeDrawerMode = ref<'live' | 'history'>('live')
 const nodeHistoryData = ref<NodeHistoryResponse | null>(null)
 const nodeHistoryLoading = ref(false)
 const nodeHistoryRange = ref<string>('1h')
-const customHistFrom = ref<string>('')
-const customHistTo = ref<string>('')
+const defaultOverviewHistDates = (() => {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return {
+    from: formatDt(new Date(now.getTime() - 24 * 60 * 60 * 1000)),
+    to: formatDt(now),
+  }
+})()
+
+const customHistFrom = ref<string>(defaultOverviewHistDates.from)
+const customHistTo = ref<string>(defaultOverviewHistDates.to)
 
 // Slide-down Alerts dismiss state
 const dismissedAlerts = ref<Set<string>>(new Set())
@@ -541,29 +551,59 @@ async function pollClusterMetrics() {
   await Promise.allSettled([fetchOverview(), fetchTps()])
 }
 
-async function loadNodeHistory(nodeId?: string, range = nodeHistoryRange.value, from?: string, to?: string) {
-  const isRangeString = nodeId && ['1h', '3h', '6h', '24h', '7d', '30d', 'custom'].includes(nodeId)
-  const actualNodeId = isRangeString ? undefined : nodeId
-  const actualRange = isRangeString ? nodeId : range
+async function loadNodeHistory(nodeIdOrRange?: string, rangeOrFrom?: string, fromOrTo?: string, maybeTo?: string) {
+  let targetNodeId: string | undefined
+  let actualRange = nodeHistoryRange.value
+  let targetFrom: string | undefined
+  let targetTo: string | undefined
 
-  const targetId = actualNodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
+  const validRanges = ['1h', '3h', '6h', '24h', '7d', '30d', 'custom']
+
+  if (nodeIdOrRange && validRanges.includes(nodeIdOrRange)) {
+    // Called as loadNodeHistory(range, from, to)
+    actualRange = nodeIdOrRange
+    targetFrom = rangeOrFrom
+    targetTo = fromOrTo
+  } else {
+    // Called as loadNodeHistory(nodeId, range, from, to)
+    targetNodeId = nodeIdOrRange
+    if (rangeOrFrom && validRanges.includes(rangeOrFrom)) {
+      actualRange = rangeOrFrom
+    }
+    targetFrom = fromOrTo
+    targetTo = maybeTo
+  }
+
+  const targetId = targetNodeId || selectedNode.value?.node_id || selectedNode.value?.node_name || selectedNodeId.value
   if (!targetId) return
 
-  if (from !== undefined) {
-    customHistFrom.value = from
+  if (targetFrom !== undefined && targetFrom !== '') {
+    customHistFrom.value = targetFrom
   }
-  if (to !== undefined) {
-    customHistTo.value = to
+  if (targetTo !== undefined && targetTo !== '') {
+    customHistTo.value = targetTo
   }
 
   nodeHistoryLoading.value = true
   nodeHistoryRange.value = actualRange
 
-  const targetFrom = actualRange === 'custom' ? (from || customHistFrom.value) : from
-  const targetTo = actualRange === 'custom' ? (to || customHistTo.value) : to
+  let reqFrom = actualRange === 'custom' ? (targetFrom || customHistFrom.value) : targetFrom
+  let reqTo = actualRange === 'custom' ? (targetTo || customHistTo.value) : targetTo
+
+  if (actualRange === 'custom') {
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    if (!reqFrom || !reqTo || reqFrom === reqTo) {
+      reqFrom = formatDt(new Date(now.getTime() - 24 * 60 * 60 * 1000))
+      reqTo = formatDt(now)
+      customHistFrom.value = reqFrom
+      customHistTo.value = reqTo
+    }
+  }
 
   try {
-    const data = await nodeHistoryApi.getNodeHistory(targetId, actualRange, targetFrom, targetTo)
+    const data = await nodeHistoryApi.getNodeHistory(targetId, actualRange, reqFrom, reqTo)
     nodeHistoryData.value = data
   } catch (err: any) {
     console.error('Failed to load historical telemetry for node:', err)

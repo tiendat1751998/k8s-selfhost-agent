@@ -195,6 +195,9 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 		if startTime.After(endTime) {
 			startTime, endTime = endTime, startTime
 		}
+		if startTime.Equal(endTime) {
+			startTime = endTime.Add(-24 * time.Hour)
+		}
 		duration := endTime.Sub(startTime)
 		if duration <= 24*time.Hour {
 			resolution = "1m"
