@@ -120,7 +120,7 @@ function handleRangeChange(range: string, from?: string, to?: string) {
   emit('range-change', range, range === 'custom' ? (from || props.customHistFrom) : undefined, range === 'custom' ? (to || props.customHistTo) : undefined)
 }
 
-function onSyncPointInTime(point: NodeMetricRollup) {
+function onSyncPointInTime(point: NodeMetricRollup, suspectApp?: string) {
   if (!point || !point.recorded_at) return
   const centerTime = new Date(point.recorded_at).getTime()
   if (isNaN(centerTime)) return
@@ -130,7 +130,7 @@ function onSyncPointInTime(point: NodeMetricRollup) {
   const pad = (n: number) => String(n).padStart(2, '0')
   const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 
-  logTerminalRef.value?.syncToTime(formatDt(fromTime), formatDt(toTime))
+  logTerminalRef.value?.syncToTime(formatDt(fromTime), formatDt(toTime), suspectApp)
 }
 
 function manageHost() {
@@ -209,6 +209,7 @@ function openAiIncidents() {
                   <NodeHistoricalChart
                     :node="node"
                     :nodeHistoryData="nodeHistoryData"
+                    :tpsData="tpsData"
                     :nodeHistoryLoading="nodeHistoryLoading"
                     :nodeHistoryRange="nodeHistoryRange"
                     :customHistFrom="customHistFrom"
