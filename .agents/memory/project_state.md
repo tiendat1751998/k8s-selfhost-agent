@@ -2,8 +2,10 @@
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `0558f00` fix(historical-chart): ensure KPI cards and header stay visible in custom range and prevent 0-interval flatlines
+Latest: `8484c3e` fix(overview): fix timezone parsing flatline and log level count filter
 Previous commits this session:
+- `12a6925` fix(overview): reset drawer scroll to top on tab switch
+- `0558f00` fix(historical-chart): ensure KPI cards and header stay visible in custom range and prevent 0-interval flatlines
 - `2431f0b` fix(drawer): implement custom date-time search and fix bottom scroll cutoff
 - `88ea205` fix(ui): pin drawer mode tabs, restore header layout, and polish historical KPI cards
 - `1bb06c9` fix(ui): correct OverviewHud and RequestFlowBar template paths
