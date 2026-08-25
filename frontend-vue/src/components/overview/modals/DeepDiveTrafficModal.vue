@@ -100,8 +100,26 @@ const avgRam = computed(() => {
   return sum / props.trendHistory.length
 })
 
+// Round up to nice round ceiling with 20% headroom so peak never touches the ceiling
+function computeCeiling(rawMax: number): number {
+  if (rawMax <= 0 || isNaN(rawMax)) return 10
+  const padded = rawMax * 1.25 // 25% headroom
+  if (padded <= 10) return 10
+  if (padded <= 20) return Math.ceil(padded)
+  if (padded <= 50) return Math.ceil(padded / 5) * 5
+  if (padded <= 200) return Math.ceil(padded / 10) * 10
+  if (padded <= 1000) return Math.ceil(padded / 50) * 50
+  if (padded <= 10000) return Math.ceil(padded / 500) * 500
+  return Math.ceil(padded / 1000) * 1000
+}
+
 // Smooth Catmull-Rom to Monotone Cubic Bézier Spline Curve Generator
-function buildSmoothSpline(points: Array<{ x: number; y: number }>, smoothing = 0.18): string {
+function buildSmoothSpline(
+  points: Array<{ x: number; y: number }>,
+  smoothing = 0.18,
+  minY = 25,
+  maxY = 190,
+): string {
   if (!points || points.length === 0) return ''
   if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
   if (points.length === 2) {
@@ -117,10 +135,17 @@ function buildSmoothSpline(points: Array<{ x: number; y: number }>, smoothing = 
     const p3 = points[Math.min(points.length - 1, i + 2)]
 
     // Controlled Catmull-Rom tangents with bounded smoothing to prevent overshoot
-    const cp1x = p1.x + ((p2.x - p0.x) / 6) * (1 - smoothing)
-    const cp1y = p1.y + ((p2.y - p0.y) / 6) * (1 - smoothing)
-    const cp2x = p2.x - ((p3.x - p1.x) / 6) * (1 - smoothing)
-    const cp2y = p2.y - ((p3.y - p1.y) / 6) * (1 - smoothing)
+    const minLocalX = Math.min(p1.x, p2.x)
+    const maxLocalX = Math.max(p1.x, p2.x)
+    const cp1x = Math.max(minLocalX, Math.min(maxLocalX, p1.x + ((p2.x - p0.x) / 6) * (1 - smoothing)))
+    const cp2x = Math.max(minLocalX, Math.min(maxLocalX, p2.x - ((p3.x - p1.x) / 6) * (1 - smoothing)))
+
+    let cp1y = p1.y + ((p2.y - p0.y) / 6) * (1 - smoothing)
+    let cp2y = p2.y - ((p3.y - p1.y) / 6) * (1 - smoothing)
+
+    // Prevent overshoot above chart ceiling or below baseline
+    cp1y = Math.max(minY, Math.min(maxY, cp1y))
+    cp2y = Math.max(minY, Math.min(maxY, cp2y))
 
     d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
   }
@@ -164,7 +189,8 @@ const latestReqs = computed(() => {
 
 // Modal High-Res Chart Computeds
 const maxModalReqs = computed(() => {
-  return Math.max(10, ...props.trendHistory.map(p => p.reqs || 0), Math.round(props.tpsData?.http?.requests_per_sec || 0))
+  const rawMax = Math.max(0, ...props.trendHistory.map(p => p.reqs || 0), Math.round(props.tpsData?.http?.requests_per_sec || 0))
+  return computeCeiling(rawMax)
 })
 
 const modalPeakReqsCoord = computed(() => {
@@ -180,28 +206,28 @@ const modalPeakReqsCoord = computed(() => {
     }
   }
   if (maxVal <= 0) return null
-  const step = history.length > 1 ? 650 / (history.length - 1) : 0
+  const step = history.length > 1 ? 640 / (history.length - 1) : 0
   const x = 50 + maxIdx * step
   const maxR = maxModalReqs.value
-  const y = 190 - (Math.min(maxR, maxVal) / maxR) * 170
+  const y = Math.max(25, Math.min(190, 190 - (Math.min(maxR, maxVal) / maxR) * 165))
   return { x, y, value: maxVal, index: maxIdx }
 })
 
 const modalChartCpuPath = computed(() => {
   const history = props.trendHistory
   if (history.length < 2) return ''
-  const step = 650 / (history.length - 1)
+  const step = 640 / (history.length - 1)
   const points = history.map((h, i) => ({
     x: 50 + i * step,
-    y: Math.max(15, Math.min(190, 190 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 170)),
+    y: Math.max(25, Math.min(190, 190 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 165)),
   }))
-  return buildSmoothSpline(points)
+  return buildSmoothSpline(points, 0.18, 25, 190)
 })
 
 const modalChartCpuArea = computed(() => {
   if (!modalChartCpuPath.value || !props.trendHistory.length) return ''
   const history = props.trendHistory
-  const step = history.length > 1 ? 650 / (history.length - 1) : 0
+  const step = history.length > 1 ? 640 / (history.length - 1) : 0
   const lastX = 50 + (history.length - 1) * step
   return `${modalChartCpuPath.value} L ${lastX.toFixed(1)} 190 L 50.0 190 Z`
 })
@@ -209,18 +235,18 @@ const modalChartCpuArea = computed(() => {
 const modalChartMemPath = computed(() => {
   const history = props.trendHistory
   if (history.length < 2) return ''
-  const step = 650 / (history.length - 1)
+  const step = 640 / (history.length - 1)
   const points = history.map((h, i) => ({
     x: 50 + i * step,
-    y: Math.max(15, Math.min(190, 190 - (Math.min(100, Math.max(0, h.mem)) / 100) * 170)),
+    y: Math.max(25, Math.min(190, 190 - (Math.min(100, Math.max(0, h.mem)) / 100) * 165)),
   }))
-  return buildSmoothSpline(points)
+  return buildSmoothSpline(points, 0.18, 25, 190)
 })
 
 const modalChartMemArea = computed(() => {
   if (!modalChartMemPath.value || !props.trendHistory.length) return ''
   const history = props.trendHistory
-  const step = history.length > 1 ? 650 / (history.length - 1) : 0
+  const step = history.length > 1 ? 640 / (history.length - 1) : 0
   const lastX = 50 + (history.length - 1) * step
   return `${modalChartMemPath.value} L ${lastX.toFixed(1)} 190 L 50.0 190 Z`
 })
@@ -228,19 +254,19 @@ const modalChartMemArea = computed(() => {
 const modalChartReqsPath = computed(() => {
   const history = props.trendHistory
   if (history.length < 2) return ''
-  const step = 650 / (history.length - 1)
+  const step = 640 / (history.length - 1)
   const maxR = maxModalReqs.value
   const points = history.map((h, i) => ({
     x: 50 + i * step,
-    y: Math.max(15, Math.min(190, 190 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 170)),
+    y: Math.max(25, Math.min(190, 190 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 165)),
   }))
-  return buildSmoothSpline(points)
+  return buildSmoothSpline(points, 0.18, 25, 190)
 })
 
 const modalChartReqsArea = computed(() => {
   if (!modalChartReqsPath.value || !props.trendHistory.length) return ''
   const history = props.trendHistory
-  const step = history.length > 1 ? 650 / (history.length - 1) : 0
+  const step = history.length > 1 ? 640 / (history.length - 1) : 0
   const lastX = 50 + (history.length - 1) * step
   return `${modalChartReqsPath.value} L ${lastX.toFixed(1)} 190 L 50.0 190 Z`
 })
@@ -265,15 +291,15 @@ const hoveredModalElapsed = computed<string>(() => {
 const modalHoverCoords = computed(() => {
   if (hoveredModalIndex.value === null || !props.trendHistory.length) return null
   const history = props.trendHistory
-  const step = 650 / (history.length - 1)
+  const step = history.length > 1 ? 640 / (history.length - 1) : 0
   const idx = hoveredModalIndex.value
   const pt = history[idx]
   if (!pt) return null
   const x = 50 + idx * step
   const maxR = maxModalReqs.value
-  const yCpu = 190 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 170
-  const yMem = 190 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 170
-  const yReq = 190 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 170
+  const yCpu = Math.max(25, Math.min(190, 190 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 165))
+  const yMem = Math.max(25, Math.min(190, 190 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 165))
+  const yReq = Math.max(25, Math.min(190, 190 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 165))
   return { x, yCpu, yMem, yReq }
 })
 
@@ -293,7 +319,7 @@ const modalTimeAxisMarkers = computed(() => {
   if (history.length < 2) return []
   const count = Math.min(5, history.length)
   const markers = []
-  const step = 650 / (history.length - 1)
+  const step = 640 / (history.length - 1)
   for (let i = 0; i < count; i++) {
     const idx = Math.round((i / (count - 1)) * (history.length - 1))
     const pt = history[idx]
@@ -317,8 +343,8 @@ function handleModalChartHover(event: MouseEvent) {
 
   const scaleX = rect.width / 760
   const svgX = mouseX / scaleX
-  const boundedSvgX = Math.max(50, Math.min(700, svgX))
-  const ratio = (boundedSvgX - 50) / 650
+  const boundedSvgX = Math.max(50, Math.min(690, svgX))
+  const ratio = (boundedSvgX - 50) / 640
   const idx = Math.round(ratio * (history.length - 1))
   hoveredModalIndex.value = Math.max(0, Math.min(history.length - 1, idx))
   modalTooltipPos.value = { x: mouseX, y: mouseY }
@@ -664,29 +690,29 @@ function formatIoRate(bytesPerSec?: number): string {
 
             <!-- Horizontal Grid Lines & Left/Right Y-Axis Labels -->
             <!-- 100% -->
-            <line x1="50" y1="20" x2="700" y2="20" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
-            <text x="42" y="24" text-anchor="end" class="svg-axis-label">100%</text>
-            <text x="708" y="24" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs) }}</text>
+            <line x1="50" y1="25" x2="690" y2="25" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
+            <text x="42" y="29" text-anchor="end" class="svg-axis-label">100%</text>
+            <text x="698" y="29" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs) }}</text>
 
             <!-- 75% -->
-            <line x1="50" y1="62.5" x2="700" y2="62.5" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
-            <text x="42" y="66" text-anchor="end" class="svg-axis-label">75%</text>
-            <text x="708" y="66" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.75) }}</text>
+            <line x1="50" y1="66.25" x2="690" y2="66.25" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
+            <text x="42" y="70.25" text-anchor="end" class="svg-axis-label">75%</text>
+            <text x="698" y="70.25" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.75) }}</text>
 
             <!-- 50% -->
-            <line x1="50" y1="105" x2="700" y2="105" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
-            <text x="42" y="109" text-anchor="end" class="svg-axis-label">50%</text>
-            <text x="708" y="109" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.5) }}</text>
+            <line x1="50" y1="107.5" x2="690" y2="107.5" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
+            <text x="42" y="111.5" text-anchor="end" class="svg-axis-label">50%</text>
+            <text x="698" y="111.5" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.5) }}</text>
 
             <!-- 25% -->
-            <line x1="50" y1="147.5" x2="700" y2="147.5" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
-            <text x="42" y="151" text-anchor="end" class="svg-axis-label">25%</text>
-            <text x="708" y="151" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.25) }}</text>
+            <line x1="50" y1="148.75" x2="690" y2="148.75" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
+            <text x="42" y="152.75" text-anchor="end" class="svg-axis-label">25%</text>
+            <text x="698" y="152.75" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.25) }}</text>
 
             <!-- 0% Baseline -->
-            <line x1="50" y1="190" x2="700" y2="190" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
+            <line x1="50" y1="190" x2="690" y2="190" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
             <text x="42" y="194" text-anchor="end" class="svg-axis-label">0%</text>
-            <text x="708" y="194" text-anchor="start" class="svg-axis-label text-emerald">0 rps</text>
+            <text x="698" y="194" text-anchor="start" class="svg-axis-label text-emerald">0 rps</text>
 
             <!-- X-Axis Timestamps -->
             <g class="modal-time-markers">
@@ -753,7 +779,7 @@ function formatIoRate(bytesPerSec?: number): string {
               <!-- Vertical Guide Line -->
               <line
                 :x1="modalHoverCoords.x"
-                y1="18"
+                y1="25"
                 :x2="modalHoverCoords.x"
                 y2="190"
                 stroke="#38bdf8"

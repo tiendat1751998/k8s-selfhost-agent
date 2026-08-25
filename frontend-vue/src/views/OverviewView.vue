@@ -241,8 +241,26 @@ const topologyFilterCounts = computed(() => {
   return { all: all.length, control, worker, hot, overloaded }
 })
 
+// Round up to nice round ceiling with 20% headroom so peak never touches the ceiling
+function computeCeiling(rawMax: number): number {
+  if (rawMax <= 0 || isNaN(rawMax)) return 10
+  const padded = rawMax * 1.25 // 25% headroom
+  if (padded <= 10) return 10
+  if (padded <= 20) return Math.ceil(padded)
+  if (padded <= 50) return Math.ceil(padded / 5) * 5
+  if (padded <= 200) return Math.ceil(padded / 10) * 10
+  if (padded <= 1000) return Math.ceil(padded / 50) * 50
+  if (padded <= 10000) return Math.ceil(padded / 500) * 500
+  return Math.ceil(padded / 1000) * 1000
+}
+
 // Smooth Catmull-Rom to Monotone Cubic Bézier Spline Curve Generator
-function buildSmoothSpline(points: Array<{ x: number; y: number }>, smoothing = 0.18): string {
+function buildSmoothSpline(
+  points: Array<{ x: number; y: number }>,
+  smoothing = 0.18,
+  minY = 10,
+  maxY = 194,
+): string {
   if (!points || points.length === 0) return ''
   if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
   if (points.length === 2) {
@@ -258,10 +276,17 @@ function buildSmoothSpline(points: Array<{ x: number; y: number }>, smoothing = 
     const p3 = points[Math.min(points.length - 1, i + 2)]
 
     // Controlled Catmull-Rom tangents with bounded smoothing to prevent overshoot
-    const cp1x = p1.x + ((p2.x - p0.x) / 6) * (1 - smoothing)
-    const cp1y = p1.y + ((p2.y - p0.y) / 6) * (1 - smoothing)
-    const cp2x = p2.x - ((p3.x - p1.x) / 6) * (1 - smoothing)
-    const cp2y = p2.y - ((p3.y - p1.y) / 6) * (1 - smoothing)
+    const minLocalX = Math.min(p1.x, p2.x)
+    const maxLocalX = Math.max(p1.x, p2.x)
+    const cp1x = Math.max(minLocalX, Math.min(maxLocalX, p1.x + ((p2.x - p0.x) / 6) * (1 - smoothing)))
+    const cp2x = Math.max(minLocalX, Math.min(maxLocalX, p2.x - ((p3.x - p1.x) / 6) * (1 - smoothing)))
+
+    let cp1y = p1.y + ((p2.y - p0.y) / 6) * (1 - smoothing)
+    let cp2y = p2.y - ((p3.y - p1.y) / 6) * (1 - smoothing)
+
+    // Prevent overshoot above chart ceiling or below baseline
+    cp1y = Math.max(minY, Math.min(maxY, cp1y))
+    cp2y = Math.max(minY, Math.min(maxY, cp2y))
 
     d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
   }
@@ -305,56 +330,66 @@ const latestTrendReqs = computed(() => {
 
 // 5-Min Saturation Trends Chart
 const trendChartMaxReqs = computed(() => {
-  return Math.max(10, ...trendHistory.value.map(p => p.reqs || 0), Math.round(effectiveHttpRps.value || 0))
+  const rawMax = Math.max(0, ...trendHistory.value.map(p => p.reqs || 0), Math.round(effectiveHttpRps.value || 0))
+  return computeCeiling(rawMax)
 })
 
 const trendChartCpuPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const step = 1000 / (history.length - 1)
+  const step = 988 / (history.length - 1)
   const points = history.map((h, i) => ({
-    x: i * step,
-    y: Math.max(4, Math.min(196, 196 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 192)),
+    x: 6 + i * step,
+    y: Math.max(10, Math.min(194, 194 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 184)),
   }))
-  return buildSmoothSpline(points)
+  return buildSmoothSpline(points, 0.18, 10, 194)
 })
 
 const trendChartCpuArea = computed(() => {
-  if (!trendChartCpuPath.value) return ''
-  return `${trendChartCpuPath.value} L 1000 196 L 0 196 Z`
+  if (!trendChartCpuPath.value || !trendHistory.value.length) return ''
+  const history = trendHistory.value
+  const step = history.length > 1 ? 988 / (history.length - 1) : 0
+  const lastX = 6 + (history.length - 1) * step
+  return `${trendChartCpuPath.value} L ${lastX.toFixed(1)} 194 L 6.0 194 Z`
 })
 
 const trendChartMemPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const step = 1000 / (history.length - 1)
+  const step = 988 / (history.length - 1)
   const points = history.map((h, i) => ({
-    x: i * step,
-    y: Math.max(4, Math.min(196, 196 - (Math.min(100, Math.max(0, h.mem)) / 100) * 192)),
+    x: 6 + i * step,
+    y: Math.max(10, Math.min(194, 194 - (Math.min(100, Math.max(0, h.mem)) / 100) * 184)),
   }))
-  return buildSmoothSpline(points)
+  return buildSmoothSpline(points, 0.18, 10, 194)
 })
 
 const trendChartMemArea = computed(() => {
-  if (!trendChartMemPath.value) return ''
-  return `${trendChartMemPath.value} L 1000 196 L 0 196 Z`
+  if (!trendChartMemPath.value || !trendHistory.value.length) return ''
+  const history = trendHistory.value
+  const step = history.length > 1 ? 988 / (history.length - 1) : 0
+  const lastX = 6 + (history.length - 1) * step
+  return `${trendChartMemPath.value} L ${lastX.toFixed(1)} 194 L 6.0 194 Z`
 })
 
 const trendChartReqsPath = computed(() => {
   const history = trendHistory.value
   if (history.length < 2) return ''
-  const step = 1000 / (history.length - 1)
+  const step = 988 / (history.length - 1)
   const maxR = trendChartMaxReqs.value
   const points = history.map((h, i) => ({
-    x: i * step,
-    y: Math.max(4, Math.min(196, 196 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 192)),
+    x: 6 + i * step,
+    y: Math.max(10, Math.min(194, 194 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 184)),
   }))
-  return buildSmoothSpline(points)
+  return buildSmoothSpline(points, 0.18, 10, 194)
 })
 
 const trendChartReqsArea = computed(() => {
-  if (!trendChartReqsPath.value) return ''
-  return `${trendChartReqsPath.value} L 1000 196 L 0 196 Z`
+  if (!trendChartReqsPath.value || !trendHistory.value.length) return ''
+  const history = trendHistory.value
+  const step = history.length > 1 ? 988 / (history.length - 1) : 0
+  const lastX = 6 + (history.length - 1) * step
+  return `${trendChartReqsPath.value} L ${lastX.toFixed(1)} 194 L 6.0 194 Z`
 })
 
 const trendTimeAxisMarkers = computed(() => {
@@ -362,13 +397,13 @@ const trendTimeAxisMarkers = computed(() => {
   if (history.length < 2) return []
   const count = Math.min(5, history.length)
   const markers = []
-  const step = 1000 / (history.length - 1)
+  const step = 988 / (history.length - 1)
   for (let i = 0; i < count; i++) {
     const idx = Math.round((i / (count - 1)) * (history.length - 1))
     const pt = history[idx]
     if (pt) {
       markers.push({
-        x: idx * step,
+        x: 6 + idx * step,
         time: pt.time,
       })
     }
@@ -396,15 +431,15 @@ const hoveredTrendElapsed = computed<string>(() => {
 const trendHoverCoords = computed(() => {
   if (hoveredTrendIndex.value === null || !trendHistory.value.length) return null
   const history = trendHistory.value
-  const step = 1000 / (history.length - 1)
+  const step = history.length > 1 ? 988 / (history.length - 1) : 0
   const idx = hoveredTrendIndex.value
   const pt = history[idx]
   if (!pt) return null
-  const x = idx * step
+  const x = 6 + idx * step
   const maxR = trendChartMaxReqs.value
-  const yCpu = 196 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 192
-  const yMem = 196 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 192
-  const yReq = 196 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 192
+  const yCpu = Math.max(10, Math.min(194, 194 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 184))
+  const yMem = Math.max(10, Math.min(194, 194 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 184))
+  const yReq = Math.max(10, Math.min(194, 194 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 184))
   return { x, yCpu, yMem, yReq }
 })
 
@@ -437,7 +472,10 @@ function handleTrendChartHover(event: MouseEvent) {
   const rect = target.getBoundingClientRect()
   const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
   const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
-  const ratio = mouseX / rect.width
+  const scaleX = rect.width / 1000
+  const svgX = mouseX / scaleX
+  const boundedSvgX = Math.max(6, Math.min(994, svgX))
+  const ratio = (boundedSvgX - 6) / 988
   const idx = Math.round(ratio * (history.length - 1))
   hoveredTrendIndex.value = Math.max(0, Math.min(history.length - 1, idx))
   trendTooltipPos.value = { x: mouseX, y: mouseY }
@@ -901,11 +939,11 @@ onUnmounted(() => {
                 </defs>
 
                 <!-- 5 Horizontal Grid Lines -->
-                <line x1="0" y1="4" x2="1000" y2="4" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
-                <line x1="0" y1="52" x2="1000" y2="52" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
-                <line x1="0" y1="100" x2="1000" y2="100" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
+                <line x1="0" y1="10" x2="1000" y2="10" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
+                <line x1="0" y1="56" x2="1000" y2="56" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
+                <line x1="0" y1="102" x2="1000" y2="102" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
                 <line x1="0" y1="148" x2="1000" y2="148" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
-                <line x1="0" y1="196" x2="1000" y2="196" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
+                <line x1="0" y1="194" x2="1000" y2="194" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
 
                 <!-- Series 1: CPU Area & Line (Violet) -->
                 <path v-if="trendChartCpuArea" :d="trendChartCpuArea" fill="url(#trendCpuGrad)" />
@@ -923,9 +961,9 @@ onUnmounted(() => {
                 <g v-if="trendHoverCoords">
                   <line
                     :x1="trendHoverCoords.x"
-                    y1="4"
+                    y1="10"
                     :x2="trendHoverCoords.x"
-                    y2="196"
+                    y2="194"
                     stroke="#38bdf8"
                     stroke-width="1.5"
                     stroke-dasharray="3 3"
