@@ -844,4 +844,172 @@ func TestOverviewHandler_GetNodeHistory_24h_1440Points_NoTruncation(t *testing.T
 	}
 }
 
+func TestParseNodeHistoryTime_TimezonesAndFormats(t *testing.T) {
+	fallback := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// 1. RFC3339 UTC string with Z
+	t.Run("RFC3339 with Z", func(t *testing.T) {
+		parsed := parseNodeHistoryTime("2026-08-25T00:23:00Z", fallback)
+		expected := time.Date(2026, 8, 25, 0, 23, 0, 0, time.UTC)
+		if !parsed.Equal(expected) {
+			t.Errorf("expected %v, got %v", expected, parsed)
+		}
+		if parsed.Location() != time.UTC {
+			t.Errorf("expected location UTC, got %v", parsed.Location())
+		}
+	})
+
+	// 2. RFC3339 string with timezone offset +07:00
+	t.Run("RFC3339 with offset +07:00", func(t *testing.T) {
+		parsed := parseNodeHistoryTime("2026-08-25T07:23:00+07:00", fallback)
+		expected := time.Date(2026, 8, 25, 0, 23, 0, 0, time.UTC)
+		if !parsed.Equal(expected) {
+			t.Errorf("expected %v, got %v", expected, parsed)
+		}
+		if parsed.Location() != time.UTC {
+			t.Errorf("expected location UTC, got %v", parsed.Location())
+		}
+	})
+
+	// 3. RFC3339Nano string with timezone offset -05:00
+	t.Run("RFC3339Nano with offset -05:00", func(t *testing.T) {
+		parsed := parseNodeHistoryTime("2026-08-24T19:23:00.500-05:00", fallback)
+		expected := time.Date(2026, 8, 25, 0, 23, 0, 500000000, time.UTC)
+		if !parsed.Equal(expected) {
+			t.Errorf("expected %v, got %v", expected, parsed)
+		}
+		if parsed.Location() != time.UTC {
+			t.Errorf("expected location UTC, got %v", parsed.Location())
+		}
+	})
+
+	// 4. Local datetime string without timezone (e.g. 2026-08-25T07:23)
+	t.Run("Local format 2006-01-02T15:04", func(t *testing.T) {
+		parsed := parseNodeHistoryTime("2026-08-25T07:23", fallback)
+		if parsed.IsZero() || parsed.Equal(fallback) {
+			t.Fatalf("expected valid parsed time, got %v", parsed)
+		}
+		if parsed.Location() != time.UTC {
+			t.Errorf("expected location UTC, got %v", parsed.Location())
+		}
+		// Ensure it never returns a time in the far future
+		if parsed.After(time.Now().UTC().Add(5 * time.Minute)) {
+			t.Errorf("parsed time %v should not be in the future beyond threshold", parsed)
+		}
+	})
+
+	// 5. Formats without timezone in past
+	t.Run("Past local formats", func(t *testing.T) {
+		testCases := []string{
+			"2026-01-15T10:30:00",
+			"2026-01-15 10:30:00",
+			"2026-01-15 10:30",
+			"2026-01-15",
+		}
+		for _, tc := range testCases {
+			parsed := parseNodeHistoryTime(tc, fallback)
+			if parsed.Equal(fallback) {
+				t.Errorf("failed to parse format: %s", tc)
+			}
+			if parsed.Location() != time.UTC {
+				t.Errorf("expected location UTC for %s, got %v", tc, parsed.Location())
+			}
+		}
+	})
+
+	// 6. Empty and invalid strings return fallback
+	t.Run("Fallback on empty or invalid", func(t *testing.T) {
+		if p := parseNodeHistoryTime("", fallback); !p.Equal(fallback) {
+			t.Errorf("expected fallback for empty string, got %v", p)
+		}
+		if p := parseNodeHistoryTime("not-a-valid-date", fallback); !p.Equal(fallback) {
+			t.Errorf("expected fallback for invalid string, got %v", p)
+		}
+	})
+}
+
+func TestOverviewHandler_GetNodeHistory_TimezoneAndFutureClamping(t *testing.T) {
+	collector := metrics.NewCollector(nil, nil, nil, zap.NewNop())
+	handler := NewOverviewHandler(collector, zap.NewNop())
+
+	mockRepo := &mockNodeMetricsRepoHttp{}
+	handler.SetNodeMetricsRepo(mockRepo)
+
+	r := chi.NewRouter()
+	r.Route("/overview", handler.RegisterRoutes)
+
+	// 1. ISO string with Z
+	{
+		req := httptest.NewRequest(http.MethodGet, "/overview/nodes/node-tz/history?from=2026-08-25T00:23:00Z&to=2026-08-25T01:23:00Z", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		expectedStart := time.Date(2026, 8, 25, 0, 23, 0, 0, time.UTC)
+		expectedEnd := time.Date(2026, 8, 25, 1, 23, 0, 0, time.UTC)
+		if !mockRepo.lastQuery.StartTime.Equal(expectedStart) {
+			t.Errorf("expected StartTime %v, got %v", expectedStart, mockRepo.lastQuery.StartTime)
+		}
+		if !mockRepo.lastQuery.EndTime.Equal(expectedEnd) {
+			t.Errorf("expected EndTime %v, got %v", expectedEnd, mockRepo.lastQuery.EndTime)
+		}
+	}
+
+	// 2. ISO string with offset +07:00
+	{
+		req := httptest.NewRequest(http.MethodGet, "/overview/nodes/node-tz/history?from=2026-08-25T07:23:00+07:00&to=2026-08-25T08:23:00+07:00", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		expectedStart := time.Date(2026, 8, 25, 0, 23, 0, 0, time.UTC)
+		expectedEnd := time.Date(2026, 8, 25, 1, 23, 0, 0, time.UTC)
+		if !mockRepo.lastQuery.StartTime.Equal(expectedStart) {
+			t.Errorf("expected StartTime %v, got %v", expectedStart, mockRepo.lastQuery.StartTime)
+		}
+		if !mockRepo.lastQuery.EndTime.Equal(expectedEnd) {
+			t.Errorf("expected EndTime %v, got %v", expectedEnd, mockRepo.lastQuery.EndTime)
+		}
+	}
+
+	// 3. Local format string (2026-08-25T07:23)
+	{
+		req := httptest.NewRequest(http.MethodGet, "/overview/nodes/node-tz/history?from=2026-08-25T07:23", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		now := time.Now().UTC()
+		if mockRepo.lastQuery.EndTime.After(now.Add(2 * time.Minute)) {
+			t.Errorf("expected EndTime clamped to <= now, got %v (now is %v)", mockRepo.lastQuery.EndTime, now)
+		}
+		if mockRepo.lastQuery.StartTime.After(now) {
+			t.Errorf("expected StartTime <= now, got %v (now is %v)", mockRepo.lastQuery.StartTime, now)
+		}
+	}
+
+	// 4. Future startTime and endTime clamped
+	{
+		futureFrom := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+		futureTo := time.Now().UTC().Add(26 * time.Hour).Format(time.RFC3339)
+		req := httptest.NewRequest(http.MethodGet, "/overview/nodes/node-tz/history?from="+futureFrom+"&to="+futureTo, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		now := time.Now().UTC()
+		if mockRepo.lastQuery.EndTime.After(now.Add(2 * time.Minute)) {
+			t.Errorf("expected EndTime clamped to now, got %v", mockRepo.lastQuery.EndTime)
+		}
+		if mockRepo.lastQuery.StartTime.After(now) {
+			t.Errorf("expected StartTime adjusted before now, got %v", mockRepo.lastQuery.StartTime)
+		}
+	}
+}
+
+
 

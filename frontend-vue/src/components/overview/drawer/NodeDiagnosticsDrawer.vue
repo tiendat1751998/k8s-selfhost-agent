@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import type { NodeMetrics, SystemOverview, TpsSnapshot } from '../../../api/overview'
 import type { NodeHistoryResponse, NodeMetricRollup } from '../../../api/compute'
@@ -48,10 +48,13 @@ const emit = defineEmits<{
 const router = useRouter()
 const nodeDrawerMode = ref<'live' | 'history'>(props.initialMode)
 const logTerminalRef = ref<InstanceType<typeof NodeLogTerminal> | null>(null)
+const drawerBodyScrollRef = ref<HTMLElement | null>(null)
 
-watch(() => props.initialMode, (newMode) => {
-  nodeDrawerMode.value = newMode
-})
+function resetDrawerScroll() {
+  nextTick(() => {
+    drawerBodyScrollRef.value?.scrollTo({ top: 0, behavior: 'instant' })
+  })
+}
 
 function handleClose() {
   emit('close')
@@ -64,12 +67,36 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
+function switchMode(mode: 'live' | 'history') {
+  nodeDrawerMode.value = mode
+  resetDrawerScroll()
+}
+
+watch(() => props.initialMode, (newMode) => {
+  nodeDrawerMode.value = newMode
+  resetDrawerScroll()
+})
+
+watch(nodeDrawerMode, () => {
+  resetDrawerScroll()
+})
+
 watch(
   () => props.show,
   (isOpen) => {
     if (typeof document !== 'undefined') {
       document.body.style.overflow = isOpen ? 'hidden' : ''
     }
+    if (isOpen) {
+      resetDrawerScroll()
+    }
+  }
+)
+
+watch(
+  () => props.node?.node_id,
+  () => {
+    resetDrawerScroll()
   }
 )
 
@@ -142,7 +169,7 @@ function openAiIncidents() {
                   type="button"
                   class="mode-tab-btn"
                   :class="{ active: nodeDrawerMode === 'live' }"
-                  @click="nodeDrawerMode = 'live'"
+                  @click="switchMode('live')"
                 >
                   <span class="tab-icon">⚡</span>
                   <span>Live Diagnostics &amp; Workloads</span>
@@ -153,7 +180,7 @@ function openAiIncidents() {
                   type="button"
                   class="mode-tab-btn"
                   :class="{ active: nodeDrawerMode === 'history' }"
-                  @click="nodeDrawerMode = 'history'"
+                  @click="switchMode('history')"
                 >
                   <span class="tab-icon">📈</span>
                   <span>Historical Telemetry &amp; Audit</span>
@@ -163,7 +190,7 @@ function openAiIncidents() {
             </div>
 
             <!-- 3. Scrollable Body containing Tab Content -->
-            <div class="drawer-body-scroll">
+            <div ref="drawerBodyScrollRef" class="drawer-body-scroll">
 
               <!-- TAB 1: LIVE DIAGNOSTICS -->
               <NodeLiveDiagnostics
