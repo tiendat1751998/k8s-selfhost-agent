@@ -739,10 +739,38 @@ func (c *SystemCollector) collectDiskIO(now time.Time) DiskIOMetrics {
 	c.prevDiskStats = newSnap
 	c.prevDiskTime = now
 
+	// Robust Fallback: If no root devices were matched or root devices reported 0 while sub-devices had active I/O,
+	// sum active non-ignored block devices
+	if totalReadBytesPerSec == 0 && totalWriteBytesPerSec == 0 && totalReadIOPS == 0 && totalWriteIOPS == 0 {
+		for _, dev := range devices {
+			if !isIgnoredDiskDevice(dev.DeviceName) {
+				totalReadBytesPerSec += dev.ReadBytesPerSec
+				totalWriteBytesPerSec += dev.WriteBytesPerSec
+				totalReadIOPS += dev.ReadIOPS
+				totalWriteIOPS += dev.WriteIOPS
+				if dev.IoUtilizationPct > maxIoUtil {
+					maxIoUtil = dev.IoUtilizationPct
+				}
+			}
+		}
+	}
+
 	var avgAwaitMs float64
 	totalRootIOs := totalRootDeltaReads + totalRootDeltaWrites
 	if totalRootIOs > 0 {
 		avgAwaitMs = math.Round((float64(totalRootDeltaReadTimeMs+totalRootDeltaWriteTimeMs)/float64(totalRootIOs))*100) / 100
+	} else if len(devices) > 0 {
+		var waitSum float64
+		var waitCount int
+		for _, dev := range devices {
+			if dev.AvgWaitMs > 0 {
+				waitSum += dev.AvgWaitMs
+				waitCount++
+			}
+		}
+		if waitCount > 0 {
+			avgAwaitMs = math.Round((waitSum/float64(waitCount))*100) / 100
+		}
 	}
 
 	return DiskIOMetrics{
