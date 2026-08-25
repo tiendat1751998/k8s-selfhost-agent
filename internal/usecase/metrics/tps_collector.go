@@ -43,6 +43,7 @@ type ServiceTPS struct {
 	RequestsPerSec float64 `json:"requests_per_sec"`
 	ErrorRate      float64 `json:"error_rate"`
 	AvgLatencyMs   float64 `json:"avg_latency_ms"`
+	MaxLatencyMs   float64 `json:"max_latency_ms,omitempty"`
 	Status         string  `json:"status"` // healthy, degraded, down
 }
 
@@ -61,6 +62,7 @@ type HTTPTPS struct {
 	TotalRequests     int64   `json:"total_requests"`
 	ErrorRate         float64 `json:"error_rate"` // % of 4xx+5xx
 	AvgLatencyMs      float64 `json:"avg_latency_ms,omitempty"`
+	MaxLatencyMs      float64 `json:"max_latency_ms,omitempty"`
 }
 
 // DatabaseTPS holds database transactional throughput metrics from pg_stat_database.
@@ -112,6 +114,8 @@ type dbStatsRaw struct {
 	tupInserted int64
 	tupUpdated  int64
 	tupDeleted  int64
+	blksRead    int64
+	blksHit     int64
 }
 
 type natsStatsRaw struct {
@@ -129,6 +133,15 @@ type httpStatsRaw struct {
 type containerNetRaw struct {
 	rxBytes int64
 	txBytes int64
+}
+
+// safeDeltaInt64 protects against negative deltas when counters reset across restarts.
+func safeDeltaInt64(curr, prev int64) int64 {
+	if curr < prev {
+		// Counter was reset after service restart / container recreation
+		return curr
+	}
+	return curr - prev
 }
 
 // TPSCollector aggregates throughput metrics across network, HTTP, database, messaging, and containers.
@@ -312,6 +325,9 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 			if aggStats.AvgLatencyMs > 0 {
 				httpTPS.AvgLatencyMs = aggStats.AvgLatencyMs
 			}
+			if aggStats.MaxLatencyMs > 0 {
+				httpTPS.MaxLatencyMs = aggStats.MaxLatencyMs
+			}
 			if aggStats.TotalRequests > 0 {
 				httpTPS.TotalRequests = aggStats.TotalRequests
 			}
@@ -471,8 +487,8 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 
 		if elapsed > 0 {
 			for _, cm := range snapshot.Containers {
-				if prev, ok := c.prevContainerStats[cm.ContainerID]; ok && prev.rxBytes > 0 && cm.NetworkRx >= prev.rxBytes {
-					rxDelta := cm.NetworkRx - prev.rxBytes
+				if prev, ok := c.prevContainerStats[cm.ContainerID]; ok && prev.rxBytes > 0 {
+					rxDelta := safeDeltaInt64(cm.NetworkRx, prev.rxBytes)
 					if rxDelta > 0 {
 						rate := int64(float64(rxDelta) / elapsed)
 						if rate < 10*1024*1024*1024 {
@@ -481,8 +497,8 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 						}
 					}
 				}
-				if prev, ok := c.prevContainerStats[cm.ContainerID]; ok && prev.txBytes > 0 && cm.NetworkTx >= prev.txBytes {
-					txDelta := cm.NetworkTx - prev.txBytes
+				if prev, ok := c.prevContainerStats[cm.ContainerID]; ok && prev.txBytes > 0 {
+					txDelta := safeDeltaInt64(cm.NetworkTx, prev.txBytes)
 					if txDelta > 0 {
 						rate := int64(float64(txDelta) / elapsed)
 						if rate < 10*1024*1024*1024 {
@@ -757,10 +773,7 @@ func (c *TPSCollector) collectHTTPTPS(ctx context.Context, now time.Time) HTTPTP
 		elapsed := now.Sub(c.prevHTTPTime).Seconds()
 		if elapsed > 0 {
 			if totalReqs > 0 {
-				reqDelta := totalReqs - c.prevHTTPStats.totalRequests
-				if reqDelta < 0 {
-					reqDelta = 0
-				}
+				reqDelta := safeDeltaInt64(totalReqs, c.prevHTTPStats.totalRequests)
 				httpTPS.RequestsPerSec = math.Round((float64(reqDelta)/elapsed)*100) / 100
 			}
 
@@ -845,39 +858,25 @@ func (c *TPSCollector) collectDatabaseTPS(ctx context.Context, now time.Time) Da
 	if !c.prevDBTime.IsZero() {
 		elapsed := now.Sub(c.prevDBTime).Seconds()
 		if elapsed > 0 {
-			commitDelta := xactCommit - c.prevDBStats.commit
-			rollbackDelta := xactRollback - c.prevDBStats.rollback
-			if commitDelta < 0 {
-				commitDelta = 0
-			}
-			if rollbackDelta < 0 {
-				rollbackDelta = 0
-			}
+			commitDelta := safeDeltaInt64(xactCommit, c.prevDBStats.commit)
+			rollbackDelta := safeDeltaInt64(xactRollback, c.prevDBStats.rollback)
 			dbTPS.TransactionsPerSec = math.Round((float64(commitDelta+rollbackDelta)/elapsed)*100) / 100
 
-			retDelta := tupReturned - c.prevDBStats.tupReturned
-			fetchDelta := tupFetched - c.prevDBStats.tupFetched
-			if retDelta < 0 {
-				retDelta = 0
-			}
-			if fetchDelta < 0 {
-				fetchDelta = 0
-			}
+			retDelta := safeDeltaInt64(tupReturned, c.prevDBStats.tupReturned)
+			fetchDelta := safeDeltaInt64(tupFetched, c.prevDBStats.tupFetched)
 			dbTPS.ReadsPerSec = math.Round((float64(retDelta+fetchDelta)/elapsed)*100) / 100
 
-			insDelta := tupInserted - c.prevDBStats.tupInserted
-			updDelta := tupUpdated - c.prevDBStats.tupUpdated
-			delDelta := tupDeleted - c.prevDBStats.tupDeleted
-			if insDelta < 0 {
-				insDelta = 0
-			}
-			if updDelta < 0 {
-				updDelta = 0
-			}
-			if delDelta < 0 {
-				delDelta = 0
-			}
+			insDelta := safeDeltaInt64(tupInserted, c.prevDBStats.tupInserted)
+			updDelta := safeDeltaInt64(tupUpdated, c.prevDBStats.tupUpdated)
+			delDelta := safeDeltaInt64(tupDeleted, c.prevDBStats.tupDeleted)
 			dbTPS.WritesPerSec = math.Round((float64(insDelta+updDelta+delDelta)/elapsed)*100) / 100
+
+			deltaBlksHit := safeDeltaInt64(blksHit, c.prevDBStats.blksHit)
+			deltaBlksRead := safeDeltaInt64(blksRead, c.prevDBStats.blksRead)
+			deltaTotalBlocks := deltaBlksHit + deltaBlksRead
+			if deltaTotalBlocks > 0 {
+				dbTPS.CacheHitRatio = math.Round((float64(deltaBlksHit)/float64(deltaTotalBlocks))*10000) / 10000
+			}
 		}
 	}
 	c.prevDBStats = dbStatsRaw{
@@ -888,6 +887,8 @@ func (c *TPSCollector) collectDatabaseTPS(ctx context.Context, now time.Time) Da
 		tupInserted: tupInserted,
 		tupUpdated:  tupUpdated,
 		tupDeleted:  tupDeleted,
+		blksRead:    blksRead,
+		blksHit:     blksHit,
 	}
 	c.prevDBTime = now
 	c.mu.Unlock()
@@ -961,22 +962,19 @@ func (c *TPSCollector) collectMessagingTPS(ctx context.Context, now time.Time) M
 	if !c.prevNATSTime.IsZero() {
 		elapsed := now.Sub(c.prevNATSTime).Seconds()
 		if elapsed > 0 {
-			inBytesDelta := payload.InBytes - c.prevNATSStats.inBytes
-			outBytesDelta := payload.OutBytes - c.prevNATSStats.outBytes
-			if inBytesDelta < 0 {
-				inBytesDelta = 0
-			}
-			if outBytesDelta < 0 {
-				outBytesDelta = 0
-			}
+			inBytesDelta := safeDeltaInt64(payload.InBytes, c.prevNATSStats.inBytes)
+			outBytesDelta := safeDeltaInt64(payload.OutBytes, c.prevNATSStats.outBytes)
 			msgTPS.InBytesPerSec = int64(float64(inBytesDelta) / elapsed)
 			msgTPS.OutBytesPerSec = int64(float64(outBytesDelta) / elapsed)
 
-			if msgTPS.InMsgsPerSec == 0 && payload.InMsgs > c.prevNATSStats.inMsgs {
-				msgTPS.InMsgsPerSec = math.Round((float64(payload.InMsgs-c.prevNATSStats.inMsgs)/elapsed)*100) / 100
+			inMsgsDelta := safeDeltaInt64(payload.InMsgs, c.prevNATSStats.inMsgs)
+			outMsgsDelta := safeDeltaInt64(payload.OutMsgs, c.prevNATSStats.outMsgs)
+
+			if msgTPS.InMsgsPerSec == 0 && inMsgsDelta > 0 {
+				msgTPS.InMsgsPerSec = math.Round((float64(inMsgsDelta)/elapsed)*100) / 100
 			}
-			if msgTPS.OutMsgsPerSec == 0 && payload.OutMsgs > c.prevNATSStats.outMsgs {
-				msgTPS.OutMsgsPerSec = math.Round((float64(payload.OutMsgs-c.prevNATSStats.outMsgs)/elapsed)*100) / 100
+			if msgTPS.OutMsgsPerSec == 0 && outMsgsDelta > 0 {
+				msgTPS.OutMsgsPerSec = math.Round((float64(outMsgsDelta)/elapsed)*100) / 100
 			}
 		}
 	}
@@ -1129,6 +1127,7 @@ func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services [
 			services[i].RequestsPerSec = stat.RequestsPerSec
 			services[i].ErrorRate = stat.ErrorRate
 			services[i].AvgLatencyMs = stat.AvgLatencyMs
+			services[i].MaxLatencyMs = stat.MaxLatencyMs
 		}
 
 		// 1. Ingress gateway mapping (tiki_traefik / traefik)
@@ -1136,6 +1135,7 @@ func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services [
 			services[i].RequestsPerSec = httpTPS.RequestsPerSec
 			services[i].ErrorRate = httpTPS.ErrorRate
 			services[i].AvgLatencyMs = httpTPS.AvgLatencyMs
+			services[i].MaxLatencyMs = httpTPS.MaxLatencyMs
 			continue
 		}
 
@@ -1166,6 +1166,9 @@ func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services [
 				}
 				if httpTPS.AvgLatencyMs > 0 {
 					services[i].AvgLatencyMs = httpTPS.AvgLatencyMs
+				}
+				if httpTPS.MaxLatencyMs > 0 {
+					services[i].MaxLatencyMs = httpTPS.MaxLatencyMs
 				}
 			}
 		}

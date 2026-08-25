@@ -12,6 +12,7 @@ type ServiceRequestStats struct {
 	Status5xx      int64   `json:"status_5xx"`
 	ErrorRate      float64 `json:"error_rate"` // 0.0-100.0%
 	AvgLatencyMs   float64 `json:"avg_latency_ms"`
+	MaxLatencyMs   float64 `json:"max_latency_ms,omitempty"`
 }
 
 // AggregateStats holds edge load balancer aggregated throughput and health statistics across entrypoints.
@@ -21,6 +22,7 @@ type AggregateStats struct {
 	ActiveConnections   int     `json:"active_connections"`
 	ErrorRate           float64 `json:"error_rate"` // 0.0-100.0%
 	AvgLatencyMs        float64 `json:"avg_latency_ms"`
+	MaxLatencyMs        float64 `json:"max_latency_ms,omitempty"`
 }
 
 // Provider abstracts any load balancer (Traefik, Nginx, HAProxy, etc.)
