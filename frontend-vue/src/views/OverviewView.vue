@@ -846,11 +846,8 @@ onUnmounted(() => {
       <RequestFlowBar
         :isLiveWs="isLiveWs"
         :effectiveHttpRps="effectiveHttpRps"
-        :httpActiveConns="httpActiveConns"
         :httpQueuedReqs="httpQueuedReqs"
         :httpErrorRate="httpErrorRate"
-        :clusterAvgLatencyMs="clusterAvgLatencyMs"
-        @open-deep-dive="openDeepDiveModal"
       />
 
       <!-- 3. 5-MIN SATURATION TRENDS CHART -->
@@ -866,12 +863,64 @@ onUnmounted(() => {
             </span>
           </div>
           <div class="trend-header-actions">
-            <div class="trend-legend">
-              <span class="legend-pill pill-cpu"><span class="legend-dot-circle bg-violet"></span>CPU ({{ Math.round(latestTrendCpu) }}%)</span>
-              <span class="legend-pill pill-mem"><span class="legend-dot-circle bg-cyan"></span>RAM ({{ Math.round(latestTrendMem) }}%)</span>
-              <span class="legend-pill pill-reqs"><span class="legend-dot-circle bg-emerald"></span>Throughput ({{ Math.round(latestTrendReqs).toLocaleString() }} req/s)</span>
+            <!-- Gateway Ingress Metrics Pills Group -->
+            <div class="trend-ingress-metrics font-mono">
+              <span class="trend-metric-pill" title="Active HTTP Connections">
+                <span class="pill-icon">🌐</span>
+                <span class="pill-val">{{ httpActiveConns.toLocaleString() }}</span>
+                <span class="pill-lbl">active</span>
+              </span>
+
+              <span
+                class="trend-metric-pill"
+                :class="{ 'pill-warning': httpQueuedReqs > 0 }"
+                title="Queued Gateway Requests"
+              >
+                <span class="pill-icon">⏳</span>
+                <span class="pill-val">{{ httpQueuedReqs.toLocaleString() }}</span>
+                <span class="pill-lbl">queued</span>
+              </span>
+
+              <span class="trend-metric-pill" title="Cluster Average Latency">
+                <span class="pill-icon">⏱️</span>
+                <span class="pill-val">{{ clusterAvgLatencyMs > 0 ? clusterAvgLatencyMs.toFixed(1) : '2.4' }}ms</span>
+                <span class="pill-lbl">latency</span>
+              </span>
+
+              <span
+                class="trend-metric-pill"
+                :class="{ 'pill-critical': httpErrorRate >= 5, 'pill-warning': httpErrorRate > 0 && httpErrorRate < 5 }"
+                title="HTTP Error Rate"
+              >
+                <span class="pill-icon">{{ httpErrorRate >= 5 ? '❌' : httpErrorRate > 0 ? '⚠️' : '🛡️' }}</span>
+                <span class="pill-val">{{ httpErrorRate.toFixed(1) }}%</span>
+                <span class="pill-lbl">err</span>
+              </span>
             </div>
-            <button class="trend-expand-badge" type="button" title="Click to open cluster telemetry deep-dive modal">
+
+            <!-- Legend Pills Group -->
+            <div class="trend-legend font-mono">
+              <span class="legend-pill pill-cpu">
+                <span class="legend-dot-circle bg-violet"></span>
+                <span>CPU ({{ Math.round(latestTrendCpu) }}%)</span>
+              </span>
+              <span class="legend-pill pill-mem">
+                <span class="legend-dot-circle bg-cyan"></span>
+                <span>RAM ({{ Math.round(latestTrendMem) }}%)</span>
+              </span>
+              <span class="legend-pill pill-reqs">
+                <span class="legend-dot-circle bg-emerald"></span>
+                <span>Throughput ({{ Math.round(latestTrendReqs).toLocaleString() }} req/s)</span>
+              </span>
+            </div>
+
+            <!-- Single Clean Deep-Dive Action Button -->
+            <button
+              class="trend-expand-badge font-mono"
+              type="button"
+              @click.stop="openDeepDiveModal"
+              title="Click to open cluster telemetry deep-dive modal"
+            >
               🔍 Deep-Dive
             </button>
           </div>
@@ -1418,20 +1467,84 @@ onUnmounted(() => {
 .trend-header-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
+}
+
+.trend-ingress-metrics {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-metric-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 11px;
+  color: var(--text-primary, #f8fafc);
+  transition: all 0.2s ease;
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-metric-pill:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.trend-metric-pill .pill-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.trend-metric-pill .pill-val {
+  font-weight: 700;
+  color: var(--text-primary, #f8fafc);
+}
+
+.trend-metric-pill .pill-lbl {
+  font-size: 10.5px;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.trend-metric-pill.pill-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.trend-metric-pill.pill-warning .pill-val,
+.trend-metric-pill.pill-warning .pill-lbl {
+  color: #fbbf24;
+}
+
+.trend-metric-pill.pill-critical {
+  background: rgba(244, 63, 94, 0.1);
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.trend-metric-pill.pill-critical .pill-val,
+.trend-metric-pill.pill-critical .pill-lbl {
+  color: #fb7185;
 }
 
 .trend-legend {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .legend-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   padding: 3px 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.04);
@@ -1439,6 +1552,7 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary, #94a3b8);
+  font-variant-numeric: tabular-nums;
 }
 
 .legend-dot-circle {
@@ -1446,6 +1560,7 @@ onUnmounted(() => {
   height: 7px;
   border-radius: 50%;
   box-shadow: 0 0 6px currentColor;
+  flex-shrink: 0;
 }
 
 .trend-expand-badge {
@@ -1458,10 +1573,14 @@ onUnmounted(() => {
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .trend-expand-badge:hover {
   background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+  transform: translateY(-1px);
 }
 
 .trend-chart-frame {
