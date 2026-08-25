@@ -2,8 +2,10 @@
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `297418b` refactor(ui): modularize OverviewView monolithic component into 9 clean sub-components
+Latest: `88ea205` fix(ui): pin drawer mode tabs, restore header layout, and polish historical KPI cards
 Previous commits this session:
+- `1bb06c9` fix(ui): correct OverviewHud and RequestFlowBar template paths
+- `297418b` refactor(ui): modularize OverviewView monolithic component into 9 clean sub-components
 - `272468f` docs: update project state memory with consolidated time toolbar
 - `2d6ffb8` feat(telemetry): consolidate time presets into unified pill bar and streamline custom range picker
 - `5d6feff` feat(telemetry): add custom date-time range selection and point-in-time log sync for node historical telemetry
