@@ -714,32 +714,38 @@ function formatIoRate(bytesPerSec?: number): string {
             <path v-if="modalShowReqs && modalChartReqsArea" :d="modalChartReqsArea" fill="url(#modalReqsGrad)" />
             <path v-if="modalShowReqs && modalChartReqsPath" :d="modalChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
 
-            <!-- Peak Beacon Indicator -->
+            <!-- Peak Apex Beacon (Clean & Non-Intrusive) -->
             <g v-if="modalShowReqs && modalPeakReqsCoord" class="peak-beacon-group">
+              <!-- Subtle vertical hairline down to baseline -->
+              <line
+                :x1="modalPeakReqsCoord.x"
+                :y1="modalPeakReqsCoord.y"
+                :x2="modalPeakReqsCoord.x"
+                y2="190"
+                stroke="rgba(16, 185, 129, 0.2)"
+                stroke-width="1"
+                stroke-dasharray="2 2"
+              />
+              <!-- Pulsing halo -->
               <circle
                 :cx="modalPeakReqsCoord.x"
                 :cy="modalPeakReqsCoord.y"
-                r="8"
+                r="6"
                 fill="none"
                 stroke="#10b981"
-                stroke-width="1.5"
-                opacity="0.7"
+                stroke-width="1.2"
+                opacity="0.6"
                 class="peak-pulse-ring"
               />
+              <!-- Apex Point -->
               <circle
                 :cx="modalPeakReqsCoord.x"
                 :cy="modalPeakReqsCoord.y"
-                r="4"
+                r="3"
                 fill="#10b981"
                 stroke="#ffffff"
                 stroke-width="1.5"
               />
-              <g :transform="`translate(${Math.max(52, Math.min(616, modalPeakReqsCoord.x - 42))}, ${Math.max(16, modalPeakReqsCoord.y - 20)})`">
-                <rect width="84" height="17" rx="4" fill="rgba(6, 78, 59, 0.92)" stroke="#10b981" stroke-width="1" />
-                <text x="42" y="12" text-anchor="middle" fill="#6ee7b7" font-size="9" font-family="monospace" font-weight="700" letter-spacing="0.03em">
-                  ⚡ PEAK {{ formatMetricRate(modalPeakReqsCoord.value, true) }}
-                </text>
-              </g>
             </g>
 
             <!-- Interactive Hover Crosshair & Series Markers -->
