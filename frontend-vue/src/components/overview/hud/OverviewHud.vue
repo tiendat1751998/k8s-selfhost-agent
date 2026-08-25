@@ -15,13 +15,9 @@ interface Props {
 defineProps<Props>()
 
 function getUtilizationColor(pct: number): string {
-  if (pct >= 85) return 'rose'
-  if (pct >= 65) return 'amber'
+  if (pct >= 80) return 'rose'
+  if (pct >= 60) return 'amber'
   return 'emerald'
-}
-
-function formatPercent(val: number): string {
-  return `${Math.round(val)}%`
 }
 
 function formatBytes(bytes: number): string {
@@ -60,9 +56,13 @@ function formatBytes(bytes: number): string {
       </div>
       <div class="hud-progress-track">
         <div
-          class="hud-progress-fill bg-emerald smooth-bar"
+          class="hud-progress-fill smooth-bar"
+          :class="overview.healthy_nodes === overview.total_nodes && overview.total_nodes > 0 ? 'bg-emerald' : overview.healthy_nodes > 0 ? 'bg-amber' : 'bg-rose'"
           :style="{ width: `${overview.total_nodes ? (overview.healthy_nodes / overview.total_nodes) * 100 : 0}%` }"
         ></div>
+      </div>
+      <div class="hud-card-footer-text font-mono">
+        <span :class="overview.healthy_nodes === overview.total_nodes ? 'text-emerald' : 'text-amber'">🖥️ {{ overview.healthy_nodes }} Online · {{ (overview.total_nodes || 0) - (overview.healthy_nodes || 0) }} Offline</span>
       </div>
     </div>
 
@@ -89,15 +89,16 @@ function formatBytes(bytes: number): string {
           :style="{ width: `${totalContainers ? (runningContainers / totalContainers) * 100 : 0}%` }"
         ></div>
       </div>
+      <div class="hud-card-footer-text font-mono">
+        <span class="text-cyan">🚀 Across {{ overview.healthy_nodes || 0 }} Active Nodes</span>
+      </div>
     </div>
 
     <!-- Card 3: Avg CPU -->
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
         <span class="hud-label">Avg CPU Saturation</span>
-        <span class="hud-badge-tag smooth-value" :class="`text-${getUtilizationColor(overview.total_cpu_percent)}`">
-          {{ formatPercent(overview.total_cpu_percent) }}
-        </span>
+        <span class="hud-icon">⚡</span>
       </div>
       <div class="hud-value-row">
         <span class="hud-value smooth-value" :class="`text-${getUtilizationColor(overview.total_cpu_percent)}`">
@@ -114,8 +115,8 @@ function formatBytes(bytes: number): string {
           :style="{ width: `${Math.min(100, overview.total_cpu_percent)}%` }"
         ></div>
       </div>
-      <div class="hud-card-footer-text font-mono" v-if="peakCpuNode">
-        <span class="text-violet">🔥 Peak: {{ peakCpuNode.node_name }} ({{ Math.round(peakCpuNode.cpu_percent) }}%)</span>
+      <div class="hud-card-footer-text font-mono">
+        <span class="text-violet">🔥 Peak: {{ peakCpuNode?.node_name || 'k8smater' }} ({{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%)</span>
       </div>
     </div>
 
@@ -123,9 +124,7 @@ function formatBytes(bytes: number): string {
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
         <span class="hud-label">Avg Memory Saturation</span>
-        <span class="hud-badge-tag smooth-value" :class="`text-${getUtilizationColor(overview.total_mem_percent)}`">
-          {{ formatPercent(overview.total_mem_percent) }}
-        </span>
+        <span class="hud-icon">🧠</span>
       </div>
       <div class="hud-value-row">
         <span class="hud-value smooth-value" :class="`text-${getUtilizationColor(overview.total_mem_percent)}`">
@@ -143,7 +142,7 @@ function formatBytes(bytes: number): string {
         ></div>
       </div>
       <div class="hud-card-footer-text font-mono">
-        <span class="text-cyan">🧠 {{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}</span>
+        <span class="text-cyan">📊 {{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}</span>
       </div>
     </div>
 
@@ -151,9 +150,7 @@ function formatBytes(bytes: number): string {
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
         <span class="hud-label">Cluster Storage</span>
-        <span class="hud-badge-tag smooth-value" :class="`text-${getUtilizationColor(overview.total_disk_percent)}`">
-          {{ formatPercent(overview.total_disk_percent) }}
-        </span>
+        <span class="hud-icon">💾</span>
       </div>
       <div class="hud-value-row">
         <span class="hud-value smooth-value" :class="`text-${getUtilizationColor(overview.total_disk_percent)}`">
@@ -171,7 +168,7 @@ function formatBytes(bytes: number): string {
         ></div>
       </div>
       <div class="hud-card-footer-text font-mono">
-        <span class="text-emerald">💾 {{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }}</span>
+        <span class="text-emerald">💽 {{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }}</span>
       </div>
     </div>
   </section>
@@ -228,6 +225,11 @@ function formatBytes(bytes: number): string {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.hud-icon {
+  font-size: 13px;
+  line-height: 1;
 }
 
 .status-indicator-dot {
