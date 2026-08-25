@@ -100,47 +100,129 @@ const avgRam = computed(() => {
   return sum / props.trendHistory.length
 })
 
+// Smooth Catmull-Rom to Monotone Cubic Bézier Spline Curve Generator
+function buildSmoothSpline(points: Array<{ x: number; y: number }>, smoothing = 0.18): string {
+  if (!points || points.length === 0) return ''
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
+  if (points.length === 2) {
+    return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)} L ${points[1].x.toFixed(1)} ${points[1].y.toFixed(1)}`
+  }
+
+  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)]
+    const p1 = points[i]
+    const p2 = points[i + 1]
+    const p3 = points[Math.min(points.length - 1, i + 2)]
+
+    // Controlled Catmull-Rom tangents with bounded smoothing to prevent overshoot
+    const cp1x = p1.x + ((p2.x - p0.x) / 6) * (1 - smoothing)
+    const cp1y = p1.y + ((p2.y - p0.y) / 6) * (1 - smoothing)
+    const cp2x = p2.x - ((p3.x - p1.x) / 6) * (1 - smoothing)
+    const cp2y = p2.y - ((p3.y - p1.y) / 6) * (1 - smoothing)
+
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+  }
+
+  return d
+}
+
+// Compact Rate Formatter (e.g. 14.7k, 8.4k, 500)
+function formatMetricRate(val: number, withUnit = false): string {
+  if (val === undefined || val === null || isNaN(val)) return withUnit ? '0 rps' : '0'
+  let str = ''
+  if (val >= 1000000) {
+    str = `${(val / 1000000).toFixed(1)}M`
+  } else if (val >= 1000) {
+    str = `${(val / 1000).toFixed(1)}k`
+  } else if (val >= 100) {
+    str = Math.round(val).toString()
+  } else if (val > 0) {
+    str = val.toFixed(1)
+  } else {
+    str = '0'
+  }
+  return withUnit ? `${str} rps` : str
+}
+
+// Live latest values for legend buttons
+const latestCpu = computed(() => {
+  if (!props.trendHistory.length) return 0
+  return props.trendHistory[props.trendHistory.length - 1].cpu || 0
+})
+
+const latestMem = computed(() => {
+  if (!props.trendHistory.length) return 0
+  return props.trendHistory[props.trendHistory.length - 1].mem || 0
+})
+
+const latestReqs = computed(() => {
+  if (!props.trendHistory.length) return props.tpsData?.http?.requests_per_sec || 0
+  return props.trendHistory[props.trendHistory.length - 1].reqs || 0
+})
+
 // Modal High-Res Chart Computeds
 const maxModalReqs = computed(() => {
   return Math.max(10, ...props.trendHistory.map(p => p.reqs || 0), Math.round(props.tpsData?.http?.requests_per_sec || 0))
+})
+
+const modalPeakReqsCoord = computed(() => {
+  const history = props.trendHistory
+  if (!history.length) return null
+  let maxVal = -1
+  let maxIdx = 0
+  for (let i = 0; i < history.length; i++) {
+    const r = history[i].reqs || 0
+    if (r > maxVal) {
+      maxVal = r
+      maxIdx = i
+    }
+  }
+  if (maxVal <= 0) return null
+  const step = history.length > 1 ? 650 / (history.length - 1) : 0
+  const x = 50 + maxIdx * step
+  const maxR = maxModalReqs.value
+  const y = 190 - (Math.min(maxR, maxVal) / maxR) * 170
+  return { x, y, value: maxVal, index: maxIdx }
 })
 
 const modalChartCpuPath = computed(() => {
   const history = props.trendHistory
   if (history.length < 2) return ''
   const step = 650 / (history.length - 1)
-  return history.map((h, i) => {
-    const x = 50 + i * step
-    const y = 190 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 170
-    return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
-  }).join(' ')
+  const points = history.map((h, i) => ({
+    x: 50 + i * step,
+    y: Math.max(15, Math.min(190, 190 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 170)),
+  }))
+  return buildSmoothSpline(points)
 })
 
 const modalChartCpuArea = computed(() => {
-  if (!modalChartCpuPath.value) return ''
+  if (!modalChartCpuPath.value || !props.trendHistory.length) return ''
   const history = props.trendHistory
-  const firstX = 50
-  const lastX = 50 + (history.length - 1) * (650 / (history.length - 1))
-  return `${modalChartCpuPath.value} L ${lastX.toFixed(1)} 190 L ${firstX} 190 Z`
+  const step = history.length > 1 ? 650 / (history.length - 1) : 0
+  const lastX = 50 + (history.length - 1) * step
+  return `${modalChartCpuPath.value} L ${lastX.toFixed(1)} 190 L 50.0 190 Z`
 })
 
 const modalChartMemPath = computed(() => {
   const history = props.trendHistory
   if (history.length < 2) return ''
   const step = 650 / (history.length - 1)
-  return history.map((h, i) => {
-    const x = 50 + i * step
-    const y = 190 - (Math.min(100, Math.max(0, h.mem)) / 100) * 170
-    return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
-  }).join(' ')
+  const points = history.map((h, i) => ({
+    x: 50 + i * step,
+    y: Math.max(15, Math.min(190, 190 - (Math.min(100, Math.max(0, h.mem)) / 100) * 170)),
+  }))
+  return buildSmoothSpline(points)
 })
 
 const modalChartMemArea = computed(() => {
-  if (!modalChartMemPath.value) return ''
+  if (!modalChartMemPath.value || !props.trendHistory.length) return ''
   const history = props.trendHistory
-  const firstX = 50
-  const lastX = 50 + (history.length - 1) * (650 / (history.length - 1))
-  return `${modalChartMemPath.value} L ${lastX.toFixed(1)} 190 L ${firstX} 190 Z`
+  const step = history.length > 1 ? 650 / (history.length - 1) : 0
+  const lastX = 50 + (history.length - 1) * step
+  return `${modalChartMemPath.value} L ${lastX.toFixed(1)} 190 L 50.0 190 Z`
 })
 
 const modalChartReqsPath = computed(() => {
@@ -148,19 +230,19 @@ const modalChartReqsPath = computed(() => {
   if (history.length < 2) return ''
   const step = 650 / (history.length - 1)
   const maxR = maxModalReqs.value
-  return history.map((h, i) => {
-    const x = 50 + i * step
-    const y = 190 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 170
-    return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
-  }).join(' ')
+  const points = history.map((h, i) => ({
+    x: 50 + i * step,
+    y: Math.max(15, Math.min(190, 190 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 170)),
+  }))
+  return buildSmoothSpline(points)
 })
 
 const modalChartReqsArea = computed(() => {
-  if (!modalChartReqsPath.value) return ''
+  if (!modalChartReqsPath.value || !props.trendHistory.length) return ''
   const history = props.trendHistory
-  const firstX = 50
-  const lastX = 50 + (history.length - 1) * (650 / (history.length - 1))
-  return `${modalChartReqsPath.value} L ${lastX.toFixed(1)} 190 L ${firstX} 190 Z`
+  const step = history.length > 1 ? 650 / (history.length - 1) : 0
+  const lastX = 50 + (history.length - 1) * step
+  return `${modalChartReqsPath.value} L ${lastX.toFixed(1)} 190 L 50.0 190 Z`
 })
 
 const hoveredModalPoint = computed<TrendPoint | null>(() => {
@@ -405,7 +487,7 @@ function formatIoRate(bytesPerSec?: number): string {
       <!-- SECTION 1: Historical Summary Statistics Cards -->
       <section class="modal-summary-grid">
         <!-- Card 1: Peak Throughput -->
-        <div class="deep-stat-card glass-panel">
+        <div class="deep-stat-card card-peak-reqs glass-panel">
           <div class="deep-stat-header">
             <span class="deep-stat-title">Peak Gateway Throughput</span>
             <span class="hud-icon">⚡</span>
@@ -422,7 +504,7 @@ function formatIoRate(bytesPerSec?: number): string {
         </div>
 
         <!-- Card 2: Average Throughput -->
-        <div class="deep-stat-card glass-panel">
+        <div class="deep-stat-card card-avg-reqs glass-panel">
           <div class="deep-stat-header">
             <span class="deep-stat-title">Average Gateway Throughput</span>
             <span class="hud-icon">🌐</span>
@@ -439,7 +521,7 @@ function formatIoRate(bytesPerSec?: number): string {
         </div>
 
         <!-- Card 3: Peak CPU Saturation -->
-        <div class="deep-stat-card glass-panel">
+        <div class="deep-stat-card card-cpu glass-panel">
           <div class="deep-stat-header">
             <span class="deep-stat-title">Peak CPU Saturation</span>
             <span class="hud-icon">🔥</span>
@@ -459,7 +541,7 @@ function formatIoRate(bytesPerSec?: number): string {
         </div>
 
         <!-- Card 4: Average RAM Usage -->
-        <div class="deep-stat-card glass-panel">
+        <div class="deep-stat-card card-mem glass-panel">
           <div class="deep-stat-header">
             <span class="deep-stat-title">Peak Memory Pressure</span>
             <span class="hud-icon">🧠</span>
@@ -491,36 +573,42 @@ function formatIoRate(bytesPerSec?: number): string {
             </span>
           </div>
 
-          <!-- Series Toggles -->
+          <!-- Series Toggles with Live Metrics -->
           <div class="series-toggles-group">
             <button
               type="button"
               class="series-toggle-btn"
-              :class="{ 'toggle-active cpu-active': modalShowCpu }"
+              :class="{ 'toggle-active cpu-active': modalShowCpu, 'toggle-dimmed': !modalShowCpu }"
               @click="modalShowCpu = !modalShowCpu"
+              title="Toggle CPU saturation spline"
             >
               <span class="toggle-dot bg-violet"></span>
-              <span>CPU %</span>
+              <span class="toggle-name">CPU %</span>
+              <span class="toggle-val font-mono">({{ Math.round(latestCpu) }}%)</span>
             </button>
 
             <button
               type="button"
               class="series-toggle-btn"
-              :class="{ 'toggle-active mem-active': modalShowMem }"
+              :class="{ 'toggle-active mem-active': modalShowMem, 'toggle-dimmed': !modalShowMem }"
               @click="modalShowMem = !modalShowMem"
+              title="Toggle RAM usage spline"
             >
               <span class="toggle-dot bg-cyan"></span>
-              <span>RAM %</span>
+              <span class="toggle-name">RAM %</span>
+              <span class="toggle-val font-mono">({{ Math.round(latestMem) }}%)</span>
             </button>
 
             <button
               type="button"
               class="series-toggle-btn"
-              :class="{ 'toggle-active reqs-active': modalShowReqs }"
+              :class="{ 'toggle-active reqs-active': modalShowReqs, 'toggle-dimmed': !modalShowReqs }"
               @click="modalShowReqs = !modalShowReqs"
+              title="Toggle Throughput spline"
             >
               <span class="toggle-dot bg-emerald"></span>
-              <span>Req/s</span>
+              <span class="toggle-name">Gateway Throughput</span>
+              <span class="toggle-val font-mono">({{ Math.round(latestReqs).toLocaleString() }} req/s)</span>
             </button>
           </div>
         </div>
@@ -533,45 +621,72 @@ function formatIoRate(bytesPerSec?: number): string {
         >
           <svg viewBox="0 0 760 210" preserveAspectRatio="none" class="modal-expanded-svg">
             <defs>
+              <!-- Glow Filters -->
+              <filter id="glow-emerald" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <filter id="glow-cyan" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <filter id="glow-violet" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+
+              <!-- Multi-Stop Gradients -->
               <linearGradient id="modalCpuGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.3" />
+                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.35" />
+                <stop offset="60%" stop-color="#7c3aed" stop-opacity="0.12" />
                 <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0" />
               </linearGradient>
               <linearGradient id="modalMemGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.25" />
+                <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.35" />
+                <stop offset="60%" stop-color="#0891b2" stop-opacity="0.12" />
                 <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
               </linearGradient>
               <linearGradient id="modalReqsGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#10b981" stop-opacity="0.25" />
+                <stop offset="0%" stop-color="#10b981" stop-opacity="0.38" />
+                <stop offset="50%" stop-color="#059669" stop-opacity="0.15" />
                 <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
               </linearGradient>
             </defs>
 
             <!-- Horizontal Grid Lines & Left/Right Y-Axis Labels -->
             <!-- 100% -->
-            <line x1="50" y1="20" x2="700" y2="20" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3" />
+            <line x1="50" y1="20" x2="700" y2="20" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
             <text x="42" y="24" text-anchor="end" class="svg-axis-label">100%</text>
-            <text x="708" y="24" text-anchor="start" class="svg-axis-label text-emerald">{{ maxModalReqs }}</text>
+            <text x="708" y="24" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs) }}</text>
 
             <!-- 75% -->
-            <line x1="50" y1="62.5" x2="700" y2="62.5" stroke="rgba(255,255,255,0.04)" stroke-dasharray="3 3" />
+            <line x1="50" y1="62.5" x2="700" y2="62.5" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
             <text x="42" y="66" text-anchor="end" class="svg-axis-label">75%</text>
-            <text x="708" y="66" text-anchor="start" class="svg-axis-label text-emerald">{{ Math.round(maxModalReqs * 0.75) }}</text>
+            <text x="708" y="66" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.75) }}</text>
 
             <!-- 50% -->
-            <line x1="50" y1="105" x2="700" y2="105" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3" />
+            <line x1="50" y1="105" x2="700" y2="105" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
             <text x="42" y="109" text-anchor="end" class="svg-axis-label">50%</text>
-            <text x="708" y="109" text-anchor="start" class="svg-axis-label text-emerald">{{ Math.round(maxModalReqs * 0.5) }}</text>
+            <text x="708" y="109" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.5) }}</text>
 
             <!-- 25% -->
-            <line x1="50" y1="147.5" x2="700" y2="147.5" stroke="rgba(255,255,255,0.04)" stroke-dasharray="3 3" />
+            <line x1="50" y1="147.5" x2="700" y2="147.5" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
             <text x="42" y="151" text-anchor="end" class="svg-axis-label">25%</text>
-            <text x="708" y="151" text-anchor="start" class="svg-axis-label text-emerald">{{ Math.round(maxModalReqs * 0.25) }}</text>
+            <text x="708" y="151" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.25) }}</text>
 
             <!-- 0% Baseline -->
-            <line x1="50" y1="190" x2="700" y2="190" stroke="rgba(255,255,255,0.12)" />
+            <line x1="50" y1="190" x2="700" y2="190" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
             <text x="42" y="194" text-anchor="end" class="svg-axis-label">0%</text>
-            <text x="708" y="194" text-anchor="start" class="svg-axis-label text-emerald">0</text>
+            <text x="708" y="194" text-anchor="start" class="svg-axis-label text-emerald">0 rps</text>
 
             <!-- X-Axis Timestamps -->
             <g class="modal-time-markers">
@@ -589,61 +704,120 @@ function formatIoRate(bytesPerSec?: number): string {
 
             <!-- Series 1: CPU Area & Line -->
             <path v-if="modalShowCpu && modalChartCpuArea" :d="modalChartCpuArea" fill="url(#modalCpuGrad)" />
-            <path v-if="modalShowCpu && modalChartCpuPath" :d="modalChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.5" />
+            <path v-if="modalShowCpu && modalChartCpuPath" :d="modalChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
 
             <!-- Series 2: RAM Area & Line -->
             <path v-if="modalShowMem && modalChartMemArea" :d="modalChartMemArea" fill="url(#modalMemGrad)" />
-            <path v-if="modalShowMem && modalChartMemPath" :d="modalChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.5" />
+            <path v-if="modalShowMem && modalChartMemPath" :d="modalChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
 
             <!-- Series 3: Throughput Area & Line -->
             <path v-if="modalShowReqs && modalChartReqsArea" :d="modalChartReqsArea" fill="url(#modalReqsGrad)" />
-            <path v-if="modalShowReqs && modalChartReqsPath" :d="modalChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.5" />
+            <path v-if="modalShowReqs && modalChartReqsPath" :d="modalChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+
+            <!-- Peak Beacon Indicator -->
+            <g v-if="modalShowReqs && modalPeakReqsCoord" class="peak-beacon-group">
+              <circle
+                :cx="modalPeakReqsCoord.x"
+                :cy="modalPeakReqsCoord.y"
+                r="8"
+                fill="none"
+                stroke="#10b981"
+                stroke-width="1.5"
+                opacity="0.7"
+                class="peak-pulse-ring"
+              />
+              <circle
+                :cx="modalPeakReqsCoord.x"
+                :cy="modalPeakReqsCoord.y"
+                r="4"
+                fill="#10b981"
+                stroke="#ffffff"
+                stroke-width="1.5"
+              />
+              <g :transform="`translate(${Math.max(52, Math.min(616, modalPeakReqsCoord.x - 42))}, ${Math.max(16, modalPeakReqsCoord.y - 20)})`">
+                <rect width="84" height="17" rx="4" fill="rgba(6, 78, 59, 0.92)" stroke="#10b981" stroke-width="1" />
+                <text x="42" y="12" text-anchor="middle" fill="#6ee7b7" font-size="9" font-family="monospace" font-weight="700" letter-spacing="0.03em">
+                  ⚡ PEAK {{ formatMetricRate(modalPeakReqsCoord.value, true) }}
+                </text>
+              </g>
+            </g>
 
             <!-- Interactive Hover Crosshair & Series Markers -->
             <g v-if="modalHoverCoords">
               <!-- Vertical Guide Line -->
               <line
                 :x1="modalHoverCoords.x"
-                y1="15"
+                y1="18"
                 :x2="modalHoverCoords.x"
                 y2="190"
                 stroke="#38bdf8"
                 stroke-width="1.5"
                 stroke-dasharray="3 3"
+                opacity="0.85"
               />
 
               <!-- CPU Point Marker -->
-              <circle
-                v-if="modalShowCpu"
-                :cx="modalHoverCoords.x"
-                :cy="modalHoverCoords.yCpu"
-                r="4.5"
-                fill="#8b5cf6"
-                stroke="#ffffff"
-                stroke-width="2"
-              />
+              <g v-if="modalShowCpu">
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yCpu"
+                  r="7"
+                  fill="none"
+                  stroke="#8b5cf6"
+                  stroke-width="1.5"
+                  opacity="0.5"
+                />
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yCpu"
+                  r="4"
+                  fill="#8b5cf6"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                />
+              </g>
 
               <!-- RAM Point Marker -->
-              <circle
-                v-if="modalShowMem"
-                :cx="modalHoverCoords.x"
-                :cy="modalHoverCoords.yMem"
-                r="4.5"
-                fill="#06b6d4"
-                stroke="#ffffff"
-                stroke-width="2"
-              />
+              <g v-if="modalShowMem">
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yMem"
+                  r="7"
+                  fill="none"
+                  stroke="#06b6d4"
+                  stroke-width="1.5"
+                  opacity="0.5"
+                />
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yMem"
+                  r="4"
+                  fill="#06b6d4"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                />
+              </g>
 
               <!-- Reqs Point Marker -->
-              <circle
-                v-if="modalShowReqs"
-                :cx="modalHoverCoords.x"
-                :cy="modalHoverCoords.yReq"
-                r="4.5"
-                fill="#10b981"
-                stroke="#ffffff"
-                stroke-width="2"
-              />
+              <g v-if="modalShowReqs">
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yReq"
+                  r="7"
+                  fill="none"
+                  stroke="#10b981"
+                  stroke-width="1.5"
+                  opacity="0.5"
+                />
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yReq"
+                  r="4"
+                  fill="#10b981"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                />
+              </g>
             </g>
           </svg>
 
@@ -892,30 +1066,60 @@ function formatIoRate(bytesPerSec?: number): string {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(15, 23, 42, 0.65);
+  background: rgba(15, 23, 42, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
               border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
               box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.deep-stat-card::before {
+.deep-stat-card.card-peak-reqs::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #06b6d4, #8b5cf6);
+  height: 2.5px;
+  background: linear-gradient(90deg, #06b6d4, #10b981);
+}
+
+.deep-stat-card.card-avg-reqs::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.deep-stat-card.card-cpu::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, #8b5cf6, #ec4899);
+}
+
+.deep-stat-card.card-mem::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, #06b6d4, #3b82f6);
 }
 
 .deep-stat-card:hover {
-  border-color: rgba(56, 189, 248, 0.35);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 15px rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35), 0 0 18px rgba(56, 189, 248, 0.12);
 }
 
 .deep-stat-header {
@@ -932,6 +1136,18 @@ function formatIoRate(bytesPerSec?: number): string {
   flex: 1;
 }
 
+.hud-icon {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .deep-stat-body {
   display: flex;
   align-items: baseline;
@@ -939,9 +1155,10 @@ function formatIoRate(bytesPerSec?: number): string {
 }
 
 .deep-stat-value {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 .deep-stat-unit {
@@ -962,8 +1179,10 @@ function formatIoRate(bytesPerSec?: number): string {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .modal-chart-top-bar {
@@ -999,59 +1218,78 @@ function formatIoRate(bytesPerSec?: number): string {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .series-toggle-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  font-size: 11px;
+  gap: 7px;
+  padding: 6px 13px;
+  font-size: 11.5px;
   font-weight: 600;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-muted, #94a3b8);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
 }
 
 .series-toggle-btn:hover {
   background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
   color: #fff;
+  transform: translateY(-1px);
 }
 
 .series-toggle-btn.toggle-active.cpu-active {
-  background: rgba(139, 92, 246, 0.15);
-  border-color: rgba(139, 92, 246, 0.5);
-  color: #c4b5fd;
+  background: rgba(139, 92, 246, 0.16);
+  border-color: rgba(139, 92, 246, 0.55);
+  color: #d8b4fe;
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.25), inset 0 0 8px rgba(139, 92, 246, 0.1);
 }
 
 .series-toggle-btn.toggle-active.mem-active {
-  background: rgba(6, 182, 212, 0.15);
-  border-color: rgba(6, 182, 212, 0.5);
+  background: rgba(6, 182, 212, 0.16);
+  border-color: rgba(6, 182, 212, 0.55);
   color: #67e8f9;
+  box-shadow: 0 0 14px rgba(6, 182, 212, 0.25), inset 0 0 8px rgba(6, 182, 212, 0.1);
 }
 
 .series-toggle-btn.toggle-active.reqs-active {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.55);
   color: #6ee7b7;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.25), inset 0 0 8px rgba(16, 185, 129, 0.1);
+}
+
+.series-toggle-btn.toggle-dimmed {
+  opacity: 0.45;
+  filter: grayscale(0.5);
 }
 
 .toggle-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.toggle-val {
+  font-size: 11px;
+  opacity: 0.9;
 }
 
 .modal-svg-canvas-box {
   position: relative;
   width: 100%;
   height: 220px;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.4);
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
 }
 
 .modal-expanded-svg {
@@ -1065,6 +1303,29 @@ function formatIoRate(bytesPerSec?: number): string {
   fill: var(--text-muted, #94a3b8);
   font-family: var(--font-mono, monospace);
   font-weight: 500;
+}
+
+@keyframes peak-pulse {
+  0% {
+    r: 4;
+    opacity: 0.9;
+    stroke-width: 2;
+  }
+  50% {
+    r: 10;
+    opacity: 0.35;
+    stroke-width: 1.2;
+  }
+  100% {
+    r: 15;
+    opacity: 0;
+    stroke-width: 0.5;
+  }
+}
+
+.peak-pulse-ring {
+  animation: peak-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  transform-origin: center;
 }
 
 .modal-rich-tooltip {
@@ -1130,8 +1391,10 @@ function formatIoRate(bytesPerSec?: number): string {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .breakdown-header-bar {
@@ -1214,12 +1477,12 @@ function formatIoRate(bytesPerSec?: number): string {
 }
 
 .breakdown-table thead tr {
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(15, 23, 42, 0.85);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .breakdown-table th {
-  padding: 10px 14px;
+  padding: 8px 12px;
   font-size: 10px;
   font-weight: 700;
   color: var(--text-muted, #94a3b8);
@@ -1253,7 +1516,7 @@ function formatIoRate(bytesPerSec?: number): string {
 }
 
 .breakdown-table td {
-  padding: 10px 14px;
+  padding: 8px 12px;
   vertical-align: middle;
 }
 
@@ -1310,9 +1573,10 @@ function formatIoRate(bytesPerSec?: number): string {
 
 .traffic-fill {
   height: 100%;
-  background: linear-gradient(90deg, #06b6d4, #8b5cf6);
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
   border-radius: 999px;
-  transition: width 0.5s ease;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.35);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .traffic-label {
