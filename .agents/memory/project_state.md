@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-25T16:10
+# K8sControl Project State — Session Update 2026-08-25T16:25
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `20a1570` feat(frontend): consolidate ingress metrics into 5-min trend header and streamline request flow bar
+Latest: `9942ce6` feat(frontend): add disk io column and compact state badge in node process table
 Previous commits this session:
+- `9942ce6` feat(frontend): add disk io column and compact state badge in node process table
 - `20a1570` feat(frontend): consolidate ingress metrics into 5-min trend header and streamline request flow bar
 - `f9503bb` docs(memory): sync DEC-052 to DEC-055 and update deployment script invariants in memory
 - `f64355a` fix(agent): enhance disk IO collection with sub-device fallback and robust await averaging
@@ -150,7 +151,7 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
   - 📡 Network Interface Throughput (per interface: ens33, docker0...)
   - 📦 Apps & Services on this Node (5 services on k8smater, filtered by Swarm node mapping)
     - Columns: Service, CPU, Memory, ↓ Rx, ↑ Tx, Req/s, Err %, Status
-  - 🔥 Top Processes (10 active, sortable, filterable)
+  - 🔥 Top Processes (10 active, sortable by CPU/RAM/Disk I/O, filterable, dual-rate 📖 Read / ✍️ Write Disk I/O telemetry, compact 68px mini state badge with glowing status dot)
 - **Removed sections**: Service Throughput table, Per-Node Network table, Active Workload Containers, TPS category cards — all moved to inspect drawer
 - **Smooth CSS transitions**: `.smooth-value`, `.smooth-bar`, `.smooth-opacity` prevent jarring number jumps
 
@@ -172,6 +173,7 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
 ## Completed Features (Latest Session: 2026-08-25)
+- **Process Table Real-Time Disk I/O & Compact State Badge Polish** (DEC-057)
 - **Consolidated Ingress Telemetry Header & Streamlined Request Flow Simulator** (DEC-056)
 - **High-Precision Linux Disk I/O Telemetry, IOPS & Await Latency** (DEC-052)
 - **Hardened TPS Engine & Monotonic Counter Reset Protection** (DEC-053)
