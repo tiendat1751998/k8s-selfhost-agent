@@ -2,8 +2,10 @@
 
 ## Git State
 Branch: `refactor/modularize-overview-components` (pushed to origin)
-Latest: `8484c3e` fix(overview): fix timezone parsing flatline and log level count filter
+Latest: `a33cfa0` feat(telemetry): dynamic 1h hourly bucket aggregation for 7d/30d queries and redesigned cyber log filter toolbar
 Previous commits this session:
+- `ee1eb18` fix(telemetry): add dynamic 1h hourly bucket aggregation for 7d/30d queries and redesign log level chips
+- `8484c3e` fix(overview): fix timezone parsing flatline and log level count filter
 - `12a6925` fix(overview): reset drawer scroll to top on tab switch
 - `0558f00` fix(historical-chart): ensure KPI cards and header stay visible in custom range and prevent 0-interval flatlines
 - `2431f0b` fix(drawer): implement custom date-time search and fix bottom scroll cutoff
