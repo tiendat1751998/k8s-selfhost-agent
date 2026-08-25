@@ -170,17 +170,21 @@ function applyLogPreset(preset: '30m' | '2h' | '6h' | 'today') {
   fetchNodeAppLogs(selectedLogApp.value)
 }
 
-function classifyLogLevel(cleanLine: string): 'error' | 'warn' | 'info' | 'debug' {
-  const cleanLower = cleanLine.toLowerCase()
+const ANSI_REGEX = /\u001b\[[0-9;]*m/g
+
+function stripAnsi(str: string): string {
+  if (str.indexOf('\u001b') === -1 && str.indexOf('\x1b') === -1) {
+    return str
+  }
+  return str.replace(ANSI_REGEX, '')
+}
+
+function classifyLogLevel(cleanLower: string): 'error' | 'warn' | 'info' | 'debug' {
   if (
-    cleanLower.includes('[error]') ||
-    cleanLower.includes('[fatal]') ||
-    cleanLower.includes('[panic]') ||
     cleanLower.includes('error') ||
     cleanLower.includes('fatal') ||
     cleanLower.includes('panic') ||
     cleanLower.includes('exception') ||
-    cleanLower.includes('failed') ||
     cleanLower.includes('fail') ||
     cleanLower.includes('err ') ||
     cleanLower.includes('[err]')
@@ -188,16 +192,12 @@ function classifyLogLevel(cleanLine: string): 'error' | 'warn' | 'info' | 'debug
     return 'error'
   }
   if (
-    cleanLower.includes('[warn]') ||
-    cleanLower.includes('[warning]') ||
-    cleanLower.includes('warning') ||
     cleanLower.includes('warn') ||
     cleanLower.includes('timeout')
   ) {
     return 'warn'
   }
   if (
-    cleanLower.includes('[debug]') ||
     cleanLower.includes('debug') ||
     cleanLower.includes('trace')
   ) {
@@ -206,27 +206,21 @@ function classifyLogLevel(cleanLine: string): 'error' | 'warn' | 'info' | 'debug
   return 'info'
 }
 
-const parsedAppLogLines = computed<ParsedLogLine[]>(() => {
-  if (!appLogsText.value) return []
-  const rawLines = appLogsText.value.split('\n')
-  const q = appLogSearch.value.toLowerCase().trim()
-  const filterLevel = selectedLogLevel.value
-
+// 1. Memoized full parsed logs cache (split & classified once upon log text update)
+const allParsedLogs = computed<ParsedLogLine[]>(() => {
+  const text = appLogsText.value
+  if (!text) return []
+  const rawLines = text.split('\n')
+  const count = rawLines.length
   const lines: ParsedLogLine[] = []
-  for (let i = 0; i < rawLines.length; i++) {
+
+  for (let i = 0; i < count; i++) {
     const raw = rawLines[i]
     if (!raw.trim()) continue
 
-    const clean = raw.replace(/\u001b\[[0-9;]*m/g, '')
-    const level = classifyLogLevel(clean)
-
-    if (filterLevel !== 'all' && level !== filterLevel) {
-      continue
-    }
-
-    if (q && !cleanLower(clean, q)) {
-      continue
-    }
+    const clean = stripAnsi(raw)
+    const lower = clean.toLowerCase()
+    const level = classifyLogLevel(lower)
 
     lines.push({
       id: i + 1,
@@ -239,29 +233,65 @@ const parsedAppLogLines = computed<ParsedLogLine[]>(() => {
   return lines
 })
 
-function cleanLower(clean: string, q: string): boolean {
-  return clean.toLowerCase().includes(q)
-}
-
+// 2. Count levels from memoized logs (zero re-splitting)
 const appLogLevelCounts = computed(() => {
-  if (!appLogsText.value) return { total: 0, error: 0, warn: 0, info: 0, debug: 0 }
-  const rawLines = appLogsText.value.split('\n')
+  const all = allParsedLogs.value
   let error = 0
   let warn = 0
   let info = 0
   let debug = 0
 
-  for (const raw of rawLines) {
-    if (!raw.trim()) continue
-    const clean = raw.replace(/\u001b\[[0-9;]*m/g, '')
-    const level = classifyLogLevel(clean)
+  for (let i = 0; i < all.length; i++) {
+    const level = all[i].level
     if (level === 'error') error++
     else if (level === 'warn') warn++
     else if (level === 'debug') debug++
     else info++
   }
 
-  return { total: error + warn + info + debug, error, warn, info, debug }
+  return { total: all.length, error, warn, info, debug }
+})
+
+// 3. Filtered log lines (fast array filter)
+const parsedAppLogLines = computed<ParsedLogLine[]>(() => {
+  const all = allParsedLogs.value
+  const q = appLogSearch.value.toLowerCase().trim()
+  const filterLevel = selectedLogLevel.value
+
+  if (filterLevel === 'all' && !q) {
+    return all
+  }
+
+  const lines: ParsedLogLine[] = []
+  for (let i = 0; i < all.length; i++) {
+    const item = all[i]
+    if (filterLevel !== 'all' && item.level !== filterLevel) {
+      continue
+    }
+    if (q && !item.cleanText.toLowerCase().includes(q)) {
+      continue
+    }
+    lines.push(item)
+  }
+
+  return lines
+})
+
+// Virtual Scrolling Constants & State
+const LINE_HEIGHT = 22
+const OVERSCAN = 15
+const terminalScrollTop = ref<number>(0)
+const terminalViewportHeight = ref<number>(380)
+
+const totalLogCount = computed(() => parsedAppLogLines.value.length)
+const totalVirtualHeight = computed(() => totalLogCount.value * LINE_HEIGHT)
+const startIndex = computed(() => Math.max(0, Math.floor(terminalScrollTop.value / LINE_HEIGHT) - OVERSCAN))
+const endIndex = computed(() => Math.min(totalLogCount.value, Math.ceil((terminalScrollTop.value + terminalViewportHeight.value) / LINE_HEIGHT) + OVERSCAN))
+const visibleLogLines = computed(() => {
+  return parsedAppLogLines.value.slice(startIndex.value, endIndex.value).map((line, idx) => ({
+    ...line,
+    virtualTop: (startIndex.value + idx) * LINE_HEIGHT,
+  }))
 })
 
 async function fetchNodeAppLogs(appName?: string) {
@@ -402,6 +432,8 @@ function toggleLogStreaming() {
 function handleTerminalScroll(event: Event) {
   const el = event.target as HTMLElement
   if (!el) return
+  terminalScrollTop.value = el.scrollTop
+  terminalViewportHeight.value = el.clientHeight || 380
   const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
   userScrolledUp.value = !isNearBottom
 }
@@ -409,12 +441,14 @@ function handleTerminalScroll(event: Event) {
 function scrollToBottom() {
   if (terminalBodyRef.value) {
     terminalBodyRef.value.scrollTop = terminalBodyRef.value.scrollHeight
+    terminalScrollTop.value = terminalBodyRef.value.scrollTop
     userScrolledUp.value = false
   }
 }
 
 function clearLogTerminal() {
   appLogsText.value = ''
+  terminalScrollTop.value = 0
 }
 
 async function copyAppLogs() {
@@ -766,21 +800,24 @@ onUnmounted(() => {
 
               <div
                 ref="terminalBodyRef"
-                class="terminal-body"
+                class="terminal-body virtual-terminal"
                 @scroll="handleTerminalScroll"
                 v-else-if="parsedAppLogLines.length > 0"
               >
-                <div
-                  v-for="line in parsedAppLogLines"
-                  :key="line.id"
-                  class="log-line"
-                  :class="`log-line-${line.level}`"
-                >
-                  <span class="log-line-num font-mono">{{ line.id }}</span>
-                  <span class="log-line-level font-mono" :class="`text-${line.level === 'error' ? 'rose' : line.level === 'warn' ? 'amber' : 'cyan'}`">
-                    [{{ line.level.toUpperCase() }}]
-                  </span>
-                  <span class="log-line-content font-mono">{{ line.cleanText }}</span>
+                <div class="virtual-scroll-spacer" :style="{ height: `${totalVirtualHeight}px`, position: 'relative', width: '100%' }">
+                  <div
+                    v-for="line in visibleLogLines"
+                    :key="line.id"
+                    class="log-line"
+                    :class="`log-line-${line.level}`"
+                    :style="{ position: 'absolute', top: `${line.virtualTop}px`, left: 0, right: 0, height: `${LINE_HEIGHT}px` }"
+                  >
+                    <span class="log-line-num font-mono">{{ line.id }}</span>
+                    <span class="log-line-level font-mono" :class="`text-${line.level === 'error' ? 'rose' : line.level === 'warn' ? 'amber' : 'cyan'}`">
+                      [{{ line.level.toUpperCase() }}]
+                    </span>
+                    <span class="log-line-content font-mono">{{ line.cleanText }}</span>
+                  </div>
                 </div>
               </div>
 
@@ -1472,6 +1509,16 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
+.virtual-terminal {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.virtual-scroll-spacer {
+  position: relative;
+  width: 100%;
+}
+
 .terminal-loading,
 .terminal-empty,
 .terminal-error {
@@ -1495,11 +1542,13 @@ onUnmounted(() => {
 
 .log-line {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
-  padding: 2px 4px;
+  padding: 0 4px;
   border-radius: 3px;
   transition: background 0.1s ease;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .log-line:hover {
@@ -1523,6 +1572,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   user-select: none;
   font-size: 10px;
+  line-height: 22px;
 }
 
 .log-line-level {
@@ -1531,13 +1581,16 @@ onUnmounted(() => {
   font-weight: 700;
   font-size: 10px;
   letter-spacing: 0.02em;
+  line-height: 22px;
 }
 
 .log-line-content {
   flex: 1;
-  white-space: pre-wrap;
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #e2e8f0;
+  line-height: 22px;
 }
 
 .log-line-error .log-line-content {
@@ -1547,6 +1600,11 @@ onUnmounted(() => {
 .log-line-warn .log-line-content {
   color: #fde68a;
 }
+
+.text-rose { color: #f43f5e; }
+.text-amber { color: #f59e0b; }
+.text-cyan { color: #38bdf8; }
+.text-slate { color: #94a3b8; }
 
 .inc-subheading {
   font-size: 12px;
