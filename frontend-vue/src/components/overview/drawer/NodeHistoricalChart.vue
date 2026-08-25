@@ -24,7 +24,7 @@ const emit = defineEmits<{
   (e: 'update:nodeHistoryRange', range: string): void
   (e: 'update:customHistFrom', val: string): void
   (e: 'update:customHistTo', val: string): void
-  (e: 'range-change', range: string): void
+  (e: 'range-change', range: string, from?: string, to?: string): void
   (e: 'custom-range-apply'): void
   (e: 'apply-preset', preset: '30m' | '2h' | '6h' | 'today'): void
   (e: 'sync-point-in-time', point: NodeMetricRollup): void
@@ -38,14 +38,34 @@ const showHistPeakEnvelope = ref(true)
 const histViewMode = ref<'both' | 'avg' | 'peak'>('both')
 const showCustomHistoryPicker = ref(false)
 
-const customHistoryFrom = ref(props.customHistFrom || '')
-const customHistoryTo = ref(props.customHistTo || '')
+const pad = (n: number) => String(n).padStart(2, '0')
+const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+
+function getSafeDefaultDates() {
+  const now = new Date()
+  return {
+    from: formatDt(new Date(now.getTime() - 24 * 60 * 60 * 1000)),
+    to: formatDt(now),
+  }
+}
+
+const safeInit = getSafeDefaultDates()
+const customHistoryFrom = ref(props.customHistFrom || safeInit.from)
+const customHistoryTo = ref(props.customHistTo || safeInit.to)
 
 watch(() => props.customHistFrom, (val) => {
-  if (val !== undefined) customHistoryFrom.value = val
+  if (val) {
+    customHistoryFrom.value = val
+  } else if (!customHistoryFrom.value) {
+    customHistoryFrom.value = getSafeDefaultDates().from
+  }
 })
 watch(() => props.customHistTo, (val) => {
-  if (val !== undefined) customHistoryTo.value = val
+  if (val) {
+    customHistoryTo.value = val
+  } else if (!customHistoryTo.value) {
+    customHistoryTo.value = getSafeDefaultDates().to
+  }
 })
 
 // Chart Hover State
@@ -69,24 +89,23 @@ const nodeHistoryWindowBadge = computed(() => {
 
 function toggleCustomHistoryPicker() {
   showCustomHistoryPicker.value = !showCustomHistoryPicker.value
-  if (showCustomHistoryPicker.value && !customHistoryFrom.value) {
-    const now = new Date()
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-    customHistoryFrom.value = formatDt(new Date(now.getTime() - 24 * 60 * 60 * 1000))
-    customHistoryTo.value = formatDt(now)
+  if (showCustomHistoryPicker.value) {
+    if (!customHistoryFrom.value || !customHistoryTo.value || customHistoryFrom.value === customHistoryTo.value) {
+      const dates = getSafeDefaultDates()
+      customHistoryFrom.value = dates.from
+      customHistoryTo.value = dates.to
+    }
   }
 }
 
 function switchNodeDrawerToHistory(range: string) {
+  showCustomHistoryPicker.value = false
   emit('update:nodeHistoryRange', range)
   emit('range-change', range)
 }
 
 function applyPreset(preset: '30m' | '2h' | '6h' | 'today') {
   const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 
   if (preset === '30m') {
     customHistoryFrom.value = formatDt(new Date(now.getTime() - 30 * 60 * 1000))
@@ -409,12 +428,23 @@ function handleNodeHistChartLeave(event?: MouseEvent) {
 }
 
 function loadNodeHistory(_nodeId?: string, range = '1h', from?: string, to?: string) {
-  const targetFrom = from || customHistoryFrom.value
-  const targetTo = to || customHistoryTo.value
+  let targetFrom = from !== undefined ? from : customHistoryFrom.value
+  let targetTo = to !== undefined ? to : customHistoryTo.value
+
+  if (range === 'custom') {
+    if (!targetFrom || !targetTo || targetFrom === targetTo) {
+      const dates = getSafeDefaultDates()
+      targetFrom = dates.from
+      targetTo = dates.to
+      customHistoryFrom.value = targetFrom
+      customHistoryTo.value = targetTo
+    }
+  }
+
   emit('update:nodeHistoryRange', range)
   emit('update:customHistFrom', targetFrom)
   emit('update:customHistTo', targetTo)
-  emit('range-change', range)
+  emit('range-change', range, targetFrom, targetTo)
   if (range === 'custom') {
     emit('custom-range-apply')
   }
@@ -448,374 +478,382 @@ function formatIoRate(bytesPerSec?: number): string {
 </script>
 
 <template>
-  <!-- Summary KPI Badges (Realtime CPU/RAM & Live I/O) -->
-  <div class="hist-kpi-grid">
-    <!-- Card 1: Realtime CPU & Peak -->
-    <div class="hist-kpi-card glass-panel">
-      <span class="kpi-label">REALTIME CPU / PEAK</span>
-      <span class="kpi-val text-violet">{{ formatPercent(node?.cpu_percent) }}</span>
-      <span class="kpi-sub font-mono">
-        🔥 Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_cpu_percent || node?.cpu_percent) }} <span class="text-slate">| Avg: {{ formatPercent(nodeHistoryData?.summary?.avg_cpu_percent || node?.cpu_percent) }}</span>
-      </span>
-    </div>
+  <div class="node-historical-container">
+    <!-- 1. Top 4 KPI Summary Cards (ALWAYS visible at top) -->
+    <div class="hist-kpi-grid">
+      <!-- Card 1: Realtime CPU & Peak -->
+      <div class="hist-kpi-card glass-panel">
+        <span class="kpi-label">REALTIME CPU / PEAK</span>
+        <span class="kpi-val text-violet">{{ formatPercent(node?.cpu_percent) }}</span>
+        <span class="kpi-sub font-mono">
+          🔥 Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_cpu_percent || node?.cpu_percent) }} <span class="text-slate">| Avg: {{ formatPercent(nodeHistoryData?.summary?.avg_cpu_percent || node?.cpu_percent) }}</span>
+        </span>
+      </div>
 
-    <!-- Card 2: Realtime RAM & Peak -->
-    <div class="hist-kpi-card glass-panel">
-      <span class="kpi-label">REALTIME RAM / PEAK</span>
-      <span class="kpi-val text-cyan">{{ formatPercent(node?.memory_percent) }}</span>
-      <span class="kpi-sub font-mono">
-        🧠 {{ formatBytes(node?.memory_used) }} / {{ formatBytes(node?.memory_total) }} <span class="text-slate">(Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_mem_percent || node?.memory_percent) }})</span>
-      </span>
-    </div>
+      <!-- Card 2: Realtime RAM & Peak -->
+      <div class="hist-kpi-card glass-panel">
+        <span class="kpi-label">REALTIME RAM / PEAK</span>
+        <span class="kpi-val text-cyan">{{ formatPercent(node?.memory_percent) }}</span>
+        <span class="kpi-sub font-mono">
+          🧠 {{ formatBytes(node?.memory_used) }} / {{ formatBytes(node?.memory_total) }} <span class="text-slate">(Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_mem_percent || node?.memory_percent) }})</span>
+        </span>
+      </div>
 
-    <!-- Card 3: Live Network I/O -->
-    <div class="hist-kpi-card glass-panel">
-      <span class="kpi-label">LIVE NETWORK I/O</span>
-      <div class="hist-kpi-net-row font-mono">
-        <div class="net-pill net-pill-rx">
-          <span class="net-pill-arrow">↓</span>
-          <span class="net-pill-val">{{ formatIoRate(node?.network_rx_bytes || 0) }}</span>
+      <!-- Card 3: Live Network I/O -->
+      <div class="hist-kpi-card glass-panel">
+        <span class="kpi-label">LIVE NETWORK I/O</span>
+        <div class="hist-kpi-net-row font-mono">
+          <div class="net-pill net-pill-rx">
+            <span class="net-pill-arrow">↓</span>
+            <span class="net-pill-val">{{ formatIoRate(node?.network_rx_bytes || 0) }}</span>
+          </div>
+          <div class="net-pill net-pill-tx">
+            <span class="net-pill-arrow">↑</span>
+            <span class="net-pill-val">{{ formatIoRate(node?.network_tx_bytes || 0) }}</span>
+          </div>
         </div>
-        <div class="net-pill net-pill-tx">
-          <span class="net-pill-arrow">↑</span>
-          <span class="net-pill-val">{{ formatIoRate(node?.network_tx_bytes || 0) }}</span>
+        <span class="kpi-sub font-mono">
+          ⚡ Peak: ↓ {{ formatIoRate(nodeHistoryData?.summary?.peak_rx_bytes_sec || node?.network_rx_bytes) }}
+        </span>
+      </div>
+
+      <!-- Card 4: Uptime & Disk Usage -->
+      <div class="hist-kpi-card glass-panel">
+        <span class="kpi-label">UPTIME & DISK USAGE</span>
+        <span class="kpi-val text-emerald">
+          {{ formatPercent(nodeHistoryData?.summary?.uptime_percent || 99) }}
+        </span>
+        <span class="kpi-sub font-mono">
+          💾 Disk: {{ formatPercent(node?.disk_percent) }} <span class="text-slate">({{ formatBytes(node?.disk_used) }} / {{ formatBytes(node?.disk_total) }})</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- 2. Historical Multi-Series Chart -->
+    <div class="hist-chart-wrapper glass-panel">
+      <!-- 2a. Chart Header with Title, Badge, and Series Toggles -->
+      <div class="hist-chart-header">
+        <div class="chart-title-group">
+          <h4 class="hist-chart-title">📈 {{ node?.node_name || 'Node' }} Hardware Saturation Trends</h4>
+          <span class="hist-chart-desc badge-history-window font-mono">{{ nodeHistoryWindowBadge }}</span>
+        </div>
+
+        <!-- Interactive Series Toggles with Live Values -->
+        <div class="series-toggles-group" v-if="nodeHistoryList.length > 0">
+          <button
+            type="button"
+            class="series-toggle-btn"
+            :class="{ 'toggle-active cpu-active': showHistCpu }"
+            @click="showHistCpu = !showHistCpu"
+            title="Click to toggle CPU curve"
+          >
+            <span class="toggle-dot bg-violet"></span>
+            <span>CPU: <strong>{{ formatPercent(node?.cpu_percent) }}</strong></span>
+          </button>
+
+          <button
+            type="button"
+            class="series-toggle-btn"
+            :class="{ 'toggle-active peak-active': showHistPeakEnvelope }"
+            @click="showHistPeakEnvelope = !showHistPeakEnvelope"
+            title="Toggle Peak Spike Envelope layer"
+          >
+            <span class="toggle-dot bg-rose"></span>
+            <span>🔥 Peak Envelope: <strong>{{ showHistPeakEnvelope ? 'ON' : 'OFF' }}</strong></span>
+          </button>
+
+          <button
+            type="button"
+            class="series-toggle-btn"
+            :class="{ 'toggle-active mem-active': showHistMem }"
+            @click="showHistMem = !showHistMem"
+            title="Click to toggle RAM curve"
+          >
+            <span class="toggle-dot bg-cyan"></span>
+            <span>RAM: <strong>{{ formatPercent(node?.memory_percent) }}</strong></span>
+          </button>
+
+          <button
+            type="button"
+            class="series-toggle-btn"
+            :class="{ 'toggle-active disk-active reqs-active': showHistDisk }"
+            @click="showHistDisk = !showHistDisk"
+            title="Click to toggle Disk curve"
+          >
+            <span class="toggle-dot bg-emerald"></span>
+            <span>Disk: <strong>{{ formatPercent(node?.disk_percent) }}</strong></span>
+          </button>
         </div>
       </div>
-      <span class="kpi-sub font-mono">
-        ⚡ Peak: ↓ {{ formatIoRate(nodeHistoryData?.summary?.peak_rx_bytes_sec || node?.network_rx_bytes) }}
-      </span>
-    </div>
 
-    <!-- Card 4: Uptime & Disk Usage -->
-    <div class="hist-kpi-card glass-panel">
-      <span class="kpi-label">UPTIME & DISK USAGE</span>
-      <span class="kpi-val text-emerald">
-        {{ formatPercent(nodeHistoryData?.summary?.uptime_percent || 99) }}
-      </span>
-      <span class="kpi-sub font-mono">
-        💾 Disk: {{ formatPercent(node?.disk_percent) }} <span class="text-slate">({{ formatBytes(node?.disk_used) }} / {{ formatBytes(node?.disk_total) }})</span>
-      </span>
+      <!-- 2b. Integrated Time Range & Sample Bar -->
+      <div class="hist-chart-time-bar">
+        <div class="chart-time-pills">
+          <button
+            v-for="r in ['1h', '3h', '6h', '24h', '7d', '30d'] as const"
+            :key="r"
+            class="btn-chart-range-pill"
+            :class="{ active: nodeHistoryRange === r && !showCustomHistoryPicker }"
+            @click="switchNodeDrawerToHistory(r)"
+          >
+            {{ r }}
+          </button>
+          <button
+            class="btn-chart-range-pill"
+            :class="{ active: nodeHistoryRange === 'custom' || showCustomHistoryPicker }"
+            @click="toggleCustomHistoryPicker"
+          >
+            📅 Custom
+          </button>
+        </div>
+        <div class="range-right">
+          <span class="badge badge-indigo font-mono" v-if="nodeHistoryData?.resolution">
+            Sample Rate: {{ nodeHistoryData.resolution }}
+          </span>
+          <button class="btn btn-secondary btn-xs" @click="loadNodeHistory(node?.node_id || node?.node_name, nodeHistoryRange)" :disabled="nodeHistoryLoading">
+            ↺ Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- 2c. Inline Glassmorphic Custom History Toolbar -->
+      <div v-if="showCustomHistoryPicker || nodeHistoryRange === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
+        <div class="custom-range-inputs">
+          <div class="range-field">
+            <label class="range-label font-mono">FROM:</label>
+            <input
+              type="datetime-local"
+              v-model="customHistoryFrom"
+              class="input-datetime font-mono"
+              @keyup.enter="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+            />
+          </div>
+          <div class="range-field">
+            <label class="range-label font-mono">TO:</label>
+            <input
+              type="datetime-local"
+              v-model="customHistoryTo"
+              class="input-datetime font-mono"
+              @keyup.enter="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+            />
+          </div>
+        </div>
+
+        <div class="custom-range-presets">
+          <span class="preset-label font-mono">PRESETS:</span>
+          <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('30m')">Last 30m</button>
+          <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('2h')">Last 2h</button>
+          <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('6h')">Last 6h</button>
+          <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('today')">Today</button>
+        </div>
+
+        <div class="custom-range-actions">
+          <button
+            type="button"
+            class="btn-apply-range font-mono"
+            :disabled="nodeHistoryLoading"
+            @click="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
+          >
+            <span class="glow-dot"></span>
+            <span>{{ nodeHistoryLoading ? 'Applying...' : 'Apply Window' }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2d. SVG Chart Canvas / Loading / Empty -->
+      <div v-if="nodeHistoryLoading" class="hist-chart-loading glass-panel">
+        <span class="spinner-sm"></span> Loading {{ nodeHistoryRange }} telemetry rollups...
+      </div>
+
+      <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave">
+        <!-- Main SVG Canvas -->
+        <svg class="hist-svg-canvas" viewBox="0 0 760 200" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="histCpuGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#a855f7" stop-opacity="0.35" />
+              <stop offset="100%" stop-color="#a855f7" stop-opacity="0.0" />
+            </linearGradient>
+            <linearGradient id="histCpuPeakEnvelopeGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.45" />
+              <stop offset="50%" stop-color="#e879f9" stop-opacity="0.25" />
+              <stop offset="100%" stop-color="#a855f7" stop-opacity="0.05" />
+            </linearGradient>
+            <linearGradient id="histMemGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.3" />
+              <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          <!-- Y-Axis Percentage Labels inside SVG (Fixed exact alignment) -->
+          <g class="hist-svg-y-labels" font-size="9" text-anchor="end">
+            <text x="44" y="23" fill="#fb7185" font-weight="600">100%</text>
+            <text x="44" y="63" fill="#fbbf24" font-weight="600">75%</text>
+            <text x="44" y="103" fill="#38bdf8" font-weight="600">50%</text>
+            <text x="44" y="143" fill="#94a3b8">25%</text>
+            <text x="44" y="183" fill="#64748b">0%</text>
+          </g>
+
+          <!-- Horizontal Grid Lines (Locked to exact scale: 20=100%, 60=75%, 100=50%, 140=25%, 180=0%) -->
+          <line x1="50" y1="20" x2="720" y2="20" stroke="rgba(244,63,94,0.2)" stroke-dasharray="3,3" />
+          <line x1="50" y1="60" x2="720" y2="60" stroke="rgba(245,158,11,0.2)" stroke-dasharray="3,3" />
+          <line x1="50" y1="100" x2="720" y2="100" stroke="rgba(56,189,248,0.12)" stroke-dasharray="3,3" />
+          <line x1="50" y1="140" x2="720" y2="140" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <line x1="50" y1="180" x2="720" y2="180" stroke="rgba(255,255,255,0.12)" />
+
+          <!-- Area Fills -->
+          <path
+            v-if="showHistCpu && showHistPeakEnvelope && (histViewMode === 'both' || histViewMode === 'peak') && nodeHistoryChartCpuEnvelope"
+            :d="nodeHistoryChartCpuEnvelope"
+            fill="url(#histCpuPeakEnvelopeGrad)"
+            class="chart-envelope-area"
+          />
+          <path v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'avg') && nodeHistoryChartCpuArea" :d="nodeHistoryChartCpuArea" fill="url(#histCpuGrad)" />
+          <path v-if="showHistMem && nodeHistoryChartMemArea" :d="nodeHistoryChartMemArea" fill="url(#histMemGrad)" />
+
+          <!-- Trend Lines -->
+          <path v-if="showHistDisk && nodeHistoryChartDiskPath" :d="nodeHistoryChartDiskPath" fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4,4" />
+          <path v-if="showHistMem && nodeHistoryChartMemPath" :d="nodeHistoryChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2" />
+          <path
+            v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'peak') && (showHistPeakEnvelope || histViewMode === 'peak') && nodeHistoryChartCpuPeakPath"
+            :d="nodeHistoryChartCpuPeakPath"
+            fill="none"
+            stroke="#e879f9"
+            stroke-width="1.2"
+            stroke-dasharray="3,2"
+            class="chart-peak-line"
+          />
+          <path v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'avg') && nodeHistoryChartCpuPath" :d="nodeHistoryChartCpuPath" fill="none" stroke="#a855f7" stroke-width="2" />
+
+          <!-- Glowing Spike Pins on Prominent Spikes -->
+          <g v-if="showHistCpu && (showHistPeakEnvelope || histViewMode === 'peak')" class="spike-markers-group">
+            <g
+              v-for="marker in nodeHistorySpikeMarkers"
+              :key="'spike-' + marker.index"
+              class="spike-pin-item"
+              @mouseenter="hoveredNodeHistIndex = marker.index; isNodeHistHovered = true"
+              @click.stop="syncLogsToPointInTime(nodeHistoryList[marker.index])"
+            >
+              <!-- Outer pulsing ring for critical spike >= 85% -->
+              <circle
+                v-if="marker.peak >= 85"
+                :cx="marker.x"
+                :cy="marker.y"
+                r="7"
+                fill="none"
+                stroke="#f43f5e"
+                stroke-width="1.5"
+                class="spike-marker-pulse"
+              />
+              <!-- Core dot -->
+              <circle
+                :cx="marker.x"
+                :cy="marker.y"
+                :r="marker.peak >= 85 ? 4 : 3"
+                :fill="marker.peak >= 85 ? '#f43f5e' : '#e879f9'"
+                stroke="#ffffff"
+                stroke-width="1.2"
+              />
+            </g>
+          </g>
+
+          <!-- Interactive Crosshair -->
+          <g v-if="isNodeHistHovered && nodeHistHoverCoords">
+            <line
+              :x1="nodeHistHoverCoords.x"
+              y1="15"
+              :x2="nodeHistHoverCoords.x"
+              y2="185"
+              stroke="#38bdf8"
+              stroke-width="1.5"
+              stroke-dasharray="3,3"
+            />
+            <circle v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'avg')" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpu" r="4.5" fill="#a855f7" stroke="#ffffff" stroke-width="2" />
+            <circle v-if="showHistCpu && (showHistPeakEnvelope || histViewMode === 'peak') && hoveredNodeHistPoint && (hoveredNodeHistPoint.cpu_peak || 0) > hoveredNodeHistPoint.cpu_percent" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpuPeak" r="4" fill="#e879f9" stroke="#ffffff" stroke-width="1.5" />
+            <circle v-if="showHistMem" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yMem" r="4" fill="#06b6d4" stroke="#ffffff" stroke-width="1.5" />
+            <circle v-if="showHistDisk" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yDisk" r="3.5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
+          </g>
+        </svg>
+
+        <!-- Floating Tooltip Box (Color-Matched with Line Legends) -->
+        <div v-if="isNodeHistHovered && hoveredNodeHistPoint" class="hist-rich-tooltip" :style="nodeHistTooltipStyle">
+          <div class="tooltip-time-header">
+            🕒 {{ new Date(hoveredNodeHistPoint.recorded_at).toLocaleString() }}
+          </div>
+          <div class="tooltip-series-row" v-if="showHistCpu">
+            <span class="tooltip-dot dot-violet"></span>
+            <span class="tooltip-label">CPU:</span>
+            <strong class="tooltip-val text-violet">
+              {{ formatPercent(hoveredNodeHistPoint.cpu_percent) }}
+              <span v-if="(hoveredNodeHistPoint.cpu_peak || 0) > hoveredNodeHistPoint.cpu_percent" class="tooltip-peak-highlight">
+                (🔥 Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})
+              </span>
+            </strong>
+          </div>
+          <div v-if="showHistCpu && (hoveredNodeHistPoint.cpu_peak || 0) >= 85" class="tooltip-spike-alert">
+            <span class="spike-alert-tag">⚠️ Critical Spike: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }}</span>
+          </div>
+          <div class="tooltip-series-row" v-if="showHistMem">
+            <span class="tooltip-dot dot-cyan"></span>
+            <span class="tooltip-label">Memory:</span>
+            <strong class="tooltip-val text-cyan">{{ formatPercent(hoveredNodeHistPoint.mem_percent) }} ({{ formatBytes(hoveredNodeHistPoint.mem_used_bytes) }})</strong>
+          </div>
+          <div class="tooltip-series-row" v-if="showHistDisk">
+            <span class="tooltip-dot dot-emerald"></span>
+            <span class="tooltip-label">Disk:</span>
+            <strong class="tooltip-val text-emerald">{{ formatPercent(hoveredNodeHistPoint.disk_percent) }} ({{ formatBytes(hoveredNodeHistPoint.disk_used_bytes) }})</strong>
+          </div>
+          <div class="tooltip-series-row">
+            <span class="tooltip-dot dot-indigo"></span>
+            <span class="tooltip-label">Net I/O:</span>
+            <strong class="tooltip-val text-indigo">↓ {{ formatIoRate(hoveredNodeHistPoint.rx_bytes_per_sec) }} ↑ {{ formatIoRate(hoveredNodeHistPoint.tx_bytes_per_sec) }}</strong>
+          </div>
+          <button
+            type="button"
+            class="btn-pit-sync font-mono"
+            @click.stop="syncLogsToPointInTime(hoveredNodeHistPoint)"
+            title="Sync live and historical failure logs to this point in time (±15 minutes)"
+          >
+            <span>🔍</span> View Logs at this time
+          </button>
+        </div>
+
+        <!-- Bottom X-Axis Time Markers -->
+        <div class="hist-x-axis">
+          <span v-for="marker in nodeHistoryTimeMarkers" :key="marker.x" class="x-tick">
+            {{ marker.time }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Empty History Chart Placeholder -->
+      <div v-else class="hist-chart-empty">
+        <div class="empty-chart-illustration">
+          <span class="empty-chart-icon">📈</span>
+          <span class="empty-pulse-badge">Awaiting Telemetry Rollups</span>
+        </div>
+        <h5 class="empty-chart-title">No Telemetry Recorded in {{ nodeHistoryRange }} Window</h5>
+        <p class="empty-chart-desc">
+          Historical metrics are aggregated periodically by the background collector. Once continuous telemetry is recorded for <code>{{ node?.node_name }}</code>, multi-series saturation curves will display here.
+        </p>
+      </div>
     </div>
   </div>
-
-  <!-- Historical Multi-Series Chart -->
-  <div class="hist-chart-wrapper glass-panel">
-    <div class="hist-chart-header">
-      <div class="chart-title-group">
-        <h4 class="hist-chart-title">📈 {{ node?.node_name || 'Node' }} Hardware Saturation Trends</h4>
-        <span class="hist-chart-desc badge-history-window font-mono">{{ nodeHistoryWindowBadge }}</span>
-      </div>
-
-      <!-- Interactive Series Toggles with Live Values -->
-      <div class="series-toggles-group" v-if="nodeHistoryList.length > 0">
-        <button
-          type="button"
-          class="series-toggle-btn"
-          :class="{ 'toggle-active cpu-active': showHistCpu }"
-          @click="showHistCpu = !showHistCpu"
-          title="Click to toggle CPU curve"
-        >
-          <span class="toggle-dot bg-violet"></span>
-          <span>CPU: <strong>{{ formatPercent(node?.cpu_percent) }}</strong></span>
-        </button>
-
-        <button
-          type="button"
-          class="series-toggle-btn"
-          :class="{ 'toggle-active peak-active': showHistPeakEnvelope }"
-          @click="showHistPeakEnvelope = !showHistPeakEnvelope"
-          title="Toggle Peak Spike Envelope layer"
-        >
-          <span class="toggle-dot bg-rose"></span>
-          <span>🔥 Peak Envelope: <strong>{{ showHistPeakEnvelope ? 'ON' : 'OFF' }}</strong></span>
-        </button>
-
-        <button
-          type="button"
-          class="series-toggle-btn"
-          :class="{ 'toggle-active mem-active': showHistMem }"
-          @click="showHistMem = !showHistMem"
-          title="Click to toggle RAM curve"
-        >
-          <span class="toggle-dot bg-cyan"></span>
-          <span>RAM: <strong>{{ formatPercent(node?.memory_percent) }}</strong></span>
-        </button>
-
-        <button
-          type="button"
-          class="series-toggle-btn"
-          :class="{ 'toggle-active reqs-active': showHistDisk }"
-          @click="showHistDisk = !showHistDisk"
-          title="Click to toggle Disk curve"
-        >
-          <span class="toggle-dot bg-emerald"></span>
-          <span>Disk: <strong>{{ formatPercent(node?.disk_percent) }}</strong></span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Integrated Time Range & Sample Bar -->
-    <div class="hist-chart-time-bar">
-      <div class="chart-time-pills">
-        <button
-          v-for="r in ['1h', '3h', '6h', '24h', '7d', '30d'] as const"
-          :key="r"
-          class="btn-chart-range-pill"
-          :class="{ active: nodeHistoryRange === r && !showCustomHistoryPicker }"
-          @click="switchNodeDrawerToHistory(r)"
-        >
-          {{ r }}
-        </button>
-        <button
-          class="btn-chart-range-pill"
-          :class="{ active: nodeHistoryRange === 'custom' || showCustomHistoryPicker }"
-          @click="toggleCustomHistoryPicker"
-        >
-          📅 Custom
-        </button>
-      </div>
-      <div class="range-right">
-        <span class="badge badge-indigo font-mono" v-if="nodeHistoryData?.resolution">
-          Sample Rate: {{ nodeHistoryData.resolution }}
-        </span>
-        <button class="btn btn-secondary btn-xs" @click="loadNodeHistory(node?.node_id || node?.node_name, nodeHistoryRange)" :disabled="nodeHistoryLoading">
-          ↺ Refresh
-        </button>
-      </div>
-    </div>
-
-    <!-- Inline Glassmorphic Custom History Toolbar -->
-    <div v-if="showCustomHistoryPicker || nodeHistoryRange === 'custom'" class="custom-range-bar glass-panel animate-fadeIn">
-      <div class="custom-range-inputs">
-        <div class="range-field">
-          <label class="range-label font-mono">FROM:</label>
-          <input
-            type="datetime-local"
-            v-model="customHistoryFrom"
-            class="input-datetime font-mono"
-            @keyup.enter="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
-          />
-        </div>
-        <div class="range-field">
-          <label class="range-label font-mono">TO:</label>
-          <input
-            type="datetime-local"
-            v-model="customHistoryTo"
-            class="input-datetime font-mono"
-            @keyup.enter="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
-          />
-        </div>
-      </div>
-
-      <div class="custom-range-presets">
-        <span class="preset-label font-mono">PRESETS:</span>
-        <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('30m')">Last 30m</button>
-        <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('2h')">Last 2h</button>
-        <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('6h')">Last 6h</button>
-        <button type="button" class="btn-preset-chip font-mono" @click="applyPreset('today')">Today</button>
-      </div>
-
-      <div class="custom-range-actions">
-        <button
-          type="button"
-          class="btn-apply-range font-mono"
-          :disabled="nodeHistoryLoading"
-          @click="loadNodeHistory(node?.node_id || node?.node_name, 'custom', customHistoryFrom, customHistoryTo)"
-        >
-          <span class="glow-dot"></span>
-          <span>{{ nodeHistoryLoading ? 'Applying...' : 'Apply Window' }}</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Loading overlay when fetching new time range -->
-    <div v-if="nodeHistoryLoading" class="hist-chart-loading glass-panel">
-      <span class="spinner-sm"></span> Loading {{ nodeHistoryRange }} telemetry rollups...
-    </div>
-
-            <!-- SVG Chart with HTML-Overlay Grid Layout -->
-            <div v-else-if="nodeHistoryList.length > 0" class="hist-chart-container" @mousemove="handleNodeHistChartHover" @mouseleave="handleNodeHistChartLeave">
-              <!-- Main SVG Canvas -->
-              <svg class="hist-svg-canvas" viewBox="0 0 760 200" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="histCpuGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#a855f7" stop-opacity="0.35" />
-                    <stop offset="100%" stop-color="#a855f7" stop-opacity="0.0" />
-                  </linearGradient>
-                  <linearGradient id="histCpuPeakEnvelopeGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.45" />
-                    <stop offset="50%" stop-color="#e879f9" stop-opacity="0.25" />
-                    <stop offset="100%" stop-color="#a855f7" stop-opacity="0.05" />
-                  </linearGradient>
-                  <linearGradient id="histMemGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.3" />
-                    <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
-                  </linearGradient>
-                </defs>
-
-                <!-- Y-Axis Percentage Labels inside SVG (Fixed exact alignment) -->
-                <g class="hist-svg-y-labels" font-size="9" text-anchor="end">
-                  <text x="44" y="23" fill="#fb7185" font-weight="600">100%</text>
-                  <text x="44" y="63" fill="#fbbf24" font-weight="600">75%</text>
-                  <text x="44" y="103" fill="#38bdf8" font-weight="600">50%</text>
-                  <text x="44" y="143" fill="#94a3b8">25%</text>
-                  <text x="44" y="183" fill="#64748b">0%</text>
-                </g>
-
-                <!-- Horizontal Grid Lines (Locked to exact scale: 20=100%, 60=75%, 100=50%, 140=25%, 180=0%) -->
-                <line x1="50" y1="20" x2="720" y2="20" stroke="rgba(244,63,94,0.2)" stroke-dasharray="3,3" />
-                <line x1="50" y1="60" x2="720" y2="60" stroke="rgba(245,158,11,0.2)" stroke-dasharray="3,3" />
-                <line x1="50" y1="100" x2="720" y2="100" stroke="rgba(56,189,248,0.12)" stroke-dasharray="3,3" />
-                <line x1="50" y1="140" x2="720" y2="140" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
-                <line x1="50" y1="180" x2="720" y2="180" stroke="rgba(255,255,255,0.12)" />
-
-                <!-- Area Fills -->
-                <path
-                  v-if="showHistCpu && showHistPeakEnvelope && (histViewMode === 'both' || histViewMode === 'peak') && nodeHistoryChartCpuEnvelope"
-                  :d="nodeHistoryChartCpuEnvelope"
-                  fill="url(#histCpuPeakEnvelopeGrad)"
-                  class="chart-envelope-area"
-                />
-                <path v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'avg') && nodeHistoryChartCpuArea" :d="nodeHistoryChartCpuArea" fill="url(#histCpuGrad)" />
-                <path v-if="showHistMem && nodeHistoryChartMemArea" :d="nodeHistoryChartMemArea" fill="url(#histMemGrad)" />
-
-                <!-- Trend Lines -->
-                <path v-if="showHistDisk && nodeHistoryChartDiskPath" :d="nodeHistoryChartDiskPath" fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4,4" />
-                <path v-if="showHistMem && nodeHistoryChartMemPath" :d="nodeHistoryChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2" />
-                <path
-                  v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'peak') && (showHistPeakEnvelope || histViewMode === 'peak') && nodeHistoryChartCpuPeakPath"
-                  :d="nodeHistoryChartCpuPeakPath"
-                  fill="none"
-                  stroke="#e879f9"
-                  stroke-width="1.2"
-                  stroke-dasharray="3,2"
-                  class="chart-peak-line"
-                />
-                <path v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'avg') && nodeHistoryChartCpuPath" :d="nodeHistoryChartCpuPath" fill="none" stroke="#a855f7" stroke-width="2" />
-
-                <!-- Glowing Spike Pins on Prominent Spikes -->
-                <g v-if="showHistCpu && (showHistPeakEnvelope || histViewMode === 'peak')" class="spike-markers-group">
-                  <g
-                    v-for="marker in nodeHistorySpikeMarkers"
-                    :key="'spike-' + marker.index"
-                    class="spike-pin-item"
-                    @mouseenter="hoveredNodeHistIndex = marker.index; isNodeHistHovered = true"
-                    @click.stop="syncLogsToPointInTime(nodeHistoryList[marker.index])"
-                  >
-                    <!-- Outer pulsing ring for critical spike >= 85% -->
-                    <circle
-                      v-if="marker.peak >= 85"
-                      :cx="marker.x"
-                      :cy="marker.y"
-                      r="7"
-                      fill="none"
-                      stroke="#f43f5e"
-                      stroke-width="1.5"
-                      class="spike-marker-pulse"
-                    />
-                    <!-- Core dot -->
-                    <circle
-                      :cx="marker.x"
-                      :cy="marker.y"
-                      :r="marker.peak >= 85 ? 4 : 3"
-                      :fill="marker.peak >= 85 ? '#f43f5e' : '#e879f9'"
-                      stroke="#ffffff"
-                      stroke-width="1.2"
-                    />
-                  </g>
-                </g>
-
-                <!-- Interactive Crosshair -->
-                <g v-if="isNodeHistHovered && nodeHistHoverCoords">
-                  <line
-                    :x1="nodeHistHoverCoords.x"
-                    y1="15"
-                    :x2="nodeHistHoverCoords.x"
-                    y2="185"
-                    stroke="#38bdf8"
-                    stroke-width="1.5"
-                    stroke-dasharray="3,3"
-                  />
-                  <circle v-if="showHistCpu && (histViewMode === 'both' || histViewMode === 'avg')" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpu" r="4.5" fill="#a855f7" stroke="#ffffff" stroke-width="2" />
-                  <circle v-if="showHistCpu && (showHistPeakEnvelope || histViewMode === 'peak') && hoveredNodeHistPoint && (hoveredNodeHistPoint.cpu_peak || 0) > hoveredNodeHistPoint.cpu_percent" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yCpuPeak" r="4" fill="#e879f9" stroke="#ffffff" stroke-width="1.5" />
-                  <circle v-if="showHistMem" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yMem" r="4" fill="#06b6d4" stroke="#ffffff" stroke-width="1.5" />
-                  <circle v-if="showHistDisk" :cx="nodeHistHoverCoords.x" :cy="nodeHistHoverCoords.yDisk" r="3.5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
-                </g>
-              </svg>
-
-              <!-- Floating Tooltip Box (Color-Matched with Line Legends) -->
-              <div v-if="isNodeHistHovered && hoveredNodeHistPoint" class="hist-rich-tooltip" :style="nodeHistTooltipStyle">
-                <div class="tooltip-time-header">
-                  🕒 {{ new Date(hoveredNodeHistPoint.recorded_at).toLocaleString() }}
-                </div>
-                <div class="tooltip-series-row" v-if="showHistCpu">
-                  <span class="tooltip-dot dot-violet"></span>
-                  <span class="tooltip-label">CPU:</span>
-                  <strong class="tooltip-val text-violet">
-                    {{ formatPercent(hoveredNodeHistPoint.cpu_percent) }}
-                    <span v-if="(hoveredNodeHistPoint.cpu_peak || 0) > hoveredNodeHistPoint.cpu_percent" class="tooltip-peak-highlight">
-                      (🔥 Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})
-                    </span>
-                  </strong>
-                </div>
-                <div v-if="showHistCpu && (hoveredNodeHistPoint.cpu_peak || 0) >= 85" class="tooltip-spike-alert">
-                  <span class="spike-alert-tag">⚠️ Critical Spike: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }}</span>
-                </div>
-                <div class="tooltip-series-row" v-if="showHistMem">
-                  <span class="tooltip-dot dot-cyan"></span>
-                  <span class="tooltip-label">Memory:</span>
-                  <strong class="tooltip-val text-cyan">{{ formatPercent(hoveredNodeHistPoint.mem_percent) }} ({{ formatBytes(hoveredNodeHistPoint.mem_used_bytes) }})</strong>
-                </div>
-                <div class="tooltip-series-row" v-if="showHistDisk">
-                  <span class="tooltip-dot dot-emerald"></span>
-                  <span class="tooltip-label">Disk:</span>
-                  <strong class="tooltip-val text-emerald">{{ formatPercent(hoveredNodeHistPoint.disk_percent) }} ({{ formatBytes(hoveredNodeHistPoint.disk_used_bytes) }})</strong>
-                </div>
-                <div class="tooltip-series-row">
-                  <span class="tooltip-dot dot-indigo"></span>
-                  <span class="tooltip-label">Net I/O:</span>
-                  <strong class="tooltip-val text-indigo">↓ {{ formatIoRate(hoveredNodeHistPoint.rx_bytes_per_sec) }} ↑ {{ formatIoRate(hoveredNodeHistPoint.tx_bytes_per_sec) }}</strong>
-                </div>
-                <button
-                  type="button"
-                  class="btn-pit-sync font-mono"
-                  @click.stop="syncLogsToPointInTime(hoveredNodeHistPoint)"
-                  title="Sync live and historical failure logs to this point in time (±15 minutes)"
-                >
-                  <span>🔍</span> View Logs at this time
-                </button>
-              </div>
-
-              <!-- Bottom X-Axis Time Markers -->
-              <div class="hist-x-axis">
-                <span v-for="marker in nodeHistoryTimeMarkers" :key="marker.x" class="x-tick">
-                  {{ marker.time }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Empty History Chart Placeholder -->
-            <div v-else class="hist-chart-empty">
-              <div class="empty-chart-illustration">
-                <span class="empty-chart-icon">📈</span>
-                <span class="empty-pulse-badge">Awaiting Telemetry Rollups</span>
-              </div>
-              <h5 class="empty-chart-title">No Telemetry Recorded in {{ nodeHistoryRange }} Window</h5>
-              <p class="empty-chart-desc">
-                Historical metrics are aggregated periodically by the background collector. Once continuous telemetry is recorded for <code>{{ node?.node_name }}</code>, multi-series saturation curves will display here.
-              </p>
-            </div>
-          </div>
-
-
 </template>
 
 <style scoped>
+.node-historical-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
 /* 4 Summary KPI Badges */
 .hist-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
+  margin-bottom: 0;
 }
 
 @media (max-width: 900px) {
@@ -1007,7 +1045,8 @@ function formatIoRate(bytesPerSec?: number): string {
   color: #38bdf8;
 }
 
-.series-toggle-btn.toggle-active.reqs-active {
+.series-toggle-btn.toggle-active.reqs-active,
+.series-toggle-btn.toggle-active.disk-active {
   background: rgba(16, 185, 129, 0.15);
   border-color: rgba(16, 185, 129, 0.4);
   color: #34d399;
