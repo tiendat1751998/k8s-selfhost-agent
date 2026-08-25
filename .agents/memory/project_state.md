@@ -1,9 +1,11 @@
-# K8sControl Project State — Session Update 2026-08-25T15:40
+# K8sControl Project State — Session Update 2026-08-25T16:10
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `f64355a` fix(agent): enhance disk IO collection with sub-device fallback and robust await averaging
+Latest: `20a1570` feat(frontend): consolidate ingress metrics into 5-min trend header and streamline request flow bar
 Previous commits this session:
+- `20a1570` feat(frontend): consolidate ingress metrics into 5-min trend header and streamline request flow bar
+- `f9503bb` docs(memory): sync DEC-052 to DEC-055 and update deployment script invariants in memory
 - `f64355a` fix(agent): enhance disk IO collection with sub-device fallback and robust await averaging
 - `73cdeb0` feat(ui): refine NodeCard with balanced 2x2 telemetry matrix, compact tabular streams, and header container chip
 - `bc1a2a0` feat(tps): harden TPS calculations with counter reset protection, delta cache hit ratio, and max latency tracking
@@ -139,10 +141,9 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 ### Overview Page Architecture
 - **Summary HUD**: Compact single-row flexbox, color-coded (green/amber/rose)
   - NODES ONLINE, CONTAINERS, AVG CPU, AVG MEMORY, THROUGHPUT
-- **Request Flow Animation Bar**: Animated particles proportional to req/s
-  - Active connections, queued requests, error rate, health coloring
-- **5-Min Saturation Trends**: SVG chart moved to below HUD
-- **Node Cards**: Drag-and-drop, stable sort, localStorage persistence
+- **Request Flow Animation Bar**: Streamlined 38px laser particle simulator with dynamic glowing speed, live state pill, pulsating glyphs (`● ● ● →`), and traffic simulator indicator (duplicate metrics and duplicate Deep-Dive button removed).
+- **5-Min Saturation Trends**: SVG chart directly below HUD with consolidated Gateway Ingress metrics in header (`active`, `queued`, `latency ms`, `error %`), unified series legend toggles (`CPU`, `RAM`, `Throughput`), and a single `🔍 Deep-Dive` action trigger.
+- **Node Cards**: Drag-and-drop, stable sort, localStorage persistence, 2x2 resource matrix (RAM/Disk allocation & Live Net/Disk rates).
 - **Node Inspect Drawer** (click node card):
   - OS Distro, Kernel Version, Architecture, Uptime, Load Avg
   - Hardware Saturation Telemetry (CPU, RAM, Disk, Network)
@@ -170,18 +171,16 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 037:plugins 038:scaffold_templates 039:ecosystem_tools 040:compute_hosts
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
-## Completed Features (this session 2026-08-22)
-- OS Distro + Kernel Version on all nodes (agent + backend + frontend)
-- Top Processes fix for worker1/worker2 (agent redeploy)
-- Per-node network interface throughput in inspect drawer
-- Per-node apps & services with Docker Swarm node mapping
-- Per-service request metrics (Req/s, Err %) via LoadBalancerProvider
-- LoadBalancerProvider abstraction (Traefik first, swap to Nginx/HAProxy)
-- Overview cleanup: removed Service Throughput, Per-Node Network, Active Containers, TPS cards
-- 5-Min Saturation Trends moved to top
-- HUD optimization: compact layout, color-coded, animated request flow bar
-- Smooth CSS transitions for real-time data
-- Traefik Prometheus metrics enabled (--metrics.prometheus=true)
+## Completed Features (Latest Session: 2026-08-25)
+- **Consolidated Ingress Telemetry Header & Streamlined Request Flow Simulator** (DEC-056)
+- **High-Precision Linux Disk I/O Telemetry, IOPS & Await Latency** (DEC-052)
+- **Hardened TPS Engine & Monotonic Counter Reset Protection** (DEC-053)
+- **Symmetrical 2x2 NodeCard Resource Matrix & Tabular-Nums Anti-Jitter** (DEC-054)
+- **Sub-Device Fallback for Block Device I/O** (DEC-055)
+- Smooth Monotone Cubic Bézier Splines, Neon Glow Area Gradients & Apex Halo Beacons (DEC-050)
+- Top HUD Navigation Alert Bell, Dropdown Toast & Real-time Telemetry Health Indicators (DEC-049)
+- Persistent Alert Snooze & Mute System with One-Click Global Suppression (DEC-047, DEC-048)
+- Dynamic Ceiling Headroom & Clamped Spline Telemetry Visualizer (DEC-051)
 
 ## Active/In-Progress Work
 
