@@ -47,6 +47,10 @@ const filteredNodeInterfaces = computed(() => {
   return props.node.network_interfaces || []
 })
 
+const filteredNodeDiskDevices = computed(() => {
+  return props.node.disk_devices || []
+})
+
 // Classify process helper
 function classifyProcessType(p: { name?: string; command_line?: string; user?: string; is_container?: boolean }): ProcessCategoryType {
   if (p.is_container) return 'container'
@@ -486,6 +490,160 @@ function formatIoRate(bytesPerSec?: number): string {
                   <span class="iface-rate-item text-purple" :title="'Upload Rate (Tx): ' + formatIoRate(iface.tx_bytes_per_sec)">
                     <span class="rate-arrow">↑</span> {{ formatIoRate(iface.tx_bytes_per_sec) }}
                   </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Disk I/O & Block Device Telemetry Section -->
+          <div class="disk-io-section">
+            <div class="hud-section-header">
+              <h4 class="hud-section-heading">
+                <span class="heading-icon">💽</span> Disk I/O & Block Device Telemetry
+              </h4>
+              <span class="badge badge-indigo font-mono" v-if="filteredNodeDiskDevices.length > 0">
+                {{ filteredNodeDiskDevices.length }} {{ filteredNodeDiskDevices.length === 1 ? 'device' : 'devices' }}
+              </span>
+              <span class="badge badge-slate font-mono" v-else>
+                HOST TELEMETRY
+              </span>
+            </div>
+
+            <!-- Summary Strip -->
+            <div class="disk-summary-strip glass-panel">
+              <div class="disk-summary-item" title="Physical Disk Read Throughput">
+                <span class="disk-summary-label">📖 READ THROUGHPUT</span>
+                <span class="disk-summary-val font-mono text-cyan font-bold">
+                  {{ formatBytes(node.disk_read_bytes_per_sec || 0) }}/s
+                </span>
+              </div>
+              <div class="disk-summary-item" title="Physical Disk Write Throughput">
+                <span class="disk-summary-label">✍️ WRITE THROUGHPUT</span>
+                <span class="disk-summary-val font-mono text-purple font-bold">
+                  {{ formatBytes(node.disk_write_bytes_per_sec || 0) }}/s
+                </span>
+              </div>
+              <div class="disk-summary-item" title="Total Physical Read & Write IOPS">
+                <span class="disk-summary-label">⚡ TOTAL IOPS</span>
+                <span class="disk-summary-val font-mono text-emerald font-bold">
+                  {{ (node.disk_read_iops || 0).toFixed(0) }} R · {{ (node.disk_write_iops || 0).toFixed(0) }} W
+                </span>
+              </div>
+              <div class="disk-summary-item" title="Average Total Latency Per I/O Operation (await)">
+                <span class="disk-summary-label">⏱️ AVG LATENCY (await)</span>
+                <span
+                  class="disk-summary-val font-mono font-bold"
+                  :class="(node.disk_avg_await_ms || 0) > 30 ? 'text-rose' : (node.disk_avg_await_ms || 0) > 10 ? 'text-amber' : 'text-emerald'"
+                >
+                  {{ (node.disk_avg_await_ms || 0).toFixed(1) }} ms
+                </span>
+              </div>
+              <div class="disk-summary-item" title="Maximum Block Device I/O Saturation Percentage">
+                <span class="disk-summary-label">📊 MAX %UTIL</span>
+                <span
+                  class="disk-summary-val font-mono font-bold"
+                  :class="`text-${getUtilizationColor(node.disk_max_io_util_pct || 0)}`"
+                >
+                  {{ (node.disk_max_io_util_pct || 0).toFixed(1) }}%
+                </span>
+              </div>
+            </div>
+
+            <!-- Block Devices Table / Micro-Cards -->
+            <div class="disk-devices-wrapper" v-if="filteredNodeDiskDevices.length > 0">
+              <div class="disk-devices-grid">
+                <div
+                  v-for="dev in filteredNodeDiskDevices"
+                  :key="dev.device_name"
+                  class="disk-device-card glass-panel"
+                >
+                  <div class="dev-card-header">
+                    <div class="dev-name-group">
+                      <span class="dev-icon">💾</span>
+                      <span class="dev-name font-mono font-bold" :title="dev.device_name">{{ dev.device_name }}</span>
+                    </div>
+                    <span
+                      class="dev-badge font-mono font-bold"
+                      :class="dev.is_root_device ? 'badge-root' : 'badge-part'"
+                      :title="dev.is_root_device ? 'Root Partition / Primary Device' : 'Storage Device / Partition'"
+                    >
+                      {{ dev.is_root_device ? 'ROOT' : 'PART' }}
+                    </span>
+                  </div>
+
+                  <div class="dev-metrics-grid font-mono">
+                    <div class="dev-metric-col" title="Read Throughput Rate">
+                      <span class="dev-metric-label">READ RATE</span>
+                      <span class="dev-metric-val text-cyan font-bold">📖 {{ formatIoRate(dev.read_bytes_per_sec) }}</span>
+                    </div>
+                    <div class="dev-metric-col" title="Write Throughput Rate">
+                      <span class="dev-metric-label">WRITE RATE</span>
+                      <span class="dev-metric-val text-purple font-bold">✍️ {{ formatIoRate(dev.write_bytes_per_sec) }}</span>
+                    </div>
+                    <div class="dev-metric-col" title="IOPS (Read / Write)">
+                      <span class="dev-metric-label">IOPS (R/W)</span>
+                      <span class="dev-metric-val text-emerald font-bold">{{ dev.read_iops.toFixed(0) }} R / {{ dev.write_iops.toFixed(0) }} W</span>
+                    </div>
+                    <div class="dev-metric-col" title="Average Wait Latency (await)">
+                      <span class="dev-metric-label">AWAIT LATENCY</span>
+                      <span
+                        class="dev-metric-val font-bold"
+                        :class="dev.avg_wait_ms > 30 ? 'text-rose' : dev.avg_wait_ms > 10 ? 'text-amber' : 'text-emerald'"
+                      >
+                        {{ dev.avg_wait_ms.toFixed(1) }} ms
+                      </span>
+                    </div>
+                    <div class="dev-metric-col" title="Average Request Size">
+                      <span class="dev-metric-label">AVG REQ SZ</span>
+                      <span class="dev-metric-val text-slate font-bold">{{ dev.avg_req_size_kb.toFixed(1) }} KB</span>
+                    </div>
+                    <div class="dev-metric-col" title="Current Queue Depth">
+                      <span class="dev-metric-label">QUEUE DEPTH</span>
+                      <span
+                        class="dev-metric-val font-bold"
+                        :class="dev.current_queue_depth > 10 ? 'text-rose' : dev.current_queue_depth > 4 ? 'text-amber' : 'text-slate'"
+                      >
+                        {{ dev.current_queue_depth }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- %util Progress Track -->
+                  <div class="dev-util-row">
+                    <div class="dev-util-label-group">
+                      <span class="dev-util-label">DEVICE I/O UTILIZATION (%UTIL)</span>
+                      <span
+                        class="dev-util-pct font-mono font-bold"
+                        :class="`text-${getUtilizationColor(dev.io_utilization_pct || 0)}`"
+                      >
+                        {{ (dev.io_utilization_pct || 0).toFixed(1) }}%
+                      </span>
+                    </div>
+                    <div class="hw-progress-track">
+                      <div
+                        class="hw-progress-fill smooth-bar"
+                        :class="`bg-${getUtilizationColor(dev.io_utilization_pct || 0)}`"
+                        :style="{ width: `${Math.min(100, Math.max(0, dev.io_utilization_pct || 0))}%` }"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Fallback when no devices reported -->
+            <div class="disk-fallback-panel glass-panel" v-else>
+              <div class="fallback-content">
+                <span class="fallback-icon">💾</span>
+                <div class="fallback-info">
+                  <span class="fallback-title font-mono">Block Device Breakdown Unavailable</span>
+                  <span class="fallback-subtitle text-muted">
+                    Displaying host-level aggregate storage metrics. Individual block device breakdown is available when reported by node agent.
+                  </span>
+                </div>
+                <div class="fallback-rates font-mono">
+                  <span class="rate-pill text-cyan">📖 {{ formatIoRate(node.disk_read_bytes_per_sec || 0) }} Read</span>
+                  <span class="rate-pill text-purple">✍️ {{ formatIoRate(node.disk_write_bytes_per_sec || 0) }} Write</span>
                 </div>
               </div>
             </div>
@@ -1018,6 +1176,248 @@ function formatIoRate(bytesPerSec?: number): string {
 .iface-rate-sep {
   color: rgba(255, 255, 255, 0.2);
   font-size: 9px;
+}
+
+/* Disk I/O & Block Device Telemetry Section in Node Drawer */
+.disk-io-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.disk-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 900px) {
+  .disk-summary-strip {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .disk-summary-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.disk-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.disk-summary-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.disk-summary-val {
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.disk-devices-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.disk-devices-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.disk-device-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.disk-device-card:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.dev-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dev-name-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dev-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.dev-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dev-badge {
+  font-size: 8.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.badge-root {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.badge-part {
+  background: rgba(6, 182, 212, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.25);
+}
+
+.dev-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 8px;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.dev-metric-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dev-metric-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.dev-metric-val {
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dev-util-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dev-util-label-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.dev-util-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.dev-util-pct {
+  font-size: 10.5px;
+}
+
+.disk-fallback-panel {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.fallback-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fallback-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.fallback-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.fallback-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.fallback-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.fallback-rates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rate-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /* Service filter chips and interactive table controls */

@@ -524,6 +524,29 @@ export interface NetworkInterface {
   tx_bytes_per_sec: number
 }
 
+export interface DiskIOStats {
+  device_name: string
+  read_bytes_per_sec: number
+  write_bytes_per_sec: number
+  read_iops: number
+  write_iops: number
+  avg_wait_ms: number
+  avg_req_size_kb: number
+  current_queue_depth: number
+  io_utilization_pct: number
+  is_root_device: boolean
+}
+
+export interface DiskIOMetrics {
+  total_read_bytes_per_sec: number
+  total_write_bytes_per_sec: number
+  total_read_iops: number
+  total_write_iops: number
+  avg_await_ms: number
+  max_io_util_pct: number
+  devices: DiskIOStats[]
+}
+
 export interface NodeMetrics {
   node_id: string
   node_name: string
@@ -540,6 +563,13 @@ export interface NodeMetrics {
   network_rx_bytes: number
   network_tx_bytes: number
   network_interfaces?: NetworkInterface[]
+  disk_read_bytes_per_sec?: number
+  disk_write_bytes_per_sec?: number
+  disk_read_iops?: number
+  disk_write_iops?: number
+  disk_avg_await_ms?: number
+  disk_max_io_util_pct?: number
+  disk_devices?: DiskIOStats[]
   container_count: number
   running_count: number
   os?: string
