@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-26T16:55
+# K8sControl Project State — Session Update 2026-08-26T17:05
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `601cd44` fix(ui): enhance mobile drawer exit with pinned top-right close button and thumb-friendly footer close button
+Latest: `ee6d3b5` fix(ui): polish overview storage hud card, streamline request flow bar, and compact header action buttons
 Previous commits this session:
+- `601cd44` fix(ui): enhance mobile drawer exit with pinned top-right close button and thumb-friendly footer close button
 - `3efaebe` docs(memory): record DEC-068 for platform-wide interactive functional QA and PWA quality gate
 - `8c71879` fix(ui): upgrade overview hud to strict css grid across all breakpoints
 - `5f42d3c` docs(memory): record DEC-066 for platform-wide 2x2 grid and smart button wrapping
@@ -160,10 +161,11 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
   - Per-interface network stats (ens33, docker0, docker_gwbridge, etc.)
 
 ### Overview Page Architecture
-- **Summary HUD**: Strict CSS Grid across all breakpoints (Desktop >1200px: `repeat(5, minmax(0, 1fr))`, Tablet 769px-1200px: `repeat(3, minmax(0, 1fr))`, Mobile <=768px: `repeat(2, minmax(0, 1fr))` with storage card spanning 2 cols). Eliminates flex-wrap 1-column collapse and guarantees resilient density across any browser window width.
+- **Summary HUD**: Strict CSS Grid across all breakpoints (Desktop >1200px: `repeat(5, minmax(0, 1fr))`, Tablet 769px-1200px: `repeat(3, minmax(0, 1fr))`, Mobile <=768px: `repeat(2, minmax(0, 1fr))` with Card 5 Cluster Storage spanning 2 cols in clean vertical layout with 3-4px progress bar and full unclipped byte metrics `💽 88.6 GB / 196.2 GB`). Eliminates flex-wrap 1-column collapse and guarantees resilient density across any browser window width.
   - NODES ONLINE, CONTAINERS, AVG CPU, AVG MEMORY, STORAGE (with micro-progress bars & tabular metrics)
-- **Request Flow Animation Bar**: Streamlined 38px laser particle simulator with dynamic glowing speed, live state pill, pulsating glyphs (`● ● ● →`), and traffic simulator indicator (duplicate metrics and duplicate Deep-Dive button removed).
+- **Request Flow Animation Bar**: Streamlined 32-38px laser particle simulator with dynamic glowing speed, live state pill, pulsating glyphs (`● ● ● →`), removing redundant 'TRAFFIC SIMULATOR' text for sleek uncluttered mobile screen space.
 - **5-Min Saturation Trends**: SVG chart directly below HUD with consolidated Gateway Ingress metrics in header (`active`, `queued`, `latency ms`, `error %`), unified series legend toggles (`CPU`, `RAM`, `Throughput`), and a single `🔍 Deep-Dive` action trigger.
+- **Header Actions**: Compact, ergonomic action buttons ('🔄 Refresh', '🚀 Deployments', '🖥️ Hosts', '☸️ Fleet') with 11.5px/12px font size in balanced 2x2 grid on mobile and clean 1-row layout on tablet.
 - **Node Cards**: Drag-and-drop, stable sort, localStorage persistence, 2x2 resource matrix (RAM/Disk allocation & Live Net/Disk rates).
 - **Node Inspect Drawer** (click node card):
   - OS Distro, Kernel Version, Architecture, Uptime, Load Avg
@@ -193,6 +195,7 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
 ## Completed Features (Latest Session: 2026-08-26)
+- **Overview HUD Card 5 Ergonomics, Streamlined Flow Bar & Compact Header Actions** (DEC-070)
 - **Mobile Inspect Drawer Exit Ergonomics & Pinned Close Controls** (DEC-069)
 - **Platform-Wide E2E Interactive Functional Testing & Multi-Viewport PWA Quality Gate** (DEC-068)
 - **Overview HUD Strict CSS Grid Layout & Resizing Resilience** (DEC-067)
