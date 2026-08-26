@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-26T16:10
+# K8sControl Project State — Session Update 2026-08-26T16:18
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `851906f` fix(ui): fix overview hud 1-column mobile override and clean top hud navbar cramping
+Latest: `5be91ab` feat(ui): enforce 2x2 metric grid and smart button wrapping across all views
 Previous commits this session:
+- `5be91ab` feat(ui): enforce 2x2 metric grid and smart button wrapping across all views
 - `851906f` fix(ui): fix overview hud 1-column mobile override and clean top hud navbar cramping
 - `9513f13` feat(ui): implement 2x2 high-density metric grid and side-by-side header actions across all views
 - `a7cb934` feat(ui): implement fluid mobile typography and streamline overview telemetry
@@ -181,6 +182,7 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
 ## Completed Features (Latest Session: 2026-08-26)
+- **Platform-Wide 2x2 Metric Grid Enforcement & Smart Button Wrapping** (DEC-066)
 - **Multi-View Mobile Web & RWD Comprehensive QA Verification** (DEC-065)
 - **Overview HUD 2x2 Grid Bug Fix & Top HUD Navbar Ergonomics Polish** (DEC-064)
 - **2x2 High-Density Metric Grid & Side-by-Side Mobile Header Actions** (DEC-063)
