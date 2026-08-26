@@ -505,7 +505,7 @@ function formatIoRate(bytesPerSec?: number): string {
     :show="show"
     mode="modal"
     maxWidth="1140px"
-    title="Cluster Ingress & Request Saturation Deep-Dive"
+    title="⚡ Traffic & Telemetry Deep-Dive"
     subtitle="High-resolution time-series saturation curves and multi-service traffic contributor breakdown"
     @close="handleClose"
   >
@@ -515,7 +515,10 @@ function formatIoRate(bytesPerSec?: number): string {
         <!-- Card 1: Peak Throughput -->
         <div class="deep-stat-card card-peak-reqs glass-panel">
           <div class="deep-stat-header">
-            <span class="deep-stat-title">Peak Gateway Throughput</span>
+            <span class="deep-stat-title">
+              <span class="stat-title-full">Peak Gateway Throughput</span>
+              <span class="stat-title-mobile">Peak Gateway</span>
+            </span>
             <span class="hud-icon">⚡</span>
           </div>
           <div class="deep-stat-body">
@@ -532,7 +535,10 @@ function formatIoRate(bytesPerSec?: number): string {
         <!-- Card 2: Average Throughput -->
         <div class="deep-stat-card card-avg-reqs glass-panel">
           <div class="deep-stat-header">
-            <span class="deep-stat-title">Average Gateway Throughput</span>
+            <span class="deep-stat-title">
+              <span class="stat-title-full">Average Gateway Throughput</span>
+              <span class="stat-title-mobile">Avg Gateway</span>
+            </span>
             <span class="hud-icon">🌐</span>
           </div>
           <div class="deep-stat-body">
@@ -549,7 +555,10 @@ function formatIoRate(bytesPerSec?: number): string {
         <!-- Card 3: Peak CPU Saturation -->
         <div class="deep-stat-card card-cpu glass-panel">
           <div class="deep-stat-header">
-            <span class="deep-stat-title">Peak CPU Saturation</span>
+            <span class="deep-stat-title">
+              <span class="stat-title-full">Peak CPU Saturation</span>
+              <span class="stat-title-mobile">Peak CPU</span>
+            </span>
             <span class="hud-icon">🔥</span>
           </div>
           <div class="deep-stat-body">
@@ -569,7 +578,10 @@ function formatIoRate(bytesPerSec?: number): string {
         <!-- Card 4: Average RAM Usage -->
         <div class="deep-stat-card card-mem glass-panel">
           <div class="deep-stat-header">
-            <span class="deep-stat-title">Peak Memory Pressure</span>
+            <span class="deep-stat-title">
+              <span class="stat-title-full">Peak Memory Pressure</span>
+              <span class="stat-title-mobile">Peak RAM</span>
+            </span>
             <span class="hud-icon">🧠</span>
           </div>
           <div class="deep-stat-body">
@@ -592,7 +604,8 @@ function formatIoRate(bytesPerSec?: number): string {
         <div class="modal-chart-top-bar">
           <div class="chart-title-group">
             <h4 class="modal-section-title">
-              <span>📈 High-Resolution Telemetry Overlay</span>
+              <span class="chart-title-full">📈 High-Resolution Telemetry Overlay</span>
+              <span class="chart-title-mobile">📈 Telemetry Spline</span>
             </h4>
             <span class="trend-chart-subtitle">
               Time-synchronized CPU %, RAM %, and Throughput RPS (30 rolling samples)
@@ -633,8 +646,14 @@ function formatIoRate(bytesPerSec?: number): string {
               title="Toggle Throughput spline"
             >
               <span class="toggle-dot bg-emerald"></span>
-              <span class="toggle-name">Gateway Throughput</span>
-              <span class="toggle-val font-mono">({{ Math.round(latestReqs).toLocaleString() }} req/s)</span>
+              <span class="toggle-name">
+                <span class="btn-lbl-full">Gateway Throughput</span>
+                <span class="btn-lbl-mobile">Gateway</span>
+              </span>
+              <span class="toggle-val font-mono">
+                <span class="btn-val-full">({{ Math.round(latestReqs).toLocaleString() }} req/s)</span>
+                <span class="btn-val-mobile">({{ Math.round(latestReqs) }} rps)</span>
+              </span>
             </button>
           </div>
         </div>
@@ -889,7 +908,8 @@ function formatIoRate(bytesPerSec?: number): string {
         <div class="breakdown-header-bar">
           <div class="breakdown-title-wrap">
             <h4 class="modal-section-title">
-              <span>📦 Ranked Service & Workload Contributors</span>
+              <span class="breakdown-title-full">📦 Ranked Service & Workload Contributors</span>
+              <span class="breakdown-title-mobile">📦 Ranked Workloads</span>
             </h4>
             <span class="badge badge-cyan font-mono">
               {{ filteredAndSortedClusterServices.length }} Active Services
@@ -1077,6 +1097,10 @@ function formatIoRate(bytesPerSec?: number): string {
 </template>
 
 <style scoped>
+/* Responsive label visibility helpers */
+.stat-title-mobile, .chart-title-mobile, .btn-lbl-mobile, .btn-val-mobile, .breakdown-title-mobile { display: none; }
+.stat-title-full, .chart-title-full, .btn-lbl-full, .btn-val-full, .breakdown-title-full { display: inline; }
+
 .deep-dive-body {
   display: flex;
   flex-direction: column;
@@ -1703,9 +1727,27 @@ function formatIoRate(bytesPerSec?: number): string {
   }
 }
 
-@media (max-width: 580px) {
-  .modal-summary-grid {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 640px) {
+  .stat-title-mobile, .chart-title-mobile, .btn-lbl-mobile, .btn-val-mobile, .breakdown-title-mobile { display: inline !important; }
+  .stat-title-full, .chart-title-full, .btn-lbl-full, .btn-val-full, .breakdown-title-full { display: none !important; }
+  .deep-stat-sub, .trend-chart-subtitle { display: none !important; }
+  .modal-summary-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+  .deep-stat-card { padding: 10px 12px !important; gap: 4px !important; border-radius: 10px !important; }
+  .deep-stat-title { font-size: 11px !important; }
+  .hud-icon { width: 22px !important; height: 22px !important; font-size: 12px !important; }
+  .deep-stat-value { font-size: 20px !important; }
+  .deep-stat-unit { font-size: 10px !important; }
+  .modal-chart-section { padding: 12px 14px !important; gap: 10px !important; border-radius: 10px !important; }
+  .modal-chart-top-bar { gap: 8px !important; }
+  .series-toggles-group { width: 100% !important; gap: 6px !important; }
+  .series-toggle-btn { flex: 1 1 calc(33.333% - 4px) !important; min-width: 0 !important; padding: 5px 8px !important; font-size: 10.5px !important; justify-content: center !important; }
+  .modal-svg-canvas-box { height: 170px !important; }
+  .modal-breakdown-section { padding: 12px 14px !important; gap: 10px !important; border-radius: 10px !important; }
+  .breakdown-header-bar { gap: 8px !important; }
+  .breakdown-actions-bar { width: 100% !important; }
+  .table-search-input-wrap { width: 100% !important; }
+  .table-search-field { width: 100% !important; min-width: 0 !important; }
+  .breakdown-table th, .breakdown-table td { padding: 6px 8px !important; font-size: 11px !important; white-space: nowrap !important; }
+  .btn-secondary { width: 100% !important; justify-content: center !important; }
 }
 </style>\n
