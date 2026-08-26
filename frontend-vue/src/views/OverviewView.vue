@@ -791,14 +791,14 @@ onUnmounted(() => {
           <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
           <span>Refresh</span>
         </button>
-        <button class="btn btn-secondary nav-redundant-mobile" @click="router.push('/deployments')">
-          <span>🚀 Deployments &amp; Rollouts</span>
+        <button class="btn btn-secondary" @click="router.push('/deployments')">
+          <span>🚀 Deployments</span>
         </button>
-        <button class="btn btn-secondary nav-redundant-mobile" @click="router.push('/hosts')">
-          <span>🖥️ Infrastructure Hosts</span>
+        <button class="btn btn-secondary" @click="router.push('/hosts')">
+          <span>🖥️ Hosts</span>
         </button>
         <button class="btn btn-primary" @click="router.push('/fleet')">
-          <span>☸️ Fleet Mesh</span>
+          <span>☸️ Fleet</span>
         </button>
       </div>
     </header>
@@ -2041,6 +2041,25 @@ onUnmounted(() => {
 }
 
 /* ==========================================
+ * TABLET & INTERMEDIATE RESPONSIVE (<= 1200px, <= 768px)
+ * ========================================== */
+@media (max-width: 1200px) {
+  .header-actions .btn {
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header-actions .btn {
+    font-size: 11.5px;
+    padding: 6px 12px;
+    border-radius: 8px;
+  }
+}
+
+/* ==========================================
  * MOBILE RESPONSIVE OPTIMIZATIONS (<= 640px)
  * ========================================== */
 @media (max-width: 640px) {
@@ -2072,7 +2091,7 @@ onUnmounted(() => {
   }
 
   .page-title {
-    font-size: clamp(17px, 4.5vw, 20px);
+    font-size: clamp(17px, 4.5vw, 19px);
     font-weight: 700;
     line-height: 1.25;
     letter-spacing: -0.02em;
@@ -2080,10 +2099,6 @@ onUnmounted(() => {
 
   .page-desc {
     display: none;
-  }
-
-  .nav-redundant-mobile {
-    display: none !important;
   }
 
   .header-actions {
@@ -2094,9 +2109,10 @@ onUnmounted(() => {
   .header-actions .btn {
     flex: 1 1 calc(50% - 4px);
     font-size: 11.5px;
-    padding: 6px 10px;
+    padding: 6px 8px;
     white-space: nowrap;
     justify-content: center;
+    border-radius: 8px;
   }
 
   /* Trend Chart Card */

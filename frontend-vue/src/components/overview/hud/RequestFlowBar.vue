@@ -72,7 +72,6 @@ const flowAnimationDuration = computed(() => {
 
       <div class="flow-stream-hint font-mono">
         <span class="stream-pulse-tail"></span>
-        <span class="stream-text">TRAFFIC SIMULATOR</span>
       </div>
     </div>
   </section>
@@ -271,5 +270,40 @@ const flowAnimationDuration = computed(() => {
 }
 .font-mono {
   font-family: var(--font-mono, monospace);
+}
+.stream-text {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .flow-stream-hint {
+    display: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .request-flow-bar {
+    height: 32px;
+    padding: 0 10px;
+  }
+
+  .flow-glyphs {
+    display: none;
+  }
+
+  .flow-indicator-group {
+    gap: 6px;
+  }
+
+  .flow-badge {
+    padding: 2px 6px;
+    font-size: 9px;
+    gap: 4px;
+  }
+
+  .flow-status-dot {
+    width: 5px;
+    height: 5px;
+  }
 }
 </style>
