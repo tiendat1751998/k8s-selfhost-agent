@@ -2090,13 +2090,39 @@ onMounted(() => {
     gap: 16px;
   }
   .header-actions {
-    flex-direction: column;
-    width: 100%;
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
   }
   .header-actions .btn,
+  .header-actions button,
   .header-actions a {
-    width: 100%;
-    justify-content: center;
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .catalog-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  :deep(.metric-card),
+  .metric-card,
+  :deep(.stat-card),
+  .stat-card,
+  :deep(.catalog-stat-card),
+  .catalog-stat-card {
+    padding: 10px 12px !important;
   }
   .filter-row {
     flex-direction: column;
@@ -2131,31 +2157,43 @@ onMounted(() => {
 
 @media (max-width: 640px) {
   .header-actions {
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-    gap: 8px;
-    flex-wrap: nowrap;
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
   }
 
   .header-actions .btn,
+  .header-actions button,
   .header-actions a {
-    flex: 1;
-    min-width: 0;
-    padding: 7px 10px;
-    font-size: 11.5px;
-    white-space: nowrap;
-    justify-content: center;
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
   }
 
-  .metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .catalog-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
   }
 
   :deep(.metric-card),
-  .metric-card {
-    padding: 10px 12px;
+  .metric-card,
+  :deep(.stat-card),
+  .stat-card,
+  :deep(.catalog-stat-card),
+  .catalog-stat-card {
+    padding: 10px 12px !important;
   }
 
   :deep(.metric-card .metric-value),
