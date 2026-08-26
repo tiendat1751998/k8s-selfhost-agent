@@ -1316,6 +1316,14 @@ async function handleRemove(cluster: Cluster) {
 }
 
 @media (max-width: 640px) {
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
   .box-header {
     flex-direction: column;
     align-items: flex-start;
