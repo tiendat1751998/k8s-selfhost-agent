@@ -174,7 +174,8 @@ function openAiIncidents() {
                   @click="switchMode('live')"
                 >
                   <span class="tab-icon">⚡</span>
-                  <span>Live Diagnostics &amp; Workloads</span>
+                  <span class="tab-label-full">Live Diagnostics &amp; Workloads</span>
+                  <span class="tab-label-mobile">Live Telemetry</span>
                   <span class="tab-pill font-mono">Real-time</span>
                 </button>
 
@@ -185,7 +186,8 @@ function openAiIncidents() {
                   @click="switchMode('history')"
                 >
                   <span class="tab-icon">📈</span>
-                  <span>Historical Telemetry &amp; Audit</span>
+                  <span class="tab-label-full">Historical Telemetry &amp; Audit</span>
+                  <span class="tab-label-mobile">Historical</span>
                   <span class="tab-pill font-mono">{{ nodeHistoryRange }}</span>
                 </button>
               </div>
@@ -241,14 +243,14 @@ function openAiIncidents() {
                 class="btn btn-secondary"
                 @click="manageHost"
               >
-                <span>⚙️ Manage in Registry</span>
+                <span>⚙️ Manage Host</span>
               </button>
               <button
                 type="button"
                 class="btn btn-primary"
                 @click="openAiIncidents"
               >
-                <span>🤖 AI Incident Diagnostics</span>
+                <span>🤖 AI RCA</span>
               </button>
               <button
                 type="button"
@@ -353,6 +355,10 @@ function openAiIncidents() {
   font-size: 14px;
 }
 
+.tab-label-mobile {
+  display: none;
+}
+
 .tab-pill {
   padding: 2px 7px;
   border-radius: 4px;
@@ -428,21 +434,44 @@ function openAiIncidents() {
 }
 
 @media (max-width: 640px) {
+  .tab-label-full {
+    display: none;
+  }
+
+  .tab-label-mobile {
+    display: inline;
+  }
+
+  .mode-tab-btn {
+    padding: 8px 10px;
+    font-size: 11.5px;
+  }
+
+  .drawer-tabs-pinned {
+    padding: 8px 12px;
+  }
+
+  .drawer-body-scroll {
+    padding: 12px 12px 100px;
+  }
+
   .node-drawer-footer {
-    padding: 12px 16px;
+    padding: 10px 12px;
     flex-wrap: wrap;
     gap: 8px;
   }
 
   .node-drawer-footer .btn {
     flex: 1 1 calc(50% - 4px);
-    padding: 9px 12px;
-    font-size: 12px;
+    padding: 8px 10px;
+    font-size: 11.5px;
   }
 
   .node-drawer-footer .btn-close-footer {
     flex: 1 1 100%;
     order: 3;
+    padding: 8px 10px;
+    font-size: 11.5px;
   }
 }
 
