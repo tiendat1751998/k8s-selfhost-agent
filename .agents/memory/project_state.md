@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-26T17:15
+# K8sControl Project State — Session Update 2026-08-26T17:25
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `d383226` feat(ui): revamp node diagnostics drawer with 2x2 gauge grid, compact tabs, and safe mobile scroll clearance
+Latest: `e4d4826` fix(ui): de-clutter mobile web ui with concise typography, compact data chips, and streamlined hud cards
 Previous commits this session:
+- `d383226` feat(ui): revamp node diagnostics drawer with 2x2 gauge grid, compact tabs, and safe mobile scroll clearance
 - `ee6d3b5` fix(ui): polish overview storage hud card, streamline request flow bar, and compact header action buttons
 - `601cd44` fix(ui): enhance mobile drawer exit with pinned top-right close button and thumb-friendly footer close button
 - `3efaebe` docs(memory): record DEC-068 for platform-wide interactive functional QA and PWA quality gate
@@ -162,15 +163,14 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
   - Per-interface network stats (ens33, docker0, docker_gwbridge, etc.)
 
 ### Overview Page Architecture
-- **Summary HUD**: Strict CSS Grid across all breakpoints (Desktop >1200px: `repeat(5, minmax(0, 1fr))`, Tablet 769px-1200px: `repeat(3, minmax(0, 1fr))`, Mobile <=768px: `repeat(2, minmax(0, 1fr))` with Card 5 Cluster Storage spanning 2 cols in clean vertical layout with 3-4px progress bar and full unclipped byte metrics `💽 88.6 GB / 196.2 GB`). Eliminates flex-wrap 1-column collapse and guarantees resilient density across any browser window width.
-  - NODES ONLINE, CONTAINERS, AVG CPU, AVG MEMORY, STORAGE (with micro-progress bars & tabular metrics)
-- **Request Flow Animation Bar**: Streamlined 32-38px laser particle simulator with dynamic glowing speed, live state pill, pulsating glyphs (`● ● ● →`), removing redundant 'TRAFFIC SIMULATOR' text for sleek uncluttered mobile screen space.
-- **5-Min Saturation Trends**: SVG chart directly below HUD with consolidated Gateway Ingress metrics in header (`active`, `queued`, `latency ms`, `error %`), unified series legend toggles (`CPU`, `RAM`, `Throughput`), and a single `🔍 Deep-Dive` action trigger.
-- **Header Actions**: Compact, ergonomic action buttons ('🔄 Refresh', '🚀 Deployments', '🖥️ Hosts', '☸️ Fleet') with 11.5px/12px font size in balanced 2x2 grid on mobile and clean 1-row layout on tablet.
+- **Summary HUD**: Strict CSS Grid across all breakpoints (Desktop >1200px: `repeat(5, minmax(0, 1fr))`, Tablet 769px-1200px: `repeat(3, minmax(0, 1fr))`, Mobile <=768px: `repeat(2, minmax(0, 1fr))` with Card 5 Cluster Storage spanning 2 cols in clean vertical layout with 3-4px progress bar and full unclipped byte metrics `💽 88.6 GB / 196.2 GB`). Concise labels (`Nodes`, `Containers`, `CPU`, `Memory`, `Storage`), hidden redundant 'NOMINAL' badges on mobile, and compact footers (`1 up · 5 down`, `2 / 3.8 GB`, `88.6 / 196.2 GB`) eliminate all text ellipsis truncation.
+- **Request Flow Animation Bar**: Streamlined 32-38px laser particle simulator with dynamic glowing speed, live state pill, pulsating glyphs (`● ● ● →`), removing redundant text badges on mobile for sleek uncluttered screen space.
+- **5-Min Saturation Trends**: SVG chart directly below HUD with consolidated Gateway Ingress metrics in header (`active`, `queued`, `latency ms`, `error %`), concise title (`📈 Trends`), unified series legend toggles (`CPU`, `RAM`, `Throughput`), and a single `🔍 Deep-Dive` action trigger.
+- **Header Actions & Title**: Concise single-line title (`⚡ Cluster Overview`), compact live badge (`● LIVE`), shortened action buttons ('🔄 Refresh', '🚀 Apps', '🖥️ Hosts', '☸️ Fleet') with 11.5px/12px font size in balanced 2x2 grid on mobile and clean 1-row layout on tablet.
 - **Node Cards**: Drag-and-drop, stable sort, localStorage persistence, 2x2 resource matrix (RAM/Disk allocation & Live Net/Disk rates).
 - **Node Inspect Drawer** (click node card):
   - OS Distro, Kernel Version, Architecture, Uptime, Load Avg
-  - Hardware Saturation Telemetry (CPU, RAM, Disk, Network)
+  - Hardware Saturation Telemetry (CPU, RAM, Disk, Network) with 2x2 hardware gauge grid on mobile/tablet
   - 📡 Network Interface Throughput (per interface: ens33, docker0...)
   - 📦 Apps & Services on this Node (5 services on k8smater, filtered by Swarm node mapping)
     - Columns: Service, CPU, Memory, ↓ Rx, ↑ Tx, Req/s, Err %, Status
@@ -196,6 +196,7 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
 ## Completed Features (Latest Session: 2026-08-26)
+- **Mobile Web UI De-Cluttering, Concise Typography & Streamlined HUD Cards** (DEC-072)
 - **Node Diagnostics Drawer Mobile/PWA Ergonomics & 2x2 Gauge Grid Overhaul** (DEC-071)
 - **Overview HUD Card 5 Ergonomics, Streamlined Flow Bar & Compact Header Actions** (DEC-070)
 - **Mobile Inspect Drawer Exit Ergonomics & Pinned Close Controls** (DEC-069)
