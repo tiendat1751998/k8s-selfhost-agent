@@ -342,4 +342,29 @@ onUnmounted(() => {
 .drawer-slide-leave-to {
   transform: translateX(100%);
 }
+
+@media (max-width: 640px) {
+  .modal-panel {
+    width: calc(100vw - 20px) !important;
+    max-width: 100% !important;
+    margin: 10px;
+    border-radius: 12px;
+  }
+
+  .drawer-panel {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    border-radius: 0;
+  }
+
+  .panel-header,
+  .panel-body,
+  .panel-footer {
+    padding: 12px 14px;
+  }
+
+  .drawer-body {
+    padding: 12px 14px;
+  }
+}
 </style>

@@ -956,4 +956,78 @@ function formatDate(d: string): string {
   gap: 10px;
   border-top: 1px solid var(--border-subtle);
 }
+
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .filter-group {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    padding-bottom: 4px;
+  }
+  .search-box,
+  .search-box input {
+    width: 100% !important;
+  }
+  .runbooks-grid {
+    grid-template-columns: 1fr;
+  }
+  .modal-card-wide,
+  .modal-card {
+    width: 100%;
+    max-width: 100%;
+    max-height: 95vh;
+  }
+  .form-group-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .modal-footer {
+    flex-direction: column;
+    width: 100%;
+  }
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .rb-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .rb-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .step-header {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .command-pre {
+    font-size: 10px;
+  }
+}
 </style>

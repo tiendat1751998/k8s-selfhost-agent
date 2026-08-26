@@ -2084,15 +2084,70 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn,
+  .header-actions a {
+    width: 100%;
+    justify-content: center;
+  }
   .filter-row {
     flex-direction: column;
     align-items: stretch;
   }
+  .filter-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .filter-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
   .form-row {
     flex-direction: column;
+    gap: 12px;
   }
   .hero-top {
     flex-direction: column;
+  }
+  .preset-buttons-row {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .table-actions-row {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+  .box-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .link-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .link-item .btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

@@ -1640,4 +1640,103 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
   border-radius: 10px;
   cursor: pointer;
 }
+
+/* Responsive Overhaul for Mobile & Tablets */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 130px;
+  }
+
+  .window-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .filter-pills {
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .snapshots-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .snap-metrics-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .form-row-2 {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .inspect-stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .box-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .snap-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .card-actions-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .card-actions-row .btn-action {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modal-card {
+    width: calc(100vw - 20px);
+    max-width: 100%;
+    margin: 10px;
+    border-radius: 12px;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 14px;
+  }
+
+  .inspect-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

@@ -128,6 +128,7 @@ const router = createRouter({
     },
     {
       path: '/compliance',
+      alias: ['/security/compliance', '/compliance-center'],
       name: 'compliance',
       component: ComplianceView,
       meta: { requiresAuth: true }
@@ -160,6 +161,7 @@ const router = createRouter({
     },
     {
       path: '/cost',
+      alias: ['/finops/cost', '/finops'],
       name: 'cost',
       component: CostFinOpsView,
       meta: { requiresAuth: true }

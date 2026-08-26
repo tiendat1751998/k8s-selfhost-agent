@@ -739,4 +739,66 @@ function formatDate(d: string): string {
   max-width: 480px;
   margin-bottom: 6px;
 }
+
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .frameworks-grid {
+    grid-template-columns: 1fr;
+  }
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .filter-group {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .modal-overlay {
+    padding: 12px;
+  }
+  .modal-card {
+    max-width: 100%;
+    border-radius: 14px;
+  }
+  .modal-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .view-title {
+    font-size: 20px;
+  }
+  .framework-card {
+    padding: 14px;
+  }
+  .fw-stats-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+}
 </style>

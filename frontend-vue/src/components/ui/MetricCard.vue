@@ -106,4 +106,14 @@ defineProps<{
   border-top: 1px solid var(--border-subtle);
   padding-top: 8px;
 }
+
+@media (max-width: 640px) {
+  .metric-card {
+    padding: 12px 14px;
+  }
+
+  .metric-value {
+    font-size: 20px;
+  }
+}
 </style>

@@ -2392,4 +2392,111 @@ input:checked + .toggle-slider:before {
 .text-right {
   text-align: right;
 }
+
+/* Responsive Overhaul for Mobile & Tablets */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 130px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .type-breakdown-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .filter-control-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .search-input-wrap {
+    min-width: 100%;
+  }
+
+  .filters-group {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .hosts-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .hosts-table-container {
+    overflow-x: auto;
+  }
+
+  .hosts-table {
+    min-width: 600px;
+  }
+
+  .form-row,
+  .auth-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .spec-grid-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .card-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .card-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .card-footer .footer-btn-group {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .hero-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .drawer-footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .drawer-footer-actions .btn {
+    width: 100%;
+  }
+}
 </style>

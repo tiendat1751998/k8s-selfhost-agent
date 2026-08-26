@@ -1457,4 +1457,92 @@ function formatTime(d?: string) {
   font-size: 12px;
   color: #fbbf24;
 }
+
+/* Responsive Overhaul for Mobile & Tablets */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 130px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .split-pane-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .filter-controls {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .search-mini,
+  .select-mini {
+    width: 100%;
+  }
+
+  .incident-list {
+    max-height: 380px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .sim-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .sim-card-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .sim-action-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .card-item-top,
+  .card-item-mid,
+  .card-item-bot {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .left-pane,
+  .right-pane {
+    border-radius: 12px;
+  }
+
+  .pane-header {
+    padding: 12px;
+  }
+
+  .incident-card-item {
+    padding: 12px;
+  }
+}
 </style>

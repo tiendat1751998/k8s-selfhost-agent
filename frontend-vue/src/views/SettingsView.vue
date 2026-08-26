@@ -1313,6 +1313,8 @@ async function testService(key: IntegrationKey) {
   display: flex;
   gap: 8px;
   overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
   border-radius: 14px;
 }
 
@@ -1756,12 +1758,65 @@ async function testService(key: IntegrationKey) {
 }
 
 @media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .integrations-grid {
+    grid-template-columns: 1fr;
+  }
+  .integration-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
   .form-row {
     flex-direction: column;
   }
   .integration-input-row {
     flex-direction: column;
     align-items: stretch;
+  }
+  .integration-input-row .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .user-2fa-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .user-2fa-active-view,
+  .user-2fa-inactive-view {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .user-2fa-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .form-actions {
+    justify-content: stretch;
+  }
+  .form-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .spec-grid {
+    grid-template-columns: 1fr;
   }
   .about-hero {
     flex-direction: column;
@@ -1773,6 +1828,27 @@ async function testService(key: IntegrationKey) {
   .about-footer {
     flex-direction: column;
     text-align: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .view-title {
+    font-size: 20px;
+  }
+  .settings-card {
+    padding: 16px;
+  }
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .card-header .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .integration-item {
+    padding: 14px;
   }
 }
 
