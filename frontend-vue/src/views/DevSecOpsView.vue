@@ -728,6 +728,44 @@ async function runScan() {
 }
 
 @media (max-width: 640px) {
+  .header-actions {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    white-space: nowrap;
+    justify-content: center;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .metric-card {
+    padding: 10px 12px;
+  }
+
+  .metric-val {
+    font-size: 18px;
+  }
+
+  .metric-title {
+    font-size: 10px;
+  }
+
+  .metric-footer {
+    font-size: 10px;
+  }
+
   .view-tag {
     font-size: var(--text-tag-fluid, 10px);
     letter-spacing: 0.05em;
@@ -749,9 +787,6 @@ async function runScan() {
     margin-top: 4px;
   }
 
-  .metric-card {
-    padding: 14px;
-  }
   .table-header {
     flex-direction: column;
     align-items: flex-start;

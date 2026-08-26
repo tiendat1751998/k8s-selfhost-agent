@@ -1172,9 +1172,48 @@ function copyPromptOutput() {
 }
 
 @media (max-width: 640px) {
-  .metrics-grid {
-    grid-template-columns: 1fr;
+  .header-actions {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    gap: 8px;
+    flex-wrap: nowrap;
   }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    white-space: nowrap;
+    justify-content: center;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  :deep(.metric-card),
+  .metric-card {
+    padding: 10px 12px;
+  }
+
+  :deep(.metric-card .metric-value),
+  .metric-card .metric-value {
+    font-size: 18px;
+  }
+
+  :deep(.metric-card .metric-title),
+  .metric-card .metric-title {
+    font-size: 10px;
+  }
+
+  :deep(.metric-card .metric-footer),
+  .metric-card .metric-footer {
+    font-size: 10px;
+  }
+
   .provider-footer {
     flex-direction: column;
     width: 100%;

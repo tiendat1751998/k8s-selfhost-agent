@@ -3940,14 +3940,26 @@ function copyToClipboard(text: string) {
     margin-top: 4px;
   }
 
-  .header-actions .btn {
-    flex: 1 1 100%;
+  .header-actions {
+    display: flex;
+    flex-direction: row;
     width: 100%;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    white-space: nowrap;
+    justify-content: center;
   }
 
   .metrics-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
   }
 
   .strategy-type-selector {

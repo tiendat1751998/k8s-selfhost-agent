@@ -1339,12 +1339,28 @@ async function handleRemove(cluster: Cluster) {
   }
 
   .header-actions {
-    flex-direction: column;
+    display: flex;
+    flex-direction: row;
     width: 100%;
+    gap: 8px;
+    flex-wrap: nowrap;
   }
   .header-actions .btn {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    white-space: nowrap;
     justify-content: center;
+  }
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .swarm-meta-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 8px 10px;
   }
   .box-header {
     flex-direction: column;
