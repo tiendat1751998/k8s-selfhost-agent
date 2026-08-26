@@ -122,6 +122,7 @@ const router = createRouter({
     },
     {
       path: '/security',
+      alias: ['/security/devsecops', '/devsecops'],
       name: 'security',
       component: DevSecOpsView,
       meta: { requiresAuth: true }
@@ -176,12 +177,14 @@ const router = createRouter({
     // 5. Enterprise Management
     {
       path: '/tenancy',
+      alias: ['/tenancy/rbac', '/rbac'],
       name: 'tenancy',
       component: TenancyRbacView,
       meta: { requiresAuth: true }
     },
     {
       path: '/ai-hub',
+      alias: ['/ai/providers', '/ai-providers'],
       name: 'ai-hub',
       component: AIProviderHubView,
       meta: { requiresAuth: true }
