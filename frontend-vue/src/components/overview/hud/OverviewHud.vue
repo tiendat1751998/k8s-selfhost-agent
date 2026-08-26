@@ -347,8 +347,7 @@ function formatBytes(bytes: number): string {
   .summary-hud-row .hud-card:nth-child(5) {
     grid-column: span 2;
     display: flex;
-    flex-direction: row;
-    align-items: center;
+    flex-direction: column;
     justify-content: space-between;
   }
 }
@@ -367,13 +366,19 @@ function formatBytes(bytes: number): string {
   .summary-hud-row .hud-card:last-child {
     grid-column: span 2 !important;
     display: flex;
-    flex-direction: row;
-    align-items: center;
+    flex-direction: column;
     justify-content: space-between;
     padding: 8px 12px !important;
+    gap: 6px !important;
   }
   .summary-hud-row .hud-card:last-child .hud-progress-track {
-    display: none;
+    display: block;
+    height: 3px;
+  }
+  .summary-hud-row .hud-card:last-child .hud-card-footer-text {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
   }
 }
 
