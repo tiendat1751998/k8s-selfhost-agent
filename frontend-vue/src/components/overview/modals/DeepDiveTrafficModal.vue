@@ -934,10 +934,45 @@ function formatIoRate(bytesPerSec?: number): string {
                 ✕
               </button>
             </div>
+            <!-- Quick Mobile Sort Pills -->
+            <div class="mobile-sort-pills">
+              <button
+                type="button"
+                class="mobile-sort-pill"
+                :class="{ active: modalServiceSortBy === 'traffic' }"
+                @click="toggleModalSort('traffic')"
+              >
+                Traffic {{ modalServiceSortBy === 'traffic' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '' }}
+              </button>
+              <button
+                type="button"
+                class="mobile-sort-pill"
+                :class="{ active: modalServiceSortBy === 'rps' }"
+                @click="toggleModalSort('rps')"
+              >
+                RPS {{ modalServiceSortBy === 'rps' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '' }}
+              </button>
+              <button
+                type="button"
+                class="mobile-sort-pill"
+                :class="{ active: modalServiceSortBy === 'cpu' }"
+                @click="toggleModalSort('cpu')"
+              >
+                CPU {{ modalServiceSortBy === 'cpu' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '' }}
+              </button>
+              <button
+                type="button"
+                class="mobile-sort-pill"
+                :class="{ active: modalServiceSortBy === 'bandwidth' }"
+                @click="toggleModalSort('bandwidth')"
+              >
+                BW {{ modalServiceSortBy === 'bandwidth' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '' }}
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Services Breakdown Table -->
+        <!-- Services Breakdown Table (Desktop & Tablet) -->
         <div class="breakdown-table-wrapper" v-if="filteredAndSortedClusterServices.length > 0">
           <table class="breakdown-table">
             <thead>
@@ -1075,6 +1110,62 @@ function formatIoRate(bytesPerSec?: number): string {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Mobile Workload Card View (Mobile <=640px) -->
+        <div class="breakdown-mobile-list" v-if="filteredAndSortedClusterServices.length > 0">
+          <div
+            v-for="svc in filteredAndSortedClusterServices"
+            :key="svc.service_name + '-' + svc.node_name"
+            class="mobile-workload-card glass-panel"
+          >
+            <!-- Line 1: ● [service_name] + [traffic_percent]% + [STATUS] -->
+            <div class="m-card-header">
+              <div class="m-svc-identity">
+                <span
+                  class="node-indicator-dot"
+                  :class="svc.status === 'healthy' ? 'bg-emerald' : svc.status === 'degraded' ? 'bg-amber' : 'bg-rose'"
+                ></span>
+                <span class="m-svc-title font-mono font-bold">{{ svc.service_name }}</span>
+                <span class="service-replica-tag" v-if="svc.container_count > 1">
+                  ({{ svc.container_count }}x)
+                </span>
+              </div>
+              <div class="m-header-right">
+                <span class="m-traffic-pct font-mono font-bold text-cyan">{{ svc.traffic_percent.toFixed(1) }}%</span>
+                <span
+                  class="badge badge-sm"
+                  :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
+                >
+                  {{ svc.status === 'healthy' ? '● HEALTHY' : svc.status === 'degraded' ? '● DEGRADED' : '● DOWN' }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Line 2: Full-width blue gradient progress track -->
+            <div class="m-traffic-track">
+              <div
+                class="m-traffic-fill"
+                :style="{ width: `${Math.max(4, Math.min(100, svc.traffic_percent))}%` }"
+              ></div>
+            </div>
+
+            <!-- Line 3: Compact metric chips row: ⚡ [rps] · ↓[rx] ↑[tx] · [cpu]% CPU · [mem] MB · 🖥️ [node_name] -->
+            <div class="m-metric-chips font-mono">
+              <span class="m-chip m-chip-rps" :class="svc.requests_per_sec > 0 ? 'text-emerald font-bold' : 'text-muted'">
+                ⚡ {{ svc.requests_per_sec > 0 ? svc.requests_per_sec.toFixed(1) : '0.0' }} rps
+              </span>
+              <span class="m-chip m-chip-bw text-cyan">
+                ↓ {{ formatIoRate(svc.rx_bytes_per_sec) }} <span class="text-violet">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+              </span>
+              <span class="m-chip m-chip-res" :class="svc.cpu_percent > 80 ? 'text-rose font-bold' : svc.cpu_percent > 50 ? 'text-amber' : 'text-violet'">
+                {{ svc.cpu_percent.toFixed(1) }}% CPU · <span class="text-cyan">{{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}</span>
+              </span>
+              <span class="m-chip m-chip-node text-muted">
+                🖥️ {{ svc.node_name }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <!-- Empty Search State -->
@@ -1355,10 +1446,14 @@ function formatIoRate(bytesPerSec?: number): string {
 }
 
 .svg-axis-label {
-  font-size: 10px;
-  fill: var(--text-muted, #94a3b8);
+  font-size: 11px;
+  fill: #94a3b8;
   font-family: var(--font-mono, monospace);
-  font-weight: 500;
+  font-weight: 600;
+}
+
+.svg-axis-label.text-emerald {
+  fill: #10b981;
 }
 
 @keyframes peak-pulse {
@@ -1721,6 +1816,14 @@ function formatIoRate(bytesPerSec?: number): string {
   font-size: 12px;
 }
 
+.breakdown-mobile-list {
+  display: none;
+}
+
+.mobile-sort-pills {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .modal-summary-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1739,15 +1842,154 @@ function formatIoRate(bytesPerSec?: number): string {
   .deep-stat-unit { font-size: 10px !important; }
   .modal-chart-section { padding: 12px 14px !important; gap: 10px !important; border-radius: 10px !important; }
   .modal-chart-top-bar { gap: 8px !important; }
-  .series-toggles-group { width: 100% !important; gap: 6px !important; }
-  .series-toggle-btn { flex: 1 1 calc(33.333% - 4px) !important; min-width: 0 !important; padding: 5px 8px !important; font-size: 10.5px !important; justify-content: center !important; }
+  .series-toggles-group {
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    gap: 6px !important;
+  }
+  .series-toggle-btn {
+    white-space: nowrap !important;
+    flex-direction: row !important;
+    gap: 4px !important;
+    padding: 6px 8px !important;
+    font-size: 11px !important;
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+  }
   .modal-svg-canvas-box { height: 170px !important; }
+  .svg-axis-label {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    fill: #94a3b8 !important;
+  }
+  .svg-axis-label.text-emerald {
+    fill: #10b981 !important;
+  }
   .modal-breakdown-section { padding: 12px 14px !important; gap: 10px !important; border-radius: 10px !important; }
   .breakdown-header-bar { gap: 8px !important; }
-  .breakdown-actions-bar { width: 100% !important; }
+  .breakdown-actions-bar {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
   .table-search-input-wrap { width: 100% !important; }
   .table-search-field { width: 100% !important; min-width: 0 !important; }
-  .breakdown-table th, .breakdown-table td { padding: 6px 8px !important; font-size: 11px !important; white-space: nowrap !important; }
+  .mobile-sort-pills {
+    display: flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    overflow-x: auto !important;
+    width: 100% !important;
+    padding: 2px 0 !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .mobile-sort-pills::-webkit-scrollbar {
+    display: none !important;
+  }
+  .mobile-sort-pill {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    padding: 4px 8px !important;
+    font-size: 10.5px !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: var(--text-secondary, #94a3b8) !important;
+    cursor: pointer !important;
+  }
+  .mobile-sort-pill.active {
+    background: rgba(56, 189, 248, 0.15) !important;
+    color: #38bdf8 !important;
+    border-color: rgba(56, 189, 248, 0.35) !important;
+  }
+  .breakdown-table-wrapper {
+    display: none !important;
+  }
+  .breakdown-mobile-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .mobile-workload-card {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+    background: rgba(15, 23, 42, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  .m-card-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+  }
+  .m-svc-identity {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    flex: 1 !important;
+  }
+  .m-svc-title {
+    font-size: 12.5px !important;
+    color: #fff !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  .m-header-right {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex-shrink: 0 !important;
+  }
+  .m-traffic-pct {
+    font-size: 12px !important;
+    color: #38bdf8 !important;
+  }
+  .m-traffic-track {
+    width: 100% !important;
+    height: 5px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-radius: 999px !important;
+    overflow: hidden !important;
+  }
+  .m-traffic-fill {
+    height: 100% !important;
+    background: linear-gradient(90deg, #38bdf8, #818cf8) !important;
+    border-radius: 999px !important;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.35) !important;
+  }
+  .m-metric-chips {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 5px !important;
+    font-size: 10.5px !important;
+  }
+  .m-chip {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+    padding: 2px 6px !important;
+    border-radius: 5px !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  }
+  .m-chip-node {
+    color: var(--text-muted, #94a3b8) !important;
+  }
+  .badge-sm {
+    padding: 1px 5px !important;
+    font-size: 9px !important;
+  }
   .btn-secondary { width: 100% !important; justify-content: center !important; }
 }
 </style>\n

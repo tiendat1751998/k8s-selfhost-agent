@@ -1146,7 +1146,7 @@ onUnmounted(() => {
           <div class="topology-title-group">
             <div class="topology-title-with-pulse">
               <span class="pulse-beacon"></span>
-              <h2 class="section-title">🖥️ Infrastructure Hosts &amp; Node Mesh</h2>
+              <h2 class="section-title"><span class="title-full">🖥️ Infrastructure Hosts &amp; Node Mesh</span><span class="title-mobile">🖥️ Hosts &amp; Mesh</span></h2>
             </div>
             <p class="section-subtitle">
               Interactive cluster server topology with live telemetry gauges, drag-and-drop reordering, and deep diagnostics.
@@ -2320,6 +2320,10 @@ onUnmounted(() => {
     width: 100%;
   }
 
+  .section-subtitle {
+    display: none;
+  }
+
   .topology-mesh-indicator {
     width: 100%;
     justify-content: space-between;
@@ -2336,8 +2340,10 @@ onUnmounted(() => {
     width: 100%;
     overflow-x: auto;
     flex-wrap: nowrap;
-    padding-bottom: 2px;
+    gap: 6px;
+    padding: 4px 2px;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   .topology-filter-pills::-webkit-scrollbar {
@@ -2345,9 +2351,10 @@ onUnmounted(() => {
   }
 
   .filter-pill-btn {
+    white-space: nowrap;
     flex-shrink: 0;
-    padding: 5px 10px;
-    font-size: 11px;
+    padding: 6px 10px;
+    font-size: 11.5px;
   }
 
   .node-cards-grid {
