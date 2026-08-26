@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-26T17:05
+# K8sControl Project State — Session Update 2026-08-26T17:15
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `ee6d3b5` fix(ui): polish overview storage hud card, streamline request flow bar, and compact header action buttons
+Latest: `d383226` feat(ui): revamp node diagnostics drawer with 2x2 gauge grid, compact tabs, and safe mobile scroll clearance
 Previous commits this session:
+- `ee6d3b5` fix(ui): polish overview storage hud card, streamline request flow bar, and compact header action buttons
 - `601cd44` fix(ui): enhance mobile drawer exit with pinned top-right close button and thumb-friendly footer close button
 - `3efaebe` docs(memory): record DEC-068 for platform-wide interactive functional QA and PWA quality gate
 - `8c71879` fix(ui): upgrade overview hud to strict css grid across all breakpoints
@@ -195,6 +196,7 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
 ## Completed Features (Latest Session: 2026-08-26)
+- **Node Diagnostics Drawer Mobile/PWA Ergonomics & 2x2 Gauge Grid Overhaul** (DEC-071)
 - **Overview HUD Card 5 Ergonomics, Streamlined Flow Bar & Compact Header Actions** (DEC-070)
 - **Mobile Inspect Drawer Exit Ergonomics & Pinned Close Controls** (DEC-069)
 - **Platform-Wide E2E Interactive Functional Testing & Multi-Viewport PWA Quality Gate** (DEC-068)
