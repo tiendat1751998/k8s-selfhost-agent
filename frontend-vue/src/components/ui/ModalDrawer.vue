@@ -231,6 +231,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: 1;
 }
 
 .title-wrap {
@@ -258,6 +259,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: auto;
+  flex-shrink: 0;
 }
 
 .close-button {
@@ -344,10 +347,14 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
+  .modal-drawer-backdrop {
+    padding: 10px !important;
+  }
+
   .modal-panel {
-    width: calc(100vw - 20px) !important;
+    width: 100% !important;
     max-width: 100% !important;
-    margin: 10px;
+    margin: 0 !important;
     border-radius: 12px;
   }
 
@@ -357,10 +364,32 @@ onUnmounted(() => {
     border-radius: 0;
   }
 
-  .panel-header,
-  .panel-body,
+  .panel-header {
+    padding: 10px 14px !important;
+  }
+
+  .panel-header .header-actions {
+    width: auto !important;
+    flex-shrink: 0 !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .panel-title {
+    font-size: 14.5px !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+  }
+
+  .panel-subtitle {
+    display: none !important;
+  }
+
+  .panel-body {
+    padding: 12px 14px !important;
+  }
+
   .panel-footer {
-    padding: 12px 14px;
+    padding: 10px 14px !important;
   }
 
   .drawer-body {
