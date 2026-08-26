@@ -953,9 +953,24 @@ function formatIoRate(bytesPerSec?: number): string {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px), (max-width: 640px), (max-width: 480px) {
   .hist-kpi-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .hist-kpi-card {
+    padding: 10px 12px !important;
+    min-height: auto !important;
+    gap: 4px !important;
+  }
+  .kpi-label {
+    font-size: 10px !important;
+  }
+  .kpi-val {
+    font-size: 20px !important;
+  }
+  .kpi-sub {
+    font-size: 10px !important;
   }
 }
 
