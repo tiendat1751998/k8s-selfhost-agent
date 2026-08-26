@@ -777,7 +777,7 @@ onUnmounted(() => {
             <span class="pulse-dot" :class="{ 'pulse-active': isLiveWs }"></span>
             {{ isLiveWs ? 'LIVE WEBSOCKET STREAM' : 'TELEMETRY SYNC' }}
           </span>
-          <span class="badge badge-indigo">Auto-Refresh 5s</span>
+          <span class="badge badge-indigo badge-auto-refresh">Auto-Refresh 5s</span>
           <span class="last-sync-text">Updated: {{ lastUpdated.toLocaleTimeString() }}</span>
         </div>
         <h1 class="page-title">Infrastructure &amp; Node Mesh Overview</h1>
@@ -791,10 +791,10 @@ onUnmounted(() => {
           <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
           <span>Refresh</span>
         </button>
-        <button class="btn btn-secondary" @click="router.push('/deployments')">
+        <button class="btn btn-secondary nav-redundant-mobile" @click="router.push('/deployments')">
           <span>🚀 Deployments &amp; Rollouts</span>
         </button>
-        <button class="btn btn-secondary" @click="router.push('/hosts')">
+        <button class="btn btn-secondary nav-redundant-mobile" @click="router.push('/hosts')">
           <span>🖥️ Infrastructure Hosts</span>
         </button>
         <button class="btn btn-primary" @click="router.push('/fleet')">
@@ -1323,18 +1323,20 @@ onUnmounted(() => {
 }
 
 .page-title {
-  font-size: 1.85rem;
+  font-size: var(--text-title-fluid, 24px);
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text-primary, #f8fafc);
   margin: 0;
+  line-height: 1.25;
 }
 
 .page-desc {
-  font-size: 13px;
+  font-size: var(--text-desc-fluid, 13px);
   color: var(--text-secondary, #94a3b8);
   margin: 0;
   max-width: 800px;
+  line-height: 1.5;
 }
 
 .header-actions {
@@ -2048,7 +2050,7 @@ onUnmounted(() => {
   }
 
   .dashboard-header {
-    gap: 12px;
+    gap: 10px;
   }
 
   .header-titles {
@@ -2060,18 +2062,28 @@ onUnmounted(() => {
     font-size: 10px;
   }
 
-  .last-sync-text {
+  .header-badge-group .badge-auto-refresh {
     display: none;
   }
 
+  .last-sync-text {
+    display: inline-block;
+    font-size: 10px;
+  }
+
   .page-title {
-    font-size: 1.35rem;
-    line-height: 1.2;
+    font-size: clamp(17px, 4.5vw, 20px);
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
   }
 
   .page-desc {
-    font-size: 11.5px;
-    line-height: 1.4;
+    display: none;
+  }
+
+  .nav-redundant-mobile {
+    display: none !important;
   }
 
   .header-actions {
@@ -2080,9 +2092,9 @@ onUnmounted(() => {
   }
 
   .header-actions .btn {
-    flex: 1 1 calc(50% - 6px);
+    flex: 1 1 calc(50% - 4px);
     font-size: 11.5px;
-    padding: 6px 8px;
+    padding: 6px 10px;
     white-space: nowrap;
     justify-content: center;
   }
@@ -2091,6 +2103,10 @@ onUnmounted(() => {
   .trend-chart-card {
     padding: 12px 10px;
     gap: 10px;
+  }
+
+  .trend-chart-subtitle {
+    display: none;
   }
 
   .trend-chart-header {

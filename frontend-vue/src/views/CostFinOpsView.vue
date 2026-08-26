@@ -363,7 +363,7 @@ function handleDismissWaste(id: string) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--text-tag-fluid, 11px);
   font-weight: 700;
   color: var(--accent-emerald);
   letter-spacing: 0.05em;
@@ -371,17 +371,19 @@ function handleDismissWaste(id: string) {
 }
 
 .view-title {
-  font-size: 24px;
+  font-size: var(--text-title-fluid, 24px);
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .view-desc {
-  font-size: 13px;
+  font-size: var(--text-desc-fluid, 13px);
   color: var(--text-secondary);
   max-width: 820px;
   margin-top: 4px;
+  line-height: 1.5;
 }
 
 .highlight {
@@ -656,9 +658,27 @@ function handleDismissWaste(id: string) {
 }
 
 @media (max-width: 640px) {
-  .view-title {
-    font-size: 20px;
+  .view-tag {
+    font-size: var(--text-tag-fluid, 10px);
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    margin-bottom: 4px;
   }
+
+  .view-title {
+    font-size: var(--text-title-fluid, clamp(18px, 4.5vw, 22px));
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+
+  .view-desc {
+    font-size: var(--text-desc-fluid, 12px);
+    line-height: 1.45;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
   .cluster-cost-card {
     padding: 14px;
   }
