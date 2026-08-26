@@ -101,6 +101,7 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
         <button
           class="close-button"
           title="Close drawer (Esc)"
+          aria-label="Close drawer (Esc)"
           @click="emit('close')"
           type="button"
         >
@@ -113,6 +114,7 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
 
 <style scoped>
 .node-drawer-header {
+  position: relative;
   padding: 16px 24px;
   background: rgba(15, 23, 42, 0.85);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -241,30 +243,50 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
 }
 
 .close-button {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-secondary, #94a3b8);
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
 .close-button:hover {
-  background: rgba(244, 63, 94, 0.18);
-  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.2);
+  border-color: rgba(244, 63, 94, 0.45);
   color: #fb7185;
   transform: translateY(-1px);
 }
 
+.close-button:active {
+  background: rgba(244, 63, 94, 0.3);
+  transform: translateY(0);
+}
+
 .close-icon {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: bold;
+  line-height: 1;
+}
+
+@media (max-width: 768px) {
+  .node-primary-info {
+    padding-right: 44px;
+  }
+
+  .close-button {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 10;
+  }
 }
 
 .font-mono { font-family: var(--font-mono, monospace); }

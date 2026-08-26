@@ -250,6 +250,14 @@ function openAiIncidents() {
               >
                 <span>🤖 AI Incident Diagnostics</span>
               </button>
+              <button
+                type="button"
+                class="btn btn-secondary btn-close-footer"
+                @click="handleClose"
+                title="Close drawer (Esc)"
+              >
+                <span>✕ Close</span>
+              </button>
             </div>
           </aside>
         </Transition>
@@ -411,6 +419,31 @@ function openAiIncidents() {
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-close-footer:hover {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: rgba(244, 63, 94, 0.35);
+  color: #fb7185;
+}
+
+@media (max-width: 640px) {
+  .node-drawer-footer {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .node-drawer-footer .btn {
+    flex: 1 1 calc(50% - 4px);
+    padding: 9px 12px;
+    font-size: 12px;
+  }
+
+  .node-drawer-footer .btn-close-footer {
+    flex: 1 1 100%;
+    order: 3;
+  }
 }
 
 .font-mono { font-family: var(--font-mono, monospace); }
