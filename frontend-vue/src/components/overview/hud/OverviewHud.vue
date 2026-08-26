@@ -176,15 +176,13 @@ function formatBytes(bytes: number): string {
 
 <style scoped>
 .summary-hud-row {
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   width: 100%;
 }
 
 .summary-hud-row .hud-card {
-  flex: 1 1 0;
   min-width: 0;
   min-height: 124px;
   padding: 14px 16px;
@@ -338,49 +336,48 @@ function formatBytes(bytes: number): string {
 .badge-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
 .badge-violet { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .summary-hud-row {
-    flex-wrap: wrap;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
   }
-  .summary-hud-row .hud-card {
-    flex: 1 1 calc(33.333% - 12px);
-    min-width: 180px;
+  .summary-hud-row .hud-card:nth-child(4) {
+    grid-column: span 1;
   }
-}
-
-@media (max-width: 700px) {
-  .summary-hud-row .hud-card {
-    flex: 1 1 calc(50% - 12px);
-  }
-}
-
-@media (max-width: 640px) {
-  .summary-hud-row {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-
-  .summary-hud-row .hud-card {
-    min-height: auto;
-    padding: 8px 10px;
-    gap: 4px;
-    border-radius: 10px;
-  }
-
-  .summary-hud-row .hud-card:last-child {
+  .summary-hud-row .hud-card:nth-child(5) {
     grid-column: span 2;
     display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
   }
+}
 
+@media (max-width: 768px) {
+  .summary-hud-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+  .summary-hud-row .hud-card {
+    min-height: auto;
+    padding: 8px 10px !important;
+    gap: 4px !important;
+    border-radius: 10px;
+  }
+  .summary-hud-row .hud-card:last-child {
+    grid-column: span 2 !important;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px !important;
+  }
   .summary-hud-row .hud-card:last-child .hud-progress-track {
     display: none;
   }
+}
 
+@media (max-width: 640px) {
   .hud-label {
     font-size: 9.5px;
     letter-spacing: 0.02em;
