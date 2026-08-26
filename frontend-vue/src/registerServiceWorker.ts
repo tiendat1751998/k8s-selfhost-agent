@@ -70,25 +70,45 @@ export function usePwaInstall() {
 }
 
 export function registerSW(): void {
-  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((reg) => {
-          reg.addEventListener('updatefound', () => {
-            const installingWorker = reg.installing
-            if (installingWorker) {
-              installingWorker.addEventListener('statechange', () => {
-                if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  hasUpdate.value = true
-                }
-              })
-            }
-          })
-        })
-        .catch((err) => {
-          console.warn('[SW] Service worker registration failed:', err)
-        })
-    })
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return
   }
+
+  if (import.meta.env.DEV) {
+    // In development mode, purge any active service worker and cache to ensure clean Vite HMR
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister()
+      }
+    })
+    if ('caches' in window) {
+      caches.keys().then((keys) => {
+        for (const key of keys) {
+          caches.delete(key)
+        }
+      })
+    }
+    return
+  }
+
+  // Production registration
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => {
+        reg.addEventListener('updatefound', () => {
+          const installingWorker = reg.installing
+          if (installingWorker) {
+            installingWorker.addEventListener('statechange', () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                hasUpdate.value = true
+              }
+            })
+          }
+        })
+      })
+      .catch((err) => {
+        console.warn('[SW] Service worker registration failed:', err)
+      })
+  })
 }
