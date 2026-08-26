@@ -1490,6 +1490,8 @@ onMounted(() => {
   .metrics-grid,
   .grid-metrics,
   .stats-grid,
+  .plugin-stats,
+  .ai-stats,
   .catalog-stats-grid {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 8px !important;
@@ -1498,6 +1500,8 @@ onMounted(() => {
   .metric-card,
   :deep(.stat-card),
   .stat-card,
+  .hud-card,
+  :deep(.hud-card),
   :deep(.catalog-stat-card),
   .catalog-stat-card {
     padding: 10px 12px !important;
@@ -1573,6 +1577,8 @@ onMounted(() => {
   .metrics-grid,
   .grid-metrics,
   .stats-grid,
+  .plugin-stats,
+  .ai-stats,
   .catalog-stats-grid {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 8px !important;
@@ -1582,6 +1588,8 @@ onMounted(() => {
   .metric-card,
   :deep(.stat-card),
   .stat-card,
+  .hud-card,
+  :deep(.hud-card),
   :deep(.catalog-stat-card),
   .catalog-stat-card {
     padding: 10px 12px !important;
