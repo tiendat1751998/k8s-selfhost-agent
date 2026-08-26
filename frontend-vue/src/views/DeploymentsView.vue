@@ -3783,4 +3783,313 @@ function copyToClipboard(text: string) {
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 .w-full { width: 100%; }
 .cursor-pointer { cursor: pointer; }
+
+/* ========================================== */
+/* RESPONSIVE & MOBILE WEB OVERHAUL           */
+/* ========================================== */
+.filter-deck,
+.tabs-container {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  white-space: nowrap;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.filter-deck::-webkit-scrollbar,
+.tabs-container::-webkit-scrollbar,
+.filter-pills-row::-webkit-scrollbar,
+.inspector-tabs-nav::-webkit-scrollbar,
+.wizard-nav::-webkit-scrollbar {
+  height: 4px;
+}
+
+.filter-deck::-webkit-scrollbar-thumb,
+.tabs-container::-webkit-scrollbar-thumb,
+.filter-pills-row::-webkit-scrollbar-thumb,
+.inspector-tabs-nav::-webkit-scrollbar-thumb,
+.wizard-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.deployment-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+}
+
+.deployment-card-top,
+.card-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .header-actions .btn {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: center;
+    text-align: center;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .table-controls-bar {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .filter-pills-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    width: 100%;
+  }
+
+  .filter-pills-row .pill-btn {
+    flex-shrink: 0;
+  }
+
+  .table-search-row {
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .select-ns {
+    width: 100%;
+  }
+
+  .action-buttons {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .action-buttons .btn {
+    flex: 1 1 auto;
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .replicas-cell {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .replicas-progress-track {
+    width: 100%;
+    max-width: 120px;
+  }
+
+  .tracks-comparison-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .bg-tracks-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .inspector-quick-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .inspector-quick-actions .btn {
+    flex: 1 1 calc(50% - 8px);
+  }
+}
+
+@media (max-width: 640px) {
+  .view-container {
+    gap: 16px;
+  }
+
+  .view-title {
+    font-size: 20px;
+  }
+
+  .view-desc {
+    font-size: 12px;
+  }
+
+  .header-actions .btn {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .strategy-type-selector {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .strat-tab-btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .canary-presets-row {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .preset-pill {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  .canary-actions-bar {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .canary-actions-bar .btn {
+    width: 100%;
+  }
+
+  .revisions-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .revisions-btns {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .revisions-btns .btn {
+    flex: 1 1 calc(50% - 6px);
+  }
+
+  .rev-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .logs-terminal-window {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .logs-terminal-titlebar {
+    height: auto;
+    padding: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .logs-terminal-body {
+    height: 280px;
+    max-height: 45vh;
+    font-size: 10px;
+    padding: 8px 6px;
+  }
+
+  .terminal-log-row {
+    font-size: 10px;
+    gap: 6px;
+  }
+
+  .log-row-num {
+    width: 22px;
+    font-size: 9px;
+  }
+
+  .logs-deck-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .logs-deck-actions .btn {
+    width: 100%;
+  }
+
+  .inspector-tabs-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  .spec-row {
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+  }
+
+  .inspector-quick-actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .inspector-quick-actions .btn {
+    width: 100%;
+  }
+
+  .wizard-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .env-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .yaml-viewer {
+    max-height: 320px;
+    font-size: 10px;
+    padding: 10px;
+  }
+}
 </style>

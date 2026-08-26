@@ -27,3 +27,65 @@ a {
   color: var(--color-primary);
   text-decoration: none;
 }
+
+/* ==========================================================================
+   Responsive Utilities & Layout Helpers
+   ========================================================================== */
+
+.view-header-responsive {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-actions-responsive {
+  display: flex;
+  gap: 10px;
+}
+
+.metrics-grid-responsive {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.filter-bar-responsive {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.form-row-responsive {
+  display: flex;
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .view-header-responsive {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions-responsive {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .metrics-grid-responsive {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .filter-bar-responsive {
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+  }
+
+  .form-row-responsive {
+    flex-direction: column;
+    gap: 10px;
+  }
+}

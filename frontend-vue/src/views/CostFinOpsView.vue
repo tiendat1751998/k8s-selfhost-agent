@@ -629,4 +629,44 @@ function handleDismissWaste(id: string) {
   max-width: 480px;
   margin-bottom: 6px;
 }
+
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .clusters-cost-grid {
+    grid-template-columns: 1fr;
+  }
+  .section-card {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .view-title {
+    font-size: 20px;
+  }
+  .cluster-cost-card {
+    padding: 14px;
+  }
+  .cluster-cost-top {
+    flex-wrap: wrap;
+  }
+  .cost-components-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

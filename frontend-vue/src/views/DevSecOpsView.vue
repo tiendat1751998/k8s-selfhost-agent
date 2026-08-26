@@ -672,4 +672,71 @@ async function runScan() {
 .text-violet { color: #a78bfa; }
 .text-muted { color: var(--text-muted); }
 .font-mono { font-family: var(--font-mono); }
+
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .filter-group {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .search-box {
+    width: 100%;
+  }
+  .search-box input {
+    width: 100% !important;
+  }
+  .modal-overlay {
+    padding: 12px;
+  }
+  .modal-card {
+    max-width: 100%;
+    border-radius: 14px;
+  }
+  .modal-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .view-title {
+    font-size: 20px;
+  }
+  .metric-card {
+    padding: 14px;
+  }
+  .table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px;
+  }
+}
 </style>

@@ -46,6 +46,9 @@
   --rounded-pill: 9999px;
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
 }
 [data-theme="light"] {
   --color-canvas-dark: #f0f2f5;

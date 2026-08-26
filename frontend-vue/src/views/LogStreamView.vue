@@ -443,4 +443,85 @@ watch(
 .text-rose { color: #fb7185; }
 .text-cyan { color: #38bdf8; }
 .font-mono { font-family: var(--font-mono); }
+
+/* Responsive Overhaul for Mobile & Tablets */
+@media (max-width: 768px) {
+  .view-container {
+    height: auto;
+    min-height: calc(100vh - 100px);
+    gap: 14px;
+  }
+
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .control-deck {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    backdrop-filter: blur(12px);
+    padding: 10px 14px;
+    border-radius: 12px;
+  }
+
+  .deck-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .search-input-wrapper {
+    min-width: 100%;
+  }
+
+  .deck-select-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .terminal-window {
+    height: 380px;
+    min-height: 380px;
+    border-radius: 12px;
+  }
+
+  .terminal-body {
+    padding: 10px 12px;
+  }
+
+  .log-line {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    font-size: 11px;
+  }
+
+  .log-idx {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .terminal-titlebar {
+    padding: 0 10px;
+  }
+
+  .window-buttons {
+    display: none;
+  }
+}
 </style>

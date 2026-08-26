@@ -685,6 +685,9 @@ function removeMember(id: string) {
   display: flex;
   align-items: center;
   gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tab-btn {
@@ -700,6 +703,7 @@ function removeMember(id: string) {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .tab-btn:hover {
@@ -902,6 +906,8 @@ function removeMember(id: string) {
 
 .rbac-table-wrap {
   overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .rbac-table {
@@ -1030,5 +1036,67 @@ function removeMember(id: string) {
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .scope-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .scope-left {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .select-scope {
+    min-width: 0;
+    width: 100%;
+  }
+  .projects-grid {
+    grid-template-columns: 1fr;
+  }
+  .rbac-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .rbac-header .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-title {
+    font-size: 20px;
+  }
+  .project-card {
+    padding: 14px;
+  }
+  .project-footer {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .project-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

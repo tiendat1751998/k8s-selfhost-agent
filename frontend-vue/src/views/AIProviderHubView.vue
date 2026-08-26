@@ -1116,4 +1116,77 @@ function copyPromptOutput() {
   max-width: 480px;
   margin-bottom: 8px;
 }
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .view-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    padding-bottom: 4px;
+  }
+  .template-chips {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .providers-grid,
+  .catalog-grid {
+    grid-template-columns: 1fr;
+  }
+  .console-input-pane {
+    padding: 16px;
+  }
+  .console-pane-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .provider-select-wrap {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .console-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .output-terminal {
+    min-height: 260px;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .provider-footer {
+    flex-direction: column;
+    width: 100%;
+  }
+  .provider-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .output-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
 </style>

@@ -784,6 +784,8 @@ function formatDate(d?: string): string {
   display: flex;
   gap: 8px;
   overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tab-btn {
@@ -1069,5 +1071,55 @@ function formatDate(d?: string): string {
   justify-content: flex-end;
   gap: 10px;
   border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .policies-grid, .storages-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-group-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .modal-overlay {
+    padding: 12px;
+  }
+  .modal-card {
+    max-width: 100%;
+    border-radius: 14px;
+  }
+  .modal-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .view-title {
+    font-size: 20px;
+  }
+  .policy-card, .storage-card {
+    padding: 14px;
+  }
 }
 </style>

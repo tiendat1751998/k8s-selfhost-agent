@@ -998,6 +998,17 @@ function downloadCodesAsFile() {
 }
 
 @media (max-width: 768px) {
+  .setup-container {
+    padding: 20px 16px;
+  }
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .title-with-badge {
+    flex-wrap: wrap;
+  }
   .stepper {
     flex-direction: column;
     align-items: flex-start;
@@ -1006,8 +1017,73 @@ function downloadCodesAsFile() {
   .step-line {
     display: none;
   }
+  .wizard-card {
+    padding: 24px 18px;
+    border-radius: 16px;
+  }
+  .info-cards-grid {
+    grid-template-columns: 1fr;
+  }
   .recovery-codes-grid {
     grid-template-columns: 1fr;
+  }
+  .step-actions {
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+  .step-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .recovery-actions-bar {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .recovery-actions-bar .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .setup-container {
+    padding: 14px 10px;
+  }
+  .page-title {
+    font-size: 20px;
+  }
+  .wizard-card {
+    padding: 20px 14px;
+  }
+  .hero-title {
+    font-size: 18px;
+  }
+  .qr-box-wrapper {
+    padding: 10px;
+  }
+  .qr-img {
+    width: 200px;
+    height: 200px;
+  }
+  .secret-display-pill {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+  .secret-key {
+    font-size: 13px;
+    letter-spacing: 1px;
+    word-break: break-all;
+  }
+  .copy-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .totp-input {
+    font-size: 22px;
+    letter-spacing: 6px;
+    padding: 10px 8px;
   }
 }
 </style>

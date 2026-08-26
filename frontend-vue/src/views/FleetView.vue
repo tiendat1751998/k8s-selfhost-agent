@@ -1241,4 +1241,113 @@ async function handleRemove(cluster: Cluster) {
 .text-emerald { color: var(--accent-emerald); }
 .text-muted { color: var(--text-muted); }
 .btn-xs { padding: 4px 8px; font-size: 11px; }
+
+/* Responsive Overhaul for Mobile & Tablets */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 130px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .swarm-section {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .swarm-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .swarm-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .swarm-actions-row {
+    justify-content: flex-start;
+  }
+
+  .section-box {
+    padding: 14px;
+  }
+
+  .clusters-card-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .fleet-features-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .mode-tabs {
+    flex-wrap: wrap;
+  }
+
+  .drawer-content {
+    gap: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .box-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .box-header .btn {
+    width: 100%;
+  }
+
+  .card-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .card-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .card-actions .btn {
+    flex: 1;
+    min-width: 80px;
+  }
+
+  .table-actions-row {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+}
 </style>

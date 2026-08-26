@@ -633,4 +633,117 @@ function formatDate(d: string): string {
   gap: 12px;
   border-top: 1px solid var(--border-subtle);
 }
+
+/* ========================================== */
+/* RESPONSIVE & MOBILE WEB OVERHAUL           */
+/* ========================================== */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .filter-select {
+    width: 100%;
+  }
+
+  .actions-cell {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .diff-snippet-cell {
+    max-width: 200px;
+  }
+
+  .diff-split-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .modal-card-wide {
+    max-height: 95vh;
+    border-radius: 12px;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 14px 16px;
+  }
+
+  .meta-strip {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .modal-footer {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .diff-snippet-cell {
+    max-width: 140px;
+  }
+
+  .diff-pane-header {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .code-pre {
+    padding: 10px 8px;
+    font-size: 10.5px;
+    max-height: 240px;
+    overflow-x: auto;
+  }
+
+  .diff-pre {
+    padding: 10px 8px;
+    font-size: 11px;
+    max-height: 180px;
+    overflow-x: auto;
+  }
+}
 </style>

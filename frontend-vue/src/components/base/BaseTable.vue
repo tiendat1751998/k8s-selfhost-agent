@@ -58,4 +58,16 @@ defineProps<{
 .base-table tbody tr:hover {
   background: var(--color-surface-elevated);
 }
+
+@media (max-width: 640px) {
+  .base-table th,
+  .base-table td {
+    padding: 8px 10px;
+    font-size: 11.5px;
+  }
+
+  .base-table {
+    min-width: 480px;
+  }
+}
 </style>

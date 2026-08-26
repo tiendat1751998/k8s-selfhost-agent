@@ -702,4 +702,49 @@ input:checked + .slider:before {
   gap: 10px;
   border-top: 1px solid var(--border-subtle);
 }
+
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .section-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .modal-card {
+    width: 100%;
+    max-width: 100%;
+  }
+  .modal-footer {
+    flex-direction: column;
+    width: 100%;
+  }
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .actions-cell {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .section-card {
+    padding: 14px;
+  }
+}
 </style>

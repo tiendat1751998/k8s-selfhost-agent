@@ -1340,4 +1340,105 @@ function formatDate(d?: string) {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
 }
+
+/* ========================================== */
+/* RESPONSIVE & MOBILE WEB OVERHAUL           */
+/* ========================================== */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .header-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .pipeline-board {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .table-actions-row {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 640px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .header-actions .btn {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .placement-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .placement-grid-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .placement-row-key {
+    min-width: unset;
+  }
+
+  .combobox-dropdown {
+    max-height: 200px;
+  }
+
+  .option-line-1 {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .option-line-2 {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .meta-bar {
+    display: none;
+  }
+
+  .p-card-actions {
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+
+  .p-card-actions .btn {
+    flex: 1;
+    text-align: center;
+  }
+}
 </style>

@@ -314,4 +314,24 @@ async function handleApply() {
   border-color: rgba(16, 185, 129, 0.3);
   color: #34d399;
 }
+
+@media (max-width: 640px) {
+  .editor-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .yaml-textarea {
+    height: 350px;
+    font-size: 11px;
+    padding: 10px;
+  }
+}
 </style>

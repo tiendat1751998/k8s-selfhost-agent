@@ -573,5 +573,38 @@ function backToCredentials() {
   font-size: 11px;
   color: var(--text-muted);
 }
+
+@media (max-width: 640px) {
+  .login-page {
+    padding: 16px 12px;
+  }
+  .login-card {
+    padding: 24px 18px;
+    border-radius: 16px;
+  }
+  .brand-title {
+    font-size: 20px;
+  }
+  .totp-input {
+    font-size: 20px;
+    letter-spacing: 6px;
+    padding: 10px 8px;
+  }
+  .recovery-input {
+    font-size: 16px;
+    letter-spacing: 3px;
+    padding: 10px 8px;
+  }
+  .login-btn {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .env-pill {
+    padding: 6px 10px;
+  }
+  .env-text {
+    font-size: 10px;
+  }
+}
 </style>
 

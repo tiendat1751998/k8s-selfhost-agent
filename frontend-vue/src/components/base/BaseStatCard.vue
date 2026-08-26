@@ -55,4 +55,15 @@ defineProps<{
   color: var(--color-muted);
   text-transform: uppercase;
 }
+
+@media (max-width: 640px) {
+  .stat-card {
+    padding: 12px 14px;
+    gap: var(--space-sm);
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+}
 </style>
