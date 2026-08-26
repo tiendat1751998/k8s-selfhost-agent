@@ -516,6 +516,23 @@ watch(
 }
 
 @media (max-width: 640px) {
+  .header-actions {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    white-space: nowrap;
+    justify-content: center;
+  }
+
   .terminal-titlebar {
     padding: 0 10px;
   }

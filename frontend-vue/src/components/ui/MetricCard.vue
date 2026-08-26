@@ -110,23 +110,23 @@ defineProps<{
 
 @media (max-width: 640px) {
   .metric-card {
-    padding: 12px 14px;
+    padding: 10px 12px;
     gap: 6px;
   }
 
   .metric-title {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
   }
 
   .metric-value {
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
 
   .metric-footer {
-    font-size: 10.5px;
+    font-size: 10px;
     padding-top: 6px;
   }
 }

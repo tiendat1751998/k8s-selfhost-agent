@@ -59,24 +59,26 @@ defineProps<{
 
 @media (max-width: 640px) {
   .stat-card {
-    padding: 12px 14px;
-    gap: var(--space-xs, 8px);
+    padding: 10px 12px;
+    gap: 6px;
+    border-radius: 10px;
   }
 
   .stat-icon {
-    width: 32px;
-    height: 32px;
-    font-size: 15px;
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
   }
 
   .stat-value {
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
 
   .stat-label {
-    font-size: 10.5px;
+    font-size: 10px;
+    letter-spacing: 0.02em;
     font-weight: 600;
   }
 }
