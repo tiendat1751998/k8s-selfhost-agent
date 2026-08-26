@@ -143,6 +143,9 @@ onUnmounted(() => {
         <span class="bell-icon-wrap">
           <span class="pulse-dot" :class="alertStore.hasCriticalAlerts ? 'pulse-dot-rose' : 'pulse-dot-amber'"></span>
           <span class="bell-emoji">{{ alertStore.hasCriticalAlerts ? '🚨' : '⚠️' }}</span>
+          <span class="bell-mobile-badge" :class="alertStore.hasCriticalAlerts ? 'badge-rose-bg' : 'badge-amber-bg'">
+            {{ alertStore.activeAlerts.length }}
+          </span>
         </span>
         <span class="bell-count-text">
           {{ alertStore.activeAlerts.length }} Alert{{ alertStore.activeAlerts.length > 1 ? 's' : '' }}
@@ -153,6 +156,9 @@ onUnmounted(() => {
       <template v-else-if="alertStore.mutedAlertsCount > 0">
         <span class="bell-icon-wrap">
           <span class="bell-emoji">🔕</span>
+          <span class="bell-mobile-badge badge-muted-bg">
+            {{ alertStore.mutedAlertsCount }}
+          </span>
         </span>
         <span class="bell-count-text">
           {{ alertStore.mutedAlertsCount }} Muted
@@ -296,6 +302,10 @@ onUnmounted(() => {
 .bell-count-text {
   letter-spacing: 0.02em;
   font-family: var(--font-sans, inherit);
+}
+
+.bell-mobile-badge {
+  display: none;
 }
 
 /* Critical Active Pill */
@@ -621,6 +631,52 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
+  .hud-bell-pill {
+    padding: 5px 8px;
+    gap: 0;
+    min-width: 32px;
+    justify-content: center;
+  }
+
+  .bell-count-text {
+    display: none;
+  }
+
+  .bell-mobile-badge {
+    position: absolute;
+    top: -6px;
+    right: -10px;
+    font-size: 9px;
+    font-weight: 700;
+    font-family: var(--font-mono, monospace);
+    line-height: 1;
+    padding: 0 4px;
+    border-radius: 8px;
+    min-width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+  }
+
+  .badge-rose-bg {
+    background: #f43f5e;
+    color: #fff;
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
+  }
+
+  .badge-amber-bg {
+    background: #f59e0b;
+    color: #0f172a;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+  }
+
+  .badge-muted-bg {
+    background: #64748b;
+    color: #fff;
+  }
+
   .header-alert-toast {
     position: fixed;
     top: 65px;

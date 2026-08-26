@@ -363,20 +363,32 @@ function formatBytes(bytes: number): string {
 
   .summary-hud-row .hud-card {
     min-height: auto;
-    padding: 10px 12px;
-    gap: 6px;
+    padding: 8px 10px;
+    gap: 4px;
+    border-radius: 10px;
   }
 
   .summary-hud-row .hud-card:last-child {
     grid-column: span 2;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+  }
+
+  .summary-hud-row .hud-card:last-child .hud-progress-track {
+    display: none;
   }
 
   .hud-label {
-    font-size: 10.5px;
+    font-size: 9.5px;
+    letter-spacing: 0.02em;
+    font-weight: 700;
   }
 
   .hud-value {
-    font-size: 20px;
+    font-size: 17px;
     font-weight: 700;
   }
 
@@ -385,22 +397,16 @@ function formatBytes(bytes: number): string {
   }
 
   .badge {
-    font-size: 9px;
-    padding: 1px 6px;
+    font-size: 8.5px;
+    padding: 1px 5px;
+  }
+
+  .hud-progress-track {
+    height: 3px;
   }
 
   .hud-card-footer-text {
-    font-size: 10px;
-  }
-}
-
-@media (max-width: 480px) {
-  .summary-hud-row {
-    grid-template-columns: 1fr;
-  }
-
-  .summary-hud-row .hud-card:last-child {
-    grid-column: span 1;
+    font-size: 9.5px;
   }
 }
 </style>
