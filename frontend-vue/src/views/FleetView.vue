@@ -215,7 +215,10 @@ async function handleRemove(cluster: Cluster) {
           <span class="pulse-dot pulse-dot-cyan"></span>
           <span>HYBRID & MULTI-CLOUD FEDERATION</span>
         </div>
-        <h1 class="view-title">Multi-Cluster Fleet Manager</h1>
+        <h1 class="view-title">
+          <span class="title-full">Multi-Cluster Fleet Manager</span>
+          <span class="title-mobile">🌐 Fleet Clusters</span>
+        </h1>
         <p class="view-desc">
           Centralized topology dashboard for on-premise, edge, Docker Swarm, and cloud Kubernetes clusters with live health monitoring and zero-downtime upgrades.
         </p>
@@ -223,10 +226,12 @@ async function handleRemove(cluster: Cluster) {
 
       <div class="header-actions">
         <button class="btn btn-secondary" :disabled="loading" @click="fetchFleet">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh Fleet' }}</span>
+          <span class="btn-text-full">{{ loading ? '⏳ Syncing...' : '🔄 Refresh Fleet' }}</span>
+          <span class="btn-text-mobile">{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
         </button>
         <button class="btn btn-primary" @click="showImportModal = true">
-          <span>+ Import Cluster</span>
+          <span class="btn-text-full">+ Import Cluster</span>
+          <span class="btn-text-mobile">+ Import</span>
         </button>
       </div>
     </div>
@@ -710,6 +715,22 @@ async function handleRemove(cluster: Cluster) {
   color: #fff;
   letter-spacing: -0.02em;
   line-height: 1.25;
+}
+
+.title-full {
+  display: inline;
+}
+
+.title-mobile {
+  display: none;
+}
+
+.btn-text-full {
+  display: inline;
+}
+
+.btn-text-mobile {
+  display: none;
 }
 
 .view-desc {
@@ -1264,8 +1285,25 @@ async function handleRemove(cluster: Cluster) {
   }
 
   .metrics-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 14px !important;
+  }
+
+  :deep(.metric-card),
+  .metric-card {
+    padding: 10px 12px !important;
+    min-height: auto !important;
+  }
+
+  :deep(.metric-card .metric-subtitle),
+  :deep(.metric-card .metric-desc) {
+    display: none !important;
+  }
+
+  :deep(.metric-card .metric-value),
+  .metric-card .metric-value {
+    font-size: 20px !important;
   }
 
   .swarm-section {
@@ -1317,51 +1355,147 @@ async function handleRemove(cluster: Cluster) {
 }
 
 @media (max-width: 640px) {
-  .view-tag {
-    font-size: var(--text-tag-fluid, 10px);
-    letter-spacing: 0.05em;
-    font-weight: 700;
-    margin-bottom: 4px;
+  .title-full {
+    display: none;
   }
 
-  .view-title {
-    font-size: var(--text-title-fluid, clamp(18px, 4.5vw, 22px));
-    font-weight: 700;
-    line-height: 1.25;
-    letter-spacing: -0.02em;
+  .title-mobile {
+    display: inline;
+  }
+
+  .view-tag {
+    display: none !important;
   }
 
   .view-desc {
-    font-size: var(--text-desc-fluid, 12px);
-    line-height: 1.45;
-    color: var(--text-muted);
-    margin-top: 4px;
+    display: none !important;
+  }
+
+  .view-title {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+  }
+
+  .view-header {
+    gap: 10px !important;
+    margin-bottom: 14px !important;
   }
 
   .header-actions {
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-    gap: 8px;
-    flex-wrap: nowrap;
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
   }
+
   .header-actions .btn {
-    flex: 1;
-    min-width: 0;
-    padding: 7px 10px;
-    font-size: 11.5px;
-    white-space: nowrap;
-    justify-content: center;
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
   }
+
+  .btn-text-full {
+    display: none;
+  }
+
+  .btn-text-mobile {
+    display: inline;
+  }
+
   .metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 14px !important;
   }
+
+  :deep(.metric-card),
+  .metric-card {
+    padding: 10px 12px !important;
+    min-height: auto !important;
+  }
+
+  :deep(.metric-card .metric-subtitle),
+  :deep(.metric-card .metric-desc) {
+    display: none !important;
+  }
+
+  :deep(.metric-card .metric-value),
+  .metric-card .metric-value {
+    font-size: 20px !important;
+  }
+
+  .swarm-section {
+    padding: 12px 14px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .swarm-desc {
+    display: none !important;
+  }
+
   .swarm-meta-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 8px 10px;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    padding: 0 !important;
   }
+
+  .swarm-meta-card {
+    padding: 8px 10px !important;
+  }
+
+  .swarm-meta-card .meta-label {
+    font-size: 9.5px !important;
+  }
+
+  .swarm-meta-card .meta-value {
+    font-size: 12px !important;
+  }
+
+  .swarm-actions-row .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    font-size: 11.5px !important;
+  }
+
+  .section-box {
+    padding: 12px 14px !important;
+  }
+
+  .box-subtitle {
+    display: none !important;
+  }
+
+  .empty-desc {
+    font-size: 12px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .fleet-features-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .feature-item {
+    padding: 8px 10px !important;
+  }
+
+  .feature-text {
+    display: none !important;
+  }
+
+  .empty-actions .btn {
+    width: 100% !important;
+    font-size: 12px !important;
+    padding: 8px 12px !important;
+  }
+
   .box-header {
     flex-direction: column;
     align-items: flex-start;
