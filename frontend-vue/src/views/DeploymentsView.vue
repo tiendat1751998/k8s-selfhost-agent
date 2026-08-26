@@ -3799,23 +3799,6 @@ function copyToClipboard(text: string) {
   padding-bottom: 4px;
 }
 
-.filter-deck::-webkit-scrollbar,
-.tabs-container::-webkit-scrollbar,
-.filter-pills-row::-webkit-scrollbar,
-.inspector-tabs-nav::-webkit-scrollbar,
-.wizard-nav::-webkit-scrollbar {
-  height: 4px;
-}
-
-.filter-deck::-webkit-scrollbar-thumb,
-.tabs-container::-webkit-scrollbar-thumb,
-.filter-pills-row::-webkit-scrollbar-thumb,
-.inspector-tabs-nav::-webkit-scrollbar-thumb,
-.wizard-nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
 .deployment-card {
   display: flex;
   flex-direction: column;
