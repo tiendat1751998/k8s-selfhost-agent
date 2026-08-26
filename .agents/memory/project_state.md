@@ -1,13 +1,19 @@
-# K8sControl Project State — Session Update 2026-08-26T16:18
+# K8sControl Project State — Session Update 2026-08-26T16:27
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `5be91ab` feat(ui): enforce 2x2 metric grid and smart button wrapping across all views
+Latest: `8c71879` fix(ui): upgrade overview hud to strict css grid across all breakpoints
 Previous commits this session:
+- `8c71879` fix(ui): upgrade overview hud to strict css grid across all breakpoints
+- `5f42d3c` docs(memory): record DEC-066 for platform-wide 2x2 grid and smart button wrapping
 - `5be91ab` feat(ui): enforce 2x2 metric grid and smart button wrapping across all views
+- `ee38d7d` docs(memory): record DEC-065 for comprehensive multi-view mobile QA audit
 - `851906f` fix(ui): fix overview hud 1-column mobile override and clean top hud navbar cramping
+- `e3982d3` docs(memory): record DEC-064 for overview hud 2x2 grid and top navbar ergonomics
 - `9513f13` feat(ui): implement 2x2 high-density metric grid and side-by-side header actions across all views
+- `222e43e` docs(memory): record DEC-063 2x2 high-density metric grid & mobile actions
 - `a7cb934` feat(ui): implement fluid mobile typography and streamline overview telemetry
+- `f421f11` docs(memory): record DEC-062 for fluid mobile typography & streamlined overview
 - `3e62058` docs(memory): record DEC-061 for 33-view mobile RWD overhaul
 - `0a66362` feat(frontend): comprehensive RWD and mobile PWA overhaul across all 33 views
 - `e8aaebd` feat(pwa): add progressive web app manifest, service worker, mobile bottom nav, and agents view rwd
@@ -111,6 +117,10 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 - workerdb1: 10.10.10.201 — Ubuntu 24.04.1 LTS, kernel 6.8.0-124-generic
 - SSH username: datdt
 - Agent deploy path: ~/k8s-agent, systemd user service (systemctl --user)
+- **Cluster Health Investigation**:
+  - Scrape engine successfully polls 5/6 real nodes on port 9100.
+  - Zero mock data; offline node alerts correctly surfaced for `k8sworker3` and manageable via Top HUD Alert Bell / Alert Center Modal.
+  - Summary telemetry accurately aggregates active nodes, container count, average CPU/RAM utilization, and cluster-wide throughput.
 
 ## Architecture
 - Backend: Go + chi, port 8080, Clean Architecture
@@ -149,8 +159,8 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
   - Per-interface network stats (ens33, docker0, docker_gwbridge, etc.)
 
 ### Overview Page Architecture
-- **Summary HUD**: Compact single-row flexbox, color-coded (green/amber/rose)
-  - NODES ONLINE, CONTAINERS, AVG CPU, AVG MEMORY, THROUGHPUT
+- **Summary HUD**: Strict CSS Grid across all breakpoints (Desktop >1200px: `repeat(5, minmax(0, 1fr))`, Tablet 769px-1200px: `repeat(3, minmax(0, 1fr))`, Mobile <=768px: `repeat(2, minmax(0, 1fr))` with storage card spanning 2 cols). Eliminates flex-wrap 1-column collapse and guarantees resilient density across any browser window width.
+  - NODES ONLINE, CONTAINERS, AVG CPU, AVG MEMORY, STORAGE (with micro-progress bars & tabular metrics)
 - **Request Flow Animation Bar**: Streamlined 38px laser particle simulator with dynamic glowing speed, live state pill, pulsating glyphs (`● ● ● →`), and traffic simulator indicator (duplicate metrics and duplicate Deep-Dive button removed).
 - **5-Min Saturation Trends**: SVG chart directly below HUD with consolidated Gateway Ingress metrics in header (`active`, `queued`, `latency ms`, `error %`), unified series legend toggles (`CPU`, `RAM`, `Throughput`), and a single `🔍 Deep-Dive` action trigger.
 - **Node Cards**: Drag-and-drop, stable sort, localStorage persistence, 2x2 resource matrix (RAM/Disk allocation & Live Net/Disk rates).
@@ -182,6 +192,7 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
 ## Completed Features (Latest Session: 2026-08-26)
+- **Overview HUD Strict CSS Grid Layout & Resizing Resilience** (DEC-067)
 - **Platform-Wide 2x2 Metric Grid Enforcement & Smart Button Wrapping** (DEC-066)
 - **Multi-View Mobile Web & RWD Comprehensive QA Verification** (DEC-065)
 - **Overview HUD 2x2 Grid Bug Fix & Top HUD Navbar Ergonomics Polish** (DEC-064)
