@@ -217,10 +217,10 @@ function formatBytes(bytes: number): string {
 }
 
 .hud-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--text-secondary, #94a3b8);
   white-space: nowrap;
   overflow: hidden;
@@ -251,12 +251,13 @@ function formatBytes(bytes: number): string {
 }
 
 .hud-value {
-  font-size: 1.6rem;
+  font-size: var(--text-number-fluid, 1.5rem);
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--text-primary, #f8fafc);
   font-family: var(--font-sans, system-ui, sans-serif);
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
   transition: color 0.5s ease;
 }
 
@@ -325,7 +326,7 @@ function formatBytes(bytes: number): string {
   align-items: center;
   padding: 2px 8px;
   border-radius: 6px;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -353,9 +354,53 @@ function formatBytes(bytes: number): string {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
+  .summary-hud-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
   .summary-hud-row .hud-card {
-    flex: 1 1 100%;
+    min-height: auto;
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .summary-hud-row .hud-card:last-child {
+    grid-column: span 2;
+  }
+
+  .hud-label {
+    font-size: 10.5px;
+  }
+
+  .hud-value {
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .hud-total {
+    font-size: 11px;
+  }
+
+  .badge {
+    font-size: 9px;
+    padding: 1px 6px;
+  }
+
+  .hud-card-footer-text {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .summary-hud-row {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-hud-row .hud-card:last-child {
+    grid-column: span 1;
   }
 }
 </style>

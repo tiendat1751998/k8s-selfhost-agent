@@ -2330,7 +2330,7 @@ function copyToClipboard(text: string) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--text-tag-fluid, 11px);
   font-weight: 700;
   color: var(--accent-cyan);
   letter-spacing: 0.08em;
@@ -2338,14 +2338,15 @@ function copyToClipboard(text: string) {
 }
 
 .view-title {
-  font-size: 24px;
+  font-size: var(--text-title-fluid, 24px);
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .view-desc {
-  font-size: 13px;
+  font-size: var(--text-desc-fluid, 13px);
   color: var(--text-secondary);
   line-height: 1.5;
   margin-top: 4px;
@@ -3918,12 +3919,25 @@ function copyToClipboard(text: string) {
     gap: 16px;
   }
 
+  .view-tag {
+    font-size: var(--text-tag-fluid, 10px);
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
   .view-title {
-    font-size: 20px;
+    font-size: var(--text-title-fluid, clamp(18px, 4.5vw, 22px));
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
   }
 
   .view-desc {
-    font-size: 12px;
+    font-size: var(--text-desc-fluid, 12px);
+    line-height: 1.45;
+    color: var(--text-muted);
+    margin-top: 4px;
   }
 
   .header-actions .btn {

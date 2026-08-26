@@ -48,6 +48,7 @@ defineProps<{
   font-weight: 700;
   line-height: 1.1;
   color: var(--color-on-dark);
+  font-variant-numeric: tabular-nums;
 }
 .stat-label {
   font-size: var(--text-caption);
@@ -59,11 +60,24 @@ defineProps<{
 @media (max-width: 640px) {
   .stat-card {
     padding: 12px 14px;
-    gap: var(--space-sm);
+    gap: var(--space-xs, 8px);
+  }
+
+  .stat-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
   }
 
   .stat-value {
-    font-size: 20px;
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-label {
+    font-size: 10.5px;
+    font-weight: 600;
   }
 }
 </style>
