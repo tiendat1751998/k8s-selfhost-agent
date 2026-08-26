@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-26T17:25
+# K8sControl Project State — Session Update 2026-08-26T17:35
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `e4d4826` fix(ui): de-clutter mobile web ui with concise typography, compact data chips, and streamlined hud cards
+Latest: `736b8e1` fix(ui): de-clutter multi-cluster fleet mobile view with 2x2 grid and compact actions
 Previous commits this session:
+- `e4d4826` fix(ui): de-clutter mobile web ui with concise typography, compact data chips, and streamlined hud cards
 - `d383226` feat(ui): revamp node diagnostics drawer with 2x2 gauge grid, compact tabs, and safe mobile scroll clearance
 - `ee6d3b5` fix(ui): polish overview storage hud card, streamline request flow bar, and compact header action buttons
 - `601cd44` fix(ui): enhance mobile drawer exit with pinned top-right close button and thumb-friendly footer close button
@@ -196,6 +197,7 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
 ## Completed Features (Latest Session: 2026-08-26)
+- **Multi-Cluster Fleet Mobile Web & PWA Typography De-Cluttering — Screen 1.1** (DEC-073)
 - **Mobile Web UI De-Cluttering, Concise Typography & Streamlined HUD Cards** (DEC-072)
 - **Node Diagnostics Drawer Mobile/PWA Ergonomics & 2x2 Gauge Grid Overhaul** (DEC-071)
 - **Overview HUD Card 5 Ergonomics, Streamlined Flow Bar & Compact Header Actions** (DEC-070)
