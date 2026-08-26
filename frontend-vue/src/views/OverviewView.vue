@@ -775,12 +775,13 @@ onUnmounted(() => {
         <div class="header-badge-group">
           <span class="badge" :class="isLiveWs ? 'badge-emerald' : 'badge-cyan'">
             <span class="pulse-dot" :class="{ 'pulse-active': isLiveWs }"></span>
-            {{ isLiveWs ? 'LIVE WEBSOCKET STREAM' : 'TELEMETRY SYNC' }}
+            <span class="badge-text-full">{{ isLiveWs ? 'LIVE WEBSOCKET STREAM' : 'TELEMETRY SYNC' }}</span>
+            <span class="badge-text-mobile">{{ isLiveWs ? '● LIVE' : 'SYNC' }}</span>
           </span>
           <span class="badge badge-indigo badge-auto-refresh">Auto-Refresh 5s</span>
           <span class="last-sync-text">Updated: {{ lastUpdated.toLocaleTimeString() }}</span>
         </div>
-        <h1 class="page-title">Infrastructure &amp; Node Mesh Overview</h1>
+        <h1 class="page-title"><span class="title-full">Infrastructure &amp; Node Mesh Overview</span><span class="title-mobile">⚡ Cluster Overview</span></h1>
         <p class="page-desc">
           Real-time cluster topology, container saturation metrics, dynamic resource gauges, and autonomous threshold alerting.
         </p>
@@ -792,7 +793,8 @@ onUnmounted(() => {
           <span>Refresh</span>
         </button>
         <button class="btn btn-secondary" @click="router.push('/deployments')">
-          <span>🚀 Deployments</span>
+          <span class="btn-text-full">🚀 Deployments</span>
+          <span class="btn-text-mobile">🚀 Apps</span>
         </button>
         <button class="btn btn-secondary" @click="router.push('/hosts')">
           <span>🖥️ Hosts</span>
@@ -859,7 +861,7 @@ onUnmounted(() => {
               <div class="trend-title-left">
                 <h3 class="sidebar-card-title">
                   <span class="title-full">📈 5-Min Saturation Trends</span>
-                  <span class="title-mobile">📈 5-Min Trends</span>
+                  <span class="title-mobile">📈 Trends</span>
                 </h3>
                 <span class="badge badge-indigo font-mono">LIVE BUFFER</span>
               </div>
@@ -1487,6 +1489,22 @@ onUnmounted(() => {
   display: none;
 }
 
+.badge-text-full {
+  display: inline;
+}
+
+.badge-text-mobile {
+  display: none;
+}
+
+.btn-text-full {
+  display: inline;
+}
+
+.btn-text-mobile {
+  display: none;
+}
+
 .trend-btn-mobile {
   display: none;
 }
@@ -2085,6 +2103,14 @@ onUnmounted(() => {
     display: none;
   }
 
+  .badge-text-full {
+    display: none;
+  }
+
+  .badge-text-mobile {
+    display: inline;
+  }
+
   .last-sync-text {
     display: inline-block;
     font-size: 10px;
@@ -2115,6 +2141,14 @@ onUnmounted(() => {
     border-radius: 8px;
   }
 
+  .btn-text-full {
+    display: none;
+  }
+
+  .btn-text-mobile {
+    display: inline;
+  }
+
   /* Trend Chart Card */
   .trend-chart-card {
     padding: 12px 10px;
@@ -2136,7 +2170,7 @@ onUnmounted(() => {
     gap: 4px;
   }
 
-  /* Row 1: Flex row with 📈 5-Min Trends + LIVE BUFFER (left) and [🔍 Deep-Dive] (right) */
+  /* Row 1: Flex row with 📈 Trends + LIVE BUFFER (left) and [🔍 Deep-Dive] (right) */
   .trend-title-top-row {
     display: flex;
     align-items: center;
@@ -2148,6 +2182,10 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+
+  .trend-title-left .badge-indigo {
+    display: none;
   }
 
   .title-full {
@@ -2212,7 +2250,7 @@ onUnmounted(() => {
   }
 
   .trend-metric-pill .pill-lbl {
-    font-size: 9.5px;
+    display: none;
   }
 
   /* Row 4: Legend pills in clean compact flex row */
