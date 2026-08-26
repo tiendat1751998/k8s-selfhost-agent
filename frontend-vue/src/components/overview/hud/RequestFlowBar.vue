@@ -291,19 +291,8 @@ const flowAnimationDuration = computed(() => {
     display: none;
   }
 
-  .flow-indicator-group {
-    gap: 6px;
-  }
-
   .flow-badge {
-    padding: 2px 6px;
-    font-size: 9px;
-    gap: 4px;
-  }
-
-  .flow-status-dot {
-    width: 5px;
-    height: 5px;
+    display: none;
   }
 }
 </style>

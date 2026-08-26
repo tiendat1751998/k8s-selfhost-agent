@@ -34,7 +34,10 @@ function formatBytes(bytes: number): string {
     <!-- Card 1: Nodes -->
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
-        <span class="hud-label">Nodes Online</span>
+        <span class="hud-label">
+          <span class="label-full">Nodes Online</span>
+          <span class="label-mobile">Nodes</span>
+        </span>
         <span
           class="status-indicator-dot"
           :class="overview.healthy_nodes === overview.total_nodes && overview.total_nodes > 0 ? 'status-green' : 'status-amber'"
@@ -62,14 +65,20 @@ function formatBytes(bytes: number): string {
         ></div>
       </div>
       <div class="hud-card-footer-text font-mono">
-        <span :class="overview.healthy_nodes === overview.total_nodes ? 'text-emerald' : 'text-amber'">🖥️ {{ overview.healthy_nodes }} Online · {{ (overview.total_nodes || 0) - (overview.healthy_nodes || 0) }} Offline</span>
+        <span :class="overview.healthy_nodes === overview.total_nodes ? 'text-emerald' : 'text-amber'">
+          <span class="footer-full">🖥️ {{ overview.healthy_nodes }} Online · {{ (overview.total_nodes || 0) - (overview.healthy_nodes || 0) }} Offline</span>
+          <span class="footer-mobile">{{ overview.healthy_nodes }} up · {{ (overview.total_nodes || 0) - (overview.healthy_nodes || 0) }} down</span>
+        </span>
       </div>
     </div>
 
     <!-- Card 2: Containers -->
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
-        <span class="hud-label">Containers</span>
+        <span class="hud-label">
+          <span class="label-full">Containers</span>
+          <span class="label-mobile">Containers</span>
+        </span>
         <span class="hud-icon">📦</span>
       </div>
       <div class="hud-value-row">
@@ -90,14 +99,20 @@ function formatBytes(bytes: number): string {
         ></div>
       </div>
       <div class="hud-card-footer-text font-mono">
-        <span class="text-cyan">🚀 Across {{ overview.healthy_nodes || 0 }} Active Nodes</span>
+        <span class="text-cyan">
+          <span class="footer-full">🚀 Across {{ overview.healthy_nodes || 0 }} Active Nodes</span>
+          <span class="footer-mobile">{{ overview.healthy_nodes || 0 }} active node{{ (overview.healthy_nodes || 0) === 1 ? '' : 's' }}</span>
+        </span>
       </div>
     </div>
 
     <!-- Card 3: Avg CPU -->
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
-        <span class="hud-label">Avg CPU Saturation</span>
+        <span class="hud-label">
+          <span class="label-full">Avg CPU Saturation</span>
+          <span class="label-mobile">CPU</span>
+        </span>
         <span class="hud-icon">⚡</span>
       </div>
       <div class="hud-value-row">
@@ -116,14 +131,20 @@ function formatBytes(bytes: number): string {
         ></div>
       </div>
       <div class="hud-card-footer-text font-mono">
-        <span class="text-violet">🔥 Peak: {{ peakCpuNode?.node_name || 'k8smater' }} ({{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%)</span>
+        <span class="text-violet">
+          <span class="footer-full">🔥 Peak: {{ peakCpuNode?.node_name || 'k8smater' }} ({{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%)</span>
+          <span class="footer-mobile">🔥 {{ peakCpuNode?.node_name || 'k8smater' }} {{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%</span>
+        </span>
       </div>
     </div>
 
     <!-- Card 4: Avg RAM -->
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
-        <span class="hud-label">Avg Memory Saturation</span>
+        <span class="hud-label">
+          <span class="label-full">Avg Memory Saturation</span>
+          <span class="label-mobile">Memory</span>
+        </span>
         <span class="hud-icon">🧠</span>
       </div>
       <div class="hud-value-row">
@@ -142,14 +163,20 @@ function formatBytes(bytes: number): string {
         ></div>
       </div>
       <div class="hud-card-footer-text font-mono">
-        <span class="text-cyan">📊 {{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}</span>
+        <span class="text-cyan">
+          <span class="footer-full">📊 {{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}</span>
+          <span class="footer-mobile">{{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}</span>
+        </span>
       </div>
     </div>
 
     <!-- Card 5: Cluster Storage -->
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
-        <span class="hud-label">Cluster Storage</span>
+        <span class="hud-label">
+          <span class="label-full">Cluster Storage</span>
+          <span class="label-mobile">Storage</span>
+        </span>
         <span class="hud-icon">💾</span>
       </div>
       <div class="hud-value-row">
@@ -168,7 +195,10 @@ function formatBytes(bytes: number): string {
         ></div>
       </div>
       <div class="hud-card-footer-text font-mono">
-        <span class="text-emerald">💽 {{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }}</span>
+        <span class="text-emerald">
+          <span class="footer-full">💽 {{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }}</span>
+          <span class="footer-mobile">{{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }}</span>
+        </span>
       </div>
     </div>
   </section>
@@ -211,66 +241,72 @@ function formatBytes(bytes: number): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
 }
 
 .hud-label {
   font-size: 11px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--text-secondary, #94a3b8);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.label-full {
+  display: inline;
+}
+
+.label-mobile {
+  display: none;
+}
+
+.footer-full {
+  display: inline;
+}
+
+.footer-mobile {
+  display: none;
 }
 
 .hud-icon {
-  font-size: 13px;
-  line-height: 1;
+  font-size: 14px;
+  opacity: 0.8;
 }
 
 .status-indicator-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
 }
 
-.status-green { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.6); }
-.status-amber { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.6); }
-.status-red { background: #f43f5e; box-shadow: 0 0 8px rgba(244, 63, 94, 0.6); }
+.status-green {
+  background: #10b981;
+  color: #10b981;
+}
+
+.status-amber {
+  background: #f59e0b;
+  color: #f59e0b;
+}
 
 .hud-value-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
 }
 
 .hud-value {
-  font-size: var(--text-number-fluid, 1.5rem);
+  font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.03em;
-  color: var(--text-primary, #f8fafc);
-  font-family: var(--font-sans, system-ui, sans-serif);
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  transition: color 0.5s ease;
+  line-height: 1;
 }
 
 .hud-total {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-muted, #64748b);
-  letter-spacing: normal;
-}
-
-.hud-badge-tag {
-  font-size: 10px;
-  font-weight: 700;
-  font-family: var(--font-mono, monospace);
-  transition: color 0.5s ease;
 }
 
 .hud-progress-track {
@@ -341,54 +377,43 @@ function formatBytes(bytes: number): string {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
   }
-  .summary-hud-row .hud-card:nth-child(4) {
-    grid-column: span 1;
-  }
-  .summary-hud-row .hud-card:nth-child(5) {
-    grid-column: span 2;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
 }
 
 @media (max-width: 768px) {
   .summary-hud-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 8px !important;
-  }
-  .summary-hud-row .hud-card {
-    min-height: auto;
-    padding: 8px 10px !important;
-    gap: 4px !important;
-    border-radius: 10px;
-  }
-  .summary-hud-row .hud-card:last-child {
-    grid-column: span 2 !important;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 8px 12px !important;
-    gap: 6px !important;
-  }
-  .summary-hud-row .hud-card:last-child .hud-progress-track {
-    display: block;
-    height: 3px;
-  }
-  .summary-hud-row .hud-card:last-child .hud-card-footer-text {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: nowrap;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 }
 
 @media (max-width: 640px) {
+  .label-full {
+    display: none;
+  }
+
+  .label-mobile {
+    display: inline;
+  }
+
+  .footer-full {
+    display: none;
+  }
+
+  .footer-mobile {
+    display: inline;
+  }
+
+  .hud-card:nth-child(3) .badge,
+  .hud-card:nth-child(4) .badge,
+  .hud-card:nth-child(5) .badge {
+    display: none;
+  }
+
   .hud-label {
     font-size: 9.5px;
     letter-spacing: 0.02em;
     font-weight: 700;
   }
-
   .hud-value {
     font-size: 17px;
     font-weight: 700;
