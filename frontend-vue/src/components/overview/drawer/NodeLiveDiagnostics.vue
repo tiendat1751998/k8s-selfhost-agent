@@ -984,7 +984,7 @@ function formatIoRate(bytesPerSec?: number): string {
 
 .hardware-gauges-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1022,6 +1022,7 @@ function formatIoRate(bytesPerSec?: number): string {
   white-space: nowrap;
 }
 
+.hw-gauge-val,
 .hw-gauge-value {
   font-size: 16px;
   font-weight: 800;
@@ -1068,6 +1069,36 @@ function formatIoRate(bytesPerSec?: number): string {
   align-items: center;
   justify-content: space-between;
   gap: 4px;
+}
+
+@media (max-width: 1024px) {
+  .hardware-gauges-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .hw-gauge-card {
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+    gap: 6px !important;
+  }
+
+  .hw-gauge-label {
+    font-size: 9.5px !important;
+  }
+
+  .hw-gauge-val,
+  .hw-gauge-value {
+    font-size: 15px !important;
+  }
+
+  .hw-progress-track {
+    height: 3px !important;
+  }
+
+  .hw-gauge-sub {
+    font-size: 9.5px !important;
+  }
 }
 
 .bw-split {

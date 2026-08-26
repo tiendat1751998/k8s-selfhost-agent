@@ -289,5 +289,30 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
   }
 }
 
+@media (max-width: 640px) {
+  .node-id-subtag {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+
+  .node-quick-stats {
+    padding: 6px 10px;
+    gap: 6px 10px;
+    border-radius: 8px;
+  }
+
+  .qs-label {
+    font-size: 8.5px;
+  }
+
+  .qs-val {
+    font-size: 11px;
+  }
+}
+
 .font-mono { font-family: var(--font-mono, monospace); }
 </style>
