@@ -456,8 +456,9 @@ function handleNavigateToHost(nodeNameOrId: string) {
           <!-- User Profile & Sign Out -->
           <div v-if="authStore.user" class="hud-user">
             <span class="user-role font-mono">{{ authStore.user.role || 'ADMIN' }}</span>
-            <button class="btn btn-secondary btn-sm" title="Sign Out" @click="handleLogout">
-              <span>Sign Out</span>
+            <button class="btn btn-secondary btn-sm btn-logout" title="Sign Out" @click="handleLogout">
+              <span class="logout-text">Sign Out</span>
+              <span class="logout-icon" aria-hidden="true">🚪</span>
             </button>
           </div>
         </div>
@@ -1039,6 +1040,10 @@ function handleNavigateToHost(nodeNameOrId: string) {
   border-radius: 6px;
 }
 
+.btn-logout .logout-icon {
+  display: none;
+}
+
 .page-container {
   flex: 1;
   padding: 28px;
@@ -1279,17 +1284,18 @@ function handleNavigateToHost(nodeNameOrId: string) {
 @media (max-width: 640px) {
   .top-hud {
     padding: 0 10px;
-    gap: 8px;
+    gap: 6px;
   }
 
   .hud-left {
-    gap: 8px;
+    gap: 6px;
     flex-shrink: 0;
   }
 
   .hud-right {
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
+    align-items: center;
   }
 
   .breadcrumb-nav {
@@ -1305,24 +1311,21 @@ function handleNavigateToHost(nodeNameOrId: string) {
     display: none;
   }
 
-  .pwa-install-hud-btn .pwa-hud-label {
-    display: none;
-  }
-
   .pwa-install-hud-btn {
-    padding: 5px 6px;
+    display: none !important;
   }
 
   .tenant-selector-wrap {
-    max-width: 120px;
+    max-width: 100px;
     padding: 4px 6px;
     gap: 4px;
     flex-shrink: 1;
     min-width: 0;
+    overflow: hidden;
   }
 
   .tenant-select {
-    max-width: 80px;
+    max-width: 70px;
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;
@@ -1330,12 +1333,29 @@ function handleNavigateToHost(nodeNameOrId: string) {
   }
 
   .hud-user {
-    padding-left: 6px;
-    gap: 6px;
+    padding-left: 4px;
+    gap: 4px;
+    border-left: 1px solid var(--border-subtle);
+    flex-shrink: 0;
   }
 
   .user-role {
     display: none;
+  }
+
+  .btn-logout {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .btn-logout .logout-text {
+    display: none;
+  }
+
+  .btn-logout .logout-icon {
+    display: inline-block;
+    font-size: 13px;
+    line-height: 1;
   }
 
   .page-container {
