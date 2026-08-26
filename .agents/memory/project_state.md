@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-25T17:05
+# K8sControl Project State — Session Update 2026-08-26T08:51
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `e8aaebd` feat(pwa): add progressive web app manifest, service worker, mobile bottom nav, and agents view rwd
+Latest: `0a66362` feat(frontend): comprehensive RWD and mobile PWA overhaul across all 33 views
 Previous commits this session:
+- `0a66362` feat(frontend): comprehensive RWD and mobile PWA overhaul across all 33 views
 - `e8aaebd` feat(pwa): add progressive web app manifest, service worker, mobile bottom nav, and agents view rwd
 - `9a614b0` fix(frontend): overhaul mobile responsive layout for trend header, chart x-axis, and top hud
 - `013aa9a` fix(frontend): add hierarchical tie-breaking for process sorting and replace container unshift with push
@@ -175,7 +176,8 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 037:plugins 038:scaffold_templates 039:ecosystem_tools 040:compute_hosts
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
-## Completed Features (Latest Session: 2026-08-25)
+## Completed Features (Latest Session: 2026-08-26)
+- **Project-Wide Responsive Web Design (RWD) & Mobile PWA Overhaul Across All 33 Views** (DEC-061)
 - **Progressive Web App (PWA), Service Worker Caching, Mobile Bottom Bar & Agents RWD** (DEC-060)
 - **Mobile Responsive UI Overhaul for Telemetry & Navigation** (DEC-059)
 - **Hierarchical Tie-Breaking for Process Sorting & Container Push** (DEC-058)
