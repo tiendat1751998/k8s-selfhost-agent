@@ -47,30 +47,30 @@ func NewResourceRepoWithInterface(client kubernetes.Interface, cm *cluster.Clien
 }
 
 func (r *ResourceRepo) getK8sClient(ctx context.Context, clusterID string) (kubernetes.Interface, error) {
-	var client kubernetes.Interface
 	if r.clientManager != nil && clusterID != "" && clusterID != "local" && clusterID != "default" && clusterID != "in-cluster" {
 		cli, err := r.clientManager.GetK8sClient(ctx, clusterID)
 		if err == nil && cli != nil {
-			client = cli
+			return cli, nil
 		}
 	}
 
-	if client == nil {
+	if r.client != nil {
 		if cs, ok := r.client.(*kubernetes.Clientset); ok {
-			var err error
-			client, err = getClient(ctx, cs)
-			if err != nil {
-				return nil, err
+			if cs != nil {
+				cli, err := getClient(ctx, cs)
+				if err != nil {
+					return nil, err
+				}
+				if cli != nil {
+					return cli, nil
+				}
 			}
 		} else {
-			client = r.client
+			return r.client, nil
 		}
 	}
 
-	if client == nil {
-		return nil, ErrK8sUnavailable
-	}
-	return client, nil
+	return nil, ErrK8sUnavailable
 }
 
 // ListNamespaces lists all namespaces in the specified cluster.
@@ -123,6 +123,8 @@ func (r *ResourceRepo) DeleteNamespace(ctx context.Context, clusterID, name stri
 func normalizeKind(kind string) string {
 	k := strings.ToLower(strings.TrimSpace(kind))
 	switch k {
+	case "pod", "pods", "po":
+		return "pods"
 	case "configmap", "configmaps", "cm":
 		return "configmaps"
 	case "secret", "secrets":
@@ -205,6 +207,19 @@ func (r *ResourceRepo) ListResources(ctx context.Context, clusterID, kind, names
 	var results []map[string]interface{}
 
 	switch k {
+	case "pods":
+		list, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("listing pods: %w", err)
+		}
+		for _, item := range list.Items {
+			m, err := toMap(item, "v1", "Pod")
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, m)
+		}
+
 	case "configmaps":
 		list, err := client.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
@@ -369,6 +384,13 @@ func (r *ResourceRepo) GetResource(ctx context.Context, clusterID, kind, namespa
 	k := normalizeKind(kind)
 
 	switch k {
+	case "pods":
+		obj, err := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return toMap(obj, "v1", "Pod")
+
 	case "configmaps":
 		obj, err := client.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
@@ -841,6 +863,8 @@ func (r *ResourceRepo) DeleteResource(ctx context.Context, clusterID, kind, name
 	k := normalizeKind(kind)
 
 	switch k {
+	case "pods":
+		return client.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	case "configmaps":
 		return client.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	case "secrets":

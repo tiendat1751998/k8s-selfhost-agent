@@ -362,6 +362,67 @@ data:
 	}
 }
 
+func TestResourceRepo_Pods(t *testing.T) {
+	ctx := context.Background()
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "default",
+			Labels: map[string]string{
+				"app": "test",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "test-container",
+					Image: "nginx:alpine",
+				},
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+	fakeClient := fake.NewSimpleClientset(pod)
+	repo := &ResourceRepo{client: fakeClient}
+
+	// 1. List Pods
+	list, err := repo.ListResources(ctx, "", "pods", "default")
+	if err != nil {
+		t.Fatalf("ListResources pods failed: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 pod, got %d", len(list))
+	}
+	if list[0]["metadata"].(map[string]interface{})["name"] != "test-pod" {
+		t.Fatalf("unexpected pod name: %v", list[0])
+	}
+
+	// 2. Get Pod
+	item, err := repo.GetResource(ctx, "", "pod", "default", "test-pod")
+	if err != nil {
+		t.Fatalf("GetResource pod failed: %v", err)
+	}
+	if item["metadata"].(map[string]interface{})["name"] != "test-pod" {
+		t.Fatalf("unexpected pod name: %v", item)
+	}
+
+	// 3. Delete Pod
+	if err := repo.DeleteResource(ctx, "", "pods", "default", "test-pod"); err != nil {
+		t.Fatalf("DeleteResource pod failed: %v", err)
+	}
+
+	// 4. Verify Deleted
+	listAfter, err := repo.ListResources(ctx, "", "pods", "default")
+	if err != nil {
+		t.Fatalf("ListResources after delete failed: %v", err)
+	}
+	if len(listAfter) != 0 {
+		t.Fatalf("expected 0 pods after delete, got %d", len(listAfter))
+	}
+}
+
 // Suppress unused imports check if any
 var _ = appsv1.Deployment{}
 var _ = batchv1.Job{}

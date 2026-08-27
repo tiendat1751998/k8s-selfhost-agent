@@ -74,6 +74,10 @@ func isK8sUnavailable(err error) bool {
 		strings.Contains(msg, "unable to connect to the server") ||
 		strings.Contains(msg, "k8s_unavailable") ||
 		strings.Contains(msg, "dial tcp") ||
+		strings.Contains(msg, "connectex") ||
+		strings.Contains(msg, "certificate signed by unknown authority") ||
+		strings.Contains(msg, "x509") ||
+		strings.Contains(msg, "tls") ||
 		strings.Contains(msg, "connection reset by peer")
 }
 
@@ -92,7 +96,11 @@ func getNamespaceQuery(r *http.Request) string {
 	if ns == "" {
 		ns = r.URL.Query().Get("namespace")
 	}
-	return strings.TrimSpace(ns)
+	ns = strings.TrimSpace(ns)
+	if ns == "all" || ns == "_all" {
+		return ""
+	}
+	return ns
 }
 
 // ListNamespaces handles GET /api/v1/k8s/{cluster}/namespaces
