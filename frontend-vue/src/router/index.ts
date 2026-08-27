@@ -1,4 +1,4 @@
-﻿import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import OverviewView from '../views/OverviewView.vue'
 import IncidentsView from '../views/IncidentsView.vue'
@@ -110,6 +110,12 @@ const router = createRouter({
       path: '/explorer',
       name: 'explorer',
       component: ExplorerView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/helm',
+      name: 'helm',
+      component: () => import('../views/HelmCatalogView.vue'),
       meta: { requiresAuth: true }
     },
 
