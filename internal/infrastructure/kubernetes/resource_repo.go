@@ -147,6 +147,10 @@ func normalizeKind(kind string) string {
 		return "persistentvolumeclaims"
 	case "storageclass", "storageclasses", "sc":
 		return "storageclasses"
+	case "node", "nodes", "no":
+		return "nodes"
+	case "event", "events", "ev":
+		return "events"
 	default:
 		return k
 	}
@@ -364,6 +368,32 @@ func (r *ResourceRepo) ListResources(ctx context.Context, clusterID, kind, names
 			results = append(results, m)
 		}
 
+	case "nodes":
+		list, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("listing nodes: %w", err)
+		}
+		for _, item := range list.Items {
+			m, err := toMap(item, "v1", "Node")
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, m)
+		}
+
+	case "events":
+		list, err := client.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("listing events: %w", err)
+		}
+		for _, item := range list.Items {
+			m, err := toMap(item, "v1", "Event")
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, m)
+		}
+
 	default:
 		return nil, fmt.Errorf("unsupported resource kind: %s", kind)
 	}
@@ -472,6 +502,20 @@ func (r *ResourceRepo) GetResource(ctx context.Context, clusterID, kind, namespa
 			return nil, err
 		}
 		return toMap(obj, "storage.k8s.io/v1", "StorageClass")
+
+	case "nodes":
+		obj, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return toMap(obj, "v1", "Node")
+
+	case "events":
+		obj, err := client.CoreV1().Events(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return toMap(obj, "v1", "Event")
 
 	default:
 		return nil, fmt.Errorf("unsupported resource kind: %s", kind)
@@ -643,6 +687,17 @@ func (r *ResourceRepo) CreateResource(ctx context.Context, clusterID, kind, name
 			return nil, fmt.Errorf("creating storageclass: %w", err)
 		}
 		return toMap(created, "storage.k8s.io/v1", "StorageClass")
+
+	case "nodes":
+		var obj corev1.Node
+		if err := fromMap(manifest, &obj); err != nil {
+			return nil, fmt.Errorf("decoding node manifest: %w", err)
+		}
+		created, err := client.CoreV1().Nodes().Create(ctx, &obj, metav1.CreateOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("creating node: %w", err)
+		}
+		return toMap(created, "v1", "Node")
 
 	default:
 		return nil, fmt.Errorf("unsupported resource kind: %s", kind)
@@ -848,6 +903,20 @@ func (r *ResourceRepo) UpdateResource(ctx context.Context, clusterID, kind, name
 		}
 		return toMap(updated, "storage.k8s.io/v1", "StorageClass")
 
+	case "nodes":
+		var obj corev1.Node
+		if err := fromMap(manifest, &obj); err != nil {
+			return nil, fmt.Errorf("decoding node manifest: %w", err)
+		}
+		if obj.Name == "" {
+			obj.Name = name
+		}
+		updated, err := client.CoreV1().Nodes().Update(ctx, &obj, metav1.UpdateOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("updating node %s: %w", name, err)
+		}
+		return toMap(updated, "v1", "Node")
+
 	default:
 		return nil, fmt.Errorf("unsupported resource kind: %s", kind)
 	}
@@ -887,6 +956,10 @@ func (r *ResourceRepo) DeleteResource(ctx context.Context, clusterID, kind, name
 		return client.CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	case "storageclasses":
 		return client.StorageV1().StorageClasses().Delete(ctx, name, metav1.DeleteOptions{})
+	case "nodes":
+		return client.CoreV1().Nodes().Delete(ctx, name, metav1.DeleteOptions{})
+	case "events":
+		return client.CoreV1().Events(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	default:
 		return fmt.Errorf("unsupported resource kind: %s", kind)
 	}
@@ -957,5 +1030,145 @@ func (r *ResourceRepo) ApplyYAML(ctx context.Context, clusterID, namespace strin
 		}
 	}
 
+	return nil
+}
+
+// CordonNode sets node.Spec.Unschedulable to true.
+func (r *ResourceRepo) CordonNode(ctx context.Context, clusterID, name string) error {
+	client, err := r.getK8sClient(ctx, clusterID)
+	if err != nil {
+		return err
+	}
+
+	node, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("getting node %s: %w", name, err)
+	}
+
+	node.Spec.Unschedulable = true
+	_, err = client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("cordoning node %s: %w", name, err)
+	}
+	return nil
+}
+
+// UncordonNode sets node.Spec.Unschedulable to false.
+func (r *ResourceRepo) UncordonNode(ctx context.Context, clusterID, name string) error {
+	client, err := r.getK8sClient(ctx, clusterID)
+	if err != nil {
+		return err
+	}
+
+	node, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("getting node %s: %w", name, err)
+	}
+
+	node.Spec.Unschedulable = false
+	_, err = client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("uncordoning node %s: %w", name, err)
+	}
+	return nil
+}
+
+// DrainNode cordons the node and gracefully deletes pods running on it.
+func (r *ResourceRepo) DrainNode(ctx context.Context, clusterID, name string, gracePeriodSeconds int64, ignoreDaemonSets bool) error {
+	client, err := r.getK8sClient(ctx, clusterID)
+	if err != nil {
+		return err
+	}
+
+	// 1. Cordon the node
+	if err := r.CordonNode(ctx, clusterID, name); err != nil {
+		return fmt.Errorf("cordoning node during drain: %w", err)
+	}
+
+	// 2. List pods running on the node
+	podList, err := client.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		FieldSelector: "spec.nodeName=" + name,
+	})
+	if err != nil {
+		return fmt.Errorf("listing pods on node %s: %w", name, err)
+	}
+
+	// 3. Delete pods gracefully
+	var deleteOpts metav1.DeleteOptions
+	if gracePeriodSeconds >= 0 {
+		deleteOpts.GracePeriodSeconds = &gracePeriodSeconds
+	}
+
+	for _, p := range podList.Items {
+		if p.Spec.NodeName != "" && p.Spec.NodeName != name {
+			continue
+		}
+		// Skip mirror pods
+		if _, isMirror := p.Annotations[corev1.MirrorPodAnnotationKey]; isMirror {
+			continue
+		}
+		// Skip DaemonSet pods when ignoreDaemonSets is true
+		isDaemonSet := false
+		for _, ref := range p.OwnerReferences {
+			if strings.EqualFold(ref.Kind, "DaemonSet") {
+				isDaemonSet = true
+				break
+			}
+		}
+		if isDaemonSet && ignoreDaemonSets {
+			continue
+		}
+
+		if err := client.CoreV1().Pods(p.Namespace).Delete(ctx, p.Name, deleteOpts); err != nil && !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("deleting pod %s/%s during drain: %w", p.Namespace, p.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// UpdateNodeTaints updates taints on the specified node.
+func (r *ResourceRepo) UpdateNodeTaints(ctx context.Context, clusterID, name string, taints []corev1.Taint) error {
+	client, err := r.getK8sClient(ctx, clusterID)
+	if err != nil {
+		return err
+	}
+
+	node, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("getting node %s: %w", name, err)
+	}
+
+	node.Spec.Taints = taints
+	_, err = client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("updating taints for node %s: %w", name, err)
+	}
+	return nil
+}
+
+// UpdateNodeLabels updates labels on the specified node.
+func (r *ResourceRepo) UpdateNodeLabels(ctx context.Context, clusterID, name string, labels map[string]string) error {
+	client, err := r.getK8sClient(ctx, clusterID)
+	if err != nil {
+		return err
+	}
+
+	node, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("getting node %s: %w", name, err)
+	}
+
+	if node.Labels == nil {
+		node.Labels = make(map[string]string)
+	}
+	for k, v := range labels {
+		node.Labels[k] = v
+	}
+
+	_, err = client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("updating labels for node %s: %w", name, err)
+	}
 	return nil
 }

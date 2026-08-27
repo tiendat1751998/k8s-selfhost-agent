@@ -10,11 +10,16 @@ import YamlEditorModal from '../components/k8s/YamlEditorModal.vue'
 import CreateResourceModal from '../components/k8s/CreateResourceModal.vue'
 import PodTerminal from '../components/k8s/PodTerminal.vue'
 import PodLogViewer from '../components/k8s/PodLogViewer.vue'
+import EventsTimeline from '../components/k8s/EventsTimeline.vue'
 import {
   k8sApi,
   type K8sResource,
   type K8sNamespace,
-  type ResourceKind
+  type ResourceKind,
+  type NodeTaint,
+  type NodeCondition,
+  type NodeSystemInfo,
+  type K8sEvent
 } from '../api/k8s'
 import { fleetApi, type Cluster } from '../api/compute'
 import { jsonToYaml } from '../utils/yaml'
@@ -48,7 +53,7 @@ const yamlEditorTitle = ref('Apply Kubernetes Manifest')
 // Detail Drawer State
 const showDetailDrawer = ref(false)
 const selectedResource = ref<K8sResource | null>(null)
-const activeDrawerTab = ref<'overview' | 'yaml'>('overview')
+const activeDrawerTab = ref<'overview' | 'events' | 'yaml'>('overview')
 const drawerYamlCopied = ref(false)
 
 // New Namespace Modal State
@@ -78,33 +83,47 @@ interface KindCategory {
 
 const kindCategories: KindCategory[] = [
   {
+    title: 'Cluster / Infrastructure',
+    icon: '🖥️',
+    items: [
+      { label: 'Nodes', kind: 'nodes', icon: '🖥️' },
+    ],
+  },
+  {
     title: 'Workloads',
-    icon: '??',
+    icon: '📦',
     items: [
       { label: 'Pods', kind: 'pods', icon: '🫛' },
-      { label: 'Deployments', kind: 'deployments', icon: '??' },
-      { label: 'StatefulSets', kind: 'statefulsets', icon: '??' },
-      { label: 'DaemonSets', kind: 'daemonsets', icon: '???' },
-      { label: 'Jobs', kind: 'jobs', icon: '??' },
-      { label: 'CronJobs', kind: 'cronjobs', icon: '??' },
+      { label: 'Deployments', kind: 'deployments', icon: '🚀' },
+      { label: 'StatefulSets', kind: 'statefulsets', icon: '🗄️' },
+      { label: 'DaemonSets', kind: 'daemonsets', icon: '🛡️' },
+      { label: 'Jobs', kind: 'jobs', icon: '⚡' },
+      { label: 'CronJobs', kind: 'cronjobs', icon: '⏰' },
     ],
   },
   {
     title: 'Config & Storage',
-    icon: '??',
+    icon: '💾',
     items: [
-      { label: 'ConfigMaps', kind: 'configmaps', icon: '??' },
-      { label: 'Secrets', kind: 'secrets', icon: '??' },
-      { label: 'PersistentVolumeClaims', kind: 'persistentvolumeclaims', icon: '??' },
-      { label: 'StorageClasses', kind: 'storageclasses', icon: '??' },
+      { label: 'ConfigMaps', kind: 'configmaps', icon: '🗺️' },
+      { label: 'Secrets', kind: 'secrets', icon: '🔒' },
+      { label: 'PersistentVolumeClaims', kind: 'persistentvolumeclaims', icon: '💾' },
+      { label: 'StorageClasses', kind: 'storageclasses', icon: '🏷️' },
     ],
   },
   {
     title: 'Networking',
-    icon: '??',
+    icon: '🌐',
     items: [
-      { label: 'Services', kind: 'services', icon: '??' },
-      { label: 'Ingresses', kind: 'ingresses', icon: '??' },
+      { label: 'Services', kind: 'services', icon: '🔌' },
+      { label: 'Ingresses', kind: 'ingresses', icon: '🌐' },
+    ],
+  },
+  {
+    title: 'Observability',
+    icon: '📢',
+    items: [
+      { label: 'Events', kind: 'events', icon: '📢' },
     ],
   },
 ]
@@ -366,6 +385,27 @@ const podColumns: Column<K8sResource>[] = [
   { key: 'actions', label: 'Actions', width: '280px', align: 'right' },
 ]
 
+const nodeColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Node Name', sortable: true },
+  { key: 'status', label: 'Status', width: '160px', sortable: true },
+  { key: 'roles', label: 'Roles', width: '140px', sortable: true },
+  { key: 'version', label: 'Version', width: '130px', sortable: true },
+  { key: 'internalIP', label: 'Internal IP', width: '140px', sortable: true },
+  { key: 'osArch', label: 'OS / Arch', width: '140px', sortable: true },
+  { key: 'podsCount', label: 'Pods', width: '100px', sortable: true },
+  { key: 'age', label: 'Age', width: '110px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '280px', align: 'right' },
+]
+
+const eventColumns: Column<K8sResource>[] = [
+  { key: 'type', label: 'Type', width: '120px', sortable: true },
+  { key: 'reason', label: 'Reason', width: '160px', sortable: true },
+  { key: 'involvedObject', label: 'Object', width: '220px', sortable: true },
+  { key: 'message', label: 'Message', sortable: false },
+  { key: 'count', label: 'Count', width: '90px', sortable: true },
+  { key: 'age', label: 'Age', width: '110px', sortable: true },
+]
+
 const standardColumns: Column<K8sResource>[] = [
   { key: 'name', label: 'Resource Name', sortable: true },
   { key: 'namespace', label: 'Namespace', width: '160px', sortable: true },
@@ -375,7 +415,10 @@ const standardColumns: Column<K8sResource>[] = [
 ]
 
 const columns = computed<Column<K8sResource>[]>(() => {
-  return selectedKind.value === 'pods' ? podColumns : standardColumns
+  if (selectedKind.value === 'pods') return podColumns
+  if (selectedKind.value === 'nodes') return nodeColumns
+  if (selectedKind.value === 'events') return eventColumns
+  return standardColumns
 })
 
 // Pod Helpers
@@ -531,6 +574,272 @@ function getPodConditions(resource: K8sResource): PodCondition[] {
   return []
 }
 
+
+// Node Management State
+const showDrainModal = ref(false)
+const drainTargetNode = ref<K8sResource | null>(null)
+const drainOptions = ref({
+  gracePeriodSeconds: 30,
+  ignoreDaemonSets: true,
+  deleteEmptyDirData: false,
+  force: false,
+})
+const drainingNode = ref(false)
+const operatingNode = ref(false)
+
+// Taint Management State in Node Drawer
+const newTaintKey = ref('')
+const newTaintValue = ref('')
+const newTaintEffect = ref<'NoSchedule' | 'PreferNoSchedule' | 'NoExecute'>('NoSchedule')
+const updatingTaints = ref(false)
+
+// Node Labels Management State in Node Drawer
+const nodeLabelsCopy = ref<Record<string, string>>({})
+const newLabelKey = ref('')
+const newLabelValue = ref('')
+const updatingLabels = ref(false)
+
+function isNodeUnschedulable(resource: K8sResource): boolean {
+  return Boolean((resource.spec as { unschedulable?: boolean } | undefined)?.unschedulable)
+}
+
+function getNodeStatus(resource: K8sResource): string {
+  if (isNodeUnschedulable(resource)) return 'SchedulingDisabled'
+  const conditions = (resource.status as { conditions?: NodeCondition[] } | undefined)?.conditions
+  if (Array.isArray(conditions)) {
+    const readyCond = conditions.find(c => c.type === 'Ready')
+    if (readyCond && readyCond.status === 'True') return 'Ready'
+    if (readyCond && readyCond.status === 'False') return 'NotReady'
+  }
+  return 'Unknown'
+}
+
+function getNodeRoles(resource: K8sResource): string[] {
+  const labels = resource.metadata?.labels || {}
+  const roles: string[] = []
+  for (const key of Object.keys(labels)) {
+    if (key.startsWith('node-role.kubernetes.io/')) {
+      const role = key.replace('node-role.kubernetes.io/', '')
+      if (role) roles.push(role)
+    }
+  }
+  if (labels['kubernetes.io/role'] && !roles.includes(labels['kubernetes.io/role'])) {
+    roles.push(labels['kubernetes.io/role'])
+  }
+  return roles.length > 0 ? roles : ['worker']
+}
+
+function getNodeVersion(resource: K8sResource): string {
+  const nodeInfo = (resource.status as { nodeInfo?: NodeSystemInfo } | undefined)?.nodeInfo
+  return nodeInfo?.kubeletVersion || 'N/A'
+}
+
+function getNodeInternalIP(resource: K8sResource): string {
+  const addresses = (resource.status as { addresses?: { type: string; address: string }[] } | undefined)?.addresses
+  if (Array.isArray(addresses)) {
+    const ip = addresses.find(a => a.type === 'InternalIP')
+    if (ip) return ip.address
+  }
+  return 'N/A'
+}
+
+function getNodeOSArch(resource: K8sResource): string {
+  const nodeInfo = (resource.status as { nodeInfo?: NodeSystemInfo } | undefined)?.nodeInfo
+  if (nodeInfo?.operatingSystem && nodeInfo?.architecture) {
+    return nodeInfo.operatingSystem + '/' + nodeInfo.architecture
+  }
+  return nodeInfo?.osImage || 'Linux'
+}
+
+function getNodePodsCount(resource: K8sResource): string {
+  const allocatable = (resource.status as { allocatable?: { pods?: string } } | undefined)?.allocatable
+  return allocatable?.pods ? allocatable.pods + ' max' : 'N/A'
+}
+
+function getNodeConditions(resource: K8sResource): NodeCondition[] {
+  return ((resource.status as { conditions?: NodeCondition[] } | undefined)?.conditions) || []
+}
+
+function getNodeTaints(resource: K8sResource): NodeTaint[] {
+  return ((resource.spec as { taints?: NodeTaint[] } | undefined)?.taints) || []
+}
+
+function getNodeSystemInfo(resource: K8sResource): NodeSystemInfo {
+  return ((resource.status as { nodeInfo?: NodeSystemInfo } | undefined)?.nodeInfo) || {}
+}
+
+function getEventInvolvedObject(resource: K8sResource): string {
+  const ev = resource as unknown as K8sEvent
+  if (ev.involvedObject?.kind && ev.involvedObject?.name) {
+    return ev.involvedObject.kind + '/' + ev.involvedObject.name
+  }
+  return 'N/A'
+}
+
+function getEventReason(resource: K8sResource): string {
+  const ev = resource as unknown as K8sEvent
+  return ev.reason || 'Event'
+}
+
+function getEventMessage(resource: K8sResource): string {
+  const ev = resource as unknown as K8sEvent
+  return ev.message || ''
+}
+
+function getEventCount(resource: K8sResource): number {
+  const ev = resource as unknown as K8sEvent
+  return ev.count || 1
+}
+
+function getEventType(resource: K8sResource): string {
+  const ev = resource as unknown as K8sEvent
+  return ev.type || 'Normal'
+}
+
+async function handleCordonNode(node: K8sResource) {
+  const name = node.metadata?.name
+  if (!name || !selectedCluster.value) return
+  operatingNode.value = true
+  try {
+    await k8sApi.cordonNode(selectedCluster.value, name)
+    showToast('Node ' + name + ' cordoned successfully (SchedulingDisabled)', 'success')
+    await fetchResources()
+    if (selectedResource.value && selectedResource.value.metadata?.name === name) {
+      selectedResource.value = await k8sApi.getResource(selectedCluster.value, 'nodes', name)
+    }
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to cordon node', 'error')
+  } finally {
+    operatingNode.value = false
+  }
+}
+
+async function handleUncordonNode(node: K8sResource) {
+  const name = node.metadata?.name
+  if (!name || !selectedCluster.value) return
+  operatingNode.value = true
+  try {
+    await k8sApi.uncordonNode(selectedCluster.value, name)
+    showToast('Node ' + name + ' uncordoned successfully (Schedulable)', 'success')
+    await fetchResources()
+    if (selectedResource.value && selectedResource.value.metadata?.name === name) {
+      selectedResource.value = await k8sApi.getResource(selectedCluster.value, 'nodes', name)
+    }
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to uncordon node', 'error')
+  } finally {
+    operatingNode.value = false
+  }
+}
+
+function openDrainModal(node: K8sResource) {
+  drainTargetNode.value = node
+  drainOptions.value = {
+    gracePeriodSeconds: 30,
+    ignoreDaemonSets: true,
+    deleteEmptyDirData: false,
+    force: false,
+  }
+  showDrainModal.value = true
+}
+
+async function handleDrainNodeConfirm() {
+  const name = drainTargetNode.value?.metadata?.name
+  if (!name || !selectedCluster.value) return
+  drainingNode.value = true
+  try {
+    await k8sApi.drainNode(selectedCluster.value, name, drainOptions.value)
+    showToast('Node ' + name + ' drain request submitted successfully', 'success')
+    showDrainModal.value = false
+    await fetchResources()
+    if (selectedResource.value && selectedResource.value.metadata?.name === name) {
+      selectedResource.value = await k8sApi.getResource(selectedCluster.value, 'nodes', name)
+    }
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to drain node', 'error')
+  } finally {
+    drainingNode.value = false
+  }
+}
+
+async function handleAddTaint(node: K8sResource) {
+  const name = node.metadata?.name
+  if (!name || !selectedCluster.value || !newTaintKey.value.trim()) return
+  const currentTaints = getNodeTaints(node)
+  const updatedTaints = [
+    ...currentTaints,
+    {
+      key: newTaintKey.value.trim(),
+      value: newTaintValue.value.trim() || undefined,
+      effect: newTaintEffect.value,
+    },
+  ]
+  updatingTaints.value = true
+  try {
+    await k8sApi.updateNodeTaints(selectedCluster.value, name, updatedTaints)
+    showToast('Added taint to node ' + name, 'success')
+    newTaintKey.value = ''
+    newTaintValue.value = ''
+    selectedResource.value = await k8sApi.getResource(selectedCluster.value, 'nodes', name)
+    await fetchResources()
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to update taints', 'error')
+  } finally {
+    updatingTaints.value = false
+  }
+}
+
+async function handleRemoveTaint(node: K8sResource, index: number) {
+  const name = node.metadata?.name
+  if (!name || !selectedCluster.value) return
+  const currentTaints = [...getNodeTaints(node)]
+  currentTaints.splice(index, 1)
+  updatingTaints.value = true
+  try {
+    await k8sApi.updateNodeTaints(selectedCluster.value, name, currentTaints)
+    showToast('Removed taint from node ' + name, 'success')
+    selectedResource.value = await k8sApi.getResource(selectedCluster.value, 'nodes', name)
+    await fetchResources()
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to remove taint', 'error')
+  } finally {
+    updatingTaints.value = false
+  }
+}
+
+function initNodeLabelsEditor(node: K8sResource) {
+  nodeLabelsCopy.value = { ...(node.metadata?.labels || {}) }
+  newLabelKey.value = ''
+  newLabelValue.value = ''
+}
+
+function addLabelToCopy() {
+  if (!newLabelKey.value.trim()) return
+  nodeLabelsCopy.value[newLabelKey.value.trim()] = newLabelValue.value.trim()
+  newLabelKey.value = ''
+  newLabelValue.value = ''
+}
+
+function removeLabelFromCopy(key: string) {
+  delete nodeLabelsCopy.value[key]
+}
+
+async function handleSaveNodeLabels(node: K8sResource) {
+  const name = node.metadata?.name
+  if (!name || !selectedCluster.value) return
+  updatingLabels.value = true
+  try {
+    await k8sApi.updateNodeLabels(selectedCluster.value, name, nodeLabelsCopy.value)
+    showToast('Updated labels for node ' + name, 'success')
+    selectedResource.value = await k8sApi.getResource(selectedCluster.value, 'nodes', name)
+    await fetchResources()
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to update labels', 'error')
+  } finally {
+    updatingLabels.value = false
+  }
+}
+
 function showToast(text: string, type: 'success' | 'error' = 'success') {
   toastMessage.value = { text, type }
   setTimeout(() => {
@@ -565,6 +874,9 @@ function openResourceYaml(resource: K8sResource) {
 function openDetailDrawer(resource: K8sResource) {
   selectedResource.value = resource
   activeDrawerTab.value = 'overview'
+  if (resource.kind === 'Node' || selectedKind.value === 'nodes') {
+    initNodeLabelsEditor(resource)
+  }
   showDetailDrawer.value = true
 }
 
@@ -870,7 +1182,9 @@ function getResourceAge(resource: K8sResource): string {
         >
           <template #cell-name="{ row }">
             <div class="resource-name-cell">
-              <span class="res-icon">{{ selectedKind === 'pods' ? '🫛' : '📦' }}</span>
+              <span class="res-icon">
+                {{ selectedKind === 'pods' ? '🫛' : selectedKind === 'nodes' ? '🖥️' : selectedKind === 'events' ? '📢' : '📦' }}
+              </span>
               <a 
                 href="javascript:void(0)" 
                 class="res-link font-mono" 
@@ -896,7 +1210,7 @@ function getResourceAge(resource: K8sResource): string {
 
           <template #cell-status="{ row }">
             <StatusBadge 
-              :status="selectedKind === 'pods' ? getPodPhase(row) : getResourceStatus(row)" 
+              :status="selectedKind === 'pods' ? getPodPhase(row) : selectedKind === 'nodes' ? getNodeStatus(row) : getResourceStatus(row)" 
               size="sm" 
             />
           </template>
@@ -923,6 +1237,60 @@ function getResourceAge(resource: K8sResource): string {
             <span class="font-mono text-muted">
               {{ getResourceAge(row) }}
             </span>
+          </template>
+
+          
+          <!-- Node Specific Slots -->
+          <template #cell-roles="{ row }">
+            <div class="roles-wrap">
+              <span v-for="r in getNodeRoles(row)" :key="r" class="role-badge font-mono font-small">
+                {{ r }}
+              </span>
+            </div>
+          </template>
+
+          <template #cell-version="{ row }">
+            <span class="font-mono text-cyan font-small">{{ getNodeVersion(row) }}</span>
+          </template>
+
+          <template #cell-internalIP="{ row }">
+            <span class="font-mono text-muted font-small">{{ getNodeInternalIP(row) }}</span>
+          </template>
+
+          <template #cell-osArch="{ row }">
+            <span class="font-mono text-muted font-small">{{ getNodeOSArch(row) }}</span>
+          </template>
+
+          <template #cell-podsCount="{ row }">
+            <span class="font-mono font-small">{{ getNodePodsCount(row) }}</span>
+          </template>
+
+          <!-- Event Specific Slots -->
+          <template #cell-type="{ row }">
+            <span
+              class="event-type-badge font-mono"
+              :class="getEventType(row) === 'Warning' ? 'type-warning' : 'type-normal'"
+            >
+              {{ getEventType(row) === 'Warning' ? '⚠️ Warning' : 'ℹ️ Normal' }}
+            </span>
+          </template>
+
+          <template #cell-reason="{ row }">
+            <span class="font-mono font-bold font-small text-white">{{ getEventReason(row) }}</span>
+          </template>
+
+          <template #cell-involvedObject="{ row }">
+            <span class="font-mono text-cyan font-small">{{ getEventInvolvedObject(row) }}</span>
+          </template>
+
+          <template #cell-message="{ row }">
+            <span class="font-mono font-small text-muted event-msg-cell" :title="getEventMessage(row)">
+              {{ getEventMessage(row) }}
+            </span>
+          </template>
+
+          <template #cell-count="{ row }">
+            <span class="font-mono font-small">{{ getEventCount(row) }}</span>
           </template>
 
           <template #cell-actions="{ row }">
@@ -967,6 +1335,54 @@ function getResourceAge(resource: K8sResource): string {
                   @click="promptDelete(row)"
                 >
                   <span>🗑️</span>
+                </button>
+              </template>
+
+                            <template v-else-if="selectedKind === 'nodes'">
+                <button 
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  title="View node details & taints"
+                  @click="openDetailDrawer(row)"
+                >
+                  <span>📊 Details</span>
+                </button>
+                <button 
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  title="Edit / View raw YAML"
+                  @click="openResourceYaml(row)"
+                >
+                  <span>📄 YAML</span>
+                </button>
+                <button
+                  v-if="isNodeUnschedulable(row)"
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  title="Uncordon Node"
+                  :disabled="operatingNode"
+                  @click="handleUncordonNode(row)"
+                >
+                  <span>🔓 Uncordon</span>
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  title="Cordon Node"
+                  :disabled="operatingNode"
+                  @click="handleCordonNode(row)"
+                >
+                  <span>🔒 Cordon</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-danger btn-xs"
+                  title="Drain Node"
+                  :disabled="operatingNode || drainingNode"
+                  @click="openDrainModal(row)"
+                >
+                  <span>🧹 Drain</span>
                 </button>
               </template>
 
@@ -1019,7 +1435,16 @@ function getResourceAge(resource: K8sResource): string {
             :class="{ 'is-active': activeDrawerTab === 'overview' }"
             @click="activeDrawerTab = 'overview'"
           >
-            ?? Overview & Data
+            📊 Overview & Data
+          </button>
+          <button 
+            v-if="['Pod', 'Deployment', 'Node'].includes(selectedResource.kind) || ['pods', 'deployments', 'nodes'].includes(selectedKind)"
+            type="button" 
+            class="tab-btn" 
+            :class="{ 'is-active': activeDrawerTab === 'events' }"
+            @click="activeDrawerTab = 'events'"
+          >
+            📢 Events
           </button>
           <button 
             type="button" 
@@ -1027,7 +1452,7 @@ function getResourceAge(resource: K8sResource): string {
             :class="{ 'is-active': activeDrawerTab === 'yaml' }"
             @click="activeDrawerTab = 'yaml'"
           >
-            ?? Live Manifest (YAML)
+            📝 Live Manifest (YAML)
           </button>
         </div>
 
@@ -1075,6 +1500,229 @@ function getResourceAge(resource: K8sResource): string {
               >
                 {{ key }}: {{ val }}
               </span>
+            </div>
+          </div>
+
+          
+          <!-- If Node: Show Node Actions, Taints, Labels, System Info, Conditions -->
+          <div v-if="selectedResource.kind === 'Node' || selectedKind === 'nodes'" class="node-detail-section">
+            <!-- Node Quick Actions Banner -->
+            <div class="pod-quick-actions glass-panel">
+              <div class="quick-actions-label font-mono font-small text-muted">Node Operations:</div>
+              <div class="quick-actions-btns">
+                <button
+                  v-if="isNodeUnschedulable(selectedResource)"
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  :disabled="operatingNode"
+                  title="Make node schedulable again"
+                  @click="handleUncordonNode(selectedResource)"
+                >
+                  <span>🔓 Uncordon Node</span>
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  :disabled="operatingNode"
+                  title="Mark node as unschedulable"
+                  @click="handleCordonNode(selectedResource)"
+                >
+                  <span>🔒 Cordon Node</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-danger btn-xs"
+                  :disabled="operatingNode || drainingNode"
+                  title="Safely evict pods from node"
+                  @click="openDrainModal(selectedResource)"
+                >
+                  <span>🧹 Drain Node...</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Node System Info Card -->
+            <div class="info-card glass-panel">
+              <div class="card-title">Node System & Hardware Architecture</div>
+              <div class="meta-grid">
+                <div class="meta-item">
+                  <span class="meta-label">Kubelet Version:</span>
+                  <span class="font-mono text-cyan">{{ getNodeVersion(selectedResource) }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Internal IP:</span>
+                  <span class="font-mono">{{ getNodeInternalIP(selectedResource) }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">OS / Architecture:</span>
+                  <span class="font-mono">{{ getNodeOSArch(selectedResource) }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Container Runtime:</span>
+                  <span class="font-mono text-muted font-small">{{ getNodeSystemInfo(selectedResource).containerRuntimeVersion || 'N/A' }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Kernel Version:</span>
+                  <span class="font-mono text-muted font-small">{{ getNodeSystemInfo(selectedResource).kernelVersion || 'N/A' }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">OS Image:</span>
+                  <span class="font-mono text-muted font-small">{{ getNodeSystemInfo(selectedResource).osImage || 'N/A' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Node Conditions Card -->
+            <div class="info-card glass-panel">
+              <div class="card-title">Node Status Conditions</div>
+              <div class="conditions-table-wrap">
+                <table class="conditions-table font-mono font-small">
+                  <thead>
+                    <tr>
+                      <th>Condition</th>
+                      <th>Status</th>
+                      <th>Reason</th>
+                      <th>Message</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="c in getNodeConditions(selectedResource)" :key="c.type">
+                      <td class="text-cyan font-bold">{{ c.type }}</td>
+                      <td>
+                        <span
+                          class="status-pill"
+                          :class="c.status === 'True' ? (c.type === 'Ready' ? 'pill-green' : 'pill-amber') : (c.type === 'Ready' ? 'pill-red' : 'pill-green')"
+                        >
+                          {{ c.status }}
+                        </span>
+                      </td>
+                      <td class="text-muted">{{ c.reason || '-' }}</td>
+                      <td class="text-muted text-break">{{ c.message || '-' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Node Taints Management Card -->
+            <div class="info-card glass-panel">
+              <div class="card-header-flex">
+                <div class="card-title">Node Taints ({{ getNodeTaints(selectedResource).length }})</div>
+              </div>
+
+              <!-- Taint List -->
+              <div v-if="getNodeTaints(selectedResource).length === 0" class="empty-inline-hint text-muted font-small">
+                No active taints configured on this node.
+              </div>
+              <div v-else class="taints-list">
+                <div v-for="(t, idx) in getNodeTaints(selectedResource)" :key="t.key + '-' + idx" class="taint-chip glass-panel font-mono">
+                  <span class="text-cyan">{{ t.key }}</span>
+                  <span v-if="t.value" class="text-white">={{ t.value }}</span>
+                  <span class="taint-effect text-amber">:{{ t.effect }}</span>
+                  <button
+                    type="button"
+                    class="btn-remove-inline"
+                    :disabled="updatingTaints"
+                    title="Remove Taint"
+                    @click="handleRemoveTaint(selectedResource, idx)"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <!-- Add Taint Form -->
+              <div class="add-taint-form glass-panel">
+                <div class="form-subtitle font-mono font-small text-muted">Add New Node Taint:</div>
+                <div class="add-taint-inputs">
+                  <input
+                    v-model="newTaintKey"
+                    type="text"
+                    placeholder="Key (e.g. dedicated)"
+                    class="input-glass font-mono form-input-sm"
+                  />
+                  <input
+                    v-model="newTaintValue"
+                    type="text"
+                    placeholder="Value (optional)"
+                    class="input-glass font-mono form-input-sm"
+                  />
+                  <select v-model="newTaintEffect" class="input-glass font-mono form-input-sm select-effect">
+                    <option value="NoSchedule">NoSchedule</option>
+                    <option value="PreferNoSchedule">PreferNoSchedule</option>
+                    <option value="NoExecute">NoExecute</option>
+                  </select>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-xs"
+                    :disabled="updatingTaints || !newTaintKey.trim()"
+                    @click="handleAddTaint(selectedResource)"
+                  >
+                    <span>+ Add Taint</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Node Labels Editor Card -->
+            <div class="info-card glass-panel">
+              <div class="card-header-flex">
+                <div class="card-title">Node Labels Editor</div>
+                <button
+                  type="button"
+                  class="btn btn-primary btn-xs"
+                  :disabled="updatingLabels"
+                  @click="handleSaveNodeLabels(selectedResource)"
+                >
+                  <span>{{ updatingLabels ? 'Saving...' : '💾 Save Labels' }}</span>
+                </button>
+              </div>
+
+              <div class="labels-editor-list">
+                <div v-for="(_val, key) in nodeLabelsCopy" :key="key" class="label-edit-row font-mono">
+                  <span class="label-key text-cyan">{{ key }}</span>
+                  <span class="label-sep text-muted">=</span>
+                  <input
+                    v-model="nodeLabelsCopy[key]"
+                    type="text"
+                    class="input-glass font-mono label-val-input"
+                  />
+                  <button
+                    type="button"
+                    class="btn-remove-inline"
+                    title="Remove label"
+                    @click="removeLabelFromCopy(key as string)"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <!-- Add Label Row -->
+              <div class="add-label-row">
+                <input
+                  v-model="newLabelKey"
+                  type="text"
+                  placeholder="New label key"
+                  class="input-glass font-mono form-input-sm"
+                />
+                <span class="text-muted">=</span>
+                <input
+                  v-model="newLabelValue"
+                  type="text"
+                  placeholder="New label value"
+                  class="input-glass font-mono form-input-sm"
+                />
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  :disabled="!newLabelKey.trim()"
+                  @click="addLabelToCopy"
+                >
+                  <span>+ Add</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1263,7 +1911,19 @@ function getResourceAge(resource: K8sResource): string {
           </div>
         </div>
 
-        <!-- Tab 2: YAML -->
+        
+        <!-- Tab: Events Timeline -->
+        <div v-else-if="activeDrawerTab === 'events'" class="tab-pane animate-fade-in">
+          <EventsTimeline
+            :cluster="selectedCluster"
+            :namespace="selectedResource.metadata?.namespace"
+            :kind="selectedResource.kind"
+            :name="selectedResource.metadata?.name"
+            :auto-refresh="true"
+          />
+        </div>
+
+        <!-- Tab 3: YAML -->
         <div v-else class="tab-pane animate-fade-in">
           <div class="yaml-pane-toolbar">
             <span class="text-muted font-mono font-small">apiVersion: {{ selectedResource.apiVersion }}</span>
@@ -1393,6 +2053,78 @@ function getResourceAge(resource: K8sResource): string {
           @click="handleDeleteConfirmed"
         >
           <span>{{ deletingResource ? 'Deleting...' : 'Confirm Delete' }}</span>
+        </button>
+      </template>
+    </ModalDrawer>
+
+    
+    <!-- Node Drain Modal -->
+    <ModalDrawer
+      v-model:show="showDrainModal"
+      mode="modal"
+      title="Drain Kubernetes Node"
+      :subtitle="'Cluster: ' + selectedCluster + ' • Node: ' + (drainTargetNode?.metadata?.name || '')"
+      max-width="520px"
+    >
+      <div v-if="drainTargetNode" class="drain-dialog-content">
+        <p class="delete-msg font-mono">
+          Drain evicts all pods from <strong>{{ drainTargetNode.metadata?.name }}</strong> safely before node maintenance or decommission.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">Grace Period (seconds)</label>
+          <input
+            v-model.number="drainOptions.gracePeriodSeconds"
+            type="number"
+            min="0"
+            class="input-glass font-mono"
+            placeholder="30"
+          />
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="cyber-checkbox-label">
+            <input
+              v-model="drainOptions.ignoreDaemonSets"
+              type="checkbox"
+              class="cyber-checkbox"
+            />
+            <span>Ignore DaemonSet pods</span>
+          </label>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="cyber-checkbox-label">
+            <input
+              v-model="drainOptions.deleteEmptyDirData"
+              type="checkbox"
+              class="cyber-checkbox"
+            />
+            <span>Delete pods using emptyDir volume data</span>
+          </label>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="cyber-checkbox-label">
+            <input
+              v-model="drainOptions.force"
+              type="checkbox"
+              class="cyber-checkbox"
+            />
+            <span>Force eviction (even if unmanaged standalone pods exist)</span>
+          </label>
+        </div>
+      </div>
+
+      <template #footer="{ close }">
+        <button type="button" class="btn btn-secondary" :disabled="drainingNode" @click="close">Cancel</button>
+        <button 
+          type="button" 
+          class="btn btn-danger" 
+          :disabled="drainingNode"
+          @click="handleDrainNodeConfirm"
+        >
+          <span>{{ drainingNode ? 'Draining...' : 'Confirm Drain Node' }}</span>
         </button>
       </template>
     </ModalDrawer>
@@ -2560,4 +3292,212 @@ function getResourceAge(resource: K8sResource): string {
   border-color: #38bdf8;
   color: #e0f2fe;
 }
+
+/* Roles Badge */
+.roles-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.role-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 229, 255, 0.12);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.25);
+}
+
+/* Event Cells */
+.event-type-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.type-warning {
+  background: rgba(245, 158, 11, 0.18);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.type-normal {
+  background: rgba(0, 229, 255, 0.12);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+}
+
+.event-msg-cell {
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+/* Node Drawer Sections */
+.node-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card-header-flex {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.conditions-table-wrap {
+  overflow-x: auto;
+}
+
+.conditions-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.conditions-table th, .conditions-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.conditions-table th {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.status-pill {
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.pill-green {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.pill-amber {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.pill-red {
+  background: rgba(244, 63, 94, 0.2);
+  color: #fb7185;
+}
+
+.text-break {
+  word-break: break-word;
+  max-width: 260px;
+}
+
+.empty-inline-hint {
+  padding: 8px 0;
+}
+
+.taints-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.taint-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.78rem;
+}
+
+.taint-effect {
+  font-weight: 600;
+}
+
+.btn-remove-inline {
+  background: none;
+  border: none;
+  color: #fb7185;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 0.75rem;
+}
+
+.btn-remove-inline:hover {
+  color: #f43f5e;
+}
+
+.add-taint-form {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.add-taint-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.form-input-sm {
+  height: 28px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  flex: 1;
+  min-width: 110px;
+}
+
+.select-effect {
+  height: 28px;
+  padding: 2px 6px;
+  font-size: 0.78rem;
+  min-width: 130px;
+}
+
+.labels-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.label-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.label-key {
+  min-width: 140px;
+  word-break: break-all;
+  font-size: 0.78rem;
+}
+
+.label-val-input {
+  flex: 1;
+  height: 26px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+}
+
+.add-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 </style>

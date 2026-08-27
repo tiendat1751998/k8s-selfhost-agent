@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 )
@@ -60,10 +61,18 @@ func TestK8sResourceHandler_OfflineGraceful(t *testing.T) {
 		{"PUT", "/k8s/local/resources/configmaps/bar"},
 		{"DELETE", "/k8s/local/resources/configmaps/bar"},
 		{"POST", "/k8s/local/apply"},
+		{"GET", "/k8s/local/events"},
+		{"POST", "/k8s/local/nodes/node-1/cordon"},
+		{"POST", "/k8s/local/nodes/node-1/uncordon"},
+		{"POST", "/k8s/local/nodes/node-1/drain"},
+		{"PUT", "/k8s/local/nodes/node-1/taints"},
+		{"PUT", "/k8s/local/nodes/node-1/labels"},
 	}
 
 	for _, ep := range endpoints {
 		req := httptest.NewRequest(ep.method, ep.path, bytes.NewBufferString(`{}`))
+		ctx := context.WithValue(req.Context(), middleware.UserRoleKey, "platform_admin")
+		req = req.WithContext(ctx)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 
@@ -107,10 +116,18 @@ func TestK8sResourceHandler_UnconfiguredClient(t *testing.T) {
 		{"PUT", "/k8s/unconfigured-cluster/resources/configmaps/bar"},
 		{"DELETE", "/k8s/unconfigured-cluster/resources/configmaps/bar"},
 		{"POST", "/k8s/unconfigured-cluster/apply"},
+		{"GET", "/k8s/unconfigured-cluster/events"},
+		{"POST", "/k8s/unconfigured-cluster/nodes/node-1/cordon"},
+		{"POST", "/k8s/unconfigured-cluster/nodes/node-1/uncordon"},
+		{"POST", "/k8s/unconfigured-cluster/nodes/node-1/drain"},
+		{"PUT", "/k8s/unconfigured-cluster/nodes/node-1/taints"},
+		{"PUT", "/k8s/unconfigured-cluster/nodes/node-1/labels"},
 	}
 
 	for _, ep := range endpoints {
 		req := httptest.NewRequest(ep.method, ep.path, bytes.NewBufferString(`{"name":"test","apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"test"}}`))
+		ctx := context.WithValue(req.Context(), middleware.UserRoleKey, "platform_admin")
+		req = req.WithContext(ctx)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 
@@ -228,5 +245,221 @@ func TestK8sResourceHandler_LiveOperations(t *testing.T) {
 	// Verify Audit Actions were recorded
 	if len(auditMock.actions) == 0 {
 		t.Fatalf("expected audit actions to be recorded, got none")
+	}
+}
+
+func TestNodeOperations(t *testing.T) {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "worker-1",
+			Labels: map[string]string{"env": "staging"},
+		},
+		Spec: corev1.NodeSpec{
+			Unschedulable: false,
+		},
+	}
+	pod1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "web-pod",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "worker-1",
+		},
+	}
+	ev1 := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ev-pod-start",
+			Namespace: "default",
+		},
+		InvolvedObject: corev1.ObjectReference{
+			Kind:      "Pod",
+			Name:      "web-pod",
+			Namespace: "default",
+		},
+		Reason:  "Started",
+		Message: "Container started",
+		Type:    "Normal",
+	}
+	ev2 := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ev-node-fail",
+			Namespace: "default",
+		},
+		InvolvedObject: corev1.ObjectReference{
+			Kind: "Node",
+			Name: "worker-1",
+		},
+		Reason:  "DiskPressure",
+		Message: "Node has disk pressure",
+		Type:    "Warning",
+	}
+
+	fakeClient := fake.NewSimpleClientset(node, pod1, ev1, ev2)
+	repo := infraK8s.NewResourceRepoWithInterface(fakeClient, nil)
+	auditMock := &mockK8sAuditRepo{}
+	handler := NewK8sResourceHandler(repo, auditMock)
+
+	r := chi.NewRouter()
+	r.Route("/k8s/{cluster}", handler.RegisterRoutes)
+
+	adminCtx := context.WithValue(context.Background(), middleware.UserRoleKey, "platform_admin")
+	tenantAdminCtx := context.WithValue(context.Background(), middleware.UserRoleKey, "tenant_admin")
+	viewerCtx := context.WithValue(context.Background(), middleware.UserRoleKey, "viewer")
+
+	// 1. List Events without filter
+	req := httptest.NewRequest("GET", "/k8s/local/events?ns=default", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for ListEvents, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var evResp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &evResp); err != nil {
+		t.Fatalf("unmarshaling events response: %v", err)
+	}
+	if int(evResp["total"].(float64)) != 2 {
+		t.Fatalf("expected 2 events, got %v", evResp["total"])
+	}
+
+	// 2. List Events with kind filter
+	req = httptest.NewRequest("GET", "/k8s/local/events?ns=default&kind=Pod", nil)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for ListEvents with kind filter, got %d", rec.Code)
+	}
+	var evKindResp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &evKindResp)
+	if int(evKindResp["total"].(float64)) != 1 {
+		t.Fatalf("expected 1 pod event, got %v", evKindResp["total"])
+	}
+
+	// 3. List Events with name filter
+	req = httptest.NewRequest("GET", "/k8s/local/events?ns=default&name=web-pod", nil)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for ListEvents with name filter, got %d", rec.Code)
+	}
+	var evNameResp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &evNameResp)
+	if int(evNameResp["total"].(float64)) != 1 {
+		t.Fatalf("expected 1 event with name web-pod, got %v", evNameResp["total"])
+	}
+
+	// 4. List Events with type filter
+	req = httptest.NewRequest("GET", "/k8s/local/events?ns=default&type=Warning", nil)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for ListEvents with type filter, got %d", rec.Code)
+	}
+	var evTypeResp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &evTypeResp)
+	if int(evTypeResp["total"].(float64)) != 1 {
+		t.Fatalf("expected 1 Warning event, got %v", evTypeResp["total"])
+	}
+
+	// 5. List Events with limit
+	req = httptest.NewRequest("GET", "/k8s/local/events?ns=default&limit=1", nil)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for ListEvents with limit, got %d", rec.Code)
+	}
+	var evLimitResp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &evLimitResp)
+	if int(evLimitResp["total"].(float64)) != 1 {
+		t.Fatalf("expected 1 event with limit 1, got %v", evLimitResp["total"])
+	}
+
+	// 6. RBAC rejection on node mutation without role or with viewer role
+	req = httptest.NewRequest("POST", "/k8s/local/nodes/worker-1/cordon", nil)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized for unauthenticated node cordon, got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest("POST", "/k8s/local/nodes/worker-1/cordon", nil).WithContext(viewerCtx)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for viewer on node cordon, got %d", rec.Code)
+	}
+
+	// 7. Cordon Node with platform_admin
+	req = httptest.NewRequest("POST", "/k8s/local/nodes/worker-1/cordon", nil).WithContext(adminCtx)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for CordonNode, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var cordonResp map[string]string
+	_ = json.Unmarshal(rec.Body.Bytes(), &cordonResp)
+	if cordonResp["status"] != "cordoned" {
+		t.Fatalf("expected status cordoned, got %s", cordonResp["status"])
+	}
+
+	// 8. Uncordon Node with tenant_admin
+	req = httptest.NewRequest("POST", "/k8s/local/nodes/worker-1/uncordon", nil).WithContext(tenantAdminCtx)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for UncordonNode, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var uncordonResp map[string]string
+	_ = json.Unmarshal(rec.Body.Bytes(), &uncordonResp)
+	if uncordonResp["status"] != "uncordoned" {
+		t.Fatalf("expected status uncordoned, got %s", uncordonResp["status"])
+	}
+
+	// 9. Update Node Taints
+	taintsBody := `{"taints":[{"key":"dedicated","value":"infra","effect":"NoSchedule"}]}`
+	req = httptest.NewRequest("PUT", "/k8s/local/nodes/worker-1/taints", bytes.NewBufferString(taintsBody)).WithContext(adminCtx)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for UpdateNodeTaints, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 10. Update Node Labels
+	labelsBody := `{"labels":{"role":"worker","tier":"backend"}}`
+	req = httptest.NewRequest("PUT", "/k8s/local/nodes/worker-1/labels", bytes.NewBufferString(labelsBody)).WithContext(adminCtx)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for UpdateNodeLabels, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 11. Drain Node
+	drainBody := `{"gracePeriodSeconds": 20, "ignoreDaemonSets": true}`
+	req = httptest.NewRequest("POST", "/k8s/local/nodes/worker-1/drain", bytes.NewBufferString(drainBody)).WithContext(adminCtx)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for DrainNode, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify Audit Actions were recorded for node operations
+	expectedActions := []string{
+		"cordon:k8s_node:worker-1",
+		"uncordon:k8s_node:worker-1",
+		"update_taints:k8s_node:worker-1",
+		"update_labels:k8s_node:worker-1",
+		"drain:k8s_node:worker-1",
+	}
+	for _, exp := range expectedActions {
+		found := false
+		for _, act := range auditMock.actions {
+			if act == exp {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected audit action %s to be recorded in %v", exp, auditMock.actions)
+		}
 	}
 }
