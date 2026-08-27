@@ -28,6 +28,7 @@ export interface K8sNamespace {
 }
 
 export type ResourceKind =
+  | 'pods'
   | 'configmaps'
   | 'secrets'
   | 'deployments'

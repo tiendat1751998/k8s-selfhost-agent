@@ -72,6 +72,7 @@ const kindCategories: KindCategory[] = [
     title: 'Workloads',
     icon: '??',
     items: [
+      { label: 'Pods', kind: 'pods', icon: '🫛' },
       { label: 'Deployments', kind: 'deployments', icon: '??' },
       { label: 'StatefulSets', kind: 'statefulsets', icon: '??' },
       { label: 'DaemonSets', kind: 'daemonsets', icon: '???' },
@@ -273,14 +274,253 @@ const currentKindLabel = computed(() => {
   return selectedKind.value
 })
 
+
+// Pod TypeScript Interfaces
+interface ContainerPort {
+  name?: string
+  containerPort: number
+  protocol?: string
+  hostPort?: number
+}
+
+interface ContainerSpec {
+  name: string
+  image?: string
+  ports?: ContainerPort[]
+  command?: string[]
+  args?: string[]
+  env?: { name: string; value?: string }[]
+}
+
+interface ContainerStateWaiting {
+  reason?: string
+  message?: string
+}
+
+interface ContainerStateRunning {
+  startedAt?: string
+}
+
+interface ContainerStateTerminated {
+  exitCode?: number
+  reason?: string
+  message?: string
+  startedAt?: string
+  finishedAt?: string
+}
+
+interface ContainerState {
+  waiting?: ContainerStateWaiting
+  running?: ContainerStateRunning
+  terminated?: ContainerStateTerminated
+}
+
+interface ContainerStatus {
+  name: string
+  image?: string
+  imageID?: string
+  ready?: boolean
+  restartCount?: number
+  started?: boolean
+  state?: ContainerState
+  lastState?: ContainerState
+}
+
+interface PodCondition {
+  type: string
+  status: string
+  reason?: string
+  message?: string
+  lastProbeTime?: string | null
+  lastTransitionTime?: string
+}
+
+interface MergedContainerInfo {
+  name: string
+  image: string
+  ports: string
+  state: string
+  stateType: 'running' | 'waiting' | 'terminated' | 'unknown'
+  ready: boolean
+  restarts: number
+}
+
 // Table columns
-const columns: Column<K8sResource>[] = [
+const podColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '150px', sortable: true },
+  { key: 'status', label: 'Status', width: '140px', sortable: true },
+  { key: 'ready', label: 'Ready', width: '90px', sortable: true },
+  { key: 'restarts', label: 'Restarts', width: '90px', sortable: true },
+  { key: 'node', label: 'Node', width: '150px', sortable: true },
+  { key: 'age', label: 'Age', width: '110px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '280px', align: 'right' },
+]
+
+const standardColumns: Column<K8sResource>[] = [
   { key: 'name', label: 'Resource Name', sortable: true },
   { key: 'namespace', label: 'Namespace', width: '160px', sortable: true },
   { key: 'status', label: 'Status / Ready', width: '150px', sortable: true },
   { key: 'age', label: 'Age / Created', width: '150px', sortable: true },
   { key: 'actions', label: 'Actions', width: '220px', align: 'right' },
 ]
+
+const columns = computed<Column<K8sResource>[]>(() => {
+  return selectedKind.value === 'pods' ? podColumns : standardColumns
+})
+
+// Pod Helpers
+function getPodPhase(resource: K8sResource): string {
+  if (resource.status && typeof resource.status === 'object') {
+    const status = resource.status as Record<string, unknown>
+    const containerStatuses = status.containerStatuses as ContainerStatus[] | undefined
+    if (Array.isArray(containerStatuses)) {
+      for (const cs of containerStatuses) {
+        if (cs.state?.waiting?.reason) {
+          return cs.state.waiting.reason
+        }
+        if (cs.state?.terminated?.reason && cs.state.terminated.reason !== 'Completed') {
+          return cs.state.terminated.reason
+        }
+      }
+    }
+    if (typeof status.phase === 'string' && status.phase) {
+      return status.phase
+    }
+  }
+  return 'Unknown'
+}
+
+function getPodReadyCount(resource: K8sResource): string {
+  const spec = resource.spec as { containers?: ContainerSpec[] } | undefined
+  const status = resource.status as { containerStatuses?: ContainerStatus[] } | undefined
+  
+  const total = Array.isArray(spec?.containers)
+    ? spec.containers.length
+    : Array.isArray(status?.containerStatuses)
+      ? status.containerStatuses.length
+      : 0
+
+  let ready = 0
+  if (Array.isArray(status?.containerStatuses)) {
+    ready = status.containerStatuses.filter(cs => Boolean(cs?.ready)).length
+  }
+  return `${ready}/${total}`
+}
+
+function getPodRestarts(resource: K8sResource): number {
+  const status = resource.status as { containerStatuses?: ContainerStatus[] } | undefined
+  if (Array.isArray(status?.containerStatuses)) {
+    return status.containerStatuses.reduce((sum, cs) => sum + (Number(cs?.restartCount) || 0), 0)
+  }
+  return 0
+}
+
+function getPodNode(resource: K8sResource): string {
+  const spec = resource.spec as { nodeName?: string } | undefined
+  if (spec?.nodeName) {
+    return spec.nodeName
+  }
+  const status = resource.status as { hostIP?: string } | undefined
+  if (status?.hostIP) {
+    return status.hostIP
+  }
+  return 'Unassigned'
+}
+
+function getPodIP(resource: K8sResource): string {
+  const status = resource.status as { podIP?: string; podIPs?: { ip: string }[] } | undefined
+  if (status?.podIP) return status.podIP
+  if (Array.isArray(status?.podIPs) && status.podIPs.length > 0 && status.podIPs[0]?.ip) {
+    return status.podIPs[0].ip
+  }
+  return 'None'
+}
+
+function getHostIP(resource: K8sResource): string {
+  const status = resource.status as { hostIP?: string } | undefined
+  return status?.hostIP || 'None'
+}
+
+function getPodQoS(resource: K8sResource): string {
+  const status = resource.status as { qosClass?: string } | undefined
+  return status?.qosClass || 'BestEffort'
+}
+
+function getPodServiceAccount(resource: K8sResource): string {
+  const spec = resource.spec as { serviceAccountName?: string; serviceAccount?: string } | undefined
+  return spec?.serviceAccountName || spec?.serviceAccount || 'default'
+}
+
+function getPodContainers(resource: K8sResource): MergedContainerInfo[] {
+  const spec = resource.spec as { containers?: ContainerSpec[]; initContainers?: ContainerSpec[] } | undefined
+  const status = resource.status as { containerStatuses?: ContainerStatus[]; initContainerStatuses?: ContainerStatus[] } | undefined
+  
+  const specContainers = Array.isArray(spec?.containers) ? spec.containers : []
+  const statuses = Array.isArray(status?.containerStatuses) ? status.containerStatuses : []
+
+  const statusMap = new Map<string, ContainerStatus>()
+  for (const s of statuses) {
+    if (s.name) statusMap.set(s.name, s)
+  }
+
+  const allNames = new Set<string>()
+  specContainers.forEach(c => c.name && allNames.add(c.name))
+  statuses.forEach(s => s.name && allNames.add(s.name))
+
+  const results: MergedContainerInfo[] = []
+
+  for (const name of allNames) {
+    const specC = specContainers.find(c => c.name === name)
+    const statC = statusMap.get(name)
+
+    const image = statC?.image || specC?.image || 'unknown'
+    
+    let portsStr = 'None'
+    if (Array.isArray(specC?.ports) && specC.ports.length > 0) {
+      portsStr = specC.ports
+        .map(p => `${p.containerPort}${p.protocol ? '/' + p.protocol : ''}${p.name ? ' (' + p.name + ')' : ''}`)
+        .join(', ')
+    }
+
+    let stateStr = 'Unknown'
+    let stateType: 'running' | 'waiting' | 'terminated' | 'unknown' = 'unknown'
+    if (statC?.state?.running) {
+      stateStr = 'Running'
+      stateType = 'running'
+    } else if (statC?.state?.waiting) {
+      stateStr = statC.state.waiting.reason ? `Waiting: ${statC.state.waiting.reason}` : 'Waiting'
+      stateType = 'waiting'
+    } else if (statC?.state?.terminated) {
+      const reason = statC.state.terminated.reason || `Exit ${statC.state.terminated.exitCode ?? 0}`
+      stateStr = `Terminated (${reason})`
+      stateType = 'terminated'
+    } else if (statC?.ready) {
+      stateStr = 'Ready'
+      stateType = 'running'
+    }
+
+    results.push({
+      name,
+      image,
+      ports: portsStr,
+      state: stateStr,
+      stateType,
+      ready: Boolean(statC?.ready),
+      restarts: Number(statC?.restartCount) || 0,
+    })
+  }
+
+  return results
+}
+
+function getPodConditions(resource: K8sResource): PodCondition[] {
+  const status = resource.status as { conditions?: PodCondition[] } | undefined
+  if (Array.isArray(status?.conditions)) {
+    return status.conditions
+  }
+  return []
+}
 
 function showToast(text: string, type: 'success' | 'error' = 'success') {
   toastMessage.value = { text, type }
@@ -602,7 +842,7 @@ function getResourceAge(resource: K8sResource): string {
         >
           <template #cell-name="{ row }">
             <div class="resource-name-cell">
-              <span class="res-icon">??</span>
+              <span class="res-icon">{{ selectedKind === 'pods' ? '🫛' : '📦' }}</span>
               <a 
                 href="javascript:void(0)" 
                 class="res-link font-mono" 
@@ -612,6 +852,9 @@ function getResourceAge(resource: K8sResource): string {
               </a>
               <span v-if="row.metadata?.labels?.app" class="app-tag font-mono">
                 app: {{ row.metadata.labels.app }}
+              </span>
+              <span v-else-if="row.metadata?.labels?.['app.kubernetes.io/name']" class="app-tag font-mono">
+                app: {{ row.metadata.labels['app.kubernetes.io/name'] }}
               </span>
             </div>
           </template>
@@ -623,7 +866,28 @@ function getResourceAge(resource: K8sResource): string {
           </template>
 
           <template #cell-status="{ row }">
-            <StatusBadge :status="getResourceStatus(row)" size="sm" />
+            <StatusBadge 
+              :status="selectedKind === 'pods' ? getPodPhase(row) : getResourceStatus(row)" 
+              size="sm" 
+            />
+          </template>
+
+          <template #cell-ready="{ row }">
+            <span class="font-mono ready-cell" :class="{ 'ready-all': getPodReadyCount(row).split('/')[0] === getPodReadyCount(row).split('/')[1] && getPodReadyCount(row).split('/')[0] !== '0' }">
+              {{ getPodReadyCount(row) }}
+            </span>
+          </template>
+
+          <template #cell-restarts="{ row }">
+            <span class="font-mono restarts-cell" :class="{ 'has-restarts': getPodRestarts(row) > 0 }">
+              {{ getPodRestarts(row) }}
+            </span>
+          </template>
+
+          <template #cell-node="{ row }">
+            <span class="font-mono text-muted font-small">
+              {{ getPodNode(row) }}
+            </span>
           </template>
 
           <template #cell-age="{ row }">
@@ -634,30 +898,75 @@ function getResourceAge(resource: K8sResource): string {
 
           <template #cell-actions="{ row }">
             <div class="action-buttons">
-              <button 
-                type="button"
-                class="btn btn-secondary btn-xs"
-                title="View structured object details"
-                @click="openDetailDrawer(row)"
-              >
-                <span>?? Details</span>
-              </button>
-              <button 
-                type="button"
-                class="btn btn-secondary btn-xs"
-                title="Edit / View raw YAML"
-                @click="openResourceYaml(row)"
-              >
-                <span>?? YAML</span>
-              </button>
-              <button 
-                type="button"
-                class="btn btn-danger btn-xs"
-                title="Delete resource"
-                @click="promptDelete(row)"
-              >
-                <span>???</span>
-              </button>
+              <template v-if="selectedKind === 'pods'">
+                <button 
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  title="View structured pod details"
+                  @click="openDetailDrawer(row)"
+                >
+                  <span>📊 Details</span>
+                </button>
+                <button 
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  title="Edit / View raw YAML"
+                  @click="openResourceYaml(row)"
+                >
+                  <span>📄 YAML</span>
+                </button>
+                <button 
+                  type="button"
+                  class="btn btn-secondary btn-xs btn-disabled"
+                  title="Coming soon"
+                  disabled
+                >
+                  <span>📜 Logs</span>
+                </button>
+                <button 
+                  type="button"
+                  class="btn btn-secondary btn-xs btn-disabled"
+                  title="Coming soon"
+                  disabled
+                >
+                  <span>🖥️ Terminal</span>
+                </button>
+                <button 
+                  type="button"
+                  class="btn btn-danger btn-xs"
+                  title="Delete Pod"
+                  @click="promptDelete(row)"
+                >
+                  <span>🗑️</span>
+                </button>
+              </template>
+
+              <template v-else>
+                <button 
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  title="View structured object details"
+                  @click="openDetailDrawer(row)"
+                >
+                  <span>📊 Details</span>
+                </button>
+                <button 
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  title="Edit / View raw YAML"
+                  @click="openResourceYaml(row)"
+                >
+                  <span>📄 YAML</span>
+                </button>
+                <button 
+                  type="button"
+                  class="btn btn-danger btn-xs"
+                  title="Delete resource"
+                  @click="promptDelete(row)"
+                >
+                  <span>🗑️</span>
+                </button>
+              </template>
             </div>
           </template>
         </DataTable>
@@ -740,8 +1049,153 @@ function getResourceAge(resource: K8sResource): string {
             </div>
           </div>
 
+          <!-- If Pod: Show Pod Info, Container List, Conditions List -->
+          <div v-if="selectedResource.kind === 'Pod' || selectedKind === 'pods'" class="pod-detail-section">
+            <!-- Pod Quick Actions Banner -->
+            <div class="pod-quick-actions glass-panel">
+              <div class="quick-actions-label font-mono font-small text-muted">Pod Quick Actions:</div>
+              <div class="quick-actions-btns">
+                <button 
+                  type="button" 
+                  class="btn btn-secondary btn-xs btn-disabled" 
+                  title="Coming soon" 
+                  disabled
+                >
+                  <span>📜 View Logs</span>
+                </button>
+                <button 
+                  type="button" 
+                  class="btn btn-secondary btn-xs btn-disabled" 
+                  title="Coming soon" 
+                  disabled
+                >
+                  <span>🖥️ Terminal</span>
+                </button>
+                <button 
+                  type="button" 
+                  class="btn btn-danger btn-xs" 
+                  title="Delete Pod" 
+                  @click="promptDelete(selectedResource)"
+                >
+                  <span>🗑️ Delete Pod</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Pod Runtime & Networking Info Card -->
+            <div class="info-card glass-panel">
+              <div class="card-title">Pod Runtime & Networking</div>
+              <div class="meta-grid">
+                <div class="meta-item">
+                  <span class="meta-label">Node Name:</span>
+                  <span class="font-mono text-cyan">{{ getPodNode(selectedResource) }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Pod IP:</span>
+                  <span class="font-mono">{{ getPodIP(selectedResource) }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Host IP:</span>
+                  <span class="font-mono">{{ getHostIP(selectedResource) }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">QoS Class:</span>
+                  <span class="font-mono text-emerald">{{ getPodQoS(selectedResource) }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Service Account:</span>
+                  <span class="font-mono">{{ getPodServiceAccount(selectedResource) }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Status Phase:</span>
+                  <div><StatusBadge :status="getPodPhase(selectedResource)" size="sm" /></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Container List Card -->
+            <div class="info-card glass-panel">
+              <div class="card-title">
+                <span>Containers ({{ getPodContainers(selectedResource).length }})</span>
+              </div>
+              <div class="containers-list">
+                <div 
+                  v-for="c in getPodContainers(selectedResource)" 
+                  :key="c.name" 
+                  class="container-item glass-panel"
+                >
+                  <div class="container-header">
+                    <div class="container-name-wrap">
+                      <span class="container-status-dot" :class="`dot-${c.ready ? 'emerald' : c.stateType === 'waiting' ? 'amber' : c.stateType === 'terminated' ? 'rose' : 'cyan'}`"></span>
+                      <strong class="container-name font-mono">{{ c.name }}</strong>
+                    </div>
+                    <div class="container-badges">
+                      <span class="badge-sm font-mono" :class="c.ready ? 'badge-ready' : 'badge-not-ready'">
+                        {{ c.ready ? 'Ready' : 'Not Ready' }}
+                      </span>
+                      <span class="badge-sm font-mono badge-restarts" :class="{ 'has-restarts': c.restarts > 0 }">
+                        Restarts: {{ c.restarts }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="container-details-grid font-mono">
+                    <div class="cd-row">
+                      <span class="cd-label">Image:</span>
+                      <span class="cd-val text-cyan truncate" :title="c.image">{{ c.image }}</span>
+                    </div>
+                    <div class="cd-row">
+                      <span class="cd-label">State:</span>
+                      <span class="cd-val">{{ c.state }}</span>
+                    </div>
+                    <div class="cd-row">
+                      <span class="cd-label">Ports:</span>
+                      <span class="cd-val text-muted">{{ c.ports }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Conditions List Card -->
+            <div v-if="getPodConditions(selectedResource).length > 0" class="info-card glass-panel">
+              <div class="card-title">Pod Conditions</div>
+              <div class="conditions-table">
+                <div 
+                  v-for="cond in getPodConditions(selectedResource)" 
+                  :key="cond.type" 
+                  class="condition-row"
+                >
+                  <div class="condition-status-col">
+                    <span 
+                      class="cond-icon" 
+                      :class="cond.status === 'True' ? 'cond-true' : 'cond-false'"
+                    >
+                      {{ cond.status === 'True' ? '✓' : '✗' }}
+                    </span>
+                    <span class="cond-type font-mono">{{ cond.type }}</span>
+                  </div>
+                  <div class="condition-details">
+                    <span class="cond-status-text font-mono" :class="cond.status === 'True' ? 'text-emerald' : 'text-amber'">
+                      Status: {{ cond.status }}
+                    </span>
+                    <span v-if="cond.reason" class="cond-reason font-mono text-muted">
+                      Reason: {{ cond.reason }}
+                    </span>
+                    <span v-if="cond.message" class="cond-msg font-mono text-muted font-small">
+                      {{ cond.message }}
+                    </span>
+                    <span v-if="cond.lastTransitionTime" class="cond-time font-mono text-muted font-small">
+                      Transition: {{ cond.lastTransitionTime }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- If Secret: Embed SecretViewer -->
-          <div v-if="selectedResource.kind === 'Secret' || selectedKind === 'secrets'" class="secret-embed-section">
+          <div v-else-if="selectedResource.kind === 'Secret' || selectedKind === 'secrets'" class="secret-embed-section">
             <div class="card-title">Secret Credentials & Keys</div>
             <SecretViewer :secret="selectedResource" />
           </div>
@@ -1780,4 +2234,231 @@ function getResourceAge(resource: K8sResource): string {
     text-align: center;
   }
 }
+
+/* Pod Specific Styles */
+.ready-cell {
+  color: var(--text-secondary);
+}
+.ready-all {
+  color: #34d399;
+  font-weight: 600;
+}
+.restarts-cell {
+  color: var(--text-secondary);
+}
+.has-restarts {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.pod-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pod-quick-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.quick-actions-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-disabled,
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
+}
+
+.text-emerald { color: #34d399; }
+.text-amber { color: #fbbf24; }
+
+.containers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.container-item {
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(11, 15, 25, 0.5);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.container-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.container-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.container-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-emerald { background-color: #10b981; box-shadow: 0 0 6px #10b981; }
+.dot-amber { background-color: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+.dot-rose { background-color: #f43f5e; box-shadow: 0 0 6px #f43f5e; }
+.dot-cyan { background-color: #06b6d4; box-shadow: 0 0 6px #06b6d4; }
+
+.container-name {
+  font-size: 13px;
+  color: #fff;
+}
+
+.container-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge-ready {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.badge-not-ready {
+  background: rgba(244, 63, 94, 0.12);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.badge-restarts {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.badge-restarts.has-restarts {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.container-details-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.cd-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cd-label {
+  color: var(--text-muted);
+  width: 48px;
+  flex-shrink: 0;
+}
+
+.cd-val {
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conditions-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.condition-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 10px;
+  background: rgba(11, 15, 25, 0.5);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.condition-status-col {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.cond-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.cond-true {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.cond-false {
+  background: rgba(244, 63, 94, 0.2);
+  color: #fb7185;
+}
+
+.cond-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.condition-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 11px;
+}
+
+.cond-status-text {
+  font-weight: 600;
+}
+
 </style>

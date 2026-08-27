@@ -1,4 +1,4 @@
-package cluster
+﻿package cluster
 
 import (
 	"context"
@@ -157,9 +157,9 @@ users:
 			wantErr:  false,
 		},
 		{
-			name:     "docker provider without kubeconfig import method",
-			provider: "docker",
-			wantErr:  true,
+			name:        "docker provider without kubeconfig import method",
+			provider:    "docker",
+			wantErr:     true,
 			errContains: "has provider docker, not kubernetes",
 		},
 		{
@@ -198,3 +198,64 @@ users:
 	}
 }
 
+func TestGetK8sRestConfig(t *testing.T) {
+	validKubeconfig := `apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://127.0.0.1:6443
+  name: test-cluster
+contexts:
+- context:
+    cluster: test-cluster
+    user: test-user
+  name: test-context
+current-context: test-context
+users:
+- name: test-user
+  user:
+    token: test-token
+`
+	repo := &mockFleetRepo{
+		cluster: &fleet.Cluster{
+			ID:             "rest-cluster-1",
+			Provider:       "kubernetes",
+			EncryptedToken: validKubeconfig,
+		},
+	}
+
+	mgr := NewClientManager(repo)
+
+	// Test empty clusterID
+	_, err := mgr.GetK8sRestConfig(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error for empty clusterID, got nil")
+	}
+
+	// Test non-existent cluster
+	_, err = mgr.GetK8sRestConfig(context.Background(), "non-existent")
+	if err == nil {
+		t.Fatal("expected error for non-existent cluster, got nil")
+	}
+
+	// Test valid cluster
+	cfg, err := mgr.GetK8sRestConfig(context.Background(), "rest-cluster-1")
+	if err != nil {
+		t.Fatalf("GetK8sRestConfig failed: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("expected non-nil rest.Config")
+	}
+	if cfg.Host != "https://127.0.0.1:6443" {
+		t.Fatalf("expected host https://127.0.0.1:6443, got %s", cfg.Host)
+	}
+
+	// Test caching - second call returns same instance
+	cfgCached, err := mgr.GetK8sRestConfig(context.Background(), "rest-cluster-1")
+	if err != nil {
+		t.Fatalf("GetK8sRestConfig cached failed: %v", err)
+	}
+	if cfgCached != cfg {
+		t.Fatal("expected cached config pointer to match")
+	}
+}

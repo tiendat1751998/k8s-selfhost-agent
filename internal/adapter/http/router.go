@@ -50,6 +50,8 @@ type PlatformHandlers struct {
 	Tenancy       *TenancyHandler
 	Alert         *AlertHandler
 	K8s           *K8sResourceHandler
+	K8sExec       *K8sExecHandler
+	K8sLogs       *K8sLogsHandler
 	Cloud         *CloudHandler
 	Settings      *SettingsHandler
 	Catalog       *CatalogHandler
@@ -200,22 +202,34 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			mountK8sUnavailable(r, "/health")
 		}
 
-		if platform != nil && platform.K8s != nil {
+		if platform != nil && (platform.K8s != nil || platform.K8sExec != nil || platform.K8sLogs != nil) {
 			r.Route("/k8s/{cluster}", func(sub chi.Router) {
-				sub.With(mw.RBACMiddleware("platform_admin")).Post("/apply", platform.K8s.ApplyYAML)
-				sub.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Group(func(k8sSub chi.Router) {
-					k8sSub.Get("/namespaces", platform.K8s.ListNamespaces)
-					k8sSub.Post("/namespaces", platform.K8s.CreateNamespace)
-					k8sSub.Delete("/namespaces/{name}", platform.K8s.DeleteNamespace)
+				if platform.K8s != nil {
+					sub.With(mw.RBACMiddleware("platform_admin")).Post("/apply", platform.K8s.ApplyYAML)
+					sub.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Group(func(k8sSub chi.Router) {
+						k8sSub.Get("/namespaces", platform.K8s.ListNamespaces)
+						k8sSub.Post("/namespaces", platform.K8s.CreateNamespace)
+						k8sSub.Delete("/namespaces/{name}", platform.K8s.DeleteNamespace)
 
-					k8sSub.Route("/resources/{kind}", func(resSub chi.Router) {
-						resSub.Get("/", platform.K8s.ListResources)
-						resSub.Post("/", platform.K8s.CreateResource)
-						resSub.Get("/{name}", platform.K8s.GetResource)
-						resSub.Put("/{name}", platform.K8s.UpdateResource)
-						resSub.Delete("/{name}", platform.K8s.DeleteResource)
+						k8sSub.Route("/resources/{kind}", func(resSub chi.Router) {
+							resSub.Get("/", platform.K8s.ListResources)
+							resSub.Post("/", platform.K8s.CreateResource)
+							resSub.Get("/{name}", platform.K8s.GetResource)
+							resSub.Put("/{name}", platform.K8s.UpdateResource)
+							resSub.Delete("/{name}", platform.K8s.DeleteResource)
+						})
 					})
-				})
+				}
+				if platform.K8sExec != nil {
+					sub.HandleFunc("/exec", platform.K8sExec.HandleExec)
+					sub.HandleFunc("/exec/{pod}", platform.K8sExec.HandleExec)
+					sub.HandleFunc("/pods/{pod}/exec", platform.K8sExec.HandleExec)
+				}
+				if platform.K8sLogs != nil {
+					sub.Get("/logs", platform.K8sLogs.HandlePodLogs)
+					sub.Get("/logs/{pod}", platform.K8sLogs.HandlePodLogs)
+					sub.Get("/pods/{pod}/logs", platform.K8sLogs.HandlePodLogs)
+				}
 			})
 		} else {
 			mountK8sUnavailable(r, "/k8s")
