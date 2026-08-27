@@ -60,7 +60,7 @@ func (m *ClientManager) GetK8sClient(ctx context.Context, clusterID string) (*ku
 		return nil, fmt.Errorf("cluster %s not found in fleet repository", clusterID)
 	}
 
-	if cluster.Provider != "kubernetes" && cluster.Provider != "aws" && cluster.Provider != "gcp" {
+	if cluster.Provider == "docker" && cluster.ImportMethod != "kubeconfig" {
 		return nil, fmt.Errorf("cluster %s has provider %s, not kubernetes", clusterID, cluster.Provider)
 	}
 
