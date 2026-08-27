@@ -1,5 +1,14 @@
 import { api, type ApiResponse } from './client'
 
+function toIsoTime(val?: string): string | undefined {
+  if (!val) return undefined
+  try {
+    const d = new Date(val)
+    if (!isNaN(d.getTime())) return d.toISOString()
+  } catch {}
+  return val
+}
+
 export interface DockerContainer {
   id: string
   name: string
@@ -247,8 +256,8 @@ export const dockerApi = {
     const params: Record<string, string> = { id }
     if (type) params.type = type
     if (tail !== undefined && tail !== null && tail !== '') params.tail = String(tail)
-    if (since) params.since = since
-    if (until) params.until = until
+    if (since) params.since = toIsoTime(since) || since
+    if (until) params.until = toIsoTime(until) || until
     if (q) params.q = q
     if (level) params.level = level
     if (nodeId) {

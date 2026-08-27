@@ -1,0 +1,1995 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import type { NodeMetrics, TpsSnapshot } from '../../../api/overview'
+import ModalDrawer from '../../ui/ModalDrawer.vue'
+
+interface TrendPoint {
+  time: string
+  cpu: number
+  mem: number
+  disk: number
+  reqs: number
+}
+
+export interface DeepDiveServiceItem {
+  service_name: string
+  node_name: string
+  requests_per_sec: number
+  traffic_percent: number
+  rx_bytes_per_sec: number
+  tx_bytes_per_sec: number
+  total_rx_bytes?: number
+  total_tx_bytes?: number
+  cpu_percent: number
+  memory_used_mb: number
+  status: 'healthy' | 'degraded' | 'down'
+  container_count: number
+}
+
+interface Props {
+  show: boolean
+  trendHistory: TrendPoint[]
+  nodes: NodeMetrics[]
+  tpsData?: TpsSnapshot | null
+  dockerContainers?: any[]
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  show: false,
+  tpsData: null,
+  dockerContainers: () => [],
+})
+
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'update:show', value: boolean): void
+}>()
+
+function handleClose() {
+  emit('close')
+  emit('update:show', false)
+}
+
+// Modal Chart Series Toggles
+const modalShowCpu = ref(true)
+const modalShowMem = ref(true)
+const modalShowReqs = ref(true)
+
+// Modal Chart Hover Crosshair & Tooltip
+const hoveredModalIndex = ref<number | null>(null)
+const modalTooltipPos = ref({ x: 0, y: 0 })
+
+// Modal Services Table State
+const modalServiceSearch = ref('')
+const modalServiceSortBy = ref<'name' | 'node' | 'traffic' | 'rps' | 'bandwidth' | 'cpu' | 'mem' | 'status'>('traffic')
+const modalServiceSortOrder = ref<'asc' | 'desc'>('desc')
+
+// Summary Statistics
+const peakThroughput = computed(() => {
+  if (!props.trendHistory.length) return 0
+  const maxReq = Math.max(...props.trendHistory.map(p => p.reqs || 0))
+  const tpsMax = props.tpsData?.http?.requests_per_sec || 0
+  return Math.max(maxReq, tpsMax)
+})
+
+const avgThroughput = computed(() => {
+  if (!props.trendHistory.length) return props.tpsData?.http?.requests_per_sec || 0
+  const sum = props.trendHistory.reduce((acc, p) => acc + (p.reqs || 0), 0)
+  return sum / props.trendHistory.length
+})
+
+const peakCpu = computed(() => {
+  if (!props.trendHistory.length) return 0
+  return Math.max(...props.trendHistory.map(p => p.cpu || 0))
+})
+
+const avgCpu = computed(() => {
+  if (!props.trendHistory.length) return 0
+  const sum = props.trendHistory.reduce((acc, p) => acc + (p.cpu || 0), 0)
+  return sum / props.trendHistory.length
+})
+
+const peakRam = computed(() => {
+  if (!props.trendHistory.length) return 0
+  return Math.max(...props.trendHistory.map(p => p.mem || 0))
+})
+
+const avgRam = computed(() => {
+  if (!props.trendHistory.length) return 0
+  const sum = props.trendHistory.reduce((acc, p) => acc + (p.mem || 0), 0)
+  return sum / props.trendHistory.length
+})
+
+// Round up to nice round ceiling with 20% headroom so peak never touches the ceiling
+function computeCeiling(rawMax: number): number {
+  if (rawMax <= 0 || isNaN(rawMax)) return 10
+  const padded = rawMax * 1.25 // 25% headroom
+  if (padded <= 10) return 10
+  if (padded <= 20) return Math.ceil(padded)
+  if (padded <= 50) return Math.ceil(padded / 5) * 5
+  if (padded <= 200) return Math.ceil(padded / 10) * 10
+  if (padded <= 1000) return Math.ceil(padded / 50) * 50
+  if (padded <= 10000) return Math.ceil(padded / 500) * 500
+  return Math.ceil(padded / 1000) * 1000
+}
+
+// Smooth Catmull-Rom to Monotone Cubic Bézier Spline Curve Generator
+function buildSmoothSpline(
+  points: Array<{ x: number; y: number }>,
+  smoothing = 0.18,
+  minY = 25,
+  maxY = 190,
+): string {
+  if (!points || points.length === 0) return ''
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
+  if (points.length === 2) {
+    return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)} L ${points[1].x.toFixed(1)} ${points[1].y.toFixed(1)}`
+  }
+
+  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)]
+    const p1 = points[i]
+    const p2 = points[i + 1]
+    const p3 = points[Math.min(points.length - 1, i + 2)]
+
+    // Controlled Catmull-Rom tangents with bounded smoothing to prevent overshoot
+    const minLocalX = Math.min(p1.x, p2.x)
+    const maxLocalX = Math.max(p1.x, p2.x)
+    const cp1x = Math.max(minLocalX, Math.min(maxLocalX, p1.x + ((p2.x - p0.x) / 6) * (1 - smoothing)))
+    const cp2x = Math.max(minLocalX, Math.min(maxLocalX, p2.x - ((p3.x - p1.x) / 6) * (1 - smoothing)))
+
+    let cp1y = p1.y + ((p2.y - p0.y) / 6) * (1 - smoothing)
+    let cp2y = p2.y - ((p3.y - p1.y) / 6) * (1 - smoothing)
+
+    // Prevent overshoot above chart ceiling or below baseline
+    cp1y = Math.max(minY, Math.min(maxY, cp1y))
+    cp2y = Math.max(minY, Math.min(maxY, cp2y))
+
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+  }
+
+  return d
+}
+
+// Compact Rate Formatter (e.g. 14.7k, 8.4k, 500)
+function formatMetricRate(val: number, withUnit = false): string {
+  if (val === undefined || val === null || isNaN(val)) return withUnit ? '0 rps' : '0'
+  let str = ''
+  if (val >= 1000000) {
+    str = `${(val / 1000000).toFixed(1)}M`
+  } else if (val >= 1000) {
+    str = `${(val / 1000).toFixed(1)}k`
+  } else if (val >= 100) {
+    str = Math.round(val).toString()
+  } else if (val > 0) {
+    str = val.toFixed(1)
+  } else {
+    str = '0'
+  }
+  return withUnit ? `${str} rps` : str
+}
+
+// Live latest values for legend buttons
+const latestCpu = computed(() => {
+  if (!props.trendHistory.length) return 0
+  return props.trendHistory[props.trendHistory.length - 1].cpu || 0
+})
+
+const latestMem = computed(() => {
+  if (!props.trendHistory.length) return 0
+  return props.trendHistory[props.trendHistory.length - 1].mem || 0
+})
+
+const latestReqs = computed(() => {
+  if (!props.trendHistory.length) return props.tpsData?.http?.requests_per_sec || 0
+  return props.trendHistory[props.trendHistory.length - 1].reqs || 0
+})
+
+// Modal High-Res Chart Computeds
+const maxModalReqs = computed(() => {
+  const rawMax = Math.max(0, ...props.trendHistory.map(p => p.reqs || 0), Math.round(props.tpsData?.http?.requests_per_sec || 0))
+  return computeCeiling(rawMax)
+})
+
+const modalPeakReqsCoord = computed(() => {
+  const history = props.trendHistory
+  if (!history.length) return null
+  let maxVal = -1
+  let maxIdx = 0
+  for (let i = 0; i < history.length; i++) {
+    const r = history[i].reqs || 0
+    if (r > maxVal) {
+      maxVal = r
+      maxIdx = i
+    }
+  }
+  if (maxVal <= 0) return null
+  const step = history.length > 1 ? 640 / (history.length - 1) : 0
+  const x = 50 + maxIdx * step
+  const maxR = maxModalReqs.value
+  const y = Math.max(25, Math.min(190, 190 - (Math.min(maxR, maxVal) / maxR) * 165))
+  return { x, y, value: maxVal, index: maxIdx }
+})
+
+const modalChartCpuPath = computed(() => {
+  const history = props.trendHistory
+  if (history.length < 2) return ''
+  const step = 640 / (history.length - 1)
+  const points = history.map((h, i) => ({
+    x: 50 + i * step,
+    y: Math.max(25, Math.min(190, 190 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 165)),
+  }))
+  return buildSmoothSpline(points, 0.18, 25, 190)
+})
+
+const modalChartCpuArea = computed(() => {
+  if (!modalChartCpuPath.value || !props.trendHistory.length) return ''
+  const history = props.trendHistory
+  const step = history.length > 1 ? 640 / (history.length - 1) : 0
+  const lastX = 50 + (history.length - 1) * step
+  return `${modalChartCpuPath.value} L ${lastX.toFixed(1)} 190 L 50.0 190 Z`
+})
+
+const modalChartMemPath = computed(() => {
+  const history = props.trendHistory
+  if (history.length < 2) return ''
+  const step = 640 / (history.length - 1)
+  const points = history.map((h, i) => ({
+    x: 50 + i * step,
+    y: Math.max(25, Math.min(190, 190 - (Math.min(100, Math.max(0, h.mem)) / 100) * 165)),
+  }))
+  return buildSmoothSpline(points, 0.18, 25, 190)
+})
+
+const modalChartMemArea = computed(() => {
+  if (!modalChartMemPath.value || !props.trendHistory.length) return ''
+  const history = props.trendHistory
+  const step = history.length > 1 ? 640 / (history.length - 1) : 0
+  const lastX = 50 + (history.length - 1) * step
+  return `${modalChartMemPath.value} L ${lastX.toFixed(1)} 190 L 50.0 190 Z`
+})
+
+const modalChartReqsPath = computed(() => {
+  const history = props.trendHistory
+  if (history.length < 2) return ''
+  const step = 640 / (history.length - 1)
+  const maxR = maxModalReqs.value
+  const points = history.map((h, i) => ({
+    x: 50 + i * step,
+    y: Math.max(25, Math.min(190, 190 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 165)),
+  }))
+  return buildSmoothSpline(points, 0.18, 25, 190)
+})
+
+const modalChartReqsArea = computed(() => {
+  if (!modalChartReqsPath.value || !props.trendHistory.length) return ''
+  const history = props.trendHistory
+  const step = history.length > 1 ? 640 / (history.length - 1) : 0
+  const lastX = 50 + (history.length - 1) * step
+  return `${modalChartReqsPath.value} L ${lastX.toFixed(1)} 190 L 50.0 190 Z`
+})
+
+const hoveredModalPoint = computed<TrendPoint | null>(() => {
+  if (hoveredModalIndex.value === null || hoveredModalIndex.value < 0 || hoveredModalIndex.value >= props.trendHistory.length) {
+    return null
+  }
+  return props.trendHistory[hoveredModalIndex.value]
+})
+
+const hoveredModalElapsed = computed<string>(() => {
+  if (hoveredModalIndex.value === null) return ''
+  const offsetFromEnd = (props.trendHistory.length - 1 - hoveredModalIndex.value) * 10
+  if (offsetFromEnd === 0) return 'Now (Live)'
+  const mins = Math.floor(offsetFromEnd / 60)
+  const secs = offsetFromEnd % 60
+  if (mins === 0) return `${secs}s ago`
+  return `${mins}m ${secs > 0 ? secs + 's' : ''} ago`
+})
+
+const modalHoverCoords = computed(() => {
+  if (hoveredModalIndex.value === null || !props.trendHistory.length) return null
+  const history = props.trendHistory
+  const step = history.length > 1 ? 640 / (history.length - 1) : 0
+  const idx = hoveredModalIndex.value
+  const pt = history[idx]
+  if (!pt) return null
+  const x = 50 + idx * step
+  const maxR = maxModalReqs.value
+  const yCpu = Math.max(25, Math.min(190, 190 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 165))
+  const yMem = Math.max(25, Math.min(190, 190 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 165))
+  const yReq = Math.max(25, Math.min(190, 190 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 165))
+  return { x, yCpu, yMem, yReq }
+})
+
+const modalTooltipStyle = computed(() => {
+  if (hoveredModalIndex.value === null) return { display: 'none' }
+  const { x, y } = modalTooltipPos.value
+  const isRightSide = x > 380
+  return {
+    left: isRightSide ? `${Math.max(10, x - 240)}px` : `${x + 16}px`,
+    top: y > 95 ? `${Math.max(10, y - 130)}px` : `${Math.min(90, y + 15)}px`,
+    pointerEvents: 'none' as const,
+  }
+})
+
+const modalTimeAxisMarkers = computed(() => {
+  const history = props.trendHistory
+  if (history.length < 2) return []
+  const count = Math.min(5, history.length)
+  const markers = []
+  const step = 640 / (history.length - 1)
+  for (let i = 0; i < count; i++) {
+    const idx = Math.round((i / (count - 1)) * (history.length - 1))
+    const pt = history[idx]
+    if (pt) {
+      markers.push({
+        x: 50 + idx * step,
+        time: pt.time,
+      })
+    }
+  }
+  return markers
+})
+
+function handleModalChartHover(event: MouseEvent) {
+  const history = props.trendHistory
+  if (history.length < 2) return
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
+  const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
+
+  const scaleX = rect.width / 760
+  const svgX = mouseX / scaleX
+  const boundedSvgX = Math.max(50, Math.min(690, svgX))
+  const ratio = (boundedSvgX - 50) / 640
+  const idx = Math.round(ratio * (history.length - 1))
+  hoveredModalIndex.value = Math.max(0, Math.min(history.length - 1, idx))
+  modalTooltipPos.value = { x: mouseX, y: mouseY }
+}
+
+function handleModalChartLeave() {
+  hoveredModalIndex.value = null
+}
+
+// Services Breakdown Computation
+const allClusterServices = computed<DeepDiveServiceItem[]>(() => {
+  const nodeMap = new Map<string, string>()
+  for (const n of props.nodes) {
+    nodeMap.set(n.node_id.toLowerCase(), n.node_name)
+    nodeMap.set(n.node_name.toLowerCase(), n.node_name)
+  }
+
+  let list: DeepDiveServiceItem[] = []
+
+  if (props.tpsData?.services && props.tpsData.services.length > 0) {
+    list = props.tpsData.services.map(s => {
+      const nId = (s.node_id || '').toLowerCase()
+      const nName = (s.node_name || '').toLowerCase()
+      const resolvedNodeName = nodeMap.get(nId) || nodeMap.get(nName) || s.node_name || s.node_id || 'k8smaster'
+      return {
+        service_name: s.service_name,
+        node_name: resolvedNodeName,
+        requests_per_sec: s.requests_per_sec || 0,
+        traffic_percent: 0,
+        rx_bytes_per_sec: s.rx_bytes_per_sec || 0,
+        tx_bytes_per_sec: s.tx_bytes_per_sec || 0,
+        total_rx_bytes: s.total_rx_bytes || 0,
+        total_tx_bytes: s.total_tx_bytes || 0,
+        cpu_percent: s.cpu_percent || 0,
+        memory_used_mb: s.memory_used_mb || 0,
+        status: (s.status as any) || 'healthy',
+        container_count: s.container_count || 1,
+      }
+    })
+  } else if (props.dockerContainers && props.dockerContainers.length > 0) {
+    list = props.dockerContainers.map(c => {
+      const nId = (c.node_id || '').toLowerCase()
+      const resolvedNodeName = nodeMap.get(nId) || c.node_id || 'k8smaster'
+      const names = c.names || (c.name ? [c.name] : ['unknown-service'])
+      const cleanName = (names[0] || 'service').replace(/^\//, '')
+      return {
+        service_name: cleanName,
+        node_name: resolvedNodeName,
+        requests_per_sec: 0,
+        traffic_percent: 0,
+        rx_bytes_per_sec: 0,
+        tx_bytes_per_sec: 0,
+        total_rx_bytes: 0,
+        total_tx_bytes: 0,
+        cpu_percent: c.cpu_percent || 0,
+        memory_used_mb: c.memory_usage ? Math.round(c.memory_usage / (1024 * 1024)) : 0,
+        status: c.state === 'running' ? 'healthy' : 'degraded',
+        container_count: 1,
+      }
+    })
+  }
+
+  const totalRps = list.reduce((acc, s) => acc + s.requests_per_sec, 0)
+  const totalBandwidth = list.reduce((acc, s) => acc + s.rx_bytes_per_sec + s.tx_bytes_per_sec, 0)
+
+  return list.map(s => {
+    let trafficShare = 0
+    if (totalRps > 0) {
+      trafficShare = (s.requests_per_sec / totalRps) * 100
+    } else if (totalBandwidth > 0) {
+      trafficShare = ((s.rx_bytes_per_sec + s.tx_bytes_per_sec) / totalBandwidth) * 100
+    } else {
+      trafficShare = list.length > 0 ? 100 / list.length : 0
+    }
+    return {
+      ...s,
+      traffic_percent: trafficShare,
+    }
+  })
+})
+
+const filteredAndSortedClusterServices = computed(() => {
+  let list = [...allClusterServices.value]
+
+  // Filter
+  const q = modalServiceSearch.value.toLowerCase().trim()
+  if (q) {
+    list = list.filter(s =>
+      s.service_name.toLowerCase().includes(q) ||
+      s.node_name.toLowerCase().includes(q)
+    )
+  }
+
+  // Sort
+  const sortKey = modalServiceSortBy.value
+  const isAsc = modalServiceSortOrder.value === 'asc'
+  const multiplier = isAsc ? 1 : -1
+
+  list.sort((a, b) => {
+    if (sortKey === 'name') {
+      return a.service_name.localeCompare(b.service_name) * multiplier
+    }
+    if (sortKey === 'node') {
+      return a.node_name.localeCompare(b.node_name) * multiplier
+    }
+    if (sortKey === 'traffic') {
+      return (a.traffic_percent - b.traffic_percent) * multiplier
+    }
+    if (sortKey === 'rps') {
+      return (a.requests_per_sec - b.requests_per_sec) * multiplier
+    }
+    if (sortKey === 'bandwidth') {
+      const aBw = a.rx_bytes_per_sec + a.tx_bytes_per_sec
+      const bBw = b.rx_bytes_per_sec + b.tx_bytes_per_sec
+      return (aBw - bBw) * multiplier
+    }
+    if (sortKey === 'cpu') {
+      return (a.cpu_percent - b.cpu_percent) * multiplier
+    }
+    if (sortKey === 'mem') {
+      return (a.memory_used_mb - b.memory_used_mb) * multiplier
+    }
+    if (sortKey === 'status') {
+      return a.status.localeCompare(b.status) * multiplier
+    }
+    return 0
+  })
+
+  return list
+})
+
+function toggleModalSort(key: typeof modalServiceSortBy.value) {
+  if (modalServiceSortBy.value === key) {
+    modalServiceSortOrder.value = modalServiceSortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    modalServiceSortBy.value = key
+    modalServiceSortOrder.value = 'desc'
+  }
+}
+
+function formatBytes(bytes?: number, decimals = 1): string {
+  if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 B'
+  const k = 1024
+  const dm = decimals < 0 ? 0 : decimals
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i] || 'B'}`
+}
+
+function formatIoRate(bytesPerSec?: number): string {
+  if (!bytesPerSec || bytesPerSec <= 0 || isNaN(bytesPerSec)) return '0 B/s'
+  return `${formatBytes(bytesPerSec)}/s`
+}
+</script>
+
+<template>
+  <ModalDrawer
+    :show="show"
+    mode="modal"
+    maxWidth="1140px"
+    title="⚡ Traffic & Telemetry Deep-Dive"
+    subtitle="High-resolution time-series saturation curves and multi-service traffic contributor breakdown"
+    @close="handleClose"
+  >
+    <div class="deep-dive-body">
+      <!-- SECTION 1: Historical Summary Statistics Cards -->
+      <section class="modal-summary-grid">
+        <!-- Card 1: Peak Throughput -->
+        <div class="deep-stat-card card-peak-reqs glass-panel">
+          <div class="deep-stat-header">
+            <span class="deep-stat-title">
+              <span class="stat-title-full">Peak Gateway Throughput</span>
+              <span class="stat-title-mobile">Peak Gateway</span>
+            </span>
+            <span class="hud-icon">⚡</span>
+          </div>
+          <div class="deep-stat-body">
+            <span class="deep-stat-value text-cyan font-mono font-bold">
+              {{ peakThroughput >= 100 ? Math.round(peakThroughput).toLocaleString() : (peakThroughput > 0 ? peakThroughput.toFixed(1) : '0.0') }}
+            </span>
+            <span class="deep-stat-unit">req / sec</span>
+          </div>
+          <div class="deep-stat-sub font-mono">
+            <span>Window High (5-min buffer)</span>
+          </div>
+        </div>
+
+        <!-- Card 2: Average Throughput -->
+        <div class="deep-stat-card card-avg-reqs glass-panel">
+          <div class="deep-stat-header">
+            <span class="deep-stat-title">
+              <span class="stat-title-full">Average Gateway Throughput</span>
+              <span class="stat-title-mobile">Avg Gateway</span>
+            </span>
+            <span class="hud-icon">🌐</span>
+          </div>
+          <div class="deep-stat-body">
+            <span class="deep-stat-value text-emerald font-mono font-bold">
+              {{ avgThroughput >= 100 ? Math.round(avgThroughput).toLocaleString() : (avgThroughput > 0 ? avgThroughput.toFixed(1) : '0.0') }}
+            </span>
+            <span class="deep-stat-unit">req / sec</span>
+          </div>
+          <div class="deep-stat-sub font-mono">
+            <span>Cluster-wide mean rate</span>
+          </div>
+        </div>
+
+        <!-- Card 3: Peak CPU Saturation -->
+        <div class="deep-stat-card card-cpu glass-panel">
+          <div class="deep-stat-header">
+            <span class="deep-stat-title">
+              <span class="stat-title-full">Peak CPU Saturation</span>
+              <span class="stat-title-mobile">Peak CPU</span>
+            </span>
+            <span class="hud-icon">🔥</span>
+          </div>
+          <div class="deep-stat-body">
+            <span
+              class="deep-stat-value font-mono font-bold"
+              :class="peakCpu >= 85 ? 'text-rose' : peakCpu >= 65 ? 'text-amber' : 'text-violet'"
+            >
+              {{ Math.round(peakCpu) }}%
+            </span>
+            <span class="deep-stat-unit">Avg {{ Math.round(avgCpu) }}%</span>
+          </div>
+          <div class="deep-stat-sub font-mono">
+            <span>5-minute envelope max</span>
+          </div>
+        </div>
+
+        <!-- Card 4: Average RAM Usage -->
+        <div class="deep-stat-card card-mem glass-panel">
+          <div class="deep-stat-header">
+            <span class="deep-stat-title">
+              <span class="stat-title-full">Peak Memory Pressure</span>
+              <span class="stat-title-mobile">Peak RAM</span>
+            </span>
+            <span class="hud-icon">🧠</span>
+          </div>
+          <div class="deep-stat-body">
+            <span
+              class="deep-stat-value font-mono font-bold"
+              :class="peakRam >= 85 ? 'text-rose' : peakRam >= 65 ? 'text-amber' : 'text-cyan'"
+            >
+              {{ Math.round(peakRam) }}%
+            </span>
+            <span class="deep-stat-unit">Avg {{ Math.round(avgRam) }}%</span>
+          </div>
+          <div class="deep-stat-sub font-mono">
+            <span>Cluster-wide memory mean</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 2: High-Resolution Expanded Multi-Series Chart -->
+      <section class="modal-chart-section glass-panel">
+        <div class="modal-chart-top-bar">
+          <div class="chart-title-group">
+            <h4 class="modal-section-title">
+              <span class="chart-title-full">📈 High-Resolution Telemetry Overlay</span>
+              <span class="chart-title-mobile">📈 Telemetry Spline</span>
+            </h4>
+            <span class="trend-chart-subtitle">
+              Time-synchronized CPU %, RAM %, and Throughput RPS (30 rolling samples)
+            </span>
+          </div>
+
+          <!-- Series Toggles with Live Metrics -->
+          <div class="series-toggles-group">
+            <button
+              type="button"
+              class="series-toggle-btn"
+              :class="{ 'toggle-active cpu-active': modalShowCpu, 'toggle-dimmed': !modalShowCpu }"
+              @click="modalShowCpu = !modalShowCpu"
+              title="Toggle CPU saturation spline"
+            >
+              <span class="toggle-dot bg-violet"></span>
+              <span class="toggle-name">CPU %</span>
+              <span class="toggle-val font-mono">({{ Math.round(latestCpu) }}%)</span>
+            </button>
+
+            <button
+              type="button"
+              class="series-toggle-btn"
+              :class="{ 'toggle-active mem-active': modalShowMem, 'toggle-dimmed': !modalShowMem }"
+              @click="modalShowMem = !modalShowMem"
+              title="Toggle RAM usage spline"
+            >
+              <span class="toggle-dot bg-cyan"></span>
+              <span class="toggle-name">RAM %</span>
+              <span class="toggle-val font-mono">({{ Math.round(latestMem) }}%)</span>
+            </button>
+
+            <button
+              type="button"
+              class="series-toggle-btn"
+              :class="{ 'toggle-active reqs-active': modalShowReqs, 'toggle-dimmed': !modalShowReqs }"
+              @click="modalShowReqs = !modalShowReqs"
+              title="Toggle Throughput spline"
+            >
+              <span class="toggle-dot bg-emerald"></span>
+              <span class="toggle-name">
+                <span class="btn-lbl-full">Gateway Throughput</span>
+                <span class="btn-lbl-mobile">Gateway</span>
+              </span>
+              <span class="toggle-val font-mono">
+                <span class="btn-val-full">({{ Math.round(latestReqs).toLocaleString() }} req/s)</span>
+                <span class="btn-val-mobile">({{ Math.round(latestReqs) }} rps)</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Expanded SVG Chart Canvas with Hover Crosshair & Tooltip -->
+        <div
+          class="modal-svg-canvas-box"
+          @mousemove="handleModalChartHover"
+          @mouseleave="handleModalChartLeave"
+        >
+          <svg viewBox="0 0 760 210" preserveAspectRatio="none" class="modal-expanded-svg">
+            <defs>
+              <!-- Glow Filters -->
+              <filter id="glow-emerald" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <filter id="glow-cyan" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <filter id="glow-violet" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+
+              <!-- Multi-Stop Gradients -->
+              <linearGradient id="modalCpuGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.35" />
+                <stop offset="60%" stop-color="#7c3aed" stop-opacity="0.12" />
+                <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0" />
+              </linearGradient>
+              <linearGradient id="modalMemGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.35" />
+                <stop offset="60%" stop-color="#0891b2" stop-opacity="0.12" />
+                <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+              </linearGradient>
+              <linearGradient id="modalReqsGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#10b981" stop-opacity="0.38" />
+                <stop offset="50%" stop-color="#059669" stop-opacity="0.15" />
+                <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+
+            <!-- Horizontal Grid Lines & Left/Right Y-Axis Labels -->
+            <!-- 100% -->
+            <line x1="50" y1="25" x2="690" y2="25" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
+            <text x="42" y="29" text-anchor="end" class="svg-axis-label">100%</text>
+            <text x="698" y="29" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs) }}</text>
+
+            <!-- 75% -->
+            <line x1="50" y1="66.25" x2="690" y2="66.25" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
+            <text x="42" y="70.25" text-anchor="end" class="svg-axis-label">75%</text>
+            <text x="698" y="70.25" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.75) }}</text>
+
+            <!-- 50% -->
+            <line x1="50" y1="107.5" x2="690" y2="107.5" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
+            <text x="42" y="111.5" text-anchor="end" class="svg-axis-label">50%</text>
+            <text x="698" y="111.5" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.5) }}</text>
+
+            <!-- 25% -->
+            <line x1="50" y1="148.75" x2="690" y2="148.75" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4" />
+            <text x="42" y="152.75" text-anchor="end" class="svg-axis-label">25%</text>
+            <text x="698" y="152.75" text-anchor="start" class="svg-axis-label text-emerald">{{ formatMetricRate(maxModalReqs * 0.25) }}</text>
+
+            <!-- 0% Baseline -->
+            <line x1="50" y1="190" x2="690" y2="190" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
+            <text x="42" y="194" text-anchor="end" class="svg-axis-label">0%</text>
+            <text x="698" y="194" text-anchor="start" class="svg-axis-label text-emerald">0 rps</text>
+
+            <!-- X-Axis Timestamps -->
+            <g class="modal-time-markers">
+              <text
+                v-for="marker in modalTimeAxisMarkers"
+                :key="marker.x"
+                :x="marker.x"
+                y="205"
+                text-anchor="middle"
+                class="svg-axis-label"
+              >
+                {{ marker.time }}
+              </text>
+            </g>
+
+            <!-- Series 1: CPU Area & Line -->
+            <path v-if="modalShowCpu && modalChartCpuArea" :d="modalChartCpuArea" fill="url(#modalCpuGrad)" />
+            <path v-if="modalShowCpu && modalChartCpuPath" :d="modalChartCpuPath" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+
+            <!-- Series 2: RAM Area & Line -->
+            <path v-if="modalShowMem && modalChartMemArea" :d="modalChartMemArea" fill="url(#modalMemGrad)" />
+            <path v-if="modalShowMem && modalChartMemPath" :d="modalChartMemPath" fill="none" stroke="#06b6d4" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+
+            <!-- Series 3: Throughput Area & Line -->
+            <path v-if="modalShowReqs && modalChartReqsArea" :d="modalChartReqsArea" fill="url(#modalReqsGrad)" />
+            <path v-if="modalShowReqs && modalChartReqsPath" :d="modalChartReqsPath" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+
+            <!-- Peak Apex Beacon (Clean & Non-Intrusive) -->
+            <g v-if="modalShowReqs && modalPeakReqsCoord" class="peak-beacon-group">
+              <!-- Subtle vertical hairline down to baseline -->
+              <line
+                :x1="modalPeakReqsCoord.x"
+                :y1="modalPeakReqsCoord.y"
+                :x2="modalPeakReqsCoord.x"
+                y2="190"
+                stroke="rgba(16, 185, 129, 0.2)"
+                stroke-width="1"
+                stroke-dasharray="2 2"
+              />
+              <!-- Pulsing halo -->
+              <circle
+                :cx="modalPeakReqsCoord.x"
+                :cy="modalPeakReqsCoord.y"
+                r="6"
+                fill="none"
+                stroke="#10b981"
+                stroke-width="1.2"
+                opacity="0.6"
+                class="peak-pulse-ring"
+              />
+              <!-- Apex Point -->
+              <circle
+                :cx="modalPeakReqsCoord.x"
+                :cy="modalPeakReqsCoord.y"
+                r="3"
+                fill="#10b981"
+                stroke="#ffffff"
+                stroke-width="1.5"
+              />
+            </g>
+
+            <!-- Interactive Hover Crosshair & Series Markers -->
+            <g v-if="modalHoverCoords">
+              <!-- Vertical Guide Line -->
+              <line
+                :x1="modalHoverCoords.x"
+                y1="25"
+                :x2="modalHoverCoords.x"
+                y2="190"
+                stroke="#38bdf8"
+                stroke-width="1.5"
+                stroke-dasharray="3 3"
+                opacity="0.85"
+              />
+
+              <!-- CPU Point Marker -->
+              <g v-if="modalShowCpu">
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yCpu"
+                  r="7"
+                  fill="none"
+                  stroke="#8b5cf6"
+                  stroke-width="1.5"
+                  opacity="0.5"
+                />
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yCpu"
+                  r="4"
+                  fill="#8b5cf6"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                />
+              </g>
+
+              <!-- RAM Point Marker -->
+              <g v-if="modalShowMem">
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yMem"
+                  r="7"
+                  fill="none"
+                  stroke="#06b6d4"
+                  stroke-width="1.5"
+                  opacity="0.5"
+                />
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yMem"
+                  r="4"
+                  fill="#06b6d4"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                />
+              </g>
+
+              <!-- Reqs Point Marker -->
+              <g v-if="modalShowReqs">
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yReq"
+                  r="7"
+                  fill="none"
+                  stroke="#10b981"
+                  stroke-width="1.5"
+                  opacity="0.5"
+                />
+                <circle
+                  :cx="modalHoverCoords.x"
+                  :cy="modalHoverCoords.yReq"
+                  r="4"
+                  fill="#10b981"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                />
+              </g>
+            </g>
+          </svg>
+
+          <!-- Expanded Floating Tooltip Box -->
+          <div v-if="hoveredModalPoint" class="modal-rich-tooltip" :style="modalTooltipStyle">
+            <div class="tooltip-time-header">
+              <span class="tooltip-time-icon">🕒</span>
+              <span class="tooltip-time-text font-mono font-bold">{{ hoveredModalPoint.time }}</span>
+              <span class="tooltip-time-elapsed">({{ hoveredModalElapsed }})</span>
+            </div>
+
+            <div class="tooltip-metrics-list">
+              <div class="tooltip-metric-row" v-if="modalShowCpu">
+                <span class="metric-indicator bg-violet"></span>
+                <span class="metric-name">Avg Cluster CPU:</span>
+                <span class="metric-val font-mono text-violet font-bold">{{ Math.round(hoveredModalPoint.cpu) }}%</span>
+              </div>
+
+              <div class="tooltip-metric-row" v-if="modalShowMem">
+                <span class="metric-indicator bg-cyan"></span>
+                <span class="metric-name">Avg Cluster RAM:</span>
+                <span class="metric-val font-mono text-cyan font-bold">{{ Math.round(hoveredModalPoint.mem) }}%</span>
+              </div>
+
+              <div class="tooltip-metric-row" v-if="modalShowReqs">
+                <span class="metric-indicator bg-emerald"></span>
+                <span class="metric-name">Throughput:</span>
+                <span class="metric-val font-mono text-emerald font-bold">{{ Math.round(hoveredModalPoint.reqs) }} req/s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 3: 📦 Top Traffic & Request-Consuming Services Breakdown -->
+      <section class="modal-breakdown-section glass-panel">
+        <div class="breakdown-header-bar">
+          <div class="breakdown-title-wrap">
+            <h4 class="modal-section-title">
+              <span class="breakdown-title-full">📦 Ranked Service & Workload Contributors</span>
+              <span class="breakdown-title-mobile">📦 Ranked Workloads</span>
+            </h4>
+            <span class="badge badge-cyan font-mono">
+              {{ filteredAndSortedClusterServices.length }} Active Services
+            </span>
+          </div>
+
+          <!-- Search & Filters -->
+          <div class="breakdown-actions-bar">
+            <div class="table-search-input-wrap">
+              <span class="search-icon">🔍</span>
+              <input
+                type="text"
+                v-model="modalServiceSearch"
+                placeholder="Filter services or nodes..."
+                class="table-search-field font-mono"
+              />
+              <button
+                v-if="modalServiceSearch"
+                class="btn-clear-search"
+                @click="modalServiceSearch = ''"
+              >
+                ✕
+              </button>
+            </div>
+            <!-- Quick Mobile Sort Pills -->
+            <div class="mobile-sort-pills">
+              <button
+                type="button"
+                class="mobile-sort-pill"
+                :class="{ active: modalServiceSortBy === 'traffic' }"
+                @click="toggleModalSort('traffic')"
+              >
+                Traffic {{ modalServiceSortBy === 'traffic' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '' }}
+              </button>
+              <button
+                type="button"
+                class="mobile-sort-pill"
+                :class="{ active: modalServiceSortBy === 'rps' }"
+                @click="toggleModalSort('rps')"
+              >
+                RPS {{ modalServiceSortBy === 'rps' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '' }}
+              </button>
+              <button
+                type="button"
+                class="mobile-sort-pill"
+                :class="{ active: modalServiceSortBy === 'cpu' }"
+                @click="toggleModalSort('cpu')"
+              >
+                CPU {{ modalServiceSortBy === 'cpu' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '' }}
+              </button>
+              <button
+                type="button"
+                class="mobile-sort-pill"
+                :class="{ active: modalServiceSortBy === 'bandwidth' }"
+                @click="toggleModalSort('bandwidth')"
+              >
+                BW {{ modalServiceSortBy === 'bandwidth' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Services Breakdown Table (Desktop & Tablet) -->
+        <div class="breakdown-table-wrapper" v-if="filteredAndSortedClusterServices.length > 0">
+          <table class="breakdown-table">
+            <thead>
+              <tr>
+                <th class="th-svc cursor-pointer" @click="toggleModalSort('name')">
+                  <div class="th-content">
+                    <span>SERVICE</span>
+                    <span class="sort-icon">{{ modalServiceSortBy === 'name' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                  </div>
+                </th>
+                <th class="th-node cursor-pointer" @click="toggleModalSort('node')">
+                  <div class="th-content">
+                    <span>HOST NODE</span>
+                    <span class="sort-icon">{{ modalServiceSortBy === 'node' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                  </div>
+                </th>
+                <th class="th-traffic cursor-pointer" @click="toggleModalSort('traffic')">
+                  <div class="th-content">
+                    <span>TRAFFIC CONTRIBUTION</span>
+                    <span class="sort-icon">{{ modalServiceSortBy === 'traffic' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                  </div>
+                </th>
+                <th class="th-rps cursor-pointer" @click="toggleModalSort('rps')">
+                  <div class="th-content">
+                    <span>REQ / S</span>
+                    <span class="sort-icon">{{ modalServiceSortBy === 'rps' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                  </div>
+                </th>
+                <th class="th-bw cursor-pointer" @click="toggleModalSort('bandwidth')">
+                  <div class="th-content">
+                    <span>BANDWIDTH</span>
+                    <span class="sort-icon">{{ modalServiceSortBy === 'bandwidth' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                  </div>
+                </th>
+                <th class="th-res cursor-pointer" @click="toggleModalSort('cpu')">
+                  <div class="th-content">
+                    <span>CPU & MEMORY</span>
+                    <span class="sort-icon">{{ modalServiceSortBy === 'cpu' || modalServiceSortBy === 'mem' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                  </div>
+                </th>
+                <th class="th-status cursor-pointer" @click="toggleModalSort('status')">
+                  <div class="th-content">
+                    <span>STATUS</span>
+                    <span class="sort-icon">{{ modalServiceSortBy === 'status' ? (modalServiceSortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="svc in filteredAndSortedClusterServices"
+                :key="svc.service_name + '-' + svc.node_name"
+                class="breakdown-row"
+              >
+                <!-- 1. Service Name with Dot Badge -->
+                <td class="col-svc">
+                  <div class="service-identity">
+                    <span
+                      class="node-indicator-dot"
+                      :class="svc.status === 'healthy' ? 'bg-emerald' : svc.status === 'degraded' ? 'bg-amber' : 'bg-rose'"
+                    ></span>
+                    <div class="service-name-wrap">
+                      <span class="service-title font-mono">{{ svc.service_name }}</span>
+                      <span class="service-replica-tag" v-if="svc.container_count > 1">
+                        {{ svc.container_count }} replicas
+                      </span>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- 2. Host Node Name -->
+                <td class="col-node">
+                  <div class="node-cell-wrap">
+                    <span class="node-server-icon">🖥️</span>
+                    <span class="node-server-name font-mono">{{ svc.node_name }}</span>
+                  </div>
+                </td>
+
+                <!-- 3. Traffic Contribution Bar -->
+                <td class="col-traffic">
+                  <div class="traffic-bar-cell">
+                    <div class="traffic-track">
+                      <div
+                        class="traffic-fill"
+                        :style="{ width: `${Math.max(4, Math.min(100, svc.traffic_percent))}%` }"
+                      ></div>
+                    </div>
+                    <span class="traffic-label font-mono font-bold">{{ svc.traffic_percent.toFixed(1) }}%</span>
+                  </div>
+                </td>
+
+                <!-- 4. Req / s -->
+                <td class="col-rps font-mono">
+                  <span
+                    class="smooth-value"
+                    :class="svc.requests_per_sec > 0 ? 'text-emerald font-bold' : 'text-muted'"
+                  >
+                    {{ svc.requests_per_sec > 0 ? svc.requests_per_sec.toFixed(1) : '0.0' }}
+                  </span>
+                  <span class="text-xs text-muted" v-if="svc.requests_per_sec > 0"> rps</span>
+                </td>
+
+                <!-- 5. Bandwidth (Rx and Tx) -->
+                <td class="col-bw font-mono">
+                  <div class="bandwidth-stack">
+                    <span class="bw-rx text-cyan" :title="'Live: ' + formatIoRate(svc.rx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_rx_bytes || 0) + ' received'">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span>
+                    <span class="bw-tx text-violet" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Lifetime Total: ' + formatBytes(svc.total_tx_bytes || 0) + ' sent'">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+                  </div>
+                </td>
+
+                <!-- 6. CPU & Memory Footprint -->
+                <td class="col-res font-mono">
+                  <div class="res-stack">
+                    <span
+                      class="smooth-value"
+                      :class="svc.cpu_percent > 80 ? 'text-rose font-bold' : svc.cpu_percent > 50 ? 'text-amber' : 'text-violet'"
+                    >
+                      {{ svc.cpu_percent.toFixed(1) }}% CPU
+                    </span>
+                    <span class="text-cyan text-xs">
+                      {{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}
+                    </span>
+                  </div>
+                </td>
+
+                <!-- 7. Status Badge -->
+                <td class="col-status">
+                  <span
+                    class="badge smooth-value"
+                    :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
+                  >
+                    {{ svc.status === 'healthy' ? '● HEALTHY' : svc.status === 'degraded' ? '● DEGRADED' : '● DOWN' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Workload Card View (Mobile <=640px) -->
+        <div class="breakdown-mobile-list" v-if="filteredAndSortedClusterServices.length > 0">
+          <div
+            v-for="svc in filteredAndSortedClusterServices"
+            :key="svc.service_name + '-' + svc.node_name"
+            class="mobile-workload-card glass-panel"
+          >
+            <!-- Line 1: ● [service_name] + [traffic_percent]% + [STATUS] -->
+            <div class="m-card-header">
+              <div class="m-svc-identity">
+                <span
+                  class="node-indicator-dot"
+                  :class="svc.status === 'healthy' ? 'bg-emerald' : svc.status === 'degraded' ? 'bg-amber' : 'bg-rose'"
+                ></span>
+                <span class="m-svc-title font-mono font-bold">{{ svc.service_name }}</span>
+                <span class="service-replica-tag" v-if="svc.container_count > 1">
+                  ({{ svc.container_count }}x)
+                </span>
+              </div>
+              <div class="m-header-right">
+                <span class="m-traffic-pct font-mono font-bold text-cyan">{{ svc.traffic_percent.toFixed(1) }}%</span>
+                <span
+                  class="badge badge-sm"
+                  :class="svc.status === 'healthy' ? 'badge-emerald' : svc.status === 'degraded' ? 'badge-amber' : 'badge-rose'"
+                >
+                  {{ svc.status === 'healthy' ? '● HEALTHY' : svc.status === 'degraded' ? '● DEGRADED' : '● DOWN' }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Line 2: Full-width blue gradient progress track -->
+            <div class="m-traffic-track">
+              <div
+                class="m-traffic-fill"
+                :style="{ width: `${Math.max(4, Math.min(100, svc.traffic_percent))}%` }"
+              ></div>
+            </div>
+
+            <!-- Line 3: Compact metric chips row: ⚡ [rps] · ↓[rx] ↑[tx] · [cpu]% CPU · [mem] MB · 🖥️ [node_name] -->
+            <div class="m-metric-chips font-mono">
+              <span class="m-chip m-chip-rps" :class="svc.requests_per_sec > 0 ? 'text-emerald font-bold' : 'text-muted'">
+                ⚡ {{ svc.requests_per_sec > 0 ? svc.requests_per_sec.toFixed(1) : '0.0' }} rps
+              </span>
+              <span class="m-chip m-chip-bw text-cyan">
+                ↓ {{ formatIoRate(svc.rx_bytes_per_sec) }} <span class="text-violet">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span>
+              </span>
+              <span class="m-chip m-chip-res" :class="svc.cpu_percent > 80 ? 'text-rose font-bold' : svc.cpu_percent > 50 ? 'text-amber' : 'text-violet'">
+                {{ svc.cpu_percent.toFixed(1) }}% CPU · <span class="text-cyan">{{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}</span>
+              </span>
+              <span class="m-chip m-chip-node text-muted">
+                🖥️ {{ svc.node_name }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty Search State -->
+        <div v-else class="breakdown-empty-state">
+          <span class="empty-icon">🔍</span>
+          <p class="empty-text">No services found matching "{{ modalServiceSearch }}"</p>
+          <button class="btn btn-secondary btn-sm" type="button" @click="modalServiceSearch = ''">
+            Clear Search Filter
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <template #footer="{ close }">
+      <button class="btn btn-secondary" type="button" @click="close">
+        <span>Close Deep-Dive</span>
+      </button>
+    </template>
+  </ModalDrawer>
+</template>
+
+<style scoped>
+/* Responsive label visibility helpers */
+.stat-title-mobile, .chart-title-mobile, .btn-lbl-mobile, .btn-val-mobile, .breakdown-title-mobile { display: none; }
+.stat-title-full, .chart-title-full, .btn-lbl-full, .btn-val-full, .breakdown-title-full { display: inline; }
+
+.deep-dive-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* SECTION 1: Modal Summary Statistics Grid */
+.modal-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.deep-stat-card {
+  position: relative;
+  overflow: hidden;
+  padding: 16px 18px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.deep-stat-card.card-peak-reqs::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, #06b6d4, #10b981);
+}
+
+.deep-stat-card.card-avg-reqs::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.deep-stat-card.card-cpu::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, #8b5cf6, #ec4899);
+}
+
+.deep-stat-card.card-mem::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, #06b6d4, #3b82f6);
+}
+
+.deep-stat-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35), 0 0 18px rgba(56, 189, 248, 0.12);
+}
+
+.deep-stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.deep-stat-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #94a3b8);
+  flex: 1;
+}
+
+.hud-icon {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.deep-stat-body {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.deep-stat-value {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.deep-stat-unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+}
+
+.deep-stat-sub {
+  font-size: 10.5px;
+  color: var(--text-muted, #64748b);
+}
+
+/* Modal Chart Section */
+.modal-chart-section {
+  padding: 18px 20px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.modal-chart-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.modal-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.chart-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trend-chart-subtitle {
+  font-size: 11.5px;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.series-toggles-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.series-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.series-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.series-toggle-btn.toggle-active.cpu-active {
+  background: rgba(139, 92, 246, 0.16);
+  border-color: rgba(139, 92, 246, 0.55);
+  color: #d8b4fe;
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.25), inset 0 0 8px rgba(139, 92, 246, 0.1);
+}
+
+.series-toggle-btn.toggle-active.mem-active {
+  background: rgba(6, 182, 212, 0.16);
+  border-color: rgba(6, 182, 212, 0.55);
+  color: #67e8f9;
+  box-shadow: 0 0 14px rgba(6, 182, 212, 0.25), inset 0 0 8px rgba(6, 182, 212, 0.1);
+}
+
+.series-toggle-btn.toggle-active.reqs-active {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.55);
+  color: #6ee7b7;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.25), inset 0 0 8px rgba(16, 185, 129, 0.1);
+}
+
+.series-toggle-btn.toggle-dimmed {
+  opacity: 0.45;
+  filter: grayscale(0.5);
+}
+
+.toggle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.toggle-val {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.modal-svg-canvas-box {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.modal-expanded-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.svg-axis-label {
+  font-size: 11px;
+  fill: #94a3b8;
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+}
+
+.svg-axis-label.text-emerald {
+  fill: #10b981;
+}
+
+@keyframes peak-pulse {
+  0% {
+    r: 4;
+    opacity: 0.9;
+    stroke-width: 2;
+  }
+  50% {
+    r: 10;
+    opacity: 0.35;
+    stroke-width: 1.2;
+  }
+  100% {
+    r: 15;
+    opacity: 0;
+    stroke-width: 0.5;
+  }
+}
+
+.peak-pulse-ring {
+  animation: peak-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  transform-origin: center;
+}
+
+.modal-rich-tooltip {
+  position: absolute;
+  z-index: 120;
+  min-width: 220px;
+  background: rgba(13, 19, 33, 0.97);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8), 0 0 20px rgba(56, 189, 248, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tooltip-time-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary, #94a3b8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 5px;
+}
+
+.tooltip-time-elapsed {
+  font-size: 10.5px;
+  color: #38bdf8;
+}
+
+.tooltip-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tooltip-metric-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.metric-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.metric-name {
+  color: var(--text-secondary, #94a3b8);
+  flex: 1;
+}
+
+/* Modal Breakdown Table Section */
+.modal-breakdown-section {
+  padding: 18px 20px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.breakdown-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.breakdown-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.breakdown-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.table-search-input-wrap .search-icon {
+  position: absolute;
+  left: 10px;
+  font-size: 12px;
+  color: var(--text-muted, #94a3b8);
+  pointer-events: none;
+}
+
+.table-search-field {
+  padding: 6px 30px 6px 30px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #fff;
+  min-width: 240px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.table-search-field:focus {
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.btn-clear-search:hover {
+  color: #fff;
+}
+
+.breakdown-table-wrapper {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+
+.breakdown-table thead tr {
+  background: rgba(15, 23, 42, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.breakdown-table th {
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted, #94a3b8);
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.breakdown-table th.cursor-pointer:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.th-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sort-icon {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.breakdown-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+
+.breakdown-row:hover {
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.breakdown-table td {
+  padding: 8px 12px;
+  vertical-align: middle;
+}
+
+.service-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.node-indicator-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.service-name-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.service-title {
+  font-weight: 700;
+  color: #fff;
+}
+
+.service-replica-tag {
+  font-size: 10px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.node-cell-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.traffic-bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.traffic-track {
+  flex: 1;
+  height: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.traffic-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
+  border-radius: 999px;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.35);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.traffic-label {
+  font-size: 11px;
+  color: #38bdf8;
+  width: 44px;
+  text-align: right;
+}
+
+.bandwidth-stack,
+.res-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
+}
+
+.breakdown-empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.font-mono { font-family: var(--font-mono, monospace); }
+.font-bold { font-weight: 700; }
+.cursor-pointer { cursor: pointer; }
+.text-cyan { color: #06b6d4; }
+.text-violet { color: #8b5cf6; }
+.text-emerald { color: #10b981; }
+.text-rose { color: #f43f5e; }
+.text-amber { color: #f59e0b; }
+.text-muted { color: #64748b; }
+.bg-cyan { background-color: #06b6d4; }
+.bg-violet { background-color: #8b5cf6; }
+.bg-emerald { background-color: #10b981; }
+.bg-rose { background-color: #f43f5e; }
+.bg-amber { background-color: #f59e0b; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.badge-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+.badge-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.badge-rose { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+.badge-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #f8fafc);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.breakdown-mobile-list {
+  display: none;
+}
+
+.mobile-sort-pills {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .modal-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .stat-title-mobile, .chart-title-mobile, .btn-lbl-mobile, .btn-val-mobile, .breakdown-title-mobile { display: inline !important; }
+  .stat-title-full, .chart-title-full, .btn-lbl-full, .btn-val-full, .breakdown-title-full { display: none !important; }
+  .deep-stat-sub, .trend-chart-subtitle { display: none !important; }
+  .modal-summary-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+  .deep-stat-card { padding: 10px 12px !important; gap: 4px !important; border-radius: 10px !important; }
+  .deep-stat-title { font-size: 11px !important; }
+  .hud-icon { width: 22px !important; height: 22px !important; font-size: 12px !important; }
+  .deep-stat-value { font-size: 20px !important; }
+  .deep-stat-unit { font-size: 10px !important; }
+  .modal-chart-section { padding: 12px 14px !important; gap: 10px !important; border-radius: 10px !important; }
+  .modal-chart-top-bar { gap: 8px !important; }
+  .series-toggles-group {
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    gap: 6px !important;
+  }
+  .series-toggle-btn {
+    white-space: nowrap !important;
+    flex-direction: row !important;
+    gap: 4px !important;
+    padding: 6px 8px !important;
+    font-size: 11px !important;
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+  }
+  .modal-svg-canvas-box { height: 170px !important; }
+  .svg-axis-label {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    fill: #94a3b8 !important;
+  }
+  .svg-axis-label.text-emerald {
+    fill: #10b981 !important;
+  }
+  .modal-breakdown-section { padding: 12px 14px !important; gap: 10px !important; border-radius: 10px !important; }
+  .breakdown-header-bar { gap: 8px !important; }
+  .breakdown-actions-bar {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .table-search-input-wrap { width: 100% !important; }
+  .table-search-field { width: 100% !important; min-width: 0 !important; }
+  .mobile-sort-pills {
+    display: flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    overflow-x: auto !important;
+    width: 100% !important;
+    padding: 2px 0 !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .mobile-sort-pills::-webkit-scrollbar {
+    display: none !important;
+  }
+  .mobile-sort-pill {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    padding: 4px 8px !important;
+    font-size: 10.5px !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: var(--text-secondary, #94a3b8) !important;
+    cursor: pointer !important;
+  }
+  .mobile-sort-pill.active {
+    background: rgba(56, 189, 248, 0.15) !important;
+    color: #38bdf8 !important;
+    border-color: rgba(56, 189, 248, 0.35) !important;
+  }
+  .breakdown-table-wrapper {
+    display: none !important;
+  }
+  .breakdown-mobile-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .mobile-workload-card {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+    background: rgba(15, 23, 42, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  .m-card-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+  }
+  .m-svc-identity {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    flex: 1 !important;
+  }
+  .m-svc-title {
+    font-size: 12.5px !important;
+    color: #fff !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  .m-header-right {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex-shrink: 0 !important;
+  }
+  .m-traffic-pct {
+    font-size: 12px !important;
+    color: #38bdf8 !important;
+  }
+  .m-traffic-track {
+    width: 100% !important;
+    height: 5px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-radius: 999px !important;
+    overflow: hidden !important;
+  }
+  .m-traffic-fill {
+    height: 100% !important;
+    background: linear-gradient(90deg, #38bdf8, #818cf8) !important;
+    border-radius: 999px !important;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.35) !important;
+  }
+  .m-metric-chips {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 5px !important;
+    font-size: 10.5px !important;
+  }
+  .m-chip {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+    padding: 2px 6px !important;
+    border-radius: 5px !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  }
+  .m-chip-node {
+    color: var(--text-muted, #94a3b8) !important;
+  }
+  .badge-sm {
+    padding: 1px 5px !important;
+    font-size: 9px !important;
+  }
+  .btn-secondary { width: 100% !important; justify-content: center !important; }
+}
+</style>\n

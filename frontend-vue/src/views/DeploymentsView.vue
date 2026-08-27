@@ -247,6 +247,52 @@ onMounted(() => {
   fetchDeployments()
 })
 
+function getRolloutState(row: DeploymentApp) {
+  const desired = row.replicas ?? 0
+  const ready = row.readyReplicas !== undefined ? row.readyReplicas : (row.status === 'healthy' ? desired : 0)
+  const updated = row.updatedReplicas !== undefined ? row.updatedReplicas : desired
+  const pending = Math.max(0, desired - ready)
+  const isUpdating = row.status === 'updating' || (desired > 0 && (ready < desired || updated < desired))
+  const isPaused = Boolean(row.paused)
+  const percent = desired > 0 ? Math.min(100, Math.round((ready / desired) * 100)) : 100
+
+  let statusText = ready + '/' + desired + ' Ready'
+  let badgeClass = 'chip-ready'
+  let label = '✓ Ready'
+
+  if (isPaused) {
+    label = '⏸ Paused'
+    badgeClass = 'chip-paused'
+    statusText = ready + '/' + desired + ' Ready (Paused)'
+  } else if (isUpdating) {
+    label = '⟳ Updating (' + pending + ' pending)'
+    badgeClass = 'chip-updating'
+    statusText = ready + '/' + desired + ' Ready • ' + updated + '/' + desired + ' Updated (' + pending + ' pending)'
+  } else if (ready === desired && desired > 0) {
+    label = '✓ Ready'
+    badgeClass = 'chip-ready'
+    statusText = desired + '/' + desired + ' Ready (Rollout complete)'
+  } else if (desired === 0) {
+    label = '0 Replicas'
+    badgeClass = 'chip-scaled-down'
+    statusText = 'Scaled to 0'
+  }
+
+  return {
+    desired,
+    ready,
+    updated,
+    pending,
+    isUpdating,
+    isPaused,
+    percent,
+    statusText,
+    badgeClass,
+    label,
+  }
+}
+
+
 // ==========================================
 // 3. COMPUTED METRICS & FILTERING
 // ==========================================
@@ -338,6 +384,18 @@ function openInspector(app: DeploymentApp, tab: 'overview' | 'strategy' | 'netwo
 
 function openLogsInspector(app: DeploymentApp) {
   openInspector(app, 'logs')
+}
+
+function openYamlViewer() {
+  if (selectedApp.value) {
+    openInspector(selectedApp.value, 'yaml')
+  } else if (filteredDeployments.value.length > 0) {
+    openInspector(filteredDeployments.value[0], 'yaml')
+  } else if (deployments.value.length > 0) {
+    openInspector(deployments.value[0], 'yaml')
+  } else {
+    showCreateModal.value = true
+  }
 }
 
 function switchInspectorTab(tab: 'overview' | 'strategy' | 'network' | 'logs' | 'env' | 'yaml') {
@@ -1019,22 +1077,31 @@ function copyToClipboard(text: string) {
           <span class="pulse-dot pulse-dot-cyan"></span>
           <span>COMPUTE & FLEET ORCHESTRATION</span>
         </div>
-        <h1 class="view-title">Deployments & App Workload Catalog</h1>
+        <h1 class="view-title">
+          <span class="title-full">Deployments & App Workload Catalog</span>
+          <span class="title-compact">🚀 Deployments</span>
+        </h1>
         <p class="view-desc">
           Unified production orchestrator for Kubernetes Deployments & Docker Swarm services with full Canary traffic splits, Blue-Green zero-downtime cutovers, dynamic replica autoscaling, and rolling restarts.
         </p>
       </div>
 
       <div class="header-actions">
-        <button class="btn btn-secondary" @click="showTemplatesDrawer = true">
-          <span>📚 Blueprint Catalog</span>
-        </button>
         <button class="btn btn-secondary" :disabled="loading" @click="fetchDeployments">
-          <span :class="{ 'spin-icon': loading }">🔄</span>
-          <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
+          <span class="btn-text-full"><span :class="{ 'spin-icon': loading }">🔄</span> {{ loading ? 'Syncing...' : 'Refresh' }}</span>
+          <span class="btn-text-mobile">{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
         </button>
         <button class="btn btn-primary" @click="showCreateModal = true">
-          <span>+ Deploy Workload</span>
+          <span class="btn-text-full">+ Deploy Workload</span>
+          <span class="btn-text-mobile">+ Deploy</span>
+        </button>
+        <button class="btn btn-secondary" @click="openYamlViewer">
+          <span class="btn-text-full">📝 YAML Manifest</span>
+          <span class="btn-text-mobile">📝 YAML</span>
+        </button>
+        <button class="btn btn-secondary" @click="showTemplatesDrawer = true">
+          <span class="btn-text-full">📦 Blueprint Catalog</span>
+          <span class="btn-text-mobile">📦 Template</span>
         </button>
       </div>
     </div>
@@ -1102,7 +1169,8 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'all' }"
             @click="activeFilterTab = 'all'"
           >
-            <span>🌐 All Workloads</span>
+            <span class="btn-text-full">🌐 All Workloads</span>
+            <span class="btn-text-mobile">All</span>
             <span class="pill-badge">{{ totalWorkloads }}</span>
           </button>
           <button 
@@ -1110,7 +1178,8 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'canary' }"
             @click="activeFilterTab = 'canary'"
           >
-            <span>🐥 Canary Rollouts</span>
+            <span class="btn-text-full">🐥 Canary Rollouts</span>
+            <span class="btn-text-mobile">Canary</span>
             <span class="pill-badge">{{ canaryCount }}</span>
           </button>
           <button 
@@ -1118,7 +1187,8 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'bluegreen' }"
             @click="activeFilterTab = 'bluegreen'"
           >
-            <span>🔄 Blue-Green</span>
+            <span class="btn-text-full">🔄 Blue-Green</span>
+            <span class="btn-text-mobile">B/G</span>
             <span class="pill-badge">{{ blueGreenCount }}</span>
           </button>
           <button 
@@ -1126,7 +1196,8 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'k8s' }"
             @click="activeFilterTab = 'k8s'"
           >
-            <span>☸️ Kubernetes</span>
+            <span class="btn-text-full">☸️ Kubernetes</span>
+            <span class="btn-text-mobile">K8s</span>
             <span class="pill-badge">{{ k8sCount }}</span>
           </button>
           <button 
@@ -1134,7 +1205,8 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'swarm' }"
             @click="activeFilterTab = 'swarm'"
           >
-            <span>🐳 Docker / Swarm</span>
+            <span class="btn-text-full">🐳 Docker / Swarm</span>
+            <span class="btn-text-mobile">Swarm</span>
             <span class="pill-badge">{{ swarmCount }}</span>
           </button>
         </div>
@@ -1233,20 +1305,34 @@ function copyToClipboard(text: string) {
           </div>
         </template>
 
-        <!-- Replicas & Scale Cell -->
+                <!-- Replicas & Scale Cell / Rollout Progress Indicator -->
         <template #cell-replicas="{ row }">
-          <div class="replicas-cell">
-            <div class="replicas-nums font-mono">
-              <span class="ready-count text-emerald">{{ row.readyReplicas !== undefined ? row.readyReplicas : row.replicas }}</span>
-              <span class="text-muted">/</span>
-              <span class="desired-count">{{ row.replicas }}</span>
-              <span class="replicas-word">Pods</span>
+          <div class="replicas-cell" :title="getRolloutState(row).statusText">
+            <div class="replicas-header-row font-mono">
+              <div class="replicas-nums">
+                <span class="ready-count text-emerald">{{ row.readyReplicas !== undefined ? row.readyReplicas : (row.status === 'healthy' ? row.replicas : 0) }}</span>
+                <span class="text-muted">/</span>
+                <span class="desired-count">{{ row.replicas }}</span>
+                <span class="replicas-word">Pods</span>
+              </div>
+              <span
+                class="rollout-chip font-mono"
+                :class="getRolloutState(row).badgeClass"
+              >
+                <span v-if="getRolloutState(row).isUpdating" class="rollout-spin-dot"></span>
+                {{ getRolloutState(row).label }}
+              </span>
             </div>
+
+            <!-- Rollout Progress Track -->
             <div class="replicas-progress-track">
               <div 
                 class="replicas-progress-bar"
-                :class="row.status === 'healthy' ? 'bg-emerald' : 'bg-amber'"
-                :style="{ width: `${row.replicas ? ((row.readyReplicas !== undefined ? row.readyReplicas : row.replicas) / row.replicas) * 100 : 0}%` }"
+                :class="[
+                  getRolloutState(row).isUpdating ? 'bg-amber progress-animated-stripes' : 'bg-emerald',
+                  { 'is-complete': getRolloutState(row).percent === 100 }
+                ]"
+                :style="{ width: getRolloutState(row).percent + '%' }"
               ></div>
             </div>
           </div>
@@ -2330,7 +2416,7 @@ function copyToClipboard(text: string) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--text-tag-fluid, 11px);
   font-weight: 700;
   color: var(--accent-cyan);
   letter-spacing: 0.08em;
@@ -2338,14 +2424,34 @@ function copyToClipboard(text: string) {
 }
 
 .view-title {
-  font-size: 24px;
+  font-size: var(--text-title-fluid, 24px);
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.title-full {
+  display: inline;
+}
+
+.title-compact,
+.title-mobile {
+  display: none;
+}
+
+.btn-text-full {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-text-mobile {
+  display: none;
 }
 
 .view-desc {
-  font-size: 13px;
+  font-size: var(--text-desc-fluid, 13px);
   color: var(--text-secondary);
   line-height: 1.5;
   margin-top: 4px;
@@ -3783,4 +3889,525 @@ function copyToClipboard(text: string) {
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 .w-full { width: 100%; }
 .cursor-pointer { cursor: pointer; }
+
+/* ========================================== */
+/* RESPONSIVE & MOBILE WEB OVERHAUL           */
+/* ========================================== */
+.filter-deck,
+.tabs-container {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  white-space: nowrap;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.deployment-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+}
+
+.deployment-card-top,
+.card-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .kpi-grid,
+  .swarm-meta-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .metric-card,
+  .stat-card,
+  .hud-card,
+  :deep(.metric-card) {
+    padding: 10px 12px !important;
+  }
+
+  .table-controls-bar {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .filter-pills-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    width: 100%;
+  }
+
+  .filter-pills-row .pill-btn {
+    flex-shrink: 0;
+  }
+
+  .table-search-row {
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .select-ns {
+    width: 100%;
+  }
+
+  .action-buttons {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .action-buttons .btn {
+    flex: 1 1 auto;
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .replicas-cell {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .replicas-progress-track {
+    width: 100%;
+    max-width: 120px;
+  }
+
+  .tracks-comparison-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .bg-tracks-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .inspector-quick-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .inspector-quick-actions .btn {
+    flex: 1 1 calc(50% - 8px);
+  }
+}
+
+@media (max-width: 640px) {
+  .title-full {
+    display: none !important;
+  }
+
+  .title-compact,
+  .title-mobile {
+    display: inline !important;
+  }
+
+  .view-tag {
+    display: none !important;
+  }
+
+  .view-desc {
+    display: none !important;
+  }
+
+  .view-title {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+  }
+
+  .view-header {
+    gap: 10px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 8px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .btn-text-full {
+    display: none !important;
+  }
+
+  .btn-text-mobile {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .kpi-grid,
+  .swarm-meta-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .metric-card,
+  .stat-card,
+  .hud-card,
+  :deep(.metric-card) {
+    padding: 8px 10px !important;
+    min-height: auto !important;
+    border-radius: 10px !important;
+  }
+
+  :deep(.metric-card .metric-subtitle),
+  :deep(.metric-card .metric-desc),
+  :deep(.metric-card .metric-footer),
+  :deep(.metric-card .metric-trend) {
+    display: none !important;
+  }
+
+  :deep(.metric-card .metric-value),
+  .metric-card .metric-value {
+    font-size: 18px !important;
+  }
+
+  :deep(.metric-card .metric-title),
+  .metric-card .metric-title {
+    font-size: 10px !important;
+  }
+
+  :deep(.metric-card .metric-badge),
+  .metric-card .metric-badge {
+    display: none !important;
+  }
+
+  :deep(.metric-card .metric-header),
+  .metric-card .metric-header {
+    gap: 4px !important;
+  }
+
+  .table-controls-bar {
+    padding: 10px !important;
+    gap: 10px !important;
+  }
+
+  .filter-pills-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    -webkit-overflow-scrolling: touch !important;
+    gap: 6px !important;
+    padding-bottom: 4px !important;
+    width: 100% !important;
+  }
+
+  .filter-pills-row::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .filter-pills-row .pill-btn {
+    flex-shrink: 0 !important;
+    font-size: 11.5px !important;
+    padding: 5px 8px !important;
+    gap: 5px !important;
+  }
+
+  .pill-badge {
+    font-size: 10px !important;
+    padding: 1px 5px !important;
+  }
+
+  .view-container {
+    gap: 14px !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .strategy-type-selector {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .strat-tab-btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .canary-presets-row {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .preset-pill {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  .canary-actions-bar {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .canary-actions-bar .btn {
+    width: 100%;
+  }
+
+  .revisions-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .revisions-btns {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .revisions-btns .btn {
+    flex: 1 1 calc(50% - 6px);
+  }
+
+  .rev-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .logs-terminal-window {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .logs-terminal-titlebar {
+    height: auto;
+    padding: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .logs-terminal-body {
+    height: 280px;
+    max-height: 45vh;
+    font-size: 10px;
+    padding: 8px 6px;
+  }
+
+  .terminal-log-row {
+    font-size: 10px;
+    gap: 6px;
+  }
+
+  .log-row-num {
+    width: 22px;
+    font-size: 9px;
+  }
+
+  .logs-deck-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .logs-deck-actions .btn {
+    width: 100%;
+  }
+
+  .inspector-tabs-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  .spec-row {
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+  }
+
+  .inspector-quick-actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .inspector-quick-actions .btn {
+    width: 100%;
+  }
+
+  .wizard-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .env-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .yaml-viewer {
+    max-height: 320px;
+    font-size: 10px;
+    padding: 10px;
+  }
+}
+
+/* Rollout Progress Styles */
+.replicas-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.rollout-chip {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip-ready {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.chip-updating {
+  background: rgba(245, 158, 11, 0.18);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  animation: pulse-updating 2s infinite ease-in-out;
+}
+
+.chip-paused {
+  background: rgba(100, 116, 139, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+.chip-scaled-down {
+  background: rgba(51, 65, 85, 0.3);
+  color: #64748b;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.rollout-spin-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+  display: inline-block;
+  animation: spin-pulse 1.2s infinite;
+}
+
+@keyframes pulse-updating {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+@keyframes spin-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.6); opacity: 0.5; }
+}
+
+.progress-animated-stripes {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.18) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.18) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 1rem 1rem;
+  animation: progress-stripes 1s linear infinite;
+}
+
+@keyframes progress-stripes {
+  0% { background-position: 1rem 0; }
+  100% { background-position: 0 0; }
+}
+
 </style>

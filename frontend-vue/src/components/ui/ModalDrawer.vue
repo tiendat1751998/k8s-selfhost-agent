@@ -231,6 +231,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: 1;
 }
 
 .title-wrap {
@@ -258,6 +259,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: auto;
+  flex-shrink: 0;
 }
 
 .close-button {
@@ -341,5 +344,56 @@ onUnmounted(() => {
 }
 .drawer-slide-leave-to {
   transform: translateX(100%);
+}
+
+@media (max-width: 640px) {
+  .modal-drawer-backdrop {
+    padding: 10px !important;
+  }
+
+  .modal-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 12px;
+  }
+
+  .drawer-panel {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    border-radius: 0;
+  }
+
+  .panel-header {
+    padding: 10px 14px !important;
+  }
+
+  .panel-header .header-actions {
+    width: auto !important;
+    flex-shrink: 0 !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .panel-title {
+    font-size: 14.5px !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+  }
+
+  .panel-subtitle {
+    display: none !important;
+  }
+
+  .panel-body {
+    padding: 12px 14px !important;
+  }
+
+  .panel-footer {
+    padding: 10px 14px !important;
+  }
+
+  .drawer-body {
+    padding: 12px 14px;
+  }
 }
 </style>

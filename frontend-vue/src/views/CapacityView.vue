@@ -548,7 +548,7 @@ function formatDate(d: string): string {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--text-tag-fluid, 11px);
   font-weight: 700;
   color: var(--accent-cyan);
   letter-spacing: 0.05em;
@@ -556,17 +556,19 @@ function formatDate(d: string): string {
 }
 
 .view-title {
-  font-size: 24px;
+  font-size: var(--text-title-fluid, 24px);
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .view-desc {
-  font-size: 13px;
+  font-size: var(--text-desc-fluid, 13px);
   color: var(--text-secondary);
   max-width: 820px;
   margin-top: 4px;
+  line-height: 1.5;
 }
 
 .highlight {
@@ -908,5 +910,150 @@ function formatDate(d: string): string {
   color: var(--text-muted);
   max-width: 480px;
   margin-bottom: 6px;
+}
+
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .capacity-grid,
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .metric-card,
+  .stat-card,
+  .hud-card,
+  :deep(.metric-card) {
+    padding: 10px 12px !important;
+  }
+  .forecasts-grid {
+    grid-template-columns: 1fr;
+  }
+  .recommendations-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-group-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .modal-overlay {
+    padding: 12px;
+  }
+  .modal-card {
+    max-width: 100%;
+    border-radius: 14px;
+  }
+  .modal-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .capacity-grid,
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .metric-card,
+  .stat-card,
+  .hud-card,
+  :deep(.metric-card) {
+    padding: 10px 12px !important;
+  }
+
+  .view-tag {
+    font-size: var(--text-tag-fluid, 10px);
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .view-title {
+    font-size: var(--text-title-fluid, clamp(18px, 4.5vw, 22px));
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+
+  .view-desc {
+    font-size: var(--text-desc-fluid, 12px);
+    line-height: 1.45;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .forecast-card {
+    padding: 14px;
+  }
+  .trajectory-matrix {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .forecast-footer {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .rec-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

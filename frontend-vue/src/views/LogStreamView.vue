@@ -443,4 +443,151 @@ watch(
 .text-rose { color: #fb7185; }
 .text-cyan { color: #38bdf8; }
 .font-mono { font-family: var(--font-mono); }
+
+/* Responsive Overhaul for Mobile & Tablets */
+@media (max-width: 768px) {
+  .view-container {
+    height: auto;
+    min-height: calc(100vh - 100px);
+    gap: 14px;
+  }
+
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .kpi-grid,
+  .swarm-meta-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .metric-card,
+  .stat-card,
+  .hud-card,
+  :deep(.metric-card) {
+    padding: 10px 12px !important;
+  }
+
+  .control-deck {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    backdrop-filter: blur(12px);
+    padding: 10px 14px;
+    border-radius: 12px;
+  }
+
+  .deck-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .search-input-wrapper {
+    min-width: 100%;
+  }
+
+  .deck-select-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .terminal-window {
+    height: 380px;
+    min-height: 380px;
+    border-radius: 12px;
+  }
+
+  .terminal-body {
+    padding: 10px 12px;
+  }
+
+  .log-line {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    font-size: 11px;
+  }
+
+  .log-idx {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .kpi-grid,
+  .swarm-meta-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .metric-card,
+  .stat-card,
+  .hud-card,
+  :deep(.metric-card) {
+    padding: 10px 12px !important;
+  }
+
+  .terminal-titlebar {
+    padding: 0 10px;
+  }
+
+  .window-buttons {
+    display: none;
+  }
+}
 </style>

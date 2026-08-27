@@ -22,6 +22,7 @@ type testDockerRepo struct {
 	tokensErr     error
 	nodeDetailErr error
 	swarmInfoErr  error
+	logs          string
 }
 
 func (r *testDockerRepo) ListContainers(ctx context.Context) ([]domain.Container, error) {
@@ -67,10 +68,16 @@ func (r *testDockerRepo) CreateService(ctx context.Context, name string, image s
 }
 
 func (r *testDockerRepo) GetLogs(ctx context.Context, targetID string, targetType string) (string, error) {
+	if r.logs != "" {
+		return r.logs, nil
+	}
 	return "mock logs", nil
 }
 
 func (r *testDockerRepo) GetLogsWithOptions(ctx context.Context, targetID string, targetType string, tail string, since string) (string, error) {
+	if r.logs != "" {
+		return r.logs, nil
+	}
 	return "mock logs", nil
 }
 
@@ -990,6 +997,105 @@ func TestDockerHandler_GetLogs(t *testing.T) {
 		}
 		if resp["logs"] != "mock logs" {
 			t.Errorf("expected fallback 'mock logs', got '%s'", resp["logs"])
+		}
+	})
+
+	t.Run("Get Logs - Search Query Filtering", func(t *testing.T) {
+		repoWithLogs := &testDockerRepo{
+			logs: "2026-08-25T10:00:00Z [INFO] Server started\n2026-08-25T10:01:00Z [WARN] Request timeout\n2026-08-25T10:02:00Z [ERROR] DB failed",
+		}
+		h := NewDockerHandler(repoWithLogs)
+		router := chi.NewRouter()
+		router.Route("/docker", h.RegisterRoutes)
+
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=c1&q=TIMEOUT", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		expected := "2026-08-25T10:01:00Z [WARN] Request timeout"
+		if resp["logs"] != expected {
+			t.Errorf("expected '%s', got '%s'", expected, resp["logs"])
+		}
+	})
+
+	t.Run("Get Logs - Level Filtering (error, warn, info, all)", func(t *testing.T) {
+		repoWithLogs := &testDockerRepo{
+			logs: "2026-08-25T10:00:00Z [INFO] Server started\n2026-08-25T10:01:00Z [WARN] Memory high warning\n2026-08-25T10:02:00Z [ERROR] Connection failed",
+		}
+		h := NewDockerHandler(repoWithLogs)
+		router := chi.NewRouter()
+		router.Route("/docker", h.RegisterRoutes)
+
+		// Test level=error
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=c1&level=error", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		var resp map[string]string
+		_ = json.NewDecoder(w.Body).Decode(&resp)
+		if resp["logs"] != "2026-08-25T10:02:00Z [ERROR] Connection failed" {
+			t.Errorf("expected error log, got: %s", resp["logs"])
+		}
+
+		// Test level=warn
+		req = httptest.NewRequest(http.MethodGet, "/docker/logs?id=c1&level=warn", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		_ = json.NewDecoder(w.Body).Decode(&resp)
+		if resp["logs"] != "2026-08-25T10:01:00Z [WARN] Memory high warning" {
+			t.Errorf("expected warn log, got: %s", resp["logs"])
+		}
+
+		// Test level=info
+		req = httptest.NewRequest(http.MethodGet, "/docker/logs?id=c1&level=info", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		_ = json.NewDecoder(w.Body).Decode(&resp)
+		if resp["logs"] != "2026-08-25T10:00:00Z [INFO] Server started" {
+			t.Errorf("expected info log, got: %s", resp["logs"])
+		}
+
+		// Test level=all
+		req = httptest.NewRequest(http.MethodGet, "/docker/logs?id=c1&level=all", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		_ = json.NewDecoder(w.Body).Decode(&resp)
+		if resp["logs"] != repoWithLogs.logs {
+			t.Errorf("expected all logs, got: %s", resp["logs"])
+		}
+	})
+
+	t.Run("Get Logs - Combined Query and Level and Limit Filtering", func(t *testing.T) {
+		repoWithLogs := &testDockerRepo{
+			logs: "2026-08-25T10:00:00Z [ERROR] Postgres query failed 1\n2026-08-25T10:01:00Z [ERROR] Postgres query failed 2\n2026-08-25T10:02:00Z [ERROR] Postgres query failed 3\n2026-08-25T10:03:00Z [ERROR] Redis auth failed",
+		}
+		h := NewDockerHandler(repoWithLogs)
+		router := chi.NewRouter()
+		router.Route("/docker", h.RegisterRoutes)
+
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=c1&q=postgres&level=error&limit=2", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		expected := "2026-08-25T10:00:00Z [ERROR] Postgres query failed 1\n2026-08-25T10:01:00Z [ERROR] Postgres query failed 2"
+		if resp["logs"] != expected {
+			t.Errorf("expected '%s', got '%s'", expected, resp["logs"])
 		}
 	})
 }

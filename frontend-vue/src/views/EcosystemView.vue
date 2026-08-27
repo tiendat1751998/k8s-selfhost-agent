@@ -1221,4 +1221,166 @@ onUnmounted(() => {
 .fade-leave-to {
   opacity: 0;
 }
+
+@media (max-width: 768px) {
+  .ecosystem-view {
+    padding: 16px;
+  }
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a,
+  .header-actions .btn-primary,
+  .header-actions .btn-secondary {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .plugin-stats,
+  .ai-stats,
+  .summary-hud-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  :deep(.metric-card),
+  .metric-card,
+  :deep(.stat-card),
+  .stat-card,
+  .hud-card,
+  :deep(.hud-card) {
+    padding: 10px 12px !important;
+  }
+  .category-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    padding-bottom: 4px;
+  }
+  .filter-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .search-box {
+    width: 100%;
+    min-width: 0;
+  }
+  .filter-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .filter-select {
+    flex: 1;
+  }
+  .tools-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .modal-dialog {
+    width: 100%;
+    max-width: 100%;
+  }
+  .modal-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .modal-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a,
+  .header-actions .btn-primary,
+  .header-actions .btn-secondary {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .plugin-stats,
+  .ai-stats,
+  .summary-hud-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  :deep(.metric-card),
+  .metric-card,
+  :deep(.stat-card),
+  .stat-card,
+  .hud-card,
+  :deep(.hud-card) {
+    padding: 10px 12px !important;
+  }
+
+  :deep(.metric-card .metric-value),
+  .metric-card .metric-value {
+    font-size: 18px;
+  }
+
+  :deep(.metric-card .metric-title),
+  .metric-card .metric-title {
+    font-size: 10px;
+  }
+
+  :deep(.metric-card .metric-footer),
+  .metric-card .metric-footer {
+    font-size: 10px;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .status-badge-wrap {
+    align-self: flex-start;
+  }
+}
 </style>

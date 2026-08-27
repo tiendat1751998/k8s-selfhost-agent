@@ -112,6 +112,12 @@ const router = createRouter({
       component: ExplorerView,
       meta: { requiresAuth: true }
     },
+    {
+      path: '/helm',
+      name: 'helm',
+      component: () => import('../views/HelmCatalogView.vue'),
+      meta: { requiresAuth: true }
+    },
 
     // 3. Governance & Security
     {
@@ -122,12 +128,14 @@ const router = createRouter({
     },
     {
       path: '/security',
+      alias: ['/security/devsecops', '/devsecops'],
       name: 'security',
       component: DevSecOpsView,
       meta: { requiresAuth: true }
     },
     {
       path: '/compliance',
+      alias: ['/security/compliance', '/compliance-center'],
       name: 'compliance',
       component: ComplianceView,
       meta: { requiresAuth: true }
@@ -160,6 +168,7 @@ const router = createRouter({
     },
     {
       path: '/cost',
+      alias: ['/finops/cost', '/finops'],
       name: 'cost',
       component: CostFinOpsView,
       meta: { requiresAuth: true }
@@ -174,12 +183,14 @@ const router = createRouter({
     // 5. Enterprise Management
     {
       path: '/tenancy',
+      alias: ['/tenancy/rbac', '/rbac'],
       name: 'tenancy',
       component: TenancyRbacView,
       meta: { requiresAuth: true }
     },
     {
       path: '/ai-hub',
+      alias: ['/ai/providers', '/ai-providers'],
       name: 'ai-hub',
       component: AIProviderHubView,
       meta: { requiresAuth: true }

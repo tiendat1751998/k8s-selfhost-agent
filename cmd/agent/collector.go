@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -23,6 +24,18 @@ type DiskUsageFunc func(mountPoint string) (totalBytes int64, usedBytes int64, e
 type netDevStat struct {
 	rxBytes int64
 	txBytes int64
+}
+
+type diskDevSnapshot struct {
+	readsCompleted   uint64
+	sectorsRead      uint64
+	readTimeMs       uint64
+	writesCompleted  uint64
+	sectorsWritten   uint64
+	writeTimeMs      uint64
+	ioInProgress     int64
+	ioTimeMs         uint64
+	weightedIoTimeMs uint64
 }
 
 type procStatSnapshot struct {
@@ -41,6 +54,8 @@ type SystemCollector struct {
 	interval      time.Duration
 	prevCPUTotal  uint64
 	prevCPUActive uint64
+	prevDiskStats map[string]diskDevSnapshot
+	prevDiskTime  time.Time
 	prevNetStats  map[string]netDevStat
 	prevNetTime   time.Time
 	prevProcStats map[int]procStatSnapshot
@@ -119,6 +134,7 @@ func NewSystemCollector(procPath, mountsPath string, diskUsageFn DiskUsageFunc, 
 		osReleasePath: "/etc/os-release",
 		diskUsageFn:   diskUsageFn,
 		interval:      5 * time.Second,
+		prevDiskStats: make(map[string]diskDevSnapshot),
 		prevNetStats:  make(map[string]netDevStat),
 		prevProcStats: make(map[int]procStatSnapshot),
 		startTime:     time.Now().UTC(),
@@ -163,6 +179,9 @@ func (c *SystemCollector) Collect() (*MetricsResponse, error) {
 	// 6. Disks
 	diskMetrics := c.collectDisks()
 
+	// 6b. Disk I/O
+	diskIOMetrics := c.collectDiskIO(now)
+
 	// 7. Network
 	netMetrics := c.collectNetwork(now)
 
@@ -183,6 +202,7 @@ func (c *SystemCollector) Collect() (*MetricsResponse, error) {
 		CPU:           cpuMetrics,
 		Memory:        memMetrics,
 		Disks:         diskMetrics,
+		DiskIO:        diskIOMetrics,
 		Network:       netMetrics,
 		Processes:     procCount,
 		TopProcesses:  topProcesses,
@@ -540,6 +560,228 @@ func (c *SystemCollector) collectDisks() []DiskMetrics {
 	}
 
 	return disks
+}
+
+var (
+	diskRootSdRegex   = regexp.MustCompile(`^(sd|vd|xvd|hd)[a-z]+$`)
+	diskRootNvmeRegex = regexp.MustCompile(`^nvme\d+n\d+$`)
+	diskRootMmcRegex  = regexp.MustCompile(`^mmcblk\d+$`)
+	diskRootDmRegex   = regexp.MustCompile(`^dm-\d+$`)
+	diskRootMdRegex   = regexp.MustCompile(`^md\d+$`)
+)
+
+func isIgnoredDiskDevice(devName string) bool {
+	devName = strings.TrimSpace(devName)
+	if devName == "" {
+		return true
+	}
+	if strings.HasPrefix(devName, "loop") ||
+		strings.HasPrefix(devName, "ram") ||
+		strings.HasPrefix(devName, "zram") ||
+		strings.HasPrefix(devName, "sr") {
+		return true
+	}
+	return false
+}
+
+func isRootBlockDevice(devName string) bool {
+	devName = strings.TrimSpace(devName)
+	if isIgnoredDiskDevice(devName) {
+		return false
+	}
+	if diskRootSdRegex.MatchString(devName) ||
+		diskRootNvmeRegex.MatchString(devName) ||
+		diskRootMmcRegex.MatchString(devName) ||
+		diskRootDmRegex.MatchString(devName) ||
+		diskRootMdRegex.MatchString(devName) {
+		return true
+	}
+	return false
+}
+
+func (c *SystemCollector) collectDiskIO(now time.Time) DiskIOMetrics {
+	diskstatsPath := filepath.Join(c.procPath, "diskstats")
+	data, err := os.ReadFile(diskstatsPath)
+	if err != nil {
+		return DiskIOMetrics{
+			Devices: make([]DiskIOStats, 0),
+		}
+	}
+
+	var deltaSec float64
+	hasPrevTime := !c.prevDiskTime.IsZero()
+	if hasPrevTime {
+		deltaSec = now.Sub(c.prevDiskTime).Seconds()
+	}
+
+	newSnap := make(map[string]diskDevSnapshot)
+	devices := make([]DiskIOStats, 0)
+
+	var totalReadBytesPerSec, totalWriteBytesPerSec int64
+	var totalReadIOPS, totalWriteIOPS float64
+	var maxIoUtil float64
+	var totalRootDeltaReads, totalRootDeltaWrites uint64
+	var totalRootDeltaReadTimeMs, totalRootDeltaWriteTimeMs uint64
+
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) < 14 {
+			continue
+		}
+
+		devName := fields[2]
+		if isIgnoredDiskDevice(devName) {
+			continue
+		}
+
+		readsCompleted, _ := strconv.ParseUint(fields[3], 10, 64)
+		sectorsRead, _ := strconv.ParseUint(fields[5], 10, 64)
+		readTimeMs, _ := strconv.ParseUint(fields[6], 10, 64)
+		writesCompleted, _ := strconv.ParseUint(fields[7], 10, 64)
+		sectorsWritten, _ := strconv.ParseUint(fields[9], 10, 64)
+		writeTimeMs, _ := strconv.ParseUint(fields[10], 10, 64)
+		ioInProgress, _ := strconv.ParseInt(fields[11], 10, 64)
+		ioTimeMs, _ := strconv.ParseUint(fields[12], 10, 64)
+		weightedIoTimeMs, _ := strconv.ParseUint(fields[13], 10, 64)
+
+		curr := diskDevSnapshot{
+			readsCompleted:   readsCompleted,
+			sectorsRead:      sectorsRead,
+			readTimeMs:       readTimeMs,
+			writesCompleted:  writesCompleted,
+			sectorsWritten:   sectorsWritten,
+			writeTimeMs:      writeTimeMs,
+			ioInProgress:     ioInProgress,
+			ioTimeMs:         ioTimeMs,
+			weightedIoTimeMs: weightedIoTimeMs,
+		}
+		newSnap[devName] = curr
+
+		isRoot := isRootBlockDevice(devName)
+
+		var readBytesPerSec, writeBytesPerSec int64
+		var readIOPS, writeIOPS float64
+		var avgWaitMs, avgReqSizeKB, ioUtilPct float64
+
+		if hasPrevTime && deltaSec >= 0.1 {
+			prev, ok := c.prevDiskStats[devName]
+			if ok {
+				var deltaReads, deltaSectorsRead, deltaReadTimeMs uint64
+				var deltaWrites, deltaSectorsWritten, deltaWriteTimeMs uint64
+				var deltaIoTimeMs uint64
+
+				if curr.readsCompleted >= prev.readsCompleted {
+					deltaReads = curr.readsCompleted - prev.readsCompleted
+				}
+				if curr.sectorsRead >= prev.sectorsRead {
+					deltaSectorsRead = curr.sectorsRead - prev.sectorsRead
+				}
+				if curr.readTimeMs >= prev.readTimeMs {
+					deltaReadTimeMs = curr.readTimeMs - prev.readTimeMs
+				}
+				if curr.writesCompleted >= prev.writesCompleted {
+					deltaWrites = curr.writesCompleted - prev.writesCompleted
+				}
+				if curr.sectorsWritten >= prev.sectorsWritten {
+					deltaSectorsWritten = curr.sectorsWritten - prev.sectorsWritten
+				}
+				if curr.writeTimeMs >= prev.writeTimeMs {
+					deltaWriteTimeMs = curr.writeTimeMs - prev.writeTimeMs
+				}
+				if curr.ioTimeMs >= prev.ioTimeMs {
+					deltaIoTimeMs = curr.ioTimeMs - prev.ioTimeMs
+				}
+
+				readBytesPerSec = int64(float64(deltaSectorsRead*512) / deltaSec)
+				writeBytesPerSec = int64(float64(deltaSectorsWritten*512) / deltaSec)
+				readIOPS = math.Round((float64(deltaReads)/deltaSec)*100) / 100
+				writeIOPS = math.Round((float64(deltaWrites)/deltaSec)*100) / 100
+
+				totalIOs := deltaReads + deltaWrites
+				if totalIOs > 0 {
+					avgWaitMs = math.Round((float64(deltaReadTimeMs+deltaWriteTimeMs)/float64(totalIOs))*100) / 100
+					avgReqSizeKB = math.Round((float64((deltaSectorsRead+deltaSectorsWritten)*512)/float64(totalIOs)/1024)*100) / 100
+				}
+
+				ioUtilPct = math.Min(100.0, math.Round((float64(deltaIoTimeMs)/(deltaSec*1000.0)*100.0)*100)/100)
+
+				if isRoot {
+					totalReadBytesPerSec += readBytesPerSec
+					totalWriteBytesPerSec += writeBytesPerSec
+					totalReadIOPS += readIOPS
+					totalWriteIOPS += writeIOPS
+					totalRootDeltaReads += deltaReads
+					totalRootDeltaWrites += deltaWrites
+					totalRootDeltaReadTimeMs += deltaReadTimeMs
+					totalRootDeltaWriteTimeMs += deltaWriteTimeMs
+					if ioUtilPct > maxIoUtil {
+						maxIoUtil = ioUtilPct
+					}
+				}
+			}
+		}
+
+		devices = append(devices, DiskIOStats{
+			DeviceName:        devName,
+			ReadBytesPerSec:   readBytesPerSec,
+			WriteBytesPerSec:  writeBytesPerSec,
+			ReadIOPS:          readIOPS,
+			WriteIOPS:         writeIOPS,
+			AvgWaitMs:         avgWaitMs,
+			AvgRequestSizeKB:  avgReqSizeKB,
+			CurrentQueueDepth: ioInProgress,
+			IoUtilizationPct:  ioUtilPct,
+			IsRootDevice:      isRoot,
+		})
+	}
+
+	c.prevDiskStats = newSnap
+	c.prevDiskTime = now
+
+	// Robust Fallback: If no root devices were matched or root devices reported 0 while sub-devices had active I/O,
+	// sum active non-ignored block devices
+	if totalReadBytesPerSec == 0 && totalWriteBytesPerSec == 0 && totalReadIOPS == 0 && totalWriteIOPS == 0 {
+		for _, dev := range devices {
+			if !isIgnoredDiskDevice(dev.DeviceName) {
+				totalReadBytesPerSec += dev.ReadBytesPerSec
+				totalWriteBytesPerSec += dev.WriteBytesPerSec
+				totalReadIOPS += dev.ReadIOPS
+				totalWriteIOPS += dev.WriteIOPS
+				if dev.IoUtilizationPct > maxIoUtil {
+					maxIoUtil = dev.IoUtilizationPct
+				}
+			}
+		}
+	}
+
+	var avgAwaitMs float64
+	totalRootIOs := totalRootDeltaReads + totalRootDeltaWrites
+	if totalRootIOs > 0 {
+		avgAwaitMs = math.Round((float64(totalRootDeltaReadTimeMs+totalRootDeltaWriteTimeMs)/float64(totalRootIOs))*100) / 100
+	} else if len(devices) > 0 {
+		var waitSum float64
+		var waitCount int
+		for _, dev := range devices {
+			if dev.AvgWaitMs > 0 {
+				waitSum += dev.AvgWaitMs
+				waitCount++
+			}
+		}
+		if waitCount > 0 {
+			avgAwaitMs = math.Round((waitSum/float64(waitCount))*100) / 100
+		}
+	}
+
+	return DiskIOMetrics{
+		TotalReadBytesPerSec:  totalReadBytesPerSec,
+		TotalWriteBytesPerSec: totalWriteBytesPerSec,
+		TotalReadIOPS:         math.Round(totalReadIOPS*100) / 100,
+		TotalWriteIOPS:        math.Round(totalWriteIOPS*100) / 100,
+		AvgAwaitMs:            avgAwaitMs,
+		MaxIoUtilizationPct:   math.Round(maxIoUtil*100) / 100,
+		Devices:               devices,
+	}
 }
 
 func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {

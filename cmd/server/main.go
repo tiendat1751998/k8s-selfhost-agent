@@ -462,6 +462,8 @@ func run() error {
 	var healthCenterHandler *adapthttp.HealthCenterHandler
 	var deploymentsHandler *adapthttp.DeploymentHandler
 	var k8sHandler *adapthttp.K8sResourceHandler
+	var k8sExecHandler *adapthttp.K8sExecHandler
+	var k8sLogsHandler *adapthttp.K8sLogsHandler
 
 	deploymentsHandler = adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
 	explorerHandler = adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
@@ -469,8 +471,12 @@ func run() error {
 	if k8sAvailable {
 		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager))
 		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(k8sClient, clientManager), auditRepo)
+		k8sExecHandler = adapthttp.NewK8sExecHandler(k8sClient, clientManager)
+		k8sLogsHandler = adapthttp.NewK8sLogsHandler(k8sClient, clientManager)
 	} else {
 		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(nil, clientManager), auditRepo)
+		k8sExecHandler = adapthttp.NewK8sExecHandler(nil, clientManager)
+		k8sLogsHandler = adapthttp.NewK8sLogsHandler(nil, clientManager)
 	}
 
 	logAggregator := logging.NewLogAggregator(2000)
@@ -589,6 +595,8 @@ func run() error {
 		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
 		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
 		K8s:           k8sHandler,
+		K8sExec:       k8sExecHandler,
+		K8sLogs:       k8sLogsHandler,
 		Cloud:         cloudHandler,
 		LogStream:     logStreamHandler,
 	}
@@ -670,8 +678,8 @@ func initializeWelcomeMessage(ctx context.Context, db *pgxpool.Pool, hub *adapth
 	if count == 0 {
 		_, err = db.Exec(ctx, `
 			INSERT INTO cicd_integrations (id, name, provider, status, success_rate, last_log) VALUES
-			('33333333-3333-3333-3333-333333333333', 'deploy-prod', 'GitHub Actions', 'active', 96.0, '✓ Build passed\n✓ Tests passed (142/142)\n✓ Image pushed: k8s-agent:v1.2.3\n✓ Deployed to prod-us-east\n✓ Health check OK'),
-			('44444444-4444-4444-4444-444444444444', 'deploy-staging', 'GitHub Actions', 'active', 89.0, '✓ Build passed\n✓ Tests passed\n✓ Deployed to staging-1')
+			('33333333-3333-3333-3333-333333333333', 'deploy-prod', 'GitHub Actions', 'active', 96.0, 'âœ“ Build passed\nâœ“ Tests passed (142/142)\nâœ“ Image pushed: k8s-agent:v1.2.3\nâœ“ Deployed to prod-us-east\nâœ“ Health check OK'),
+			('44444444-4444-4444-4444-444444444444', 'deploy-staging', 'GitHub Actions', 'active', 89.0, 'âœ“ Build passed\nâœ“ Tests passed\nâœ“ Deployed to staging-1')
 			ON CONFLICT DO NOTHING
 		`)
 		if err != nil {

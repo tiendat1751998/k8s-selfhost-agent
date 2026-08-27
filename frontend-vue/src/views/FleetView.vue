@@ -215,7 +215,10 @@ async function handleRemove(cluster: Cluster) {
           <span class="pulse-dot pulse-dot-cyan"></span>
           <span>HYBRID & MULTI-CLOUD FEDERATION</span>
         </div>
-        <h1 class="view-title">Multi-Cluster Fleet Manager</h1>
+        <h1 class="view-title">
+          <span class="title-full">Multi-Cluster Fleet Manager</span>
+          <span class="title-mobile">🌐 Fleet Clusters</span>
+        </h1>
         <p class="view-desc">
           Centralized topology dashboard for on-premise, edge, Docker Swarm, and cloud Kubernetes clusters with live health monitoring and zero-downtime upgrades.
         </p>
@@ -223,10 +226,12 @@ async function handleRemove(cluster: Cluster) {
 
       <div class="header-actions">
         <button class="btn btn-secondary" :disabled="loading" @click="fetchFleet">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh Fleet' }}</span>
+          <span class="btn-text-full">{{ loading ? '⏳ Syncing...' : '🔄 Refresh Fleet' }}</span>
+          <span class="btn-text-mobile">{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
         </button>
         <button class="btn btn-primary" @click="showImportModal = true">
-          <span>+ Import Cluster</span>
+          <span class="btn-text-full">+ Import Cluster</span>
+          <span class="btn-text-mobile">+ Import</span>
         </button>
       </div>
     </div>
@@ -697,7 +702,7 @@ async function handleRemove(cluster: Cluster) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--text-tag-fluid, 11px);
   font-weight: 700;
   color: var(--accent-cyan);
   letter-spacing: 0.08em;
@@ -705,14 +710,31 @@ async function handleRemove(cluster: Cluster) {
 }
 
 .view-title {
-  font-size: 24px;
+  font-size: var(--text-title-fluid, 24px);
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.title-full {
+  display: inline;
+}
+
+.title-mobile {
+  display: none;
+}
+
+.btn-text-full {
+  display: inline;
+}
+
+.btn-text-mobile {
+  display: none;
 }
 
 .view-desc {
-  font-size: 13px;
+  font-size: var(--text-desc-fluid, 13px);
   color: var(--text-secondary);
   max-width: 780px;
   margin-top: 4px;
@@ -1241,4 +1263,271 @@ async function handleRemove(cluster: Cluster) {
 .text-emerald { color: var(--accent-emerald); }
 .text-muted { color: var(--text-muted); }
 .btn-xs { padding: 4px 8px; font-size: 11px; }
+
+/* Responsive Overhaul for Mobile & Tablets */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 130px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 14px !important;
+  }
+
+  :deep(.metric-card),
+  .metric-card {
+    padding: 10px 12px !important;
+    min-height: auto !important;
+  }
+
+  :deep(.metric-card .metric-subtitle),
+  :deep(.metric-card .metric-desc) {
+    display: none !important;
+  }
+
+  :deep(.metric-card .metric-value),
+  .metric-card .metric-value {
+    font-size: 20px !important;
+  }
+
+  .swarm-section {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .swarm-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .swarm-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .swarm-actions-row {
+    justify-content: flex-start;
+  }
+
+  .section-box {
+    padding: 14px;
+  }
+
+  .clusters-card-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .fleet-features-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .mode-tabs {
+    flex-wrap: wrap;
+  }
+
+  .drawer-content {
+    gap: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .title-full {
+    display: none;
+  }
+
+  .title-mobile {
+    display: inline;
+  }
+
+  .view-tag {
+    display: none !important;
+  }
+
+  .view-desc {
+    display: none !important;
+  }
+
+  .view-title {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+  }
+
+  .view-header {
+    gap: 10px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .btn-text-full {
+    display: none;
+  }
+
+  .btn-text-mobile {
+    display: inline;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 14px !important;
+  }
+
+  :deep(.metric-card),
+  .metric-card {
+    padding: 10px 12px !important;
+    min-height: auto !important;
+  }
+
+  :deep(.metric-card .metric-subtitle),
+  :deep(.metric-card .metric-desc) {
+    display: none !important;
+  }
+
+  :deep(.metric-card .metric-value),
+  .metric-card .metric-value {
+    font-size: 20px !important;
+  }
+
+  .swarm-section {
+    padding: 12px 14px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .swarm-desc {
+    display: none !important;
+  }
+
+  .swarm-meta-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    padding: 0 !important;
+  }
+
+  .swarm-meta-card {
+    padding: 8px 10px !important;
+  }
+
+  .swarm-meta-card .meta-label {
+    font-size: 9.5px !important;
+  }
+
+  .swarm-meta-card .meta-value {
+    font-size: 12px !important;
+  }
+
+  .swarm-actions-row .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    font-size: 11.5px !important;
+  }
+
+  .section-box {
+    padding: 12px 14px !important;
+  }
+
+  .box-subtitle {
+    display: none !important;
+  }
+
+  .empty-desc {
+    font-size: 12px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .fleet-features-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .feature-item {
+    padding: 8px 10px !important;
+  }
+
+  .feature-text {
+    display: none !important;
+  }
+
+  .empty-actions .btn {
+    width: 100% !important;
+    font-size: 12px !important;
+    padding: 8px 12px !important;
+  }
+
+  .box-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .box-header .btn {
+    width: 100%;
+  }
+
+  .card-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .card-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .card-actions .btn {
+    flex: 1;
+    min-width: 80px;
+  }
+
+  .table-actions-row {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+}
 </style>

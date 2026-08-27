@@ -1340,4 +1340,156 @@ function formatDate(d?: string) {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
 }
+
+/* ========================================== */
+/* RESPONSIVE & MOBILE WEB OVERHAUL           */
+/* ========================================== */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .kpi-grid,
+  .swarm-meta-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .metric-card,
+  .stat-card,
+  .hud-card,
+  :deep(.metric-card) {
+    padding: 10px 12px !important;
+  }
+
+  .pipeline-board {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .table-actions-row {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .header-actions > :last-child:nth-child(odd) {
+    flex: 1 1 100% !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid,
+  .kpi-grid,
+  .swarm-meta-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .metric-card,
+  .stat-card,
+  .hud-card,
+  :deep(.metric-card) {
+    padding: 10px 12px !important;
+  }
+
+  .placement-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .placement-grid-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .placement-row-key {
+    min-width: unset;
+  }
+
+  .combobox-dropdown {
+    max-height: 200px;
+  }
+
+  .option-line-1 {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .option-line-2 {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .meta-bar {
+    display: none;
+  }
+
+  .p-card-actions {
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+
+  .p-card-actions .btn {
+    flex: 1;
+    text-align: center;
+  }
+}
 </style>

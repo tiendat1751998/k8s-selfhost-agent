@@ -50,6 +50,8 @@ type PlatformHandlers struct {
 	Tenancy       *TenancyHandler
 	Alert         *AlertHandler
 	K8s           *K8sResourceHandler
+	K8sExec       *K8sExecHandler
+	K8sLogs       *K8sLogsHandler
 	Cloud         *CloudHandler
 	Settings      *SettingsHandler
 	Catalog       *CatalogHandler
@@ -57,6 +59,7 @@ type PlatformHandlers struct {
 	Plugin        *PluginHandler
 	Ecosystem     *EcosystemHandler
 	LogStream     *LogStreamHandler
+	Helm          *HelmHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -200,22 +203,58 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			mountK8sUnavailable(r, "/health")
 		}
 
-		if platform != nil && platform.K8s != nil {
+		if platform != nil && (platform.K8s != nil || platform.K8sExec != nil || platform.K8sLogs != nil) {
 			r.Route("/k8s/{cluster}", func(sub chi.Router) {
-				sub.With(mw.RBACMiddleware("platform_admin")).Post("/apply", platform.K8s.ApplyYAML)
-				sub.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Group(func(k8sSub chi.Router) {
-					k8sSub.Get("/namespaces", platform.K8s.ListNamespaces)
-					k8sSub.Post("/namespaces", platform.K8s.CreateNamespace)
-					k8sSub.Delete("/namespaces/{name}", platform.K8s.DeleteNamespace)
+				if platform.K8s != nil {
+					sub.With(mw.RBACMiddleware("platform_admin")).Post("/apply", platform.K8s.ApplyYAML)
+					sub.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Group(func(k8sSub chi.Router) {
+						k8sSub.Get("/namespaces", platform.K8s.ListNamespaces)
+						k8sSub.Post("/namespaces", platform.K8s.CreateNamespace)
+						k8sSub.Delete("/namespaces/{name}", platform.K8s.DeleteNamespace)
 
-					k8sSub.Route("/resources/{kind}", func(resSub chi.Router) {
-						resSub.Get("/", platform.K8s.ListResources)
-						resSub.Post("/", platform.K8s.CreateResource)
-						resSub.Get("/{name}", platform.K8s.GetResource)
-						resSub.Put("/{name}", platform.K8s.UpdateResource)
-						resSub.Delete("/{name}", platform.K8s.DeleteResource)
+						k8sSub.Route("/resources/{kind}", func(resSub chi.Router) {
+							resSub.Get("/", platform.K8s.ListResources)
+							resSub.Post("/", platform.K8s.CreateResource)
+							resSub.Get("/{name}", platform.K8s.GetResource)
+							resSub.Put("/{name}", platform.K8s.UpdateResource)
+							resSub.Delete("/{name}", platform.K8s.DeleteResource)
+						})
+
+						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/deployments/{name}", func(wSub chi.Router) {
+							wSub.Post("/scale", platform.K8s.ScaleDeployment)
+							wSub.Post("/restart", platform.K8s.RestartDeployment)
+						})
+						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/statefulsets/{name}", func(wSub chi.Router) {
+							wSub.Post("/scale", platform.K8s.ScaleStatefulSet)
+						})
+						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/daemonsets/{name}", func(wSub chi.Router) {
+							wSub.Post("/restart", platform.K8s.RestartDaemonSet)
+						})
+						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/cronjobs/{name}", func(wSub chi.Router) {
+							wSub.Post("/trigger", platform.K8s.TriggerCronJob)
+							wSub.Put("/suspend", platform.K8s.SuspendCronJob)
+						})
+
+						k8sSub.Get("/events", platform.K8s.ListEvents)
+						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/nodes/{name}", func(nodeSub chi.Router) {
+							nodeSub.Post("/cordon", platform.K8s.CordonNode)
+							nodeSub.Post("/uncordon", platform.K8s.UncordonNode)
+							nodeSub.Post("/drain", platform.K8s.DrainNode)
+							nodeSub.Put("/taints", platform.K8s.UpdateNodeTaints)
+							nodeSub.Put("/labels", platform.K8s.UpdateNodeLabels)
+						})
 					})
-				})
+				}
+				if platform.K8sExec != nil {
+					sub.HandleFunc("/exec", platform.K8sExec.HandleExec)
+					sub.HandleFunc("/exec/{pod}", platform.K8sExec.HandleExec)
+					sub.HandleFunc("/pods/{pod}/exec", platform.K8sExec.HandleExec)
+				}
+				if platform.K8sLogs != nil {
+					sub.Get("/logs", platform.K8sLogs.HandlePodLogs)
+					sub.Get("/logs/{pod}", platform.K8sLogs.HandlePodLogs)
+					sub.Get("/pods/{pod}/logs", platform.K8sLogs.HandlePodLogs)
+				}
 			})
 		} else {
 			mountK8sUnavailable(r, "/k8s")
@@ -315,6 +354,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.LogStream != nil {
 				r.Get("/logs/stream", platform.LogStream.ServeHTTP)
+			}
+			if platform.Helm != nil {
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin")).Route("/helm", platform.Helm.RegisterRoutes)
 			}
 		}
 	})

@@ -520,3 +520,154 @@ func TestTraefikProvider_UnresponsiveDegradationWithEMADecay(t *testing.T) {
 		t.Errorf("expected last known ActiveConnections = 25, got %d", agg.ActiveConnections)
 	}
 }
+
+func TestTraefikProvider_CounterResetProtection(t *testing.T) {
+	promMetrics1 := strings.Join([]string{
+		`traefik_entrypoint_requests_total{code="200",entrypoint="web",method="GET",protocol="http"} 5000`,
+		`traefik_service_requests_total{code="200",method="GET",protocol="http",service="gateway@file"} 3000`,
+	}, "\n")
+
+	// Service restart / counter reset: counters drop to smaller values
+	promMetrics2 := strings.Join([]string{
+		`traefik_entrypoint_requests_total{code="200",entrypoint="web",method="GET",protocol="http"} 100`,
+		`traefik_service_requests_total{code="200",method="GET",protocol="http",service="gateway@file"} 50`,
+	}, "\n")
+
+	iteration := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/http/services":
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"name":"gateway@file","provider":"file","type":"loadbalancer","status":"enabled"}]`))
+		case "/metrics":
+			w.Header().Set("Content-Type", "text/plain")
+			if iteration == 0 {
+				w.Write([]byte(promMetrics1))
+			} else {
+				w.Write([]byte(promMetrics2))
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	provider := NewTraefikProvider(ts.URL, WithHTTPClient(ts.Client()))
+
+	// First scrape
+	_, err := provider.GetAggregateStats(context.Background())
+	if err != nil {
+		t.Fatalf("first GetAggregateStats failed: %v", err)
+	}
+	_, err = provider.GetServiceStats(context.Background())
+	if err != nil {
+		t.Fatalf("first GetServiceStats failed: %v", err)
+	}
+
+	// Trigger counter reset on second scrape
+	iteration = 1
+	provider.InvalidateMetricsCache()
+	provider.mu.Lock()
+	provider.prevAggregateTime = time.Now().UTC().Add(-2 * time.Second)
+	provider.prevTime = time.Now().UTC().Add(-2 * time.Second)
+	provider.mu.Unlock()
+
+	agg2, err := provider.GetAggregateStats(context.Background())
+	if err != nil {
+		t.Fatalf("second GetAggregateStats failed: %v", err)
+	}
+	// SafeDelta should treat 100 as delta (100 / 2s = 50 RPS), not negative or 0
+	if agg2.TotalRequestsPerSec <= 0 {
+		t.Errorf("expected positive TotalRequestsPerSec after counter reset, got %f", agg2.TotalRequestsPerSec)
+	}
+
+	provider.InvalidateMetricsCache()
+	svcStats2, err := provider.GetServiceStats(context.Background())
+	if err != nil {
+		t.Fatalf("second GetServiceStats failed: %v", err)
+	}
+	if len(svcStats2) != 1 {
+		t.Fatalf("expected 1 service, got %d", len(svcStats2))
+	}
+	if svcStats2[0].RequestsPerSec <= 0 {
+		t.Errorf("expected positive service RequestsPerSec after counter reset, got %f", svcStats2[0].RequestsPerSec)
+	}
+}
+
+func TestTraefikProvider_MaxLatencyMs(t *testing.T) {
+	promMetrics := strings.Join([]string{
+		`traefik_entrypoint_requests_total{code="200",entrypoint="web",method="GET",protocol="http"} 200`,
+		`traefik_entrypoint_request_duration_seconds_sum{entrypoint="web"} 2.0`,
+		`traefik_entrypoint_request_duration_seconds_count{entrypoint="web"} 200`,
+		`traefik_service_requests_total{code="200",method="GET",protocol="http",service="gateway@file"} 200`,
+		`traefik_service_request_duration_seconds_sum{code="200",service="gateway@file"} 2.0`,
+		`traefik_service_request_duration_seconds_count{code="200",service="gateway@file"} 200`,
+	}, "\n")
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/http/services":
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"name":"gateway@file","provider":"file","type":"loadbalancer","status":"enabled"}]`))
+		case "/metrics":
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte(promMetrics))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	provider := NewTraefikProvider(ts.URL, WithHTTPClient(ts.Client()))
+
+	// Baseline
+	provider.GetAggregateStats(context.Background())
+	provider.GetServiceStats(context.Background())
+
+	// Next cycle with duration
+	provider.InvalidateMetricsCache()
+	provider.mu.Lock()
+	provider.prevAggregateTime = time.Now().UTC().Add(-2 * time.Second)
+	provider.prevTime = time.Now().UTC().Add(-2 * time.Second)
+	// Add previous stats with lower latency
+	provider.prevAggregateStats = entrypointSample{
+		totalRequests: 100,
+		latencySumSec: 1.0,
+		latencyCount:  100,
+	}
+	provider.prevStats["gateway"] = serviceSample{
+		totalRequests: 100,
+		latencySumSec: 1.0,
+		latencyCount:  100,
+	}
+	provider.mu.Unlock()
+
+	agg, err := provider.GetAggregateStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetAggregateStats failed: %v", err)
+	}
+	// AvgLatencyMs = (1.0 / 100) * 1000 = 10ms
+	if agg.AvgLatencyMs <= 0 {
+		t.Errorf("expected positive AvgLatencyMs, got %f", agg.AvgLatencyMs)
+	}
+	// MaxLatencyMs = avg * 1.6 = 16ms
+	if agg.MaxLatencyMs <= agg.AvgLatencyMs {
+		t.Errorf("expected MaxLatencyMs (%f) > AvgLatencyMs (%f)", agg.MaxLatencyMs, agg.AvgLatencyMs)
+	}
+
+	provider.InvalidateMetricsCache()
+	svcs, err := provider.GetServiceStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetServiceStats failed: %v", err)
+	}
+	if len(svcs) != 1 {
+		t.Fatalf("expected 1 service, got %d", len(svcs))
+	}
+	if svcs[0].AvgLatencyMs <= 0 {
+		t.Errorf("expected positive service AvgLatencyMs, got %f", svcs[0].AvgLatencyMs)
+	}
+	if svcs[0].MaxLatencyMs <= svcs[0].AvgLatencyMs {
+		t.Errorf("expected service MaxLatencyMs (%f) > AvgLatencyMs (%f)", svcs[0].MaxLatencyMs, svcs[0].AvgLatencyMs)
+	}
+}
+

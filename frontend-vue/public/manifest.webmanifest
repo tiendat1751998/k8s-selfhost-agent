@@ -1,0 +1,48 @@
+{
+  "name": "K8sControl Enterprise Console",
+  "short_name": "K8sControl",
+  "description": "Autonomous Kubernetes Infrastructure, Mesh & Agent Management Platform",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07090e",
+  "theme_color": "#07090e",
+  "orientation": "any",
+  "categories": ["productivity", "utilities", "developer"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Overview",
+      "url": "/",
+      "description": "Cluster overview & saturation trends"
+    },
+    {
+      "name": "Agents",
+      "url": "/agents",
+      "description": "Autonomous agents execution console"
+    },
+    {
+      "name": "Fleet",
+      "url": "/fleet",
+      "description": "Compute fleet & node mesh"
+    },
+    {
+      "name": "Deployments",
+      "url": "/deployments",
+      "description": "Deployments & rollouts"
+    }
+  ]
+}

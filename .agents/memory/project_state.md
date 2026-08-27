@@ -1,9 +1,79 @@
-# K8sControl Project State — Session Update 2026-08-24T15:20
+# K8sControl Project State — Session Update 2026-08-27T10:25
 
 ## Git State
-Branch: `feat/ui-workload-resource-tuning-and-scale` (pushed to origin)
-Latest: `46e7f5e` fix(telemetry): fix 24h timeline truncation by lifting query limits to fetch all 1440 1-minute samples
+Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
+Latest: `006c460` fix(cluster): support onprem, k3s, baremetal, and all kubeconfig imported clusters in dynamic client manager
 Previous commits this session:
+- `e5c4596` fix(ui): de-clutter slo tracking mobile view with 2x2 kpis, compact burn rate bar, and responsive header
+- `bd6adc5` fix(ui): overhaul mobile number visibility with workload cards, 2x2 historical kpis, and compact toggles
+- `ab42656` fix(ui): de-clutter deep-dive modal with 2x2 kpi grid, compact header, and streamlined series toggles
+- `b556dce` fix(hmr): purge service worker dev cache to prevent vite hmr websocket 400 handshake error
+- `736b8e1` fix(ui): de-clutter multi-cluster fleet mobile view with 2x2 grid and compact actions
+- `e4d4826` fix(ui): de-clutter mobile web ui with concise typography, compact data chips, and streamlined hud cards
+- `d383226` feat(ui): revamp node diagnostics drawer with 2x2 gauge grid, compact tabs, and safe mobile scroll clearance
+- `ee6d3b5` fix(ui): polish overview storage hud card, streamline request flow bar, and compact header action buttons
+- `601cd44` fix(ui): enhance mobile drawer exit with pinned top-right close button and thumb-friendly footer close button
+- `3efaebe` docs(memory): record DEC-068 for platform-wide interactive functional QA and PWA quality gate
+- `8c71879` fix(ui): upgrade overview hud to strict css grid across all breakpoints
+- `5f42d3c` docs(memory): record DEC-066 for platform-wide 2x2 grid and smart button wrapping
+- `5be91ab` feat(ui): enforce 2x2 metric grid and smart button wrapping across all views
+- `ee38d7d` docs(memory): record DEC-065 for comprehensive multi-view mobile QA audit
+- `851906f` fix(ui): fix overview hud 1-column mobile override and clean top hud navbar cramping
+- `e3982d3` docs(memory): record DEC-064 for overview hud 2x2 grid and top navbar ergonomics
+- `9513f13` feat(ui): implement 2x2 high-density metric grid and side-by-side header actions across all views
+- `222e43e` docs(memory): record DEC-063 2x2 high-density metric grid & mobile actions
+- `a7cb934` feat(ui): implement fluid mobile typography and streamline overview telemetry
+- `f421f11` docs(memory): record DEC-062 for fluid mobile typography & streamlined overview
+- `3e62058` docs(memory): record DEC-061 for 33-view mobile RWD overhaul
+- `0a66362` feat(frontend): comprehensive RWD and mobile PWA overhaul across all 33 views
+- `e8aaebd` feat(pwa): add progressive web app manifest, service worker, mobile bottom nav, and agents view rwd
+- `9a614b0` fix(frontend): overhaul mobile responsive layout for trend header, chart x-axis, and top hud
+- `013aa9a` fix(frontend): add hierarchical tie-breaking for process sorting and replace container unshift with push
+- `9942ce6` feat(frontend): add disk io column and compact state badge in node process table
+- `20a1570` feat(frontend): consolidate ingress metrics into 5-min trend header and streamline request flow bar
+- `f9503bb` docs(memory): sync DEC-052 to DEC-055 and update deployment script invariants in memory
+- `f64355a` fix(agent): enhance disk IO collection with sub-device fallback and robust await averaging
+- `73cdeb0` feat(ui): refine NodeCard with balanced 2x2 telemetry matrix, compact tabular streams, and header container chip
+- `bc1a2a0` feat(tps): harden TPS calculations with counter reset protection, delta cache hit ratio, and max latency tracking
+- `561936c` feat(telemetry): add high-precision Linux disk I/O telemetry, IOPS, await latency, and live dashboard visualization
+- `df9eee3` fix(chart): remove clumsy peak badge box and streamline apex halo beacon
+- `8c59e49` docs(memory): record DEC-050 smooth cubic spline chart upgrade
+- `fb91758` feat(chart): upgrade telemetry saturation curves to smooth monotone cubic splines with neon glow and peak beacons
+- `8f6c28c` feat(header): integrate alert bell, dropdown toast, and telemetry health into top hud
+- `acd1cdb` feat(overview): top-right floating cyber alert toast and alert center modal
+- `7820b2a` feat(overview): persistent alert snooze and mute system with one-click suppression
+
+## Agent Deployment Script Invariant
+- **Single-Node Deployment**: `./deploy-agent.sh user@<ip>`
+  - Automatically compiles Linux binary `k8s-agent` from `cmd/agent/`
+  - Deploys to target host over SCP
+  - Configures non-sudo `systemd --user` service with `loginctl enable-linger`
+  - Restarts `k8s-agent` on port 9100
+- **Node IP Mapping**:
+  - `k8smater`: `10.10.10.133` (Central Control Plane & Swarm Manager)
+  - `masterdb`: `10.10.10.200`
+  - `worker1`: `10.10.10.150`
+  - `worker2`: `10.10.10.151`
+  - `workerdb1`: `10.10.10.201`
+  - `k8sworker3`: `10.10.10.152` (offline)
+
+## Scalability Roadmap Master Architecture (1,000 - 10,000 Nodes)
+- **Master Plan File**: [`docs/plans/fleet-scalability-roadmap-10k-nodes.md`](file:///d:/project/k8sseflhost/docs/plans/fleet-scalability-roadmap-10k-nodes.md)
+- **Evolutionary Scaling Phases**:
+  - Phase 1 (100 - 500 Nodes): `@tanstack/vue-virtual` Virtual Scroller in `OverviewView.vue`, Standalone VictoriaMetrics single-binary adapter, Binary WebSocket delta streams.
+  - Phase 2 (500 - 2,000 Nodes): `k8s-agent` gRPC Push over mTLS, NATS JetStream buffer cluster, WebGL Hex-Grid Cluster Density Map.
+  - Phase 3 (2,000 - 5,000 Nodes): Regional Cellular Supernode Relays (eBPF FastPath + WireGuard), Edge Sentinel local autonomous self-healing.
+  - Phase 4 (5,000 - 10,000+ Nodes): 3-Tier TSDB Lifecycle (Hot VM $\rightarrow$ Warm 1m $\rightarrow$ Cold Snappy Parquet on S3/MinIO), Multi-Region Control Plane Federation.
+
+- `0cf69b1` feat(telemetry): add output TX peak rate to live network IO summary card
+- `a33cfa0` feat(telemetry): dynamic 1h hourly bucket aggregation for 7d/30d queries and redesigned cyber log filter toolbar
+- `8484c3e` fix(overview): fix timezone parsing flatline and log level count filter
+- `12a6925` fix(overview): reset drawer scroll to top on tab switch
+- `0558f00` fix(historical-chart): ensure KPI cards and header stay visible in custom range and prevent 0-interval flatlines
+- `2431f0b` fix(drawer): implement custom date-time search and fix bottom scroll cutoff
+- `88ea205` fix(ui): pin drawer mode tabs, restore header layout, and polish historical KPI cards
+- `1bb06c9` fix(ui): correct OverviewHud and RequestFlowBar template paths
+- `297418b` refactor(ui): modularize OverviewView monolithic component into 9 clean sub-components
 - `272468f` docs: update project state memory with consolidated time toolbar
 - `2d6ffb8` feat(telemetry): consolidate time presets into unified pill bar and streamline custom range picker
 - `5d6feff` feat(telemetry): add custom date-time range selection and point-in-time log sync for node historical telemetry
@@ -57,6 +127,10 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 - workerdb1: 10.10.10.201 — Ubuntu 24.04.1 LTS, kernel 6.8.0-124-generic
 - SSH username: datdt
 - Agent deploy path: ~/k8s-agent, systemd user service (systemctl --user)
+- **Cluster Health Investigation**:
+  - Scrape engine successfully polls 5/6 real nodes on port 9100.
+  - Zero mock data; offline node alerts correctly surfaced for `k8sworker3` and manageable via Top HUD Alert Bell / Alert Center Modal.
+  - Summary telemetry accurately aggregates active nodes, container count, average CPU/RAM utilization, and cluster-wide throughput.
 
 ## Architecture
 - Backend: Go + chi, port 8080, Clean Architecture
@@ -95,19 +169,18 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
   - Per-interface network stats (ens33, docker0, docker_gwbridge, etc.)
 
 ### Overview Page Architecture
-- **Summary HUD**: Compact single-row flexbox, color-coded (green/amber/rose)
-  - NODES ONLINE, CONTAINERS, AVG CPU, AVG MEMORY, THROUGHPUT
-- **Request Flow Animation Bar**: Animated particles proportional to req/s
-  - Active connections, queued requests, error rate, health coloring
-- **5-Min Saturation Trends**: SVG chart moved to below HUD
-- **Node Cards**: Drag-and-drop, stable sort, localStorage persistence
+- **Summary HUD**: Strict CSS Grid across all breakpoints (Desktop >1200px: `repeat(5, minmax(0, 1fr))`, Tablet 769px-1200px: `repeat(3, minmax(0, 1fr))`, Mobile <=768px: `repeat(2, minmax(0, 1fr))` with Card 5 Cluster Storage spanning 2 cols in clean vertical layout with 3-4px progress bar and full unclipped byte metrics `💽 88.6 GB / 196.2 GB`). Concise labels (`Nodes`, `Containers`, `CPU`, `Memory`, `Storage`), hidden redundant 'NOMINAL' badges on mobile, and compact footers (`1 up · 5 down`, `2 / 3.8 GB`, `88.6 / 196.2 GB`) eliminate all text ellipsis truncation.
+- **Request Flow Animation Bar**: Streamlined 32-38px laser particle simulator with dynamic glowing speed, live state pill, pulsating glyphs (`● ● ● →`), removing redundant text badges on mobile for sleek uncluttered screen space.
+- **5-Min Saturation Trends**: SVG chart directly below HUD with consolidated Gateway Ingress metrics in header (`active`, `queued`, `latency ms`, `error %`), concise title (`📈 Trends`), unified series legend toggles (`CPU`, `RAM`, `Throughput`), and a single `🔍 Deep-Dive` action trigger.
+- **Header Actions & Title**: Concise single-line title (`⚡ Cluster Overview`), compact live badge (`● LIVE`), shortened action buttons ('🔄 Refresh', '🚀 Apps', '🖥️ Hosts', '☸️ Fleet') with 11.5px/12px font size in balanced 2x2 grid on mobile and clean 1-row layout on tablet.
+- **Node Cards**: Drag-and-drop, stable sort, localStorage persistence, 2x2 resource matrix (RAM/Disk allocation & Live Net/Disk rates).
 - **Node Inspect Drawer** (click node card):
   - OS Distro, Kernel Version, Architecture, Uptime, Load Avg
-  - Hardware Saturation Telemetry (CPU, RAM, Disk, Network)
+  - Hardware Saturation Telemetry (CPU, RAM, Disk, Network) with 2x2 hardware gauge grid on mobile/tablet
   - 📡 Network Interface Throughput (per interface: ens33, docker0...)
   - 📦 Apps & Services on this Node (5 services on k8smater, filtered by Swarm node mapping)
     - Columns: Service, CPU, Memory, ↓ Rx, ↑ Tx, Req/s, Err %, Status
-  - 🔥 Top Processes (10 active, sortable, filterable)
+  - 🔥 Top Processes (10 active, sortable by CPU/RAM/Disk I/O, filterable, dual-rate 📖 Read / ✍️ Write Disk I/O telemetry, compact 68px mini state badge with glowing status dot)
 - **Removed sections**: Service Throughput table, Per-Node Network table, Active Workload Containers, TPS category cards — all moved to inspect drawer
 - **Smooth CSS transitions**: `.smooth-value`, `.smooth-bar`, `.smooth-opacity` prevent jarring number jumps
 
@@ -128,18 +201,38 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 037:plugins 038:scaffold_templates 039:ecosystem_tools 040:compute_hosts
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
-## Completed Features (this session 2026-08-22)
-- OS Distro + Kernel Version on all nodes (agent + backend + frontend)
-- Top Processes fix for worker1/worker2 (agent redeploy)
-- Per-node network interface throughput in inspect drawer
-- Per-node apps & services with Docker Swarm node mapping
-- Per-service request metrics (Req/s, Err %) via LoadBalancerProvider
-- LoadBalancerProvider abstraction (Traefik first, swap to Nginx/HAProxy)
-- Overview cleanup: removed Service Throughput, Per-Node Network, Active Containers, TPS cards
-- 5-Min Saturation Trends moved to top
-- HUD optimization: compact layout, color-coded, animated request flow bar
-- Smooth CSS transitions for real-time data
-- Traefik Prometheus metrics enabled (--metrics.prometheus=true)
+## Completed Features (Latest Session: 2026-08-27)
+- **Kubernetes Dynamic Client Manager Multi-Provider & On-Prem Support** (DEC-078)
+- **Service Level Objectives (SLO) Mobile Web Typography & Layout De-Cluttering** (DEC-077)
+- **Mobile Web Ergonomics, Workload Card Visibility & 2x2 Historical KPI Overhaul** (DEC-076)
+- **Cluster Telemetry & Ingress Saturation Deep-Dive Modal Mobile Ergonomics Overhaul** (DEC-075)
+- **Service Worker Dev Mode Purge & Vite HMR WebSocket 400 Resolution** (DEC-074)
+- **Multi-Cluster Fleet Mobile Web & PWA Typography De-Cluttering — Screen 1.1** (DEC-073)
+- **Mobile Web UI De-Cluttering, Concise Typography & Streamlined HUD Cards** (DEC-072)
+- **Node Diagnostics Drawer Mobile/PWA Ergonomics & 2x2 Gauge Grid Overhaul** (DEC-071)
+- **Overview HUD Card 5 Ergonomics, Streamlined Flow Bar & Compact Header Actions** (DEC-070)
+- **Mobile Inspect Drawer Exit Ergonomics & Pinned Close Controls** (DEC-069)
+- **Platform-Wide E2E Interactive Functional Testing & Multi-Viewport PWA Quality Gate** (DEC-068)
+- **Overview HUD Strict CSS Grid Layout & Resizing Resilience** (DEC-067)
+- **Platform-Wide 2x2 Metric Grid Enforcement & Smart Button Wrapping** (DEC-066)
+- **Multi-View Mobile Web & RWD Comprehensive QA Verification** (DEC-065)
+- **Overview HUD 2x2 Grid Bug Fix & Top HUD Navbar Ergonomics Polish** (DEC-064)
+- **2x2 High-Density Metric Grid & Side-by-Side Mobile Header Actions** (DEC-063)
+- **Fluid Mobile Typography & Streamlined Overview Telemetry** (DEC-062)
+- **Project-Wide Responsive Web Design (RWD) & Mobile PWA Overhaul Across All 33 Views** (DEC-061)
+- **Progressive Web App (PWA), Service Worker Caching, Mobile Bottom Bar & Agents RWD** (DEC-060)
+- **Mobile Responsive UI Overhaul for Telemetry & Navigation** (DEC-059)
+- **Hierarchical Tie-Breaking for Process Sorting & Container Push** (DEC-058)
+- **Process Table Real-Time Disk I/O & Compact State Badge Polish** (DEC-057)
+- **Consolidated Ingress Telemetry Header & Streamlined Request Flow Simulator** (DEC-056)
+- **High-Precision Linux Disk I/O Telemetry, IOPS & Await Latency** (DEC-052)
+- **Hardened TPS Engine & Monotonic Counter Reset Protection** (DEC-053)
+- **Symmetrical 2x2 NodeCard Resource Matrix & Tabular-Nums Anti-Jitter** (DEC-054)
+- **Sub-Device Fallback for Block Device I/O** (DEC-055)
+- Smooth Monotone Cubic Bézier Splines, Neon Glow Area Gradients & Apex Halo Beacons (DEC-050)
+- Top HUD Navigation Alert Bell, Dropdown Toast & Real-time Telemetry Health Indicators (DEC-049)
+- Persistent Alert Snooze & Mute System with One-Click Global Suppression (DEC-047, DEC-048)
+- Dynamic Ceiling Headroom & Clamped Spline Telemetry Visualizer (DEC-051)
 
 ## Active/In-Progress Work
 
@@ -171,12 +264,169 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 - Use Chrome DevTools MCP for QA verification
 
 ## Next Roadmap Candidates
-1. Complete Traefik RPS fix (in-progress subagent)
-2. Per-app latency metrics (avg response time from Traefik service_request_duration)
-3. AI SRE / RCA Engine + Ecosystem Tools Integration
-4. Edge Agent Command & Remote Diagnostics
-5. Cost model (deferred by user)
+1. **K8s Deep Features Phase** (IN PROGRESS — see below)
+2. Complete Traefik RPS fix
+3. Per-app latency metrics (avg response time from Traefik service_request_duration)
+4. AI SRE / RCA Engine + Ecosystem Tools Integration
+5. Edge Agent Command & Remote Diagnostics
+6. Cost model (deferred by user)
 
-## BLOCKED (waiting K8s cluster hardware)
-Pod Terminal, Helm Catalog, GitOps Visual, Real-time Logs,
-Image CVE Scanning, Policy Dashboard, Service Mesh, Network Policy
+## Kubernetes Deep Features — Comprehensive State (UPDATED: 2026-08-27T14:00)
+
+### Cluster Info
+- **Cluster**: `k8snode` on `https://10.10.10.60:6443` (v1.35.8, 2 nodes, Cilium 1.20.0 eBPF CNI, Hubble, 14+ Pods)
+- **Auth**: `admin@k8s.local / admin123`, JWT, RBAC roles: platform_admin, tenant_admin, operator
+
+### Commits This Phase
+- `dc82701` feat(k8s): add pod explorer, pod exec terminal, pod log streaming, and deployments mobile UX
+- `3dbfc60` feat(k8s): add interactive pod terminal (xterm.js) and real-time pod log viewer with SSE streaming
+- `176ab79` fix(k8s): add pod CRUD support, nil client safety guards, enhanced error matching, and fleet query fix
+- `20bf0a5` feat(helm): add Helm v3 chart catalog with release management, repo browser, and install wizard
+- `1fcedf0` feat(k8s): add events stream timeline, node management (cordon/drain/taints/labels), and rollout progress
+- `8fdbe65` fix(ui): polish events timeline view, add fallback node support, and resolve TS2367 type check
+
+### ✅ What's DONE (Backend)
+
+| Component | File | Lines | Status |
+|:----------|:-----|:------|:-------|
+| **Resource CRUD** (11 kinds + pods + nodes + events) | `resource_repo.go` | ~1150 | ✅ Full CRUD for Deployments, Services, ConfigMaps, Secrets, StatefulSets, DaemonSets, Jobs, CronJobs, Ingresses, PVCs, StorageClasses, Pods, Nodes, Events |
+| **Node Management Operations** | `resource_repo.go`, `k8s_resource_handler.go` | ~600 | ✅ Cordon, Uncordon, Drain (graceful eviction), Taints editor, Labels editor |
+| **Events Stream & Query** | `k8s_resource_handler.go` | ~150 | ✅ GET /k8s/{cluster}/events with filters (ns, kind, name, type, limit) |
+| **Helm Release Manager** | `release_manager.go` | ~450 | ✅ Helm v3 SDK: List, Get, Install, Upgrade, Rollback, Uninstall, Repo CRUD, Search, Default values |
+| **Helm HTTP Handler** | `helm_handler.go` | ~350 | ✅ 12 REST endpoints with RBAC + audit logging |
+| **Deployment Lifecycle** | `deployment_repo.go` | ~470 | ✅ List, Scale, Restart, Delete, Rollback, Canary, BlueGreen |
+| **Explorer Search** | `explorer_repo.go` | ~530 | ✅ Cross-resource search with pagination |
+| **Fleet Discovery** | `discovery.go` | ~200 | ✅ Namespace/deployment/service/node/CRD counts per cluster |
+| **Health Center** | `healthcenter_repo.go` | ~150 | ✅ K8s API /healthz check |
+| **Capacity Analysis** | `capacity_repo.go` | ~300 | ✅ CPU/Memory/Storage capacity per cluster |
+| **Pod Exec WebSocket** | `k8s_exec_handler.go` | ~260 | ✅ SPDY executor + WebSocket bridge + resize |
+| **Pod Log Streaming** | `k8s_logs_handler.go` | ~165 | ✅ SSE follow + JSON static mode |
+| **YAML Apply** | `resource_repo.go` | ~50 | ✅ POST /k8s/{cluster}/apply |
+| **Multi-Cluster ClientManager** | `manager.go` | ~200 | ✅ Dynamic client + rest.Config per cluster |
+
+### ✅ What's DONE (Frontend)
+
+| Component | File | Lines | Status |
+|:----------|:-----|:------|:-------|
+| **Explorer View** | `ExplorerView.vue` | ~3600 | ✅ Kind tree (Pods, Nodes, Events, Deployments, etc.), data table, detail drawer |
+| **Node Management Drawer** | `ExplorerView.vue` | ~400 | ✅ Cordon/Uncordon buttons, Drain modal (grace period/daemonsets), Taints chip editor, Labels editor, System info, Conditions, Events tab |
+| **Events Timeline** | `EventsTimeline.vue` | ~300 | ✅ Stream timeline, Warning/Normal chips, search, live 5s auto-polling, embedded in Pod/Node/Deployment drawers |
+| **Helm Catalog View** | `HelmCatalogView.vue` | ~1200 | ✅ 3 tabs: Releases, 18k+ Chart Catalog, Repositories + Install Wizard + Values YAML viewer |
+| **Helm API Client** | `helm.ts` | ~200 | ✅ Typed API client for all Helm endpoints |
+| **Pod Terminal** (xterm.js) | `PodTerminal.vue` | ~400 | ✅ WebSocket terminal, resize, reconnect, quick shortcuts |
+| **Pod Log Viewer** | `PodLogViewer.vue` | ~600 | ✅ SSE streaming, level colors, search, auto-scroll, export |
+| **Create Resource Modal** | `CreateResourceModal.vue` | ~700 | ✅ Visual forms for Deployments, Services, ConfigMaps, Secrets |
+| **YAML Editor** | `YamlEditorModal.vue` | ~300 | ✅ Templates for 11+ kinds |
+| **Secret Viewer** | `SecretViewer.vue` | ~200 | ✅ Mask/reveal/decode/copy |
+| **Deployments View** | `DeploymentsView.vue` | ~4400 | ✅ Workload lifecycle, Rollout Progress chips/bars, mobile 2x2 grid |
+| **K8s API Client** | `k8s.ts` | ~300 | ✅ Full CRUD + applyYAML + pods + nodes + events + cordon/drain/taints/labels |
+
+### ❌ GAP ANALYSIS vs Rancher / Portainer — What's MISSING
+
+#### 🔴 P0: Core K8s Management (Rancher parity)
+
+1. ~~**Helm Chart Catalog**~~ — ✅ COMPLETED (`20bf0a5`)
+2. ~~**Events Timeline**~~ — ✅ COMPLETED (`1fcedf0`, `8fdbe65`)
+3. ~~**Node Management** (Cordon, Drain, Taints, Labels)~~ — ✅ COMPLETED (`1fcedf0`, `8fdbe65`)
+4. ~~**Rolling Update Progress**~~ — ✅ COMPLETED (`1fcedf0`)
+5. **Workload Real-time Metrics** — CPU/Memory per pod/container live sparklines
+   - Backend: Need metrics-server integration (`/apis/metrics.k8s.io/v1beta1`)
+   - Frontend: Need sparkline charts in Pod detail drawer
+   - Rancher equivalent: Workload Metrics tab
+   - **Status**: NEXT PRIORITY
+
+#### 🟡 P1: Advanced Resource Management (Portainer parity)
+
+6. **Network Policies** — Visual editor for ingress/egress rules
+   - Backend: Need CRUD for NetworkPolicy kind
+   - Frontend: Need visual policy builder
+   - **Status**: NOT STARTED
+
+7. **Resource Quotas & Limit Ranges** — Per-namespace resource limits
+   - Backend: Need CRUD for ResourceQuota, LimitRange kinds
+   - Frontend: Need quota dashboard with usage bars
+   - **Status**: NOT STARTED
+
+8. **HPA / VPA** — Horizontal/Vertical Pod Autoscaler management
+   - Backend: Need CRUD for HorizontalPodAutoscaler kind
+   - Frontend: Need autoscaler config UI
+   - **Status**: NOT STARTED
+
+9. **Pod Disruption Budgets** — PDB management
+   - Backend: Need CRUD for PodDisruptionBudget kind
+   - Frontend: Need PDB config form
+   - **Status**: NOT STARTED
+
+10. **Volume Browser** — Browse PV/PVC with storage usage
+    - Backend: PVC CRUD exists, PV missing. Need storage metrics
+    - Frontend: Need volume detail drawer with capacity charts
+    - **Status**: PARTIAL
+
+11. **Registry Management** — Docker registry CRUD, image pull secrets
+    - Backend: NOT STARTED
+    - Frontend: NOT STARTED
+    - **Status**: NOT STARTED
+
+#### 🟢 P2: Enterprise Features (Rancher Enterprise parity)
+
+12. **CIS Benchmark Scanning** — Security compliance scanning
+13. **Cluster Backup & Restore** — etcd backup, Velero integration
+14. **GitOps / Continuous Delivery** — Fleet/ArgoCD integration
+15. **Service Mesh** — Istio/Linkerd management
+16. **Multi-Cluster RBAC** — Per-cluster role bindings
+17. **Cluster Provisioning** — Create K3s/RKE/EKS/GKE clusters from UI
+
+#### 🔵 P3: Quality & UX Polish
+
+18. **Pod detail drawer**: Missing real-time CPU/Memory sparklines
+19. **Explorer search**: Need full-text search across all resource YAML
+20. **Breadcrumb navigation**: cluster → namespace → kind → resource
+21. **Bulk operations**: Multi-select + bulk delete/scale/restart
+22. **Keyboard shortcuts**: vim-like navigation in Explorer
+23. **Dark/Light theme toggle**: Currently dark-only
+24. **Resource YAML diff**: Compare current vs desired state
+25. **Favorites/Pinned resources**: Quick access to frequently used resources
+
+### K8s API Routes (Current)
+```
+/explorer           → ExplorerHandler (search, sync)
+/deployments        → DeploymentHandler (list, scale, restart, delete, rollback, canary, bluegreen)
+/k8s/{cluster}/
+  namespaces        → GET (list), POST (create), DELETE /{name}
+  resources/{kind}  → GET (list), POST (create), GET /{name}, PUT /{name}, DELETE /{name}
+  apply             → POST (raw YAML, platform_admin only)
+  exec              → WebSocket (pod terminal)
+  pods/{pod}/exec   → WebSocket (pod terminal - alt route)
+  logs              → GET (pod log streaming SSE/JSON)
+  pods/{pod}/logs   → GET (pod log streaming - alt route)
+/fleet              → FleetHandler (import kubeconfig, cluster CRUD)
+/catalog            → CatalogHandler (service templates - NOT Helm)
+/logs/stream        → LogStreamHandler (WebSocket - Docker-based)
+```
+
+### Frontend K8s Components (Current)
+```
+frontend-vue/src/
+  api/k8s.ts                              → API client (ResourceKind includes pods)
+  components/k8s/
+    CreateResourceModal.vue               → Visual forms for 4 resource kinds
+    SecretViewer.vue                       → Masked secret viewer
+    YamlEditorModal.vue                   → Raw YAML editor + templates
+    PodTerminal.vue                       → xterm.js WebSocket terminal
+    PodLogViewer.vue                      → SSE real-time log viewer
+  views/
+    ExplorerView.vue                      → K8s resource explorer (all kinds)
+    FleetView.vue                         → Multi-cluster management
+    DeploymentsView.vue                   → Workload lifecycle + mobile UX
+```
+
+## Mobile UI Audit Progress
+- Screen 1.1: Fleet (`/fleet`) — ✅ COMPLETED (DEC-073)
+- Screen 1.2: SLO (`/slo`) — ✅ COMPLETED (DEC-077)
+- Deep-Dive Traffic Modal — ✅ COMPLETED (DEC-075)
+- Node Historical Charts — ✅ COMPLETED (DEC-076)
+- Screen 1.3: Deployments (`/deployments`) — ✅ COMPLETED (K8s Deep Features Phase)
+- Screen 1.4: Real-Time Logs (`/logs`) — ⏳ PENDING
+- Screen 1.5: Security (`/security` / `/compliance`) — ⏳ PENDING
+- Screen 1.6: Infrastructure Hosts (`/hosts`) — ⏳ PENDING
+- Screen 1.7: Incidents (`/incidents`) — ⏳ PENDING
