@@ -1,8 +1,10 @@
-﻿package cluster
+package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -60,6 +62,18 @@ func (m *ClientManager) GetK8sRestConfig(ctx context.Context, clusterID string) 
 	}
 
 	cluster, err := m.fleetRepo.GetCluster(ctx, clusterID)
+	if (err != nil || cluster == nil) && m.fleetRepo != nil {
+		if clusters, listErr := m.fleetRepo.ListClusters(ctx); listErr == nil {
+			for _, c := range clusters {
+				if c.ID == clusterID || c.Name == clusterID {
+					target := c
+					cluster = &target
+					err = nil
+					break
+				}
+			}
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("retrieving cluster %s details: %w", clusterID, err)
 	}
@@ -80,6 +94,23 @@ func (m *ClientManager) GetK8sRestConfig(ctx context.Context, clusterID string) 
 		kubeconfigData = decrypted
 	}
 
+	trimmed := strings.TrimSpace(kubeconfigData)
+	for strings.HasPrefix(trimmed, "\"") && strings.HasSuffix(trimmed, "\"") {
+		var unquoted string
+		if err := json.Unmarshal([]byte(trimmed), &unquoted); err == nil {
+			trimmed = strings.TrimSpace(unquoted)
+		} else {
+			break
+		}
+	}
+	if strings.Contains(trimmed, "\\n") {
+		trimmed = strings.ReplaceAll(trimmed, "\\r\\n", "\n")
+		trimmed = strings.ReplaceAll(trimmed, "\\n", "\n")
+		trimmed = strings.ReplaceAll(trimmed, "\\t", "\t")
+		trimmed = strings.ReplaceAll(trimmed, "\\\"", "\"")
+	}
+	kubeconfigData = trimmed
+
 	config, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeconfigData))
 	if err != nil {
 		return nil, fmt.Errorf("parsing kubeconfig for cluster %s: %w", clusterID, err)
@@ -88,6 +119,9 @@ func (m *ClientManager) GetK8sRestConfig(ctx context.Context, clusterID string) 
 	config.QPS = 50
 	config.Burst = 100
 	config.Timeout = 30 * time.Second
+	if len(config.TLSClientConfig.CAData) == 0 && config.TLSClientConfig.CAFile == "" {
+		config.TLSClientConfig.Insecure = true
+	}
 
 	m.k8sConfigPool[clusterID] = config
 	return config, nil

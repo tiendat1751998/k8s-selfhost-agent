@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -113,10 +114,18 @@ func isK8sUnavailable(err error) bool {
 }
 
 func writeK8sUnavailable(w http.ResponseWriter) {
+	writeK8sUnavailableWithErr(w, nil)
+}
+
+func writeK8sUnavailableWithErr(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusServiceUnavailable)
+	errMsg := "Kubernetes cluster not connected or unconfigured"
+	if err != nil {
+		errMsg = fmt.Sprintf("Kubernetes cluster not connected: %v", err)
+	}
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error":   "Kubernetes cluster not connected or unconfigured",
+		"error":   errMsg,
 		"code":    "K8S_UNAVAILABLE",
 		"message": "Import a kubeconfig via Fleet to enable this feature",
 	})
@@ -145,7 +154,7 @@ func (h *K8sResourceHandler) ListNamespaces(w http.ResponseWriter, r *http.Reque
 	namespaces, err := h.repo.ListNamespaces(r.Context(), cluster)
 	if err != nil {
 		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
+			writeK8sUnavailableWithErr(w, err)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to list namespaces", err)
@@ -158,13 +167,6 @@ func (h *K8sResourceHandler) ListNamespaces(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-type createNamespaceRequest struct {
-	Name     string `json:"name"`
-	Metadata struct {
-		Name string `json:"name"`
-	} `json:"metadata"`
-}
-
 // CreateNamespace handles POST /api/v1/k8s/{cluster}/namespaces
 func (h *K8sResourceHandler) CreateNamespace(w http.ResponseWriter, r *http.Request) {
 	if h.repo == nil {
@@ -173,50 +175,32 @@ func (h *K8sResourceHandler) CreateNamespace(w http.ResponseWriter, r *http.Requ
 	}
 
 	cluster := chi.URLParam(r, "cluster")
-	var req createNamespaceRequest
+	var req struct {
+		Name string `json:"name"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body", err)
 		return
 	}
-
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		name = strings.TrimSpace(req.Metadata.Name)
-	}
-	if name == "" {
-		writeError(w, http.StatusBadRequest, "namespace name is required", nil)
+	if strings.TrimSpace(req.Name) == "" {
+		writeError(w, http.StatusBadRequest, "namespace name cannot be empty", nil)
 		return
 	}
 
-	ns, err := h.repo.CreateNamespace(r.Context(), cluster, name)
-
-	// Audit logging
-	userID := middleware.UserIDFromContext(r.Context())
-	if userID == "" {
-		userID = "system"
-	}
-	result := "success"
-	details := map[string]interface{}{"cluster": cluster, "namespace": name}
-	if err != nil {
-		result = "failure"
-		details["error"] = err.Error()
-	}
-	if h.auditRepo != nil {
-		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "create", "k8s_namespace", name, name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
-			logger.Get().Error("failed to record audit action for namespace creation", zap.Error(auditErr))
-		}
-	}
-
+	ns, err := h.repo.CreateNamespace(r.Context(), cluster, req.Name)
 	if err != nil {
 		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
+			writeK8sUnavailableWithErr(w, err)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to create namespace", err)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, ns)
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"data":    ns,
+		"message": "namespace created successfully",
+	})
 }
 
 // DeleteNamespace handles DELETE /api/v1/k8s/{cluster}/namespaces/{name}
@@ -228,29 +212,14 @@ func (h *K8sResourceHandler) DeleteNamespace(w http.ResponseWriter, r *http.Requ
 
 	cluster := chi.URLParam(r, "cluster")
 	name := chi.URLParam(r, "name")
-
-	err := h.repo.DeleteNamespace(r.Context(), cluster, name)
-
-	// Audit logging
-	userID := middleware.UserIDFromContext(r.Context())
-	if userID == "" {
-		userID = "system"
-	}
-	result := "success"
-	details := map[string]interface{}{"cluster": cluster, "namespace": name}
-	if err != nil {
-		result = "failure"
-		details["error"] = err.Error()
-	}
-	if h.auditRepo != nil {
-		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "delete", "k8s_namespace", name, name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
-			logger.Get().Error("failed to record audit action for namespace deletion", zap.Error(auditErr))
-		}
+	if strings.TrimSpace(name) == "" {
+		writeError(w, http.StatusBadRequest, "namespace name cannot be empty", nil)
+		return
 	}
 
-	if err != nil {
+	if err := h.repo.DeleteNamespace(r.Context(), cluster, name); err != nil {
 		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
+			writeK8sUnavailableWithErr(w, err)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to delete namespace", err)
@@ -277,7 +246,7 @@ func (h *K8sResourceHandler) ListResources(w http.ResponseWriter, r *http.Reques
 	items, err := h.repo.ListResources(r.Context(), cluster, kind, ns)
 	if err != nil {
 		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
+			writeK8sUnavailableWithErr(w, err)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to list resources", err)
