@@ -264,21 +264,179 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 - Use Chrome DevTools MCP for QA verification
 
 ## Next Roadmap Candidates
-1. Complete Traefik RPS fix (in-progress subagent)
-2. Per-app latency metrics (avg response time from Traefik service_request_duration)
-3. AI SRE / RCA Engine + Ecosystem Tools Integration
-4. Edge Agent Command & Remote Diagnostics
-5. Cost model (deferred by user)
+1. **K8s Deep Features Phase** (IN PROGRESS — see below)
+2. Complete Traefik RPS fix
+3. Per-app latency metrics (avg response time from Traefik service_request_duration)
+4. AI SRE / RCA Engine + Ecosystem Tools Integration
+5. Edge Agent Command & Remote Diagnostics
+6. Cost model (deferred by user)
 
-## Kubernetes Cluster State (UPDATED: Live Cluster Connected)
-- **Cluster**: `k8snode` on `https://10.10.10.60:6443` (v1.35.8, 2 nodes: k8smasterdeb + k8smaster, Cilium 1.20.0 eBPF CNI, Hubble Relay/UI, 14 Pods).
-- **K8s Deep Features (Pod Terminal, Live Pod Logs, YAML Editor, Helm Catalog)**: Deferred to dedicated phase after completing screen-by-screen mobile/PWA ergonomics audit.
-- **Current Active Phase**: Step-by-step screen-by-screen mobile web UI & button-by-button ergonomics optimization:
-  - Screen 1.1: Multi-Cluster Fleet (`/fleet`) — ✅ COMPLETED & VERIFIED (DEC-073)
-  - Screen 1.2: SLO Tracking (`/slo`) — ✅ COMPLETED & VERIFIED (DEC-077)
-  - Deep-Dive Traffic Modal & Node Historical Chart Numbers — ✅ COMPLETED & VERIFIED (DEC-075, DEC-076)
-  - Screen 1.3: Deployments & Apps (`/deployments`) — ⏳ READY FOR NEXT AUDIT
-  - Screen 1.4: Real-Time Logs (`/logs`)
-  - Screen 1.5: Security & Compliance (`/security` / `/compliance`)
-  - Screen 1.6: Infrastructure Hosts (`/hosts`)
-  - Screen 1.7: Incidents & RCA (`/incidents`)
+## Kubernetes Deep Features — Comprehensive State (UPDATED: 2026-08-27T14:00)
+
+### Cluster Info
+- **Cluster**: `k8snode` on `https://10.10.10.60:6443` (v1.35.8, 2 nodes, Cilium 1.20.0 eBPF CNI, Hubble, 14+ Pods)
+- **Auth**: `admin@k8s.local / admin123`, JWT, RBAC roles: platform_admin, tenant_admin, operator
+
+### Commits This Phase
+- `dc82701` feat(k8s): add pod explorer, pod exec terminal, pod log streaming, and deployments mobile UX
+- `3dbfc60` feat(k8s): add interactive pod terminal (xterm.js) and real-time pod log viewer with SSE streaming
+- `176ab79` fix(k8s): add pod CRUD support, nil client safety guards, enhanced error matching, and fleet query fix
+
+### ✅ What's DONE (Backend)
+
+| Component | File | Lines | Status |
+|:----------|:-----|:------|:-------|
+| **Resource CRUD** (11 kinds + pods) | `resource_repo.go` | ~950 | ✅ Full CRUD for Deployments, Services, ConfigMaps, Secrets, StatefulSets, DaemonSets, Jobs, CronJobs, Ingresses, PVCs, StorageClasses, Pods |
+| **Deployment Lifecycle** | `deployment_repo.go` | ~470 | ✅ List, Scale, Restart, Delete, Rollback, Canary, BlueGreen |
+| **Explorer Search** | `explorer_repo.go` | ~530 | ✅ Cross-resource search with pagination |
+| **Fleet Discovery** | `discovery.go` | ~200 | ✅ Namespace/deployment/service/node/CRD counts per cluster |
+| **Health Center** | `healthcenter_repo.go` | ~150 | ✅ K8s API /healthz check |
+| **Capacity Analysis** | `capacity_repo.go` | ~300 | ✅ CPU/Memory/Storage capacity per cluster |
+| **Pod Exec WebSocket** | `k8s_exec_handler.go` | ~260 | ✅ SPDY executor + WebSocket bridge + resize |
+| **Pod Log Streaming** | `k8s_logs_handler.go` | ~165 | ✅ SSE follow + JSON static mode |
+| **YAML Apply** | `resource_repo.go` | ~50 | ✅ POST /k8s/{cluster}/apply |
+| **Multi-Cluster ClientManager** | `manager.go` | ~200 | ✅ Dynamic client + rest.Config per cluster |
+
+### ✅ What's DONE (Frontend)
+
+| Component | File | Lines | Status |
+|:----------|:-----|:------|:-------|
+| **Explorer View** | `ExplorerView.vue` | ~2500 | ✅ Kind tree, data table, detail drawer, Pod-specific columns & actions |
+| **Pod Terminal** (xterm.js) | `PodTerminal.vue` | ~400 | ✅ WebSocket terminal, resize, reconnect, quick shortcuts |
+| **Pod Log Viewer** | `PodLogViewer.vue` | ~600 | ✅ SSE streaming, level colors, search, auto-scroll, export |
+| **Create Resource Modal** | `CreateResourceModal.vue` | ~700 | ✅ Visual forms for Deployments, Services, ConfigMaps, Secrets |
+| **YAML Editor** | `YamlEditorModal.vue` | ~300 | ✅ Templates for 11+ kinds |
+| **Secret Viewer** | `SecretViewer.vue` | ~200 | ✅ Mask/reveal/decode/copy |
+| **Fleet View** | `FleetView.vue` | ~1200 | ✅ Multi-cluster import & overview |
+| **Deployments View** | `DeploymentsView.vue` | ~4300 | ✅ Lifecycle management + mobile UX |
+| **K8s API Client** | `k8s.ts` | ~185 | ✅ Full CRUD + applyYAML + pods |
+
+### ❌ GAP ANALYSIS vs Rancher / Portainer — What's MISSING
+
+#### 🔴 P0: Core K8s Management (Rancher parity)
+
+1. **Helm Chart Catalog** — Browse repos, install/upgrade/rollback releases
+   - Backend: Need `helm.sh/helm/v3` Go SDK integration
+   - Frontend: Need chart browser grid, install wizard, release manager
+   - Rancher equivalent: Apps & Marketplace
+   - **Status**: NOT STARTED (Feature 5 in plan)
+
+2. **Events Timeline** — K8s events stream per cluster/namespace/resource
+   - Backend: `client.CoreV1().Events(ns).List()` + Watch
+   - Frontend: Need EventsTimeline component with filtering
+   - Rancher equivalent: Cluster Events tab
+   - **Status**: NOT STARTED
+
+3. **Node Management** — Drain, Cordon, Uncordon, Labels, Taints, Annotations
+   - Backend: Partially in explorer_repo.go (labels only). Missing drain/cordon/taint API
+   - Frontend: Need NodeManagement drawer with actions
+   - Rancher equivalent: Nodes → Actions menu
+   - **Status**: PARTIAL
+
+4. **Workload Real-time Metrics** — CPU/Memory per pod/container live charts
+   - Backend: Need metrics-server integration (`/apis/metrics.k8s.io/v1beta1`)
+   - Frontend: Need sparkline charts in Pod detail drawer
+   - Rancher equivalent: Workload Metrics tab
+   - **Status**: NOT STARTED
+
+5. **Rolling Update Progress** — Visual progress bar for deployment rollouts
+   - Backend: Deployment status conditions (Progressing/Available/ReplicaFailure)
+   - Frontend: Need progress indicator in Deployments view
+   - Rancher equivalent: Workload detail → Rollout Status
+   - **Status**: NOT STARTED
+
+#### 🟡 P1: Advanced Resource Management (Portainer parity)
+
+6. **Network Policies** — Visual editor for ingress/egress rules
+   - Backend: Need CRUD for NetworkPolicy kind
+   - Frontend: Need visual policy builder
+   - **Status**: NOT STARTED
+
+7. **Resource Quotas & Limit Ranges** — Per-namespace resource limits
+   - Backend: Need CRUD for ResourceQuota, LimitRange kinds
+   - Frontend: Need quota dashboard with usage bars
+   - **Status**: NOT STARTED
+
+8. **HPA / VPA** — Horizontal/Vertical Pod Autoscaler management
+   - Backend: Need CRUD for HorizontalPodAutoscaler kind
+   - Frontend: Need autoscaler config UI
+   - **Status**: NOT STARTED
+
+9. **Pod Disruption Budgets** — PDB management
+   - Backend: Need CRUD for PodDisruptionBudget kind
+   - Frontend: Need PDB config form
+   - **Status**: NOT STARTED
+
+10. **Volume Browser** — Browse PV/PVC with storage usage
+    - Backend: PVC CRUD exists, PV missing. Need storage metrics
+    - Frontend: Need volume detail drawer with capacity charts
+    - **Status**: PARTIAL
+
+11. **Registry Management** — Docker registry CRUD, image pull secrets
+    - Backend: NOT STARTED
+    - Frontend: NOT STARTED
+    - **Status**: NOT STARTED
+
+#### 🟢 P2: Enterprise Features (Rancher Enterprise parity)
+
+12. **CIS Benchmark Scanning** — Security compliance scanning
+13. **Cluster Backup & Restore** — etcd backup, Velero integration
+14. **GitOps / Continuous Delivery** — Fleet/ArgoCD integration
+15. **Service Mesh** — Istio/Linkerd management
+16. **Multi-Cluster RBAC** — Per-cluster role bindings
+17. **Cluster Provisioning** — Create K3s/RKE/EKS/GKE clusters from UI
+
+#### 🔵 P3: Quality & UX Polish
+
+18. **Pod detail drawer**: Missing real-time CPU/Memory sparklines
+19. **Explorer search**: Need full-text search across all resource YAML
+20. **Breadcrumb navigation**: cluster → namespace → kind → resource
+21. **Bulk operations**: Multi-select + bulk delete/scale/restart
+22. **Keyboard shortcuts**: vim-like navigation in Explorer
+23. **Dark/Light theme toggle**: Currently dark-only
+24. **Resource YAML diff**: Compare current vs desired state
+25. **Favorites/Pinned resources**: Quick access to frequently used resources
+
+### K8s API Routes (Current)
+```
+/explorer           → ExplorerHandler (search, sync)
+/deployments        → DeploymentHandler (list, scale, restart, delete, rollback, canary, bluegreen)
+/k8s/{cluster}/
+  namespaces        → GET (list), POST (create), DELETE /{name}
+  resources/{kind}  → GET (list), POST (create), GET /{name}, PUT /{name}, DELETE /{name}
+  apply             → POST (raw YAML, platform_admin only)
+  exec              → WebSocket (pod terminal)
+  pods/{pod}/exec   → WebSocket (pod terminal - alt route)
+  logs              → GET (pod log streaming SSE/JSON)
+  pods/{pod}/logs   → GET (pod log streaming - alt route)
+/fleet              → FleetHandler (import kubeconfig, cluster CRUD)
+/catalog            → CatalogHandler (service templates - NOT Helm)
+/logs/stream        → LogStreamHandler (WebSocket - Docker-based)
+```
+
+### Frontend K8s Components (Current)
+```
+frontend-vue/src/
+  api/k8s.ts                              → API client (ResourceKind includes pods)
+  components/k8s/
+    CreateResourceModal.vue               → Visual forms for 4 resource kinds
+    SecretViewer.vue                       → Masked secret viewer
+    YamlEditorModal.vue                   → Raw YAML editor + templates
+    PodTerminal.vue                       → xterm.js WebSocket terminal
+    PodLogViewer.vue                      → SSE real-time log viewer
+  views/
+    ExplorerView.vue                      → K8s resource explorer (all kinds)
+    FleetView.vue                         → Multi-cluster management
+    DeploymentsView.vue                   → Workload lifecycle + mobile UX
+```
+
+## Mobile UI Audit Progress
+- Screen 1.1: Fleet (`/fleet`) — ✅ COMPLETED (DEC-073)
+- Screen 1.2: SLO (`/slo`) — ✅ COMPLETED (DEC-077)
+- Deep-Dive Traffic Modal — ✅ COMPLETED (DEC-075)
+- Node Historical Charts — ✅ COMPLETED (DEC-076)
+- Screen 1.3: Deployments (`/deployments`) — ✅ COMPLETED (K8s Deep Features Phase)
+- Screen 1.4: Real-Time Logs (`/logs`) — ⏳ PENDING
+- Screen 1.5: Security (`/security` / `/compliance`) — ⏳ PENDING
+- Screen 1.6: Infrastructure Hosts (`/hosts`) — ⏳ PENDING
+- Screen 1.7: Incidents (`/incidents`) — ⏳ PENDING
