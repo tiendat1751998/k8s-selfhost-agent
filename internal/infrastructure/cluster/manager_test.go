@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,3 +104,97 @@ users:
 		t.Fatal("expected k8s client, got nil")
 	}
 }
+
+func TestGetK8sClient_Providers(t *testing.T) {
+	validKubeconfig := `apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://127.0.0.1:6443
+  name: test-cluster
+contexts:
+- context:
+    cluster: test-cluster
+    user: test-user
+  name: test-context
+current-context: test-context
+users:
+- name: test-user
+  user:
+    token: test-token
+`
+
+	tests := []struct {
+		name         string
+		provider     string
+		importMethod string
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:     "onprem provider",
+			provider: "onprem",
+			wantErr:  false,
+		},
+		{
+			name:     "k3s provider",
+			provider: "k3s",
+			wantErr:  false,
+		},
+		{
+			name:     "baremetal provider",
+			provider: "baremetal",
+			wantErr:  false,
+		},
+		{
+			name:     "azure provider",
+			provider: "azure",
+			wantErr:  false,
+		},
+		{
+			name:     "custom provider",
+			provider: "custom",
+			wantErr:  false,
+		},
+		{
+			name:     "docker provider without kubeconfig import method",
+			provider: "docker",
+			wantErr:  true,
+			errContains: "has provider docker, not kubernetes",
+		},
+		{
+			name:         "docker provider with kubeconfig import method",
+			provider:     "docker",
+			importMethod: "kubeconfig",
+			wantErr:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &mockFleetRepo{
+				cluster: &fleet.Cluster{
+					ID:             "cluster-" + tt.provider + "-" + tt.importMethod,
+					Provider:       tt.provider,
+					ImportMethod:   tt.importMethod,
+					EncryptedToken: validKubeconfig,
+				},
+			}
+			mgr := NewClientManager(repo)
+			client, err := mgr.GetK8sClient(context.Background(), "cluster-"+tt.provider+"-"+tt.importMethod)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("GetK8sClient() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				if tt.errContains != "" && (err == nil || !strings.Contains(err.Error(), tt.errContains)) {
+					t.Fatalf("expected error containing %q, got %v", tt.errContains, err)
+				}
+			} else {
+				if client == nil {
+					t.Fatal("expected non-nil clientset")
+				}
+			}
+		})
+	}
+}
+
