@@ -284,12 +284,15 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 - `20bf0a5` feat(helm): add Helm v3 chart catalog with release management, repo browser, and install wizard
 - `1fcedf0` feat(k8s): add events stream timeline, node management (cordon/drain/taints/labels), and rollout progress
 - `8fdbe65` fix(ui): polish events timeline view, add fallback node support, and resolve TS2367 type check
+- `260bbd3` feat(k8s): enterprise explorer overhaul with zero mock data, 16 resource kinds, workload scale/restart, and rich drawers
+- `61e0012` fix(k8s): enhance cluster tenant query precedence, kubeconfig unquoting, and error propagation
 
 ### ✅ What's DONE (Backend)
 
 | Component | File | Lines | Status |
 |:----------|:-----|:------|:-------|
-| **Resource CRUD** (11 kinds + pods + nodes + events) | `resource_repo.go` | ~1150 | ✅ Full CRUD for Deployments, Services, ConfigMaps, Secrets, StatefulSets, DaemonSets, Jobs, CronJobs, Ingresses, PVCs, StorageClasses, Pods, Nodes, Events |
+| **Resource CRUD** (16 kinds + pods + nodes + events) | `resource_repo.go` | ~1550 | ✅ Full CRUD for Deployments, Services, ConfigMaps, Secrets, StatefulSets, DaemonSets, Jobs, CronJobs, Ingresses, PVCs, PVs, StorageClasses, NetworkPolicies, ServiceAccounts, HPAs, Pods, Nodes, Events |
+| **Workload Lifecycle API** | `resource_repo.go`, `k8s_resource_handler.go` | ~400 | ✅ Scale Deployments/StatefulSets, Rolling Restart Deployments/DaemonSets, Trigger CronJob, Suspend/Resume CronJob |
 | **Node Management Operations** | `resource_repo.go`, `k8s_resource_handler.go` | ~600 | ✅ Cordon, Uncordon, Drain (graceful eviction), Taints editor, Labels editor |
 | **Events Stream & Query** | `k8s_resource_handler.go` | ~150 | ✅ GET /k8s/{cluster}/events with filters (ns, kind, name, type, limit) |
 | **Helm Release Manager** | `release_manager.go` | ~450 | ✅ Helm v3 SDK: List, Get, Install, Upgrade, Rollback, Uninstall, Repo CRUD, Search, Default values |
