@@ -428,3 +428,256 @@ var _ = appsv1.Deployment{}
 var _ = batchv1.Job{}
 var _ = networkingv1.Ingress{}
 var _ = storagev1.StorageClass{}
+
+func TestResourceRepo_Nodes(t *testing.T) {
+	ctx := context.Background()
+	node1 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "node-1",
+			Labels: map[string]string{"env": "prod"},
+		},
+		Spec: corev1.NodeSpec{
+			Unschedulable: false,
+			Taints: []corev1.Taint{
+				{Key: "dedicated", Value: "gpu", Effect: corev1.TaintEffectNoSchedule},
+			},
+		},
+	}
+	node2 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node-2",
+		},
+	}
+	pod1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "regular-pod-1",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "node-1",
+		},
+	}
+	dsPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ds-pod",
+			Namespace: "kube-system",
+			OwnerReferences: []metav1.OwnerReference{
+				{Kind: "DaemonSet", Name: "ds-app"},
+			},
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "node-1",
+		},
+	}
+	mirrorPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "mirror-pod",
+			Namespace: "kube-system",
+			Annotations: map[string]string{
+				corev1.MirrorPodAnnotationKey: "mirror-hash",
+			},
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "node-1",
+		},
+	}
+	pod2 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "regular-pod-2",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "node-2",
+		},
+	}
+
+	fakeClient := fake.NewSimpleClientset(node1, node2, pod1, dsPod, mirrorPod, pod2)
+	repo := &ResourceRepo{client: fakeClient}
+
+	// 1. List Nodes
+	nodesList, err := repo.ListResources(ctx, "", "nodes", "")
+	if err != nil {
+		t.Fatalf("ListResources nodes failed: %v", err)
+	}
+	if len(nodesList) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(nodesList))
+	}
+
+	// 2. Get Node
+	n1, err := repo.GetResource(ctx, "", "nodes", "", "node-1")
+	if err != nil {
+		t.Fatalf("GetResource node-1 failed: %v", err)
+	}
+	meta := n1["metadata"].(map[string]interface{})
+	if meta["name"] != "node-1" {
+		t.Fatalf("expected node-1, got %v", meta["name"])
+	}
+
+	// 3. Cordon Node
+	if err := repo.CordonNode(ctx, "", "node-1"); err != nil {
+		t.Fatalf("CordonNode failed: %v", err)
+	}
+	updatedNode, err := fakeClient.CoreV1().Nodes().Get(ctx, "node-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("fetching node-1 after cordon: %v", err)
+	}
+	if !updatedNode.Spec.Unschedulable {
+		t.Fatalf("expected node-1 to be unschedulable true")
+	}
+
+	// 4. Uncordon Node
+	if err := repo.UncordonNode(ctx, "", "node-1"); err != nil {
+		t.Fatalf("UncordonNode failed: %v", err)
+	}
+	updatedNode, err = fakeClient.CoreV1().Nodes().Get(ctx, "node-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("fetching node-1 after uncordon: %v", err)
+	}
+	if updatedNode.Spec.Unschedulable {
+		t.Fatalf("expected node-1 to be unschedulable false")
+	}
+
+	// 5. Update Node Taints
+	newTaints := []corev1.Taint{
+		{Key: "env", Value: "stage", Effect: corev1.TaintEffectNoExecute},
+	}
+	if err := repo.UpdateNodeTaints(ctx, "", "node-1", newTaints); err != nil {
+		t.Fatalf("UpdateNodeTaints failed: %v", err)
+	}
+	updatedNode, err = fakeClient.CoreV1().Nodes().Get(ctx, "node-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("fetching node-1 after taint update: %v", err)
+	}
+	if len(updatedNode.Spec.Taints) != 1 || updatedNode.Spec.Taints[0].Key != "env" {
+		t.Fatalf("expected updated taints, got %v", updatedNode.Spec.Taints)
+	}
+
+	// 6. Update Node Labels
+	newLabels := map[string]string{
+		"tier": "frontend",
+	}
+	if err := repo.UpdateNodeLabels(ctx, "", "node-1", newLabels); err != nil {
+		t.Fatalf("UpdateNodeLabels failed: %v", err)
+	}
+	updatedNode, err = fakeClient.CoreV1().Nodes().Get(ctx, "node-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("fetching node-1 after label update: %v", err)
+	}
+	if updatedNode.Labels["tier"] != "frontend" || updatedNode.Labels["env"] != "prod" {
+		t.Fatalf("expected merged labels, got %v", updatedNode.Labels)
+	}
+
+	// 7. Drain Node
+	if err := repo.DrainNode(ctx, "", "node-1", 30, true); err != nil {
+		t.Fatalf("DrainNode failed: %v", err)
+	}
+	// Verify node is cordoned
+	updatedNode, err = fakeClient.CoreV1().Nodes().Get(ctx, "node-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("fetching node-1 after drain: %v", err)
+	}
+	if !updatedNode.Spec.Unschedulable {
+		t.Fatalf("expected node-1 to be unschedulable after drain")
+	}
+	// Verify regular-pod-1 is deleted
+	_, err = fakeClient.CoreV1().Pods("default").Get(ctx, "regular-pod-1", metav1.GetOptions{})
+	if err == nil {
+		t.Fatalf("expected regular-pod-1 to be deleted during drain")
+	}
+	// Verify ds-pod still exists (ignoreDaemonSets=true)
+	_, err = fakeClient.CoreV1().Pods("kube-system").Get(ctx, "ds-pod", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected ds-pod to be preserved during drain, got error: %v", err)
+	}
+	// Verify mirror-pod still exists
+	_, err = fakeClient.CoreV1().Pods("kube-system").Get(ctx, "mirror-pod", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected mirror-pod to be preserved during drain, got error: %v", err)
+	}
+	// Verify regular-pod-2 on node-2 still exists
+	_, err = fakeClient.CoreV1().Pods("default").Get(ctx, "regular-pod-2", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected regular-pod-2 on node-2 to be preserved during drain, got error: %v", err)
+	}
+
+	// 8. Delete Resource Node
+	if err := repo.DeleteResource(ctx, "", "nodes", "", "node-2"); err != nil {
+		t.Fatalf("DeleteResource node-2 failed: %v", err)
+	}
+	_, err = fakeClient.CoreV1().Nodes().Get(ctx, "node-2", metav1.GetOptions{})
+	if err == nil {
+		t.Fatalf("expected node-2 to be deleted")
+	}
+}
+
+func TestResourceRepo_Events(t *testing.T) {
+	ctx := context.Background()
+	ev1 := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ev-1",
+			Namespace: "default",
+		},
+		InvolvedObject: corev1.ObjectReference{
+			Kind:      "Pod",
+			Name:      "app-pod",
+			Namespace: "default",
+		},
+		Reason:  "Started",
+		Message: "Started container app",
+		Type:    "Normal",
+	}
+	ev2 := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ev-2",
+			Namespace: "prod",
+		},
+		InvolvedObject: corev1.ObjectReference{
+			Kind:      "Deployment",
+			Name:      "db",
+			Namespace: "prod",
+		},
+		Reason:  "Failed",
+		Message: "Back-off restarting failed container",
+		Type:    "Warning",
+	}
+
+	fakeClient := fake.NewSimpleClientset(ev1, ev2)
+	repo := &ResourceRepo{client: fakeClient}
+
+	// 1. List Events in default namespace
+	eventsDefault, err := repo.ListResources(ctx, "", "events", "default")
+	if err != nil {
+		t.Fatalf("ListResources events in default namespace failed: %v", err)
+	}
+	if len(eventsDefault) != 1 {
+		t.Fatalf("expected 1 event in default namespace, got %d", len(eventsDefault))
+	}
+
+	// 2. List Events in all namespaces
+	eventsAll, err := repo.ListResources(ctx, "", "events", "")
+	if err != nil {
+		t.Fatalf("ListResources events in all namespaces failed: %v", err)
+	}
+	if len(eventsAll) != 2 {
+		t.Fatalf("expected 2 events in total, got %d", len(eventsAll))
+	}
+
+	// 3. Get Event
+	item, err := repo.GetResource(ctx, "", "events", "default", "ev-1")
+	if err != nil {
+		t.Fatalf("GetResource event ev-1 failed: %v", err)
+	}
+	meta := item["metadata"].(map[string]interface{})
+	if meta["name"] != "ev-1" {
+		t.Fatalf("expected ev-1, got %v", meta["name"])
+	}
+
+	// 4. Delete Event
+	if err := repo.DeleteResource(ctx, "", "events", "default", "ev-1"); err != nil {
+		t.Fatalf("DeleteResource event ev-1 failed: %v", err)
+	}
+	_, err = fakeClient.CoreV1().Events("default").Get(ctx, "ev-1", metav1.GetOptions{})
+	if err == nil {
+		t.Fatalf("expected ev-1 to be deleted")
+	}
+}

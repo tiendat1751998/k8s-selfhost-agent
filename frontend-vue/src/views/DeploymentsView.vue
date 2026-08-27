@@ -247,6 +247,52 @@ onMounted(() => {
   fetchDeployments()
 })
 
+function getRolloutState(row: DeploymentApp) {
+  const desired = row.replicas ?? 0
+  const ready = row.readyReplicas !== undefined ? row.readyReplicas : (row.status === 'healthy' ? desired : 0)
+  const updated = row.updatedReplicas !== undefined ? row.updatedReplicas : desired
+  const pending = Math.max(0, desired - ready)
+  const isUpdating = row.status === 'updating' || (desired > 0 && (ready < desired || updated < desired))
+  const isPaused = Boolean(row.paused)
+  const percent = desired > 0 ? Math.min(100, Math.round((ready / desired) * 100)) : 100
+
+  let statusText = ready + '/' + desired + ' Ready'
+  let badgeClass = 'chip-ready'
+  let label = '✓ Ready'
+
+  if (isPaused) {
+    label = '⏸ Paused'
+    badgeClass = 'chip-paused'
+    statusText = ready + '/' + desired + ' Ready (Paused)'
+  } else if (isUpdating) {
+    label = '⟳ Updating (' + pending + ' pending)'
+    badgeClass = 'chip-updating'
+    statusText = ready + '/' + desired + ' Ready • ' + updated + '/' + desired + ' Updated (' + pending + ' pending)'
+  } else if (ready === desired && desired > 0) {
+    label = '✓ Ready'
+    badgeClass = 'chip-ready'
+    statusText = desired + '/' + desired + ' Ready (Rollout complete)'
+  } else if (desired === 0) {
+    label = '0 Replicas'
+    badgeClass = 'chip-scaled-down'
+    statusText = 'Scaled to 0'
+  }
+
+  return {
+    desired,
+    ready,
+    updated,
+    pending,
+    isUpdating,
+    isPaused,
+    percent,
+    statusText,
+    badgeClass,
+    label,
+  }
+}
+
+
 // ==========================================
 // 3. COMPUTED METRICS & FILTERING
 // ==========================================
@@ -1259,20 +1305,34 @@ function copyToClipboard(text: string) {
           </div>
         </template>
 
-        <!-- Replicas & Scale Cell -->
+                <!-- Replicas & Scale Cell / Rollout Progress Indicator -->
         <template #cell-replicas="{ row }">
-          <div class="replicas-cell">
-            <div class="replicas-nums font-mono">
-              <span class="ready-count text-emerald">{{ row.readyReplicas !== undefined ? row.readyReplicas : row.replicas }}</span>
-              <span class="text-muted">/</span>
-              <span class="desired-count">{{ row.replicas }}</span>
-              <span class="replicas-word">Pods</span>
+          <div class="replicas-cell" :title="getRolloutState(row).statusText">
+            <div class="replicas-header-row font-mono">
+              <div class="replicas-nums">
+                <span class="ready-count text-emerald">{{ row.readyReplicas !== undefined ? row.readyReplicas : (row.status === 'healthy' ? row.replicas : 0) }}</span>
+                <span class="text-muted">/</span>
+                <span class="desired-count">{{ row.replicas }}</span>
+                <span class="replicas-word">Pods</span>
+              </div>
+              <span
+                class="rollout-chip font-mono"
+                :class="getRolloutState(row).badgeClass"
+              >
+                <span v-if="getRolloutState(row).isUpdating" class="rollout-spin-dot"></span>
+                {{ getRolloutState(row).label }}
+              </span>
             </div>
+
+            <!-- Rollout Progress Track -->
             <div class="replicas-progress-track">
               <div 
                 class="replicas-progress-bar"
-                :class="row.status === 'healthy' ? 'bg-emerald' : 'bg-amber'"
-                :style="{ width: `${row.replicas ? ((row.readyReplicas !== undefined ? row.readyReplicas : row.replicas) / row.replicas) * 100 : 0}%` }"
+                :class="[
+                  getRolloutState(row).isUpdating ? 'bg-amber progress-animated-stripes' : 'bg-emerald',
+                  { 'is-complete': getRolloutState(row).percent === 100 }
+                ]"
+                :style="{ width: getRolloutState(row).percent + '%' }"
               ></div>
             </div>
           </div>
@@ -4264,4 +4324,90 @@ function copyToClipboard(text: string) {
     padding: 10px;
   }
 }
+
+/* Rollout Progress Styles */
+.replicas-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.rollout-chip {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip-ready {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.chip-updating {
+  background: rgba(245, 158, 11, 0.18);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  animation: pulse-updating 2s infinite ease-in-out;
+}
+
+.chip-paused {
+  background: rgba(100, 116, 139, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+.chip-scaled-down {
+  background: rgba(51, 65, 85, 0.3);
+  color: #64748b;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.rollout-spin-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+  display: inline-block;
+  animation: spin-pulse 1.2s infinite;
+}
+
+@keyframes pulse-updating {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+@keyframes spin-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.6); opacity: 0.5; }
+}
+
+.progress-animated-stripes {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.18) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.18) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 1rem 1rem;
+  animation: progress-stripes 1s linear infinite;
+}
+
+@keyframes progress-stripes {
+  0% { background-position: 1rem 0; }
+  100% { background-position: 0 0; }
+}
+
 </style>

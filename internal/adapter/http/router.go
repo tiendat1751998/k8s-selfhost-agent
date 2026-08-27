@@ -219,6 +219,15 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 							resSub.Put("/{name}", platform.K8s.UpdateResource)
 							resSub.Delete("/{name}", platform.K8s.DeleteResource)
 						})
+
+						k8sSub.Get("/events", platform.K8s.ListEvents)
+						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/nodes/{name}", func(nodeSub chi.Router) {
+							nodeSub.Post("/cordon", platform.K8s.CordonNode)
+							nodeSub.Post("/uncordon", platform.K8s.UncordonNode)
+							nodeSub.Post("/drain", platform.K8s.DrainNode)
+							nodeSub.Put("/taints", platform.K8s.UpdateNodeTaints)
+							nodeSub.Put("/labels", platform.K8s.UpdateNodeLabels)
+						})
 					})
 				}
 				if platform.K8sExec != nil {
