@@ -1,4 +1,4 @@
-import { api, type ApiResponse } from './client'
+﻿import { api, type ApiResponse } from './client'
 
 export interface K8sResource {
   apiVersion: string
@@ -15,9 +15,14 @@ export interface K8sResource {
   }
   spec?: Record<string, unknown>
   data?: Record<string, string>  // for ConfigMaps/Secrets
+  binaryData?: Record<string, string>
   stringData?: Record<string, string>
   type?: string
   status?: Record<string, unknown>
+  secrets?: unknown[]
+  provisioner?: string
+  reclaimPolicy?: string
+  volumeBindingMode?: string
 }
 
 export interface K8sNamespace {
@@ -26,7 +31,6 @@ export interface K8sNamespace {
   createdAt: string
   labels?: Record<string, string>
 }
-
 
 export interface K8sEventObjectReference {
   kind?: string
@@ -104,6 +108,7 @@ export interface NodeSystemInfo {
   operatingSystem?: string
   architecture?: string
 }
+
 export type ResourceKind =
   | 'pods'
   | 'configmaps'
@@ -116,7 +121,11 @@ export type ResourceKind =
   | 'jobs'
   | 'cronjobs'
   | 'persistentvolumeclaims'
+  | 'persistentvolumes'
   | 'storageclasses'
+  | 'networkpolicies'
+  | 'serviceaccounts'
+  | 'horizontalpodautoscalers'
   | 'nodes'
   | 'events'
 
@@ -264,6 +273,70 @@ export const k8sApi = {
     const path = '/k8s/' + encodeURIComponent(cluster) + '/resources/events' + query
     const res = await api.get<ApiResponse<K8sEvent[]> | K8sEvent[]>(path)
     return (unwrapResourceList(res as unknown as K8sResource[]) as unknown) as K8sEvent[]
+  },
+
+  // Workload Actions
+  async scaleDeployment(
+    cluster: string,
+    name: string,
+    namespace: string | undefined,
+    replicas: number
+  ): Promise<{ status?: string; message?: string }> {
+    const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/deployments/${encodeURIComponent(name)}/scale${query}`
+    return api.post<{ status?: string; message?: string }>(path, { replicas })
+  },
+
+  async restartDeployment(
+    cluster: string,
+    name: string,
+    namespace?: string
+  ): Promise<{ status?: string; message?: string }> {
+    const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/deployments/${encodeURIComponent(name)}/restart${query}`
+    return api.post<{ status?: string; message?: string }>(path, {})
+  },
+
+  async scaleStatefulSet(
+    cluster: string,
+    name: string,
+    namespace: string | undefined,
+    replicas: number
+  ): Promise<{ status?: string; message?: string }> {
+    const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/statefulsets/${encodeURIComponent(name)}/scale${query}`
+    return api.post<{ status?: string; message?: string }>(path, { replicas })
+  },
+
+  async restartDaemonSet(
+    cluster: string,
+    name: string,
+    namespace?: string
+  ): Promise<{ status?: string; message?: string }> {
+    const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/daemonsets/${encodeURIComponent(name)}/restart${query}`
+    return api.post<{ status?: string; message?: string }>(path, {})
+  },
+
+  async triggerCronJob(
+    cluster: string,
+    name: string,
+    namespace?: string
+  ): Promise<{ status?: string; message?: string }> {
+    const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/cronjobs/${encodeURIComponent(name)}/trigger${query}`
+    return api.post<{ status?: string; message?: string }>(path, {})
+  },
+
+  async suspendCronJob(
+    cluster: string,
+    name: string,
+    namespace: string | undefined,
+    suspend: boolean
+  ): Promise<{ status?: string; message?: string }> {
+    const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/resources/cronjobs/${encodeURIComponent(name)}/suspend${query}`
+    return api.put<{ status?: string; message?: string }>(path, { suspend })
   },
 
   // Node Management Operations

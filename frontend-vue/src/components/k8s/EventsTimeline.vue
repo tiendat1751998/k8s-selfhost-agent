@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { k8sApi, type K8sEvent } from '../../api/k8s'
 
@@ -36,185 +36,16 @@ async function loadEvents(silent = false) {
       limit: 150,
     })
 
-    const fallbackEvents: K8sEvent[] = [
-      {
-        apiVersion: 'v1',
-        kind: 'Event',
-        metadata: {
-          name: 'event-coredns-pull-01',
-          namespace: 'kube-system',
-          creationTimestamp: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
-        },
-        type: 'Normal',
-        reason: 'Pulled',
-        message: 'Container image "registry.k8s.io/coredns/coredns:v1.11.3" already present on machine',
-        count: 1,
-        involvedObject: {
-          kind: 'Pod',
-          namespace: 'kube-system',
-          name: 'coredns-7c65d6cfc9-5k8p2',
-        },
-        source: {
-          component: 'kubelet',
-          host: 'k8smasterdeb',
-        },
-        firstTimestamp: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
-        lastTimestamp: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Event',
-        metadata: {
-          name: 'event-cilium-started-02',
-          namespace: 'kube-system',
-          creationTimestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-        },
-        type: 'Normal',
-        reason: 'Started',
-        message: 'Started container cilium-agent with eBPF host routing enabled',
-        count: 1,
-        involvedObject: {
-          kind: 'Pod',
-          namespace: 'kube-system',
-          name: 'cilium-operator-58b8f547c8-9m2p4',
-        },
-        source: {
-          component: 'kubelet',
-          host: 'k8smaster',
-        },
-        firstTimestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-        lastTimestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Event',
-        metadata: {
-          name: 'event-node-disk-warning-03',
-          namespace: 'default',
-          creationTimestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-        },
-        type: 'Warning',
-        reason: 'HighDiskUsage',
-        message: 'Node k8smasterdeb local disk /var/lib/containerd exceeds 80% watermark threshold',
-        count: 3,
-        involvedObject: {
-          kind: 'Node',
-          name: 'k8smasterdeb',
-        },
-        source: {
-          component: 'node-problem-detector',
-          host: 'k8smasterdeb',
-        },
-        firstTimestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        lastTimestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Event',
-        metadata: {
-          name: 'event-hubble-scheduled-04',
-          namespace: 'kube-system',
-          creationTimestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-        },
-        type: 'Normal',
-        reason: 'Scheduled',
-        message: 'Successfully assigned kube-system/hubble-relay-6bf96745f-4x8w1 to k8smasterdeb',
-        count: 1,
-        involvedObject: {
-          kind: 'Pod',
-          namespace: 'kube-system',
-          name: 'hubble-relay-6bf96745f-4x8w1',
-        },
-        source: {
-          component: 'default-scheduler',
-        },
-        firstTimestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-        lastTimestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-      },
-    ]
-
-    // Sort events by timestamp descending
-    const sorted = [...(list && list.length > 0 ? list : fallbackEvents)].sort((a, b) => {
+    const sorted = (Array.isArray(list) ? list : []).sort((a, b) => {
       const timeA = new Date(a.lastTimestamp || a.eventTime || a.firstTimestamp || a.metadata?.creationTimestamp || 0).getTime()
       const timeB = new Date(b.lastTimestamp || b.eventTime || b.firstTimestamp || b.metadata?.creationTimestamp || 0).getTime()
       return timeB - timeA
     })
 
     events.value = sorted
-  } catch {
-    events.value = [
-      {
-        apiVersion: 'v1',
-        kind: 'Event',
-        metadata: {
-          name: 'event-coredns-pull-01',
-          namespace: 'kube-system',
-          creationTimestamp: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
-        },
-        type: 'Normal',
-        reason: 'Pulled',
-        message: 'Container image "registry.k8s.io/coredns/coredns:v1.11.3" already present on machine',
-        count: 1,
-        involvedObject: {
-          kind: 'Pod',
-          namespace: 'kube-system',
-          name: 'coredns-7c65d6cfc9-5k8p2',
-        },
-        source: {
-          component: 'kubelet',
-          host: 'k8smasterdeb',
-        },
-        firstTimestamp: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
-        lastTimestamp: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Event',
-        metadata: {
-          name: 'event-cilium-started-02',
-          namespace: 'kube-system',
-          creationTimestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-        },
-        type: 'Normal',
-        reason: 'Started',
-        message: 'Started container cilium-agent with eBPF host routing enabled',
-        count: 1,
-        involvedObject: {
-          kind: 'Pod',
-          namespace: 'kube-system',
-          name: 'cilium-operator-58b8f547c8-9m2p4',
-        },
-        source: {
-          component: 'kubelet',
-          host: 'k8smaster',
-        },
-        firstTimestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-        lastTimestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-      },
-      {
-        apiVersion: 'v1',
-        kind: 'Event',
-        metadata: {
-          name: 'event-node-disk-warning-03',
-          namespace: 'default',
-          creationTimestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-        },
-        type: 'Warning',
-        reason: 'HighDiskUsage',
-        message: 'Node k8smasterdeb local disk /var/lib/containerd exceeds 80% watermark threshold',
-        count: 3,
-        involvedObject: {
-          kind: 'Node',
-          name: 'k8smasterdeb',
-        },
-        source: {
-          component: 'node-problem-detector',
-          host: 'k8smasterdeb',
-        },
-        firstTimestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        lastTimestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-      },
-    ]
+  } catch (err: unknown) {
+    events.value = []
+    error.value = err instanceof Error ? err.message : 'Failed to query Kubernetes cluster events'
   } finally {
     if (!silent) loading.value = false
   }
@@ -344,7 +175,7 @@ function getEventTime(ev: K8sEvent): string {
             :class="{ 'is-active': selectedTypeFilter === 'Warning' }"
             @click="selectedTypeFilter = 'Warning'"
           >
-            &#9888;&#65039; Warnings ({{ warningCount }})
+            ⚠️ Warnings ({{ warningCount }})
           </button>
           <button
             type="button"
@@ -352,14 +183,13 @@ function getEventTime(ev: K8sEvent): string {
             :class="{ 'is-active': selectedTypeFilter === 'Normal' }"
             @click="selectedTypeFilter = 'Normal'"
           >
-            &#8505;&#65039; Normal ({{ normalCount }})
+            ℹ️ Normal ({{ normalCount }})
           </button>
         </div>
 
-
         <!-- Search Input -->
         <div class="search-box">
-          <span class="search-icon">&#128269;</span>
+          <span class="search-icon">🔍</span>
           <input
             v-model="searchQuery"
             type="text"
@@ -373,7 +203,7 @@ function getEventTime(ev: K8sEvent): string {
             title="Clear search"
             @click="searchQuery = ''"
           >
-            &#10005;
+            ✕
           </button>
         </div>
       </div>
@@ -398,7 +228,7 @@ function getEventTime(ev: K8sEvent): string {
           :disabled="loading"
           @click="loadEvents()"
         >
-          <span :class="{ 'spin-icon': loading }">&#128260;</span>
+          <span :class="{ 'spin-icon': loading }">🔄</span>
           <span>{{ loading ? 'Updating...' : 'Refresh' }}</span>
         </button>
       </div>
@@ -406,7 +236,7 @@ function getEventTime(ev: K8sEvent): string {
 
     <!-- Error Banner -->
     <div v-if="error" class="events-error-banner glass-panel animate-fade-in">
-      <span class="err-icon">&#9888;&#65039;</span>
+      <span class="err-icon">⚠️</span>
       <div class="err-text">
         <strong>Error loading events:</strong>
         <span class="font-mono font-small">{{ error }}</span>
@@ -416,7 +246,6 @@ function getEventTime(ev: K8sEvent): string {
       </button>
     </div>
 
-
     <!-- Loading Skeleton -->
     <div v-if="loading && events.length === 0" class="timeline-loading">
       <div v-for="n in 4" :key="n" class="skeleton-event-item glass-panel animate-pulse">
@@ -425,10 +254,9 @@ function getEventTime(ev: K8sEvent): string {
       </div>
     </div>
 
-
     <!-- Empty State -->
     <div v-else-if="filteredEvents.length === 0" class="events-empty glass-panel">
-      <div class="empty-icon">&#128226;</div>
+      <div class="empty-icon">📢</div>
       <div class="empty-title">No Kubernetes Events Found</div>
       <div class="empty-desc text-muted">
         {{
@@ -436,7 +264,7 @@ function getEventTime(ev: K8sEvent): string {
             ? 'No events match the current search filter.'
             : selectedTypeFilter !== 'all'
             ? 'No ' + selectedTypeFilter + ' events recorded in this scope.'
-            : 'No cluster events recorded for the selected target.'
+            : 'No Kubernetes events recorded for this scope.'
         }}
       </div>
     </div>
@@ -467,7 +295,7 @@ function getEventTime(ev: K8sEvent): string {
                 class="event-type-badge font-mono"
                 :class="ev.type === 'Warning' ? 'type-warning' : 'type-normal'"
               >
-                {{ ev.type === 'Warning' ? '&#9888;&#65039; Warning' : '&#8505;&#65039; Normal' }}
+                {{ ev.type === 'Warning' ? '⚠️ Warning' : 'ℹ️ Normal' }}
               </span>
 
               <span class="event-reason font-mono font-bold">
@@ -485,7 +313,7 @@ function getEventTime(ev: K8sEvent): string {
 
             <div class="event-meta-right">
               <span class="event-age font-mono" :title="ev.lastTimestamp || ev.eventTime || ev.firstTimestamp || ev.metadata?.creationTimestamp">
-                &#128338; {{ getEventTime(ev) }}
+                🕒 {{ getEventTime(ev) }}
               </span>
             </div>
           </div>
@@ -505,7 +333,6 @@ function getEventTime(ev: K8sEvent): string {
           <div class="event-message font-mono">
             {{ ev.message || 'No additional message detail.' }}
           </div>
-
 
           <!-- Footer details: Source Component / Sub-object -->
           <div v-if="ev.source?.component || ev.source?.host || ev.involvedObject?.fieldPath" class="event-footer-row font-mono text-muted font-small">

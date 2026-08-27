@@ -681,3 +681,439 @@ func TestResourceRepo_Events(t *testing.T) {
 		t.Fatalf("expected ev-1 to be deleted")
 	}
 }
+
+
+func TestResourceRepo_CRUD_PersistentVolumes(t *testing.T) {
+	ctx := context.Background()
+	fakeClient := fake.NewSimpleClientset()
+	repo := &ResourceRepo{client: fakeClient}
+
+	pv := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"name": "pv-test",
+		},
+		"spec": map[string]interface{}{
+			"capacity": map[string]interface{}{
+				"storage": "10Gi",
+			},
+			"accessModes": []interface{}{"ReadWriteOnce"},
+			"storageClassName": "standard",
+		},
+	}
+
+	// 1. Create PV
+	created, err := repo.CreateResource(ctx, "", "persistentvolumes", "", pv)
+	if err != nil {
+		t.Fatalf("CreateResource PV failed: %v", err)
+	}
+	meta := created["metadata"].(map[string]interface{})
+	if meta["name"] != "pv-test" {
+		t.Fatalf("expected pv-test, got %v", meta["name"])
+	}
+
+	// 2. Get PV
+	got, err := repo.GetResource(ctx, "", "pv", "", "pv-test")
+	if err != nil {
+		t.Fatalf("GetResource PV failed: %v", err)
+	}
+	gotMeta := got["metadata"].(map[string]interface{})
+	if gotMeta["name"] != "pv-test" {
+		t.Fatalf("expected pv-test, got %v", gotMeta["name"])
+	}
+
+	// 3. List PVs
+	list, err := repo.ListResources(ctx, "", "persistentvolume", "")
+	if err != nil {
+		t.Fatalf("ListResources PV failed: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 PV, got %d", len(list))
+	}
+
+	// 4. Update PV
+	pv["metadata"].(map[string]interface{})["labels"] = map[string]interface{}{"env": "prod"}
+	updated, err := repo.UpdateResource(ctx, "", "persistentvolumes", "", "pv-test", pv)
+	if err != nil {
+		t.Fatalf("UpdateResource PV failed: %v", err)
+	}
+	updatedMeta := updated["metadata"].(map[string]interface{})
+	labels := updatedMeta["labels"].(map[string]interface{})
+	if labels["env"] != "prod" {
+		t.Fatalf("expected env: prod label, got %v", labels["env"])
+	}
+
+	// 5. Delete PV
+	if err := repo.DeleteResource(ctx, "", "pv", "", "pv-test"); err != nil {
+		t.Fatalf("DeleteResource PV failed: %v", err)
+	}
+	_, err = fakeClient.CoreV1().PersistentVolumes().Get(ctx, "pv-test", metav1.GetOptions{})
+	if err == nil {
+		t.Fatalf("expected PV to be deleted")
+	}
+}
+
+func TestResourceRepo_CRUD_NetworkPolicies(t *testing.T) {
+	ctx := context.Background()
+	fakeClient := fake.NewSimpleClientset()
+	repo := &ResourceRepo{client: fakeClient}
+
+	np := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"name":      "np-test",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"podSelector": map[string]interface{}{
+				"matchLabels": map[string]interface{}{
+					"role": "db",
+				},
+			},
+			"policyTypes": []interface{}{"Ingress"},
+		},
+	}
+
+	// 1. Create NP
+	created, err := repo.CreateResource(ctx, "", "networkpolicies", "default", np)
+	if err != nil {
+		t.Fatalf("CreateResource NP failed: %v", err)
+	}
+	meta := created["metadata"].(map[string]interface{})
+	if meta["name"] != "np-test" {
+		t.Fatalf("expected np-test, got %v", meta["name"])
+	}
+
+	// 2. Get NP
+	got, err := repo.GetResource(ctx, "", "netpol", "default", "np-test")
+	if err != nil {
+		t.Fatalf("GetResource NP failed: %v", err)
+	}
+	gotMeta := got["metadata"].(map[string]interface{})
+	if gotMeta["name"] != "np-test" {
+		t.Fatalf("expected np-test, got %v", gotMeta["name"])
+	}
+
+	// 3. List NPs
+	list, err := repo.ListResources(ctx, "", "networkpolicy", "default")
+	if err != nil {
+		t.Fatalf("ListResources NP failed: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 NP, got %d", len(list))
+	}
+
+	// 4. Update NP
+	np["metadata"].(map[string]interface{})["labels"] = map[string]interface{}{"tier": "backend"}
+	updated, err := repo.UpdateResource(ctx, "", "networkpolicies", "default", "np-test", np)
+	if err != nil {
+		t.Fatalf("UpdateResource NP failed: %v", err)
+	}
+	updatedMeta := updated["metadata"].(map[string]interface{})
+	labels := updatedMeta["labels"].(map[string]interface{})
+	if labels["tier"] != "backend" {
+		t.Fatalf("expected tier: backend label, got %v", labels["tier"])
+	}
+
+	// 5. Delete NP
+	if err := repo.DeleteResource(ctx, "", "netpol", "default", "np-test"); err != nil {
+		t.Fatalf("DeleteResource NP failed: %v", err)
+	}
+	_, err = fakeClient.NetworkingV1().NetworkPolicies("default").Get(ctx, "np-test", metav1.GetOptions{})
+	if err == nil {
+		t.Fatalf("expected NP to be deleted")
+	}
+}
+
+func TestResourceRepo_CRUD_ServiceAccounts(t *testing.T) {
+	ctx := context.Background()
+	fakeClient := fake.NewSimpleClientset()
+	repo := &ResourceRepo{client: fakeClient}
+
+	sa := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"name":      "sa-test",
+			"namespace": "default",
+		},
+	}
+
+	// 1. Create SA
+	created, err := repo.CreateResource(ctx, "", "serviceaccounts", "default", sa)
+	if err != nil {
+		t.Fatalf("CreateResource SA failed: %v", err)
+	}
+	meta := created["metadata"].(map[string]interface{})
+	if meta["name"] != "sa-test" {
+		t.Fatalf("expected sa-test, got %v", meta["name"])
+	}
+
+	// 2. Get SA
+	got, err := repo.GetResource(ctx, "", "sa", "default", "sa-test")
+	if err != nil {
+		t.Fatalf("GetResource SA failed: %v", err)
+	}
+	gotMeta := got["metadata"].(map[string]interface{})
+	if gotMeta["name"] != "sa-test" {
+		t.Fatalf("expected sa-test, got %v", gotMeta["name"])
+	}
+
+	// 3. List SAs
+	list, err := repo.ListResources(ctx, "", "serviceaccount", "default")
+	if err != nil {
+		t.Fatalf("ListResources SA failed: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 SA, got %d", len(list))
+	}
+
+	// 4. Update SA
+	sa["metadata"].(map[string]interface{})["labels"] = map[string]interface{}{"team": "infra"}
+	updated, err := repo.UpdateResource(ctx, "", "serviceaccounts", "default", "sa-test", sa)
+	if err != nil {
+		t.Fatalf("UpdateResource SA failed: %v", err)
+	}
+	updatedMeta := updated["metadata"].(map[string]interface{})
+	labels := updatedMeta["labels"].(map[string]interface{})
+	if labels["team"] != "infra" {
+		t.Fatalf("expected team: infra label, got %v", labels["team"])
+	}
+
+	// 5. Delete SA
+	if err := repo.DeleteResource(ctx, "", "sa", "default", "sa-test"); err != nil {
+		t.Fatalf("DeleteResource SA failed: %v", err)
+	}
+	_, err = fakeClient.CoreV1().ServiceAccounts("default").Get(ctx, "sa-test", metav1.GetOptions{})
+	if err == nil {
+		t.Fatalf("expected SA to be deleted")
+	}
+}
+
+func TestResourceRepo_CRUD_HorizontalPodAutoscalers(t *testing.T) {
+	ctx := context.Background()
+	fakeClient := fake.NewSimpleClientset()
+	repo := &ResourceRepo{client: fakeClient}
+
+	minReplicas := int32(2)
+	hpa := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"name":      "hpa-test",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"scaleTargetRef": map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"name":       "my-app",
+			},
+			"minReplicas": float64(minReplicas),
+			"maxReplicas": float64(10),
+		},
+	}
+
+	// 1. Create HPA
+	created, err := repo.CreateResource(ctx, "", "horizontalpodautoscalers", "default", hpa)
+	if err != nil {
+		t.Fatalf("CreateResource HPA failed: %v", err)
+	}
+	meta := created["metadata"].(map[string]interface{})
+	if meta["name"] != "hpa-test" {
+		t.Fatalf("expected hpa-test, got %v", meta["name"])
+	}
+
+	// 2. Get HPA
+	got, err := repo.GetResource(ctx, "", "hpa", "default", "hpa-test")
+	if err != nil {
+		t.Fatalf("GetResource HPA failed: %v", err)
+	}
+	gotMeta := got["metadata"].(map[string]interface{})
+	if gotMeta["name"] != "hpa-test" {
+		t.Fatalf("expected hpa-test, got %v", gotMeta["name"])
+	}
+
+	// 3. List HPAs
+	list, err := repo.ListResources(ctx, "", "horizontalpodautoscaler", "default")
+	if err != nil {
+		t.Fatalf("ListResources HPA failed: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 HPA, got %d", len(list))
+	}
+
+	// 4. Update HPA
+	hpa["metadata"].(map[string]interface{})["labels"] = map[string]interface{}{"autoscale": "true"}
+	updated, err := repo.UpdateResource(ctx, "", "hpa", "default", "hpa-test", hpa)
+	if err != nil {
+		t.Fatalf("UpdateResource HPA failed: %v", err)
+	}
+	updatedMeta := updated["metadata"].(map[string]interface{})
+	labels := updatedMeta["labels"].(map[string]interface{})
+	if labels["autoscale"] != "true" {
+		t.Fatalf("expected autoscale: true label, got %v", labels["autoscale"])
+	}
+
+	// 5. Delete HPA
+	if err := repo.DeleteResource(ctx, "", "hpa", "default", "hpa-test"); err != nil {
+		t.Fatalf("DeleteResource HPA failed: %v", err)
+	}
+	_, err = fakeClient.AutoscalingV2().HorizontalPodAutoscalers("default").Get(ctx, "hpa-test", metav1.GetOptions{})
+	if err == nil {
+		t.Fatalf("expected HPA to be deleted")
+	}
+}
+
+func TestResourceRepo_WorkloadLifecycleOperations(t *testing.T) {
+	ctx := context.Background()
+
+	// Initial resources
+	initDeploy := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "web-deploy",
+			Namespace: "default",
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: func() *int32 { i := int32(1); return &i }(),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "web"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "web", Image: "nginx:latest"}},
+				},
+			},
+		},
+	}
+
+	initSts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "redis-sts",
+			Namespace: "default",
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: func() *int32 { i := int32(1); return &i }(),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "redis"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "redis", Image: "redis:alpine"}},
+				},
+			},
+		},
+	}
+
+	initDs := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fluentd-ds",
+			Namespace: "default",
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "fluentd"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "fluentd", Image: "fluentd:v1"}},
+				},
+			},
+		},
+	}
+
+	initCron := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "nightly-cj",
+			Namespace: "default",
+		},
+		Spec: batchv1.CronJobSpec{
+			Schedule: "0 0 * * *",
+			JobTemplate: batchv1.JobTemplateSpec{
+				Spec: batchv1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers:    []corev1.Container{{Name: "job", Image: "busybox"}},
+							RestartPolicy: corev1.RestartPolicyNever,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewSimpleClientset(initDeploy, initSts, initDs, initCron)
+	repo := &ResourceRepo{client: fakeClient}
+
+	// 1. Scale Deployment
+	if err := repo.ScaleDeployment(ctx, "", "default", "web-deploy", 5); err != nil {
+		t.Fatalf("ScaleDeployment failed: %v", err)
+	}
+	dep, err := fakeClient.AppsV1().Deployments("default").Get(ctx, "web-deploy", metav1.GetOptions{})
+	if err != nil || *dep.Spec.Replicas != 5 {
+		t.Fatalf("expected replicas 5, got %v (err: %v)", dep.Spec.Replicas, err)
+	}
+
+	// 2. Restart Deployment
+	if err := repo.RestartDeployment(ctx, "", "default", "web-deploy"); err != nil {
+		t.Fatalf("RestartDeployment failed: %v", err)
+	}
+	depAfterRestart, _ := fakeClient.AppsV1().Deployments("default").Get(ctx, "web-deploy", metav1.GetOptions{})
+	if depAfterRestart.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] == "" {
+		t.Fatalf("expected restartedAt annotation on deployment")
+	}
+
+	// 3. Scale StatefulSet
+	if err := repo.ScaleStatefulSet(ctx, "", "default", "redis-sts", 3); err != nil {
+		t.Fatalf("ScaleStatefulSet failed: %v", err)
+	}
+	sts, err := fakeClient.AppsV1().StatefulSets("default").Get(ctx, "redis-sts", metav1.GetOptions{})
+	if err != nil || *sts.Spec.Replicas != 3 {
+		t.Fatalf("expected replicas 3, got %v (err: %v)", sts.Spec.Replicas, err)
+	}
+
+	// 4. Restart DaemonSet
+	if err := repo.RestartDaemonSet(ctx, "", "default", "fluentd-ds"); err != nil {
+		t.Fatalf("RestartDaemonSet failed: %v", err)
+	}
+	dsAfterRestart, _ := fakeClient.AppsV1().DaemonSets("default").Get(ctx, "fluentd-ds", metav1.GetOptions{})
+	if dsAfterRestart.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] == "" {
+		t.Fatalf("expected restartedAt annotation on daemonset")
+	}
+
+	// 5. Trigger CronJob
+	job, err := repo.TriggerCronJob(ctx, "", "default", "nightly-cj")
+	if err != nil {
+		t.Fatalf("TriggerCronJob failed: %v", err)
+	}
+	if job == nil || job.Name == "" {
+		t.Fatalf("expected created Job object")
+	}
+	createdJob, err := fakeClient.BatchV1().Jobs("default").Get(ctx, job.Name, metav1.GetOptions{})
+	if err != nil || createdJob.Annotations["cronjob.kubernetes.io/instantiate"] != "manual" {
+		t.Fatalf("expected manual trigger annotation on Job: %v", err)
+	}
+
+	// 6. Suspend CronJob
+	if err := repo.SuspendCronJob(ctx, "", "default", "nightly-cj", true); err != nil {
+		t.Fatalf("SuspendCronJob(true) failed: %v", err)
+	}
+	cjSuspended, _ := fakeClient.BatchV1().CronJobs("default").Get(ctx, "nightly-cj", metav1.GetOptions{})
+	if cjSuspended.Spec.Suspend == nil || !*cjSuspended.Spec.Suspend {
+		t.Fatalf("expected CronJob to be suspended")
+	}
+
+	// 7. Resume CronJob
+	if err := repo.SuspendCronJob(ctx, "", "default", "nightly-cj", false); err != nil {
+		t.Fatalf("SuspendCronJob(false) failed: %v", err)
+	}
+	cjResumed, _ := fakeClient.BatchV1().CronJobs("default").Get(ctx, "nightly-cj", metav1.GetOptions{})
+	if cjResumed.Spec.Suspend == nil || *cjResumed.Spec.Suspend {
+		t.Fatalf("expected CronJob to be resumed (not suspended)")
+	}
+
+	// 8. Test Not Found errors
+	if err := repo.ScaleDeployment(ctx, "", "default", "non-existent", 2); err == nil {
+		t.Fatalf("expected error scaling non-existent deployment")
+	}
+	if err := repo.RestartDaemonSet(ctx, "", "default", "non-existent"); err == nil {
+		t.Fatalf("expected error restarting non-existent daemonset")
+	}
+	if _, err := repo.TriggerCronJob(ctx, "", "default", "non-existent"); err == nil {
+		t.Fatalf("expected error triggering non-existent cronjob")
+	}
+}

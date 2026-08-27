@@ -220,6 +220,21 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 							resSub.Delete("/{name}", platform.K8s.DeleteResource)
 						})
 
+						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/deployments/{name}", func(wSub chi.Router) {
+							wSub.Post("/scale", platform.K8s.ScaleDeployment)
+							wSub.Post("/restart", platform.K8s.RestartDeployment)
+						})
+						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/statefulsets/{name}", func(wSub chi.Router) {
+							wSub.Post("/scale", platform.K8s.ScaleStatefulSet)
+						})
+						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/daemonsets/{name}", func(wSub chi.Router) {
+							wSub.Post("/restart", platform.K8s.RestartDaemonSet)
+						})
+						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/cronjobs/{name}", func(wSub chi.Router) {
+							wSub.Post("/trigger", platform.K8s.TriggerCronJob)
+							wSub.Put("/suspend", platform.K8s.SuspendCronJob)
+						})
+
 						k8sSub.Get("/events", platform.K8s.ListEvents)
 						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/nodes/{name}", func(nodeSub chi.Router) {
 							nodeSub.Post("/cordon", platform.K8s.CordonNode)
