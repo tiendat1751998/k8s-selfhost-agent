@@ -21,7 +21,7 @@ import (
 )
 
 type deploymentRepo struct {
-	defaultK8sClient  *kubernetes.Clientset
+	defaultK8sClient  kubernetes.Interface
 	defaultDockerRepo domainDocker.Repository
 	fleetRepo         fleet.Repository
 	clientManager     *infraCluster.ClientManager
@@ -42,7 +42,22 @@ func NewDeploymentRepo(
 	}
 }
 
-func (r *deploymentRepo) getK8sClient(ctx context.Context, clusterName string) (*kubernetes.Clientset, error) {
+// NewDeploymentRepoWithInterface creates a deployment repository with any kubernetes.Interface.
+func NewDeploymentRepoWithInterface(
+	defaultK8sClient kubernetes.Interface,
+	defaultDockerRepo domainDocker.Repository,
+	fleetRepo fleet.Repository,
+	clientManager *infraCluster.ClientManager,
+) deployment.Repository {
+	return &deploymentRepo{
+		defaultK8sClient:  defaultK8sClient,
+		defaultDockerRepo: defaultDockerRepo,
+		fleetRepo:         fleetRepo,
+		clientManager:     clientManager,
+	}
+}
+
+func (r *deploymentRepo) getK8sClient(ctx context.Context, clusterName string) (kubernetes.Interface, error) {
 	if r.clientManager != nil && clusterName != "" {
 		clusters, err := r.fleetRepo.ListClusters(ctx)
 		if err == nil {
@@ -110,9 +125,6 @@ func (r *deploymentRepo) List(ctx context.Context) ([]deployment.Application, er
 					deps, err := kCli.AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
 					if err == nil {
 						for _, d := range deps.Items {
-							if isSystemNamespace(d.Namespace) {
-								continue
-							}
 							apps = append(apps, r.mapK8sDeployment(d, c.Name))
 						}
 					}
@@ -127,9 +139,6 @@ func (r *deploymentRepo) List(ctx context.Context) ([]deployment.Application, er
 			deps, err := r.defaultK8sClient.AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
 			if err == nil {
 				for _, d := range deps.Items {
-					if isSystemNamespace(d.Namespace) {
-						continue
-					}
 					apps = append(apps, r.mapK8sDeployment(d, "prod-us-east"))
 				}
 			}
@@ -392,7 +401,7 @@ func (r *deploymentRepo) mapK8sDeployment(d v1.Deployment, clusterName string) d
 	}
 
 	status := "down"
-	if d.Status.ReadyReplicas == int32(replicas) && replicas > 0 {
+	if d.Status.ReadyReplicas >= int32(replicas) && replicas > 0 {
 		status = "healthy"
 	} else if d.Status.ReadyReplicas > 0 {
 		status = "degraded"
@@ -548,8 +557,4 @@ func (r *deploymentRepo) mapSwarmService(s domainDocker.Service, clusterName str
 		NetType:           "NodePort",
 		Volume:            "none",
 	}
-}
-
-func isSystemNamespace(ns string) bool {
-	return ns == "kube-system" || ns == "kube-public" || ns == "kube-node-lease" || ns == "local-path-storage"
 }
