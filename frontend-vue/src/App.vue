@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/authStore'
@@ -106,6 +106,7 @@ const navGroups = [
       { path: '/deployments', name: 'Deployments & Apps', icon: '🚀', sub: 'Canary, Blue-Green & Workloads' },
       { path: '/promotions', name: 'Promotions', icon: '🔄', sub: 'Dev → Stage → Prod' },
       { path: '/explorer', name: 'Cluster Explorer', icon: '🔍', sub: 'Live CRD & Pod Trees' },
+      { path: '/helm', name: 'Helm Catalog', icon: '⛵', sub: 'Repositories, Charts & Releases' },
     ]
   },
   {

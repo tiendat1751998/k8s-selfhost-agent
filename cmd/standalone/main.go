@@ -30,6 +30,7 @@ import (
 	infraLB "github.com/datdt/k8sselfhost/internal/infrastructure/loadbalancer"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
+	infraHelm "github.com/datdt/k8sselfhost/internal/infrastructure/helm"
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
@@ -202,6 +203,8 @@ func run() error {
 	}
 	ecosystemUsecase := usecaseEcosystem.NewUsecase(ecosystemRepo, settingsRepo, httputil.NewSafeHTTPClient(5*time.Second), log, ecoOpts...)
 	ecosystemHandler := adapthttp.NewEcosystemHandler(ecosystemUsecase, log)
+	helmReleaseManager := infraHelm.NewReleaseManager(clientManager, infraK8s.GetLastConfig())
+	helmHandler := adapthttp.NewHelmHandler(helmReleaseManager, auditRepo)
 	computeHostRepo := postgres.NewComputeHostRepo(pgClient)
 
 	txManager := postgres.NewTxManager(pgClient)
@@ -460,6 +463,7 @@ func run() error {
 		Plugin:        pluginHandler,
 		Ecosystem:     ecosystemHandler,
 		LogStream:     logStreamHandler,
+		Helm:          helmHandler,
 	}
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)
