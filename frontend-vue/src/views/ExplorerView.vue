@@ -8,6 +8,8 @@ import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import SecretViewer from '../components/k8s/SecretViewer.vue'
 import YamlEditorModal from '../components/k8s/YamlEditorModal.vue'
 import CreateResourceModal from '../components/k8s/CreateResourceModal.vue'
+import PodTerminal from '../components/k8s/PodTerminal.vue'
+import PodLogViewer from '../components/k8s/PodLogViewer.vue'
 import {
   k8sApi,
   type K8sResource,
@@ -59,6 +61,13 @@ const newNsError = ref<string | null>(null)
 const showDeleteModal = ref(false)
 const resourceToDelete = ref<K8sResource | null>(null)
 const deletingResource = ref(false)
+
+// Pod Terminal & Logs Modal State
+const showTerminalModal = ref(false)
+const showLogsModal = ref(false)
+const terminalPod = ref<K8sResource | null>(null)
+const logsPod = ref<K8sResource | null>(null)
+const selectedPodContainer = ref<string>('')
 
 // Resource Kind Tree Definition
 interface KindCategory {
@@ -559,6 +568,25 @@ function openDetailDrawer(resource: K8sResource) {
   showDetailDrawer.value = true
 }
 
+function openPodTerminal(pod: K8sResource, containerName?: string) {
+  terminalPod.value = pod
+  const containers = getPodContainers(pod)
+  selectedPodContainer.value = containerName || (containers.length > 0 ? containers[0].name : '')
+  showTerminalModal.value = true
+}
+
+function openPodLogs(pod: K8sResource, containerName?: string) {
+  logsPod.value = pod
+  const containers = getPodContainers(pod)
+  selectedPodContainer.value = containerName || (containers.length > 0 ? containers[0].name : '')
+  showLogsModal.value = true
+}
+
+function getPodContainerNames(pod: K8sResource | null): string[] {
+  if (!pod) return []
+  return getPodContainers(pod).map(c => c.name)
+}
+
 function promptDelete(resource: K8sResource) {
   resourceToDelete.value = resource
   showDeleteModal.value = true
@@ -856,6 +884,7 @@ function getResourceAge(resource: K8sResource): string {
               <span v-else-if="row.metadata?.labels?.['app.kubernetes.io/name']" class="app-tag font-mono">
                 app: {{ row.metadata.labels['app.kubernetes.io/name'] }}
               </span>
+
             </div>
           </template>
 
@@ -917,17 +946,17 @@ function getResourceAge(resource: K8sResource): string {
                 </button>
                 <button 
                   type="button"
-                  class="btn btn-secondary btn-xs btn-disabled"
-                  title="Coming soon"
-                  disabled
+                  class="btn btn-secondary btn-xs"
+                  title="View Pod Logs"
+                  @click="openPodLogs(row)"
                 >
                   <span>📜 Logs</span>
                 </button>
                 <button 
                   type="button"
-                  class="btn btn-secondary btn-xs btn-disabled"
-                  title="Coming soon"
-                  disabled
+                  class="btn btn-secondary btn-xs"
+                  title="Open Web Terminal"
+                  @click="openPodTerminal(row)"
                 >
                   <span>🖥️ Terminal</span>
                 </button>
@@ -1057,17 +1086,17 @@ function getResourceAge(resource: K8sResource): string {
               <div class="quick-actions-btns">
                 <button 
                   type="button" 
-                  class="btn btn-secondary btn-xs btn-disabled" 
-                  title="Coming soon" 
-                  disabled
+                  class="btn btn-secondary btn-xs" 
+                  title="View Pod Logs" 
+                  @click="openPodLogs(selectedResource)"
                 >
                   <span>📜 View Logs</span>
                 </button>
                 <button 
                   type="button" 
-                  class="btn btn-secondary btn-xs btn-disabled" 
-                  title="Coming soon" 
-                  disabled
+                  class="btn btn-secondary btn-xs" 
+                  title="Open Web Terminal" 
+                  @click="openPodTerminal(selectedResource)"
                 >
                   <span>🖥️ Terminal</span>
                 </button>
@@ -1130,6 +1159,22 @@ function getResourceAge(resource: K8sResource): string {
                       <strong class="container-name font-mono">{{ c.name }}</strong>
                     </div>
                     <div class="container-badges">
+                      <button 
+                        type="button" 
+                        class="btn-container-quick-action font-mono" 
+                        title="View logs for this container"
+                        @click.stop="openPodLogs(selectedResource, c.name)"
+                      >
+                        📜 Logs
+                      </button>
+                      <button 
+                        type="button" 
+                        class="btn-container-quick-action font-mono" 
+                        title="Open terminal for this container"
+                        @click.stop="openPodTerminal(selectedResource, c.name)"
+                      >
+                        🖥️ Term
+                      </button>
                       <span class="badge-sm font-mono" :class="c.ready ? 'badge-ready' : 'badge-not-ready'">
                         {{ c.ready ? 'Ready' : 'Not Ready' }}
                       </span>
@@ -1448,6 +1493,42 @@ function getResourceAge(resource: K8sResource): string {
           <span>{{ importingCluster ? 'Importing...' : 'Import Cluster' }}</span>
         </button>
       </template>
+    </ModalDrawer>
+
+    <!-- Pod Terminal Modal -->
+    <ModalDrawer
+      v-model:show="showTerminalModal"
+      mode="modal"
+      :title="`Pod Terminal: ${terminalPod?.metadata?.name || 'Pod'}`"
+      :subtitle="`Cluster: ${selectedCluster} | Namespace: ${terminalPod?.metadata?.namespace || 'default'}`"
+      max-width="1000px"
+    >
+      <PodTerminal
+        v-if="showTerminalModal && terminalPod"
+        :cluster="selectedCluster"
+        :pod="terminalPod.metadata.name"
+        :namespace="terminalPod.metadata.namespace || 'default'"
+        :container="selectedPodContainer"
+        :containers="getPodContainerNames(terminalPod)"
+      />
+    </ModalDrawer>
+
+    <!-- Pod Logs Modal -->
+    <ModalDrawer
+      v-model:show="showLogsModal"
+      mode="modal"
+      :title="`Pod Logs: ${logsPod?.metadata?.name || 'Pod'}`"
+      :subtitle="`Cluster: ${selectedCluster} | Namespace: ${logsPod?.metadata?.namespace || 'default'}`"
+      max-width="1100px"
+    >
+      <PodLogViewer
+        v-if="showLogsModal && logsPod"
+        :cluster="selectedCluster"
+        :pod="logsPod.metadata.name"
+        :namespace="logsPod.metadata.namespace || 'default'"
+        :container="selectedPodContainer"
+        :containers="getPodContainerNames(logsPod)"
+      />
     </ModalDrawer>
   </div>
 </template>
@@ -2461,4 +2542,22 @@ function getResourceAge(resource: K8sResource): string {
   font-weight: 600;
 }
 
+
+.btn-container-quick-action {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-container-quick-action:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: #38bdf8;
+  color: #e0f2fe;
+}
 </style>
