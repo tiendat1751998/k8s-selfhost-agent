@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-27T10:10
+# K8sControl Project State — Session Update 2026-08-27T10:25
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `e5c4596` fix(ui): de-clutter slo tracking mobile view with 2x2 kpis, compact burn rate bar, and responsive header
+Latest: `006c460` fix(cluster): support onprem, k3s, baremetal, and all kubeconfig imported clusters in dynamic client manager
 Previous commits this session:
+- `e5c4596` fix(ui): de-clutter slo tracking mobile view with 2x2 kpis, compact burn rate bar, and responsive header
 - `bd6adc5` fix(ui): overhaul mobile number visibility with workload cards, 2x2 historical kpis, and compact toggles
 - `ab42656` fix(ui): de-clutter deep-dive modal with 2x2 kpi grid, compact header, and streamlined series toggles
 - `b556dce` fix(hmr): purge service worker dev cache to prevent vite hmr websocket 400 handshake error
@@ -201,6 +202,7 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
 ## Completed Features (Latest Session: 2026-08-27)
+- **Kubernetes Dynamic Client Manager Multi-Provider & On-Prem Support** (DEC-078)
 - **Service Level Objectives (SLO) Mobile Web Typography & Layout De-Cluttering** (DEC-077)
 - **Mobile Web Ergonomics, Workload Card Visibility & 2x2 Historical KPI Overhaul** (DEC-076)
 - **Cluster Telemetry & Ingress Saturation Deep-Dive Modal Mobile Ergonomics Overhaul** (DEC-075)
