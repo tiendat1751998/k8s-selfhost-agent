@@ -53,7 +53,10 @@ func NewResourceRepoWithInterface(client kubernetes.Interface, cm *cluster.Clien
 func (r *ResourceRepo) getK8sClient(ctx context.Context, clusterID string) (kubernetes.Interface, error) {
 	if r.clientManager != nil && clusterID != "" && clusterID != "local" && clusterID != "default" && clusterID != "in-cluster" {
 		cli, err := r.clientManager.GetK8sClient(ctx, clusterID)
-		if err == nil && cli != nil {
+		if err != nil {
+			return nil, err
+		}
+		if cli != nil {
 			return cli, nil
 		}
 	}
