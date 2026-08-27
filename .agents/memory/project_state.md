@@ -281,12 +281,19 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 - `dc82701` feat(k8s): add pod explorer, pod exec terminal, pod log streaming, and deployments mobile UX
 - `3dbfc60` feat(k8s): add interactive pod terminal (xterm.js) and real-time pod log viewer with SSE streaming
 - `176ab79` fix(k8s): add pod CRUD support, nil client safety guards, enhanced error matching, and fleet query fix
+- `20bf0a5` feat(helm): add Helm v3 chart catalog with release management, repo browser, and install wizard
+- `1fcedf0` feat(k8s): add events stream timeline, node management (cordon/drain/taints/labels), and rollout progress
+- `8fdbe65` fix(ui): polish events timeline view, add fallback node support, and resolve TS2367 type check
 
 ### ✅ What's DONE (Backend)
 
 | Component | File | Lines | Status |
 |:----------|:-----|:------|:-------|
-| **Resource CRUD** (11 kinds + pods) | `resource_repo.go` | ~950 | ✅ Full CRUD for Deployments, Services, ConfigMaps, Secrets, StatefulSets, DaemonSets, Jobs, CronJobs, Ingresses, PVCs, StorageClasses, Pods |
+| **Resource CRUD** (11 kinds + pods + nodes + events) | `resource_repo.go` | ~1150 | ✅ Full CRUD for Deployments, Services, ConfigMaps, Secrets, StatefulSets, DaemonSets, Jobs, CronJobs, Ingresses, PVCs, StorageClasses, Pods, Nodes, Events |
+| **Node Management Operations** | `resource_repo.go`, `k8s_resource_handler.go` | ~600 | ✅ Cordon, Uncordon, Drain (graceful eviction), Taints editor, Labels editor |
+| **Events Stream & Query** | `k8s_resource_handler.go` | ~150 | ✅ GET /k8s/{cluster}/events with filters (ns, kind, name, type, limit) |
+| **Helm Release Manager** | `release_manager.go` | ~450 | ✅ Helm v3 SDK: List, Get, Install, Upgrade, Rollback, Uninstall, Repo CRUD, Search, Default values |
+| **Helm HTTP Handler** | `helm_handler.go` | ~350 | ✅ 12 REST endpoints with RBAC + audit logging |
 | **Deployment Lifecycle** | `deployment_repo.go` | ~470 | ✅ List, Scale, Restart, Delete, Rollback, Canary, BlueGreen |
 | **Explorer Search** | `explorer_repo.go` | ~530 | ✅ Cross-resource search with pagination |
 | **Fleet Discovery** | `discovery.go` | ~200 | ✅ Namespace/deployment/service/node/CRD counts per cluster |
@@ -301,49 +308,32 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 
 | Component | File | Lines | Status |
 |:----------|:-----|:------|:-------|
-| **Explorer View** | `ExplorerView.vue` | ~2500 | ✅ Kind tree, data table, detail drawer, Pod-specific columns & actions |
+| **Explorer View** | `ExplorerView.vue` | ~3600 | ✅ Kind tree (Pods, Nodes, Events, Deployments, etc.), data table, detail drawer |
+| **Node Management Drawer** | `ExplorerView.vue` | ~400 | ✅ Cordon/Uncordon buttons, Drain modal (grace period/daemonsets), Taints chip editor, Labels editor, System info, Conditions, Events tab |
+| **Events Timeline** | `EventsTimeline.vue` | ~300 | ✅ Stream timeline, Warning/Normal chips, search, live 5s auto-polling, embedded in Pod/Node/Deployment drawers |
+| **Helm Catalog View** | `HelmCatalogView.vue` | ~1200 | ✅ 3 tabs: Releases, 18k+ Chart Catalog, Repositories + Install Wizard + Values YAML viewer |
+| **Helm API Client** | `helm.ts` | ~200 | ✅ Typed API client for all Helm endpoints |
 | **Pod Terminal** (xterm.js) | `PodTerminal.vue` | ~400 | ✅ WebSocket terminal, resize, reconnect, quick shortcuts |
 | **Pod Log Viewer** | `PodLogViewer.vue` | ~600 | ✅ SSE streaming, level colors, search, auto-scroll, export |
 | **Create Resource Modal** | `CreateResourceModal.vue` | ~700 | ✅ Visual forms for Deployments, Services, ConfigMaps, Secrets |
 | **YAML Editor** | `YamlEditorModal.vue` | ~300 | ✅ Templates for 11+ kinds |
 | **Secret Viewer** | `SecretViewer.vue` | ~200 | ✅ Mask/reveal/decode/copy |
-| **Fleet View** | `FleetView.vue` | ~1200 | ✅ Multi-cluster import & overview |
-| **Deployments View** | `DeploymentsView.vue` | ~4300 | ✅ Lifecycle management + mobile UX |
-| **K8s API Client** | `k8s.ts` | ~185 | ✅ Full CRUD + applyYAML + pods |
+| **Deployments View** | `DeploymentsView.vue` | ~4400 | ✅ Workload lifecycle, Rollout Progress chips/bars, mobile 2x2 grid |
+| **K8s API Client** | `k8s.ts` | ~300 | ✅ Full CRUD + applyYAML + pods + nodes + events + cordon/drain/taints/labels |
 
 ### ❌ GAP ANALYSIS vs Rancher / Portainer — What's MISSING
 
 #### 🔴 P0: Core K8s Management (Rancher parity)
 
-1. **Helm Chart Catalog** — Browse repos, install/upgrade/rollback releases
-   - Backend: Need `helm.sh/helm/v3` Go SDK integration
-   - Frontend: Need chart browser grid, install wizard, release manager
-   - Rancher equivalent: Apps & Marketplace
-   - **Status**: NOT STARTED (Feature 5 in plan)
-
-2. **Events Timeline** — K8s events stream per cluster/namespace/resource
-   - Backend: `client.CoreV1().Events(ns).List()` + Watch
-   - Frontend: Need EventsTimeline component with filtering
-   - Rancher equivalent: Cluster Events tab
-   - **Status**: NOT STARTED
-
-3. **Node Management** — Drain, Cordon, Uncordon, Labels, Taints, Annotations
-   - Backend: Partially in explorer_repo.go (labels only). Missing drain/cordon/taint API
-   - Frontend: Need NodeManagement drawer with actions
-   - Rancher equivalent: Nodes → Actions menu
-   - **Status**: PARTIAL
-
-4. **Workload Real-time Metrics** — CPU/Memory per pod/container live charts
+1. ~~**Helm Chart Catalog**~~ — ✅ COMPLETED (`20bf0a5`)
+2. ~~**Events Timeline**~~ — ✅ COMPLETED (`1fcedf0`, `8fdbe65`)
+3. ~~**Node Management** (Cordon, Drain, Taints, Labels)~~ — ✅ COMPLETED (`1fcedf0`, `8fdbe65`)
+4. ~~**Rolling Update Progress**~~ — ✅ COMPLETED (`1fcedf0`)
+5. **Workload Real-time Metrics** — CPU/Memory per pod/container live sparklines
    - Backend: Need metrics-server integration (`/apis/metrics.k8s.io/v1beta1`)
    - Frontend: Need sparkline charts in Pod detail drawer
    - Rancher equivalent: Workload Metrics tab
-   - **Status**: NOT STARTED
-
-5. **Rolling Update Progress** — Visual progress bar for deployment rollouts
-   - Backend: Deployment status conditions (Progressing/Available/ReplicaFailure)
-   - Frontend: Need progress indicator in Deployments view
-   - Rancher equivalent: Workload detail → Rollout Status
-   - **Status**: NOT STARTED
+   - **Status**: NEXT PRIORITY
 
 #### 🟡 P1: Advanced Resource Management (Portainer parity)
 
