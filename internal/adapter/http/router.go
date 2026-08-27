@@ -218,21 +218,14 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 							resSub.Get("/{name}", platform.K8s.GetResource)
 							resSub.Put("/{name}", platform.K8s.UpdateResource)
 							resSub.Delete("/{name}", platform.K8s.DeleteResource)
-						})
 
-						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/deployments/{name}", func(wSub chi.Router) {
-							wSub.Post("/scale", platform.K8s.ScaleDeployment)
-							wSub.Post("/restart", platform.K8s.RestartDeployment)
-						})
-						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/statefulsets/{name}", func(wSub chi.Router) {
-							wSub.Post("/scale", platform.K8s.ScaleStatefulSet)
-						})
-						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/daemonsets/{name}", func(wSub chi.Router) {
-							wSub.Post("/restart", platform.K8s.RestartDaemonSet)
-						})
-						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/cronjobs/{name}", func(wSub chi.Router) {
-							wSub.Post("/trigger", platform.K8s.TriggerCronJob)
-							wSub.Put("/suspend", platform.K8s.SuspendCronJob)
+							// Workload actions on individual resource
+							resSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Group(func(actSub chi.Router) {
+								actSub.Post("/{name}/scale", platform.K8s.ScaleDeployment)
+								actSub.Post("/{name}/restart", platform.K8s.RestartDeployment)
+								actSub.Post("/{name}/trigger", platform.K8s.TriggerCronJob)
+								actSub.Put("/{name}/suspend", platform.K8s.SuspendCronJob)
+							})
 						})
 
 						k8sSub.Get("/events", platform.K8s.ListEvents)

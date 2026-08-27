@@ -171,6 +171,147 @@ func normalizeKind(kind string) string {
 	}
 }
 
+func isNamespacedKind(kind string) bool {
+	switch normalizeKind(kind) {
+	case "nodes", "persistentvolumes", "storageclasses", "namespaces":
+		return false
+	default:
+		return true
+	}
+}
+
+func (r *ResourceRepo) discoverNamespace(ctx context.Context, client kubernetes.Interface, kind, name string) string {
+	if client == nil || strings.TrimSpace(name) == "" {
+		return "default"
+	}
+
+	k := normalizeKind(kind)
+	switch k {
+	case "pods":
+		if list, err := client.CoreV1().Pods("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "configmaps":
+		if list, err := client.CoreV1().ConfigMaps("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "secrets":
+		if list, err := client.CoreV1().Secrets("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "deployments":
+		if list, err := client.AppsV1().Deployments("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "services":
+		if list, err := client.CoreV1().Services("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "ingresses":
+		if list, err := client.NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "statefulsets":
+		if list, err := client.AppsV1().StatefulSets("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "daemonsets":
+		if list, err := client.AppsV1().DaemonSets("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "jobs":
+		if list, err := client.BatchV1().Jobs("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "cronjobs":
+		if list, err := client.BatchV1().CronJobs("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "persistentvolumeclaims":
+		if list, err := client.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "networkpolicies":
+		if list, err := client.NetworkingV1().NetworkPolicies("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "serviceaccounts":
+		if list, err := client.CoreV1().ServiceAccounts("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "horizontalpodautoscalers":
+		if list, err := client.AutoscalingV2().HorizontalPodAutoscalers("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	case "events":
+		if list, err := client.CoreV1().Events("").List(ctx, metav1.ListOptions{}); err == nil {
+			for _, item := range list.Items {
+				if item.Name == name {
+					return item.Namespace
+				}
+			}
+		}
+	}
+
+	return "default"
+}
+
 func toMap(obj interface{}, defaultAPIVersion, defaultKind string) (map[string]interface{}, error) {
 	data, err := json.Marshal(obj)
 	if err != nil {
@@ -479,6 +620,9 @@ func (r *ResourceRepo) GetResource(ctx context.Context, clusterID, kind, namespa
 	}
 
 	k := normalizeKind(kind)
+	if namespace == "" && isNamespacedKind(k) {
+		namespace = r.discoverNamespace(ctx, client, k, name)
+	}
 
 	switch k {
 	case "pods":
@@ -1143,6 +1287,9 @@ func (r *ResourceRepo) DeleteResource(ctx context.Context, clusterID, kind, name
 	}
 
 	k := normalizeKind(kind)
+	if namespace == "" && isNamespacedKind(k) {
+		namespace = r.discoverNamespace(ctx, client, k, name)
+	}
 
 	switch k {
 	case "pods":
@@ -1401,6 +1548,10 @@ func (r *ResourceRepo) ScaleDeployment(ctx context.Context, clusterID, namespace
 		return err
 	}
 
+	if namespace == "" {
+		namespace = r.discoverNamespace(ctx, client, "deployments", name)
+	}
+
 	deploy, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("getting deployment %s: %w", name, err)
@@ -1418,6 +1569,10 @@ func (r *ResourceRepo) RestartDeployment(ctx context.Context, clusterID, namespa
 	client, err := r.getK8sClient(ctx, clusterID)
 	if err != nil {
 		return err
+	}
+
+	if namespace == "" {
+		namespace = r.discoverNamespace(ctx, client, "deployments", name)
 	}
 
 	deploy, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
@@ -1443,6 +1598,10 @@ func (r *ResourceRepo) ScaleStatefulSet(ctx context.Context, clusterID, namespac
 		return err
 	}
 
+	if namespace == "" {
+		namespace = r.discoverNamespace(ctx, client, "statefulsets", name)
+	}
+
 	sts, err := client.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("getting statefulset %s: %w", name, err)
@@ -1460,6 +1619,10 @@ func (r *ResourceRepo) RestartDaemonSet(ctx context.Context, clusterID, namespac
 	client, err := r.getK8sClient(ctx, clusterID)
 	if err != nil {
 		return err
+	}
+
+	if namespace == "" {
+		namespace = r.discoverNamespace(ctx, client, "daemonsets", name)
 	}
 
 	ds, err := client.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
@@ -1496,6 +1659,10 @@ func (r *ResourceRepo) TriggerCronJob(ctx context.Context, clusterID, namespace,
 	client, err := r.getK8sClient(ctx, clusterID)
 	if err != nil {
 		return nil, err
+	}
+
+	if namespace == "" {
+		namespace = r.discoverNamespace(ctx, client, "cronjobs", name)
 	}
 
 	cronJob, err := client.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
@@ -1543,6 +1710,10 @@ func (r *ResourceRepo) SuspendCronJob(ctx context.Context, clusterID, namespace,
 	client, err := r.getK8sClient(ctx, clusterID)
 	if err != nil {
 		return err
+	}
+
+	if namespace == "" {
+		namespace = r.discoverNamespace(ctx, client, "cronjobs", name)
 	}
 
 	cronJob, err := client.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
