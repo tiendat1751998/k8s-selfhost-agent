@@ -270,6 +270,15 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 4. Edge Agent Command & Remote Diagnostics
 5. Cost model (deferred by user)
 
-## BLOCKED (waiting K8s cluster hardware)
-Pod Terminal, Helm Catalog, GitOps Visual, Real-time Logs,
-Image CVE Scanning, Policy Dashboard, Service Mesh, Network Policy
+## Kubernetes Cluster State (UPDATED: Live Cluster Connected)
+- **Cluster**: `k8snode` on `https://10.10.10.60:6443` (v1.35.8, 2 nodes: k8smasterdeb + k8smaster, Cilium 1.20.0 eBPF CNI, Hubble Relay/UI, 14 Pods).
+- **K8s Deep Features (Pod Terminal, Live Pod Logs, YAML Editor, Helm Catalog)**: Deferred to dedicated phase after completing screen-by-screen mobile/PWA ergonomics audit.
+- **Current Active Phase**: Step-by-step screen-by-screen mobile web UI & button-by-button ergonomics optimization:
+  - Screen 1.1: Multi-Cluster Fleet (`/fleet`) — ✅ COMPLETED & VERIFIED (DEC-073)
+  - Screen 1.2: SLO Tracking (`/slo`) — ✅ COMPLETED & VERIFIED (DEC-077)
+  - Deep-Dive Traffic Modal & Node Historical Chart Numbers — ✅ COMPLETED & VERIFIED (DEC-075, DEC-076)
+  - Screen 1.3: Deployments & Apps (`/deployments`) — ⏳ READY FOR NEXT AUDIT
+  - Screen 1.4: Real-Time Logs (`/logs`)
+  - Screen 1.5: Security & Compliance (`/security` / `/compliance`)
+  - Screen 1.6: Infrastructure Hosts (`/hosts`)
+  - Screen 1.7: Incidents & RCA (`/incidents`)
