@@ -654,3 +654,141 @@ func TestK8sResourceHandler_WorkloadLifecycleEndpoints(t *testing.T) {
 		}
 	}
 }
+
+
+func TestK8sResourceHandler_AutoNamespaceDiscoveryAndRouteShadowing(t *testing.T) {
+	// Deployment in non-default namespace 'prod'
+	depProd := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "web-prod",
+			Namespace: "prod",
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: func() *int32 { i := int32(2); return &i }(),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "web"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "web", Image: "nginx"}}},
+			},
+		},
+	}
+
+	// StatefulSet in non-default namespace 'db-zone'
+	stsDb := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pg-cluster",
+			Namespace: "db-zone",
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: func() *int32 { i := int32(1); return &i }(),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "postgres"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "postgres", Image: "postgres:15"}}},
+			},
+		},
+	}
+
+	// DaemonSet in non-default namespace 'monitoring'
+	dsMon := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "node-exporter",
+			Namespace: "monitoring",
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "node-exporter"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "exporter", Image: "prom/node-exporter"}}},
+			},
+		},
+	}
+
+	// CronJob in non-default namespace 'batch'
+	cjBatch := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cleaner-cron",
+			Namespace: "batch",
+		},
+		Spec: batchv1.CronJobSpec{
+			Schedule: "0 * * * *",
+			JobTemplate: batchv1.JobTemplateSpec{
+				Spec: batchv1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers:    []corev1.Container{{Name: "cleaner", Image: "busybox"}},
+							RestartPolicy: corev1.RestartPolicyNever,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewSimpleClientset(depProd, stsDb, dsMon, cjBatch)
+	k8sRepo := infraK8s.NewResourceRepoWithInterface(fakeClient, nil)
+	auditMock := &mockK8sAuditRepo{}
+	handler := NewK8sResourceHandler(k8sRepo, auditMock)
+
+	// Test with router from router.go to guarantee NO router collisions
+	platform := &PlatformHandlers{
+		K8s: handler,
+	}
+	router := NewRouterWithWS(nil, nil, platform)
+
+	adminToken, err := middleware.GenerateJWT("admin-1", "platform_admin", "default-tenant")
+	if err != nil {
+		t.Fatalf("failed to generate admin token: %v", err)
+	}
+
+	// 1. GetResource with auto-namespace discovery (no ?ns=)
+	req := httptest.NewRequest("GET", "/api/v1/k8s/local/resources/deployments/web-prod", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GetResource with auto-discovery, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 2. Scale Deployment with auto-namespace discovery (no query, no body namespace)
+	req = httptest.NewRequest("POST", "/api/v1/k8s/local/resources/deployments/web-prod/scale", bytes.NewBufferString(`{"replicas": 5}`))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for ScaleDeployment with auto-discovery, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 3. Scale StatefulSet with body namespace
+	req = httptest.NewRequest("POST", "/api/v1/k8s/local/resources/statefulsets/pg-cluster/scale", bytes.NewBufferString(`{"namespace": "db-zone", "replicas": 3}`))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for ScaleStatefulSet with body namespace, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 4. Restart DaemonSet with auto-namespace discovery
+	req = httptest.NewRequest("POST", "/api/v1/k8s/local/resources/daemonsets/node-exporter/restart", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for RestartDaemonSet with auto-discovery, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 5. Trigger CronJob with auto-namespace discovery
+	req = httptest.NewRequest("POST", "/api/v1/k8s/local/resources/cronjobs/cleaner-cron/trigger", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for TriggerCronJob with auto-discovery, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 6. Suspend CronJob with auto-namespace discovery
+	req = httptest.NewRequest("PUT", "/api/v1/k8s/local/resources/cronjobs/cleaner-cron/suspend", bytes.NewBufferString(`{"suspend": true}`))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for SuspendCronJob with auto-discovery, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
