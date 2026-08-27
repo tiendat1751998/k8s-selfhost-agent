@@ -323,7 +323,7 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
           <span class="pulse-dot pulse-dot-cyan"></span>
           <span>SITE RELIABILITY ENGINEERING & COMPLIANCE</span>
         </div>
-        <h1 class="view-title">Service Level Objectives (SLO)</h1>
+        <h1 class="view-title"><span class="title-full">Service Level Objectives (SLO)</span><span class="title-mobile">🎯 SLO Tracking</span></h1>
         <p class="view-desc">
           Continuous error budget depletion tracking, multi-window burn rate indicators, and automated fast/slow breach alerting across active cluster workloads.
         </p>
@@ -331,10 +331,10 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
 
       <div class="header-actions">
         <button class="btn btn-primary" @click="showCreateModal = true">
-          <span>➕ Create SLO Definition</span>
+          <span class="btn-text-full">➕ Create SLO Definition</span><span class="btn-text-mobile">➕ Create SLO</span>
         </button>
         <button class="btn btn-secondary" :disabled="loading || actionInProgress" @click="fetchSLOData">
-          <span>{{ loading ? '⏳ Querying...' : '🔄 Refresh' }}</span>
+          <span class="btn-text-full">{{ loading ? '⏳ Querying...' : '🔄 Refresh' }}</span><span class="btn-text-mobile">🔄 Refresh</span>
         </button>
       </div>
     </div>
@@ -365,28 +365,28 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
           :class="{ active: selectedWindowFilter === '1h' }"
           @click="setWindowFilter('1h')"
         >
-          <span>⚡ 1h Fast Burn (14.4x)</span>
+          <span class="pill-full">⚡ 1h Fast Burn (14.4x)</span><span class="pill-mobile">⚡ 1h (14.4x)</span>
         </button>
         <button
           class="pill-btn"
           :class="{ active: selectedWindowFilter === '6h' }"
           @click="setWindowFilter('6h')"
         >
-          <span>⏳ 6h Slow Burn (6.0x)</span>
+          <span class="pill-full">⏳ 6h Slow Burn (6.0x)</span><span class="pill-mobile">⏳ 6h (6.0x)</span>
         </button>
         <button
           class="pill-btn"
           :class="{ active: selectedWindowFilter === '24h' }"
           @click="setWindowFilter('24h')"
         >
-          <span>📊 24h Multi-Window (2.0x)</span>
+          <span class="pill-full">📊 24h Multi-Window (2.0x)</span><span class="pill-mobile">📊 24h (2.0x)</span>
         </button>
         <button
           class="pill-btn"
           :class="{ active: selectedWindowFilter === '30d' }"
           @click="setWindowFilter('30d')"
         >
-          <span>🗓️ 30d Overall (1.0x)</span>
+          <span class="pill-full">🗓️ 30d Overall (1.0x)</span><span class="pill-mobile">🗓️ 30d (1.0x)</span>
         </button>
       </div>
 
@@ -894,6 +894,12 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
+}
+
+.title-mobile,
+.btn-text-mobile,
+.pill-mobile {
+  display: none;
 }
 
 .view-desc {
@@ -1691,6 +1697,7 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
   .swarm-meta-grid {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 8px !important;
+    margin-bottom: 14px !important;
   }
 
   .metric-card,
@@ -1698,6 +1705,24 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
   .hud-card,
   :deep(.metric-card) {
     padding: 10px 12px !important;
+    min-height: auto !important;
+    border-radius: 10px !important;
+  }
+
+  :deep(.metric-card .metric-subtitle),
+  :deep(.metric-card .metric-desc) {
+    display: none !important;
+  }
+
+  :deep(.metric-card .metric-value),
+  .metric-card .metric-value {
+    font-size: 20px !important;
+  }
+
+  :deep(.metric-card .metric-trend) {
+    font-size: 10px !important;
+    padding: 2px 4px !important;
+    white-space: nowrap !important;
   }
 
   .snapshots-grid {
@@ -1721,6 +1746,39 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
 }
 
 @media (max-width: 640px) {
+  .title-full,
+  .btn-text-full,
+  .pill-full {
+    display: none !important;
+  }
+
+  .title-mobile,
+  .btn-text-mobile,
+  .pill-mobile {
+    display: inline !important;
+  }
+
+  .view-tag {
+    display: none !important;
+  }
+
+  .view-desc {
+    display: none !important;
+  }
+
+  .view-title {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+  }
+
+  .view-header {
+    gap: 10px !important;
+    margin-bottom: 14px !important;
+  }
+
   .header-actions {
     display: flex !important;
     flex-direction: row !important;
@@ -1744,6 +1802,43 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
     flex: 1 1 100% !important;
   }
 
+  .window-filter-bar {
+    padding: 10px 12px !important;
+    gap: 8px !important;
+    margin-bottom: 14px !important;
+    border-radius: 10px !important;
+  }
+
+  .filter-label-group {
+    gap: 6px !important;
+  }
+
+  .filter-title {
+    font-size: 11px !important;
+  }
+
+  .filter-desc {
+    display: none !important;
+  }
+
+  .filter-pills {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    gap: 6px !important;
+    padding: 2px !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .pill-btn {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+    border-radius: 8px !important;
+  }
+
   .metrics-grid,
   .grid-metrics,
   .stats-grid,
@@ -1751,6 +1846,7 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
   .swarm-meta-grid {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 8px !important;
+    margin-bottom: 14px !important;
   }
 
   .metric-card,
@@ -1758,6 +1854,30 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
   .hud-card,
   :deep(.metric-card) {
     padding: 10px 12px !important;
+    min-height: auto !important;
+    border-radius: 10px !important;
+  }
+
+  :deep(.metric-card .metric-subtitle),
+  :deep(.metric-card .metric-desc) {
+    display: none !important;
+  }
+
+  :deep(.metric-card .metric-value),
+  .metric-card .metric-value {
+    font-size: 20px !important;
+  }
+
+  :deep(.metric-card .metric-trend) {
+    font-size: 10px !important;
+    padding: 2px 4px !important;
+    white-space: nowrap !important;
+  }
+
+  .section-box {
+    padding: 12px 14px !important;
+    margin-bottom: 14px !important;
+    border-radius: 10px !important;
   }
 
   .box-header {
@@ -1766,21 +1886,74 @@ async function handleDeleteSLO(defId: string, serviceName: string) {
     gap: 10px;
   }
 
+  .box-title {
+    font-size: 13.5px !important;
+  }
+
+  .box-subtitle {
+    display: none !important;
+  }
+
+  .snapshots-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .snapshot-card {
+    padding: 12px !important;
+    border-radius: 10px !important;
+    gap: 10px !important;
+  }
+
   .snap-top {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  .snap-service-name {
+    font-size: 13px !important;
+  }
+
+  .snap-target-badge {
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+  }
+
+  .snap-metrics-row {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+    padding: 8px 10px !important;
+    background: rgba(0, 0, 0, 0.25) !important;
+    border-radius: 8px !important;
+  }
+
+  .snap-metric {
+    align-items: center !important;
+    text-align: center !important;
+  }
+
+  .snap-lbl {
+    font-size: 9px !important;
+  }
+
+  .snap-val {
+    font-size: 13px !important;
   }
 
   .card-actions-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 6px !important;
   }
 
   .card-actions-row .btn-action {
-    width: 100%;
-    justify-content: center;
+    flex: 1 1 auto !important;
+    width: auto !important;
+    padding: 6px 8px !important;
+    font-size: 10.5px !important;
+    justify-content: center !important;
   }
 
   .modal-card {
