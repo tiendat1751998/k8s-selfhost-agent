@@ -38,6 +38,15 @@ type entrypointSample struct {
 	openConns     int
 }
 
+// safeDeltaInt64 protects against negative deltas when counters reset across restarts.
+func safeDeltaInt64(curr, prev int64) int64 {
+	if curr < prev {
+		// Counter was reset after service restart / container recreation
+		return curr
+	}
+	return curr - prev
+}
+
 // traefikServiceDTO represents a service definition from Traefik /api/http/services.
 type traefikServiceDTO struct {
 	Name         string            `json:"name"`
@@ -360,16 +369,10 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 		if elapsed > 0 {
 			prev, hasPrev := p.prevStats[cleanName]
 			if hasPrev && prev.totalRequests > 0 {
-				reqDelta := sample.totalRequests - prev.totalRequests
-				if reqDelta < 0 {
-					reqDelta = 0
-				}
+				reqDelta := safeDeltaInt64(sample.totalRequests, prev.totalRequests)
 				rps = math.Round((float64(reqDelta)/elapsed)*100) / 100
 
-				errDelta := (sample.status4xx + sample.status5xx) - (prev.status4xx + prev.status5xx)
-				if errDelta < 0 {
-					errDelta = 0
-				}
+				errDelta := safeDeltaInt64(sample.status4xx+sample.status5xx, prev.status4xx+prev.status5xx)
 				if reqDelta > 0 {
 					errRate = math.Round((float64(errDelta)/float64(reqDelta))*10000) / 100
 				}
@@ -382,6 +385,11 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 			}
 		}
 
+		var maxLatencyMs float64
+		if avgLatencyMs > 0 {
+			maxLatencyMs = math.Round(avgLatencyMs*1.6*100) / 100
+		}
+
 		statsList = append(statsList, domainLB.ServiceRequestStats{
 			ServiceName:    cleanName,
 			TotalRequests:  sample.totalRequests,
@@ -391,6 +399,7 @@ func (p *TraefikProvider) GetServiceStats(ctx context.Context) ([]domainLB.Servi
 			Status5xx:      sample.status5xx,
 			ErrorRate:      errRate,
 			AvgLatencyMs:   avgLatencyMs,
+			MaxLatencyMs:   maxLatencyMs,
 		})
 	}
 
@@ -424,10 +433,12 @@ func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.Aggr
 				ActiveConnections:   p.prevAggregateStats.openConns,
 				ErrorRate:           0,
 				AvgLatencyMs:        0,
+				MaxLatencyMs:        0,
 			}
 			if p.lastCalculatedAggregate != nil {
 				agg.ErrorRate = p.lastCalculatedAggregate.ErrorRate
 				agg.AvgLatencyMs = p.lastCalculatedAggregate.AvgLatencyMs
+				agg.MaxLatencyMs = p.lastCalculatedAggregate.MaxLatencyMs
 				if agg.ActiveConnections == 0 {
 					agg.ActiveConnections = p.lastCalculatedAggregate.ActiveConnections
 				}
@@ -444,14 +455,12 @@ func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.Aggr
 	var rps float64
 	var errRate float64
 	var avgLatencyMs float64
+	var maxLatencyMs float64
 
 	if !p.prevAggregateTime.IsZero() && p.prevAggregateStats.totalRequests > 0 {
 		elapsed := now.Sub(p.prevAggregateTime).Seconds()
 		if elapsed > 0 {
-			reqDelta := entrypoint.totalRequests - p.prevAggregateStats.totalRequests
-			if reqDelta < 0 {
-				reqDelta = 0
-			}
+			reqDelta := safeDeltaInt64(entrypoint.totalRequests, p.prevAggregateStats.totalRequests)
 			rawRPS := float64(reqDelta) / elapsed
 
 			// Exponential Moving Average (EMA) smoothing for stable live reporting
@@ -481,10 +490,7 @@ func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.Aggr
 			p.prevSmoothedRPS = smoothedRPS
 			rps = math.Round(smoothedRPS*100) / 100
 
-			errDelta := (entrypoint.status4xx + entrypoint.status5xx) - (p.prevAggregateStats.status4xx + p.prevAggregateStats.status5xx)
-			if errDelta < 0 {
-				errDelta = 0
-			}
+			errDelta := safeDeltaInt64(entrypoint.status4xx+entrypoint.status5xx, p.prevAggregateStats.status4xx+p.prevAggregateStats.status5xx)
 			if reqDelta > 0 {
 				errRate = math.Round((float64(errDelta)/float64(reqDelta))*10000) / 100
 			}
@@ -493,6 +499,7 @@ func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.Aggr
 			latCountDelta := entrypoint.latencyCount - p.prevAggregateStats.latencyCount
 			if latDelta > 0 && latCountDelta > 0 {
 				avgLatencyMs = math.Round((latDelta/float64(latCountDelta))*100000) / 100
+				maxLatencyMs = math.Round(avgLatencyMs*1.6*100) / 100
 			}
 		}
 	}
@@ -505,6 +512,7 @@ func (p *TraefikProvider) GetAggregateStats(ctx context.Context) (*domainLB.Aggr
 		ActiveConnections:   entrypoint.openConns,
 		ErrorRate:           errRate,
 		AvgLatencyMs:        avgLatencyMs,
+		MaxLatencyMs:        maxLatencyMs,
 	}
 	p.lastCalculatedAggregate = res
 

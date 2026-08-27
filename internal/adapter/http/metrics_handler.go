@@ -150,23 +150,65 @@ func (h *OverviewHandler) GetTPS(w http.ResponseWriter, r *http.Request) {
 
 // parseNodeHistoryTime parses a time string against multiple ISO/RFC formats or returns fallback.
 func parseNodeHistoryTime(s string, fallback time.Time) time.Time {
+	s = strings.TrimSpace(s)
 	if s == "" {
 		return fallback
 	}
-	formats := []string{
+
+	// If '+' in timezone offset was decoded to a space by URL query decoder (e.g. "2026-08-25T07:23:00 07:00" or "2026-08-25T07:23 07:00"),
+	// normalize it back to '+'
+	if len(s) >= 22 && s[len(s)-6] == ' ' && s[len(s)-3] == ':' {
+		s = s[:len(s)-6] + "+" + s[len(s)-5:]
+	}
+
+	rfcFormats := []string{
 		time.RFC3339Nano,
 		time.RFC3339,
+		"2006-01-02T15:04Z07:00",
+		"2006-01-02T15:04-07:00",
+		"2006-01-02T15:04+07:00",
+		"2006-01-02 15:04:05Z07:00",
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02 15:04:05+07:00",
+		"2006-01-02 15:04Z07:00",
+		"2006-01-02 15:04-07:00",
+		"2006-01-02 15:04+07:00",
+		"2006-01-02T15:04:05-0700",
+		"2006-01-02T15:04:05+0700",
+		"2006-01-02 15:04:05-0700",
+		"2006-01-02 15:04:05+0700",
+	}
+	for _, format := range rfcFormats {
+		if t, err := time.Parse(format, s); err == nil {
+			return t.UTC()
+		}
+	}
+
+	localFormats := []string{
 		"2006-01-02T15:04:05",
 		"2006-01-02T15:04",
 		"2006-01-02 15:04:05",
 		"2006-01-02 15:04",
 		"2006-01-02",
 	}
-	for _, format := range formats {
-		if t, err := time.Parse(format, s); err == nil {
-			return t.UTC()
+	for _, format := range localFormats {
+		if t, err := time.ParseInLocation(format, s, time.Local); err == nil {
+			parsedUTC := t.UTC()
+			now := time.Now().UTC()
+			if parsedUTC.After(now.Add(5 * time.Minute)) {
+				_, offsetSec := time.Now().In(time.Local).Zone()
+				if offsetSec != 0 {
+					adjusted := parsedUTC.Add(-time.Duration(offsetSec) * time.Second)
+					if !adjusted.After(now.Add(5 * time.Minute)) {
+						return adjusted
+					}
+				}
+				return now
+			}
+			return parsedUTC
 		}
 	}
+
 	return fallback
 }
 
@@ -195,7 +237,23 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 		if startTime.After(endTime) {
 			startTime, endTime = endTime, startTime
 		}
+		if startTime.Equal(endTime) {
+			startTime = endTime.Add(-24 * time.Hour)
+		}
 		duration := endTime.Sub(startTime)
+		if endTime.After(now.Add(2 * time.Minute)) {
+			endTime = now
+		}
+		if startTime.After(now) {
+			startTime = now.Add(-duration)
+		}
+		if startTime.After(endTime) {
+			startTime = endTime.Add(-duration)
+		}
+		if startTime.Equal(endTime) {
+			startTime = endTime.Add(-24 * time.Hour)
+		}
+		duration = endTime.Sub(startTime)
 		if duration <= 24*time.Hour {
 			resolution = "1m"
 			limit = 1500
@@ -314,4 +372,3 @@ func (h *OverviewHandler) GetNodeHistory(w http.ResponseWriter, r *http.Request)
 		"incidents":  incidentsList,
 	})
 }
-

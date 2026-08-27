@@ -441,4 +441,42 @@ const currentFeature = computed(() => {
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .header-badge {
+    flex-wrap: wrap;
+  }
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .feature-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .items-list {
+    padding: 12px 14px;
+  }
+}
 </style>

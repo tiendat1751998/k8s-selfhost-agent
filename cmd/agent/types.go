@@ -25,6 +25,31 @@ type DiskMetrics struct {
 	Filesystem   string  `json:"filesystem"`
 }
 
+// DiskIOStats represents real-time I/O performance and latency metrics for a block device.
+type DiskIOStats struct {
+	DeviceName        string  `json:"device_name"`         // e.g. "sda", "nvme0n1", "dm-0"
+	ReadBytesPerSec   int64   `json:"read_bytes_per_sec"`  // Read throughput (Bytes/s)
+	WriteBytesPerSec  int64   `json:"write_bytes_per_sec"` // Write throughput (Bytes/s)
+	ReadIOPS          float64 `json:"read_iops"`           // Read operations per second
+	WriteIOPS         float64 `json:"write_iops"`          // Write operations per second
+	AvgWaitMs         float64 `json:"avg_wait_ms"`         // await (Average I/O wait time in ms)
+	AvgRequestSizeKB  float64 `json:"avg_req_size_kb"`     // avgrq-sz (Average request size in KB)
+	CurrentQueueDepth int64   `json:"current_queue_depth"` // in_flight requests currently queued
+	IoUtilizationPct  float64 `json:"io_utilization_pct"`  // %util (Disk busy time %)
+	IsRootDevice      bool    `json:"is_root_device"`      // true for sda, nvme0n1, false for partitions sda1
+}
+
+// DiskIOMetrics aggregates host-level disk I/O metrics across block devices.
+type DiskIOMetrics struct {
+	TotalReadBytesPerSec  int64         `json:"total_read_bytes_per_sec"`
+	TotalWriteBytesPerSec int64         `json:"total_write_bytes_per_sec"`
+	TotalReadIOPS         float64       `json:"total_read_iops"`
+	TotalWriteIOPS        float64       `json:"total_write_iops"`
+	AvgAwaitMs            float64       `json:"avg_await_ms"`
+	MaxIoUtilizationPct   float64       `json:"max_io_util_pct"`
+	Devices               []DiskIOStats `json:"devices"`
+}
+
 // NetworkInterfaceMetrics holds network rates for an interface.
 type NetworkInterfaceMetrics struct {
 	Name          string `json:"name"`
@@ -65,6 +90,7 @@ type MetricsResponse struct {
 	CPU           CPUMetrics      `json:"cpu"`
 	Memory        MemoryMetrics   `json:"memory"`
 	Disks         []DiskMetrics   `json:"disks"`
+	DiskIO        DiskIOMetrics   `json:"disk_io"`
 	Network       NetworkMetrics  `json:"network"`
 	Processes     int             `json:"processes"`
 	TopProcesses  []ProcessMetric `json:"top_processes"`

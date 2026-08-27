@@ -1,13 +1,20 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/authStore'
 import { useBackupStore } from './stores/backupStore'
 import { useSecurityStore } from './stores/securityStore'
 import { useLogStore } from './stores/logStore'
+import { useAppStore } from './stores/app'
+import { useAlertStore } from './stores/alertStore'
 import { api } from './api/client'
 import { tenancyApi } from './api/management'
+import { overviewApi } from './api/overview'
 import ModalDrawer from './components/ui/ModalDrawer.vue'
+import TopHudAlertBell from './components/layout/TopHudAlertBell.vue'
+import AlertCenterModal from './components/overview/alerts/AlertCenterModal.vue'
+import PwaInstallBanner from './components/common/PwaInstallBanner.vue'
+import { usePwaInstall } from './registerServiceWorker'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,6 +22,9 @@ const authStore = useAuthStore()
 const backupStore = useBackupStore()
 const securityStore = useSecurityStore()
 const logStore = useLogStore()
+const appStore = useAppStore()
+const alertStore = useAlertStore()
+const { isInstallable, promptInstall } = usePwaInstall()
 
 // State
 const selectedTenant = ref('default-tenant')
@@ -96,6 +106,7 @@ const navGroups = [
       { path: '/deployments', name: 'Deployments & Apps', icon: '🚀', sub: 'Canary, Blue-Green & Workloads' },
       { path: '/promotions', name: 'Promotions', icon: '🔄', sub: 'Dev → Stage → Prod' },
       { path: '/explorer', name: 'Cluster Explorer', icon: '🔍', sub: 'Live CRD & Pod Trees' },
+      { path: '/helm', name: 'Helm Catalog', icon: '⛵', sub: 'Repositories, Charts & Releases' },
     ]
   },
   {
@@ -180,37 +191,100 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
+let globalTelemetryInterval: ReturnType<typeof setInterval> | null = null
+
+async function syncGlobalTelemetry() {
+  if (!authStore.isAuthenticated) return
+  try {
+    const data = await overviewApi.getOverview()
+    if (data) {
+      appStore.setMetrics(data)
+      alertStore.syncAlerts(data.alerts || [])
+    }
+  } catch {
+    // Background telemetry fallback
+  }
+}
+
 onMounted(() => {
   if (authStore.isAuthenticated) {
     backupStore.fetchAll().catch(() => {})
     securityStore.fetchAll().catch(() => {})
     loadTenants().catch(() => {})
+    syncGlobalTelemetry().catch(() => {})
   }
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', handleGlobalKeydown)
   }
+  globalTelemetryInterval = setInterval(() => {
+    if (authStore.isAuthenticated) {
+      syncGlobalTelemetry().catch(() => {})
+    }
+  }, 10000)
 })
 
 onUnmounted(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('keydown', handleGlobalKeydown)
   }
+  if (globalTelemetryInterval) {
+    clearInterval(globalTelemetryInterval)
+    globalTelemetryInterval = null
+  }
 })
 
 const isLoginPage = computed(() => route.path === '/login')
 
-const clusterStatus = computed(() => {
-  if (securityStore.error || backupStore.error) return 'DEGRADED'
+// Mesh & Node Health Real-time Calculations
+const downNodes = computed(() => {
+  const nodes = appStore.latestMetrics?.nodes || []
+  return nodes.filter(n => n.status?.toLowerCase() === 'down' || n.status?.toLowerCase() === 'offline')
+})
+
+const downNodeCount = computed(() => downNodes.value.length)
+
+const clusterMeshStatus = computed(() => {
+  if (downNodeCount.value > 0) return 'DEGRADED'
+  if (securityStore.error || backupStore.error || alertStore.hasCriticalAlerts) return 'DEGRADED'
   return 'HEALTHY'
 })
 
-const streamStatus = computed(() => {
+const meshTooltip = computed(() => {
+  if (downNodeCount.value > 0) {
+    const names = downNodes.value.map(n => n.node_name || n.node_id).join(', ')
+    return `Mesh Status: DEGRADED — ${downNodeCount.value} node(s) offline (${names}). Cluster cross-node communication impaired.`
+  }
+  if (securityStore.error || backupStore.error) {
+    return `Mesh Status: DEGRADED — Security audit or backup synchronization encountered error.`
+  }
+  if (alertStore.hasCriticalAlerts) {
+    return `Mesh Status: DEGRADED — Critical resource alerts active in cluster.`
+  }
+  const total = appStore.latestMetrics?.total_nodes || appStore.latestMetrics?.nodes?.length || 0
+  const healthy = appStore.latestMetrics?.healthy_nodes || total
+  return `Mesh Status: HEALTHY — WireGuard/eBPF encrypted mesh operational across ${healthy}/${total || 'all'} connected nodes.`
+})
+
+// Latency & Stream Real-time Calculations
+const streamStatusText = computed(() => {
   return logStore.isConnected ? '<50ms' : 'POLLING'
+})
+
+const latencyTooltip = computed(() => {
+  if (logStore.isConnected) {
+    return 'Telemetry Stream: Live WebSocket connection active (<50ms real-time stream latency). Continuous bidirectional events.'
+  }
+  return 'Telemetry Stream: HTTP 5s Polling Fallback active. WebSocket stream reconnecting in background.'
 })
 
 function handleLogout() {
   authStore.logout()
   router.push('/login')
+}
+
+function handleNavigateToHost(nodeNameOrId: string) {
+  alertStore.closeAlertCenter()
+  router.push({ path: '/hosts', query: { search: nodeNameOrId } })
 }
 </script>
 
@@ -333,33 +407,59 @@ function handleLogout() {
 
         <div class="hud-right">
           <!-- Tenant Selector Dropdown -->
-          <div class="tenant-selector-wrap">
+          <div class="tenant-selector-wrap" title="Workspace / Multi-Tenant Organization">
             <span class="tenant-icon">🏢</span>
-            <select v-model="selectedTenant" @change="handleTenantChange" class="tenant-select font-mono">
+            <select v-model="selectedTenant" @change="handleTenantChange" class="tenant-select font-mono" title="Select active workspace tenant">
               <option v-for="t in tenants" :key="t.id" :value="t.id">
                 {{ t.name }}
               </option>
             </select>
           </div>
 
-          <!-- Cluster Status -->
-          <div class="hud-stat">
-            <span class="pulse-dot" :class="clusterStatus === 'HEALTHY' ? 'pulse-dot-emerald' : 'pulse-dot-amber'"></span>
+          <!-- Mesh Status -->
+          <div class="hud-stat hud-stat-interactive" :title="meshTooltip">
+            <span 
+              class="pulse-dot" 
+              :class="clusterMeshStatus === 'HEALTHY' ? 'pulse-dot-emerald' : (downNodeCount > 0 ? 'pulse-dot-rose' : 'pulse-dot-amber')"
+            ></span>
             <span class="stat-label">Mesh:</span>
-            <span class="stat-value" :class="clusterStatus === 'HEALTHY' ? 'text-emerald' : 'text-amber'">{{ clusterStatus }}</span>
+            <span 
+              class="stat-value" 
+              :class="clusterMeshStatus === 'HEALTHY' ? 'text-emerald' : (downNodeCount > 0 ? 'text-rose font-bold' : 'text-amber')"
+            >
+              {{ downNodeCount > 0 ? `DEGRADED (${downNodeCount} Down)` : clusterMeshStatus }}
+            </span>
           </div>
 
           <!-- Latency -->
-          <div class="hud-stat">
+          <div class="hud-stat hud-stat-interactive" :title="latencyTooltip">
             <span class="stat-label">Latency:</span>
-            <span class="stat-value font-mono text-cyan">{{ streamStatus }}</span>
+            <span class="stat-value font-mono" :class="logStore.isConnected ? 'text-emerald font-semibold' : 'text-cyan'">
+              {{ streamStatusText }}
+            </span>
           </div>
+
+          <!-- Compact PWA Install Button -->
+          <button 
+            v-if="isInstallable" 
+            class="pwa-install-hud-btn" 
+            @click="promptInstall"
+            title="Install K8sControl PWA App"
+            aria-label="Install App"
+          >
+            <span class="pwa-hud-icon">📲</span>
+            <span class="pwa-hud-label font-mono">INSTALL</span>
+          </button>
+
+          <!-- Top HUD Global Alert Bell & Dropdown Toast -->
+          <TopHudAlertBell />
 
           <!-- User Profile & Sign Out -->
           <div v-if="authStore.user" class="hud-user">
             <span class="user-role font-mono">{{ authStore.user.role || 'ADMIN' }}</span>
-            <button class="btn btn-secondary btn-sm" title="Sign Out" @click="handleLogout">
-              <span>Sign Out</span>
+            <button class="btn btn-secondary btn-sm btn-logout" title="Sign Out" @click="handleLogout">
+              <span class="logout-text">Sign Out</span>
+              <span class="logout-icon" aria-hidden="true">🚪</span>
             </button>
           </div>
         </div>
@@ -422,6 +522,58 @@ function handleLogout() {
         </div>
       </template>
     </ModalDrawer>
+
+    <!-- GLOBAL ALERT CENTER & TELEMETRY DIAGNOSTICS MODAL -->
+    <AlertCenterModal
+      :show="alertStore.showAlertCenterModal"
+      :activeAlerts="alertStore.activeAlerts"
+      :mutedAlertsList="alertStore.mutedAlertsList"
+      :hasCriticalAlerts="alertStore.hasCriticalAlerts"
+      @close="alertStore.closeAlertCenter"
+      @mute-alert="alertStore.muteAlert"
+      @unmute-alert="alertStore.unmuteAlert"
+      @mute-all="alertStore.muteAll"
+      @unmute-all="alertStore.unmuteAll"
+      @dismiss-alert="alertStore.dismissAlert"
+      @navigate-to-host="handleNavigateToHost"
+    />
+
+    <!-- Mobile Bottom Navigation Bar (Docked) -->
+    <nav class="mobile-bottom-bar" aria-label="Mobile Navigation">
+      <router-link to="/" class="mobile-nav-tab" :class="{ 'mobile-tab-active': route.path === '/' }">
+        <span class="tab-icon">📊</span>
+        <span class="tab-label font-mono">Overview</span>
+      </router-link>
+      <router-link to="/agents" class="mobile-nav-tab" :class="{ 'mobile-tab-active': route.path.startsWith('/agents') }">
+        <span class="tab-icon">🤖</span>
+        <span class="tab-label font-mono">Agents</span>
+      </router-link>
+      <router-link to="/fleet" class="mobile-nav-tab" :class="{ 'mobile-tab-active': route.path.startsWith('/fleet') }">
+        <span class="tab-icon">☸️</span>
+        <span class="tab-label font-mono">Fleet</span>
+      </router-link>
+      <router-link to="/deployments" class="mobile-nav-tab" :class="{ 'mobile-tab-active': route.path.startsWith('/deployments') }">
+        <span class="tab-icon">🚀</span>
+        <span class="tab-label font-mono">Deploy</span>
+      </router-link>
+      <button 
+        class="mobile-nav-tab mobile-nav-btn" 
+        :class="{ 'mobile-tab-active': alertStore.showAlertCenterModal }" 
+        @click="alertStore.showAlertCenterModal = true"
+        aria-label="Open Alert Center"
+      >
+        <div class="tab-icon-wrap">
+          <span class="tab-icon">🔔</span>
+          <span v-if="alertStore.activeAlerts.length > 0" class="mobile-badge-count font-mono">
+            {{ alertStore.activeAlerts.length > 99 ? '99+' : alertStore.activeAlerts.length }}
+          </span>
+        </div>
+        <span class="tab-label font-mono">Alerts</span>
+      </button>
+    </nav>
+
+    <!-- PWA Install Floating Banner -->
+    <PwaInstallBanner />
   </div>
 </template>
 
@@ -849,6 +1001,20 @@ function handleLogout() {
   font-size: 12px;
 }
 
+.hud-stat-interactive {
+  cursor: help;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+}
+
+.hud-stat-interactive:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-subtle);
+}
+
 .stat-label {
   color: var(--text-muted);
 }
@@ -873,6 +1039,10 @@ function handleLogout() {
   border: 1px solid rgba(6, 182, 212, 0.25);
   padding: 2px 8px;
   border-radius: 6px;
+}
+
+.btn-logout .logout-icon {
+  display: none;
 }
 
 .page-container {
@@ -1032,6 +1202,43 @@ function handleLogout() {
   display: none;
 }
 
+/* PWA HUD Install Button */
+.pwa-install-hud-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  padding: 5px 9px;
+  color: var(--accent-sky);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.15);
+}
+
+.pwa-install-hud-btn:hover {
+  background: rgba(6, 182, 212, 0.22);
+  border-color: var(--accent-sky);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.35);
+  transform: translateY(-1px);
+}
+
+.pwa-hud-icon {
+  font-size: 13px;
+}
+
+.pwa-hud-label {
+  letter-spacing: 0.05em;
+}
+
+/* Mobile Bottom Navigation Bar */
+.mobile-bottom-bar {
+  display: none;
+}
+
 @media (max-width: 1024px) {
   .mobile-menu-btn {
     display: flex;
@@ -1077,20 +1284,166 @@ function handleLogout() {
 
 @media (max-width: 640px) {
   .top-hud {
-    padding: 0 12px;
+    padding: 0 10px;
+    gap: 6px;
+  }
+
+  .hud-left {
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .hud-right {
+    gap: 6px;
+    min-width: 0;
+    align-items: center;
   }
 
   .breadcrumb-nav {
     display: none;
   }
 
+  .command-search-btn {
+    padding: 6px 10px;
+    gap: 0;
+  }
+
+  .command-search-btn .kbd-badge {
+    display: none;
+  }
+
+  .pwa-install-hud-btn {
+    display: none !important;
+  }
+
   .tenant-selector-wrap {
-    max-width: 150px;
+    max-width: 100px;
+    padding: 4px 6px;
+    gap: 4px;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .tenant-select {
-    max-width: 110px;
+    max-width: 70px;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: 11px;
+  }
+
+  .hud-user {
+    padding-left: 4px;
+    gap: 4px;
+    border-left: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  .user-role {
+    display: none;
+  }
+
+  .btn-logout {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .btn-logout .logout-text {
+    display: none;
+  }
+
+  .btn-logout .logout-icon {
+    display: inline-block;
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .page-container {
+    padding: 12px 8px calc(68px + var(--sab)) 8px;
+  }
+
+  /* Docked Mobile Bottom Navigation Bar */
+  .mobile-bottom-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(56px + var(--sab));
+    padding-bottom: var(--sab);
+    background: rgba(7, 9, 14, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border-medium);
+    z-index: 90;
+    align-items: center;
+    justify-content: space-around;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .mobile-nav-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--text-muted);
+    text-decoration: none;
+    height: 100%;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 4px 0;
+  }
+
+  .mobile-nav-tab:hover,
+  .mobile-nav-tab.mobile-tab-active {
+    color: var(--accent-sky);
+  }
+
+  .mobile-nav-tab.mobile-tab-active .tab-icon {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.5));
+  }
+
+  .tab-icon {
+    font-size: 18px;
+    line-height: 1;
+    transition: transform 0.15s ease, filter 0.15s ease;
+  }
+
+  .tab-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .tab-icon-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-badge-count {
+    position: absolute;
+    top: -4px;
+    right: -10px;
+    background: #f43f5e;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 0 4px;
+    border-radius: 8px;
+    min-width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
   }
 }
 </style>

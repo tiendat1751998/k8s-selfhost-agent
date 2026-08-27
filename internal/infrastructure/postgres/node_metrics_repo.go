@@ -136,20 +136,6 @@ func (r *nodeMetricsRepo) QueryHistory(ctx context.Context, q nodemetrics.NodeHi
 		limit = 1500
 	}
 
-	query := `
-		SELECT id, tenant_id::text, node_id, node_name,
-		       cpu_percent, cpu_peak, mem_used_bytes, mem_total_bytes, mem_percent,
-		       disk_used_bytes, disk_total_bytes, disk_percent,
-		       rx_bytes_per_sec, tx_bytes_per_sec, process_count, container_count,
-		       status, resolution, recorded_at
-		FROM node_metric_rollups
-		WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
-		  AND resolution = $2
-		  AND recorded_at >= $3
-		  AND recorded_at <= $4
-		ORDER BY recorded_at ASC
-		LIMIT $5
-	`
 	startTime := q.StartTime
 	if startTime.IsZero() {
 		startTime = time.Now().UTC().Add(-24 * time.Hour)
@@ -159,7 +145,59 @@ func (r *nodeMetricsRepo) QueryHistory(ctx context.Context, q nodemetrics.NodeHi
 		endTime = time.Now().UTC()
 	}
 
-	rows, err := db.Query(ctx, query, q.NodeID, resolution, startTime, endTime, limit)
+	var query string
+	var args []any
+
+	if resolution == "1h" {
+		query = `
+			SELECT 
+				gen_random_uuid() as id,
+				tenant_id::text,
+				node_id,
+				node_name,
+				AVG(cpu_percent) as cpu_percent,
+				MAX(cpu_peak) as cpu_peak,
+				AVG(mem_used_bytes)::bigint as mem_used_bytes,
+				AVG(mem_total_bytes)::bigint as mem_total_bytes,
+				AVG(mem_percent) as mem_percent,
+				AVG(disk_used_bytes)::bigint as disk_used_bytes,
+				AVG(disk_total_bytes)::bigint as disk_total_bytes,
+				AVG(disk_percent) as disk_percent,
+				AVG(rx_bytes_per_sec)::bigint as rx_bytes_per_sec,
+				AVG(tx_bytes_per_sec)::bigint as tx_bytes_per_sec,
+				AVG(process_count)::int as process_count,
+				AVG(container_count)::int as container_count,
+				'online' as status,
+				'1h' as resolution,
+				date_trunc('hour', recorded_at) as recorded_at
+			FROM node_metric_rollups
+			WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
+			  AND recorded_at >= $2
+			  AND recorded_at <= $3
+			GROUP BY tenant_id, node_id, node_name, date_trunc('hour', recorded_at)
+			ORDER BY date_trunc('hour', recorded_at) ASC
+			LIMIT $4
+		`
+		args = []any{q.NodeID, startTime, endTime, limit}
+	} else {
+		query = `
+			SELECT id, tenant_id::text, node_id, node_name,
+			       cpu_percent, cpu_peak, mem_used_bytes, mem_total_bytes, mem_percent,
+			       disk_used_bytes, disk_total_bytes, disk_percent,
+			       rx_bytes_per_sec, tx_bytes_per_sec, process_count, container_count,
+			       status, resolution, recorded_at
+			FROM node_metric_rollups
+			WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
+			  AND resolution = $2
+			  AND recorded_at >= $3
+			  AND recorded_at <= $4
+			ORDER BY recorded_at ASC
+			LIMIT $5
+		`
+		args = []any{q.NodeID, resolution, startTime, endTime, limit}
+	}
+
+	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying node history: %w", err)
 	}

@@ -524,6 +524,29 @@ export interface NetworkInterface {
   tx_bytes_per_sec: number
 }
 
+export interface DiskIOStats {
+  device_name: string
+  read_bytes_per_sec: number
+  write_bytes_per_sec: number
+  read_iops: number
+  write_iops: number
+  avg_wait_ms: number
+  avg_req_size_kb: number
+  current_queue_depth: number
+  io_utilization_pct: number
+  is_root_device: boolean
+}
+
+export interface DiskIOMetrics {
+  total_read_bytes_per_sec: number
+  total_write_bytes_per_sec: number
+  total_read_iops: number
+  total_write_iops: number
+  avg_await_ms: number
+  max_io_util_pct: number
+  devices: DiskIOStats[]
+}
+
 export interface NodeMetrics {
   node_id: string
   node_name: string
@@ -540,6 +563,13 @@ export interface NodeMetrics {
   network_rx_bytes: number
   network_tx_bytes: number
   network_interfaces?: NetworkInterface[]
+  disk_read_bytes_per_sec?: number
+  disk_write_bytes_per_sec?: number
+  disk_read_iops?: number
+  disk_write_iops?: number
+  disk_avg_await_ms?: number
+  disk_max_io_util_pct?: number
+  disk_devices?: DiskIOStats[]
   container_count: number
   running_count: number
   os?: string
@@ -1197,14 +1227,25 @@ export interface NodeHistoryResponse {
   incidents: Incident[]
 }
 
+function toIsoTime(val?: string): string | undefined {
+  if (!val) return undefined
+  try {
+    const d = new Date(val)
+    if (!isNaN(d.getTime())) return d.toISOString()
+  } catch {}
+  return val
+}
+
 export const nodeHistoryApi = {
   async getNodeHistory(nodeId: string, range = '24h', from?: string, to?: string): Promise<NodeHistoryResponse> {
+    const isoFrom = toIsoTime(from) || from
+    const isoTo = toIsoTime(to) || to
     let url = `/overview/nodes/${encodeURIComponent(nodeId)}/history?range=${encodeURIComponent(range)}`
-    if (from) {
-      url += `&from=${encodeURIComponent(from)}`
+    if (isoFrom) {
+      url += `&from=${encodeURIComponent(isoFrom)}`
     }
-    if (to) {
-      url += `&to=${encodeURIComponent(to)}`
+    if (isoTo) {
+      url += `&to=${encodeURIComponent(isoTo)}`
     }
     const res = await api.get<NodeHistoryResponse | { data: NodeHistoryResponse }>(url)
     if (res && typeof res === 'object' && 'data' in res && (res as any).data && Array.isArray((res as any).data.history)) {

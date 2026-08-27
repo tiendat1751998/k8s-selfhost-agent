@@ -1457,4 +1457,141 @@ function formatTime(d?: string) {
   font-size: 12px;
   color: #fbbf24;
 }
+
+/* Responsive Overhaul for Mobile & Tablets */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  :deep(.metric-card),
+  .metric-card,
+  .stat-card,
+  .hud-card {
+    padding: 10px 12px !important;
+  }
+
+  .split-pane-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .filter-controls {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .search-mini,
+  .select-mini {
+    width: 100%;
+  }
+
+  .incident-list {
+    max-height: 380px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .sim-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .sim-card-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .sim-action-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .header-actions .btn,
+  .header-actions button,
+  .header-actions a {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+    justify-content: center !important;
+  }
+
+  .metrics-grid,
+  .grid-metrics,
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  :deep(.metric-card),
+  .metric-card,
+  .stat-card,
+  .hud-card {
+    padding: 10px 12px !important;
+  }
+
+  .card-item-top,
+  .card-item-mid,
+  .card-item-bot {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .left-pane,
+  .right-pane {
+    border-radius: 12px;
+  }
+
+  .pane-header {
+    padding: 12px;
+  }
+
+  .incident-card-item {
+    padding: 12px;
+  }
+}
 </style>

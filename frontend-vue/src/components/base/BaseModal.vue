@@ -70,4 +70,21 @@ defineEmits<{
 .panel-body {
   padding: var(--space-lg);
 }
+
+@media (max-width: 640px) {
+  .modal-content {
+    width: calc(100vw - 20px);
+    max-width: 100%;
+    margin: 10px;
+    border-radius: var(--rounded-lg);
+  }
+
+  .panel-header {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .panel-body {
+    padding: var(--space-md);
+  }
+}
 </style>

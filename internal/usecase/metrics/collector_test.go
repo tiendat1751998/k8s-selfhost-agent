@@ -2138,6 +2138,155 @@ func TestCollector_ScrapeAgent_NormalizationAndTopProcessesFallback(t *testing.T
 	}
 }
 
+func TestCollector_ScrapeAgent_DiskIO(t *testing.T) {
+	agentResp := map[string]interface{}{
+		"hostname":       "worker-disk-io",
+		"os":             "linux",
+		"arch":           "amd64",
+		"os_distro":      "Ubuntu 22.04 LTS",
+		"kernel_version": "5.15.0-generic",
+		"uptime_seconds": 12345,
+		"load_average":   [3]float64{0.5, 0.4, 0.3},
+		"cpu": map[string]interface{}{
+			"count":         4,
+			"usage_percent": 25.5,
+		},
+		"memory": map[string]interface{}{
+			"total_bytes":     16000000000,
+			"used_bytes":      8000000000,
+			"available_bytes": 8000000000,
+			"usage_percent":   50.0,
+		},
+		"disks": []map[string]interface{}{
+			{
+				"mount_point":   "/",
+				"total_bytes":   100000000000,
+				"used_bytes":    40000000000,
+				"usage_percent": 40.0,
+				"filesystem":    "ext4",
+			},
+		},
+		"disk_io": DiskIOMetrics{
+			TotalReadBytesPerSec:  3072000,
+			TotalWriteBytesPerSec: 1536000,
+			TotalReadIOPS:         300.0,
+			TotalWriteIOPS:        150.0,
+			AvgAwaitMs:            3.0,
+			MaxIoUtilizationPct:   60.0,
+			Devices: []DiskIOStats{
+				{
+					DeviceName:        "sda",
+					ReadBytesPerSec:   1024000,
+					WriteBytesPerSec:  512000,
+					ReadIOPS:          100.0,
+					WriteIOPS:         50.0,
+					AvgWaitMs:         5.0,
+					AvgRequestSizeKB:  10.0,
+					CurrentQueueDepth: 5,
+					IoUtilizationPct:  40.0,
+					IsRootDevice:      true,
+				},
+				{
+					DeviceName:        "nvme0n1",
+					ReadBytesPerSec:   2048000,
+					WriteBytesPerSec:  1024000,
+					ReadIOPS:          200.0,
+					WriteIOPS:         100.0,
+					AvgWaitMs:         2.0,
+					AvgRequestSizeKB:  10.0,
+					CurrentQueueDepth: 1,
+					IoUtilizationPct:  60.0,
+					IsRootDevice:      true,
+				},
+			},
+		},
+		"network": map[string]interface{}{
+			"interfaces": []map[string]interface{}{
+				{
+					"name":              "eth0",
+					"rx_bytes_per_sec": 1024,
+					"tx_bytes_per_sec": 2048,
+				},
+			},
+			"total_rx_bytes_per_sec": 1024,
+			"total_tx_bytes_per_sec": 2048,
+		},
+		"processes":     100,
+		"top_processes": []ProcessMetric{},
+		"collected_at":  time.Now().UTC(),
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(agentResp)
+	}))
+	defer server.Close()
+
+	collector := NewCollector(nil, nil, nil, zap.NewNop(), WithHTTPClient(server.Client()))
+
+	host := docker.ComputeHost{
+		ID:       "host-disk-1",
+		Name:     "worker-disk-io",
+		Endpoint: server.URL,
+	}
+
+	collector.ScrapeAgent(context.Background(), host)
+
+	agentMap := collector.GetAgentMetrics()
+	am, ok := agentMap["host-disk-1"]
+	if !ok {
+		t.Fatalf("agent metrics not found for host-disk-1")
+	}
+	if am.DiskIO.TotalReadBytesPerSec != 3072000 {
+		t.Errorf("expected TotalReadBytesPerSec 3072000, got %d", am.DiskIO.TotalReadBytesPerSec)
+	}
+	if am.DiskIO.TotalWriteBytesPerSec != 1536000 {
+		t.Errorf("expected TotalWriteBytesPerSec 1536000, got %d", am.DiskIO.TotalWriteBytesPerSec)
+	}
+	if len(am.DiskIO.Devices) != 2 {
+		t.Fatalf("expected 2 devices in DiskIO, got %d", len(am.DiskIO.Devices))
+	}
+
+	overview, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("CollectOnce failed: %v", err)
+	}
+	if len(overview.Nodes) != 1 {
+		t.Fatalf("expected 1 node in overview, got %d", len(overview.Nodes))
+	}
+
+	node := overview.Nodes[0]
+	if node.DiskReadBytesPerSec != 3072000 {
+		t.Errorf("expected node DiskReadBytesPerSec 3072000, got %d", node.DiskReadBytesPerSec)
+	}
+	if node.DiskWriteBytesPerSec != 1536000 {
+		t.Errorf("expected node DiskWriteBytesPerSec 1536000, got %d", node.DiskWriteBytesPerSec)
+	}
+	if node.DiskReadIOPS != 300.0 {
+		t.Errorf("expected node DiskReadIOPS 300.0, got %f", node.DiskReadIOPS)
+	}
+	if node.DiskWriteIOPS != 150.0 {
+		t.Errorf("expected node DiskWriteIOPS 150.0, got %f", node.DiskWriteIOPS)
+	}
+	if node.DiskAvgAwaitMs != 3.0 {
+		t.Errorf("expected node DiskAvgAwaitMs 3.0, got %f", node.DiskAvgAwaitMs)
+	}
+	if node.DiskMaxIoUtilPct != 60.0 {
+		t.Errorf("expected node DiskMaxIoUtilPct 60.0, got %f", node.DiskMaxIoUtilPct)
+	}
+	if len(node.DiskDevices) != 2 {
+		t.Fatalf("expected 2 disk devices in node, got %d", len(node.DiskDevices))
+	}
+
+	if overview.TotalDiskReadBytesPerSec != 3072000 {
+		t.Errorf("expected overview TotalDiskReadBytesPerSec 3072000, got %d", overview.TotalDiskReadBytesPerSec)
+	}
+	if overview.TotalDiskWriteBytesPerSec != 1536000 {
+		t.Errorf("expected overview TotalDiskWriteBytesPerSec 1536000, got %d", overview.TotalDiskWriteBytesPerSec)
+	}
+}
+
+
 
 
 

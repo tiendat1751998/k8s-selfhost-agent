@@ -257,3 +257,127 @@ func TestNodeMetricsRepo_QueryHistory_24h_1440Points(t *testing.T) {
 		}
 	}
 }
+
+func TestNodeMetricsRepo_QueryHistory_1h_DynamicAggregation(t *testing.T) {
+	pool := getNodeMetricsTestPool(t)
+	defer pool.Close()
+
+	repo := postgres.NewNodeMetricsRepo(pool)
+	ctx := context.Background()
+	testNodeID := "test-node-1h-" + uuid.NewString()[:8]
+
+	now := time.Now().UTC().Truncate(time.Hour)
+	var samples []nodemetrics.NodeMetricRollup
+
+	// Insert 1m samples spanning 72 hours (3 days), with 2 samples per hour
+	// For each hour h in 0..71:
+	// Sample 1 at hour + 10m (CPU 20.0, Peak 40.0)
+	// Sample 2 at hour + 40m (CPU 40.0, Peak 60.0)
+	// Expected aggregated 1h bucket: AVG(CPU) = 30.0, MAX(Peak) = 60.0, Resolution = "1h"
+	totalHours := 72
+	for h := totalHours - 1; h >= 0; h-- {
+		baseHour := now.Add(-time.Duration(h) * time.Hour)
+		samples = append(samples,
+			nodemetrics.NodeMetricRollup{
+				NodeID:         testNodeID,
+				NodeName:       "Test 1h Master",
+				CPUPercent:     20.0,
+				CPUPeak:        40.0,
+				MemUsedBytes:   4 * 1024 * 1024 * 1024,
+				MemTotalBytes:  16 * 1024 * 1024 * 1024,
+				MemPercent:     25.0,
+				DiskUsedBytes:  50 * 1024 * 1024 * 1024,
+				DiskTotalBytes: 200 * 1024 * 1024 * 1024,
+				DiskPercent:    25.0,
+				RxBytesPerSec:  1000000,
+				TxBytesPerSec:  500000,
+				ProcessCount:   100,
+				ContainerCount: 10,
+				Status:         "online",
+				Resolution:     "1m",
+				RecordedAt:     baseHour.Add(10 * time.Minute),
+			},
+			nodemetrics.NodeMetricRollup{
+				NodeID:         testNodeID,
+				NodeName:       "Test 1h Master",
+				CPUPercent:     40.0,
+				CPUPeak:        60.0,
+				MemUsedBytes:   8 * 1024 * 1024 * 1024,
+				MemTotalBytes:  16 * 1024 * 1024 * 1024,
+				MemPercent:     50.0,
+				DiskUsedBytes:  50 * 1024 * 1024 * 1024,
+				DiskTotalBytes: 200 * 1024 * 1024 * 1024,
+				DiskPercent:    25.0,
+				RxBytesPerSec:  2000000,
+				TxBytesPerSec:  1000000,
+				ProcessCount:   200,
+				ContainerCount: 20,
+				Status:         "online",
+				Resolution:     "1m",
+				RecordedAt:     baseHour.Add(40 * time.Minute),
+			},
+		)
+	}
+
+	batchSize := 50
+	for i := 0; i < len(samples); i += batchSize {
+		end := i + batchSize
+		if end > len(samples) {
+			end = len(samples)
+		}
+		if err := repo.InsertBatch(ctx, samples[i:end]); err != nil {
+			t.Fatalf("InsertBatch failed at batch %d: %v", i, err)
+		}
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM node_metric_rollups WHERE node_id = $1", testNodeID)
+	}()
+
+	// Query with resolution "1h" over 72h window
+	history1h, err := repo.QueryHistory(ctx, nodemetrics.NodeHistoryQuery{
+		NodeID:     testNodeID,
+		Resolution: "1h",
+		StartTime:  now.Add(-time.Duration(totalHours) * time.Hour),
+		EndTime:    now.Add(1 * time.Hour),
+		Limit:      500,
+	})
+	if err != nil {
+		t.Fatalf("QueryHistory with resolution=1h failed: %v", err)
+	}
+
+	if len(history1h) != totalHours {
+		t.Fatalf("expected %d hourly aggregated points, got %d", totalHours, len(history1h))
+	}
+
+	// Verify the aggregated metrics for the hourly buckets
+	for i, point := range history1h {
+		if point.Resolution != "1h" {
+			t.Errorf("point %d: expected resolution '1h', got '%s'", i, point.Resolution)
+		}
+		if point.CPUPercent < 29.9 || point.CPUPercent > 30.1 {
+			t.Errorf("point %d: expected AVG(cpu_percent) ~ 30.0, got %f", i, point.CPUPercent)
+		}
+		if point.CPUPeak < 59.9 || point.CPUPeak > 60.1 {
+			t.Errorf("point %d: expected MAX(cpu_peak) ~ 60.0, got %f", i, point.CPUPeak)
+		}
+		if point.MemPercent < 37.4 || point.MemPercent > 37.6 {
+			t.Errorf("point %d: expected AVG(mem_percent) ~ 37.5, got %f", i, point.MemPercent)
+		}
+		if point.ProcessCount != 150 {
+			t.Errorf("point %d: expected AVG(process_count) = 150, got %d", i, point.ProcessCount)
+		}
+		if point.ContainerCount != 15 {
+			t.Errorf("point %d: expected AVG(container_count) = 15, got %d", i, point.ContainerCount)
+		}
+		if point.ID == "" {
+			t.Errorf("point %d: expected non-empty generated ID", i)
+		}
+		if point.NodeID != testNodeID {
+			t.Errorf("point %d: expected node_id '%s', got '%s'", i, testNodeID, point.NodeID)
+		}
+		if i > 0 && point.RecordedAt.Before(history1h[i-1].RecordedAt) {
+			t.Errorf("point %d (%v) is before point %d (%v)", i, point.RecordedAt, i-1, history1h[i-1].RecordedAt)
+		}
+	}
+}

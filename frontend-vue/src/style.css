@@ -1,4 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import './assets/css/tokens.css';
+@import './assets/css/base.css';
 
 :root {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -37,12 +39,25 @@
   --grad-indigo: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
   --grad-emerald: linear-gradient(135deg, #10b981 0%, #059669 100%);
   --grad-card: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+
+  /* Safe Area Insets for Mobile / PWA Notch & Home Bar */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+
+  /* Fluid Responsive Typography Scale */
+  --text-title-fluid: clamp(18px, 4.5vw, 24px);
+  --text-desc-fluid: clamp(11.5px, 2.5vw, 13px);
+  --text-tag-fluid: clamp(9.5px, 2vw, 11px);
+  --text-number-fluid: clamp(20px, 5vw, 28px);
 }
 
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
@@ -87,6 +102,49 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 700;
   letter-spacing: -0.025em;
   color: var(--text-primary);
+}
+
+/* Standard View Headers & Responsive Typography */
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.view-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-tag-fluid, 11px);
+  font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.view-title {
+  font-size: var(--text-title-fluid, 24px);
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.view-desc {
+  font-size: var(--text-desc-fluid, 13px);
+  color: var(--text-secondary);
+  max-width: 820px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 /* Glassmorphic Components */
@@ -181,6 +239,11 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 10px #f59e0b;
 }
 
+.pulse-dot-rose {
+  background-color: #f43f5e;
+  box-shadow: 0 0 10px #f43f5e;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -267,11 +330,67 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
+/* Mobile & Touch Target Improvements */
 @media (max-width: 768px) {
   .data-table,
   .base-table {
-    min-width: 600px;
+    min-width: 540px;
+  }
+
+  /* Improve touch targets on mobile devices */
+  button,
+  .btn,
+  .nav-item,
+  a {
+    touch-action: manipulation;
   }
 }
+
+/* Standalone PWA adjustments */
+@media (display-mode: standalone) {
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+/* Compact Mobile View Headers & Fluid Typography */
+@media (max-width: 640px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .view-title {
+    font-size: var(--text-title-fluid, clamp(18px, 4.5vw, 22px));
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+
+  .view-desc {
+    font-size: var(--text-desc-fluid, 12px);
+    line-height: 1.45;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .view-tag {
+    font-size: var(--text-tag-fluid, 10px);
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+

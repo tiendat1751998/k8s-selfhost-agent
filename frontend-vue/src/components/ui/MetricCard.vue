@@ -89,6 +89,7 @@ defineProps<{
   letter-spacing: -0.03em;
   color: var(--text-primary);
   font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
 }
 
 .metric-trend {
@@ -105,5 +106,28 @@ defineProps<{
   color: var(--text-muted);
   border-top: 1px solid var(--border-subtle);
   padding-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .metric-card {
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .metric-title {
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .metric-value {
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric-footer {
+    font-size: 10px;
+    padding-top: 6px;
+  }
 }
 </style>

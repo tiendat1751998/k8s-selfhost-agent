@@ -326,4 +326,33 @@ td {
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
+
+@media (max-width: 640px) {
+  .table-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .table-search {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .table-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  th,
+  td {
+    padding: 8px 10px;
+    font-size: 11.5px;
+  }
+
+  .data-table {
+    min-width: 480px;
+  }
+}
 </style>
