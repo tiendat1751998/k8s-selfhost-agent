@@ -340,6 +340,18 @@ function openLogsInspector(app: DeploymentApp) {
   openInspector(app, 'logs')
 }
 
+function openYamlViewer() {
+  if (selectedApp.value) {
+    openInspector(selectedApp.value, 'yaml')
+  } else if (filteredDeployments.value.length > 0) {
+    openInspector(filteredDeployments.value[0], 'yaml')
+  } else if (deployments.value.length > 0) {
+    openInspector(deployments.value[0], 'yaml')
+  } else {
+    showCreateModal.value = true
+  }
+}
+
 function switchInspectorTab(tab: 'overview' | 'strategy' | 'network' | 'logs' | 'env' | 'yaml') {
   inspectorActiveTab.value = tab
   if (tab === 'logs' && selectedApp.value) {
@@ -1019,22 +1031,31 @@ function copyToClipboard(text: string) {
           <span class="pulse-dot pulse-dot-cyan"></span>
           <span>COMPUTE & FLEET ORCHESTRATION</span>
         </div>
-        <h1 class="view-title">Deployments & App Workload Catalog</h1>
+        <h1 class="view-title">
+          <span class="title-full">Deployments & App Workload Catalog</span>
+          <span class="title-compact">🚀 Deployments</span>
+        </h1>
         <p class="view-desc">
           Unified production orchestrator for Kubernetes Deployments & Docker Swarm services with full Canary traffic splits, Blue-Green zero-downtime cutovers, dynamic replica autoscaling, and rolling restarts.
         </p>
       </div>
 
       <div class="header-actions">
-        <button class="btn btn-secondary" @click="showTemplatesDrawer = true">
-          <span>📚 Blueprint Catalog</span>
-        </button>
         <button class="btn btn-secondary" :disabled="loading" @click="fetchDeployments">
-          <span :class="{ 'spin-icon': loading }">🔄</span>
-          <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
+          <span class="btn-text-full"><span :class="{ 'spin-icon': loading }">🔄</span> {{ loading ? 'Syncing...' : 'Refresh' }}</span>
+          <span class="btn-text-mobile">{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
         </button>
         <button class="btn btn-primary" @click="showCreateModal = true">
-          <span>+ Deploy Workload</span>
+          <span class="btn-text-full">+ Deploy Workload</span>
+          <span class="btn-text-mobile">+ Deploy</span>
+        </button>
+        <button class="btn btn-secondary" @click="openYamlViewer">
+          <span class="btn-text-full">📝 YAML Manifest</span>
+          <span class="btn-text-mobile">📝 YAML</span>
+        </button>
+        <button class="btn btn-secondary" @click="showTemplatesDrawer = true">
+          <span class="btn-text-full">📦 Blueprint Catalog</span>
+          <span class="btn-text-mobile">📦 Template</span>
         </button>
       </div>
     </div>
@@ -1102,7 +1123,8 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'all' }"
             @click="activeFilterTab = 'all'"
           >
-            <span>🌐 All Workloads</span>
+            <span class="btn-text-full">🌐 All Workloads</span>
+            <span class="btn-text-mobile">All</span>
             <span class="pill-badge">{{ totalWorkloads }}</span>
           </button>
           <button 
@@ -1110,7 +1132,8 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'canary' }"
             @click="activeFilterTab = 'canary'"
           >
-            <span>🐥 Canary Rollouts</span>
+            <span class="btn-text-full">🐥 Canary Rollouts</span>
+            <span class="btn-text-mobile">Canary</span>
             <span class="pill-badge">{{ canaryCount }}</span>
           </button>
           <button 
@@ -1118,7 +1141,8 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'bluegreen' }"
             @click="activeFilterTab = 'bluegreen'"
           >
-            <span>🔄 Blue-Green</span>
+            <span class="btn-text-full">🔄 Blue-Green</span>
+            <span class="btn-text-mobile">B/G</span>
             <span class="pill-badge">{{ blueGreenCount }}</span>
           </button>
           <button 
@@ -1126,7 +1150,8 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'k8s' }"
             @click="activeFilterTab = 'k8s'"
           >
-            <span>☸️ Kubernetes</span>
+            <span class="btn-text-full">☸️ Kubernetes</span>
+            <span class="btn-text-mobile">K8s</span>
             <span class="pill-badge">{{ k8sCount }}</span>
           </button>
           <button 
@@ -1134,7 +1159,8 @@ function copyToClipboard(text: string) {
             :class="{ 'pill-active': activeFilterTab === 'swarm' }"
             @click="activeFilterTab = 'swarm'"
           >
-            <span>🐳 Docker / Swarm</span>
+            <span class="btn-text-full">🐳 Docker / Swarm</span>
+            <span class="btn-text-mobile">Swarm</span>
             <span class="pill-badge">{{ swarmCount }}</span>
           </button>
         </div>
@@ -2343,6 +2369,25 @@ function copyToClipboard(text: string) {
   color: #fff;
   letter-spacing: -0.02em;
   line-height: 1.25;
+}
+
+.title-full {
+  display: inline;
+}
+
+.title-compact,
+.title-mobile {
+  display: none;
+}
+
+.btn-text-full {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-text-mobile {
+  display: none;
 }
 
 .view-desc {
@@ -3936,29 +3981,34 @@ function copyToClipboard(text: string) {
 }
 
 @media (max-width: 640px) {
-  .view-container {
-    gap: 16px;
+  .title-full {
+    display: none !important;
+  }
+
+  .title-compact,
+  .title-mobile {
+    display: inline !important;
   }
 
   .view-tag {
-    font-size: var(--text-tag-fluid, 10px);
-    letter-spacing: 0.05em;
-    font-weight: 700;
-    margin-bottom: 4px;
-  }
-
-  .view-title {
-    font-size: var(--text-title-fluid, clamp(18px, 4.5vw, 22px));
-    font-weight: 700;
-    line-height: 1.25;
-    letter-spacing: -0.02em;
+    display: none !important;
   }
 
   .view-desc {
-    font-size: var(--text-desc-fluid, 12px);
-    line-height: 1.45;
-    color: var(--text-muted);
-    margin-top: 4px;
+    display: none !important;
+  }
+
+  .view-title {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+  }
+
+  .view-header {
+    gap: 10px !important;
+    margin-bottom: 12px !important;
   }
 
   .header-actions {
@@ -3974,14 +4024,20 @@ function copyToClipboard(text: string) {
   .header-actions a {
     flex: 1 1 calc(50% - 4px) !important;
     min-width: 0 !important;
-    padding: 7px 10px !important;
+    padding: 7px 8px !important;
     font-size: 11.5px !important;
     white-space: nowrap !important;
     justify-content: center !important;
   }
 
-  .header-actions > :last-child:nth-child(odd) {
-    flex: 1 1 100% !important;
+  .btn-text-full {
+    display: none !important;
+  }
+
+  .btn-text-mobile {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
   }
 
   .metrics-grid,
@@ -3991,13 +4047,82 @@ function copyToClipboard(text: string) {
   .swarm-meta-grid {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 8px !important;
+    margin-bottom: 12px !important;
   }
 
   .metric-card,
   .stat-card,
   .hud-card,
   :deep(.metric-card) {
-    padding: 10px 12px !important;
+    padding: 8px 10px !important;
+    min-height: auto !important;
+    border-radius: 10px !important;
+  }
+
+  :deep(.metric-card .metric-subtitle),
+  :deep(.metric-card .metric-desc),
+  :deep(.metric-card .metric-footer),
+  :deep(.metric-card .metric-trend) {
+    display: none !important;
+  }
+
+  :deep(.metric-card .metric-value),
+  .metric-card .metric-value {
+    font-size: 18px !important;
+  }
+
+  :deep(.metric-card .metric-title),
+  .metric-card .metric-title {
+    font-size: 10px !important;
+  }
+
+  :deep(.metric-card .metric-badge),
+  .metric-card .metric-badge {
+    display: none !important;
+  }
+
+  :deep(.metric-card .metric-header),
+  .metric-card .metric-header {
+    gap: 4px !important;
+  }
+
+  .table-controls-bar {
+    padding: 10px !important;
+    gap: 10px !important;
+  }
+
+  .filter-pills-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    -webkit-overflow-scrolling: touch !important;
+    gap: 6px !important;
+    padding-bottom: 4px !important;
+    width: 100% !important;
+  }
+
+  .filter-pills-row::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .filter-pills-row .pill-btn {
+    flex-shrink: 0 !important;
+    font-size: 11.5px !important;
+    padding: 5px 8px !important;
+    gap: 5px !important;
+  }
+
+  .pill-badge {
+    font-size: 10px !important;
+    padding: 1px 5px !important;
+  }
+
+  .view-container {
+    gap: 14px !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
   }
 
   .strategy-type-selector {

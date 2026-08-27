@@ -1,5 +1,5 @@
 // Package main is a standalone development server for the K8S Self-Healing dashboard.
-// It runs with PostgreSQL but WITHOUT Redis or NATS — perfect for frontend development.
+// It runs with PostgreSQL but WITHOUT Redis or NATS â€” perfect for frontend development.
 // Usage: go run ./cmd/standalone
 package main
 
@@ -81,7 +81,7 @@ func run() error {
 	defer logger.Sync()
 	log := logger.Get()
 
-	log.Info("🚀 Starting K8S Control Plane (standalone mode)",
+	log.Info("ðŸš€ Starting K8S Control Plane (standalone mode)",
 		zap.String("version", "0.1.0"),
 		zap.String("mode", "standalone-enterprise"),
 	)
@@ -301,6 +301,8 @@ func run() error {
 	var healthCenterHandler *adapthttp.HealthCenterHandler
 	var deploymentsHandler *adapthttp.DeploymentHandler
 	var k8sHandler *adapthttp.K8sResourceHandler
+	var k8sExecHandler *adapthttp.K8sExecHandler
+	var k8sLogsHandler *adapthttp.K8sLogsHandler
 
 	deploymentsHandler = adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
 	explorerHandler = adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
@@ -308,8 +310,12 @@ func run() error {
 	if k8sAvailable {
 		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager))
 		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(k8sClient, clientManager), auditRepo)
+		k8sExecHandler = adapthttp.NewK8sExecHandler(k8sClient, clientManager)
+		k8sLogsHandler = adapthttp.NewK8sLogsHandler(k8sClient, clientManager)
 	} else {
 		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(nil, clientManager), auditRepo)
+		k8sExecHandler = adapthttp.NewK8sExecHandler(nil, clientManager)
+		k8sLogsHandler = adapthttp.NewK8sLogsHandler(nil, clientManager)
 	}
 
 	discoveryAdapter := infraK8s.NewDiscoveryAdapter()
@@ -445,6 +451,8 @@ func run() error {
 		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
 		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
 		K8s:           k8sHandler,
+		K8sExec:       k8sExecHandler,
+		K8sLogs:       k8sLogsHandler,
 		Cloud:         cloudHandler,
 		Settings:      settingsHandler,
 		Catalog:       catalogHandler,
@@ -468,8 +476,8 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("✅ Dashboard available at http://localhost" + addr)
-		log.Info("📡 WebSocket endpoint: ws://localhost" + addr + "/ws")
+		log.Info("âœ… Dashboard available at http://localhost" + addr)
+		log.Info("ðŸ“¡ WebSocket endpoint: ws://localhost" + addr + "/ws")
 		if listenErr := srv.ListenAndServe(); listenErr != nil && listenErr != http.ErrServerClosed {
 			errCh <- fmt.Errorf("HTTP server error: %w", listenErr)
 		}
