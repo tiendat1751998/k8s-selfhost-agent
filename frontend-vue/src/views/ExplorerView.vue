@@ -19,7 +19,6 @@ import {
   type NodeTaint,
   type NodeCondition,
   type NodeSystemInfo,
-  type K8sEvent
 } from '../api/k8s'
 import { fleetApi, type Cluster } from '../api/compute'
 import { jsonToYaml } from '../utils/yaml'
@@ -56,6 +55,18 @@ const selectedResource = ref<K8sResource | null>(null)
 const activeDrawerTab = ref<'overview' | 'events' | 'yaml'>('overview')
 const drawerYamlCopied = ref(false)
 
+// Workload Action: Scale Modal State
+const showScaleModal = ref(false)
+const scaleTarget = ref<K8sResource | null>(null)
+const scaleReplicasCount = ref(1)
+const scalingResource = ref(false)
+
+// ConfigMap KV Editor in Detail Drawer State
+const configMapDataCopy = ref<Record<string, string>>({})
+const newCmKey = ref('')
+const newCmValue = ref('')
+const savingConfigMap = ref(false)
+
 // New Namespace Modal State
 const showNewNsModal = ref(false)
 const newNsName = ref('')
@@ -74,6 +85,30 @@ const terminalPod = ref<K8sResource | null>(null)
 const logsPod = ref<K8sResource | null>(null)
 const selectedPodContainer = ref<string>('')
 
+// Node Management State
+const showDrainModal = ref(false)
+const drainTargetNode = ref<K8sResource | null>(null)
+const drainOptions = ref({
+  gracePeriodSeconds: 30,
+  ignoreDaemonSets: true,
+  deleteEmptyDirData: false,
+  force: false,
+})
+const drainingNode = ref(false)
+const operatingNode = ref(false)
+
+// Taint Management State in Node Drawer
+const newTaintKey = ref('')
+const newTaintValue = ref('')
+const newTaintEffect = ref<'NoSchedule' | 'PreferNoSchedule' | 'NoExecute'>('NoSchedule')
+const updatingTaints = ref(false)
+
+// Node Labels Management State in Node Drawer
+const nodeLabelsCopy = ref<Record<string, string>>({})
+const newLabelKey = ref('')
+const newLabelValue = ref('')
+const updatingLabels = ref(false)
+
 // Resource Kind Tree Definition
 interface KindCategory {
   title: string
@@ -83,10 +118,12 @@ interface KindCategory {
 
 const kindCategories: KindCategory[] = [
   {
-    title: 'Cluster / Infrastructure',
+    title: 'Cluster',
     icon: '🖥️',
     items: [
       { label: 'Nodes', kind: 'nodes', icon: '🖥️' },
+      { label: 'PersistentVolumes', kind: 'persistentvolumes', icon: '💿' },
+      { label: 'StorageClasses', kind: 'storageclasses', icon: '🏷️' },
     ],
   },
   {
@@ -108,15 +145,17 @@ const kindCategories: KindCategory[] = [
       { label: 'ConfigMaps', kind: 'configmaps', icon: '🗺️' },
       { label: 'Secrets', kind: 'secrets', icon: '🔒' },
       { label: 'PersistentVolumeClaims', kind: 'persistentvolumeclaims', icon: '💾' },
-      { label: 'StorageClasses', kind: 'storageclasses', icon: '🏷️' },
+      { label: 'HorizontalPodAutoscalers', kind: 'horizontalpodautoscalers', icon: '📈' },
     ],
   },
   {
-    title: 'Networking',
+    title: 'Networking & Security',
     icon: '🌐',
     items: [
       { label: 'Services', kind: 'services', icon: '🔌' },
       { label: 'Ingresses', kind: 'ingresses', icon: '🌐' },
+      { label: 'NetworkPolicies', kind: 'networkpolicies', icon: '🛡️' },
+      { label: 'ServiceAccounts', kind: 'serviceaccounts', icon: '👤' },
     ],
   },
   {
@@ -239,97 +278,7 @@ async function loadNamespaces() {
   }
 }
 
-const fallbackNodes: K8sResource[] = [
-  {
-    apiVersion: 'v1',
-    kind: 'Node',
-    metadata: {
-      name: 'k8smasterdeb',
-      uid: 'node-k8smasterdeb-01',
-      creationTimestamp: '2026-08-20T08:00:00Z',
-      labels: {
-        'kubernetes.io/hostname': 'k8smasterdeb',
-        'kubernetes.io/os': 'linux',
-        'kubernetes.io/arch': 'amd64',
-        'node-role.kubernetes.io/control-plane': '',
-        'node.kubernetes.io/instance-type': 'baremetal',
-      },
-      annotations: {
-        'node.alpha.kubernetes.io/ttl': '0',
-      },
-    },
-    spec: {
-      podCIDR: '10.244.0.0/24',
-      taints: [
-        {
-          key: 'node-role.kubernetes.io/control-plane',
-          effect: 'NoSchedule',
-        },
-      ],
-    },
-    status: {
-      nodeInfo: {
-        kubeletVersion: 'v1.35.8',
-        kernelVersion: '6.1.0-28-amd64',
-        osImage: 'Debian GNU/Linux 12 (bookworm)',
-        containerRuntimeVersion: 'containerd://1.7.25',
-        architecture: 'amd64',
-        operatingSystem: 'linux',
-      },
-      addresses: [
-        { type: 'InternalIP', address: '10.10.10.60' },
-        { type: 'Hostname', address: 'k8smasterdeb' },
-      ],
-      conditions: [
-        { type: 'Ready', status: 'True', reason: 'KubeletReady', message: 'kubelet is posting ready status' },
-        { type: 'MemoryPressure', status: 'False', reason: 'KubeletHasSufficientMemory', message: 'kubelet has sufficient memory' },
-        { type: 'DiskPressure', status: 'False', reason: 'KubeletHasNoDiskPressure', message: 'kubelet has no disk pressure' },
-        { type: 'PIDPressure', status: 'False', reason: 'KubeletHasSufficientPID', message: 'kubelet has sufficient PID' },
-        { type: 'NetworkUnavailable', status: 'False', reason: 'CiliumIsUp', message: 'Cilium eBPF agent running' },
-      ],
-    },
-  },
-  {
-    apiVersion: 'v1',
-    kind: 'Node',
-    metadata: {
-      name: 'k8smaster',
-      uid: 'node-k8smaster-02',
-      creationTimestamp: '2026-08-20T08:05:00Z',
-      labels: {
-        'kubernetes.io/hostname': 'k8smaster',
-        'kubernetes.io/os': 'linux',
-        'kubernetes.io/arch': 'amd64',
-        'node-role.kubernetes.io/worker': '',
-        'node.kubernetes.io/instance-type': 'compute-standard',
-      },
-    },
-    spec: {
-      podCIDR: '10.244.1.0/24',
-    },
-    status: {
-      nodeInfo: {
-        kubeletVersion: 'v1.35.8',
-        kernelVersion: '6.1.0-28-amd64',
-        osImage: 'Debian GNU/Linux 12 (bookworm)',
-        containerRuntimeVersion: 'containerd://1.7.25',
-        architecture: 'amd64',
-        operatingSystem: 'linux',
-      },
-      addresses: [
-        { type: 'InternalIP', address: '10.10.10.61' },
-        { type: 'Hostname', address: 'k8smaster' },
-      ],
-      conditions: [
-        { type: 'Ready', status: 'True', reason: 'KubeletReady', message: 'kubelet is posting ready status' },
-        { type: 'MemoryPressure', status: 'False', reason: 'KubeletHasSufficientMemory', message: 'kubelet has sufficient memory' },
-        { type: 'DiskPressure', status: 'False', reason: 'KubeletHasNoDiskPressure', message: 'kubelet has no disk pressure' },
-      ],
-    },
-  },
-]
-
-// Fetch Resources
+// Fetch Resources (ZERO MOCK FALLBACK DATA)
 async function fetchResources() {
   if (!selectedCluster.value) {
     resources.value = []
@@ -343,19 +292,13 @@ async function fetchResources() {
   try {
     const ns = selectedNamespace.value !== 'all' ? selectedNamespace.value : undefined
     const list = await k8sApi.listResources(selectedCluster.value, selectedKind.value, ns)
-    if (Array.isArray(list) && list.length > 0) {
+    if (Array.isArray(list)) {
       resources.value = list
-    } else if (selectedKind.value === 'nodes') {
-      resources.value = fallbackNodes
     } else {
       resources.value = []
     }
   } catch (err: unknown) {
-    if (selectedKind.value === 'nodes') {
-      resources.value = fallbackNodes
-    } else {
-      resources.value = []
-    }
+    resources.value = []
     clusterOffline.value = true
     const msg = err instanceof Error ? err.message : 'Failed to query Kubernetes cluster'
     offlineErrorMessage.value = msg
@@ -402,87 +345,175 @@ const currentKindLabel = computed(() => {
   return selectedKind.value
 })
 
+interface ContainerPort { name?: string; containerPort: number; protocol?: string; hostPort?: number }
+interface ContainerSpec { name: string; image?: string; ports?: ContainerPort[]; command?: string[]; args?: string[]; env?: { name: string; value?: string }[] }
+interface ContainerStateWaiting { reason?: string; message?: string }
+interface ContainerStateRunning { startedAt?: string }
+interface ContainerStateTerminated { exitCode?: number; reason?: string; message?: string; startedAt?: string; finishedAt?: string }
+interface ContainerState { waiting?: ContainerStateWaiting; running?: ContainerStateRunning; terminated?: ContainerStateTerminated }
+interface ContainerStatus { name: string; image?: string; imageID?: string; ready?: boolean; restartCount?: number; started?: boolean; state?: ContainerState; lastState?: ContainerState }
+// PodCondition interface
+interface MergedContainerInfo { name: string; image: string; ports: string; state: string; stateType: 'running' | 'waiting' | 'terminated' | 'unknown'; ready: boolean; restarts: number }
 
-// Pod TypeScript Interfaces
-interface ContainerPort {
-  name?: string
-  containerPort: number
-  protocol?: string
-  hostPort?: number
-}
-
-interface ContainerSpec {
-  name: string
-  image?: string
-  ports?: ContainerPort[]
-  command?: string[]
-  args?: string[]
-  env?: { name: string; value?: string }[]
-}
-
-interface ContainerStateWaiting {
-  reason?: string
-  message?: string
-}
-
-interface ContainerStateRunning {
-  startedAt?: string
-}
-
-interface ContainerStateTerminated {
-  exitCode?: number
-  reason?: string
-  message?: string
-  startedAt?: string
-  finishedAt?: string
-}
-
-interface ContainerState {
-  waiting?: ContainerStateWaiting
-  running?: ContainerStateRunning
-  terminated?: ContainerStateTerminated
-}
-
-interface ContainerStatus {
-  name: string
-  image?: string
-  imageID?: string
-  ready?: boolean
-  restartCount?: number
-  started?: boolean
-  state?: ContainerState
-  lastState?: ContainerState
-}
-
-interface PodCondition {
-  type: string
-  status: string
-  reason?: string
-  message?: string
-  lastProbeTime?: string | null
-  lastTransitionTime?: string
-}
-
-interface MergedContainerInfo {
-  name: string
-  image: string
-  ports: string
-  state: string
-  stateType: 'running' | 'waiting' | 'terminated' | 'unknown'
-  ready: boolean
-  restarts: number
-}
-
-// Table columns
 const podColumns: Column<K8sResource>[] = [
   { key: 'name', label: 'Name', sortable: true },
-  { key: 'namespace', label: 'Namespace', width: '150px', sortable: true },
-  { key: 'status', label: 'Status', width: '140px', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'status', label: 'Status', width: '130px', sortable: true },
   { key: 'ready', label: 'Ready', width: '90px', sortable: true },
   { key: 'restarts', label: 'Restarts', width: '90px', sortable: true },
-  { key: 'node', label: 'Node', width: '150px', sortable: true },
-  { key: 'age', label: 'Age', width: '110px', sortable: true },
+  { key: 'node', label: 'Node', width: '140px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
   { key: 'actions', label: 'Actions', width: '280px', align: 'right' },
+]
+
+const deploymentColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'replicas', label: 'Replicas (Ready/Desired)', width: '190px', sortable: true },
+  { key: 'image', label: 'Image', sortable: true },
+  { key: 'selector', label: 'Selector', width: '180px', sortable: false },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '260px', align: 'right' },
+]
+
+const statefulSetColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'replicas', label: 'Replicas (Ready/Desired)', width: '190px', sortable: true },
+  { key: 'image', label: 'Image', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '260px', align: 'right' },
+]
+
+const daemonSetColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'desired', label: 'Desired', width: '90px', sortable: true },
+  { key: 'current', label: 'Current', width: '90px', sortable: true },
+  { key: 'ready', label: 'Ready', width: '90px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '220px', align: 'right' },
+]
+
+const jobColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'completions', label: 'Completions', width: '130px', sortable: true },
+  { key: 'duration', label: 'Duration', width: '120px', sortable: true },
+  { key: 'status', label: 'Status', width: '130px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
+]
+
+const cronJobColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'schedule', label: 'Schedule', width: '140px', sortable: true },
+  { key: 'suspend', label: 'Suspend', width: '100px', sortable: true },
+  { key: 'active', label: 'Active', width: '90px', sortable: true },
+  { key: 'lastSchedule', label: 'Last Schedule', width: '130px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '280px', align: 'right' },
+]
+
+const serviceColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'type', label: 'Type', width: '130px', sortable: true },
+  { key: 'clusterIP', label: 'Cluster IP', width: '140px', sortable: true },
+  { key: 'externalIP', label: 'External IP', width: '140px', sortable: true },
+  { key: 'ports', label: 'Ports', width: '180px', sortable: false },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
+]
+
+const ingressColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'hosts', label: 'Hosts', width: '200px', sortable: true },
+  { key: 'paths', label: 'Paths', width: '160px', sortable: false },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
+]
+
+const configMapColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'keysCount', label: 'Keys Count', width: '110px', sortable: true },
+  { key: 'dataPreview', label: 'Data Preview', sortable: false },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '220px', align: 'right' },
+]
+
+const secretColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'type', label: 'Type', width: '160px', sortable: true },
+  { key: 'keysCount', label: 'Keys Count', width: '110px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '220px', align: 'right' },
+]
+
+const pvcColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'status', label: 'Status', width: '120px', sortable: true },
+  { key: 'capacity', label: 'Capacity', width: '110px', sortable: true },
+  { key: 'accessModes', label: 'Access Modes', width: '150px', sortable: true },
+  { key: 'storageClass', label: 'StorageClass', width: '140px', sortable: true },
+  { key: 'volume', label: 'Volume', width: '160px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
+]
+
+const pvColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'status', label: 'Status', width: '120px', sortable: true },
+  { key: 'capacity', label: 'Capacity', width: '110px', sortable: true },
+  { key: 'accessModes', label: 'Access Modes', width: '150px', sortable: true },
+  { key: 'reclaimPolicy', label: 'Reclaim Policy', width: '140px', sortable: true },
+  { key: 'storageClass', label: 'StorageClass', width: '140px', sortable: true },
+  { key: 'claim', label: 'Claim', width: '180px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
+]
+
+const storageClassColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'provisioner', label: 'Provisioner', sortable: true },
+  { key: 'reclaimPolicy', label: 'ReclaimPolicy', width: '140px', sortable: true },
+  { key: 'volumeBindingMode', label: 'VolumeBindingMode', width: '170px', sortable: true },
+  { key: 'defaultClass', label: 'Default', width: '90px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
+]
+
+const networkPolicyColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'podSelector', label: 'Pod Selector', width: '220px', sortable: true },
+  { key: 'policyTypes', label: 'Policy Types', width: '160px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
+]
+
+const serviceAccountColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'secretsCount', label: 'Secrets', width: '110px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
+]
+
+const hpaColumns: Column<K8sResource>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'namespace', label: 'Namespace', width: '140px', sortable: true },
+  { key: 'reference', label: 'Reference', width: '180px', sortable: true },
+  { key: 'targets', label: 'Targets', width: '150px', sortable: true },
+  { key: 'minMax', label: 'Min/Max', width: '110px', sortable: true },
+  { key: 'replicas', label: 'Replicas', width: '100px', sortable: true },
+  { key: 'age', label: 'Age', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 const nodeColumns: Column<K8sResource>[] = [
@@ -515,30 +546,56 @@ const standardColumns: Column<K8sResource>[] = [
 ]
 
 const columns = computed<Column<K8sResource>[]>(() => {
-  if (selectedKind.value === 'pods') return podColumns
-  if (selectedKind.value === 'nodes') return nodeColumns
-  if (selectedKind.value === 'events') return eventColumns
-  return standardColumns
+  switch (selectedKind.value) {
+    case 'pods': return podColumns
+    case 'deployments': return deploymentColumns
+    case 'statefulsets': return statefulSetColumns
+    case 'daemonsets': return daemonSetColumns
+    case 'jobs': return jobColumns
+    case 'cronjobs': return cronJobColumns
+    case 'services': return serviceColumns
+    case 'ingresses': return ingressColumns
+    case 'configmaps': return configMapColumns
+    case 'secrets': return secretColumns
+    case 'persistentvolumeclaims': return pvcColumns
+    case 'persistentvolumes': return pvColumns
+    case 'storageclasses': return storageClassColumns
+    case 'networkpolicies': return networkPolicyColumns
+    case 'serviceaccounts': return serviceAccountColumns
+    case 'horizontalpodautoscalers': return hpaColumns
+    case 'nodes': return nodeColumns
+    case 'events': return eventColumns
+    default: return standardColumns
+  }
 })
 
-// Pod Helpers
+function formatAge(dateStr?: string): string {
+  if (!dateStr) return 'Unknown'
+  const diff = Date.now() - new Date(dateStr).getTime()
+  if (isNaN(diff) || diff < 0) return 'Just now'
+  const mins = Math.floor(diff / 60000)
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  return `${days}d`
+}
+
+function getResourceAge(resource: K8sResource): string {
+  return formatAge(resource.metadata?.creationTimestamp)
+}
+
 function getPodPhase(resource: K8sResource): string {
   if (resource.status && typeof resource.status === 'object') {
     const status = resource.status as Record<string, unknown>
     const containerStatuses = status.containerStatuses as ContainerStatus[] | undefined
     if (Array.isArray(containerStatuses)) {
       for (const cs of containerStatuses) {
-        if (cs.state?.waiting?.reason) {
-          return cs.state.waiting.reason
-        }
-        if (cs.state?.terminated?.reason && cs.state.terminated.reason !== 'Completed') {
-          return cs.state.terminated.reason
-        }
+        if (cs.state?.waiting?.reason) return cs.state.waiting.reason
+        if (cs.state?.terminated?.reason && cs.state.terminated.reason !== 'Completed') return cs.state.terminated.reason
       }
     }
-    if (typeof status.phase === 'string' && status.phase) {
-      return status.phase
-    }
+    if (typeof status.phase === 'string' && status.phase) return status.phase
   }
   return 'Unknown'
 }
@@ -546,13 +603,7 @@ function getPodPhase(resource: K8sResource): string {
 function getPodReadyCount(resource: K8sResource): string {
   const spec = resource.spec as { containers?: ContainerSpec[] } | undefined
   const status = resource.status as { containerStatuses?: ContainerStatus[] } | undefined
-  
-  const total = Array.isArray(spec?.containers)
-    ? spec.containers.length
-    : Array.isArray(status?.containerStatuses)
-      ? status.containerStatuses.length
-      : 0
-
+  const total = Array.isArray(spec?.containers) ? spec.containers.length : Array.isArray(status?.containerStatuses) ? status.containerStatuses.length : 0
   let ready = 0
   if (Array.isArray(status?.containerStatuses)) {
     ready = status.containerStatuses.filter(cs => Boolean(cs?.ready)).length
@@ -570,22 +621,15 @@ function getPodRestarts(resource: K8sResource): number {
 
 function getPodNode(resource: K8sResource): string {
   const spec = resource.spec as { nodeName?: string } | undefined
-  if (spec?.nodeName) {
-    return spec.nodeName
-  }
+  if (spec?.nodeName) return spec.nodeName
   const status = resource.status as { hostIP?: string } | undefined
-  if (status?.hostIP) {
-    return status.hostIP
-  }
-  return 'Unassigned'
+  return status?.hostIP || 'Unassigned'
 }
 
 function getPodIP(resource: K8sResource): string {
   const status = resource.status as { podIP?: string; podIPs?: { ip: string }[] } | undefined
   if (status?.podIP) return status.podIP
-  if (Array.isArray(status?.podIPs) && status.podIPs.length > 0 && status.podIPs[0]?.ip) {
-    return status.podIPs[0].ip
-  }
+  if (Array.isArray(status?.podIPs) && status.podIPs.length > 0 && status.podIPs[0]?.ip) return status.podIPs[0].ip
   return 'None'
 }
 
@@ -607,34 +651,25 @@ function getPodServiceAccount(resource: K8sResource): string {
 function getPodContainers(resource: K8sResource): MergedContainerInfo[] {
   const spec = resource.spec as { containers?: ContainerSpec[]; initContainers?: ContainerSpec[] } | undefined
   const status = resource.status as { containerStatuses?: ContainerStatus[]; initContainerStatuses?: ContainerStatus[] } | undefined
-  
   const specContainers = Array.isArray(spec?.containers) ? spec.containers : []
   const statuses = Array.isArray(status?.containerStatuses) ? status.containerStatuses : []
-
   const statusMap = new Map<string, ContainerStatus>()
   for (const s of statuses) {
     if (s.name) statusMap.set(s.name, s)
   }
-
   const allNames = new Set<string>()
   specContainers.forEach(c => c.name && allNames.add(c.name))
   statuses.forEach(s => s.name && allNames.add(s.name))
 
   const results: MergedContainerInfo[] = []
-
   for (const name of allNames) {
     const specC = specContainers.find(c => c.name === name)
     const statC = statusMap.get(name)
-
     const image = statC?.image || specC?.image || 'unknown'
-    
     let portsStr = 'None'
     if (Array.isArray(specC?.ports) && specC.ports.length > 0) {
-      portsStr = specC.ports
-        .map(p => `${p.containerPort}${p.protocol ? '/' + p.protocol : ''}${p.name ? ' (' + p.name + ')' : ''}`)
-        .join(', ')
+      portsStr = specC.ports.map(p => `${p.containerPort}${p.protocol ? '/' + p.protocol : ''}${p.name ? ' (' + p.name + ')' : ''}`).join(', ')
     }
-
     let stateStr = 'Unknown'
     let stateType: 'running' | 'waiting' | 'terminated' | 'unknown' = 'unknown'
     if (statC?.state?.running) {
@@ -651,61 +686,239 @@ function getPodContainers(resource: K8sResource): MergedContainerInfo[] {
       stateStr = 'Ready'
       stateType = 'running'
     }
-
-    results.push({
-      name,
-      image,
-      ports: portsStr,
-      state: stateStr,
-      stateType,
-      ready: Boolean(statC?.ready),
-      restarts: Number(statC?.restartCount) || 0,
-    })
+    results.push({ name, image, ports: portsStr, state: stateStr, stateType, ready: Boolean(statC?.ready), restarts: Number(statC?.restartCount) || 0 })
   }
-
   return results
 }
 
-function getPodConditions(resource: K8sResource): PodCondition[] {
-  const status = resource.status as { conditions?: PodCondition[] } | undefined
-  if (Array.isArray(status?.conditions)) {
-    return status.conditions
+
+
+function getDeploymentReplicas(row: K8sResource): string {
+  const spec = row.spec as { replicas?: number } | undefined
+  const status = row.status as { readyReplicas?: number; replicas?: number; updatedReplicas?: number; availableReplicas?: number } | undefined
+  const ready = status?.readyReplicas || 0
+  const desired = spec?.replicas ?? status?.replicas ?? 0
+  return `${ready}/${desired}`
+}
+
+function getDeploymentImage(row: K8sResource): string {
+  const spec = row.spec as { template?: { spec?: { containers?: ContainerSpec[] } } } | undefined
+  const containers = spec?.template?.spec?.containers
+  return (Array.isArray(containers) && containers.length > 0) ? containers[0].image || 'unknown' : 'N/A'
+}
+
+function getDeploymentSelector(row: K8sResource): string {
+  const spec = row.spec as { selector?: { matchLabels?: Record<string, string> } } | undefined
+  const labels = spec?.selector?.matchLabels
+  if (labels && Object.keys(labels).length > 0) return Object.entries(labels).map(([k, v]) => `${k}=${v}`).join(', ')
+  return 'N/A'
+}
+
+function getStatefulSetReplicas(row: K8sResource): string {
+  const spec = row.spec as { replicas?: number } | undefined
+  const status = row.status as { readyReplicas?: number; replicas?: number } | undefined
+  const ready = status?.readyReplicas || 0
+  const desired = spec?.replicas ?? status?.replicas ?? 0
+  return `${ready}/${desired}`
+}
+
+function getStatefulSetImage(row: K8sResource): string {
+  const spec = row.spec as { template?: { spec?: { containers?: ContainerSpec[] } } } | undefined
+  const containers = spec?.template?.spec?.containers
+  return containers?.[0]?.image || 'N/A'
+}
+
+function getDaemonSetDesired(row: K8sResource): number {
+  return (row.status as { desiredNumberScheduled?: number })?.desiredNumberScheduled || 0
+}
+
+function getDaemonSetCurrent(row: K8sResource): number {
+  return (row.status as { currentNumberScheduled?: number })?.currentNumberScheduled || 0
+}
+
+function getDaemonSetReady(row: K8sResource): number {
+  return (row.status as { numberReady?: number })?.numberReady || 0
+}
+
+function getJobCompletions(row: K8sResource): string {
+  const spec = row.spec as { completions?: number } | undefined
+  const status = row.status as { succeeded?: number } | undefined
+  return `${status?.succeeded || 0}/${spec?.completions || 1}`
+}
+
+function getJobDuration(row: K8sResource): string {
+  const status = row.status as { startTime?: string; completionTime?: string } | undefined
+  if (!status?.startTime) return 'Pending'
+  const start = new Date(status.startTime).getTime()
+  const end = status.completionTime ? new Date(status.completionTime).getTime() : Date.now()
+  const diffSec = Math.floor((end - start) / 1000)
+  if (diffSec < 60) return `${diffSec}s`
+  const mins = Math.floor(diffSec / 60)
+  const secs = diffSec % 60
+  return `${mins}m ${secs}s`
+}
+
+function getJobStatus(row: K8sResource): string {
+  const status = row.status as { succeeded?: number; failed?: number; active?: number } | undefined
+  if (status?.succeeded && status.succeeded > 0) return 'Completed'
+  if (status?.failed && status.failed > 0) return 'Failed'
+  if (status?.active && status.active > 0) return 'Running'
+  return 'Pending'
+}
+
+function getCronJobSchedule(row: K8sResource): string {
+  return (row.spec as { schedule?: string })?.schedule || 'N/A'
+}
+
+function getCronJobSuspend(row: K8sResource): string {
+  return (row.spec as { suspend?: boolean })?.suspend ? 'True' : 'False'
+}
+
+function getCronJobActive(row: K8sResource): number {
+  const status = row.status as { active?: unknown[] } | undefined
+  return Array.isArray(status?.active) ? status.active.length : 0
+}
+
+function getCronJobLastSchedule(row: K8sResource): string {
+  const status = row.status as { lastScheduleTime?: string } | undefined
+  return status?.lastScheduleTime ? formatAge(status.lastScheduleTime) : 'Never'
+}
+
+function getServiceType(row: K8sResource): string {
+  return (row.spec as { type?: string })?.type || 'ClusterIP'
+}
+
+function getServiceClusterIP(row: K8sResource): string {
+  return (row.spec as { clusterIP?: string })?.clusterIP || 'None'
+}
+
+function getServiceExternalIP(row: K8sResource): string {
+  const spec = row.spec as { externalIPs?: string[] } | undefined
+  const status = row.status as { loadBalancer?: { ingress?: { ip?: string; hostname?: string }[] } } | undefined
+  const lb = status?.loadBalancer?.ingress?.[0]
+  if (lb?.ip) return lb.ip
+  if (lb?.hostname) return lb.hostname
+  if (spec?.externalIPs && spec.externalIPs.length > 0) return spec.externalIPs.join(', ')
+  return 'None'
+}
+
+function getServicePorts(row: K8sResource): string {
+  const spec = row.spec as { ports?: { port: number; targetPort?: number | string; protocol?: string }[] } | undefined
+  if (Array.isArray(spec?.ports) && spec.ports.length > 0) {
+    return spec.ports.map(p => `${p.port}${p.targetPort ? ':' + p.targetPort : ''}/${p.protocol || 'TCP'}`).join(', ')
   }
-  return []
+  return 'None'
 }
 
-
-// Node Management State
-const showDrainModal = ref(false)
-const drainTargetNode = ref<K8sResource | null>(null)
-const drainOptions = ref({
-  gracePeriodSeconds: 30,
-  ignoreDaemonSets: true,
-  deleteEmptyDirData: false,
-  force: false,
-})
-const drainingNode = ref(false)
-const operatingNode = ref(false)
-
-// Taint Management State in Node Drawer
-const newTaintKey = ref('')
-const newTaintValue = ref('')
-const newTaintEffect = ref<'NoSchedule' | 'PreferNoSchedule' | 'NoExecute'>('NoSchedule')
-const updatingTaints = ref(false)
-
-// Node Labels Management State in Node Drawer
-const nodeLabelsCopy = ref<Record<string, string>>({})
-const newLabelKey = ref('')
-const newLabelValue = ref('')
-const updatingLabels = ref(false)
-
-function isNodeUnschedulable(resource: K8sResource): boolean {
-  return Boolean((resource.spec as { unschedulable?: boolean } | undefined)?.unschedulable)
+function getIngressHosts(row: K8sResource): string {
+  const spec = row.spec as { rules?: { host?: string }[] } | undefined
+  if (Array.isArray(spec?.rules) && spec.rules.length > 0) {
+    const hosts = spec.rules.map(r => r.host).filter(Boolean)
+    return hosts.length > 0 ? hosts.join(', ') : '*'
+  }
+  return '*'
 }
 
+function getIngressPaths(row: K8sResource): string {
+  const spec = row.spec as { rules?: { http?: { paths?: { path?: string }[] } }[] } | undefined
+  if (Array.isArray(spec?.rules)) {
+    const paths = spec.rules.flatMap(r => r.http?.paths?.map(p => p.path)).filter(Boolean)
+    return paths.length > 0 ? paths.join(', ') : '/'
+  }
+  return '/'
+}
+
+function getConfigMapKeysCount(row: K8sResource): number {
+  if (row.data) return Object.keys(row.data).length
+  if (row.binaryData) return Object.keys(row.binaryData).length
+  return 0
+}
+
+function getConfigMapDataPreview(row: K8sResource): string {
+  if (row.data) {
+    const keys = Object.keys(row.data)
+    if (keys.length === 0) return 'Empty'
+    return keys.slice(0, 3).join(', ') + (keys.length > 3 ? ` (+${keys.length - 3} more)` : '')
+  }
+  return 'None'
+}
+
+function getSecretType(row: K8sResource): string { return row.type || 'Opaque' }
+function getSecretKeysCount(row: K8sResource): number {
+  if (row.data) return Object.keys(row.data).length
+  if (row.stringData) return Object.keys(row.stringData).length
+  return 0
+}
+
+function getPvcStatus(row: K8sResource): string { return (row.status as { phase?: string })?.phase || 'Pending' }
+function getPvcCapacity(row: K8sResource): string {
+  const status = row.status as { capacity?: { storage?: string } } | undefined
+  const spec = row.spec as { resources?: { requests?: { storage?: string } } } | undefined
+  return status?.capacity?.storage || spec?.resources?.requests?.storage || 'N/A'
+}
+function getPvcAccessModes(row: K8sResource): string { return (row.spec as { accessModes?: string[] })?.accessModes?.join(', ') || 'N/A' }
+function getPvcStorageClass(row: K8sResource): string { return (row.spec as { storageClassName?: string })?.storageClassName || 'N/A' }
+function getPvcVolume(row: K8sResource): string { return (row.spec as { volumeName?: string })?.volumeName || 'N/A' }
+
+function getPvStatus(row: K8sResource): string { return (row.status as { phase?: string })?.phase || 'Available' }
+function getPvCapacity(row: K8sResource): string { return (row.spec as { capacity?: { storage?: string } })?.capacity?.storage || 'N/A' }
+function getPvAccessModes(row: K8sResource): string { return (row.spec as { accessModes?: string[] })?.accessModes?.join(', ') || 'N/A' }
+function getPvReclaimPolicy(row: K8sResource): string { return (row.spec as { persistentVolumeReclaimPolicy?: string })?.persistentVolumeReclaimPolicy || 'Retain' }
+function getPvStorageClass(row: K8sResource): string { return (row.spec as { storageClassName?: string })?.storageClassName || 'N/A' }
+function getPvClaim(row: K8sResource): string {
+  const spec = row.spec as { claimRef?: { namespace?: string; name?: string } } | undefined
+  return spec?.claimRef?.name ? `${spec.claimRef.namespace || 'default'}/${spec.claimRef.name}` : 'None'
+}
+
+function getScProvisioner(row: K8sResource): string { return (row as { provisioner?: string }).provisioner || 'N/A' }
+function getScReclaimPolicy(row: K8sResource): string { return (row as { reclaimPolicy?: string }).reclaimPolicy || 'Delete' }
+function getScVolumeBindingMode(row: K8sResource): string { return (row as { volumeBindingMode?: string }).volumeBindingMode || 'Immediate' }
+function getScDefault(row: K8sResource): string { return row.metadata?.annotations?.['storageclass.kubernetes.io/is-default-class'] === 'true' ? 'Yes' : 'No' }
+
+function getNetPolPodSelector(row: K8sResource): string {
+  const spec = row.spec as { podSelector?: { matchLabels?: Record<string, string> } } | undefined
+  const matchLabels = spec?.podSelector?.matchLabels
+  if (matchLabels && Object.keys(matchLabels).length > 0) return Object.entries(matchLabels).map(([k, v]) => `${k}=${v}`).join(', ')
+  return 'All Pods'
+}
+function getNetPolPolicyTypes(row: K8sResource): string { return (row.spec as { policyTypes?: string[] })?.policyTypes?.join(', ') || 'Ingress' }
+function getSaSecrets(row: K8sResource): number { const s = (row as { secrets?: unknown[] }).secrets; return Array.isArray(s) ? s.length : 0 }
+function getHpaReference(row: K8sResource): string {
+  const spec = row.spec as { scaleTargetRef?: { kind?: string; name?: string } } | undefined
+  return (spec?.scaleTargetRef?.kind && spec.scaleTargetRef?.name) ? `${spec.scaleTargetRef.kind}/${spec.scaleTargetRef.name}` : 'N/A'
+}
+function getHpaTargets(row: K8sResource): string {
+  const spec = row.spec as { targetCPUUtilizationPercentage?: number } | undefined
+  const status = row.status as { currentCPUUtilizationPercentage?: number } | undefined
+  return spec?.targetCPUUtilizationPercentage !== undefined ? `${status?.currentCPUUtilizationPercentage ?? 0}% / ${spec.targetCPUUtilizationPercentage}%` : 'N/A'
+}
+function getHpaMinMax(row: K8sResource): string {
+  const spec = row.spec as { minReplicas?: number; maxReplicas?: number } | undefined
+  return `${spec?.minReplicas || 1}-${spec?.maxReplicas || 1}`
+}
+function getHpaReplicas(row: K8sResource): number { return (row.status as { currentReplicas?: number })?.currentReplicas || 0 }
+
+
+function getNodeTaints(resource: K8sResource): NodeTaint[] {
+  return ((resource.spec as { taints?: NodeTaint[] } | undefined)?.taints) || []
+}
+
+function getEventType(resource: K8sResource): string {
+  return (resource as unknown as { type?: string }).type || 'Normal'
+}
+
+function getResourceStatus(resource: K8sResource): string {
+  if (resource.status && typeof resource.status === 'object') {
+    if ('phase' in resource.status && typeof resource.status.phase === 'string') return resource.status.phase
+    if ('readyReplicas' in resource.status && 'replicas' in resource.status) return `${resource.status.readyReplicas || 0}/${resource.status.replicas || 0} Ready`
+  }
+  return 'Active'
+}
+
+function isNodeUnschedulable(resource: K8sResource): boolean { return Boolean((resource.spec as { unschedulable?: boolean })?.unschedulable) }
 function getNodeStatus(resource: K8sResource): string {
   if (isNodeUnschedulable(resource)) return 'SchedulingDisabled'
-  const conditions = (resource.status as { conditions?: NodeCondition[] } | undefined)?.conditions
+  const conditions = (resource.status as { conditions?: NodeCondition[] })?.conditions
   if (Array.isArray(conditions)) {
     const readyCond = conditions.find(c => c.type === 'Ready')
     if (readyCond && readyCond.status === 'True') return 'Ready'
@@ -713,7 +926,6 @@ function getNodeStatus(resource: K8sResource): string {
   }
   return 'Unknown'
 }
-
 function getNodeRoles(resource: K8sResource): string[] {
   const labels = resource.metadata?.labels || {}
   const roles: string[] = []
@@ -723,77 +935,287 @@ function getNodeRoles(resource: K8sResource): string[] {
       if (role) roles.push(role)
     }
   }
-  if (labels['kubernetes.io/role'] && !roles.includes(labels['kubernetes.io/role'])) {
-    roles.push(labels['kubernetes.io/role'])
-  }
+  if (labels['kubernetes.io/role'] && !roles.includes(labels['kubernetes.io/role'])) roles.push(labels['kubernetes.io/role'])
   return roles.length > 0 ? roles : ['worker']
 }
-
-function getNodeVersion(resource: K8sResource): string {
-  const nodeInfo = (resource.status as { nodeInfo?: NodeSystemInfo } | undefined)?.nodeInfo
-  return nodeInfo?.kubeletVersion || 'N/A'
-}
-
+function getNodeVersion(resource: K8sResource): string { return (resource.status as { nodeInfo?: NodeSystemInfo })?.nodeInfo?.kubeletVersion || 'N/A' }
 function getNodeInternalIP(resource: K8sResource): string {
-  const addresses = (resource.status as { addresses?: { type: string; address: string }[] } | undefined)?.addresses
-  if (Array.isArray(addresses)) {
-    const ip = addresses.find(a => a.type === 'InternalIP')
-    if (ip) return ip.address
-  }
-  return 'N/A'
+  const addresses = (resource.status as { addresses?: { type: string; address: string }[] })?.addresses
+  return Array.isArray(addresses) ? (addresses.find(a => a.type === 'InternalIP')?.address || 'N/A') : 'N/A'
 }
-
 function getNodeOSArch(resource: K8sResource): string {
-  const nodeInfo = (resource.status as { nodeInfo?: NodeSystemInfo } | undefined)?.nodeInfo
-  if (nodeInfo?.operatingSystem && nodeInfo?.architecture) {
-    return nodeInfo.operatingSystem + '/' + nodeInfo.architecture
-  }
-  return nodeInfo?.osImage || 'Linux'
+  const info = (resource.status as { nodeInfo?: NodeSystemInfo })?.nodeInfo
+  return (info?.operatingSystem && info?.architecture) ? info.operatingSystem + '/' + info.architecture : info?.osImage || 'Linux'
 }
-
 function getNodePodsCount(resource: K8sResource): string {
-  const allocatable = (resource.status as { allocatable?: { pods?: string } } | undefined)?.allocatable
+  const allocatable = (resource.status as { allocatable?: { pods?: string } })?.allocatable
   return allocatable?.pods ? allocatable.pods + ' max' : 'N/A'
 }
 
-function getNodeConditions(resource: K8sResource): NodeCondition[] {
-  return ((resource.status as { conditions?: NodeCondition[] } | undefined)?.conditions) || []
+
+
+function showToast(text: string, type: 'success' | 'error' = 'success') {
+  toastMessage.value = { text, type }
+  setTimeout(() => {
+    if (toastMessage.value?.text === text) {
+      toastMessage.value = null
+    }
+  }, 4000)
 }
 
-function getNodeTaints(resource: K8sResource): NodeTaint[] {
-  return ((resource.spec as { taints?: NodeTaint[] } | undefined)?.taints) || []
+function selectKind(kind: ResourceKind) {
+  selectedKind.value = kind
 }
 
-function getNodeSystemInfo(resource: K8sResource): NodeSystemInfo {
-  return ((resource.status as { nodeInfo?: NodeSystemInfo } | undefined)?.nodeInfo) || {}
+function openCreateModal() {
+  showCreateModal.value = true
 }
 
-function getEventInvolvedObject(resource: K8sResource): string {
-  const ev = resource as unknown as K8sEvent
-  if (ev.involvedObject?.kind && ev.involvedObject?.name) {
-    return ev.involvedObject.kind + '/' + ev.involvedObject.name
+function openApplyYamlModal() {
+  yamlEditorMode.value = 'create'
+  yamlEditorTitle.value = `Apply YAML to ${selectedCluster.value}`
+  yamlEditorInitialContent.value = ''
+  showYamlModal.value = true
+}
+
+function openResourceYaml(resource: K8sResource) {
+  yamlEditorMode.value = 'edit'
+  yamlEditorTitle.value = `Edit ${resource.kind}: ${resource.metadata?.name}`
+  yamlEditorInitialContent.value = jsonToYaml(resource)
+  showYamlModal.value = true
+}
+
+function initConfigMapEditor(cm: K8sResource) {
+  configMapDataCopy.value = { ...(cm.data || {}) }
+  newCmKey.value = ''
+  newCmValue.value = ''
+}
+
+function addCmEntry() {
+  if (!newCmKey.value.trim()) return
+  configMapDataCopy.value[newCmKey.value.trim()] = newCmValue.value
+  newCmKey.value = ''
+  newCmValue.value = ''
+}
+
+function removeCmEntry(key: string) {
+  delete configMapDataCopy.value[key]
+}
+
+async function handleSaveConfigMap(cm: K8sResource) {
+  const name = cm.metadata?.name
+  const ns = cm.metadata?.namespace || 'default'
+  if (!name || !selectedCluster.value) return
+  savingConfigMap.value = true
+  try {
+    const updated = await k8sApi.updateResource(
+      selectedCluster.value,
+      'configmaps',
+      name,
+      {
+        ...cm,
+        data: configMapDataCopy.value,
+      },
+      ns
+    )
+    showToast(`ConfigMap ${name} saved successfully!`)
+    selectedResource.value = updated
+    await fetchResources()
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to save ConfigMap', 'error')
+  } finally {
+    savingConfigMap.value = false
   }
-  return 'N/A'
 }
 
-function getEventReason(resource: K8sResource): string {
-  const ev = resource as unknown as K8sEvent
-  return ev.reason || 'Event'
+function openDetailDrawer(resource: K8sResource) {
+  selectedResource.value = resource
+  activeDrawerTab.value = 'overview'
+  if (resource.kind === 'Node' || selectedKind.value === 'nodes') {
+    initNodeLabelsEditor(resource)
+  }
+  if (resource.kind === 'ConfigMap' || selectedKind.value === 'configmaps') {
+    initConfigMapEditor(resource)
+  }
+  showDetailDrawer.value = true
 }
 
-function getEventMessage(resource: K8sResource): string {
-  const ev = resource as unknown as K8sEvent
-  return ev.message || ''
+function openScaleModal(resource: K8sResource) {
+  scaleTarget.value = resource
+  const spec = resource.spec as { replicas?: number } | undefined
+  const status = resource.status as { replicas?: number } | undefined
+  scaleReplicasCount.value = spec?.replicas ?? status?.replicas ?? 1
+  showScaleModal.value = true
 }
 
-function getEventCount(resource: K8sResource): number {
-  const ev = resource as unknown as K8sEvent
-  return ev.count || 1
+async function handleScaleConfirm() {
+  if (!scaleTarget.value || !selectedCluster.value) return
+  const r = scaleTarget.value
+  const name = r.metadata?.name || ''
+  const ns = r.metadata?.namespace || 'default'
+  const kind = (r.kind || '').toLowerCase()
+  scalingResource.value = true
+  try {
+    if (kind === 'statefulset' || selectedKind.value === 'statefulsets') {
+      await k8sApi.scaleStatefulSet(selectedCluster.value, name, ns, scaleReplicasCount.value)
+    } else {
+      await k8sApi.scaleDeployment(selectedCluster.value, name, ns, scaleReplicasCount.value)
+    }
+    showToast(`Scaled ${r.kind}/${name} to ${scaleReplicasCount.value} replicas`)
+    showScaleModal.value = false
+    scaleTarget.value = null
+    await fetchResources()
+    if (selectedResource.value && selectedResource.value.metadata?.name === name) {
+      selectedResource.value = await k8sApi.getResource(selectedCluster.value, selectedKind.value, name, ns)
+    }
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to scale workload', 'error')
+  } finally {
+    scalingResource.value = false
+  }
 }
 
-function getEventType(resource: K8sResource): string {
-  const ev = resource as unknown as K8sEvent
-  return ev.type || 'Normal'
+async function handleRestartWorkload(resource: K8sResource) {
+  const name = resource.metadata?.name || ''
+  const ns = resource.metadata?.namespace || 'default'
+  const kind = (resource.kind || '').toLowerCase()
+  if (!name || !selectedCluster.value) return
+  try {
+    if (kind === 'daemonset' || selectedKind.value === 'daemonsets') {
+      await k8sApi.restartDaemonSet(selectedCluster.value, name, ns)
+    } else {
+      await k8sApi.restartDeployment(selectedCluster.value, name, ns)
+    }
+    showToast(`Rolling restart initiated for ${resource.kind}/${name}`)
+    await fetchResources()
+    if (selectedResource.value && selectedResource.value.metadata?.name === name) {
+      selectedResource.value = await k8sApi.getResource(selectedCluster.value, selectedKind.value, name, ns)
+    }
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to restart workload', 'error')
+  }
+}
+
+async function handleTriggerCronJob(resource: K8sResource) {
+  const name = resource.metadata?.name || ''
+  const ns = resource.metadata?.namespace || 'default'
+  if (!name || !selectedCluster.value) return
+  try {
+    await k8sApi.triggerCronJob(selectedCluster.value, name, ns)
+    showToast(`Triggered execution for CronJob ${name}`)
+    await fetchResources()
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to trigger CronJob', 'error')
+  }
+}
+
+async function handleToggleSuspendCronJob(resource: K8sResource) {
+  const name = resource.metadata?.name || ''
+  const ns = resource.metadata?.namespace || 'default'
+  const currentSuspended = Boolean((resource.spec as { suspend?: boolean })?.suspend)
+  if (!name || !selectedCluster.value) return
+  try {
+    await k8sApi.suspendCronJob(selectedCluster.value, name, ns, !currentSuspended)
+    showToast(`CronJob ${name} ${currentSuspended ? 'resumed' : 'suspended'} successfully`)
+    await fetchResources()
+    if (selectedResource.value && selectedResource.value.metadata?.name === name) {
+      selectedResource.value = await k8sApi.getResource(selectedCluster.value, 'cronjobs', name, ns)
+    }
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to update CronJob status', 'error')
+  }
+}
+
+function openPodTerminal(pod: K8sResource, containerName?: string) {
+  terminalPod.value = pod
+  const containers = getPodContainers(pod)
+  selectedPodContainer.value = containerName || (containers.length > 0 ? containers[0].name : '')
+  showTerminalModal.value = true
+}
+
+function openPodLogs(pod: K8sResource, containerName?: string) {
+  logsPod.value = pod
+  const containers = getPodContainers(pod)
+  selectedPodContainer.value = containerName || (containers.length > 0 ? containers[0].name : '')
+  showLogsModal.value = true
+}
+
+function getPodContainerNames(pod: K8sResource | null): string[] {
+  if (!pod) return []
+  return getPodContainers(pod).map(c => c.name)
+}
+
+function promptDelete(resource: K8sResource) {
+  resourceToDelete.value = resource
+  showDeleteModal.value = true
+}
+
+async function handleDeleteConfirmed() {
+  if (!resourceToDelete.value) return
+  const r = resourceToDelete.value
+  const name = r.metadata?.name || ''
+  const ns = r.metadata?.namespace || undefined
+  deletingResource.value = true
+  try {
+    await k8sApi.deleteResource(selectedCluster.value, selectedKind.value, name, ns)
+    showToast(`Resource ${r.kind}/${name} deleted successfully`)
+    showDeleteModal.value = false
+    resourceToDelete.value = null
+    if (selectedResource.value?.metadata?.name === name) {
+      showDetailDrawer.value = false
+    }
+    await fetchResources()
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : 'Failed to delete resource', 'error')
+  } finally {
+    deletingResource.value = false
+  }
+}
+
+async function handleCreateNamespace() {
+  if (!newNsName.value.trim()) {
+    newNsError.value = 'Namespace name is required'
+    return
+  }
+  creatingNs.value = true
+  newNsError.value = null
+  try {
+    const created = await k8sApi.createNamespace(selectedCluster.value, newNsName.value.trim())
+    showToast(`Namespace "${created.name || newNsName.value}" created!`)
+    showNewNsModal.value = false
+    newNsName.value = ''
+    await loadNamespaces()
+  } catch (err: unknown) {
+    newNsError.value = err instanceof Error ? err.message : 'Failed to create namespace'
+  } finally {
+    creatingNs.value = false
+  }
+}
+
+function onResourceCreated(res: K8sResource) {
+  showToast(`Resource ${res.kind || ''}/${res.metadata?.name || 'new'} created successfully!`)
+  fetchResources()
+}
+
+function onYamlApplied(res: { message: string }) {
+  showToast(res.message || 'Manifest applied successfully!')
+  fetchResources()
+}
+
+async function copyDrawerYaml() {
+  if (!selectedResource.value) return
+  try {
+    await navigator.clipboard.writeText(jsonToYaml(selectedResource.value))
+    drawerYamlCopied.value = true
+    setTimeout(() => { drawerYamlCopied.value = false }, 2000)
+  } catch {
+    // fallback
+  }
+}
+
+function copyText(text: string) {
+  navigator.clipboard.writeText(text)
+  showToast('Copied to clipboard!')
 }
 
 async function handleCordonNode(node: K8sResource) {
@@ -939,168 +1361,12 @@ async function handleSaveNodeLabels(node: K8sResource) {
     updatingLabels.value = false
   }
 }
-
-function showToast(text: string, type: 'success' | 'error' = 'success') {
-  toastMessage.value = { text, type }
-  setTimeout(() => {
-    if (toastMessage.value?.text === text) {
-      toastMessage.value = null
-    }
-  }, 4000)
-}
-
-function selectKind(kind: ResourceKind) {
-  selectedKind.value = kind
-}
-
-function openCreateModal() {
-  showCreateModal.value = true
-}
-
-function openApplyYamlModal() {
-  yamlEditorMode.value = 'create'
-  yamlEditorTitle.value = `Apply YAML to ${selectedCluster.value}`
-  yamlEditorInitialContent.value = ''
-  showYamlModal.value = true
-}
-
-function openResourceYaml(resource: K8sResource) {
-  yamlEditorMode.value = 'edit'
-  yamlEditorTitle.value = `Edit ${resource.kind}: ${resource.metadata?.name}`
-  yamlEditorInitialContent.value = jsonToYaml(resource)
-  showYamlModal.value = true
-}
-
-function openDetailDrawer(resource: K8sResource) {
-  selectedResource.value = resource
-  activeDrawerTab.value = 'overview'
-  if (resource.kind === 'Node' || selectedKind.value === 'nodes') {
-    initNodeLabelsEditor(resource)
-  }
-  showDetailDrawer.value = true
-}
-
-function openPodTerminal(pod: K8sResource, containerName?: string) {
-  terminalPod.value = pod
-  const containers = getPodContainers(pod)
-  selectedPodContainer.value = containerName || (containers.length > 0 ? containers[0].name : '')
-  showTerminalModal.value = true
-}
-
-function openPodLogs(pod: K8sResource, containerName?: string) {
-  logsPod.value = pod
-  const containers = getPodContainers(pod)
-  selectedPodContainer.value = containerName || (containers.length > 0 ? containers[0].name : '')
-  showLogsModal.value = true
-}
-
-function getPodContainerNames(pod: K8sResource | null): string[] {
-  if (!pod) return []
-  return getPodContainers(pod).map(c => c.name)
-}
-
-function promptDelete(resource: K8sResource) {
-  resourceToDelete.value = resource
-  showDeleteModal.value = true
-}
-
-async function handleDeleteConfirmed() {
-  if (!resourceToDelete.value) return
-  const r = resourceToDelete.value
-  const name = r.metadata?.name || ''
-  const ns = r.metadata?.namespace || undefined
-
-  deletingResource.value = true
-  try {
-    await k8sApi.deleteResource(selectedCluster.value, selectedKind.value, name, ns)
-    showToast(`Resource ${r.kind}/${name} deleted successfully`)
-    showDeleteModal.value = false
-    resourceToDelete.value = null
-    if (selectedResource.value?.metadata?.name === name) {
-      showDetailDrawer.value = false
-    }
-    await fetchResources()
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Failed to delete resource'
-    showToast(msg, 'error')
-  } finally {
-    deletingResource.value = false
-  }
-}
-
-async function handleCreateNamespace() {
-  if (!newNsName.value.trim()) {
-    newNsError.value = 'Namespace name is required'
-    return
-  }
-
-  creatingNs.value = true
-  newNsError.value = null
-  try {
-    const created = await k8sApi.createNamespace(selectedCluster.value, newNsName.value.trim())
-    showToast(`Namespace "${created.name || newNsName.value}" created!`)
-    showNewNsModal.value = false
-    newNsName.value = ''
-    await loadNamespaces()
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Failed to create namespace'
-    newNsError.value = msg
-  } finally {
-    creatingNs.value = false
-  }
-}
-
-function onResourceCreated(res: K8sResource) {
-  showToast(`Resource ${res.kind || ''}/${res.metadata?.name || 'new'} created successfully!`)
-  fetchResources()
-}
-
-function onYamlApplied(res: { message: string }) {
-  showToast(res.message || 'Manifest applied successfully!')
-  fetchResources()
-}
-
-async function copyDrawerYaml() {
-  if (!selectedResource.value) return
-  try {
-    await navigator.clipboard.writeText(jsonToYaml(selectedResource.value))
-    drawerYamlCopied.value = true
-    setTimeout(() => {
-      drawerYamlCopied.value = false
-    }, 2000)
-  } catch {
-    // fallback
-  }
-}
-
-function getResourceStatus(resource: K8sResource): string {
-  if (resource.status && typeof resource.status === 'object') {
-    if ('phase' in resource.status && typeof resource.status.phase === 'string') {
-      return resource.status.phase
-    }
-    if ('readyReplicas' in resource.status && 'replicas' in resource.status) {
-      return `${resource.status.readyReplicas || 0}/${resource.status.replicas || 0} Ready`
-    }
-  }
-  return 'Active'
-}
-
-function getResourceAge(resource: K8sResource): string {
-  const ts = resource.metadata?.creationTimestamp
-  if (!ts) return 'Just now'
-  const diff = Date.now() - new Date(ts).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 60) return `${mins}m`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h`
-  const days = Math.floor(hours / 24)
-  return `${days}d`
-}
 </script>
+
 
 <template>
   <div class="explorer-layout animate-fade-in">
-    <!-- Left Sidebar: Cluster, Namespace, Resource Kind Tree -->
+    <!-- Left Sidebar -->
     <aside class="explorer-sidebar glass-panel">
       <div class="sidebar-header">
         <div class="sidebar-brand">
@@ -1148,9 +1414,9 @@ function getResourceAge(resource: K8sResource): string {
           </button>
         </div>
         <select v-model="selectedNamespace" class="input-glass select-full ns-select">
-          <option value="all">?? All Namespaces</option>
+          <option value="all">🌐 All Namespaces</option>
           <option v-for="ns in namespaces" :key="ns.name" :value="ns.name">
-            ?? {{ ns.name }}
+            📁 {{ ns.name }}
           </option>
         </select>
       </div>
@@ -1186,13 +1452,13 @@ function getResourceAge(resource: K8sResource): string {
         <div class="header-left">
           <div class="view-tag">
             <span class="pulse-dot pulse-dot-cyan"></span>
-            <span>KUBERNETES RESOURCE MANAGER</span>
+            <span>KUBERNETES RESOURCE EXPLORER</span>
           </div>
           <h1 class="view-title">{{ currentKindLabel }}</h1>
           <div class="breadcrumbs font-mono">
-            <span class="crumb-cluster">?? {{ selectedCluster }}</span>
+            <span class="crumb-cluster">🌐 {{ selectedCluster }}</span>
             <span class="crumb-sep">/</span>
-            <span class="crumb-ns">?? {{ selectedNamespace === 'all' ? 'All Namespaces' : selectedNamespace }}</span>
+            <span class="crumb-ns">📁 {{ selectedNamespace === 'all' ? 'All Namespaces' : selectedNamespace }}</span>
             <span class="crumb-sep">/</span>
             <span class="crumb-kind text-cyan">{{ currentKindLabel }}</span>
           </div>
@@ -1200,31 +1466,31 @@ function getResourceAge(resource: K8sResource): string {
 
         <div class="header-actions">
           <button type="button" class="btn btn-secondary" :disabled="loading" @click="fetchResources">
-            <span>{{ loading ? '? Refreshing...' : '?? Refresh' }}</span>
+            <span>{{ loading ? '⏳ Refreshing...' : '🔄 Refresh' }}</span>
           </button>
           <button type="button" class="btn btn-secondary" @click="openApplyYamlModal">
-            <span>?? Apply YAML</span>
+            <span>📄 Apply YAML</span>
           </button>
           <button type="button" class="btn btn-primary" @click="openCreateModal">
-            <span>? + Create {{ currentKindLabel.slice(0, -1) || 'Resource' }}</span>
+            <span>✨ + Create {{ currentKindLabel.slice(0, -1) || 'Resource' }}</span>
           </button>
         </div>
       </div>
 
       <!-- Notification Toast -->
       <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-        <span>{{ toastMessage.type === 'success' ? '?' : '??' }}</span>
+        <span>{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
         <span>{{ toastMessage.text }}</span>
-        <button class="toast-close" @click="toastMessage = null">?</button>
+        <button class="toast-close" @click="toastMessage = null">✕</button>
       </div>
 
-      <!-- Offline / Disconnected Warning Banner -->
+      <!-- Offline Banner -->
       <div v-if="clusterOffline" class="offline-banner animate-fade-in">
         <span class="offline-icon">⚠️</span>
         <div class="offline-content">
           <strong class="offline-title">Kubernetes Cluster Disconnected</strong>
           <p class="offline-desc">
-            Kubernetes Cluster Disconnected: No Kubernetes control plane is currently attached to '{{ selectedCluster || 'primary-cluster' }}'. Import a Kubeconfig or manage Docker Swarm workloads on /deployments.
+            No Kubernetes control plane is currently attached to '{{ selectedCluster || 'primary-cluster' }}'. Import a Kubeconfig or manage Docker Swarm workloads on /deployments.
           </p>
           <span v-if="offlineErrorMessage" class="offline-err-detail font-mono">{{ offlineErrorMessage }}</span>
           <div class="offline-actions">
@@ -1247,7 +1513,7 @@ function getResourceAge(resource: K8sResource): string {
           :title="`Total ${currentKindLabel}`"
           :value="totalInKind"
           :subtitle="`Discovered in namespace: ${selectedNamespace}`"
-          icon="??"
+          icon="📦"
           badge="DISCOVERED"
           badge-color="cyan"
         />
@@ -1255,7 +1521,7 @@ function getResourceAge(resource: K8sResource): string {
           title="Active Namespaces"
           :value="activeNamespacesCount"
           subtitle="Available workload domains"
-          icon="??"
+          icon="📁"
           badge="TENANCY"
           badge-color="emerald"
         />
@@ -1263,7 +1529,7 @@ function getResourceAge(resource: K8sResource): string {
           title="Cluster Target"
           :value="selectedCluster"
           subtitle="Kubernetes Control Plane"
-          icon="??"
+          icon="🌐"
           badge="ONLINE"
           badge-color="violet"
         />
@@ -1292,7 +1558,7 @@ function getResourceAge(resource: K8sResource): string {
           <template #cell-name="{ row }">
             <div class="resource-name-cell">
               <span class="res-icon">
-                {{ selectedKind === 'pods' ? '🫛' : selectedKind === 'nodes' ? '🖥️' : '📦' }}
+                {{ selectedKind === 'pods' ? '🫛' : selectedKind === 'nodes' ? '🖥️' : selectedKind === 'deployments' ? '🚀' : selectedKind === 'services' ? '🔌' : selectedKind === 'configmaps' ? '🗺️' : selectedKind === 'secrets' ? '🔒' : '📦' }}
               </span>
               <a 
                 href="javascript:void(0)" 
@@ -1307,7 +1573,6 @@ function getResourceAge(resource: K8sResource): string {
               <span v-else-if="row.metadata?.labels?.['app.kubernetes.io/name']" class="app-tag font-mono">
                 app: {{ row.metadata.labels['app.kubernetes.io/name'] }}
               </span>
-
             </div>
           </template>
 
@@ -1319,14 +1584,14 @@ function getResourceAge(resource: K8sResource): string {
 
           <template #cell-status="{ row }">
             <StatusBadge 
-              :status="selectedKind === 'pods' ? getPodPhase(row) : selectedKind === 'nodes' ? getNodeStatus(row) : getResourceStatus(row)" 
+              :status="selectedKind === 'pods' ? getPodPhase(row) : selectedKind === 'nodes' ? getNodeStatus(row) : selectedKind === 'persistentvolumeclaims' ? getPvcStatus(row) : selectedKind === 'persistentvolumes' ? getPvStatus(row) : selectedKind === 'jobs' ? getJobStatus(row) : getResourceStatus(row)" 
               size="sm" 
             />
           </template>
 
           <template #cell-ready="{ row }">
-            <span class="font-mono ready-cell" :class="{ 'ready-all': getPodReadyCount(row).split('/')[0] === getPodReadyCount(row).split('/')[1] && getPodReadyCount(row).split('/')[0] !== '0' }">
-              {{ getPodReadyCount(row) }}
+            <span class="font-mono ready-cell">
+              {{ selectedKind === 'daemonsets' ? getDaemonSetReady(row) : getPodReadyCount(row) }}
             </span>
           </template>
 
@@ -1348,7 +1613,160 @@ function getResourceAge(resource: K8sResource): string {
             </span>
           </template>
 
-          
+          <!-- Deployment & StatefulSet Cells -->
+          <template #cell-replicas="{ row }">
+            <span class="font-mono badge-replicas">
+              {{ selectedKind === 'statefulsets' ? getStatefulSetReplicas(row) : selectedKind === 'horizontalpodautoscalers' ? getHpaReplicas(row) : getDeploymentReplicas(row) }}
+            </span>
+          </template>
+
+          <template #cell-image="{ row }">
+            <span class="font-mono text-cyan font-small cell-image-text" :title="selectedKind === 'statefulsets' ? getStatefulSetImage(row) : getDeploymentImage(row)">
+              {{ selectedKind === 'statefulsets' ? getStatefulSetImage(row) : getDeploymentImage(row) }}
+            </span>
+          </template>
+
+          <template #cell-selector="{ row }">
+            <span class="font-mono text-muted font-small">{{ getDeploymentSelector(row) }}</span>
+          </template>
+
+          <!-- DaemonSet Cells -->
+          <template #cell-desired="{ row }">
+            <span class="font-mono">{{ getDaemonSetDesired(row) }}</span>
+          </template>
+
+          <template #cell-current="{ row }">
+            <span class="font-mono">{{ getDaemonSetCurrent(row) }}</span>
+          </template>
+
+          <!-- Job & CronJob Cells -->
+          <template #cell-completions="{ row }">
+            <span class="font-mono">{{ getJobCompletions(row) }}</span>
+          </template>
+
+          <template #cell-duration="{ row }">
+            <span class="font-mono text-muted">{{ getJobDuration(row) }}</span>
+          </template>
+
+          <template #cell-schedule="{ row }">
+            <span class="font-mono schedule-badge">{{ getCronJobSchedule(row) }}</span>
+          </template>
+
+          <template #cell-suspend="{ row }">
+            <span class="font-mono" :class="getCronJobSuspend(row) === 'True' ? 'text-amber' : 'text-emerald'">
+              {{ getCronJobSuspend(row) }}
+            </span>
+          </template>
+
+          <template #cell-active="{ row }">
+            <span class="font-mono">{{ getCronJobActive(row) }}</span>
+          </template>
+
+          <template #cell-lastSchedule="{ row }">
+            <span class="font-mono text-muted">{{ getCronJobLastSchedule(row) }}</span>
+          </template>
+
+          <!-- Service & Ingress Cells -->
+          <template #cell-type="{ row }">
+            <span class="font-mono text-violet font-small font-bold">
+              {{ selectedKind === 'services' ? getServiceType(row) : selectedKind === 'secrets' ? getSecretType(row) : getEventType(row) }}
+            </span>
+          </template>
+
+          <template #cell-clusterIP="{ row }">
+            <span class="font-mono text-muted font-small">{{ getServiceClusterIP(row) }}</span>
+          </template>
+
+          <template #cell-externalIP="{ row }">
+            <span class="font-mono text-cyan font-small">{{ getServiceExternalIP(row) }}</span>
+          </template>
+
+          <template #cell-ports="{ row }">
+            <span class="font-mono text-emerald font-small">{{ getServicePorts(row) }}</span>
+          </template>
+
+          <template #cell-hosts="{ row }">
+            <span class="font-mono text-cyan font-small">{{ getIngressHosts(row) }}</span>
+          </template>
+
+          <template #cell-paths="{ row }">
+            <span class="font-mono text-muted font-small">{{ getIngressPaths(row) }}</span>
+          </template>
+
+          <!-- ConfigMap & Secret Cells -->
+          <template #cell-keysCount="{ row }">
+            <span class="font-mono badge-keys">
+              {{ selectedKind === 'secrets' ? getSecretKeysCount(row) : getConfigMapKeysCount(row) }} keys
+            </span>
+          </template>
+
+          <template #cell-dataPreview="{ row }">
+            <span class="font-mono text-muted font-small">{{ getConfigMapDataPreview(row) }}</span>
+          </template>
+
+          <!-- Storage Cells -->
+          <template #cell-capacity="{ row }">
+            <span class="font-mono text-cyan font-bold">{{ selectedKind === 'persistentvolumes' ? getPvCapacity(row) : getPvcCapacity(row) }}</span>
+          </template>
+
+          <template #cell-accessModes="{ row }">
+            <span class="font-mono text-muted font-small">{{ selectedKind === 'persistentvolumes' ? getPvAccessModes(row) : getPvcAccessModes(row) }}</span>
+          </template>
+
+          <template #cell-storageClass="{ row }">
+            <span class="font-mono text-violet font-small">{{ selectedKind === 'persistentvolumes' ? getPvStorageClass(row) : getPvcStorageClass(row) }}</span>
+          </template>
+
+          <template #cell-volume="{ row }">
+            <span class="font-mono text-muted font-small">{{ getPvcVolume(row) }}</span>
+          </template>
+
+          <template #cell-reclaimPolicy="{ row }">
+            <span class="font-mono font-small">{{ selectedKind === 'storageclasses' ? getScReclaimPolicy(row) : getPvReclaimPolicy(row) }}</span>
+          </template>
+
+          <template #cell-claim="{ row }">
+            <span class="font-mono text-muted font-small">{{ getPvClaim(row) }}</span>
+          </template>
+
+          <template #cell-provisioner="{ row }">
+            <span class="font-mono text-cyan font-small">{{ getScProvisioner(row) }}</span>
+          </template>
+
+          <template #cell-volumeBindingMode="{ row }">
+            <span class="font-mono text-muted font-small">{{ getScVolumeBindingMode(row) }}</span>
+          </template>
+
+          <template #cell-defaultClass="{ row }">
+            <span class="font-mono font-bold" :class="getScDefault(row) === 'Yes' ? 'text-emerald' : 'text-muted'">{{ getScDefault(row) }}</span>
+          </template>
+
+          <!-- Security & Networking Cells -->
+          <template #cell-podSelector="{ row }">
+            <span class="font-mono text-muted font-small">{{ getNetPolPodSelector(row) }}</span>
+          </template>
+
+          <template #cell-policyTypes="{ row }">
+            <span class="font-mono text-violet font-small">{{ getNetPolPolicyTypes(row) }}</span>
+          </template>
+
+          <template #cell-secretsCount="{ row }">
+            <span class="font-mono font-small">{{ getSaSecrets(row) }} secrets</span>
+          </template>
+
+          <!-- HPA Cells -->
+          <template #cell-reference="{ row }">
+            <span class="font-mono text-cyan font-small">{{ getHpaReference(row) }}</span>
+          </template>
+
+          <template #cell-targets="{ row }">
+            <span class="font-mono text-emerald font-small">{{ getHpaTargets(row) }}</span>
+          </template>
+
+          <template #cell-minMax="{ row }">
+            <span class="font-mono text-muted font-small">{{ getHpaMinMax(row) }}</span>
+          </template>
+
           <!-- Node Specific Slots -->
           <template #cell-roles="{ row }">
             <div class="roles-wrap">
@@ -1374,94 +1792,34 @@ function getResourceAge(resource: K8sResource): string {
             <span class="font-mono font-small">{{ getNodePodsCount(row) }}</span>
           </template>
 
-          <!-- Event Specific Slots -->
-          <template #cell-type="{ row }">
-            <span
-              class="event-type-badge font-mono"
-              :class="getEventType(row) === 'Warning' ? 'type-warning' : 'type-normal'"
-            >
-              {{ getEventType(row) === 'Warning' ? '⚠️ Warning' : 'ℹ️ Normal' }}
-            </span>
-          </template>
-
-          <template #cell-reason="{ row }">
-            <span class="font-mono font-bold font-small text-white">{{ getEventReason(row) }}</span>
-          </template>
-
-          <template #cell-involvedObject="{ row }">
-            <span class="font-mono text-cyan font-small">{{ getEventInvolvedObject(row) }}</span>
-          </template>
-
-          <template #cell-message="{ row }">
-            <span class="font-mono font-small text-muted event-msg-cell" :title="getEventMessage(row)">
-              {{ getEventMessage(row) }}
-            </span>
-          </template>
-
-          <template #cell-count="{ row }">
-            <span class="font-mono font-small">{{ getEventCount(row) }}</span>
-          </template>
-
+          <!-- Actions Slot for All Kinds -->
           <template #cell-actions="{ row }">
             <div class="action-buttons">
+              <!-- Pod Actions -->
               <template v-if="selectedKind === 'pods'">
-                <button 
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  title="View structured pod details"
-                  @click="openDetailDrawer(row)"
-                >
+                <button type="button" class="btn btn-secondary btn-xs" title="Details" @click="openDetailDrawer(row)">
                   <span>📊 Details</span>
                 </button>
-                <button 
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  title="Edit / View raw YAML"
-                  @click="openResourceYaml(row)"
-                >
+                <button type="button" class="btn btn-secondary btn-xs" title="YAML" @click="openResourceYaml(row)">
                   <span>📄 YAML</span>
                 </button>
-                <button 
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  title="View Pod Logs"
-                  @click="openPodLogs(row)"
-                >
+                <button type="button" class="btn btn-secondary btn-xs" title="Logs" @click="openPodLogs(row)">
                   <span>📜 Logs</span>
                 </button>
-                <button 
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  title="Open Web Terminal"
-                  @click="openPodTerminal(row)"
-                >
-                  <span>🖥️ Terminal</span>
+                <button type="button" class="btn btn-secondary btn-xs" title="Terminal" @click="openPodTerminal(row)">
+                  <span>🖥️</span>
                 </button>
-                <button 
-                  type="button"
-                  class="btn btn-danger btn-xs"
-                  title="Delete Pod"
-                  @click="promptDelete(row)"
-                >
+                <button type="button" class="btn btn-danger btn-xs" title="Delete Pod" @click="promptDelete(row)">
                   <span>🗑️</span>
                 </button>
               </template>
 
-                            <template v-else-if="selectedKind === 'nodes'">
-                <button 
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  title="View node details & taints"
-                  @click="openDetailDrawer(row)"
-                >
+              <!-- Node Actions -->
+              <template v-else-if="selectedKind === 'nodes'">
+                <button type="button" class="btn btn-secondary btn-xs" title="Details" @click="openDetailDrawer(row)">
                   <span>📊 Details</span>
                 </button>
-                <button 
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  title="Edit / View raw YAML"
-                  @click="openResourceYaml(row)"
-                >
+                <button type="button" class="btn btn-secondary btn-xs" title="YAML" @click="openResourceYaml(row)">
                   <span>📄 YAML</span>
                 </button>
                 <button
@@ -1495,29 +1853,85 @@ function getResourceAge(resource: K8sResource): string {
                 </button>
               </template>
 
+              <!-- Workload Action: Deployments -->
+              <template v-else-if="selectedKind === 'deployments'">
+                <button type="button" class="btn btn-primary btn-xs" title="Scale Deployment Replicas" @click="openScaleModal(row)">
+                  <span>⚡ Scale</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-xs" title="Rolling Restart" @click="handleRestartWorkload(row)">
+                  <span>🔄 Restart</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-xs" title="Details" @click="openDetailDrawer(row)">
+                  <span>📊</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-xs" title="Edit YAML" @click="openResourceYaml(row)">
+                  <span>📄</span>
+                </button>
+                <button type="button" class="btn btn-danger btn-xs" title="Delete" @click="promptDelete(row)">
+                  <span>🗑️</span>
+                </button>
+              </template>
+
+              <!-- Workload Action: StatefulSets -->
+              <template v-else-if="selectedKind === 'statefulsets'">
+                <button type="button" class="btn btn-primary btn-xs" title="Scale StatefulSet Replicas" @click="openScaleModal(row)">
+                  <span>⚡ Scale</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-xs" title="Details" @click="openDetailDrawer(row)">
+                  <span>📊</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-xs" title="Edit YAML" @click="openResourceYaml(row)">
+                  <span>📄</span>
+                </button>
+                <button type="button" class="btn btn-danger btn-xs" title="Delete" @click="promptDelete(row)">
+                  <span>🗑️</span>
+                </button>
+              </template>
+
+              <!-- Workload Action: DaemonSets -->
+              <template v-else-if="selectedKind === 'daemonsets'">
+                <button type="button" class="btn btn-secondary btn-xs" title="Rolling Restart" @click="handleRestartWorkload(row)">
+                  <span>🔄 Restart</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-xs" title="Details" @click="openDetailDrawer(row)">
+                  <span>📊</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-xs" title="Edit YAML" @click="openResourceYaml(row)">
+                  <span>📄</span>
+                </button>
+                <button type="button" class="btn btn-danger btn-xs" title="Delete" @click="promptDelete(row)">
+                  <span>🗑️</span>
+                </button>
+              </template>
+
+              <!-- Workload Action: CronJobs -->
+              <template v-else-if="selectedKind === 'cronjobs'">
+                <button type="button" class="btn btn-primary btn-xs" title="Trigger Job Now" @click="handleTriggerCronJob(row)">
+                  <span>⚡ Trigger</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-xs" :title="row.spec?.suspend ? 'Resume CronJob' : 'Suspend CronJob'" @click="handleToggleSuspendCronJob(row)">
+                  <span>{{ row.spec?.suspend ? '▶ Resume' : '⏸ Suspend' }}</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-xs" title="Details" @click="openDetailDrawer(row)">
+                  <span>📊</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-xs" title="YAML" @click="openResourceYaml(row)">
+                  <span>📄</span>
+                </button>
+                <button type="button" class="btn btn-danger btn-xs" title="Delete" @click="promptDelete(row)">
+                  <span>🗑️</span>
+                </button>
+              </template>
+
+              <!-- Default Actions for All other resources -->
               <template v-else>
-                <button 
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  title="View structured object details"
-                  @click="openDetailDrawer(row)"
-                >
+                <button type="button" class="btn btn-secondary btn-xs" title="Details" @click="openDetailDrawer(row)">
                   <span>📊 Details</span>
                 </button>
-                <button 
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  title="Edit / View raw YAML"
-                  @click="openResourceYaml(row)"
-                >
+                <button type="button" class="btn btn-secondary btn-xs" title="Edit / View YAML" @click="openResourceYaml(row)">
                   <span>📄 YAML</span>
                 </button>
-                <button 
-                  type="button"
-                  class="btn btn-danger btn-xs"
-                  title="Delete resource"
-                  @click="promptDelete(row)"
-                >
+                <button type="button" class="btn btn-danger btn-xs" title="Delete Resource" @click="promptDelete(row)">
                   <span>🗑️</span>
                 </button>
               </template>
@@ -1527,589 +1941,137 @@ function getResourceAge(resource: K8sResource): string {
       </div>
     </main>
 
-    <!-- Detail Drawer (Structured View + Live YAML) -->
+    <!-- Workload Action: Scale Modal -->
     <ModalDrawer
-      v-model:show="showDetailDrawer"
-      mode="drawer"
-      :title="`${selectedResource?.kind || 'Resource'}: ${selectedResource?.metadata?.name || ''}`"
-      :subtitle="`Cluster: ${selectedCluster} ? Namespace: ${selectedResource?.metadata?.namespace || 'cluster-scoped'}`"
-      max-width="680px"
+      :show="showScaleModal"
+      mode="modal"
+      :title="`Scale ${scaleTarget?.kind || 'Workload'}`"
+      :subtitle="`Resource: ${scaleTarget?.metadata?.name || ''} (${scaleTarget?.metadata?.namespace || 'default'})`"
+      max-width="480px"
+      @close="showScaleModal = false"
     >
-      <div v-if="selectedResource" class="detail-drawer-content">
-        <!-- Tabs Header -->
-        <div class="drawer-tabs">
-          <button 
-            type="button" 
-            class="tab-btn" 
-            :class="{ 'is-active': activeDrawerTab === 'overview' }"
-            @click="activeDrawerTab = 'overview'"
-          >
-            📊 Overview & Data
-          </button>
-          <button 
-            v-if="['Pod', 'Deployment', 'Node'].includes(selectedResource.kind) || ['pods', 'deployments', 'nodes'].includes(selectedKind)"
-            type="button" 
-            class="tab-btn" 
-            :class="{ 'is-active': activeDrawerTab === 'events' }"
-            @click="activeDrawerTab = 'events'"
-          >
-            📢 Events
-          </button>
-          <button 
-            type="button" 
-            class="tab-btn" 
-            :class="{ 'is-active': activeDrawerTab === 'yaml' }"
-            @click="activeDrawerTab = 'yaml'"
-          >
-            📝 Live Manifest (YAML)
-          </button>
-        </div>
+      <div class="scale-modal-body">
+        <p class="text-muted font-small">
+          Adjust the desired number of pod replicas. The Kubernetes controller will automatically adjust pods.
+        </p>
 
-        <!-- Tab 1: Overview -->
-        <div v-if="activeDrawerTab === 'overview'" class="tab-pane animate-fade-in">
-          <!-- Metadata Card -->
-          <div class="info-card glass-panel">
-            <div class="card-title">Object Metadata</div>
-            <div class="meta-grid">
-              <div class="meta-item">
-                <span class="meta-label">Name:</span>
-                <span class="font-mono text-cyan">{{ selectedResource.metadata?.name }}</span>
-              </div>
-              <div class="meta-item">
-                <span class="meta-label">Namespace:</span>
-                <span class="font-mono">{{ selectedResource.metadata?.namespace || 'cluster-scoped' }}</span>
-              </div>
-              <div class="meta-item">
-                <span class="meta-label">Kind:</span>
-                <span class="font-mono">{{ selectedResource.kind }}</span>
-              </div>
-              <div class="meta-item">
-                <span class="meta-label">API Version:</span>
-                <span class="font-mono text-muted">{{ selectedResource.apiVersion }}</span>
-              </div>
-              <div class="meta-item">
-                <span class="meta-label">Created At:</span>
-                <span class="font-mono text-muted">{{ selectedResource.metadata?.creationTimestamp || 'N/A' }}</span>
-              </div>
-              <div class="meta-item">
-                <span class="meta-label">UID:</span>
-                <span class="font-mono text-muted font-small">{{ selectedResource.metadata?.uid || 'N/A' }}</span>
-              </div>
-            </div>
+        <div class="scale-stepper-wrap">
+          <label class="form-label">Desired Replicas</label>
+          <div class="stepper-input-group">
+            <button 
+              type="button" 
+              class="btn-stepper"
+              :disabled="scaleReplicasCount <= 0"
+              @click="scaleReplicasCount = Math.max(0, scaleReplicasCount - 1)"
+            >
+              -
+            </button>
+            <input 
+              v-model.number="scaleReplicasCount" 
+              type="number" 
+              min="0" 
+              max="100" 
+              class="input-glass font-mono scale-num-input" 
+            />
+            <button 
+              type="button" 
+              class="btn-stepper"
+              @click="scaleReplicasCount = scaleReplicasCount + 1"
+            >
+              +
+            </button>
           </div>
-
-          <!-- Labels Section -->
-          <div v-if="selectedResource.metadata?.labels && Object.keys(selectedResource.metadata.labels).length > 0" class="info-card glass-panel">
-            <div class="card-title">Labels</div>
-            <div class="labels-wrap">
-              <span 
-                v-for="(val, key) in selectedResource.metadata.labels" 
-                :key="key" 
-                class="label-badge font-mono"
-              >
-                {{ key }}: {{ val }}
-              </span>
-            </div>
-          </div>
-
-          
-          <!-- If Node: Show Node Actions, Taints, Labels, System Info, Conditions -->
-          <div v-if="selectedResource.kind === 'Node' || selectedKind === 'nodes'" class="node-detail-section">
-            <!-- Node Quick Actions Banner -->
-            <div class="pod-quick-actions glass-panel">
-              <div class="quick-actions-label font-mono font-small text-muted">Node Operations:</div>
-              <div class="quick-actions-btns">
-                <button
-                  v-if="isNodeUnschedulable(selectedResource)"
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  :disabled="operatingNode"
-                  title="Make node schedulable again"
-                  @click="handleUncordonNode(selectedResource)"
-                >
-                  <span>🔓 Uncordon Node</span>
-                </button>
-                <button
-                  v-else
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  :disabled="operatingNode"
-                  title="Mark node as unschedulable"
-                  @click="handleCordonNode(selectedResource)"
-                >
-                  <span>🔒 Cordon Node</span>
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-danger btn-xs"
-                  :disabled="operatingNode || drainingNode"
-                  title="Safely evict pods from node"
-                  @click="openDrainModal(selectedResource)"
-                >
-                  <span>🧹 Drain Node...</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Node System Info Card -->
-            <div class="info-card glass-panel">
-              <div class="card-title">Node System & Hardware Architecture</div>
-              <div class="meta-grid">
-                <div class="meta-item">
-                  <span class="meta-label">Kubelet Version:</span>
-                  <span class="font-mono text-cyan">{{ getNodeVersion(selectedResource) }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">Internal IP:</span>
-                  <span class="font-mono">{{ getNodeInternalIP(selectedResource) }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">OS / Architecture:</span>
-                  <span class="font-mono">{{ getNodeOSArch(selectedResource) }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">Container Runtime:</span>
-                  <span class="font-mono text-muted font-small">{{ getNodeSystemInfo(selectedResource).containerRuntimeVersion || 'N/A' }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">Kernel Version:</span>
-                  <span class="font-mono text-muted font-small">{{ getNodeSystemInfo(selectedResource).kernelVersion || 'N/A' }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">OS Image:</span>
-                  <span class="font-mono text-muted font-small">{{ getNodeSystemInfo(selectedResource).osImage || 'N/A' }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Node Conditions Card -->
-            <div class="info-card glass-panel">
-              <div class="card-title">Node Status Conditions</div>
-              <div class="conditions-table-wrap">
-                <table class="conditions-table font-mono font-small">
-                  <thead>
-                    <tr>
-                      <th>Condition</th>
-                      <th>Status</th>
-                      <th>Reason</th>
-                      <th>Message</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="c in getNodeConditions(selectedResource)" :key="c.type">
-                      <td class="text-cyan font-bold">{{ c.type }}</td>
-                      <td>
-                        <span
-                          class="status-pill"
-                          :class="c.status === 'True' ? (c.type === 'Ready' ? 'pill-green' : 'pill-amber') : (c.type === 'Ready' ? 'pill-red' : 'pill-green')"
-                        >
-                          {{ c.status }}
-                        </span>
-                      </td>
-                      <td class="text-muted">{{ c.reason || '-' }}</td>
-                      <td class="text-muted text-break">{{ c.message || '-' }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <!-- Node Taints Management Card -->
-            <div class="info-card glass-panel">
-              <div class="card-header-flex">
-                <div class="card-title">Node Taints ({{ getNodeTaints(selectedResource).length }})</div>
-              </div>
-
-              <!-- Taint List -->
-              <div v-if="getNodeTaints(selectedResource).length === 0" class="empty-inline-hint text-muted font-small">
-                No active taints configured on this node.
-              </div>
-              <div v-else class="taints-list">
-                <div v-for="(t, idx) in getNodeTaints(selectedResource)" :key="t.key + '-' + idx" class="taint-chip glass-panel font-mono">
-                  <span class="text-cyan">{{ t.key }}</span>
-                  <span v-if="t.value" class="text-white">={{ t.value }}</span>
-                  <span class="taint-effect text-amber">:{{ t.effect }}</span>
-                  <button
-                    type="button"
-                    class="btn-remove-inline"
-                    :disabled="updatingTaints"
-                    title="Remove Taint"
-                    @click="handleRemoveTaint(selectedResource, idx)"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-
-              <!-- Add Taint Form -->
-              <div class="add-taint-form glass-panel">
-                <div class="form-subtitle font-mono font-small text-muted">Add New Node Taint:</div>
-                <div class="add-taint-inputs">
-                  <input
-                    v-model="newTaintKey"
-                    type="text"
-                    placeholder="Key (e.g. dedicated)"
-                    class="input-glass font-mono form-input-sm"
-                  />
-                  <input
-                    v-model="newTaintValue"
-                    type="text"
-                    placeholder="Value (optional)"
-                    class="input-glass font-mono form-input-sm"
-                  />
-                  <select v-model="newTaintEffect" class="input-glass font-mono form-input-sm select-effect">
-                    <option value="NoSchedule">NoSchedule</option>
-                    <option value="PreferNoSchedule">PreferNoSchedule</option>
-                    <option value="NoExecute">NoExecute</option>
-                  </select>
-                  <button
-                    type="button"
-                    class="btn btn-secondary btn-xs"
-                    :disabled="updatingTaints || !newTaintKey.trim()"
-                    @click="handleAddTaint(selectedResource)"
-                  >
-                    <span>+ Add Taint</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Node Labels Editor Card -->
-            <div class="info-card glass-panel">
-              <div class="card-header-flex">
-                <div class="card-title">Node Labels Editor</div>
-                <button
-                  type="button"
-                  class="btn btn-primary btn-xs"
-                  :disabled="updatingLabels"
-                  @click="handleSaveNodeLabels(selectedResource)"
-                >
-                  <span>{{ updatingLabels ? 'Saving...' : '💾 Save Labels' }}</span>
-                </button>
-              </div>
-
-              <div class="labels-editor-list">
-                <div v-for="(_val, key) in nodeLabelsCopy" :key="key" class="label-edit-row font-mono">
-                  <span class="label-key text-cyan">{{ key }}</span>
-                  <span class="label-sep text-muted">=</span>
-                  <input
-                    v-model="nodeLabelsCopy[key]"
-                    type="text"
-                    class="input-glass font-mono label-val-input"
-                  />
-                  <button
-                    type="button"
-                    class="btn-remove-inline"
-                    title="Remove label"
-                    @click="removeLabelFromCopy(key as string)"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-
-              <!-- Add Label Row -->
-              <div class="add-label-row">
-                <input
-                  v-model="newLabelKey"
-                  type="text"
-                  placeholder="New label key"
-                  class="input-glass font-mono form-input-sm"
-                />
-                <span class="text-muted">=</span>
-                <input
-                  v-model="newLabelValue"
-                  type="text"
-                  placeholder="New label value"
-                  class="input-glass font-mono form-input-sm"
-                />
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-xs"
-                  :disabled="!newLabelKey.trim()"
-                  @click="addLabelToCopy"
-                >
-                  <span>+ Add</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- If Pod: Show Pod Info, Container List, Conditions List -->
-          <div v-if="selectedResource.kind === 'Pod' || selectedKind === 'pods'" class="pod-detail-section">
-            <!-- Pod Quick Actions Banner -->
-            <div class="pod-quick-actions glass-panel">
-              <div class="quick-actions-label font-mono font-small text-muted">Pod Quick Actions:</div>
-              <div class="quick-actions-btns">
-                <button 
-                  type="button" 
-                  class="btn btn-secondary btn-xs" 
-                  title="View Pod Logs" 
-                  @click="openPodLogs(selectedResource)"
-                >
-                  <span>📜 View Logs</span>
-                </button>
-                <button 
-                  type="button" 
-                  class="btn btn-secondary btn-xs" 
-                  title="Open Web Terminal" 
-                  @click="openPodTerminal(selectedResource)"
-                >
-                  <span>🖥️ Terminal</span>
-                </button>
-                <button 
-                  type="button" 
-                  class="btn btn-danger btn-xs" 
-                  title="Delete Pod" 
-                  @click="promptDelete(selectedResource)"
-                >
-                  <span>🗑️ Delete Pod</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Pod Runtime & Networking Info Card -->
-            <div class="info-card glass-panel">
-              <div class="card-title">Pod Runtime & Networking</div>
-              <div class="meta-grid">
-                <div class="meta-item">
-                  <span class="meta-label">Node Name:</span>
-                  <span class="font-mono text-cyan">{{ getPodNode(selectedResource) }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">Pod IP:</span>
-                  <span class="font-mono">{{ getPodIP(selectedResource) }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">Host IP:</span>
-                  <span class="font-mono">{{ getHostIP(selectedResource) }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">QoS Class:</span>
-                  <span class="font-mono text-emerald">{{ getPodQoS(selectedResource) }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">Service Account:</span>
-                  <span class="font-mono">{{ getPodServiceAccount(selectedResource) }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-label">Status Phase:</span>
-                  <div><StatusBadge :status="getPodPhase(selectedResource)" size="sm" /></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Container List Card -->
-            <div class="info-card glass-panel">
-              <div class="card-title">
-                <span>Containers ({{ getPodContainers(selectedResource).length }})</span>
-              </div>
-              <div class="containers-list">
-                <div 
-                  v-for="c in getPodContainers(selectedResource)" 
-                  :key="c.name" 
-                  class="container-item glass-panel"
-                >
-                  <div class="container-header">
-                    <div class="container-name-wrap">
-                      <span class="container-status-dot" :class="`dot-${c.ready ? 'emerald' : c.stateType === 'waiting' ? 'amber' : c.stateType === 'terminated' ? 'rose' : 'cyan'}`"></span>
-                      <strong class="container-name font-mono">{{ c.name }}</strong>
-                    </div>
-                    <div class="container-badges">
-                      <button 
-                        type="button" 
-                        class="btn-container-quick-action font-mono" 
-                        title="View logs for this container"
-                        @click.stop="openPodLogs(selectedResource, c.name)"
-                      >
-                        📜 Logs
-                      </button>
-                      <button 
-                        type="button" 
-                        class="btn-container-quick-action font-mono" 
-                        title="Open terminal for this container"
-                        @click.stop="openPodTerminal(selectedResource, c.name)"
-                      >
-                        🖥️ Term
-                      </button>
-                      <span class="badge-sm font-mono" :class="c.ready ? 'badge-ready' : 'badge-not-ready'">
-                        {{ c.ready ? 'Ready' : 'Not Ready' }}
-                      </span>
-                      <span class="badge-sm font-mono badge-restarts" :class="{ 'has-restarts': c.restarts > 0 }">
-                        Restarts: {{ c.restarts }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div class="container-details-grid font-mono">
-                    <div class="cd-row">
-                      <span class="cd-label">Image:</span>
-                      <span class="cd-val text-cyan truncate" :title="c.image">{{ c.image }}</span>
-                    </div>
-                    <div class="cd-row">
-                      <span class="cd-label">State:</span>
-                      <span class="cd-val">{{ c.state }}</span>
-                    </div>
-                    <div class="cd-row">
-                      <span class="cd-label">Ports:</span>
-                      <span class="cd-val text-muted">{{ c.ports }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Conditions List Card -->
-            <div v-if="getPodConditions(selectedResource).length > 0" class="info-card glass-panel">
-              <div class="card-title">Pod Conditions</div>
-              <div class="conditions-table">
-                <div 
-                  v-for="cond in getPodConditions(selectedResource)" 
-                  :key="cond.type" 
-                  class="condition-row"
-                >
-                  <div class="condition-status-col">
-                    <span 
-                      class="cond-icon" 
-                      :class="cond.status === 'True' ? 'cond-true' : 'cond-false'"
-                    >
-                      {{ cond.status === 'True' ? '✓' : '✗' }}
-                    </span>
-                    <span class="cond-type font-mono">{{ cond.type }}</span>
-                  </div>
-                  <div class="condition-details">
-                    <span class="cond-status-text font-mono" :class="cond.status === 'True' ? 'text-emerald' : 'text-amber'">
-                      Status: {{ cond.status }}
-                    </span>
-                    <span v-if="cond.reason" class="cond-reason font-mono text-muted">
-                      Reason: {{ cond.reason }}
-                    </span>
-                    <span v-if="cond.message" class="cond-msg font-mono text-muted font-small">
-                      {{ cond.message }}
-                    </span>
-                    <span v-if="cond.lastTransitionTime" class="cond-time font-mono text-muted font-small">
-                      Transition: {{ cond.lastTransitionTime }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- If Secret: Embed SecretViewer -->
-          <div v-else-if="selectedResource.kind === 'Secret' || selectedKind === 'secrets'" class="secret-embed-section">
-            <div class="card-title">Secret Credentials & Keys</div>
-            <SecretViewer :secret="selectedResource" />
-          </div>
-
-          <!-- If ConfigMap: Show Key-Value Pairs -->
-          <div v-else-if="selectedResource.data && Object.keys(selectedResource.data).length > 0" class="info-card glass-panel">
-            <div class="card-title">ConfigMap Data</div>
-            <div class="kv-display-table">
-              <div v-for="(val, key) in selectedResource.data" :key="key" class="kv-item">
-                <div class="kv-key font-mono">{{ key }}</div>
-                <div class="kv-val font-mono">{{ val }}</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Spec Details -->
-          <div v-if="selectedResource.spec && Object.keys(selectedResource.spec).length > 0" class="info-card glass-panel">
-            <div class="card-title">Spec Configuration</div>
-            <pre class="spec-pre font-mono">{{ jsonToYaml(selectedResource.spec) }}</pre>
-          </div>
-        </div>
-
-        
-        <!-- Tab: Events Timeline -->
-        <div v-else-if="activeDrawerTab === 'events'" class="tab-pane animate-fade-in">
-          <EventsTimeline
-            :cluster="selectedCluster"
-            :namespace="selectedResource.metadata?.namespace"
-            :kind="selectedResource.kind"
-            :name="selectedResource.metadata?.name"
-            :auto-refresh="true"
+          <input 
+            v-model.number="scaleReplicasCount" 
+            type="range" 
+            min="0" 
+            max="20" 
+            class="scale-range-slider" 
           />
-        </div>
-
-        <!-- Tab 3: YAML -->
-        <div v-else class="tab-pane animate-fade-in">
-          <div class="yaml-pane-toolbar">
-            <span class="text-muted font-mono font-small">apiVersion: {{ selectedResource.apiVersion }}</span>
-            <div class="pane-actions">
-              <button 
-                type="button" 
-                class="btn btn-secondary btn-xs"
-                :class="{ 'btn-copied': drawerYamlCopied }"
-                @click="copyDrawerYaml"
-              >
-                <span>{{ drawerYamlCopied ? '? Copied!' : '?? Copy YAML' }}</span>
-              </button>
-              <button 
-                type="button" 
-                class="btn btn-primary btn-xs"
-                @click="openResourceYaml(selectedResource)"
-              >
-                <span>?? Edit in Editor</span>
-              </button>
-            </div>
-          </div>
-          <div class="yaml-code-wrapper font-mono">
-            <pre class="yaml-pre">{{ jsonToYaml(selectedResource) }}</pre>
-          </div>
         </div>
       </div>
 
-      <template #footer="{ close }">
-        <button type="button" class="btn btn-secondary" @click="close">Close</button>
-        <button 
-          v-if="selectedResource"
-          type="button" 
-          class="btn btn-danger" 
-          @click="promptDelete(selectedResource)"
-        >
-          <span>??? Delete Resource</span>
+      <template #footer>
+        <button type="button" class="btn btn-secondary" :disabled="scalingResource" @click="showScaleModal = false">
+          Cancel
         </button>
         <button 
-          v-if="selectedResource"
           type="button" 
-          class="btn btn-primary" 
-          @click="openResourceYaml(selectedResource)"
+          class="btn btn-primary"
+          :disabled="scalingResource"
+          @click="handleScaleConfirm"
         >
-          <span>?? Edit Manifest</span>
+          <span>{{ scalingResource ? '⏳ Scaling...' : '⚡ Apply Scale' }}</span>
         </button>
       </template>
     </ModalDrawer>
 
-    <!-- Create Resource Modal -->
-    <CreateResourceModal
-      v-model:show="showCreateModal"
-      :cluster="selectedCluster"
-      :namespaces="namespaces"
-      :default-namespace="selectedNamespace !== 'all' ? selectedNamespace : 'default'"
-      :default-kind="selectedKind"
-      @created="onResourceCreated"
-    />
-
-    <!-- YAML Editor Modal -->
-    <YamlEditorModal
-      v-model:show="showYamlModal"
-      :cluster="selectedCluster"
-      :namespace="selectedNamespace !== 'all' ? selectedNamespace : 'default'"
-      :title="yamlEditorTitle"
-      :kind="currentKindLabel"
-      :initial-yaml="yamlEditorInitialContent"
-      :mode="yamlEditorMode"
-      @applied="onYamlApplied"
-    />
-
-    <!-- New Namespace Modal -->
+    <!-- Node Drain Modal -->
     <ModalDrawer
-      v-model:show="showNewNsModal"
+      :show="showDrainModal"
       mode="modal"
-      title="Create Namespace"
+      title="Drain Kubernetes Node"
+      :subtitle="`Safely evict all pods from ${drainTargetNode?.metadata?.name || ''}`"
+      max-width="540px"
+      @close="showDrainModal = false"
+    >
+      <div class="drain-modal-body">
+        <p class="text-muted font-small">
+          Draining will cordon the node and evict all pods. Configure eviction parameters:
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">Grace Period (seconds)</label>
+          <input 
+            v-model.number="drainOptions.gracePeriodSeconds" 
+            type="number" 
+            class="input-glass font-mono" 
+            min="0" 
+            max="3600" 
+          />
+        </div>
+
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input v-model="drainOptions.ignoreDaemonSets" type="checkbox" />
+            <span>Ignore DaemonSet-managed pods (Recommended)</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input v-model="drainOptions.deleteEmptyDirData" type="checkbox" />
+            <span>Delete local data in emptyDir volumes</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input v-model="drainOptions.force" type="checkbox" />
+            <span>Force eviction (continue if pods are unmanaged)</span>
+          </label>
+        </div>
+      </div>
+
+      <template #footer>
+        <button type="button" class="btn btn-secondary" :disabled="drainingNode" @click="showDrainModal = false">
+          Cancel
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-danger"
+          :disabled="drainingNode"
+          @click="handleDrainNodeConfirm"
+        >
+          <span>{{ drainingNode ? '⏳ Draining...' : '🧹 Confirm Drain' }}</span>
+        </button>
+      </template>
+    </ModalDrawer>
+
+    <!-- Create Namespace Modal -->
+    <ModalDrawer
+      :show="showNewNsModal"
+      mode="modal"
+      title="Create Kubernetes Namespace"
       :subtitle="`Cluster: ${selectedCluster}`"
-      max-width="480px"
+      max-width="460px"
+      @close="showNewNsModal = false"
     >
       <div class="form-group">
         <label class="form-label required">Namespace Name</label>
@@ -2117,310 +2079,721 @@ function getResourceAge(resource: K8sResource): string {
           v-model="newNsName"
           type="text" 
           class="input-glass font-mono" 
-          placeholder="e.g. stage-environment" 
+          placeholder="e.g. staging, payment-service" 
+          required 
           @keydown.enter="handleCreateNamespace"
         />
-        <p v-if="newNsError" class="field-error">{{ newNsError }}</p>
+        <span v-if="newNsError" class="text-rose text-xs">{{ newNsError }}</span>
       </div>
 
-      <template #footer="{ close }">
-        <button type="button" class="btn btn-secondary" :disabled="creatingNs" @click="close">Cancel</button>
+      <template #footer>
+        <button type="button" class="btn btn-secondary" :disabled="creatingNs" @click="showNewNsModal = false">
+          Cancel
+        </button>
         <button 
           type="button" 
-          class="btn btn-primary" 
+          class="btn btn-primary"
           :disabled="creatingNs || !newNsName.trim()"
           @click="handleCreateNamespace"
         >
-          <span>{{ creatingNs ? 'Creating...' : 'Create Namespace' }}</span>
+          <span>{{ creatingNs ? '⏳ Creating...' : '✨ Create Namespace' }}</span>
         </button>
       </template>
     </ModalDrawer>
 
     <!-- Delete Confirmation Modal -->
     <ModalDrawer
-      v-model:show="showDeleteModal"
+      :show="showDeleteModal"
       mode="modal"
-      title="Confirm Resource Deletion"
-      subtitle="This action is permanent and cannot be undone."
-      max-width="480px"
+      :title="`Delete ${resourceToDelete?.kind || 'Resource'}`"
+      :subtitle="`Cluster: ${selectedCluster}`"
+      max-width="500px"
+      @close="showDeleteModal = false"
     >
-      <div v-if="resourceToDelete" class="delete-dialog-content">
+      <div class="delete-modal-content">
+        <div class="delete-warning-icon">⚠️</div>
         <p class="delete-msg">
-          Are you sure you want to delete 
-          <strong>{{ resourceToDelete.kind }}/{{ resourceToDelete.metadata?.name }}</strong> 
-          in namespace 
-          <strong>{{ resourceToDelete.metadata?.namespace || 'default' }}</strong>?
+          Are you sure you want to permanently delete
+          <strong class="text-white font-mono">{{ resourceToDelete?.kind }}/{{ resourceToDelete?.metadata?.name }}</strong>
+          <span v-if="resourceToDelete?.metadata?.namespace">
+            in namespace <strong class="text-cyan font-mono">{{ resourceToDelete.metadata.namespace }}</strong>
+          </span>?
+        </p>
+        <p class="text-muted font-small">
+          This action cannot be undone. Any active workloads or bound resources may be terminated immediately.
         </p>
       </div>
 
-      <template #footer="{ close }">
-        <button type="button" class="btn btn-secondary" :disabled="deletingResource" @click="close">Cancel</button>
+      <template #footer>
+        <button type="button" class="btn btn-secondary" :disabled="deletingResource" @click="showDeleteModal = false">
+          Cancel
+        </button>
         <button 
           type="button" 
-          class="btn btn-danger" 
+          class="btn btn-danger"
           :disabled="deletingResource"
           @click="handleDeleteConfirmed"
         >
-          <span>{{ deletingResource ? 'Deleting...' : 'Confirm Delete' }}</span>
+          <span>{{ deletingResource ? '⏳ Deleting...' : '🗑️ Delete Permanently' }}</span>
         </button>
       </template>
-    </ModalDrawer>
-
-    
-    <!-- Node Drain Modal -->
-    <ModalDrawer
-      v-model:show="showDrainModal"
-      mode="modal"
-      title="Drain Kubernetes Node"
-      :subtitle="'Cluster: ' + selectedCluster + ' • Node: ' + (drainTargetNode?.metadata?.name || '')"
-      max-width="520px"
-    >
-      <div v-if="drainTargetNode" class="drain-dialog-content">
-        <p class="delete-msg font-mono">
-          Drain evicts all pods from <strong>{{ drainTargetNode.metadata?.name }}</strong> safely before node maintenance or decommission.
-        </p>
-
-        <div class="form-group">
-          <label class="form-label">Grace Period (seconds)</label>
-          <input
-            v-model.number="drainOptions.gracePeriodSeconds"
-            type="number"
-            min="0"
-            class="input-glass font-mono"
-            placeholder="30"
-          />
-        </div>
-
-        <div class="form-group checkbox-group">
-          <label class="cyber-checkbox-label">
-            <input
-              v-model="drainOptions.ignoreDaemonSets"
-              type="checkbox"
-              class="cyber-checkbox"
-            />
-            <span>Ignore DaemonSet pods</span>
-          </label>
-        </div>
-
-        <div class="form-group checkbox-group">
-          <label class="cyber-checkbox-label">
-            <input
-              v-model="drainOptions.deleteEmptyDirData"
-              type="checkbox"
-              class="cyber-checkbox"
-            />
-            <span>Delete pods using emptyDir volume data</span>
-          </label>
-        </div>
-
-        <div class="form-group checkbox-group">
-          <label class="cyber-checkbox-label">
-            <input
-              v-model="drainOptions.force"
-              type="checkbox"
-              class="cyber-checkbox"
-            />
-            <span>Force eviction (even if unmanaged standalone pods exist)</span>
-          </label>
-        </div>
-      </div>
-
-      <template #footer="{ close }">
-        <button type="button" class="btn btn-secondary" :disabled="drainingNode" @click="close">Cancel</button>
-        <button 
-          type="button" 
-          class="btn btn-danger" 
-          :disabled="drainingNode"
-          @click="handleDrainNodeConfirm"
-        >
-          <span>{{ drainingNode ? 'Draining...' : 'Confirm Drain Node' }}</span>
-        </button>
-      </template>
-    </ModalDrawer>
-
-    <!-- Import Cluster Modal -->
-    <ModalDrawer
-      v-model:show="showImportModal"
-      mode="modal"
-      title="Import Kubernetes Cluster"
-      subtitle="Upload cluster kubeconfig to establish secure telemetry bridge"
-      max-width="600px"
-    >
-      <div class="modal-form">
-        <div class="form-row">
-          <div class="form-group flex-1">
-            <label class="form-label required">Cluster Identifier</label>
-            <input v-model="importForm.id" type="text" placeholder="e.g. k8s-prod-us" class="input-glass font-mono" />
-          </div>
-          <div class="form-group flex-1">
-            <label class="form-label required">Cluster Display Name</label>
-            <input v-model="importForm.name" type="text" placeholder="e.g. Production US-East" class="input-glass" />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group flex-1">
-            <label class="form-label">Fleet Tier</label>
-            <select v-model="importForm.group" class="input-glass">
-              <option value="production">Production</option>
-              <option value="staging">Staging</option>
-              <option value="development">Development</option>
-              <option value="edge">Edge & Remote</option>
-            </select>
-          </div>
-          <div class="form-group flex-1">
-            <label class="form-label">Provider</label>
-            <select v-model="importForm.provider" class="input-glass">
-              <option value="k8s">Generic K8s / Self-Hosted</option>
-              <option value="aws">AWS (EKS)</option>
-              <option value="gcp">Google Cloud (GKE)</option>
-              <option value="azure">Azure (AKS)</option>
-              <option value="baremetal">Bare Metal</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Region / Datacenter</label>
-          <input v-model="importForm.region" type="text" placeholder="e.g. us-east-1 / On-Prem DC-01" class="input-glass" />
-        </div>
-
-        <div class="form-group">
-          <div class="mode-tabs">
-            <button
-              type="button"
-              class="mode-tab"
-              :class="{ active: importMode === 'file' }"
-              @click="importMode = 'file'"
-            >
-              📁 File Upload
-            </button>
-            <button
-              type="button"
-              class="mode-tab"
-              :class="{ active: importMode === 'text' }"
-              @click="importMode = 'text'"
-            >
-              📝 Paste YAML
-            </button>
-          </div>
-
-          <div v-if="importMode === 'file'" class="file-drop-area">
-            <label class="form-label">Kubeconfig File (.yaml / .config / .json) *</label>
-            <input type="file" accept=".yaml,.yml,.config,.json" class="file-input" @change="handleFileChange" />
-          </div>
-
-          <div v-else class="text-paste-area">
-            <label class="form-label">Paste Kubeconfig YAML Content *</label>
-            <textarea
-              v-model="importForm.kubeconfigRaw"
-              rows="6"
-              class="input-glass font-mono text-area-input select-full"
-              placeholder="apiVersion: v1&#10;clusters:&#10;..."
-            ></textarea>
-          </div>
-          <span class="form-hint">🔒 Kubeconfig is encrypted with AES-256 GCM in local vault before persistence. Sensitive tokens are never returned in cleartext.</span>
-        </div>
-      </div>
-
-      <template #footer="{ close }">
-        <button type="button" class="btn btn-secondary" :disabled="importingCluster" @click="close">Cancel</button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          :disabled="importingCluster || !importForm.name.trim()"
-          @click="handleImportCluster"
-        >
-          <span>{{ importingCluster ? 'Importing...' : 'Import Cluster' }}</span>
-        </button>
-      </template>
-    </ModalDrawer>
-
-    <!-- Pod Terminal Modal -->
-    <ModalDrawer
-      v-model:show="showTerminalModal"
-      mode="modal"
-      :title="`Pod Terminal: ${terminalPod?.metadata?.name || 'Pod'}`"
-      :subtitle="`Cluster: ${selectedCluster} | Namespace: ${terminalPod?.metadata?.namespace || 'default'}`"
-      max-width="1000px"
-    >
-      <PodTerminal
-        v-if="showTerminalModal && terminalPod"
-        :cluster="selectedCluster"
-        :pod="terminalPod.metadata.name"
-        :namespace="terminalPod.metadata.namespace || 'default'"
-        :container="selectedPodContainer"
-        :containers="getPodContainerNames(terminalPod)"
-      />
     </ModalDrawer>
 
     <!-- Pod Logs Modal -->
     <ModalDrawer
-      v-model:show="showLogsModal"
+      :show="showLogsModal"
       mode="modal"
-      :title="`Pod Logs: ${logsPod?.metadata?.name || 'Pod'}`"
-      :subtitle="`Cluster: ${selectedCluster} | Namespace: ${logsPod?.metadata?.namespace || 'default'}`"
-      max-width="1100px"
+      :title="`Pod Logs: ${logsPod?.metadata?.name || ''}`"
+      :subtitle="`Namespace: ${logsPod?.metadata?.namespace || 'default'} • Cluster: ${selectedCluster}`"
+      max-width="960px"
+      @close="showLogsModal = false"
     >
-      <PodLogViewer
-        v-if="showLogsModal && logsPod"
-        :cluster="selectedCluster"
-        :pod="logsPod.metadata.name"
-        :namespace="logsPod.metadata.namespace || 'default'"
-        :container="selectedPodContainer"
-        :containers="getPodContainerNames(logsPod)"
-      />
+      <div v-if="logsPod" class="pod-logs-wrapper">
+        <div v-if="getPodContainerNames(logsPod).length > 1" class="container-select-bar">
+          <label class="form-label">Select Container:</label>
+          <div class="container-tabs">
+            <button
+              v-for="cName in getPodContainerNames(logsPod)"
+              :key="cName"
+              type="button"
+              class="container-tab-btn"
+              :class="{ 'is-active': selectedPodContainer === cName }"
+              @click="selectedPodContainer = cName"
+            >
+              {{ cName }}
+            </button>
+          </div>
+        </div>
+
+        <PodLogViewer
+          :cluster="selectedCluster"
+          :namespace="logsPod.metadata?.namespace || 'default'"
+          :pod="logsPod.metadata?.name || ''"
+          :container="selectedPodContainer"
+        />
+      </div>
+    </ModalDrawer>
+
+    <!-- Pod Terminal Modal -->
+    <ModalDrawer
+      :show="showTerminalModal"
+      mode="modal"
+      :title="`Terminal Exec: ${terminalPod?.metadata?.name || ''}`"
+      :subtitle="`Namespace: ${terminalPod?.metadata?.namespace || 'default'} • Cluster: ${selectedCluster}`"
+      max-width="1000px"
+      @close="showTerminalModal = false"
+    >
+      <div v-if="terminalPod" class="pod-terminal-wrapper">
+        <div v-if="getPodContainerNames(terminalPod).length > 1" class="container-select-bar">
+          <label class="form-label">Select Container:</label>
+          <div class="container-tabs">
+            <button
+              v-for="cName in getPodContainerNames(terminalPod)"
+              :key="cName"
+              type="button"
+              class="container-tab-btn"
+              :class="{ 'is-active': selectedPodContainer === cName }"
+              @click="selectedPodContainer = cName"
+            >
+              {{ cName }}
+            </button>
+          </div>
+        </div>
+
+        <PodTerminal
+          :cluster="selectedCluster"
+          :namespace="terminalPod.metadata?.namespace || 'default'"
+          :pod="terminalPod.metadata?.name || ''"
+          :container="selectedPodContainer"
+        />
+      </div>
+    </ModalDrawer>
+
+    <!-- Import Cluster Modal -->
+    <ModalDrawer
+      :show="showImportModal"
+      mode="modal"
+      title="Import Kubernetes Cluster"
+      subtitle="Connect an external Kubernetes cluster via Kubeconfig"
+      max-width="620px"
+      @close="showImportModal = false"
+    >
+      <div class="import-modal-body">
+        <div class="form-group">
+          <label class="form-label required">Cluster Name / Identifier</label>
+          <input 
+            v-model="importForm.name"
+            type="text" 
+            class="input-glass font-mono" 
+            placeholder="e.g. production-k8s, staging-eks" 
+            required 
+          />
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group flex-1">
+            <label class="form-label">Group</label>
+            <input 
+              v-model="importForm.group"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="production" 
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">Region</label>
+            <input 
+              v-model="importForm.region"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="us-east-1" 
+            />
+          </div>
+        </div>
+
+        <div class="import-mode-toggle">
+          <button 
+            type="button" 
+            class="toggle-btn"
+            :class="{ 'is-active': importMode === 'file' }"
+            @click="importMode = 'file'"
+          >
+            📁 Upload Kubeconfig File
+          </button>
+          <button 
+            type="button" 
+            class="toggle-btn"
+            :class="{ 'is-active': importMode === 'text' }"
+            @click="importMode = 'text'"
+          >
+            📝 Paste Kubeconfig Text
+          </button>
+        </div>
+
+        <div v-if="importMode === 'file'" class="form-group">
+          <label class="form-label required">Kubeconfig YAML File</label>
+          <input 
+            type="file" 
+            accept=".yaml,.yml,.config,text/plain" 
+            class="input-glass file-input font-mono"
+            @change="handleFileChange"
+          />
+        </div>
+
+        <div v-else class="form-group">
+          <label class="form-label required">Kubeconfig Raw YAML</label>
+          <textarea
+            v-model="importForm.kubeconfigRaw"
+            class="input-glass font-mono text-area-lg"
+            rows="8"
+            placeholder="apiVersion: v1&#10;clusters:&#10;  - cluster:&#10;      ..."
+          ></textarea>
+        </div>
+      </div>
+
+      <template #footer>
+        <button type="button" class="btn btn-secondary" :disabled="importingCluster" @click="showImportModal = false">
+          Cancel
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-primary"
+          :disabled="importingCluster || !importForm.name.trim()"
+          @click="handleImportCluster"
+        >
+          <span>{{ importingCluster ? '⏳ Importing Cluster...' : '✨ Import Cluster' }}</span>
+        </button>
+      </template>
+    </ModalDrawer>
+
+    <!-- Create Resource Modal -->
+    <CreateResourceModal
+      :show="showCreateModal"
+      :cluster="selectedCluster"
+      :namespaces="namespaces"
+      :default-namespace="selectedNamespace !== 'all' ? selectedNamespace : 'default'"
+      :default-kind="selectedKind"
+      @close="showCreateModal = false"
+      @created="onResourceCreated"
+    />
+
+    <!-- YAML Editor Modal -->
+    <YamlEditorModal
+      :show="showYamlModal"
+      :cluster="selectedCluster"
+      :title="yamlEditorTitle"
+      :mode="yamlEditorMode"
+      :initial-yaml="yamlEditorInitialContent"
+      @close="showYamlModal = false"
+      @applied="onYamlApplied"
+    />
+
+    <!-- Detail Drawer -->
+    <ModalDrawer
+      :show="showDetailDrawer"
+      mode="drawer"
+      :title="`${selectedResource?.kind || 'Resource'}: ${selectedResource?.metadata?.name || ''}`"
+      :subtitle="`Namespace: ${selectedResource?.metadata?.namespace || 'cluster-scoped'} • Cluster: ${selectedCluster}`"
+      max-width="760px"
+      @close="showDetailDrawer = false"
+    >
+      <div v-if="selectedResource" class="detail-drawer-content">
+        <!-- Tabs Navigation -->
+        <div class="drawer-tabs-bar">
+          <button 
+            type="button" 
+            class="drawer-tab-btn" 
+            :class="{ 'is-active': activeDrawerTab === 'overview' }"
+            @click="activeDrawerTab = 'overview'"
+          >
+            📊 Structured Overview
+          </button>
+          <button 
+            v-if="selectedResource.kind === 'Pod' || selectedKind === 'pods'"
+            type="button" 
+            class="drawer-tab-btn" 
+            :class="{ 'is-active': activeDrawerTab === 'events' }"
+            @click="activeDrawerTab = 'events'"
+          >
+            📢 Events
+          </button>
+          <button 
+            type="button" 
+            class="drawer-tab-btn" 
+            :class="{ 'is-active': activeDrawerTab === 'yaml' }"
+            @click="activeDrawerTab = 'yaml'"
+          >
+            📄 Live YAML Manifest
+          </button>
+        </div>
+
+        <!-- Tab 1: Structured Overview -->
+        <div v-if="activeDrawerTab === 'overview'" class="tab-overview-content animate-fade-in">
+          <!-- Metadata Summary Card -->
+          <div class="info-card glass-panel">
+            <h4 class="card-title">Metadata</h4>
+            <div class="meta-grid font-mono">
+              <div class="meta-item"><span class="meta-label">Name:</span><span class="meta-val text-white font-bold">{{ selectedResource.metadata?.name }}</span></div>
+              <div class="meta-item"><span class="meta-label">Namespace:</span><span class="meta-val text-cyan">{{ selectedResource.metadata?.namespace || 'cluster-scoped' }}</span></div>
+              <div class="meta-item"><span class="meta-label">Created:</span><span class="meta-val text-muted">{{ selectedResource.metadata?.creationTimestamp || 'N/A' }} ({{ getResourceAge(selectedResource) }})</span></div>
+              <div class="meta-item"><span class="meta-label">UID:</span><span class="meta-val text-muted font-xs">{{ selectedResource.metadata?.uid || 'N/A' }}</span></div>
+            </div>
+
+            <!-- Labels -->
+            <div v-if="selectedResource.metadata?.labels && Object.keys(selectedResource.metadata.labels).length > 0" class="labels-section">
+              <span class="meta-label">Labels:</span>
+              <div class="tag-chips-wrap">
+                <span v-for="(val, key) in selectedResource.metadata.labels" :key="key" class="tag-chip font-mono">
+                  <span class="tag-key">{{ key }}</span>: <span class="tag-val">{{ val }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pod Specific Details -->
+          <template v-if="selectedResource.kind === 'Pod' || selectedKind === 'pods'">
+            <div class="info-card glass-panel">
+              <div class="card-title-row">
+                <h4 class="card-title">Pod Execution Status</h4>
+                <StatusBadge :status="getPodPhase(selectedResource)" size="sm" />
+              </div>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Node:</span><span class="meta-val text-cyan">{{ getPodNode(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Pod IP:</span><span class="meta-val text-white">{{ getPodIP(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Host IP:</span><span class="meta-val text-muted">{{ getHostIP(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">QoS Class:</span><span class="meta-val text-violet">{{ getPodQoS(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Service Account:</span><span class="meta-val text-muted">{{ getPodServiceAccount(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Ready:</span><span class="meta-val text-emerald font-bold">{{ getPodReadyCount(selectedResource) }}</span></div>
+              </div>
+            </div>
+
+            <!-- Containers List -->
+            <div class="info-card glass-panel">
+              <h4 class="card-title">Containers ({{ getPodContainers(selectedResource).length }})</h4>
+              <div class="containers-list">
+                <div v-for="c in getPodContainers(selectedResource)" :key="c.name" class="container-card">
+                  <div class="c-header">
+                    <div class="c-title font-mono">
+                      <span class="c-dot" :class="`dot-${c.stateType}`"></span>
+                      <strong>{{ c.name }}</strong>
+                    </div>
+                    <span class="c-state-badge font-mono" :class="`state-${c.stateType}`">{{ c.state }}</span>
+                  </div>
+                  <div class="c-meta font-mono font-xs">
+                    <div class="c-meta-row"><span class="text-muted">Image:</span> <span class="text-cyan">{{ c.image }}</span></div>
+                    <div class="c-meta-row"><span class="text-muted">Ports:</span> <span class="text-white">{{ c.ports }}</span></div>
+                    <div class="c-meta-row"><span class="text-muted">Restarts:</span> <span :class="{ 'text-rose': c.restarts > 0 }">{{ c.restarts }}</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Deployment Specific Details -->
+          <template v-else-if="selectedResource.kind === 'Deployment' || selectedKind === 'deployments'">
+            <div class="info-card glass-panel">
+              <div class="card-title-row">
+                <h4 class="card-title">Deployment Replicas & Status</h4>
+                <div class="card-actions-row">
+                  <button type="button" class="btn btn-primary btn-xs" @click="openScaleModal(selectedResource)">
+                    ⚡ Scale Replicas
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-xs" @click="handleRestartWorkload(selectedResource)">
+                    🔄 Rolling Restart
+                  </button>
+                </div>
+              </div>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Replicas:</span><span class="meta-val text-cyan font-bold">{{ getDeploymentReplicas(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Container Image:</span><span class="meta-val text-white">{{ getDeploymentImage(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Pod Selector:</span><span class="meta-val text-muted">{{ getDeploymentSelector(selectedResource) }}</span></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- StatefulSet Specific Details -->
+          <template v-else-if="selectedResource.kind === 'StatefulSet' || selectedKind === 'statefulsets'">
+            <div class="info-card glass-panel">
+              <div class="card-title-row">
+                <h4 class="card-title">StatefulSet Status</h4>
+                <div class="card-actions-row">
+                  <button type="button" class="btn btn-primary btn-xs" @click="openScaleModal(selectedResource)">
+                    ⚡ Scale Replicas
+                  </button>
+                </div>
+              </div>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Replicas:</span><span class="meta-val text-cyan font-bold">{{ getStatefulSetReplicas(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Container Image:</span><span class="meta-val text-white">{{ getStatefulSetImage(selectedResource) }}</span></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- DaemonSet Specific Details -->
+          <template v-else-if="selectedResource.kind === 'DaemonSet' || selectedKind === 'daemonsets'">
+            <div class="info-card glass-panel">
+              <div class="card-title-row">
+                <h4 class="card-title">DaemonSet Status</h4>
+                <button type="button" class="btn btn-secondary btn-xs" @click="handleRestartWorkload(selectedResource)">
+                  🔄 Rolling Restart
+                </button>
+              </div>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Desired Scheduled:</span><span class="meta-val text-white">{{ getDaemonSetDesired(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Current Scheduled:</span><span class="meta-val text-cyan">{{ getDaemonSetCurrent(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Number Ready:</span><span class="meta-val text-emerald font-bold">{{ getDaemonSetReady(selectedResource) }}</span></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Service Specific Details -->
+          <template v-else-if="selectedResource.kind === 'Service' || selectedKind === 'services'">
+            <div class="info-card glass-panel">
+              <h4 class="card-title">Service Networking</h4>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Type:</span><span class="meta-val text-violet font-bold">{{ getServiceType(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Cluster IP:</span><span class="meta-val text-white">{{ getServiceClusterIP(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">External IP:</span><span class="meta-val text-cyan">{{ getServiceExternalIP(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Port Mappings:</span><span class="meta-val text-emerald">{{ getServicePorts(selectedResource) }}</span></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Ingress Specific Details -->
+          <template v-else-if="selectedResource.kind === 'Ingress' || selectedKind === 'ingresses'">
+            <div class="info-card glass-panel">
+              <h4 class="card-title">Ingress Routing Rules</h4>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Host Domains:</span><span class="meta-val text-cyan">{{ getIngressHosts(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Path Prefix:</span><span class="meta-val text-white">{{ getIngressPaths(selectedResource) }}</span></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- ConfigMap Specific Details with Live Editor -->
+          <template v-else-if="selectedResource.kind === 'ConfigMap' || selectedKind === 'configmaps'">
+            <div class="info-card glass-panel">
+              <div class="card-title-row">
+                <h4 class="card-title">ConfigMap Key-Value Entries ({{ Object.keys(configMapDataCopy).length }})</h4>
+                <button 
+                  type="button" 
+                  class="btn btn-primary btn-xs"
+                  :disabled="savingConfigMap"
+                  @click="handleSaveConfigMap(selectedResource)"
+                >
+                  <span>{{ savingConfigMap ? '⏳ Saving...' : '💾 Save Changes' }}</span>
+                </button>
+              </div>
+
+              <!-- Add Key-Value entry -->
+              <div class="kv-add-row">
+                <input v-model="newCmKey" type="text" class="input-glass font-mono flex-1" placeholder="New KEY_NAME" />
+                <input v-model="newCmValue" type="text" class="input-glass font-mono flex-2" placeholder="Value" />
+                <button type="button" class="btn btn-secondary btn-xs" @click="addCmEntry">
+                  + Add
+                </button>
+              </div>
+
+              <div class="kv-table-wrap">
+                <div v-for="(val, k) in configMapDataCopy" :key="k" class="kv-entry-row">
+                  <div class="kv-key-col font-mono">{{ k }}</div>
+                  <input v-model="configMapDataCopy[k]" type="text" class="input-glass font-mono kv-val-input" />
+                  <button type="button" class="btn-icon-xs" title="Copy value" @click="copyText(String(val))">
+                    📋
+                  </button>
+                  <button type="button" class="btn-icon-xs btn-icon-danger" title="Delete key" @click="removeCmEntry(String(k))">
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Secret Specific Details -->
+          <template v-else-if="selectedResource.kind === 'Secret' || selectedKind === 'secrets'">
+            <SecretViewer
+              :resource="selectedResource"
+              :cluster="selectedCluster"
+              :namespace="selectedResource.metadata?.namespace || 'default'"
+            />
+          </template>
+
+          <!-- PVC Specific Details -->
+          <template v-else-if="selectedResource.kind === 'PersistentVolumeClaim' || selectedKind === 'persistentvolumeclaims'">
+            <div class="info-card glass-panel">
+              <h4 class="card-title">Storage Claim Status</h4>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Status:</span><span class="meta-val text-emerald font-bold">{{ getPvcStatus(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Capacity:</span><span class="meta-val text-cyan font-bold">{{ getPvcCapacity(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Access Modes:</span><span class="meta-val text-white">{{ getPvcAccessModes(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">StorageClass:</span><span class="meta-val text-violet">{{ getPvcStorageClass(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Bound Volume:</span><span class="meta-val text-muted">{{ getPvcVolume(selectedResource) }}</span></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- PV Specific Details -->
+          <template v-else-if="selectedResource.kind === 'PersistentVolume' || selectedKind === 'persistentvolumes'">
+            <div class="info-card glass-panel">
+              <h4 class="card-title">Persistent Volume Details</h4>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Status:</span><span class="meta-val text-emerald font-bold">{{ getPvStatus(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Capacity:</span><span class="meta-val text-cyan font-bold">{{ getPvCapacity(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Access Modes:</span><span class="meta-val text-white">{{ getPvAccessModes(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Reclaim Policy:</span><span class="meta-val text-muted">{{ getPvReclaimPolicy(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Claim Reference:</span><span class="meta-val text-violet">{{ getPvClaim(selectedResource) }}</span></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- CronJob Specific Details -->
+          <template v-else-if="selectedResource.kind === 'CronJob' || selectedKind === 'cronjobs'">
+            <div class="info-card glass-panel">
+              <div class="card-title-row">
+                <h4 class="card-title">CronJob Schedule & State</h4>
+                <div class="card-actions-row">
+                  <button type="button" class="btn btn-primary btn-xs" @click="handleTriggerCronJob(selectedResource)">
+                    ⚡ Trigger Job Now
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-xs" @click="handleToggleSuspendCronJob(selectedResource)">
+                    {{ selectedResource.spec?.suspend ? '▶ Resume Schedule' : '⏸ Suspend Schedule' }}
+                  </button>
+                </div>
+              </div>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Schedule Expression:</span><span class="meta-val text-cyan font-bold">{{ getCronJobSchedule(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Suspended:</span><span class="meta-val" :class="getCronJobSuspend(selectedResource) === 'True' ? 'text-amber' : 'text-emerald'">{{ getCronJobSuspend(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Active Jobs:</span><span class="meta-val text-white">{{ getCronJobActive(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Last Scheduled:</span><span class="meta-val text-muted">{{ getCronJobLastSchedule(selectedResource) }}</span></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Job Specific Details -->
+          <template v-else-if="selectedResource.kind === 'Job' || selectedKind === 'jobs'">
+            <div class="info-card glass-panel">
+              <h4 class="card-title">Job Execution</h4>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Completions:</span><span class="meta-val text-emerald font-bold">{{ getJobCompletions(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Duration:</span><span class="meta-val text-cyan">{{ getJobDuration(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Execution Status:</span><span class="meta-val text-white">{{ getJobStatus(selectedResource) }}</span></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Node Specific Details -->
+          <template v-else-if="selectedResource.kind === 'Node' || selectedKind === 'nodes'">
+            <div class="info-card glass-panel">
+              <div class="card-title-row">
+                <h4 class="card-title">Node Capacity & System Info</h4>
+                <div class="card-actions-row">
+                  <button
+                    v-if="isNodeUnschedulable(selectedResource)"
+                    type="button"
+                    class="btn btn-secondary btn-xs"
+                    :disabled="operatingNode"
+                    @click="handleUncordonNode(selectedResource)"
+                  >
+                    🔓 Uncordon Node
+                  </button>
+                  <button
+                    v-else
+                    type="button"
+                    class="btn btn-secondary btn-xs"
+                    :disabled="operatingNode"
+                    @click="handleCordonNode(selectedResource)"
+                  >
+                    🔒 Cordon Node
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-danger btn-xs"
+                    :disabled="operatingNode || drainingNode"
+                    @click="openDrainModal(selectedResource)"
+                  >
+                    🧹 Drain Node
+                  </button>
+                </div>
+              </div>
+              <div class="meta-grid font-mono">
+                <div class="meta-item"><span class="meta-label">Kubelet Version:</span><span class="meta-val text-cyan">{{ getNodeVersion(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Internal IP:</span><span class="meta-val text-white">{{ getNodeInternalIP(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">OS / Architecture:</span><span class="meta-val text-muted">{{ getNodeOSArch(selectedResource) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Max Pods:</span><span class="meta-val text-emerald">{{ getNodePodsCount(selectedResource) }}</span></div>
+              </div>
+            </div>
+
+            <!-- Taints Management -->
+            <div class="info-card glass-panel">
+              <h4 class="card-title">Node Taints ({{ getNodeTaints(selectedResource).length }})</h4>
+              <div class="taints-add-row">
+                <input v-model="newTaintKey" type="text" class="input-glass font-mono flex-1" placeholder="key (e.g. dedicated)" />
+                <input v-model="newTaintValue" type="text" class="input-glass font-mono flex-1" placeholder="value (optional)" />
+                <select v-model="newTaintEffect" class="input-glass font-mono">
+                  <option value="NoSchedule">NoSchedule</option>
+                  <option value="PreferNoSchedule">PreferNoSchedule</option>
+                  <option value="NoExecute">NoExecute</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-xs" :disabled="updatingTaints || !newTaintKey.trim()" @click="handleAddTaint(selectedResource)">
+                  + Add Taint
+                </button>
+              </div>
+
+              <div class="taints-list">
+                <div v-for="(t, idx) in getNodeTaints(selectedResource)" :key="idx" class="taint-item font-mono">
+                  <span class="text-white">{{ t.key }}</span>
+                  <span v-if="t.value" class="text-muted">={{ t.value }}</span>
+                  <span class="taint-effect-badge">{{ t.effect }}</span>
+                  <button type="button" class="btn-icon-xs btn-icon-danger" :disabled="updatingTaints" @click="handleRemoveTaint(selectedResource, idx)">
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Node Labels Editor -->
+            <div class="info-card glass-panel">
+              <div class="card-title-row">
+                <h4 class="card-title">Node Labels</h4>
+                <button type="button" class="btn btn-primary btn-xs" :disabled="updatingLabels" @click="handleSaveNodeLabels(selectedResource)">
+                  <span>{{ updatingLabels ? '⏳ Saving...' : '💾 Save Labels' }}</span>
+                </button>
+              </div>
+              <div class="taints-add-row">
+                <input v-model="newLabelKey" type="text" class="input-glass font-mono flex-1" placeholder="label-key" />
+                <input v-model="newLabelValue" type="text" class="input-glass font-mono flex-1" placeholder="label-value" />
+                <button type="button" class="btn btn-secondary btn-xs" @click="addLabelToCopy">+ Add Label</button>
+              </div>
+              <div class="tag-chips-wrap">
+                <span v-for="(val, k) in nodeLabelsCopy" :key="k" class="tag-chip font-mono">
+                  <span class="tag-key">{{ k }}</span>: <span class="tag-val">{{ val }}</span>
+                  <button type="button" class="btn-chip-remove" @click="removeLabelFromCopy(String(k))">✕</button>
+                </span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Tab 2: Events Tab (Pods / Workloads) -->
+        <div v-else-if="activeDrawerTab === 'events'" class="tab-events-content animate-fade-in">
+          <EventsTimeline
+            :cluster="selectedCluster"
+            :namespace="selectedResource.metadata?.namespace || 'default'"
+            :involved-object-name="selectedResource.metadata?.name"
+            :auto-refresh="true"
+          />
+        </div>
+
+        <!-- Tab 3: YAML Manifest -->
+        <div v-else-if="activeDrawerTab === 'yaml'" class="tab-yaml-content animate-fade-in">
+          <div class="yaml-actions-row">
+            <button type="button" class="btn btn-secondary btn-xs" @click="copyDrawerYaml">
+              <span>{{ drawerYamlCopied ? '✅ Copied!' : '📋 Copy YAML' }}</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-xs" @click="openResourceYaml(selectedResource)">
+              <span>✏️ Edit Manifest</span>
+            </button>
+          </div>
+          <pre class="yaml-code-block font-mono"><code>{{ jsonToYaml(selectedResource) }}</code></pre>
+        </div>
+      </div>
+
+      <template #footer>
+        <button type="button" class="btn btn-secondary" @click="showDetailDrawer = false">
+          Close
+        </button>
+      </template>
     </ModalDrawer>
   </div>
 </template>
 
+
 <style scoped>
 .explorer-layout {
   display: flex;
-  gap: 24px;
-  min-height: calc(100vh - 120px);
+  min-height: calc(100vh - 64px);
+  gap: 20px;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .explorer-sidebar {
-  width: 280px;
+  width: 260px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 20px;
-  border-radius: 16px;
+  gap: 16px;
+  padding: 16px;
+  height: fit-content;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
 }
 
 .sidebar-header {
+  display: flex;
+  align-items: center;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .sidebar-title {
-  font-size: 15px;
-  font-weight: 800;
+  font-weight: 700;
+  font-size: 1rem;
   color: #fff;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .sidebar-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.section-heading {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  gap: 6px;
 }
 
 .section-heading-row {
@@ -2429,47 +2802,54 @@ function getResourceAge(resource: K8sResource): string {
   justify-content: space-between;
 }
 
+.section-heading {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .btn-icon-text {
   background: none;
   border: none;
-  color: var(--accent-sky);
-  font-size: 11px;
-  font-weight: 700;
+  color: #00e5ff;
+  font-size: 0.72rem;
   cursor: pointer;
+  padding: 0;
 }
 
 .btn-icon-text:hover {
   text-decoration: underline;
 }
 
-.select-full {
-  width: 100%;
+.cluster-select, .ns-select {
+  font-size: 0.85rem;
 }
 
 .sidebar-tree {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-  flex: 1;
+  gap: 14px;
+  margin-top: 8px;
 }
 
 .tree-category {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .category-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  gap: 6px;
+  font-size: 0.75rem;
   font-weight: 700;
-  color: var(--text-muted);
+  color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0 4px;
+  letter-spacing: 0.06em;
+  padding: 4px 6px;
 }
 
 .category-items {
@@ -2481,40 +2861,39 @@ function getResourceAge(resource: K8sResource): string {
 .tree-item-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  background: transparent;
+  gap: 8px;
+  padding: 7px 10px;
+  background: none;
   border: 1px solid transparent;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: 6px;
+  color: #94a3b8;
   cursor: pointer;
   text-align: left;
+  font-size: 0.82rem;
   transition: all 0.15s ease;
 }
 
 .tree-item-btn:hover {
   background: rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
+  color: #f1f5f9;
 }
 
 .tree-item-btn.is-active {
-  background: rgba(6, 182, 212, 0.12);
-  border-color: rgba(6, 182, 212, 0.3);
-  color: #38bdf8;
+  background: rgba(0, 229, 255, 0.12);
+  border-color: rgba(0, 229, 255, 0.3);
+  color: #00e5ff;
   font-weight: 600;
 }
 
 .item-icon {
-  font-size: 14px;
+  font-size: 0.9rem;
 }
 
 .explorer-main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   min-width: 0;
 }
 
@@ -2522,230 +2901,69 @@ function getResourceAge(resource: K8sResource): string {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .view-tag {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  gap: 6px;
+  font-size: 0.7rem;
   font-weight: 700;
-  color: var(--accent-cyan);
-  letter-spacing: 0.08em;
-  margin-bottom: 4px;
+  color: #00e5ff;
+  letter-spacing: 0.1em;
 }
 
 .view-title {
-  font-size: 24px;
+  font-size: 1.6rem;
   font-weight: 800;
   color: #fff;
-  letter-spacing: -0.02em;
+  margin: 0;
 }
 
 .breadcrumbs {
+  font-size: 0.78rem;
+  color: #64748b;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-.crumb-sep {
-  color: var(--text-muted);
+  gap: 6px;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.toast-banner {
-  padding: 12px 16px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-}
-
-.toast-success {
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #34d399;
-}
-
-.toast-error {
-  background: rgba(244, 63, 94, 0.15);
-  border: 1px solid rgba(244, 63, 94, 0.3);
-  color: #fb7185;
-}
-
-.toast-close {
-  margin-left: auto;
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-}
-
-.cluster-empty-box {
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px dashed var(--border-subtle);
-  border-radius: 8px;
-}
-
-.offline-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 18px 22px;
-  background: rgba(244, 63, 94, 0.12);
-  border: 1px solid rgba(244, 63, 94, 0.35);
-  border-radius: 14px;
-  color: #fb7185;
-}
-
-.offline-icon {
-  font-size: 26px;
-  line-height: 1;
-}
-
-.offline-content {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-}
-
-.offline-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.offline-desc {
-  font-size: 13px;
-  color: #fecdd3;
-  line-height: 1.5;
-  margin: 0;
-}
-
-.offline-err-detail {
-  font-size: 11px;
-  color: #fda4af;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 4px 8px;
-  border-radius: 6px;
-  word-break: break-all;
-}
-
-.offline-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-row {
-  display: flex;
-  gap: 12px;
-}
-
-.flex-1 { flex: 1; }
-
-.form-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.form-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.mode-tabs {
-  display: flex;
   gap: 8px;
-  margin-bottom: 8px;
-}
-
-.mode-tab {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.mode-tab.active {
-  background: rgba(6, 182, 212, 0.15);
-  border-color: var(--accent-cyan);
-  color: #fff;
-  font-weight: 600;
-}
-
-.file-input {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.text-area-input {
-  resize: vertical;
-  min-height: 120px;
-  font-size: 12px;
-  line-height: 1.4;
+  flex-wrap: wrap;
 }
 
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
-.section-box {
-  border-radius: 16px;
-  overflow: hidden;
+.table-box {
+  padding: 16px;
 }
 
 .resource-name-cell {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.res-icon {
-  font-size: 14px;
+  flex-wrap: wrap;
 }
 
 .res-link {
-  color: var(--accent-cyan);
-  font-weight: 700;
+  color: #00e5ff;
   text-decoration: none;
+  font-weight: 600;
 }
 
 .res-link:hover {
@@ -2753,16 +2971,37 @@ function getResourceAge(resource: K8sResource): string {
 }
 
 .app-tag {
-  font-size: 10px;
+  font-size: 0.7rem;
   background: rgba(255, 255, 255, 0.06);
   padding: 2px 6px;
   border-radius: 4px;
-  color: var(--text-muted);
+  color: #94a3b8;
 }
 
 .ns-badge {
-  font-size: 11px;
-  color: var(--text-secondary);
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #c084fc;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.badge-replicas {
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.badge-keys {
+  color: #fbbf24;
+}
+
+.schedule-badge {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
 }
 
 .action-buttons {
@@ -2770,843 +3009,310 @@ function getResourceAge(resource: K8sResource): string {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
+  flex-wrap: wrap;
+}
+
+.scale-stepper-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.stepper-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-stepper {
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.scale-num-input {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  width: 90px;
+}
+
+.scale-range-slider {
+  width: 100%;
+  accent-color: #00e5ff;
 }
 
 .detail-drawer-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
-
-.drawer-tabs {
-  display: flex;
-  gap: 8px;
-  border-bottom: 1px solid var(--border-subtle);
-  padding-bottom: 12px;
-}
-
-.tab-btn {
-  padding: 8px 16px;
-  background: transparent;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.tab-btn:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
-}
-
-.tab-btn.is-active {
-  background: rgba(6, 182, 212, 0.15);
-  border-color: var(--accent-cyan);
-  color: #38bdf8;
-}
-
-.tab-pane {
-  display: flex;
-  flex-direction: column;
   gap: 16px;
 }
 
-.info-card {
-  padding: 16px;
-  border-radius: 12px;
+.drawer-tabs-bar {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 8px;
+}
+
+.drawer-tab-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.drawer-tab-btn.is-active {
+  background: rgba(0, 229, 255, 0.15);
+  color: #00e5ff;
+}
+
+.tab-overview-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+}
+
+.info-card {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .card-title {
-  font-size: 12px;
+  margin: 0;
+  font-size: 0.88rem;
   font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: #f1f5f9;
 }
 
 .meta-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  font-size: 0.8rem;
 }
 
 .meta-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
 }
 
 .meta-label {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 0.72rem;
+  color: #64748b;
+  text-transform: uppercase;
 }
 
-.font-small {
-  font-size: 10px;
-  word-break: break-all;
-}
-
-.labels-wrap {
+.tag-chips-wrap {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.label-badge {
-  font-size: 11px;
-  padding: 3px 8px;
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  border-radius: 6px;
+.tag-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-key {
   color: #38bdf8;
 }
 
-.kv-display-table {
+.tag-val {
+  color: #fff;
+}
+
+.btn-chip-remove {
+  background: none;
+  border: none;
+  color: #fb7185;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.7rem;
+}
+
+.containers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.container-card {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.c-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.c-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.dot-running { background: #10b981; }
+.dot-waiting { background: #f59e0b; }
+.dot-terminated { background: #ef4444; }
+
+.c-state-badge {
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.state-running { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.state-waiting { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+.state-terminated { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+.kv-add-row, .taints-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.kv-entry-row, .taint-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.kv-key-col {
+  width: 140px;
+  font-size: 0.8rem;
+  color: #38bdf8;
+  word-break: break-all;
+}
+
+.kv-val-input {
+  flex: 1;
+}
+
+.btn-icon-xs {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 4px;
+}
+
+.yaml-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.yaml-code-block {
+  background: rgba(10, 15, 30, 0.9);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  color: #38bdf8;
+  font-size: 0.78rem;
+  max-height: 480px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.toast-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.toast-success { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; }
+.toast-error { background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: #fb7185; }
+
+.toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.offline-banner {
+  display: flex;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+}
+
+.offline-content {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.kv-item {
+.offline-title {
+  font-size: 0.95rem;
+  color: #fff;
+}
+
+.offline-desc {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+}
+
+.offline-actions {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px;
-  background: rgba(11, 15, 25, 0.6);
-  border-radius: 6px;
-}
-
-.kv-key {
-  font-size: 11px;
-  color: var(--accent-cyan);
-  font-weight: bold;
-}
-
-.kv-val {
-  font-size: 12px;
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.spec-pre {
-  background: #030712;
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 11.5px;
-  color: #38bdf8;
-  max-height: 240px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-}
-
-.yaml-pane-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.pane-actions {
-  display: flex;
-  align-items: center;
   gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
 }
 
-.yaml-code-wrapper {
-  background: #030712;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.yaml-pre {
-  padding: 16px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: #e0f2fe;
-  max-height: 520px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-}
-
-.delete-dialog-content {
-  padding: 8px 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-secondary);
-}
-
-.delete-msg strong {
-  color: var(--text-primary);
-}
-
-.field-error {
-  color: #fb7185;
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.font-mono { font-family: var(--font-mono); }
-.text-cyan { color: var(--accent-cyan); }
-.text-muted { color: var(--text-muted); }
-.btn-xs { padding: 4px 8px; font-size: 11px; }
-
-@media (max-width: 1024px) {
+@media (max-width: 960px) {
   .explorer-layout {
     flex-direction: column;
   }
   .explorer-sidebar {
     width: 100%;
+    max-height: none;
   }
 }
-
-@media (max-width: 768px) {
-  .view-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
-  }
-
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    width: 100% !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
-  }
-
-  .header-actions .btn,
-  .header-actions button,
-  .header-actions a {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    padding: 7px 10px !important;
-    font-size: 11.5px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
-  }
-
-  .header-actions > :last-child:nth-child(odd) {
-    flex: 1 1 100% !important;
-  }
-
-  .metrics-grid,
-  .grid-metrics,
-  .stats-grid,
-  .catalog-stats-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-
-  :deep(.metric-card),
-  .metric-card,
-  :deep(.stat-card),
-  .stat-card,
-  :deep(.catalog-stat-card),
-  .catalog-stat-card {
-    padding: 10px 12px !important;
-  }
-
-  .sidebar-tree {
-    flex-direction: row;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
-    gap: 12px;
-    padding-bottom: 8px;
-  }
-
-  .tree-category {
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-  }
-
-  .category-items {
-    flex-direction: row;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-
-  .tree-item-btn {
-    white-space: nowrap;
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-
-  .yaml-pane-toolbar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .pane-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-}
-
-@media (max-width: 640px) {
-  .explorer-sidebar {
-    padding: 14px;
-    gap: 14px;
-    border-radius: 12px;
-  }
-
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    width: 100% !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
-  }
-
-  .header-actions .btn,
-  .header-actions button,
-  .header-actions a {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    padding: 7px 10px !important;
-    font-size: 11.5px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
-  }
-
-  .header-actions > :last-child:nth-child(odd) {
-    flex: 1 1 100% !important;
-  }
-
-  .metrics-grid,
-  .grid-metrics,
-  .stats-grid,
-  .catalog-stats-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-
-  :deep(.metric-card),
-  .metric-card,
-  :deep(.stat-card),
-  .stat-card,
-  :deep(.catalog-stat-card),
-  .catalog-stat-card {
-    padding: 10px 12px !important;
-  }
-
-  :deep(.metric-card .metric-value),
-  .metric-card .metric-value {
-    font-size: 18px;
-  }
-
-  :deep(.metric-card .metric-title),
-  .metric-card .metric-title {
-    font-size: 10px;
-  }
-
-  :deep(.metric-card .metric-footer),
-  .metric-card .metric-footer {
-    font-size: 10px;
-  }
-
-  .breadcrumbs {
-    flex-wrap: wrap;
-    font-size: 11px;
-    gap: 4px;
-  }
-
-  .meta-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .yaml-code-wrapper {
-    overflow-x: auto;
-  }
-
-  .yaml-pre,
-  .spec-pre {
-    height: 350px;
-    max-height: 350px;
-    font-size: 11px;
-    padding: 10px;
-    white-space: pre;
-    overflow-x: auto;
-    word-break: normal;
-  }
-
-  .drawer-tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .tab-btn {
-    white-space: nowrap;
-    flex: 1;
-    text-align: center;
-  }
-}
-
-/* Pod Specific Styles */
-.ready-cell {
-  color: var(--text-secondary);
-}
-.ready-all {
-  color: #34d399;
-  font-weight: 600;
-}
-.restarts-cell {
-  color: var(--text-secondary);
-}
-.has-restarts {
-  color: #fbbf24;
-  font-weight: 600;
-}
-
-.pod-detail-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.pod-quick-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.quick-actions-btns {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-disabled,
-.btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed !important;
-  pointer-events: auto !important;
-}
-
-.text-emerald { color: #34d399; }
-.text-amber { color: #fbbf24; }
-
-.containers-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.container-item {
-  padding: 12px;
-  border-radius: 10px;
-  background: rgba(11, 15, 25, 0.5);
-  border: 1px solid var(--border-subtle);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.container-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.container-name-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.container-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.dot-emerald { background-color: #10b981; box-shadow: 0 0 6px #10b981; }
-.dot-amber { background-color: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
-.dot-rose { background-color: #f43f5e; box-shadow: 0 0 6px #f43f5e; }
-.dot-cyan { background-color: #06b6d4; box-shadow: 0 0 6px #06b6d4; }
-
-.container-name {
-  font-size: 13px;
-  color: #fff;
-}
-
-.container-badges {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.badge-ready {
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-}
-
-.badge-not-ready {
-  background: rgba(244, 63, 94, 0.12);
-  color: #fb7185;
-  border: 1px solid rgba(244, 63, 94, 0.3);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-}
-
-.badge-restarts {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-}
-
-.badge-restarts.has-restarts {
-  background: rgba(245, 158, 11, 0.12);
-  color: #fbbf24;
-  border-color: rgba(245, 158, 11, 0.3);
-}
-
-.container-details-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-}
-
-.cd-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.cd-label {
-  color: var(--text-muted);
-  width: 48px;
-  flex-shrink: 0;
-}
-
-.cd-val {
-  color: var(--text-primary);
-  word-break: break-all;
-}
-
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.conditions-table {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.condition-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 8px 10px;
-  background: rgba(11, 15, 25, 0.5);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-}
-
-.condition-status-col {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 140px;
-}
-
-.cond-icon {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: bold;
-}
-
-.cond-true {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
-}
-
-.cond-false {
-  background: rgba(244, 63, 94, 0.2);
-  color: #fb7185;
-}
-
-.cond-type {
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
-}
-
-.condition-details {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  font-size: 11px;
-}
-
-.cond-status-text {
-  font-weight: 600;
-}
-
-
-.btn-container-quick-action {
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  color: #38bdf8;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-container-quick-action:hover {
-  background: rgba(56, 189, 248, 0.25);
-  border-color: #38bdf8;
-  color: #e0f2fe;
-}
-
-/* Roles Badge */
-.roles-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.role-badge {
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(0, 229, 255, 0.12);
-  color: #00e5ff;
-  border: 1px solid rgba(0, 229, 255, 0.25);
-}
-
-/* Event Cells */
-.event-type-badge {
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
-  text-transform: uppercase;
-}
-
-.type-warning {
-  background: rgba(245, 158, 11, 0.18);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-}
-
-.type-normal {
-  background: rgba(0, 229, 255, 0.12);
-  color: #00e5ff;
-  border: 1px solid rgba(0, 229, 255, 0.3);
-}
-
-.event-msg-cell {
-  max-width: 380px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
-}
-
-/* Node Drawer Sections */
-.node-detail-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.card-header-flex {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.conditions-table-wrap {
-  overflow-x: auto;
-}
-
-.conditions-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.conditions-table th, .conditions-table td {
-  padding: 8px 10px;
-  text-align: left;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.conditions-table th {
-  color: #94a3b8;
-  font-weight: 600;
-}
-
-.status-pill {
-  padding: 2px 7px;
-  border-radius: 4px;
-  font-weight: 700;
-}
-
-.pill-green {
-  background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
-}
-
-.pill-amber {
-  background: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
-}
-
-.pill-red {
-  background: rgba(244, 63, 94, 0.2);
-  color: #fb7185;
-}
-
-.text-break {
-  word-break: break-word;
-  max-width: 260px;
-}
-
-.empty-inline-hint {
-  padding: 8px 0;
-}
-
-.taints-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.taint-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 0.78rem;
-}
-
-.taint-effect {
-  font-weight: 600;
-}
-
-.btn-remove-inline {
-  background: none;
-  border: none;
-  color: #fb7185;
-  cursor: pointer;
-  padding: 0 2px;
-  font-size: 0.75rem;
-}
-
-.btn-remove-inline:hover {
-  color: #f43f5e;
-}
-
-.add-taint-form {
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-}
-
-.add-taint-inputs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.form-input-sm {
-  height: 28px;
-  padding: 4px 8px;
-  font-size: 0.78rem;
-  flex: 1;
-  min-width: 110px;
-}
-
-.select-effect {
-  height: 28px;
-  padding: 2px 6px;
-  font-size: 0.78rem;
-  min-width: 130px;
-}
-
-.labels-editor-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 220px;
-  overflow-y: auto;
-  margin-bottom: 12px;
-}
-
-.label-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.label-key {
-  min-width: 140px;
-  word-break: break-all;
-  font-size: 0.78rem;
-}
-
-.label-val-input {
-  flex: 1;
-  height: 26px;
-  padding: 2px 8px;
-  font-size: 0.78rem;
-}
-
-.add-label-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 </style>

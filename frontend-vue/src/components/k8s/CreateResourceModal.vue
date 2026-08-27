@@ -26,10 +26,14 @@ const emit = defineEmits<{
 
 // Kind options
 const kindOptions: { label: string; value: ResourceKind; icon: string }[] = [
-  { label: 'Deployment (Workload)', value: 'deployments', icon: '??' },
-  { label: 'Service (Networking)', value: 'services', icon: '??' },
-  { label: 'ConfigMap (Configuration)', value: 'configmaps', icon: '??' },
-  { label: 'Secret (Credentials)', value: 'secrets', icon: '??' },
+  { label: 'Deployment (Workload)', value: 'deployments', icon: '🚀' },
+  { label: 'Service (Networking)', value: 'services', icon: '🔌' },
+  { label: 'Ingress (Routing)', value: 'ingresses', icon: '🌐' },
+  { label: 'ConfigMap (Configuration)', value: 'configmaps', icon: '🗺️' },
+  { label: 'Secret (Credentials)', value: 'secrets', icon: '🔒' },
+  { label: 'PersistentVolumeClaim (Storage)', value: 'persistentvolumeclaims', icon: '💾' },
+  { label: 'Job (Batch)', value: 'jobs', icon: '⚡' },
+  { label: 'CronJob (Scheduled)', value: 'cronjobs', icon: '⏰' },
 ]
 
 const selectedKind = ref<ResourceKind>('deployments')
@@ -67,6 +71,40 @@ const serviceForm = reactive({
   selectorValue: '',
 })
 
+const ingressForm = reactive({
+  name: '',
+  host: 'example.local',
+  path: '/',
+  pathType: 'Prefix',
+  serviceName: '',
+  servicePort: 80,
+  tlsSecret: '',
+})
+
+const pvcForm = reactive({
+  name: '',
+  storageClassName: '',
+  accessMode: 'ReadWriteOnce',
+  capacity: '10Gi',
+})
+
+const jobForm = reactive({
+  name: '',
+  image: 'busybox:latest',
+  command: 'echo "Job completed successfully"',
+  backoffLimit: 4,
+  restartPolicy: 'OnFailure',
+})
+
+const cronJobForm = reactive({
+  name: '',
+  schedule: '*/5 * * * *',
+  image: 'curlimages/curl:latest',
+  command: 'curl -s https://httpbin.org/get',
+  concurrencyPolicy: 'Allow',
+  suspend: false,
+})
+
 const namespaceList = computed<string[]>(() => {
   return props.namespaces.map(ns => typeof ns === 'string' ? ns : ns.name).filter(Boolean)
 })
@@ -85,29 +123,15 @@ watch(
   { immediate: true }
 )
 
-// Dynamic Key-Value row helpers
-function addConfigMapRow() {
-  configMapForm.entries.push({ key: '', value: '' })
-}
-function removeConfigMapRow(index: number) {
-  configMapForm.entries.splice(index, 1)
-}
+function addConfigMapRow() { configMapForm.entries.push({ key: '', value: '' }) }
+function removeConfigMapRow(index: number) { configMapForm.entries.splice(index, 1) }
 
-function addSecretRow() {
-  secretForm.entries.push({ key: '', value: '', masked: true })
-}
-function removeSecretRow(index: number) {
-  secretForm.entries.splice(index, 1)
-}
+function addSecretRow() { secretForm.entries.push({ key: '', value: '', masked: true }) }
+function removeSecretRow(index: number) { secretForm.entries.splice(index, 1) }
 
-function addEnvVarRow() {
-  deploymentForm.envVars.push({ key: '', value: '' })
-}
-function removeEnvVarRow(index: number) {
-  deploymentForm.envVars.splice(index, 1)
-}
+function addEnvVarRow() { deploymentForm.envVars.push({ key: '', value: '' }) }
+function removeEnvVarRow(index: number) { deploymentForm.envVars.splice(index, 1) }
 
-// Generate the manifest payload
 const manifestPayload = computed<Record<string, unknown>>(() => {
   const ns = selectedNamespace.value || 'default'
 
@@ -125,9 +149,7 @@ const manifestPayload = computed<Record<string, unknown>>(() => {
         metadata: {
           name: configMapForm.name.trim() || 'my-configmap',
           namespace: ns,
-          labels: {
-            'app.kubernetes.io/managed-by': 'k8sselfhost',
-          },
+          labels: { 'app.kubernetes.io/managed-by': 'k8sselfhost' },
         },
         data: dataObj,
       }
@@ -151,9 +173,7 @@ const manifestPayload = computed<Record<string, unknown>>(() => {
         metadata: {
           name: secretForm.name.trim() || 'my-secret',
           namespace: ns,
-          labels: {
-            'app.kubernetes.io/managed-by': 'k8sselfhost',
-          },
+          labels: { 'app.kubernetes.io/managed-by': 'k8sselfhost' },
         },
         data: dataObj,
       }
@@ -171,24 +191,13 @@ const manifestPayload = computed<Record<string, unknown>>(() => {
         metadata: {
           name: appName,
           namespace: ns,
-          labels: {
-            app: appName,
-            'app.kubernetes.io/managed-by': 'k8sselfhost',
-          },
+          labels: { app: appName, 'app.kubernetes.io/managed-by': 'k8sselfhost' },
         },
         spec: {
           replicas: deploymentForm.replicas || 1,
-          selector: {
-            matchLabels: {
-              app: appName,
-            },
-          },
+          selector: { matchLabels: { app: appName } },
           template: {
-            metadata: {
-              labels: {
-                app: appName,
-              },
-            },
+            metadata: { labels: { app: appName } },
             spec: {
               containers: [
                 {
@@ -217,9 +226,7 @@ const manifestPayload = computed<Record<string, unknown>>(() => {
         metadata: {
           name: svcName,
           namespace: ns,
-          labels: {
-            'app.kubernetes.io/managed-by': 'k8sselfhost',
-          },
+          labels: { 'app.kubernetes.io/managed-by': 'k8sselfhost' },
         },
         spec: {
           type: serviceForm.type,
@@ -232,6 +239,141 @@ const manifestPayload = computed<Record<string, unknown>>(() => {
               protocol: 'TCP',
             },
           ],
+        },
+      }
+    }
+
+    case 'ingresses': {
+      const ingName = ingressForm.name.trim() || 'my-ingress'
+      const targetSvc = ingressForm.serviceName.trim() || (ingName + '-service')
+      const specObj: Record<string, unknown> = {
+        rules: [
+          {
+            host: ingressForm.host.trim() || undefined,
+            http: {
+              paths: [
+                {
+                  path: ingressForm.path.trim() || '/',
+                  pathType: ingressForm.pathType || 'Prefix',
+                  backend: {
+                    service: {
+                      name: targetSvc,
+                      port: { number: Number(ingressForm.servicePort) || 80 },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }
+      if (ingressForm.tlsSecret.trim()) {
+        specObj.tls = [
+          {
+            hosts: ingressForm.host.trim() ? [ingressForm.host.trim()] : [],
+            secretName: ingressForm.tlsSecret.trim(),
+          },
+        ]
+      }
+
+      return {
+        apiVersion: 'networking.k8s.io/v1',
+        kind: 'Ingress',
+        metadata: {
+          name: ingName,
+          namespace: ns,
+          labels: { 'app.kubernetes.io/managed-by': 'k8sselfhost' },
+        },
+        spec: specObj,
+      }
+    }
+
+    case 'persistentvolumeclaims': {
+      const pvcName = pvcForm.name.trim() || 'my-pvc'
+      const pvcSpec: Record<string, unknown> = {
+        accessModes: [pvcForm.accessMode || 'ReadWriteOnce'],
+        resources: {
+          requests: { storage: pvcForm.capacity.trim() || '10Gi' },
+        },
+      }
+      if (pvcForm.storageClassName.trim()) {
+        pvcSpec.storageClassName = pvcForm.storageClassName.trim()
+      }
+
+      return {
+        apiVersion: 'v1',
+        kind: 'PersistentVolumeClaim',
+        metadata: {
+          name: pvcName,
+          namespace: ns,
+          labels: { 'app.kubernetes.io/managed-by': 'k8sselfhost' },
+        },
+        spec: pvcSpec,
+      }
+    }
+
+    case 'jobs': {
+      const jobName = jobForm.name.trim() || 'my-job'
+      const cmdParts = jobForm.command.trim() ? ['/bin/sh', '-c', jobForm.command.trim()] : undefined
+
+      return {
+        apiVersion: 'batch/v1',
+        kind: 'Job',
+        metadata: {
+          name: jobName,
+          namespace: ns,
+          labels: { 'app.kubernetes.io/managed-by': 'k8sselfhost' },
+        },
+        spec: {
+          backoffLimit: Number(jobForm.backoffLimit) || 4,
+          template: {
+            spec: {
+              restartPolicy: jobForm.restartPolicy || 'OnFailure',
+              containers: [
+                {
+                  name: jobName,
+                  image: jobForm.image.trim() || 'busybox:latest',
+                  command: cmdParts,
+                },
+              ],
+            },
+          },
+        },
+      }
+    }
+
+    case 'cronjobs': {
+      const cjName = cronJobForm.name.trim() || 'my-cronjob'
+      const cmdParts = cronJobForm.command.trim() ? ['/bin/sh', '-c', cronJobForm.command.trim()] : undefined
+
+      return {
+        apiVersion: 'batch/v1',
+        kind: 'CronJob',
+        metadata: {
+          name: cjName,
+          namespace: ns,
+          labels: { 'app.kubernetes.io/managed-by': 'k8sselfhost' },
+        },
+        spec: {
+          schedule: cronJobForm.schedule.trim() || '*/5 * * * *',
+          concurrencyPolicy: cronJobForm.concurrencyPolicy || 'Allow',
+          suspend: cronJobForm.suspend,
+          jobTemplate: {
+            spec: {
+              template: {
+                spec: {
+                  restartPolicy: 'OnFailure',
+                  containers: [
+                    {
+                      name: cjName,
+                      image: cronJobForm.image.trim() || 'curlimages/curl:latest',
+                      command: cmdParts,
+                    },
+                  ],
+                },
+              },
+            },
+          },
         },
       }
     }
@@ -255,6 +397,14 @@ const isFormValid = computed(() => {
       return Boolean(deploymentForm.name.trim() && deploymentForm.image.trim())
     case 'services':
       return Boolean(serviceForm.name.trim() && serviceForm.port)
+    case 'ingresses':
+      return Boolean(ingressForm.name.trim() && ingressForm.serviceName.trim())
+    case 'persistentvolumeclaims':
+      return Boolean(pvcForm.name.trim() && pvcForm.capacity.trim())
+    case 'jobs':
+      return Boolean(jobForm.name.trim() && jobForm.image.trim())
+    case 'cronjobs':
+      return Boolean(cronJobForm.name.trim() && cronJobForm.schedule.trim() && cronJobForm.image.trim())
     default:
       return true
   }
@@ -292,12 +442,13 @@ async function handleSubmit() {
 }
 </script>
 
+
 <template>
   <ModalDrawer
     :show="show"
     mode="modal"
     title="Create Kubernetes Resource"
-    :subtitle="`Cluster: ${cluster} ? Namespace: ${selectedNamespace}`"
+    :subtitle="'Cluster: ' + cluster + ' • Namespace: ' + selectedNamespace"
     max-width="720px"
     @close="handleClose"
   >
@@ -306,7 +457,7 @@ async function handleSubmit() {
       <div class="selectors-row">
         <div class="form-group flex-1">
           <label class="form-label">Resource Kind</label>
-          <select v-model="selectedKind" class="input-glass select-full">
+          <select v-model="selectedKind" class="input-glass select-full font-mono">
             <option v-for="k in kindOptions" :key="k.value" :value="k.value">
               {{ k.icon }} {{ k.label }}
             </option>
@@ -315,7 +466,7 @@ async function handleSubmit() {
 
         <div class="form-group flex-1">
           <label class="form-label">Target Namespace</label>
-          <select v-model="selectedNamespace" class="input-glass select-full">
+          <select v-model="selectedNamespace" class="input-glass select-full font-mono">
             <option v-for="ns in namespaceList" :key="ns" :value="ns">{{ ns }}</option>
             <option v-if="!namespaceList.includes(selectedNamespace) && selectedNamespace" :value="selectedNamespace">
               {{ selectedNamespace }}
@@ -326,12 +477,12 @@ async function handleSubmit() {
 
       <!-- Error Notification -->
       <div v-if="errorMessage" class="error-banner animate-fade-in">
-        <span class="error-icon">??</span>
+        <span class="error-icon">⚠️</span>
         <div class="error-text">
           <strong>Creation Failed:</strong>
           <span>{{ errorMessage }}</span>
         </div>
-        <button class="error-close" @click="errorMessage = null">?</button>
+        <button class="error-close" @click="errorMessage = null">✕</button>
       </div>
 
       <!-- ConfigMap Form -->
@@ -341,7 +492,7 @@ async function handleSubmit() {
           <input 
             v-model="configMapForm.name"
             type="text" 
-            class="input-glass" 
+            class="input-glass font-mono" 
             placeholder="e.g. app-config" 
             required 
           />
@@ -375,7 +526,7 @@ async function handleSubmit() {
               @click="removeConfigMapRow(idx)"
               title="Delete row"
             >
-              ?
+              ✕
             </button>
           </div>
         </div>
@@ -389,7 +540,7 @@ async function handleSubmit() {
             <input 
               v-model="secretForm.name"
               type="text" 
-              class="input-glass" 
+              class="input-glass font-mono" 
               placeholder="e.g. db-credentials" 
               required 
             />
@@ -434,7 +585,7 @@ async function handleSubmit() {
                 @click="entry.masked = !entry.masked"
                 :title="entry.masked ? 'Show' : 'Hide'"
               >
-                {{ entry.masked ? '???' : '??' }}
+                {{ entry.masked ? '👁️' : '🔒' }}
               </button>
             </div>
             <button 
@@ -444,7 +595,7 @@ async function handleSubmit() {
               @click="removeSecretRow(idx)"
               title="Delete row"
             >
-              ?
+              ✕
             </button>
           </div>
         </div>
@@ -458,7 +609,7 @@ async function handleSubmit() {
             <input 
               v-model="deploymentForm.name"
               type="text" 
-              class="input-glass" 
+              class="input-glass font-mono" 
               placeholder="e.g. web-app" 
               required 
             />
@@ -471,7 +622,7 @@ async function handleSubmit() {
               type="number" 
               min="1"
               max="50"
-              class="input-glass" 
+              class="input-glass font-mono" 
               required 
             />
           </div>
@@ -529,7 +680,7 @@ async function handleSubmit() {
               @click="removeEnvVarRow(idx)"
               title="Delete env var"
             >
-              ?
+              ✕
             </button>
           </div>
         </div>
@@ -543,7 +694,7 @@ async function handleSubmit() {
             <input 
               v-model="serviceForm.name"
               type="text" 
-              class="input-glass" 
+              class="input-glass font-mono" 
               placeholder="e.g. web-service" 
               required 
             />
@@ -595,9 +746,246 @@ async function handleSubmit() {
               v-model="serviceForm.selectorValue" 
               type="text" 
               class="input-glass font-mono flex-2" 
-              :placeholder="`Value (default: ${serviceForm.name || 'app-name'})`" 
+              :placeholder="'Value (default: ' + (serviceForm.name || 'app-name') + ')'" 
             />
           </div>
+        </div>
+      </div>
+
+      <!-- Ingress Form -->
+      <div v-else-if="selectedKind === 'ingresses'" class="kind-form">
+        <div class="form-row-2">
+          <div class="form-group flex-1">
+            <label class="form-label required">Ingress Name</label>
+            <input 
+              v-model="ingressForm.name"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="e.g. app-ingress" 
+              required 
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">Host Domain</label>
+            <input 
+              v-model="ingressForm.host"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="e.g. app.example.com" 
+            />
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group flex-1">
+            <label class="form-label">Path</label>
+            <input 
+              v-model="ingressForm.path"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="/" 
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">Path Type</label>
+            <select v-model="ingressForm.pathType" class="input-glass select-full font-mono">
+              <option value="Prefix">Prefix</option>
+              <option value="Exact">Exact</option>
+              <option value="ImplementationSpecific">ImplementationSpecific</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group flex-2">
+            <label class="form-label required">Target Service Name</label>
+            <input 
+              v-model="ingressForm.serviceName"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="e.g. web-service" 
+              required 
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label required">Target Port</label>
+            <input 
+              v-model.number="ingressForm.servicePort"
+              type="number" 
+              class="input-glass font-mono" 
+              placeholder="80" 
+              required 
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">TLS Secret (Optional for HTTPS)</label>
+          <input 
+            v-model="ingressForm.tlsSecret"
+            type="text" 
+            class="input-glass font-mono" 
+            placeholder="e.g. tls-app-secret" 
+          />
+        </div>
+      </div>
+
+      <!-- PVC Form -->
+      <div v-else-if="selectedKind === 'persistentvolumeclaims'" class="kind-form">
+        <div class="form-row-2">
+          <div class="form-group flex-2">
+            <label class="form-label required">Claim Name</label>
+            <input 
+              v-model="pvcForm.name"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="e.g. data-volume-pvc" 
+              required 
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label required">Capacity (Size)</label>
+            <input 
+              v-model="pvcForm.capacity"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="10Gi" 
+              required 
+            />
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group flex-1">
+            <label class="form-label">Access Mode</label>
+            <select v-model="pvcForm.accessMode" class="input-glass select-full font-mono">
+              <option value="ReadWriteOnce">ReadWriteOnce (RWO)</option>
+              <option value="ReadWriteMany">ReadWriteMany (RWX)</option>
+              <option value="ReadOnlyMany">ReadOnlyMany (ROX)</option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">StorageClass (Optional)</label>
+            <input 
+              v-model="pvcForm.storageClassName"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="e.g. standard or local-path" 
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Job Form -->
+      <div v-else-if="selectedKind === 'jobs'" class="kind-form">
+        <div class="form-row-2">
+          <div class="form-group flex-2">
+            <label class="form-label required">Job Name</label>
+            <input 
+              v-model="jobForm.name"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="e.g. database-migration-job" 
+              required 
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">Backoff Limit</label>
+            <input 
+              v-model.number="jobForm.backoffLimit"
+              type="number" 
+              min="0"
+              max="20"
+              class="input-glass font-mono" 
+            />
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group flex-2">
+            <label class="form-label required">Container Image</label>
+            <input 
+              v-model="jobForm.image"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="e.g. busybox:latest or alpine" 
+              required 
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">Restart Policy</label>
+            <select v-model="jobForm.restartPolicy" class="input-glass select-full font-mono">
+              <option value="OnFailure">OnFailure</option>
+              <option value="Never">Never</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Shell Command / Script</label>
+          <input 
+            v-model="jobForm.command"
+            type="text" 
+            class="input-glass font-mono" 
+            placeholder="echo 'Done'" 
+          />
+        </div>
+      </div>
+
+      <!-- CronJob Form -->
+      <div v-else-if="selectedKind === 'cronjobs'" class="kind-form">
+        <div class="form-row-2">
+          <div class="form-group flex-2">
+            <label class="form-label required">CronJob Name</label>
+            <input 
+              v-model="cronJobForm.name"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="e.g. nightly-backup-cron" 
+              required 
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label required">Cron Schedule</label>
+            <input 
+              v-model="cronJobForm.schedule"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="*/5 * * * *" 
+              required 
+            />
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group flex-2">
+            <label class="form-label required">Container Image</label>
+            <input 
+              v-model="cronJobForm.image"
+              type="text" 
+              class="input-glass font-mono" 
+              placeholder="e.g. curlimages/curl:latest" 
+              required 
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">Concurrency Policy</label>
+            <select v-model="cronJobForm.concurrencyPolicy" class="input-glass select-full font-mono">
+              <option value="Allow">Allow</option>
+              <option value="Forbid">Forbid</option>
+              <option value="Replace">Replace</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Shell Command / Script</label>
+          <input 
+            v-model="cronJobForm.command"
+            type="text" 
+            class="input-glass font-mono" 
+            placeholder="curl -s https://api.service/task" 
+          />
         </div>
       </div>
 
@@ -608,7 +996,7 @@ async function handleSubmit() {
           class="preview-toggle-btn"
           @click="showPreview = !showPreview"
         >
-          <span>{{ showPreview ? '? Hide Generated Manifest' : '? Show Live YAML Preview' }}</span>
+          <span>{{ showPreview ? '▼ Hide Generated Manifest' : '▶ Show Live YAML Preview' }}</span>
         </button>
 
         <div v-if="showPreview" class="manifest-preview glass-panel font-mono animate-fade-in">
@@ -627,7 +1015,7 @@ async function handleSubmit() {
         :disabled="submitting || !isFormValid"
         @click="handleSubmit"
       >
-        <span>{{ submitting ? '? Creating...' : '? Create Resource' }}</span>
+        <span>{{ submitting ? '⏳ Creating...' : '✨ Create Resource' }}</span>
       </button>
     </template>
   </ModalDrawer>
@@ -650,8 +1038,17 @@ async function handleSubmit() {
   gap: 14px;
 }
 
-.flex-1 { flex: 1; }
-.flex-2 { flex: 2; }
+.flex-1 {
+  flex: 1;
+}
+
+.flex-2 {
+  flex: 2;
+}
+
+.select-full {
+  width: 100%;
+}
 
 .form-group {
   display: flex;
@@ -660,36 +1057,31 @@ async function handleSubmit() {
 }
 
 .form-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
 }
 
 .form-label.required::after {
   content: ' *';
-  color: #fb7185;
-}
-
-.select-full {
-  width: 100%;
+  color: #f43f5e;
 }
 
 .kind-form {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 16px;
-  background: rgba(11, 15, 25, 0.4);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
 }
 
 .key-value-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.4);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .section-title-row {
@@ -715,64 +1107,39 @@ async function handleSubmit() {
   right: 8px;
   background: none;
   border: none;
-  color: var(--text-muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.85rem;
+  opacity: 0.7;
+  padding: 2px;
+}
+
+.btn-mask-toggle:hover {
+  opacity: 1;
 }
 
 .btn-icon-danger {
-  background: rgba(244, 63, 94, 0.1);
-  border: 1px solid rgba(244, 63, 94, 0.2);
-  border-radius: 8px;
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: #fb7185;
+  border-radius: 6px;
   width: 32px;
   height: 32px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fb7185;
   cursor: pointer;
+  font-size: 0.8rem;
   transition: all 0.15s ease;
-  flex-shrink: 0;
 }
 
 .btn-icon-danger:hover:not(:disabled) {
-  background: rgba(244, 63, 94, 0.25);
-  border-color: #fb7185;
+  background: rgba(244, 63, 94, 0.3);
+  color: #fff;
 }
 
 .btn-icon-danger:disabled {
   opacity: 0.3;
   cursor: not-allowed;
-}
-
-.error-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 14px;
-  background: rgba(244, 63, 94, 0.15);
-  border: 1px solid rgba(244, 63, 94, 0.35);
-  border-radius: 10px;
-  color: #fb7185;
-  font-size: 12px;
-}
-
-.error-icon {
-  font-size: 14px;
-}
-
-.error-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-}
-
-.error-close {
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
 }
 
 .preview-accordion {
@@ -785,32 +1152,70 @@ async function handleSubmit() {
 .preview-toggle-btn {
   background: none;
   border: none;
-  color: var(--accent-sky);
-  font-size: 11px;
+  color: #00e5ff;
+  font-size: 0.82rem;
   font-weight: 600;
-  text-align: left;
   cursor: pointer;
+  text-align: left;
   padding: 4px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.preview-toggle-btn:hover {
+  text-decoration: underline;
 }
 
 .manifest-preview {
-  background: #030712;
-  padding: 12px;
+  padding: 14px;
   border-radius: 8px;
-  border: 1px solid var(--border-subtle);
+  background: rgba(10, 15, 30, 0.85);
+  border: 1px solid rgba(0, 229, 255, 0.2);
   max-height: 220px;
   overflow-y: auto;
-  font-size: 11px;
+}
+
+.manifest-preview pre {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
   color: #38bdf8;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.font-mono {
-  font-family: var(--font-mono);
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  color: #fb7185;
 }
 
-.btn-xs {
-  padding: 3px 8px;
-  font-size: 11px;
+.error-text {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.82rem;
+  flex: 1;
+}
+
+.error-close {
+  background: none;
+  border: none;
+  color: #fb7185;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .selectors-row,
+  .form-row-2,
+  .kv-row {
+    flex-direction: column;
+  }
 }
 </style>

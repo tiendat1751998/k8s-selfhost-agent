@@ -58,6 +58,24 @@ func (h *K8sResourceHandler) RegisterRoutes(r chi.Router) {
 		r.Put("/labels", h.UpdateNodeLabels)
 	})
 
+	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/deployments/{name}", func(r chi.Router) {
+		r.Post("/scale", h.ScaleDeployment)
+		r.Post("/restart", h.RestartDeployment)
+	})
+
+	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/statefulsets/{name}", func(r chi.Router) {
+		r.Post("/scale", h.ScaleStatefulSet)
+	})
+
+	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/daemonsets/{name}", func(r chi.Router) {	
+		r.Post("/restart", h.RestartDaemonSet)
+	})
+
+	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/cronjobs/{name}", func(r chi.Router) {
+		r.Post("/trigger", h.TriggerCronJob)
+		r.Put("/suspend", h.SuspendCronJob)
+	})
+
 	r.Post("/apply", h.ApplyYAML)
 }
 
@@ -896,5 +914,366 @@ func (h *K8sResourceHandler) ListEvents(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"data":  filtered,
 		"total": len(filtered),
+	})
+}
+
+type scaleWorkloadRequest struct {
+	Replicas *int32 `json:"replicas"`
+}
+
+type suspendCronJobRequest struct {
+	Suspend *bool `json:"suspend"`
+}
+
+// ScaleDeployment handles POST /api/v1/k8s/{cluster}/resources/deployments/{name}/scale
+func (h *K8sResourceHandler) ScaleDeployment(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeK8sUnavailable(w)
+		return
+	}
+
+	cluster := chi.URLParam(r, "cluster")
+	name := chi.URLParam(r, "name")
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	var req scaleWorkloadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Replicas == nil || *req.Replicas < 0 {
+		writeError(w, http.StatusBadRequest, "invalid request body: replicas must be a non-negative integer", err)
+		return
+	}
+
+	err := h.repo.ScaleDeployment(r.Context(), cluster, namespace, name, *req.Replicas)
+
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "system"
+	}
+	result := "success"
+	details := map[string]interface{}{"cluster": cluster, "namespace": namespace, "name": name, "replicas": *req.Replicas}
+	if err != nil {
+		result = "failure"
+		details["error"] = err.Error()
+	}
+	if h.auditRepo != nil {
+		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "scale", "k8s_deployment", name, name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+			logger.Get().Error("failed to record audit action for deployment scale", zap.Error(auditErr))
+		}
+	}
+
+	if err != nil {
+		if isK8sUnavailable(err) {
+			writeK8sUnavailable(w)
+			return
+		}
+		if k8serrors.IsNotFound(err) {
+			writeError(w, http.StatusNotFound, "deployment not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to scale deployment", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":   "deployment scaled successfully",
+		"name":      name,
+		"namespace": namespace,
+		"replicas":  *req.Replicas,
+		"cluster":   cluster,
+	})
+}
+
+// RestartDeployment handles POST /api/v1/k8s/{cluster}/resources/deployments/{name}/restart
+func (h *K8sResourceHandler) RestartDeployment(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeK8sUnavailable(w)
+		return
+	}
+
+	cluster := chi.URLParam(r, "cluster")
+	name := chi.URLParam(r, "name")
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	err := h.repo.RestartDeployment(r.Context(), cluster, namespace, name)
+
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "system"
+	}
+	result := "success"
+	details := map[string]interface{}{"cluster": cluster, "namespace": namespace, "name": name, "action": "restart"}
+	if err != nil {
+		result = "failure"
+		details["error"] = err.Error()
+	}
+	if h.auditRepo != nil {
+		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "restart", "k8s_deployment", name, name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+			logger.Get().Error("failed to record audit action for deployment restart", zap.Error(auditErr))
+		}
+	}
+
+	if err != nil {
+		if isK8sUnavailable(err) {
+			writeK8sUnavailable(w)
+			return
+		}
+		if k8serrors.IsNotFound(err) {
+			writeError(w, http.StatusNotFound, "deployment not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to restart deployment", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":   "deployment restart triggered successfully",
+		"name":      name,
+		"namespace": namespace,
+		"cluster":   cluster,
+	})
+}
+
+// ScaleStatefulSet handles POST /api/v1/k8s/{cluster}/resources/statefulsets/{name}/scale
+func (h *K8sResourceHandler) ScaleStatefulSet(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeK8sUnavailable(w)
+		return
+	}
+
+	cluster := chi.URLParam(r, "cluster")
+	name := chi.URLParam(r, "name")
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	var req scaleWorkloadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Replicas == nil || *req.Replicas < 0 {
+		writeError(w, http.StatusBadRequest, "invalid request body: replicas must be a non-negative integer", err)
+		return
+	}
+
+	err := h.repo.ScaleStatefulSet(r.Context(), cluster, namespace, name, *req.Replicas)
+
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "system"
+	}
+	result := "success"
+	details := map[string]interface{}{"cluster": cluster, "namespace": namespace, "name": name, "replicas": *req.Replicas}
+	if err != nil {
+		result = "failure"
+		details["error"] = err.Error()
+	}
+	if h.auditRepo != nil {
+		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "scale", "k8s_statefulset", name, name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+			logger.Get().Error("failed to record audit action for statefulset scale", zap.Error(auditErr))
+		}
+	}
+
+	if err != nil {
+		if isK8sUnavailable(err) {
+			writeK8sUnavailable(w)
+			return
+		}
+		if k8serrors.IsNotFound(err) {
+			writeError(w, http.StatusNotFound, "statefulset not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to scale statefulset", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":   "statefulset scaled successfully",
+		"name":      name,
+		"namespace": namespace,
+		"replicas":  *req.Replicas,
+		"cluster":   cluster,
+	})
+}
+
+// RestartDaemonSet handles POST /api/v1/k8s/{cluster}/resources/daemonsets/{name}/restart
+func (h *K8sResourceHandler) RestartDaemonSet(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeK8sUnavailable(w)
+		return
+	}
+
+	cluster := chi.URLParam(r, "cluster")
+	name := chi.URLParam(r, "name")
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	err := h.repo.RestartDaemonSet(r.Context(), cluster, namespace, name)
+
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "system"
+	}
+	result := "success"
+	details := map[string]interface{}{"cluster": cluster, "namespace": namespace, "name": name, "action": "restart"}
+	if err != nil {
+		result = "failure"
+		details["error"] = err.Error()
+	}
+	if h.auditRepo != nil {
+		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "restart", "k8s_daemonset", name, name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+			logger.Get().Error("failed to record audit action for daemonset restart", zap.Error(auditErr))
+		}
+	}
+
+	if err != nil {
+		if isK8sUnavailable(err) {
+			writeK8sUnavailable(w)
+			return
+		}
+		if k8serrors.IsNotFound(err) {
+			writeError(w, http.StatusNotFound, "daemonset not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to restart daemonset", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":   "daemonset restart triggered successfully",
+		"name":      name,
+		"namespace": namespace,
+		"cluster":   cluster,
+	})
+}
+
+// TriggerCronJob handles POST /api/v1/k8s/{cluster}/resources/cronjobs/{name}/trigger
+func (h *K8sResourceHandler) TriggerCronJob(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeK8sUnavailable(w)
+		return
+	}
+
+	cluster := chi.URLParam(r, "cluster")
+	name := chi.URLParam(r, "name")
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	job, err := h.repo.TriggerCronJob(r.Context(), cluster, namespace, name)
+
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "system"
+	}
+	result := "success"
+	details := map[string]interface{}{"cluster": cluster, "namespace": namespace, "cronjob": name}
+	if job != nil {
+		details["job"] = job.Name
+	}
+	if err != nil {
+		result = "failure"
+		details["error"] = err.Error()
+	}
+	if h.auditRepo != nil {
+		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "trigger", "k8s_cronjob", name, name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+			logger.Get().Error("failed to record audit action for cronjob trigger", zap.Error(auditErr))
+		}
+	}
+
+	if err != nil {
+		if isK8sUnavailable(err) {
+			writeK8sUnavailable(w)
+			return
+		}
+		if k8serrors.IsNotFound(err) {
+			writeError(w, http.StatusNotFound, "cronjob not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to trigger cronjob", err)
+		return
+	}
+
+	jobName := ""
+	if job != nil {
+		jobName = job.Name
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":   "cronjob triggered successfully",
+		"cronjob":   name,
+		"job":       jobName,
+		"namespace": namespace,
+		"cluster":   cluster,
+	})
+}
+
+// SuspendCronJob handles PUT /api/v1/k8s/{cluster}/resources/cronjobs/{name}/suspend
+func (h *K8sResourceHandler) SuspendCronJob(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeK8sUnavailable(w)
+		return
+	}
+
+	cluster := chi.URLParam(r, "cluster")
+	name := chi.URLParam(r, "name")
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	var req suspendCronJobRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Suspend == nil {
+		writeError(w, http.StatusBadRequest, "invalid request body: suspend boolean is required", err)
+		return
+	}
+
+	err := h.repo.SuspendCronJob(r.Context(), cluster, namespace, name, *req.Suspend)
+
+	action := "suspend"
+	if !*req.Suspend {
+		action = "resume"
+	}
+
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "system"
+	}
+	result := "success"
+	details := map[string]interface{}{"cluster": cluster, "namespace": namespace, "cronjob": name, "suspend": *req.Suspend}
+	if err != nil {
+		result = "failure"
+		details["error"] = err.Error()
+	}
+	if h.auditRepo != nil {
+		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, action, "k8s_cronjob", name, name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+			logger.Get().Error("failed to record audit action for cronjob suspend", zap.Error(auditErr))
+		}
+	}
+
+	if err != nil {
+		if isK8sUnavailable(err) {
+			writeK8sUnavailable(w)
+			return
+		}
+		if k8serrors.IsNotFound(err) {
+			writeError(w, http.StatusNotFound, "cronjob not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to update cronjob suspend state", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":   "cronjob suspend status updated successfully",
+		"cronjob":   name,
+		"suspend":   *req.Suspend,
+		"namespace": namespace,
+		"cluster":   cluster,
 	})
 }
