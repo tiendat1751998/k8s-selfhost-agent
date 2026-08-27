@@ -1,9 +1,10 @@
-# K8sControl Project State — Session Update 2026-08-26T23:46
+# K8sControl Project State — Session Update 2026-08-27T10:10
 
 ## Git State
 Branch: `feat/disk-io-realtime-telemetry` (pushed to origin)
-Latest: `bd6adc5` fix(ui): overhaul mobile number visibility with workload cards, 2x2 historical kpis, and compact toggles
+Latest: `e5c4596` fix(ui): de-clutter slo tracking mobile view with 2x2 kpis, compact burn rate bar, and responsive header
 Previous commits this session:
+- `bd6adc5` fix(ui): overhaul mobile number visibility with workload cards, 2x2 historical kpis, and compact toggles
 - `ab42656` fix(ui): de-clutter deep-dive modal with 2x2 kpi grid, compact header, and streamlined series toggles
 - `b556dce` fix(hmr): purge service worker dev cache to prevent vite hmr websocket 400 handshake error
 - `736b8e1` fix(ui): de-clutter multi-cluster fleet mobile view with 2x2 grid and compact actions
@@ -199,7 +200,8 @@ GitHub: https://github.com/tiendat1751998/k8s-selfhost-agent (master)
 037:plugins 038:scaffold_templates 039:ecosystem_tools 040:compute_hosts
 041:user_mfa+refresh_tokens 042-049:various 050:slo_health_samples 051:remove_all_seed_data
 
-## Completed Features (Latest Session: 2026-08-26)
+## Completed Features (Latest Session: 2026-08-27)
+- **Service Level Objectives (SLO) Mobile Web Typography & Layout De-Cluttering** (DEC-077)
 - **Mobile Web Ergonomics, Workload Card Visibility & 2x2 Historical KPI Overhaul** (DEC-076)
 - **Cluster Telemetry & Ingress Saturation Deep-Dive Modal Mobile Ergonomics Overhaul** (DEC-075)
 - **Service Worker Dev Mode Purge & Vite HMR WebSocket 400 Resolution** (DEC-074)
