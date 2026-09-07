@@ -737,12 +737,16 @@ func TestDockerHandler_AgentHostConnectivity(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", w.Code)
 	}
 	var failResp struct {
-		Status  string `json:"status"`
-		Message string `json:"message"`
+		Status    string `json:"status"`
+		Message   string `json:"message"`
+		LatencyMs int64  `json:"latency_ms"`
 	}
 	_ = json.NewDecoder(w.Body).Decode(&failResp)
 	if failResp.Status != "error" {
 		t.Errorf("expected status error for dead agent, got %s", failResp.Status)
+	}
+	if failResp.LatencyMs != 0 {
+		t.Errorf("expected latency_ms 0 for dead agent, got %d", failResp.LatencyMs)
 	}
 }
 
@@ -1186,3 +1190,129 @@ func TestDockerHandler_SearchClusterLogs(t *testing.T) {
 		t.Errorf("unexpected ordered results: %+v", resp.Data)
 	}
 }
+
+func TestDockerHandler_StandaloneHostRoutes_And_AgentProbe(t *testing.T) {
+	// 1. Mock agent server simulating k8s-agent daemon on port 9100
+	agentMux := http.NewServeMux()
+	agentMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+	agentMux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"hostname":       "worker-node-alpha",
+			"os":             "linux",
+			"arch":           "arm64",
+			"os_distro":      "Ubuntu 24.04 LTS",
+			"kernel_version": "6.8.0-generic",
+			"uptime_seconds": 98765,
+		})
+	})
+	agentServer := httptest.NewServer(agentMux)
+	defer agentServer.Close()
+
+	repo := &testDockerRepo{}
+	hostRepo := newMockComputeHostRepo()
+	handler := NewDockerHandler(repo, hostRepo)
+
+	r := chi.NewRouter()
+	r.Route("/hosts", handler.RegisterHostRoutes)
+
+	// Create host via /hosts
+	createBody := fmt.Sprintf(`{
+		"name": "worker-alpha",
+		"host_type": "agent",
+		"endpoint": "%s",
+		"labels": {"zone": "us-east-1a"}
+	}`, agentServer.URL)
+	req := httptest.NewRequest(http.MethodPost, "/hosts", bytes.NewBufferString(createBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201 Created, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var created domain.ComputeHost
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatalf("failed to decode created host: %v", err)
+	}
+
+	// GET /hosts/{id}
+	getReq := httptest.NewRequest(http.MethodGet, "/hosts/"+created.ID, nil)
+	getW := httptest.NewRecorder()
+	r.ServeHTTP(getW, getReq)
+	if getW.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK for GET /hosts/{id}, got %d", getW.Code)
+	}
+
+	// POST /hosts/{id}/test (Healthy Agent)
+	testReq := httptest.NewRequest(http.MethodPost, "/hosts/"+created.ID+"/test", nil)
+	testW := httptest.NewRecorder()
+	r.ServeHTTP(testW, testReq)
+	if testW.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK for POST /hosts/{id}/test, got %d", testW.Code)
+	}
+
+	var testResp struct {
+		Status    string                 `json:"status"`
+		Message   string                 `json:"message"`
+		LatencyMs int64                  `json:"latency_ms"`
+		AgentInfo map[string]interface{} `json:"agent_info"`
+	}
+	if err := json.NewDecoder(testW.Body).Decode(&testResp); err != nil {
+		t.Fatalf("unmarshaling test response: %v", err)
+	}
+	if testResp.Status != "connected" {
+		t.Errorf("expected status connected, got %s", testResp.Status)
+	}
+	if testResp.LatencyMs <= 0 {
+		t.Errorf("expected latency_ms > 0 for connected host, got %d", testResp.LatencyMs)
+	}
+	if testResp.AgentInfo["hostname"] != "worker-node-alpha" {
+		t.Errorf("expected hostname worker-node-alpha, got %v", testResp.AgentInfo["hostname"])
+	}
+	if testResp.AgentInfo["os_distro"] != "Ubuntu 24.04 LTS" {
+		t.Errorf("expected os_distro 'Ubuntu 24.04 LTS', got %v", testResp.AgentInfo["os_distro"])
+	}
+
+	// Unreachable agent probe -> returns status: "error", latency_ms: 0
+	unreachableHost := &domain.ComputeHost{
+		ID:        "unreachable-node",
+		Name:      "unreachable-node",
+		HostType:  "agent",
+		Endpoint:  "http://127.0.0.1:58999",
+		Status:    "pending",
+		TenantID:  "default-tenant",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	_ = hostRepo.Create(context.Background(), unreachableHost)
+
+	failReq := httptest.NewRequest(http.MethodPost, "/hosts/"+unreachableHost.ID+"/test", nil)
+	failW := httptest.NewRecorder()
+	r.ServeHTTP(failW, failReq)
+	if failW.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK with error payload, got %d", failW.Code)
+	}
+
+	var failResp struct {
+		Status    string `json:"status"`
+		Message   string `json:"message"`
+		LatencyMs int64  `json:"latency_ms"`
+	}
+	if err := json.NewDecoder(failW.Body).Decode(&failResp); err != nil {
+		t.Fatalf("unmarshaling fail response: %v", err)
+	}
+	if failResp.Status != "error" {
+		t.Errorf("expected status error, got %s", failResp.Status)
+	}
+	if failResp.LatencyMs != 0 {
+		t.Errorf("expected latency_ms 0 for unreachable agent, got %d", failResp.LatencyMs)
+	}
+	if failResp.Message == "" {
+		t.Errorf("expected non-empty error message for unreachable agent")
+	}
+}
+

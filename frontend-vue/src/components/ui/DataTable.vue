@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="T extends Record<string, unknown>">
+<script setup lang="ts" generic="T = any">
 import { ref, computed } from 'vue'
 
 export interface Column<T> {
@@ -24,6 +24,11 @@ const search = ref('')
 const sortKey = ref<string>('')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 
+function getCellValue(row: T, key: keyof T | string): unknown {
+  if (row === null || row === undefined) return undefined
+  return (row as Record<string, unknown>)[key as string]
+}
+
 function deepSearchMatch(obj: unknown, query: string): boolean {
   if (obj === null || obj === undefined) return false
   if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') {
@@ -48,8 +53,8 @@ const filteredData = computed(() => {
 
   if (sortKey.value) {
     result.sort((a, b) => {
-      const va = a[sortKey.value]
-      const vb = b[sortKey.value]
+      const va = getCellValue(a, sortKey.value)
+      const vb = getCellValue(b, sortKey.value)
       if (va === vb) return 0
       if (va === undefined || va === null) return 1
       if (vb === undefined || vb === null) return -1
@@ -145,8 +150,8 @@ function handleSort(key: string, sortable?: boolean) {
               :key="String(col.key)"
               :style="{ textAlign: col.align || 'left' }"
             >
-              <slot :name="`cell-${String(col.key)}`" :row="row" :value="row[col.key]">
-                {{ col.render ? col.render(row) : row[col.key] ?? '-' }}
+              <slot :name="`cell-${String(col.key)}`" :row="row" :value="getCellValue(row, col.key)">
+                {{ col.render ? col.render(row) : (getCellValue(row, col.key) ?? '-') }}
               </slot>
             </td>
           </tr>

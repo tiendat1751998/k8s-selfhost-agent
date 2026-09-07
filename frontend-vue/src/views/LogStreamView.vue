@@ -1,593 +1,390 @@
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
+import { useLogStreamer } from '../composables/useLogStreamer'
+import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
+import LogTelemetryStrip from '../components/logs/LogTelemetryStrip.vue'
+import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
+
+const {
+  logStore,
+  searchKeyword,
+  selectedLevel,
+  autoScroll,
+  isScrollLocked,
+  linesStreamed,
+  latency,
+  errorRate,
+  maxBufferSize,
+  isConnected,
+  isPaused,
+  totalBufferCount,
+  clearBuffer,
+  togglePause,
+  setTerminalRef,
+  scrollToBottom,
+  handleScroll,
+} = useLogStreamer()
+
+const selectedTarget = ref<LogTarget>({
+  type: 'all',
+  id: 'all',
+  name: 'All Cluster Logs',
+  icon: '🌐',
+})
+
+const showMobileTree = ref(false)
+
+watch(selectedTarget, (target) => {
+  if (target.type === 'node') {
+    logStore.connect({ node: target.id })
+  } else if (target.type === 'service') {
+    logStore.connect({ service: target.id })
+  } else {
+    logStore.connect()
+  }
+})
+
+const targetFilteredLogs = computed(() => {
+  const target = selectedTarget.value
+  const level = selectedLevel.value
+  const kw = searchKeyword.value.trim().toLowerCase()
+
+  return logStore.logs.filter((log) => {
+    // 1. Level filter
+    if (level && log.level.toUpperCase() !== level.toUpperCase()) return false
+
+    // 2. Target drill-down filter (Node / Service / All)
+    if (target.type === 'node') {
+      const q = target.id.toLowerCase()
+      const matchNode = log.node && log.node.toLowerCase().includes(q)
+      const matchPod = log.pod && log.pod.toLowerCase().includes(q)
+      const matchNs = log.namespace && log.namespace.toLowerCase().includes(q)
+      if (!matchNode && !matchPod && !matchNs) return false
+    } else if (target.type === 'service') {
+      const q = target.id.toLowerCase()
+      const matchSvc = log.service && log.service.toLowerCase().includes(q)
+      const matchCtr = log.container && log.container.toLowerCase().includes(q)
+      const matchPod = log.pod && log.pod.toLowerCase().includes(q)
+      const matchNs = log.namespace && log.namespace.toLowerCase().includes(q)
+      if (!matchSvc && !matchCtr && !matchPod && !matchNs) return false
+    }
+
+    // 3. Search keyword or regex
+    if (kw) {
+      const matchMsg = log.msg.toLowerCase().includes(kw)
+      const matchPod = log.pod.toLowerCase().includes(kw)
+      const matchTrace = log.traceId?.toLowerCase().includes(kw)
+      if (!matchMsg && !matchPod && !matchTrace) return false
+    }
+
+    return true
+  })
+})
+
+function handleExport() {
+  const logsToExport = targetFilteredLogs.value.length > 0 ? targetFilteredLogs.value : logStore.logs
+  const content = logsToExport
+    .map((l) => {
+      const node = l.node || (l.namespace !== 'default' ? l.namespace : 'node')
+      const service = l.service || l.container || l.pod || 'system'
+      return `[${l.time}] [${l.level.padEnd(5)}] [${node}/${service}]: ${l.msg}${l.traceId ? ` [trace=${l.traceId}]` : ''}`
+    })
+    .join('\n')
+
+  if (typeof window !== 'undefined') {
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    a.href = url
+    a.download = `k8s-logs-${selectedTarget.value.id}-${timestamp}.log`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+}
+</script>
+
 <template>
-  <div class="view-container">
-    <!-- View Header -->
-    <div class="view-header">
-      <div>
+  <div class="view-container log-explorer-page">
+    <!-- Compact View Header -->
+    <header class="view-header">
+      <div class="header-left">
         <div class="view-tag">
           <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>HIGH-THROUGHPUT REALTIME LOG AGGREGATOR</span>
+          <span>REAL-TIME OBSERVABILITY & LOG EXPLORER</span>
         </div>
-        <h1 class="view-title">Enterprise Kubernetes Log Stream Explorer</h1>
-        <p class="view-desc">
-          Ultra-low latency (<span class="highlight">&lt;50ms</span>) WebSocket pub/sub stream harvested by <span class="highlight">Vector DaemonSet</span> with in-memory non-blocking <span class="highlight">RingBuffer</span>.
-        </p>
+        <h1 class="view-title">Enterprise Kubernetes Logs Explorer</h1>
       </div>
 
-      <div class="header-actions">
-        <button 
-          class="btn"
-          :class="logStore.isPaused ? 'btn-primary' : 'btn-secondary'"
-          @click="logStore.togglePause()"
-        >
-          <span>{{ logStore.isPaused ? '▶ Resume Live Tail' : '⏸ Pause Live Stream' }}</span>
-        </button>
-        <button class="btn btn-secondary" @click="logStore.clear()">
-          <span>🧹 Clear Buffer</span>
-        </button>
-      </div>
-    </div>
+      <!-- Mobile Target Drawer Toggle -->
+      <button
+        type="button"
+        class="mobile-tree-toggle-btn"
+        aria-label="Toggle log targets drawer"
+        @click="showMobileTree = !showMobileTree"
+      >
+        <span>🌲 {{ selectedTarget.name }} ▾</span>
+      </button>
+    </header>
 
-    <!-- Filter & Control Deck -->
-    <div class="control-deck glass-panel">
-      <div class="deck-row">
-        <!-- Search Filter -->
-        <div class="search-input-wrapper">
-          <span class="search-icon">🔍</span>
-          <input 
-            v-model="searchKeyword" 
-            type="text" 
-            placeholder="Search regex, error codes, trace IDs, panic, OOM..." 
-            class="input-glass search-input font-mono" 
-          />
-          <button v-if="searchKeyword" class="search-clear" @click="searchKeyword = ''">✕</button>
+    <!-- Compact 32px Telemetry Strip -->
+    <LogTelemetryStrip
+      :lines-streamed="linesStreamed"
+      :error-rate="errorRate"
+      :buffer-size="totalBufferCount"
+      :max-buffer-size="maxBufferSize"
+      :latency="latency"
+      :is-connected="isConnected"
+      :is-paused="isPaused"
+    />
+
+    <!-- Mobile Backdrop Overlay -->
+    <div
+      v-if="showMobileTree"
+      class="mobile-backdrop"
+      aria-hidden="true"
+      @click="showMobileTree = false"
+    ></div>
+
+    <!-- 2-Column Explorer Grid (Datadog/Loki Style) -->
+    <div class="log-explorer-grid">
+      <!-- Left Column: Log Target Drill-Down Tree -->
+      <div class="explorer-left-col" :class="{ 'mobile-tree-open': showMobileTree }">
+        <div v-if="showMobileTree" class="mobile-drawer-header">
+          <span class="drawer-title font-mono">🌲 Select Target</span>
+          <button type="button" class="drawer-close-btn" aria-label="Close targets drawer" @click="showMobileTree = false">✕</button>
         </div>
-
-        <!-- Level Selector -->
-        <div class="deck-select-group">
-          <span class="deck-label">Level:</span>
-          <select v-model="selectedLevel" class="input-glass deck-select">
-            <option value="">ALL LEVELS</option>
-            <option value="ERROR">ERROR</option>
-            <option value="WARN">WARN</option>
-            <option value="INFO">INFO</option>
-            <option value="DEBUG">DEBUG</option>
-          </select>
-        </div>
-
-        <!-- Namespace Selector -->
-        <div class="deck-select-group">
-          <span class="deck-label">Namespace:</span>
-          <select v-model="selectedNamespace" class="input-glass deck-select" @change="onNamespaceChange">
-            <option value="">ALL NAMESPACES</option>
-            <option value="production">production</option>
-            <option value="staging">staging</option>
-            <option value="logging">logging</option>
-            <option value="vault">vault</option>
-          </select>
-        </div>
-
-        <!-- Auto-scroll toggle -->
-        <label class="auto-scroll-label">
-          <input v-model="autoScroll" type="checkbox" class="toggle-cb" />
-          <span>Auto-Scroll</span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Terminal Window Container -->
-    <div class="terminal-window glass-panel">
-      <!-- Terminal Header / Titlebar -->
-      <div class="terminal-titlebar">
-        <div class="window-buttons">
-          <span class="win-btn win-close"></span>
-          <span class="win-btn win-min"></span>
-          <span class="win-btn win-max"></span>
-        </div>
-
-        <div class="terminal-title font-mono">
-          <span class="pulse-dot" :class="logStore.isPaused ? 'pulse-dot-amber' : (logStore.isConnected ? 'pulse-dot-emerald' : 'pulse-dot-rose')"></span>
-          <span>live-tail://k8s-cluster.internal/logs/stream</span>
-          <span class="buffer-count">({{ filteredLogs.length }} events in buffer)</span>
-        </div>
-
-        <div class="terminal-actions">
-          <span class="font-mono" :class="logStore.isConnected ? 'text-emerald' : 'text-rose'" style="font-size: 11px;">
-            WebSocket: {{ logStore.isConnected ? 'CONNECTED (<50ms)' : 'DISCONNECTED' }}
-          </span>
-        </div>
+        <LogTargetTree
+          v-model="selectedTarget"
+          :logs="logStore.logs"
+          @select="showMobileTree = false"
+        />
       </div>
 
-      <!-- Terminal Body / Logs -->
-      <div ref="terminalBody" class="terminal-body font-mono">
-        <div v-for="(log, idx) in filteredLogs" :key="idx" class="log-line" :class="'log-' + log.level.toLowerCase()">
-          <span class="log-idx">{{ idx + 1 }}</span>
-          <span class="log-time">{{ log.time }}</span>
-          <span class="log-level-badge" :class="'badge-' + log.level.toLowerCase()">{{ log.level }}</span>
-          <span class="log-ns">[{{ log.namespace }}]</span>
-          <span class="log-pod">{{ log.pod }}:</span>
-          <span class="log-msg">{{ log.msg }}</span>
-          <span v-if="log.traceId" class="log-trace font-mono">trace_id={{ log.traceId }}</span>
-        </div>
-
-        <div v-if="filteredLogs.length === 0" class="empty-terminal">
-          <span class="empty-icon">⚡</span>
-          <p>{{ logStore.isConnected ? 'Waiting for log events matching the filter...' : 'Disconnected from log stream. Reconnecting...' }}</p>
-        </div>
+      <!-- Right Column: Clean Modern Terminal Window -->
+      <div class="explorer-right-col">
+        <LogViewerTerminal
+          :logs="targetFilteredLogs"
+          :is-connected="isConnected"
+          :is-paused="isPaused"
+          :auto-scroll="autoScroll"
+          :is-scroll-locked="isScrollLocked"
+          :search-query="searchKeyword"
+          :selected-level="selectedLevel"
+          :target-name="selectedTarget.name"
+          :latency="latency"
+          @update:search-query="searchKeyword = $event"
+          @update:selected-level="selectedLevel = $event"
+          @update:auto-scroll="autoScroll = $event"
+          @toggle-pause="togglePause"
+          @clear-buffer="clearBuffer"
+          @export-logs="handleExport"
+          @scroll="handleScroll"
+          @scroll-to-bottom="scrollToBottom"
+          @register-terminal="setTerminalRef"
+          @toggle-target-tree="showMobileTree = !showMobileTree"
+        />
       </div>
     </div>
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
-import { useLogStore } from '../stores/logStore'
-
-const route = useRoute()
-const logStore = useLogStore()
-const autoScroll = ref(true)
-const searchKeyword = ref('')
-const selectedLevel = ref('')
-const selectedNamespace = ref('')
-const terminalBody = ref<HTMLElement | null>(null)
-
-onMounted(() => {
-  if (route.query.namespace && typeof route.query.namespace === 'string') {
-    selectedNamespace.value = route.query.namespace
-  }
-  if (route.query.search && typeof route.query.search === 'string') {
-    searchKeyword.value = route.query.search
-  } else if (route.query.pod && typeof route.query.pod === 'string') {
-    searchKeyword.value = route.query.pod
-  }
-  logStore.connect(selectedNamespace.value)
-})
-
-onUnmounted(() => {
-  logStore.disconnect()
-})
-
-function onNamespaceChange() {
-  logStore.connect(selectedNamespace.value)
-}
-
-const filteredLogs = computed(() => {
-  return logStore.logs.filter(l => {
-    if (selectedLevel.value && l.level !== selectedLevel.value) return false
-    if (selectedNamespace.value && l.namespace !== selectedNamespace.value) return false
-    if (searchKeyword.value) {
-      const kw = searchKeyword.value.toLowerCase()
-      const matchMsg = l.msg?.toLowerCase().includes(kw)
-      const matchPod = l.pod?.toLowerCase().includes(kw)
-      const matchTrace = l.traceId?.toLowerCase().includes(kw)
-      if (!matchMsg && !matchPod && !matchTrace) return false
-    }
-    return true
-  })
-})
-
-watch(
-  () => filteredLogs.value.length,
-  async () => {
-    if (autoScroll.value && terminalBody.value) {
-      await nextTick()
-      terminalBody.value.scrollTop = terminalBody.value.scrollHeight
-    }
-  }
-)
-</script>
-
 <style scoped>
-.view-container {
+.log-explorer-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  height: calc(100vh - 120px);
+  gap: 12px;
+  height: calc(100vh - 100px);
+  min-height: 600px;
 }
 
 .view-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
 }
 
 .view-tag {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  gap: 6px;
+  font-size: 10.5px;
   font-weight: 700;
-  color: var(--accent-cyan);
+  color: #38bdf8;
   letter-spacing: 0.05em;
-  margin-bottom: 6px;
+  font-family: var(--font-mono, monospace);
+  margin-bottom: 2px;
 }
 
 .view-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
+  margin: 0;
 }
 
-.view-desc {
-  font-size: 13px;
-  color: var(--text-secondary);
-  max-width: 820px;
-  margin-top: 4px;
+.mobile-tree-toggle-btn {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.highlight {
-  color: #fff;
-  font-weight: 600;
+.mobile-tree-toggle-btn:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.6);
 }
 
-.header-actions {
-  display: flex;
+/* 2-Column Explorer Grid */
+.log-explorer-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr;
   gap: 12px;
-}
-
-.control-deck {
-  padding: 12px 18px;
-}
-
-.deck-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.search-input-wrapper {
-  position: relative;
-  flex: 1;
-  min-width: 260px;
-  display: flex;
-  align-items: center;
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.search-input {
-  width: 100%;
-  padding-left: 36px;
-  padding-right: 32px;
-}
-
-.search-clear {
-  position: absolute;
-  right: 12px;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.deck-select-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.deck-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.deck-select {
-  padding: 6px 12px;
-}
-
-.auto-scroll-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.toggle-cb {
-  accent-color: var(--accent-cyan);
-}
-
-.terminal-window {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-terminal);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: 0;
   overflow: hidden;
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.9);
 }
 
-.terminal-titlebar {
-  height: 38px;
-  background: rgba(16, 24, 40, 0.9);
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-}
-
-.window-buttons {
-  display: flex;
-  gap: 7px;
-}
-
-.win-btn {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-}
-
-.win-close { background: #ff5f56; }
-.win-min { background: #ffbd2e; }
-.win-max { background: #27c93f; }
-
-.terminal-title {
-  font-size: 11px;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.buffer-count {
-  color: var(--text-muted);
-}
-
-.terminal-body {
-  flex: 1;
-  padding: 16px;
+.explorer-left-col {
+  height: 100%;
   overflow-y: auto;
-  font-size: 12px;
-  line-height: 1.7;
 }
 
-.log-line {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: background 0.1s ease;
-}
-
-.log-line:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.log-idx {
-  color: rgba(255, 255, 255, 0.2);
-  width: 24px;
-  user-select: none;
-  font-size: 10px;
-}
-
-.log-time {
-  color: var(--text-muted);
-  user-select: none;
-  font-size: 11px;
-}
-
-.log-level-badge {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 4px;
-  user-select: none;
-}
-
-.badge-info { background: rgba(16, 185, 129, 0.15); color: #34d399; }
-.badge-warn { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
-.badge-error { background: rgba(244, 63, 94, 0.15); color: #fb7185; }
-
-.log-ns {
-  color: #c084fc;
-}
-
-.log-pod {
-  color: var(--accent-sky);
-}
-
-.log-msg {
-  color: var(--text-primary);
-  flex: 1;
-  word-break: break-all;
-}
-
-.log-trace {
-  font-size: 10px;
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.05);
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-
-.log-error .log-msg {
-  color: #fda4af;
-  font-weight: 600;
-}
-
-.empty-terminal {
+.explorer-right-col {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-muted);
-  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.empty-icon {
-  font-size: 32px;
+.mobile-backdrop {
+  display: none;
+}
+.mobile-drawer-header {
+  display: none;
 }
 
-.pulse-dot-rose {
-  background-color: #f43f5e;
-  box-shadow: 0 0 10px #f43f5e;
-}
-
-.text-emerald { color: #34d399; }
-.text-rose { color: #fb7185; }
-.text-cyan { color: #38bdf8; }
-.font-mono { font-family: var(--font-mono); }
-
-/* Responsive Overhaul for Mobile & Tablets */
-@media (max-width: 768px) {
-  .view-container {
-    height: auto;
-    min-height: calc(100vh - 100px);
-    gap: 14px;
+@media (max-width: 900px) {
+  .mobile-tree-toggle-btn {
+    display: inline-flex;
   }
 
-  .view-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
+  .mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    z-index: 45;
   }
 
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    width: 100% !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
-  }
-
-  .header-actions .btn,
-  .header-actions button,
-  .header-actions a {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    padding: 7px 10px !important;
-    font-size: 11.5px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
-  }
-
-  .header-actions > :last-child:nth-child(odd) {
-    flex: 1 1 100% !important;
-  }
-
-  .metrics-grid,
-  .grid-metrics,
-  .stats-grid,
-  .kpi-grid,
-  .swarm-meta-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-
-  .metric-card,
-  .stat-card,
-  .hud-card,
-  :deep(.metric-card) {
-    padding: 10px 12px !important;
-  }
-
-  .control-deck {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    backdrop-filter: blur(12px);
-    padding: 10px 14px;
-    border-radius: 12px;
-  }
-
-  .deck-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-
-  .search-input-wrapper {
-    min-width: 100%;
-  }
-
-  .deck-select-group {
-    width: 100%;
+  .mobile-drawer-header {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(15, 23, 42, 0.98);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .terminal-window {
-    height: 380px;
-    min-height: 380px;
-    border-radius: 12px;
-  }
-
-  .terminal-body {
-    padding: 10px 12px;
-  }
-
-  .log-line {
-    flex-wrap: wrap;
-    gap: 4px 8px;
+  .drawer-title {
     font-size: 11px;
+    font-weight: 700;
+    color: #38bdf8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
-  .log-idx {
+  .drawer-close-btn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .drawer-close-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .log-explorer-grid {
+    grid-template-columns: 1fr;
+    position: relative;
+  }
+
+  .explorer-left-col {
     display: none;
+    position: fixed;
+    top: 50px;
+    left: 12px;
+    right: 12px;
+    bottom: 20px;
+    max-width: 380px;
+    z-index: 50;
+    background: #0b0f19;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.9);
+    flex-direction: column;
+  }
+
+  .explorer-left-col.mobile-tree-open {
+    display: flex;
   }
 }
 
 @media (max-width: 640px) {
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    width: 100% !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
+  .log-explorer-page {
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    gap: 0;
+    flex: 1;
+    overflow: hidden;
   }
 
-  .header-actions .btn,
-  .header-actions button,
-  .header-actions a {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    padding: 7px 10px !important;
-    font-size: 11.5px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
+  .view-header {
+    display: none !important;
   }
 
-  .header-actions > :last-child:nth-child(odd) {
-    flex: 1 1 100% !important;
+  .log-explorer-grid {
+    gap: 0;
+    height: calc(100% - 20px);
+    min-height: 0;
+    flex: 1;
   }
 
-  .metrics-grid,
-  .grid-metrics,
-  .stats-grid,
-  .kpi-grid,
-  .swarm-meta-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-
-  .metric-card,
-  .stat-card,
-  .hud-card,
-  :deep(.metric-card) {
-    padding: 10px 12px !important;
-  }
-
-  .terminal-titlebar {
-    padding: 0 10px;
-  }
-
-  .window-buttons {
-    display: none;
+  .explorer-left-col {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    max-width: none;
+    border-radius: 8px;
+    z-index: 50;
   }
 }
 </style>

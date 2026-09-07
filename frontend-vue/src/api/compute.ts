@@ -461,6 +461,8 @@ export interface ComputeHost {
   last_health_check?: string
   labels: Record<string, string>
   tenant_id?: string
+  runtime_environment?: string
+  host_role?: string
   created_at: string
   updated_at?: string
 }
@@ -698,6 +700,11 @@ export const incidentsApi = {
     return normalizeIncident(raw)
   },
 
+  async create(body: Partial<Incident>): Promise<Incident> {
+    const raw = await api.post<any>('/incidents', body)
+    return normalizeIncident(raw)
+  },
+
   async getReport(id: string): Promise<RCAReport> {
     const raw = await api.get<any>(`/incidents/${id}/report`)
     return normalizeReport(raw)
@@ -710,6 +717,14 @@ export const incidentsApi = {
 
   async analyze(id: string): Promise<{ status: string }> {
     return api.post<{ status: string }>(`/incidents/${id}/analyze`)
+  },
+
+  async mitigate(id: string): Promise<{ status: string }> {
+    return api.post<{ status: string }>(`/incidents/${id}/mitigate`)
+  },
+
+  async resolve(id: string): Promise<{ status: string }> {
+    return api.post<{ status: string }>(`/incidents/${id}/resolve`)
   },
 
   async simulate(body?: { scenario?: string; pod_name?: string; namespace?: string }): Promise<Incident> {

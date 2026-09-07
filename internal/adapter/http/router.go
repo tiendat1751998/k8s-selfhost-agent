@@ -49,9 +49,11 @@ type PlatformHandlers struct {
 	Deployments   *DeploymentHandler
 	Tenancy       *TenancyHandler
 	Alert         *AlertHandler
+	Storage       *StorageHandler
 	K8s           *K8sResourceHandler
 	K8sExec       *K8sExecHandler
 	K8sLogs       *K8sLogsHandler
+	K8sBootstrap  *K8sBootstrapHandler
 	Cloud         *CloudHandler
 	Settings      *SettingsHandler
 	Catalog       *CatalogHandler
@@ -60,6 +62,7 @@ type PlatformHandlers struct {
 	Ecosystem     *EcosystemHandler
 	LogStream     *LogStreamHandler
 	Helm          *HelmHandler
+	DR            *DRHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -203,7 +206,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			mountK8sUnavailable(r, "/health")
 		}
 
-		if platform != nil && (platform.K8s != nil || platform.K8sExec != nil || platform.K8sLogs != nil) {
+		if platform != nil && (platform.K8s != nil || platform.K8sExec != nil || platform.K8sLogs != nil || platform.K8sBootstrap != nil || platform.Storage != nil || platform.DR != nil) {
 			r.Route("/k8s/{cluster}", func(sub chi.Router) {
 				if platform.K8s != nil {
 					sub.With(mw.RBACMiddleware("platform_admin")).Post("/apply", platform.K8s.ApplyYAML)
@@ -247,6 +250,19 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 					sub.Get("/logs", platform.K8sLogs.HandlePodLogs)
 					sub.Get("/logs/{pod}", platform.K8sLogs.HandlePodLogs)
 					sub.Get("/pods/{pod}/logs", platform.K8sLogs.HandlePodLogs)
+				}
+				if platform.K8sBootstrap != nil {
+					sub.Get("/essentials", platform.K8sBootstrap.GetEssentialsStatus)
+					sub.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin")).Post("/bootstrap", platform.K8sBootstrap.ExecuteBootstrap)
+					sub.Get("/metrics/pods", platform.K8sBootstrap.GetPodMetrics)
+				}
+				if platform.Storage != nil {
+					sub.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/storage/volumes", platform.Storage.RegisterRoutes)
+				} else {
+					mountK8sUnavailable(sub, "/storage/volumes")
+				}
+				if platform.DR != nil {
+					sub.Route("/dr", platform.DR.RegisterRoutes)
 				}
 			})
 		} else {
@@ -378,3 +394,4 @@ func findFrontendDir() string {
 	}
 	return ""
 }
+

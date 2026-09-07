@@ -47,6 +47,7 @@ export interface NodeMetrics {
   node_name: string
   role: string // manager, worker
   status: string // ready, down
+  unschedulable?: boolean
   source?: 'docker' | 'agent' | string
   cpu_percent: number
   memory_used: number

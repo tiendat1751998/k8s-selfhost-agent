@@ -292,9 +292,4 @@ async function copyValue(key: string, rawVal: string) {
 .font-mono {
   font-family: var(--font-mono);
 }
-
-.btn-xs {
-  padding: 4px 10px;
-  font-size: 11px;
-}
 </style>

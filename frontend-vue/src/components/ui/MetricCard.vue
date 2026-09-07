@@ -1,5 +1,7 @@
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue'
+
+const props = defineProps<{
   title: string
   value: string | number
   subtitle?: string
@@ -9,13 +11,38 @@ defineProps<{
   badge?: string
   badgeColor?: 'emerald' | 'amber' | 'rose' | 'cyan' | 'violet' | 'muted'
 }>()
+
+const iconMap: Record<string, string> = {
+  alert: '⚠️',
+  warning: '⚠️',
+  fire: '🔥',
+  danger: '🚨',
+  critical: '🚨',
+  ok: '✅',
+  success: '✅',
+  check: '✔️',
+  info: 'ℹ️',
+  clock: '⏱️',
+  shield: '🛡️',
+  cpu: '⚡',
+  ram: '🧠',
+  disk: '💾',
+  network: '🌐'
+}
+
+const resolvedIcon = computed(() => {
+  if (!props.icon) return ''
+  const trimmed = props.icon.trim()
+  const key = trimmed.toLowerCase()
+  return iconMap[key] || trimmed
+})
 </script>
 
 <template>
-  <div class="metric-card glass-panel glass-panel-glow">
+  <div class="metric-card glass-panel">
     <div class="metric-header">
       <div class="metric-title-group">
-        <span v-if="icon" class="metric-icon">{{ icon }}</span>
+        <span v-if="resolvedIcon" class="metric-icon" aria-hidden="true">{{ resolvedIcon }}</span>
         <span class="metric-title">{{ title }}</span>
       </div>
       <span v-if="badge" class="metric-badge" :class="`badge-${badgeColor || 'cyan'}`">
@@ -38,11 +65,19 @@ defineProps<{
 
 <style scoped>
 .metric-card {
-  padding: 18px 20px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-radius: 14px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:hover {
+  border-color: var(--border-medium);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .metric-header {
@@ -58,7 +93,8 @@ defineProps<{
 }
 
 .metric-icon {
-  font-size: 16px;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .metric-title {
@@ -84,9 +120,9 @@ defineProps<{
 }
 
 .metric-value {
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
@@ -97,8 +133,8 @@ defineProps<{
   font-weight: 600;
 }
 
-.trend-positive { color: #34d399; }
-.trend-negative { color: #fb7185; }
+.trend-positive { color: #10b981; }
+.trend-negative { color: #f43f5e; }
 .trend-neutral { color: var(--text-muted); }
 
 .metric-footer {
@@ -116,13 +152,10 @@ defineProps<{
 
   .metric-title {
     font-size: 10px;
-    font-weight: 600;
   }
 
   .metric-value {
     font-size: 18px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
   }
 
   .metric-footer {

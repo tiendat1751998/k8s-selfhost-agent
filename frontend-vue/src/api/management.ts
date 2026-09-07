@@ -8,6 +8,7 @@ export interface Organization {
   id: string
   name: string
   tier: string
+  quotaPreset?: string
 }
 
 export interface Project {

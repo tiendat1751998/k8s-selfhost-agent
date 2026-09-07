@@ -1,0 +1,406 @@
+/* ==========================================================================
+   SLO View Stylesheet - Enterprise Reliability & Error Budgeting
+   Optimized for High-Density Mobile PWA Ergonomics & Micro-Telemetry
+   ========================================================================== */
+
+.slo-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Visibility Utilities */
+@media (min-width: 641px) {
+  .mobile-only {
+    display: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .slo-view-container {
+    gap: 8px;
+    padding: 0 4px;
+  }
+}
+
+/* Desktop Header */
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.view-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-cyan, #06b6d4);
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.view-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.view-desc {
+  font-size: 13px;
+  color: var(--text-secondary, #94a3b8);
+  max-width: 750px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ==========================================================================
+   Mobile 44px Command Bar (<= 640px)
+   ========================================================================== */
+.slo-mobile-command-bar {
+  height: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+}
+
+.command-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.command-bar-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.command-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Compact 32px Mobile Action Buttons */
+.btn-icon-cmd {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 8px;
+  color: #e2e8f0;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 0.15s ease;
+}
+
+.btn-icon-cmd:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.85);
+  color: #fff;
+}
+
+.btn-icon-cmd.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+}
+
+.btn-icon-cmd:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Mobile 20px Centered Micro-Telemetry Strip (<= 640px)
+   ========================================================================== */
+.slo-micro-telemetry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-height: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  gap: 6px;
+  user-select: none;
+  letter-spacing: -0.01em;
+  padding: 0 4px;
+}
+
+.slo-micro-telemetry .tel-item {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.slo-micro-telemetry .tel-total {
+  color: #38bdf8;
+}
+
+.slo-micro-telemetry .tel-healthy {
+  color: #34d399;
+}
+
+.slo-micro-telemetry .tel-warn {
+  color: #f59e0b;
+}
+
+.slo-micro-telemetry .tel-burn {
+  color: #f43f5e;
+}
+
+.slo-micro-telemetry .tel-sep {
+  color: rgba(148, 163, 184, 0.4);
+  font-weight: 400;
+}
+
+/* Collapsible Mobile Search / Filter Drawer */
+.mobile-filter-drawer {
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+}
+
+.mobile-search-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  background: rgba(11, 15, 25, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  color: #fff;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.mobile-search-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+/* Alert / Toast Banner */
+.banner-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.banner-success {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #10b981;
+}
+
+.banner-warning {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+}
+
+.banner-error {
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.25);
+  color: #f43f5e;
+}
+
+.banner-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Multi-Window Analysis Filter Strip & Mobile Pill Selector
+   ========================================================================== */
+.filter-strip {
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: 10px;
+  background: var(--bg-card, #0f172a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  flex-wrap: wrap;
+}
+
+.filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+}
+
+.pill-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: #0b0f19;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pill-btn:hover {
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+.pill-btn.active {
+  background: #2563eb;
+  border-color: #3b82f6;
+  color: #fff;
+  font-weight: 600;
+}
+
+.filter-desc {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+}
+
+/* Streamlined Mobile Pill Strip (< 640px) */
+@media (max-width: 640px) {
+  .mobile-pill-strip {
+    padding: 4px !important;
+    margin: 0 !important;
+    background: rgba(11, 15, 25, 0.65) !important;
+    border-radius: 8px !important;
+    gap: 0 !important;
+  }
+
+  .mobile-pill-strip .filter-pills {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 4px !important;
+    width: 100% !important;
+  }
+
+  .mobile-pill-strip .pill-btn {
+    padding: 6px 2px !important;
+    font-size: 11px !important;
+    text-align: center !important;
+    justify-content: center !important;
+    display: flex !important;
+    align-items: center !important;
+    border-radius: 6px !important;
+    white-space: nowrap !important;
+    min-width: 0 !important;
+  }
+}
+
+/* ==========================================================================
+   Desktop Metric HUD (4-Column Grid, hidden on mobile < 640px)
+   ========================================================================== */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Font utility */
+.font-mono {
+  font-family: var(--font-mono, monospace);
+}
+
+/* ==========================================================================
+   PromQL Query Display & Truncation
+   ========================================================================== */
+.snapshots-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)) !important;
+}
+
+@media (max-width: 640px) {
+  .snapshots-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+.snapshot-card {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden;
+}
+
+.snap-query-bar {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden;
+}
+
+.snap-query-bar .indicator-pill {
+  flex-shrink: 0;
+}
+
+.query-snippet,
+.query-code,
+.snap-query-bar .query-code,
+.promql-box code,
+.promql-query,
+.query-cell {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.snap-query-bar .query-code {
+  flex: 1 1 0%;
+}
+
+

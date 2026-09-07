@@ -1,610 +1,97 @@
 <template>
   <div class="login-page">
-    <div class="login-background-glow"></div>
+    <div class="login-background-glow" aria-hidden="true"></div>
 
-    <div class="login-card glass-panel animate-fade-in">
-      <!-- Brand Header -->
-      <div class="brand-section">
-        <div class="brand-icon-wrapper">
-          <div class="brand-icon">⎈</div>
-          <div class="brand-glow"></div>
+    <main class="login-container">
+      <!-- Left-side branding / status mesh hero banner -->
+      <LoginBrandingHero />
+
+      <!-- Auth Form Card -->
+      <div class="login-card glass-panel animate-fade-in">
+        <!-- Mobile-only Brand Header (visible when hero banner is hidden on narrow screens) -->
+        <div class="mobile-brand">
+          <div class="brand-icon-wrapper">
+            <div class="brand-icon">⎈</div>
+            <div class="brand-glow"></div>
+          </div>
+          <h1 class="brand-title">K8S<span>CONTROL</span></h1>
+          <p class="brand-subtitle">Enterprise Hybrid Control Plane</p>
         </div>
-        <h1 class="brand-title">K8S<span>CONTROL</span></h1>
-        <p class="brand-subtitle">Enterprise Hybrid Control Plane</p>
+
+        <!-- Environment Badge -->
+        <div class="env-pill">
+          <span class="pulse-dot pulse-dot-emerald"></span>
+          <span class="env-text">Air-Gapped ZeroTrust Enforced</span>
+          <span class="env-chip">TLS v1.3</span>
+        </div>
+
+        <!-- Error Box -->
+        <div v-if="errorMessage" class="error-banner animate-fade-in" role="alert">
+          <span class="error-icon">⚠️</span>
+          <span class="error-text">{{ errorMessage }}</span>
+        </div>
+
+        <!-- Steps Transition -->
+        <Transition name="step-fade" mode="out-in">
+          <!-- STEP 1: Email & Password -->
+          <LoginFormCard
+            v-if="step === 'credentials'"
+            key="step-creds"
+            v-model:email="email"
+            v-model:password="password"
+            v-model:remember-me="rememberMe"
+            :loading="isLoading"
+            @submit="handleCredentialsSubmit"
+          />
+
+          <!-- STEP 2: TOTP / Recovery MFA -->
+          <MFAVerificationStep
+            v-else
+            key="step-mfa"
+            :mode="step === 'recovery' ? 'recovery' : 'totp'"
+            v-model:totp-code="totpCode"
+            v-model:recovery-code="recoveryCode"
+            :loading="isLoading"
+            @submit-totp="handleTotpSubmit"
+            @submit-recovery="handleRecoverySubmit"
+            @switch-to-recovery="switchToRecovery"
+            @switch-to-totp="switchToTotp"
+            @back="backToCredentials"
+            @totp-input="onTotpInput"
+          />
+        </Transition>
+
+        <!-- Footer Info -->
+        <footer class="login-footer">
+          <span>Dual-Sync DR • Trivy Gate • Real-Time Stream</span>
+        </footer>
       </div>
-
-      <!-- Environment Badge -->
-      <div class="env-pill">
-        <span class="pulse-dot pulse-dot-emerald"></span>
-        <span class="env-text">Air-Gapped ZeroTrust Enforced</span>
-        <span class="env-chip">TLS v1.3</span>
-      </div>
-
-      <!-- Error Box -->
-      <div v-if="errorMessage" class="error-banner animate-fade-in" role="alert">
-        <span class="error-icon">⚠️</span>
-        <span class="error-text">{{ errorMessage }}</span>
-      </div>
-
-      <!-- STEP 1: Email & Password -->
-      <Transition name="step-fade" mode="out-in">
-        <form v-if="step === 'credentials'" key="step-creds" class="login-form" @submit.prevent="handleCredentialsSubmit">
-          <div class="form-group">
-            <label for="email" class="form-label">Email Address</label>
-            <input
-              id="email"
-              v-model="email"
-              type="email"
-              required
-              autocomplete="email"
-              placeholder="admin@k8s.local"
-              class="input-glass form-input"
-              :disabled="authStore.loading"
-            />
-          </div>
-
-          <div class="form-group">
-            <label for="password" class="form-label">Password</label>
-            <input
-              id="password"
-              v-model="password"
-              type="password"
-              required
-              autocomplete="current-password"
-              placeholder="••••••••••••"
-              class="input-glass form-input"
-              :disabled="authStore.loading"
-            />
-          </div>
-
-          <button
-            type="submit"
-            class="btn btn-primary login-btn"
-            :disabled="authStore.loading || !email || !password"
-          >
-            <span v-if="authStore.loading" class="spinner"></span>
-            <span>{{ authStore.loading ? 'Authenticating...' : 'Sign In to Console' }}</span>
-          </button>
-        </form>
-
-        <!-- STEP 2: TOTP 6-digit Code -->
-        <form v-else-if="step === 'totp'" key="step-totp" class="login-form step-panel" @submit.prevent="handleTotpSubmit">
-          <div class="step-header">
-            <div class="step-icon">🔐</div>
-            <h2 class="step-title">Two-Factor Authentication</h2>
-            <p class="step-subtitle">Enter the 6-digit verification code generated by your Google Authenticator or TOTP app.</p>
-          </div>
-
-          <div class="form-group">
-            <label for="totp-code" class="form-label">6-Digit Security Code</label>
-            <div class="totp-input-container">
-              <input
-                id="totp-code"
-                ref="totpInputRef"
-                v-model="totpCode"
-                type="text"
-                inputmode="numeric"
-                pattern="[0-9]*"
-                maxlength="6"
-                required
-                autocomplete="one-time-code"
-                placeholder="000000"
-                class="input-glass form-input totp-input"
-                :disabled="authStore.loading"
-                @input="onTotpInput"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            class="btn btn-primary login-btn"
-            :disabled="authStore.loading || totpCode.length !== 6"
-          >
-            <span v-if="authStore.loading" class="spinner"></span>
-            <span>{{ authStore.loading ? 'Verifying...' : 'Verify Code' }}</span>
-          </button>
-
-          <div class="auth-switch-links">
-            <button type="button" class="text-link-btn" @click="switchToRecovery">
-              🔑 Use Recovery Code Instead
-            </button>
-            <button type="button" class="text-link-btn back-btn" @click="backToCredentials">
-              ← Back to Sign In
-            </button>
-          </div>
-        </form>
-
-        <!-- STEP 2b: Recovery Code -->
-        <form v-else-if="step === 'recovery'" key="step-recovery" class="login-form step-panel" @submit.prevent="handleRecoverySubmit">
-          <div class="step-header">
-            <div class="step-icon">🔑</div>
-            <h2 class="step-title">Recovery Code</h2>
-            <p class="step-subtitle">Enter one of your 8-character backup emergency recovery codes.</p>
-          </div>
-
-          <div class="form-group">
-            <label for="recovery-code" class="form-label">Backup Recovery Code</label>
-            <input
-              id="recovery-code"
-              ref="recoveryInputRef"
-              v-model="recoveryCode"
-              type="text"
-              required
-              placeholder="ABCD1234"
-              class="input-glass form-input recovery-input"
-              :disabled="authStore.loading"
-              @input="recoveryCode = recoveryCode.toUpperCase().trim()"
-            />
-          </div>
-
-          <button
-            type="submit"
-            class="btn btn-primary login-btn"
-            :disabled="authStore.loading || !recoveryCode"
-          >
-            <span v-if="authStore.loading" class="spinner"></span>
-            <span>{{ authStore.loading ? 'Verifying...' : 'Verify Recovery Code' }}</span>
-          </button>
-
-          <div class="auth-switch-links">
-            <button type="button" class="text-link-btn" @click="switchToTotp">
-              🔐 Use Authenticator App
-            </button>
-            <button type="button" class="text-link-btn back-btn" @click="backToCredentials">
-              ← Back to Sign In
-            </button>
-          </div>
-        </form>
-      </Transition>
-
-      <!-- Footer Info -->
-      <div class="login-footer">
-        <span>Dual-Sync DR • Trivy Gate • Real-Time Stream</span>
-      </div>
-    </div>
+    </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '../stores/authStore'
+import '../assets/styles/views/login.css'
+import { useLoginAuth } from '../composables/useLoginAuth'
+import LoginBrandingHero from '../components/auth/LoginBrandingHero.vue'
+import LoginFormCard from '../components/auth/LoginFormCard.vue'
+import MFAVerificationStep from '../components/auth/MFAVerificationStep.vue'
 
-type StepType = 'credentials' | 'totp' | 'recovery'
-
-const router = useRouter()
-const route = useRoute()
-const authStore = useAuthStore()
-
-const step = ref<StepType>('credentials')
-const email = ref('')
-const password = ref('')
-const totpCode = ref('')
-const recoveryCode = ref('')
-const errorMessage = ref('')
-
-const totpInputRef = ref<HTMLInputElement | null>(null)
-const recoveryInputRef = ref<HTMLInputElement | null>(null)
-
-function getRedirectPath(): string {
-  const redirect = route.query.redirect as string
-  if (redirect && !redirect.startsWith('/login')) {
-    return redirect
-  }
-  return '/'
-}
-
-async function handleCredentialsSubmit() {
-  if (!email.value || !password.value) return
-  errorMessage.value = ''
-
-  try {
-    const res = await authStore.login(email.value, password.value)
-    if (res.mfaRequired) {
-      step.value = 'totp'
-      totpCode.value = ''
-      await nextTick()
-      totpInputRef.value?.focus()
-    } else {
-      router.push(getRedirectPath())
-    }
-  } catch (err: unknown) {
-    errorMessage.value = err instanceof Error ? err.message : 'Authentication failed. Please check your credentials.'
-  }
-}
-
-async function handleTotpSubmit() {
-  if (totpCode.value.length !== 6) return
-  errorMessage.value = ''
-
-  try {
-    await authStore.verifyMFA(totpCode.value)
-    router.push(getRedirectPath())
-  } catch (err: unknown) {
-    errorMessage.value = err instanceof Error ? err.message : 'Invalid 2FA code. Please check your authenticator clock and try again.'
-  }
-}
-
-function onTotpInput(e: Event) {
-  const target = e.target as HTMLInputElement
-  totpCode.value = target.value.replace(/\D/g, '').slice(0, 6)
-  if (totpCode.value.length === 6) {
-    handleTotpSubmit()
-  }
-}
-
-async function handleRecoverySubmit() {
-  if (!recoveryCode.value.trim()) return
-  errorMessage.value = ''
-
-  try {
-    await authStore.verifyRecovery(recoveryCode.value.trim())
-    router.push(getRedirectPath())
-  } catch (err: unknown) {
-    errorMessage.value = err instanceof Error ? err.message : 'Invalid recovery code. Please check and try again.'
-  }
-}
-
-async function switchToRecovery() {
-  errorMessage.value = ''
-  step.value = 'recovery'
-  recoveryCode.value = ''
-  await nextTick()
-  recoveryInputRef.value?.focus()
-}
-
-async function switchToTotp() {
-  errorMessage.value = ''
-  step.value = 'totp'
-  totpCode.value = ''
-  await nextTick()
-  totpInputRef.value?.focus()
-}
-
-function backToCredentials() {
-  errorMessage.value = ''
-  step.value = 'credentials'
-  authStore.cancelMFA()
-}
+const {
+  step,
+  email,
+  password,
+  totpCode,
+  recoveryCode,
+  rememberMe,
+  errorMessage,
+  isLoading,
+  handleCredentialsSubmit,
+  handleTotpSubmit,
+  handleRecoverySubmit,
+  switchToRecovery,
+  switchToTotp,
+  backToCredentials,
+  onTotpInput,
+} = useLoginAuth()
 </script>
-
-<style scoped>
-.login-page {
-  width: 100vw;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--bg-app);
-  position: relative;
-  overflow: hidden;
-  padding: 20px;
-}
-
-.login-background-glow {
-  position: absolute;
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(6, 182, 212, 0.12) 0%, rgba(99, 102, 241, 0.05) 50%, transparent 70%);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-
-.login-card {
-  width: 100%;
-  max-width: 440px;
-  padding: 36px 32px;
-  background: rgba(11, 15, 25, 0.9);
-  border: 1px solid var(--border-medium);
-  border-radius: 20px;
-  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px rgba(6, 182, 212, 0.1);
-  position: relative;
-  z-index: 10;
-}
-
-.brand-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.brand-icon-wrapper {
-  position: relative;
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-
-.brand-icon {
-  width: 48px;
-  height: 48px;
-  background: var(--grad-cyan);
-  color: #fff;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 26px;
-  font-weight: bold;
-  box-shadow: 0 4px 20px rgba(6, 182, 212, 0.4);
-  position: relative;
-  z-index: 2;
-}
-
-.brand-glow {
-  position: absolute;
-  width: 48px;
-  height: 48px;
-  background: var(--accent-cyan);
-  filter: blur(14px);
-  opacity: 0.6;
-}
-
-.brand-title {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: #fff;
-}
-
-.brand-title span {
-  color: var(--accent-cyan);
-  margin-left: 2px;
-}
-
-.brand-subtitle {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-  margin-top: 2px;
-}
-
-.env-pill {
-  margin-bottom: 20px;
-  padding: 8px 12px;
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.env-text {
-  font-size: 11px;
-  font-weight: 600;
-  color: #34d399;
-  flex: 1;
-}
-
-.env-chip {
-  font-size: 10px;
-  background: rgba(16, 185, 129, 0.2);
-  color: #a7f3d0;
-  padding: 2px 6px;
-  border-radius: 6px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-}
-
-.error-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: rgba(244, 63, 94, 0.12);
-  border: 1px solid rgba(244, 63, 94, 0.3);
-  border-radius: 10px;
-  color: #fda4af;
-  font-size: 12px;
-  margin-bottom: 18px;
-}
-
-.error-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.step-header {
-  text-align: center;
-  margin-bottom: 4px;
-}
-
-.step-icon {
-  font-size: 28px;
-  margin-bottom: 6px;
-}
-
-.step-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-
-.step-subtitle {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  font-size: 13px;
-}
-
-.totp-input {
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: 8px;
-  padding: 12px 14px;
-  color: var(--accent-cyan);
-  border-color: rgba(6, 182, 212, 0.4);
-}
-
-.totp-input:focus {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 16px rgba(6, 182, 212, 0.25);
-}
-
-.recovery-input {
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 4px;
-  padding: 12px 14px;
-  text-transform: uppercase;
-  color: var(--accent-amber);
-  border-color: rgba(245, 158, 11, 0.4);
-}
-
-.recovery-input:focus {
-  border-color: var(--accent-amber);
-  box-shadow: 0 0 16px rgba(245, 158, 11, 0.25);
-}
-
-.login-btn {
-  width: 100%;
-  padding: 11px;
-  font-size: 14px;
-  margin-top: 8px;
-}
-
-.auth-switch-links {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.text-link-btn {
-  background: none;
-  border: none;
-  color: var(--accent-cyan);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-  transition: color 0.2s, background-color 0.2s;
-}
-
-.text-link-btn:hover {
-  color: var(--accent-sky);
-  background: rgba(6, 182, 212, 0.1);
-}
-
-.back-btn {
-  color: var(--text-muted);
-}
-
-.back-btn:hover {
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  display: inline-block;
-  vertical-align: middle;
-  margin-right: 6px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.step-fade-enter-active,
-.step-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.step-fade-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-
-.step-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
-.login-footer {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-subtle);
-  text-align: center;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-@media (max-width: 640px) {
-  .login-page {
-    padding: 16px 12px;
-  }
-  .login-card {
-    padding: 24px 18px;
-    border-radius: 16px;
-  }
-  .brand-title {
-    font-size: 20px;
-  }
-  .totp-input {
-    font-size: 20px;
-    letter-spacing: 6px;
-    padding: 10px 8px;
-  }
-  .recovery-input {
-    font-size: 16px;
-    letter-spacing: 3px;
-    padding: 10px 8px;
-  }
-  .login-btn {
-    min-height: 44px;
-    font-size: 13px;
-  }
-  .env-pill {
-    padding: 6px 10px;
-  }
-  .env-text {
-    font-size: 10px;
-  }
-}
-</style>
-

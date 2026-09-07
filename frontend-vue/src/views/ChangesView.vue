@@ -1,142 +1,44 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import {
-  changesApi,
-  type ChangeRequest,
-  type MaintenanceWindow
-} from '../api/management'
-import MetricCard from '../components/ui/MetricCard.vue'
-import StatusBadge from '../components/ui/StatusBadge.vue'
-import DataTable, { type Column } from '../components/ui/DataTable.vue'
+import '../assets/styles/views/changes.css'
+import { useChangesTimeline } from '../composables/useChangesTimeline'
+import ChangesHudCards from '../components/changes/ChangesHudCards.vue'
+import ChangesFilterBar from '../components/changes/ChangesFilterBar.vue'
+import ChangesTimelineStream from '../components/changes/ChangesTimelineStream.vue'
+import ChangesMobileCards from '../components/changes/ChangesMobileCards.vue'
+import ChangeDiffDrawer from '../components/changes/ChangeDiffDrawer.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
 
-// State
-const loading = ref(false)
-const error = ref<string | null>(null)
-const changes = ref<ChangeRequest[]>([])
-const selectedStatus = ref<string>('all')
-const feedbackMessage = ref<string | null>(null)
-
-// Maintenance Windows
-const maintenanceWindows = ref<MaintenanceWindow[]>([])
-
-// Modal State
-const showCreateModal = ref(false)
-const isSubmitting = ref(false)
-const newChange = ref({
-  title: '',
-  description: '',
-  type: 'standard' as 'standard' | 'emergency',
-  cluster: 'prod-us-east-1',
-  namespace: 'production-core',
-  resource: 'deployment/payment-processor',
-  requester: 'sre.lead@enterprise.io'
-})
-
-async function loadChanges() {
-  loading.value = true
-  error.value = null
-  try {
-    const res = await changesApi.getChanges()
-    changes.value = res?.data || []
-  } catch (err: unknown) {
-    changes.value = []
-    error.value = err instanceof Error ? err.message : 'Failed to load change requests'
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(() => {
-  loadChanges()
-})
-
-const filteredChanges = computed(() => {
-  if (selectedStatus.value === 'all') return changes.value
-  return changes.value.filter(c => c.status === selectedStatus.value)
-})
-
-const pendingCount = computed(() => changes.value.filter(c => c.status === 'pending').length)
-const approvedCount = computed(() => changes.value.filter(c => c.status === 'approved').length)
-const emergencyCount = computed(() => changes.value.filter(c => c.type === 'emergency').length)
-
-const changeColumns: Column<ChangeRequest>[] = [
-  { key: 'id', label: 'RFC ID', sortable: true, width: '110px' },
-  { key: 'title', label: 'Change Request & Scope', sortable: true },
-  { key: 'type', label: 'Type', sortable: true, width: '120px' },
-  { key: 'cluster', label: 'Target Resource', sortable: true },
-  { key: 'requester', label: 'Requester / Approver', sortable: true },
-  { key: 'status', label: 'Status', sortable: true, width: '130px' },
-  { key: 'actions', label: 'Governance Action', align: 'right', width: '200px' }
-]
-
-function showFeedback(msg: string) {
-  feedbackMessage.value = msg
-  setTimeout(() => {
-    if (feedbackMessage.value === msg) {
-      feedbackMessage.value = null
-    }
-  }, 4000)
-}
-
-async function handleApprove(cr: ChangeRequest) {
-  try {
-    await changesApi.approveChange(cr.id)
-    cr.status = 'approved'
-    cr.approver = 'current.user@enterprise.io'
-    showFeedback(`Change request ${cr.id} successfully approved.`)
-  } catch (e: unknown) {
-    showFeedback(`Failed to approve change request: ${e instanceof Error ? e.message : 'Unknown error'}`)
-  }
-}
-
-async function handleReject(cr: ChangeRequest) {
-  try {
-    await changesApi.rejectChange(cr.id)
-    cr.status = 'rejected'
-    cr.approver = 'current.user@enterprise.io'
-    showFeedback(`Change request ${cr.id} rejected.`)
-  } catch (e: unknown) {
-    showFeedback(`Failed to reject change request: ${e instanceof Error ? e.message : 'Unknown error'}`)
-  }
-}
-
-async function handleCreateChange() {
-  if (!newChange.value.title || !newChange.value.resource) return
-  isSubmitting.value = true
-  const cr: ChangeRequest = {
-    id: `cr-${Math.floor(Math.random() * 9000 + 1000)}`,
-    title: newChange.value.title,
-    description: newChange.value.description,
-    type: newChange.value.type,
-    status: 'pending',
-    requester: newChange.value.requester,
-    cluster: newChange.value.cluster,
-    namespace: newChange.value.namespace,
-    resource: newChange.value.resource,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-
-  try {
-    const created = await changesApi.createChange(cr)
-    changes.value.unshift(created || cr)
-    showCreateModal.value = false
-    showFeedback(`Change Request ${cr.id} registered for review.`)
-    newChange.value.title = ''
-    newChange.value.description = ''
-  } catch (e: unknown) {
-    showFeedback(`Failed to submit change request: ${e instanceof Error ? e.message : 'Unknown error'}`)
-  } finally {
-    isSubmitting.value = false
-  }
-}
+const {
+  loading,
+  feedbackMessage,
+  maintenanceWindows,
+  searchQuery,
+  selectedCluster,
+  selectedTimeWindow,
+  selectedStatus,
+  selectedDiffEvent,
+  isDiffDrawerOpen,
+  showCreateModal,
+  isSubmitting,
+  newChange,
+  filteredEvents,
+  availableClusters,
+  totalChanges24h,
+  totalRollbacks,
+  configDrifts,
+  highRiskMutations,
+  handleApprove,
+  handleReject,
+  handleRollback,
+  handleCreateChange,
+  inspectDiff
+} = useChangesTimeline()
 </script>
 
 <template>
   <div class="changes-page">
     <!-- Header -->
-    <div class="page-header">
+    <div class="page-header desktop-header desktop-only">
       <div class="header-titles">
         <div class="header-badge">
           <span class="badge badge-cyan">ITIL Change Governance</span>
@@ -155,39 +57,48 @@ async function handleCreateChange() {
       </div>
     </div>
 
+    <!-- Mobile 40px Command Bar (<640px) -->
+    <div class="changes-mobile-command-bar mobile-only">
+      <div class="command-bar-left">
+        <span class="command-bar-title font-bold">🔄 RFC Changes ({{ filteredEvents.length }})</span>
+      </div>
+      <div class="command-bar-actions">
+        <button
+          class="btn-icon-cmd"
+          title="Submit RFC"
+          aria-label="Submit RFC"
+          @click="showCreateModal = true"
+        >
+          <span>➕</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <div class="changes-micro-telemetry mobile-only font-mono" role="status" aria-label="Changes Micro Telemetry">
+      <span class="tel-item tel-changes">🔄 {{ totalChanges24h }} chgs</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-rollbacks">⏪ {{ totalRollbacks }} rolls</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-drifts">🎯 {{ configDrifts }} drift</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-risk">⚠️ {{ highRiskMutations }} risk</span>
+    </div>
+
     <!-- Feedback Banner -->
     <div v-if="feedbackMessage" class="feedback-banner animate-fade-in">
       <span class="feedback-icon">✓</span>
       <span>{{ feedbackMessage }}</span>
     </div>
 
-    <!-- Metrics Grid -->
-    <div class="metrics-grid">
-      <MetricCard 
-        title="Pending Reviews" 
-        :value="pendingCount" 
-        trend="Requires Four-Eyes Approval" 
-        trendDirection="neutral" 
-      />
-      <MetricCard 
-        title="Approved & Queued" 
-        :value="approvedCount" 
-        trend="Ready for Deployment" 
-        trendDirection="up" 
-      />
-      <MetricCard 
-        title="Emergency RFCs" 
-        :value="emergencyCount" 
-        trend="Hotfix Expedited" 
-        trendDirection="down" 
-      />
-      <MetricCard 
-        title="Active Windows" 
-        :value="`${maintenanceWindows.filter(m => m.active).length} LIVE`" 
-        trend="Scheduled Maintenance" 
-        trendDirection="neutral" 
-      />
-    </div>
+    <!-- HUD KPI Cards -->
+    <ChangesHudCards
+      class="desktop-only"
+      :totalChanges="totalChanges24h"
+      :totalRollbacks="totalRollbacks"
+      :configDrifts="configDrifts"
+      :highRiskMutations="highRiskMutations"
+    />
 
     <!-- Active Maintenance Windows Banner -->
     <div class="maintenance-bar glass-panel">
@@ -226,88 +137,43 @@ async function handleCreateChange() {
     </div>
 
     <!-- Filter Bar -->
-    <div class="filter-bar glass-panel">
-      <div class="filter-left">
-        <span class="filter-label">Filter by Status:</span>
-        <div class="status-pills">
-          <button 
-            v-for="s in ['all', 'pending', 'approved', 'deployed', 'rejected']" 
-            :key="s"
-            class="spill"
-            :class="{ active: selectedStatus === s }"
-            @click="selectedStatus = s"
-          >
-            {{ s.toUpperCase() }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <ChangesFilterBar
+      v-model:searchQuery="searchQuery"
+      v-model:selectedCluster="selectedCluster"
+      v-model:selectedTimeWindow="selectedTimeWindow"
+      v-model:selectedStatus="selectedStatus"
+      :clusters="availableClusters"
+    />
 
-    <!-- DataTable of Changes -->
-    <DataTable
-      :columns="changeColumns"
-      :data="filteredChanges"
+    <!-- Desktop: Interactive Timeline Stream -->
+    <ChangesTimelineStream
+      :events="filteredEvents"
       :loading="loading"
-      searchable
-      searchPlaceholder="Filter RFCs by title, resource, cluster, or requester..."
-    >
-      <template #cell-id="{ value }">
-        <span class="rfc-id font-mono">{{ value }}</span>
-      </template>
+      @diff="inspectDiff"
+      @rollback="handleRollback"
+      @approve="handleApprove"
+      @reject="handleReject"
+    />
 
-      <template #cell-title="{ row }">
-        <div class="change-title-cell">
-          <div class="ct-main">{{ row.title }}</div>
-          <small class="ct-desc">{{ row.description }}</small>
-        </div>
-      </template>
+    <!-- Mobile: Touch-Friendly Card Stream (~65px/item, 0 horizontal scroll) -->
+    <ChangesMobileCards
+      :events="filteredEvents"
+      :loading="loading"
+      @diff="inspectDiff"
+      @rollback="handleRollback"
+      @approve="handleApprove"
+      @reject="handleReject"
+    />
 
-      <template #cell-type="{ value }">
-        <span v-if="value === 'emergency'" class="badge badge-rose">EMERGENCY</span>
-        <span v-else class="badge badge-cyan">STANDARD</span>
-      </template>
+    <!-- Side Drawer: Visual Unified Diff -->
+    <ChangeDiffDrawer
+      :show="isDiffDrawerOpen"
+      :event="selectedDiffEvent"
+      @update:show="isDiffDrawerOpen = $event"
+      @rollback="handleRollback"
+    />
 
-      <template #cell-cluster="{ row }">
-        <div class="target-cell">
-          <div class="tc-resource font-mono text-cyan">{{ row.resource }}</div>
-          <div class="tc-cluster font-mono text-muted">{{ row.cluster }} / {{ row.namespace }}</div>
-        </div>
-      </template>
-
-      <template #cell-requester="{ row }">
-        <div class="requester-cell">
-          <span class="req-user">{{ row.requester }}</span>
-          <small v-if="row.approver" class="app-user text-emerald font-mono">
-            Approved by: {{ row.approver }}
-          </small>
-        </div>
-      </template>
-
-      <template #cell-status="{ value, row }">
-        <StatusBadge :status="String(value || row.status)" />
-      </template>
-
-      <template #cell-actions="{ row }">
-        <div v-if="row.status === 'pending'" class="actions-group">
-          <button class="btn btn-primary btn-sm" @click="handleApprove(row)">
-            <span>✓ Approve</span>
-          </button>
-          <button class="btn btn-secondary btn-sm" @click="handleReject(row)">
-            <span>✕ Reject</span>
-          </button>
-        </div>
-        <div v-else-if="row.status === 'approved'" class="actions-group">
-          <button class="btn btn-secondary btn-sm" @click="showFeedback(`Initiating rollout for ${row.id}`)">
-            <span>🚀 Deploy</span>
-          </button>
-        </div>
-        <div v-else class="actions-group">
-          <span class="text-muted font-mono text-xs">Archived</span>
-        </div>
-      </template>
-    </DataTable>
-
-    <!-- MODAL: CREATE CHANGE REQUEST -->
+    <!-- Modal Drawer: Submit Change Request (RFC) -->
     <ModalDrawer
       v-model:show="showCreateModal"
       title="Submit Change Request (RFC)"
@@ -386,440 +252,3 @@ async function handleCreateChange() {
     </ModalDrawer>
   </div>
 </template>
-
-<style scoped>
-.changes-page {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 20px;
-}
-
-.header-badge {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.page-title {
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: #fff;
-  margin-bottom: 6px;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: var(--text-secondary);
-  max-width: 840px;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.feedback-banner {
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #34d399;
-  padding: 12px 18px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-}
-
-/* Maintenance Bar */
-.maintenance-bar {
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.mw-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.mw-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.mw-heading {
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.02em;
-}
-
-.mw-badge {
-  font-size: 10px;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 2px 8px;
-  border-radius: 6px;
-  color: var(--text-muted);
-}
-
-.mw-items {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 12px;
-}
-
-.mw-item {
-  background: rgba(11, 15, 25, 0.6);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.mw-item.mw-active {
-  border-color: rgba(16, 185, 129, 0.4);
-  background: rgba(16, 185, 129, 0.05);
-}
-
-.mw-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.mw-meta {
-  font-size: 11px;
-  color: var(--text-muted);
-  display: flex;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-/* Filter Bar */
-.filter-bar {
-  padding: 12px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.filter-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.filter-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.status-pills {
-  display: flex;
-  gap: 6px;
-}
-
-.spill {
-  padding: 5px 12px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.spill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-}
-
-.spill.active {
-  background: rgba(6, 182, 212, 0.15);
-  border-color: rgba(6, 182, 212, 0.4);
-  color: #38bdf8;
-}
-
-/* Cells */
-.rfc-id {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent-sky);
-}
-
-.change-title-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.ct-main {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.ct-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.target-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.tc-resource {
-  font-size: 12px;
-}
-
-.tc-cluster {
-  font-size: 11px;
-}
-
-.requester-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.req-user {
-  font-size: 12px;
-  color: var(--text-primary);
-}
-
-.app-user {
-  font-size: 10px;
-}
-
-.actions-group {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.text-xs {
-  font-size: 11px;
-}
-
-/* Form */
-.form-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-group label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.empty-list {
-  padding: 24px 16px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-/* ========================================== */
-/* RESPONSIVE & MOBILE WEB OVERHAUL           */
-/* ========================================== */
-@media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
-  }
-
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    width: 100% !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
-  }
-
-  .header-actions .btn,
-  .header-actions button,
-  .header-actions a {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    padding: 7px 10px !important;
-    font-size: 11.5px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
-  }
-
-  .header-actions > :last-child:nth-child(odd) {
-    flex: 1 1 100% !important;
-  }
-
-  .metrics-grid,
-  .grid-metrics,
-  .stats-grid,
-  .capacity-grid,
-  .kpi-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-
-  .metric-card,
-  .stat-card,
-  .hud-card,
-  :deep(.metric-card) {
-    padding: 10px 12px !important;
-  }
-
-  .mw-items {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .filter-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-    padding: 12px;
-  }
-
-  .filter-left {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    width: 100%;
-  }
-
-  .status-pills {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
-    width: 100%;
-  }
-
-  .spill {
-    flex-shrink: 0;
-  }
-
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .actions-group {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    gap: 6px;
-  }
-
-  .actions-group .btn {
-    flex: 1;
-    text-align: center;
-  }
-}
-
-@media (max-width: 640px) {
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    width: 100% !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
-  }
-
-  .header-actions .btn,
-  .header-actions button,
-  .header-actions a {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    padding: 7px 10px !important;
-    font-size: 11.5px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
-  }
-
-  .header-actions > :last-child:nth-child(odd) {
-    flex: 1 1 100% !important;
-  }
-
-  .metrics-grid,
-  .grid-metrics,
-  .stats-grid,
-  .capacity-grid,
-  .kpi-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-
-  .metric-card,
-  .stat-card,
-  .hud-card,
-  :deep(.metric-card) {
-    padding: 10px 12px !important;
-  }
-
-  .page-title {
-    font-size: 20px;
-  }
-
-  .page-desc {
-    font-size: 12px;
-  }
-
-  .mw-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .mw-meta {
-    flex-direction: column;
-    gap: 2px;
-  }
-}
-</style>

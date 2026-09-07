@@ -201,9 +201,20 @@ func (h *DockerHandler) RegisterRoutes(r chi.Router) {
 	// Compute Hosts
 	r.Get("/hosts", h.ListHosts)
 	r.Post("/hosts", h.CreateHost)
+	r.Get("/hosts/{id}", h.GetHost)
 	r.Put("/hosts/{id}", h.UpdateHost)
 	r.Delete("/hosts/{id}", h.DeleteHost)
 	r.Post("/hosts/{id}/test", h.TestHost)
+}
+
+// RegisterHostRoutes registers routes for standalone /api/v1/hosts endpoint.
+func (h *DockerHandler) RegisterHostRoutes(r chi.Router) {
+	r.Get("/", h.ListHosts)
+	r.Post("/", h.CreateHost)
+	r.Get("/{id}", h.GetHost)
+	r.Put("/{id}", h.UpdateHost)
+	r.Delete("/{id}", h.DeleteHost)
+	r.Post("/{id}/test", h.TestHost)
 }
 
 // ListContainers handles GET /api/v1/docker/containers
@@ -764,6 +775,32 @@ func (h *DockerHandler) CreateHost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, host)
 }
 
+// GetHost handles GET /api/v1/docker/hosts/{id} or /api/v1/hosts/{id}
+func (h *DockerHandler) GetHost(w http.ResponseWriter, r *http.Request) {
+	if h.hostRepo == nil {
+		writeError(w, http.StatusServiceUnavailable, "compute host service unavailable", nil)
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "missing compute host id", nil)
+		return
+	}
+
+	host, err := h.hostRepo.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get compute host", err)
+		return
+	}
+	if host == nil {
+		writeError(w, http.StatusNotFound, "compute host not found", nil)
+		return
+	}
+
+	host.TLSKey = ""
+	writeJSON(w, http.StatusOK, host)
+}
+
 // UpdateHost handles PUT /api/v1/docker/hosts/{id}
 func (h *DockerHandler) UpdateHost(w http.ResponseWriter, r *http.Request) {
 	if h.hostRepo == nil {
@@ -891,7 +928,7 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"status":     "error",
 				"message":    testErr.Error(),
-				"latency_ms": latencyMs,
+				"latency_ms": 0,
 			})
 			return
 		}
@@ -914,7 +951,7 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"status":     "error",
 				"message":    testErr.Error(),
-				"latency_ms": latencyMs,
+				"latency_ms": 0,
 			})
 			return
 		}
@@ -933,7 +970,7 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"status":     "error",
 				"message":    testErr.Error(),
-				"latency_ms": latencyMs,
+				"latency_ms": 0,
 			})
 			return
 		}
@@ -952,7 +989,7 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"status":     "error",
 				"message":    testErr.Error(),
-				"latency_ms": latencyMs,
+				"latency_ms": 0,
 			})
 			return
 		}
@@ -971,7 +1008,7 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"status":     "error",
 				"message":    testErr.Error(),
-				"latency_ms": latencyMs,
+				"latency_ms": 0,
 			})
 			return
 		}
@@ -990,7 +1027,7 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"status":     "error",
 				"message":    testErr.Error(),
-				"latency_ms": latencyMs,
+				"latency_ms": 0,
 			})
 			return
 		}
@@ -1011,7 +1048,7 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"status":     "error",
 				"message":    testErr.Error(),
-				"latency_ms": latencyMs,
+				"latency_ms": 0,
 			})
 			return
 		}
@@ -1036,8 +1073,27 @@ func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int
 		}
 	}
 
+	if u, err := url.Parse(endpoint); err == nil && u.Port() == "" && u.Hostname() != "" {
+		u.Host = net.JoinHostPort(u.Hostname(), "9100")
+		endpoint = u.String()
+	}
+
+	var transport *http.Transport
+	if host.TLSEnabled && host.TLSCA != "" && host.TLSCert != "" && host.TLSKey != "" {
+		tlsConfig, err := configureDockerTLS(host.TLSCA, host.TLSCert, host.TLSKey)
+		if err != nil {
+			return 0, nil, fmt.Errorf("tls configuration error: %w", err)
+		}
+		transport = &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+	}
+
 	client := &http.Client{
 		Timeout: 5 * time.Second,
+	}
+	if transport != nil {
+		client.Transport = transport
 	}
 
 	start := time.Now()

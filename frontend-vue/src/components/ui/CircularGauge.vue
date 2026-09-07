@@ -11,6 +11,7 @@ const props = withDefaults(
     showValue?: boolean
     unit?: string
     disabled?: boolean
+    disabledText?: string
   }>(),
   {
     percent: 0,
@@ -21,6 +22,7 @@ const props = withDefaults(
     showValue: true,
     unit: '%',
     disabled: false,
+    disabledText: '—',
   }
 )
 
@@ -30,7 +32,7 @@ const clampedPercent = computed(() => {
 })
 
 const strokeColor = computed(() => {
-  if (props.disabled) return 'var(--text-muted)'
+  if (props.disabled) return 'var(--text-muted, #64748b)'
   if (props.color && props.color !== 'auto') {
     switch (props.color) {
       case 'emerald': return '#10b981'
@@ -56,12 +58,19 @@ const glowColor = computed(() => {
 </script>
 
 <template>
-  <div class="circular-gauge-wrapper" :style="{ width: `${size}px` }">
+  <div
+    class="circular-gauge-wrapper"
+    :class="{ 'is-disabled': disabled }"
+    :style="{ width: `${size}px` }"
+  >
     <div class="gauge-container" :style="{ width: `${size}px`, height: `${size}px` }">
       <svg
         viewBox="0 0 36 36"
         class="circular-gauge"
-        :class="{ 'is-critical': clampedPercent >= 80 && !disabled }"
+        :class="{
+          'is-critical': clampedPercent >= 80 && !disabled,
+          'is-disabled': disabled
+        }"
       >
         <!-- Background Track -->
         <path
@@ -74,7 +83,7 @@ const glowColor = computed(() => {
           class="gauge-fill"
           :stroke-width="strokeWidth"
           :stroke="strokeColor"
-          :stroke-dasharray="`${clampedPercent}, 100`"
+          :stroke-dasharray="disabled ? '0, 100' : `${clampedPercent}, 100`"
           :style="{ filter: `drop-shadow(0 0 4px ${glowColor})` }"
           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
         />
@@ -82,15 +91,16 @@ const glowColor = computed(() => {
         <text
           v-if="showValue"
           x="18"
-          y="20.5"
+          :y="disabled ? 21.5 : 20.5"
           class="gauge-text"
+          :class="{ 'is-disabled-val': disabled }"
           :fill="strokeColor"
         >
-          {{ Math.round(clampedPercent) }}{{ unit }}
+          {{ disabled ? disabledText : `${Math.round(clampedPercent)}${unit}` }}
         </text>
       </svg>
     </div>
-    <span v-if="label" class="gauge-label">{{ label }}</span>
+    <span v-if="label" class="gauge-label" :class="{ 'gauge-label-disabled': disabled }">{{ label }}</span>
   </div>
 </template>
 
@@ -100,6 +110,10 @@ const glowColor = computed(() => {
   flex-direction: column;
   align-items: center;
   gap: 5px;
+}
+
+.circular-gauge-wrapper.is-disabled {
+  opacity: 0.65;
 }
 
 .gauge-container {
@@ -120,6 +134,10 @@ const glowColor = computed(() => {
   stroke: rgba(255, 255, 255, 0.06);
 }
 
+.circular-gauge.is-disabled .gauge-bg {
+  stroke: rgba(255, 255, 255, 0.04);
+}
+
 .gauge-fill {
   fill: none;
   stroke-linecap: round;
@@ -134,12 +152,23 @@ const glowColor = computed(() => {
   transition: fill 0.3s ease;
 }
 
+.gauge-text.is-disabled-val {
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--text-muted, #64748b);
+}
+
 .gauge-label {
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
+}
+
+.gauge-label.gauge-label-disabled {
+  color: var(--text-muted, #64748b);
+  opacity: 0.75;
 }
 
 .is-critical .gauge-fill {

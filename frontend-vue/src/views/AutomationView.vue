@@ -78,6 +78,7 @@
         <span class="badge badge-cyan">{{ rules.length }} Configured Rules</span>
       </div>
 
+      <div class="rules-table-container">
       <DataTable
         :columns="ruleColumns"
         :data="rules"
@@ -148,6 +149,7 @@
           </div>
         </template>
       </DataTable>
+      </div>
     </div>
 
     <!-- Section 2: Rule Execution History Logs -->
@@ -160,6 +162,7 @@
         <span class="badge badge-emerald">Live Telemetry Log</span>
       </div>
 
+      <div class="automation-desktop-table">
       <DataTable
         :columns="executionColumns"
         :data="executions"
@@ -188,6 +191,14 @@
           <span class="font-mono text-muted" style="font-size: 11px;">{{ formatDate(row.created_at) }}</span>
         </template>
       </DataTable>
+      </div>
+
+      <div class="automation-mobile-cards">
+        <AutomationMobileCards
+          :executions="executions"
+          :loading="loading"
+        />
+      </div>
     </div>
 
     <!-- Modal: Create Automation Rule -->
@@ -255,6 +266,7 @@ import {
 import DataTable, { type Column } from '../components/ui/DataTable.vue'
 import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
+import AutomationMobileCards from '../components/automation/AutomationMobileCards.vue'
 
 const rules = ref<AutomationRule[]>([])
 const executions = ref<AutomationExecution[]>([])
@@ -807,6 +819,24 @@ input:checked + .slider:before {
 
   .section-card {
     padding: 14px;
+  }
+}
+.rules-table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.automation-mobile-cards {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .automation-desktop-table {
+    display: none !important;
+  }
+  .automation-mobile-cards {
+    display: block !important;
   }
 }
 </style>

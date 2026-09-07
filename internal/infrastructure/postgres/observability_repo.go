@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/observability"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type observabilityRepo struct {
@@ -315,6 +316,9 @@ func parseTenantUUID(tid string) string {
 
 func (r *observabilityRepo) RecordHealthSample(ctx context.Context, tenantID string, serviceName string, desired int, running int, isHealthy bool, latencyMs *int) error {
 	id := uuid.NewString()
+	if tenantID == "" {
+		tenantID = tenancy.TenantIDFromContext(ctx)
+	}
 	tID := parseTenantUUID(tenantID)
 	query := `
 		INSERT INTO slo_health_samples (id, tenant_id, service_name, desired_replicas, running_replicas, is_healthy, health_check_latency_ms, recorded_at)
@@ -328,15 +332,37 @@ func (r *observabilityRepo) RecordHealthSample(ctx context.Context, tenantID str
 }
 
 func (r *observabilityRepo) GetHealthSamples(ctx context.Context, serviceName string, since time.Time) ([]observability.HealthSample, error) {
-	query := `
-		SELECT id, tenant_id, service_name, desired_replicas, running_replicas, is_healthy, health_check_latency_ms, recorded_at
-		FROM slo_health_samples
-		WHERE service_name = $1 AND recorded_at >= $2
-		ORDER BY recorded_at DESC
-	`
-	rows, err := r.getDB(ctx).Query(ctx, query, serviceName, since)
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	userRole := tenancy.UserRoleFromContext(ctx)
+
+	var query string
+	var args []any
+
+	if userRole != "platform_admin" && tenantID != "" {
+		tUUID := parseTenantUUID(tenantID)
+		query = `
+			SELECT id, tenant_id, service_name, desired_replicas, running_replicas, is_healthy, health_check_latency_ms, recorded_at
+			FROM slo_health_samples
+			WHERE service_name = $1 AND recorded_at >= $2 AND tenant_id = $3
+			ORDER BY recorded_at DESC
+		`
+		args = []any{serviceName, since, tUUID}
+	} else {
+		query = `
+			SELECT id, tenant_id, service_name, desired_replicas, running_replicas, is_healthy, health_check_latency_ms, recorded_at
+			FROM slo_health_samples
+			WHERE service_name = $1 AND recorded_at >= $2
+			ORDER BY recorded_at DESC
+		`
+		args = []any{serviceName, since}
+	}
+
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying slo health samples: %w", err)
+	}
+	if rows == nil {
+		return nil, nil
 	}
 	defer rows.Close()
 
@@ -358,15 +384,35 @@ func (r *observabilityRepo) GetHealthSamples(ctx context.Context, serviceName st
 
 func (r *observabilityRepo) ComputeSLI(ctx context.Context, serviceName string, window time.Duration) (float64, error) {
 	since := time.Now().UTC().Add(-window)
-	query := `
-		SELECT 
-			COUNT(*) AS total_count,
-			COALESCE(COUNT(*) FILTER (WHERE is_healthy = true), 0) AS healthy_count
-		FROM slo_health_samples
-		WHERE service_name = $1 AND recorded_at >= $2
-	`
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	userRole := tenancy.UserRoleFromContext(ctx)
+
+	var query string
+	var args []any
+
+	if userRole != "platform_admin" && tenantID != "" {
+		tUUID := parseTenantUUID(tenantID)
+		query = `
+			SELECT 
+				COUNT(*) AS total_count,
+				COALESCE(COUNT(*) FILTER (WHERE is_healthy = true), 0) AS healthy_count
+			FROM slo_health_samples
+			WHERE service_name = $1 AND recorded_at >= $2 AND tenant_id = $3
+		`
+		args = []any{serviceName, since, tUUID}
+	} else {
+		query = `
+			SELECT 
+				COUNT(*) AS total_count,
+				COALESCE(COUNT(*) FILTER (WHERE is_healthy = true), 0) AS healthy_count
+			FROM slo_health_samples
+			WHERE service_name = $1 AND recorded_at >= $2
+		`
+		args = []any{serviceName, since}
+	}
+
 	var totalCount, healthyCount int64
-	err := r.getDB(ctx).QueryRow(ctx, query, serviceName, since).Scan(&totalCount, &healthyCount)
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(&totalCount, &healthyCount)
 	if err != nil {
 		return 0, fmt.Errorf("computing sli for service %s: %w", serviceName, err)
 	}

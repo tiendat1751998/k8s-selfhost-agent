@@ -303,4 +303,20 @@ func TestAllRepositoriesDBTXExtraction(t *testing.T) {
 			t.Errorf("expected tx queryRowCount=1, got %d", tx.queryRowCount)
 		}
 	})
+
+	t.Run("AlertRepo getDB fallback vs tx", func(t *testing.T) {
+		fb := &trackingMockDBTX{id: "fb_alert"}
+		tx := &trackingMockDBTX{id: "tx_alert"}
+		repo := postgres.NewAlertRepo(fb)
+
+		_, _ = repo.ListRules(bgCtx, "test-tenant")
+		if fb.queryCount != 1 {
+			t.Errorf("expected fb queryCount=1, got %d", fb.queryCount)
+		}
+
+		_, _ = repo.ListRules(postgres.InjectTx(bgCtx, tx), "test-tenant")
+		if tx.queryCount != 1 {
+			t.Errorf("expected tx queryCount=1, got %d", tx.queryCount)
+		}
+	})
 }

@@ -105,6 +105,9 @@ func (r *ResourceRepo) CreateNamespace(ctx context.Context, clusterID, name stri
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
+		Status: corev1.NamespaceStatus{
+			Phase: corev1.NamespaceActive,
+		},
 	}
 	created, err := client.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	if err != nil {

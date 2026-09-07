@@ -19,6 +19,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/pkg/stdcopy"
 	"go.uber.org/zap"
+	"k8s.io/client-go/kubernetes"
 
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
@@ -46,6 +47,9 @@ import (
 	usecasePromotion "github.com/datdt/k8sselfhost/internal/usecase/promotion"
 	usecaseAlert "github.com/datdt/k8sselfhost/internal/usecase/alert"
 	usecaseCluster "github.com/datdt/k8sselfhost/internal/usecase/cluster"
+	usecaseStorage "github.com/datdt/k8sselfhost/internal/usecase/storage"
+	usecaseDR "github.com/datdt/k8sselfhost/internal/usecase/dr"
+	usecaseSRE "github.com/datdt/k8sselfhost/internal/usecase/sre"
 	usecaseScaffold "github.com/datdt/k8sselfhost/internal/usecase/scaffold"
 	usecaseEcosystem "github.com/datdt/k8sselfhost/internal/usecase/ecosystem"
 	usecaseRCA "github.com/datdt/k8sselfhost/internal/usecase/rca"
@@ -58,9 +62,6 @@ import (
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
-
-
-
 
 func main() {
 	if err := run(); err != nil {
@@ -97,52 +98,7 @@ func run() error {
 	go wsHub.Run()
 
 	// Initialize LLM Provider Registry
-	registry := llm.NewProviderRegistry()
-	for _, pCfg := range cfg.LLM.Providers {
-		var client llm.Client
-		var initErr error
-		switch pCfg.Type {
-		case "ollama":
-			client = llm.NewOllamaClientDynamic(llm.OllamaClientConfig{
-				Endpoint: pCfg.Endpoint,
-				Model:    pCfg.Model,
-			})
-		case "openai":
-			client = llm.NewOpenAIClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
-		case "vllm":
-			client = llm.NewVLLMClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
-		default:
-			log.Warn("unknown LLM provider type, skipping", zap.String("type", pCfg.Type))
-			continue
-		}
-		if initErr != nil {
-			log.Error("failed to create client for LLM provider", zap.String("name", pCfg.Name), zap.Error(initErr))
-			continue
-		}
-
-		cbClient := llm.NewCircuitBreakerClient(pCfg.Name, client, llm.DefaultCircuitBreakerConfig())
-		registry.Register(pCfg.Name, cbClient, llm.ProviderInfo{
-			Type:     pCfg.Type,
-			Model:    pCfg.Model,
-			Endpoint: pCfg.Endpoint,
-			Default:  pCfg.Default,
-		})
-	}
-
-	// Register default fallback if empty
-	if registry.Count() == 0 && cfg.LLM.Endpoint != "" {
-		client := llm.NewOllamaClientDynamic(llm.OllamaClientConfig{
-			Endpoint: cfg.LLM.Endpoint,
-			Model:    cfg.LLM.Model,
-		})
-		cbClient := llm.NewCircuitBreakerClient("default", client, llm.DefaultCircuitBreakerConfig())
-		registry.Register("default", cbClient, llm.ProviderInfo{
-			Type:     "ollama",
-			Model:    cfg.LLM.Model,
-			Endpoint: cfg.LLM.Endpoint,
-			Default:  true,
-		})
-	}
+	registry := initLLMRegistry(cfg, log)
 
 	dsn := cfg.Postgres.DSN()
 	pgClient, err := pgxpool.New(ctx, dsn)
@@ -213,10 +169,7 @@ func run() error {
 	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge, txManager)
 
 	metricsCollector := usecaseMetrics.NewCollector(
-		dockerClient,
-		computeHostRepo,
-		bridge,
-		log,
+		dockerClient, computeHostRepo, bridge, log,
 		usecaseMetrics.WithRequestCountFn(mw.GetRequestCount),
 		usecaseMetrics.WithIncidentRepo(incRepo),
 	)
@@ -236,9 +189,7 @@ func run() error {
 	}
 
 	tpsCollector := usecaseMetrics.NewTPSCollector(
-		metricsCollector,
-		pgClient,
-		log,
+		metricsCollector, pgClient, log,
 		usecaseMetrics.WithLoadBalancerProvider(lbProvider),
 		usecaseMetrics.WithTraefikURL(lbURL),
 		usecaseMetrics.WithNATSMonitorURL(usecaseMetrics.DeriveNATSMonitorURL(cfg.NATS.URL)),
@@ -247,13 +198,7 @@ func run() error {
 	go tpsCollector.Start(ctx)
 
 	if dockerClient != nil {
-		dockerEventWatcher := event.NewDockerEventWatcher(
-			dockerClient,
-			incRepo,
-			bridge,
-			log,
-			event.WithDockerClusterName("fleet-primary"),
-		)
+		dockerEventWatcher := event.NewDockerEventWatcher(dockerClient, incRepo, bridge, log, event.WithDockerClusterName("fleet-primary"))
 		go func() {
 			if err := dockerEventWatcher.Start(ctx); err != nil {
 				log.Error("docker event watcher stopped with error", zap.Error(err))
@@ -284,12 +229,11 @@ func run() error {
 	tenancyRepo := postgres.NewTenancyRepo(pgClient)
 
 	alertRepo := postgres.NewAlertRepo(pgClient)
-	alertNotifiers := map[string]alert.Notifier{
+	_ = usecaseAlert.NewRuleEngine(alertRepo, map[string]alert.Notifier{
 		"slack":   notifier.NewSlackNotifier(),
 		"email":   notifier.NewEmailNotifier(),
 		"webhook": notifier.NewWebhookNotifier(),
-	}
-	_ = usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers)
+	})
 	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
 
 	costCalculator := usecaseCost.NewCalculator(computeHostRepo, metricsCollector)
@@ -300,26 +244,25 @@ func run() error {
 	)
 	capacityHandler := adapthttp.NewCapacityHandler(capacityForecaster)
 
-	var explorerHandler *adapthttp.ExplorerHandler
+	deploymentsHandler := adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
+	explorerHandler := adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
 	var healthCenterHandler *adapthttp.HealthCenterHandler
-	var deploymentsHandler *adapthttp.DeploymentHandler
-	var k8sHandler *adapthttp.K8sResourceHandler
-	var k8sExecHandler *adapthttp.K8sExecHandler
-	var k8sLogsHandler *adapthttp.K8sLogsHandler
-
-	deploymentsHandler = adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager)))
-	explorerHandler = adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager))
-
 	if k8sAvailable {
 		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, clientManager))
-		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(k8sClient, clientManager), auditRepo)
-		k8sExecHandler = adapthttp.NewK8sExecHandler(k8sClient, clientManager)
-		k8sLogsHandler = adapthttp.NewK8sLogsHandler(k8sClient, clientManager)
-	} else {
-		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(nil, clientManager), auditRepo)
-		k8sExecHandler = adapthttp.NewK8sExecHandler(nil, clientManager)
-		k8sLogsHandler = adapthttp.NewK8sLogsHandler(nil, clientManager)
 	}
+	k8sHandler := adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(k8sClient, clientManager), auditRepo)
+	k8sExecHandler := adapthttp.NewK8sExecHandler(k8sClient, clientManager)
+	k8sLogsHandler := adapthttp.NewK8sLogsHandler(k8sClient, clientManager)
+
+	resourceRepo := infraK8s.NewResourceRepo(k8sClient, clientManager)
+	k8sBootstrapHandler := adapthttp.NewK8sBootstrapHandler(usecaseCluster.NewBootstrapUsecase(resourceRepo, clientManager, log))
+	storageHandler := adapthttp.NewStorageHandler(usecaseStorage.NewVolumeUsecase(k8sClient, clientManager, log))
+	var k8sIface kubernetes.Interface
+	if k8sClient != nil {
+		k8sIface = k8sClient
+	}
+	remediationCtrl := usecaseSRE.NewRemediationController(k8sIface, clientManager, log)
+	drHandler := adapthttp.NewDRHandler(usecaseDR.NewDRUsecase(k8sClient, clientManager, log), remediationCtrl, log)
 
 	discoveryAdapter := infraK8s.NewDiscoveryAdapter()
 	importUsecase := usecaseCluster.NewImportUsecase(fleetRepo, discoveryAdapter, logger.Get())
@@ -327,6 +270,16 @@ func run() error {
 	go healthChecker.Start(ctx, 1*time.Minute)
 
 	obsRepo := postgres.NewObservabilityRepo(pgClient)
+	if obsRepo != nil {
+		defs, err := obsRepo.ListSLODefinitions(ctx)
+		if err != nil {
+			log.Warn("Failed to check existing SLO definitions", zap.Error(err))
+		} else if len(defs) == 0 {
+			if seedErr := usecaseSLO.SeedDefaultSLODefinitions(ctx, obsRepo, log); seedErr != nil {
+				log.Warn("Failed to seed default enterprise SLO definitions", zap.Error(seedErr))
+			}
+		}
+	}
 	sloCollector := usecaseSLO.NewSLOCollector(dockerClient, obsRepo, log)
 	go sloCollector.Start(ctx)
 
@@ -340,6 +293,17 @@ func run() error {
 	dashboardHandler.SetRCAPipeline(rcaPipeline)
 
 	logAggregator := logging.NewLogAggregator(2000)
+	logAggregator.Ingest(logging.LogEntry{
+		Timestamp: time.Now().UTC(),
+		Namespace: "system",
+		Pod:       "control-plane",
+		Container: "standalone",
+		Service:   "standalone",
+		Node:      "control-plane",
+		Stream:    "stdout",
+		Level:     "INFO",
+		Message:   "K8SCONTROL Hybrid Control Plane online — real-time telemetry log aggregator initialized",
+	})
 	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator)
 
 	// Stream real Docker container logs into log aggregator
@@ -377,8 +341,8 @@ func run() error {
 					stdoutReader, stdoutWriter := io.Pipe()
 					stderrReader, stderrWriter := io.Pipe()
 
-					go func() {
-						scanner := bufio.NewScanner(stdoutReader)
+					streamPipe := func(r io.Reader, stream, defaultLvl string) {
+						scanner := bufio.NewScanner(r)
 						for scanner.Scan() {
 							line := strings.TrimSpace(scanner.Text())
 							if line == "" {
@@ -389,31 +353,17 @@ func run() error {
 								Namespace: "docker",
 								Pod:       name,
 								Container: name,
-								Stream:    "stdout",
-								Level:     detectLogLevel(line, "INFO"),
+								Service:   name,
+								Node:      "standalone-host",
+								Stream:    stream,
+								Level:     detectLogLevel(line, defaultLvl),
 								Message:   line,
 							})
 						}
-					}()
+					}
 
-					go func() {
-						scanner := bufio.NewScanner(stderrReader)
-						for scanner.Scan() {
-							line := strings.TrimSpace(scanner.Text())
-							if line == "" {
-								continue
-							}
-							logAggregator.Ingest(logging.LogEntry{
-								Timestamp: time.Now().UTC(),
-								Namespace: "docker",
-								Pod:       name,
-								Container: name,
-								Stream:    "stderr",
-								Level:     detectLogLevel(line, "WARN"),
-								Message:   line,
-							})
-						}
-					}()
+					go streamPipe(stdoutReader, "stdout", "INFO")
+					go streamPipe(stderrReader, "stderr", "WARN")
 
 					_, _ = stdcopy.StdCopy(stdoutWriter, stderrWriter, reader)
 					_ = stdoutWriter.Close()
@@ -456,6 +406,9 @@ func run() error {
 		K8s:           k8sHandler,
 		K8sExec:       k8sExecHandler,
 		K8sLogs:       k8sLogsHandler,
+		K8sBootstrap:  k8sBootstrapHandler,
+		Storage:       storageHandler,
+		DR:            drHandler,
 		Cloud:         cloudHandler,
 		Settings:      settingsHandler,
 		Catalog:       catalogHandler,
@@ -467,7 +420,6 @@ func run() error {
 	}
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)
-
 
 	addr := ":8080"
 	srv := &http.Server{
@@ -503,21 +455,46 @@ func run() error {
 	return nil
 }
 
-
-
 func detectLogLevel(msg string, defaultLvl string) string {
 	upper := strings.ToUpper(msg)
-	switch {
-	case strings.Contains(upper, "ERROR") || strings.Contains(upper, "FATAL") || strings.Contains(upper, "PANIC"):
+	if strings.Contains(upper, "ERROR") || strings.Contains(upper, "FATAL") || strings.Contains(upper, "PANIC") {
 		return "ERROR"
-	case strings.Contains(upper, "WARN"):
-		return "WARN"
-	case strings.Contains(upper, "DEBUG") || strings.Contains(upper, "TRACE"):
-		return "DEBUG"
-	case strings.Contains(upper, "INFO"):
-		return "INFO"
-	default:
-		return defaultLvl
 	}
+	if strings.Contains(upper, "WARN") {
+		return "WARN"
+	}
+	if strings.Contains(upper, "DEBUG") || strings.Contains(upper, "TRACE") {
+		return "DEBUG"
+	}
+	if strings.Contains(upper, "INFO") {
+		return "INFO"
+	}
+	return defaultLvl
 }
 
+func initLLMRegistry(cfg *config.Config, log *zap.Logger) *llm.ProviderRegistry {
+	registry := llm.NewProviderRegistry()
+	for _, pCfg := range cfg.LLM.Providers {
+		var client llm.Client
+		switch pCfg.Type {
+		case "ollama":
+			client = llm.NewOllamaClientDynamic(llm.OllamaClientConfig{Endpoint: pCfg.Endpoint, Model: pCfg.Model})
+		case "openai":
+			client = llm.NewOpenAIClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
+		case "vllm":
+			client = llm.NewVLLMClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
+		default:
+			log.Warn("unknown LLM provider type, skipping", zap.String("type", pCfg.Type))
+			continue
+		}
+		cbClient := llm.NewCircuitBreakerClient(pCfg.Name, client, llm.DefaultCircuitBreakerConfig())
+		registry.Register(pCfg.Name, cbClient, llm.ProviderInfo{Type: pCfg.Type, Model: pCfg.Model, Endpoint: pCfg.Endpoint, Default: pCfg.Default})
+	}
+
+	if registry.Count() == 0 && cfg.LLM.Endpoint != "" {
+		client := llm.NewOllamaClientDynamic(llm.OllamaClientConfig{Endpoint: cfg.LLM.Endpoint, Model: cfg.LLM.Model})
+		cbClient := llm.NewCircuitBreakerClient("default", client, llm.DefaultCircuitBreakerConfig())
+		registry.Register("default", cbClient, llm.ProviderInfo{Type: "ollama", Model: cfg.LLM.Model, Endpoint: cfg.LLM.Endpoint, Default: true})
+	}
+	return registry
+}

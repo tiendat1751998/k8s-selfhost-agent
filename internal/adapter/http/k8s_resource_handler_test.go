@@ -190,6 +190,26 @@ func TestK8sResourceHandler_LiveOperations(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 	}
+	var nsResp struct {
+		Data []struct {
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+			Status struct {
+				Phase string `json:"phase"`
+			} `json:"status"`
+		} `json:"data"`
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &nsResp); err != nil {
+		t.Fatalf("unmarshaling namespaces response: %v", err)
+	}
+	if nsResp.Total == 0 || len(nsResp.Data) == 0 {
+		t.Fatalf("expected namespaces in data, got %d", nsResp.Total)
+	}
+	if nsResp.Data[0].Metadata.Name == "" {
+		t.Fatalf("expected metadata.name in namespace, got empty")
+	}
 
 	// 3. Get Secret (verifying masked data)
 	req = httptest.NewRequest("GET", "/k8s/local/resources/secrets/db-secret?ns=default", nil)

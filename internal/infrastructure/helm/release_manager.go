@@ -1,4 +1,4 @@
-﻿package helm
+package helm
 
 import (
 	"context"
@@ -178,8 +178,8 @@ func (m *ReleaseManager) getRestConfig(ctx context.Context, clusterID string) (*
 }
 
 func (m *ReleaseManager) getActionConfig(ctx context.Context, clusterID, namespace string) (*action.Configuration, error) {
-	if namespace == "" {
-		namespace = "default"
+	if namespace == "all" || namespace == "_all" {
+		namespace = ""
 	}
 
 	restConfig, err := m.getRestConfig(ctx, clusterID)
@@ -238,6 +238,22 @@ func (m *ReleaseManager) ListReleases(ctx context.Context, clusterID, namespace 
 func (m *ReleaseManager) GetRelease(ctx context.Context, clusterID, name, namespace string) (*release.Release, error) {
 	if strings.TrimSpace(name) == "" {
 		return nil, fmt.Errorf("release name is required")
+	}
+
+	if namespace == "" || namespace == "all" || namespace == "_all" {
+		// Auto-discover namespace of the release across all cluster releases
+		allRels, err := m.ListReleases(ctx, clusterID, "")
+		if err == nil {
+			for _, r := range allRels {
+				if r != nil && r.Name == name {
+					namespace = r.Namespace
+					break
+				}
+			}
+		}
+		if namespace == "" || namespace == "all" || namespace == "_all" {
+			namespace = "default"
+		}
 	}
 
 	actionConfig, err := m.getActionConfig(ctx, clusterID, namespace)
@@ -450,6 +466,22 @@ func (m *ReleaseManager) UninstallRelease(ctx context.Context, clusterID, name, 
 func (m *ReleaseManager) GetReleaseHistory(ctx context.Context, clusterID, name, namespace string) ([]*release.Release, error) {
 	if strings.TrimSpace(name) == "" {
 		return nil, fmt.Errorf("release name is required")
+	}
+
+	if namespace == "" || namespace == "all" || namespace == "_all" {
+		// Auto-discover namespace of the release across all cluster releases
+		allRels, err := m.ListReleases(ctx, clusterID, "")
+		if err == nil {
+			for _, r := range allRels {
+				if r != nil && r.Name == name {
+					namespace = r.Namespace
+					break
+				}
+			}
+		}
+		if namespace == "" || namespace == "all" || namespace == "_all" {
+			namespace = "default"
+		}
 	}
 
 	actionConfig, err := m.getActionConfig(ctx, clusterID, namespace)

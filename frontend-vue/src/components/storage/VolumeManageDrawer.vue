@@ -1,0 +1,229 @@
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
+import ModalDrawer from '../ui/ModalDrawer.vue'
+import VolumeReplicaMatrix from './VolumeReplicaMatrix.vue'
+import { storageApi, formatBytes, type DistributedVolume } from '../../api/storage'
+
+const props = defineProps<{
+  show: boolean
+  volume: DistributedVolume | null
+  clusterId: string
+}>()
+
+const emit = defineEmits<{
+  (e: 'update:show', val: boolean): void
+  (e: 'expanded'): void
+  (e: 'snapshot-created'): void
+}>()
+
+const currentSizeGb = computed(() => {
+  if (!props.volume?.capacity_bytes) return 10
+  return Math.max(1, Math.round(props.volume.capacity_bytes / (1024 * 1024 * 1024)))
+})
+
+const maxSizeGb = computed(() => Math.max(currentSizeGb.value * 5, 200))
+const targetSizeGb = ref(10)
+const isExpanding = ref(false)
+const expandAlert = ref<{ type: 'success' | 'error'; message: string } | null>(null)
+
+watch(currentSizeGb, (val) => {
+  targetSizeGb.value = val
+  expandAlert.value = null
+}, { immediate: true })
+
+async function handleExpand() {
+  if (!props.volume || targetSizeGb.value <= currentSizeGb.value) return
+  isExpanding.value = true
+  expandAlert.value = null
+  try {
+    const bytes = targetSizeGb.value * 1024 * 1024 * 1024
+    await storageApi.expandVolume(props.clusterId, props.volume.name, props.volume.namespace, bytes)
+    expandAlert.value = { type: 'success', message: `Volume expanded to ${targetSizeGb.value} GiB successfully.` }
+    emit('expanded')
+  } catch (err: unknown) {
+    expandAlert.value = { type: 'error', message: err instanceof Error ? err.message : 'Online expansion failed.' }
+  } finally {
+    isExpanding.value = false
+  }
+}
+
+const isCreatingSnapshot = ref(false)
+const confirmingSnapshot = ref(false)
+const snapshotAlert = ref<{ type: 'success' | 'error'; message: string } | null>(null)
+
+async function handleCreateSnapshot() {
+  if (!props.volume) return
+  confirmingSnapshot.value = false
+  isCreatingSnapshot.value = true
+  snapshotAlert.value = null
+  try {
+    const res = await storageApi.createSnapshot(props.clusterId, props.volume.name, props.volume.namespace)
+    snapshotAlert.value = { type: 'success', message: `Snapshot created: ${res.snapshot_name || 'Success'}` }
+    emit('snapshot-created')
+  } catch (err: unknown) {
+    snapshotAlert.value = { type: 'error', message: err instanceof Error ? err.message : 'Snapshot creation failed.' }
+  } finally {
+    isCreatingSnapshot.value = false
+  }
+}
+</script>
+
+<template>
+  <ModalDrawer
+    :show="show"
+    mode="drawer"
+    placement="right"
+    max-width="540px"
+    :title="volume ? `HA Volume: ${volume.name}` : 'HA Volume Management'"
+    :subtitle="volume ? `Namespace: ${volume.namespace} | StorageClass: ${volume.storage_class}` : 'Distributed Storage Controller'"
+    @close="emit('update:show', false)"
+  >
+    <div v-if="volume" class="drawer-content">
+      <!-- Volume Metadata Grid -->
+      <div class="meta-card font-mono">
+        <div class="meta-row"><span class="meta-label">Volume:</span><span class="meta-val text-white">{{ volume.name }}</span></div>
+        <div class="meta-row"><span class="meta-label">Namespace:</span><span class="meta-val text-muted">{{ volume.namespace }}</span></div>
+        <div class="meta-row"><span class="meta-label">StorageClass:</span><span class="meta-val text-violet">{{ volume.storage_class }}</span></div>
+        <div class="meta-row"><span class="meta-label">Capacity:</span><span class="meta-val text-cyan font-bold">{{ volume.capacity_human || formatBytes(volume.capacity_bytes) }}</span></div>
+      </div>
+
+      <!-- Distributed Topology Matrix -->
+      <VolumeReplicaMatrix :volume="volume" />
+
+      <!-- Online Expansion Slider Section -->
+      <div class="action-card">
+        <div class="card-head">
+          <span class="card-title">Online Volume Expansion</span>
+          <span class="growth-tag font-mono">+{{ targetSizeGb - currentSizeGb }} GiB</span>
+        </div>
+        <div class="slider-metric font-mono">
+          <span>Current: <strong class="text-white">{{ currentSizeGb }} GiB</strong></span>
+          <span>Target: <strong class="text-cyan">{{ targetSizeGb }} GiB</strong></span>
+        </div>
+        <input 
+          type="range" 
+          class="size-slider"
+          :min="currentSizeGb" 
+          :max="maxSizeGb" 
+          step="1"
+          v-model.number="targetSizeGb"
+          :disabled="isExpanding"
+        />
+        <div class="slider-bounds font-mono">
+          <span>{{ currentSizeGb }} GiB</span>
+          <span>{{ maxSizeGb }} GiB</span>
+        </div>
+        <button 
+          type="button" 
+          class="btn-action btn-expand" 
+          :disabled="targetSizeGb <= currentSizeGb || isExpanding"
+          @click="handleExpand"
+        >
+          {{ isExpanding ? '? Expanding Online...' : '? Expand Online' }}
+        </button>
+        <p v-if="expandAlert" class="status-alert font-mono" :class="`alert-${expandAlert.type}`">
+          {{ expandAlert.message }}
+        </p>
+      </div>
+
+      <!-- 1-Click Volume Snapshot Section -->
+      <div class="action-card">
+        <div class="card-head">
+          <span class="card-title">1-Click Volume Snapshot</span>
+          <span class="card-sub font-mono">Point-in-time state</span>
+        </div>
+        <div v-if="confirmingSnapshot" class="confirm-prompt font-mono">
+          <span>Create online snapshot for <strong>{{ volume.name }}</strong>?</span>
+          <div class="confirm-btns">
+            <button type="button" class="btn-xs btn-confirm" :disabled="isCreatingSnapshot" @click="handleCreateSnapshot">Confirm</button>
+            <button type="button" class="btn-xs btn-cancel" @click="confirmingSnapshot = false">Cancel</button>
+          </div>
+        </div>
+        <button 
+          v-else 
+          type="button" 
+          class="btn-action btn-snapshot" 
+          :disabled="isCreatingSnapshot"
+          @click="confirmingSnapshot = true"
+        >
+          {{ isCreatingSnapshot ? '📸 Creating Snapshot...' : '📸 Create Snapshot' }}
+        </button>
+        <p v-if="snapshotAlert" class="status-alert font-mono" :class="`alert-${snapshotAlert.type}`">
+          {{ snapshotAlert.message }}
+        </p>
+      </div>
+    </div>
+    <div v-else class="empty-state font-mono">No volume selected</div>
+  </ModalDrawer>
+</template>
+
+<style scoped>
+.drawer-content { display: flex; flex-direction: column; gap: 14px; }
+.meta-card {
+  padding: 10px 12px;
+  background: var(--color-surface-card, #1e2329);
+  border: 1px solid var(--color-hairline, #2b3139);
+  border-radius: var(--rounded-md, 6px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 11px;
+}
+.meta-row { display: flex; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta-label { color: var(--color-muted, #707a8a); }
+.text-cyan { color: #00f0ff; }
+.text-violet { color: #b794f4; }
+.text-white { color: #ffffff; }
+
+.action-card {
+  padding: 12px;
+  background: var(--color-surface-card, #1e2329);
+  border: 1px solid var(--color-hairline, #2b3139);
+  border-radius: var(--rounded-md, 6px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card-head { display: flex; justify-content: space-between; align-items: center; }
+.card-title { font-size: 11px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 0.04em; }
+.card-sub { font-size: 10px; color: var(--color-muted, #707a8a); }
+.growth-tag { font-size: 10px; font-weight: 700; color: #fcd535; background: rgba(252, 213, 53, 0.15); padding: 2px 6px; border-radius: 4px; }
+
+.slider-metric { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-muted, #707a8a); }
+.size-slider { width: 100%; accent-color: #00f0ff; cursor: pointer; }
+.slider-bounds { display: flex; justify-content: space-between; font-size: 9px; color: var(--color-muted, #707a8a); }
+
+.btn-action {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: opacity 150ms ease;
+}
+.btn-action:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-expand { background: #fcd535; color: #181a20; }
+.btn-snapshot { background: rgba(255, 255, 255, 0.08); color: #eaecef; border: 1px solid var(--color-hairline, #2b3139); }
+.btn-snapshot:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+
+.confirm-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(11, 14, 17, 0.7);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.confirm-btns { display: flex; gap: 6px; }
+.btn-xs { min-height: 32px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; border: none; display: inline-flex; align-items: center; justify-content: center; }
+.btn-confirm { background: #0ecb81; color: #181a20; }
+.btn-cancel { background: rgba(255, 255, 255, 0.1); color: #eaecef; }
+
+.status-alert { font-size: 10px; padding: 6px 8px; border-radius: 4px; margin: 0; }
+.alert-success { background: rgba(14, 203, 129, 0.15); color: #0ecb81; border: 1px solid rgba(14, 203, 129, 0.3); }
+.alert-error { background: rgba(246, 70, 93, 0.15); color: #f6465d; border: 1px solid rgba(246, 70, 93, 0.3); }
+.empty-state { padding: 24px; text-align: center; color: var(--color-muted, #707a8a); }
+</style>

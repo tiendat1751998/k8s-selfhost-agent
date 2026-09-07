@@ -40,12 +40,12 @@ function formatUptime(uptimeSeconds?: number): string {
 }
 
 function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): string {
-  if (!loadAvg) return '0.45, 0.32, 0.28'
+  if (!loadAvg) return '--'
   if (typeof loadAvg === 'string') return loadAvg
   if (Array.isArray(loadAvg)) {
     return loadAvg.map(n => (typeof n === 'number' ? n.toFixed(2) : String(n))).join(', ')
   }
-  return '0.45, 0.32, 0.28'
+  return '--'
 }
 </script>
 
