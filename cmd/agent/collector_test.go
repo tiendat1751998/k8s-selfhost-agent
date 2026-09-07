@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -755,4 +756,244 @@ func TestCollectDiskIO(t *testing.T) {
 	}
 }
 
+func TestDetectRuntimeEnvironment(t *testing.T) {
+	// 1. When KUBERNETES_SERVICE_HOST is set -> "kubernetes"
+	t.Run("kubernetes", func(t *testing.T) {
+		t.Setenv("KUBERNETES_SERVICE_HOST", "10.96.0.1")
+		got := detectRuntimeEnvironment()
+		if got != "kubernetes" {
+			t.Errorf("expected 'kubernetes', got '%s'", got)
+		}
+	})
+
+	// 2. When KUBERNETES_SERVICE_HOST is unset and dockerEnvPath exists -> "docker"
+	t.Run("docker", func(t *testing.T) {
+		t.Setenv("KUBERNETES_SERVICE_HOST", "")
+		tmpFile := filepath.Join(t.TempDir(), ".dockerenv")
+		if err := os.WriteFile(tmpFile, []byte{}, 0644); err != nil {
+			t.Fatalf("failed to create dummy .dockerenv: %v", err)
+		}
+
+		oldPath := dockerEnvPath
+		dockerEnvPath = tmpFile
+		t.Cleanup(func() { dockerEnvPath = oldPath })
+
+		got := detectRuntimeEnvironment()
+		if got != "docker" {
+			t.Errorf("expected 'docker', got '%s'", got)
+		}
+	})
+
+	// 3. When KUBERNETES_SERVICE_HOST is unset and dockerEnvPath does not exist -> "bare-metal"
+	t.Run("bare-metal", func(t *testing.T) {
+		t.Setenv("KUBERNETES_SERVICE_HOST", "")
+		oldPath := dockerEnvPath
+		dockerEnvPath = filepath.Join(t.TempDir(), "nonexistent")
+		t.Cleanup(func() { dockerEnvPath = oldPath })
+
+		got := detectRuntimeEnvironment()
+		if got != "bare-metal" {
+			t.Errorf("expected 'bare-metal', got '%s'", got)
+		}
+	})
+
+	// 4. Precedence: KUBERNETES_SERVICE_HOST takes precedence over dockerenv
+	t.Run("kubernetes_precedence", func(t *testing.T) {
+		t.Setenv("KUBERNETES_SERVICE_HOST", "10.96.0.1")
+		tmpFile := filepath.Join(t.TempDir(), ".dockerenv")
+		if err := os.WriteFile(tmpFile, []byte{}, 0644); err != nil {
+			t.Fatalf("failed to create dummy .dockerenv: %v", err)
+		}
+		oldPath := dockerEnvPath
+		dockerEnvPath = tmpFile
+		t.Cleanup(func() { dockerEnvPath = oldPath })
+
+		got := detectRuntimeEnvironment()
+		if got != "kubernetes" {
+			t.Errorf("expected 'kubernetes' precedence, got '%s'", got)
+		}
+	})
+}
+
+func TestDetectHostRoleAndServices(t *testing.T) {
+	t.Run("database_postgres_and_redis", func(t *testing.T) {
+		procs := []ProcessMetric{
+			{Name: "postgres", CommandLine: "/usr/lib/postgresql/16/bin/postgres -D /data"},
+			{Name: "redis-server", CommandLine: "redis-server *:6379"},
+		}
+		role, services := detectHostRoleAndServices(procs)
+		if role != "database" {
+			t.Errorf("expected role 'database', got '%s'", role)
+		}
+		expectedServices := []string{"postgres", "redis"}
+		if !reflect.DeepEqual(services, expectedServices) {
+			t.Errorf("expected services %v, got %v", expectedServices, services)
+		}
+	})
+
+	t.Run("database_engines_all", func(t *testing.T) {
+		procs := []ProcessMetric{
+			{Name: "mysqld", CommandLine: "/usr/sbin/mysqld"},
+			{Name: "mariadbd", CommandLine: "/usr/sbin/mariadbd"},
+			{Name: "mongod", CommandLine: "/usr/bin/mongod --config /etc/mongod.conf"},
+			{Name: "clickhouse-server", CommandLine: "clickhouse-server --config-file=/etc/clickhouse.xml"},
+		}
+		role, services := detectHostRoleAndServices(procs)
+		if role != "database" {
+			t.Errorf("expected role 'database', got '%s'", role)
+		}
+		expectedServices := []string{"clickhouse", "mariadb", "mongodb", "mysql"}
+		if !reflect.DeepEqual(services, expectedServices) {
+			t.Errorf("expected services %v, got %v", expectedServices, services)
+		}
+	})
+
+	t.Run("database_deduplication", func(t *testing.T) {
+		procs := []ProcessMetric{
+			{Name: "postgres", CommandLine: "postgres: checkpointer"},
+			{Name: "postgres", CommandLine: "postgres: background writer"},
+			{Name: "postgres", CommandLine: "postgres: walwriter"},
+			{Name: "postgres", CommandLine: "postgres: autovacuum launcher"},
+		}
+		role, services := detectHostRoleAndServices(procs)
+		if role != "database" {
+			t.Errorf("expected role 'database', got '%s'", role)
+		}
+		expectedServices := []string{"postgres"}
+		if !reflect.DeepEqual(services, expectedServices) {
+			t.Errorf("expected deduplicated services %v, got %v", expectedServices, services)
+		}
+	})
+
+	t.Run("database_precedence_over_k8s", func(t *testing.T) {
+		procs := []ProcessMetric{
+			{Name: "postgres", CommandLine: "postgres -D /data"},
+			{Name: "kubelet", CommandLine: "/usr/bin/kubelet"},
+		}
+		role, services := detectHostRoleAndServices(procs)
+		if role != "database" {
+			t.Errorf("expected role 'database' to take precedence, got '%s'", role)
+		}
+		if !reflect.DeepEqual(services, []string{"postgres"}) {
+			t.Errorf("expected services ['postgres'], got %v", services)
+		}
+	})
+
+	t.Run("k8s_kubelet", func(t *testing.T) {
+		procs := []ProcessMetric{
+			{Name: "kubelet", CommandLine: "/usr/bin/kubelet --config=/var/lib/kubelet/config.yaml"},
+		}
+		role, services := detectHostRoleAndServices(procs)
+		if role != "k8s" {
+			t.Errorf("expected role 'k8s', got '%s'", role)
+		}
+		if len(services) != 0 {
+			t.Errorf("expected empty services for k8s node, got %v", services)
+		}
+	})
+
+	t.Run("k8s_k3s", func(t *testing.T) {
+		procs := []ProcessMetric{
+			{Name: "k3s-server", CommandLine: "/usr/local/bin/k3s server"},
+		}
+		role, services := detectHostRoleAndServices(procs)
+		if role != "k8s" {
+			t.Errorf("expected role 'k8s', got '%s'", role)
+		}
+		if len(services) != 0 {
+			t.Errorf("expected empty services for k3s node, got %v", services)
+		}
+	})
+
+	t.Run("compute_containerd", func(t *testing.T) {
+		procs := []ProcessMetric{
+			{Name: "containerd", CommandLine: "/usr/bin/containerd"},
+		}
+		role, services := detectHostRoleAndServices(procs)
+		if role != "compute" {
+			t.Errorf("expected role 'compute', got '%s'", role)
+		}
+		if len(services) != 0 {
+			t.Errorf("expected empty services, got %v", services)
+		}
+	})
+
+	t.Run("compute_dockerd", func(t *testing.T) {
+		procs := []ProcessMetric{
+			{Name: "dockerd", CommandLine: "/usr/bin/dockerd -H fd://"},
+		}
+		role, services := detectHostRoleAndServices(procs)
+		if role != "compute" {
+			t.Errorf("expected role 'compute', got '%s'", role)
+		}
+		if len(services) != 0 {
+			t.Errorf("expected empty services, got %v", services)
+		}
+	})
+
+	t.Run("compute_generic_and_empty", func(t *testing.T) {
+		procs := []ProcessMetric{
+			{Name: "systemd", CommandLine: "/sbin/init"},
+			{Name: "bash", CommandLine: "-bash"},
+			{Name: "nginx", CommandLine: "nginx: master process /usr/sbin/nginx"},
+		}
+		role, services := detectHostRoleAndServices(procs)
+		if role != "compute" {
+			t.Errorf("expected role 'compute', got '%s'", role)
+		}
+		if len(services) != 0 {
+			t.Errorf("expected empty services, got %v", services)
+		}
+
+		// Empty procs
+		roleEmpty, servicesEmpty := detectHostRoleAndServices(nil)
+		if roleEmpty != "compute" {
+			t.Errorf("expected empty procs to be 'compute', got '%s'", roleEmpty)
+		}
+		if len(servicesEmpty) != 0 {
+			t.Errorf("expected empty services for nil procs, got %v", servicesEmpty)
+		}
+	})
+}
+
+func TestCollect_PopulatesRuntimeAndRole(t *testing.T) {
+	tempDir := t.TempDir()
+	c := NewSystemCollector(tempDir, "", nil)
+
+	resp, err := c.Collect()
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if resp.RuntimeEnvironment == "" {
+		t.Errorf("expected non-empty RuntimeEnvironment")
+	}
+	if resp.HostRole == "" {
+		t.Errorf("expected non-empty HostRole")
+	}
+	if resp.DetectedServices == nil {
+		t.Errorf("expected non-nil DetectedServices slice")
+	}
+
+	// Verify JSON serialization includes the new fields
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if _, ok := parsed["runtime_environment"]; !ok {
+		t.Errorf("expected 'runtime_environment' in JSON output")
+	}
+	if _, ok := parsed["host_role"]; !ok {
+		t.Errorf("expected 'host_role' in JSON output")
+	}
+	if _, ok := parsed["detected_services"]; !ok {
+		t.Errorf("expected 'detected_services' in JSON output")
+	}
+}
 

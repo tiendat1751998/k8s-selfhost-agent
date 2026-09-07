@@ -83,9 +83,22 @@ spec:
         runAsGroup: 10001
         runAsNonRoot: true
         runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: loki
           image: grafana/loki:3.0.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
           args:
             - "-config.file=/etc/loki/loki.yaml"
           ports:
@@ -98,13 +111,17 @@ spec:
               path: /ready
               port: http-metrics
             initialDelaySeconds: 15
-            timeoutSeconds: 1
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /ready
               port: http-metrics
             initialDelaySeconds: 30
-            timeoutSeconds: 1
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
             requests:
               cpu: 100m
@@ -117,10 +134,14 @@ spec:
               mountPath: /etc/loki
             - name: storage
               mountPath: /var/loki
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: config
           configMap:
             name: loki-config
+        - name: tmp
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: storage

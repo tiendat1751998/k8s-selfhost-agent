@@ -90,7 +90,13 @@ func (m *ClientManager) GetK8sRestConfig(ctx context.Context, clusterID string) 
 	}
 
 	kubeconfigData := cluster.EncryptedToken
-	if decrypted, err := crypto.Decrypt(cluster.EncryptedToken); err == nil && decrypted != "" {
+	if strings.Contains(cluster.EncryptedToken, "apiVersion:") || strings.Contains(cluster.EncryptedToken, "\"apiVersion\"") {
+		kubeconfigData = cluster.EncryptedToken
+	} else {
+		decrypted, err := crypto.Decrypt(cluster.EncryptedToken)
+		if err != nil {
+			return nil, fmt.Errorf("decrypting cluster %s credentials: %w", clusterID, err)
+		}
 		kubeconfigData = decrypted
 	}
 
@@ -100,6 +106,7 @@ func (m *ClientManager) GetK8sRestConfig(ctx context.Context, clusterID string) 
 		if err := json.Unmarshal([]byte(trimmed), &unquoted); err == nil {
 			trimmed = strings.TrimSpace(unquoted)
 		} else {
+			trimmed = strings.Trim(trimmed, "\"")
 			break
 		}
 	}
@@ -109,6 +116,9 @@ func (m *ClientManager) GetK8sRestConfig(ctx context.Context, clusterID string) 
 		trimmed = strings.ReplaceAll(trimmed, "\\t", "\t")
 		trimmed = strings.ReplaceAll(trimmed, "\\\"", "\"")
 	}
+	trimmed = strings.Trim(trimmed, "\"")
+	trimmed = strings.Trim(trimmed, "'")
+	trimmed = strings.TrimSpace(trimmed)
 	kubeconfigData = trimmed
 
 	config, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeconfigData))

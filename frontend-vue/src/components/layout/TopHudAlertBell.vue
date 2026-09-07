@@ -43,6 +43,18 @@ function dismissToast() {
   alertStore.dismissToast()
 }
 
+const firstDownNode = computed(() => downNodeAlerts.value[0]?.node_name || downNodeAlerts.value[0]?.node_id || '')
+
+function handleQuickFailover() {
+  dismissToast()
+  if (firstDownNode.value) {
+    alertStore.openRemediation(firstDownNode.value)
+    alertStore.openAlertCenter()
+  } else {
+    alertStore.openAlertCenter()
+  }
+}
+
 function handleOpenDetails() {
   dismissToast()
   alertStore.openAlertCenter()
@@ -96,22 +108,35 @@ const previewMessage = computed(() => {
   return `${uniqueNames.slice(0, 2).join(', ')} +${uniqueNames.length - 2} nodes reporting alerts`
 })
 
-function handleDocumentClick(e: MouseEvent) {
+function handleMouseEnter() {
+  if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+    isPaused.value = true
+  }
+}
+
+function handleMouseLeave() {
+  isPaused.value = false
+}
+
+function handleDocumentInteraction(e: MouseEvent | TouchEvent) {
   if (!alertStore.isToastDropped) return
-  if (containerRef.value && !containerRef.value.contains(e.target as Node)) {
+  const target = e.target as Node | null
+  if (containerRef.value && target && !containerRef.value.contains(target)) {
     dismissToast()
   }
 }
 
 onMounted(() => {
   if (typeof document !== 'undefined') {
-    document.addEventListener('click', handleDocumentClick)
+    document.addEventListener('click', handleDocumentInteraction)
+    document.addEventListener('touchend', handleDocumentInteraction, { passive: true })
   }
 })
 
 onUnmounted(() => {
   if (typeof document !== 'undefined') {
-    document.removeEventListener('click', handleDocumentClick)
+    document.removeEventListener('click', handleDocumentInteraction)
+    document.removeEventListener('touchend', handleDocumentInteraction)
   }
   stopTimer()
 })
@@ -182,8 +207,8 @@ onUnmounted(() => {
         :class="alertStore.hasCriticalAlerts ? 'toast-critical' : 'toast-warning'"
         role="alert"
         aria-live="assertive"
-        @mouseenter="isPaused = true"
-        @mouseleave="isPaused = false"
+        @mouseenter="handleMouseEnter"
+        @mouseleave="handleMouseLeave"
       >
         <!-- Top Row: Icon, Title, Badge, Close -->
         <div class="toast-header">
@@ -201,10 +226,11 @@ onUnmounted(() => {
           </div>
 
           <button
+            type="button"
             class="btn-toast-close"
             title="Dismiss notification (Docks into bell icon)"
             aria-label="Close notification"
-            @click.stop="dismissToast"
+            @click.stop.prevent="dismissToast"
           >
             ✕
           </button>
@@ -221,6 +247,16 @@ onUnmounted(() => {
         <!-- Action Buttons -->
         <div class="toast-actions">
           <button
+            v-if="hasNodeDown"
+            type="button"
+            class="btn-toast-action btn-toast-failover"
+            title="1-Click SRE Fast Failover for offline node"
+            @click="handleQuickFailover"
+          >
+            <span>⚡ Quick Failover</span>
+          </button>
+          <button
+            type="button"
             class="btn-toast-action btn-toast-details"
             title="Open interactive Alert Center"
             @click="handleOpenDetails"
@@ -228,11 +264,20 @@ onUnmounted(() => {
             <span>🔍 View Details</span>
           </button>
           <button
+            type="button"
             class="btn-toast-action btn-toast-mute"
             title="Silence all active node alerts until server restart"
             @click="handleMuteAll"
           >
             <span>🔕 Mute All</span>
+          </button>
+          <button
+            type="button"
+            class="btn-toast-action btn-toast-dismiss"
+            title="Dismiss toast and dock into bell icon"
+            @click.stop.prevent="dismissToast"
+          >
+            <span>✕ Dismiss</span>
           </button>
         </div>
 
@@ -250,440 +295,50 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.top-hud-alert-container {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
+@import '../../assets/styles/components/floating-alert-toast.css';
+
+.top-hud-alert-container { position: relative; display: inline-flex; align-items: center; }
 
 /* ==========================================
    HUD BELL CAPSULE BUTTON
    ========================================== */
-.hud-bell-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 12px;
-  border-radius: 9999px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  color: var(--text-secondary, #94a3b8);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  user-select: none;
-  line-height: 1;
-}
+.hud-bell-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; cursor: pointer; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12)); color: var(--text-secondary, #94a3b8); transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); user-select: none; line-height: 1; }
 
-.hud-bell-pill:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
+.hud-bell-pill:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.08); color: #fff; }
 
-.hud-bell-pill:active {
-  transform: translateY(0);
-}
+.hud-bell-pill:active { transform: translateY(0); }
 
-.bell-icon-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-}
+.bell-icon-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
 
-.bell-emoji {
-  display: inline-block;
-  line-height: 1;
-}
+.bell-emoji { display: inline-block; line-height: 1; }
 
-.bell-count-text {
-  letter-spacing: 0.02em;
-  font-family: var(--font-sans, inherit);
-}
+.bell-count-text { letter-spacing: 0.02em; font-family: var(--font-sans, inherit); }
 
-.bell-mobile-badge {
-  display: none;
-}
+.bell-mobile-badge { display: none; }
 
 /* Critical Active Pill */
-.pill-critical {
-  background: rgba(244, 63, 94, 0.15);
-  border-color: rgba(244, 63, 94, 0.55);
-  color: #fb7185;
-  box-shadow: 0 0 14px rgba(244, 63, 94, 0.3), inset 0 0 8px rgba(244, 63, 94, 0.15);
-  animation: critical-pill-pulse 2.2s infinite;
-}
+.pill-critical { background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.55); color: #fb7185; box-shadow: 0 0 14px rgba(244, 63, 94, 0.3), inset 0 0 8px rgba(244, 63, 94, 0.15); animation: critical-pill-pulse 2.2s infinite; }
 
-.pill-critical:hover {
-  background: rgba(244, 63, 94, 0.25);
-  border-color: rgba(244, 63, 94, 0.75);
-  color: #fff;
-}
+.pill-critical:hover { background: rgba(244, 63, 94, 0.25); border-color: rgba(244, 63, 94, 0.75); color: #fff; }
 
 /* Warning Active Pill */
-.pill-warning {
-  background: rgba(245, 158, 11, 0.15);
-  border-color: rgba(245, 158, 11, 0.55);
-  color: #fbbf24;
-  box-shadow: 0 0 14px rgba(245, 158, 11, 0.3), inset 0 0 8px rgba(245, 158, 11, 0.15);
-}
+.pill-warning { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.55); color: #fbbf24; box-shadow: 0 0 14px rgba(245, 158, 11, 0.3), inset 0 0 8px rgba(245, 158, 11, 0.15); }
 
-.pill-warning:hover {
-  background: rgba(245, 158, 11, 0.25);
-  border-color: rgba(245, 158, 11, 0.75);
-  color: #fff;
-}
+.pill-warning:hover { background: rgba(245, 158, 11, 0.25); border-color: rgba(245, 158, 11, 0.75); color: #fff; }
 
 /* Muted Only Pill */
-.pill-muted {
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px dashed rgba(148, 163, 184, 0.45);
-  color: #cbd5e1;
-}
+.pill-muted { background: rgba(15, 23, 42, 0.75); border: 1px dashed rgba(148, 163, 184, 0.45); color: #cbd5e1; }
 
-.pill-muted:hover {
-  border-color: rgba(148, 163, 184, 0.75);
-  color: #fff;
-}
+.pill-muted:hover { border-color: rgba(148, 163, 184, 0.75); color: #fff; }
 
 /* Clean Pill */
-.pill-clean {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: #64748b;
+.pill-clean { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.08); color: #64748b; }
+
+.pill-clean:hover { border-color: rgba(6, 182, 212, 0.4); color: #38bdf8; background: rgba(6, 182, 212, 0.06); }
+
+@keyframes critical-pill-pulse { 0% { box-shadow: 0 0 12px rgba(244, 63, 94, 0.25); }
+  50% { box-shadow: 0 0 20px rgba(244, 63, 94, 0.5); }
+  100% { box-shadow: 0 0 12px rgba(244, 63, 94, 0.25); }
 }
 
-.pill-clean:hover {
-  border-color: rgba(6, 182, 212, 0.4);
-  color: #38bdf8;
-  background: rgba(6, 182, 212, 0.06);
-}
-
-@keyframes critical-pill-pulse {
-  0% {
-    box-shadow: 0 0 12px rgba(244, 63, 94, 0.25);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(244, 63, 94, 0.5);
-  }
-  100% {
-    box-shadow: 0 0 12px rgba(244, 63, 94, 0.25);
-  }
-}
-
-/* ==========================================
-   HEADER-ANCHORED DROPDOWN ALERT TOAST
-   ========================================== */
-.header-alert-toast {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  z-index: 1000;
-  width: 380px;
-  max-width: calc(100vw - 32px);
-  background: rgba(15, 23, 42, 0.96);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-radius: 12px;
-  padding: 14px 16px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  cursor: pointer;
-  overflow: hidden;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.75), 0 0 1px rgba(255, 255, 255, 0.15);
-}
-
-.toast-critical {
-  border: 1px solid rgba(244, 63, 94, 0.5);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.75), 0 0 22px rgba(244, 63, 94, 0.25);
-}
-
-.toast-warning {
-  border: 1px solid rgba(245, 158, 11, 0.5);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.75), 0 0 22px rgba(245, 158, 11, 0.25);
-}
-
-/* Header */
-.toast-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.toast-title-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.toast-beacon {
-  position: relative;
-  font-size: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.beacon-pulse {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  animation: beacon-glow 1.8s infinite;
-  opacity: 0.7;
-}
-
-.beacon-rose .beacon-pulse {
-  background: rgba(244, 63, 94, 0.35);
-}
-
-.beacon-amber .beacon-pulse {
-  background: rgba(245, 158, 11, 0.35);
-}
-
-@keyframes beacon-glow {
-  0% {
-    transform: scale(0.85);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.3);
-    opacity: 0.2;
-  }
-  100% {
-    transform: scale(0.85);
-    opacity: 0.8;
-  }
-}
-
-.toast-title-text {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.toast-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.02em;
-}
-
-.badge-rose {
-  background: rgba(244, 63, 94, 0.2);
-  color: #fb7185;
-  border: 1px solid rgba(244, 63, 94, 0.4);
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 1px 7px;
-  border-radius: 4px;
-}
-
-.badge-amber {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 1px 7px;
-  border-radius: 4px;
-}
-
-.btn-toast-close {
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  line-height: 1;
-}
-
-.btn-toast-close:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-/* Body */
-.toast-body {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.toast-preview-msg {
-  font-size: 12px;
-  color: #cbd5e1;
-  margin: 0;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-}
-
-.toast-paused-badge {
-  font-size: 10px;
-  font-weight: 600;
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.15);
-  padding: 1px 6px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-/* Actions */
-.toast-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-toast-action {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 5px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.btn-toast-details {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #f8fafc;
-}
-
-.btn-toast-details:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #fff;
-}
-
-.btn-toast-mute {
-  background: rgba(244, 63, 94, 0.15);
-  border: 1px solid rgba(244, 63, 94, 0.4);
-  color: #fecdd3;
-}
-
-.btn-toast-mute:hover {
-  background: rgba(244, 63, 94, 0.3);
-  border-color: rgba(244, 63, 94, 0.6);
-  color: #fff;
-}
-
-/* Progress bar */
-.toast-progress-track {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.toast-progress-fill {
-  height: 100%;
-  transition: width 0.05s linear;
-}
-
-.progress-rose {
-  background: linear-gradient(90deg, #f43f5e, #fb7185);
-  box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
-}
-
-.progress-amber {
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
-}
-
-/* Transitions */
-.dropdown-toast-enter-active {
-  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.dropdown-toast-leave-active {
-  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.dropdown-toast-enter-from {
-  opacity: 0;
-  transform: translateY(-10px) scale(0.96);
-}
-
-.dropdown-toast-leave-to {
-  opacity: 0;
-  transform: translateY(-8px) scale(0.96);
-}
-
-@media (max-width: 640px) {
-  .hud-bell-pill {
-    padding: 5px 8px;
-    gap: 0;
-    min-width: 32px;
-    justify-content: center;
-  }
-
-  .bell-count-text {
-    display: none;
-  }
-
-  .bell-mobile-badge {
-    position: absolute;
-    top: -6px;
-    right: -10px;
-    font-size: 9px;
-    font-weight: 700;
-    font-family: var(--font-mono, monospace);
-    line-height: 1;
-    padding: 0 4px;
-    border-radius: 8px;
-    min-width: 14px;
-    height: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
-  }
-
-  .badge-rose-bg {
-    background: #f43f5e;
-    color: #fff;
-    box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
-  }
-
-  .badge-amber-bg {
-    background: #f59e0b;
-    color: #0f172a;
-    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
-  }
-
-  .badge-muted-bg {
-    background: #64748b;
-    color: #fff;
-  }
-
-  .header-alert-toast {
-    position: fixed;
-    top: 65px;
-    right: 12px;
-    left: 12px;
-    width: auto;
-    max-width: none;
-  }
-}
 </style>

@@ -1,4 +1,4 @@
-﻿package promotion_test
+package promotion_test
 
 import (
 	"testing"

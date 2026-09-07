@@ -31,9 +31,12 @@ var upgrader = websocket.Upgrader{
 		if u.Host == r.Host {
 			return true
 		}
+		if u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" {
+			return true
+		}
 		allowedOriginsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
 		if allowedOriginsEnv == "" {
-			allowedOriginsEnv = "http://localhost:3000,http://localhost:5173"
+			allowedOriginsEnv = "http://127.0.0.1:5173,http://127.0.0.1:3000,http://localhost:5173,http://localhost:3000"
 		}
 		for _, o := range strings.Split(allowedOriginsEnv, ",") {
 			o = strings.TrimSpace(o)

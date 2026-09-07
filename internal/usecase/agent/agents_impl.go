@@ -8,13 +8,13 @@ import (
 	"os/exec"
 
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
-	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
 )
 
 type baseAgent struct {
 	agentType agent.AgentType
 	system    string
-	llmClient llm.Client
+	llmClient ports.LLMClient
 }
 
 func (a *baseAgent) Type() agent.AgentType {
@@ -26,11 +26,10 @@ func (a *baseAgent) Execute(ctx context.Context, task *agent.Task, input string)
 		return "", fmt.Errorf("llm client is not initialized for agent %s", a.agentType)
 	}
 
-
 	prompt := fmt.Sprintf("Task: %s\nDescription: %s\nPhase: %s\nModule: %s\nFeature: %s\n\nInput Context:\n%s",
 		task.Title, task.Description, task.Phase, task.Module, task.Feature, input)
 
-	resp, err := a.llmClient.Complete(ctx, llm.CompletionRequest{
+	resp, err := a.llmClient.Complete(ctx, ports.LLMCompletionRequest{
 		System:      a.system,
 		Prompt:      prompt,
 		Temperature: 0.2,
@@ -54,7 +53,7 @@ func (a *qaAgent) Execute(ctx context.Context, task *agent.Task, input string) (
 		return "QA SUCCESS: Bypassed actual compiler and test runs during unit tests to prevent recursion.", nil
 	}
 
-		projectDir := os.Getenv("PROJECT_DIR")
+	projectDir := os.Getenv("PROJECT_DIR")
 	if projectDir == "" {
 		projectDir = "."
 	}
@@ -80,7 +79,7 @@ func (a *qaAgent) Execute(ctx context.Context, task *agent.Task, input string) (
 }
 
 // Factory to create agents
-func NewAgent(agentType agent.AgentType, llmClient llm.Client) agent.Agent {
+func NewAgent(agentType agent.AgentType, llmClient ports.LLMClient) agent.Agent {
 	switch agentType {
 	case agent.QAEngineer:
 		return &qaAgent{

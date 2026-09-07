@@ -1,4 +1,4 @@
-﻿package slo
+package slo
 
 import (
 	"context"

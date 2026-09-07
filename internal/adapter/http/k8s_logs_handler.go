@@ -1,4 +1,4 @@
-﻿package http
+package http
 
 import (
 	"bufio"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
@@ -94,6 +95,19 @@ func (h *K8sLogsHandler) HandlePodLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "failed to get kubernetes client", err)
 		return
+	}
+
+	// Auto-discover namespace if default/empty
+	if namespace == "default" || namespace == "" {
+		podList, listErr := client.CoreV1().Pods("").List(r.Context(), metav1.ListOptions{})
+		if listErr == nil {
+			for _, p := range podList.Items {
+				if p.Name == pod {
+					namespace = p.Namespace
+					break
+				}
+			}
+		}
 	}
 
 	opts := &corev1.PodLogOptions{

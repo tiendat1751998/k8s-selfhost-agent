@@ -43,6 +43,7 @@ func TestRouter_RBACEnforcement(t *testing.T) {
 		Catalog:     NewCatalogHandler(nil, nil),
 		Deployments: NewDeploymentHandler(nil),
 		K8s:         NewK8sResourceHandler(nil, nil),
+		Audit:       NewAuditHandler(nil),
 	}
 
 	router := NewRouterWithWS(healthHandler, nil, platform)
@@ -113,6 +114,7 @@ func TestRouter_RBACEnforcement(t *testing.T) {
 			{http.MethodPost, "/api/v1/deployments"},
 			{http.MethodDelete, "/api/v1/automation/rules/r1"},
 			{http.MethodPut, "/api/v1/catalog/services/s1"},
+			{http.MethodPost, "/api/v1/audit/run"},
 		}
 
 		for _, ep := range mutatingEndpoints {

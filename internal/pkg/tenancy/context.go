@@ -33,3 +33,18 @@ func TenantIDFromContext(ctx context.Context) string {
 	}
 	return ""
 }
+
+// WithTenantID returns a copy of parent context with the given tenant ID attached.
+func WithTenantID(ctx context.Context, tenantID string) context.Context {
+	return context.WithValue(ctx, TenantIDKey, tenantID)
+}
+
+// WithUserID returns a copy of parent context with the given user ID attached.
+func WithUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, UserIDKey, userID)
+}
+
+// WithUserRole returns a copy of parent context with the given user role attached.
+func WithUserRole(ctx context.Context, role string) context.Context {
+	return context.WithValue(ctx, UserRoleKey, role)
+}

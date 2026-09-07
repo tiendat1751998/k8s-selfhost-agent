@@ -80,21 +80,24 @@ type ProcessMetric struct {
 
 // MetricsResponse is the JSON schema returned by GET /metrics.
 type MetricsResponse struct {
-	Hostname      string          `json:"hostname"`
-	OS            string          `json:"os"`
-	Arch          string          `json:"arch"`
-	OSDistro      string          `json:"os_distro,omitempty"`
-	KernelVersion string          `json:"kernel_version,omitempty"`
-	UptimeSeconds int64           `json:"uptime_seconds"`
-	LoadAverage   [3]float64      `json:"load_average"`
-	CPU           CPUMetrics      `json:"cpu"`
-	Memory        MemoryMetrics   `json:"memory"`
-	Disks         []DiskMetrics   `json:"disks"`
-	DiskIO        DiskIOMetrics   `json:"disk_io"`
-	Network       NetworkMetrics  `json:"network"`
-	Processes     int             `json:"processes"`
-	TopProcesses  []ProcessMetric `json:"top_processes"`
-	CollectedAt   time.Time       `json:"collected_at"`
+	Hostname           string          `json:"hostname"`
+	OS                 string          `json:"os"`
+	Arch               string          `json:"arch"`
+	OSDistro           string          `json:"os_distro,omitempty"`
+	KernelVersion      string          `json:"kernel_version,omitempty"`
+	RuntimeEnvironment string          `json:"runtime_environment"` // "bare-metal" | "docker" | "kubernetes"
+	HostRole           string          `json:"host_role"`           // "database" | "compute" | "k8s"
+	DetectedServices   []string        `json:"detected_services"`   // e.g. ["postgres", "redis"]
+	UptimeSeconds      int64           `json:"uptime_seconds"`
+	LoadAverage        [3]float64      `json:"load_average"`
+	CPU                CPUMetrics      `json:"cpu"`
+	Memory             MemoryMetrics   `json:"memory"`
+	Disks              []DiskMetrics   `json:"disks"`
+	DiskIO             DiskIOMetrics   `json:"disk_io"`
+	Network            NetworkMetrics  `json:"network"`
+	Processes          int             `json:"processes"`
+	TopProcesses       []ProcessMetric `json:"top_processes"`
+	CollectedAt        time.Time       `json:"collected_at"`
 }
 
 // HealthResponse is the JSON schema returned by GET /health.

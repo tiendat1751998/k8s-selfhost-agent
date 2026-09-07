@@ -31,15 +31,6 @@ type Token struct {
 var nonTenantTables = map[string]bool{
 	// Tables without tenant_id column in database schema:
 	// TODO: Add migrations to add tenant_id column to these tables for full tenant isolation:
-	"agent_tasks":           true, // TODO: needs migration to add tenant_id
-	"agent_subtasks":        true, // TODO: needs migration to add tenant_id
-	"agent_executions":      true, // TODO: needs migration to add tenant_id
-	"agent_project_state":   true, // TODO: needs migration to add tenant_id
-	"audit_findings":        true, // TODO: needs migration to add tenant_id
-	"audit_runs":            true, // TODO: needs migration to add tenant_id
-	"audit_logs":            true, // TODO: needs migration to add tenant_id
-	"automation_rules":      true, // TODO: needs migration to add tenant_id
-	"automation_executions": true, // TODO: needs migration to add tenant_id
 	"backup_history":        true, // TODO: needs migration to add tenant_id
 	"change_requests":       true, // TODO: needs migration to add tenant_id
 	"maintenance_windows":   true, // TODO: needs migration to add tenant_id

@@ -1,0 +1,91 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-snapshot-hourly
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: etcd-snapshot-hourly
+    app.kubernetes.io/part-of: k8sselfhost
+    app.kubernetes.io/component: disaster-recovery
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 200
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: etcd-snapshot-hourly
+            app.kubernetes.io/part-of: k8sselfhost
+            app.kubernetes.io/component: disaster-recovery
+        spec:
+          hostNetwork: true
+          priorityClassName: system-cluster-critical
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: node-role.kubernetes.io/control-plane
+                        operator: Exists
+                  - matchExpressions:
+                      - key: node-role.kubernetes.io/master
+                        operator: Exists
+          tolerations:
+            - key: node-role.kubernetes.io/master
+              operator: Exists
+              effect: NoSchedule
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+            - key: CriticalAddonsOnly
+              operator: Exists
+          restartPolicy: OnFailure
+          containers:
+            - name: etcd-snapshot
+              image: registry.k8s.io/etcd:3.5.15-0
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - -c
+                - etcdctl --endpoints=https://127.0.0.1:2379 snapshot save /backup/etcd-snapshot-$(date +%s).db
+              env:
+                - name: ETCDCTL_API
+                  value: "3"
+                - name: ETCDCTL_CACERT
+                  value: /etc/kubernetes/pki/etcd/ca.crt
+                - name: ETCDCTL_CERT
+                  value: /etc/kubernetes/pki/etcd/server.crt
+                - name: ETCDCTL_KEY
+                  value: /etc/kubernetes/pki/etcd/server.key
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: etcd-certs
+                  mountPath: /etc/kubernetes/pki/etcd
+                  readOnly: true
+                - name: etcd-backup
+                  mountPath: /backup
+          volumes:
+            - name: etcd-certs
+              hostPath:
+                path: /etc/kubernetes/pki/etcd
+                type: DirectoryOrCreate
+            - name: etcd-backup
+              hostPath:
+                path: /var/backups/etcd
+                type: DirectoryOrCreate

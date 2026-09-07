@@ -1,4 +1,4 @@
-﻿package changes_test
+package changes_test
 
 import (
 	"testing"

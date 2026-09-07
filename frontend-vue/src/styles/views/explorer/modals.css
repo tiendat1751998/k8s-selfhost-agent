@@ -1,0 +1,111 @@
+/* ==========================================================================
+   K8s Explorer - Modals & Dialogs Styles
+   ========================================================================== */
+
+.scale-modal-body,
+.drain-modal-body,
+.new-ns-modal-body,
+.import-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.scale-stepper-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.stepper-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-stepper {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.btn-stepper:hover:not(:disabled) {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: #06b6d4;
+}
+
+.btn-stepper:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.scale-num-input {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  width: 90px;
+}
+
+.scale-range-slider {
+  width: 100%;
+  accent-color: #06b6d4;
+}
+
+.delete-modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 10px 0;
+}
+
+.delete-warning-icon {
+  font-size: 2.2rem;
+  color: #f43f5e;
+}
+
+.delete-msg {
+  font-size: 0.95rem;
+  color: #f1f5f9;
+  margin: 0;
+}
+
+.form-error-banner {
+  padding: 8px 12px;
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  border-radius: 6px;
+  color: #fb7185;
+  font-size: 0.78rem;
+}
+
+.source-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.file-input {
+  padding: 6px;
+}
+
+.text-area-lg {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.logs-modal-body,
+.terminal-modal-body {
+  height: 600px;
+  max-height: 75vh;
+}

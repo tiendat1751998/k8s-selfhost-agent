@@ -379,36 +379,35 @@ function formatBytes(bytes: number): string {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .summary-hud-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 10px;
+  }
+  .hud-card:nth-child(5) {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 640px) {
-  .label-full {
+  .summary-hud-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .hud-card:nth-child(5) {
+    grid-column: span 2;
+  }
+  .label-full, .footer-full {
     display: none;
   }
-
-  .label-mobile {
+  .label-mobile, .footer-mobile {
     display: inline;
   }
-
-  .footer-full {
-    display: none;
-  }
-
-  .footer-mobile {
-    display: inline;
-  }
-
   .hud-card:nth-child(3) .badge,
   .hud-card:nth-child(4) .badge,
   .hud-card:nth-child(5) .badge {
     display: none;
   }
-
   .hud-label {
     font-size: 9.5px;
     letter-spacing: 0.02em;
@@ -418,20 +417,16 @@ function formatBytes(bytes: number): string {
     font-size: 17px;
     font-weight: 700;
   }
-
   .hud-total {
     font-size: 11px;
   }
-
   .badge {
     font-size: 8.5px;
     padding: 1px 5px;
   }
-
   .hud-progress-track {
     height: 3px;
   }
-
   .hud-card-footer-text {
     font-size: 9.5px;
   }

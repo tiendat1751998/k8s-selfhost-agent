@@ -18,6 +18,7 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // ProcessMetric holds resource consumption details for a single OS process.
@@ -672,22 +673,31 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		LastSeen:          collectedAt,
 	}
 
+	c.recordAgentSuccess(ctx, host, am, now)
+}
+
+func (c *Collector) recordAgentSuccess(ctx context.Context, host docker.ComputeHost, am *AgentMetrics, now time.Time) {
 	c.agentMu.Lock()
 	c.agentMetrics[host.ID] = am
 	c.agentMu.Unlock()
 
+	repoCtx := ctx
+	if tenancy.TenantIDFromContext(repoCtx) == "" {
+		repoCtx = tenancy.WithTenantID(repoCtx, "default-tenant")
+	}
+
 	if c.computeHostRepo != nil {
-		_ = c.computeHostRepo.UpdateStatus(ctx, host.ID, "connected", now)
+		_ = c.computeHostRepo.UpdateStatus(repoCtx, host.ID, "connected", now)
 	}
 
 	if c.incRepo != nil {
-		activeInc, getErr := c.incRepo.GetByPodAndType(ctx, "infrastructure", host.Name, incident.TypeNodeNotReady)
+		activeInc, getErr := c.incRepo.GetByPodAndType(repoCtx, "infrastructure", host.Name, incident.TypeNodeNotReady)
 		if getErr != nil {
 			c.logger.Warn("Failed to query active incident on agent recovery", zap.String("host", host.Name), zap.Error(getErr))
 		} else if activeInc != nil {
 			if activeInc.Status == incident.StatusDetected || activeInc.Status == incident.StatusAnalyzing || activeInc.Status == incident.StatusRemediating {
 				if resErr := activeInc.MarkResolved(); resErr == nil {
-					if updateErr := c.incRepo.Update(ctx, activeInc); updateErr == nil {
+					if updateErr := c.incRepo.Update(repoCtx, activeInc); updateErr == nil {
 						if c.broadcaster != nil {
 							c.broadcaster.Broadcast("incident_resolved", activeInc)
 						}
@@ -741,19 +751,24 @@ func (c *Collector) recordAgentFailure(ctx context.Context, host docker.ComputeH
 	}
 	c.agentMu.Unlock()
 
+	repoCtx := ctx
+	if tenancy.TenantIDFromContext(repoCtx) == "" {
+		repoCtx = tenancy.WithTenantID(repoCtx, "default-tenant")
+	}
+
 	if c.computeHostRepo != nil {
-		_ = c.computeHostRepo.UpdateStatus(ctx, host.ID, "disconnected", now)
+		_ = c.computeHostRepo.UpdateStatus(repoCtx, host.ID, "disconnected", now)
 	}
 
 	if c.incRepo != nil {
-		activeInc, getErr := c.incRepo.GetByPodAndType(ctx, "infrastructure", host.Name, incident.TypeNodeNotReady)
+		activeInc, getErr := c.incRepo.GetByPodAndType(repoCtx, "infrastructure", host.Name, incident.TypeNodeNotReady)
 		if getErr != nil {
 			c.logger.Warn("Failed to query existing incident on agent failure", zap.String("host", host.Name), zap.Error(getErr))
 		}
 		if activeInc == nil || activeInc.Status == incident.StatusResolved || activeInc.Status == incident.StatusFailed {
 			newInc, newErr := incident.New("fleet-primary", "infrastructure", host.Name, incident.TypeNodeNotReady, incident.SeverityCritical, fmt.Sprintf("Infrastructure host '%s' is unreachable: agent at %s is down (%v)", host.Name, host.Endpoint, err))
 			if newErr == nil {
-				if saveErr := c.incRepo.Create(ctx, newInc); saveErr == nil {
+				if saveErr := c.incRepo.Create(repoCtx, newInc); saveErr == nil {
 					if c.broadcaster != nil {
 						c.broadcaster.Broadcast("incident", newInc)
 					}

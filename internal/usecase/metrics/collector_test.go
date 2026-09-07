@@ -1349,6 +1349,134 @@ func TestCollector_ScrapeAgent_Recovery_ResolvesIncidentAndBroadcasts(t *testing
 	}
 }
 
+func TestCollector_ScrapeAgent_Failure_DoesNotDuplicateOnFailedStatus(t *testing.T) {
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-failed-remediation",
+				Name:     "worker-srv-03",
+				HostType: "agent",
+				Endpoint: "http://127.0.0.1:59997",
+			},
+		},
+	}
+
+	incRepo := newMockIncidentRepo()
+	activeInc, _ := incident.New("fleet-primary", "infrastructure", "worker-srv-03", incident.TypeNodeNotReady, incident.SeverityCritical, "host down")
+	activeInc.ID = "inc-failed-03"
+	_ = activeInc.MarkFailed()
+	_ = incRepo.Create(context.Background(), activeInc)
+
+	broadcaster := &mockBroadcaster{}
+
+	collector := NewCollector(
+		nil,
+		hostRepo,
+		broadcaster,
+		zap.NewNop(),
+		WithIncidentRepo(incRepo),
+	)
+
+	// Scrape failing agent — must NOT duplicate incident even if existing status is StatusFailed
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[0])
+
+	incRepo.mu.Lock()
+	createdCount := len(incRepo.created)
+	incRepo.mu.Unlock()
+
+	if createdCount != 1 {
+		t.Fatalf("expected exactly 1 incident (pre-existing, no duplicates), got %d", createdCount)
+	}
+}
+
+func TestCollector_ScrapeAgent_Recovery_ResolvesFailedIncident(t *testing.T) {
+	agentResp := map[string]interface{}{
+		"hostname":       "worker-srv-04",
+		"os":             "linux",
+		"arch":           "amd64",
+		"uptime_seconds": 3600,
+		"load_average":   []float64{0.1, 0.1, 0.1},
+		"cpu": map[string]interface{}{
+			"count":         4,
+			"usage_percent": 10.0,
+		},
+		"memory": map[string]interface{}{
+			"total_bytes":     int64(8589934592),
+			"used_bytes":      int64(2147483648),
+			"available_bytes": int64(6442450944),
+			"usage_percent":   25.0,
+		},
+		"disks": []map[string]interface{}{
+			{
+				"mount_point":   "/",
+				"total_bytes":   int64(53687091200),
+				"used_bytes":    int64(10737418240),
+				"usage_percent": 20.0,
+				"filesystem":    "ext4",
+			},
+		},
+		"network": map[string]interface{}{
+			"total_rx_bytes_per_sec": 100,
+			"total_tx_bytes_per_sec": 200,
+		},
+		"processes":    20,
+		"collected_at": "2026-08-19T16:00:00Z",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(agentResp)
+	}))
+	defer srv.Close()
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-recovering-failed",
+				Name:     "worker-srv-04",
+				HostType: "agent",
+				Endpoint: srv.URL,
+			},
+		},
+	}
+
+	incRepo := newMockIncidentRepo()
+	activeInc, _ := incident.New("fleet-primary", "infrastructure", "worker-srv-04", incident.TypeNodeNotReady, incident.SeverityCritical, "host down")
+	activeInc.ID = "inc-failed-04"
+	_ = activeInc.MarkFailed()
+	_ = incRepo.Create(context.Background(), activeInc)
+
+	broadcaster := &mockBroadcaster{}
+
+	collector := NewCollector(
+		nil,
+		hostRepo,
+		broadcaster,
+		zap.NewNop(),
+		WithHTTPClient(srv.Client()),
+		WithIncidentRepo(incRepo),
+	)
+
+	// Scrape recovering agent — should resolve incident even if status was StatusFailed
+	collector.ScrapeAgent(context.Background(), hostRepo.hosts[0])
+
+	incRepo.mu.Lock()
+	updatedCount := len(incRepo.updated)
+	incRepo.mu.Unlock()
+
+	if updatedCount != 1 {
+		t.Fatalf("expected 1 incident update (resolved), got %d", updatedCount)
+	}
+
+	incRepo.mu.Lock()
+	resolvedInc := incRepo.updated[0]
+	incRepo.mu.Unlock()
+
+	if resolvedInc.Status != incident.StatusResolved {
+		t.Errorf("expected incident status %s, got %s", incident.StatusResolved, resolvedInc.Status)
+	}
+}
+
 func TestCollector_TopProcesses_ScrapeAndTransfer(t *testing.T) {
 	agentResp := map[string]interface{}{
 		"hostname":       "worker-node-highcpu",

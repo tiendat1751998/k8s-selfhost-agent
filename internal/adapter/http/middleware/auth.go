@@ -266,9 +266,16 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// Fallback to query parameter "token" ONLY for WebSocket paths (/ws, /ws/..., /api/v1/logs/stream)
-		if token == "" && (r.URL.Path == "/ws" || strings.HasPrefix(r.URL.Path, "/ws/") || r.URL.Path == "/api/v1/logs/stream" || strings.HasPrefix(r.URL.Path, "/api/v1/logs/stream")) {
-			token = r.URL.Query().Get("token")
+		// Fallback to query parameter "token" ONLY for WebSocket upgrade connections or specific stream paths
+		if token == "" {
+			isWSUpgrade := strings.ToLower(r.Header.Get("Upgrade")) == "websocket" ||
+				strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
+			isStreamPath := r.URL.Path == "/ws" || strings.HasPrefix(r.URL.Path, "/ws/") ||
+				r.URL.Path == "/api/v1/logs/stream" || strings.HasPrefix(r.URL.Path, "/api/v1/logs/stream")
+
+			if isWSUpgrade || isStreamPath {
+				token = r.URL.Query().Get("token")
+			}
 		}
 
 		if token == "" {

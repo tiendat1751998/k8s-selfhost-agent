@@ -44,6 +44,52 @@ export const auditApi = {
   },
 }
 
+export type AuditActionType = 'mutation' | 'access' | 'rbac_grant' | 'deletion' | 'configuration' | string
+export type AuditSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info' | string
+export type AuditResultStatus = 'success' | 'denied' | 'error' | 'pending' | string
+
+export interface AuditLogEntry {
+  id: string
+  timestamp: string
+  actor: string
+  action: string
+  action_type: AuditActionType
+  target_resource: string
+  target_type?: string
+  user_agent?: string
+  ip_address: string
+  status: AuditResultStatus
+  severity: AuditSeverity
+  details?: Record<string, unknown> | null
+  payload?: Record<string, unknown> | null
+}
+
+export const auditLogApi = {
+  async getLogs(): Promise<AuditLogEntry[]> {
+    try {
+      const findings = await auditApi.getFindings('all')
+      if (findings && findings.length > 0) {
+        return findings.map((f, idx) => ({
+          id: f.id || `audit-find-${idx}`,
+          timestamp: f.detected_at || new Date().toISOString(),
+          actor: 'security-scanner',
+          action: f.category || 'scan.finding',
+          action_type: (f.severity === 'critical' ? 'mutation' : 'access') as AuditActionType,
+          target_resource: f.description?.split(' ')[0] || 'k8s-cluster',
+          ip_address: '10.10.10.133',
+          status: (f.status === 'resolved' ? 'success' : 'denied') as AuditResultStatus,
+          severity: f.severity as AuditSeverity,
+          details: { remediation: f.remediation, resolved_at: f.resolved_at },
+          payload: { finding_id: f.id, description: f.description, remediation: f.remediation }
+        }))
+      }
+      return []
+    } catch {
+      return []
+    }
+  }
+}
+
 // ==========================================
 // 2. COMPLIANCE & GOVERNANCE
 // ==========================================

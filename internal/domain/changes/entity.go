@@ -1,4 +1,4 @@
-﻿// Package changes provides domain entities for change management.
+// Package changes provides domain entities for change management.
 package changes
 
 import (

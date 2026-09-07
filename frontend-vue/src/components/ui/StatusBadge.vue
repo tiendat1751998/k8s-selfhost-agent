@@ -8,13 +8,13 @@ defineProps<{
 function normalizeStatus(s: string) {
   if (!s) return 'unknown'
   const lower = s.toLowerCase()
-  if (['healthy', 'active', 'pass', 'success', 'resolved', 'deployed', 'completed', 'verified', 'running', 'armed'].includes(lower)) {
+  if (['healthy', 'active', 'connected', 'online', 'ready', 'live', 'ok', 'pass', 'success', 'resolved', 'deployed', 'completed', 'verified', 'running', 'armed'].includes(lower)) {
     return 'emerald'
   }
-  if (['warning', 'pending', 'standby', 'polling', 'inprogress', 'in_progress', 'promoting', 'open'].includes(lower)) {
+  if (['warning', 'pending', 'standby', 'polling', 'inprogress', 'in_progress', 'promoting', 'open', 'degraded'].includes(lower)) {
     return 'amber'
   }
-  if (['critical', 'danger', 'failed', 'error', 'degraded', 'rejected', 'blocked', 'mismatch', 'down'].includes(lower)) {
+  if (['critical', 'danger', 'failed', 'error', 'offline', 'disconnected', 'rejected', 'blocked', 'mismatch', 'down', 'unhealthy'].includes(lower)) {
     return 'rose'
   }
   if (['info', 'analyzing', 'remediating', 'generating', 'idle', 'draft'].includes(lower)) {

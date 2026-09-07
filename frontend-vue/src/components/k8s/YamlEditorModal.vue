@@ -304,11 +304,6 @@ async function handleApply() {
   font-family: var(--font-mono);
 }
 
-.btn-xs {
-  padding: 4px 8px;
-  font-size: 11px;
-}
-
 .btn-copied {
   background: rgba(16, 185, 129, 0.15);
   border-color: rgba(16, 185, 129, 0.3);

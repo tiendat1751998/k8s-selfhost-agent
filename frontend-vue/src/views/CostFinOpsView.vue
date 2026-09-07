@@ -132,6 +132,7 @@
         <span class="badge badge-cyan">{{ namespaces.length }} Namespaces</span>
       </div>
 
+      <div class="cost-ns-table-container">
       <DataTable
         :columns="namespaceColumns"
         :data="namespaces"
@@ -173,6 +174,7 @@
           </div>
         </template>
       </DataTable>
+      </div>
     </div>
 
     <!-- Section 2: Resource Waste & Idle Allocation Alerts Table -->
@@ -185,6 +187,7 @@
         <span class="badge badge-rose">{{ wasteAlerts.length }} Waste Findings</span>
       </div>
 
+      <div class="cost-desktop-table">
       <DataTable
         :columns="wasteColumns"
         :data="wasteAlerts"
@@ -225,6 +228,15 @@
           </button>
         </template>
       </DataTable>
+      </div>
+
+      <div class="cost-mobile-cards">
+        <CostMobileCards
+          :waste-alerts="wasteAlerts"
+          :loading="loading"
+          @right-size="handleDismissWaste"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -240,6 +252,7 @@ import {
 import DataTable, { type Column } from '../components/ui/DataTable.vue'
 import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
+import CostMobileCards from '../components/cost/CostMobileCards.vue'
 
 const clusters = ref<ClusterCost[]>([])
 const namespaces = ref<NamespaceCost[]>([])
@@ -709,6 +722,24 @@ function handleDismissWaste(id: string) {
   }
   .cost-components-grid {
     grid-template-columns: 1fr;
+  }
+}
+.cost-ns-table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cost-mobile-cards {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .cost-desktop-table {
+    display: none !important;
+  }
+  .cost-mobile-cards {
+    display: block !important;
   }
 }
 </style>

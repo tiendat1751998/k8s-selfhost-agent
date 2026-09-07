@@ -1,193 +1,55 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import {
-  tenancyApi,
-  type Organization,
-  type Project,
-  type Member,
-  type RBACMatrix
-} from '../api/management'
-import StatusBadge from '../components/ui/StatusBadge.vue'
+import { useTenancyRbac } from '../composables/useTenancyRbac'
 import MetricCard from '../components/ui/MetricCard.vue'
-import DataTable, { type Column } from '../components/ui/DataTable.vue'
+import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
+import TenantListTable from '../components/tenancy/TenantListTable.vue'
+import TenancyMobileCards from '../components/tenancy/TenancyMobileCards.vue'
+import RolePermissionMatrixModal from '../components/tenancy/RolePermissionMatrixModal.vue'
+import TenantMemberDrawer from '../components/tenancy/TenantMemberDrawer.vue'
+import CreateTenantModal from '../components/tenancy/CreateTenantModal.vue'
+import '../assets/styles/views/tenancy.css'
 
-// State
-const loading = ref(false)
-const error = ref<string | null>(null)
-const organizations = ref<Organization[]>([])
-const projects = ref<Project[]>([])
-const members = ref<Member[]>([])
-const rbacMatrix = ref<RBACMatrix>({})
-
-const selectedOrgId = ref<string>('all')
-const activeTab = ref<'members' | 'rbac' | 'projects'>('members')
-
-// Modals
-const showOrgModal = ref(false)
-const showProjectModal = ref(false)
-const showMemberModal = ref(false)
-
-const newOrg = ref({ id: '', name: '', tier: 'Enterprise' })
-const newProj = ref({ id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 5 })
-const newMember = ref({ id: '', orgId: '', user: '', role: 'developer', scope: 'project-wide' })
-const isSubmitting = ref(false)
-const feedbackMessage = ref<string | null>(null)
-
-async function loadData() {
-  loading.value = true
-  error.value = null
-  try {
-    const summary = await tenancyApi.getSummary()
-    organizations.value = summary?.organizations || []
-    projects.value = summary?.projects || []
-    members.value = summary?.members || []
-    rbacMatrix.value = summary?.rbacMatrix || {}
-  } catch (err: unknown) {
-    organizations.value = []
-    projects.value = []
-    members.value = []
-    rbacMatrix.value = {}
-    error.value = err instanceof Error ? err.message : 'Failed to load tenancy and RBAC data'
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(() => {
-  loadData()
-})
-
-const filteredProjects = computed(() => {
-  if (selectedOrgId.value === 'all') return projects.value
-  return projects.value.filter(p => p.orgId === selectedOrgId.value)
-})
-
-const filteredMembers = computed(() => {
-  if (selectedOrgId.value === 'all') return members.value
-  return members.value.filter(m => m.orgId === selectedOrgId.value)
-})
-
-const totalWorkloads = computed(() => {
-  return filteredProjects.value.reduce((acc, p) => acc + (p.workloads || 0), 0)
-})
-
-const memberColumns: Column<Member>[] = [
-  { key: 'user', label: 'User / Identity', sortable: true },
-  { key: 'role', label: 'Assigned Role', sortable: true },
-  { key: 'scope', label: 'Resource Scope', sortable: true },
-  { key: 'orgId', label: 'Organization ID', sortable: true },
-  { key: 'actions', label: 'Management', align: 'right' }
-]
-
-const rbacResources = [
-  { key: 'pods:read', label: 'Pods / Logs (Read)' },
-  { key: 'pods:write', label: 'Exec / Port-Forward' },
-  { key: 'deployments:scale', label: 'Scale Deployments' },
-  { key: 'secrets:manage', label: 'Manage Vault Secrets' },
-  { key: 'backups:execute', label: 'Disaster Recovery Ops' },
-  { key: 'nodes:drain', label: 'Cordon & Drain Nodes' },
-  { key: 'ai:configure', label: 'AI LLM Hub Config' },
-  { key: 'changes:approve', label: 'Change Request Approval' },
-  { key: 'audit:view', label: 'CVE & Security Audit' }
-]
-
-const rbacRoles = computed(() => {
-  const keys = Object.keys(rbacMatrix.value || {})
-  const validRoles = keys.filter(k =>
-    !k.includes(':') && !k.toLowerCase().includes('read') && !k.toLowerCase().includes('write') &&
-    !k.toLowerCase().includes('scale') && !k.toLowerCase().includes('deploy') && !k.toLowerCase().includes('analyze')
-  )
-  return validRoles.length > 0 ? validRoles : ['Platform Admin', 'DevOps Team', 'Developer', 'Viewer', 'Security Auditor']
-})
-
-function toggleRbacPermission(role: string, resourceKey: string) {
-  if (!rbacMatrix.value[role]) {
-    rbacMatrix.value[role] = {}
-  }
-  rbacMatrix.value[role][resourceKey] = !rbacMatrix.value[role][resourceKey]
-  showFeedback(`Updated permission [${resourceKey}] for role [${role}]`)
-}
-
-function showFeedback(msg: string) {
-  feedbackMessage.value = msg
-  setTimeout(() => {
-    if (feedbackMessage.value === msg) {
-      feedbackMessage.value = null
-    }
-  }, 4000)
-}
-
-async function handleCreateOrg() {
-  if (!newOrg.value.id || !newOrg.value.name) return
-  isSubmitting.value = true
-  const orgPayload: Organization = {
-    id: newOrg.value.id.toLowerCase().replace(/\s+/g, '-'),
-    name: newOrg.value.name,
-    tier: newOrg.value.tier
-  }
-  try {
-    const created = await tenancyApi.createOrganization(orgPayload)
-    organizations.value.push(created || orgPayload)
-    showOrgModal.value = false
-    showFeedback(`Organization ${newOrg.value.name} successfully provisioned.`)
-    newOrg.value = { id: '', name: '', tier: 'Enterprise' }
-  } catch (e: unknown) {
-    showFeedback(`Failed to provision organization: ${e instanceof Error ? e.message : 'Unknown error'}`)
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-async function handleCreateProject() {
-  if (!newProj.value.id || !newProj.value.name) return
-  isSubmitting.value = true
-  const envArray = newProj.value.envs.split(',').map(e => e.trim()).filter(Boolean)
-  const proj: Project = {
-    id: newProj.value.id.toLowerCase().replace(/\s+/g, '-'),
-    orgId: newProj.value.orgId || (organizations.value[0]?.id ?? 'org-default'),
-    name: newProj.value.name,
-    envs: envArray,
-    workloads: Number(newProj.value.workloads) || 0
-  }
-  try {
-    const created = await tenancyApi.createProject(proj)
-    projects.value.push(created || proj)
-    showProjectModal.value = false
-    showFeedback(`Project ${proj.name} successfully created.`)
-    newProj.value = { id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 5 }
-  } catch (e: unknown) {
-    showFeedback(`Failed to create project: ${e instanceof Error ? e.message : 'Unknown error'}`)
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-function handleInviteMember() {
-  if (!newMember.value.user) return
-  const mem: Member = {
-    id: `mem-${Date.now()}`,
-    orgId: newMember.value.orgId || (organizations.value[0]?.id ?? 'org-default'),
-    user: newMember.value.user,
-    role: newMember.value.role,
-    scope: newMember.value.scope
-  }
-  members.value.push(mem)
-  showMemberModal.value = false
-  showFeedback(`Invitation dispatched for ${mem.user} with [${mem.role}] role.`)
-  newMember.value = { id: '', orgId: '', user: '', role: 'developer', scope: 'project-wide' }
-}
-
-function removeMember(id: string) {
-  members.value = members.value.filter(m => m.id !== id)
-  showFeedback('Member revoked successfully.')
-}
+const {
+  loading,
+  organizations,
+  members,
+  rbacMatrix,
+  selectedOrgId,
+  activeTab,
+  showOrgModal,
+  showProjectModal,
+  showMemberDrawer,
+  showRbacMatrixModal,
+  selectedOrgForDrawer,
+  selectedRoleForMatrix,
+  newProj,
+  isSubmitting,
+  feedbackMessage,
+  filteredProjects,
+  filteredMembers,
+  totalWorkloads,
+  organizationStats,
+  rbacResources,
+  rbacRoles,
+  showFeedback,
+  toggleRbacPermission,
+  syncRbacToApi,
+  handleCreateOrg,
+  handleDeleteOrg,
+  handleCreateProject,
+  handleInviteMember,
+  removeMember,
+  openMemberDrawer,
+  openRbacModal,
+  openQuotaModal
+} = useTenancyRbac()
 </script>
 
 <template>
   <div class="tenancy-page">
     <!-- Header -->
-    <div class="page-header">
+    <div class="page-header desktop-header desktop-only">
       <div class="header-titles">
         <div class="header-badge">
           <span class="badge badge-cyan">Multi-Tenant Isolation</span>
@@ -200,13 +62,45 @@ function removeMember(id: string) {
       </div>
 
       <div class="header-actions">
-        <button class="btn btn-secondary" @click="showOrgModal = true">
-          <span>+ New Organization</span>
+        <button class="btn btn-secondary" @click="showOrgModal = true"><span>+ New Organization</span></button>
+        <button class="btn btn-primary" @click="showProjectModal = true"><span>+ Create Project</span></button>
+      </div>
+    </div>
+
+    <!-- Mobile 40px Command Bar (<640px) -->
+    <div class="tenancy-mobile-command-bar mobile-only">
+      <div class="command-bar-left">
+        <span class="command-bar-title font-bold">🏢 Tenancy ({{ organizations.length }})</span>
+      </div>
+      <div class="command-bar-actions">
+        <button
+          class="btn-icon-cmd"
+          title="Create Project"
+          aria-label="Create Project"
+          @click="showProjectModal = true"
+        >
+          <span>➕</span>
         </button>
-        <button class="btn btn-primary" @click="showProjectModal = true">
-          <span>+ Create Project</span>
+        <button
+          class="btn-icon-cmd"
+          title="New Organization"
+          aria-label="New Organization"
+          @click="showOrgModal = true"
+        >
+          <span>🏢</span>
         </button>
       </div>
+    </div>
+
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <div class="tenancy-micro-telemetry mobile-only font-mono" role="status" aria-label="Tenancy Micro Telemetry">
+      <span class="tel-item tel-orgs">🏢 {{ organizations.length }} orgs</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-projs">📁 {{ filteredProjects.length }} projs</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-wkls">📦 {{ totalWorkloads }} wkls</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-mbrs">👥 {{ filteredMembers.length }} mbrs</span>
     </div>
 
     <!-- Alert Banner -->
@@ -216,31 +110,11 @@ function removeMember(id: string) {
     </div>
 
     <!-- Key Metrics Grid -->
-    <div class="metrics-grid">
-      <MetricCard 
-        title="Organizations" 
-        :value="organizations.length" 
-        trend="Multi-Org Isolated" 
-        trendDirection="neutral" 
-      />
-      <MetricCard 
-        title="Active Projects" 
-        :value="filteredProjects.length" 
-        trend="+2 namespaces this week" 
-        trendDirection="up" 
-      />
-      <MetricCard 
-        title="Live Workloads" 
-        :value="totalWorkloads" 
-        trend="Replicas across pods" 
-        trendDirection="up" 
-      />
-      <MetricCard 
-        title="Active Members" 
-        :value="filteredMembers.length" 
-        trend="Mapped to RBAC Roles" 
-        trendDirection="neutral" 
-      />
+    <div class="metrics-grid desktop-metrics desktop-only">
+      <MetricCard title="Organizations" :value="organizations.length" trend="Multi-Org Isolated" trendType="neutral" />
+      <MetricCard title="Active Projects" :value="filteredProjects.length" trend="+2 namespaces this week" trendType="positive" />
+      <MetricCard title="Live Workloads" :value="totalWorkloads" trend="Replicas across pods" trendType="positive" />
+      <MetricCard title="Active Members" :value="filteredMembers.length" trend="Mapped to RBAC Roles" trendType="neutral" />
     </div>
 
     <!-- Filter & Scope Bar -->
@@ -256,78 +130,92 @@ function removeMember(id: string) {
       </div>
 
       <div class="tab-pills">
-        <button 
-          class="tab-btn" 
-          :class="{ active: activeTab === 'members' }" 
-          @click="activeTab = 'members'"
-        >
-          <span>👥 Members & Roles</span>
-          <span class="tab-count">{{ filteredMembers.length }}</span>
+        <button class="tab-btn" :class="{ active: activeTab === 'tenants' }" @click="activeTab = 'tenants'">
+          <span>🏢 Organizations</span> <span class="tab-count">{{ organizations.length }}</span>
         </button>
-        <button 
-          class="tab-btn" 
-          :class="{ active: activeTab === 'projects' }" 
-          @click="activeTab = 'projects'"
-        >
-          <span>📁 Project Namespaces</span>
-          <span class="tab-count">{{ filteredProjects.length }}</span>
+        <button class="tab-btn" :class="{ active: activeTab === 'members' }" @click="activeTab = 'members'">
+          <span>👥 Members & Roles</span> <span class="tab-count">{{ filteredMembers.length }}</span>
         </button>
-        <button 
-          class="tab-btn" 
-          :class="{ active: activeTab === 'rbac' }" 
-          @click="activeTab = 'rbac'"
-        >
+        <button class="tab-btn" :class="{ active: activeTab === 'projects' }" @click="activeTab = 'projects'">
+          <span>📁 Project Namespaces</span> <span class="tab-count">{{ filteredProjects.length }}</span>
+        </button>
+        <button class="tab-btn" :class="{ active: activeTab === 'rbac' }" @click="activeTab = 'rbac'">
           <span>🛡️ Granular RBAC Matrix</span>
         </button>
       </div>
     </div>
 
-    <!-- TAB 1: MEMBERS -->
-    <div v-if="activeTab === 'members'" class="tab-content animate-fade-in">
-      <DataTable
-        :columns="memberColumns"
-        :data="filteredMembers"
-        :loading="loading"
-        searchable
-        searchPlaceholder="Filter members by user, role, or scope..."
-      >
-        <template #toolbar>
-          <button class="btn btn-primary btn-sm" @click="showMemberModal = true">
-            <span>+ Invite Member</span>
-          </button>
-        </template>
-
-        <template #cell-user="{ value }">
-          <div class="user-cell">
-            <div class="user-avatar">{{ String(value).charAt(0).toUpperCase() }}</div>
-            <div class="user-details">
-              <span class="user-name">{{ value }}</span>
-              <small class="user-verified">Verified Enterprise SSO</small>
-            </div>
-          </div>
-        </template>
-
-        <template #cell-role="{ value }">
-          <StatusBadge :status="value === 'admin' ? 'danger' : value === 'operator' ? 'warning' : value === 'auditor' ? 'violet' : 'active'" :label="String(value).toUpperCase()" />
-        </template>
-
-        <template #cell-scope="{ value }">
-          <span class="scope-tag font-mono">{{ value }}</span>
-        </template>
-
-        <template #cell-orgId="{ value }">
-          <span class="text-muted font-mono">{{ value }}</span>
-        </template>
-
-        <template #cell-actions="{ row }">
-          <button class="btn btn-secondary btn-sm" title="Revoke Member" @click="removeMember(row.id)">
-            <span>Revoke</span>
-          </button>
-        </template>
-      </DataTable>
+    <!-- TAB 1: TENANTS LIST -->
+    <div v-if="activeTab === 'tenants'" class="tab-content animate-fade-in">
+      <div class="desktop-only-table">
+        <TenantListTable
+          :organizations="organizations"
+          :stats="organizationStats"
+          :loading="loading"
+          @open-members="openMemberDrawer($event)"
+          @open-rbac="openRbacModal($event)"
+          @open-quota="openQuotaModal($event)"
+          @delete-org="handleDeleteOrg($event)"
+          @create-org="showOrgModal = true"
+        />
+      </div>
+      <div class="mobile-only-stream">
+        <TenancyMobileCards
+          :organizations="organizations"
+          :stats="organizationStats"
+          @open-members="openMemberDrawer($event)"
+          @open-rbac="openRbacModal($event)"
+          @open-quota="openQuotaModal($event)"
+          @delete-org="handleDeleteOrg($event)"
+        />
+      </div>
     </div>
 
-    <!-- TAB 2: PROJECTS WORKLOAD GRID -->
+    <!-- TAB 2: MEMBERS -->
+    <div v-else-if="activeTab === 'members'" class="tab-content animate-fade-in">
+      <div class="tenant-table-wrapper glass-panel">
+        <div class="table-toolbar">
+          <span class="tenant-count-badge">{{ filteredMembers.length }} Bound Members</span>
+          <button class="btn btn-primary btn-sm" @click="openMemberDrawer()"><span>+ Invite Member</span></button>
+        </div>
+        <div class="table-scroll">
+          <table class="tenant-table">
+            <thead>
+              <tr>
+                <th class="th-left">User / Identity</th>
+                <th>Assigned Role</th>
+                <th>Resource Scope</th>
+                <th>Organization ID</th>
+                <th class="th-right">Management</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in filteredMembers" :key="m.id" class="tenant-row">
+                <td class="td-left">
+                  <div class="user-cell">
+                    <div class="user-avatar">{{ m.user.charAt(0).toUpperCase() }}</div>
+                    <div class="user-details">
+                      <span class="user-name">{{ m.user }}</span>
+                      <small class="user-verified">Verified Enterprise SSO</small>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <StatusBadge :status="m.role === 'admin' ? 'danger' : m.role === 'operator' ? 'warning' : m.role === 'auditor' ? 'violet' : 'active'" :label="m.role.toUpperCase()" />
+                </td>
+                <td><span class="scope-tag font-mono">{{ m.scope }}</span></td>
+                <td><span class="text-muted font-mono">{{ m.orgId }}</span></td>
+                <td class="td-right">
+                  <button class="btn btn-secondary btn-sm" title="Revoke Member" @click="removeMember(m.id)"><span>Revoke</span></button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: PROJECTS WORKLOAD GRID -->
     <div v-else-if="activeTab === 'projects'" class="tab-content animate-fade-in">
       <div v-if="filteredProjects.length === 0" class="empty-list glass-panel">
         No project namespaces configured. Click "+ Create Project" above to allocate namespaces.
@@ -344,39 +232,29 @@ function removeMember(id: string) {
             </div>
             <StatusBadge status="healthy" label="ACTIVE" size="sm" />
           </div>
-
           <div class="project-body">
             <div class="project-stat-row">
-              <span class="stat-label">Attached Org:</span>
-              <span class="stat-value font-mono">{{ proj.orgId }}</span>
+              <span class="stat-label">Attached Org:</span> <span class="stat-value font-mono">{{ proj.orgId }}</span>
             </div>
             <div class="project-stat-row">
-              <span class="stat-label">Live Workload Pods:</span>
-              <span class="stat-value font-mono text-cyan">{{ proj.workloads }} pods</span>
+              <span class="stat-label">Live Workload Pods:</span> <span class="stat-value font-mono text-cyan">{{ proj.workloads }} pods</span>
             </div>
             <div class="project-envs">
               <span class="env-label">Environments:</span>
               <div class="env-badges">
-                <span v-for="env in proj.envs" :key="env" class="env-chip" :class="`env-${env}`">
-                  {{ env }}
-                </span>
+                <span v-for="env in proj.envs" :key="env" class="env-chip" :class="'env-' + env">{{ env }}</span>
               </div>
             </div>
           </div>
-
           <div class="project-footer">
-            <button class="btn btn-secondary btn-sm" @click="showFeedback(`Exporting namespace config for ${proj.name}`)">
-              <span>Inspect CRDs</span>
-            </button>
-            <button class="btn btn-primary btn-sm" @click="showFeedback(`Connecting to ${proj.name} telemetry stream...`)">
-              <span>View Pods</span>
-            </button>
+            <button class="btn btn-secondary btn-sm" @click="showFeedback('Exporting namespace config for ' + proj.name)">Inspect CRDs</button>
+            <button class="btn btn-primary btn-sm" @click="showFeedback('Connecting to ' + proj.name + ' telemetry stream...')">View Pods</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- TAB 3: RBAC MATRIX -->
+    <!-- TAB 4: RBAC MATRIX -->
     <div v-else-if="activeTab === 'rbac'" class="tab-content animate-fade-in">
       <div class="rbac-container glass-panel">
         <div class="rbac-header">
@@ -384,15 +262,9 @@ function removeMember(id: string) {
             <h3 class="rbac-title">Kubernetes RBAC Privilege Matrix</h3>
             <p class="rbac-sub">Click individual cells to toggle runtime access policies across the cluster mesh.</p>
           </div>
-          <button class="btn btn-secondary btn-sm" @click="showFeedback('RBAC policy synced to cluster API server.')">
-            <span>💾 Sync to APIServer</span>
-          </button>
+          <button class="btn btn-secondary btn-sm" @click="syncRbacToApi"><span>💾 Sync to APIServer</span></button>
         </div>
-
-        <div v-if="rbacRoles.length === 0" class="empty-list">
-          No RBAC roles configured
-        </div>
-        <div v-else class="rbac-table-wrap">
+        <div class="rbac-table-wrap">
           <table class="rbac-table">
             <thead>
               <tr>
@@ -408,18 +280,9 @@ function removeMember(id: string) {
                   <div class="resource-name">{{ res.label }}</div>
                   <small class="resource-key font-mono">{{ res.key }}</small>
                 </td>
-                <td 
-                  v-for="role in rbacRoles" 
-                  :key="role" 
-                  class="td-perm"
-                  @click="toggleRbacPermission(role, res.key)"
-                >
-                  <div 
-                    class="perm-badge" 
-                    :class="rbacMatrix[role]?.[res.key] ? 'perm-allowed' : 'perm-denied'"
-                  >
-                    <span v-if="rbacMatrix[role]?.[res.key]">✓ ALLOWED</span>
-                    <span v-else>✕ DENIED</span>
+                <td v-for="role in rbacRoles" :key="role" class="td-perm" @click="toggleRbacPermission(role, res.key)">
+                  <div class="perm-badge" :class="rbacMatrix[role]?.[res.key] ? 'perm-allowed' : 'perm-denied'">
+                    <span>{{ rbacMatrix[role]?.[res.key] ? '✓ ALLOWED' : '✕ DENIED' }}</span>
                   </div>
                 </td>
               </tr>
@@ -429,740 +292,53 @@ function removeMember(id: string) {
       </div>
     </div>
 
-    <!-- MODAL: NEW ORGANIZATION -->
-    <ModalDrawer
-      v-model:show="showOrgModal"
-      title="Provision Organization Boundary"
-      subtitle="Create a new isolated multi-tenant organization container."
-    >
-      <form @submit.prevent="handleCreateOrg" class="form-layout">
-        <div class="form-group">
-          <label>Organization Identifier (Slug)</label>
-          <input 
-            v-model="newOrg.id" 
-            type="text" 
-            placeholder="e.g. org-fintech-apac" 
-            class="input-glass" 
-            required 
-          />
-        </div>
-        <div class="form-group">
-          <label>Display Name</label>
-          <input 
-            v-model="newOrg.name" 
-            type="text" 
-            placeholder="e.g. APAC Fintech Operations" 
-            class="input-glass" 
-            required 
-          />
-        </div>
-        <div class="form-group">
-          <label>Service Tier</label>
-          <select v-model="newOrg.tier" class="input-glass">
-            <option value="Enterprise Tier-1">Enterprise Tier-1 (Dedicated Nodes)</option>
-            <option value="GovCloud High-Sec">GovCloud High-Sec (FIPS-140-3)</option>
-            <option value="High-Performance">High-Performance (GPU Accelerated)</option>
-            <option value="Standard">Standard Multi-Tenant</option>
-          </select>
-        </div>
-      </form>
+    <!-- MODALS & DRAWERS -->
+    <CreateTenantModal v-model:show="showOrgModal" :is-submitting="isSubmitting" @create="handleCreateOrg($event)" />
 
-      <template #footer="{ close }">
-        <button class="btn btn-secondary" type="button" @click="close">Cancel</button>
-        <button class="btn btn-primary" :disabled="isSubmitting" @click="handleCreateOrg">
-          {{ isSubmitting ? 'Provisioning...' : 'Confirm Organization' }}
-        </button>
-      </template>
-    </ModalDrawer>
-
-    <!-- MODAL: NEW PROJECT -->
-    <ModalDrawer
-      v-model:show="showProjectModal"
-      title="Create Project Namespace"
-      subtitle="Allocate cluster namespaces and resource quotas to an organization."
-    >
-      <form @submit.prevent="handleCreateProject" class="form-layout">
+    <ModalDrawer v-model:show="showProjectModal" title="Create Project Namespace" subtitle="Allocate cluster namespaces and resource quotas to an organization.">
+      <form class="form-layout" @submit.prevent="handleCreateProject()">
         <div class="form-group">
           <label>Parent Organization</label>
           <select v-model="newProj.orgId" class="input-glass">
-            <option v-for="org in organizations" :key="org.id" :value="org.id">
-              {{ org.name }} ({{ org.id }})
-            </option>
+            <option v-for="org in organizations" :key="org.id" :value="org.id">{{ org.name }} ({{ org.id }})</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Project Name</label>
-          <input 
-            v-model="newProj.name" 
-            type="text" 
-            placeholder="e.g. Payment Gateway Ingress" 
-            class="input-glass" 
-            required 
-          />
+          <label>Project Name</label> <input v-model="newProj.name" type="text" placeholder="e.g. Payment Gateway Ingress" class="input-glass" required />
         </div>
         <div class="form-group">
-          <label>Project Identifier</label>
-          <input 
-            v-model="newProj.id" 
-            type="text" 
-            placeholder="e.g. proj-payment-gw" 
-            class="input-glass" 
-            required 
-          />
+          <label>Project Identifier</label> <input v-model="newProj.id" type="text" placeholder="e.g. proj-payment-gw" class="input-glass font-mono" required />
         </div>
         <div class="form-group">
-          <label>Environments (comma separated)</label>
-          <input 
-            v-model="newProj.envs" 
-            type="text" 
-            placeholder="dev, staging, prod" 
-            class="input-glass" 
-          />
+          <label>Environments (comma separated)</label> <input v-model="newProj.envs" type="text" placeholder="dev, staging, prod" class="input-glass" />
         </div>
         <div class="form-group">
-          <label>Initial Workload Pod Capacity</label>
-          <input 
-            v-model="newProj.workloads" 
-            type="number" 
-            min="1" 
-            max="500" 
-            class="input-glass" 
-          />
+          <label>Initial Workload Pod Capacity</label> <input v-model="newProj.workloads" type="number" min="1" max="500" class="input-glass" />
         </div>
       </form>
-
       <template #footer="{ close }">
         <button class="btn btn-secondary" type="button" @click="close">Cancel</button>
-        <button class="btn btn-primary" :disabled="isSubmitting" @click="handleCreateProject">
-          {{ isSubmitting ? 'Creating...' : 'Create Project' }}
-        </button>
+        <button class="btn btn-primary" :disabled="isSubmitting" @click="handleCreateProject()">{{ isSubmitting ? 'Creating...' : 'Create Project' }}</button>
       </template>
     </ModalDrawer>
 
-    <!-- DRAWER: INVITE MEMBER -->
-    <ModalDrawer
-      v-model:show="showMemberModal"
-      mode="drawer"
-      title="Invite Team Member"
-      subtitle="Assign organization access permissions and RBAC role bindings."
-    >
-      <form @submit.prevent="handleInviteMember" class="form-layout">
-        <div class="form-group">
-          <label>Member Email / SSO Identity</label>
-          <input 
-            v-model="newMember.user" 
-            type="email" 
-            placeholder="e.g. engineer@enterprise.io" 
-            class="input-glass" 
-            required 
-          />
-        </div>
-        <div class="form-group">
-          <label>Target Organization</label>
-          <select v-model="newMember.orgId" class="input-glass">
-            <option v-for="org in organizations" :key="org.id" :value="org.id">
-              {{ org.name }}
-            </option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>RBAC Role Assignment</label>
-          <select v-model="newMember.role" class="input-glass">
-            <option value="admin">Admin (Full Control Plane & RBAC)</option>
-            <option value="operator">Operator (Deploy, Scale, Logs, Restart)</option>
-            <option value="developer">Developer (Pods, Port-forward, Dev Namespace)</option>
-            <option value="auditor">Auditor (Read-Only Compliance & CVEs)</option>
-            <option value="viewer">Viewer (Read-Only Telemetry)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Access Scope</label>
-          <select v-model="newMember.scope" class="input-glass">
-            <option value="org-wide">Organization-Wide (All Namespaces)</option>
-            <option value="project-wide">Project Namespace Specific</option>
-            <option value="sandbox-only">Developer Sandbox Only</option>
-          </select>
-        </div>
-      </form>
+    <TenantMemberDrawer
+      v-model:show="showMemberDrawer"
+      :organizations="organizations"
+      :members="members"
+      :selected-org-id="selectedOrgForDrawer"
+      @invite="handleInviteMember($event)"
+      @revoke="removeMember($event)"
+    />
 
-      <template #footer="{ close }">
-        <button class="btn btn-secondary" type="button" @click="close">Cancel</button>
-        <button class="btn btn-primary" @click="handleInviteMember">
-          <span>Send Invitation & Bind RBAC</span>
-        </button>
-      </template>
-    </ModalDrawer>
+    <RolePermissionMatrixModal
+      v-model:show="showRbacMatrixModal"
+      :matrix="rbacMatrix"
+      :roles="rbacRoles"
+      :resources="rbacResources"
+      :selected-role="selectedRoleForMatrix"
+      @toggle="toggleRbacPermission"
+      @sync="syncRbacToApi"
+    />
   </div>
 </template>
-
-<style scoped>
-.tenancy-page {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 20px;
-}
-
-.header-badge {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.page-title {
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: #fff;
-  margin-bottom: 6px;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: var(--text-secondary);
-  max-width: 800px;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.feedback-banner {
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #34d399;
-  padding: 12px 18px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-}
-
-/* Scope & Tab Bar */
-.scope-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.scope-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.scope-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.select-scope {
-  min-width: 320px;
-  font-weight: 600;
-}
-
-.tab-pills {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-}
-
-.tab-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.tab-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-}
-
-.tab-btn.active {
-  background: rgba(6, 182, 212, 0.15);
-  border-color: rgba(6, 182, 212, 0.4);
-  color: #38bdf8;
-}
-
-.tab-count {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 1px 6px;
-  border-radius: 9999px;
-  font-size: 10px;
-  font-family: var(--font-mono);
-}
-
-/* User Cell */
-.user-cell {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--grad-cyan);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.user-details {
-  display: flex;
-  flex-direction: column;
-}
-
-.user-name {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.user-verified {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.scope-tag {
-  background: rgba(255, 255, 255, 0.06);
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-/* Projects Grid */
-.projects-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 18px;
-}
-
-.project-card {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.project-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.project-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.project-icon {
-  font-size: 24px;
-}
-
-.project-name {
-  font-size: 15px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.project-id {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.project-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 0;
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.project-stat-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-}
-
-.project-envs {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.env-label {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.env-badges {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.env-chip {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-}
-
-.env-prod {
-  background: rgba(244, 63, 94, 0.15);
-  color: #fb7185;
-  border: 1px solid rgba(244, 63, 94, 0.3);
-}
-
-.env-stage, .env-staging {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.env-dev, .env-test {
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.3);
-}
-
-.project-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-/* RBAC Table */
-.rbac-container {
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.rbac-header {
-  padding: 18px 24px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: rgba(11, 15, 25, 0.5);
-}
-
-.rbac-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.rbac-sub {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.rbac-table-wrap {
-  overflow-x: auto;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-}
-
-.rbac-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.rbac-table th {
-  padding: 14px 18px;
-  background: rgba(15, 23, 42, 0.85);
-  border-bottom: 1px solid var(--border-medium);
-  font-size: 11px;
-  text-transform: uppercase;
-}
-
-.th-resource {
-  text-align: left;
-  min-width: 240px;
-}
-
-.th-role {
-  text-align: center;
-  min-width: 140px;
-}
-
-.role-header-badge {
-  background: rgba(6, 182, 212, 0.15);
-  border: 1px solid rgba(6, 182, 212, 0.3);
-  color: #38bdf8;
-  padding: 3px 10px;
-  border-radius: 6px;
-  font-weight: 700;
-}
-
-.rbac-row {
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.rbac-row:hover {
-  background: rgba(56, 189, 248, 0.03);
-}
-
-.td-resource {
-  padding: 14px 18px;
-}
-
-.resource-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.resource-key {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.td-perm {
-  padding: 14px 18px;
-  text-align: center;
-  cursor: pointer;
-  user-select: none;
-}
-
-.perm-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 12px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  transition: all 0.15s ease;
-}
-
-.perm-allowed {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.perm-allowed:hover {
-  background: rgba(16, 185, 129, 0.25);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
-}
-
-.perm-denied {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
-}
-
-.perm-denied:hover {
-  background: rgba(244, 63, 94, 0.15);
-  color: #fb7185;
-  border-color: rgba(244, 63, 94, 0.3);
-}
-
-/* Forms */
-.form-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-group label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.empty-list {
-  padding: 32px 20px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-@media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
-  }
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    width: 100% !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
-  }
-  .header-actions .btn,
-  .header-actions button,
-  .header-actions a {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    padding: 7px 10px !important;
-    font-size: 11.5px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
-  }
-  .metrics-grid,
-  .grid-metrics,
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-  :deep(.metric-card),
-  .metric-card,
-  .stat-card,
-  .hud-card {
-    padding: 10px 12px !important;
-  }
-  .scope-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .scope-left {
-    width: 100%;
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .select-scope {
-    min-width: 0;
-    width: 100%;
-  }
-  .projects-grid {
-    grid-template-columns: 1fr;
-  }
-  .rbac-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .rbac-header .btn {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-@media (max-width: 640px) {
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    width: 100% !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
-  }
-
-  .header-actions .btn,
-  .header-actions button,
-  .header-actions a {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    padding: 7px 10px !important;
-    font-size: 11.5px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
-  }
-
-  .metrics-grid,
-  .grid-metrics,
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-
-  :deep(.metric-card),
-  .metric-card,
-  .stat-card,
-  .hud-card {
-    padding: 10px 12px !important;
-  }
-
-  :deep(.metric-card .metric-value),
-  .metric-card .metric-value {
-    font-size: 18px;
-  }
-
-  :deep(.metric-card .metric-title),
-  .metric-card .metric-title {
-    font-size: 10px;
-  }
-
-  :deep(.metric-card .metric-footer),
-  .metric-card .metric-footer {
-    font-size: 10px;
-  }
-
-  .page-title {
-    font-size: 20px;
-  }
-  .project-card {
-    padding: 14px;
-  }
-  .project-footer {
-    flex-direction: column;
-    gap: 6px;
-  }
-  .project-footer .btn {
-    width: 100%;
-    justify-content: center;
-  }
-}
-</style>

@@ -3,11 +3,11 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import MetricCard from '../components/ui/MetricCard.vue'
 import DataTable, { type Column } from '../components/ui/DataTable.vue'
+import ExplorerMobileCards from '../components/explorer/ExplorerMobileCards.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import SecretViewer from '../components/k8s/SecretViewer.vue'
 import YamlEditorModal from '../components/k8s/YamlEditorModal.vue'
-import CreateResourceModal from '../components/k8s/CreateResourceModal.vue'
 import PodTerminal from '../components/k8s/PodTerminal.vue'
 import PodLogViewer from '../components/k8s/PodLogViewer.vue'
 import EventsTimeline from '../components/k8s/EventsTimeline.vue'
@@ -1715,8 +1715,9 @@ async function handleSaveNodeLabels(node: K8sResource) {
         />
       </div>
 
-      <!-- Data Table of Resources with Compact Single-Line Action Toolbar (28px height, 4px gap) -->
-      <div v-else class="section-box glass-panel table-box">
+      <!-- Resources Section: Desktop DataTable (>= 768px) & Mobile Card Stream (< 768px) -->
+      <div v-else class="explorer-resources-wrapper">
+        <div class="explorer-desktop-table section-box glass-panel table-box">
         <DataTable
           :columns="columns"
           :data="resources"
@@ -2309,7 +2310,22 @@ async function handleSaveNodeLabels(node: K8sResource) {
           </template>
         </DataTable>
       </div>
-    </main>
+
+      <div class="explorer-mobile-cards">
+        <ExplorerMobileCards
+          :resources="resources"
+          :selected-kind="selectedKind"
+          :loading="loading"
+          empty-message="No Kubernetes resources discovered matching current filters."
+          @select="openDetailDrawer"
+          @logs="openPodLogs"
+          @scale="openScaleModal"
+          @restart="handleRestartWorkload"
+          @delete="promptDelete"
+        />
+      </div>
+    </div>
+  </main>
 
     <!-- Workload Action: Scale Modal -->
     <ModalDrawer
@@ -4341,6 +4357,18 @@ async function handleSaveNodeLabels(node: K8sResource) {
   .action-btn {
     padding: 0 7px;
     min-width: 32px;
+  }
+}
+.explorer-mobile-cards {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .explorer-desktop-table {
+    display: none !important;
+  }
+  .explorer-mobile-cards {
+    display: block !important;
   }
 }
 </style>

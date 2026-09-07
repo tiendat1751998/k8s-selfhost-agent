@@ -146,6 +146,9 @@ func (h *K8sResourceHandler) ListNamespaces(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, "failed to list namespaces", err)
 		return
 	}
+	if namespaces == nil {
+		namespaces = []corev1.Namespace{}
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"data":  namespaces,

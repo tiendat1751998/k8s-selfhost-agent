@@ -6,13 +6,21 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
 )
 
 // TransactionManager defines the contract for executing transactional units of work.
 type TransactionManager interface {
-	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+	ports.TransactionManager
 	RunInTxWithOpts(ctx context.Context, opts pgx.TxOptions, fn func(ctx context.Context) error) error
 }
+
+// Compile-time assertions for interface compliance.
+var (
+	_ ports.TransactionManager = (*TxManager)(nil)
+	_ TransactionManager       = (*TxManager)(nil)
+)
 
 // TxManager implements TransactionManager using pgxpool.Pool.
 type TxManager struct {

@@ -191,22 +191,29 @@ func (c *SystemCollector) Collect() (*MetricsResponse, error) {
 	// 9. Top Processes
 	topProcesses := c.readTopProcesses(10, memMetrics.TotalBytes)
 
+	// 10. Runtime environment and host role detection
+	runtimeEnv := detectRuntimeEnvironment()
+	hostRole, detectedServices := detectHostRoleAndServices(topProcesses)
+
 	resp := &MetricsResponse{
-		Hostname:      hostname,
-		OS:            osName,
-		Arch:          arch,
-		OSDistro:      osDistro,
-		KernelVersion: kernelVersion,
-		UptimeSeconds: uptime,
-		LoadAverage:   loadAvg,
-		CPU:           cpuMetrics,
-		Memory:        memMetrics,
-		Disks:         diskMetrics,
-		DiskIO:        diskIOMetrics,
-		Network:       netMetrics,
-		Processes:     procCount,
-		TopProcesses:  topProcesses,
-		CollectedAt:   now,
+		Hostname:           hostname,
+		OS:                 osName,
+		Arch:               arch,
+		OSDistro:           osDistro,
+		KernelVersion:      kernelVersion,
+		RuntimeEnvironment: runtimeEnv,
+		HostRole:           hostRole,
+		DetectedServices:   detectedServices,
+		UptimeSeconds:      uptime,
+		LoadAverage:        loadAvg,
+		CPU:                cpuMetrics,
+		Memory:             memMetrics,
+		Disks:              diskMetrics,
+		DiskIO:             diskIOMetrics,
+		Network:            netMetrics,
+		Processes:          procCount,
+		TopProcesses:       topProcesses,
+		CollectedAt:        now,
 	}
 
 	c.lastMetrics = resp
@@ -1475,5 +1482,86 @@ func (c *SystemCollector) readKernelVersion() string {
 	}
 
 	return ""
+}
+
+var dockerEnvPath = "/.dockerenv"
+
+// detectRuntimeEnvironment identifies whether the agent is running in Kubernetes, Docker, or bare metal.
+func detectRuntimeEnvironment() string {
+	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+		return "kubernetes"
+	}
+	if _, err := os.Stat(dockerEnvPath); err == nil {
+		return "docker"
+	}
+	return "bare-metal"
+}
+
+// detectHostRoleAndServices inspects processes to classify host role ("database", "compute", or "k8s")
+// and returns any detected database services.
+func detectHostRoleAndServices(topProcesses []ProcessMetric) (string, []string) {
+	detectedMap := make(map[string]struct{})
+	hasK8s := false
+	hasCompute := false
+
+	for _, p := range topProcesses {
+		name := strings.ToLower(p.Name)
+		cmd := strings.ToLower(p.CommandLine)
+
+		// Check for database engines: postgres, mysqld, mariadbd, mongod, redis-server, clickhouse
+		if strings.Contains(name, "postgres") || strings.Contains(cmd, "postgres") {
+			detectedMap["postgres"] = struct{}{}
+		}
+		if strings.Contains(name, "mysqld") || strings.Contains(cmd, "mysqld") ||
+			strings.Contains(name, "mysql") || strings.Contains(cmd, "mysql") {
+			detectedMap["mysql"] = struct{}{}
+		}
+		if strings.Contains(name, "mariadbd") || strings.Contains(cmd, "mariadbd") ||
+			strings.Contains(name, "mariadb") || strings.Contains(cmd, "mariadb") {
+			detectedMap["mariadb"] = struct{}{}
+		}
+		if strings.Contains(name, "mongod") || strings.Contains(cmd, "mongod") ||
+			strings.Contains(name, "mongodb") || strings.Contains(cmd, "mongodb") {
+			detectedMap["mongodb"] = struct{}{}
+		}
+		if strings.Contains(name, "redis-server") || strings.Contains(cmd, "redis-server") ||
+			strings.Contains(name, "redis") || strings.Contains(cmd, "redis") {
+			detectedMap["redis"] = struct{}{}
+		}
+		if strings.Contains(name, "clickhouse") || strings.Contains(cmd, "clickhouse") {
+			detectedMap["clickhouse"] = struct{}{}
+		}
+
+		// Check for k8s engines
+		if strings.Contains(name, "kubelet") || strings.Contains(cmd, "kubelet") ||
+			strings.Contains(name, "k3s") || strings.Contains(cmd, "k3s") {
+			hasK8s = true
+		}
+
+		// Check for compute engines
+		if strings.Contains(name, "containerd") || strings.Contains(cmd, "containerd") ||
+			strings.Contains(name, "dockerd") || strings.Contains(cmd, "dockerd") {
+			hasCompute = true
+		}
+	}
+
+	if len(detectedMap) > 0 {
+		services := make([]string, 0, len(detectedMap))
+		for s := range detectedMap {
+			services = append(services, s)
+		}
+		sort.Strings(services)
+		return "database", services
+	}
+
+	if hasK8s {
+		return "k8s", []string{}
+	}
+
+	if hasCompute {
+		return "compute", []string{}
+	}
+
+	return "compute", []string{}
 }
 

@@ -6,10 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
-	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
 )
 
 type mockTxManager struct {
@@ -17,11 +15,6 @@ type mockTxManager struct {
 }
 
 func (m *mockTxManager) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	m.txCount++
-	return fn(ctx)
-}
-
-func (m *mockTxManager) RunInTxWithOpts(ctx context.Context, opts pgx.TxOptions, fn func(ctx context.Context) error) error {
 	m.txCount++
 	return fn(ctx)
 }
@@ -135,8 +128,8 @@ func (m *mockWSBroadcaster) Broadcast(msgType string, data interface{}) {
 
 type mockLLM struct{}
 
-func (m *mockLLM) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	return &llm.CompletionResponse{
+func (m *mockLLM) Complete(ctx context.Context, req ports.LLMCompletionRequest) (*ports.LLMCompletionResponse, error) {
+	return &ports.LLMCompletionResponse{
 		Content: "Mock Completed output",
 	}, nil
 }
@@ -149,7 +142,7 @@ type mockLLMWithError struct {
 	err error
 }
 
-func (m *mockLLMWithError) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (m *mockLLMWithError) Complete(ctx context.Context, req ports.LLMCompletionRequest) (*ports.LLMCompletionResponse, error) {
 	return nil, m.err
 }
 
@@ -396,4 +389,3 @@ func TestCreateAndScheduleTask_WithUnmetDependencies(t *testing.T) {
 		t.Errorf("Expected task status to be blocked due to unmet dependency, got %s", saved.Status)
 	}
 }
-
