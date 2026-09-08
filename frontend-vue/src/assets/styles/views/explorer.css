@@ -1211,7 +1211,7 @@
   }
 
   .metrics-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
   }
 
@@ -1401,7 +1401,7 @@
   }
 
   .metrics-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
   }
 
@@ -1423,16 +1423,34 @@
 /* ==========================================================================
    Mobile PWA Ergonomics (< 640px)
    ========================================================================== */
+.desktop-header-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.explorer-mobile-command-bar,
 .mobile-command-bar {
   display: none;
   height: 44px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
+  padding: 0 10px;
   background: rgba(11, 15, 25, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  margin-bottom: 6px;
+}
+
+.mobile-command-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-command-title {
@@ -1442,27 +1460,49 @@
   font-family: var(--font-mono);
 }
 
+.mobile-count-badge {
+  font-size: 0.72rem;
+  color: #06b6d4;
+  background: rgba(6, 182, 212, 0.12);
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
 .mobile-command-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .btn-mobile-cmd {
   height: 32px;
   min-height: 32px;
-  padding: 0 8px;
+  width: 32px;
+  padding: 0;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #38bdf8;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-family: var(--font-mono);
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
   cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-mobile-cmd:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+.btn-mobile-cmd:active {
+  transform: scale(0.95);
+  background: rgba(6, 182, 212, 0.2);
 }
 
 .mobile-micro-telemetry {
@@ -1476,11 +1516,55 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 0 4px;
+  margin-bottom: 6px;
+}
+
+.mobile-kind-scroller {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.mobile-kind-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-kind-scroller .mobile-kind-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  scroll-snap-align: start;
+  min-height: 30px;
+  transition: all 0.15s ease;
+}
+
+.mobile-kind-scroller .mobile-kind-pill.is-active {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: #06b6d4;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
 }
 
 .mobile-search-strip {
   display: none;
-  padding: 4px 0;
+  padding: 4px 0 8px 0;
 }
 
 .mobile-search-input {
@@ -1489,17 +1573,45 @@
   font-size: 0.8rem;
 }
 
+.explorer-mobile-cards {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .explorer-desktop-table {
+    display: none !important;
+  }
+  .explorer-mobile-cards {
+    display: block !important;
+  }
+}
+
 @media (max-width: 640px) {
+  .desktop-header-wrap,
+  .desktop-only,
   .desktop-hud-wrapper {
     display: none !important;
   }
+  .mobile-resource-bar {
+    display: none !important;
+  }
+  .explorer-mobile-command-bar,
   .mobile-command-bar {
     display: flex !important;
   }
   .mobile-micro-telemetry {
     display: block !important;
   }
+  .mobile-kind-scroller {
+    display: flex !important;
+  }
   .mobile-search-strip {
+    display: block !important;
+  }
+  .explorer-desktop-table {
+    display: none !important;
+  }
+  .explorer-mobile-cards {
     display: block !important;
   }
 }

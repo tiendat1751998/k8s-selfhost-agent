@@ -411,6 +411,16 @@ export const k8sApi = {
     }
   },
 
+  async scaleWorkload(
+    cluster: string,
+    kind: string,
+    name: string,
+    replicas: number,
+    namespace?: string
+  ): Promise<{ status?: string; message?: string }> {
+    return this.scaleResource(cluster, kind, name, replicas, namespace)
+  },
+
   async scaleResource(
     cluster: string,
     kind: string,
