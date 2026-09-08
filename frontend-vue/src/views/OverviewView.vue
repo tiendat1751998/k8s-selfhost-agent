@@ -2,7 +2,6 @@
 import { useRouter } from 'vue-router'
 import { useOverviewDashboard } from '../composables/useOverviewDashboard'
 
-// Modular Sub-Components
 import OverviewHud from '../components/overview/hud/OverviewHud.vue'
 import RequestFlowBar from '../components/overview/hud/RequestFlowBar.vue'
 import OverviewSaturationTrends from '../components/overview/hud/OverviewSaturationTrends.vue'
@@ -299,18 +298,11 @@ const {
             v-for="node in filteredTopologyNodes"
             :key="node.node_id"
             :node="node"
-            :busiestNodeId="busiestNodeId"
-            :draggedNodeId="draggedNodeId"
-            :dragOverNodeId="dragOverNodeId"
+            :busiestNodeId="busiestNodeId" :draggedNodeId="draggedNodeId" :dragOverNodeId="dragOverNodeId"
             @click="handleNodeCardClick"
             @inspect="inspectNode"
             @manage="manageNode"
-            @dragstart="onDragStart"
-            @dragover="onDragOver"
-            @dragenter="onDragEnter"
-            @dragleave="onDragLeave"
-            @drop="onDrop"
-            @dragend="onDragEnd"
+            @dragstart="onDragStart" @dragover="onDragOver" @dragenter="onDragEnter" @dragleave="onDragLeave" @drop="onDrop" @dragend="onDragEnd"
           />
         </div>
       </section>
