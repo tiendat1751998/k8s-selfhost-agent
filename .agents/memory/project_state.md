@@ -1,9 +1,23 @@
-# K8sControl Project State — Session Checkpoint 2026-09-07T16:05 (Task 012 & 013 COMPLETED)
+# K8sControl Project State — Session Checkpoint 2026-09-08T13:40 (Task 014 COMPLETED)
 
 ## 🏆 SUPREME DIRECTIVE RATIFICATION (Session 2026-09-04)
 - **Directive**: Craftsmanship & Quality Over Speed (`AGENTS.md` Section 00 & `DEC-085`).
 - **User Mandate**: *"Tôi cần chất lượng chứ không phải tốc độ, chất lượng tốt thì 1-2 tháng cũng được."*
 - **Binding Rule**: Zero tolerance for superficial progress ("làm đối phó"). Build passing is only the bare minimum baseline. Mandatory proactive visual, layout, and UX auditing using Chrome DevTools MCP across mobile (375x812), tablet (768x1024), and desktop (1440x900) before any task is claimed complete.
+
+## 📱 TASK 014: K8s Explorer Mobile PWA Overhaul, Monolith Shredding & Button Text Normalization (100% COMPLETED ✅)
+- **Master Plan Archived**: [`.agents/tasks/success/014_k8s_explorer_mobile_pwa_and_monolith_shredding.md`](file:///d:/project/k8sseflhost/.agents/tasks/success/014_k8s_explorer_mobile_pwa_and_monolith_shredding.md)
+- **User Bug Addressed (from Screenshot)**:
+  - Truncated button text on mobile: `+ Create Deployment` was clipped into `+ Create Deploym`.
+  - 3 giant vertically stacked KPI cards (`Total Deployments`, `Active Namespaces`, `Cluster Target`) ate up 350px+ of height, burying workloads off screen.
+  - `ExplorerView.vue` was a 4,375-line monolith violating AGENTS.md constitutional limits (< 500 lines).
+- **Key Solutions & Deliverables**:
+  - `ExplorerView.vue`: Shredded from 4,375 lines down to **333 lines** (< 350 lines). Delegated state and operations to `useK8sExplorer.ts`.
+  - On mobile (`<640px`): Desktop header and 3 KPI cards wrapped in `.desktop-header-wrap` and completely hidden (`display: none !important`).
+  - Added 44px Mobile Command Bar with standardized 32px icon buttons (`[ 🔍 ] [ 🔄 ] [ 📄 ] [ ➕ ] [ ☰ ]`), 20px micro-telemetry strip, and 36px horizontal kind pill scroller.
+  - Mounted `<ExplorerMobileCards>` directly on Screen 1: all 4 workloads (`cilium-operator`, `coredns`, `hubble-relay`, `hubble-ui`) are immediately visible without scrolling.
+  - Tablet (768x1024): 3 KPI cards in a clean horizontal row (`repeat(3, 1fr)`) with all 4 workload cards visible on Screen 1.
+  - Verified via Chrome DevTools MCP across Mobile (375x812), Tablet (768x1024), and Desktop (1440x900).
 
 ## 📱 TASK 013: Mobile PWA Craftsmanship, Font Normalization, Button Polish & SRE Controller Robustness (100% COMPLETED ✅)
 - **Master Plan Archived**: [`.agents/tasks/success/013_mobile_pwa_craftsmanship_fonts_and_button_overhaul.md`](file:///d:/project/k8sseflhost/.agents/tasks/success/013_mobile_pwa_craftsmanship_fonts_and_button_overhaul.md)
@@ -75,7 +89,7 @@
     - 100% of embedded CSS extracted into `src/assets/styles/`.
 
 ## 📋 TASK QUEUE STATUS (inprocess → success triage)
-- **success/**: 001, 002, 003, 004, 005, 005_modular, 006, 007, 008, 009, 010, 011, 012, 013 (ALL 100% COMPLETE & VERIFIED)
+- **success/**: 001, 002, 003, 004, 005, 005_modular, 006, 007, 008, 009, 010, 011, 012, 013, 014 (ALL 100% COMPLETE & VERIFIED)
 - **inprocess/**: (Empty — all current tasks completed and verified)
 
 ## 🚀 TASK 010: SRE Node Failure Remediation & Cluster DR (COMPLETED ✅)
