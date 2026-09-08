@@ -9,20 +9,29 @@
   }
 }
 
-/* Mobile 40px Command Bar (<640px) */
+@media (max-width: 640px) {
+  .desktop-only,
+  .desktop-header-wrap {
+    display: none !important;
+  }
+}
+
+/* Mobile 44px Command Bar (<640px) */
+.mobile-command-bar,
 .automation-mobile-command-bar {
-  height: 40px;
-  min-height: 40px;
+  height: 44px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
+  padding: 0 12px;
   background: rgba(15, 23, 42, 0.75);
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 10px;
   backdrop-filter: blur(8px);
 }
 
+.mobile-command-bar .command-bar-left,
 .automation-mobile-command-bar .command-bar-left {
   display: flex;
   align-items: center;
@@ -30,6 +39,7 @@
   min-width: 0;
 }
 
+.mobile-command-bar .command-bar-title,
 .automation-mobile-command-bar .command-bar-title {
   font-size: 13.5px;
   font-weight: 700;
@@ -38,6 +48,7 @@
   white-space: nowrap;
 }
 
+.mobile-command-bar .command-bar-actions,
 .automation-mobile-command-bar .command-bar-actions {
   display: flex;
   align-items: center;
@@ -75,6 +86,7 @@
 }
 
 /* Mobile 20px Centered Micro-Telemetry Strip (<640px) */
+.mobile-micro-telemetry,
 .automation-micro-telemetry {
   display: flex;
   align-items: center;
@@ -92,31 +104,43 @@
   padding: 0 4px;
 }
 
+.mobile-micro-telemetry .tel-item,
 .automation-micro-telemetry .tel-item {
   display: inline-flex;
   align-items: center;
   line-height: 1;
 }
 
+.mobile-micro-telemetry .tel-rules,
 .automation-micro-telemetry .tel-rules {
   color: #38bdf8;
 }
 
+.mobile-micro-telemetry .tel-active,
 .automation-micro-telemetry .tel-active {
   color: #34d399;
 }
 
+.mobile-micro-telemetry .tel-healed,
 .automation-micro-telemetry .tel-healed {
   color: #c084fc;
 }
 
+.mobile-micro-telemetry .tel-saved,
 .automation-micro-telemetry .tel-saved {
   color: #fbbf24;
 }
 
+.mobile-micro-telemetry .tel-sep,
 .automation-micro-telemetry .tel-sep {
   color: rgba(148, 163, 184, 0.4);
   font-weight: 400;
+}
+
+.automation-mobile-container {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .view-container {
