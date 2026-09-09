@@ -86,8 +86,10 @@ func (p *Pipeline) Analyze(ctx context.Context, inc *incident.Incident) (*report
 	// Step 2.5: Collect Observability SLOs
 	var activeSLO *observability.SLOSnapshot
 	if p.obsRepo != nil {
-		slos, _ := p.obsRepo.ListSLOSnapshots(ctx)
-		if len(slos) > 0 {
+		slos, err := p.obsRepo.ListSLOSnapshots(ctx)
+		if err != nil {
+			log.Warn("failed to list SLO snapshots", zap.Error(err))
+		} else if len(slos) > 0 {
 			activeSLO = &slos[0] // Simple injection of primary SLO for context
 		}
 	}

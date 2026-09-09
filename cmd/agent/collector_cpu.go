@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -41,14 +42,32 @@ func (c *SystemCollector) collectCPU() CPUMetrics {
 			fields := strings.Fields(line)
 			if len(fields) >= 5 {
 				var sum uint64
+				var parseErr bool
 				for i := 1; i < len(fields); i++ {
-					v, _ := strconv.ParseUint(fields[i], 10, 64)
+					v, err := strconv.ParseUint(fields[i], 10, 64)
+					if err != nil {
+						slog.Warn("failed to parse cpu metric field", slog.String("field", fields[i]), slog.Any("error", err))
+						parseErr = true
+						break
+					}
 					sum += v
 				}
-				idle, _ := strconv.ParseUint(fields[4], 10, 64)
+				if parseErr {
+					continue
+				}
+				idle, err := strconv.ParseUint(fields[4], 10, 64)
+				if err != nil {
+					slog.Warn("failed to parse cpu idle field", slog.String("field", fields[4]), slog.Any("error", err))
+					continue
+				}
 				var iowait uint64
 				if len(fields) >= 6 {
-					iowait, _ = strconv.ParseUint(fields[5], 10, 64)
+					var err error
+					iowait, err = strconv.ParseUint(fields[5], 10, 64)
+					if err != nil {
+						slog.Warn("failed to parse cpu iowait field", slog.String("field", fields[5]), slog.Any("error", err))
+						continue
+					}
 				}
 				idleTotal := idle + iowait
 				totalVal = sum
@@ -160,8 +179,16 @@ func (c *SystemCollector) readTopProcesses(limit int, totalMem int64) []ProcessM
 
 		stateChar := fields[0]
 		state := parseState(stateChar)
-		utime, _ := strconv.ParseUint(fields[11], 10, 64)
-		stime, _ := strconv.ParseUint(fields[12], 10, 64)
+		utime, err := strconv.ParseUint(fields[11], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse process utime", slog.Int("pid", pid), slog.Any("error", err))
+			continue
+		}
+		stime, err := strconv.ParseUint(fields[12], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse process stime", slog.Int("pid", pid), slog.Any("error", err))
+			continue
+		}
 
 		// 2. Parse /proc/[pid]/cmdline
 		var cmdline string
@@ -240,9 +267,17 @@ func (c *SystemCollector) readTopProcesses(limit int, totalMem int64) []ProcessM
 				val := strings.TrimSpace(parts[1])
 				switch key {
 				case "read_bytes":
-					readBytes, _ = strconv.ParseInt(val, 10, 64)
+					var err error
+					readBytes, err = strconv.ParseInt(val, 10, 64)
+					if err != nil {
+						slog.Warn("failed to parse process read_bytes", slog.Int("pid", pid), slog.Any("error", err))
+					}
 				case "write_bytes":
-					writeBytes, _ = strconv.ParseInt(val, 10, 64)
+					var err error
+					writeBytes, err = strconv.ParseInt(val, 10, 64)
+					if err != nil {
+						slog.Warn("failed to parse process write_bytes", slog.Int("pid", pid), slog.Any("error", err))
+					}
 				}
 			}
 			_ = ioFile.Close()

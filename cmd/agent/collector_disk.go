@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -235,15 +236,51 @@ func (c *SystemCollector) collectDiskIO(now time.Time) DiskIOMetrics {
 			continue
 		}
 
-		readsCompleted, _ := strconv.ParseUint(fields[3], 10, 64)
-		sectorsRead, _ := strconv.ParseUint(fields[5], 10, 64)
-		readTimeMs, _ := strconv.ParseUint(fields[6], 10, 64)
-		writesCompleted, _ := strconv.ParseUint(fields[7], 10, 64)
-		sectorsWritten, _ := strconv.ParseUint(fields[9], 10, 64)
-		writeTimeMs, _ := strconv.ParseUint(fields[10], 10, 64)
-		ioInProgress, _ := strconv.ParseInt(fields[11], 10, 64)
-		ioTimeMs, _ := strconv.ParseUint(fields[12], 10, 64)
-		weightedIoTimeMs, _ := strconv.ParseUint(fields[13], 10, 64)
+		readsCompleted, err := strconv.ParseUint(fields[3], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse diskstats readsCompleted", slog.String("device", devName), slog.Any("error", err))
+			continue
+		}
+		sectorsRead, err := strconv.ParseUint(fields[5], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse diskstats sectorsRead", slog.String("device", devName), slog.Any("error", err))
+			continue
+		}
+		readTimeMs, err := strconv.ParseUint(fields[6], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse diskstats readTimeMs", slog.String("device", devName), slog.Any("error", err))
+			continue
+		}
+		writesCompleted, err := strconv.ParseUint(fields[7], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse diskstats writesCompleted", slog.String("device", devName), slog.Any("error", err))
+			continue
+		}
+		sectorsWritten, err := strconv.ParseUint(fields[9], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse diskstats sectorsWritten", slog.String("device", devName), slog.Any("error", err))
+			continue
+		}
+		writeTimeMs, err := strconv.ParseUint(fields[10], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse diskstats writeTimeMs", slog.String("device", devName), slog.Any("error", err))
+			continue
+		}
+		ioInProgress, err := strconv.ParseInt(fields[11], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse diskstats ioInProgress", slog.String("device", devName), slog.Any("error", err))
+			continue
+		}
+		ioTimeMs, err := strconv.ParseUint(fields[12], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse diskstats ioTimeMs", slog.String("device", devName), slog.Any("error", err))
+			continue
+		}
+		weightedIoTimeMs, err := strconv.ParseUint(fields[13], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse diskstats weightedIoTimeMs", slog.String("device", devName), slog.Any("error", err))
+			continue
+		}
 
 		curr := diskDevSnapshot{
 			readsCompleted:   readsCompleted,

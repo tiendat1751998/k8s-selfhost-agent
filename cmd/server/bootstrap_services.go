@@ -252,7 +252,10 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	})
 
 	txManager := postgres.NewTxManager(infra.pgClient.Pool())
-	defaultLLM, _ := registry.Default()
+	defaultLLM, err := registry.Default()
+	if err != nil {
+		log.Warn("no default LLM provider available, proceeding with caution", zap.Error(err))
+	}
 	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge, txManager)
 
 	userRepo := postgres.NewUserRepo(infra.pgClient.Pool())

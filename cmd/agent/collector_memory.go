@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -36,7 +37,11 @@ func (c *SystemCollector) collectMemory() MemoryMetrics {
 		if len(valFields) == 0 {
 			continue
 		}
-		val, _ := strconv.ParseInt(valFields[0], 10, 64)
+		val, err := strconv.ParseInt(valFields[0], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse meminfo field", slog.String("key", key), slog.String("val", valFields[0]), slog.Any("error", err))
+			continue
+		}
 
 		switch key {
 		case "MemTotal":
