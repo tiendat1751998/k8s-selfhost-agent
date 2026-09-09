@@ -5,7 +5,7 @@ import type { Column } from '../components/ui/DataTable.vue'
 import { jsonToYaml } from '../utils/yaml'
 export * from './explorerHelpers'
 export * from './explorerColumns'
-export type { DrainOptions } from './useExplorerOperations'
+export type { DrainOptions } from '../domain/explorer/types'
 import { kindCategories, type KindCategory } from './explorerHelpers'
 import {
   podColumns, deploymentColumns, statefulSetColumns, daemonSetColumns,
@@ -14,7 +14,7 @@ import {
   storageClassColumns, networkPolicyColumns, serviceAccountColumns,
   hpaColumns, nodeColumns, eventColumns, standardColumns
 } from './explorerColumns'
-import type { DrainOptions } from './useExplorerOperations'
+import type { DrainOptions } from '../domain/explorer/types'
 
 export function useK8sExplorer() {
   // Async loading & error states
