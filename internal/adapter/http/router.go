@@ -314,7 +314,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 				r.With(mw.RBACMiddleware("platform_admin")).Route("/fleet", platform.Fleet.RegisterRoutes)
 			}
 			if platform.Audit != nil {
-				r.Route("/audit", platform.Audit.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/audit", platform.Audit.RegisterRoutes)
 			}
 			if platform.Docker != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/docker", platform.Docker.RegisterRoutes)
