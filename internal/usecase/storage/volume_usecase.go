@@ -237,13 +237,6 @@ func (u *VolumeUsecase) ExpandVolume(ctx context.Context, clusterID, namespace, 
 		if _, updateErr := client.CoreV1().PersistentVolumeClaims(namespace).Update(ctx, pvc, metav1.UpdateOptions{}); updateErr != nil {
 			return fmt.Errorf("expanding pvc %s/%s: %w", namespace, name, updateErr)
 		}
-	} else {
-		// Sync the memory tracker in fake clientset for consistent test assertions
-		if pvc.Spec.Resources.Requests == nil {
-			pvc.Spec.Resources.Requests = corev1.ResourceList{}
-		}
-		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = *newQty
-		_, _ = client.CoreV1().PersistentVolumeClaims(namespace).Update(ctx, pvc, metav1.UpdateOptions{})
 	}
 
 	u.logger.Info("Expanded distributed volume",

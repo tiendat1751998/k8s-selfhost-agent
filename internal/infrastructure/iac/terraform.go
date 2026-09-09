@@ -103,15 +103,12 @@ func (r *TerraformRunner) execute(ctx context.Context, dir string, args []string
 	cmd.Stderr = writer
 
 	if err := cmd.Start(); err != nil {
-		// Mock baseline output in mock/test environment without Terraform binary
-		msg := fmt.Sprintf("[%s %v] Execution completed successfully (Simulated runner mode)\n", r.binaryPath, args)
-		_, _ = writer.Write([]byte(msg))
 		return &TerraformResult{
 			Command:  fmt.Sprintf("%s %v", r.binaryPath, args),
-			Success:  true,
-			Output:   msg,
+			Success:  false,
+			Output:   buf.String(),
 			Duration: time.Since(start),
-		}, nil
+		}, errors.Wrap(err, fmt.Sprintf("failed to start terraform binary '%s'", r.binaryPath))
 	}
 
 	err := cmd.Wait()
