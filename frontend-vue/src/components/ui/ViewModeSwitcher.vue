@@ -66,21 +66,5 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.view-mode-switcher {
-  display: inline-flex; align-items: center; height: 32px; padding: 2px;
-  border-radius: 8px; background: var(--color-canvas-card, #101828);
-  border: 1px solid rgba(255, 255, 255, 0.08); box-sizing: border-box;
-}
-.mode-btn {
-  display: inline-flex; align-items: center; gap: 6px; height: 100%;
-  padding: 0 10px; border-radius: 6px; border: none; background: transparent;
-  color: var(--color-text-muted, #7b8c9d); font-size: 12px; font-weight: 500;
-  cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
-}
-.mode-btn:hover:not(.active) { color: #f8fafc; background: rgba(255, 255, 255, 0.05); }
-.mode-btn.active {
-  background: var(--color-brand-cyan, #0284c7); color: #ffffff;
-  font-weight: 600; box-shadow: 0 1px 4px rgba(2, 132, 199, 0.35);
-}
-.mode-icon { width: 13px; height: 13px; flex-shrink: 0; }
+@import '../../assets/styles/components/ui/common.css';
 </style>
