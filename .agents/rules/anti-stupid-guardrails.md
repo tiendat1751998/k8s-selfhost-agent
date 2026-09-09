@@ -7,37 +7,36 @@
 
 ## 🚫 THE 6 CARDINAL SINS OF AI AGENTS
 
-### 1. BLIND GUESSWORK (CẤM ĐOÁN MÒ)
+### 1. BLIND GUESSWORK
 - **Violation**: Inventing struct field names, function signatures, file paths, or API schemas without reading the actual source code first.
-- **Enforcement**: Step 0 for ANY agent MUST be calling iew_file on target source definitions. Every proposed change MUST cite exact ile:line evidence. Guessing is strictly penalized.
+- **Enforcement**: Step 0 for ANY agent MUST be calling `view_file` on target source definitions. Every proposed change MUST cite exact `file:line` evidence. Guessing is strictly penalized.
 
-### 2. TOY CODE & FAKE PROGRESS (CẤM MOCK GIẢ & CODE ĐỒ CHƠI)
+### 2. TOY CODE & FAKE PROGRESS
 - **Violation**: 
-  - Discarding errors via _ := func(), _ = err, or empty catch (e) {}.
-  - Injecting synthetic mocks, Math.random(), fake latency, or hardcoded dummy JSON in production pathways.
-  - Writing empty unit tests that assert nothing or only test trivialities (ssert.True(true)).
+  - Discarding errors via `_ := func()`, `_ = err`, or empty `catch (e) {}`.
+  - Injecting synthetic mocks, `Math.random()`, fake latency, or hardcoded dummy JSON in production pathways.
+  - Writing empty unit tests that assert nothing or only test trivialities (`assert.True(true)`).
 - **Enforcement**: Production-grade implementation only. Proper context propagation, typed domain errors, structured slog/zap logging, and deterministic rollback handlers.
 
-### 3. FABRICATED TEST AUDITS (CẤM DIỄN TUỒNG KHI TEST)
-- **Violation**: Text-only claims of \"tests pass\" without raw command output, or QA claiming UI is functional without running browser tools.
+### 3. FABRICATED TEST AUDITS
+- **Violation**: Text-only claims of "tests pass" without raw command output, or QA claiming UI is functional without running browser tools.
 - **Enforcement**:
   - Backend: Verbatim terminal execution required (command line + exit code 0 + stdout/stderr).
-  - QA / Frontend: MUST call call_mcp_tool with chrome-devtools-mcp (
-avigate_page, list_network_requests, 	ake_screenshot). Actual on-disk screenshot path and full HTTP request status table required.
+  - QA / Frontend: MUST call `call_mcp_tool` with `chrome-devtools-mcp` (`navigate_page`, `list_network_requests`, `take_screenshot`). Actual on-disk screenshot path and full HTTP request status table required.
 
-### 4. LONE-WOLF EXECUTION (CẤM TỰ BIÊN TỰ DIỄN)
+### 4. LONE-WOLF EXECUTION
 - **Violation**: Main agent bypassing the Graph layer to dump unrefined user prompts directly to coders.
 - **Enforcement**: Graph Layer precedence:
-  1. esearch: Comprehensive codebase reconnaissance.
-  2. planner: Granular, topological WBS breakdown with file-level contracts.
-  3. coder: Surgical implementation inside Git worktree isolation (Workspace: \"branch\").
-  4. eviewer: Line-by-line adversarial code audit.
-  5. qa-test-engineer: Real MCP browser audit across mobile, tablet, desktop viewports.
+  1. `research`: Comprehensive codebase reconnaissance.
+  2. `planner`: Granular, topological WBS breakdown with file-level contracts.
+  3. `coder`: Surgical implementation inside Git worktree isolation (`Workspace: "branch"`).
+  4. `reviewer`: Line-by-line adversarial code audit.
+  5. `qa-test-engineer`: Real MCP browser audit across mobile, tablet, desktop viewports.
 
 ### 5. MONOLITHIC CODE BLOAT (STRICT < 500 LINES / FILE)
 - **Violation**: Appending logic to existing files pushing line counts past 500 lines; coupling CSS, business logic, and UI templates in one file.
 - **Enforcement**: Clean Architecture & SOLID segregation:
-  - Frontend: Composables in src/composables/, styles in src/assets/styles/, sub-components < 250 lines in src/components/, views < 350 lines.
+  - Frontend: Composables in `src/composables/`, styles in `src/assets/styles/`, sub-components < 250 lines in `src/components/`, views < 350 lines.
   - Backend: Strict 4-tier separation (Domain -> Usecase -> Adapter -> Infrastructure).
 
 ### 6. SKILL AMNESIA & IGNORING INSTRUCTIONS
@@ -50,33 +49,33 @@ avigate_page, list_network_requests, 	ake_screenshot). Actual on-disk screenshot
 
 ### Gate 1: Mandatory Dispatch Contract (English Only)
 Every dispatch prompt from Orchestrator MUST contain:
-1. REQUIRED SKILLS: Absolute paths of SKILL.md files to read in Step 0.
-2. CONTEXT ANCHOR: Active branch, commit SHA, and mandatory reading of .agents/memory/project_state.md.
-3. SCOPE WHITELIST: Explicit list of allowed files. Touching unlisted files = automatic rejection.
-4. ACCEPTANCE CRITERIA: Verifiable Gherkin (Given-When-Then) or boolean checklist.
-5. NEGATIVE CONSTRAINTS: Zero stubs, zero mocks, zero _ :=, strict < 500 lines/file.
-6. REQUIRED EVIDENCE: Exact command to run and expected output format.
+1. `REQUIRED SKILLS`: Absolute paths of `SKILL.md` files to read in Step 0.
+2. `CONTEXT ANCHOR`: Active branch, commit SHA, and mandatory reading of `.agents/memory/project_state.md`.
+3. `SCOPE WHITELIST`: Explicit list of allowed files. Touching unlisted files = automatic rejection.
+4. `ACCEPTANCE CRITERIA`: Verifiable Gherkin (Given-When-Then) or boolean checklist.
+5. `NEGATIVE CONSTRAINTS`: Zero stubs, zero mocks, zero `_ :=`, strict < 500 lines/file.
+6. `REQUIRED EVIDENCE`: Exact command to run and expected output format.
 
 ### Gate 2: The 7-Point Adversarial Reviewer Checklist
-eviewer must evaluate every coder diff against:
+`reviewer` must evaluate every coder diff against:
 1. **Concurrency Safety**: Data race prevention, sync primitives, channel deadlocks.
 2. **Resource Leaks**: Unclosed response bodies, leaked goroutines, uncancelled contexts.
-3. **Error Handling**: Wrapped typed errors (%w), contextual logging.
+3. **Error Handling**: Wrapped typed errors (`%w`), contextual logging.
 4. **Architectural Fitness**: Layer integrity, dependency direction, < 500 line limit.
 5. **Performance & Allocations**: N+1 query elimination, indexing, memory allocations.
 6. **Security & RBAC**: Input sanitization, authorization middleware, least privilege.
-7. **Simplicity (ponytail-review)**: Elimination of dead code, speculative abstractions, and bloat.
+7. **Simplicity (`ponytail-review`)**: Elimination of dead code, speculative abstractions, and bloat.
 
 ### Gate 3: Exhaustive QA Matrix (Happy + Unhappy + Edge Cases)
-qa-test-engineer MUST audit:
+`qa-test-engineer` MUST audit:
 1. **Happy Path**: Expected valid workflows return 200 OK.
 2. **Unhappy Path**: Invalid inputs return 400 Bad Request, unauthorized calls return 401/403.
 3. **Boundary / Edge Cases**: Empty arrays, nil pointers, malformed UUIDs, maximum payload sizes.
 4. **Multi-Viewport Visual Audit**: Mobile (375x812), Tablet (768x1024), Desktop (1440x900).
 
 ### Gate 4: Fail-Closed Governor Handoff Audit
-Before any merge, Orchestrator or governor inspects the transcript:
-- Did coder call iew_file before editing?
+Before any merge, Orchestrator or `governor` inspects the transcript:
+- Did coder call `view_file` before editing?
 - Did reviewer actively critique or merely rubber-stamp?
-- Did QA execute actual chrome-devtools-mcp tools?
+- Did QA execute actual `chrome-devtools-mcp` tools?
 - Any failure = REJECT, ROLLBACK worktree, RE-DISPATCH with penalty instructions.
