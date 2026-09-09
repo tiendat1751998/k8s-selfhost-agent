@@ -128,7 +128,10 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	computeHostRepo := postgres.NewComputeHostRepo(pgClient)
 
 	txManager := postgres.NewTxManager(pgClient)
-	defaultLLM, _ := registry.Default()
+	defaultLLM, err := registry.Default()
+	if err != nil {
+		log.Warn("no default LLM provider available, proceeding with caution", zap.Error(err))
+	}
 	bridge := adapthttp.NewWSBridge(wsHub)
 	orchestrator := usecaseAgent.NewOrchestrator(agentRepo, defaultLLM, bridge, txManager)
 
