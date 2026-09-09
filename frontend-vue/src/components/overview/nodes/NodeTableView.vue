@@ -148,54 +148,6 @@ function getNodePing(node: NodeMetrics): number {
 </template>
 
 <style scoped>
-.node-table-container { border-radius: 12px; overflow: hidden; border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)); }
-.table-responsive { width: 100%; overflow-x: auto; }
-.node-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11.5px; }
-.node-table th { padding: 6px 10px; background: rgba(15, 23, 42, 0.75); color: var(--text-muted, #94a3b8); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)); white-space: nowrap; }
-.node-row { height: 38px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); transition: background 0.15s ease; cursor: pointer; }
-.node-row:hover { background: rgba(56, 189, 248, 0.05); }
-.node-table td { padding: 2px 10px; height: 38px; vertical-align: middle; white-space: nowrap; }
-.status-wrap { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; }
-.pulse-dot { width: 6px; height: 6px; border-radius: 50%; }
-.dot-ready { background: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); }
-.dot-offline { background: #f43f5e; box-shadow: 0 0 6px rgba(244, 63, 94, 0.6); }
-.dot-degraded { background: #fbbf24; box-shadow: 0 0 6px rgba(251, 191, 36, 0.6); }
-.status-ready { color: #34d399; }
-.status-offline { color: #fb7185; }
-.status-degraded { color: #fcd34d; }
-.name-role-cell { display: flex; align-items: center; gap: 6px; }
-.node-name-text { color: var(--text-primary, #f8fafc); max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
-.role-badge { font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 3px; }
-.badge-control { color: #c084fc; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.25); }
-.badge-worker { color: #38bdf8; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); }
-.badge-agent { color: #818cf8; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.25); }
-.ip-text { color: var(--text-secondary, #cbd5e1); margin-right: 6px; font-size: 11px; }
-.os-distro-pill { font-size: 9px; padding: 1px 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.05); color: var(--text-muted, #94a3b8); }
-.progress-cell { display: flex; align-items: center; gap: 6px; }
-.pct-num { width: 28px; text-align: right; font-size: 11px; color: var(--text-primary, #f8fafc); }
-.bar-track { width: 48px; height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 999px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 999px; }
-.fill-cyan { background: #06b6d4; }
-.fill-amber { background: #f59e0b; }
-.fill-rose { background: #f43f5e; }
-.resource-text { font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
-.sub-dim { color: var(--text-muted, #64748b); font-size: 10px; }
-.badge-workload { font-size: 10.5px; color: #38bdf8; background: rgba(56, 189, 248, 0.1); padding: 1px 5px; border-radius: 4px; }
-.probe-val { color: #10b981; font-size: 11px; }
-.sre-suite { display: inline-flex; align-items: center; gap: 3px; justify-content: flex-end; }
-.sre-btn { padding: 3px 6px; font-size: 9.5px; font-weight: 600; border-radius: 4px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-secondary, #94a3b8); cursor: pointer; white-space: nowrap; transition: all 0.15s ease; }
-.sre-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; transform: translateY(-1px); }
-.btn-logs:hover { border-color: #f59e0b; color: #fbbf24; }
-.btn-scale:hover { border-color: #38bdf8; color: #38bdf8; }
-.btn-restart:hover { border-color: #a855f7; color: #c084fc; }
-.btn-yaml:hover { border-color: #06b6d4; color: #22d3ee; }
-.btn-details:hover { border-color: #10b981; color: #34d399; }
-.btn-delete:hover { border-color: #f43f5e; color: #fb7185; background: rgba(244, 63, 94, 0.15); }
-.font-mono { font-family: var(--font-mono, monospace); }
-.font-bold { font-weight: 700; }
-.text-cyan { color: #06b6d4; }
-.text-emerald { color: #10b981; }
-.text-muted { color: var(--text-muted, #64748b); }
-.text-right { text-align: right; }
+@import '../../../assets/styles/views/overview.css';
 </style>
 

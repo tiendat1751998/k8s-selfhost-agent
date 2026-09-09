@@ -82,24 +82,5 @@ function formatIoRate(bytesPerSec?: number): string {
 </template>
 
 <style scoped>
-.node-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.meta-item { display: flex; flex-direction: column; justify-content: center; gap: 3px; min-height: 48px; background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 7px; padding: 5px 9px; transition: border-color 0.2s ease, background 0.2s ease; }
-.meta-item:hover { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.09); }
-.meta-header-row { display: flex; align-items: center; justify-content: space-between; line-height: 1; }
-.meta-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted, #64748b); }
-.meta-badge { font-size: 0.68rem; font-weight: 700; padding: 1px 4px; border-radius: 4px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); line-height: 1.1; }
-.meta-val { font-size: 0.76rem; font-weight: 600; color: var(--text-primary, #f8fafc); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
-.meta-sep { color: var(--text-muted, #64748b); margin: 0 1px; font-weight: 400; opacity: 0.7; }
-.io-offline { font-size: 0.76rem; font-weight: 600; color: var(--text-muted, #64748b); line-height: 1.25; }
-.io-dual-stream { display: flex; align-items: center; justify-content: space-between; gap: 3px; font-size: 0.72rem; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; }
-.io-stream { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stream-arrow { font-size: 0.76rem; font-weight: 700; flex-shrink: 0; }
-.stream-val { letter-spacing: -0.01em; color: var(--text-secondary, #cbd5e1); }
-.font-mono { font-family: var(--font-mono, monospace); }
-.text-cyan { color: #06b6d4; }
-.text-sky { color: #38bdf8; }
-.text-emerald { color: #10b981; }
-.text-purple { color: #c084fc; }
-.text-amber { color: #fbbf24; }
-.text-muted { color: var(--text-muted, #64748b); }
+@import '../../../assets/styles/views/overview.css';
 </style>

@@ -798,3 +798,42 @@
   transform: translateY(-1px);
   box-shadow: 0 0 16px rgba(239, 68, 68, 0.6) !important;
 }
+
+/* === AlertBatchActionsBar.vue === */
+.alert-header-batch-actions,
+.alert-footer-batch-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* === AlertListTable.vue === */
+.btn-text-full {
+  display: inline;
+}
+.btn-text-mobile {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .btn-text-full {
+    display: none !important;
+  }
+  .btn-text-mobile {
+    display: inline !important;
+  }
+  .card-actions-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    align-items: center;
+    overflow-x: auto;
+  }
+  .card-actions-row .btn-card-action,
+  .card-actions-row .btn-card-mute-pill,
+  .card-actions-row .btn-card-dismiss {
+    padding: 4px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
