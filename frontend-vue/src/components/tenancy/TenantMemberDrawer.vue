@@ -157,25 +157,5 @@ function handleInviteSubmit() {
 </template>
 
 <style scoped>
-.member-drawer-layout { display: flex; flex-direction: column; gap: 20px; }
-.invite-section {
-  padding: 16px; border-radius: 10px;
-  background: rgba(15, 23, 42, 0.5); border: 1px solid var(--border-subtle);
-}
-.section-title { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 6px; }
-.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.members-list-section { display: flex; flex-direction: column; gap: 10px; }
-.member-items { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
-.member-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-radius: 8px; }
-.member-item-info { display: flex; align-items: center; gap: 10px; }
-.member-avatar {
-  width: 32px; height: 32px; border-radius: 6px; background: var(--grad-cyan);
-  color: #fff; display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 12px;
-}
-.member-details { display: flex; flex-direction: column; gap: 2px; }
-.member-email { font-size: 12.5px; font-weight: 600; color: #fff; }
-.member-tags { display: flex; align-items: center; gap: 6px; }
-.scope-tag { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); color: var(--text-secondary); }
-.revoke-btn { padding: 4px 8px; font-size: 11px; }
+@import '../../assets/styles/views/tenancy.css';
 </style>
