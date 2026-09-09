@@ -169,22 +169,5 @@ function formatReleaseDate(dateStr?: string): string {
 </template>
 
 <style scoped>
-.modal-form-body { display: flex; flex-direction: column; gap: 16px; }
-.form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
-.form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-group.full-width { grid-column: span 2; }
-.form-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
-.cyber-textarea { width: 100%; padding: 10px 12px; background: #090c10; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: var(--text-primary); font-family: var(--font-mono); font-size: 12px; line-height: 1.45; resize: vertical; }
-.checkbox-group { grid-column: span 2; }
-.cyber-checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
-.cyber-checkbox { accent-color: var(--color-primary); }
-.danger-warning-box { padding: 14px; border-radius: 8px; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: #fb7185; font-size: 13px; line-height: 1.5; }
-.alert-box { padding: 10px 14px; border-radius: 8px; font-size: 12px; }
-.alert-warning { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24; }
-.modal-footer-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 10px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
-.loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px; text-align: center; gap: 10px; }
-.cyber-spinner { width: 28px; height: 28px; border: 3px solid rgba(252, 213, 53, 0.15); border-top-color: var(--color-primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
-.spin-anim { display: inline-block; animation: spin 1s linear infinite; }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-@media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } .form-group.full-width { grid-column: span 1; } }
+@import '../../assets/styles/views/helm.css';
 </style>
