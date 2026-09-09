@@ -1,45 +1,46 @@
-# MANDATORY ORCHESTRATION PLAYBOOK — Step-by-Step Checklist
+# MANDATORY ORCHESTRATION PLAYBOOK — Enterprise Pipeline Checklist
 
-> Main agent PHẢI tuân thủ từng bước. Không bỏ bước. Không làm tắt.
+> Main agent MUST follow this checklist. References: `.agents/rules/enterprise-pipeline.md`
+> Chất lượng > Tốc độ. ALL relevant agents MUST participate.
 
-## PER-TASK EXECUTION CHECKLIST
-
-### Step 0: TOPOLOGY (fleet-controller logic)
-- [ ] Xác định topology: Fast-Track / Standard / High-Assurance / Emergency
+## STEP 0: TOPOLOGY SELECTION
+- [ ] Xác định topology: Micro / Fast-Track / Standard / High-Assurance / Full Enterprise
 - [ ] Ghi topology vào task tracker
+- [ ] Tham chiếu `.agents/rules/enterprise-pipeline.md` cho chi tiết
 
-### Step 1: DISPATCH (Graph layer)
-- [ ] Dispatch `backend-coder` / `frontend-coder` / `database-engineer` / `devops` với `Workspace: "branch"`
-- [ ] Prompt PHẢI có: goal, acceptance criteria, file scope, verify command
-- [ ] KHÔNG tự code, KHÔNG tự grep, KHÔNG tự scan
+## STEP 1: HARNESS (Context Gathering)
+- [ ] Dispatch `research` scan codebase, gather context
+- [ ] Dispatch `security-engineer` nếu có security impact
+- [ ] Dispatch `sre` nếu có production impact
+- [ ] KHÔNG tự grep, KHÔNG tự scan — dùng research agent
 
-### Step 2: RECEIVE & INSPECT (Graph layer)
-- [ ] Đọc report summary từ coder (< 50 lines)
-- [ ] Kiểm tra line counts, build result, file list
-- [ ] KHÔNG đọc build log dài, KHÔNG đọc file content
+## STEP 2: GRAPH (Planning & Design)
+- [ ] Dispatch `business-analyst` viết user stories & acceptance criteria
+- [ ] Dispatch `architect` thiết kế giải pháp (ADR nếu architectural change)
+- [ ] Dispatch `ux-designer` nếu có UI change
+- [ ] Dispatch `planner` phân rã WBS & sắp xếp task sequence
+- [ ] Dispatch `product-owner` validate priority & scope
+- [ ] KHÔNG dispatch coder TRƯỚC khi planner hoàn thành
 
-### Step 3: REVIEW (Loop:Reflect) — Skip nếu Fast-Track
-- [ ] Dispatch `reviewer` với diff summary
-- [ ] Đợi verdict: APPROVE hoặc REJECT
-- [ ] Nếu REJECT → send feedback về coder (Step 1), count retry
-- [ ] Nếu retry >= 3 → escalate `architect`
+## STEP 3: LOOP (Execute → Review → Test)
+Per task từ planner:
+- [ ] Dispatch coder với `Workspace: "branch"` (goal + AC + file scope + verify cmd)
+- [ ] Dispatch `reviewer` audit code
+- [ ] Dispatch `qa-test-engineer` test với MCP (chrome-devtools-mcp)
+- [ ] Dispatch `performance-engineer` nếu perf-critical
+- [ ] Dispatch `governor` validate compliance
+- [ ] Dispatch `security-engineer` review nếu security-sensitive
+- [ ] Nếu PASS → Merge. Nếu DEFECT → quay lại coder (max 3 lần)
 
-### Step 4: MERGE (Graph layer)
-- [ ] `git -C <worktree> add -A; git -C <worktree> commit -m "..."`
-- [ ] `git merge <branch> --no-edit`
-- [ ] Rebuild backend nếu Go changes: `go build ./cmd/standalone/...`
+## STEP 4: RELEASE
+- [ ] Dispatch `release-manager` approve & tag
+- [ ] Dispatch `technical-writer` update docs
+- [ ] Dispatch `sre` post-deploy monitoring
 
-### Step 5: QA AUDIT (Loop:Check)
-- [ ] Dispatch `qa-test-engineer` với danh sách pages cần check
-- [ ] QA dùng `chrome-devtools-mcp`: navigate, list_network_requests, take_screenshot
-- [ ] QA report: PASS hoặc DEFECT
-- [ ] Nếu DEFECT → dispatch coder fix (Step 1), count retry
-- [ ] Nếu retry >= 3 → escalate `architect`
-
-### Step 6: COMPLETE
-- [ ] Update task tracker (task.md)
+## STEP 5: FLEET MANAGEMENT
+- [ ] Dispatch `fleet-controller` cleanup worktrees
 - [ ] Kill idle subagents
-- [ ] Proceed to next task
+- [ ] Update task tracker
 
 ---
 
@@ -51,6 +52,7 @@
 ❌ call_mcp_tool chrome-devtools-mcp (dùng qa-test-engineer)
 ❌ replace_file_content / write_to_file trên source code (dùng coder)
 ❌ Đọc output > 20 lines (yêu cầu subagent summarize)
+❌ Dispatch coder TRƯỚC khi planner hoàn thành WBS
 ```
 
 ## ALLOWED ACTIONS (main thread)
