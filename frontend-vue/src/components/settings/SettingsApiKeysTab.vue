@@ -42,19 +42,7 @@ const newKeyRole = ref('developer')
 const showCreateForm = ref(false)
 
 function handleCreateKey() {
-  if (!newKeyName.value.trim()) return
-  const id = `key-${Date.now()}`
-  const rand = Math.random().toString(36).substring(2, 6)
-  keys.value.unshift({
-    id,
-    name: newKeyName.value.trim(),
-    prefix: `k8s_live_${rand}...`,
-    role: newKeyRole.value === 'admin' ? 'Cluster Admin' : 'Cluster Operator',
-    created_at: new Date().toISOString().split('T')[0],
-    last_used: 'Just now',
-  })
-  newKeyName.value = ''
-  showCreateForm.value = false
+  // API key generation requires backend configuration
 }
 
 function handleRevokeKey(id: string) {
@@ -73,10 +61,11 @@ function handleRevokeKey(id: string) {
       </div>
       <button
         type="button"
-        class="btn btn-primary btn-sm"
-        @click="showCreateForm = !showCreateForm"
+        class="btn btn-secondary btn-sm"
+        disabled
+        title="API key generation requires backend configuration"
       >
-        <span>{{ showCreateForm ? '✕ Close Form' : '+ Generate API Key' }}</span>
+        <span>+ Generate API Key (API key generation requires backend configuration)</span>
       </button>
     </div>
 
@@ -105,8 +94,13 @@ function handleRevokeKey(id: string) {
           </div>
         </div>
         <div class="form-actions" style="margin-top: 8px;">
-          <button type="submit" class="btn btn-primary btn-sm" :disabled="!newKeyName.trim()">
-            <span>🔑 Generate Token</span>
+          <button
+            type="submit"
+            class="btn btn-secondary btn-sm"
+            disabled
+            title="API key generation requires backend configuration"
+          >
+            <span>API key generation requires backend configuration</span>
           </button>
         </div>
       </form>
