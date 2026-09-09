@@ -222,56 +222,5 @@ function asDeployment(row: unknown): DeploymentApp {
 </template>
 
 <style scoped>
-.workload-name-cell { display: flex; flex-direction: column; gap: 4px; }
-.name-primary-row { display: flex; align-items: center; gap: 8px; }
-.workload-name { font-weight: 700; font-size: 13px; color: #fff; }
-.slot-badge { font-size: 10px; background: rgba(6, 182, 212, 0.12); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.25); padding: 1px 6px; border-radius: 4px; }
-.runtime-pill { font-size: 10px; background: rgba(255, 255, 255, 0.06); color: var(--text-muted); border: 1px solid rgba(255, 255, 255, 0.1); padding: 1px 6px; border-radius: 4px; text-transform: uppercase; }
-.name-sub-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); }
-.ns-tag { color: var(--accent-cyan); background: rgba(6, 182, 212, 0.1); padding: 1px 6px; border-radius: 4px; }
-.cluster-tag { color: var(--text-secondary); }
-.team-tag { color: var(--text-muted); }
-
-.strategy-cell { display: flex; align-items: center; gap: 6px; }
-.canary-chip, .bluegreen-chip, .rolling-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 11px; }
-.canary-chip { background: rgba(251, 191, 36, 0.12); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.25); }
-.canary-dot { width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; }
-.canary-mini-bar { width: 36px; height: 4px; border-radius: 2px; background: rgba(0, 0, 0, 0.3); overflow: hidden; }
-.canary-bar-fill { height: 100%; background: #fbbf24; }
-.bluegreen-chip { background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.25); }
-.bg-track-dot { width: 6px; height: 6px; border-radius: 50%; }
-.bg-blue-active { background: #38bdf8; }
-.bg-green-active { background: #34d399; }
-.rolling-chip { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); border: 1px solid rgba(255, 255, 255, 0.08); }
-
-.image-cell { display: flex; flex-direction: column; gap: 2px; }
-.image-name { font-size: 12px; color: #cbd5e1; }
-.image-sub-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-muted); }
-.rev-badge { background: rgba(255, 255, 255, 0.06); padding: 0 4px; border-radius: 3px; }
-.paused-badge { color: #f59e0b; background: rgba(245, 158, 11, 0.15); padding: 0 4px; border-radius: 3px; }
-.ingress-badge { color: #38bdf8; }
-
-.replicas-cell { display: flex; flex-direction: column; gap: 4px; width: 100%; }
-.replicas-header-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.replicas-nums { display: flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; }
-.replicas-word { font-size: 10px; color: var(--text-muted); font-weight: 400; margin-left: 2px; }
-.rollout-chip { font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
-.chip-ready { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
-.chip-updating { background: rgba(245, 158, 11, 0.18); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.35); }
-.chip-paused { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3); }
-.chip-scaled-down { background: rgba(51, 65, 85, 0.3); color: #64748b; }
-.rollout-spin-dot { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; display: inline-block; animation: spin 1s linear infinite; }
-.replicas-progress-track { height: 4px; border-radius: 2px; background: rgba(0, 0, 0, 0.4); overflow: hidden; }
-.replicas-progress-bar { height: 100%; transition: width 0.3s ease; }
-.progress-animated-stripes { background-size: 1rem 1rem; animation: progress-stripes 1s linear infinite; }
-
-.action-buttons { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
-.btn-remove { color: #f87171; }
-.btn-remove:hover:not(:disabled) { border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-.btn-strategy:hover:not(:disabled) { border-color: rgba(168, 85, 247, 0.4); color: #c084fc; }
-.btn-logs:hover:not(:disabled) { border-color: rgba(56, 189, 248, 0.4); color: #38bdf8; }
-.spin-icon { display: inline-block; animation: spin 1s linear infinite; }
-.cursor-pointer { cursor: pointer; }
-
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@import '../../assets/styles/views/deployments.css';
 </style>
