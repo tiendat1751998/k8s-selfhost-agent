@@ -137,7 +137,7 @@ func (h *Handler) GetIncidentReport(w http.ResponseWriter, r *http.Request) {
 	rpt, err := h.reportRepo.GetByIncidentID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, errors.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "report not found", err)
+			writeJSON(w, http.StatusOK, map[string]interface{}{"data": nil})
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to get report", err)
@@ -153,7 +153,7 @@ func (h *Handler) GetIncidentPR(w http.ResponseWriter, r *http.Request) {
 	pr, err := h.prRepo.GetByIncidentID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, errors.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "pull request not found", err)
+			writeJSON(w, http.StatusOK, map[string]interface{}{"data": nil})
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to get PR", err)
