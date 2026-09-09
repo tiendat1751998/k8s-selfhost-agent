@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -50,8 +51,16 @@ func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {
 			continue
 		}
 
-		rxBytes, _ := strconv.ParseInt(fields[0], 10, 64)
-		txBytes, _ := strconv.ParseInt(fields[8], 10, 64)
+		rxBytes, err := strconv.ParseInt(fields[0], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse network rxBytes", slog.String("interface", iface), slog.Any("error", err))
+			continue
+		}
+		txBytes, err := strconv.ParseInt(fields[8], 10, 64)
+		if err != nil {
+			slog.Warn("failed to parse network txBytes", slog.String("interface", iface), slog.Any("error", err))
+			continue
+		}
 
 		var rxRate, txRate int64
 		prev, ok := c.prevNetStats[iface]
