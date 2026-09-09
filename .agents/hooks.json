@@ -1,0 +1,11 @@
+{
+  "orchestrator-role-enforcer": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "powershell -NoProfile -Command \"$json = @{ injectSteps = @(@{ ephemeralMessage = 'ORCHESTRATOR INVARIANT: You are the orchestrator. NEVER code directly. NEVER run chrome-devtools-mcp. NEVER grep/scan codebase. Dispatch to subagents: backend-coder, frontend-coder, qa-test-engineer, research. Follow orchestration-playbook.md steps 0-6.' }) } | ConvertTo-Json -Depth 3; Write-Output $json\"",
+        "timeout": 5
+      }
+    ]
+  }
+}
