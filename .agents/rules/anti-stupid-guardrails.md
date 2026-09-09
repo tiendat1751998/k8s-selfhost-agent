@@ -1,74 +1,82 @@
-﻿# BỘ QUY TẮC PHÒNG VỆ CHỐNG NGU VÀ LƯỜI BIẾNG (ANTI-STUPIDITY & ANTI-LAZY GUARDRAILS)
+﻿# ANTI-STUPIDITY & ANTI-LAZY GUARDRAILS (ENTERPRISE DEFENSE SYSTEM)
 
-> Áp dụng tuyệt đối cho TẤT CẢ agents (Orchestrator, Coder, Reviewer, QA, Architect, Planner...).
-> Vi phạm bất kỳ điều nào dưới đây đều bị coi là LỖI PHẨM CHẤT NGHIÊM TRỌNG (CRITICAL DEFECT).
-
----
-
-## 🚫 6 ĐIỀU CẤM KỴ TUYỆT ĐỐI (THE 6 CARDINAL SINS OF AI)
-
-### 1. CẤM ĐOÁN MÒ (NO BLIND GUESSWORK)
-- Hành vi cấm: Tự đoán tên trường struct, signature hàm, đường dẫn file, API payload mà không mở file nguồn ra xem.
-- Quy tắc ép buộc: Tool call đầu tiên của bất kỳ Coder/Architect nào BẮT BUỘC phải là view_file hoặc tra cứu định nghĩa thực tế. Mọi thay đổi code phải trích dẫn chính xác file:line làm bằng chứng.
-
-### 2. CẤM LÀM ĐỐI PHÓ, MOCK GIẢ (ZERO STUBS & ZERO FAKE PROGRESS)
-- Hành vi cấm: 
-  - Nuốt lỗi bằng _ := func(), _ = err, catch (e) {} trống rỗng.
-  - Viết dữ liệu giả (Math.random(), fake metrics, hardcoded JSON ở production).
-  - Viết unit test không assert cái gì hoặc chỉ assert true == true.
-- Quy tắc ép buộc: Lỗi phát sinh phải được xử lý triệt để (log có ngữ cảnh, trả về lỗi, retry hoặc fallback có chủ đích).
-
-### 3. CẤM "DIỄN TUỒNG" KHI TEST (NO FABRICATED VERIFICATION)
-- Hành vi cấm: Báo cáo "build pass, test xanh, giao diện đẹp" bằng văn bản suông mà không có terminal output thật hoặc không gọi MCP tool thật.
-- Quy tắc ép buộc:
-  - Backend/Code: Bắt buộc đính kèm lệnh terminal thực tế và output nguyên bản (verbatim exit code + stdout/stderr).
-  - QA / Frontend: Bắt buộc gọi chrome-devtools-mcp (navigate_page, list_network_requests, take_screenshot). Phải có file path ảnh chụp thực tế và danh sách status code của các API. Không có ảnh/log = BỊA ĐẶT (FALSIFIED).
-
-### 4. CẤM TỰ BIÊN TỰ DIỄN (NO LONE-WOLF EXECUTION)
-- Hành vi cấm: Orchestrator nhận yêu cầu từ user rồi ném thẳng cho Coder tự làm từ A đến Z, bỏ qua Planner/Architect/Reviewer.
-- Quy tắc ép buộc: Mọi task đều phải qua Graph Layer:
-  1. research: Thu thập hiện trạng.
-  2. planner: Lên WBS chia nhỏ task, xác định thứ tự phụ thuộc.
-  3. coder: Thực thi từng subtask biệt lập trong worktree riêng.
-  4. reviewer: Soi từng dòng diff tìm lỗ hổng/code thối.
-  5. qa-test-engineer: Chạy MCP audit thực tế.
-
-### 5. CẤM PHÌNH MONOLITH (STRICT < 500 LINES / FILE)
-- Hành vi cấm: Viết thêm logic vào một file khiến file đó vượt quá 500 dòng; nhồi nhét CSS, template, API call vào chung một chỗ.
-- Quy tắc ép buộc: Tách nhỏ triệt để theo Clean Architecture & SOLID: Composables riêng, Styles riêng, Sub-components riêng, Domain entities riêng. Vượt 500 dòng = REJECT ngay lập tức.
-
-### 6. CẤM BỎ QUA SKILLS (MANDATORY SKILL APPLICATION)
-- Hành vi cấm: Bắt đầu làm việc mà không mở file SKILL.md được giao trong system prompt.
-- Quy tắc ép buộc: Subagent phải đọc skills được chỉ định và áp dụng trực tiếp kỹ thuật từ skill đó vào việc xử lý task.
+> Strictly binding for ALL agents (Orchestrator, Coder, Reviewer, QA, Architect, Planner).
+> Any violation is classified as a CRITICAL DEFECT requiring immediate rejection and rollback.
 
 ---
 
-## 🛡️ 4 CHỐT CHẶN CƯỠNG CHẾ (HARD ENFORCEMENT GATES)
+## 🚫 THE 6 CARDINAL SINS OF AI AGENTS
 
-### Chốt 1: Bản Hợp Đồng Điều Phối Bắt Buộc (Dispatch Contract)
-Mọi prompt mà Orchestrator gửi cho subagent PHẢI tuân theo cấu trúc hợp đồng 5 phần:
-1. SKILLS BẮT BUỘC: Đọc đường dẫn tuyệt đối SKILL.md trước khi hành động.
-2. PHẠM VI (WHITELIST): Chỉ được phép đọc/sửa các file trong danh sách cụ thể. Cấm đụng file khác.
-3. TIÊU CHÍ NGHIỆM THU (AC): Gherkin hoặc Checklist cụ thể.
-4. RÀNG BUỘC PHỦ ĐỊNH: Không stub, không nuốt lỗi, không file nào > 500 dòng, không mock data.
-5. BẰNG CHỨNG BẮT BUỘC: Lệnh verify + output thật + screenshot (đối với QA).
+### 1. BLIND GUESSWORK (CẤM ĐOÁN MÒ)
+- **Violation**: Inventing struct field names, function signatures, file paths, or API schemas without reading the actual source code first.
+- **Enforcement**: Step 0 for ANY agent MUST be calling iew_file on target source definitions. Every proposed change MUST cite exact ile:line evidence. Guessing is strictly penalized.
 
-### Chốt 2: Cơ Chế Thẩm Tra Độc Lập Của Governor (Anti-Collusion Audit)
-Trước khi Orchestrator merge bất kỳ branch nào:
-- Nếu là task quan trọng / High-Assurance: Dispatch governor để thanh tra git diff và transcript của subagents.
-- Governor kiểm tra: Coder có đọc skill không? Reviewer có soi thật không hay chỉ khen đãi bôi? QA có gọi chrome-devtools-mcp không?
-- Nếu phát hiện thông đồng/đối phó -> Governor phủ quyết (Veto) -> Hủy branch, phạt làm lại.
+### 2. TOY CODE & FAKE PROGRESS (CẤM MOCK GIẢ & CODE ĐỒ CHƠI)
+- **Violation**: 
+  - Discarding errors via _ := func(), _ = err, or empty catch (e) {}.
+  - Injecting synthetic mocks, Math.random(), fake latency, or hardcoded dummy JSON in production pathways.
+  - Writing empty unit tests that assert nothing or only test trivialities (ssert.True(true)).
+- **Enforcement**: Production-grade implementation only. Proper context propagation, typed domain errors, structured slog/zap logging, and deterministic rollback handlers.
 
-### Chốt 3: Quy Tắc 3 Lần Phục Hồi (Max 3 Recovery Rule)
-- Một subagent chỉ được phép retry tối đa 3 lần cho cùng một lỗi.
-- Mỗi lần retry PHẢI thay đổi phương pháp tiếp cận rõ ràng, không được thử lại y hệt lần trước.
-- Sau 3 lần thất bại -> Dừng ngay lập tức, chuyển lên cho architect tái thiết kế.
+### 3. FABRICATED TEST AUDITS (CẤM DIỄN TUỒNG KHI TEST)
+- **Violation**: Text-only claims of \"tests pass\" without raw command output, or QA claiming UI is functional without running browser tools.
+- **Enforcement**:
+  - Backend: Verbatim terminal execution required (command line + exit code 0 + stdout/stderr).
+  - QA / Frontend: MUST call call_mcp_tool with chrome-devtools-mcp (
+avigate_page, list_network_requests, 	ake_screenshot). Actual on-disk screenshot path and full HTTP request status table required.
 
-### Chốt 4: Evidence Ledger (Sổ Bằng Chứng Nghiệm Thu)
-Mọi báo cáo nghiệm thu gửi về Orchestrator bắt buộc phải có khối bằng chứng:
-- Command executed: ...
-- Exit code: 0
-- Raw output snippet: ...
-- Artifact / Screenshot URI: file:///...
-- Lines before / after: ... -> ... (< 500 lines)
-Thiếu khối này -> Orchestrator mặc định từ chối nhận bàn giao (Reject Handoff).
+### 4. LONE-WOLF EXECUTION (CẤM TỰ BIÊN TỰ DIỄN)
+- **Violation**: Main agent bypassing the Graph layer to dump unrefined user prompts directly to coders.
+- **Enforcement**: Graph Layer precedence:
+  1. esearch: Comprehensive codebase reconnaissance.
+  2. planner: Granular, topological WBS breakdown with file-level contracts.
+  3. coder: Surgical implementation inside Git worktree isolation (Workspace: \"branch\").
+  4. eviewer: Line-by-line adversarial code audit.
+  5. qa-test-engineer: Real MCP browser audit across mobile, tablet, desktop viewports.
+
+### 5. MONOLITHIC CODE BLOAT (STRICT < 500 LINES / FILE)
+- **Violation**: Appending logic to existing files pushing line counts past 500 lines; coupling CSS, business logic, and UI templates in one file.
+- **Enforcement**: Clean Architecture & SOLID segregation:
+  - Frontend: Composables in src/composables/, styles in src/assets/styles/, sub-components < 250 lines in src/components/, views < 350 lines.
+  - Backend: Strict 4-tier separation (Domain -> Usecase -> Adapter -> Infrastructure).
+
+### 6. SKILL AMNESIA & IGNORING INSTRUCTIONS
+- **Violation**: Executing tasks without loading assigned skills from system prompt.
+- **Enforcement**: Mandatory execution of Step 0 skill loading. Subagents must state the techniques they are applying from their assigned skills.
+
+---
+
+## 🛡️ 4 HARD ENFORCEMENT GATES
+
+### Gate 1: Mandatory Dispatch Contract (English Only)
+Every dispatch prompt from Orchestrator MUST contain:
+1. REQUIRED SKILLS: Absolute paths of SKILL.md files to read in Step 0.
+2. CONTEXT ANCHOR: Active branch, commit SHA, and mandatory reading of .agents/memory/project_state.md.
+3. SCOPE WHITELIST: Explicit list of allowed files. Touching unlisted files = automatic rejection.
+4. ACCEPTANCE CRITERIA: Verifiable Gherkin (Given-When-Then) or boolean checklist.
+5. NEGATIVE CONSTRAINTS: Zero stubs, zero mocks, zero _ :=, strict < 500 lines/file.
+6. REQUIRED EVIDENCE: Exact command to run and expected output format.
+
+### Gate 2: The 7-Point Adversarial Reviewer Checklist
+eviewer must evaluate every coder diff against:
+1. **Concurrency Safety**: Data race prevention, sync primitives, channel deadlocks.
+2. **Resource Leaks**: Unclosed response bodies, leaked goroutines, uncancelled contexts.
+3. **Error Handling**: Wrapped typed errors (%w), contextual logging.
+4. **Architectural Fitness**: Layer integrity, dependency direction, < 500 line limit.
+5. **Performance & Allocations**: N+1 query elimination, indexing, memory allocations.
+6. **Security & RBAC**: Input sanitization, authorization middleware, least privilege.
+7. **Simplicity (ponytail-review)**: Elimination of dead code, speculative abstractions, and bloat.
+
+### Gate 3: Exhaustive QA Matrix (Happy + Unhappy + Edge Cases)
+qa-test-engineer MUST audit:
+1. **Happy Path**: Expected valid workflows return 200 OK.
+2. **Unhappy Path**: Invalid inputs return 400 Bad Request, unauthorized calls return 401/403.
+3. **Boundary / Edge Cases**: Empty arrays, nil pointers, malformed UUIDs, maximum payload sizes.
+4. **Multi-Viewport Visual Audit**: Mobile (375x812), Tablet (768x1024), Desktop (1440x900).
+
+### Gate 4: Fail-Closed Governor Handoff Audit
+Before any merge, Orchestrator or governor inspects the transcript:
+- Did coder call iew_file before editing?
+- Did reviewer actively critique or merely rubber-stamp?
+- Did QA execute actual chrome-devtools-mcp tools?
+- Any failure = REJECT, ROLLBACK worktree, RE-DISPATCH with penalty instructions.
