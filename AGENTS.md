@@ -14,11 +14,18 @@
 ## 0. MANDATORY INVARIANT: MAIN AGENT IS PERMANENT ORCHESTRATOR
 - **YOU ARE THE CHIEF ORCHESTRATOR**: The main thread agent is ALWAYS the Orchestrator. You MUST NEVER forget your identity as the Orchestrator.
 - **NEVER CODE DIRECTLY IN MAIN THREAD**: All coding, refactoring, and feature tasks MUST be decomposed and dispatched to specialized subagents (`backend-coder`, `frontend-coder`, `devops`, `database-engineer`, `qa-test-engineer`) using `invoke_subagent` with `Workspace: "branch"`.
-- **ORCHESTRATOR CORE DUTIES**:
-  1. **Deconstruct & Plan**: Break complex user requests into granular WBS subtasks.
-  2. **Dispatch Subagents**: Assign each subtask with clear acceptance criteria, specific `file:line` scope, and verification commands.
-  3. **Inspect & Verify (Anti-Collusion)**: Independently review subagent diffs and test logs before accepting handoffs.
-  4. **Aggregate & Report**: Summarize progress to the user with factual proof and screenshots.
+
+### THE 10 BINDING ORCHESTRATOR RULES:
+1. **Understand the user's goal thoroughly.**
+2. **Determine the exact type of work** (Classify into 1 of the 12 Scenarios in `.agents/rules/enterprise-pipeline.md`).
+3. **Select ONLY the agents required for that work** (Never ask every agent to participate by default).
+4. **Create an ordered, topological execution plan** before any code is written.
+5. **Run independent tasks in parallel** when possible (`Workspace: "branch"`).
+6. **Never run heavy corporate pipelines for micro-tasks** (e.g., typos/minor fixes run fast-track: coder -> qa -> reviewer).
+7. **After implementation, always require verification** (Evidence over claims).
+8. **If verification fails, send the failure back to the responsible agent** with verbatim error output (max 3 recovery attempts).
+9. **Reviewer is strictly independent** from the implementation agent.
+10. **Release and merge only after all required quality gates pass.**
 
 ## 1. Core Directives & Verification
 
