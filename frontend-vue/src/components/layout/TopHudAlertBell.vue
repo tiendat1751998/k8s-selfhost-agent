@@ -296,49 +296,4 @@ onUnmounted(() => {
 
 <style scoped>
 @import '../../assets/styles/components/floating-alert-toast.css';
-
-.top-hud-alert-container { position: relative; display: inline-flex; align-items: center; }
-
-/* ==========================================
-   HUD BELL CAPSULE BUTTON
-   ========================================== */
-.hud-bell-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; cursor: pointer; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12)); color: var(--text-secondary, #94a3b8); transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); user-select: none; line-height: 1; }
-
-.hud-bell-pill:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.08); color: #fff; }
-
-.hud-bell-pill:active { transform: translateY(0); }
-
-.bell-icon-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
-
-.bell-emoji { display: inline-block; line-height: 1; }
-
-.bell-count-text { letter-spacing: 0.02em; font-family: var(--font-sans, inherit); }
-
-.bell-mobile-badge { display: none; }
-
-/* Critical Active Pill */
-.pill-critical { background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.55); color: #fb7185; box-shadow: 0 0 14px rgba(244, 63, 94, 0.3), inset 0 0 8px rgba(244, 63, 94, 0.15); animation: critical-pill-pulse 2.2s infinite; }
-
-.pill-critical:hover { background: rgba(244, 63, 94, 0.25); border-color: rgba(244, 63, 94, 0.75); color: #fff; }
-
-/* Warning Active Pill */
-.pill-warning { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.55); color: #fbbf24; box-shadow: 0 0 14px rgba(245, 158, 11, 0.3), inset 0 0 8px rgba(245, 158, 11, 0.15); }
-
-.pill-warning:hover { background: rgba(245, 158, 11, 0.25); border-color: rgba(245, 158, 11, 0.75); color: #fff; }
-
-/* Muted Only Pill */
-.pill-muted { background: rgba(15, 23, 42, 0.75); border: 1px dashed rgba(148, 163, 184, 0.45); color: #cbd5e1; }
-
-.pill-muted:hover { border-color: rgba(148, 163, 184, 0.75); color: #fff; }
-
-/* Clean Pill */
-.pill-clean { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.08); color: #64748b; }
-
-.pill-clean:hover { border-color: rgba(6, 182, 212, 0.4); color: #38bdf8; background: rgba(6, 182, 212, 0.06); }
-
-@keyframes critical-pill-pulse { 0% { box-shadow: 0 0 12px rgba(244, 63, 94, 0.25); }
-  50% { box-shadow: 0 0 20px rgba(244, 63, 94, 0.5); }
-  100% { box-shadow: 0 0 12px rgba(244, 63, 94, 0.25); }
-}
-
 </style>

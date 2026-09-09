@@ -137,30 +137,5 @@ function getServiceCount(serviceId: string): number {
 </template>
 
 <style scoped>
-.log-target-tree { display: flex; flex-direction: column; background: rgba(11, 15, 25, 0.85); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; overflow: hidden; height: 100%; min-height: 520px; }
-.tree-header { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
-.tree-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; }
-.tree-badge { font-size: 10px; color: #38bdf8; background: rgba(56, 189, 248, 0.12); padding: 1px 6px; border-radius: 4px; }
-.tree-content { padding: 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-.tree-item { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; background: transparent; border: 1px solid transparent; border-radius: 6px; color: #94a3b8; text-align: left; cursor: pointer; transition: all 0.15s ease; }
-.tree-item:hover { background: rgba(255, 255, 255, 0.04); color: #f1f5f9; }
-.tree-item.active { background: rgba(6, 182, 212, 0.14); border-color: rgba(6, 182, 212, 0.45); color: #38bdf8; }
-.tree-item.active .item-name { color: #f8fafc; font-weight: 700; }
-.tree-accent-bar { display: none; position: absolute; left: 0; top: 3px; bottom: 3px; width: 3px; background: linear-gradient(180deg, #06b6d4 0%, #10b981 100%); border-radius: 0 2px 2px 0; box-shadow: 0 0 10px rgba(6, 182, 212, 0.8); }
-.tree-item.active .tree-accent-bar { display: block; }
-.item-icon { font-size: 13px; line-height: 1; }
-.item-meta { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.item-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-sub { font-size: 10px; color: #64748b; line-height: 1.1; }
-.item-count { font-size: 10px; padding: 1px 5px; background: rgba(255, 255, 255, 0.05); border-radius: 4px; color: #64748b; }
-.item-count.has-logs { color: #94a3b8; background: rgba(255, 255, 255, 0.08); }
-.tree-item.active .item-count { background: rgba(6, 182, 212, 0.2); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.35); }
-.tree-section { display: flex; flex-direction: column; gap: 2px; }
-.section-toggle { display: flex; align-items: center; gap: 6px; padding: 4px 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; cursor: pointer; user-select: none; border-radius: 4px; }
-.section-toggle:hover { color: #cbd5e1; }
-.section-caret { font-size: 10px; display: inline-block; transition: transform 0.15s ease; }
-.section-caret.caret-down { transform: rotate(90deg); }
-.section-label { flex: 1; }
-.section-count { font-size: 9px; background: rgba(255, 255, 255, 0.05); padding: 0 4px; border-radius: 3px; }
-.section-items { display: flex; flex-direction: column; gap: 2px; padding-left: 6px; }
+@import '../../assets/styles/views/logstream.css';
 </style>
