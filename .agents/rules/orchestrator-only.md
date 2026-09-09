@@ -56,3 +56,22 @@ CODER (Loop:Do) → REVIEWER (Loop:Reflect) → QA+MCP (Loop:Check) → MERGE
 2. Subagents summarize results in < 50 lines
 3. Kill idle subagents after task completion
 4. Reuse existing subagent conversations via `send_message`
+
+## Enterprise Pipeline Enforcement
+
+> Added 2026-09-09. References `.agents/rules/enterprise-pipeline.md`
+
+### MANDATORY: Planning Before Coding
+- Orchestrator MUST dispatch `planner` BEFORE dispatching any coder agent
+- Coder agents receive tasks from planner's WBS, NOT directly from user request
+- Exception: Micro topology (typo fix, 1-line change)
+
+### MANDATORY: Full Review Chain
+- Every code change MUST go through: Coder → Reviewer → QA (MCP) → Merge
+- High-Assurance adds: Performance → Governor → Security
+- Exception: Micro topology
+
+### ALL 20 Agents Must Be Used
+- No agent should be permanently idle
+- Each topology defines which agents participate
+- Orchestrator selects topology based on task complexity

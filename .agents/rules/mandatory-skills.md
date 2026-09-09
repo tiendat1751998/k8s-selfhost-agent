@@ -1,6 +1,7 @@
 # MANDATORY SKILL LOADING — Agent-to-Skill Mapping
 
 > Backup enforcement rule. Every agent MUST read its assigned skills before starting ANY task.
+> Main thread (orchestrator) does NOT have a separate agent definition. Its behavior is governed by GEMINI.md, AGENTS.md, and .agents/rules/*.md
 
 ## How It Works
 Each agent definition in `~/.gemini/config/agents/*.md` contains a `## SKILL LOADING (MANDATORY)` section listing skills to read via `view_file`. This project rule serves as backup documentation and enforcement.
@@ -15,7 +16,6 @@ ALL agents must call `view_file` on their listed skills BEFORE writing code, run
 
 | Agent | Required Skills |
 |-------|----------------|
-| orchestrator | verification-before-completion, dispatching-parallel-agents, subagent-driven-development, executing-plans, finishing-a-development-branch, writing-plans, using-superpowers |
 | backend-coder | verification-before-completion, test-driven-development, systematic-debugging, receiving-code-review, ponytail |
 | frontend-coder | verification-before-completion, test-driven-development, systematic-debugging, receiving-code-review, ponytail |
 | database-engineer | verification-before-completion, test-driven-development, systematic-debugging, receiving-code-review, ponytail, schema-mapping |
