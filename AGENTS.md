@@ -43,6 +43,7 @@
 
 - Rules reside in `.agents/rules/` (including `git-branching.md`, `subagent-orchestration.md`, `vbc-verification.md`).
 - **Enterprise Pipeline**: `.agents/rules/enterprise-pipeline.md` — mandatory 5-phase agent orchestration flow (Harness → Graph → Loop → Release → Fleet)
+- **Anti-Stupidity Guardrails**: `.agents/rules/anti-stupid-guardrails.md` — 6 Cardinal Sins of AI & 4 Hard Enforcement Gates
 - Architectural decisions and task progress must be logged in `.agents/memory/decision_log.jsonl` and `.agents/tasks/`.
 - **Project State Memory**: Every session MUST load `.agents/memory/project_state.md` to restore full architectural context, completed modules, and active tasks.
 

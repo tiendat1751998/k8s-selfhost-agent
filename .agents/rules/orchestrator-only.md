@@ -75,3 +75,22 @@ CODER (Loop:Do) → REVIEWER (Loop:Reflect) → QA+MCP (Loop:Check) → MERGE
 - No agent should be permanently idle
 - Each topology defines which agents participate
 - Orchestrator selects topology based on task complexity
+
+## Anti-Stupidity & Anti-Lazy Hard Enforcement
+
+> References `.agents/rules/anti-stupid-guardrails.md`
+
+### 1. Mandatory Dispatch Contract
+Every subagent dispatch MUST explicitly mandate:
+1. `view_file` on listed skills + target source code as Step 0.
+2. Exact file whitelist (no touching out-of-scope files).
+3. Explicit verifiable acceptance criteria.
+4. Negative constraints (no stubs, no fake data, no `_ = err`, strictly < 500 lines/file).
+5. Exact verification evidence required.
+
+### 2. Zero-Tolerance Rejection (Fail-Closed)
+Orchestrator MUST reject handoffs immediately if:
+- Coder did not run verification commands or provide verbatim output.
+- QA claimed tests passed without calling `chrome-devtools-mcp` (`call_mcp_tool`) and capturing real screenshots.
+- Any modified file exceeds 500 lines.
+- Any mock/stub data or discarded error (`_ :=`) was introduced.
