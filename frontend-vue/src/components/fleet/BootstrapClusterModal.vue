@@ -217,32 +217,5 @@ function handleClose() {
 </template>
 
 <style scoped>
-.bootstrap-content { display: flex; flex-direction: column; gap: 14px; padding: 4px 0; }
-.pane-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.step-lbl { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; }
-.link-btn { background: none; border: none; color: var(--accent-cyan); cursor: pointer; padding: 0; }
-.link-btn:hover { text-decoration: underline; }
-.sep { color: var(--text-muted); margin: 0 4px; }
-.options-grid { display: flex; flex-direction: column; gap: 8px; }
-.opt-card { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 9px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-subtle); cursor: pointer; transition: all 0.15s ease; }
-.opt-card:hover { background: rgba(0, 0, 0, 0.35); border-color: var(--border-medium); }
-.opt-card.is-selected { background: rgba(6, 182, 212, 0.08); border-color: rgba(6, 182, 212, 0.4); }
-.opt-icon { font-size: 18px; }
-.opt-text { display: flex; flex-direction: column; gap: 2px; }
-.opt-title { font-size: 13px; color: #fff; }
-.opt-desc { font-size: 11.5px; color: var(--text-secondary); margin: 0; }
-.terminal-pane { border-radius: 9px; overflow: hidden; background: #05070d; border: 1px solid var(--border-subtle); }
-.term-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
-.term-dots { display: flex; gap: 5px; }
-.dot { width: 9px; height: 9px; border-radius: 50%; }
-.dot.red { background: #f43f5e; }
-.dot.yellow { background: #eab308; }
-.dot.green { background: #10b981; }
-.term-title { color: var(--text-muted); flex: 1; }
-.term-body { padding: 12px; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: #38bdf8; }
-.term-line { line-height: 1.4; word-break: break-all; }
-.alert-error { padding: 8px 12px; border-radius: 6px; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: #fb7185; }
-.footer-actions { display: flex; justify-content: flex-end; gap: 10px; width: 100%; }
-.font-mono { font-family: var(--font-mono); }
-.font-xs { font-size: 11px; }
+@import '../../assets/styles/views/fleet.css';
 </style>
