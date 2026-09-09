@@ -94,23 +94,5 @@ const filterChips: { kind: ResourceKind; label: string; icon: string }[] = [
 </template>
 
 <style scoped>
-.explorer-hud-container { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; border-radius: 12px; }
-.hud-top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.hud-selectors { display: flex; align-items: center; gap: 10px; }
-.selector-group { display: flex; align-items: center; gap: 6px; }
-.hud-label { font-size: 0.72rem; color: #94a3b8; font-family: var(--font-mono); text-transform: uppercase; }
-.hud-select { padding: 4px 8px; font-size: 0.75rem; min-width: 120px; }
-.hud-telemetry-cards { display: flex; align-items: center; gap: 8px; }
-.telemetry-card { display: flex; align-items: baseline; gap: 4px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); padding: 2px 7px; border-radius: 6px; }
-.telemetry-label { font-size: 0.68rem; color: #64748b; text-transform: uppercase; }
-.telemetry-val { font-size: 0.82rem; font-weight: 700; }
-.hud-actions { display: flex; align-items: center; gap: 6px; }
-.hud-bottom-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.filter-chips-scroller { display: flex; align-items: center; gap: 5px; overflow-x: auto; padding-bottom: 2px; }
-.hud-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 9999px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: #94a3b8; font-size: 0.74rem; cursor: pointer; white-space: nowrap; }
-.hud-chip:hover { border-color: rgba(6, 182, 212, 0.35); color: #e2e8f0; }
-.hud-chip.is-active { background: rgba(6, 182, 212, 0.15); border-color: #06b6d4; color: #38bdf8; font-weight: 600; }
-.hud-search-box { position: relative; display: flex; align-items: center; flex: 1; max-width: 260px; min-width: 160px; }
-.hud-search-input { width: 100%; padding: 4px 24px 4px 8px; font-size: 0.75rem; }
-.search-clear-btn { position: absolute; right: 6px; background: none; border: none; color: #64748b; cursor: pointer; font-size: 0.72rem; }
+@import '../../assets/styles/views/explorer.css';
 </style>

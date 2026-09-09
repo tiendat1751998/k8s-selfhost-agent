@@ -210,26 +210,5 @@ function toResource(row: unknown): K8sResource {
 </template>
 
 <style scoped>
-.table-box { padding: 16px; border-radius: 16px; }
-.resource-name-cell { display: flex; align-items: center; gap: 8px; }
-.res-link { color: #38bdf8; text-decoration: none; font-weight: 600; }
-.res-link:hover { text-decoration: underline; }
-.ns-badge { background: rgba(139, 92, 246, 0.12); color: #c084fc; padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; }
-.badge-replicas { color: #38bdf8; font-weight: 700; }
-.badge-keys { color: #fbbf24; }
-.schedule-badge { background: rgba(56, 189, 248, 0.12); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
-.cell-image-text { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
-.roles-wrap { display: flex; gap: 4px; flex-wrap: wrap; }
-.role-badge { background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.25); color: #38bdf8; padding: 1px 6px; border-radius: 4px; font-size: 0.7rem; }
-.ready-cell { font-weight: 600; color: #34d399; }
-.restarts-cell.has-restarts { color: #fb7185; font-weight: 700; }
-
-.action-toolbar { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; flex-wrap: nowrap; }
-.action-btn { height: 28px; padding: 0 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; font-family: var(--font-mono); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.04); color: #94a3b8; }
-.action-btn:hover:not(:disabled) { transform: translateY(-1px); }
-.action-btn-cyan { background: rgba(6, 182, 212, 0.08); border-color: rgba(6, 182, 212, 0.25); color: #38bdf8; }
-.action-btn-amber { background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.25); color: #fbbf24; }
-.action-btn-emerald { background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.25); color: #34d399; }
-.action-btn-secondary { background: rgba(99, 102, 241, 0.08); border-color: rgba(99, 102, 241, 0.25); color: #a5b4fc; }
-.action-btn-danger { background: rgba(244, 63, 94, 0.08); border-color: rgba(244, 63, 94, 0.25); color: #fb7185; }
+@import '../../assets/styles/views/explorer.css';
 </style>

@@ -130,16 +130,5 @@ async function handleApply() {
 </template>
 
 <style scoped>
-.create-modal-body { display: flex; flex-direction: column; gap: 12px; }
-.template-chips-section { display: flex; flex-direction: column; gap: 6px; }
-.template-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.template-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: #94a3b8; font-size: 0.78rem; cursor: pointer; }
-.template-chip:hover { border-color: rgba(6, 182, 212, 0.4); color: #e2e8f0; }
-.template-chip.is-active { background: rgba(6, 182, 212, 0.15); border-color: #06b6d4; color: #38bdf8; font-weight: 600; }
-.apply-error-banner { padding: 8px 12px; border-radius: 6px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.3); color: #fb7185; font-size: 0.8rem; }
-.yaml-editor-wrap { border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); overflow: hidden; background: rgba(10, 15, 29, 0.95); }
-.editor-header { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.75rem; color: #64748b; }
-.btn-clear { background: none; border: none; color: #94a3b8; font-size: 0.72rem; cursor: pointer; }
-.btn-clear:hover { color: #fb7185; }
-.yaml-textarea { width: 100%; padding: 12px; box-sizing: border-box; background: transparent; border: none; color: #38bdf8; font-size: 0.82rem; line-height: 1.5; resize: vertical; outline: none; }
+@import '../../assets/styles/views/explorer.css';
 </style>

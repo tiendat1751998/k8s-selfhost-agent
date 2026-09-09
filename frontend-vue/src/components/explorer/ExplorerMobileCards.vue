@@ -130,48 +130,5 @@ const canDelete = (r: K8sResource) => props.selectedKind !== 'events' && (r.kind
 </script>
 
 <style scoped>
-.mobile-cards-stream { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-.stream-status, .stream-empty { padding: 20px 16px; text-align: center; font-size: 12px; color: var(--text-muted); }
-.cards-list { display: flex; flex-direction: column; gap: 8px; }
-.mobile-card {
-  padding: 10px 12px; border-radius: 10px; background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; gap: 6px; cursor: pointer;
-}
-.mobile-card:hover { border-color: rgba(6, 182, 212, 0.4); background: rgba(15, 23, 42, 0.85); }
-.card-top-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.kind-badge {
-  font-size: 9.5px; font-weight: 800; padding: 2px 5px; border-radius: 4px;
-  background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); border: 1px solid rgba(6, 182, 212, 0.3); flex-shrink: 0;
-}
-.ns-pill {
-  font-size: 10px; color: var(--text-muted); padding: 1px 5px; background: rgba(255, 255, 255, 0.06);
-  border-radius: 4px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0;
-}
-.res-name { font-size: 12.5px; font-weight: 700; color: #fff; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.copy-btn { background: none; border: none; color: var(--text-muted); padding: 3px; border-radius: 4px; display: flex; cursor: pointer; flex-shrink: 0; }
-.copy-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
-.copy-ok { color: #34d399; font-size: 11px; font-weight: 700; }
-.card-mid-row { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
-.status-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; }
-.status-healthy .status-dot { background: #34d399; box-shadow: 0 0 6px #34d399; }
-.status-healthy .status-text { color: #34d399; }
-.status-warning .status-dot { background: #fbbf24; box-shadow: 0 0 6px #fbbf24; }
-.status-warning .status-text { color: #fbbf24; }
-.status-error .status-dot { background: #f43f5e; box-shadow: 0 0 6px #f43f5e; }
-.status-error .status-text { color: #f43f5e; }
-.status-neutral .status-dot { background: var(--text-muted); }
-.status-neutral .status-text { color: var(--text-muted); }
-.metrics-meta { display: flex; align-items: center; gap: 8px; font-size: 10.5px; }
-.card-actions-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
-.btn-card-action {
-  flex: 1; height: 32px; min-height: 32px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
-  display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent;
-  cursor: pointer; white-space: nowrap; transition: all 0.15s ease;
-}
-.btn-logs { background: rgba(6, 182, 212, 0.12); border-color: rgba(6, 182, 212, 0.3); color: #38bdf8; }
-.btn-scale { background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.3); color: #34d399; }
-.btn-restart { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
-.btn-del { background: rgba(244, 63, 94, 0.12); border-color: rgba(244, 63, 94, 0.3); color: #f87171; }
-.btn-card-action:hover { filter: brightness(1.2); }
+@import '../../assets/styles/views/explorer.css';
 </style>

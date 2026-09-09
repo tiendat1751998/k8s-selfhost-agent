@@ -53,32 +53,5 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-.restart-modal-body {
-  padding: 4px 0;
-}
-.restart-warning-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-}
-.warning-icon {
-  font-size: 1.4rem;
-}
-.restart-desc {
-  margin-top: 12px;
-  line-height: 1.5;
-}
-.btn-amber-glow {
-  background: rgba(245, 158, 11, 0.2);
-  border-color: #f59e0b;
-  color: #fbbf24;
-}
-.btn-amber-glow:hover:not(:disabled) {
-  background: #f59e0b;
-  color: #000;
-}
+@import '../../assets/styles/views/explorer.css';
 </style>
