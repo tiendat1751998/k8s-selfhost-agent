@@ -182,43 +182,5 @@ async function handleImportCluster() {
 </template>
 
 <style scoped>
-.import-modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.form-row-2 {
-  display: flex;
-  gap: 12px;
-}
-.import-mode-toggle {
-  display: flex;
-  gap: 8px;
-  margin: 4px 0;
-}
-.toggle-btn {
-  flex: 1;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
-  font-size: 0.8rem;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.toggle-btn.is-active {
-  background: rgba(6, 182, 212, 0.15);
-  border-color: #06b6d4;
-  color: #38bdf8;
-  font-weight: 600;
-}
-.text-area-lg {
-  width: 100%;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.3);
-  color: #f8fafc;
-  resize: vertical;
-}
+@import '../../assets/styles/views/explorer.css';
 </style>

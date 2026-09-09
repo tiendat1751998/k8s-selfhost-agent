@@ -139,20 +139,5 @@ const isWorkload = computed(() => {
 </template>
 
 <style scoped>
-.detail-drawer-body { display: flex; flex-direction: column; gap: 14px; }
-.drawer-tabs { display: flex; gap: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; }
-.drawer-tab-btn { padding: 5px 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #94a3b8; font-size: 0.78rem; cursor: pointer; }
-.drawer-tab-btn.is-active { background: rgba(6, 182, 212, 0.15); border-color: #06b6d4; color: #38bdf8; font-weight: 600; }
-.tab-content { display: flex; flex-direction: column; gap: 12px; }
-.overview-header-card { padding: 12px; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; }
-.meta-row { display: flex; align-items: baseline; gap: 12px; font-size: 0.8rem; }
-.meta-label { width: 70px; color: #64748b; font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; }
-.meta-val { color: #e2e8f0; word-break: break-all; }
-.labels-row { align-items: flex-start; }
-.chips-wrap { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
-.kv-chip { padding: 2px 6px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; font-size: 0.72rem; color: #38bdf8; }
-.section-title { margin: 0 0 6px 0; font-size: 0.78rem; color: #94a3b8; text-transform: uppercase; }
-.json-spec-box, .yaml-code { background: rgba(10, 15, 29, 0.95); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px; color: #38bdf8; font-size: 0.76rem; max-height: 420px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
-.yaml-toolbar { display: flex; justify-content: flex-end; gap: 8px; }
-.drawer-footer-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; width: 100%; }
+@import '../../assets/styles/views/explorer.css';
 </style>

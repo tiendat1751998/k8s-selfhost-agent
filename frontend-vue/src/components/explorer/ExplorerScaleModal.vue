@@ -98,45 +98,5 @@ watch(
 </template>
 
 <style scoped>
-.scale-modal-body {
-  padding: 6px 0;
-}
-.scale-stepper-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
-}
-.stepper-input-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.btn-stepper {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font-size: 1.1rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.btn-stepper:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.scale-num-input {
-  width: 80px;
-  text-align: center;
-  height: 36px;
-}
-.scale-range-slider {
-  margin-top: 6px;
-  accent-color: #06b6d4;
-  cursor: pointer;
-}
+@import '../../assets/styles/views/explorer.css';
 </style>
