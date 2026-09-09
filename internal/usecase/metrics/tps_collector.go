@@ -230,7 +230,9 @@ func (c *TPSCollector) Start(ctx context.Context) {
 	)
 
 	// Run initial collection
-	_, _ = c.Collect(ctx)
+	if _, err := c.Collect(ctx); err != nil {
+		c.logger.Warn("Initial TPS collection failed", zap.Error(err))
+	}
 
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
@@ -245,7 +247,9 @@ func (c *TPSCollector) Start(ctx context.Context) {
 			return
 		case <-ticker.C:
 			collectCtx, cancel := context.WithTimeout(ctx, c.interval-500*time.Millisecond)
-			_, _ = c.Collect(collectCtx)
+			if _, err := c.Collect(collectCtx); err != nil {
+				c.logger.Warn("Periodic TPS collection failed", zap.Error(err))
+			}
 			cancel()
 		}
 	}

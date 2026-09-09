@@ -69,16 +69,12 @@ func (r *AnsibleRunner) RunPlaybook(ctx context.Context, opts AnsiblePlaybookOpt
 	cmd.Stderr = writer
 
 	if err := cmd.Start(); err != nil {
-		// Mock baseline output in test environment without Ansible binary
-		msg := fmt.Sprintf("[%s %s] PLAY [Hardening & Air-Gapped Setup] ********************\nPLAY RECAP: localhost : ok=5 changed=2 unreachable=0 failed=0\n",
-			r.binaryPath, opts.PlaybookFile)
-		_, _ = writer.Write([]byte(msg))
 		return &AnsibleResult{
 			Playbook: opts.PlaybookFile,
-			Success:  true,
-			Output:   msg,
+			Success:  false,
+			Output:   buf.String(),
 			Duration: time.Since(start),
-		}, nil
+		}, errors.Wrap(err, fmt.Sprintf("failed to start ansible-playbook binary '%s'", r.binaryPath))
 	}
 
 	err := cmd.Wait()

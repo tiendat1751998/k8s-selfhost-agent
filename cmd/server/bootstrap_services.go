@@ -239,7 +239,14 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		"email":   notifier.NewEmailNotifier(),
 		"webhook": notifier.NewWebhookNotifier(),
 	}
-	_ = usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers)
+	ruleEngine, err := usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers, usecaseAlert.WithLogger(log))
+	if err != nil {
+		for i := len(stopFns) - 1; i >= 0; i-- {
+			stopFns[i]()
+		}
+		return nil, fmt.Errorf("initializing alert rule engine: %w", err)
+	}
+	_ = ruleEngine
 	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
 
 	clientManager := infraCluster.NewClientManager(fleetRepo)
