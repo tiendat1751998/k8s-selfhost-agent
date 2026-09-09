@@ -55,53 +55,5 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-.templates-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.template-item {
-  padding: 14px;
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.tmpl-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.tmpl-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  margin: 0;
-}
-
-.tmpl-category {
-  font-size: 11px;
-  color: var(--accent-cyan);
-}
-
-.tmpl-desc {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.4;
-  margin: 0;
-}
-
-.tmpl-specs {
-  display: flex;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--text-muted);
-  background: rgba(0, 0, 0, 0.2);
-  padding: 6px 10px;
-  border-radius: 6px;
-}
+@import '../../assets/styles/views/deployments.css';
 </style>
