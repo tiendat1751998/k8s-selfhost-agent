@@ -63,11 +63,4 @@ const emit = defineEmits<{
 
 <style scoped>
 @import '../../../assets/styles/components/alert-center.css';
-
-.alert-header-batch-actions,
-.alert-footer-batch-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
 </style>

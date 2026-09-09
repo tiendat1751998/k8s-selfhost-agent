@@ -153,46 +153,5 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-.topology-section { display: flex; flex-direction: column; gap: 16px; }
-.topology-header-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.topology-title-group { display: flex; flex-direction: column; gap: 4px; }
-.topology-title-with-pulse { display: flex; align-items: center; gap: 10px; }
-.pulse-beacon { width: 10px; height: 10px; border-radius: 50%; background: #06b6d4; box-shadow: 0 0 10px #06b6d4; animation: pulseBeacon 2s infinite ease-in-out; }
-@keyframes pulseBeacon { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.3); opacity: 1; filter: drop-shadow(0 0 8px #06b6d4); } }
-.section-title { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text-primary, #f8fafc); margin: 0; }
-.title-full { display: inline; }
-.title-mobile { display: none; }
-.section-subtitle { font-size: 12px; color: var(--text-secondary, #94a3b8); margin: 0; }
-.topology-mesh-indicator { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.08); font-size: 11.5px; }
-.mesh-dot-active { width: 7px; height: 7px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; }
-.mesh-label { color: var(--text-secondary, #94a3b8); }
-.text-cyan { color: #06b6d4; }
-.font-bold { font-weight: 700; }
-.font-mono { font-family: var(--font-mono, monospace); }
-.topology-filter-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; border-radius: 12px; background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.08); flex-wrap: wrap; }
-.topology-filter-pills { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.filter-pill-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-secondary, #94a3b8); font-size: 11.5px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
-.filter-pill-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
-.filter-pill-btn.active { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
-.pill-count { font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); }
-.btn-reset-order { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11px; color: #38bdf8; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
-.btn-reset-order:hover { background: rgba(56, 189, 248, 0.2); color: #fff; }
-.node-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
-.empty-topology-state { padding: 36px 20px; text-align: center; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 12px; grid-column: 1 / -1; color: var(--text-muted, #64748b); }
-.empty-topology-icon { font-size: 28px; }
-.empty-topology-text { font-size: 13px; color: var(--text-secondary, #94a3b8); }
-.btn-reset-filters { background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
-.btn-reset-filters:hover { background: rgba(56, 189, 248, 0.22); }
-@media (max-width: 640px) {
-  .topology-header-row { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .topology-title-group { width: 100%; }
-  .section-subtitle { display: none; }
-  .title-full { display: none; }
-  .title-mobile { display: inline; }
-  .topology-mesh-indicator { width: 100%; justify-content: space-between; padding: 6px 10px; font-size: 10.5px; }
-  .topology-filter-bar { padding: 8px 10px; gap: 8px; }
-  .topology-filter-pills { width: 100%; overflow-x: auto; flex-wrap: nowrap; gap: 6px; padding: 4px 2px; }
-  .filter-pill-btn { white-space: nowrap; flex-shrink: 0; padding: 6px 10px; font-size: 11.5px; }
-  .node-cards-grid { grid-template-columns: 1fr; gap: 12px; }
-}
+@import '../../assets/styles/views/overview.css';
 </style>

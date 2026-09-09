@@ -141,41 +141,5 @@ function navigateTo(link?: string) {
 </template>
 
 <style scoped>
-.overview-activity-feed {
-  padding: 18px 20px;
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.feed-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.feed-title-wrap { display: flex; flex-direction: column; gap: 2px; }
-.feed-title { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; font-weight: 800; letter-spacing: -0.01em; color: var(--text-primary, #f8fafc); margin: 0; }
-.feed-icon { font-size: 16px; }
-.feed-subtitle { font-size: 11.5px; color: var(--text-secondary, #94a3b8); }
-.btn-alert-center { background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); color: #38bdf8; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
-.btn-alert-center:hover { background: rgba(56, 189, 248, 0.2); transform: translateY(-1px); }
-.empty-feed { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 24px 16px; border-radius: 8px; background: rgba(255, 255, 255, 0.02); color: var(--text-muted, #64748b); font-size: 12.5px; }
-.empty-feed-icon { font-size: 20px; }
-.feed-list { display: flex; flex-direction: column; gap: 8px; }
-.feed-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer; transition: all 0.2s ease; }
-.feed-item:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(56, 189, 248, 0.3); transform: translateX(2px); }
-.item-badge-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.severity-critical .item-badge-dot { background: #f43f5e; box-shadow: 0 0 8px #f43f5e; }
-.severity-warning .item-badge-dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
-.severity-info .item-badge-dot { background: #06b6d4; box-shadow: 0 0 8px #06b6d4; }
-.severity-success .item-badge-dot { background: #10b981; box-shadow: 0 0 8px #10b981; }
-.item-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-.item-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.item-title { font-size: 12.5px; color: var(--text-primary, #f8fafc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-time { font-size: 10.5px; color: var(--text-muted, #64748b); white-space: nowrap; }
-.item-desc { font-size: 11.5px; color: var(--text-secondary, #94a3b8); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-arrow { color: var(--text-muted, #64748b); font-size: 13px; transition: transform 0.2s ease, color 0.2s ease; }
-.feed-item:hover .item-arrow { color: #38bdf8; transform: translateX(2px); }
-.font-mono { font-family: var(--font-mono, monospace); }
-.font-bold { font-weight: 700; }
+@import '../../assets/styles/views/overview.css';
 </style>

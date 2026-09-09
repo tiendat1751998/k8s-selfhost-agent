@@ -189,34 +189,4 @@ onUnmounted(() => document.removeEventListener('click', handleDocumentClick))
 
 <style scoped>
 @import '../../../assets/styles/components/alert-center.css';
-
-.btn-text-full {
-  display: inline;
-}
-.btn-text-mobile {
-  display: none;
-}
-
-@media (max-width: 640px) {
-  .btn-text-full {
-    display: none !important;
-  }
-  .btn-text-mobile {
-    display: inline !important;
-  }
-  .card-actions-row {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 6px;
-    align-items: center;
-    overflow-x: auto;
-  }
-  .card-actions-row .btn-card-action,
-  .card-actions-row .btn-card-mute-pill,
-  .card-actions-row .btn-card-dismiss {
-    padding: 4px 8px;
-    font-size: 11px;
-    white-space: nowrap;
-  }
-}
 </style>

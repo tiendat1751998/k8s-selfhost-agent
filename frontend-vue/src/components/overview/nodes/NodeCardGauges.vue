@@ -25,15 +25,5 @@ const isDisabled = computed(() =>
 </template>
 
 <style scoped>
-.node-gauges-cluster {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  padding: 10px 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.18);
-  border-radius: 10px;
-}
-.gauge-col { display: flex; flex-direction: column; align-items: center; }
+@import '../../../assets/styles/views/overview.css';
 </style>
