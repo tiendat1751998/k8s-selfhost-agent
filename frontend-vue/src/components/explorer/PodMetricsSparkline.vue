@@ -80,18 +80,5 @@ function getColorClass(pct: number): string {
 </template>
 
 <style scoped>
-.pod-metrics-sparkline { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
-.is-compact { gap: 2px; min-width: 110px; }
-.metric-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
-.metric-lbl { width: 26px; color: var(--text-muted); font-size: 10px; font-weight: 700; }
-.bar-container { flex: 1; display: flex; align-items: center; }
-.spark-bar { width: 100%; height: 5px; display: block; }
-.bar-bg { fill: rgba(255, 255, 255, 0.08); }
-.color-emerald { fill: #10b981; color: #10b981; }
-.color-amber { fill: #f59e0b; color: #f59e0b; }
-.color-crimson { fill: #f43f5e; color: #f43f5e; }
-.empty-bar { color: var(--text-muted); font-size: 10px; }
-.metric-val { font-size: 11px; font-weight: 600; text-align: right; min-width: 52px; }
-.text-muted { color: var(--text-muted); }
-.font-mono { font-family: var(--font-mono); }
+@import '../../assets/styles/views/explorer.css';
 </style>

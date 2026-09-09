@@ -72,38 +72,5 @@ function getPodContainerNames(pod: K8sResource | null): string[] {
 </template>
 
 <style scoped>
-.pod-terminal-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.container-select-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.container-tabs {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.container-tab-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  padding: 4px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.container-tab-btn.is-active {
-  background: rgba(6, 182, 212, 0.2);
-  border-color: #06b6d4;
-  color: #fff;
-}
+@import '../../assets/styles/views/explorer.css';
 </style>

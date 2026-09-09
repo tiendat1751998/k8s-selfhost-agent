@@ -122,42 +122,5 @@ async function handleScaleConfirm() {
 </template>
 
 <style scoped>
-.scale-stepper-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.stepper-input-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-stepper {
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #fff;
-  font-size: 1.2rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.scale-num-input {
-  text-align: center;
-  font-size: 1.1rem;
-  font-weight: 700;
-  width: 90px;
-}
-
-.scale-range-slider {
-  width: 100%;
-  accent-color: #06b6d4;
-}
+@import '../../assets/styles/views/explorer.css';
 </style>

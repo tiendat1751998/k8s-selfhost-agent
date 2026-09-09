@@ -77,18 +77,5 @@ async function handleDeleteConfirmed() {
 </template>
 
 <style scoped>
-.delete-modal-content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  text-align: center;
-  align-items: center;
-}
-.delete-warning-icon {
-  font-size: 2.5rem;
-}
-.delete-msg {
-  font-size: 0.95rem;
-  color: #cbd5e1;
-}
+@import '../../assets/styles/views/explorer.css';
 </style>
