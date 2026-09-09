@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOverviewDashboard } from '../composables/useOverviewDashboard'
 
@@ -7,6 +8,7 @@ import RequestFlowBar from '../components/overview/hud/RequestFlowBar.vue'
 import OverviewSaturationTrends from '../components/overview/hud/OverviewSaturationTrends.vue'
 import OverviewMobileStream from '../components/overview/OverviewMobileStream.vue'
 import NodeCard from '../components/overview/nodes/NodeCard.vue'
+import NodeTableView from '../components/overview/nodes/NodeTableView.vue'
 import NodeDiagnosticsDrawer from '../components/overview/drawer/NodeDiagnosticsDrawer.vue'
 import DeepDiveTrafficModal from '../components/overview/modals/DeepDiveTrafficModal.vue'
 import type { MutedAlertConfig } from '../stores/alertStore'
@@ -14,6 +16,7 @@ import type { MutedAlertConfig } from '../stores/alertStore'
 export type { MutedAlertConfig }
 
 const router = useRouter()
+const nodeViewMode = ref<'grid' | 'table'>('table')
 
 const {
   overview,
@@ -102,25 +105,7 @@ const {
       </div>
     </header>
 
-    <!-- Mobile 44px Command Bar (<640px) -->
-    <header class="mobile-command-bar">
-      <div class="mobile-command-left">
-        <h1 class="mobile-title">Overview</h1>
-        <span class="badge" :class="isLiveWs ? 'badge-emerald' : 'badge-cyan'">
-          <span class="pulse-dot" :class="{ 'pulse-active': isLiveWs }"></span>
-          <span>{{ isLiveWs ? 'Live' : 'Synced' }}</span>
-        </span>
-      </div>
-      <div class="mobile-command-actions">
-        <button class="btn btn-secondary btn-compact" @click="pollClusterMetrics" :disabled="loading" title="Refresh">
-          <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
-        </button>
-        <button class="btn btn-secondary btn-compact" @click="openDeepDiveModal" title="Deep-Dive Telemetry">
-          <span class="btn-icon">📊</span>
-          <span>Deep-Dive</span>
-        </button>
-      </div>
-    </header>
+    
 
     <!-- LOADING SKELETON -->
     <div v-if="loading && !overview" class="skeleton-hud-grid">
@@ -158,6 +143,7 @@ const {
           :runningContainers="runningContainers"
           :totalContainers="totalContainers"
           :effectiveHttpRps="effectiveHttpRps"
+          :tpsData="tpsData"
           :isLiveWs="isLiveWs"
           :lastUpdated="lastUpdated"
           :loading="loading"
@@ -276,15 +262,34 @@ const {
             </button>
           </div>
 
-          <div class="topology-order-actions" v-if="customNodeOrder.length > 0">
-            <button class="btn-reset-order font-mono" @click="resetNodeOrder" title="Reset customized card order">
+          <div class="topology-order-actions">
+            <div class="view-mode-toggle glass-panel">
+              <button class="toggle-btn" :class="{ active: nodeViewMode === 'table' }" @click="nodeViewMode = 'table'">📑 Bảng</button>
+              <button class="toggle-btn" :class="{ active: nodeViewMode === 'grid' }" @click="nodeViewMode = 'grid'">🗂 Thẻ</button>
+            </div>
+            
+            <button v-if="customNodeOrder.length > 0" class="btn-reset-order font-mono" @click="resetNodeOrder" title="Reset customized card order">
               <span>↺ Reset Card Order</span>
             </button>
           </div>
         </div>
 
-        <!-- Node Cards Grid -->
-        <div class="node-cards-grid">
+        <template v-if="nodeViewMode === 'table'">
+          <NodeTableView
+            :nodes="filteredTopologyNodes"
+            :busiestNodeId="busiestNodeId"
+            @click="handleNodeCardClick"
+            @details="inspectNode"
+            @logs="manageNode"
+            @scale="manageNode"
+            @restart="manageNode"
+            @yaml="manageNode"
+            @delete="manageNode"
+          />
+        </template>
+        <template v-else>
+          <!-- Node Cards Grid -->
+          <div class="node-cards-grid">
           <div
             v-if="filteredTopologyNodes.length === 0"
             class="empty-topology-state glass-panel"
@@ -305,6 +310,7 @@ const {
             @dragstart="onDragStart" @dragover="onDragOver" @dragenter="onDragEnter" @dragleave="onDragLeave" @drop="onDrop" @dragend="onDragEnd"
           />
         </div>
+        </template>
       </section>
       </div>
     </div>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { SystemOverview, NodeMetrics } from '../../api/overview'
+import NodeTableView from './nodes/NodeTableView.vue'
 
 interface Props {
   overview: SystemOverview
@@ -7,6 +9,7 @@ interface Props {
   runningContainers: number
   totalContainers: number
   effectiveHttpRps: number
+  tpsData?: any
   isLiveWs?: boolean
   lastUpdated?: Date
   loading?: boolean
@@ -16,9 +19,20 @@ defineProps<Props>()
 
 const emit = defineEmits<{
   (e: 'inspect', node: NodeMetrics): void
+  (e: 'manage', node: NodeMetrics): void
   (e: 'refresh'): void
   (e: 'deepDive'): void
 }>()
+
+const viewMode = ref<'grid' | 'table'>('table')
+
+function formatBytes(bytes?: number): string {
+  if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}
 
 function formatRps(val: number): string {
   if (!val || isNaN(val)) return '0'
@@ -37,15 +51,35 @@ function formatRps(val: number): string {
       <span class="ticker-dot">•</span>
       <span class="ticker-item"><span class="ticker-label">CPU</span> <span :class="['ticker-val', (overview.total_cpu_percent || 0) >= 80 ? 'text-rose' : 'text-emerald']">{{ Math.round(overview.total_cpu_percent || 0) }}%</span></span>
       <span class="ticker-dot">•</span>
+      <span class="ticker-item"><span class="ticker-label">RAM</span> <span :class="['ticker-val', (overview.total_mem_percent || 0) >= 80 ? 'text-rose' : 'text-cyan']">{{ Math.round(overview.total_mem_percent || 0) }}%</span></span>
+      <span class="ticker-dot">•</span>
+      <span class="ticker-item"><span class="ticker-label">NET</span> <span class="ticker-val text-violet">↓{{ formatBytes(tpsData?.network?.total_rx_bytes_per_sec) }}/s ↑{{ formatBytes(tpsData?.network?.total_tx_bytes_per_sec) }}/s</span></span>
+      <span class="ticker-dot">•</span>
       <span class="ticker-item"><span class="ticker-val text-cyan">{{ formatRps(effectiveHttpRps) }} rps</span></span>
     </div>
 
     <!-- Touch Stream of Active Nodes -->
     <div class="mobile-nodes-stream">
-      <div class="stream-section-title">
-        <span>Active Infrastructure Nodes ({{ nodes.length }})</span>
+      <div class="stream-section-title mobile-view-toggle">
+        <button class="toggle-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">📑 Bảng thông số</button>
+        <button class="toggle-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">🗂 Thẻ</button>
       </div>
-      <div class="nodes-list">
+      <template v-if="viewMode === 'table'">
+        <div class="table-responsive mobile-table-wrapper">
+          <NodeTableView
+            :nodes="nodes"
+            @click="node => emit('inspect', node)"
+            @details="node => emit('inspect', node)"
+            @logs="node => emit('manage', node)"
+            @scale="node => emit('manage', node)"
+            @restart="node => emit('manage', node)"
+            @yaml="node => emit('manage', node)"
+            @delete="node => emit('manage', node)"
+          />
+        </div>
+      </template>
+      <template v-else>
+        <div class="nodes-list">
         <div
           v-for="node in nodes"
           :key="node.node_id"
@@ -73,6 +107,7 @@ function formatRps(val: number): string {
           </div>
         </div>
       </div>
+      </template>
     </div>
   </div>
 </template>
