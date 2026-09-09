@@ -136,19 +136,5 @@ function toggleCapability(capId: string) {
 </template>
 
 <style scoped>
-.prompt-textarea {
-  resize: vertical;
-  line-height: 1.4;
-  font-size: 11px;
-}
-
-.cap-name {
-  font-weight: 700;
-  color: #fff;
-}
-
-.cap-desc {
-  font-size: 9px;
-  margin-top: 2px;
-}
+@import '../../assets/styles/views/agents.css';
 </style>

@@ -149,13 +149,5 @@ function formatTime(d: string) {
 </template>
 
 <style scoped>
-.reasoning-lbl {
-  font-size: 10px;
-  margin-bottom: 2px;
-}
-
-.jsonl-code {
-  color: #38bdf8;
-  word-break: break-all;
-}
+@import '../../assets/styles/views/agents.css';
 </style>
