@@ -192,7 +192,6 @@ func (o *Orchestrator) ExecuteTask(ctx context.Context, task *agent.Task) error 
 		}
 
 		o.broadcastAgentStep(step.stepName, "success", cumulativeDuration)
-		time.Sleep(1 * time.Second) // Small delay for UI smoothness
 	}
 
 	if finalErr != nil {

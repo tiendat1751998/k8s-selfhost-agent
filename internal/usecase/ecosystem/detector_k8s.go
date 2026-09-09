@@ -41,7 +41,14 @@ var knownToolSpecs = []toolProbeSpec{
 				Version    string `json:"Version"`
 				ApiVersion string `json:"ApiVersion"`
 			}
-			_ = json.Unmarshal(body, &payload)
+			if err := json.Unmarshal(body, &payload); err != nil {
+				return "", ecosystem.HealthDegraded, map[string]string{
+					"engine":         "docker-daemon",
+					"storage_driver": "overlay2",
+					"cluster":        "primary-cluster",
+					"error":          fmt.Sprintf("failed to parse version response: %v", err),
+				}
+			}
 			return payload.Version, ecosystem.HealthHealthy, map[string]string{
 				"engine":         "docker-daemon",
 				"storage_driver": "overlay2",
@@ -180,7 +187,13 @@ var knownToolSpecs = []toolProbeSpec{
 				Ver        string `json:"version"`
 				GitVersion string `json:"gitVersion"`
 			}
-			_ = json.Unmarshal(body, &payload)
+			if err := json.Unmarshal(body, &payload); err != nil {
+				return "", ecosystem.HealthDegraded, map[string]string{
+					"probe":       "/api/version",
+					"status_code": "200",
+					"error":       fmt.Sprintf("failed to parse version response: %v", err),
+				}
+			}
 			ver := payload.Version
 			if ver == "" {
 				ver = payload.Ver
@@ -231,7 +244,13 @@ var knownToolSpecs = []toolProbeSpec{
 				Database string `json:"database"`
 				Commit   string `json:"commit"`
 			}
-			_ = json.Unmarshal(body, &payload)
+			if err := json.Unmarshal(body, &payload); err != nil {
+				return "", ecosystem.HealthDegraded, map[string]string{
+					"probe":       "/api/health",
+					"status_code": "200",
+					"error":       fmt.Sprintf("failed to parse health response: %v", err),
+				}
+			}
 			health := ecosystem.HealthHealthy
 			if payload.Database != "" && payload.Database != "ok" {
 				health = ecosystem.HealthDegraded
@@ -259,7 +278,13 @@ var knownToolSpecs = []toolProbeSpec{
 				Standby       bool   `json:"standby"`
 				ServerVersion string `json:"version"`
 			}
-			_ = json.Unmarshal(body, &payload)
+			if err := json.Unmarshal(body, &payload); err != nil {
+				return "", ecosystem.HealthDegraded, map[string]string{
+					"probe":       "/v1/sys/health",
+					"status_code": fmt.Sprintf("%d", resp.StatusCode),
+					"error":       fmt.Sprintf("failed to parse health response: %v", err),
+				}
+			}
 			health := ecosystem.HealthHealthy
 			if payload.Sealed || (resp.StatusCode != http.StatusOK && resp.StatusCode != 429) {
 				health = ecosystem.HealthDegraded

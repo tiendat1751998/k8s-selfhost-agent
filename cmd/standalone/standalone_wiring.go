@@ -3,6 +3,7 @@
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -196,11 +197,15 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	tenancyRepo := postgres.NewTenancyRepo(pgClient)
 
 	alertRepo := postgres.NewAlertRepo(pgClient)
-	_ = usecaseAlert.NewRuleEngine(alertRepo, map[string]alert.Notifier{
+	ruleEngine, err := usecaseAlert.NewRuleEngine(alertRepo, map[string]alert.Notifier{
 		"slack":   notifier.NewSlackNotifier(),
 		"email":   notifier.NewEmailNotifier(),
 		"webhook": notifier.NewWebhookNotifier(),
-	})
+	}, usecaseAlert.WithLogger(log))
+	if err != nil {
+		return nil, nil, fmt.Errorf("initializing alert rule engine: %w", err)
+	}
+	_ = ruleEngine
 	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
 
 	costCalculator := usecaseCost.NewCalculator(computeHostRepo, metricsCollector)

@@ -153,7 +153,10 @@ func (s *S3Storage) UploadStream(ctx context.Context, relPath string, reader io.
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", errors.NewInternal(fmt.Sprintf("S3 upload failed with status %d (failed to read response body: %v)", resp.StatusCode, err), errors.ErrInternal)
+		}
 		return "", errors.NewInternal(fmt.Sprintf("S3 upload failed with status %d: %s", resp.StatusCode, string(body)), errors.ErrInternal)
 	}
 
