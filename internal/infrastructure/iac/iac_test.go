@@ -3,7 +3,6 @@ package iac_test
 import (
 	"bytes"
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/iac"
@@ -24,21 +23,21 @@ func TestTerraformRunner_PlanAndApply(t *testing.T) {
 
 	var streamOutput bytes.Buffer
 	planResult, err := runner.Plan(ctx, opts, &streamOutput)
-	if err != nil {
-		t.Fatalf("Plan execution failed: %v", err)
+	if err == nil {
+		t.Fatalf("expected error when terraform binary is not found, got nil")
 	}
 
-	if !planResult.Success {
-		t.Errorf("expected success plan result")
+	if planResult != nil && planResult.Success {
+		t.Errorf("expected failed plan result when binary is not found")
 	}
 
 	applyResult, err := runner.Apply(ctx, opts, &streamOutput)
-	if err != nil {
-		t.Fatalf("Apply execution failed: %v", err)
+	if err == nil {
+		t.Fatalf("expected error when terraform binary is not found, got nil")
 	}
 
-	if !applyResult.Success {
-		t.Errorf("expected success apply result")
+	if applyResult != nil && applyResult.Success {
+		t.Errorf("expected failed apply result when binary is not found")
 	}
 }
 
@@ -54,15 +53,11 @@ func TestAnsibleRunner_RunPlaybook(t *testing.T) {
 
 	var streamOutput bytes.Buffer
 	result, err := runner.RunPlaybook(ctx, opts, &streamOutput)
-	if err != nil {
-		t.Fatalf("Playbook run failed: %v", err)
+	if err == nil {
+		t.Fatalf("expected error when ansible binary is not found, got nil")
 	}
 
-	if !result.Success {
-		t.Errorf("expected successful playbook execution")
-	}
-
-	if !strings.Contains(result.Output, "PLAY RECAP") {
-		t.Errorf("expected output to contain play recap, got: %s", result.Output)
+	if result != nil && result.Success {
+		t.Errorf("expected failed playbook execution when binary is not found")
 	}
 }

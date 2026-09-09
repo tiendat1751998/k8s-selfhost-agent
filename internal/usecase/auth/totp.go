@@ -314,7 +314,9 @@ func (u *Usecase) DisableTOTP(ctx context.Context, userID, password, code string
 		return fmt.Errorf("disabling MFA: %w", err)
 	}
 
-	_ = u.repo.SetRecoveryCodes(ctx, userID, "")
+	if err := u.repo.SetRecoveryCodes(ctx, userID, ""); err != nil {
+		return fmt.Errorf("clearing recovery codes: %w", err)
+	}
 	return nil
 }
 
