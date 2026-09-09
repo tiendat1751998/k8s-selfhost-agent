@@ -99,14 +99,5 @@ function getDbIcon(type: string): string {
 </template>
 
 <style scoped>
-.toggle-badge-btn {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  outline: none;
-}
-.toggle-badge-btn:hover {
-  opacity: 0.85;
-}
+@import '../../assets/styles/views/backup.css';
 </style>

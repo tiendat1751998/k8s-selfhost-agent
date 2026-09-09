@@ -90,30 +90,5 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-.matrix-modal-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.matrix-top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-.matrix-info {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.matrix-scroll-wrap {
-  overflow-x: auto;
-  scrollbar-width: thin;
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
-}
-.role-header-badge.highlighted {
-  background: rgba(168, 85, 247, 0.25);
-  border-color: #c084fc;
-  color: #fff;
-}
+@import '../../assets/styles/views/tenancy.css';
 </style>

@@ -139,44 +139,5 @@ function formatUptime(seconds?: number): string {
 </template>
 
 <style scoped>
-.host-card { padding: 14px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; background: rgba(11, 15, 25, 0.7); border: 1px solid var(--border-subtle); transition: all 0.2s ease; }
-.host-card:hover { border-color: var(--border-medium); }
-.card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-.card-title-group { display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1; min-width: 0; }
-.card-type-icon { font-size: 20px; }
-.card-name-wrap { display: flex; flex-direction: column; min-width: 0; }
-.card-host-name { font-size: 14px; font-weight: 700; color: #fff; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-host-id { font-size: 10.5px; }
-.card-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.type-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
-.badge-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
-.badge-cyan { background: rgba(6, 182, 212, 0.15); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.3); }
-.badge-purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
-.role-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
-.badge-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-.card-endpoint-box { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-subtle); }
-.endpoint-text { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btn-copy-sm { background: none; border: none; cursor: pointer; padding: 0; font-size: 12px; }
-.card-meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; background: rgba(0, 0, 0, 0.2); padding: 8px; border-radius: 8px; }
-.meta-item { display: flex;
-  flex-direction: column; gap: 2px; }
-.meta-item-full { grid-column: 1 / -1; }
-.meta-lbl { font-size: 9.5px; color: var(--text-muted); }
-.meta-val { font-size: 11.5px; font-weight: 600; }
-.test-result-bar { padding: 6px 8px; border-radius: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
-.test-pass { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); color: #34d399; }
-.test-fail { background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.25); color: #fb7185; }
-.test-top { display: flex; justify-content: space-between; align-items: center; }
-.test-status-tag { font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 3px; background: rgba(0,0,0,0.3); }
--agent-telemetry-mini { display: flex; flex-wrap: wrap; gap: 6px; font-size: 10px; color: var(--text-secondary); }
-.card-labels-list { display: flex; flex-wrap: wrap; gap: 4px; }
-.host-tag { font-size: 10px; background: rgba(255, 255, 255, 0.05); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-subtle); color: var(--text-secondary); }
-.card-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-top: 1px solid var(--border-subtle); padding-top: 8px; }
-.footer-btn-group { display: flex; gap: 6px; }
-.font-mono { font-family: var(--font-mono); }
-.text-cyan { color: var(--accent-cyan); }
-.text-emerald { color: var(--accent-emerald); }
-.text-muted { color: var(--text-muted); }
-.btn-danger-outline { border: 1px solid rgba(244, 63, 94, 0.4); color: #fb7185; background: transparent; }
-.btn-danger-outline:hover { background: rgba(244, 63, 94, 0.15); }
+@import '../../assets/styles/views/infra-hosts.css';
 </style>
