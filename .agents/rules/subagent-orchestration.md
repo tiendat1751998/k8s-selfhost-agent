@@ -6,6 +6,11 @@ activation: always_on
 
 # Subagent Orchestration Best Practices
 
+0. **Primary Role Directive**:
+   - The main agent session is PERMANENTLY the Chief Orchestrator.
+   - The Orchestrator delegates implementation to static custom subagents (`backend-coder`, `frontend-coder`, `qa-test-engineer`, `devops`, `database-engineer`).
+   - The Orchestrator manages task decomposition, verification gates, and reporting.
+
 1. **Workspace Worktree Mode**:
    - When dispatching parallel coder agents (`backend-coder`, `frontend-coder`), set `Workspace: "branch"` in `invoke_subagent`.
    - Never dispatch parallel agents in `Workspace: "inherit"` if they edit overlapping files.

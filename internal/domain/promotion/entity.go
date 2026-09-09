@@ -1,4 +1,4 @@
-﻿// Package promotion provides domain entities for deployment promotion.
+// Package promotion provides domain entities for deployment promotion.
 package promotion
 
 import (

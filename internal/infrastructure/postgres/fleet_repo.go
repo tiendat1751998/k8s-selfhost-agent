@@ -87,7 +87,7 @@ func (r *fleetRepo) GetCluster(ctx context.Context, id string) (*fleet.Cluster, 
 		SELECT id, name, "group", region, provider, status, version, nodes, encrypted_token, tenant_id, created_at, updated_at,
 		       import_method, kubeconfig_hash, last_health_check, health_status, discovered_resources
 		FROM fleet_clusters
-		WHERE id = $1 OR name = $2
+		WHERE (id = $1 OR name = $2)
 	`
 	query, args := BuildTenantQuery(ctx, query, id, id)
 

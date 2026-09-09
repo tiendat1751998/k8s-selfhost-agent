@@ -9,12 +9,11 @@ import (
 
 	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
-	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	"github.com/datdt/k8sselfhost/internal/pkg/stringutil"
 )
-
 
 // GitProvider defines the interface for interacting with Git hosting providers.
 type GitProvider interface {
@@ -39,11 +38,11 @@ type Controller struct {
 	providers map[domainGitops.Provider]GitProvider
 	prRepo    domainGitops.Repository
 	incRepo   incident.Repository
-	txManager postgres.TransactionManager
+	txManager ports.TransactionManager
 }
 
 // NewController creates a new GitOps controller with the given providers.
-func NewController(prRepo domainGitops.Repository, incRepo incident.Repository, txManager postgres.TransactionManager) *Controller {
+func NewController(prRepo domainGitops.Repository, incRepo incident.Repository, txManager ports.TransactionManager) *Controller {
 	return &Controller{
 		providers: make(map[domainGitops.Provider]GitProvider),
 		prRepo:    prRepo,
@@ -68,7 +67,7 @@ func (c *Controller) CreateRemediationPR(ctx context.Context, inc *incident.Inci
 
 	// Create domain PR
 	branch := fmt.Sprintf("fix/incident-%s", inc.ID[:8])
-		title := fmt.Sprintf("fix(%s): %s - %s", inc.Namespace, inc.Type, stringutil.Truncate(inc.Message, 60))
+	title := fmt.Sprintf("fix(%s): %s - %s", inc.Namespace, inc.Type, stringutil.Truncate(inc.Message, 60))
 
 	body := buildPRBody(inc, rpt)
 
@@ -335,4 +334,3 @@ func (c *Controller) ClosePR(ctx context.Context, id string) (*domainGitops.Pull
 
 	return pr, nil
 }
-

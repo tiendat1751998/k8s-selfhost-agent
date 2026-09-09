@@ -108,3 +108,25 @@ Presentation (HTTP/WS) → Usecase → Domain ← Infrastructure (Adapter)
 - Test both happy path and error cases.
 - Use `go test -race ./...` for race condition detection.
 - Python tests: `uv run pytest` with 80%+ coverage target.
+
+---
+
+# MANDATORY ENTERPRISE ARCHITECTURE CONSTITUTION: MODULAR CLEAN ARCHITECTURE (<500 LINES / SEPARATED CSS / 4-TIER RWD)
+
+## 1. FRONTEND TAM QUYỀN PHÂN LẬP (< 500 LINES PER FILE)
+- Zero Monolithic Files: Under NO circumstances may any .vue, .ts, or .go file exceed 500 lines.
+- Separation of CSS, Logic, and Template:
+  1. CSS: All styles must be segregated into src/assets/styles/ (base, buttons, tables, modals, responsive, and scoped view styles).
+  2. Composables: All reactive state and API business logic must reside in src/composables/ (useK8sExplorer.ts, useDeployments.ts, useInfraHosts.ts, etc.).
+  3. Sub-Components & Dialogs: Every modal and drawer must be a standalone component in src/components/<feature>/ (< 150-300 lines).
+  4. Views: The main view file must be an orchestrator template of ONLY 150 - 350 lines.
+
+## 2. 4-TIER RWD & MOBILE-FIRST PWA
+- Tier 1 (Mobile < 640px): Hide bulky 800px headers/KPIs, show ultra-compact 48px command bar + Mobile Card Stream (~70px/item) displaying 4-5 workloads on the first screen without horizontal scroll.
+- Tier 2 (Tablet 768-1024px): Auto-collapsing 64px sidebar + 2x2 KPI grid.
+- Tier 3 (Desktop Full HD 1440/1920px): Single left sidebar 240px + 100% data table with standardized labeled buttons [ 📄 Logs ] [ ⚡ Scale/Test ] [ 🔄 Restart ] [ 🎯 Strategy/YAML ] [ 🔍 Details/Edit ] [ 🗑 Delete ] (Crimson Red #f43f5e).
+- Tier 4 (4K 3840px): max-width: 1920px; margin: 0 auto;.
+
+## 3. BACKEND CLEAN ARCHITECTURE, SOLID & ACID (GO)
+- Strict 4-layer structure: internal/domain/ -> internal/usecase/ -> internal/adapter/http/ -> internal/infrastructure/ (Postgres TxManager, K8s client-go, real port 9100 probes).
+- Zero Stubs / No Fake Latency: Prohibit Math.random(). Offline hosts must return latency_ms: 0 and display --.

@@ -187,6 +187,26 @@ func TestJWTAuth_WebSocketQueryTokenAllowed(t *testing.T) {
 	if wLogStream.Code != http.StatusOK {
 		t.Errorf("expected status 200 for query token on /api/v1/logs/stream, got %d", wLogStream.Code)
 	}
+
+	// Upgrade: websocket header with query param token on arbitrary path should be allowed
+	rWSHeader := httptest.NewRequest(http.MethodGet, "/api/v1/k8s/exec?token="+token, nil)
+	rWSHeader.Header.Set("Upgrade", "websocket")
+	wWSHeader := httptest.NewRecorder()
+	handler.ServeHTTP(wWSHeader, rWSHeader)
+
+	if wWSHeader.Code != http.StatusOK {
+		t.Errorf("expected status 200 for query token with Upgrade: websocket header, got %d", wWSHeader.Code)
+	}
+
+	// Connection: upgrade header with query param token on arbitrary path should be allowed
+	rConnHeader := httptest.NewRequest(http.MethodGet, "/api/v1/terminal?token="+token, nil)
+	rConnHeader.Header.Set("Connection", "Upgrade")
+	wConnHeader := httptest.NewRecorder()
+	handler.ServeHTTP(wConnHeader, rConnHeader)
+
+	if wConnHeader.Code != http.StatusOK {
+		t.Errorf("expected status 200 for query token with Connection: Upgrade header, got %d", wConnHeader.Code)
+	}
 }
 
 func TestJWTAuth_TenantClaim(t *testing.T) {

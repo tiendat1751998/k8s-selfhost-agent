@@ -16,33 +16,5 @@ defineProps<{ title?: string }>()
 </template>
 
 <style scoped>
-.base-panel {
-  display: flex;
-  flex-direction: column;
-  background: var(--color-surface-card);
-  border-radius: var(--rounded-xl);
-  border: 1px solid var(--color-hairline);
-  overflow: hidden;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-md) var(--space-lg);
-  border-bottom: 1px solid var(--color-hairline);
-  flex-shrink: 0;
-}
-
-.panel-title {
-  font-size: var(--text-title-sm);
-  font-weight: 600;
-  color: var(--color-on-dark);
-}
-
-.panel-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-md);
-}
+@import '../../assets/styles/components/ui/base.css';
 </style>

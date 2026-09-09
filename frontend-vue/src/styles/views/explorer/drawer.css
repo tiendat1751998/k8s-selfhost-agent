@@ -1,0 +1,326 @@
+/* ==========================================================================
+   K8s Explorer - Enterprise Resource Drawer & Inspection Styles
+   ========================================================================== */
+
+.detail-drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Tabs: Sleek Pill Switcher with Active Cyan Glow */
+.drawer-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow-x: auto;
+  margin-bottom: 2px;
+}
+
+.drawer-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drawer-tab-btn:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.drawer-tab-btn.is-active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: rgba(6, 182, 212, 0.35);
+  color: #38bdf8;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.2);
+}
+
+.tab-overview-content,
+.tab-events-content,
+.tab-yaml-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Metadata Cards: Dark Surface & Clean Border */
+.info-card {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
+}
+
+.card-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.meta-val {
+  word-break: break-all;
+}
+
+.labels-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.tag-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-key {
+  color: #38bdf8;
+}
+
+.tag-val {
+  color: #fff;
+}
+
+.btn-chip-remove {
+  background: none;
+  border: none;
+  color: #fb7185;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.7rem;
+}
+
+.containers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.container-card {
+  background: rgba(11, 15, 25, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.c-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.c-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.c-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.dot-running { background: #10b981; box-shadow: 0 0 6px #10b981; }
+.dot-waiting { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+.dot-terminated { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+.c-state-badge {
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.state-running { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.state-waiting { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+.state-terminated { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+.c-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-meta-row {
+  display: flex;
+  gap: 6px;
+}
+
+.kv-add-row,
+.taints-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.kv-table-wrap,
+.kv-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.k8s-events-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kv-entry-row,
+.taint-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.kv-key-col {
+  width: 140px;
+  font-size: 0.8rem;
+  color: #38bdf8;
+  word-break: break-all;
+}
+
+.kv-val-input {
+  flex: 1;
+}
+
+.taints-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.taint-effect-badge {
+  font-size: 0.7rem;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* YAML Code Block: Monospace, Dark Terminal Background & Animated Copied Badge */
+.yaml-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.btn-copy-yaml {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.copied-badge {
+  color: #34d399;
+  font-weight: 700;
+}
+
+.yaml-code-block {
+  background: rgba(5, 10, 20, 0.95);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  color: #38bdf8;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  max-height: 500px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.yaml-code-block::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.yaml-code-block::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+.yaml-code-block::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.25);
+  border-radius: 9999px;
+}
+.yaml-code-block::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.5);
+}

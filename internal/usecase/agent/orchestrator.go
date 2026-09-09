@@ -10,7 +10,6 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
 	"github.com/datdt/k8sselfhost/internal/domain/ports"
-	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	"github.com/datdt/k8sselfhost/internal/pkg/concurrency"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
@@ -23,10 +22,10 @@ type Orchestrator struct {
 	repo      agent.Repository
 	llmClient ports.LLMClient
 	wsHub     WSBroadcaster
-	txManager postgres.TransactionManager
+	txManager ports.TransactionManager
 }
 
-func NewOrchestrator(repo agent.Repository, llmClient ports.LLMClient, wsHub WSBroadcaster, txManager postgres.TransactionManager) *Orchestrator {
+func NewOrchestrator(repo agent.Repository, llmClient ports.LLMClient, wsHub WSBroadcaster, txManager ports.TransactionManager) *Orchestrator {
 	return &Orchestrator{
 		repo:      repo,
 		llmClient: llmClient,
@@ -141,13 +140,13 @@ func (o *Orchestrator) ExecuteTask(ctx context.Context, task *agent.Task) error 
 		stepName string
 		role     agent.AgentType
 	}{
-		{"TASK", agent.Planner}, // Planner acts first
-		{"LLM", agent.Architect}, // Architect reviews architecture
+		{"TASK", agent.Planner},            // Planner acts first
+		{"LLM", agent.Architect},          // Architect reviews architecture
 		{"CODE", agent.RepositoryAnalyzer}, // Analyzer checks reusable modules
-		{"TEST", agent.BackendEngineer}, // Backend implementations
-		{"FIX", agent.QAEngineer}, // QA validates compilation and tests
-		{"COMMIT", agent.CodeReviewer}, // Code Reviewer audits
-		{"PR", agent.ReleaseManager}, // Release Manager deploys/finalizes
+		{"TEST", agent.BackendEngineer},    // Backend implementations
+		{"FIX", agent.QAEngineer},          // QA validates compilation and tests
+		{"COMMIT", agent.CodeReviewer},     // Code Reviewer audits
+		{"PR", agent.ReleaseManager},       // Release Manager deploys/finalizes
 	}
 
 	var cumulativeDuration int64 = 0

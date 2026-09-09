@@ -38,12 +38,22 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	query := r.URL.Query()
+	node := query.Get("node")
+	service := query.Get("service")
+	container := query.Get("container")
+	namespace := query.Get("namespace")
+	pod := query.Get("pod")
+	level := query.Get("level")
+	keyword := query.Get("keyword")
+
 	filter := logging.LogFilter{
-		Namespace: query.Get("namespace"),
-		Pod:       query.Get("pod"),
-		Container: query.Get("container"),
-		Level:     query.Get("level"),
-		Keyword:   query.Get("keyword"),
+		Namespace: namespace,
+		Pod:       pod,
+		Container: container,
+		Node:      node,
+		Service:   service,
+		Level:     level,
+		Keyword:   keyword,
 	}
 
 	subID := fmt.Sprintf("ws-%s", uuid.New().String()[:8])
@@ -53,6 +63,25 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Send historical logs first
 	for _, entry := range history {
 		data, _ := json.Marshal(entry)
+		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			return
+		}
+	}
+
+	// Emit initial handshake status if targeting specific node/service with no historical records
+	if len(history) == 0 && (node != "" || service != "") {
+		handshakeEntry := logging.LogEntry{
+			Timestamp: time.Now().UTC(),
+			Namespace: namespace,
+			Pod:       pod,
+			Container: container,
+			Node:      node,
+			Service:   service,
+			Stream:    "stdout",
+			Level:     "INFO",
+			Message:   fmt.Sprintf("[INFO] Real-time log stream opened for target (node: %s, service: %s). Waiting for live log events...", node, service),
+		}
+		data, _ := json.Marshal(handshakeEntry)
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			return
 		}

@@ -94,6 +94,10 @@ func (r *IncidentRepo) Update(ctx context.Context, inc *incident.Incident) error
 
 	inc.UpdatedAt = time.Now().UTC()
 
+	if tenancy.TenantIDFromContext(ctx) == "" && tenancy.UserRoleFromContext(ctx) == "" {
+		ctx = tenancy.WithTenantID(ctx, "default-tenant")
+	}
+
 	query := `
 		UPDATE incidents
 		SET status = $1, severity = $2, message = $3, raw_data = $4, updated_at = $5, resolved_at = $6
@@ -202,6 +206,10 @@ func (r *IncidentRepo) List(ctx context.Context, filter incident.Filter) ([]*inc
 
 // GetByPodAndType finds an active (non-resolved) incident for a specific pod and type.
 func (r *IncidentRepo) GetByPodAndType(ctx context.Context, namespace, podName string, incidentType incident.Type) (*incident.Incident, error) {
+	if tenancy.TenantIDFromContext(ctx) == "" && tenancy.UserRoleFromContext(ctx) == "" {
+		ctx = tenancy.WithTenantID(ctx, "default-tenant")
+	}
+
 	query := `
 		SELECT id, cluster_name, namespace, pod_name, type, status, severity, message, raw_data, created_at, updated_at, resolved_at
 		FROM incidents

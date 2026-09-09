@@ -14,26 +14,28 @@
 
 FROM python:3.12-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 RUN pip install --no-cache-dir uv==0.8.13
 
 WORKDIR /code
 
 COPY ./pyproject.toml ./README.md ./uv.lock* ./
-
 COPY ./app ./app
 
 RUN uv sync --frozen
 
 ARG COMMIT_SHA=""
-ENV COMMIT_SHA=${COMMIT_SHA}
+ENV COMMIT_SHA=
 
 ARG AGENT_VERSION=0.0.0
-ENV AGENT_VERSION=${AGENT_VERSION}
+ENV AGENT_VERSION=
 
 EXPOSE 8080
 
-RUN useradd -m -r appuser && chown -R appuser /code
-USER appuser
+RUN useradd -u 10001 -m -r appuser && chown -R appuser:appuser /code
+USER 10001:10001
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/livez')" || exit 1

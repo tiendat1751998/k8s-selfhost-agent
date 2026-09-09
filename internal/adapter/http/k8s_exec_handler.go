@@ -1,4 +1,4 @@
-﻿package http
+package http
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -148,6 +149,19 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "failed to get kubernetes client or config", err)
 		return
+	}
+
+	// Auto-discover namespace if default/empty
+	if namespace == "default" || namespace == "" {
+		podList, listErr := client.CoreV1().Pods("").List(r.Context(), metav1.ListOptions{})
+		if listErr == nil {
+			for _, p := range podList.Items {
+				if p.Name == pod {
+					namespace = p.Namespace
+					break
+				}
+			}
+		}
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
