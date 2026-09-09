@@ -24,6 +24,12 @@ const router = createRouter({
       component: () => import('../views/IncidentsView.vue'),
       meta: { requiresAuth: true }
     },
+    {
+      path: '/agents',
+      name: 'agents',
+      component: () => import('../views/AgentsView.vue'),
+      meta: { requiresAuth: true }
+    },
 
     {
       path: '/slo',
