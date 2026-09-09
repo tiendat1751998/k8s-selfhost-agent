@@ -7,8 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/datdt/k8sselfhost.git
-    # TODO: Pin to specific tag/SHA for production
-    targetRevision: main
+    targetRevision: 98df034a624a7a24c0615f3a9502528dcea9572c
     path: deployments/helm/k8sselfhost
     helm:
       valueFiles:
