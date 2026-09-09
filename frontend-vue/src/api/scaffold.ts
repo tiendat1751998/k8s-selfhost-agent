@@ -4,11 +4,12 @@ export type TemplateCategory = 'all' | 'web' | 'api' | 'worker' | 'database' | '
 
 export interface TemplateVariable {
   name: string
-  label: string
+  label?: string
   type: 'string' | 'number' | 'boolean' | 'select'
   default: string
   required: boolean
   options?: string[]
+  description?: string
 }
 
 export interface Template {
@@ -23,7 +24,7 @@ export interface Template {
   variables: TemplateVariable[]
   tags: string[]
   built_in: boolean
-  tenant_id: string
+  tenant_id?: string
   created_at: string
   updated_at: string
 }
@@ -64,8 +65,8 @@ export const scaffoldApi = {
     api.put<Template>(`/scaffolder/templates/${encodeURIComponent(id)}`, template),
 
   delete: (id: string): Promise<void> =>
-    api.delete<void>(`/scaffolder/templates/${encodeURIComponent(id)}`),
+    api.delete(`/scaffolder/templates/${encodeURIComponent(id)}`),
 
-  render: (req: RenderRequest): Promise<RenderResponse> =>
-    api.post<RenderResponse>('/scaffolder/render', req),
+  render: (request: RenderRequest): Promise<RenderResponse> =>
+    api.post<RenderResponse>('/scaffolder/render', request),
 }

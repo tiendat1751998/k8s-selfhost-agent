@@ -14,6 +14,8 @@ type LogEntry struct {
 	Namespace string    `json:"namespace"`
 	Pod       string    `json:"pod"`
 	Container string    `json:"container"`
+	Node      string    `json:"node,omitempty"`
+	Service   string    `json:"service,omitempty"`
 	Stream    string    `json:"stream"` // stdout, stderr
 	Level     string    `json:"level"`  // INFO, WARN, ERROR, DEBUG
 	Message   string    `json:"message"`
@@ -29,10 +31,14 @@ func (e LogEntry) MarshalJSON() ([]byte, error) {
 		Alias
 		Time string `json:"time"`
 		Msg  string `json:"msg"`
+		Host string `json:"host,omitempty"`
+		App  string `json:"app,omitempty"`
 	}{
 		Alias: Alias(e),
 		Time:  tStr,
 		Msg:   e.Message,
+		Host:  e.Node,
+		App:   e.Service,
 	})
 }
 
@@ -41,6 +47,8 @@ func (e *LogEntry) UnmarshalJSON(data []byte) error {
 	aux := &struct {
 		Time string `json:"time"`
 		Msg  string `json:"msg"`
+		Host string `json:"host"`
+		App  string `json:"app"`
 		*Alias
 	}{
 		Alias: (*Alias)(e),
@@ -50,6 +58,22 @@ func (e *LogEntry) UnmarshalJSON(data []byte) error {
 	}
 	if e.Message == "" && aux.Msg != "" {
 		e.Message = aux.Msg
+	}
+	if e.Node == "" && aux.Host != "" {
+		e.Node = aux.Host
+	}
+	if e.Service == "" && aux.App != "" {
+		e.Service = aux.App
+	}
+	if e.Timestamp.IsZero() && aux.Time != "" {
+		if t, err := time.Parse(time.RFC3339Nano, aux.Time); err == nil {
+			e.Timestamp = t
+		} else if t, err := time.Parse(time.RFC3339, aux.Time); err == nil {
+			e.Timestamp = t
+		} else if t, err := time.Parse("15:04:05.000", aux.Time); err == nil {
+			now := time.Now().UTC()
+			e.Timestamp = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
+		}
 	}
 	return nil
 }
@@ -141,6 +165,8 @@ type LogFilter struct {
 	Namespace string
 	Pod       string
 	Container string
+	Node      string
+	Service   string
 	Level     string
 	Keyword   string
 }
@@ -154,6 +180,21 @@ func (f *LogFilter) Matches(entry LogEntry) bool {
 	}
 	if f.Container != "" && entry.Container != f.Container {
 		return false
+	}
+	if f.Node != "" {
+		matchNode := strings.EqualFold(entry.Node, f.Node) ||
+			(entry.Node == "" && strings.Contains(strings.ToLower(entry.Pod), strings.ToLower(f.Node)))
+		if !matchNode {
+			return false
+		}
+	}
+	if f.Service != "" {
+		matchService := strings.EqualFold(entry.Service, f.Service) ||
+			strings.EqualFold(entry.Container, f.Service) ||
+			strings.Contains(strings.ToLower(entry.Pod), strings.ToLower(f.Service))
+		if !matchService {
+			return false
+		}
 	}
 	if f.Level != "" && strings.ToUpper(entry.Level) != strings.ToUpper(f.Level) {
 		return false
@@ -300,11 +341,11 @@ func (a *LogAggregator) Subscribe(subID string, filter LogFilter, chSize int) (*
 				}
 			}
 		}
-		if len(historical) > 1 {
-			sort.Slice(historical, func(i, j int) bool {
-				return historical[i].Timestamp.Before(historical[j].Timestamp)
-			})
-		}
+	}
+	if len(historical) > 1 {
+		sort.SliceStable(historical, func(i, j int) bool {
+			return historical[i].Timestamp.Before(historical[j].Timestamp)
+		})
 	}
 	a.mu.Unlock()
 

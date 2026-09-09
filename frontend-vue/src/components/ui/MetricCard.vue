@@ -1,5 +1,7 @@
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue'
+
+const props = defineProps<{
   title: string
   value: string | number
   subtitle?: string
@@ -9,13 +11,38 @@ defineProps<{
   badge?: string
   badgeColor?: 'emerald' | 'amber' | 'rose' | 'cyan' | 'violet' | 'muted'
 }>()
+
+const iconMap: Record<string, string> = {
+  alert: '⚠️',
+  warning: '⚠️',
+  fire: '🔥',
+  danger: '🚨',
+  critical: '🚨',
+  ok: '✅',
+  success: '✅',
+  check: '✔️',
+  info: 'ℹ️',
+  clock: '⏱️',
+  shield: '🛡️',
+  cpu: '⚡',
+  ram: '🧠',
+  disk: '💾',
+  network: '🌐'
+}
+
+const resolvedIcon = computed(() => {
+  if (!props.icon) return ''
+  const trimmed = props.icon.trim()
+  const key = trimmed.toLowerCase()
+  return iconMap[key] || trimmed
+})
 </script>
 
 <template>
-  <div class="metric-card glass-panel glass-panel-glow">
+  <div class="metric-card glass-panel">
     <div class="metric-header">
       <div class="metric-title-group">
-        <span v-if="icon" class="metric-icon">{{ icon }}</span>
+        <span v-if="resolvedIcon" class="metric-icon" aria-hidden="true">{{ resolvedIcon }}</span>
         <span class="metric-title">{{ title }}</span>
       </div>
       <span v-if="badge" class="metric-badge" :class="`badge-${badgeColor || 'cyan'}`">
@@ -37,97 +64,5 @@ defineProps<{
 </template>
 
 <style scoped>
-.metric-card {
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border-radius: 14px;
-}
-
-.metric-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.metric-title-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.metric-icon {
-  font-size: 16px;
-}
-
-.metric-title {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary);
-}
-
-.metric-badge {
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-size: 10px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-}
-
-.metric-body {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.metric-value {
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-variant-numeric: tabular-nums;
-}
-
-.metric-trend {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.trend-positive { color: #34d399; }
-.trend-negative { color: #fb7185; }
-.trend-neutral { color: var(--text-muted); }
-
-.metric-footer {
-  font-size: 11px;
-  color: var(--text-muted);
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 8px;
-}
-
-@media (max-width: 640px) {
-  .metric-card {
-    padding: 10px 12px;
-    gap: 6px;
-  }
-
-  .metric-title {
-    font-size: 10px;
-    font-weight: 600;
-  }
-
-  .metric-value {
-    font-size: 18px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .metric-footer {
-    font-size: 10px;
-    padding-top: 6px;
-  }
-}
+@import '../../assets/styles/components/ui/common.css';
 </style>

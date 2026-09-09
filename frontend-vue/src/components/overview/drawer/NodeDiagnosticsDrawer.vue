@@ -3,10 +3,13 @@ import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import type { NodeMetrics, SystemOverview, TpsSnapshot } from '../../../api/overview'
 import type { NodeHistoryResponse, NodeMetricRollup } from '../../../api/compute'
+import { k8sApi } from '../../../api/k8s'
+import type { RemediationResult } from '../../../api/dr'
 import NodeDrawerHeader from './NodeDrawerHeader.vue'
 import NodeLiveDiagnostics from './NodeLiveDiagnostics.vue'
 import NodeHistoricalChart from './NodeHistoricalChart.vue'
 import NodeLogTerminal from './NodeLogTerminal.vue'
+import NodeRemediationModal from './NodeRemediationModal.vue'
 
 interface Props {
   show: boolean
@@ -50,6 +53,50 @@ const router = useRouter()
 const nodeDrawerMode = ref<'live' | 'history'>(props.initialMode)
 const logTerminalRef = ref<InstanceType<typeof NodeLogTerminal> | null>(null)
 const drawerBodyScrollRef = ref<HTMLElement | null>(null)
+
+const showRemediationModal = ref(false)
+const isCordonLoading = ref(false)
+const isNodeUnschedulable = ref(!!props.node?.unschedulable)
+const cordonFeedback = ref<{ text: string; type: 'success' | 'error' } | null>(null)
+
+watch(() => props.node?.unschedulable, (val) => {
+  isNodeUnschedulable.value = !!val
+})
+
+function setFeedback(text: string, type: 'success' | 'error') {
+  cordonFeedback.value = { text, type }
+  setTimeout(() => {
+    if (cordonFeedback.value?.text === text) cordonFeedback.value = null
+  }, 3500)
+}
+
+async function toggleCordon() {
+  if (!props.node) return
+  isCordonLoading.value = true
+  const nodeName = props.node.node_name
+  const cluster = 'default'
+  try {
+    if (isNodeUnschedulable.value) {
+      await k8sApi.uncordonNode(cluster, nodeName)
+      isNodeUnschedulable.value = false
+      setFeedback(`Node ${nodeName} uncordoned`, 'success')
+    } else {
+      await k8sApi.cordonNode(cluster, nodeName)
+      isNodeUnschedulable.value = true
+      setFeedback(`Node ${nodeName} cordoned`, 'success')
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Cordon action failed'
+    setFeedback(msg, 'error')
+  } finally {
+    isCordonLoading.value = false
+  }
+}
+
+function onRemediated(res: RemediationResult) {
+  isNodeUnschedulable.value = true
+  setFeedback(`Node remediated: ${res.node_name}`, 'success')
+}
 
 function resetDrawerScroll() {
   nextTick(() => {
@@ -128,7 +175,7 @@ function onSyncPointInTime(point: NodeMetricRollup, suspectApp?: string) {
   const fromTime = new Date(centerTime - 15 * 60 * 1000)
   const toTime = new Date(centerTime + 15 * 60 * 1000)
   const pad = (n: number) => String(n).padStart(2, '0')
-  const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const formatDt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}TX${pad(d.getHours())}:${pad(d.getMinutes())}`.replace('X', 'T')
 
   logTerminalRef.value?.syncToTime(formatDt(fromTime), formatDt(toTime), suspectApp)
 }
@@ -161,10 +208,8 @@ function openAiIncidents() {
             v-if="show && node"
             class="node-diagnostics-drawer glass-panel"
           >
-            <!-- 1. Header Information Panel at very top -->
             <NodeDrawerHeader :node="node" @close="handleClose" />
 
-            <!-- 2. Pinned Mode Switcher Tabs (Always visible) -->
             <div class="drawer-tabs-pinned">
               <div class="drawer-mode-tabs">
                 <button
@@ -173,50 +218,38 @@ function openAiIncidents() {
                   :class="{ active: nodeDrawerMode === 'live' }"
                   @click="switchMode('live')"
                 >
-                  <span class="tab-icon">⚡</span>
-                  <span class="tab-label-full">Live Diagnostics &amp; Workloads</span>
-                  <span class="tab-label-mobile">Live Telemetry</span>
-                  <span class="tab-pill font-mono">Real-time</span>
+                  <span class="tab-icon">📩</span>
+                  <span class="tab-label-full">Live Telemetry (Real-time)</span>
+                  <span class="tab-label-mobile">Live</span>
+                  <span class="tab-pill">5s Poll</span>
                 </button>
-
                 <button
                   type="button"
                   class="mode-tab-btn"
                   :class="{ active: nodeDrawerMode === 'history' }"
                   @click="switchMode('history')"
                 >
-                  <span class="tab-icon">📈</span>
-                  <span class="tab-label-full">Historical Telemetry &amp; Audit</span>
-                  <span class="tab-label-mobile">Historical</span>
-                  <span class="tab-pill font-mono">{{ nodeHistoryRange }}</span>
+                  <span class="tab-icon">🔅</span>
+                  <span class="tab-label-full">Historical Trends (Timeseries)</span>
+                  <span class="tab-label-mobile">History</span>
+                  <span class="tab-pill">1h - 24h</span>
                 </button>
               </div>
             </div>
 
-            <!-- 3. Scrollable Body containing Tab Content -->
-            <div ref="drawerBodyScrollRef" class="drawer-body-scroll">
-
-              <!-- TAB 1: LIVE DIAGNOSTICS -->
-              <NodeLiveDiagnostics
-                v-if="nodeDrawerMode === 'live'"
-                :node="node"
-                :overview="overview"
-                :tpsData="tpsData"
-              />
-
-              <!-- TAB 2: HISTORICAL TELEMETRY & AUDIT -->
-              <div v-else class="drawer-tab-content">
+            <div ref="drawerBodyScrollRef" class="drawer-body-scroll custom-scrollbar">
+              <div v-if="nodeDrawerMode === 'live'" class="drawer-tab-content animate-fade-in">
+                <NodeLiveDiagnostics :node="node" :overview="overview" :tpsData="tpsData" />
+              </div>
+              <div v-else class="drawer-tab-content animate-fade-in">
                 <div class="node-history-content">
-                  <!-- Top: Multi-Series Chart & KPIs -->
                   <NodeHistoricalChart
-                    :node="node"
+                     :node="node"
                     :nodeHistoryData="nodeHistoryData"
-                    :tpsData="tpsData"
                     :nodeHistoryLoading="nodeHistoryLoading"
                     :nodeHistoryRange="nodeHistoryRange"
                     :customHistFrom="customHistFrom"
                     :customHistTo="customHistTo"
-                    @update:nodeHistoryRange="emit('update:nodeHistoryRange', $event)"
                     @update:customHistFrom="emit('update:customHistFrom', $event)"
                     @update:customHistTo="emit('update:customHistTo', $event)"
                     @range-change="handleRangeChange"
@@ -224,8 +257,6 @@ function openAiIncidents() {
                     @apply-preset="emit('apply-preset', $event)"
                     @sync-point-in-time="onSyncPointInTime"
                   />
-
-                  <!-- Bottom: Log Terminal & Incidents -->
                   <NodeLogTerminal
                     ref="logTerminalRef"
                     :node="node"
@@ -238,26 +269,33 @@ function openAiIncidents() {
 
             <!-- 4. Drawer Footer Actions -->
             <div class="node-drawer-footer">
+              <span v-if="cordonFeedback" class="footer-toast font-mono" :class="cordonFeedback.type">
+                {{ cordonFeedback.text }}
+              </span>
+              <button
+                 type="button"
+                class="btn btn-primary btn-failover"
+                @click="showRemediationModal = true"
+                title="Trigger 1-Click Fast Failover SRE Remediation"
+              >
+                <span>⚡ 1-Click Failover</span>
+              </button>
               <button
                 type="button"
-                class="btn btn-secondary"
-                @click="manageHost"
+                class="btn btn-secondary btn-cordon"
+                :disabled="isCordonLoading"
+                @click="toggleCordon"
+                :title="isNodeUnschedulable ? 'Mark node schedulable' : 'Mark node unschedulable'"
               >
+                <span>{{ isNodeUnschedulable ? '🔵 Uncordon' : '🛡️ Cordon' }}</span>
+              </button>
+              <button type="button" class="btn btn-secondary" @click="manageHost">
                 <span>⚙️ Manage Host</span>
               </button>
-              <button
-                type="button"
-                class="btn btn-primary"
-                @click="openAiIncidents"
-              >
+              <button type="button" class="btn btn-primary" @click="openAiIncidents">
                 <span>🤖 AI RCA</span>
               </button>
-              <button
-                type="button"
-                class="btn btn-secondary btn-close-footer"
-                @click="handleClose"
-                title="Close drawer (Esc)"
-              >
+              <button type="button" class="btn btn-secondary btn-close-footer" @click="handleClose" title="Close drawer (Esc)">
                 <span>✕ Close</span>
               </button>
             </div>
@@ -265,236 +303,19 @@ function openAiIncidents() {
         </Transition>
       </div>
     </Transition>
+
+    <!-- 1-Click SRE Node Remediation Modal -->
+    <NodeRemediationModal
+      v-if="node"
+      :show="showRemediationModal"
+      :nodeName="node.node_name"
+      clusterId="default"
+      @close="showRemediationModal = false"
+      @remediated="onRemediated"
+    />
   </Teleport>
 </template>
 
 <style scoped>
-.drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(4, 6, 12, 0.78);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  z-index: 1000;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.node-diagnostics-drawer {
-  width: 100%;
-  max-width: 1100px;
-  height: 100vh;
-  background: rgba(11, 16, 28, 0.98);
-  border-left: 1px solid var(--border-medium, rgba(255, 255, 255, 0.12));
-  box-shadow: -15px 0 45px rgba(0, 0, 0, 0.75);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  z-index: 1001;
-}
-
-.drawer-tabs-pinned {
-  padding: 12px 24px;
-  background: rgba(11, 16, 28, 0.98);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  flex-shrink: 0;
-  z-index: 10;
-}
-
-.drawer-body-scroll {
-  padding: 16px 24px 48px;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.drawer-mode-tabs {
-  display: flex;
-  gap: 8px;
-  background: rgba(15, 23, 42, 0.7);
-  padding: 4px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  width: 100%;
-  flex-shrink: 0;
-}
-
-.mode-tab-btn {
-  flex: 1;
-  padding: 10px 16px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-muted, #94a3b8);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.mode-tab-btn:hover {
-  color: var(--text-primary, #f8fafc);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.mode-tab-btn.active {
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.35);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25), 0 0 12px rgba(56, 189, 248, 0.15);
-}
-
-.tab-icon {
-  font-size: 14px;
-}
-
-.tab-label-mobile {
-  display: none;
-}
-
-.tab-pill {
-  padding: 2px 7px;
-  border-radius: 4px;
-  font-size: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  color: inherit;
-}
-
-.drawer-tab-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.node-history-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.node-drawer-footer {
-  padding: 14px 24px;
-  background: rgba(15, 23, 42, 0.65);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
-  color: #fff;
-  border: none;
-  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
-}
-
-.btn-primary:hover {
-  opacity: 0.95;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.4);
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-primary, #f8fafc);
-}
-
-.btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.btn-close-footer:hover {
-  background: rgba(244, 63, 94, 0.15);
-  border-color: rgba(244, 63, 94, 0.35);
-  color: #fb7185;
-}
-
-@media (max-width: 640px) {
-  .tab-label-full {
-    display: none;
-  }
-
-  .tab-label-mobile {
-    display: inline;
-  }
-
-  .mode-tab-btn {
-    padding: 8px 10px;
-    font-size: 11.5px;
-  }
-
-  .drawer-tabs-pinned {
-    padding: 8px 12px;
-  }
-
-  .drawer-body-scroll {
-    padding: 12px 12px 100px;
-  }
-
-  .node-drawer-footer {
-    padding: 10px 12px;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .node-drawer-footer .btn {
-    flex: 1 1 calc(50% - 4px);
-    padding: 8px 10px;
-    font-size: 11.5px;
-  }
-
-  .node-drawer-footer .btn-close-footer {
-    flex: 1 1 100%;
-    order: 3;
-    padding: 8px 10px;
-    font-size: 11.5px;
-  }
-}
-
-.font-mono { font-family: var(--font-mono, monospace); }
-
-/* Animations */
-.overlay-fade-enter-active,
-.overlay-fade-leave-active {
-  transition: opacity 0.25s ease;
-}
-.overlay-fade-enter-from,
-.overlay-fade-leave-to {
-  opacity: 0;
-}
-
-.drawer-slide-enter-active {
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.drawer-slide-leave-active {
-  transition: transform 0.22s ease-in;
-}
-.drawer-slide-enter-from,
-.drawer-slide-leave-to {
-  transform: translateX(100%);
-}
-</style>\n
+@import '../../../assets/styles/components/node-diagnostics.css';
+</style>

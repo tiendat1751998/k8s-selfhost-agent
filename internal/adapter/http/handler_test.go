@@ -6,364 +6,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
-	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/usecase/rca"
 )
-
-func TestWriteJSON(t *testing.T) {
-	w := httptest.NewRecorder()
-	writeJSON(w, http.StatusOK, map[string]string{"key": "value"})
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if w.Header().Get("Content-Type") != "application/json" {
-		t.Errorf("expected content-type application/json, got %s", w.Header().Get("Content-Type"))
-	}
-}
-
-func TestWriteError(t *testing.T) {
-	w := httptest.NewRecorder()
-	writeError(w, http.StatusNotFound, "not found", nil)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected status 404, got %d", w.Code)
-	}
-}
-
-func TestParseIntParam(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/?limit=25&offset=10", nil)
-
-	limit := parseIntParam(r, "limit", 50)
-	if limit != 25 {
-		t.Errorf("expected limit 25, got %d", limit)
-	}
-
-	offset := parseIntParam(r, "offset", 0)
-	if offset != 10 {
-		t.Errorf("expected offset 10, got %d", offset)
-	}
-}
-
-func TestParseIntParam_Default(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-
-	limit := parseIntParam(r, "limit", 50)
-	if limit != 50 {
-		t.Errorf("expected default limit 50, got %d", limit)
-	}
-}
-
-func TestParseIntParam_Invalid(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/?limit=abc", nil)
-
-	limit := parseIntParam(r, "limit", 50)
-	if limit != 50 {
-		t.Errorf("expected default limit 50 for invalid input, got %d", limit)
-	}
-}
-
-func TestAuthMiddleware_NoToken(t *testing.T) {
-	handler := AuthMiddleware("")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 when no token configured, got %d", w.Code)
-	}
-}
-
-func TestAuthMiddleware_ValidToken(t *testing.T) {
-	handler := AuthMiddleware("secret-token")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("Authorization", "Bearer secret-token")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 with valid token, got %d", w.Code)
-	}
-}
-
-func TestAuthMiddleware_InvalidToken(t *testing.T) {
-	handler := AuthMiddleware("secret-token")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("Authorization", "Bearer wrong-token")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusForbidden {
-		t.Errorf("expected 403 with invalid token, got %d", w.Code)
-	}
-}
-
-func TestAuthMiddleware_MissingHeader(t *testing.T) {
-	handler := AuthMiddleware("secret-token")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 with missing header, got %d", w.Code)
-	}
-}
-
-func TestParseUUIDParam(t *testing.T) {
-	t.Run("valid UUID", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodGet, "/incidents/123e4567-e89b-12d3-a456-426614174000", nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "123e4567-e89b-12d3-a456-426614174000")
-		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-
-		id, err := parseUUIDParam(r, "id")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if id != "123e4567-e89b-12d3-a456-426614174000" {
-			t.Errorf("expected UUID, got %s", id)
-		}
-	})
-
-	t.Run("valid custom string ID", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodGet, "/services/service-auth-prod", nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "service-auth-prod")
-		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-
-		id, err := parseUUIDParam(r, "id")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if id != "service-auth-prod" {
-			t.Errorf("expected string ID, got %s", id)
-		}
-	})
-
-	t.Run("missing parameter", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodGet, "/incidents/", nil)
-		rctx := chi.NewRouteContext()
-		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-
-		_, err := parseUUIDParam(r, "id")
-		if err == nil {
-			t.Fatalf("expected error for missing param, got nil")
-		}
-	})
-
-	t.Run("parameter too long", func(t *testing.T) {
-		longID := strings.Repeat("a", 129)
-		r := httptest.NewRequest(http.MethodGet, "/incidents/"+longID, nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", longID)
-		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-
-		_, err := parseUUIDParam(r, "id")
-		if err == nil {
-			t.Fatalf("expected error for overly long param (>128 chars), got nil")
-		}
-	})
-}
-
-type mockIncidentRepo struct {
-	mu        sync.Mutex
-	incidents map[string]*incident.Incident
-	created   []*incident.Incident
-	updated   []*incident.Incident
-}
-
-func newMockIncidentRepo() *mockIncidentRepo {
-	return &mockIncidentRepo{
-		incidents: make(map[string]*incident.Incident),
-	}
-}
-
-func (m *mockIncidentRepo) Create(ctx context.Context, inc *incident.Incident) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if inc.ID == "" {
-		inc.ID = "inc-sim-123"
-	}
-	m.incidents[inc.ID] = inc
-	m.created = append(m.created, inc)
-	return nil
-}
-
-func (m *mockIncidentRepo) GetByID(ctx context.Context, id string) (*incident.Incident, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	inc, ok := m.incidents[id]
-	if !ok {
-		return nil, errors.NewNotFound("incident", id)
-	}
-	return inc, nil
-}
-
-func (m *mockIncidentRepo) Update(ctx context.Context, inc *incident.Incident) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.incidents[inc.ID] = inc
-	m.updated = append(m.updated, inc)
-	return nil
-}
-
-func (m *mockIncidentRepo) List(ctx context.Context, filter incident.Filter) ([]*incident.Incident, int64, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var res []*incident.Incident
-	for _, inc := range m.incidents {
-		res = append(res, inc)
-	}
-	return res, int64(len(res)), nil
-}
-
-func (m *mockIncidentRepo) GetByPodAndType(ctx context.Context, namespace, podName string, incidentType incident.Type) (*incident.Incident, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, inc := range m.incidents {
-		if inc.Namespace == namespace && inc.PodName == podName && inc.Type == incidentType {
-			return inc, nil
-		}
-	}
-	return nil, nil
-}
-
-type mockReportRepo struct {
-	mu      sync.Mutex
-	reports map[string]*report.Report
-	created []*report.Report
-}
-
-func newMockReportRepo() *mockReportRepo {
-	return &mockReportRepo{
-		reports: make(map[string]*report.Report),
-	}
-}
-
-func (m *mockReportRepo) Create(ctx context.Context, rpt *report.Report) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if rpt.ID == "" {
-		rpt.ID = "rpt-sim-123"
-	}
-	m.reports[rpt.IncidentID] = rpt
-	m.created = append(m.created, rpt)
-	return nil
-}
-
-func (m *mockReportRepo) GetByID(ctx context.Context, id string) (*report.Report, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, r := range m.reports {
-		if r.ID == id {
-			return r, nil
-		}
-	}
-	return nil, errors.NewNotFound("report", id)
-}
-
-func (m *mockReportRepo) GetByIncidentID(ctx context.Context, incidentID string) (*report.Report, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	r, ok := m.reports[incidentID]
-	if !ok {
-		return nil, errors.NewNotFound("report", incidentID)
-	}
-	return r, nil
-}
-
-func (m *mockReportRepo) List(ctx context.Context, limit, offset int) ([]*report.Report, int64, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var res []*report.Report
-	for _, r := range m.reports {
-		res = append(res, r)
-	}
-	return res, int64(len(res)), nil
-}
-
-type mockPRRepo struct {
-	mu      sync.Mutex
-	prs     map[string]*domainGitops.PullRequest
-	created []*domainGitops.PullRequest
-}
-
-func newMockPRRepo() *mockPRRepo {
-	return &mockPRRepo{
-		prs: make(map[string]*domainGitops.PullRequest),
-	}
-}
-
-func (m *mockPRRepo) Create(ctx context.Context, pr *domainGitops.PullRequest) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if pr.ID == "" {
-		pr.ID = "pr-sim-123"
-	}
-	m.prs[pr.ID] = pr
-	m.created = append(m.created, pr)
-	return nil
-}
-
-func (m *mockPRRepo) GetByID(ctx context.Context, id string) (*domainGitops.PullRequest, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	pr, ok := m.prs[id]
-	if !ok {
-		return nil, errors.NewNotFound("pr", id)
-	}
-	return pr, nil
-}
-
-func (m *mockPRRepo) GetByIncidentID(ctx context.Context, incidentID string) (*domainGitops.PullRequest, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, pr := range m.prs {
-		if pr.IncidentID == incidentID {
-			return pr, nil
-		}
-	}
-	return nil, errors.NewNotFound("pr", incidentID)
-}
-
-func (m *mockPRRepo) Update(ctx context.Context, pr *domainGitops.PullRequest) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.prs[pr.ID] = pr
-	return nil
-}
-
-func (m *mockPRRepo) List(ctx context.Context, status *domainGitops.PRStatus, limit, offset int) ([]*domainGitops.PullRequest, int64, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var res []*domainGitops.PullRequest
-	for _, pr := range m.prs {
-		if status == nil || pr.Status == *status {
-			res = append(res, pr)
-		}
-	}
-	return res, int64(len(res)), nil
-}
 
 func TestSimulateIncident_Default_OOMKilled(t *testing.T) {
 	incRepo := newMockIncidentRepo()
@@ -536,6 +188,177 @@ func TestSimulateIncident_InvalidJSON(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 Bad Request, got %d", w.Code)
+	}
+}
+
+func TestAnalyzeIncident_Standalone_FallbackAndPRCreation(t *testing.T) {
+	incRepo := newMockIncidentRepo()
+	reportRepo := newMockReportRepo()
+	prRepo := newMockPRRepo()
+
+	h := NewHandler(incRepo, reportRepo, prRepo, nil, nil)
+	r := chi.NewRouter()
+	h.RegisterRoutes(r)
+
+	inc, err := incident.New("fleet-primary", "infrastructure", "k8sworker3", incident.TypeNodeNotReady, incident.SeverityCritical, "Node unreachable")
+	if err != nil {
+		t.Fatalf("failed to create incident: %v", err)
+	}
+	inc.ID = "inc-node-down-1"
+	incRepo.incidents[inc.ID] = inc
+
+	req := httptest.NewRequest(http.MethodPost, "/incidents/inc-node-down-1/analyze", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Wait for background fallback synthesis and PR creation
+	var (
+		rpt *report.Report
+		pr  *domainGitops.PullRequest
+	)
+	ctx := context.Background()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if r, err := reportRepo.GetByIncidentID(ctx, "inc-node-down-1"); err == nil && r != nil {
+			rpt = r
+		}
+		if p, err := prRepo.GetByIncidentID(ctx, "inc-node-down-1"); err == nil && p != nil {
+			pr = p
+		}
+		if rpt != nil && pr != nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if rpt == nil {
+		t.Fatal("expected fallback report to be created in report repository")
+	}
+	if rpt.Confidence != 0.92 {
+		t.Errorf("expected confidence 0.92 for critical incident, got %f", rpt.Confidence)
+	}
+	if rpt.RiskLevel != report.RiskCritical {
+		t.Errorf("expected risk level critical, got %s", rpt.RiskLevel)
+	}
+	if rpt.LLMModel != "heuristic-deterministic-v1" {
+		t.Errorf("expected LLMModel 'heuristic-deterministic-v1', got %s", rpt.LLMModel)
+	}
+
+	if pr == nil {
+		t.Fatal("expected automated remediation PR to be created in PR repository")
+	}
+	if len(pr.FilesChanged) == 0 {
+		t.Errorf("expected files changed in PR")
+	}
+
+	// Verify incident status transitioned to remediating
+	updatedInc, err := incRepo.GetByID(ctx, "inc-node-down-1")
+	if err != nil {
+		t.Fatalf("failed to get updated incident: %v", err)
+	}
+	if updatedInc.Status != incident.StatusRemediating {
+		t.Errorf("expected incident status %s, got %s", incident.StatusRemediating, updatedInc.Status)
+	}
+}
+
+func TestAnalyzeIncident_WithRCAPipeline_LLMFailureFallback(t *testing.T) {
+	incRepo := newMockIncidentRepo()
+	reportRepo := newMockReportRepo()
+	prRepo := newMockPRRepo()
+
+	// Pipeline without registry or collector to trigger deterministic fallback
+	pipeline := rca.NewPipeline(nil, nil, reportRepo, incRepo, nil)
+
+	h := NewHandler(incRepo, reportRepo, prRepo, nil, nil)
+	h.SetRCAPipeline(pipeline)
+
+	r := chi.NewRouter()
+	h.RegisterRoutes(r)
+
+	inc, _ := incident.New("fleet-primary", "production", "payment-api-9f8d", incident.TypeOOMKilled, incident.SeverityCritical, "Container OOM")
+	inc.ID = "inc-oom-pipeline-1"
+	incRepo.incidents[inc.ID] = inc
+
+	req := httptest.NewRequest(http.MethodPost, "/incidents/inc-oom-pipeline-1/analyze", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var (
+		rpt *report.Report
+		pr  *domainGitops.PullRequest
+	)
+	ctx := context.Background()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if r, err := reportRepo.GetByIncidentID(ctx, "inc-oom-pipeline-1"); err == nil && r != nil {
+			rpt = r
+		}
+		if p, err := prRepo.GetByIncidentID(ctx, "inc-oom-pipeline-1"); err == nil && p != nil {
+			pr = p
+		}
+		if rpt != nil && pr != nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if rpt == nil {
+		t.Fatal("expected report to be created via pipeline fallback")
+	}
+	if rpt.LLMModel != "heuristic-deterministic-v1" {
+		t.Errorf("expected model 'heuristic-deterministic-v1', got %s", rpt.LLMModel)
+	}
+	if pr == nil {
+		t.Fatal("expected remediation PR to be created")
+	}
+
+	updatedInc, _ := incRepo.GetByID(ctx, "inc-oom-pipeline-1")
+	if updatedInc.Status != incident.StatusRemediating {
+		t.Errorf("expected status %s, got %s", incident.StatusRemediating, updatedInc.Status)
+	}
+}
+
+func TestAnalyzeIncident_NotFound(t *testing.T) {
+	incRepo := newMockIncidentRepo()
+	h := NewHandler(incRepo, nil, nil, nil, nil)
+	r := chi.NewRouter()
+	h.RegisterRoutes(r)
+
+	req := httptest.NewRequest(http.MethodPost, "/incidents/non-existent/analyze", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 Not Found, got %d", w.Code)
+	}
+}
+
+func TestAnalyzeIncident_AlreadyAnalyzing(t *testing.T) {
+	incRepo := newMockIncidentRepo()
+	reportRepo := newMockReportRepo()
+	h := NewHandler(incRepo, reportRepo, nil, nil, nil)
+	r := chi.NewRouter()
+	h.RegisterRoutes(r)
+
+	inc, _ := incident.New("fleet-primary", "production", "worker", incident.TypeResourceExhaust, incident.SeverityHigh, "Resource exhaust")
+	inc.ID = "inc-already-analyzing"
+	inc.Status = incident.StatusAnalyzing
+	incRepo.incidents[inc.ID] = inc
+
+	req := httptest.NewRequest(http.MethodPost, "/incidents/inc-already-analyzing/analyze", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("expected 202 Accepted when already analyzing, got %d", w.Code)
 	}
 }
 

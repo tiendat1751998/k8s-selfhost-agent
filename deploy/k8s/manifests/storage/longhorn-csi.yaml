@@ -1,0 +1,553 @@
+﻿apiVersion: v1
+kind: Namespace
+metadata:
+  name: longhorn-system
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: storage
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: longhorn-service-account
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: storage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: longhorn-role
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: storage
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims/status"]
+    verbs: ["update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments/status"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csistoragecapacities"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["get", "list", "watch", "create", "update", "delete", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents/status"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots/status"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["longhorn.io"]
+    resources:
+      - volumes
+      - volumes/status
+      - engines
+      - engines/status
+      - replicas
+      - replicas/status
+      - settings
+      - nodes
+      - nodes/status
+      - engineimages
+      - engineimages/status
+      - backups
+      - backups/status
+      - backuptargets
+      - backuptargets/status
+      - snapshots
+      - snapshots/status
+      - volumeattachments
+      - volumeattachments/status
+    verbs: ["*"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: longhorn-bind
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: storage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: longhorn-role
+subjects:
+  - kind: ServiceAccount
+    name: longhorn-service-account
+    namespace: longhorn-system
+---
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: driver.longhorn.io
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: storage
+spec:
+  attachRequired: true
+  podInfoOnMount: true
+  volumeLifecycleModes:
+    - Persistent
+  storageCapacity: true
+  fsGroupPolicy: File
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-fast
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: storage
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+parameters:
+  numberOfReplicas: "3"
+  staleReplicaTimeout: "2880"
+  fromBackup: ""
+  fsType: "ext4"
+  dataLocality: "best-effort"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: longhorn-backend
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: backend
+    app: longhorn-manager
+spec:
+  type: ClusterIP
+  selector:
+    app: longhorn-manager
+  ports:
+    - name: manager
+      port: 9500
+      targetPort: 9500
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: longhorn-csi-plugin
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: csi-plugin
+    app: longhorn-csi-plugin
+spec:
+  selector:
+    matchLabels:
+      app: longhorn-csi-plugin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: longhorn
+        app.kubernetes.io/component: csi-plugin
+        app: longhorn-csi-plugin
+    spec:
+      hostNetwork: false
+      serviceAccountName: longhorn-service-account
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: node-driver-registrar
+          image: longhornio/csi-node-driver-registrar:v2.11.1
+          args:
+            - --v=2
+            - --csi-address=$(ADDRESS)
+            - --kubelet-registration-path=$(DRIVER_REG_PATH)
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+            - name: DRIVER_REG_PATH
+              value: /var/lib/kubelet/plugins/driver.longhorn.io/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+        - name: longhorn-csi-plugin
+          image: longhornio/longhorn-manager:v1.7.0
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true
+          args:
+            - longhorn-manager
+            - csi
+            - --nodeid=$(NODE_NAME)
+            - --endpoint=$(CSI_ENDPOINT)
+            - --drivername=driver.longhorn.io
+            - --manager-url=http://longhorn-backend.longhorn-system.svc.cluster.local:9500/v1
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet/pods
+              mountPropagation: Bidirectional
+            - name: host-dev
+              mountPath: /dev
+            - name: host-sys
+              mountPath: /sys
+            - name: host-proc
+              mountPath: /proc
+      volumes:
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/driver.longhorn.io
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: DirectoryOrCreate
+        - name: host-dev
+          hostPath:
+            path: /dev
+        - name: host-sys
+          hostPath:
+            path: /sys
+        - name: host-proc
+          hostPath:
+            path: /proc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-attacher
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: csi-attacher
+    app: csi-attacher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-attacher
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: longhorn
+        app.kubernetes.io/component: csi-attacher
+        app: csi-attacher
+    spec:
+      serviceAccountName: longhorn-service-account
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: csi-attacher
+          image: longhornio/csi-attacher:v4.6.1
+          args:
+            - --v=2
+            - --csi-address=$(ADDRESS)
+            - --leader-election=true
+            - --leader-election-lease-duration=15s
+            - --leader-election-renew-deadline=10s
+            - --leader-election-retry-period=2s
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: longhorn-csi-plugin
+          image: longhornio/longhorn-manager:v1.7.0
+          securityContext:
+            privileged: true
+          args:
+            - longhorn-manager
+            - csi
+            - --nodeid=$(NODE_NAME)
+            - --endpoint=$(CSI_ENDPOINT)
+            - --drivername=driver.longhorn.io
+            - --manager-url=http://longhorn-backend.longhorn-system.svc.cluster.local:9500/v1
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-provisioner
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: csi-provisioner
+    app: csi-provisioner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-provisioner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: longhorn
+        app.kubernetes.io/component: csi-provisioner
+        app: csi-provisioner
+    spec:
+      serviceAccountName: longhorn-service-account
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: csi-provisioner
+          image: longhornio/csi-provisioner:v4.0.1
+          args:
+            - --v=2
+            - --csi-address=$(ADDRESS)
+            - --leader-election=true
+            - --leader-election-lease-duration=15s
+            - --leader-election-renew-deadline=10s
+            - --leader-election-retry-period=2s
+            - --feature-gates=Topology=true
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: longhorn-csi-plugin
+          image: longhornio/longhorn-manager:v1.7.0
+          securityContext:
+            privileged: true
+          args:
+            - longhorn-manager
+            - csi
+            - --nodeid=$(NODE_NAME)
+            - --endpoint=$(CSI_ENDPOINT)
+            - --drivername=driver.longhorn.io
+            - --manager-url=http://longhorn-backend.longhorn-system.svc.cluster.local:9500/v1
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-resizer
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: csi-resizer
+    app: csi-resizer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-resizer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: longhorn
+        app.kubernetes.io/component: csi-resizer
+        app: csi-resizer
+    spec:
+      serviceAccountName: longhorn-service-account
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: csi-resizer
+          image: longhornio/csi-resizer:v1.11.1
+          args:
+            - --v=2
+            - --csi-address=$(ADDRESS)
+            - --leader-election=true
+            - --leader-election-lease-duration=15s
+            - --leader-election-renew-deadline=10s
+            - --leader-election-retry-period=2s
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: longhorn-csi-plugin
+          image: longhornio/longhorn-manager:v1.7.0
+          securityContext:
+            privileged: true
+          args:
+            - longhorn-manager
+            - csi
+            - --nodeid=$(NODE_NAME)
+            - --endpoint=$(CSI_ENDPOINT)
+            - --drivername=driver.longhorn.io
+            - --manager-url=http://longhorn-backend.longhorn-system.svc.cluster.local:9500/v1
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-snapshotter
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/component: csi-snapshotter
+    app: csi-snapshotter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-snapshotter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: longhorn
+        app.kubernetes.io/component: csi-snapshotter
+        app: csi-snapshotter
+    spec:
+      serviceAccountName: longhorn-service-account
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: csi-snapshotter
+          image: longhornio/csi-snapshotter:v7.0.2
+          args:
+            - --v=2
+            - --csi-address=$(ADDRESS)
+            - --leader-election=true
+            - --leader-election-lease-duration=15s
+            - --leader-election-renew-deadline=10s
+            - --leader-election-retry-period=2s
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: longhorn-csi-plugin
+          image: longhornio/longhorn-manager:v1.7.0
+          securityContext:
+            privileged: true
+          args:
+            - longhorn-manager
+            - csi
+            - --nodeid=$(NODE_NAME)
+            - --endpoint=$(CSI_ENDPOINT)
+            - --drivername=driver.longhorn.io
+            - --manager-url=http://longhorn-backend.longhorn-system.svc.cluster.local:9500/v1
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+      volumes:
+        - name: socket-dir
+          emptyDir: {}

@@ -1,262 +1,21 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import MetricCard from '../components/ui/MetricCard.vue'
-import {
-  ecosystemApi,
-  type DetectedTool,
-  type EcosystemSummary,
-  type CreateToolRequest
-} from '../api/ecosystem'
+import EcosystemGrid from '../components/ecosystem/EcosystemGrid.vue'
+import EcosystemTable from '../components/ecosystem/EcosystemTable.vue'
+import EcosystemMobileCards from '../components/ecosystem/EcosystemMobileCards.vue'
+import ConnectIntegrationModal from '../components/ecosystem/ConnectIntegrationModal.vue'
+import IntegrationHealthDrawer from '../components/ecosystem/IntegrationHealthDrawer.vue'
+import { useEcosystem } from '../composables/useEcosystem'
 
-// State
-const loading = ref(false)
-const scanning = ref(false)
-const saving = ref(false)
-const deleting = ref<string | null>(null)
-const error = ref<string | null>(null)
-const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
-let toastTimer: ReturnType<typeof setTimeout> | null = null
-let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
-
-const tools = ref<DetectedTool[]>([])
-const summary = ref<EcosystemSummary>({
-  total: 0,
-  healthy: 0,
-  degraded: 0,
-  by_category: {},
-})
-
-// Filters
-const activeCategory = ref('all')
-const searchQuery = ref('')
-const selectedStatus = ref('all')
-
-// Manual Tool Modal State
-const showAddModal = ref(false)
-const form = reactive<CreateToolRequest>({
-  name: '',
-  category: 'gitops',
-  endpoint: '',
-  version: '',
-  status: 'detected',
-  health: 'healthy',
-})
-
-const categories = [
-  { key: 'all', label: 'All Categories', icon: '🌐' },
-  { key: 'compute', label: 'Compute & Containers', icon: '🐳' },
-  { key: 'database', label: 'Databases & Storage', icon: '🗄️' },
-  { key: 'messaging', label: 'Messaging & Streaming', icon: '⚡' },
-  { key: 'mesh', label: 'Ingress & Mesh', icon: '⛵' },
-  { key: 'gitops', label: 'GitOps & CI/CD', icon: '🐙' },
-  { key: 'security', label: 'Security & Posture', icon: '🛡️' },
-  { key: 'monitoring', label: 'Monitoring & Telemetry', icon: '📈' },
-  { key: 'secrets', label: 'Secrets & KMS', icon: '🔐' },
-  { key: 'policy', label: 'Policy & Guardrails', icon: '📜' },
-]
-
-function showToast(text: string, type: 'success' | 'error' = 'success') {
-  if (toastTimer) clearTimeout(toastTimer)
-  toastMessage.value = { text, type }
-  toastTimer = setTimeout(() => {
-    toastMessage.value = null
-  }, 4000)
-}
-
-function getToolIcon(tool: DetectedTool): string {
-  const name = tool.name.toLowerCase()
-  if (name.includes('docker')) return '🐳'
-  if (name.includes('postgres')) return '🐘'
-  if (name.includes('redis')) return '🔴'
-  if (name.includes('nats')) return '⚡'
-  if (name.includes('traefik')) return '🚦'
-  if (name.includes('drone')) return '🚁'
-  if (name.includes('argo')) return '🐙'
-  if (name.includes('trivy')) return '🛡️'
-  if (name.includes('grafana')) return '📈'
-  if (name.includes('vault')) return '🔐'
-  if (name.includes('prometheus')) return '🔥'
-  if (name.includes('kyverno')) return '📜'
-  if (name.includes('istio')) return '⛵'
-  if (name.includes('cert-manager') || name.includes('cert')) return '🔒'
-
-  switch (tool.category.toLowerCase()) {
-    case 'compute': return '🐳'
-    case 'database': return '🗄️'
-    case 'messaging': return '⚡'
-    case 'gitops': return '🐙'
-    case 'security': return '🛡️'
-    case 'monitoring': return '📊'
-    case 'secrets': return '🔑'
-    case 'policy': return '⚖️'
-    case 'mesh': return '🌐'
-    case 'certificates': return '📜'
-    default: return '🧩'
-  }
-}
-
-async function loadData() {
-  loading.value = true
-  error.value = null
-  try {
-    const [toolList, sum] = await Promise.all([
-      ecosystemApi.getTools(),
-      ecosystemApi.getSummary().catch(() => null),
-    ])
-    tools.value = Array.isArray(toolList) ? toolList : []
-
-    // Aggregate category counts & health
-    const byCategory: Record<string, number> = {}
-    let healthyCount = 0
-    let degradedCount = 0
-
-    for (const t of tools.value) {
-      byCategory[t.category] = (byCategory[t.category] || 0) + 1
-      if (t.health === 'healthy') {
-        healthyCount++
-      } else if (t.health === 'degraded' || t.status === 'unreachable') {
-        degradedCount++
-      }
-    }
-
-    summary.value = sum && sum.total > 0 ? sum : {
-      total: tools.value.length,
-      healthy: healthyCount,
-      degraded: degradedCount,
-      by_category: byCategory,
-    }
-  } catch (err: any) {
-    error.value = err?.message || 'Failed to load ecosystem tools'
-    tools.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-async function handleScan() {
-  scanning.value = true
-  try {
-    const updatedTools = await ecosystemApi.triggerScan()
-    tools.value = updatedTools || []
-    const updatedSummary = await ecosystemApi.getSummary()
-    summary.value = updatedSummary || { total: 0, healthy: 0, degraded: 0, by_category: {} }
-    showToast('Ecosystem scan completed successfully!')
-  } catch (err: any) {
-    showToast(err.message || 'Failed to run ecosystem scan', 'error')
-  } finally {
-    scanning.value = false
-  }
-}
-
-async function handleCreateTool() {
-  if (!form.name.trim() || !form.category.trim()) {
-    showToast('Name and Category are required', 'error')
-    return
-  }
-
-  saving.value = true
-  try {
-    await ecosystemApi.createTool({
-      name: form.name.trim(),
-      category: form.category.toLowerCase().trim(),
-      endpoint: form.endpoint?.trim() || '',
-      version: form.version?.trim() || '',
-      status: form.status || 'detected',
-      health: form.health || 'healthy',
-    })
-    showToast(`Tool "${form.name}" registered successfully!`)
-    showAddModal.value = false
-    // Reset form
-    form.name = ''
-    form.category = 'gitops'
-    form.endpoint = ''
-    form.version = ''
-    form.status = 'detected'
-    form.health = 'healthy'
-    await loadData()
-  } catch (err: any) {
-    showToast(err.message || 'Failed to register tool', 'error')
-  } finally {
-    saving.value = false
-  }
-}
-
-async function handleDeleteTool(tool: DetectedTool) {
-  if (!confirm(`Are you sure you want to remove "${tool.name}"?`)) {
-    return
-  }
-
-  deleting.value = tool.id
-  try {
-    await ecosystemApi.deleteTool(tool.id)
-    showToast(`Tool "${tool.name}" removed`)
-    await loadData()
-  } catch (err: any) {
-    showToast(err.message || 'Failed to delete tool', 'error')
-  } finally {
-    deleting.value = null
-  }
-}
-
-// Computed Filtered Tools
-const filteredTools = computed(() => {
-  return tools.value.filter(tool => {
-    // Category filter
-    if (activeCategory.value !== 'all' && tool.category.toLowerCase() !== activeCategory.value) {
-      return false
-    }
-
-    // Status filter
-    if (selectedStatus.value === 'healthy' && tool.health !== 'healthy') {
-      return false
-    }
-    if (selectedStatus.value === 'degraded' && tool.health !== 'degraded' && tool.status !== 'unreachable') {
-      return false
-    }
-    if (selectedStatus.value === 'not_configured' && tool.status !== 'not_configured') {
-      return false
-    }
-
-    // Search query
-    if (searchQuery.value.trim()) {
-      const q = searchQuery.value.toLowerCase()
-      const matchName = tool.name.toLowerCase().includes(q)
-      const matchCategory = tool.category.toLowerCase().includes(q)
-      const matchEndpoint = tool.endpoint?.toLowerCase().includes(q)
-      const matchVersion = tool.version?.toLowerCase().includes(q)
-      if (!matchName && !matchCategory && !matchEndpoint && !matchVersion) {
-        return false
-      }
-    }
-
-    return true
-  })
-})
-
-function formatRelativeTime(dateStr: string): string {
-  if (!dateStr) return 'Never'
-  const date = new Date(dateStr)
-  if (isNaN(date.getTime())) return 'Never'
-  const now = new Date()
-  const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000)
-  if (diffSec < 60) return 'Just now'
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`
-  return `${Math.floor(diffSec / 86400)}d ago`
-}
-
-onMounted(() => {
-  loadData()
-  // Auto-refresh every 5 minutes
-  autoRefreshTimer = setInterval(() => {
-    loadData()
-  }, 5 * 60 * 1000)
-})
-
-onUnmounted(() => {
-  if (autoRefreshTimer) clearInterval(autoRefreshTimer)
-  if (toastTimer) clearTimeout(toastTimer)
-})
+const {
+  loading, scanning, saving, deleting, syncing, error, toastMessage, viewMode,
+  tools, summary, activeCategory, searchQuery, selectedStatus, categories, presets,
+  showConnectModal, connectForm, showHealthDrawer, selectedToolForHealth,
+  healthProbeResult, isProbing, webhookHistory, errorLogs, filteredTools,
+  getToolIcon, formatRelativeTime, loadData, handleScan, openConnectModal,
+  closeConnectModal, handleCreateTool, handleDeleteTool, handleSyncWebhook,
+  openHealthDrawer, closeHealthDrawer, runHealthProbe
+} = useEcosystem()
 </script>
 
 <template>
@@ -282,19 +41,11 @@ onUnmounted(() => {
       </div>
 
       <div class="header-actions">
-        <button
-          class="btn-secondary"
-          :disabled="scanning || loading"
-          @click="handleScan"
-        >
+        <button class="btn-secondary" :disabled="scanning || loading" @click="handleScan">
           <span class="btn-icon" :class="{ 'spin-anim': scanning }">🔄</span>
           <span>{{ scanning ? 'Scanning Stack...' : 'Scan Now' }}</span>
         </button>
-
-        <button
-          class="btn-primary"
-          @click="showAddModal = true"
-        >
+        <button class="btn-primary" @click="openConnectModal()">
           <span class="btn-icon">➕</span>
           <span>Register Tool</span>
         </button>
@@ -349,14 +100,10 @@ onUnmounted(() => {
         >
           <span class="tab-icon">{{ cat.icon }}</span>
           <span class="tab-label">{{ cat.label }}</span>
-          <span
-            v-if="cat.key === 'all'"
-            class="tab-count"
-          >{{ tools.length }}</span>
-          <span
-            v-else-if="summary.by_category && summary.by_category[cat.key]"
-            class="tab-count"
-          >{{ summary.by_category[cat.key] }}</span>
+          <span v-if="cat.key === 'all'" class="tab-count">{{ tools.length }}</span>
+          <span v-else-if="summary.by_category && summary.by_category[cat.key]" class="tab-count">
+            {{ summary.by_category[cat.key] }}
+          </span>
         </button>
       </div>
     </section>
@@ -365,19 +112,8 @@ onUnmounted(() => {
     <section class="filter-toolbar glass-panel">
       <div class="search-box">
         <span class="search-icon">🔍</span>
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search by tool name, endpoint, version..."
-          class="search-input"
-        />
-        <button
-          v-if="searchQuery"
-          class="clear-search-btn"
-          @click="searchQuery = ''"
-        >
-          ✕
-        </button>
+        <input v-model="searchQuery" type="text" placeholder="Search by tool name, endpoint, version..." class="search-input" />
+        <button v-if="searchQuery" class="clear-search-btn" @click="searchQuery = ''">✕</button>
       </div>
 
       <div class="filter-group">
@@ -388,6 +124,11 @@ onUnmounted(() => {
           <option value="degraded">Degraded / Unreachable</option>
           <option value="not_configured">Not Configured</option>
         </select>
+
+        <div class="view-mode-toggle">
+          <button class="toggle-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">Grid</button>
+          <button class="toggle-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">Table</button>
+        </div>
       </div>
     </section>
 
@@ -412,975 +153,74 @@ onUnmounted(() => {
       <button class="btn-primary" @click="handleScan">Run Scan</button>
     </div>
 
-    <!-- Tools Grid Cards -->
-    <section v-else class="tools-grid">
-      <div
-        v-for="tool in filteredTools"
-        :key="tool.id || tool.name"
-        class="tool-card glass-panel"
-        :class="{
-          'border-healthy': tool.health === 'healthy',
-          'border-degraded': tool.health === 'degraded' || tool.status === 'unreachable',
-          'border-unconfigured': tool.status === 'not_configured'
-        }"
-      >
-        <!-- Card Top Header -->
-        <div class="card-header">
-          <div class="tool-main-info">
-            <div class="tool-icon-wrap">
-              {{ getToolIcon(tool) }}
-            </div>
-            <div>
-              <h3 class="tool-name">{{ tool.name }}</h3>
-              <span class="category-badge">{{ tool.category.toUpperCase() }}</span>
-            </div>
-          </div>
+    <!-- Data Presentation -->
+    <template v-else>
+      <EcosystemGrid
+        v-if="viewMode === 'grid'"
+        :tools="filteredTools"
+        :deleting-id="deleting"
+        :syncing-id="syncing"
+        :get-tool-icon="getToolIcon"
+        :format-relative-time="formatRelativeTime"
+        @inspect-health="openHealthDrawer"
+        @configure="openConnectModal"
+        @sync="handleSyncWebhook"
+        @delete="handleDeleteTool"
+      />
 
-          <div class="status-badge-wrap">
-            <span
-              v-if="tool.status === 'not_configured'"
-              class="status-pill pill-muted"
-            >
-              ⚪ Not Configured
-            </span>
-            <span
-              v-else-if="tool.health === 'healthy'"
-              class="status-pill pill-healthy"
-            >
-              🟢 Healthy
-            </span>
-            <span
-              v-else-if="tool.status === 'unreachable'"
-              class="status-pill pill-degraded"
-            >
-              🔴 Unreachable
-            </span>
-            <span
-              v-else
-              class="status-pill pill-warning"
-            >
-              🟡 Degraded
-            </span>
-          </div>
-        </div>
+      <EcosystemTable
+        v-else
+        :tools="filteredTools"
+        :deleting-id="deleting"
+        :syncing-id="syncing"
+        :get-tool-icon="getToolIcon"
+        :format-relative-time="formatRelativeTime"
+        @inspect-health="openHealthDrawer"
+        @configure="openConnectModal"
+        @sync="handleSyncWebhook"
+        @delete="handleDeleteTool"
+      />
 
-        <!-- Card Body Details -->
-        <div class="card-body">
-          <div class="detail-row" v-if="tool.version">
-            <span class="detail-label">Version:</span>
-            <span class="version-badge font-mono">{{ tool.version }}</span>
-          </div>
+      <EcosystemMobileCards
+        :tools="filteredTools"
+        :deleting-id="deleting"
+        :syncing-id="syncing"
+        :get-tool-icon="getToolIcon"
+        :format-relative-time="formatRelativeTime"
+        @inspect-health="openHealthDrawer"
+        @configure="openConnectModal"
+        @sync="handleSyncWebhook"
+        @delete="handleDeleteTool"
+      />
+    </template>
 
-          <div class="detail-row">
-            <span class="detail-label">Endpoint:</span>
-            <div class="endpoint-val font-mono">
-              <a
-                v-if="tool.endpoint"
-                :href="tool.endpoint"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="endpoint-link"
-                :title="tool.endpoint"
-              >
-                {{ tool.endpoint }} ↗
-              </a>
-              <span v-else class="endpoint-empty">
-                Not configured in Settings
-              </span>
-            </div>
-          </div>
+    <!-- Connect / Configure Modal -->
+    <ConnectIntegrationModal
+      :show="showConnectModal"
+      :form="connectForm"
+      :saving="saving"
+      :presets="presets"
+      @close="closeConnectModal"
+      @submit="handleCreateTool"
+      @select-preset="openConnectModal"
+    />
 
-          <div class="detail-row">
-            <span class="detail-label">Discovery Source:</span>
-            <span class="source-badge" :class="`source-${tool.source}`">
-              {{ tool.source === 'settings' ? '⚙️ Settings' : tool.source === 'manual' ? '✍️ Manual' : '☸️ K8s' }}
-            </span>
-          </div>
-
-          <!-- Metadata Tag Pills -->
-          <div v-if="tool.metadata && Object.keys(tool.metadata).length > 0" class="metadata-tags">
-            <span
-              v-for="(val, key) in tool.metadata"
-              :key="key"
-              class="meta-pill"
-            >
-              <strong class="meta-k">{{ key }}:</strong> {{ val }}
-            </span>
-          </div>
-        </div>
-
-        <!-- Card Footer -->
-        <div class="card-footer">
-          <span class="last-checked">
-            🕒 Checked {{ formatRelativeTime(tool.last_checked) }}
-          </span>
-
-          <button
-            v-if="tool.source === 'manual'"
-            class="btn-delete-tool"
-            :disabled="deleting === tool.id"
-            title="Delete manual tool"
-            @click="handleDeleteTool(tool)"
-          >
-            🗑️
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Register Tool Modal -->
-    <div v-if="showAddModal" class="modal-backdrop" @click.self="showAddModal = false">
-      <div class="modal-dialog glass-panel">
-        <div class="modal-header">
-          <h2>Register Ecosystem Tool</h2>
-          <button class="modal-close-btn" @click="showAddModal = false">✕</button>
-        </div>
-
-        <form @submit.prevent="handleCreateTool" class="modal-form">
-          <div class="form-group">
-            <label>Tool Name *</label>
-            <input
-              v-model="form.name"
-              type="text"
-              placeholder="e.g. Istio, Kyverno, Velero"
-              required
-              class="form-input"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>Category *</label>
-            <select v-model="form.category" class="form-input">
-              <option value="gitops">GitOps</option>
-              <option value="security">Security</option>
-              <option value="monitoring">Monitoring</option>
-              <option value="secrets">Secrets</option>
-              <option value="policy">Policy</option>
-              <option value="mesh">Service Mesh</option>
-              <option value="certificates">Certificates</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Endpoint URL / Service</label>
-            <input
-              v-model="form.endpoint"
-              type="text"
-              placeholder="e.g. https://kyverno.prod.corp or http://istio-ingress"
-              class="form-input"
-            />
-          </div>
-
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label>Version</label>
-              <input
-                v-model="form.version"
-                type="text"
-                placeholder="e.g. v1.11.0"
-                class="form-input"
-              />
-            </div>
-            <div class="form-group flex-1">
-              <label>Initial Health</label>
-              <select v-model="form.health" class="form-input">
-                <option value="healthy">Healthy</option>
-                <option value="degraded">Degraded</option>
-                <option value="unknown">Unknown</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="modal-actions">
-            <button
-              type="button"
-              class="btn-secondary"
-              @click="showAddModal = false"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="btn-primary"
-              :disabled="saving"
-            >
-              {{ saving ? 'Saving...' : 'Register Tool' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <!-- Health Inspection Drawer -->
+    <IntegrationHealthDrawer
+      :show="showHealthDrawer"
+      :tool="selectedToolForHealth"
+      :probe-result="healthProbeResult"
+      :is-probing="isProbing"
+      :webhook-history="webhookHistory"
+      :error-logs="errorLogs"
+      :get-tool-icon="getToolIcon"
+      @close="closeHealthDrawer"
+      @probe="runHealthProbe"
+      @sync="handleSyncWebhook"
+    />
   </div>
 </template>
 
-<style scoped>
-.ecosystem-view {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: 24px 32px;
-  min-height: calc(100vh - 64px);
-  background: var(--bg-app, #0a0e17);
-  color: var(--text-primary, #e2e8f0);
-}
-
-/* Header */
-.view-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
-.header-titles {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.title-with-badge {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.title-with-badge h1 {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #fff;
-  margin: 0;
-}
-
-.badge-tag {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 6px;
-  text-transform: uppercase;
-}
-
-.live-badge {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.header-subtitle {
-  font-size: 14px;
-  color: var(--text-muted, #94a3b8);
-  margin: 0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* Buttons */
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-space, #3b82f6;
-  background-image: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: #fff;
-  border: none;
-  padding: 9px 18px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-image: linear-gradient(135deg, #3b82f6, #2563eb);
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(30, 41, 59, 0.8);
-  color: #cbd5e1;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 9px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: rgba(51, 65, 85, 0.9);
-  color: #fff;
-}
-
-.btn-primary:disabled,
-.btn-secondary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.spin-anim {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Summary HUD */
-.summary-hud-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-}
-
-/* Category Tabs */
-.category-tabs-container {
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.category-tabs {
-  display: flex;
-  gap: 8px;
-}
-
-.category-tab-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #94a3b8;
-  padding: 8px 14px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.category-tab-btn:hover {
-  background: rgba(51, 65, 85, 0.7);
-  color: #f1f5f9;
-}
-
-.category-tab-btn.active {
-  background: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
-  border-color: rgba(59, 130, 246, 0.5);
-  font-weight: 600;
-}
-
-.tab-count {
-  background: rgba(0, 0, 0, 0.3);
-  padding: 1px 7px;
-  border-radius: 10px;
-  font-size: 11px;
-}
-
-/* Filter Toolbar */
-.filter-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 18px;
-  border-radius: 12px;
-  flex-wrap: wrap;
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 6px 12px;
-  border-radius: 8px;
-  flex: 1;
-  min-width: 260px;
-}
-
-.search-input {
-  background: transparent;
-  border: none;
-  color: #fff;
-  font-size: 13px;
-  width: 100%;
-  outline: none;
-}
-
-.clear-search-btn {
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.filter-label {
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.filter-select {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  outline: none;
-}
-
-/* Tools Grid */
-.tools-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
-}
-
-.tool-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 18px 20px;
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: all 0.25s ease;
-}
-
-.tool-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.18);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-.border-healthy {
-  border-left: 3px solid #10b981;
-}
-
-.border-degraded {
-  border-left: 3px solid #ef4444;
-}
-
-.border-unconfigured {
-  border-left: 3px solid #64748b;
-}
-
-.card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.tool-main-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.tool-icon-wrap {
-  font-size: 26px;
-  background: rgba(30, 41, 59, 0.6);
-  padding: 8px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tool-name {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  margin: 0 0 4px 0;
-}
-
-.category-badge {
-  font-size: 10px;
-  font-weight: 700;
-  color: #93c5fd;
-  background: rgba(59, 130, 246, 0.15);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-/* Status Pills */
-.status-pill {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 9px;
-  border-radius: 12px;
-  white-space: nowrap;
-}
-
-.pill-healthy {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.pill-degraded {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.pill-warning {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.pill-muted {
-  background: rgba(100, 116, 139, 0.15);
-  color: #94a3b8;
-  border: 1px solid rgba(100, 116, 139, 0.3);
-}
-
-/* Card Body */
-.card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.detail-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.detail-label {
-  color: #64748b;
-  font-weight: 500;
-}
-
-.version-badge {
-  background: rgba(30, 41, 59, 0.8);
-  color: #38bdf8;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-}
-
-.endpoint-val {
-  max-width: 190px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.endpoint-link {
-  color: #60a5fa;
-  text-decoration: none;
-  font-size: 12px;
-}
-
-.endpoint-link:hover {
-  text-decoration: underline;
-}
-
-.endpoint-empty {
-  color: #64748b;
-  font-style: italic;
-  font-size: 11px;
-}
-
-.source-badge {
-  font-size: 11px;
-  color: #cbd5e1;
-}
-
-.metadata-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.meta-pill {
-  font-size: 10px;
-  background: rgba(30, 41, 59, 0.7);
-  color: #94a3b8;
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.meta-k {
-  color: #cbd5e1;
-}
-
-/* Card Footer */
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: 12px;
-  font-size: 11px;
-  color: #64748b;
-}
-
-.btn-delete-tool {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  opacity: 0.7;
-  transition: opacity 0.2s ease;
-}
-
-.btn-delete-tool:hover {
-  opacity: 1;
-}
-
-/* Glass panel */
-.glass-panel {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* Empty / Loading states */
-.loading-state,
-.error-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  border-radius: 14px;
-  text-align: center;
-  gap: 12px;
-}
-
-.spinner-icon,
-.error-icon,
-.empty-icon {
-  font-size: 36px;
-}
-
-.loading-state .spinner-icon {
-  animation: spin 1.2s linear infinite;
-}
-
-/* Toast */
-.toast-popup {
-  position: fixed;
-  top: 24px;
-  right: 24px;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 20px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
-}
-
-.toast-popup.success {
-  background: #065f46;
-  color: #d1fae5;
-  border: 1px solid #059669;
-}
-
-.toast-popup.error {
-  background: #991b1b;
-  color: #fee2e2;
-  border: 1px solid #dc2626;
-}
-
-/* Modal */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.modal-dialog {
-  width: 100%;
-  max-width: 480px;
-  padding: 24px;
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.modal-header h2 {
-  font-size: 18px;
-  font-weight: 700;
-  color: #fff;
-  margin: 0;
-}
-
-.modal-close-btn {
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  font-size: 18px;
-  cursor: pointer;
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-group label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #94a3b8;
-}
-
-.form-input {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #fff;
-  padding: 9px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.2s ease;
-}
-
-.form-input:focus {
-  border-color: #3b82f6;
-}
-
-.form-row {
-  display: flex;
-  gap: 12px;
-}
-
-.flex-1 {
-  flex: 1;
-}
-
-.modal-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 10px;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 768px) {
-  .ecosystem-view {
-    padding: 16px;
-  }
-  .view-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
-  }
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    width: 100% !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
-  }
-  .header-actions .btn,
-  .header-actions button,
-  .header-actions a,
-  .header-actions .btn-primary,
-  .header-actions .btn-secondary {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    padding: 7px 10px !important;
-    font-size: 11.5px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
-  }
-  .header-actions > :last-child:nth-child(odd) {
-    flex: 1 1 100% !important;
-  }
-  .metrics-grid,
-  .grid-metrics,
-  .stats-grid,
-  .plugin-stats,
-  .ai-stats,
-  .summary-hud-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-  :deep(.metric-card),
-  .metric-card,
-  :deep(.stat-card),
-  .stat-card,
-  .hud-card,
-  :deep(.hud-card) {
-    padding: 10px 12px !important;
-  }
-  .category-tabs {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    -webkit-overflow-scrolling: touch;
-    width: 100%;
-    padding-bottom: 4px;
-  }
-  .filter-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .search-box {
-    width: 100%;
-    min-width: 0;
-  }
-  .filter-group {
-    width: 100%;
-    justify-content: space-between;
-  }
-  .filter-select {
-    flex: 1;
-  }
-  .tools-grid {
-    grid-template-columns: 1fr;
-  }
-  .form-row {
-    flex-direction: column;
-    gap: 12px;
-  }
-  .modal-dialog {
-    width: 100%;
-    max-width: 100%;
-  }
-  .modal-actions {
-    flex-direction: column;
-    width: 100%;
-  }
-  .modal-actions button {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-@media (max-width: 640px) {
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    width: 100% !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
-  }
-
-  .header-actions .btn,
-  .header-actions button,
-  .header-actions a,
-  .header-actions .btn-primary,
-  .header-actions .btn-secondary {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    padding: 7px 10px !important;
-    font-size: 11.5px !important;
-    white-space: nowrap !important;
-    justify-content: center !important;
-  }
-
-  .header-actions > :last-child:nth-child(odd) {
-    flex: 1 1 100% !important;
-  }
-
-  .metrics-grid,
-  .grid-metrics,
-  .stats-grid,
-  .plugin-stats,
-  .ai-stats,
-  .summary-hud-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-
-  :deep(.metric-card),
-  .metric-card,
-  :deep(.stat-card),
-  .stat-card,
-  .hud-card,
-  :deep(.hud-card) {
-    padding: 10px 12px !important;
-  }
-
-  :deep(.metric-card .metric-value),
-  .metric-card .metric-value {
-    font-size: 18px;
-  }
-
-  :deep(.metric-card .metric-title),
-  .metric-card .metric-title {
-    font-size: 10px;
-  }
-
-  :deep(.metric-card .metric-footer),
-  .metric-card .metric-footer {
-    font-size: 10px;
-  }
-
-  .card-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  .status-badge-wrap {
-    align-self: flex-start;
-  }
-}
+<style>
+@import '../assets/styles/views/ecosystem.css';
 </style>

@@ -1,6 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;700&display=swap');
-@import './tokens.css';
-
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -11,6 +8,7 @@ html {
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -21,12 +19,196 @@ body {
   background-color: var(--color-canvas-dark);
   min-height: 100vh;
   overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 a {
   color: var(--color-primary);
   text-decoration: none;
 }
+
+/* ==========================================================================
+   Global Button Normalization -- Enterprise 32px Standard
+   ========================================================================== */
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  min-height: 32px;
+}
+
+.btn,
+.btn-cyber,
+button.btn,
+button.btn-cyber,
+a.btn,
+a.btn-cyber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+  border-radius: 6px;
+  background: var(--bg-card, #161f30);
+  color: var(--text-primary, #f8fafc);
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 150ms ease, border-color 150ms ease, opacity 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:hover,
+.btn-cyber:hover {
+  background: var(--bg-card-hover, #1e293b);
+  border-color: var(--border-medium, rgba(255,255,255,0.14));
+}
+
+.btn:focus-visible,
+.btn-cyber:focus-visible {
+  outline: 2px solid var(--accent-cyan, #3b82f6);
+  outline-offset: 2px;
+}
+
+.btn:active,
+.btn-cyber:active {
+  opacity: 0.85;
+}
+
+.btn-primary {
+  background: var(--accent-cyan, #3b82f6);
+  border-color: transparent;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+}
+
+.btn-secondary {
+  background: transparent;
+  border-color: var(--border-medium, rgba(255,255,255,0.14));
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card, #161f30);
+}
+
+.btn-outline-cyan {
+  background: transparent;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.btn-outline-cyan:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: #38bdf8;
+  color: #fff;
+}
+
+/* btn-xs: still 32px minimum, just less padding */
+.btn-xs,
+.btn.btn-xs,
+.btn-cyber.btn-xs {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* btn-sm: slightly larger */
+.btn-sm,
+.btn.btn-sm,
+.btn-cyber.btn-sm {
+  min-height: 32px;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+/* btn-lg: hero actions */
+.btn-lg,
+.btn.btn-lg,
+.btn-cyber.btn-lg {
+  min-height: 40px;
+  padding: 8px 20px;
+  font-size: 14px;
+}
+
+/* Destructive / Danger */
+.btn-danger,
+.btn-remove {
+  color: var(--accent-rose, #f43f5e);
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.btn-danger:hover,
+.btn-remove:hover {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.5);
+}
+
+/* Close, Copy, & Icon Button Normalization */
+.btn-copy-icon,
+.btn-copy-sm,
+.btn-copy-mini,
+.btn-close,
+.modal-close,
+.modal-close-btn,
+.drawer-close,
+.banner-close,
+.toast-close,
+.btn-toast-close,
+.btn-toast-action {
+  min-height: 32px;
+  min-width: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* Mobile touch targets: invisible hit area expansion */
+@media (max-width: 640px) {
+  /* Responsive button styling: limit padding, max-width, truncate text */
+  .btn,
+  .btn-cyber,
+  button.btn,
+  button.btn-cyber,
+  a.btn,
+  a.btn-cyber {
+    padding: 5px 10px;
+    font-size: 12px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .btn,
+  .btn-cyber,
+  button.btn,
+  button.btn-cyber,
+  a.btn,
+  a.btn-cyber {
+    position: relative;
+  }
+  
+  .btn::after,
+  .btn-cyber::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 
 /* ==========================================================================
    Responsive Utilities & Layout Helpers
@@ -46,7 +228,7 @@ a {
   gap: 8px;
   font-size: var(--text-tag-fluid, 11px);
   font-weight: 700;
-  color: var(--color-primary, #fcd535);
+  color: var(--color-primary, #0284c7);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   margin-bottom: 6px;
@@ -125,6 +307,20 @@ a {
 }
 
 @media (max-width: 640px) {
+  /* Responsive button styling: limit padding, max-width, truncate text */
+  .btn,
+  .btn-cyber,
+  button.btn,
+  button.btn-cyber,
+  a.btn,
+  a.btn-cyber {
+    padding: 5px 10px;
+    font-size: 12px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .view-header-responsive .view-title,
   .view-title {
     font-size: var(--text-title-fluid, clamp(18px, 4.5vw, 22px));
@@ -171,3 +367,60 @@ a {
     justify-content: center;
   }
 }
+
+/* ==========================================================================
+   Global Tab Bar Horizontal Scroll -- Mobile Safe
+   ========================================================================== */
+.tab-pills,
+.tab-bar,
+.tabs-bar,
+.view-tabs,
+.sub-tabs,
+.filter-tabs,
+.category-tabs,
+.catalog-tabs,
+.mode-tabs,
+.tab-control-bar,
+.type-pills,
+.filter-pills-row {
+  display: flex;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.tab-pills::-webkit-scrollbar,
+.tab-bar::-webkit-scrollbar,
+.tabs-bar::-webkit-scrollbar,
+.view-tabs::-webkit-scrollbar,
+.sub-tabs::-webkit-scrollbar,
+.filter-tabs::-webkit-scrollbar,
+.category-tabs::-webkit-scrollbar,
+.catalog-tabs::-webkit-scrollbar,
+.mode-tabs::-webkit-scrollbar,
+.tab-control-bar::-webkit-scrollbar,
+.type-pills::-webkit-scrollbar,
+.filter-pills-row::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-pills > *,
+.tab-bar > *,
+.tabs-bar > *,
+.view-tabs > *,
+.sub-tabs > *,
+.filter-tabs > *,
+.category-tabs > *,
+.catalog-tabs > *,
+.mode-tabs > *,
+.tab-control-bar > *,
+.type-pills > *,
+.filter-pills-row > * {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+

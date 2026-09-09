@@ -1,0 +1,279 @@
+/* === CircularGauge.vue === */
+.circular-gauge-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.circular-gauge-wrapper.is-disabled {
+  opacity: 0.65;
+}
+
+.gauge-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.circular-gauge {
+  width: 100%;
+  height: 100%;
+  transform: rotate(0deg);
+}
+
+.gauge-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.06);
+}
+
+.circular-gauge.is-disabled .gauge-bg {
+  stroke: rgba(255, 255, 255, 0.04);
+}
+
+.gauge-fill {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.8s ease-in-out, stroke 0.5s ease, filter 0.4s ease;
+}
+
+.gauge-text {
+  font-family: var(--font-mono, monospace);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-anchor: middle;
+  transition: fill 0.3s ease;
+}
+
+.gauge-text.is-disabled-val {
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--text-muted, #64748b);
+}
+
+.gauge-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.gauge-label.gauge-label-disabled {
+  color: var(--text-muted, #64748b);
+  opacity: 0.75;
+}
+
+.is-critical .gauge-fill {
+  animation: gauge-pulse 2s infinite ease-in-out;
+}
+
+@keyframes gauge-pulse {
+  0%, 100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(244, 63, 94, 0.6));
+  }
+  50% {
+    opacity: 0.65;
+    filter: drop-shadow(0 0 2px rgba(244, 63, 94, 0.2));
+  }
+}
+
+/* === MetricCard.vue === */
+.metric-card {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:hover {
+  border-color: var(--border-medium);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.metric-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.metric-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.metric-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.metric-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.metric-badge {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.metric-body {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-trend {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trend-positive { color: #10b981; }
+.trend-negative { color: #f43f5e; }
+.trend-neutral { color: var(--text-muted); }
+
+.metric-footer {
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .metric-card {
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .metric-title {
+    font-size: 10px;
+  }
+
+  .metric-value {
+    font-size: 18px;
+  }
+
+  .metric-footer {
+    font-size: 10px;
+    padding-top: 6px;
+  }
+}
+
+/* === StatusBadge.vue === */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.badge-sm {
+  padding: 2px 8px;
+  font-size: 10px;
+}
+
+.badge-md {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.badge-emerald {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.dot-emerald {
+  background-color: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.badge-amber {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.dot-amber {
+  background-color: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+}
+
+.badge-rose {
+  background: rgba(244, 63, 94, 0.12);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+.dot-rose {
+  background-color: #f43f5e;
+  box-shadow: 0 0 6px #f43f5e;
+}
+
+.badge-cyan {
+  background: rgba(6, 182, 212, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+.dot-cyan {
+  background-color: #06b6d4;
+  box-shadow: 0 0 6px #06b6d4;
+}
+
+.badge-violet {
+  background: rgba(139, 92, 246, 0.12);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+.dot-violet {
+  background-color: #8b5cf6;
+  box-shadow: 0 0 6px #8b5cf6;
+}
+
+/* === ViewModeSwitcher.vue === */
+.view-mode-switcher {
+  display: inline-flex; align-items: center; height: 32px; padding: 2px;
+  border-radius: 8px; background: var(--color-canvas-card, #101828);
+  border: 1px solid rgba(255, 255, 255, 0.08); box-sizing: border-box;
+}
+.mode-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 100%;
+  padding: 0 10px; border-radius: 6px; border: none; background: transparent;
+  color: var(--color-text-muted, #7b8c9d); font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
+}
+.mode-btn:hover:not(.active) { color: #f8fafc; background: rgba(255, 255, 255, 0.05); }
+.mode-btn.active {
+  background: var(--color-brand-cyan, #0284c7); color: #ffffff;
+  font-weight: 600; box-shadow: 0 1px 4px rgba(2, 132, 199, 0.35);
+}
+.mode-icon { width: 13px; height: 13px; flex-shrink: 0; }

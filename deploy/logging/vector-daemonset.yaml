@@ -118,6 +118,13 @@ spec:
           operator: Exists
         - effect: NoExecute
           operator: Exists
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: vector
           image: timberio/vector:0.38.0-alpine
@@ -128,6 +135,8 @@ spec:
             capabilities:
               drop: ["ALL"]
               add: ["DAC_READ_SEARCH"]
+            seccompProfile:
+              type: RuntimeDefault
           resources:
             requests:
               cpu: 50m
@@ -138,6 +147,22 @@ spec:
           ports:
             - containerPort: 8686
               name: api
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: api
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: api
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           volumeMounts:
             - name: config
               mountPath: /etc/vector

@@ -1,0 +1,45 @@
+# Build stage
+FROM golang:1.23-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /app
+
+# Cache dependencies
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source
+COPY . .
+
+# Build monitoring agent binary and static health probe
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -trimpath \
+    -ldflags="-s -w -extldflags '-static'" \
+    -o /app/bin/agent \
+    ./cmd/agent
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -trimpath \
+    -ldflags="-s -w -extldflags '-static'" \
+    -o /app/bin/probe \
+    ./cmd/probe
+
+# Runtime stage (distroless nonroot static image)
+FROM gcr.io/distroless/static-debian12:nonroot
+
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /app/bin/agent /agent
+COPY --from=builder /app/bin/probe /probe
+
+EXPOSE 9100
+
+# Enforce non-root user (distroless nonroot UID 65532)
+USER 65532:65532
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD ["/probe", "http://localhost:9100/health"]
+
+ENTRYPOINT ["/agent"]
+CMD ["--port", "9100"]

@@ -124,6 +124,13 @@ func (r *nodeMetricsRepo) InsertBatch(ctx context.Context, rollups []nodemetrics
 	return nil
 }
 
+func parseNodeTenantUUID(tid string) uuid.UUID {
+	if u, err := uuid.Parse(tid); err == nil {
+		return u
+	}
+	return uuid.MustParse("00000000-0000-0000-0000-000000000001")
+}
+
 func (r *nodeMetricsRepo) QueryHistory(ctx context.Context, q nodemetrics.NodeHistoryQuery) ([]nodemetrics.NodeMetricRollup, error) {
 	db := r.getDB(ctx)
 
@@ -145,61 +152,122 @@ func (r *nodeMetricsRepo) QueryHistory(ctx context.Context, q nodemetrics.NodeHi
 		endTime = time.Now().UTC()
 	}
 
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	userRole := tenancy.UserRoleFromContext(ctx)
+
 	var query string
 	var args []any
 
 	if resolution == "1h" {
-		query = `
-			SELECT 
-				gen_random_uuid() as id,
-				tenant_id::text,
-				node_id,
-				node_name,
-				AVG(cpu_percent) as cpu_percent,
-				MAX(cpu_peak) as cpu_peak,
-				AVG(mem_used_bytes)::bigint as mem_used_bytes,
-				AVG(mem_total_bytes)::bigint as mem_total_bytes,
-				AVG(mem_percent) as mem_percent,
-				AVG(disk_used_bytes)::bigint as disk_used_bytes,
-				AVG(disk_total_bytes)::bigint as disk_total_bytes,
-				AVG(disk_percent) as disk_percent,
-				AVG(rx_bytes_per_sec)::bigint as rx_bytes_per_sec,
-				AVG(tx_bytes_per_sec)::bigint as tx_bytes_per_sec,
-				AVG(process_count)::int as process_count,
-				AVG(container_count)::int as container_count,
-				'online' as status,
-				'1h' as resolution,
-				date_trunc('hour', recorded_at) as recorded_at
-			FROM node_metric_rollups
-			WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
-			  AND recorded_at >= $2
-			  AND recorded_at <= $3
-			GROUP BY tenant_id, node_id, node_name, date_trunc('hour', recorded_at)
-			ORDER BY date_trunc('hour', recorded_at) ASC
-			LIMIT $4
-		`
-		args = []any{q.NodeID, startTime, endTime, limit}
+		if userRole != "platform_admin" && tenantID != "" {
+			tUUID := parseNodeTenantUUID(tenantID)
+			query = `
+				SELECT 
+					gen_random_uuid() as id,
+					tenant_id::text,
+					node_id,
+					node_name,
+					AVG(cpu_percent) as cpu_percent,
+					MAX(cpu_peak) as cpu_peak,
+					AVG(mem_used_bytes)::bigint as mem_used_bytes,
+					AVG(mem_total_bytes)::bigint as mem_total_bytes,
+					AVG(mem_percent) as mem_percent,
+					AVG(disk_used_bytes)::bigint as disk_used_bytes,
+					AVG(disk_total_bytes)::bigint as disk_total_bytes,
+					AVG(disk_percent) as disk_percent,
+					AVG(rx_bytes_per_sec)::bigint as rx_bytes_per_sec,
+					AVG(tx_bytes_per_sec)::bigint as tx_bytes_per_sec,
+					AVG(process_count)::int as process_count,
+					AVG(container_count)::int as container_count,
+					'online' as status,
+					'1h' as resolution,
+					date_trunc('hour', recorded_at) as recorded_at
+				FROM node_metric_rollups
+				WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
+				  AND tenant_id = $2
+				  AND recorded_at >= $3
+				  AND recorded_at <= $4
+				GROUP BY tenant_id, node_id, node_name, date_trunc('hour', recorded_at)
+				ORDER BY date_trunc('hour', recorded_at) ASC
+				LIMIT $5
+			`
+			args = []any{q.NodeID, tUUID, startTime, endTime, limit}
+		} else {
+			query = `
+				SELECT 
+					gen_random_uuid() as id,
+					tenant_id::text,
+					node_id,
+					node_name,
+					AVG(cpu_percent) as cpu_percent,
+					MAX(cpu_peak) as cpu_peak,
+					AVG(mem_used_bytes)::bigint as mem_used_bytes,
+					AVG(mem_total_bytes)::bigint as mem_total_bytes,
+					AVG(mem_percent) as mem_percent,
+					AVG(disk_used_bytes)::bigint as disk_used_bytes,
+					AVG(disk_total_bytes)::bigint as disk_total_bytes,
+					AVG(disk_percent) as disk_percent,
+					AVG(rx_bytes_per_sec)::bigint as rx_bytes_per_sec,
+					AVG(tx_bytes_per_sec)::bigint as tx_bytes_per_sec,
+					AVG(process_count)::int as process_count,
+					AVG(container_count)::int as container_count,
+					'online' as status,
+					'1h' as resolution,
+					date_trunc('hour', recorded_at) as recorded_at
+				FROM node_metric_rollups
+				WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
+				  AND recorded_at >= $2
+				  AND recorded_at <= $3
+				GROUP BY tenant_id, node_id, node_name, date_trunc('hour', recorded_at)
+				ORDER BY date_trunc('hour', recorded_at) ASC
+				LIMIT $4
+			`
+			args = []any{q.NodeID, startTime, endTime, limit}
+		}
 	} else {
-		query = `
-			SELECT id, tenant_id::text, node_id, node_name,
-			       cpu_percent, cpu_peak, mem_used_bytes, mem_total_bytes, mem_percent,
-			       disk_used_bytes, disk_total_bytes, disk_percent,
-			       rx_bytes_per_sec, tx_bytes_per_sec, process_count, container_count,
-			       status, resolution, recorded_at
-			FROM node_metric_rollups
-			WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
-			  AND resolution = $2
-			  AND recorded_at >= $3
-			  AND recorded_at <= $4
-			ORDER BY recorded_at ASC
-			LIMIT $5
-		`
-		args = []any{q.NodeID, resolution, startTime, endTime, limit}
+		if userRole != "platform_admin" && tenantID != "" {
+			tUUID := parseNodeTenantUUID(tenantID)
+			query = `
+				SELECT id, tenant_id::text, node_id, node_name,
+				       cpu_percent, cpu_peak, mem_used_bytes, mem_total_bytes, mem_percent,
+				       disk_used_bytes, disk_total_bytes, disk_percent,
+				       rx_bytes_per_sec, tx_bytes_per_sec, process_count, container_count,
+				       status, resolution, recorded_at
+				FROM node_metric_rollups
+				WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
+				  AND tenant_id = $2
+				  AND resolution = $3
+				  AND recorded_at >= $4
+				  AND recorded_at <= $5
+				ORDER BY recorded_at ASC
+				LIMIT $6
+			`
+			args = []any{q.NodeID, tUUID, resolution, startTime, endTime, limit}
+		} else {
+			query = `
+				SELECT id, tenant_id::text, node_id, node_name,
+				       cpu_percent, cpu_peak, mem_used_bytes, mem_total_bytes, mem_percent,
+				       disk_used_bytes, disk_total_bytes, disk_percent,
+				       rx_bytes_per_sec, tx_bytes_per_sec, process_count, container_count,
+				       status, resolution, recorded_at
+				FROM node_metric_rollups
+				WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
+				  AND resolution = $2
+				  AND recorded_at >= $3
+				  AND recorded_at <= $4
+				ORDER BY recorded_at ASC
+				LIMIT $5
+			`
+			args = []any{q.NodeID, resolution, startTime, endTime, limit}
+		}
 	}
 
 	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying node history: %w", err)
+	}
+	if rows == nil {
+		return nil, nil
 	}
 	defer rows.Close()
 
@@ -233,30 +301,61 @@ func (r *nodeMetricsRepo) GetSummary(ctx context.Context, q nodemetrics.NodeHist
 		endTime = time.Now().UTC()
 	}
 
-	query := `
-		SELECT 
-			COALESCE(node_name, $1),
-			COALESCE(AVG(cpu_percent), 0),
-			COALESCE(MAX(cpu_peak), 0),
-			COALESCE(AVG(mem_percent), 0),
-			COALESCE(MAX(mem_percent), 0),
-			COALESCE(MAX(rx_bytes_per_sec), 0),
-			COALESCE(MAX(tx_bytes_per_sec), 0),
-			COUNT(*),
-			COALESCE(SUM(CASE WHEN status != 'online' THEN 1 ELSE 0 END), 0)
-		FROM node_metric_rollups
-		WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
-		  AND recorded_at >= $2
-		  AND recorded_at <= $3
-		GROUP BY node_name
-		LIMIT 1
-	`
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	userRole := tenancy.UserRoleFromContext(ctx)
+
+	var query string
+	var args []any
+	if userRole != "platform_admin" && tenantID != "" {
+		tUUID := parseNodeTenantUUID(tenantID)
+		query = `
+			SELECT 
+				COALESCE(node_name, $1),
+				COALESCE(AVG(cpu_percent), 0),
+				COALESCE(MAX(cpu_peak), 0),
+				COALESCE(AVG(mem_percent), 0),
+				COALESCE(MAX(mem_percent), 0),
+				COALESCE(MAX(rx_bytes_per_sec), 0),
+				COALESCE(MAX(tx_bytes_per_sec), 0),
+				COUNT(*),
+				COALESCE(SUM(CASE WHEN status != 'online' THEN 1 ELSE 0 END), 0)
+			FROM node_metric_rollups
+			WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
+			  AND tenant_id = $2
+			  AND recorded_at >= $3
+			  AND recorded_at <= $4
+			GROUP BY node_name
+			LIMIT 1
+		`
+		args = []any{q.NodeID, tUUID, startTime, endTime}
+	} else {
+		query = `
+			SELECT 
+				COALESCE(node_name, $1),
+				COALESCE(AVG(cpu_percent), 0),
+				COALESCE(MAX(cpu_peak), 0),
+				COALESCE(AVG(mem_percent), 0),
+				COALESCE(MAX(mem_percent), 0),
+				COALESCE(MAX(rx_bytes_per_sec), 0),
+				COALESCE(MAX(tx_bytes_per_sec), 0),
+				COUNT(*),
+				COALESCE(SUM(CASE WHEN status != 'online' THEN 1 ELSE 0 END), 0)
+			FROM node_metric_rollups
+			WHERE (node_id = $1 OR LOWER(node_name) = LOWER($1))
+			  AND recorded_at >= $2
+			  AND recorded_at <= $3
+			GROUP BY node_name
+			LIMIT 1
+		`
+		args = []any{q.NodeID, startTime, endTime}
+	}
+
 	var nodeName string
 	var avgCPU, peakCPU, avgMem, peakMem float64
 	var peakRx, peakTx int64
 	var totalSamples, offlineCount int
 
-	err := db.QueryRow(ctx, query, q.NodeID, startTime, endTime).Scan(
+	err := db.QueryRow(ctx, query, args...).Scan(
 		&nodeName, &avgCPU, &peakCPU, &avgMem, &peakMem, &peakRx, &peakTx, &totalSamples, &offlineCount,
 	)
 	if err != nil {

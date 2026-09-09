@@ -1,0 +1,26 @@
+services:
+  agent:
+    image: k8sselfhost/k8s-agent:latest
+    container_name: k8s-control-agent
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    volumes:
+      - /proc:/proc:ro
+      - /sys:/sys:ro
+      - /var/log:/var/log:ro
+    ports:
+      - "9100:9100"
+    environment:
+      - AGENT_PORT=9100
+      - AGENT_LOG_DIR=/var/log
+    command: ["--port", "9100", "--log-dir", "/var/log"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:9100/health || curl -f http://localhost:9100/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    labels:
+      app.kubernetes.io/name: k8s-control-agent
+      app.kubernetes.io/part-of: k8sselfhost

@@ -1,11 +1,9 @@
-﻿package gitops
+package gitops
 
 import (
 	"context"
 	"errors"
 	"testing"
-
-	"github.com/jackc/pgx/v5"
 
 	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
@@ -18,11 +16,6 @@ type mockTxManager struct {
 }
 
 func (m *mockTxManager) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	m.txCount++
-	return fn(ctx)
-}
-
-func (m *mockTxManager) RunInTxWithOpts(ctx context.Context, opts pgx.TxOptions, fn func(ctx context.Context) error) error {
 	m.txCount++
 	return fn(ctx)
 }
@@ -671,3 +664,4 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+

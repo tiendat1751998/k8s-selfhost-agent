@@ -23,6 +23,8 @@ export const useAlertStore = defineStore('alert', () => {
   const showAlertCenterModal = ref<boolean>(false)
   const isToastDropped = ref<boolean>(false)
   const manuallyDismissedKeys = ref<string>('')
+  const targetRemediationNode = ref<string>('')
+  const showRemediationModal = ref<boolean>(false)
 
   function getAlertKey(alert: MetricAlert): string {
     return `${alert.node_name || alert.node_id}-${alert.type}`
@@ -163,6 +165,14 @@ export const useAlertStore = defineStore('alert', () => {
     }
   }
 
+  function dismissToast() {
+    isToastDropped.value = false
+    manuallyDismissedKeys.value = activeAlerts.value
+      .map(a => `${a.node_id || a.node_name}-${a.type}`)
+      .sort()
+      .join(',')
+  }
+
   function muteAlert(
     alert: MetricAlert,
     mode: 'restart' | '1h' | '24h' | 'session' | 'forever' = 'restart'
@@ -240,21 +250,22 @@ export const useAlertStore = defineStore('alert', () => {
     dismissedAlertKeys.value.add(getAlertKey(alert))
   }
 
-  function dismissToast() {
-    isToastDropped.value = false
-    const keys = activeAlerts.value
-      .map(a => `${a.node_id || a.node_name}-${a.type}`)
-      .sort()
-      .join(',')
-    manuallyDismissedKeys.value = keys
-  }
-
   function openAlertCenter() {
     showAlertCenterModal.value = true
   }
 
   function closeAlertCenter() {
     showAlertCenterModal.value = false
+  }
+
+  function openRemediation(nodeName: string) {
+    targetRemediationNode.value = nodeName
+    showRemediationModal.value = true
+  }
+
+  function closeRemediation() {
+    showRemediationModal.value = false
+    targetRemediationNode.value = ''
   }
 
   // Initialize storage load
@@ -285,5 +296,9 @@ export const useAlertStore = defineStore('alert', () => {
     dismissToast,
     openAlertCenter,
     closeAlertCenter,
+    targetRemediationNode,
+    showRemediationModal,
+    openRemediation,
+    closeRemediation,
   }
 })

@@ -1,4 +1,4 @@
-﻿import { api, type ApiResponse } from './client'
+import { api, type ApiResponse } from './client'
 
 export interface K8sResource {
   apiVersion: string
@@ -28,7 +28,8 @@ export interface K8sResource {
 export interface K8sNamespace {
   name: string
   status: string
-  createdAt: string
+  createdAt?: string
+  created_at?: string
   labels?: Record<string, string>
 }
 
@@ -149,12 +150,18 @@ function unwrapResourceList(res: ApiResponse<K8sResource[]> | K8sResource[]): K8
   return []
 }
 
-function unwrapNamespaceList(res: ApiResponse<K8sNamespace[]> | K8sNamespace[]): K8sNamespace[] {
-  if (Array.isArray(res)) return res
-  if (res && typeof res === 'object' && 'data' in res && Array.isArray(res.data)) {
-    return res.data
-  }
-  return []
+function unwrapNamespaceList(res: ApiResponse<K8sNamespace[]> | K8sNamespace[] | unknown): K8sNamespace[] {
+  const rawList: any[] = Array.isArray(res) ? res : (res && typeof res === 'object' && 'data' in res && Array.isArray((res as any).data) ? (res as any).data : [])
+  return rawList.map((item: any) => {
+    const name = item.name || item.metadata?.name || ''
+    const status = item.status?.phase || item.status || 'Active'
+    return {
+      name,
+      status: typeof status === 'string' ? status : 'Active',
+      labels: item.metadata?.labels || item.labels || {},
+      createdAt: item.metadata?.creationTimestamp || item.created_at || item.createdAt || ''
+    }
+  }).filter((ns: K8sNamespace) => Boolean(ns.name))
 }
 
 function unwrapNamespace(res: ApiResponse<K8sNamespace> | K8sNamespace): K8sNamespace {
@@ -398,12 +405,53 @@ export const k8sApi = {
       `/k8s/${encodeURIComponent(cluster)}/apply`,
       { yaml, namespace: ns }
     )
-    if (res && typeof res === 'object' && 'data' in res && res.data) {
-      return res.data
-    }
     return {
       message:
         (res as { message?: string }).message || 'YAML manifest applied successfully',
     }
+  },
+
+  async scaleWorkload(
+    cluster: string,
+    kind: string,
+    name: string,
+    replicas: number,
+    namespace?: string
+  ): Promise<{ status?: string; message?: string }> {
+    return this.scaleResource(cluster, kind, name, replicas, namespace)
+  },
+
+  async scaleResource(
+    cluster: string,
+    kind: string,
+    name: string,
+    replicas: number,
+    namespace?: string
+  ): Promise<{ status?: string; message?: string }> {
+    if (kind === 'statefulsets') {
+      return this.scaleStatefulSet(cluster, name, namespace, replicas)
+    }
+    return this.scaleDeployment(cluster, name, namespace, replicas)
+  },
+
+  async restartResource(
+    cluster: string,
+    kind: string,
+    name: string,
+    namespace?: string
+  ): Promise<{ status?: string; message?: string }> {
+    if (kind === 'daemonsets') {
+      return this.restartDaemonSet(cluster, name, namespace)
+    }
+    return this.restartDeployment(cluster, name, namespace)
+  },
+
+  async toggleCronJobSuspend(
+    cluster: string,
+    name: string,
+    suspend: boolean,
+    namespace?: string
+  ): Promise<{ status?: string; message?: string }> {
+    return this.suspendCronJob(cluster, name, namespace, suspend)
   },
 }

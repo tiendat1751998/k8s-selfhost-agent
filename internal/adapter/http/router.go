@@ -49,9 +49,11 @@ type PlatformHandlers struct {
 	Deployments   *DeploymentHandler
 	Tenancy       *TenancyHandler
 	Alert         *AlertHandler
+	Storage       *StorageHandler
 	K8s           *K8sResourceHandler
 	K8sExec       *K8sExecHandler
 	K8sLogs       *K8sLogsHandler
+	K8sBootstrap  *K8sBootstrapHandler
 	Cloud         *CloudHandler
 	Settings      *SettingsHandler
 	Catalog       *CatalogHandler
@@ -60,6 +62,7 @@ type PlatformHandlers struct {
 	Ecosystem     *EcosystemHandler
 	LogStream     *LogStreamHandler
 	Helm          *HelmHandler
+	DR            *DRHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -203,7 +206,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			mountK8sUnavailable(r, "/health")
 		}
 
-		if platform != nil && (platform.K8s != nil || platform.K8sExec != nil || platform.K8sLogs != nil) {
+		if platform != nil && (platform.K8s != nil || platform.K8sExec != nil || platform.K8sLogs != nil || platform.K8sBootstrap != nil || platform.Storage != nil || platform.DR != nil) {
 			r.Route("/k8s/{cluster}", func(sub chi.Router) {
 				if platform.K8s != nil {
 					sub.With(mw.RBACMiddleware("platform_admin")).Post("/apply", platform.K8s.ApplyYAML)
@@ -218,21 +221,14 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 							resSub.Get("/{name}", platform.K8s.GetResource)
 							resSub.Put("/{name}", platform.K8s.UpdateResource)
 							resSub.Delete("/{name}", platform.K8s.DeleteResource)
-						})
 
-						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/deployments/{name}", func(wSub chi.Router) {
-							wSub.Post("/scale", platform.K8s.ScaleDeployment)
-							wSub.Post("/restart", platform.K8s.RestartDeployment)
-						})
-						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/statefulsets/{name}", func(wSub chi.Router) {
-							wSub.Post("/scale", platform.K8s.ScaleStatefulSet)
-						})
-						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/daemonsets/{name}", func(wSub chi.Router) {
-							wSub.Post("/restart", platform.K8s.RestartDaemonSet)
-						})
-						k8sSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Route("/resources/cronjobs/{name}", func(wSub chi.Router) {
-							wSub.Post("/trigger", platform.K8s.TriggerCronJob)
-							wSub.Put("/suspend", platform.K8s.SuspendCronJob)
+							// Workload actions on individual resource
+							resSub.With(mw.RBACMiddleware("platform_admin", "tenant_admin")).Group(func(actSub chi.Router) {
+								actSub.Post("/{name}/scale", platform.K8s.ScaleDeployment)
+								actSub.Post("/{name}/restart", platform.K8s.RestartDeployment)
+								actSub.Post("/{name}/trigger", platform.K8s.TriggerCronJob)
+								actSub.Put("/{name}/suspend", platform.K8s.SuspendCronJob)
+							})
 						})
 
 						k8sSub.Get("/events", platform.K8s.ListEvents)
@@ -254,6 +250,19 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 					sub.Get("/logs", platform.K8sLogs.HandlePodLogs)
 					sub.Get("/logs/{pod}", platform.K8sLogs.HandlePodLogs)
 					sub.Get("/pods/{pod}/logs", platform.K8sLogs.HandlePodLogs)
+				}
+				if platform.K8sBootstrap != nil {
+					sub.Get("/essentials", platform.K8sBootstrap.GetEssentialsStatus)
+					sub.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin")).Post("/bootstrap", platform.K8sBootstrap.ExecuteBootstrap)
+					sub.Get("/metrics/pods", platform.K8sBootstrap.GetPodMetrics)
+				}
+				if platform.Storage != nil {
+					sub.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/storage/volumes", platform.Storage.RegisterRoutes)
+				} else {
+					mountK8sUnavailable(sub, "/storage/volumes")
+				}
+				if platform.DR != nil {
+					sub.Route("/dr", platform.DR.RegisterRoutes)
 				}
 			})
 		} else {
@@ -385,3 +394,4 @@ func findFrontendDir() string {
 	}
 	return ""
 }
+

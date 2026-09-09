@@ -49,6 +49,11 @@ func (c *Collector) Collect(ctx context.Context, namespace, podName string) (*Co
 		PodLogs: make(map[string]string),
 	}
 
+	if c == nil || c.clientset == nil {
+		log.Info("Kubernetes clientset is nil (standalone/air-gapped mode), skipping K8s live resource collection")
+		return data, nil
+	}
+
 	log.Info("collecting diagnostic data",
 		zap.String("namespace", namespace),
 		zap.String("pod", podName),
@@ -127,6 +132,10 @@ func (c *Collector) Collect(ctx context.Context, namespace, podName string) (*Co
 }
 
 func (c *Collector) collectPodLogs(ctx context.Context, namespace, podName string, data *CollectedData) error {
+	if c == nil || c.clientset == nil {
+		return nil
+	}
+
 	pod, err := c.clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("getting pod: %w", err)
@@ -156,6 +165,10 @@ func (c *Collector) collectPodLogs(ctx context.Context, namespace, podName strin
 }
 
 func (c *Collector) getContainerLogs(ctx context.Context, namespace, podName, containerName string, previous bool) (string, error) {
+	if c == nil || c.clientset == nil {
+		return "", nil
+	}
+
 	tailLines := MaxLogLines
 	opts := &corev1.PodLogOptions{
 		Container: containerName,
@@ -180,6 +193,10 @@ func (c *Collector) getContainerLogs(ctx context.Context, namespace, podName, co
 }
 
 func (c *Collector) collectEvents(ctx context.Context, namespace, podName string, data *CollectedData) error {
+	if c == nil || c.clientset == nil {
+		return nil
+	}
+
 	events, err := c.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("involvedObject.name=%s", podName),
 	})
@@ -202,6 +219,10 @@ func (c *Collector) collectEvents(ctx context.Context, namespace, podName string
 }
 
 func (c *Collector) collectPodDescribe(ctx context.Context, namespace, podName string, data *CollectedData) error {
+	if c == nil || c.clientset == nil {
+		return nil
+	}
+
 	pod, err := c.clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("getting pod for describe: %w", err)
@@ -240,6 +261,10 @@ func (c *Collector) collectPodDescribe(ctx context.Context, namespace, podName s
 }
 
 func (c *Collector) collectOwnerResources(ctx context.Context, namespace, podName string, data *CollectedData) error {
+	if c == nil || c.clientset == nil {
+		return nil
+	}
+
 	pod, err := c.clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("getting pod for owner: %w", err)
@@ -262,6 +287,10 @@ func (c *Collector) collectOwnerResources(ctx context.Context, namespace, podNam
 }
 
 func (c *Collector) collectDeploymentFromRS(ctx context.Context, namespace, rsName string, data *CollectedData) error {
+	if c == nil || c.clientset == nil {
+		return nil
+	}
+
 	rs, err := c.clientset.AppsV1().ReplicaSets(namespace).Get(ctx, rsName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("getting replicaset: %w", err)
@@ -304,6 +333,10 @@ func (c *Collector) collectDeploymentFromRS(ctx context.Context, namespace, rsNa
 }
 
 func (c *Collector) collectStatefulSet(ctx context.Context, namespace, stsName string, data *CollectedData) error {
+	if c == nil || c.clientset == nil {
+		return nil
+	}
+
 	sts, err := c.clientset.AppsV1().StatefulSets(namespace).Get(ctx, stsName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("getting statefulset: %w", err)
@@ -324,6 +357,10 @@ func (c *Collector) collectStatefulSet(ctx context.Context, namespace, stsName s
 }
 
 func (c *Collector) collectServiceYAML(ctx context.Context, namespace, podName string, data *CollectedData) error {
+	if c == nil || c.clientset == nil {
+		return nil
+	}
+
 	pod, err := c.clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("getting pod for service: %w", err)
@@ -352,6 +389,10 @@ func (c *Collector) collectServiceYAML(ctx context.Context, namespace, podName s
 }
 
 func (c *Collector) collectIngressYAML(ctx context.Context, namespace string, data *CollectedData) error {
+	if c == nil || c.clientset == nil {
+		return nil
+	}
+
 	ingresses, err := c.clientset.NetworkingV1().Ingresses(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("listing ingresses: %w", err)
@@ -379,6 +420,10 @@ func (c *Collector) collectIngressYAML(ctx context.Context, namespace string, da
 }
 
 func (c *Collector) collectNodeMetrics(ctx context.Context, namespace, podName string, data *CollectedData) error {
+	if c == nil || c.clientset == nil {
+		return nil
+	}
+
 	pod, err := c.clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("getting pod for node metrics: %w", err)

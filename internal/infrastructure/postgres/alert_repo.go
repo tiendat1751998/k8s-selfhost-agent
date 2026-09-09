@@ -7,17 +7,20 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
 )
 
 type AlertRepo struct {
-	db *pgxpool.Pool
+	db DBTX
 }
 
-func NewAlertRepo(db *pgxpool.Pool) *AlertRepo {
+func NewAlertRepo(db DBTX) *AlertRepo {
 	return &AlertRepo{db: db}
+}
+
+func (r *AlertRepo) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, r.db)
 }
 
 func (r *AlertRepo) CreateChannel(ctx context.Context, channel *alert.NotificationChannel) error {
@@ -38,7 +41,7 @@ func (r *AlertRepo) CreateChannel(ctx context.Context, channel *alert.Notificati
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 
-	_, err = r.db.Exec(ctx, query,
+	_, err = r.getDB(ctx).Exec(ctx, query,
 		channel.ID,
 		channel.TenantID,
 		channel.Name,
@@ -61,7 +64,7 @@ func (r *AlertRepo) ListChannels(ctx context.Context, tenantID string) ([]*alert
 		WHERE tenant_id = $1
 	`
 
-	rows, err := r.db.Query(ctx, query, tenantID)
+	rows, err := r.getDB(ctx).Query(ctx, query, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query notification channels: %w", err)
 	}
@@ -104,7 +107,7 @@ func (r *AlertRepo) CreateRule(ctx context.Context, rule *alert.AlertRule) error
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 
-	_, err = r.db.Exec(ctx, query,
+	_, err = r.getDB(ctx).Exec(ctx, query,
 		rule.ID,
 		rule.TenantID,
 		rule.Name,
@@ -132,7 +135,7 @@ func (r *AlertRepo) ListRules(ctx context.Context, tenantID string) ([]*alert.Al
 		WHERE tenant_id = $1
 	`
 
-	rows, err := r.db.Query(ctx, query, tenantID)
+	rows, err := r.getDB(ctx).Query(ctx, query, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query alert rules: %w", err)
 	}
@@ -169,7 +172,7 @@ func (r *AlertRepo) UpdateRule(ctx context.Context, rule *alert.AlertRule) error
 		WHERE id = $11 AND tenant_id = $12
 	`
 
-	_, err = r.db.Exec(ctx, query,
+	_, err = r.getDB(ctx).Exec(ctx, query,
 		rule.Name, rule.Description, rule.MetricName, rule.Condition, rule.Threshold, rule.DurationSeconds, rule.Severity, channelsJSON, rule.Enabled, rule.UpdatedAt,
 		rule.ID, rule.TenantID,
 	)
@@ -181,7 +184,7 @@ func (r *AlertRepo) UpdateRule(ctx context.Context, rule *alert.AlertRule) error
 
 func (r *AlertRepo) DeleteRule(ctx context.Context, id, tenantID string) error {
 	query := `DELETE FROM alert_rules WHERE id = $1 AND tenant_id = $2`
-	_, err := r.db.Exec(ctx, query, id, tenantID)
+	_, err := r.getDB(ctx).Exec(ctx, query, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("failed to delete alert rule: %w", err)
 	}
@@ -200,7 +203,7 @@ func (r *AlertRepo) CreateHistory(ctx context.Context, history *alert.AlertHisto
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
-	_, err := r.db.Exec(ctx, query,
+	_, err := r.getDB(ctx).Exec(ctx, query,
 		history.ID, history.TenantID, history.RuleID, history.Status, history.Value, history.Message, history.AcknowledgedBy, history.CreatedAt, history.UpdatedAt,
 	)
 	if err != nil {
@@ -217,7 +220,7 @@ func (r *AlertRepo) ListHistory(ctx context.Context, tenantID string) ([]*alert.
 		ORDER BY created_at DESC
 	`
 
-	rows, err := r.db.Query(ctx, query, tenantID)
+	rows, err := r.getDB(ctx).Query(ctx, query, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query alert history: %w", err)
 	}
@@ -247,7 +250,7 @@ func (r *AlertRepo) AcknowledgeAlert(ctx context.Context, id, tenantID, userID s
 		WHERE id = $3 AND tenant_id = $4
 	`
 
-	_, err := r.db.Exec(ctx, query, userID, time.Now(), id, tenantID)
+	_, err := r.getDB(ctx).Exec(ctx, query, userID, time.Now(), id, tenantID)
 	if err != nil {
 		return fmt.Errorf("failed to acknowledge alert: %w", err)
 	}

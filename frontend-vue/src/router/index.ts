@@ -1,30 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import LoginView from '../views/LoginView.vue'
-import OverviewView from '../views/OverviewView.vue'
-import IncidentsView from '../views/IncidentsView.vue'
-import AgentsView from '../views/AgentsView.vue'
-import SLOView from '../views/SLOView.vue'
-import LogStreamView from '../views/LogStreamView.vue'
-import FleetView from '../views/FleetView.vue'
-import DeploymentsView from '../views/DeploymentsView.vue'
-import PromotionsView from '../views/PromotionsView.vue'
-import DockerSwarmView from '../views/DockerSwarmView.vue'
-import ExplorerView from '../views/ExplorerView.vue'
-import AuditView from '../views/AuditView.vue'
-import DevSecOpsView from '../views/DevSecOpsView.vue'
-import ComplianceView from '../views/ComplianceView.vue'
-import DriftView from '../views/DriftView.vue'
-import BackupRestoreView from '../views/BackupRestoreView.vue'
-import AutomationView from '../views/AutomationView.vue'
-import RunbooksView from '../views/RunbooksView.vue'
-import CostFinOpsView from '../views/CostFinOpsView.vue'
-import CapacityView from '../views/CapacityView.vue'
-import TenancyRbacView from '../views/TenancyRbacView.vue'
-import AIProviderHubView from '../views/AIProviderHubView.vue'
-import ChangesView from '../views/ChangesView.vue'
-import AlertsView from '../views/AlertsView.vue'
-import ReportsView from '../views/ReportsView.vue'
-import SettingsView from '../views/SettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -33,7 +7,7 @@ const router = createRouter({
     {
       path: '/login',
       name: 'login',
-      component: LoginView,
+      component: () => import('../views/LoginView.vue'),
       meta: { public: true }
     },
 
@@ -41,31 +15,26 @@ const router = createRouter({
     {
       path: '/',
       name: 'overview',
-      component: OverviewView,
+      component: () => import('../views/OverviewView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/incidents',
       name: 'incidents',
-      component: IncidentsView,
+      component: () => import('../views/IncidentsView.vue'),
       meta: { requiresAuth: true }
     },
-    {
-      path: '/agents',
-      name: 'agents',
-      component: AgentsView,
-      meta: { requiresAuth: true }
-    },
+
     {
       path: '/slo',
       name: 'slo',
-      component: SLOView,
+      component: () => import('../views/SLOView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/logs',
       name: 'logs',
-      component: LogStreamView,
+      component: () => import('../views/LogStreamView.vue'),
       meta: { requiresAuth: true }
     },
 
@@ -73,7 +42,7 @@ const router = createRouter({
     {
       path: '/fleet',
       name: 'fleet',
-      component: FleetView,
+      component: () => import('../views/FleetView.vue'),
       meta: { requiresAuth: true }
     },
     {
@@ -85,31 +54,31 @@ const router = createRouter({
     {
       path: '/deployments',
       name: 'deployments',
-      component: DeploymentsView,
+      component: () => import('../views/DeploymentsView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/workloads',
       name: 'workloads',
-      component: DeploymentsView,
+      component: () => import('../views/DeploymentsView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/promotions',
       name: 'promotions',
-      component: PromotionsView,
+      component: () => import('../views/PromotionsView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/docker',
       name: 'docker',
-      component: DockerSwarmView,
+      component: () => import('../views/DockerSwarmView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/explorer',
       name: 'explorer',
-      component: ExplorerView,
+      component: () => import('../views/ExplorerView.vue'),
       meta: { requiresAuth: true }
     },
     {
@@ -123,33 +92,33 @@ const router = createRouter({
     {
       path: '/audit',
       name: 'audit',
-      component: AuditView,
+      component: () => import('../views/AuditView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/security',
       alias: ['/security/devsecops', '/devsecops'],
       name: 'security',
-      component: DevSecOpsView,
+      component: () => import('../views/DevSecOpsView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/compliance',
       alias: ['/security/compliance', '/compliance-center'],
       name: 'compliance',
-      component: ComplianceView,
+      component: () => import('../views/ComplianceView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/drift',
       name: 'drift',
-      component: DriftView,
+      component: () => import('../views/DriftView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/backup',
       name: 'backup',
-      component: BackupRestoreView,
+      component: () => import('../views/BackupRestoreView.vue'),
       meta: { requiresAuth: true }
     },
 
@@ -157,26 +126,26 @@ const router = createRouter({
     {
       path: '/automation',
       name: 'automation',
-      component: AutomationView,
+      component: () => import('../views/AutomationView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/runbooks',
       name: 'runbooks',
-      component: RunbooksView,
+      component: () => import('../views/RunbooksView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/cost',
       alias: ['/finops/cost', '/finops'],
       name: 'cost',
-      component: CostFinOpsView,
+      component: () => import('../views/CostFinOpsView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/capacity',
       name: 'capacity',
-      component: CapacityView,
+      component: () => import('../views/CapacityView.vue'),
       meta: { requiresAuth: true }
     },
 
@@ -185,32 +154,32 @@ const router = createRouter({
       path: '/tenancy',
       alias: ['/tenancy/rbac', '/rbac'],
       name: 'tenancy',
-      component: TenancyRbacView,
+      component: () => import('../views/TenancyRbacView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/ai-hub',
       alias: ['/ai/providers', '/ai-providers'],
       name: 'ai-hub',
-      component: AIProviderHubView,
+      component: () => import('../views/AIProviderHubView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/changes',
       name: 'changes',
-      component: ChangesView,
+      component: () => import('../views/ChangesView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/alerts',
       name: 'alerts',
-      component: AlertsView,
+      component: () => import('../views/AlertsView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/reports',
       name: 'reports',
-      component: ReportsView,
+      component: () => import('../views/ReportsView.vue'),
       meta: { requiresAuth: true }
     },
     {
@@ -240,7 +209,7 @@ const router = createRouter({
     {
       path: '/settings',
       name: 'settings',
-      component: SettingsView,
+      component: () => import('../views/SettingsView.vue'),
       meta: { requiresAuth: true }
     },
     {
