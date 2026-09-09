@@ -2,11 +2,17 @@
 
 > Binding project constitution for `k8sseflhost`. Applies to all agents and subagents operating in this workspace.
 
-## 00. SUPREME DIRECTIVE: CRAFTSMANSHIP & QUALITY OVER SPEED (CHẤT LƯỢNG LÀ SỐ 1 — TUYỆT ĐỐI KHÔNG ĐỐI PHÓ)
-- **CRAFTSMANSHIP > SPEED**: Tốc độ là thứ yếu, chất lượng là tối thượng. Người dùng KHÔNG cần code nhanh, người dùng cần một sản phẩm **chuẩn chỉnh, tinh xảo, chất lượng cao cấp Enterprise**. Sẵn sàng dành 1-2 tiếng hoặc nhiều ngày/tuần/tháng cho từng màn hình hoặc tính năng để hoàn thiện đến từng pixel và từng dòng code.
-- **ZERO TOLERANCE FOR SUPERFICIAL PROGRESS (Nghiêm cấm làm đối phó)**:
-  - Tuyệt đối KHÔNG được có tư duy "build xanh là xong", "chạy được là báo hoàn thành". Một giao diện build pass nhưng UX xấu, vỡ bố cục, nhồi nhét chữ, cuộn kép trên mobile là **DEFECT NGHIÊM TRỌNG**.
-  - Không được cắt xén góc, không dùng giải pháp chắp vá (monkey patch), không để lại giao diện nửa vời.
+## 00. SUPREME DIRECTIVE: CRAFTSMANSHIP & ZERO TOY PROJECTS (CHẤT LƯỢNG ENTERPRISE — TUYỆT ĐỐI KHÔNG LÀM CODE ĐỒ CHƠI)
+- **CRAFTSMANSHIP > SPEED**: Tốc độ là thứ yếu, chất lượng là tối thượng. Tuyệt đối không làm vội, không hám xong việc để báo cáo. Một giải pháp nhanh nhưng ẩu, chắp vá, làm đối phó là **THẤT BẠI HOÀN TOÀN**.
+- **ANTI-TOY PROJECT SYNDROME (CHỐNG LÀM CODE ĐỒ CHƠI)**:
+  - Cấm tiệt tư duy "viết vài dòng cho nó chạy tạm rồi tính". Mọi đoạn code xuất xưởng phải đạt chuẩn **Production Enterprise**: kiểu dữ liệu chặt chẽ, xử lý lỗi tận gốc, an toàn đa luồng (concurrency-safe), kiến trúc sạch sẽ, có khả năng scale.
+  - Không monkey-patch, không tạo mock tạm bợ, không để lại code lởm khởm. Đã đụng vào module nào là module đó phải chuẩn chỉ, dưới 500 dòng và sạch bóng lỗi.
+- **SURGICAL SKILL SELECTION (DÙNG ĐÚNG KỸ NĂNG, KHÔNG NHỒI NHÉT SKILLS)**:
+  - CẤM spam hay nhồi nhét hàng chục skill vào đầu hoặc vào prompt.
+  - Mỗi task cụ thể CHỈ ĐƯỢC CHỌN ĐÚNG 1 ĐẾN 2 SKILL trực tiếp phục vụ cho việc đó (ví dụ: fix bug thì dùng `systematic-debugging`, test UI thì dùng `chrome-devtools-mcp`). Bỏ qua toàn bộ các skill còn lại để giữ context luôn tinh gọn và sắc bén.
+- **ZERO DEFENSIVENESS (CẤM CHỐNG CHẾ & BA HOA LÝ THUYẾT)**:
+  - Khi phát hiện lỗi hoặc bị chỉ ra thiếu sót, tuyệt đối CẤM giải thích vòng vo, cấm vẽ sơ đồ chống chế, cấm hứa hẹn suông.
+  - Nhận diện đúng sự thật, đi chậm lại, kiểm tra bằng chứng thực tế và sửa tận gốc vấn đề.
 - **MANDATORY PROACTIVE MCP AUDIT (Tự dùng MCP kiểm thử, không để User làm QA)**:
   - Orchestrator và QA agents BẮT BUỘC phải dùng `chrome-devtools-mcp` (`emulate` mobile 375x812, `resize_page`, `take_screenshot`) để tự mở trang, tự soi từng breakpoint, tự kiểm tra mật độ thông tin, độ tương phản và trải nghiệm cuộn thực tế.
   - Chỉ khi sản phẩm đạt chuẩn thẩm mỹ cao cấp và kiểm thử kỹ lưỡng trên mọi thiết bị mới được phép báo cáo.
