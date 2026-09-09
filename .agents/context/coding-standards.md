@@ -113,7 +113,7 @@ Presentation (HTTP/WS) → Usecase → Domain ← Infrastructure (Adapter)
 
 # MANDATORY ENTERPRISE ARCHITECTURE CONSTITUTION: MODULAR CLEAN ARCHITECTURE (<500 LINES / SEPARATED CSS / 4-TIER RWD)
 
-## 1. FRONTEND TAM QUYỀN PHÂN LẬP (< 500 LINES PER FILE)
+## 1. FRONTEND MODULARITY & SEPARATION OF CONCERNS (< 500 LINES PER FILE)
 - Zero Monolithic Files: Under NO circumstances may any .vue, .ts, or .go file exceed 500 lines.
 - Separation of CSS, Logic, and Template:
   1. CSS: All styles must be segregated into src/assets/styles/ (base, buttons, tables, modals, responsive, and scoped view styles).
