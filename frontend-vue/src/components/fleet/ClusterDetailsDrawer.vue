@@ -124,26 +124,5 @@ function handleBootstrapped() {
 </template>
 
 <style scoped>
-.cluster-drawer-content { display: flex; flex-direction: column; gap: 14px; }
-.overview-meta-card { padding: 14px; border-radius: 12px; background: rgba(11, 15, 25, 0.7); display: flex; flex-direction: column; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.07); }
-.card-title-row { display: flex; justify-content: space-between; align-items: center; }
-.cluster-brand { display: flex; align-items: center; gap: 10px; }
-.cluster-icon { font-size: 22px; color: var(--accent-cyan); }
-.cluster-name { font-size: 15px; font-weight: 700; color: #fff; }
-.meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; background: rgba(0, 0, 0, 0.25); padding: 8px 10px; border-radius: 8px; }
-.meta-item { display: flex; flex-direction: column; gap: 2px; }
-.meta-lbl { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
-.meta-val { font-size: 12px; font-weight: 600; }
-.drawer-action-bar .btn { width: 100%; justify-content: center; }
-.discovery-section { padding: 12px; border-radius: 10px; display: flex;
-  flex-direction: column; gap: 8px; background: rgba(11, 15, 25, 0.5); border: 1px solid var(--border-subtle); }	
-.sec-title { font-size: 11.5px; color: #fff; font-weight: 700; }
-.labels-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.one-chip { font-size: 10.5px; background: rgba(6, 182, 212, 0.12); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.25); padding: 2px 7px; border-radius: 5px; }
-.empty-drawer { padding: 36px; text-align: center; font-size: 13px; }
-.font-mono { font-family: var(--font-mono); }
-.text-cyan { color: var(--accent-cyan); }
-.text-emerald { color: var(--accent-emerald); }
-.text-muted { color: var(--text-muted); }
-.text-xs { font-size: 11px; }
+@import '../../assets/styles/views/fleet.css';
 </style>

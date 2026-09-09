@@ -91,29 +91,5 @@ defineExpose({ refresh: loadEssentials })
 </template>
 
 <style scoped>
-.essentials-matrix { padding: 16px; border-radius: 14px; display: flex; flex-direction: column; gap: 12px; background: rgba(11, 15, 25, 0.7); border: 1px solid var(--border-subtle); }
-.matrix-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-.matrix-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.matrix-icon { font-size: 16px; color: var(--accent-cyan); }
-.matrix-title { font-size: 14px; font-weight: 700; color: #fff; }
-.matrix-counter { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); border: 1px solid rgba(6, 182, 212, 0.3); }
-.matrix-subtitle { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
-.matrix-error { font-size: 11px; color: #fb7185; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.25); padding: 5px 8px; border-radius: 6px; }
-.matrix-list { display: flex; flex-direction: column; gap: 8px; }
-.matrix-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border-radius: 9px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-subtle); transition: all 0.15s ease; }
-.matrix-row:hover { border-color: var(--border-medium); background: rgba(0, 0, 0, 0.35); }
-.matrix-row.is-ready { border-color: rgba(16, 185, 129, 0.2); }
-.matrix-info { display: flex; flex-direction: column; gap: 3px; }
-.item-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.item-name { font-size: 13px; font-weight: 700; color: #fff; }
-.item-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.35; }
-.matrix-action { flex-shrink: 0; margin-left: 12px; }
-.ready-text { font-size: 11.5px; font-weight: 600; }
-.font-mono { font-family: var(--font-mono); }
-.text-emerald { color: var(--accent-emerald); }
-@media (max-width: 640px) {
-  .matrix-row { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .matrix-action { width: 100%; margin-left: 0; }
-  .matrix-action .btn { width: 100%; }
-}
+@import '../../assets/styles/views/fleet.css';
 </style>
