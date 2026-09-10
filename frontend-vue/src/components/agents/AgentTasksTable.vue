@@ -91,6 +91,13 @@ const filteredTasks = computed(() => {
     <!-- Table -->
     <div v-else class="task-table-container">
       <table class="cyber-table">
+        <colgroup>
+          <col style="width: 32%;" />
+          <col style="width: 12%;" />
+          <col style="width: 18%;" />
+          <col style="width: 14%;" />
+          <col style="width: 24%;" />
+        </colgroup>
         <thead>
           <tr>
             <th>Task & Specifications</th>
@@ -105,8 +112,8 @@ const filteredTasks = computed(() => {
             <!-- Title & ID -->
             <td>
               <div class="task-cell-title">
-                <span class="task-cell-name">{{ task.title }}</span>
-                <span class="task-cell-desc font-mono">{{ task.description }}</span>
+                <span class="task-cell-name" :title="task.title">{{ task.title }}</span>
+                <span class="task-cell-desc font-mono" :title="task.description">{{ task.description }}</span>
                 <span class="task-id-tag font-mono">ID: {{ task.id }}</span>
               </div>
             </td>
@@ -119,51 +126,44 @@ const filteredTasks = computed(() => {
             <!-- Scope -->
             <td>
               <div class="scope-chips font-mono">
-                <span class="module-chip">{{ task.module }}</span>
-                <span class="feature-chip">{{ task.feature }}</span>
+                <span class="module-chip" :title="task.module">{{ task.module }}</span>
+                <span class="feature-chip" :title="task.feature">{{ task.feature }}</span>
               </div>
             </td>
 
             <!-- Prerequisites -->
             <td>
               <div v-if="task.dependencies && task.dependencies.length > 0" class="deps-chips font-mono">
-                <span v-for="dep in task.dependencies" :key="dep" class="dep-chip">
+                <span v-for="dep in task.dependencies" :key="dep" class="dep-chip" :title="dep">
                   ⛓️ {{ dep.slice(0, 12) }}
                 </span>
               </div>
               <span v-else class="text-muted font-mono text-xs">None (Root DAG)</span>
             </td>
 
-            <!-- Action Buttons: [ ⚡ Dispatch ], [ 📜 Logs ], [ ⏸ Pause ], [ 🗑 Terminate ] -->
+            <!-- Action Buttons: [ 📜 Transcript ], [ ⏸️ Pause ], [ 🛑 Terminate ] -->
             <td class="text-right">
               <div class="task-actions-group">
                 <button 
-                  class="btn btn-xs btn-dispatch-act font-mono"
-                  title="Dispatch Task"
-                  @click="emit('dispatch', task)"
-                >
-                  ⚡ Dispatch
-                </button>
-                <button 
-                  class="btn btn-xs btn-logs-act font-mono"
-                  title="Inspect Live Step Logs"
+                  class="btn-table-act btn-logs-act font-mono"
+                  title="Inspect Live Step Transcript"
                   @click="emit('logs', task)"
                 >
-                  📜 Logs
+                  📜 Transcript
                 </button>
                 <button 
-                  class="btn btn-xs btn-pause-act font-mono"
+                  class="btn-table-act btn-pause-act font-mono"
                   :title="task.status === 'blocked' ? 'Resume Task' : 'Pause Task'"
                   @click="emit('pause', task.id)"
                 >
-                  {{ task.status === 'blocked' ? '▶ Resume' : '⏸ Pause' }}
+                  {{ task.status === 'blocked' ? '▶️ Resume' : '⏸️ Pause' }}
                 </button>
                 <button 
-                  class="btn btn-xs btn-terminate font-mono"
+                  class="btn-table-act btn-terminate font-mono"
                   title="Terminate Autonomous Worker"
                   @click="emit('terminate', task.id)"
                 >
-                  🗑 Terminate
+                  🛑 Terminate
                 </button>
               </div>
             </td>
