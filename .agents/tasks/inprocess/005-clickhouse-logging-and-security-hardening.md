@@ -102,9 +102,9 @@
 - [x] Verification: `npm.cmd run build` passes with zero errors (Reviewer APPROVED, QA PASS, Merged)
 
 ### Loop 5: Monolith Shredding (< 500 lines per file)
-- [ ] Task 5.1: Shred `internal/domain/scaffold/builtin.go` (780 lines -> modular files < 400 lines)
-- [ ] Task 5.2: Shred `internal/usecase/ecosystem/detector_k8s.go` (502 lines -> modular files < 400 lines)
-- [ ] Verification: `powershell scripts\verify_quality_gate.ps1 -SkipBuild` confirms zero files > 500 lines
+- [x] Task 5.1: Shred `internal/domain/scaffold/builtin.go` (803 lines -> `builtin.go` 24 lines, `builtin_microservices.go` 240 lines, `builtin_apps_db.go` 385 lines)
+- [x] Task 5.2: Shred `internal/usecase/ecosystem/detector_k8s.go` (523 lines -> `detector_k8s.go` 154 lines, `detector_specs.go` 263 lines)
+- [x] Verification: `powershell scripts\verify_quality_gate.ps1 -SkipBuild` confirms 100% of 814 source files strictly < 500 lines (Reviewer APPROVED, QA PASS, Merged)
 
 ### Loop 6: Security Vulnerability Remediation (11 Findings)
 - [ ] Task 6.1 (Batch 1 - P0 Critical):
