@@ -112,7 +112,7 @@ function handleSave() {
               :class="{ active: format === 'pdf' }"
               @click="format = 'pdf'"
             >
-              <span>📄</span> PDF
+              <BaseIcon name="file-text" size="xs" /> PDF
             </button>
             <button
               type="button"
@@ -120,7 +120,7 @@ function handleSave() {
               :class="{ active: format === 'csv' }"
               @click="format = 'csv'"
             >
-              <span>📊</span> CSV
+              <BaseIcon name="grid" size="xs" /> CSV
             </button>
             <button
               type="button"
@@ -128,7 +128,7 @@ function handleSave() {
               :class="{ active: format === 'excel' }"
               @click="format = 'excel'"
             >
-              <span>📁</span> Excel
+              <BaseIcon name="database" size="xs" /> Excel
             </button>
           </div>
         </div>
@@ -173,7 +173,7 @@ function handleSave() {
           </div>
 
           <div class="cron-preview-badge font-mono">
-            <span>⏱️ Expression:</span>
+            <BaseIcon name="clock" size="xs" /> <span>Expression:</span>
             <strong>{{ activeCronExpression }}</strong>
           </div>
         </div>
@@ -211,7 +211,7 @@ function handleSave() {
         />
         <div v-if="parsedRecipients.length > 0" class="recipient-chips">
           <span v-for="(email, idx) in parsedRecipients" :key="idx" class="recipient-chip font-mono">
-            <span class="recipient-chip-icon">✉️</span>
+            <BaseIcon name="mail" size="xs" class="recipient-chip-icon" />
             <span>{{ email }}</span>
           </span>
         </div>

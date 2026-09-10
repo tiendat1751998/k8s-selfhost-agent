@@ -31,7 +31,7 @@ function formatDate(d?: string) {
 <template>
   <div class="promotions-mobile-section">
     <div v-if="loading" class="mobile-stream-loading font-mono glass-panel">
-      <span>⏳ Loading promotions ledger...</span>
+      <BaseIcon name="clock" size="xs" /> <span>Loading promotions ledger...</span>
     </div>
 
     <div v-else-if="promotions.length === 0" class="mobile-stream-empty font-mono glass-panel">
@@ -57,7 +57,7 @@ function formatDate(d?: string) {
         <div class="mobile-card-row-1">
           <div class="mobile-card-identity">
             <span class="mobile-service-name font-mono">{{ p.service }}</span>
-            <span class="mobile-env-route font-mono">{{ p.from_env }} ➔ {{ p.to_env }}</span>
+            <span class="mobile-env-route font-mono">{{ p.from_env }} <BaseIcon name="chevron-right" size="xs" /> {{ p.to_env }}</span>
           </div>
           <StatusBadge :status="p.status" size="sm" />
         </div>
@@ -77,7 +77,7 @@ function formatDate(d?: string) {
               aria-label="Inspect Git Diff"
               @click.stop="emit('diff', p)"
             >
-              <span>🔍 Diff</span>
+              <BaseIcon name="search" size="xs" /> <span>Diff</span>
             </button>
 
             <template v-if="p.status === 'pending'">
@@ -88,7 +88,7 @@ function formatDate(d?: string) {
                 aria-label="Approve Promotion"
                 @click.stop="emit('approve', p)"
               >
-                <span>⚡ Approve</span>
+                <BaseIcon name="check" size="xs" /> <span>Approve</span>
               </button>
               <button
                 class="mobile-action-btn btn-reject"
@@ -97,7 +97,7 @@ function formatDate(d?: string) {
                 aria-label="Reject Promotion"
                 @click.stop="emit('reject', p)"
               >
-                <span>🛑 Reject</span>
+                <BaseIcon name="x-circle" size="xs" /> <span>Reject</span>
               </button>
             </template>
 
@@ -109,7 +109,7 @@ function formatDate(d?: string) {
                 aria-label="Complete Rollout"
                 @click.stop="emit('complete', p)"
               >
-                <span>🚀 Rollout</span>
+                <BaseIcon name="play" size="xs" /> <span>Rollout</span>
               </button>
               <button
                 class="mobile-action-btn btn-abort"
@@ -118,7 +118,7 @@ function formatDate(d?: string) {
                 aria-label="Abort Promotion"
                 @click.stop="emit('abort', p)"
               >
-                <span>🛑 Abort</span>
+                <BaseIcon name="x-circle" size="xs" /> <span>Abort</span>
               </button>
             </template>
 
@@ -130,7 +130,7 @@ function formatDate(d?: string) {
                 aria-label="Rollback Release"
                 @click.stop="emit('rollback', p)"
               >
-                <span>⏪ Rollback</span>
+                <BaseIcon name="rotate-ccw" size="xs" /> <span>Rollback</span>
               </button>
             </template>
           </div>

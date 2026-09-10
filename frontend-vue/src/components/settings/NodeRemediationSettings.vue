@@ -2,17 +2,17 @@
   <div class="settings-card glass-panel sre-policy-card">
     <div class="card-header">
       <div>
-        <h2 class="card-title">⚡ SRE Auto-Remediation & Fast-Failover Settings</h2>
+        <h2 class="card-title"><BaseIcon name="zap" size="sm" /> SRE Auto-Remediation & Fast-Failover Settings</h2>
         <p class="card-subtitle">Autonomous controller policies for rapid node failure detection and pod eviction.</p>
       </div>
-      <button type="button" class="btn btn-secondary btn-sm" @click="resetDefaults"><span>↺ Reset Defaults</span></button>
+      <button type="button" class="btn btn-secondary btn-sm" @click="resetDefaults"><BaseIcon name="rotate-ccw" size="xs" /> <span>Reset Defaults</span></button>
     </div>
 
     <!-- Toast Notification -->
     <transition name="fade">
       <div v-if="toast" class="toast-banner" :class="'banner-' + toast.type">
-        <span>{{ toast.type === 'success' ? '✅' : '⚠️' }} {{ toast.text }}</span>
-        <button class="toast-close" @click="toast = null">✕</button>
+        <BaseIcon :name="toast.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" /> <span>{{ toast.text }}</span>
+        <button class="toast-close" @click="toast = null"><BaseIcon name="x" size="xs" /></button>
       </div>
     </transition>
 
@@ -63,7 +63,7 @@
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary" :disabled="saving">
-          <span>{{ saving ? '💾 Persisting SRE Policy...' : '💾 Save SRE Policy' }}</span>
+          <BaseIcon name="hard-drive" size="xs" /> <span>{{ saving ? 'Persisting SRE Policy...' : 'Save SRE Policy' }}</span>
         </button>
       </div>
     </form>

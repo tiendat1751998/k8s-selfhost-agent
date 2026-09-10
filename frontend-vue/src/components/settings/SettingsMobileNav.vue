@@ -23,7 +23,7 @@ const emit = defineEmits<{
         :class="{ active: activeTab === tab.id }"
         @click="emit('update:activeTab', tab.id)"
       >
-        <span>{{ tab.icon }} {{ tab.label }}</span>
+        <span><BaseIcon :name="tab.icon" size="xs" /> {{ tab.label }}</span>
         <span v-if="tab.category && isDirtyCategory?.(tab.category)" class="dirty-dot"></span>
         <span v-if="tab.count !== undefined" class="tab-badge">{{ tab.count }}</span>
       </button>

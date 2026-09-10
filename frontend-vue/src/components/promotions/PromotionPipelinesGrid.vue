@@ -57,7 +57,7 @@ function getPromotionsForEnv(env: Environment): Promotion[] {
             </div>
 
             <div class="p-version font-mono">
-              <span>{{ p.from_env }} ➔ </span>
+              <span>{{ p.from_env }} <BaseIcon name="chevron-right" size="xs" /> </span>
               <span class="text-cyan">{{ p.version }}</span>
             </div>
 
@@ -71,7 +71,7 @@ function getPromotionsForEnv(env: Environment): Promotion[] {
                 title="Inspect GitOps Manifest Diff"
                 @click="emit('diff', p)"
               >
-                🔍 Diff
+                <BaseIcon name="search" size="xs" /> Diff
               </button>
 
               <template v-if="p.status === 'pending'">
@@ -81,14 +81,14 @@ function getPromotionsForEnv(env: Environment): Promotion[] {
                   title="Reject Promotion"
                   @click="emit('reject', p)"
                 >
-                  🛑 Reject
+                  <BaseIcon name="x-circle" size="xs" /> Reject
                 </button>
                 <button
                   class="btn btn-primary btn-xs"
                   :disabled="actionLoading === p.id"
                   @click="emit('approve', p)"
                 >
-                  ✓ Approve
+                  <BaseIcon name="check" size="xs" /> Approve
                 </button>
               </template>
 
@@ -98,7 +98,7 @@ function getPromotionsForEnv(env: Environment): Promotion[] {
                   :disabled="actionLoading === p.id"
                   @click="emit('complete', p)"
                 >
-                  Complete Rollout ➔
+                  Complete Rollout <BaseIcon name="chevron-right" size="xs" />
                 </button>
               </template>
 
@@ -108,7 +108,7 @@ function getPromotionsForEnv(env: Environment): Promotion[] {
                   :disabled="actionLoading === p.id"
                   @click="emit('rollback', p)"
                 >
-                  ⏪ Rollback
+                  <BaseIcon name="rotate-ccw" size="xs" /> Rollback
                 </button>
               </template>
             </div>

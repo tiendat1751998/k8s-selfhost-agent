@@ -81,13 +81,13 @@ function onDelete(row: Record<string, unknown>) {
     <template #cell-actions="{ row }">
       <div class="actions-group">
         <button class="btn btn-primary btn-action-32" :title="`Download ${String(row.format || 'Report').toUpperCase()}`" @click="onDownload(row)">
-          <span>📥 Download</span>
+          <BaseIcon name="download" size="xs" /> <span>Download</span>
         </button>
         <button class="btn btn-secondary btn-action-32" title="View / Preview Report" @click="onPreview(row)">
-          <span>👁️ View</span>
+          <BaseIcon name="eye" size="xs" /> <span>View</span>
         </button>
         <button class="btn btn-action-32 btn-delete-crimson" title="Delete Report" @click="onDelete(row)">
-          <span>🗑️ Delete</span>
+          <BaseIcon name="trash" size="xs" /> <span>Delete</span>
         </button>
       </div>
     </template>
