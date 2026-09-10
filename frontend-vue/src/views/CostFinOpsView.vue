@@ -38,12 +38,12 @@ const {
 const showMobileBreakdown = ref(false)
 
 const wasteColumns: Column<ResourceWaste>[] = [
-  { key: 'severity', label: 'Severity', width: '15%', sortable: true },
-  { key: 'type', label: 'Waste Category', width: '20%', sortable: true },
-  { key: 'resource', label: 'Impacted Resource', width: '28%', sortable: true },
-  { key: 'util', label: 'Measured Util', width: '15%' },
+  { key: 'severity', label: 'Severity', width: '14%', sortable: true },
+  { key: 'type', label: 'Waste Category', width: '18%', sortable: true },
+  { key: 'resource', label: 'Impacted Resource', width: '26%', sortable: true },
+  { key: 'util', label: 'Measured Util', width: '14%' },
   { key: 'wasted_cost', label: 'Idle Cost', width: '12%', sortable: true },
-  { key: 'actions', label: 'Action', width: '10%', align: 'right' },
+  { key: 'actions', label: 'Action', width: '16%', align: 'right' },
 ]
 </script>
 
@@ -311,4 +311,15 @@ const wasteColumns: Column<ResourceWaste>[] = [
 <style scoped>
 @import '../assets/styles/views/cost.css';
 @import '../assets/styles/components/cost-drawers.css';
+
+.cost-desktop-table :deep(.table-scroll-wrapper) {
+  overflow-x: auto !important;
+  width: 100%;
+}
+
+.cost-desktop-table :deep(.data-table) {
+  table-layout: fixed !important;
+  width: 100%;
+  min-width: 720px;
+}
 </style>
