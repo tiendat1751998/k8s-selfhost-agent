@@ -21,11 +21,11 @@ const emit = defineEmits<{
 const clusterColumns: Column<Cluster>[] = [
   { key: 'name', label: 'Cluster Name', sortable: true },
   { key: 'group', label: 'Fleet Tier', width: '100px', sortable: true },
-  { key: 'provider', label: 'Provider / Region', width: '150px', sortable: true },
-  { key: 'version', label: 'K8s Version', width: '110px', sortable: true },
-  { key: 'nodes', label: 'Nodes', width: '75px', sortable: true, align: 'center' },
+  { key: 'provider', label: 'Provider / Region', width: '125px', sortable: true },
+  { key: 'version', label: 'K8s Version', width: '95px', sortable: true },
+  { key: 'nodes', label: 'Nodes', width: '65px', sortable: true, align: 'center' },
   { key: 'health_status', label: 'Health Status', width: '110px', sortable: true },
-  { key: 'actions', label: 'Operations', width: '260px', align: 'right' },
+  { key: 'actions', label: 'Operations', width: '245px', align: 'right' },
 ]
 </script>
 
@@ -122,5 +122,17 @@ const clusterColumns: Column<Cluster>[] = [
 .tier-pill {
   font-family: var(--font-sans);
   font-weight: 600;
+}
+
+.table-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.table-actions-row .btn {
+  padding: 3px 6px;
+  font-size: 11px;
 }
 </style>
