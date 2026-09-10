@@ -51,7 +51,7 @@ function calculatePercentage(used: number, total: number) {
               ></div>
             </div>
             <div class="agent-title-col">
-              <span class="agent-name">{{ agent.name }}</span>
+              <span class="agent-name" :title="agent.name">{{ agent.name }}</span>
               <span class="agent-role-tag font-mono">{{ agent.role }}</span>
             </div>
           </div>
