@@ -51,7 +51,7 @@ function updatePosition() {
   const r = triggerRef.value.getBoundingClientRect()
   const vw = window.innerWidth
   const vh = window.innerHeight
-  const w = menuRef.value?.offsetWidth || 160
+  const w = menuRef.value?.offsetWidth || 170
   const h = menuRef.value?.offsetHeight || 140
 
   let top = r.bottom + 4
@@ -77,19 +77,15 @@ function handleScrollOrResize() {
 }
 
 function handleTriggerKeydown(e: KeyboardEvent) {
-  if (props.disabled) return
-  if (['ArrowDown', 'Enter', ' '].includes(e.key)) {
-    e.preventDefault()
-    if (!isOpen.value) openMenu(true)
+  if (!props.disabled && ['ArrowDown', 'Enter', ' '].includes(e.key) && !isOpen.value) {
+    e.preventDefault(); openMenu(true)
   }
 }
 
 function handleMenuKeydown(e: KeyboardEvent) {
   if (!isOpen.value) return
   if (e.key === 'Escape') {
-    e.preventDefault()
-    closeMenu(true)
-    return
+    e.preventDefault(); closeMenu(true); return
   }
   const sel = getSelectableIndices()
   if (sel.length === 0) return
@@ -193,7 +189,7 @@ onUnmounted(() => toggleListeners(false))
               :class="[item.variant ? `variant-${item.variant}` : 'variant-default', { 'is-focused': activeIndex === idx }]"
               :disabled="item.disabled"
               role="menuitem"
-              @mouseenter="activeIndex = idx"
+              @mouseenter="!item.disabled && (activeIndex = idx)"
               @click="selectItem(item)"
             >
               <BaseIcon v-if="item.icon" :name="item.icon" size="xs" class="action-item-icon" />
@@ -207,35 +203,45 @@ onUnmounted(() => toggleListeners(false))
 </template>
 
 <style scoped>
-.action-dropdown {
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-}
+.action-dropdown { display: inline-flex; align-items: center; position: relative; }
 .action-dropdown-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-muted, #94a3b8);
-  border-radius: 6px;
-  cursor: pointer;
-  padding: 0;
-  transition: all 0.15s ease;
-  line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent; color: var(--text-muted, #94a3b8);
+  border-radius: 6px; cursor: pointer; padding: 0; transition: all 0.15s ease; line-height: 1;
 }
-.action-dropdown-trigger:hover:not(:disabled),
-.action-dropdown-trigger.is-active {
-  color: var(--text-primary, #f8fafc);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.1);
+.action-dropdown-trigger:hover:not(:disabled), .action-dropdown-trigger.is-active {
+  color: var(--text-primary, #f8fafc); background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.1);
 }
-.action-dropdown-trigger:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.action-dropdown-trigger:disabled { opacity: 0.4; cursor: not-allowed; }
 .trigger-xs { width: 22px; height: 22px; }
 .trigger-sm { width: 26px; height: 26px; }
 .trigger-md { width: 32px; height: 32px; }
+</style>
+
+<style>
+.action-dropdown-menu {
+  position: fixed !important; z-index: 9999; min-width: 170px; background: #141516;
+  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+  padding: 4px; display: flex; flex-direction: column; gap: 2px;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-sizing: border-box;
+}
+.action-dropdown-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 4px;
+  font-size: 12px; font-family: var(--font-sans, system-ui, sans-serif); font-weight: 500;
+  color: #f8fafc; border: none; background: transparent; cursor: pointer; text-align: left;
+  width: 100%; box-sizing: border-box; transition: background 0.15s ease, color 0.15s ease;
+}
+.action-dropdown-item:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); color: #ffffff; }
+.action-dropdown-item.is-focused:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
+.action-dropdown-item.variant-danger { color: #fb7185; }
+.action-dropdown-item.variant-danger:hover:not(:disabled),
+.action-dropdown-item.variant-danger.is-focused:not(:disabled) { background: rgba(244, 63, 94, 0.12); color: #fda4af; }
+.action-dropdown-item.variant-warning { color: #fbbf24; }
+.action-dropdown-item.variant-warning:hover:not(:disabled),
+.action-dropdown-item.variant-warning.is-focused:not(:disabled) { background: rgba(245, 158, 11, 0.14); color: #fde68a; }
+.action-dropdown-item:disabled { opacity: 0.4; cursor: not-allowed; }
+.action-dropdown-separator { height: 1px; background: rgba(255, 255, 255, 0.06); margin: 4px 0; }
+.action-dropdown-fade-enter-active, .action-dropdown-fade-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
+.action-dropdown-fade-enter-from, .action-dropdown-fade-leave-to { opacity: 0; transform: scale(0.97); }
 </style>
