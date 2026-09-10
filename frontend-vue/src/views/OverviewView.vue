@@ -179,6 +179,8 @@ const {
           :isLiveWs="isLiveWs"
           :lastUpdated="lastUpdated"
           :loading="loading"
+          :trendHistory="trendHistory"
+          :clusterAvgLatencyMs="clusterAvgLatencyMs"
           @inspect="inspectNode"
           @refresh="pollClusterMetrics"
           @deepDive="openDeepDiveModal"

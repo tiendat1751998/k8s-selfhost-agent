@@ -6,7 +6,7 @@ export const configMapColumns: Column<K8sResource>[] = [
   { key: 'keysCount', label: 'Keys Count', width: '100px', sortable: true },
   { key: 'dataPreview', label: 'Data Preview', sortable: false },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const secretColumns: Column<K8sResource>[] = [
@@ -15,7 +15,7 @@ export const secretColumns: Column<K8sResource>[] = [
   { key: 'type', label: 'Type', width: '150px', sortable: true },
   { key: 'keysCount', label: 'Keys Count', width: '100px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const hpaColumns: Column<K8sResource>[] = [
@@ -26,5 +26,5 @@ export const hpaColumns: Column<K8sResource>[] = [
   { key: 'minMax', label: 'Min/Max', width: '100px', sortable: true },
   { key: 'replicas', label: 'Replicas', width: '90px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]

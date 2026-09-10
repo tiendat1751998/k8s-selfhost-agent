@@ -8,7 +8,7 @@ export const podColumns: Column<K8sResource>[] = [
   { key: 'restarts', label: 'Restarts', width: '85px', sortable: true },
   { key: 'node', label: 'Node', width: '130px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '270px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const deploymentColumns: Column<K8sResource>[] = [
@@ -18,7 +18,7 @@ export const deploymentColumns: Column<K8sResource>[] = [
   { key: 'image', label: 'Image', sortable: true },
   { key: 'selector', label: 'Selector', width: '160px', sortable: false },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '270px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const statefulSetColumns: Column<K8sResource>[] = [
@@ -27,7 +27,7 @@ export const statefulSetColumns: Column<K8sResource>[] = [
   { key: 'replicas', label: 'Replicas (Ready/Desired)', width: '180px', sortable: true },
   { key: 'image', label: 'Image', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '240px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const daemonSetColumns: Column<K8sResource>[] = [
@@ -37,7 +37,7 @@ export const daemonSetColumns: Column<K8sResource>[] = [
   { key: 'current', label: 'Current', width: '80px', sortable: true },
   { key: 'ready', label: 'Ready', width: '80px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '240px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const jobColumns: Column<K8sResource>[] = [
@@ -47,7 +47,7 @@ export const jobColumns: Column<K8sResource>[] = [
   { key: 'duration', label: 'Duration', width: '110px', sortable: true },
   { key: 'status', label: 'Status', width: '120px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const cronJobColumns: Column<K8sResource>[] = [
@@ -58,7 +58,7 @@ export const cronJobColumns: Column<K8sResource>[] = [
   { key: 'active', label: 'Active', width: '80px', sortable: true },
   { key: 'lastSchedule', label: 'Last Schedule', width: '120px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '280px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const serviceColumns: Column<K8sResource>[] = [
@@ -69,7 +69,7 @@ export const serviceColumns: Column<K8sResource>[] = [
   { key: 'externalIP', label: 'External IP', width: '130px', sortable: true },
   { key: 'ports', label: 'Ports', width: '170px', sortable: false },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const ingressColumns: Column<K8sResource>[] = [
@@ -78,7 +78,7 @@ export const ingressColumns: Column<K8sResource>[] = [
   { key: 'hosts', label: 'Hosts', width: '180px', sortable: true },
   { key: 'paths', label: 'Paths', width: '150px', sortable: false },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const configMapColumns: Column<K8sResource>[] = [
@@ -87,7 +87,7 @@ export const configMapColumns: Column<K8sResource>[] = [
   { key: 'keysCount', label: 'Keys Count', width: '100px', sortable: true },
   { key: 'dataPreview', label: 'Data Preview', sortable: false },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const secretColumns: Column<K8sResource>[] = [
@@ -96,7 +96,7 @@ export const secretColumns: Column<K8sResource>[] = [
   { key: 'type', label: 'Type', width: '150px', sortable: true },
   { key: 'keysCount', label: 'Keys Count', width: '100px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const pvcColumns: Column<K8sResource>[] = [
@@ -108,7 +108,7 @@ export const pvcColumns: Column<K8sResource>[] = [
   { key: 'storageClass', label: 'StorageClass', width: '130px', sortable: true },
   { key: 'volume', label: 'Volume', width: '150px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const pvColumns: Column<K8sResource>[] = [
@@ -120,7 +120,7 @@ export const pvColumns: Column<K8sResource>[] = [
   { key: 'storageClass', label: 'StorageClass', width: '130px', sortable: true },
   { key: 'claim', label: 'Claim', width: '170px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const storageClassColumns: Column<K8sResource>[] = [
@@ -130,7 +130,7 @@ export const storageClassColumns: Column<K8sResource>[] = [
   { key: 'volumeBindingMode', label: 'VolumeBindingMode', width: '160px', sortable: true },
   { key: 'defaultClass', label: 'Default', width: '80px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const networkPolicyColumns: Column<K8sResource>[] = [
@@ -139,7 +139,7 @@ export const networkPolicyColumns: Column<K8sResource>[] = [
   { key: 'podSelector', label: 'Pod Selector', width: '200px', sortable: true },
   { key: 'policyTypes', label: 'Policy Types', width: '150px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const serviceAccountColumns: Column<K8sResource>[] = [
@@ -147,7 +147,7 @@ export const serviceAccountColumns: Column<K8sResource>[] = [
   { key: 'namespace', label: 'Namespace', width: '130px', sortable: true },
   { key: 'secretsCount', label: 'Secrets', width: '100px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const hpaColumns: Column<K8sResource>[] = [
@@ -158,7 +158,7 @@ export const hpaColumns: Column<K8sResource>[] = [
   { key: 'minMax', label: 'Min/Max', width: '100px', sortable: true },
   { key: 'replicas', label: 'Replicas', width: '90px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const nodeColumns: Column<K8sResource>[] = [
@@ -170,7 +170,7 @@ export const nodeColumns: Column<K8sResource>[] = [
   { key: 'osArch', label: 'OS / Arch', width: '130px', sortable: true },
   { key: 'podsCount', label: 'Pods', width: '90px', sortable: true },
   { key: 'age', label: 'Age', width: '90px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '270px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const eventColumns: Column<K8sResource>[] = [
@@ -187,6 +187,6 @@ export const standardColumns: Column<K8sResource>[] = [
   { key: 'namespace', label: 'Namespace', width: '150px', sortable: true },
   { key: 'status', label: 'Status / Ready', width: '140px', sortable: true },
   { key: 'age', label: 'Age / Created', width: '140px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
