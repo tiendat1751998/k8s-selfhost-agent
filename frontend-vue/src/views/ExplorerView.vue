@@ -34,7 +34,6 @@ const {
   selectedNamespace,
   selectedKind,
   resources,
-  isMobileSidebarOpen,
   filteredKindCategories,
   allKindItems,
   totalInKind,
@@ -131,7 +130,7 @@ onMounted(async () => {
 <template>
   <div class="explorer-layout animate-fade-in">
     <!-- Top Resource Bar (Replaces Sidebar) -->
-    <div class="top-resource-bar glass-panel">
+    <div class="top-resource-bar glass-panel desktop-only">
       <div class="top-selectors">
         <div class="selector-group">
           <span class="selector-label">Cluster</span>
@@ -139,7 +138,7 @@ onMounted(async () => {
             <select v-model="selectedCluster" class="input-glass top-select font-mono">
               <option v-for="c in clusters" :key="c.id || c.name" :value="c.name || c.id">?? {{ c.name || c.id }}</option>
             </select>
-            <button type="button" class="btn-icon" @click="showImportModal = true" title="Import Cluster">?</button>
+            <button type="button" class="btn-icon" @click="showImportModal = true" title="Import Cluster">+</button>
           </div>
         </div>
         <div class="selector-divider"></div>
@@ -150,7 +149,7 @@ onMounted(async () => {
               <option value="all">?? All Namespaces</option>
               <option v-for="ns in namespaces" :key="ns.name" :value="ns.name">?? {{ ns.name }}</option>
             </select>
-            <button type="button" class="btn-icon" @click="showNewNsModal = true" title="New Namespace">?</button>
+            <button type="button" class="btn-icon" @click="showNewNsModal = true" title="New Namespace">+</button>
           </div>
         </div>
         <div class="selector-divider"></div>
@@ -162,7 +161,7 @@ onMounted(async () => {
               :key="category.title"
               class="input-glass top-select font-mono dropdown-selector"
               :class="{ 'active-category': category.items.some(i => i.kind === selectedKind) }"
-              @change="selectKind(($event.target as HTMLSelectElement).value as any); ($event.target as HTMLSelectElement).value = ''"
+              @change="selectKind(($event.target as HTMLSelectElement).value as any)"
             >
               <option value="" disabled :selected="!category.items.some(i => i.kind === selectedKind)">{{ category.title }} ?</option>
               <option v-for="item in category.items" :key="item.kind" :value="item.kind" :selected="selectedKind === item.kind">
@@ -194,9 +193,7 @@ onMounted(async () => {
           <button type="button" class="btn-mobile-cmd" title="Create Resource" aria-label="Create Resource" @click="showCreateModal = true">
             ➕
           </button>
-          <button type="button" class="btn-mobile-cmd" title="Menu" aria-label="Menu" @click="isMobileSidebarOpen = !isMobileSidebarOpen">
-            ☰
-          </button>
+          
         </div>
       </div>
 

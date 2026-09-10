@@ -1985,3 +1985,9 @@
 .explorer-layout {
   flex-direction: column;
 }
+
+@media (max-width: 640px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
