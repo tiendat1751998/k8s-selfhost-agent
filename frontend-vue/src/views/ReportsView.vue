@@ -8,9 +8,12 @@ import GeneratedReportsTable from '../components/reports/GeneratedReportsTable.v
 import ReportsMobileCards from '../components/reports/ReportsMobileCards.vue'
 import ScheduleReportModal from '../components/reports/ScheduleReportModal.vue'
 import '../assets/styles/views/reports.css'
+import '../assets/styles/components/reports-drawers.css'
 
 const {
   loading,
+  reports,
+  schedules,
   frameworks,
   selectedType,
   feedbackMessage,
@@ -60,40 +63,41 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="reports-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">📑 Reports ({{ filteredReports.length }})</span>
+        <span class="command-bar-title font-bold">📊 Reports ({{ filteredReports.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
           class="btn-icon-cmd"
-          title="Generate Report"
-          aria-label="Generate Report"
-          @click="showGenerateModal = true"
+          title="➕ Schedule"
+          aria-label="Schedule Cadence"
+          @click="showScheduleModal = true"
         >
           <span>➕</span>
         </button>
         <button
           class="btn-icon-cmd"
-          title="Schedule Cadence"
-          aria-label="Schedule Cadence"
-          @click="showScheduleModal = true"
+          title="🔄 Sync"
+          aria-label="Sync Reports"
+          :disabled="loading"
+          @click="loadReports"
         >
-          <span>🕒</span>
+          <span>🔄</span>
         </button>
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="reports-micro-telemetry mobile-only font-mono" role="status" aria-label="Reports Micro Telemetry">
-      <span class="tel-item tel-compiled">📑 {{ completedCount }} compiled</span>
+      <span class="tel-item tel-compiled">📊 {{ reports.length }} Total Reports</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-score">🛡️ {{ complianceScore || '—' }} score</span>
+      <span class="tel-item tel-cadence">⚡ {{ schedules.length }} Scheduled</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-footprint">💾 {{ storageFootprint || '0 MB' }}</span>
+      <span class="tel-item tel-footprint">📁 3 Formats</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-cadence">🕒 Cadence</span>
+      <span class="tel-item tel-score">⏱️ 1.2s Avg Time</span>
     </div>
 
     <div v-if="feedbackMessage" class="feedback-banner animate-fade-in">

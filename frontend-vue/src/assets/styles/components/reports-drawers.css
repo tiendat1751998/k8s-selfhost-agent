@@ -1,0 +1,269 @@
+/* ==========================================================================
+   Reports Drawers & Modals Styles
+   ScheduleReportModal, Compile Modal, and Report Preview Drawer
+   ========================================================================== */
+
+/* Modal Backdrop & Base Dialog Overrides */
+.reports-modal-backdrop {
+  background: rgba(8, 12, 20, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.reports-drawer-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Form Controls & Layout */
+.form-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #94a3b8);
+}
+
+/* Glass Inputs & Selects */
+.input-glass {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.input-glass:focus {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.15);
+}
+
+.input-glass option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.help-text {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  line-height: 1.4;
+}
+
+/* Schedule Cron Picker */
+.cron-picker-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cron-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.cron-preset-btn {
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.cron-preset-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.cron-preset-btn.active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: rgba(6, 182, 212, 0.5);
+  color: #38bdf8;
+}
+
+.cron-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(6, 182, 212, 0.08);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  font-size: 11.5px;
+  color: #38bdf8;
+}
+
+/* Format Checkboxes / Option Chips */
+.format-options-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.format-checkbox-pill {
+  flex: 1;
+  min-width: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.format-checkbox-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.format-checkbox-pill.active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+/* Recipient List & Chips */
+.recipient-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recipient-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.recipient-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.recipient-chip-icon {
+  font-size: 10px;
+  color: #38bdf8;
+}
+
+/* Preview Drawer Content */
+.preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.preview-meta-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.p-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.p-key {
+  color: var(--text-muted, #64748b);
+}
+
+.p-val {
+  font-weight: 600;
+}
+
+.preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preview-section h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.preview-text {
+  font-size: 13px;
+  color: var(--text-secondary, #94a3b8);
+  line-height: 1.6;
+}
+
+.preview-checklist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-primary, #f8fafc);
+  padding: 0;
+  margin: 0;
+}
+
+.check-icon {
+  font-weight: 800;
+  margin-right: 6px;
+}
+
+/* Modal Responsive Adaptations (<768px) */
+@media (max-width: 767px) {
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .cron-presets-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .format-options-group {
+    grid-template-columns: 1fr 1fr;
+  }
+}

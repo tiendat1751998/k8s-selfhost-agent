@@ -21,12 +21,13 @@ function onPreview(row: Record<string, unknown>) {
   emit('preview', row as PlatformReport)
 }
 
-function onDownloadPdf(row: Record<string, unknown>) {
-  emit('downloadPdf', row as PlatformReport)
-}
-
-function onViewCsv(row: Record<string, unknown>) {
-  emit('viewCsv', row as PlatformReport)
+function onDownload(row: Record<string, unknown>) {
+  const rep = row as PlatformReport
+  if (rep.format === 'csv') {
+    emit('viewCsv', rep)
+  } else {
+    emit('downloadPdf', rep)
+  }
 }
 
 function onDelete(row: Record<string, unknown>) {
@@ -79,19 +80,34 @@ function onDelete(row: Record<string, unknown>) {
 
     <template #cell-actions="{ row }">
       <div class="actions-group">
-        <button class="btn btn-secondary btn-sm" title="Preview Report" @click="onPreview(row)">
-          <span>👁️ Preview</span>
+        <button class="btn btn-primary btn-action-32" :title="`Download ${String(row.format || 'Report').toUpperCase()}`" @click="onDownload(row)">
+          <span>📥 Download</span>
         </button>
-        <button class="btn btn-primary btn-sm" title="Download PDF" @click="onDownloadPdf(row)">
-          <span>📥 Download PDF</span>
+        <button class="btn btn-secondary btn-action-32" title="View / Preview Report" @click="onPreview(row)">
+          <span>👁️ View</span>
         </button>
-        <button class="btn btn-secondary btn-sm" title="View CSV" @click="onViewCsv(row)">
-          <span>📊 View CSV</span>
-        </button>
-        <button class="btn btn-sm btn-delete-crimson" title="Delete Report" @click="onDelete(row)">
-          <span>🗑 Delete</span>
+        <button class="btn btn-action-32 btn-delete-crimson" title="Delete Report" @click="onDelete(row)">
+          <span>🗑️ Delete</span>
         </button>
       </div>
     </template>
   </DataTable>
 </template>
+
+<style scoped>
+:deep(.table-scroll-wrapper) {
+  overflow-x: hidden !important;
+}
+
+:deep(.data-table) {
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
+:deep(.data-table th),
+:deep(.data-table td) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>
