@@ -298,8 +298,8 @@ const {
 
           <div class="topology-order-actions">
             <div class="view-mode-toggle glass-panel">
-              <button class="toggle-btn" :class="{ active: nodeViewMode === 'table' }" @click="nodeViewMode = 'table'">📑 Bảng</button>
-              <button class="toggle-btn" :class="{ active: nodeViewMode === 'grid' }" @click="nodeViewMode = 'grid'">🗂 Thẻ</button>
+              <button class="toggle-btn" :class="{ active: nodeViewMode === 'table' }" @click="nodeViewMode = 'table'">📑 Table</button>
+              <button class="toggle-btn" :class="{ active: nodeViewMode === 'grid' }" @click="nodeViewMode = 'grid'">🗂 Cards</button>
             </div>
             
             <button v-if="customNodeOrder.length > 0" class="btn-reset-order font-mono" @click="resetNodeOrder" title="Reset customized card order">
