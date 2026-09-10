@@ -79,7 +79,7 @@
 ### Loop 1: ClickHouse Service & Storage Schema (< 500MB RAM)
 - [x] Task 1.1: Author `deployments/docker/docker-compose.clickhouse.yaml` (Capped at 480MB RAM, max 350MB server memory)
 - [x] Task 1.2: Author `migrations/clickhouse/001_cluster_logs.sql` (MergeTree, ZSTD, LowCardinality, Tokenbf_v1, TTL 30 days)
-- [ ] Task 1.3: Author `deployments/k8s/logging/daemonset-vector.yaml` (1,000-Node Edge Collector)
+- [x] Task 1.3: Author `deployments/k8s/logging/daemonset-vector.yaml` (1,000-Node Edge Collector, 128Mi RAM cap, 50MB disk buffer, Bearer token auth)
 - [x] Verification: Dry-run manifests, validate SQL syntax and partition/index rules
 
 ### Loop 2: Go Backend ClickHouse Infrastructure Driver
@@ -92,9 +92,9 @@
 - [x] Verification: `go vet` and unit tests pass (18/18 PASS, Reviewer APPROVED, QA PASS, Merged)
 
 ### Loop 3: REST & WebSocket Log APIs
-- [ ] Task 3.1: Create `internal/adapter/http/log_handler.go` (< 350 lines)
-- [ ] Task 3.2: Register routes in `internal/adapter/http/router.go` with tenant context & RBAC
-- [ ] Verification: Unit tests for handlers, ensure RBAC denies unauthenticated calls
+- [x] Task 3.1: Create `internal/adapter/http/log_handler.go` (339 lines, 10MB scoped DoS protection, WebSocket ping/pong & write deadline)
+- [x] Task 3.2: Register routes in `internal/adapter/http/router.go` with tenant context & RBAC
+- [x] Verification: Unit tests for handlers (9/9 PASS, Reviewer APPROVED, QA PASS, Merged)
 
 ### Loop 4: Frontend LogStreamView Modernization
 - [ ] Task 4.1: Create `frontend-vue/src/composables/useLogStream.ts` (< 250 lines)
