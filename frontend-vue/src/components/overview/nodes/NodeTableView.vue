@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
 import type { NodeMetrics } from '../../../api/overview'
 
 defineProps<{
@@ -6,7 +7,7 @@ defineProps<{
   busiestNodeId?: string | null
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'click', node: NodeMetrics): void
   (e: 'details', node: NodeMetrics): void
   (e: 'logs', node: NodeMetrics): void
@@ -15,6 +16,42 @@ defineEmits<{
   (e: 'yaml', node: NodeMetrics): void
   (e: 'delete', node: NodeMetrics): void
 }>()
+
+const activeMenuId = ref<string | null>(null)
+
+function toggleMenu(nodeId: string) {
+  activeMenuId.value = activeMenuId.value === nodeId ? null : nodeId
+}
+
+function handleMenuAction(event: 'scale' | 'restart' | 'yaml' | 'delete', node: NodeMetrics) {
+  activeMenuId.value = null
+  if (event === 'scale') emit('scale', node)
+  else if (event === 'restart') emit('restart', node)
+  else if (event === 'yaml') emit('yaml', node)
+  else if (event === 'delete') emit('delete', node)
+}
+
+function handleDocumentClick(e: MouseEvent) {
+  if (activeMenuId.value && !(e.target as HTMLElement).closest('.more-actions-wrap')) {
+    activeMenuId.value = null
+  }
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && activeMenuId.value) {
+    activeMenuId.value = null
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleDocumentClick)
+  document.removeEventListener('keydown', handleKeydown)
+})
 
 function isOffline(node: NodeMetrics): boolean {
   return node.status === 'down' || node.status === 'offline' || node.status === 'disconnected' || node.memory_total === 0
@@ -83,11 +120,17 @@ function getNodePing(node: NodeMetrics): number {
             <th class="col-disk">Disk Storage</th>
             <th class="col-workloads">Workloads</th>
             <th class="col-probe">Probes / Ping</th>
-            <th class="col-actions text-right">Node Operations Suite</th>
+            <th class="col-actions text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="node in nodes" :key="node.node_id" class="node-row" :class="{ 'row-busiest': node.node_id === busiestNodeId }" @click="$emit('click', node)">
+          <tr
+            v-for="(node, idx) in nodes"
+            :key="node.node_id"
+            class="node-row"
+            :class="{ 'row-busiest': node.node_id === busiestNodeId }"
+            @click="emit('click', node)"
+          >
             <td class="col-status">
               <span class="status-wrap font-mono" :class="`status-${getNodeStatus(node).type}`">
                 <span class="pulse-dot" :class="`dot-${getNodeStatus(node).type}`"></span>
@@ -132,12 +175,44 @@ function getNodePing(node: NodeMetrics): number {
             </td>
             <td class="col-actions text-right" @click.stop>
               <div class="sre-suite">
-                <button type="button" class="sre-btn btn-logs" title="Stream Logs" @click="$emit('logs', node)">📄 Logs</button>
-                <button type="button" class="sre-btn btn-scale" title="Scale Workloads" @click="$emit('scale', node)">⚡ Scale</button>
-                <button type="button" class="sre-btn btn-restart" title="Restart Agent" @click="$emit('restart', node)">🔄 Restart</button>
-                <button type="button" class="sre-btn btn-yaml" title="View Manifest YAML" @click="$emit('yaml', node)">🎯 YAML</button>
-                <button type="button" class="sre-btn btn-details" title="Diagnostics & Details" @click="$emit('details', node)">🔍 Details</button>
-                <button type="button" class="sre-btn btn-delete" title="Cordon / Evict" @click="$emit('delete', node)">🗑 Delete</button>
+                <button type="button" class="sre-btn btn-logs" title="Stream Logs" @click="emit('logs', node)">📄 Logs</button>
+                <button type="button" class="sre-btn btn-details" title="Diagnostics & Details" @click="emit('details', node)">🔍 Details</button>
+                <div class="more-actions-wrap">
+                  <button
+                    type="button"
+                    class="sre-btn btn-more-actions"
+                    title="More Node Actions"
+                    :class="{ active: activeMenuId === node.node_id }"
+                    :aria-expanded="activeMenuId === node.node_id"
+                    aria-haspopup="true"
+                    @click.stop="toggleMenu(node.node_id)"
+                  >
+                    ⋯
+                  </button>
+                  <div
+                    v-if="activeMenuId === node.node_id"
+                    class="more-actions-dropdown"
+                    :class="{ dropup: idx >= nodes.length - 2 && nodes.length > 2 }"
+                    @click.stop
+                  >
+                    <button type="button" class="menu-item item-scale" @click="handleMenuAction('scale', node)">
+                      <span class="menu-item-icon">⚡</span>
+                      <span>Scale Workloads</span>
+                    </button>
+                    <button type="button" class="menu-item item-restart" @click="handleMenuAction('restart', node)">
+                      <span class="menu-item-icon">🔄</span>
+                      <span>Restart Agent</span>
+                    </button>
+                    <button type="button" class="menu-item item-yaml" @click="handleMenuAction('yaml', node)">
+                      <span class="menu-item-icon">🎯</span>
+                      <span>View YAML</span>
+                    </button>
+                    <button type="button" class="menu-item item-delete" @click="handleMenuAction('delete', node)">
+                      <span class="menu-item-icon">🗑</span>
+                      <span>Cordon / Evict</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </td>
           </tr>
@@ -150,4 +225,3 @@ function getNodePing(node: NodeMetrics): number {
 <style scoped>
 @import '../../../assets/styles/views/overview.css';
 </style>
-
