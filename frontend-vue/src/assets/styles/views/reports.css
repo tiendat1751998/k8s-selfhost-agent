@@ -111,6 +111,11 @@
   gap: 16px;
 }
 
+.metrics-grid.desktop-only {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+
 /* One-Click Catalog Grid */
 .templates-card { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 .template-header { display: flex; justify-content: space-between; align-items: center; }
@@ -279,17 +284,25 @@
 
 /* 4-Tier RWD Media Queries */
 
-/* Tablet Breakpoint (768px - 1023px): 2x2 HUD Grid */
-@media (min-width: 768px) and (max-width: 1023px) {
+/* Tablet Breakpoint (768px - 1023.98px): 2x2 HUD Grid */
+@media (min-width: 768px) and (max-width: 1023.98px) {
   .mobile-only { display: none !important; }
   .desktop-only { display: block !important; }
-  .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
+  .metrics-grid,
+  .metrics-grid.desktop-only {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
   .template-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
 }
 
 /* Mobile Breakpoint (<768px): Desktop Suppression & Stream Cards */
-@media (max-width: 767px) {
-  .desktop-only { display: none !important; }
+@media (max-width: 767.98px) {
+  .desktop-only,
+  .metrics-grid.desktop-only {
+    display: none !important;
+  }
   .mobile-only { display: flex !important; }
   .reports-page { gap: 10px; }
   .template-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
@@ -302,6 +315,10 @@
 @media (min-width: 1024px) {
   .mobile-only { display: none !important; }
   .desktop-only { display: block !important; }
-  .metrics-grid { grid-template-columns: repeat(4, 1fr); }
+  .metrics-grid,
+  .metrics-grid.desktop-only {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
   .template-grid { grid-template-columns: repeat(3, 1fr); }
 }
