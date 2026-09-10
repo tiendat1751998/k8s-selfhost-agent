@@ -1,6 +1,7 @@
 package http
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -183,7 +184,9 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Revoke the old token (rotation)
-	_ = h.refreshTokenRepo.Revoke(r.Context(), rt.ID)
+	if err := h.refreshTokenRepo.Revoke(r.Context(), rt.ID); err != nil {
+		log.Printf("failed to revoke old refresh token during rotation: %v", err)
+	}
 
 	usr, err := h.userRepo.GetByID(r.Context(), rt.UserID)
 	if err != nil || usr == nil {
@@ -233,7 +236,9 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	if err == nil && cookie.Value != "" && h.refreshTokenRepo != nil {
 		tokenHash := middleware.HashToken(cookie.Value)
 		if rt, err := h.refreshTokenRepo.GetByHash(r.Context(), tokenHash); err == nil && rt != nil {
-			_ = h.refreshTokenRepo.Revoke(r.Context(), rt.ID)
+			if err := h.refreshTokenRepo.Revoke(r.Context(), rt.ID); err != nil {
+				log.Printf("failed to revoke refresh token during logout: %v", err)
+			}
 		}
 	}
 
