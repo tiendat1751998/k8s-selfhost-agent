@@ -3,7 +3,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import type { DeploymentApp } from '../../api/compute'
 import { dockerApi } from '../../api/compute'
-import { k8sApi } from '../../api/k8s'
+import { k8sApi, type K8sResource } from '../../api/k8s'
 
 interface Props {
   app: DeploymentApp | null
@@ -25,6 +25,7 @@ const logsError = ref<string | null>(null)
 const logsSearchQuery = ref('')
 const logsAutoScroll = ref(true)
 const logsTerminalRef = ref<HTMLElement | null>(null)
+const resolvedPodName = ref<string>('')
 
 watch(
   () => props.active,
@@ -45,30 +46,78 @@ watch(
   }
 )
 
+function findMatchingPod(pods: K8sResource[], workloadName: string): K8sResource | undefined {
+  if (!Array.isArray(pods) || pods.length === 0) return undefined
+  const candidates = pods.filter((p) => {
+    const name = p.metadata?.name || ''
+    if (name === workloadName || name.startsWith(`${workloadName}-`)) {
+      return true
+    }
+    const labels = p.metadata?.labels || {}
+    return (
+      labels['app'] === workloadName ||
+      labels['app.kubernetes.io/name'] === workloadName ||
+      labels['app.kubernetes.io/instance'] === workloadName ||
+      labels['k8s-app'] === workloadName ||
+      labels['name'] === workloadName
+    )
+  })
+
+  if (candidates.length === 0) return undefined
+
+  // Prefer a Running pod if available
+  const running = candidates.find((p) => {
+    const phase = typeof p.status?.phase === 'string' ? p.status.phase.toLowerCase() : ''
+    return phase === 'running'
+  })
+  return running || candidates[0]
+}
+
 async function fetchLogs(targetApp?: DeploymentApp | null) {
   const target = targetApp || props.app
   if (!target) return
 
   logsLoading.value = true
   logsError.value = null
+  resolvedPodName.value = ''
+
   try {
     if (target.type === 'kubernetes' || target.type === 'k8s') {
+      const cluster = target.target && target.target !== 'docker-engine' && target.target !== 'swarm-manager' ? target.target : 'default'
+      let fetchedLogs = false
+
       try {
-        const cluster = target.target && target.target !== 'docker-engine' && target.target !== 'swarm-manager' ? target.target : 'default'
-        const res = await k8sApi.getPodLogs(cluster, target.name, target.namespace)
-        const logLines = res?.logs
-        const joinedLogs = Array.isArray(logLines)
-          ? logLines.join('\n').trim()
-          : (typeof logLines === 'string' ? (logLines as string).trim() : '')
-        if (joinedLogs.length > 0) {
-          logsRawContent.value = joinedLogs
-        } else {
-          const now = new Date().toISOString()
-          logsRawContent.value = `[${now}] [INFO] Kubernetes Workload: ${target.name} (Namespace: ${target.namespace || 'default'})\n[${now}] [INFO] Replicas: ${target.readyReplicas || target.replicas}/${target.replicas} | Status: ${target.status}\n[${now}] [INFO] Live stream available in Logs Explorer (/logs?namespace=${target.namespace || 'default'}&pod=${target.name})`
+        const ns = target.namespace && target.namespace !== 'all' ? target.namespace : undefined
+        const pods = await k8sApi.listResources(cluster, 'pods', ns)
+        const matchingPod = findMatchingPod(pods, target.name)
+
+        if (matchingPod?.metadata?.name) {
+          resolvedPodName.value = matchingPod.metadata.name
+          try {
+            const res = await k8sApi.getPodLogs(cluster, matchingPod.metadata.name, target.namespace)
+            const logLines = res?.logs
+            const joinedLogs = Array.isArray(logLines)
+              ? logLines.join('\n').trim()
+              : (typeof logLines === 'string' ? (logLines as string).trim() : '')
+            if (joinedLogs.length > 0) {
+              logsRawContent.value = joinedLogs
+              fetchedLogs = true
+            }
+          } catch {
+            // pod log fetch failed - DO NOT call getPodLogs with raw deployment name!
+          }
         }
       } catch {
+        // listResources failed or other error
+      }
+
+      if (!fetchedLogs) {
+        // DO NOT call getPodLogs with the raw deployment name!
+        // Cleanly set logsRawContent.value to the required fallback format
         const now = new Date().toISOString()
-        logsRawContent.value = `[${now}] [INFO] Kubernetes Workload: ${target.name} (Namespace: ${target.namespace || 'default'})\n[${now}] [INFO] Replicas: ${target.readyReplicas || target.replicas}/${target.replicas} | Status: ${target.status}\n[${now}] [INFO] Live stream available in Logs Explorer (/logs?namespace=${target.namespace || 'default'}&pod=${target.name})`
+        logsRawContent.value = `[${now}] [INFO] Kubernetes Workload: ${target.name} [${target.status || 'Active'}]\n[${now}] [INFO] Namespace: ${target.namespace || 'default'} | Cluster: ${cluster}\n[${now}] [INFO] Replicas: ${target.readyReplicas || target.replicas}/${target.replicas} (Desired: ${target.replicas})\n[${now}] [INFO] Direct pod log streaming: Open Live Logs Explorer (/logs?namespace=${target.namespace}&pod=${target.name})`
+        logsLoading.value = false
+        logsError.value = null
       }
     } else if (target.type === 'docker' || target.type === 'swarm') {
       const targetId = target.rawId || target.id || target.name
@@ -153,7 +202,7 @@ function openFullLogs(targetApp?: DeploymentApp | null) {
     path: '/logs',
     query: {
       namespace: target.namespace || '',
-      pod: target.name,
+      pod: resolvedPodName.value || target.name,
       search: target.name
     }
   })
@@ -224,7 +273,7 @@ defineExpose({
         </div>
         <div class="terminal-title-text font-mono">
           <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>{{ app.type === 'kubernetes' || app.type === 'k8s' ? 'k8s' : 'docker' }}://{{ app.name }} [{{ app.type }}]</span>
+          <span>{{ app.type === 'kubernetes' || app.type === 'k8s' ? 'k8s' : 'docker' }}://{{ resolvedPodName || app.name }} [{{ app.type }}]</span>
           <span class="logs-count">({{ filteredLogLines.length }} lines)</span>
         </div>
         <div class="terminal-status font-mono">

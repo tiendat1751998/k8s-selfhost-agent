@@ -205,7 +205,7 @@ export const k8sApi = {
     kind: ResourceKind,
     ns?: string
   ): Promise<K8sResource[]> {
-    const query = ns ? `?ns=${encodeURIComponent(ns)}` : ''
+    const query = ns && ns !== 'all' && ns !== '_all' ? `?ns=${encodeURIComponent(ns)}` : ''
     const path = `/k8s/${encodeURIComponent(cluster)}/resources/${encodeURIComponent(kind)}${query}`
     const res = await api.get<ApiResponse<K8sResource[]> | K8sResource[]>(path)
     return unwrapResourceList(res)
@@ -283,82 +283,49 @@ export const k8sApi = {
   },
 
   // Workload Actions
-  async scaleDeployment(
-    cluster: string,
-    name: string,
-    namespace: string | undefined,
-    replicas: number
-  ): Promise<{ status?: string; message?: string }> {
+  async scaleDeployment(cluster: string, name: string, namespace: string | undefined, replicas: number): Promise<{ status?: string; message?: string }> {
     const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
     const path = `/k8s/${encodeURIComponent(cluster)}/resources/deployments/${encodeURIComponent(name)}/scale${query}`
     return api.post<{ status?: string; message?: string }>(path, { replicas })
   },
 
-  async restartDeployment(
-    cluster: string,
-    name: string,
-    namespace?: string
-  ): Promise<{ status?: string; message?: string }> {
+  async restartDeployment(cluster: string, name: string, namespace?: string): Promise<{ status?: string; message?: string }> {
     const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
     const path = `/k8s/${encodeURIComponent(cluster)}/resources/deployments/${encodeURIComponent(name)}/restart${query}`
     return api.post<{ status?: string; message?: string }>(path, {})
   },
 
-  async scaleStatefulSet(
-    cluster: string,
-    name: string,
-    namespace: string | undefined,
-    replicas: number
-  ): Promise<{ status?: string; message?: string }> {
+  async scaleStatefulSet(cluster: string, name: string, namespace: string | undefined, replicas: number): Promise<{ status?: string; message?: string }> {
     const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
     const path = `/k8s/${encodeURIComponent(cluster)}/resources/statefulsets/${encodeURIComponent(name)}/scale${query}`
     return api.post<{ status?: string; message?: string }>(path, { replicas })
   },
 
-  async restartDaemonSet(
-    cluster: string,
-    name: string,
-    namespace?: string
-  ): Promise<{ status?: string; message?: string }> {
+  async restartDaemonSet(cluster: string, name: string, namespace?: string): Promise<{ status?: string; message?: string }> {
     const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
     const path = `/k8s/${encodeURIComponent(cluster)}/resources/daemonsets/${encodeURIComponent(name)}/restart${query}`
     return api.post<{ status?: string; message?: string }>(path, {})
   },
 
-  async triggerCronJob(
-    cluster: string,
-    name: string,
-    namespace?: string
-  ): Promise<{ status?: string; message?: string }> {
+  async triggerCronJob(cluster: string, name: string, namespace?: string): Promise<{ status?: string; message?: string }> {
     const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
     const path = `/k8s/${encodeURIComponent(cluster)}/resources/cronjobs/${encodeURIComponent(name)}/trigger${query}`
     return api.post<{ status?: string; message?: string }>(path, {})
   },
 
-  async suspendCronJob(
-    cluster: string,
-    name: string,
-    namespace: string | undefined,
-    suspend: boolean
-  ): Promise<{ status?: string; message?: string }> {
+  async suspendCronJob(cluster: string, name: string, namespace: string | undefined, suspend: boolean): Promise<{ status?: string; message?: string }> {
     const query = namespace && namespace !== 'all' ? `?ns=${encodeURIComponent(namespace)}` : ''
     const path = `/k8s/${encodeURIComponent(cluster)}/resources/cronjobs/${encodeURIComponent(name)}/suspend${query}`
     return api.put<{ status?: string; message?: string }>(path, { suspend })
   },
 
   // Node Management Operations
-  async cordonNode(
-    cluster: string,
-    name: string
-  ): Promise<{ status?: string; message?: string }> {
+  async cordonNode(cluster: string, name: string): Promise<{ status?: string; message?: string }> {
     const path = '/k8s/' + encodeURIComponent(cluster) + '/nodes/' + encodeURIComponent(name) + '/cordon'
     return api.post<{ status?: string; message?: string }>(path, {})
   },
 
-  async uncordonNode(
-    cluster: string,
-    name: string
-  ): Promise<{ status?: string; message?: string }> {
+  async uncordonNode(cluster: string, name: string): Promise<{ status?: string; message?: string }> {
     const path = '/k8s/' + encodeURIComponent(cluster) + '/nodes/' + encodeURIComponent(name) + '/uncordon'
     return api.post<{ status?: string; message?: string }>(path, {})
   },
@@ -377,30 +344,18 @@ export const k8sApi = {
     return api.post<{ status?: string; message?: string }>(path, options || {})
   },
 
-  async updateNodeTaints(
-    cluster: string,
-    name: string,
-    taints: NodeTaint[]
-  ): Promise<{ status?: string; message?: string }> {
+  async updateNodeTaints(cluster: string, name: string, taints: NodeTaint[]): Promise<{ status?: string; message?: string }> {
     const path = '/k8s/' + encodeURIComponent(cluster) + '/nodes/' + encodeURIComponent(name) + '/taints'
     return api.put<{ status?: string; message?: string }>(path, { taints })
   },
 
-  async updateNodeLabels(
-    cluster: string,
-    name: string,
-    labels: Record<string, string>
-  ): Promise<{ status?: string; message?: string }> {
+  async updateNodeLabels(cluster: string, name: string, labels: Record<string, string>): Promise<{ status?: string; message?: string }> {
     const path = '/k8s/' + encodeURIComponent(cluster) + '/nodes/' + encodeURIComponent(name) + '/labels'
     return api.put<{ status?: string; message?: string }>(path, { labels })
   },
 
   // Raw YAML
-  async applyYAML(
-    cluster: string,
-    yaml: string,
-    ns?: string
-  ): Promise<{ message: string }> {
+  async applyYAML(cluster: string, yaml: string, ns?: string): Promise<{ message: string }> {
     const res = await api.post<{ message?: string } | ApiResponse<{ message: string }>>(
       `/k8s/${encodeURIComponent(cluster)}/apply`,
       { yaml, namespace: ns }
@@ -411,48 +366,52 @@ export const k8sApi = {
     }
   },
 
-  async scaleWorkload(
-    cluster: string,
-    kind: string,
-    name: string,
-    replicas: number,
-    namespace?: string
-  ): Promise<{ status?: string; message?: string }> {
+  async scaleWorkload(cluster: string, kind: string, name: string, replicas: number, namespace?: string): Promise<{ status?: string; message?: string }> {
     return this.scaleResource(cluster, kind, name, replicas, namespace)
   },
 
-  async scaleResource(
-    cluster: string,
-    kind: string,
-    name: string,
-    replicas: number,
-    namespace?: string
-  ): Promise<{ status?: string; message?: string }> {
+  async scaleResource(cluster: string, kind: string, name: string, replicas: number, namespace?: string): Promise<{ status?: string; message?: string }> {
     if (kind === 'statefulsets') {
       return this.scaleStatefulSet(cluster, name, namespace, replicas)
     }
     return this.scaleDeployment(cluster, name, namespace, replicas)
   },
 
-  async restartResource(
-    cluster: string,
-    kind: string,
-    name: string,
-    namespace?: string
-  ): Promise<{ status?: string; message?: string }> {
+  async restartResource(cluster: string, kind: string, name: string, namespace?: string): Promise<{ status?: string; message?: string }> {
     if (kind === 'daemonsets') {
       return this.restartDaemonSet(cluster, name, namespace)
     }
     return this.restartDeployment(cluster, name, namespace)
   },
 
-  async toggleCronJobSuspend(
-    cluster: string,
-    name: string,
-    suspend: boolean,
-    namespace?: string
-  ): Promise<{ status?: string; message?: string }> {
+  async toggleCronJobSuspend(cluster: string, name: string, suspend: boolean, namespace?: string): Promise<{ status?: string; message?: string }> {
     return this.suspendCronJob(cluster, name, namespace, suspend)
+  },
+
+  async findPodForWorkload(
+    cluster: string,
+    workloadName: string,
+    namespace?: string
+  ): Promise<K8sResource | null> {
+    try {
+      const ns = namespace && namespace !== 'all' && namespace !== '_all' ? namespace : undefined
+      const pods = await this.listResources(cluster, 'pods', ns)
+      if (!Array.isArray(pods) || pods.length === 0) return null
+      return pods.find((p) => {
+        const name = p.metadata?.name || ''
+        if (name === workloadName || name.startsWith(`${workloadName}-`)) return true
+        const labels = p.metadata?.labels || {}
+        return (
+          labels['app'] === workloadName ||
+          labels['app.kubernetes.io/name'] === workloadName ||
+          labels['app.kubernetes.io/instance'] === workloadName ||
+          labels['k8s-app'] === workloadName ||
+          labels['name'] === workloadName
+        )
+      }) || null
+    } catch {
+      return null
+    }
   },
 
   async getPodLogs(
@@ -460,21 +419,26 @@ export const k8sApi = {
     pod: string,
     namespace?: string
   ): Promise<{ logs?: string[]; error?: string }> {
-    const q = namespace && namespace !== 'all' ? `?namespace=${encodeURIComponent(namespace)}` : ''
-    const path = `/k8s/${encodeURIComponent(cluster)}/pods/${encodeURIComponent(pod)}/logs${q}`
-    const res = await api.get<any>(path)
-    if (res && res.data && typeof res.data.logs === 'string') {
-      return { logs: res.data.logs.split('\n') }
+    try {
+      const q = namespace && namespace !== 'all' && namespace !== '_all' ? `?namespace=${encodeURIComponent(namespace)}` : ''
+      const path = `/k8s/${encodeURIComponent(cluster)}/pods/${encodeURIComponent(pod)}/logs${q}`
+      const res = await api.get<any>(path)
+      if (res && res.data && typeof res.data.logs === 'string') {
+        return { logs: res.data.logs.split('\n') }
+      }
+      if (res && typeof res.logs === 'string') {
+        return { logs: res.logs.split('\n') }
+      }
+      if (res && Array.isArray(res.logs)) {
+        return { logs: res.logs }
+      }
+      if (res && res.data && Array.isArray(res.data.logs)) {
+        return { logs: res.data.logs }
+      }
+      return res || {}
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err.message : String(err)
+      return { logs: [], error }
     }
-    if (res && typeof res.logs === 'string') {
-      return { logs: res.logs.split('\n') }
-    }
-    if (res && Array.isArray(res.logs)) {
-      return { logs: res.logs }
-    }
-    if (res && res.data && Array.isArray(res.data.logs)) {
-      return { logs: res.data.logs }
-    }
-    return res || {}
   },
 }
