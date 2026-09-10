@@ -8,39 +8,39 @@
 
 ---
 
-## 👑 SUPREME CRAFTSMANSHIP CONSTITUTION (CHỈ THỊ THI CÔNG TUYỆT ĐỐI — KHÔNG ĐỐI PHÓ, KHÔNG LÀM TẮT)
+## 👑 SUPREME CRAFTSMANSHIP CONSTITUTION (BINDING PRODUCTION DIRECTIVE — ZERO COMPROMISES, ZERO SHORTCUTS)
 
-> **MỆNH LỆNH TỪ USER**: *"Làm việc cẩn thận, chi tiết, chất lượng cao, không làm cho có hay làm nhanh để đối phó. Không quan tâm tốn token, chỉ quan tâm sản phẩm chuẩn Enterprise thực sự."*
+> **MANDATORY USER DIRECTIVE**: *"Work with extreme care, granular attention to detail, and uncompromising quality. Do not rush or provide superficial 'check-the-box' patches to finish fast. Token consumption is irrelevant; enterprise production excellence is the sole metric of success."*
 
-### 1. Triệt tiêu tư duy "Hide instead of Adapt" (Ẩn tính năng để né việc):
-- Bất kỳ màn nào có biểu đồ (line chart, trend graphs, saturation splines, breakdown bars) trên Desktop thì **BẮT BUỘC phải thiết kế phiên bản Mobile-First tương ứng** (SVG sparkline card ~120-140px, live pulse dot, compact time axis).
-- **CẤM TUYỆT ĐỐI** hành vi đặt `display: none !important;` lên toàn bộ component biểu đồ để né overflow trên mobile. Mọi PR vi phạm = **LẬP TỨC REJECT VÀ ROLLBACK**.
+### 1. Eradicate "Hide instead of Adapt" (Zero Lazy Feature Hiding):
+- Any screen featuring data visualizations (line charts, saturation splines, trend graphs, breakdown bars, gauges) on Desktop **MUST have a bespoke, responsive Mobile-First visualization** (e.g. compact SVG sparkline card ~120-140px, live pulse dot, compact time axis).
+- **ABSOLUTE PROHIBITION** on setting `display: none !important;` on entire charts to artificially force mobile tests to pass. Any PR violating this = **INSTANT REJECT AND ROLLBACK**.
 
-### 2. Tiêu chuẩn 3-Tier Viewports Bắt buộc (Không bỏ quên Tablet & Desktop):
+### 2. Mandatory 3-Tier Viewport Parity (Desktop, Tablet & Mobile):
 - **Desktop (1440x900 / 1920x1080)**:
-  - Bảng dữ liệu chiếm 100% độ rộng khả dụng, `hasScroll: false` (zero horizontal scrollbar).
-  - Không được cắt cụt cột Actions ở mép phải màn hình.
-  - Mọi nút bấm (`Logs`, `Details`, `Scale`, `Restart`, `YAML`, `Delete`) phải gọi API thật, mở drawer/modal thật, **0 lỗi console, 0 lỗi HTTP 500**.
+  - Data table occupies 100% available container width, `hasScroll: false` (zero horizontal scrollbar).
+  - The rightmost Actions column must NEVER be cut off at screen edge.
+  - Every action button (`Logs`, `Details`, `Scale`, `Restart`, `YAML`, `Delete`) must invoke real APIs, open real modals/drawers, and produce **0 console errors and 0 HTTP 500 errors**.
 - **Tablet (768x1024 - iPad Standard)**:
-  - Cụm HUD Cards tự động chia thành **lưới 2x2 cân xứng** (`grid-template-columns: repeat(2, 1fr)`), không được ép dồn 4 cột làm vỡ layout.
-  - Bảng dữ liệu tự động co giãn (`table-layout: fixed; width: 100%;`), không tràn viền ngang +300px.
-  - Sidebar chuyển thành off-canvas drawer để dành 100% diện tích cho nội dung.
+  - HUD metric cards MUST auto-reorganize into a **balanced 2x2 grid** (`grid-template-columns: repeat(2, 1fr)`). Never squish 4 cards into 1 row.
+  - Data tables must scale cleanly via `table-layout: fixed; width: 100%;` without overflowing horizontally (+300px blowout prohibited).
+  - Sidebar transitions to off-canvas drawer to grant 100% screen real estate to active content.
 - **Mobile (375x812 - iPhone Standard)**:
-  - Command bar $\le 44\text{px}$ + Micro-telemetry $\le 20\text{px}$.
-  - **Live SVG Line Chart / Saturation Spline** sắc nét, hiển thị CPU, RAM, RPS theo thời gian.
-  - Mobile Card Stream ~60–75px/item, hiển thị 4–5 workloads ngay trên màn hình đầu tiên, touch targets $\ge 32\text{px}$.
-  - Zero horizontal overflow (`document.documentElement.scrollWidth === 375px`).
+  - Command bar $\le 44\text{px}$ + Micro-telemetry strip $\le 20\text{px}$.
+  - **Live SVG Saturation Line Chart** displaying CPU, RAM, and RPS telemetry over time.
+  - High-density mobile card stream ~60–75px/item, displaying 4–5 workloads on the initial fold, touch targets $\ge 32\text{px}$.
+  - Zero horizontal page overflow (`document.documentElement.scrollWidth === 375px`).
 
-### 3. Xóa bỏ triệt để "Hội chứng Spam Nút Bấm" (Button Suite Clutter):
-- Cấm lặp lại 5–6 nút text to đùng trên mỗi hàng (`Logs`, `Scale`, `Restart`, `YAML`, `Details`, `Delete`).
-- Chuẩn hóa kiến trúc nút bấm Enterprise:
-  - **Tối đa 2 nút chính inline** (ví dụ: `📄 Logs`, `🔍 Details`).
-  - Toàn bộ hành động phụ gom vào nút menu `[ ⋯ ]` (`.btn-more-actions`) tinh tế hoặc bộ icon 30px có tooltip.
+### 3. Eradicate "Button Suite Clutter" (Max 2 Inline Actions):
+- Prohibit repeating 5–6 bulky text buttons across every row in tables (`Logs`, `Scale`, `Restart`, `YAML`, `Details`, `Delete`).
+- Standardize enterprise action architecture:
+  - **Maximum 2 primary inline buttons** (e.g. `📄 Logs`, `🔍 Details`).
+  - All secondary operations MUST reside inside a sleek `[ ⋯ ]` dropdown menu (`.btn-more-actions`) or 30x30px compact icon buttons with tooltips.
 
-### 4. Kiểm toán Thật 100% Trước Khi Báo Cáo (Evidence Over Claims):
-- Coder phải tự chạy `npm run type-check && npm run build` và kiểm tra layout trước khi handoff.
-- Reviewer duyệt theo **8-Point Adversarial Checklist** (đặc biệt điểm số 8: Anti-Lazy & Feature Parity).
-- QA bắt buộc dùng `chrome-devtools-mcp` chụp ảnh màn hình và đo đạc kích thước thực tế trên **cả 3 viewports: Desktop, Tablet, Mobile** trước khi xác nhận PASS.
+### 4. 100% Verifiable Evidence Before Handoff:
+- Coders must execute project verification (`npm run type-check && npm run build`) and self-inspect layout prior to handoff.
+- Reviewers evaluate PRs against the **8-Point Adversarial Reviewer Checklist** (strict rejection for lazy feature suppression).
+- QA Engineers MUST execute `chrome-devtools-mcp` across **ALL THREE VIEWPORTS (Desktop 1440x900, Tablet 768x1024, Mobile 375x812)**, click test real action buttons, and provide verbatim screenshot paths before declaring PASS.
 
 ---
 
