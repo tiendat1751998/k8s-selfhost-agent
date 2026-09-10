@@ -30,20 +30,26 @@ function toggleExpand(taskId: string) {
       <button class="btn btn-primary btn-xs font-mono" @click="emit('dispatch')">+ New</button>
     </div>
 
-    <div class="mobile-card-stream">
+    <!-- Dedicated Empty State -->
+    <div v-if="tasks.length === 0" class="empty-state mobile-empty-card font-mono">
+      <span>🤖 No agent tasks active. Tap + to dispatch a task.</span>
+    </div>
+
+    <!-- Mobile Cards Stream (~68-75px High Density) -->
+    <div v-else class="mobile-card-stream">
       <div 
         v-for="task in tasks" 
         :key="task.id" 
         class="mobile-card-item glass-panel"
         :class="{ expanded: expandedTaskId === task.id }"
       >
-        <!-- Compact Summary Row (~65px height) -->
+        <!-- Compact Summary Row (~68-75px height) -->
         <div class="mobile-compact-row" @click="toggleExpand(task.id)">
           <div class="mobile-card-left">
             <span class="mobile-card-icon">⚡</span>
             <div class="mobile-card-info">
               <div class="mobile-title-row">
-                <span class="mobile-card-title">{{ task.title }}</span>
+                <span class="mobile-card-title" :title="task.title">{{ task.title }}</span>
               </div>
               <div class="mobile-card-meta font-mono">
                 <StatusBadge :status="task.status" size="sm" />
@@ -52,11 +58,12 @@ function toggleExpand(taskId: string) {
             </div>
           </div>
 
-          <!-- Quick Action Buttons -->
+          <!-- Quick Action Buttons (Touch Targets >= 32px) -->
           <div class="mobile-card-actions" @click.stop>
             <button 
               class="btn-icon-sm btn-dispatch-act" 
               title="Dispatch Task"
+              aria-label="Dispatch Task"
               @click="emit('dispatch', task)"
             >
               ⚡
@@ -64,6 +71,7 @@ function toggleExpand(taskId: string) {
             <button 
               class="btn-icon-sm btn-logs-act" 
               title="View Transcript Logs"
+              aria-label="View Transcript Logs"
               @click="emit('logs', task)"
             >
               📜
@@ -71,6 +79,7 @@ function toggleExpand(taskId: string) {
             <button 
               class="btn-icon-sm btn-pause-act" 
               :title="task.status === 'blocked' ? 'Resume' : 'Pause'"
+              :aria-label="task.status === 'blocked' ? 'Resume' : 'Pause'"
               @click="emit('pause', task.id)"
             >
               {{ task.status === 'blocked' ? '▶' : '⏸' }}
@@ -78,9 +87,10 @@ function toggleExpand(taskId: string) {
             <button 
               class="btn-icon-sm btn-terminate" 
               title="Terminate Task"
+              aria-label="Terminate Task"
               @click="emit('terminate', task.id)"
             >
-              🗑
+              🛑
             </button>
           </div>
         </div>
