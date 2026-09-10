@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // auditRepo implements audit.Repository using PostgreSQL.
@@ -44,6 +45,7 @@ func (r *auditRepo) ListFindings(ctx context.Context, status string) ([]audit.Au
 			ORDER BY detected_at DESC
 		`
 	}
+	query, args = BuildTenantQuery(ctx, query, args...)
 
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
@@ -76,8 +78,9 @@ func (r *auditRepo) GetFinding(ctx context.Context, id string) (*audit.AuditFind
 		FROM audit_findings 
 		WHERE id = $1
 	`
+	query, args := BuildTenantQuery(ctx, query, id)
 	var f audit.AuditFinding
-	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&f.ID, &f.Category, &f.Severity, &f.Description, &f.Remediation,
 		&f.Status, &f.DetectedAt, &f.ResolvedAt,
 	)
@@ -96,7 +99,8 @@ func (r *auditRepo) ResolveFinding(ctx context.Context, id string) error {
 		SET status = 'resolved', resolved_at = NOW() 
 		WHERE id = $1
 	`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
+	query, args := BuildTenantQuery(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating audit finding: %w", err)
 	}
@@ -107,12 +111,16 @@ func (r *auditRepo) ResolveFinding(ctx context.Context, id string) error {
 }
 
 func (r *auditRepo) RecordRun(ctx context.Context, run *audit.AuditRun) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
 	query := `
-		INSERT INTO audit_runs (status, start_time, end_time, findings_count)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO audit_runs (status, start_time, end_time, findings_count, tenant_id)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`
-	err := r.getDB(ctx).QueryRow(ctx, query, run.Status, run.StartTime, run.EndTime, run.FindingsCount).Scan(&run.ID)
+	err := r.getDB(ctx).QueryRow(ctx, query, run.Status, run.StartTime, run.EndTime, run.FindingsCount, tenantID).Scan(&run.ID)
 	if err != nil {
 		return fmt.Errorf("inserting audit run: %w", err)
 	}
@@ -126,8 +134,9 @@ func (r *auditRepo) GetLastRun(ctx context.Context) (*audit.AuditRun, error) {
 		ORDER BY start_time DESC 
 		LIMIT 1
 	`
+	query, args := BuildTenantQuery(ctx, query)
 	var run audit.AuditRun
-	err := r.getDB(ctx).QueryRow(ctx, query).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&run.ID, &run.Status, &run.StartTime, &run.EndTime, &run.FindingsCount,
 	)
 	if err != nil {
@@ -158,11 +167,15 @@ func (r *auditRepo) RecordAction(ctx context.Context, actor, action, targetType,
 		detailsJSON = []byte("{}")
 	}
 
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
 	query := `
-		INSERT INTO audit_logs (actor, action, target_type, target_id, target_name, result, details, ip_address, user_agent)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO audit_logs (actor, action, target_type, target_id, target_name, result, details, ip_address, user_agent, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
-	_, err = r.getDB(ctx).Exec(ctx, query, actor, action, targetType, targetUUID, targetName, result, detailsJSON, ipAddress, userAgent)
+	_, err = r.getDB(ctx).Exec(ctx, query, actor, action, targetType, targetUUID, targetName, result, detailsJSON, ipAddress, userAgent, tenantID)
 	if err != nil {
 		return fmt.Errorf("recording audit log action: %w", err)
 	}
@@ -229,7 +242,14 @@ func (r *auditRepo) ListLogs(ctx context.Context, filter audit.AuditLogFilter) (
 
 	var args []interface{}
 	argIdx := 1
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	userRole := tenancy.UserRoleFromContext(ctx)
 	whereClause := " WHERE 1=1"
+	if userRole != "platform_admin" && tenantID != "" {
+		whereClause += fmt.Sprintf(" AND tenant_id = $%d", argIdx)
+		args = append(args, tenantID)
+		argIdx++
+	}
 
 	if filter.Actor != "" {
 		whereClause += fmt.Sprintf(" AND LOWER(actor) = LOWER($%d)", argIdx)
@@ -319,7 +339,9 @@ func (r *auditRepo) ListLogs(ctx context.Context, filter audit.AuditLogFilter) (
 		}
 
 		if len(detailsJSON) > 0 {
-			_ = json.Unmarshal(detailsJSON, &l.Details)
+			if err := json.Unmarshal(detailsJSON, &l.Details); err != nil {
+				l.Details = make(map[string]interface{})
+			}
 		}
 		if l.Details == nil {
 			l.Details = make(map[string]interface{})

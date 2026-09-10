@@ -136,7 +136,9 @@ func (w *Worker) processMessage(ctx context.Context, msg jetstream.Msg) {
 		// Mark incident as failed in DB and notify UI using a fresh detached context
 		dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if markErr := inc.MarkFailed(); markErr == nil {
-			_ = w.incRepo.Update(dbCtx, inc)
+			if updateErr := w.incRepo.Update(dbCtx, inc); updateErr != nil {
+				log.Error("failed to update incident status to failed in DB", zap.String("incident_id", inc.ID), zap.Error(updateErr))
+			}
 		}
 		dbCancel()
 
