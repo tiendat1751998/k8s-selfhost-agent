@@ -28,32 +28,9 @@ type Token struct {
 }
 
 var nonTenantTables = map[string]bool{
-	// Tables without tenant_id column in database schema:
-	"backup_history":        true,
-	"change_requests":       true,
-	"maintenance_windows":   true,
-	"compliance_frameworks": true,
-	"compliance_violations": true,
-	"correlated_events":     true,
-	"cluster_costs":         true,
-	"namespace_costs":       true,
-	"resource_waste":        true,
-	"capacity_forecasts":    true,
-	"drift_records":         true,
-	"notifications":        true,
-	"slo_definitions":       true,
-	"slo_snapshots":         true,
-	"promotions":            true,
-	"reports":               true,
-	"reporting":             true,
-	"tags":                  true,
-	"resource_tags":         true,
-	"organizations":         true, // Root tenant table (id is tenant ID)
-	"projects":              true,
-	"tenant_members":        true,
-	"rbac_matrix":           true, // Global RBAC definitions
-	"timeline_events":       true,
-	"users":                 true, // Global user accounts
+	"organizations": true, // Root tenant table (id is tenant ID)
+	"rbac_matrix":   true, // Global RBAC definitions
+	"users":         true, // Global user accounts
 }
 
 // BuildTenantQuery appends tenant filtering to a query if the user is not platform_admin.
