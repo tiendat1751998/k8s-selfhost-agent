@@ -10,6 +10,14 @@ defineProps<{
   getLifecycleDotClass: (lifecycle: string) => string
 }>()
 
+function handleApiClick(service: ServiceEntry) {
+  if (service.docs_url) {
+    window.open(service.docs_url, '_blank', 'noopener,noreferrer')
+  } else {
+    emit('open-detail', service)
+  }
+}
+
 const emit = defineEmits<{
   (e: 'open-detail', service: ServiceEntry): void
   (e: 'deploy', service: ServiceEntry): void
@@ -33,7 +41,7 @@ const emit = defineEmits<{
     </div>
 
     <div v-else-if="services.length === 0" class="empty-state-box glass-panel text-center text-muted">
-      <p class="font-mono text-xs">No services registered matching filters.</p>
+      <p class="font-mono text-xs">📦 No registered catalog services found. Tap ➕ Register to add a service.</p>
     </div>
 
     <div v-else class="catalog-mobile-stream">
@@ -57,6 +65,9 @@ const emit = defineEmits<{
               <span>·</span>
               <span class="text-cyan">{{ service.owner_team || 'Unassigned' }}</span>
             </div>
+            <div v-if="service.description" class="mobile-card-desc">
+              {{ service.description }}
+            </div>
           </div>
         </div>
 
@@ -73,20 +84,20 @@ const emit = defineEmits<{
           <button
             type="button"
             class="btn btn-secondary btn-xs btn-action-compact"
-            title="Deploy"
-            aria-label="Deploy Service"
-            @click="emit('deploy', service)"
+            title="APIs & Docs"
+            aria-label="APIs & Documentation"
+            @click="handleApiClick(service)"
           >
-            <span>📦</span>
+            <span>⚡</span>
           </button>
           <button
             type="button"
-            class="btn btn-danger-crimson btn-xs btn-action-compact"
-            title="Delete"
-            aria-label="Delete Service"
-            @click="emit('delete', service)"
+            class="btn btn-secondary btn-xs btn-action-compact"
+            title="Edit Service"
+            aria-label="Edit Service"
+            @click="emit('config', service)"
           >
-            <span>🗑</span>
+            <span>✏️</span>
           </button>
         </div>
       </div>
