@@ -161,8 +161,8 @@
   display: flex;
   align-items: center;
   min-width: 260px;
-  flex: 1;
-  max-width: 380px;
+  flex: 1.5;
+  max-width: 420px;
 }
 
 .filter-search-icon {

@@ -20,12 +20,12 @@ const emit = defineEmits<{
 
 const clusterColumns: Column<Cluster>[] = [
   { key: 'name', label: 'Cluster Name', sortable: true },
-  { key: 'group', label: 'Fleet Tier', width: '120px', sortable: true },
-  { key: 'provider', label: 'Provider / Region', width: '170px', sortable: true },
-  { key: 'version', label: 'K8s Version', width: '130px', sortable: true },
-  { key: 'nodes', label: 'Nodes', width: '90px', sortable: true, align: 'center' },
-  { key: 'health_status', label: 'Health Status', width: '130px', sortable: true },
-  { key: 'actions', label: 'Cluster Operations', width: '330px', align: 'right' },
+  { key: 'group', label: 'Fleet Tier', width: '100px', sortable: true },
+  { key: 'provider', label: 'Provider / Region', width: '150px', sortable: true },
+  { key: 'version', label: 'K8s Version', width: '110px', sortable: true },
+  { key: 'nodes', label: 'Nodes', width: '75px', sortable: true, align: 'center' },
+  { key: 'health_status', label: 'Health Status', width: '110px', sortable: true },
+  { key: 'actions', label: 'Cluster Operations', width: '280px', align: 'right' },
 ]
 </script>
 
@@ -64,7 +64,7 @@ const clusterColumns: Column<Cluster>[] = [
       </template>
 
       <template #cell-provider="{ row }">
-        <span class="font-mono text-muted">{{ (row.provider || '').toUpperCase() }} ({{ row.region || 'local' }})</span>
+        <span class="text-muted">{{ (row.provider || '').toUpperCase() }} ({{ row.region || 'local' }})</span>
       </template>
 
       <template #cell-version="{ row }">

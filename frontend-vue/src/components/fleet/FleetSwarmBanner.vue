@@ -18,7 +18,7 @@ defineProps<{
           <div>
             <div class="swarm-title-row">
               <h3 class="swarm-title">Docker Swarm Cluster</h3>
-              <span class="swarm-badge font-mono">LOCAL CONTROL PLANE</span>
+              <span class="swarm-badge">LOCAL CONTROL PLANE</span>
             </div>
             <p class="swarm-desc">
               Active native Docker cluster orchestrating container services, ingress routing, and multi-host networks.
@@ -44,7 +44,7 @@ defineProps<{
         </div>
         <div class="swarm-meta-card">
           <span class="meta-label">Control Node Role</span>
-          <span class="meta-value font-mono">{{ swarmInfo.is_manager ? 'Swarm Manager' : 'Worker Node' }}</span>
+          <span class="meta-value">{{ swarmInfo.is_manager ? 'Swarm Manager' : 'Worker Node' }}</span>
         </div>
         <div class="swarm-meta-card">
           <span class="meta-label">Cluster ID</span>

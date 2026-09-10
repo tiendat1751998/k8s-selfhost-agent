@@ -334,7 +334,7 @@ async function handleRemove(cluster: Cluster) {
         <input
           v-model="searchFilter"
           type="text"
-          placeholder="Filter fleet by name, provider, region, tier..."
+          placeholder="Filter fleet by name, provider, tier..."
           class="input-glass filter-search-input"
         />
         <button
@@ -350,8 +350,8 @@ async function handleRemove(cluster: Cluster) {
       <div class="filter-groups-wrap">
         <!-- Cluster Type Pills -->
         <div class="filter-group">
-          <span class="filter-group-label font-mono">TYPE:</span>
-          <div class="filter-pills font-mono">
+          <span class="filter-group-label">TYPE:</span>
+          <div class="filter-pills">
             <button
               class="filter-pill"
               :class="{ active: clusterTypeFilter === 'all' }"
@@ -378,8 +378,8 @@ async function handleRemove(cluster: Cluster) {
 
         <!-- Status Filter Pills -->
         <div class="filter-group">
-          <span class="filter-group-label font-mono">STATUS:</span>
-          <div class="filter-pills font-mono">
+          <span class="filter-group-label">STATUS:</span>
+          <div class="filter-pills">
             <button
               class="filter-pill"
               :class="{ active: statusFilter === 'all' }"
