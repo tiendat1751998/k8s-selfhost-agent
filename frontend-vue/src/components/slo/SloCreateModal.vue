@@ -68,10 +68,10 @@ function handleSubmit() {
     <div class="modal-card glass-panel animate-scale-up">
       <div class="modal-header">
         <div class="modal-title-group">
-          <span class="modal-icon">🎯</span>
+          <BaseIcon name="target" size="sm" class="modal-icon" />
           <h2 class="modal-title">+ Create SLO Target Definition</h2>
         </div>
-        <button class="modal-close-btn" @click="emit('update:show', false)">✕</button>
+        <button class="modal-close-btn" @click="emit('update:show', false)"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <form class="modal-body" @submit.prevent="handleSubmit">
@@ -168,7 +168,7 @@ function handleSubmit() {
             Cancel
           </button>
           <button type="submit" class="btn btn-primary" :disabled="actionInProgress">
-            <span>{{ actionInProgress ? '⏳ Creating...' : '✨ Save & Arm SLO Target' }}</span>
+            <BaseIcon :name="actionInProgress ? 'clock' : 'zap'" size="xs" /> <span>{{ actionInProgress ? 'Creating...' : 'Save & Arm SLO Target' }}</span>
           </button>
         </div>
       </form>
