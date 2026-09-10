@@ -14,26 +14,31 @@ const emit = defineEmits<{
   (e: 'discover', cluster: Cluster): void
   (e: 'upgrade', cluster: Cluster): void
   (e: 'remove', cluster: Cluster): void
+  (e: 'details', cluster: Cluster): void
+  (e: 'import'): void
 }>()
 
 const clusterColumns: Column<Cluster>[] = [
   { key: 'name', label: 'Cluster Name', sortable: true },
-  { key: 'group', label: 'Fleet Tier', width: '130px', sortable: true },
-  { key: 'provider', label: 'Provider / Region', width: '180px', sortable: true },
+  { key: 'group', label: 'Fleet Tier', width: '120px', sortable: true },
+  { key: 'provider', label: 'Provider / Region', width: '170px', sortable: true },
   { key: 'version', label: 'K8s Version', width: '130px', sortable: true },
-  { key: 'nodes', label: 'Nodes', width: '100px', sortable: true, align: 'center' },
-  { key: 'health_status', label: 'Health Status', width: '140px', sortable: true },
-  { key: 'actions', label: 'Cluster Operations', width: '260px', align: 'right' },
+  { key: 'nodes', label: 'Nodes', width: '90px', sortable: true, align: 'center' },
+  { key: 'health_status', label: 'Health Status', width: '130px', sortable: true },
+  { key: 'actions', label: 'Cluster Operations', width: '330px', align: 'right' },
 ]
 </script>
 
 <template>
-  <div v-if="clusters.length > 0" class="section-box glass-panel table-box">
-    <div class="box-header" style="padding: 18px 22px; border-bottom: 1px solid var(--border-subtle);">
+  <div class="section-box glass-panel table-box">
+    <div class="box-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-subtle);">
       <div>
         <h2 class="box-title">Fleet Clusters Inventory</h2>
         <p class="box-subtitle">Full tabular inventory with operational controls</p>
       </div>
+      <button class="btn btn-secondary btn-xs" @click="emit('import')">
+        <span>+ Add Cluster</span>
+      </button>
     </div>
 
     <DataTable
@@ -41,20 +46,25 @@ const clusterColumns: Column<Cluster>[] = [
       :data="clusters"
       :loading="loading"
       :error="error"
-      empty-message="No clusters found."
-      searchable
-      search-placeholder="Filter fleet by cluster name, provider, region..."
+      empty-message="No clusters found matching current filters."
     >
       <template #cell-name="{ row }">
-        <span class="font-mono text-cyan" style="font-weight: 700;">{{ row.name }}</span>
+        <span
+          class="font-mono text-cyan"
+          style="font-weight: 700; cursor: pointer;"
+          title="View Cluster Essentials"
+          @click="emit('details', row)"
+        >
+          {{ row.name }}
+        </span>
       </template>
 
       <template #cell-group="{ row }">
-        <span class="tier-pill font-mono">{{ row.group }}</span>
+        <span class="tier-pill font-mono">{{ row.group || 'default' }}</span>
       </template>
 
       <template #cell-provider="{ row }">
-        <span class="font-mono text-muted">{{ (row.provider || '').toUpperCase() }} ({{ row.region }})</span>
+        <span class="font-mono text-muted">{{ (row.provider || '').toUpperCase() }} ({{ row.region || 'local' }})</span>
       </template>
 
       <template #cell-version="{ row }">
@@ -72,25 +82,35 @@ const clusterColumns: Column<Cluster>[] = [
       <template #cell-actions="{ row }">
         <div class="table-actions-row">
           <button
+            class="btn btn-primary btn-xs"
+            title="Cluster Essentials"
+            @click="emit('details', row)"
+          >
+            <span>⚡ Essentials</span>
+          </button>
+          <button
             class="btn btn-secondary btn-xs"
             :disabled="actionLoading === row.id"
+            title="Discover Resources"
             @click="emit('discover', row)"
           >
-            <span>Discover</span>
+            <span>🔍 Discover</span>
           </button>
           <button
             class="btn btn-secondary btn-xs"
             :disabled="actionLoading === row.id"
+            title="Upgrade Cluster"
             @click="emit('upgrade', row)"
           >
-            <span>Upgrade</span>
+            <span>⬆️ Upgrade</span>
           </button>
           <button
-            class="btn btn-secondary btn-xs btn-remove"
+            class="btn btn-secondary btn-xs btn-remove btn-evict"
             :disabled="actionLoading === row.id"
+            title="Evict Cluster"
             @click="emit('remove', row)"
           >
-            <span>Remove</span>
+            <span>🗑️ Evict</span>
           </button>
         </div>
       </template>

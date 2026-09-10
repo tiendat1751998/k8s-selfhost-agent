@@ -95,42 +95,215 @@
   gap: 16px;
 }
 
+/* Responsive Visibility Controls */
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none !important;
+}
+
+/* Segmented View Mode Toggle */
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.segmented-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.segmented-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.segmented-btn.active {
+  background: rgba(6, 182, 212, 0.18);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.15);
+}
+
+/* Unified Filter Bar */
+.fleet-filter-bar {
+  padding: 12px 16px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle);
+}
+
+.filter-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 260px;
+  flex: 1;
+  max-width: 380px;
+}
+
+.filter-search-icon {
+  position: absolute;
+  left: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.filter-search-input {
+  width: 100%;
+  padding: 6px 28px 6px 30px;
+  font-size: 12px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.filter-search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.filter-groups-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-group-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.filter-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.filter-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: var(--border-medium);
+}
+
+.filter-pill.active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--accent-cyan);
+  color: #fff;
+  font-weight: 600;
+}
+
+.filter-pill.pill-healthy.active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--accent-emerald, #10b981);
+  color: #34d399;
+}
+
+.filter-pill.pill-degraded.active {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+  color: #fbbf24;
+}
+
+.filter-pill.pill-offline.active {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: #f43f5e;
+  color: #fb7185;
+}
+
 /* Docker Swarm Section */
 .swarm-section {
-  padding: 20px;
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 14px;
   border: 1px solid rgba(6, 182, 212, 0.25);
   background: rgba(6, 182, 212, 0.04);
 }
 
+.swarm-desktop-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .swarm-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  gap: 16px;
 }
 
 .swarm-brand {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
 }
 
 .swarm-logo {
-  font-size: 32px;
+  font-size: 26px;
   line-height: 1;
 }
 
 .swarm-title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .swarm-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   color: #fff;
 }
@@ -138,50 +311,226 @@
 .swarm-badge {
   font-size: 10px;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 2px 7px;
   background: rgba(6, 182, 212, 0.2);
   color: var(--accent-cyan);
   border-radius: 4px;
 }
 
 .swarm-desc {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-top: 2px;
+}
+
+.swarm-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .swarm-meta-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
 }
 
 .swarm-meta-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   background: rgba(0, 0, 0, 0.3);
-  padding: 10px 14px;
-  border-radius: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
   border: 1px solid var(--border-subtle);
 }
 
 .swarm-meta-card .meta-label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .swarm-meta-card .meta-value {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: #fff;
 }
 
-.swarm-actions-row {
+/* Mobile Compact Swarm (<640px) */
+.swarm-mobile-compact {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.swarm-mobile-top {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.swarm-mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swarm-logo-sm {
+  font-size: 18px;
+}
+
+.swarm-mobile-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.swarm-link-btn {
+  font-size: 11px !important;
+  padding: 3px 8px !important;
+  height: 28px !important;
+}
+
+.swarm-mobile-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+}
+
+.swarm-stat-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.swarm-stat-badge .stat-lbl {
+  color: var(--text-muted);
+}
+
+.swarm-stat-badge .stat-val {
+  font-weight: 600;
+}
+
+/* High-Density Mobile Stream for Fleet Clusters */
+.mobile-stream-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.mobile-empty-state {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  border-radius: 10px;
+}
+
+.mobile-stream-item {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(11, 15, 25, 0.65);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.mobile-stream-item:hover {
+  border-color: rgba(6, 182, 212, 0.4);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.mobile-stream-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.mobile-stream-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cluster-icon-mini {
+  font-size: 14px;
+  color: var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+.mobile-stream-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.mobile-stream-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.sub-sep {
+  opacity: 0.4;
+}
+
+.mobile-stream-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.mobile-stream-actions .btn {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.btn-evict:hover {
+  background: rgba(244, 63, 94, 0.2) !important;
+  border-color: rgba(244, 63, 94, 0.4) !important;
+  color: #fb7185 !important;
 }
 
 .section-box {
@@ -629,24 +978,52 @@
     font-size: 20px !important;
   }
 
-  .swarm-section {
-    padding: 14px;
-    gap: 12px;
+  .desktop-only {
+    display: none !important;
   }
 
-  .swarm-header {
-    flex-direction: column;
-    align-items: flex-start;
+  .mobile-only {
+    display: flex !important;
+  }
+
+  .fleet-filter-bar {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .filter-search-wrap {
+    min-width: 100%;
+    max-width: 100%;
+  }
+
+  .filter-groups-wrap {
+    width: 100%;
+    gap: 10px;
+  }
+
+  .filter-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .filter-pills {
+    flex: 1;
+    justify-content: flex-end;
+  }
+
+  .filter-pill {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  .swarm-section {
+    padding: 12px 14px;
     gap: 10px;
   }
 
   .swarm-meta-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
-  }
-
-  .swarm-actions-row {
-    justify-content: flex-start;
   }
 
   .section-box {
@@ -805,37 +1182,32 @@
     display: none !important;
   }
 
-  .swarm-section {
-    padding: 12px 14px !important;
-    margin-bottom: 10px !important;
+  .filter-search-wrap {
+    display: none;
   }
 
-  .swarm-desc {
+  .filter-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .filter-pills {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .swarm-section {
+    padding: 10px 12px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .swarm-desktop-content {
     display: none !important;
   }
 
-  .swarm-meta-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-    padding: 0 !important;
-  }
-
-  .swarm-meta-card {
-    padding: 8px 10px !important;
-  }
-
-  .swarm-meta-card .meta-label {
-    font-size: 9.5px !important;
-  }
-
-  .swarm-meta-card .meta-value {
-    font-size: 12px !important;
-  }
-
-  .swarm-actions-row .btn {
-    width: 100% !important;
-    justify-content: center !important;
-    font-size: 11.5px !important;
+  .swarm-mobile-compact {
+    display: flex !important;
   }
 
   .section-box {
