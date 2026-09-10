@@ -82,7 +82,7 @@ const filterChips: { kind: ResourceKind; label: string; icon: string }[] = [
           :class="{ 'is-active': selectedKind === chip.kind }"
           @click="emit('update:selectedKind', chip.kind)"
         >
-          <span>{{ chip.icon }}</span><span>{{ chip.label }}</span>
+          <BaseIcon :name="chip.icon" size="xs" /><span>{{ chip.label }}</span>
         </button>
       </div>
       <div class="hud-search-box">

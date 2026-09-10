@@ -41,7 +41,7 @@ const emit = defineEmits<{
     >
       <div class="mobile-card-left">
         <div class="mobile-avatar">
-          {{ getFrameworkIcon(tmpl.framework) }}
+          <BaseIcon :name="getFrameworkIcon(tmpl.framework)" size="md" />
         </div>
         <div class="mobile-details">
           <span class="mobile-title font-mono">{{ tmpl.name }}</span>

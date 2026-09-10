@@ -119,7 +119,7 @@
             :class="{ active: selectedCategory === cat.value }"
             @click="selectedCategory = cat.value"
           >
-            <span>{{ cat.icon }}</span> {{ cat.label }}
+            <BaseIcon :name="getCategoryIcon(cat.value)" size="xs" /> {{ cat.label }}
           </button>
         </div>
 
@@ -147,7 +147,7 @@
               @click="viewMode = 'grid'"
               title="Grid View"
             >
-              ⊞ Grid
+              <BaseIcon name="grid" size="xs" /> Grid
             </button>
             <button
               class="view-toggle-btn"
@@ -290,6 +290,17 @@ import PluginsTable from '../components/plugins/PluginsTable.vue'
 import PluginsMobileCards from '../components/plugins/PluginsMobileCards.vue'
 import PluginConfigModal from '../components/plugins/PluginConfigModal.vue'
 import InstallPluginModal from '../components/plugins/InstallPluginModal.vue'
+
+
+function getCategoryIcon(val: string): string {
+  switch (val) {
+    case 'monitoring': return 'pie-chart'
+    case 'security': return 'shield'
+    case 'devtools': return 'wrench'
+    case 'integration': return 'plug'
+    default: return 'globe'
+  }
+}
 
 const {
   plugins, stats, loading, error, toastMessage, viewMode, categoryCount, starterPresets, categories,

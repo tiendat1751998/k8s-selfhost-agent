@@ -155,7 +155,7 @@ const {
             <label class="filter-label" for="filter-type">Type</label>
             <select id="filter-type" v-model="filter.type" class="input-glass filter-select" @change="fetchCatalogData">
               <option value="">All Types ({{ totalServices }})</option>
-              <option v-for="t in serviceTypes" :key="t.value" :value="t.value">{{ t.icon }} {{ t.label }} ({{ stats.by_type[t.value] || 0 }})</option>
+              <option v-for="t in serviceTypes" :key="t.value" :value="t.value">{{ t.label }} ({{ stats.by_type[t.value] || 0 }})</option>
             </select>
           </div>
 
@@ -163,7 +163,7 @@ const {
             <label class="filter-label" for="filter-lifecycle">Lifecycle</label>
             <select id="filter-lifecycle" v-model="filter.lifecycle" class="input-glass filter-select" @change="fetchCatalogData">
               <option value="">All Lifecycles</option>
-              <option v-for="l in lifecycles" :key="l.value" :value="l.value">{{ l.icon }} {{ l.label }} ({{ stats.by_lifecycle[l.value] || 0 }})</option>
+              <option v-for="l in lifecycles" :key="l.value" :value="l.value">{{ l.label }} ({{ stats.by_lifecycle[l.value] || 0 }})</option>
             </select>
           </div>
 

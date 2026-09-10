@@ -72,7 +72,7 @@ const emit = defineEmits<{
           <label class="form-label" for="form-svc-type">Service Type</label>
           <select id="form-svc-type" v-model="form.type" class="input-glass">
             <option v-for="t in serviceTypes" :key="t.value" :value="t.value">
-              {{ t.icon }} {{ t.label }}
+              {{ t.label }}
             </option>
           </select>
         </div>
@@ -81,7 +81,7 @@ const emit = defineEmits<{
           <label class="form-label" for="form-svc-lifecycle">Lifecycle Stage</label>
           <select id="form-svc-lifecycle" v-model="form.lifecycle" class="input-glass">
             <option v-for="l in lifecycles" :key="l.value" :value="l.value">
-              {{ l.icon }} {{ l.label }}
+              {{ l.label }}
             </option>
           </select>
         </div>

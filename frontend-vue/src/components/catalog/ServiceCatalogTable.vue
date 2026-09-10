@@ -55,7 +55,7 @@ const emit = defineEmits<{
       <!-- Cell: Name -->
       <template #cell-name="{ row }">
         <div class="service-name-cell">
-          <div class="type-mini-icon">{{ getTypeIcon(row.type) }}</div>
+          <div class="type-mini-icon"><BaseIcon :name="getTypeIcon(row.type)" size="xs" /></div>
           <div class="name-meta">
             <a
               href="javascript:void(0)"
@@ -74,7 +74,7 @@ const emit = defineEmits<{
       <!-- Cell: Type -->
       <template #cell-type="{ row }">
         <span class="type-badge" :class="getTypeBadgeClass(row.type)">
-          <span class="type-icon-dot">{{ getTypeIcon(row.type) }}</span>
+          <span class="type-icon-dot"><BaseIcon :name="getTypeIcon(row.type)" size="xs" /></span>
           <span>{{ row.type }}</span>
         </span>
       </template>

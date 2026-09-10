@@ -41,7 +41,7 @@ const emit = defineEmits<{
       }"
     >
       <div class="mobile-tool-left">
-        <span class="mobile-tool-icon">{{ getToolIcon(tool) }}</span>
+        <span class="mobile-tool-icon"><BaseIcon :name="getToolIcon(tool)" size="md" /></span>
         <div class="mobile-tool-details">
           <span class="mobile-tool-name" :title="tool.name">{{ tool.name }}</span>
           <div class="mobile-tool-sub">

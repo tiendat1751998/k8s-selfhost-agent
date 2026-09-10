@@ -57,7 +57,7 @@ const emit = defineEmits<{
       >
         <div class="catalog-card-header">
           <div class="card-title-group">
-            <span class="type-mini-icon">{{ getTypeIcon(service.type) }}</span>
+            <span class="type-mini-icon"><BaseIcon :name="getTypeIcon(service.type)" size="xs" /></span>
             <a
               href="javascript:void(0)"
               class="card-title-link font-mono"

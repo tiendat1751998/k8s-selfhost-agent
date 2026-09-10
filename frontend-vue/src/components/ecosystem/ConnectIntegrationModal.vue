@@ -36,7 +36,7 @@ const emit = defineEmits<{
             class="preset-chip"
             @click="emit('selectPreset', p)"
           >
-            <span>{{ p.icon }}</span>
+            <BaseIcon :name="p.icon" size="xs" />
             <span>{{ p.name }}</span>
           </button>
         </div>
