@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { AuditActionType, AuditSeverity } from '../../api/governance'
 
 const props = defineProps<{
@@ -56,7 +57,7 @@ function onEndDateChange(e: Event, currentStart: string) {
     <!-- Command Bar / Primary Row: compact 40px on mobile, flex row on desktop -->
     <div class="toolbar-primary-row">
       <div class="toolbar-search-box">
-        <span class="search-input-icon">🔍</span>
+        <BaseIcon name="search" size="xs" class="search-input-icon" />
         <input
           type="text"
           class="input-glass toolbar-search-input"
@@ -66,7 +67,7 @@ function onEndDateChange(e: Event, currentStart: string) {
         />
       </div>
 
-      <!-- Mobile Filter Toggle Button (<768px): [ ⚙️ Filters (${activeFilterCount}) ] -->
+      <!-- Mobile Filter Toggle Button (<768px): [ Filters (${activeFilterCount}) ] -->
       <button
         class="toolbar-filter-toggle mobile-only-btn"
         :class="{ 'filter-active': activeFilterCount > 0 || isMobileExpanded }"
@@ -75,8 +76,8 @@ function onEndDateChange(e: Event, currentStart: string) {
         aria-label="Toggle detailed filters"
         @click="toggleMobileFilters"
       >
-        <span>⚙️ Filters ({{ activeFilterCount }})</span>
-        <span class="filter-toggle-arrow">{{ isMobileExpanded ? '▲' : '▼' }}</span>
+        <BaseIcon name="sliders" size="xs" /> <span>Filters ({{ activeFilterCount }})</span>
+        <BaseIcon :name="isMobileExpanded ? 'chevron-up' : 'chevron-down'" size="xs" class="filter-toggle-arrow" />
       </button>
 
       <!-- Desktop Action Buttons (>=768px) -->
@@ -87,16 +88,16 @@ function onEndDateChange(e: Event, currentStart: string) {
           type="button"
           @click="$emit('toggle-live-tail')"
         >
-          <span>{{ isLiveTailing ? '🔴 Tail Active (Pause)' : '⚡ Live Audit Tail' }}</span>
+          <BaseIcon :name="isLiveTailing ? 'pause' : 'zap'" size="xs" /> <span>{{ isLiveTailing ? 'Tail Active (Pause)' : 'Live Audit Tail' }}</span>
         </button>
         <button class="btn btn-secondary btn-sm" type="button" @click="$emit('export-csv')">
-          <span>📄 CSV</span>
+          <BaseIcon name="file-text" size="xs" /> <span>CSV</span>
         </button>
         <button class="btn btn-secondary btn-sm" type="button" @click="$emit('export-json')">
-          <span>📦 JSON</span>
+          <BaseIcon name="box" size="xs" /> <span>JSON</span>
         </button>
         <button class="btn btn-secondary btn-sm" type="button" title="Reset all filters" @click="$emit('reset-filters')">
-          <span>↺ Reset</span>
+          <BaseIcon name="refresh" size="xs" /> <span>Reset</span>
         </button>
       </div>
     </div>
@@ -182,13 +183,13 @@ function onEndDateChange(e: Event, currentStart: string) {
           type="button"
           @click="$emit('toggle-live-tail')"
         >
-          <span>{{ isLiveTailing ? '🔴 Tail Active' : '⚡ Live Tail' }}</span>
+          <BaseIcon :name="isLiveTailing ? 'pause' : 'zap'" size="xs" /> <span>{{ isLiveTailing ? 'Tail Active' : 'Live Tail' }}</span>
         </button>
         <button class="btn btn-secondary btn-sm" type="button" @click="$emit('export-csv')">
-          <span>📄 CSV</span>
+          <BaseIcon name="file-text" size="xs" /> <span>CSV</span>
         </button>
         <button class="btn btn-secondary btn-sm" type="button" @click="$emit('export-json')">
-          <span>📦 JSON</span>
+          <BaseIcon name="box" size="xs" /> <span>JSON</span>
         </button>
         <button
           class="btn btn-secondary btn-sm"
@@ -196,7 +197,7 @@ function onEndDateChange(e: Event, currentStart: string) {
           title="Reset all filters"
           @click="$emit('reset-filters')"
         >
-          <span>↺ Reset</span>
+          <BaseIcon name="refresh" size="xs" /> <span>Reset</span>
         </button>
       </div>
     </div>

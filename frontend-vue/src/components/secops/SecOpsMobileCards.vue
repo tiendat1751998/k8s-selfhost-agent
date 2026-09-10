@@ -1,5 +1,6 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { CveFinding, SecretAuditItem } from '../../composables/useDevSecOps'
 
 interface Props {
@@ -20,6 +21,16 @@ const emit = defineEmits<{
 }>()
 
 const activeTab = ref<'cves' | 'secrets'>('cves')
+
+function getResourceBaseIcon(resourceType: string): string {
+  const t = (resourceType || '').toLowerCase()
+  if (t.includes('image') || t.includes('container')) return 'box'
+  if (t.includes('pod') || t.includes('deployment') || t.includes('statefulset') || t.includes('daemonset')) return 'anchor'
+  if (t.includes('secret') || t.includes('vault') || t.includes('cert')) return 'lock'
+  if (t.includes('ingress') || t.includes('service')) return 'globe'
+  if (t.includes('rbac') || t.includes('role') || t.includes('serviceaccount')) return 'shield'
+  return 'box'
+}
 
 function getBorderClass(severity: string): string {
   switch ((severity || '').toUpperCase()) {
@@ -72,7 +83,7 @@ function getSecretBorderClass(status: string): string {
       >
         <div class="mobile-card-main">
           <div class="mobile-card-row-1">
-            <span>{{ getResourceIcon(finding.resource_type) }}</span>
+            <BaseIcon :name="getResourceBaseIcon(finding.resource_type)" size="xs" />
             <span class="mobile-card-title">{{ finding.resource_name }}</span>
             <span class="badge" :class="getSeverityBadgeClass(finding.severity)" style="font-size: 9.5px; padding: 1px 5px;">
               {{ finding.severity?.substring(0, 4) }}
@@ -94,20 +105,20 @@ function getSecretBorderClass(status: string): string {
             style="padding: 4px 8px; font-size: 11px;"
             @click.stop="emit('viewFinding', finding)"
           >
-            <span>🔍</span>
+            <BaseIcon name="search" size="xs" />
           </button>
           <button
             class="btn btn-sm btn-patch"
             style="padding: 4px 8px; font-size: 11px;"
             @click.stop="emit('patchFinding', finding)"
           >
-            <span>🛡️</span>
+            <BaseIcon name="shield" size="xs" />
           </button>
         </div>
       </div>
 
       <div v-if="findings.length === 0" class="empty-table-cell" style="padding: 24px !important;">
-        <span class="empty-icon">🛡️</span>
+        <span class="empty-icon"><BaseIcon name="shield" size="lg" /></span>
         <p style="font-size: 12px;">No vulnerabilities matching current filters.</p>
       </div>
     </template>
@@ -123,7 +134,7 @@ function getSecretBorderClass(status: string): string {
       >
         <div class="mobile-card-main">
           <div class="mobile-card-row-1">
-            <span>🔐</span>
+            <BaseIcon name="lock" size="xs" />
             <span class="mobile-card-title">{{ secret.name }}</span>
             <span
               class="badge"
@@ -146,13 +157,13 @@ function getSecretBorderClass(status: string): string {
             style="padding: 4px 8px; font-size: 11px;"
             @click.stop="emit('rotateSecret', secret)"
           >
-            <span>{{ secret.status === 'COMPLIANT' ? '🔄' : '⚡' }}</span>
+            <BaseIcon :name="secret.status === 'COMPLIANT' ? 'refresh' : 'zap'" size="xs" />
           </button>
         </div>
       </div>
 
       <div v-if="secrets.length === 0" class="empty-table-cell" style="padding: 24px !important;">
-        <span class="empty-icon">🔐</span>
+        <span class="empty-icon"><BaseIcon name="lock" size="lg" /></span>
         <p style="font-size: 12px;">No secrets or certificates flagged.</p>
       </div>
     </template>

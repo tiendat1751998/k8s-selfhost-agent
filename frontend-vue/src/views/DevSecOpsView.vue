@@ -15,10 +15,10 @@
 
       <div class="header-actions">
         <button class="btn btn-secondary" :disabled="securityStore.loading || isScanning" @click="securityStore.fetchAll()">
-          <span>{{ securityStore.loading ? '⏳ Syncing...' : '🔄 Refresh Compliance' }}</span>
+          <BaseIcon :name="securityStore.loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ securityStore.loading ? 'Syncing...' : 'Refresh Compliance' }}</span>
         </button>
         <button class="btn btn-primary" :disabled="securityStore.loading || isScanning" @click="runSecurityScan">
-          <span>{{ isScanning ? '⚡ Auditing Cluster...' : '⚡ Run Full Security Audit' }}</span>
+          <BaseIcon name="zap" size="xs" /> <span>{{ isScanning ? 'Auditing Cluster...' : 'Run Full Security Audit' }}</span>
         </button>
       </div>
     </div>
@@ -26,7 +26,7 @@
     <!-- Mobile 40px Command Bar (<640px) -->
     <div class="secops-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🛡️ DevSecOps ({{ filteredCveFindings.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="shield" size="xs" /> DevSecOps ({{ filteredCveFindings.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -36,7 +36,7 @@
           aria-label="Run Full Security Audit"
           @click="runSecurityScan"
         >
-          <span>⚡</span>
+          <BaseIcon name="zap" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -45,27 +45,27 @@
           aria-label="Refresh Compliance"
           @click="securityStore.fetchAll()"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
     <div class="secops-micro-telemetry mobile-only font-mono" role="status" aria-label="DevSecOps Micro Telemetry">
-      <span class="tel-item tel-score">🛡️ {{ securityPostureScore }} score</span>
+      <span class="tel-item tel-score"><BaseIcon name="shield" size="xs" /> {{ securityPostureScore }} score</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-crit">🔥 {{ criticalCveCount }} crit</span>
+      <span class="tel-item tel-crit"><BaseIcon name="flame" size="xs" /> {{ criticalCveCount }} crit</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-high">⚠️ {{ highCveCount }} high</span>
+      <span class="tel-item tel-high"><BaseIcon name="alert-triangle" size="xs" /> {{ highCveCount }} high</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-secrets">🔑 {{ exposedSecretsCount }} secr</span>
+      <span class="tel-item tel-secrets"><BaseIcon name="lock" size="xs" /> {{ exposedSecretsCount }} secr</span>
     </div>
 
     <!-- Notification Banner -->
     <div v-if="statusMessage" class="status-banner animate-fade-in" :class="'banner-' + statusMessage.type">
-      <span class="banner-icon">{{ statusMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="statusMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="banner-icon" />
       <span class="banner-text">{{ statusMessage.text }}</span>
-      <button class="banner-close" @click="statusMessage = null">✕</button>
+      <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Security HUD Metric Cards -->
@@ -139,7 +139,7 @@
             </div>
             <h3 class="modal-title">{{ selectedFinding.cve_id }}: {{ selectedFinding.resource_name }}</h3>
           </div>
-          <button class="modal-close" @click="selectedFinding = null">✕</button>
+          <button class="modal-close" @click="selectedFinding = null"><BaseIcon name="x" size="xs" /></button>
         </div>
 
         <div class="modal-body">
@@ -182,7 +182,7 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="selectedFinding = null">Close</button>
           <button class="btn btn-primary btn-patch" :disabled="isPatching" @click="patchVulnerability(selectedFinding)">
-            <span>{{ isPatching ? 'Applying...' : '🛡️ Dispatch Automated Patch PR' }}</span>
+            <BaseIcon name="shield" size="xs" /> <span>{{ isPatching ? 'Applying...' : 'Dispatch Automated Patch PR' }}</span>
           </button>
         </div>
       </div>
@@ -193,6 +193,7 @@
 <script setup lang="ts">
 import '../assets/styles/views/secops.css'
 import { useDevSecOps } from '../composables/useDevSecOps'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import SecurityScoreCards from '../components/secops/SecurityScoreCards.vue'
 import VulnerabilityScanTable from '../components/secops/VulnerabilityScanTable.vue'
 import SecretAuditGrid from '../components/secops/SecretAuditGrid.vue'

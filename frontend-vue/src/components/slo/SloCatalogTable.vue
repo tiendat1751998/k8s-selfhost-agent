@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
 
@@ -55,7 +56,7 @@ function formatDate(d?: unknown): string {
         <p class="box-subtitle">Configured Service Level Objectives with sliding compliance windows and alert thresholds</p>
       </div>
       <button class="btn btn-sm btn-primary" @click="emit('create')">
-        <span>➕ Add Target</span>
+        <BaseIcon name="plus" size="xs" /> <span>Add Target</span>
       </button>
     </div>
 
@@ -68,7 +69,7 @@ function formatDate(d?: unknown): string {
     >
       <template #cell-service="{ row }">
         <div class="service-name-cell">
-          <span class="service-icon">⚡</span>
+          <BaseIcon name="zap" size="xs" class="service-icon" />
           <span class="service-text font-mono font-bold">{{ row.service }}</span>
         </div>
       </template>
@@ -102,13 +103,13 @@ function formatDate(d?: unknown): string {
       <template #cell-actions="{ row }">
         <div class="table-actions-cell">
           <button class="btn-icon-action" title="Inspect SLI" @click="emit('inspect', (row as unknown as SLODefinition))">
-            <span>🔍</span>
+            <BaseIcon name="search" size="xs" />
           </button>
           <button class="btn-icon-action btn-icon-warn" title="Test Burn Alert" @click="emit('triggerAlert', String(row.id || ''), String(row.service || ''))">
-            <span>⚡</span>
+            <BaseIcon name="zap" size="xs" />
           </button>
           <button class="btn-icon-action btn-icon-del" title="Delete SLO" @click="emit('deleteSlo', String(row.id || ''), String(row.service || ''))">
-            <span>🗑️</span>
+            <BaseIcon name="trash" size="xs" />
           </button>
         </div>
       </template>

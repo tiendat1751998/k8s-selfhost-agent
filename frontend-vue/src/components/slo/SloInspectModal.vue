@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
 
 const props = defineProps<{
@@ -57,13 +58,13 @@ const targetId = computed(() => {
     <div class="modal-card inspect-modal glass-panel animate-scale-up">
       <div class="modal-header">
         <div class="modal-title-group">
-          <span class="modal-icon">🔍</span>
+          <BaseIcon name="search" size="sm" class="modal-icon" />
           <div>
             <h2 class="modal-title">SLI Telemetry Inspector: {{ targetService }}</h2>
             <span class="modal-subtitle">PromQL evaluation formula & multi-window compliance breakdown</span>
           </div>
         </div>
-        <button class="modal-close-btn" @click="emit('update:show', false)">✕</button>
+        <button class="modal-close-btn" @click="emit('update:show', false)"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="modal-body inspect-body">
@@ -117,7 +118,7 @@ const targetId = computed(() => {
             </div>
             <div class="formula-line">
               <span class="formula-term">Remaining Budget:</span>
-              <span class="formula-calc">(1.0 - Consumed Errors / Total Budget) × 100% = {{ currentBudget.toFixed(1) }}%</span>
+              <span class="formula-calc">(1.0 - Consumed Errors / Total Budget) * 100% = {{ currentBudget.toFixed(1) }}%</span>
             </div>
           </div>
         </div>
@@ -192,7 +193,7 @@ const targetId = computed(() => {
             :disabled="actionInProgress"
             @click="emit('triggerAlert', targetId, targetService)"
           >
-            <span>⚡ Test Burn Alert</span>
+            <BaseIcon name="zap" size="xs" /> <span>Test Burn Alert</span>
           </button>
           <button type="button" class="btn btn-primary" @click="emit('update:show', false)">
             Close Inspector

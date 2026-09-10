@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AuditLogEntry } from '../../api/governance'
+import BaseIcon from '../ui/BaseIcon.vue'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 
@@ -67,7 +68,7 @@ function formatDate(d: string): string {
 
       <template #cell-actor="{ row }">
         <span class="actor-badge">
-          <span>👤</span>
+          <BaseIcon name="user" size="xs" />
           <span class="font-mono">{{ row.actor }}</span>
         </span>
       </template>
@@ -98,7 +99,7 @@ function formatDate(d: string): string {
           type="button"
           @click="$emit('select-payload', row)"
         >
-          <span>[ 🔍 Event Payload ]</span>
+          <BaseIcon name="search" size="xs" /> <span>Event Payload</span>
         </button>
       </template>
     </DataTable>

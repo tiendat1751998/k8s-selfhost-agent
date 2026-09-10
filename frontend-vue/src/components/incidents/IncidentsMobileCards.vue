@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { Incident } from '../../api/compute'
 
@@ -28,7 +29,7 @@ function formatTime(d?: string) {
 <template>
   <div class="mobile-cards-stream">
     <div v-if="incidents.length === 0" class="empty-list-mobile">
-      <span>🛡️ Zero cluster incidents reported</span>
+      <BaseIcon name="shield" size="xs" /> <span>Zero cluster incidents reported</span>
     </div>
 
     <div
@@ -59,7 +60,7 @@ function formatTime(d?: string) {
             title="Triage"
             @click="emit('triage', inc)"
           >
-            <span>🔍</span>
+            <BaseIcon name="search" size="xs" />
           </button>
           <button
             type="button"
@@ -67,7 +68,7 @@ function formatTime(d?: string) {
             title="RCATimeline"
             @click="emit('rca', inc)"
           >
-            <span>🔬</span>
+            <BaseIcon name="activity" size="xs" />
           </button>
           <button
             type="button"
@@ -76,7 +77,7 @@ function formatTime(d?: string) {
             title="Resolve"
             @click="emit('resolve', inc)"
           >
-            <span>🕑</span>
+            <BaseIcon name="check-circle" size="xs" />
           </button>
         </div>
       </div>

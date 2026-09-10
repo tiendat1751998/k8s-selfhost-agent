@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { InspectSLOState, LatencyPercentiles } from '../../composables/useSLOMonitor'
 
 const props = defineProps<{
@@ -23,13 +24,13 @@ const emit = defineEmits<{
     <div class="modal-card inspect-modal glass-panel animate-scale-up">
       <div class="modal-header">
         <div class="modal-title-group">
-          <span class="modal-icon">🔍</span>
+          <BaseIcon name="search" size="sm" class="modal-icon" />
           <div>
             <h2 class="modal-title">SLI Telemetry Inspector: {{ selectedInspect.def?.service || selectedInspect.snap?.service }}</h2>
             <span class="modal-subtitle">PromQL evaluation formula & multi-window compliance breakdown</span>
           </div>
         </div>
-        <button class="modal-close-btn" @click="emit('close')">✕</button>
+        <button class="modal-close-btn" @click="emit('close')"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="modal-body inspect-body">
@@ -106,7 +107,7 @@ const emit = defineEmits<{
             </div>
             <div class="formula-line">
               <span class="formula-term">Remaining Budget:</span>
-              <span class="formula-calc">(1.0 - Consumed Errors / Budget) × 100% = {{ (selectedInspect.snap?.error_budget ?? 85.0).toFixed(1) }}%</span>
+              <span class="formula-calc">(1.0 - Consumed Errors / Budget) * 100% = {{ (selectedInspect.snap?.error_budget ?? 85.0).toFixed(1) }}%</span>
             </div>
             <div class="formula-line">
               <span class="formula-term">Depletion Velocity:</span>
@@ -169,7 +170,7 @@ const emit = defineEmits<{
             :disabled="actionInProgress"
             @click="emit('trigger-alert', selectedInspect.def?.id || selectedInspect.snap?.slo_id || '', selectedInspect.def?.service || selectedInspect.snap?.service || '')"
           >
-            <span>⚡ Trigger Test Burn Alert</span>
+            <BaseIcon name="zap" size="xs" /> <span>Trigger Test Burn Alert</span>
           </button>
           <button type="button" class="btn btn-secondary" @click="emit('close')">
             Close Inspector
