@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { Incident, RCAReport, PullRequest } from '../../api/compute'
 
 const props = defineProps<{
@@ -50,7 +51,7 @@ const hasDiffContent = computed(() => {
   <div class="right-pane glass-panel">
     <!-- Unselected Placeholder -->
     <div v-if="!selectedIncident" class="no-selection">
-      <span class="no-sel-icon">🔍</span>
+      <BaseIcon name="search" size="lg" class="no-sel-icon" />
       <h3>Select an Incident to Inspect</h3>
       <p>Choose an anomaly from the queue on the left to review telemetry evidence, trigger autonomous AI Root Cause Analysis (RCA), and inspect GitOps remediation diffs.</p>
     </div>
@@ -78,7 +79,7 @@ const hasDiffContent = computed(() => {
             :disabled="actionLoading === 'analyze' || selectedIncident.status === 'analyzing'"
             @click="emit('analyze', selectedIncident)"
           >
-            <span>{{ actionLoading === 'analyze' ? '⏳ Reasoning...' : '🤖 Re-run AI RCA' }}</span>
+            <BaseIcon v-if="actionLoading !== 'analyze'" name="bot" size="xs" /> <span>{{ actionLoading === 'analyze' ? 'Reasoning...' : 'Re-run AI RCA' }}</span>
           </button>
         </div>
       </div>
@@ -87,7 +88,7 @@ const hasDiffContent = computed(() => {
       <div class="rca-inspector-card glass-panel">
         <div class="rca-card-header">
           <div class="rca-title-wrap">
-            <span class="ai-sparkle">✨</span>
+            <BaseIcon name="sparkles" size="sm" class="ai-sparkle" />
             <div>
               <h3 class="rca-title">AI Root Cause Analysis (RCA)</h3>
               <span class="ai-model-tag font-mono">{{ selectedReport?.llm_model || 'Claude 3.5 Sonnet / Multi-Agent' }}</span>
@@ -105,7 +106,7 @@ const hasDiffContent = computed(() => {
 
         <!-- Loading State -->
         <div v-if="loadingReport" class="rca-loading-state font-mono">
-          <span>⏳ Retrieving AI Root Cause Analysis...</span>
+          <span>Retrieving AI Root Cause Analysis...</span>
         </div>
 
         <!-- Analyzed Report Content -->
@@ -128,7 +129,7 @@ const hasDiffContent = computed(() => {
 
         <!-- Diagnostics Error Fallback (non-404 unexpected failure) -->
         <div v-else-if="reportError && !isNotFoundError(reportError)" class="rca-empty-state">
-          <span class="rca-empty-icon">⚠️</span>
+          <BaseIcon name="alert-triangle" size="lg" class="rca-empty-icon" />
           <h4 class="rca-empty-title">Diagnostics Query Failed</h4>
           <p class="rca-empty-desc">{{ reportError }}</p>
           <button 
@@ -136,13 +137,13 @@ const hasDiffContent = computed(() => {
             :disabled="actionLoading === 'analyze' || selectedIncident.status === 'analyzing'"
             @click="emit('analyze', selectedIncident)"
           >
-            <span>{{ actionLoading === 'analyze' ? '⏳ Reasoning...' : '🔄 Retry Autonomous AI RCA' }}</span>
+            <BaseIcon v-if="actionLoading !== 'analyze'" name="refresh" size="xs" /> <span>{{ actionLoading === 'analyze' ? 'Reasoning...' : 'Retry Autonomous AI RCA' }}</span>
           </button>
         </div>
 
         <!-- Enterprise AI RCA Empty State: Anomaly not analyzed yet -->
         <div v-else class="rca-empty-state">
-          <span class="rca-empty-icon">✨</span>
+          <BaseIcon name="sparkles" size="lg" class="rca-empty-icon" />
           <h4 class="rca-empty-title">AI Root Cause Analysis Ready</h4>
           <span class="rca-empty-subtitle font-mono">Claude 3.5 Sonnet / Multi-Agent correlation ready for this incident.</span>
           <p class="rca-empty-desc">
@@ -153,7 +154,7 @@ const hasDiffContent = computed(() => {
             :disabled="actionLoading === 'analyze' || selectedIncident.status === 'analyzing'"
             @click="emit('analyze', selectedIncident)"
           >
-            <span>{{ actionLoading === 'analyze' ? '⏳ Reasoning...' : '⚡ Run Autonomous AI RCA' }}</span>
+            <BaseIcon v-if="actionLoading !== 'analyze'" name="zap" size="xs" /> <span>{{ actionLoading === 'analyze' ? 'Reasoning...' : 'Run Autonomous AI RCA' }}</span>
           </button>
         </div>
       </div>
@@ -162,7 +163,7 @@ const hasDiffContent = computed(() => {
       <div class="diff-panel glass-panel">
         <div class="diff-header">
           <div class="diff-title-wrap">
-            <span class="diff-icon">📝</span>
+            <BaseIcon name="file-text" size="sm" class="diff-icon" />
             <div>
               <h3 class="diff-title">GitOps Remediation Manifest Diff</h3>
               <span class="diff-subtitle font-mono">deployments/{{ selectedIncident.namespace }}/{{ (selectedIncident.pod_name || 'workload').split('-')[0] }}.yaml</span>
@@ -191,7 +192,7 @@ const hasDiffContent = computed(() => {
 
         <!-- Sleek Compact Notice when no diff exists or is empty -->
         <div v-else class="diff-compact-notice">
-          <span class="compact-notice-icon">ℹ️</span>
+          <BaseIcon name="help-circle" size="xs" class="compact-notice-icon" />
           <span class="compact-notice-text">No GitOps remediation manifest generated yet. Run AI RCA or inject scenario to synthesize corrective YAML.</span>
         </div>
 
@@ -208,7 +209,7 @@ const hasDiffContent = computed(() => {
               :disabled="actionLoading === 'create-pr'"
               @click="emit('open-pr-modal')"
             >
-              <span>{{ actionLoading === 'create-pr' ? '⏳ Synthesizing...' : '🚀 Generate Fix PR' }}</span>
+              <BaseIcon v-if="actionLoading !== 'create-pr'" name="git-branch" size="xs" /> <span>{{ actionLoading === 'create-pr' ? 'Synthesizing...' : 'Generate Fix PR' }}</span>
             </button>
 
             <button 
@@ -217,11 +218,11 @@ const hasDiffContent = computed(() => {
               :disabled="actionLoading === 'merge-pr'"
               @click="emit('merge-pr')"
             >
-              <span>{{ actionLoading === 'merge-pr' ? '⏳ Merging PR...' : '⚡ Merge PR & Apply Fix' }}</span>
+              <BaseIcon v-if="actionLoading !== 'merge-pr'" name="zap" size="xs" /> <span>{{ actionLoading === 'merge-pr' ? 'Merging PR...' : 'Merge PR & Apply Fix' }}</span>
             </button>
 
             <div v-else-if="activePR.status === 'merged'" class="merged-badge font-mono">
-              <span>✅ Remediation Deployed to Production</span>
+              <BaseIcon name="check-circle" size="xs" /> <span>Remediation Deployed to Production</span>
             </div>
           </div>
         </div>

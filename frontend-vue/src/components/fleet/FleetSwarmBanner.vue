@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { SwarmClusterInfo } from '../../api/fleet'
 
 defineProps<{
@@ -14,7 +15,7 @@ defineProps<{
     <div class="swarm-desktop-content desktop-only">
       <div class="swarm-header">
         <div class="swarm-brand">
-          <span class="swarm-logo">🐳</span>
+          <BaseIcon name="layers" size="md" class="swarm-logo" />
           <div>
             <div class="swarm-title-row">
               <h3 class="swarm-title">Docker Swarm Cluster</h3>
@@ -28,7 +29,7 @@ defineProps<{
         <div class="swarm-header-actions">
           <StatusBadge :status="swarmInfo.node_count > 0 ? 'active' : 'ready'" size="sm" />
           <router-link to="/infra/hosts" class="btn btn-secondary btn-xs font-mono">
-            <span>🖥️ Compute Hosts ➔</span>
+            <BaseIcon name="server" size="xs" /> <span>Compute Hosts</span> <BaseIcon name="chevron-right" size="xs" />
           </router-link>
         </div>
       </div>
@@ -57,12 +58,12 @@ defineProps<{
     <div class="swarm-mobile-compact mobile-only">
       <div class="swarm-mobile-top">
         <div class="swarm-mobile-brand">
-          <span class="swarm-logo-sm">🐳</span>
+          <BaseIcon name="layers" size="xs" class="swarm-logo-sm" />
           <span class="swarm-mobile-title font-mono">Docker Swarm</span>
           <StatusBadge :status="swarmInfo.node_count > 0 ? 'active' : 'ready'" size="sm" />
         </div>
         <router-link to="/infra/hosts" class="btn btn-secondary btn-xs swarm-link-btn font-mono" title="View Compute Hosts">
-          <span>Hosts ➔</span>
+          <span>Hosts</span> <BaseIcon name="chevron-right" size="xs" />
         </router-link>
       </div>
 

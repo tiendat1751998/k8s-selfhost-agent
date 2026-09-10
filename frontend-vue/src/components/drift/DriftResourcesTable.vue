@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { EnrichedDriftRecord } from '../../composables/useDriftDetection'
 
 interface Props {
@@ -106,7 +107,7 @@ function formatDate(d: string): string {
           title="Inspect cryptographic state diff"
           @click="emit('inspect', row)"
         >
-          <span>🔍 Diff</span>
+          <BaseIcon name="search" size="xs" /> <span>Diff</span>
         </button>
         <button 
           v-if="row.status === 'drifted'" 
@@ -115,14 +116,14 @@ function formatDate(d: string): string {
           title="Reconcile live cluster etcd with Git repository"
           @click="emit('sync', row.id)"
         >
-          <span>{{ resolvingId === row.id ? 'Syncing...' : '⚡ Sync' }}</span>
+          <BaseIcon v-if="resolvingId !== row.id" name="zap" size="xs" /> <span>{{ resolvingId === row.id ? 'Syncing...' : 'Sync' }}</span>
         </button>
         <button
           class="btn btn-icon btn-sm"
           :title="row.isSuppressed ? 'Resume drift alerts' : 'Suppress drift alert'"
           @click="emit('suppress', row.id)"
         >
-          <span>{{ row.isSuppressed ? '🛡️' : '👁️' }}</span>
+          <BaseIcon :name="row.isSuppressed ? 'shield' : 'eye'" size="xs" />
         </button>
       </div>
     </template>

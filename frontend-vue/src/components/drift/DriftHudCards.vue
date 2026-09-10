@@ -20,7 +20,7 @@ defineProps<Props>()
       :badge="driftedCount === 0 ? 'SYNCHRONIZED' : 'DRIFT DETECTED'"
       :badge-color="driftedCount === 0 ? 'emerald' : 'rose'"
       subtitle="Uncommitted live cluster mutations"
-      icon="⚡"
+      icon="zap"
     />
 
     <!-- Card 2: Critical Out-of-Sync -->
@@ -32,7 +32,7 @@ defineProps<Props>()
       :trend="criticalCount === 0 ? 'Compliant' : 'Reconciliation Pending'"
       :trend-type="criticalCount === 0 ? 'positive' : 'negative'"
       subtitle="Workloads with mutated replicas/security"
-      icon="🚨"
+      icon="alert-triangle"
     />
 
     <!-- Card 3: Remediated Today -->
@@ -42,7 +42,7 @@ defineProps<Props>()
       badge="AUTO-RECONCILED"
       badge-color="cyan"
       subtitle="Cryptographically restored to Git"
-      icon="🔄"
+      icon="refresh"
     />
 
     <!-- Card 4: Git Repos Tracked -->
@@ -52,7 +52,7 @@ defineProps<Props>()
       badge="GITOPS SOURCE"
       badge-color="violet"
       subtitle="Flux / ArgoCD monitored sources"
-      icon="🐙"
+      icon="git-branch"
     />
   </div>
 </template>

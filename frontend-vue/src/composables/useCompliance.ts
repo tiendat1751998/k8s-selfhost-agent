@@ -29,7 +29,7 @@ export const FALLBACK_FRAMEWORKS: ComplianceFramework[] = [
   {
     id: 'cis-k8s-v1.8',
     name: 'CIS Kubernetes Benchmark v1.8',
-    icon: '🛡️',
+    icon: 'shield',
     total_checks: 68,
     passed_checks: 61,
     failed_checks: 7,
@@ -39,7 +39,7 @@ export const FALLBACK_FRAMEWORKS: ComplianceFramework[] = [
   {
     id: 'nist-sp-800-53',
     name: 'NIST SP 800-53 Rev. 5',
-    icon: '🏛️',
+    icon: 'building',
     total_checks: 112,
     passed_checks: 104,
     failed_checks: 8,
@@ -49,7 +49,7 @@ export const FALLBACK_FRAMEWORKS: ComplianceFramework[] = [
   {
     id: 'pci-dss-v4.0',
     name: 'PCI-DSS v4.0 (Cardholder Data)',
-    icon: '💳',
+    icon: 'dollar-sign',
     total_checks: 54,
     passed_checks: 50,
     failed_checks: 4,
@@ -59,7 +59,7 @@ export const FALLBACK_FRAMEWORKS: ComplianceFramework[] = [
   {
     id: 'soc-2-type-2',
     name: 'SOC 2 Type II (Trust Services)',
-    icon: '🔒',
+    icon: 'lock',
     total_checks: 42,
     passed_checks: 39,
     failed_checks: 3,
@@ -69,7 +69,7 @@ export const FALLBACK_FRAMEWORKS: ComplianceFramework[] = [
   {
     id: 'iso-27001-2022',
     name: 'ISO 27001:2022 ISMS Controls',
-    icon: '🌐',
+    icon: 'globe',
     total_checks: 76,
     passed_checks: 70,
     failed_checks: 6,
@@ -79,7 +79,7 @@ export const FALLBACK_FRAMEWORKS: ComplianceFramework[] = [
   {
     id: 'hipaa-security',
     name: 'HIPAA Security & Privacy Rule',
-    icon: '🏥',
+    icon: 'activity',
     total_checks: 38,
     passed_checks: 36,
     failed_checks: 2,

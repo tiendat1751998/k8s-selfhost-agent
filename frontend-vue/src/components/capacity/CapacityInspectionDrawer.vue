@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import type { NodeHeadroom } from '../../composables/useCapacityForecast'
 import { getUsageColorBg, getUsageColorText } from '../../composables/useCapacityForecast'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = defineProps<{
   node: NodeHeadroom | null
@@ -76,7 +77,7 @@ const recommendation = computed(() => {
           </div>
           <span class="capacity-drawer-subtitle font-mono">Node ID: {{ node.id }}</span>
         </div>
-        <button type="button" class="capacity-drawer-close" aria-label="Close inspection drawer" @click="emit('close')">✕</button>
+        <button type="button" class="capacity-drawer-close" aria-label="Close inspection drawer" @click="emit('close')"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <!-- Drawer Body -->
@@ -95,7 +96,7 @@ const recommendation = computed(() => {
         <!-- CPU Allocation Gauge -->
         <div class="drawer-metric-card">
           <div class="drawer-metric-header font-mono">
-            <span class="drawer-metric-name">⚡ Compute Allocation</span>
+            <span class="drawer-metric-name"><BaseIcon name="zap" size="xs" /> Compute Allocation</span>
             <span class="drawer-metric-stat" :class="getUsageColorText(node.cpuUsagePercent)">
               {{ node.cpuUsagePercent.toFixed(1) }}%
             </span>
@@ -116,7 +117,7 @@ const recommendation = computed(() => {
         <!-- Memory Allocation Gauge -->
         <div class="drawer-metric-card">
           <div class="drawer-metric-header font-mono">
-            <span class="drawer-metric-name">🧠 Memory Allocation</span>
+            <span class="drawer-metric-name"><BaseIcon name="cpu" size="xs" /> Memory Allocation</span>
             <span class="drawer-metric-stat" :class="getUsageColorText(node.memUsagePercent)">
               {{ node.memUsagePercent.toFixed(1) }}%
             </span>
@@ -137,7 +138,7 @@ const recommendation = computed(() => {
         <!-- Pod Density & Bin-Packing -->
         <div class="drawer-metric-card">
           <div class="drawer-metric-header font-mono">
-            <span class="drawer-metric-name">📦 Pod Density & Bin-Packing</span>
+            <span class="drawer-metric-name"><BaseIcon name="box" size="xs" /> Pod Density & Bin-Packing</span>
             <span class="drawer-metric-stat" :class="podUsagePercent >= 90 ? 'text-rose' : 'text-cyan'">
               {{ node.podCount }} / {{ node.podCapacity }} Pods ({{ podUsagePercent }}%)
             </span>
@@ -158,7 +159,7 @@ const recommendation = computed(() => {
         <!-- Safe Headroom Recommendation Card -->
         <div class="drawer-rec-card" :class="`rec-${recommendation.type}`">
           <div class="drawer-rec-title">
-            <span>{{ recommendation.type === 'critical' ? '🚨' : recommendation.type === 'warning' ? '⚡' : '🛡️' }}</span>
+            <BaseIcon :name="recommendation.type === 'critical' ? 'alert-triangle' : recommendation.type === 'warning' ? 'zap' : 'shield'" size="sm" />
             <span>{{ recommendation.title }}</span>
           </div>
           <p class="drawer-rec-desc">{{ recommendation.desc }}</p>
@@ -169,7 +170,7 @@ const recommendation = computed(() => {
       <div class="capacity-drawer-footer">
         <button type="button" class="btn btn-secondary" @click="emit('close')">Close</button>
         <button type="button" class="btn btn-primary" @click="emit('rebalance', node.id); emit('close')">
-          <span>⚡ Rebalance Node</span>
+          <BaseIcon name="refresh" size="xs" /> <span>Rebalance Node</span>
         </button>
       </div>
     </div>

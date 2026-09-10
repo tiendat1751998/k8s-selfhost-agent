@@ -245,7 +245,7 @@ function getServiceCount(serviceId: string): number {
         class="tree-search-clear"
         aria-label="Clear target filter"
         @click="targetSearch = ''"
-      >✕</button>
+      ><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <div class="tree-content">

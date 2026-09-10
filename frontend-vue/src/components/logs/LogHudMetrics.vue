@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 interface Props {
   linesStreamed: number
   errorRate: number
@@ -19,7 +20,7 @@ defineProps<Props>()
     <div class="log-hud-card">
       <div class="log-hud-top">
         <div class="log-hud-title-group">
-          <span class="log-hud-icon">⚡</span>
+          <BaseIcon name="zap" size="xs" class="log-hud-icon" />
           <span class="log-hud-label">Lines Streamed</span>
         </div>
         <span
@@ -46,7 +47,7 @@ defineProps<Props>()
     <div class="log-hud-card">
       <div class="log-hud-top">
         <div class="log-hud-title-group">
-          <span class="log-hud-icon">🚨</span>
+          <BaseIcon name="alert-triangle" size="xs" class="log-hud-icon" />
           <span class="log-hud-label">Error Rate</span>
         </div>
         <span
@@ -80,7 +81,7 @@ defineProps<Props>()
     <div class="log-hud-card">
       <div class="log-hud-top">
         <div class="log-hud-title-group">
-          <span class="log-hud-icon">💾</span>
+          <BaseIcon name="hard-drive" size="xs" class="log-hud-icon" />
           <span class="log-hud-label">Buffer Saturation</span>
         </div>
         <span class="log-hud-badge badge-info text-cyan">
@@ -106,7 +107,7 @@ defineProps<Props>()
     <div class="log-hud-card">
       <div class="log-hud-top">
         <div class="log-hud-title-group">
-          <span class="log-hud-icon">🌐</span>
+          <BaseIcon name="globe" size="xs" class="log-hud-icon" />
           <span class="log-hud-label">Connection Latency</span>
         </div>
         <span

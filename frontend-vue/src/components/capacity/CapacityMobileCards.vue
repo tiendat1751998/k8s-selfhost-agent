@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { NodeHeadroom } from '../../composables/useCapacityForecast'
 import { getUsageColorBg, getUsageColorText } from '../../composables/useCapacityForecast'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   nodes: NodeHeadroom[]
@@ -16,7 +17,7 @@ const emit = defineEmits<{
   <div class="mobile-stream-container">
     <!-- Empty State -->
     <div v-if="nodes.length === 0" class="empty-state-box font-mono">
-      <span class="empty-icon">📈</span>
+      <BaseIcon name="trending-up" size="lg" class="empty-icon" />
       <p class="empty-desc">No cluster nodes reporting headroom telemetry.</p>
     </div>
 
@@ -77,7 +78,7 @@ const emit = defineEmits<{
           aria-label="Rebalance node"
           @click="emit('rebalance', node.id)"
         >
-          ⚡
+          <BaseIcon name="zap" size="xs" />
         </button>
         <button
           type="button"
@@ -86,7 +87,7 @@ const emit = defineEmits<{
           aria-label="Inspect node"
           @click="emit('inspect', node.id)"
         >
-          🔍
+          <BaseIcon name="search" size="xs" />
         </button>
       </div>
     </div>

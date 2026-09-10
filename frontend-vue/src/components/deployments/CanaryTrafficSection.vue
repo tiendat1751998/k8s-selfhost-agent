@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DeploymentApp } from '../../api/compute'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   app: DeploymentApp
@@ -78,7 +79,7 @@ const emit = defineEmits<{
         :disabled="actionLoading === 'abort'"
         @click="emit('abortCanary', app)"
       >
-        <span>✕ Abort Canary (0%)</span>
+        <BaseIcon name="x" size="xs" /> <span>Abort Canary (0%)</span>
       </button>
       <button
         type="button"
@@ -86,7 +87,7 @@ const emit = defineEmits<{
         :disabled="actionLoading === 'promote'"
         @click="emit('promoteCanary', app)"
       >
-        <span>Promote Canary to 100% ➔</span>
+        <span>Promote Canary to 100%</span> <BaseIcon name="chevron-right" size="xs" />
       </button>
     </div>
   </div>
