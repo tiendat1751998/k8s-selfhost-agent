@@ -30,13 +30,13 @@ const emit = defineEmits<{
 const tableRules = computed(() => props.rules as unknown as AutomationRuleRow[])
 
 const ruleColumns: Column<AutomationRuleRow>[] = [
-  { key: 'enabled', label: 'State', width: '80px' },
-  { key: 'name', label: 'Rule Name', width: '250px', sortable: true },
-  { key: 'trigger_type', label: 'Trigger & Schedule / Webhook', width: '260px', sortable: true },
-  { key: 'action_type', label: 'Automated Action', width: '200px', sortable: true },
-  { key: 'executions', label: 'Executions', width: '120px', sortable: true },
-  { key: 'last_triggered', label: 'Last Triggered', width: '160px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '220px', align: 'right' },
+  { key: 'enabled', label: 'State', width: '70px' },
+  { key: 'name', label: 'Rule Name', width: '180px', sortable: true },
+  { key: 'trigger_type', label: 'Trigger & Schedule', width: '180px', sortable: true },
+  { key: 'action_type', label: 'Automated Action', width: '140px', sortable: true },
+  { key: 'executions', label: 'Runs', width: '100px', sortable: true },
+  { key: 'last_triggered', label: 'Last Triggered', width: '120px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '160px', align: 'right' },
 ]
 </script>
 
@@ -101,24 +101,30 @@ const ruleColumns: Column<AutomationRuleRow>[] = [
       <template #cell-actions="{ row }">
         <div class="actions-cell">
           <button
-            class="btn btn-primary btn-sm"
+            class="btn-icon-cmd btn-trigger-action"
             :disabled="triggeringId === row.id"
+            :title="triggeringId === row.id ? 'Running automation...' : 'Trigger Rule Now'"
+            aria-label="Trigger Rule Now"
             @click="emit('trigger', row)"
           >
-            <span>{{ triggeringId === row.id ? '⚡ Running...' : '⚡ Trigger Now' }}</span>
+            <span>{{ triggeringId === row.id ? '⏳' : '⚡' }}</span>
           </button>
           <button
-            class="btn btn-secondary btn-sm"
+            class="btn-icon-cmd btn-edit-action"
+            title="Edit Rule Configuration"
+            aria-label="Edit Rule Configuration"
             @click="emit('edit', row)"
           >
-            <span>⚙️ Edit</span>
+            <span>⚙️</span>
           </button>
           <button
-            class="btn btn-crimson-delete btn-sm"
+            class="btn-icon-cmd btn-crimson-delete"
             :disabled="deletingId === row.id"
+            :title="deletingId === row.id ? 'Deleting rule...' : 'Delete Rule'"
+            aria-label="Delete Rule"
             @click="emit('delete', row.id)"
           >
-            <span>{{ deletingId === row.id ? 'Deleting...' : '🗑 Delete' }}</span>
+            <span>{{ deletingId === row.id ? '⏳' : '🗑' }}</span>
           </button>
         </div>
       </template>

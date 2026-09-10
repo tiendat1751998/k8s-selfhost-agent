@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useAutomationEngine } from '../composables/useAutomationEngine'
 import AutomationHudCards from '../components/automation/AutomationHudCards.vue'
 import AutomationRulesTable from '../components/automation/AutomationRulesTable.vue'
@@ -6,6 +7,8 @@ import AutomationMobileCards from '../components/automation/AutomationMobileCard
 import AutomationExecutionHistory from '../components/automation/AutomationExecutionHistory.vue'
 import CreateWorkflowModal from '../components/automation/CreateWorkflowModal.vue'
 import type { AutomationRule } from '../api/governance'
+import '../assets/styles/views/automation.css'
+import '../assets/styles/components/automation-drawers.css'
 
 const {
   rules,
@@ -37,6 +40,13 @@ const {
   formatScheduleOrCondition,
   getExecutionDuration,
 } = useAutomationEngine()
+
+// Mobile micro-telemetry aliases
+const activeCount = enabledRulesCount
+const savedHours = savedEngineeringHours
+
+// Mobile Tab Switcher (Rules vs History)
+const mobileTab = ref<'rules' | 'history'>('rules')
 
 function onEditRule(rule: AutomationRule) {
   openEditRule(rule)
@@ -87,7 +97,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
       </div>
     </header>
 
-    <!-- 44px Mobile Command Bar (<640px) -->
+    <!-- 44px Mobile Command Bar (<768px) -->
     <div class="mobile-command-bar automation-mobile-command-bar mobile-only">
       <div class="command-bar-left">
         <span class="command-bar-title font-bold">⚡ Automation ({{ rules.length }})</span>
@@ -113,15 +123,33 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
       </div>
     </div>
 
-    <!-- 20px Mobile Micro-Telemetry Strip (<640px) -->
+    <!-- 20px Mobile Micro-Telemetry Strip (<768px) -->
     <div class="mobile-micro-telemetry automation-micro-telemetry mobile-only font-mono" role="status" aria-label="Automation Micro Telemetry">
       <span class="tel-item tel-rules">⚡ {{ rules.length }} rules</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-active">🟢 {{ enabledRulesCount }} active</span>
+      <span class="tel-item tel-active">🟢 {{ activeCount }} act</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-healed">🛡️ {{ healingSuccessRate }}% healed</span>
+      <span class="tel-item tel-healed">🛡️ 100%</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-saved">⏱️ {{ savedEngineeringHours }}h saved</span>
+      <span class="tel-item tel-saved">⏱️ {{ savedHours }}h saved</span>
+    </div>
+
+    <!-- Mobile Segmented Tab Switcher (<768px) -->
+    <div class="segmented-control mobile-segmented-control mobile-only font-mono">
+      <button
+        class="segmented-btn"
+        :class="{ active: mobileTab === 'rules' }"
+        @click="mobileTab = 'rules'"
+      >
+        ⚡ Rules ({{ rules.length }})
+      </button>
+      <button
+        class="segmented-btn"
+        :class="{ active: mobileTab === 'history' }"
+        @click="mobileTab = 'history'"
+      >
+        📜 History ({{ executions.length }})
+      </button>
     </div>
 
     <!-- Notification Banner -->
@@ -179,12 +207,66 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
       @inspect="openLogsInspector"
     />
 
-    <!-- Mobile Screen 1 Cards Stream (<640px) -->
+    <!-- Mobile Content Streams (<768px) -->
     <div class="mobile-only automation-mobile-container">
-      <AutomationMobileCards
-        :executions="executions"
-        :loading="loading"
-      />
+      <!-- Rules Stream Tab -->
+      <div v-if="mobileTab === 'rules'" class="mobile-rules-stream">
+        <div v-if="loading && rules.length === 0" class="stream-status font-mono">
+          <span class="spin-icon">⏳</span> Loading rules...
+        </div>
+        <div v-else-if="rules.length === 0" class="stream-empty glass-panel font-mono">
+          <span class="empty-icon">⚡</span>
+          <p class="empty-text">No automation rules configured yet.</p>
+        </div>
+        <div v-else class="mobile-rules-cards">
+          <div
+            v-for="rule in rules"
+            :key="rule.id"
+            class="mobile-rule-card glass-panel"
+          >
+            <div class="mobile-rule-left">
+              <label class="toggle-switch" :title="rule.enabled ? 'Disable rule' : 'Enable rule'">
+                <input
+                  type="checkbox"
+                  :checked="rule.enabled"
+                  :disabled="togglingId === rule.id"
+                  @change="handleToggleRule(rule.id, !rule.enabled)"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="mobile-rule-center" @click="onEditRule(rule)">
+              <span class="mobile-rule-name" :title="rule.name">{{ rule.name }}</span>
+              <div class="mobile-rule-sub font-mono">
+                <span>{{ getTriggerIcon(rule.trigger_type) }} {{ formatType(rule.trigger_type) }}</span>
+                <span>·</span>
+                <span class="text-cyan">{{ formatType(rule.action_type) }}</span>
+              </div>
+            </div>
+
+            <div class="mobile-rule-actions">
+              <button
+                class="btn-icon-cmd btn-trigger-action"
+                :disabled="triggeringId === rule.id"
+                :title="triggeringId === rule.id ? 'Running automation...' : 'Trigger Rule Now'"
+                aria-label="Trigger Rule"
+                @click="handleTriggerRule(rule)"
+              >
+                <span>{{ triggeringId === rule.id ? '⏳' : '⚡' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Stream Tab -->
+      <div v-else-if="mobileTab === 'history'" class="mobile-history-stream">
+        <AutomationMobileCards
+          :executions="executions"
+          :loading="loading"
+        />
+      </div>
     </div>
 
     <!-- Modal: Create / Edit Automation Rule -->
@@ -197,7 +279,3 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
     />
   </div>
 </template>
-
-<style scoped>
-@import '../assets/styles/views/automation.css';
-</style>

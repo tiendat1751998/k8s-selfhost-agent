@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="automation-mobile-cards">
     <div v-if="loading" class="stream-status font-mono">
       <span class="spin-icon">⏳</span> Loading executions...
@@ -96,7 +96,3 @@ function formatDate(dateStr?: string): string {
   }
 }
 </script>
-
-<style scoped>
-@import '../../assets/styles/views/automation.css';
-</style>
