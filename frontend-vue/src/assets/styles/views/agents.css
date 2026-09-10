@@ -310,10 +310,19 @@
 .agents-mobile-command-bar, .agents-micro-telemetry, .mobile-only { display: none !important; }
 .desktop-only { display: block; }
 .view-header.desktop-only { display: flex; }
+.metrics-grid.desktop-only {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr);
+}
 
 /* Tablet (768px - 1023.98px) */
 @media (min-width: 768px) and (max-width: 1023.98px) {
-  .metrics-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .metrics-grid,
+  .metrics-grid.desktop-only {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 14px;
+  }
   .swarm-grid { grid-template-columns: repeat(2, 1fr); }
   .agents-mobile-command-bar, .agents-micro-telemetry, .mobile-only { display: none !important; }
   .desktop-only { display: block; }
@@ -322,7 +331,10 @@
 
 /* Mobile (<768px) */
 @media (max-width: 767.98px) {
-  .desktop-only { display: none !important; }
+  .desktop-only,
+  .metrics-grid.desktop-only {
+    display: none !important;
+  }
   .agents-mobile-command-bar { display: flex !important; height: 44px; min-height: 44px; }
   .agents-micro-telemetry { display: flex !important; height: 20px; min-height: 20px; }
   .mobile-only { display: flex !important; }

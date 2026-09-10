@@ -60,7 +60,7 @@ frontend-vue/src/assets/styles/views/catalog.css
 .section-box { padding: 16px; border-radius: 14px; display: flex; flex-direction: column; gap: 14px; width: 100%; box-sizing: border-box; }
 .table-box { padding: 0; overflow: hidden !important; width: 100%; }
 .table-box .data-table-container,
-.table-box .table-scroll-wrapper { overflow-x: hidden !important; width: 100%; }
+.table-box .table-scroll-wrapper { overflow-x: auto !important; max-width: 100%; width: 100%; }
 .table-box .data-table { table-layout: fixed; width: 100%; }
 .table-box .data-table th,
 .table-box .data-table td { overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }

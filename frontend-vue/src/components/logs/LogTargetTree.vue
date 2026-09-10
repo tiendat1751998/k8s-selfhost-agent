@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import type { LogEntry } from '../../stores/logStore'
 import { useInfraHosts } from '../../composables/useInfraHosts'
 import { api } from '../../api/client'
+import { fleetApi } from '../../api/fleet'
 
 export interface LogTarget {
   type: 'all' | 'node' | 'service'
@@ -25,7 +26,16 @@ export interface TargetServiceItem {
   type: string
 }
 
-const props = defineProps<{ modelValue: LogTarget; logs: LogEntry[] }>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: LogTarget
+    logs: LogEntry[]
+    cluster?: string
+  }>(),
+  {
+    cluster: '',
+  }
+)
 const emit = defineEmits<{ (e: 'update:modelValue', target: LogTarget): void; (e: 'select', target: LogTarget): void }>()
 
 const { hosts } = useInfraHosts()
@@ -48,7 +58,25 @@ function getServiceIcon(name: string): string {
 
 async function fetchClusterServices() {
   try {
-    const res = await api.get<any>('/k8s/default/resources', { kind: 'Service' })
+    // Verify active cluster exists before querying or query fleet
+    let targetCluster = props.cluster
+    if (!targetCluster) {
+      try {
+        const clusters = await fleetApi.list()
+        if (clusters && clusters.length > 0) {
+          targetCluster = clusters[0].name || clusters[0].id || ''
+        }
+      } catch {
+        // Fleet list failed or offline; continue without active cluster
+      }
+    }
+
+    if (!targetCluster) {
+      // No verified active cluster; retain default services and logs discovery without firing 404
+      return
+    }
+
+    const res = await api.get<any>(`/k8s/${encodeURIComponent(targetCluster)}/resources`, { kind: 'Service' })
     const items = Array.isArray(res) ? res : (res?.data || res?.items || [])
     if (Array.isArray(items) && items.length > 0) {
       apiServices.value = items.map((s: any) => {
@@ -62,9 +90,17 @@ async function fetchClusterServices() {
       })
     }
   } catch {
-    // API endpoint is optional; gracefully fallback to logs and default services
+    // Gracefully catch HTTP 404 and endpoint errors without unhandled console errors
+    // Baseline defaults and dynamic log stream discovery provide complete coverage
   }
 }
+
+watch(
+  () => props.cluster,
+  () => {
+    fetchClusterServices()
+  }
+)
 
 onMounted(() => {
   fetchClusterServices()

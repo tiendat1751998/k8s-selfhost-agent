@@ -258,6 +258,17 @@
       @remove-pair="removeConfigPair"
     />
 
+    <!-- Operation Toast Feedback -->
+    <div v-if="toastMessage" class="test-feedback-toast glass-panel" :class="toastMessage.type">
+      <div class="toast-header">
+        <span>{{ toastMessage.type === 'success' ? '✅ Success' : '⚠️ Action Notice' }}</span>
+        <button class="toast-close" @click="toastMessage = null">✕</button>
+      </div>
+      <div class="toast-body">
+        {{ toastMessage.text }}
+      </div>
+    </div>
+
     <!-- Test Feedback Toast -->
     <div v-if="testResult" class="test-feedback-toast glass-panel" :class="testResult.status">
       <div class="toast-header">
@@ -280,7 +291,7 @@ import PluginConfigModal from '../components/plugins/PluginConfigModal.vue'
 import InstallPluginModal from '../components/plugins/InstallPluginModal.vue'
 
 const {
-  plugins, stats, loading, error, viewMode, categoryCount, starterPresets, categories,
+  plugins, stats, loading, error, toastMessage, viewMode, categoryCount, starterPresets, categories,
   availablePermissionScopes, wasmSandboxStatus, searchQuery, selectedCategory,
   selectedStatus, selectedScope, filteredPlugins, togglingId, installingPreset,
   testResult, testBundleLoad, getRuntimeStatusLabel, getRuntimeStatusClass,

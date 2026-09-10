@@ -75,7 +75,7 @@ export const timezoneOptions = [
 
 export const languageOptions = [
   { value: 'en', label: '🇺🇸 English (United States)' },
-  { value: 'vi', label: '🇻🇳 Tiếng Việt (Vietnam)' },
+  { value: 'vi', label: '🇻🇳 Vietnamese (Vietnam)' },
 ]
 
 export const environmentOptions = [

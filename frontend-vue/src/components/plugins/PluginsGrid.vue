@@ -18,7 +18,7 @@
             <h4>{{ tpl.name }} <span class="badge" :class="categoryBadgeClass(tpl.category || 'devtools')">{{ tpl.category }}</span></h4>
             <p>{{ tpl.description }}</p>
           </div>
-          <button class="btn btn-sm btn-primary" :disabled="installingPreset">
+          <button class="btn btn-sm btn-primary" :disabled="installingPreset" @click.stop="$emit('installPreset', tpl)">
             + Install
           </button>
         </div>

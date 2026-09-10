@@ -22,6 +22,16 @@ export function usePlugins() {
   const selectedScope = ref('all')
   const togglingId = ref<string | null>(null)
   const installingPreset = ref(false)
+  const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
+
+  function showToast(text: string, type: 'success' | 'error' = 'success') {
+    toastMessage.value = { text, type }
+    setTimeout(() => {
+      if (toastMessage.value?.text === text) {
+        toastMessage.value = null
+      }
+    }, 4000)
+  }
 
   const wasmSandboxStatus = ref<WasmSandboxStatus>({
     activeSandboxes: 0,
@@ -160,7 +170,9 @@ export function usePlugins() {
       }
       wasmSandboxStatus.value.activeSandboxes = stats.value.enabled
     } catch (err: any) {
-      alert(`Failed to toggle plugin: ${err.message}`)
+      const msg = err.response?.data?.message || err.message || 'Unknown error'
+      showToast(`Failed to toggle plugin: ${msg}`, 'error')
+      error.value = `Failed to toggle plugin: ${msg}`
     } finally {
       togglingId.value = null
     }
@@ -170,9 +182,12 @@ export function usePlugins() {
     installingPreset.value = true
     try {
       await pluginsApi.create(preset)
+      showToast(`Plugin "${preset.name}" installed successfully!`, 'success')
       await loadData()
     } catch (err: any) {
-      alert(`Failed to install preset: ${err.message}`)
+      const msg = err.response?.data?.message || err.message || 'Unknown error'
+      showToast(`Failed to install preset: ${msg}`, 'error')
+      error.value = `Failed to install preset: ${msg}`
     } finally {
       installingPreset.value = false
     }
@@ -287,9 +302,12 @@ export function usePlugins() {
       try {
         await pluginsApi.delete(p.id)
         pluginLoader.unloadPlugin(p.id)
+        showToast(`Plugin "${p.name}" deleted successfully`, 'success')
         await loadData()
       } catch (err: any) {
-        alert(`Failed to delete plugin: ${err.message}`)
+        const msg = err.response?.data?.message || err.message || 'Unknown error'
+        showToast(`Failed to delete plugin: ${msg}`, 'error')
+        error.value = `Failed to delete plugin: ${msg}`
       }
     }
   }
@@ -347,7 +365,7 @@ export function usePlugins() {
   })
 
   return {
-    plugins, stats, loading, error, viewMode, categoryCount, starterPresets, categories,
+    plugins, stats, loading, error, toastMessage, showToast, viewMode, categoryCount, starterPresets, categories,
     availablePermissionScopes, wasmSandboxStatus, searchQuery, selectedCategory,
     selectedStatus, selectedScope, filteredPlugins, togglingId, installingPreset,
     testResult, testBundleLoad, hotReloadPlugin, getRuntimeStatusLabel, getRuntimeStatusClass,

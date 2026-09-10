@@ -96,7 +96,8 @@ function onDelete(row: Record<string, unknown>) {
 
 <style scoped>
 :deep(.table-scroll-wrapper) {
-  overflow-x: hidden !important;
+  overflow-x: auto !important;
+  max-width: 100%;
 }
 
 :deep(.data-table) {

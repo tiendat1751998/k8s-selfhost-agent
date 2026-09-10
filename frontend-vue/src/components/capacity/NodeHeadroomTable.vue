@@ -141,7 +141,8 @@ const emit = defineEmits<{
 <style scoped>
 :deep(.node-table-wrapper),
 .node-table-wrapper {
-  overflow-x: hidden !important;
+  overflow-x: auto !important;
+  max-width: 100%;
   width: 100%;
 }
 .node-matrix-table {

@@ -1171,7 +1171,7 @@ input:checked + .toggle-slider:before {
 }
 
 /* Responsive Overhaul for Mobile & Tablets */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .view-header {
     flex-direction: column;
     align-items: stretch;
