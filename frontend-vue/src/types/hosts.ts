@@ -53,7 +53,7 @@ export const hostTypeDefinitions: HostTypeDefinition[] = [
     label: 'K8s-Agent',
     icon: '📡',
     color: 'cyan',
-    badgeClass: 'badge-cyan',
+    badgeClass: 'badge-slate text-muted',
     desc: 'System metrics telemetry (CPU/RAM/Disk/Network) via host daemon',
     placeholder: 'http://10.10.10.200:9100',
     hint: '💡 Run `./deploy-agent.sh user@server-ip` to install agent daemon'
@@ -63,7 +63,7 @@ export const hostTypeDefinitions: HostTypeDefinition[] = [
     label: 'Docker Engine',
     icon: '🐳',
     color: 'blue',
-    badgeClass: 'badge-blue',
+    badgeClass: 'badge-slate text-muted',
     desc: 'Standalone Docker Engine socket / TCP container manager',
     placeholder: 'tcp://10.10.10.133:2375',
     hint: '💡 Use port 2376 for TLS mTLS authenticated socket endpoints'
@@ -73,7 +73,7 @@ export const hostTypeDefinitions: HostTypeDefinition[] = [
     label: 'Kubernetes API',
     icon: '☸️',
     color: 'purple',
-    badgeClass: 'badge-purple',
+    badgeClass: 'badge-slate text-muted',
     desc: 'Direct Kubernetes Control Plane API Server endpoint',
     placeholder: 'https://k8s-master:6443',
     hint: '💡 Connects directly to API server with optional client certificates'
@@ -83,7 +83,7 @@ export const hostTypeDefinitions: HostTypeDefinition[] = [
     label: 'Prometheus Target',
     icon: '📊',
     color: 'orange',
-    badgeClass: 'badge-orange',
+    badgeClass: 'badge-slate text-muted',
     desc: 'Prometheus metrics scraping and time-series query target',
     placeholder: 'http://prometheus:9090',
     hint: '💡 Validates `/-/healthy` and build status endpoints'
@@ -93,7 +93,7 @@ export const hostTypeDefinitions: HostTypeDefinition[] = [
     label: 'Git Repository',
     icon: '🔗',
     color: 'green',
-    badgeClass: 'badge-emerald',
+    badgeClass: 'badge-slate text-muted',
     desc: 'GitHub, GitLab, Gitea GitOps repository endpoint',
     placeholder: 'https://github.com/org/repo',
     hint: '💡 Git repository URL used for automated pipeline synchronization'
@@ -103,7 +103,7 @@ export const hostTypeDefinitions: HostTypeDefinition[] = [
     label: 'Database Server',
     icon: '🗄️',
     color: 'amber',
-    badgeClass: 'badge-amber',
+    badgeClass: 'badge-slate text-muted',
     desc: 'PostgreSQL, MySQL, Redis, or MongoDB connection target',
     placeholder: 'postgresql://user:pass@host:5432/db',
     hint: '💡 Accepts standard DSN or host:port connection targets'
@@ -113,7 +113,7 @@ export const hostTypeDefinitions: HostTypeDefinition[] = [
     label: 'Custom HTTP',
     icon: '⚙️',
     color: 'gray',
-    badgeClass: 'badge-slate',
+    badgeClass: 'badge-slate text-muted',
     desc: 'Generic HTTP microservice or health check target',
     placeholder: 'https://service:8080/health',
     hint: '💡 Accepts any HTTP/HTTPS health verification URI'
