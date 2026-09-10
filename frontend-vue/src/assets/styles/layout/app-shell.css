@@ -224,8 +224,8 @@
 /* Command Palette Modal Content */
 .command-palette-content { display: flex; flex-direction: column; gap: 14px; }
 .palette-input-wrap { position: relative; display: flex; align-items: center; }
-.palette-search-icon { position: absolute; left: 14px; font-size: 14px; color: var(--text-muted); }
-.palette-search-input { width: 100%; padding: 12px 38px 12px 42px; font-size: 14px; }
+.palette-search-icon { position: absolute; left: 16px; font-size: 14px; color: var(--text-muted); }
+.palette-search-input { width: 100%; padding: 12px 38px 12px 48px; font-size: 14px; }
 .palette-clear { position: absolute; right: 14px; cursor: pointer; color: var(--text-muted); }
 .palette-results { max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .palette-item {
@@ -379,3 +379,4 @@ button:focus-visible,
 .palette-item:focus-visible,
 select:focus-visible,
 input:focus-visible { outline: 2px solid var(--accent-cyan, #38bdf8) !important; outline-offset: 2px !important; }
+\n.mobile-tips { display: none; }\n@media (max-width: 640px) {\n  .desktop-tips { display: none; }\n  .mobile-tips { display: inline; }\n  .p-item-title-row {\n    flex-direction: column-reverse;\n    align-items: flex-start;\n    gap: 2px;\n  }\n  .p-item-group {\n    font-size: 9px;\n    padding: 2px 6px;\n    display: inline-block;\n  }\n}\n

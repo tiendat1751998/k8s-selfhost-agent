@@ -182,14 +182,14 @@
 
 @media (max-width: 640px) {
   .modal-drawer-backdrop {
-    padding: 10px !important;
+    padding: 0 !important;\n    align-items: flex-end !important;
   }
 
   .modal-panel {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    border-radius: 12px;
+    border-radius: 18px 18px 0 0 !important;\n    border-bottom: none !important;\n    max-height: 85vh !important;
   }
 
   .drawer-panel {
