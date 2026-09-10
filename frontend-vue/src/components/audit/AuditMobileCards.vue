@@ -52,6 +52,7 @@ function formatRelativeTime(d: string): string {
       class="mobile-audit-card glass-panel"
       role="button"
       tabindex="0"
+      aria-label="View audit event payload"
       @click="$emit('select-payload', entry)"
       @keydown.enter="$emit('select-payload', entry)"
     >
@@ -65,7 +66,7 @@ function formatRelativeTime(d: string): string {
         <span class="mobile-card-time font-mono">{{ formatRelativeTime(entry.timestamp) }}</span>
       </div>
 
-      <!-- Row 2: Actor + Target Resource + Payload Button -->
+      <!-- Row 2: Actor + Target Resource + Payload Button (>=32px) -->
       <div class="mobile-card-row-bottom">
         <div class="mobile-card-bottom-left">
           <span class="mobile-actor font-mono">👤 {{ entry.actor }}</span>
@@ -77,6 +78,7 @@ function formatRelativeTime(d: string): string {
         <button
           class="mobile-payload-btn font-mono"
           type="button"
+          aria-label="Inspect Event Payload"
           @click.stop="$emit('select-payload', entry)"
         >
           🔍 Payload
