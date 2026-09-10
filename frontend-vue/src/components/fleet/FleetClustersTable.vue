@@ -20,6 +20,13 @@ const emit = defineEmits<{
   (e: 'import'): void
 }>()
 
+const CLUSTER_ACTIONS: ActionItem[] = [
+  { id: 'discover', label: 'Discover Resources', icon: 'search' },
+  { id: 'upgrade', label: 'Upgrade Cluster', icon: 'arrow-up' },
+  { id: 'sep-1', label: '', separator: true },
+  { id: 'remove', label: 'Evict Cluster', icon: 'trash', variant: 'danger' },
+]
+
 const clusterColumns: Column<Cluster>[] = [
   { key: 'name', label: 'Cluster Name', sortable: true },
   { key: 'group', label: 'Fleet Tier', width: '100px', sortable: true },
@@ -29,15 +36,6 @@ const clusterColumns: Column<Cluster>[] = [
   { key: 'health_status', label: 'Health Status', width: '110px', sortable: true },
   { key: 'actions', label: 'Operations', width: '120px', align: 'right' },
 ]
-
-function getClusterActions(_cluster: Cluster): ActionItem[] {
-  return [
-    { id: 'discover', label: 'Discover Resources', icon: 'search' },
-    { id: 'upgrade', label: 'Upgrade Cluster', icon: 'arrow-up' },
-    { id: 'sep-1', label: '', separator: true },
-    { id: 'remove', label: 'Evict Cluster', icon: 'trash', variant: 'danger' },
-  ]
-}
 
 function handleClusterAction(actionId: string, cluster: Cluster) {
   if (actionId === 'discover') emit('discover', cluster)
@@ -109,7 +107,7 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
           </button>
           <ActionDropdown
             size="xs"
-            :items="getClusterActions(row)"
+            :items="CLUSTER_ACTIONS"
             :disabled="actionLoading === row.id"
             @select="(actionId) => handleClusterAction(actionId, row)"
           />

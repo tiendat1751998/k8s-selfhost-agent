@@ -88,7 +88,8 @@ watch(
     if (typeof document !== 'undefined') {
       document.body.style.overflow = isOpen ? 'hidden' : ''
     }
-  }
+  },
+  { immediate: true }
 )
 
 onMounted(() => {
@@ -192,7 +193,7 @@ onUnmounted(() => {
   </Teleport>
 </template>
 
-<style scoped>
+<style>
 .slide-over-backdrop {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
