@@ -32,7 +32,7 @@ type fakeLoggingService struct {
 	tailErr      error
 }
 
-func (f *fakeLoggingService) IngestBatch(ctx context.Context, entries []logging.LogEntry) error {
+func (f *fakeLoggingService) Ingest(ctx context.Context, entries []logging.LogEntry) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.ingestErr != nil {
@@ -70,7 +70,7 @@ func (f *fakeLoggingService) GetHistogram(ctx context.Context, filter logging.Lo
 	return f.histogramRes, nil
 }
 
-func (f *fakeLoggingService) Tail(ctx context.Context, filter logging.LogFilter) (<-chan logging.LogEntry, error) {
+func (f *fakeLoggingService) TailLogs(ctx context.Context, filter logging.LogFilter) (<-chan logging.LogEntry, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lastFilter = filter
@@ -94,27 +94,18 @@ func TestLogHandler_Ingest_Batch(t *testing.T) {
 	fake := &fakeLoggingService{}
 	h := NewLogHandler(fake)
 
-	now := time.Now().UTC()
 	entries := []logging.LogEntry{
 		{
-			Timestamp:     now,
-			ClusterID:     "cluster-1",
-			Namespace:     "prod",
-			PodName:       "api-pod-1",
-			ContainerName: "api",
-			Stream:        "stdout",
-			LogLevel:      logging.LogLevelInfo,
-			Message:       "batch entry 1",
+			ClusterID: "cluster-1",
+			Namespace: "prod",
+			PodName:   "api-pod-1",
+			Message:   "batch entry 1",
 		},
 		{
-			Timestamp:     now,
-			ClusterID:     "cluster-1",
-			Namespace:     "prod",
-			PodName:       "api-pod-2",
-			ContainerName: "api",
-			Stream:        "stderr",
-			LogLevel:      logging.LogLevelError,
-			Message:       "batch entry 2",
+			ClusterID: "cluster-1",
+			Namespace: "prod",
+			PodName:   "api-pod-2",
+			Message:   "batch entry 2",
 		},
 	}
 
@@ -157,14 +148,10 @@ func TestLogHandler_Ingest_Single(t *testing.T) {
 	h := NewLogHandler(fake)
 
 	entry := logging.LogEntry{
-		Timestamp:     time.Now().UTC(),
-		ClusterID:     "cluster-1",
-		Namespace:     "kube-system",
-		PodName:       "coredns-xyz",
-		ContainerName: "coredns",
-		Stream:        "stdout",
-		LogLevel:      logging.LogLevelWarn,
-		Message:       "dns query timeout",
+		ClusterID: "cluster-1",
+		Namespace: "kube-system",
+		PodName:   "coredns-xyz",
+		Message:   "dns query timeout",
 	}
 
 	body, _ := json.Marshal(entry)
@@ -185,6 +172,34 @@ func TestLogHandler_Ingest_Single(t *testing.T) {
 	}
 	if fake.ingested[0].TenantID != "tenant-single" {
 		t.Errorf("expected tenant-single, got %s", fake.ingested[0].TenantID)
+	}
+}
+
+func TestLogHandler_Ingest_NoTenant_Rejected(t *testing.T) {
+	fake := &fakeLoggingService{}
+	h := NewLogHandler(fake)
+
+	entry := logging.LogEntry{
+		ClusterID: "cluster-1",
+		Message:   "no tenant",
+	}
+	body, _ := json.Marshal(entry)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/logs/ingest", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleIngest(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when tenant context is missing, got %d", w.Code)
+	}
+
+	// But works if X-Tenant-ID header is provided
+	reqWithHeader := httptest.NewRequest(http.MethodPost, "/api/v1/logs/ingest", bytes.NewReader(body))
+	reqWithHeader.Header.Set("X-Tenant-ID", "tenant-header")
+	w2 := httptest.NewRecorder()
+
+	h.HandleIngest(w2, reqWithHeader)
+	if w2.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 when X-Tenant-ID header is set, got %d", w2.Code)
 	}
 }
 

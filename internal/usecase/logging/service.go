@@ -82,11 +82,6 @@ func (s *Service) TailLogs(ctx context.Context, filter logging.LogFilter) (<-cha
 	return s.repo.TailLogs(ctx, sanitized)
 }
 
-// Tail opens a live streaming channel, delegating to TailLogs.
-func (s *Service) Tail(ctx context.Context, filter logging.LogFilter) (<-chan logging.LogEntry, error) {
-	return s.TailLogs(ctx, filter)
-}
-
 // Ingest sanitizes and streams logs into storage, overriding entry tenant_id with context tenant.
 func (s *Service) Ingest(ctx context.Context, entries []logging.LogEntry) error {
 	tenantID, err := s.resolveTenant(ctx)
@@ -102,9 +97,4 @@ func (s *Service) Ingest(ctx context.Context, entries []logging.LogEntry) error 
 	}
 
 	return s.repo.IngestBatch(ctx, entries)
-}
-
-// IngestBatch persists log entries, delegating to Ingest.
-func (s *Service) IngestBatch(ctx context.Context, entries []logging.LogEntry) error {
-	return s.Ingest(ctx, entries)
 }

@@ -81,7 +81,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(60 * time.Second))
 	r.Use(chimw.Heartbeat("/ping"))
-	r.Use(mw.RequestBodyLimit(10 << 20))
+	r.Use(mw.RequestBodyLimit(1 << 20))
 	r.Use(mw.StructuredLogger)
 	r.Use(mw.CORS)
 	r.Use(mw.Metrics)
@@ -365,7 +365,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/ecosystem", platform.Ecosystem.RegisterRoutes)
 			}
 			if platform.CentralizedLogs != nil {
-				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator", "logs:write")).Route("/logs", platform.CentralizedLogs.RegisterRoutes)
+				r.With(mw.RequestBodyLimit(10 << 20)).With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator", "logs:write")).Route("/logs", platform.CentralizedLogs.RegisterRoutes)
 			} else if platform.LogStream != nil {
 				r.Get("/logs/stream", platform.LogStream.ServeHTTP)
 			}

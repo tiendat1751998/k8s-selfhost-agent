@@ -1,4 +1,4 @@
-﻿apiVersion: v1
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: vector-edge-config
@@ -51,13 +51,13 @@ data:
           structured, s_err = parse_json(.message)
           if s_err == null {
             .log_level = downcase(string(structured.level ?? structured.log_level ?? "info"))
-          } else if match(.message, r'(?i)\b(fatal|panic)\b') {
+          } else if match(.message, r'(?i)(fatal|panic)') {
             .log_level = "fatal"
-          } else if match(.message, r'(?i)\b(error|err)\b') {
+          } else if match(.message, r'(?i)(error|err)') {
             .log_level = "error"
-          } else if match(.message, r'(?i)\b(warn|warning)\b') {
+          } else if match(.message, r'(?i)(warn|warning)') {
             .log_level = "warn"
-          } else if match(.message, r'(?i)\b(debug|trace)\b') {
+          } else if match(.message, r'(?i)(debug|trace)') {
             .log_level = "debug"
           } else {
             .log_level = "info"
@@ -72,6 +72,9 @@ data:
         inputs: ["enrich_edge_logs"]
         uri: http://k8sselfhost-server:8080/api/v1/logs/ingest
         method: post
+        auth:
+          strategy: bearer
+          token: ""
         encoding:
           codec: json
         buffer:
@@ -105,13 +108,20 @@ spec:
         - name: vector
           image: timberio/vector:0.38.0-alpine
           args: ["--config", "/etc/vector/vector.yaml"]
+          env:
+            - name: VECTOR_INGEST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vector-ingest-secret
+                  key: token
+                  optional: true
           resources:
             requests:
               cpu: 10m
-              memory: 32Mi
+              memory: 64Mi
             limits:
               cpu: 100m
-              memory: 64Mi
+              memory: 128Mi
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
@@ -124,6 +134,9 @@ spec:
               readOnly: true
             - name: buffer-storage
               mountPath: /var/lib/vector
+            - name: var-log
+              mountPath: /var/log
+              readOnly: true
             - name: var-log-pods
               mountPath: /var/log/pods
               readOnly: true
@@ -135,6 +148,9 @@ spec:
           hostPath:
             path: /var/lib/vector-edge
             type: DirectoryOrCreate
+        - name: var-log
+          hostPath:
+            path: /var/log
         - name: var-log-pods
           hostPath:
             path: /var/log/pods
