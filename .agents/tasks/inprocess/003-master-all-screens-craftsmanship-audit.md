@@ -29,6 +29,11 @@
    - Prohibit neon badge storms (no 7-pill color explosions). Use subtle slate/neutral badges.
    - Sanitize all typos (`k8smater` -> `k8smaster`).
 
+6. **Standardized Action Toolbars (Zero Button Spam / Benchmark Overview Standard)**:
+   - Prohibit repeating 5-6 chunky text buttons across every row in tables (as seen in user uploaded images).
+   - Every table must standardize on: 2 quick-access primary actions (e.g. `📄 Logs`, `🔍 Details`) + a sleek `[ ⋯ ]` dropdown / drawer menu for secondary actions, or compact 30x30px icon buttons with tooltips.
+   - Benchmark: Every screen must strictly achieve the elegance, clean typography, and zero-clutter standard of the Cluster Overview (`/`) screen.
+
 ---
 
 ## 📋 34-SCREEN AUDIT & EXECUTION MATRIX
