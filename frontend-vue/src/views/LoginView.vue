@@ -2,6 +2,17 @@
   <div class="login-page">
     <div class="login-background-glow" aria-hidden="true"></div>
 
+    <!-- Mobile 40-44px Command Bar (<768px) -->
+    <header class="login-mobile-command-bar mobile-only" role="banner">
+      <div class="command-bar-left">
+        <span class="command-bar-icon">🔐</span>
+        <span class="command-bar-title font-bold">Enterprise Access</span>
+      </div>
+      <div class="command-bar-right">
+        <span class="command-bar-badge font-mono">TLS v1.3</span>
+      </div>
+    </header>
+
     <main class="login-container">
       <!-- Left-side branding / status mesh hero banner -->
       <LoginBrandingHero />
@@ -33,7 +44,7 @@
 
         <!-- Steps Transition -->
         <Transition name="step-fade" mode="out-in">
-          <!-- STEP 1: Email & Password -->
+          <!-- STEP 1: Email & Password + Enterprise SSO Gateway -->
           <LoginFormCard
             v-if="step === 'credentials'"
             key="step-creds"
@@ -42,6 +53,7 @@
             v-model:remember-me="rememberMe"
             :loading="isLoading"
             @submit="handleCredentialsSubmit"
+            @sso-login="handleSsoLogin"
           />
 
           <!-- STEP 2: TOTP / Recovery MFA -->
@@ -61,6 +73,22 @@
           />
         </Transition>
 
+        <!-- Security Disclaimer Badges -->
+        <div class="security-disclaimer-badges" role="complementary" aria-label="Security Disclaimers">
+          <div class="sec-badge" title="FIPS 140-3 Cryptographic Boundary">
+            <span class="sec-badge-icon">🛡️</span>
+            <span class="sec-badge-text">FIPS 140-3 Enforced</span>
+          </div>
+          <div class="sec-badge" title="ZeroTrust Multi-Factor Identity Gate">
+            <span class="sec-badge-icon">🔒</span>
+            <span class="sec-badge-text">ZeroTrust MFA Gate</span>
+          </div>
+          <div class="sec-badge" title="Immutable SOC2 Audit Stream">
+            <span class="sec-badge-icon">📋</span>
+            <span class="sec-badge-text">SOC2 Audit Stream</span>
+          </div>
+        </div>
+
         <!-- Footer Info -->
         <footer class="login-footer">
           <span>Dual-Sync DR • Trivy Gate • Real-Time Stream</span>
@@ -72,6 +100,7 @@
 
 <script setup lang="ts">
 import '../assets/styles/views/login.css'
+import '../assets/styles/components/login-sso.css'
 import { useLoginAuth } from '../composables/useLoginAuth'
 import LoginBrandingHero from '../components/auth/LoginBrandingHero.vue'
 import LoginFormCard from '../components/auth/LoginFormCard.vue'
@@ -89,6 +118,7 @@ const {
   handleCredentialsSubmit,
   handleTotpSubmit,
   handleRecoverySubmit,
+  handleSsoLogin,
   switchToRecovery,
   switchToTotp,
   backToCredentials,
