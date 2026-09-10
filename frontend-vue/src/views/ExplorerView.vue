@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import MetricCard from '../components/ui/MetricCard.vue'
 import EventsTimeline from '../components/k8s/EventsTimeline.vue'
-import ExplorerSidebar from '../components/explorer/ExplorerSidebar.vue'
+
 import ExplorerResourceTable from '../components/explorer/ExplorerResourceTable.vue'
 import ExplorerMobileCards from '../components/explorer/ExplorerMobileCards.vue'
 import ExplorerDetailDrawer from '../components/explorer/ExplorerDetailDrawer.vue'
@@ -34,8 +34,6 @@ const {
   selectedNamespace,
   selectedKind,
   resources,
-  kindSearchQuery,
-  isMobileSidebarOpen,
   filteredKindCategories,
   allKindItems,
   totalInKind,
@@ -131,23 +129,49 @@ onMounted(async () => {
 
 <template>
   <div class="explorer-layout animate-fade-in">
-    <!-- Desktop Left Sidebar -->
-    <ExplorerSidebar
-      :clusters="clusters"
-      v-model:selected-cluster="selectedCluster"
-      :namespaces="namespaces"
-      v-model:selected-namespace="selectedNamespace"
-      :selected-kind="selectedKind"
-      v-model:kind-search-query="kindSearchQuery"
-      :filtered-kind-categories="filteredKindCategories"
-      v-model:is-mobile-sidebar-open="isMobileSidebarOpen"
-      @select-kind="selectKind"
-      @import-cluster="showImportModal = true"
-      @new-namespace="showNewNsModal = true"
-    />
-
-    <!-- Mobile Sidebar Backdrop -->
-    <div v-if="isMobileSidebarOpen" class="sidebar-backdrop" @click="isMobileSidebarOpen = false"></div>
+    <!-- Top Resource Bar (Replaces Sidebar) -->
+    <div class="top-resource-bar glass-panel desktop-only">
+      <div class="top-selectors">
+        <div class="selector-group">
+          <span class="selector-label">Cluster</span>
+          <div class="selector-input-wrap">
+            <select v-model="selectedCluster" class="input-glass top-select font-mono">
+              <option v-for="c in clusters" :key="c.id || c.name" :value="c.name || c.id">&#127760; {{ c.name || c.id }}</option>
+            </select>
+            <button type="button" class="btn-icon" @click="showImportModal = true" title="Import Cluster">+</button>
+          </div>
+        </div>
+        <div class="selector-divider"></div>
+        <div class="selector-group">
+          <span class="selector-label">Namespace</span>
+          <div class="selector-input-wrap">
+            <select v-model="selectedNamespace" class="input-glass top-select font-mono">
+              <option value="all">&#127760; All Namespaces</option>
+              <option v-for="ns in namespaces" :key="ns.name" :value="ns.name">&#128193; {{ ns.name }}</option>
+            </select>
+            <button type="button" class="btn-icon" @click="showNewNsModal = true" title="New Namespace">+</button>
+          </div>
+        </div>
+        <div class="selector-divider"></div>
+        <div class="selector-group kind-selectors">
+          <span class="selector-label">Resource</span>
+          <div class="kind-dropdowns">
+            <select
+              v-for="category in filteredKindCategories"
+              :key="category.title"
+              class="input-glass top-select font-mono dropdown-selector"
+              :class="{ 'active-category': category.items.some(i => i.kind === selectedKind) }"
+              @change="selectKind(($event.target as HTMLSelectElement).value as any)"
+            >
+              <option value="" disabled :selected="!category.items.some(i => i.kind === selectedKind)">{{ category.title }} &#9662;</option>
+              <option v-for="item in category.items" :key="item.kind" :value="item.kind" :selected="selectedKind === item.kind">
+                {{ item.label }}
+              </option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <main class="explorer-main">
       <!-- Mobile 44px Command Bar (< 640px) -->
@@ -169,9 +193,7 @@ onMounted(async () => {
           <button type="button" class="btn-mobile-cmd" title="Create Resource" aria-label="Create Resource" @click="showCreateModal = true">
             ➕
           </button>
-          <button type="button" class="btn-mobile-cmd" title="Menu" aria-label="Menu" @click="isMobileSidebarOpen = !isMobileSidebarOpen">
-            ☰
-          </button>
+          
         </div>
       </div>
 
