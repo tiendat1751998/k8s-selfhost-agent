@@ -97,9 +97,9 @@
 - [x] Verification: Unit tests for handlers (9/9 PASS, Reviewer APPROVED, QA PASS, Merged)
 
 ### Loop 4: Frontend LogStreamView Modernization
-- [ ] Task 4.1: Create `frontend-vue/src/composables/useLogStream.ts` (< 250 lines)
-- [ ] Task 4.2: Refactor `frontend-vue/src/views/LogStreamView.vue` (< 450 lines)
-- [ ] Verification: `npm.cmd run build` passes with zero errors
+- [x] Task 4.1: Create `frontend-vue/src/api/logging.ts` (83 lines, typed ClickHouse endpoints) & update `logStore.ts` (234 lines, timer cleanup, query params, memory capping)
+- [x] Task 4.2: Refactor `frontend-vue/src/views/LogStreamView.vue` (341 lines, Live Tail vs Historical Mode, Sparkline mini-histogram, node querying, Load More pagination)
+- [x] Verification: `npm.cmd run build` passes with zero errors (Reviewer APPROVED, QA PASS, Merged)
 
 ### Loop 5: Monolith Shredding (< 500 lines per file)
 - [ ] Task 5.1: Shred `internal/domain/scaffold/builtin.go` (780 lines -> modular files < 400 lines)
