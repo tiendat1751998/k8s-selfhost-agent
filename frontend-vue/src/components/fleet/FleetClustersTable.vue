@@ -60,7 +60,7 @@ const clusterColumns: Column<Cluster>[] = [
       </template>
 
       <template #cell-group="{ row }">
-        <span class="tier-pill font-mono">{{ row.group || 'default' }}</span>
+        <span class="tier-pill">{{ row.group || 'default' }}</span>
       </template>
 
       <template #cell-provider="{ row }">
@@ -117,3 +117,10 @@ const clusterColumns: Column<Cluster>[] = [
     </DataTable>
   </div>
 </template>
+
+<style scoped>
+.tier-pill {
+  font-family: var(--font-sans);
+  font-weight: 600;
+}
+</style>

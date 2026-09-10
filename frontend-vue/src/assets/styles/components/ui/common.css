@@ -187,10 +187,10 @@
   align-items: center;
   gap: 6px;
   border-radius: 9999px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
 }
 
 .badge-sm {

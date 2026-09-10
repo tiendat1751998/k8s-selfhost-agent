@@ -122,7 +122,7 @@ async function onCreateApp(payload: DeploymentApp) {
           v-model="searchQuery"
           type="text"
           placeholder="Filter workloads..."
-          class="input-glass mobile-search-compact font-mono"
+          class="input-glass mobile-search-compact"
         />
         <button v-if="searchQuery" type="button" class="mobile-search-clear" @click="searchQuery = ''">✕</button>
       </div>

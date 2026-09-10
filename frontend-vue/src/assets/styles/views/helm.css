@@ -137,7 +137,7 @@
 }
 .toolbar-search { position: relative; flex: 1; min-width: 260px; display: flex; align-items: center; }
 .toolbar-search .search-icon { position: absolute; left: 12px; font-size: 13px; opacity: 0.6; pointer-events: none; }
-.toolbar-search .search-input { width: 100%; padding: 8px 32px 8px 34px; font-size: 13px; border-radius: 8px; }
+.toolbar-search .search-input { width: 100%; padding: 8px 32px 8px 36px; font-size: 13px; border-radius: 8px; }
 .toolbar-search .btn-clear { position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; }
 .toolbar-filters { display: flex; align-items: center; gap: 12px; }
 .filter-group { display: flex; align-items: center; gap: 6px; }

@@ -152,7 +152,7 @@ const searchPlaceholder = computed(() => {
         <input
           v-model="searchQuery"
           type="search"
-          class="mobile-search-input font-mono"
+          class="mobile-search-input"
           :placeholder="searchPlaceholder"
           autofocus
         />
@@ -266,7 +266,7 @@ const searchPlaceholder = computed(() => {
         <input
           v-model="searchQuery"
           type="search"
-          class="swarm-search-input font-mono"
+          class="swarm-search-input"
           :placeholder="searchPlaceholder"
         />
         <button
