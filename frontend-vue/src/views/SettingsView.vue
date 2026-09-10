@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import '../assets/styles/views/settings.css'
+import '../assets/styles/components/settings-tabs.css'
 import MetricCard from '../components/ui/MetricCard.vue'
 import SettingsGeneralTab from '../components/settings/SettingsGeneralTab.vue'
 import SettingsSecurityTab from '../components/settings/SettingsSecurityTab.vue'
@@ -8,10 +10,13 @@ import SettingsNotificationsTab from '../components/settings/SettingsNotificatio
 import SettingsApiKeysTab from '../components/settings/SettingsApiKeysTab.vue'
 import AboutSettingsTab from '../components/settings/AboutSettingsTab.vue'
 import Disable2FAModal from '../components/settings/Disable2FAModal.vue'
+import SettingsMobileNav from '../components/settings/SettingsMobileNav.vue'
 import {
   useSettings,
   timezoneOptions,
   languageOptions,
+  type TabKey,
+  type CategoryKey,
 } from '../composables/useSettings'
 
 const {
@@ -21,6 +26,7 @@ const {
   saving,
   statusMessage,
   saveCategory,
+  saveAllSettings,
   resetCategoryToDefaults,
   loadSettings,
   totpStatus,
@@ -31,12 +37,55 @@ const {
   disabling2FA,
   disableError,
   handleDisable2FA,
+  isDirtyCategory,
 } = useSettings()
+
+const tabsList: { id: TabKey; label: string; icon: string; category?: CategoryKey; count?: number }[] = [
+  { id: 'general', label: 'General', icon: '⚙️', category: 'platform' },
+  { id: 'security', label: 'Security', icon: '🛡️', category: 'security' },
+  { id: 'tenancy', label: 'Tenancy', icon: '🏢', category: 'tenancy' },
+  { id: 'notifications', label: 'Notifications', icon: '🔔', category: 'notifications' },
+  { id: 'apikeys', label: 'API Keys', icon: '🔑', category: 'apikeys', count: 3 },
+  { id: 'about', label: 'About', icon: 'ℹ️' },
+]
+
+const activeTabLabel = computed(() => {
+  const found = tabsList.find(t => t.id === activeTab.value)
+  return found ? found.label : 'General'
+})
+
+function handleMobileSave() {
+  if (activeTab.value === 'general') {
+    saveCategory('platform')
+  } else if (activeTab.value === 'security') {
+    saveCategory('security')
+  } else if (activeTab.value === 'tenancy') {
+    saveCategory('tenancy')
+  } else if (activeTab.value === 'notifications') {
+    saveCategory('notifications')
+  } else {
+    saveAllSettings()
+  }
+}
+
+function handleMobileReset() {
+  if (activeTab.value === 'general') {
+    resetCategoryToDefaults('platform')
+  } else if (activeTab.value === 'security') {
+    resetCategoryToDefaults('security')
+  } else if (activeTab.value === 'tenancy') {
+    resetCategoryToDefaults('tenancy')
+  } else if (activeTab.value === 'notifications') {
+    resetCategoryToDefaults('notifications')
+  } else {
+    loadSettings()
+  }
+}
 </script>
 
 <template>
   <div class="view-container animate-fade-in">
-    <!-- View Header -->
+    <!-- View Header (Desktop/Tablet >=768px) -->
     <div class="view-header desktop-header desktop-only">
       <div>
         <div class="view-tag">
@@ -56,7 +105,7 @@ const {
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 40-44px Command Bar (<768px) with 32x32px Action Buttons -->
     <div class="settings-mobile-command-bar mobile-only">
       <div class="command-bar-left">
         <span class="command-bar-title font-bold">⚙️ Settings</span>
@@ -65,26 +114,44 @@ const {
         <button
           type="button"
           class="btn-icon-cmd"
-          title="Refresh Settings"
-          aria-label="Refresh Settings"
-          :disabled="loading"
-          @click="loadSettings"
+          title="Save Active Tab Settings"
+          aria-label="Save Settings"
+          :disabled="saving"
+          @click="handleMobileSave"
         >
-          <svg class="cmd-icon" :class="{ 'spin-animate': loading }" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          <span v-if="!saving">💾</span>
+          <span v-else class="spinner spinner-sm"></span>
+        </button>
+        <button
+          type="button"
+          class="btn-icon-cmd"
+          title="Reset Active Tab to Defaults"
+          aria-label="Reset Defaults"
+          :disabled="loading || saving"
+          @click="handleMobileReset"
+        >
+          <span>🔄</span>
         </button>
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px): ⚙️ Active Tab · 🛡️ 2FA · 🔑 API Keys · 🏢 Org -->
     <div class="settings-micro-telemetry mobile-only font-mono" role="status" aria-label="Settings Micro Telemetry">
-      <span class="tel-item tel-name">⚙️ 6 tabs</span>
+      <span class="tel-item tel-name">⚙️ {{ activeTabLabel }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-sec">🔐 {{ totpStatus?.enabled ? 'TOTP Active' : 'TOTP Off' }}</span>
+      <span class="tel-item tel-sec">🛡️ {{ totpStatus?.enabled ? '2FA' : 'No 2FA' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-alert">👤 admin</span>
+      <span class="tel-item tel-alert">🔑 3 Keys</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-tenancy">🏢 default</span>
+      <span class="tel-item tel-tenancy">🏢 {{ form.name ? 'Active' : 'Default' }}</span>
     </div>
+
+    <!-- Mobile Tabs Navigation (Pills with snap, <768px) -->
+    <SettingsMobileNav
+      v-model:active-tab="activeTab"
+      :tabs="tabsList"
+      :is-dirty-category="isDirtyCategory"
+    />
 
     <!-- Notification Banner -->
     <div
@@ -94,10 +161,10 @@ const {
     >
       <span class="banner-icon">{{ statusMessage.type === 'success' ? '✅' : '⚠️' }}</span>
       <span class="banner-text">{{ statusMessage.text }}</span>
-      <button class="banner-close" @click="statusMessage = null">✕</button>
+      <button class="banner-close" aria-label="Close Banner" @click="statusMessage = null">✕</button>
     </div>
 
-    <!-- Key Metrics Summary HUD -->
+    <!-- Key Metrics Summary HUD (Desktop/Tablet >=768px) -->
     <div class="metrics-grid desktop-metrics desktop-only">
       <MetricCard
         title="Platform Console"
@@ -111,7 +178,7 @@ const {
         title="Security Policy"
         :value="form.require_2fa ? '2FA Enforced' : 'Standard 2FA'"
         :badge="form.require_2fa ? 'STRICT' : 'FLEXIBLE'"
-        :badge-color="form.require_2fa ? 'emerald' : 'amber'"
+        badge-color="emerald"
         :subtitle="`Timeout: ${form.session_timeout_minutes}m | Min Pass: ${form.password_min_length}`"
         icon="🛡️"
       />
@@ -133,49 +200,18 @@ const {
       />
     </div>
 
-    <!-- Tabs Navigation Bar -->
-    <div class="tabs-bar glass-panel">
+    <!-- Desktop Tabs Navigation Bar (>=768px) -->
+    <div class="tabs-bar glass-panel desktop-only">
       <button
+        v-for="tab in tabsList"
+        :key="tab.id"
         class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'general' }"
-        @click="activeTab = 'general'"
+        :class="{ 'tab-btn-active': activeTab === tab.id }"
+        @click="activeTab = tab.id"
       >
-        <span>⚙️ General</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'security' }"
-        @click="activeTab = 'security'"
-      >
-        <span>🛡️ Security</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'tenancy' }"
-        @click="activeTab = 'tenancy'"
-      >
-        <span>🏢 Tenancy</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'notifications' }"
-        @click="activeTab = 'notifications'"
-      >
-        <span>🔔 Notifications</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'apikeys' }"
-        @click="activeTab = 'apikeys'"
-      >
-        <span>🔑 API Keys</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'about' }"
-        @click="activeTab = 'about'"
-      >
-        <span>ℹ️ About</span>
+        <span>{{ tab.icon }} {{ tab.label }}</span>
+        <span v-if="tab.category && isDirtyCategory(tab.category)" class="dirty-dot"></span>
+        <span v-if="tab.count !== undefined" class="tab-badge">{{ tab.count }}</span>
       </button>
     </div>
 
