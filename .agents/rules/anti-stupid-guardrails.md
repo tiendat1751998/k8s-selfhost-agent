@@ -77,13 +77,19 @@ Every dispatch prompt from Orchestrator MUST contain:
 7. **Simplicity (`ponytail-review`)**: Elimination of dead code, speculative abstractions, and bloat.
 8. **Anti-Lazy & Feature Parity**: Zero lazy hiding of charts/data on mobile (`display: none` on charts is an instant reject), max 2 inline table actions (zero button spam).
 
-### Gate 3: Exhaustive QA Matrix (Happy + Unhappy + Edge Cases + Charts)
+### Gate 3: Exhaustive QA Matrix (Happy + Unhappy + Edge Cases + Charts + 3 Viewports)
 `qa-test-engineer` MUST audit:
 1. **Happy Path**: Expected valid workflows return 200 OK.
 2. **Unhappy Path**: Invalid inputs return 400 Bad Request, unauthorized calls return 401/403.
 3. **Boundary / Edge Cases**: Empty arrays, nil pointers, malformed UUIDs, maximum payload sizes.
-4. **Multi-Viewport Visual Audit**: Mobile (375x812), Tablet (768x1024), Desktop (1440x900).
-5. **Chart & Visual Density Verification**: Confirm live charts (splines, bars, SVG trends) actually render on mobile and desktop without clipping, horizontal overflow, or being hidden.
+4. **Mandatory 3-Tier Viewport Audit (ZERO TOLERANCE FOR TABLET REGRESSION)**:
+   - **Desktop (1440x900)**: 100% full-width table, all action buttons visible, zero horizontal scrollbar, interactive drawers/modals functional.
+   - **Tablet (768x1024 - iPad Standard)**: HUD cards form a clean 2x2 grid (`repeat(2, 1fr)`), zero horizontal table blowout, off-canvas sidebar triggers properly, filters wrap cleanly without clipping.
+   - **Mobile (375x812 - iPhone Standard)**: 44px command bar + live SVG chart/telemetry + 60-75px high density card stream + zero horizontal overflow (`scrollWidth === 375px`).
+5. **Feature & Interaction Verification**:
+   - Test real clicks on action buttons (`Logs`, `Details`, `Scale`, `Restart`, `YAML`, `Delete`).
+   - Confirm modals open with populated data, form inputs work, and API calls succeed with zero console errors.
+   - Confirm live charts (splines, bars, SVG trends) actually render on mobile and desktop without clipping, horizontal overflow, or being hidden.
 
 ### Gate 4: Fail-Closed Governor Handoff Audit
 Before any merge, Orchestrator or `governor` inspects the transcript:
