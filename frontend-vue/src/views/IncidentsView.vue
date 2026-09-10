@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import IncidentDetailPane from '../components/incidents/IncidentDetailPane.vue'
@@ -83,10 +84,12 @@ function formatRelativeTime(dateStr?: string): string {
 
       <div class="header-actions">
         <button class="btn-slate-primary" @click="showSimulateModal = true">
-          <span>⚡ Simulate Incident</span>
+          <BaseIcon name="zap" size="xs" />
+          <span>Simulate Incident</span>
         </button>
         <button class="btn-slate" :disabled="loading" @click="fetchIncidents">
-          <span>{{ loading ? '⏳ Querying...' : '🔄 Refresh Feed' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" />
+          <span>{{ loading ? 'Querying...' : 'Refresh Feed' }}</span>
         </button>
       </div>
     </div>
@@ -94,7 +97,7 @@ function formatRelativeTime(dateStr?: string): string {
     <!-- Mobile Sleek 40px Command Bar -->
     <div class="mobile-command-bar mobile-only">
       <div class="mobile-command-title">
-        <span class="mobile-title-icon">🚨</span>
+        <span class="mobile-title-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
         <span class="mobile-title-text">Incidents ({{ filteredIncidents.length }})</span>
       </div>
       <div class="mobile-command-actions">
@@ -104,7 +107,7 @@ function formatRelativeTime(dateStr?: string): string {
           aria-label="Simulate Incident"
           @click="showSimulateModal = true"
         >
-          <span>⚡</span>
+          <BaseIcon name="zap" size="xs" />
         </button>
         <button
           class="mobile-action-btn"
@@ -113,7 +116,7 @@ function formatRelativeTime(dateStr?: string): string {
           aria-label="Refresh Feed"
           @click="fetchIncidents"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
         <button
           class="mobile-action-btn"
@@ -122,7 +125,7 @@ function formatRelativeTime(dateStr?: string): string {
           aria-label="Toggle Search"
           @click="showMobileSearch = !showMobileSearch"
         >
-          <span>🔍</span>
+          <BaseIcon name="search" size="xs" />
         </button>
       </div>
     </div>
@@ -187,9 +190,9 @@ function formatRelativeTime(dateStr?: string): string {
 
     <!-- Notification Toast -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <span>{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" />
       <span>{{ toastMessage.text }}</span>
-      <button class="toast-close" @click="toastMessage = null">✕</button>
+      <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Desktop Metric HUD (4 cards, hidden on mobile) -->
@@ -198,7 +201,7 @@ function formatRelativeTime(dateStr?: string): string {
         title="Detected Incidents"
         :value="totalIncidents"
         subtitle="Total cluster anomalies logged"
-        icon="⚡"
+        icon="zap"
         badge="TELEMETRY"
         badge-color="cyan"
       />
@@ -206,7 +209,7 @@ function formatRelativeTime(dateStr?: string): string {
         title="Critical Severity"
         :value="criticalCount"
         subtitle="Workloads requiring urgent fix"
-        icon="🔥"
+        icon="flame"
         badge="HIGH PRIORITY"
         :badge-color="criticalCount > 0 ? 'rose' : 'emerald'"
         :trend="criticalCount > 0 ? 'Action Required' : 'Zero Critical'"
@@ -216,7 +219,7 @@ function formatRelativeTime(dateStr?: string): string {
         title="Active Remediation"
         :value="analyzingCount"
         subtitle="AI reasoning & PR synthesis in progress"
-        icon="🤖"
+        icon="cpu"
         badge="AI AGENT"
         badge-color="violet"
         trend="Autonomous Pipeline"
@@ -226,7 +229,7 @@ function formatRelativeTime(dateStr?: string): string {
         title="Resolved & Verified"
         :value="resolvedCount"
         subtitle="Incidents successfully healed"
-        icon="🛡️"
+        icon="shield"
         badge="CLOSED"
         badge-color="emerald"
         trend="Auto-Remediated"
@@ -240,7 +243,7 @@ function formatRelativeTime(dateStr?: string): string {
       <div class="left-pane glass-panel">
         <div class="pane-header desktop-only">
           <div class="pane-title-wrap">
-            <span class="pane-icon">🚨</span>
+            <span class="pane-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
             <h2 class="pane-title">Incident Queue ({{ filteredIncidents.length }})</h2>
           </div>
           <div class="status-tab-group">
@@ -293,25 +296,25 @@ function formatRelativeTime(dateStr?: string): string {
         <div class="incident-list">
           <!-- Empty State: Filter Mismatch (incidents exist, but none match filters) -->
           <div v-if="filteredIncidents.length === 0 && incidents.length > 0" class="empty-list filter-mismatch-empty">
-            <div class="empty-icon">🔍</div>
+            <div class="empty-icon"><BaseIcon name="search" size="lg" /></div>
             <div class="empty-title">No Matching Incidents</div>
             <p class="empty-desc">
               No incidents match the active filters (Status: {{ filterStatus }}, Severity: {{ filterSeverity }})
             </p>
             <button class="btn-slate-primary empty-simulate-btn" @click="resetFilters">
-              <span>↺ Reset Filters</span>
+              <BaseIcon name="refresh" size="xs" /> <span>Reset Filters</span>
             </button>
           </div>
 
           <!-- Empty State: Truly No Incidents in Cluster Feed -->
           <div v-else-if="filteredIncidents.length === 0" class="empty-list">
-            <div class="empty-icon">🛡️</div>
+            <div class="empty-icon"><BaseIcon name="shield" size="lg" /></div>
             <div class="empty-title">No Incidents Detected</div>
             <p class="empty-desc">
               Cluster telemetry is nominal. Inject a test anomaly scenario to evaluate autonomous AI diagnostics and GitOps remediation.
             </p>
             <button class="btn-slate-primary empty-simulate-btn" @click="showSimulateModal = true">
-              <span>⚡ Inject Test Incident (Demo Mode)</span>
+              <BaseIcon name="zap" size="xs" /> <span>Inject Test Incident (Demo Mode)</span>
             </button>
           </div>
 
@@ -348,7 +351,7 @@ function formatRelativeTime(dateStr?: string): string {
       <div class="right-pane-wrapper">
         <div class="mobile-back-bar mobile-only">
           <button class="btn-slate mobile-back-btn" @click="showMobileDetail = false">
-            <span>✕ Back to Incidents</span>
+            <BaseIcon name="x" size="xs" /> <span>Back to Incidents</span>
           </button>
         </div>
         <IncidentDetailPane

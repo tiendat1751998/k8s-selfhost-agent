@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="view-container">
     <!-- Desktop View Header (>=768px) -->
     <div class="view-header desktop-header desktop-only">
@@ -15,10 +15,10 @@
 
       <div class="header-actions">
         <button class="btn btn-secondary" :disabled="loading || isScanning" @click="fetchComplianceData">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh Posture' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Syncing...' : 'Refresh Posture' }}</span>
         </button>
         <button class="btn btn-primary" :disabled="loading || isScanning" @click="triggerScan">
-          <span>{{ isScanning ? '⚡ Scanning...' : '🚀 Run Audit Scan' }}</span>
+          <BaseIcon :name="isScanning ? 'clock' : 'play'" size="xs" /> <span>{{ isScanning ? 'Scanning...' : 'Run Audit Scan' }}</span>
         </button>
       </div>
     </div>
@@ -26,7 +26,7 @@
     <!-- Mobile 44px Command Bar (<768px) -->
     <div class="compliance-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">⚖️ Compliance ({{ filteredFrameworks.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="shield" size="xs" /> Compliance ({{ filteredFrameworks.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -36,7 +36,7 @@
           aria-label="Run Audit Scan"
           @click="triggerScan"
         >
-          <span>🚀</span>
+          <BaseIcon name="play" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -45,18 +45,18 @@
           aria-label="Refresh Posture"
           @click="fetchComplianceData"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 24px Centered Micro-Telemetry Strip (<768px) -->
     <div class="compliance-micro-telemetry mobile-only font-mono" role="status" aria-label="Compliance Micro Telemetry">
-      <span class="tel-item tel-score">⚖️ {{ Math.round(overallScore) }}% score</span>
+      <span class="tel-item tel-score"><BaseIcon name="shield" size="xs" /> {{ Math.round(overallScore) }}% score</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-controls">🛡️ {{ passingControlsCount }}/{{ totalControlsCount }} controls</span>
+      <span class="tel-item tel-controls"><BaseIcon name="shield" size="xs" /> {{ passingControlsCount }}/{{ totalControlsCount }} controls</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-crit">🛑 {{ criticalViolationsCount }} crit</span>
+      <span class="tel-item tel-crit"><BaseIcon name="alert-triangle" size="xs" /> {{ criticalViolationsCount }} crit</span>
     </div>
 
     <!-- Mobile Segmented View Tabs (<768px) -->
@@ -68,7 +68,7 @@
         :aria-selected="mobileTab === 'violations'"
         @click="mobileTab = 'violations'"
       >
-        <span>⚠️ Violations</span>
+        <BaseIcon name="alert-triangle" size="xs" /> <span>Violations</span>
         <span class="tab-badge">{{ filteredViolations.length }}</span>
       </button>
       <button
@@ -78,16 +78,16 @@
         :aria-selected="mobileTab === 'frameworks'"
         @click="mobileTab = 'frameworks'"
       >
-        <span>🛡️ Frameworks</span>
+        <BaseIcon name="shield" size="xs" /> <span>Frameworks</span>
         <span class="tab-badge">{{ filteredFrameworks.length }}</span>
       </button>
     </div>
 
     <!-- Error Banner if any -->
     <div v-if="error" class="status-banner banner-error animate-fade-in">
-      <span class="banner-icon">⚠️</span>
+      <BaseIcon name="alert-triangle" size="xs" class="banner-icon" />
       <span class="banner-text">{{ error }}</span>
-      <button class="banner-close" @click="error = null">✕</button>
+      <button class="banner-close" @click="error = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Top HUD Cards (Desktop Only, Overall Score, Passing Controls, Critical Failures, Automated Audit Status) -->
@@ -156,7 +156,7 @@
             />
             <h3 class="modal-title">{{ selectedViolation.policy }}</h3>
           </div>
-          <button class="modal-close" aria-label="Close modal" @click="closeModal">✕</button>
+          <button class="modal-close" aria-label="Close modal" @click="closeModal"><BaseIcon name="x" size="xs" /></button>
         </div>
 
         <div class="modal-body">
@@ -194,7 +194,7 @@
             class="btn btn-primary"
             @click="exportRemediationReport('markdown'); closeModal()"
           >
-            📥 Download Playbook
+            <BaseIcon name="download" size="xs" /> <span>Download Playbook</span>
           </button>
         </div>
       </div>
@@ -208,6 +208,7 @@ import '../assets/styles/views/compliance.css'
 import '../assets/styles/components/compliance-drawers.css'
 import { useCompliance } from '../composables/useCompliance'
 import StatusBadge from '../components/ui/StatusBadge.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import ComplianceScoreCards from '../components/compliance/ComplianceScoreCards.vue'
 import ComplianceFrameworksGrid from '../components/compliance/ComplianceFrameworksGrid.vue'
 import ComplianceControlsTable from '../components/compliance/ComplianceControlsTable.vue'

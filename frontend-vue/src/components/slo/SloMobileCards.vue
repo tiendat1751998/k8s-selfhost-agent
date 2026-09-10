@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
 
 const props = defineProps<{
@@ -21,7 +22,7 @@ const emit = defineEmits<{
 <template>
   <div class="mobile-stream-container">
     <div class="mobile-stream-header">
-      <span class="mobile-stream-title">📱 Touch-Optimized SLO Workload Stream</span>
+      <span class="mobile-stream-title"><BaseIcon name="target" size="xs" /> Touch-Optimized SLO Workload Stream</span>
       <span class="mobile-stream-count font-mono">{{ definitions.length }} Objectives</span>
     </div>
 
@@ -80,7 +81,7 @@ const emit = defineEmits<{
             aria-label="Inspect SLI"
             @click="emit('inspect', def, getSnapshotForDef(def.id, def.service))"
           >
-            <span>📈</span>
+            <BaseIcon name="trending-up" size="xs" />
           </button>
           <button 
             type="button"
@@ -89,7 +90,7 @@ const emit = defineEmits<{
             aria-label="Edit SLO"
             @click="emit('edit', def)"
           >
-            <span>✏️</span>
+            <BaseIcon name="edit" size="xs" />
           </button>
           <button 
             type="button"
@@ -98,7 +99,7 @@ const emit = defineEmits<{
             aria-label="Delete SLO"
             @click="emit('delete', def.id, def.service)"
           >
-            <span>🗑️</span>
+            <BaseIcon name="trash" size="xs" />
           </button>
         </div>
       </div>

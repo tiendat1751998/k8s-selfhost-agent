@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import '../assets/styles/views/capacity.css'
 import '../assets/styles/components/capacity-drawers.css'
@@ -50,10 +50,10 @@ function handleInspectNode(nodeId: string) {
 }
 
 function getRecIcon(icon: string): string {
-  if (icon === '⚙️') return 'sliders'
-  if (icon === '🧠') return 'cpu'
-  if (icon === '🗄️') return 'hard-drive'
-  if (icon === '✅') return 'check-circle'
+  if (icon === 'sliders' || icon.includes('\u2699')) return 'sliders'
+  if (icon === 'cpu' || icon.includes('\u{1F9E0}')) return 'cpu'
+  if (icon === 'hard-drive' || icon.includes('\u{1F5C4}')) return 'hard-drive'
+  if (icon === 'check-circle' || icon.includes('\u2705')) return 'check-circle'
   return 'activity'
 }
 
