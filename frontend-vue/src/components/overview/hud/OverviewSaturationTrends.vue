@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 export interface TrendPoint {
   time: string
@@ -246,8 +247,12 @@ function handleChartLeave() {
         <div class="trend-title-top-row">
           <div class="trend-title-left">
             <h3 class="sidebar-card-title">
-              <span class="title-full">📈 5-Min Saturation Trends</span>
-              <span class="title-mobile">📈 Trends</span>
+              <span class="title-full">
+                <BaseIcon name="trending-up" size="sm" /> 5-Min Saturation Trends
+              </span>
+              <span class="title-mobile">
+                <BaseIcon name="trending-up" size="sm" /> Trends
+              </span>
             </h3>
             <span class="badge badge-muted font-mono">LIVE BUFFER</span>
           </div>
@@ -261,7 +266,9 @@ function handleChartLeave() {
         <!-- Gateway Ingress Metrics Pills Group -->
         <div class="trend-ingress-metrics font-mono">
           <span class="trend-metric-pill" title="Active HTTP Connections">
-            <span class="pill-icon">🌐</span>
+            <span class="pill-icon">
+              <BaseIcon name="globe" size="xs" />
+            </span>
             <span class="pill-val">{{ httpActiveConns.toLocaleString() }}</span>
             <span class="pill-lbl">active</span>
           </span>
@@ -271,13 +278,17 @@ function handleChartLeave() {
             :class="{ 'pill-warning': httpQueuedReqs > 0 }"
             title="Queued Gateway Requests"
           >
-            <span class="pill-icon">⏳</span>
+            <span class="pill-icon">
+              <BaseIcon name="activity" size="xs" />
+            </span>
             <span class="pill-val">{{ httpQueuedReqs.toLocaleString() }}</span>
             <span class="pill-lbl">queued</span>
           </span>
 
           <span class="trend-metric-pill" title="Cluster Average Latency">
-            <span class="pill-icon">⏱️</span>
+            <span class="pill-icon">
+              <BaseIcon name="activity" size="xs" />
+            </span>
             <span class="pill-val">{{ clusterAvgLatencyMs > 0 ? clusterAvgLatencyMs.toFixed(1) : '2.4' }}ms</span>
             <span class="pill-lbl">latency</span>
           </span>
@@ -287,7 +298,9 @@ function handleChartLeave() {
             :class="{ 'pill-critical': httpErrorRate >= 5, 'pill-warning': httpErrorRate > 0 && httpErrorRate < 5 }"
             title="HTTP Error Rate"
           >
-            <span class="pill-icon">{{ httpErrorRate >= 5 ? '❌' : httpErrorRate > 0 ? '⚠️' : '🛡️' }}</span>
+            <span class="pill-icon">
+              <BaseIcon :name="httpErrorRate >= 5 ? 'x-circle' : httpErrorRate > 0 ? 'alert-triangle' : 'shield'" size="xs" />
+            </span>
             <span class="pill-val">{{ httpErrorRate.toFixed(1) }}%</span>
             <span class="pill-lbl">err</span>
           </span>
@@ -316,7 +329,8 @@ function handleChartLeave() {
           @click.stop="emit('openDeepDive')"
           title="Click to open cluster telemetry deep-dive modal"
         >
-          🔍 Deep-Dive
+          <BaseIcon name="search" size="xs" />
+          <span>Deep-Dive</span>
         </button>
       </div>
     </div>
@@ -400,7 +414,9 @@ function handleChartLeave() {
           <!-- Floating Rich Tooltip Box -->
           <div v-if="hoveredPoint" class="trend-rich-tooltip" :style="tooltipStyle">
             <div class="tooltip-time-header">
-              <span class="tooltip-time-icon">🕒</span>
+              <span class="tooltip-time-icon">
+                <BaseIcon name="activity" size="xs" />
+              </span>
               <span class="tooltip-time-text font-mono font-bold">{{ hoveredPoint.time }}</span>
               <span class="tooltip-time-elapsed">({{ hoveredElapsed }})</span>
             </div>
