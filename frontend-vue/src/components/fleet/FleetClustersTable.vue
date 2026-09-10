@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue'
 import type { Cluster } from '../../api/fleet'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
+import FacetedFilterBar, { type FilterFacet } from '../ui/FacetedFilterBar.vue'
 
-defineProps<{
+const props = defineProps<{
   clusters: Cluster[]
   loading?: boolean
   error?: string | null
@@ -19,6 +21,57 @@ const emit = defineEmits<{
   (e: 'details', cluster: Cluster): void
   (e: 'import'): void
 }>()
+
+const searchQuery = ref('')
+const activeFilters = ref<Record<string, string>>({})
+
+const clusterFacets: FilterFacet[] = [
+  {
+    key: 'status',
+    label: 'Status',
+    options: [
+      { value: 'healthy', label: 'Healthy' },
+      { value: 'degraded', label: 'Degraded' },
+      { value: 'offline', label: 'Offline' },
+      { value: 'active', label: 'Active' },
+    ]
+  },
+  {
+    key: 'tier',
+    label: 'Tier',
+    options: [
+      { value: 'production', label: 'Production' },
+      { value: 'staging', label: 'Staging' },
+      { value: 'edge', label: 'Edge' },
+      { value: 'default', label: 'Default' },
+    ]
+  }
+]
+
+const filteredClusters = computed(() => {
+  let list = props.clusters || []
+  const q = searchQuery.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter(c =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.provider || '').toLowerCase().includes(q) ||
+      (c.region || '').toLowerCase().includes(q) ||
+      (c.group || '').toLowerCase().includes(q)
+    )
+  }
+  const statusFilter = activeFilters.value.status
+  if (statusFilter && statusFilter !== 'all') {
+    list = list.filter(c => {
+      const s = (c.health_status || c.status || '').toLowerCase()
+      return s === statusFilter.toLowerCase()
+    })
+  }
+  const tierFilter = activeFilters.value.tier
+  if (tierFilter && tierFilter !== 'all') {
+    list = list.filter(c => (c.group || 'default').toLowerCase() === tierFilter.toLowerCase())
+  }
+  return list
+})
 
 const CLUSTER_ACTIONS: ActionItem[] = [
   { id: 'discover', label: 'Discover Resources', icon: 'search' },
@@ -56,9 +109,16 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
       </button>
     </div>
 
+    <FacetedFilterBar
+      v-model="searchQuery"
+      v-model:active-filters="activeFilters"
+      :facets="clusterFacets"
+      placeholder="Filter clusters by name, tier, region, provider... (Press / to focus)"
+    />
+
     <DataTable
       :columns="clusterColumns"
-      :data="clusters"
+      :data="filteredClusters"
       :loading="loading"
       :error="error"
       empty-message="No clusters found matching current filters."

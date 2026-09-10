@@ -17,6 +17,7 @@ import AlertCenterModal from './components/overview/alerts/AlertCenterModal.vue'
 import AppMobileNav from './components/layout/AppMobileNav.vue'
 import PwaInstallBanner from './components/common/PwaInstallBanner.vue'
 import BaseIcon from './components/ui/BaseIcon.vue'
+import GlobalContextSelector from './components/navigation/GlobalContextSelector.vue'
 import '@/assets/styles/layout/app-shell.css'
 
 const route = useRoute()
@@ -266,7 +267,11 @@ function handleNavigateToHost(nodeNameOrId: string) {
             </span>
           </button>
 
+          <!-- Global Context Selector: Cluster & Namespace (Tasks 021 & 015) -->
+          <GlobalContextSelector />
+
           <!-- Sleek Workspace / Tenant Selector -->
+
           <div class="tenant-selector-wrap" title="Workspace / Multi-Tenant Organization">
             <span class="tenant-icon" aria-hidden="true">
               <BaseIcon name="layers" size="xs" />
