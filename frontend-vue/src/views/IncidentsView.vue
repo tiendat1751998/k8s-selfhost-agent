@@ -13,7 +13,9 @@ const {
   loading,
   actionLoading,
   toastMessage,
+  incidents,
   filterSeverity,
+  filterStatus,
   searchQuery,
   selectedIncident,
   selectedReport,
@@ -28,6 +30,10 @@ const {
   criticalCount,
   analyzingCount,
   resolvedCount,
+  countAll,
+  countOpen,
+  countInProgress,
+  countResolved,
   fetchIncidents,
   selectIncident,
   triggerAIAnalysis,
@@ -36,6 +42,12 @@ const {
   handleCreatePR,
   handleMergePR
 } = useIncidents()
+
+function resetFilters() {
+  filterStatus.value = 'all'
+  filterSeverity.value = 'all'
+  searchQuery.value = ''
+}
 
 // Mobile Ergonomics States
 const showMobileDetail = ref(false)
@@ -126,19 +138,51 @@ function formatRelativeTime(dateStr?: string): string {
 
     <!-- Mobile Collapsible Search & Filter Bar -->
     <div v-if="showMobileSearch" class="mobile-filter-bar mobile-only animate-fade-in">
-      <input
-        v-model="searchQuery"
-        type="text"
-        placeholder="Filter pod, cluster, ns..."
-        class="search-mini"
-      />
-      <select v-model="filterSeverity" class="select-mini">
-        <option value="all">All Severities</option>
-        <option value="critical">Critical</option>
-        <option value="high">High</option>
-        <option value="medium">Medium</option>
-        <option value="low">Low</option>
-      </select>
+      <div class="status-tab-group mobile-status-tabs">
+        <button
+          class="status-tab-btn"
+          :class="{ active: filterStatus === 'all' }"
+          @click="filterStatus = 'all'"
+        >
+          All ({{ countAll }})
+        </button>
+        <button
+          class="status-tab-btn"
+          :class="{ active: filterStatus === 'open' }"
+          @click="filterStatus = 'open'"
+        >
+          Open ({{ countOpen }})
+        </button>
+        <button
+          class="status-tab-btn"
+          :class="{ active: filterStatus === 'in_progress' }"
+          @click="filterStatus = 'in_progress'"
+        >
+          In Progress ({{ countInProgress }})
+        </button>
+        <button
+          class="status-tab-btn"
+          :class="{ active: filterStatus === 'resolved' }"
+          @click="filterStatus = 'resolved'"
+        >
+          Resolved ({{ countResolved }})
+        </button>
+      </div>
+      <div class="mobile-filter-inputs">
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Filter pod, cluster, ns..."
+          class="search-mini"
+        />
+        <select v-model="filterSeverity" class="select-mini">
+          <option value="all">All Severities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
     </div>
 
     <!-- Notification Toast -->
@@ -199,6 +243,36 @@ function formatRelativeTime(dateStr?: string): string {
             <span class="pane-icon">🚨</span>
             <h2 class="pane-title">Incident Queue ({{ filteredIncidents.length }})</h2>
           </div>
+          <div class="status-tab-group">
+            <button
+              class="status-tab-btn"
+              :class="{ active: filterStatus === 'all' }"
+              @click="filterStatus = 'all'"
+            >
+              All ({{ countAll }})
+            </button>
+            <button
+              class="status-tab-btn"
+              :class="{ active: filterStatus === 'open' }"
+              @click="filterStatus = 'open'"
+            >
+              Open ({{ countOpen }})
+            </button>
+            <button
+              class="status-tab-btn"
+              :class="{ active: filterStatus === 'in_progress' }"
+              @click="filterStatus = 'in_progress'"
+            >
+              In Progress ({{ countInProgress }})
+            </button>
+            <button
+              class="status-tab-btn"
+              :class="{ active: filterStatus === 'resolved' }"
+              @click="filterStatus = 'resolved'"
+            >
+              Resolved ({{ countResolved }})
+            </button>
+          </div>
           <div class="filter-controls">
             <input
               v-model="searchQuery"
@@ -217,7 +291,20 @@ function formatRelativeTime(dateStr?: string): string {
         </div>
 
         <div class="incident-list">
-          <div v-if="filteredIncidents.length === 0" class="empty-list">
+          <!-- Empty State: Filter Mismatch (incidents exist, but none match filters) -->
+          <div v-if="filteredIncidents.length === 0 && incidents.length > 0" class="empty-list filter-mismatch-empty">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-title">No Matching Incidents</div>
+            <p class="empty-desc">
+              No incidents match the active filters (Status: {{ filterStatus }}, Severity: {{ filterSeverity }})
+            </p>
+            <button class="btn-slate-primary empty-simulate-btn" @click="resetFilters">
+              <span>↺ Reset Filters</span>
+            </button>
+          </div>
+
+          <!-- Empty State: Truly No Incidents in Cluster Feed -->
+          <div v-else-if="filteredIncidents.length === 0" class="empty-list">
             <div class="empty-icon">🛡️</div>
             <div class="empty-title">No Incidents Detected</div>
             <p class="empty-desc">
@@ -228,6 +315,7 @@ function formatRelativeTime(dateStr?: string): string {
             </button>
           </div>
 
+          <!-- High-Density Incident Cards (~68-76px height) -->
           <div
             v-for="inc in filteredIncidents"
             :key="inc.id"
@@ -237,19 +325,20 @@ function formatRelativeTime(dateStr?: string): string {
           >
             <div class="card-item-top">
               <div class="item-title-group">
-                <span class="item-pod">{{ inc.pod_name }}</span>
-                <StatusBadge :status="inc.severity" size="sm" />
+                <span class="item-pod" :title="inc.pod_name">{{ inc.pod_name }}</span>
+                <span class="item-ns font-mono">{{ inc.namespace }}</span>
               </div>
-              <StatusBadge :status="inc.status" size="sm" />
+              <div class="card-badges">
+                <StatusBadge :status="inc.severity" size="sm" />
+                <StatusBadge :status="inc.status" size="sm" />
+              </div>
             </div>
 
-            <div class="card-item-mid">
+            <div class="card-item-bot">
               <span class="type-badge font-mono">{{ inc.type }}</span>
-              <span class="cluster-loc font-mono text-muted">{{ inc.cluster_name }}/{{ inc.namespace }}</span>
-            </div>
-
-            <div class="card-item-bot font-mono">
-              <span class="time-stamp-clean" :title="inc.created_at">Detected: {{ formatRelativeTime(inc.created_at) }}</span>
+              <span class="time-stamp-clean font-mono" :title="inc.created_at">
+                {{ formatRelativeTime(inc.created_at) }}
+              </span>
             </div>
           </div>
         </div>
