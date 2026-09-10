@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -149,6 +150,53 @@ func (r *auditRepo) GetLastRun(ctx context.Context) (*audit.AuditRun, error) {
 	return &run, nil
 }
 
+var sensitiveAuditKeys = map[string]struct{}{
+	"token":         {},
+	"trace_token":   {},
+	"authorization": {},
+	"password":      {},
+	"secret":        {},
+	"cookie":        {},
+	"access_token":  {},
+	"refresh_token": {},
+	"apikey":        {},
+	"api_key":       {},
+	"private_key":   {},
+}
+
+func isSensitiveAuditKey(key string) bool {
+	clean := strings.ToLower(strings.TrimSpace(key))
+	_, exists := sensitiveAuditKeys[clean]
+	return exists
+}
+
+// sanitizeAuditDetails recursively sanitizes sensitive keys in an audit log details map or slice.
+func sanitizeAuditDetails(val interface{}) interface{} {
+	if val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case map[string]interface{}:
+		sanitized := make(map[string]interface{}, len(v))
+		for k, item := range v {
+			if isSensitiveAuditKey(k) {
+				sanitized[k] = "[REDACTED]"
+			} else {
+				sanitized[k] = sanitizeAuditDetails(item)
+			}
+		}
+		return sanitized
+	case []interface{}:
+		sanitized := make([]interface{}, len(v))
+		for i, item := range v {
+			sanitized[i] = sanitizeAuditDetails(item)
+		}
+		return sanitized
+	default:
+		return val
+	}
+}
+
 func (r *auditRepo) RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error {
 	var targetUUID *string
 	if targetID != "" {
@@ -162,7 +210,8 @@ func (r *auditRepo) RecordAction(ctx context.Context, actor, action, targetType,
 		}
 	}
 	
-	detailsJSON, err := json.Marshal(details)
+	sanitizedDetails := sanitizeAuditDetails(details)
+	detailsJSON, err := json.Marshal(sanitizedDetails)
 	if err != nil {
 		detailsJSON = []byte("{}")
 	}
