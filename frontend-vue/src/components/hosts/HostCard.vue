@@ -20,12 +20,12 @@ const emit = defineEmits<{
 const runtimeBadge = computed(() => {
   const env = (props.host.runtime_environment || props.host.host_type || '').toLowerCase()
   if (env.includes('k8s') || env.includes('kube')) {
-    return { label: '❨️ K8S', class: 'badge-blue' }
+    return { label: 'K8S', class: 'badge-slate text-muted' }
   }
   if (env.includes('docker') || env.includes('container')) {
-    return { label: '🐱 DOCKER', class: 'badge-cyan' }
+    return { label: 'DOCKER', class: 'badge-slate text-muted' }
   }
-  return { label: '💻 BARE-METAL', class: 'badge-purple' }
+  return { label: 'BARE-METAL', class: 'badge-slate text-muted' }
 })
 
 const isDatabaseRole = computed(() => {
@@ -71,10 +71,10 @@ function formatUptime(seconds?: number): string {
 
       <div class="card-badges">
         <span class="type-badge font-mono" :class="runtimeBadge.class">
-          [ {{ runtimeBadge.label }} ]
+          {{ runtimeBadge.label }}
         </span>
-        <span v-if="isDatabaseRole" class="role-badge font-mono badge-amber">
-          [ 🔩 DATABASE ]
+        <span v-if="isDatabaseRole" class="role-badge font-mono badge-slate text-muted">
+          DATABASE
         </span>
         <StatusBadge :status="host.status || 'connected'" size="sm" />
       </div>
@@ -94,7 +94,7 @@ function formatUptime(seconds?: number): string {
       <div class="meta-item">
         <span class="meta-lbl">SECURITY:</span>
         <span class="meta-val" :class="host.tls_enabled ? 'text-emerald' : 'text-muted'">
-          {{ host.tls_enabled ? '🔴 mTLS' : '🔥 Standard' }}
+          {{ host.tls_enabled ? 'mTLS' : 'Standard' }}
         </span>
       </div>
 
@@ -131,7 +131,7 @@ function formatUptime(seconds?: number): string {
           <span>✏️ Edit</span>
         </button>
         <button class="btn btn-danger-outline btn-xs" title="Delete Host" @click="emit('delete', host)">
-          <span>п／／ Delete</span>
+          <span>🗑 Delete</span>
         </button>
       </div>
     </div>

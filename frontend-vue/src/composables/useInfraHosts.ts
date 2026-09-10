@@ -50,7 +50,7 @@ export function useInfraHosts() {
   const error = ref<string | null>(null)
   const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
   const hosts = ref<ComputeHost[]>([])
-  const viewMode = ref<'grid' | 'table'>('grid')
+  const viewMode = ref<'grid' | 'table'>('table')
 
   // Filter State
   const searchQuery = ref(route?.query?.search ? String(route.query.search) : '')
