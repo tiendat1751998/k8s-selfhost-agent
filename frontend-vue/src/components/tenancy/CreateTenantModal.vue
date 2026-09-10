@@ -111,3 +111,7 @@ function handleFormSubmit() {
     </template>
   </ModalDrawer>
 </template>
+
+<style scoped>
+@import '../../assets/styles/components/tenancy-drawers.css';
+</style>
