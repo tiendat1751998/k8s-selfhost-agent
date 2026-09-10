@@ -187,10 +187,12 @@
   align-items: center;
   gap: 6px;
   border-radius: 9999px;
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   font-weight: 700;
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-family: var(--font-sans);
+  line-height: 1.2;
 }
 
 .badge-sm {
@@ -207,6 +209,25 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@keyframes status-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 6px #f59e0b;
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+    box-shadow: 0 0 2px #f59e0b;
+  }
+}
+
+.dot-pulse,
+.dot-amber {
+  animation: status-pulse 2s infinite ease-in-out;
 }
 
 .badge-emerald {
@@ -237,6 +258,16 @@
 .dot-rose {
   background-color: #f43f5e;
   box-shadow: 0 0 6px #f43f5e;
+}
+
+.badge-slate {
+  background: rgba(100, 116, 139, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+}
+.dot-slate {
+  background-color: #64748b;
+  box-shadow: 0 0 6px #64748b;
 }
 
 .badge-cyan {

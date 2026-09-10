@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOverviewDashboard } from '../composables/useOverviewDashboard'
@@ -11,6 +11,7 @@ import NodeCard from '../components/overview/nodes/NodeCard.vue'
 import NodeTableView from '../components/overview/nodes/NodeTableView.vue'
 import NodeDiagnosticsDrawer from '../components/overview/drawer/NodeDiagnosticsDrawer.vue'
 import DeepDiveTrafficModal from '../components/overview/modals/DeepDiveTrafficModal.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { MutedAlertConfig } from '../stores/alertStore'
 
 export type { MutedAlertConfig }
@@ -80,7 +81,7 @@ const {
     <div v-if="overview" class="mobile-command-bar">
       <div class="command-bar-left">
         <span class="command-bar-title font-semibold text-slate-100">
-          🖥️ Overview • {{ overview.healthy_nodes }}/{{ overview.total_nodes }} Online
+          <BaseIcon name="server" size="xs" /> Overview • {{ overview.healthy_nodes }}/{{ overview.total_nodes }} Online
         </span>
       </div>
       <div class="command-bar-actions">
@@ -92,7 +93,9 @@ const {
           aria-label="Refresh Telemetry"
           @click="pollClusterMetrics"
         >
-          <span class="cmd-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
+          <span class="cmd-icon" :class="{ 'spin-icon': loading || tpsLoading }">
+            <BaseIcon name="refresh" size="sm" />
+          </span>
           <span class="cmd-label">Refresh</span>
         </button>
         <button
@@ -102,7 +105,9 @@ const {
           aria-label="Deep-Dive Telemetry"
           @click="openDeepDiveModal"
         >
-          <span class="cmd-icon">📊</span>
+          <span class="cmd-icon">
+            <BaseIcon name="activity" size="sm" />
+          </span>
           <span class="cmd-label">Deep-Dive</span>
         </button>
       </div>
@@ -127,17 +132,19 @@ const {
 
       <div class="header-actions">
         <button class="btn btn-secondary" @click="pollClusterMetrics" :disabled="loading" title="Refresh Telemetry">
-          <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
+          <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">
+            <BaseIcon name="refresh" size="sm" />
+          </span>
           <span>Refresh</span>
         </button>
         <button class="btn btn-secondary" @click="openDeepDiveModal" title="Deep-Dive Telemetry">
-          <span class="btn-icon">📊</span>
+          <span class="btn-icon">
+            <BaseIcon name="activity" size="sm" />
+          </span>
           <span>Deep-Dive Telemetry</span>
         </button>
       </div>
     </header>
-
-    
 
     <!-- LOADING SKELETON -->
     <div v-if="loading && !overview" class="skeleton-hud-grid">
@@ -146,7 +153,9 @@ const {
 
     <!-- ERROR STATE -->
     <div v-else-if="error && !overview" class="error-banner glass-panel">
-      <div class="error-icon">⚠️</div>
+      <div class="error-icon">
+        <BaseIcon name="alert-triangle" size="xl" />
+      </div>
       <div class="error-info">
         <h3>Telemetry Connection Interrupted</h3>
         <p>{{ error }}</p>
@@ -156,7 +165,9 @@ const {
 
     <!-- EMPTY STATE -->
     <div v-else-if="nodes.length === 0 && !loading" class="empty-state-card glass-panel">
-      <div class="empty-icon">🖥️</div>
+      <div class="empty-icon">
+        <BaseIcon name="server" size="xl" />
+      </div>
       <h2>No Infrastructure Servers Connected</h2>
       <p>Deploy k8s-agent (port 9100) on your hosts or attach compute clusters to enable real-time telemetry streaming.</p>
       <div class="empty-actions">
@@ -261,7 +272,7 @@ const {
               :class="{ active: selectedTopologyFilter === 'control_plane' }"
               @click="selectedTopologyFilter = 'control_plane'"
             >
-              <span>👑 Control-Plane</span>
+              <span><BaseIcon name="shield" size="xs" /> Control-Plane</span>
               <span class="pill-count font-mono">{{ topologyFilterCounts.control }}</span>
             </button>
 
@@ -271,7 +282,7 @@ const {
               :class="{ active: selectedTopologyFilter === 'worker' }"
               @click="selectedTopologyFilter = 'worker'"
             >
-              <span>📡 Workers / Agents</span>
+              <span><BaseIcon name="radio" size="xs" /> Workers / Agents</span>
               <span class="pill-count font-mono">{{ topologyFilterCounts.worker }}</span>
             </button>
 
@@ -281,7 +292,7 @@ const {
               :class="{ active: selectedTopologyFilter === 'hot' }"
               @click="selectedTopologyFilter = 'hot'"
             >
-              <span>🔥 Hot Nodes</span>
+              <span><BaseIcon name="flame" size="xs" /> Hot Nodes</span>
               <span class="pill-count font-mono">{{ topologyFilterCounts.hot }}</span>
             </button>
 
@@ -291,19 +302,23 @@ const {
               :class="{ active: selectedTopologyFilter === 'overloaded' }"
               @click="selectedTopologyFilter = 'overloaded'"
             >
-              <span>⚠️ Overloaded / Down</span>
+              <span><BaseIcon name="alert-triangle" size="xs" /> Overloaded / Down</span>
               <span class="pill-count font-mono">{{ topologyFilterCounts.overloaded }}</span>
             </button>
           </div>
 
           <div class="topology-order-actions">
             <div class="view-mode-toggle glass-panel">
-              <button class="toggle-btn" :class="{ active: nodeViewMode === 'table' }" @click="nodeViewMode = 'table'">📑 Table</button>
-              <button class="toggle-btn" :class="{ active: nodeViewMode === 'grid' }" @click="nodeViewMode = 'grid'">🗂 Cards</button>
+              <button class="toggle-btn" :class="{ active: nodeViewMode === 'table' }" @click="nodeViewMode = 'table'">
+                <BaseIcon name="file-text" size="xs" /> Table
+              </button>
+              <button class="toggle-btn" :class="{ active: nodeViewMode === 'grid' }" @click="nodeViewMode = 'grid'">
+                <BaseIcon name="layers" size="xs" /> Cards
+              </button>
             </div>
             
             <button v-if="customNodeOrder.length > 0" class="btn-reset-order font-mono" @click="resetNodeOrder" title="Reset customized card order">
-              <span>↺ Reset Card Order</span>
+              <span><BaseIcon name="refresh" size="xs" /> Reset Card Order</span>
             </button>
           </div>
         </div>
@@ -328,7 +343,9 @@ const {
             v-if="filteredTopologyNodes.length === 0"
             class="empty-topology-state glass-panel"
           >
-            <span class="empty-topology-icon">🔍</span>
+            <span class="empty-topology-icon">
+              <BaseIcon name="search" size="lg" />
+            </span>
             <span class="empty-topology-text">No servers match the selected filter "{{ selectedTopologyFilter }}".</span>
             <button class="btn-reset-filters" @click="selectedTopologyFilter = 'all'">Show All Servers</button>
           </div>

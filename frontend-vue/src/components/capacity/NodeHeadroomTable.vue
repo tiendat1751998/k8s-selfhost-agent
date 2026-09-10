@@ -1,5 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { NodeHeadroom } from '../../composables/useCapacityForecast'
 import { getUsageColorBg, getUsageColorText } from '../../composables/useCapacityForecast'
 
@@ -119,7 +120,8 @@ const emit = defineEmits<{
                   title="Rebalance Pods onto under-utilized nodes"
                   @click="emit('rebalance', node.id)"
                 >
-                  ⚡ Rebalance
+                  <BaseIcon name="zap" size="xs" />
+                  <span>Rebalance</span>
                 </button>
                 <button
                   type="button"
@@ -127,7 +129,8 @@ const emit = defineEmits<{
                   title="Inspect node telemetry breakdown"
                   @click="emit('inspect', node.id)"
                 >
-                  🔍 Inspect
+                  <BaseIcon name="search" size="xs" />
+                  <span>Inspect</span>
                 </button>
               </div>
             </td>
@@ -148,5 +151,10 @@ const emit = defineEmits<{
 .node-matrix-table {
   table-layout: fixed;
   width: 100%;
+}
+.btn-table-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 </style>

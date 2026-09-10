@@ -1,6 +1,7 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import type { LogEntry } from '../../stores/logStore'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   logs: LogEntry[]
@@ -81,12 +82,14 @@ function getTargetBadge(log: LogEntry): string {
           aria-label="Toggle log targets drawer"
           @click="emit('toggleTargetTree')"
         >
-          <span>🌲 {{ targetName || 'All' }} ▾</span>
+          <span>
+            <BaseIcon name="layers" size="xs" /> {{ targetName || 'All' }} ▾
+          </span>
         </button>
 
         <span class="pulse-dot" :class="!isConnected ? 'pulse-dot-rose' : (isPaused ? 'pulse-dot-amber' : 'pulse-dot-emerald')"></span>
         <span class="status-text desktop-only" :class="isConnected ? (isPaused ? 'text-amber' : 'text-emerald') : 'text-rose'">
-          {{ !isConnected ? '○ RECONNECTING' : (isPaused ? '⏸ PAUSED' : '● CONNECTED') }}
+          {{ !isConnected ? 'RECONNECTING' : (isPaused ? 'PAUSED' : 'CONNECTED') }}
         </span>
         <span class="status-text mobile-only font-mono" :class="isConnected ? (isPaused ? 'text-amber' : 'text-emerald') : 'text-rose'">
           {{ !isConnected ? 'DISC' : (isPaused ? 'PAUSED' : 'LIVE') }}
@@ -98,7 +101,9 @@ function getTargetBadge(log: LogEntry): string {
       <!-- Center Search & Regex Filter (Desktop) -->
       <div class="terminal-search-group desktop-only">
         <div class="search-wrap">
-          <span class="search-ico" aria-hidden="true">🔍</span>
+          <span class="search-ico" aria-hidden="true">
+            <BaseIcon name="search" size="xs" />
+          </span>
           <input
             :value="searchQuery"
             type="text"
@@ -145,16 +150,19 @@ function getTargetBadge(log: LogEntry): string {
             :title="wrapLines ? 'Switch to nowrap mode (horizontal scroll)' : 'Switch to line wrap mode'"
             @click="wrapLines = !wrapLines"
           >
-            <span>[ ↵ Wrap ]</span>
+            <span>[ Wrap ]</span>
           </button>
           <button type="button" class="term-btn" :class="{ 'btn-paused': isPaused }" :title="isPaused ? 'Resume live stream' : 'Pause live stream'" @click="emit('togglePause')">
-            <span>{{ isPaused ? '▶ Resume' : '⏸ Pause' }}</span>
+            <BaseIcon :name="isPaused ? 'play' : 'pause'" size="xs" />
+            <span>{{ isPaused ? 'Resume' : 'Pause' }}</span>
           </button>
           <button type="button" class="term-btn" title="Clear buffer" @click="emit('clearBuffer')">
-            <span>🧹 Clear</span>
+            <BaseIcon name="trash" size="xs" />
+            <span>Clear</span>
           </button>
           <button type="button" class="term-btn" title="Export logs" @click="emit('exportLogs')">
-            <span>📥 Export</span>
+            <BaseIcon name="download" size="xs" />
+            <span>Export</span>
           </button>
         </div>
 
@@ -167,19 +175,19 @@ function getTargetBadge(log: LogEntry): string {
             :title="wrapLines ? 'Line wrap on' : 'Line wrap off'"
             @click="wrapLines = !wrapLines"
           >
-            <span>↵</span>
+            <span>Wrap</span>
           </button>
           <button type="button" class="term-btn term-icon-btn" :class="{ 'btn-paused': isPaused }" :title="isPaused ? 'Resume' : 'Pause'" @click="emit('togglePause')">
-            <span>{{ isPaused ? '▶' : '⏸' }}</span>
+            <BaseIcon :name="isPaused ? 'play' : 'pause'" size="xs" />
           </button>
           <button type="button" class="term-btn term-icon-btn" title="Clear buffer" @click="emit('clearBuffer')">
-            <span>🧹</span>
+            <BaseIcon name="trash" size="xs" />
           </button>
           <button type="button" class="term-btn term-icon-btn" :class="{ 'btn-active': mobileSearchOpen || searchQuery }" title="Toggle search" @click="mobileSearchOpen = !mobileSearchOpen">
-            <span>🔍</span>
+            <BaseIcon name="search" size="xs" />
           </button>
           <button type="button" class="term-btn term-icon-btn" title="Export logs" @click="emit('exportLogs')">
-            <span>📥</span>
+            <BaseIcon name="download" size="xs" />
           </button>
         </div>
       </div>
@@ -188,7 +196,9 @@ function getTargetBadge(log: LogEntry): string {
     <!-- Collapsible Mobile Search & Level Bar (Slim 28px) -->
     <div v-show="mobileSearchOpen" class="mobile-search-bar mobile-only font-mono">
       <div class="search-wrap">
-        <span class="search-ico" aria-hidden="true">🔍</span>
+        <span class="search-ico" aria-hidden="true">
+          <BaseIcon name="search" size="xs" />
+        </span>
         <input
           :value="searchQuery"
           type="text"
@@ -209,7 +219,7 @@ function getTargetBadge(log: LogEntry): string {
         <option value="INFO">INFO</option>
         <option value="WARN">WARN</option>
         <option value="ERROR">ERR</option>
-        <option value="DEBUG">DBG</option>
+        <option value="DEBUG">DEBUG</option>
       </select>
     </div>
 
@@ -231,7 +241,9 @@ function getTargetBadge(log: LogEntry): string {
 
       <!-- Clean Empty Terminal State -->
       <div v-if="logs.length === 0" class="empty-terminal font-mono">
-        <span class="empty-icon" aria-hidden="true">📡</span>
+        <span class="empty-icon" aria-hidden="true">
+          <BaseIcon name="radio" size="lg" />
+        </span>
         <p class="empty-title">{{ isConnected ? `Waiting for logs from [${targetName || 'cluster'}]...` : 'Disconnected from log stream. Reconnecting...' }}</p>
         <p class="empty-sub">Live stream is active. Matching log events will appear in real-time as they are emitted.</p>
       </div>
@@ -239,7 +251,8 @@ function getTargetBadge(log: LogEntry): string {
 
     <!-- Jump to Bottom Floating Pill -->
     <button v-if="isScrollLocked" type="button" class="btn-scroll-bottom font-mono" aria-label="Scroll to newest logs" @click="emit('scrollToBottom')">
-      <span>⬇ Jump to Bottom</span>
+      <BaseIcon name="arrow-up" size="xs" style="transform: rotate(180deg);" />
+      <span>Jump to Bottom</span>
     </button>
   </div>
 </template>

@@ -1,8 +1,9 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { navGroups, type NavItem } from '../../config/navigation'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const STORAGE_KEY = 'k8s_sidebar_collapsed'
 
@@ -139,7 +140,9 @@ function handleItemClick() {
         @keydown.space.prevent="navigateHome"
       >
         <div class="brand-icon-wrapper">
-          <div class="brand-icon">⎈</div>
+          <div class="brand-icon">
+            <BaseIcon name="anchor" size="lg" />
+          </div>
           <div class="brand-glow"></div>
         </div>
         <div class="brand-info">
@@ -184,7 +187,9 @@ function handleItemClick() {
           @keydown.space.prevent="toggleSection(group.key)"
         >
           <span class="section-title">
-            <span class="section-icon">{{ group.icon }}</span>
+            <span class="section-icon">
+              <BaseIcon :name="group.icon" size="sm" />
+            </span>
             <span>{{ group.label }}</span>
           </span>
           <span class="section-caret" :class="{ 'caret-collapsed': collapsedSections[group.key] }">
@@ -205,7 +210,9 @@ function handleItemClick() {
             @mouseleave="handleItemMouseLeave"
             @click="handleItemClick"
           >
-            <div class="nav-icon" aria-hidden="true">{{ item.icon }}</div>
+            <div class="nav-icon" aria-hidden="true">
+              <BaseIcon :name="item.icon" size="sm" />
+            </div>
             <div class="nav-label">
               <span>{{ item.name }}</span>
               <small>{{ item.sub }}</small>
@@ -221,7 +228,9 @@ function handleItemClick() {
       <!-- Mobile Drawer Tenant Switcher & User Profile -->
       <div class="drawer-mobile-meta">
         <div class="drawer-tenant-row">
-          <span class="drawer-tenant-icon" aria-hidden="true">🏢</span>
+          <span class="drawer-tenant-icon" aria-hidden="true">
+            <BaseIcon name="layers" size="sm" />
+          </span>
           <select
             :value="selectedTenant"
             @change="onTenantChange"
@@ -239,7 +248,9 @@ function handleItemClick() {
             <span class="user-role font-mono">{{ authStore.user.role || 'ADMIN' }}</span>
           </div>
           <button class="drawer-logout-btn" title="Sign Out" aria-label="Sign Out" @click="emit('logout')">
-            <span class="logout-icon" aria-hidden="true">🚪</span>
+            <span class="logout-icon" aria-hidden="true">
+              <BaseIcon name="lock" size="sm" />
+            </span>
             <span>Sign Out</span>
           </button>
         </div>

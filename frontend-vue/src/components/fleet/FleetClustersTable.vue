@@ -1,7 +1,8 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { Cluster } from '../../api/fleet'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   clusters: Cluster[]
@@ -86,7 +87,8 @@ const clusterColumns: Column<Cluster>[] = [
             title="Cluster Details"
             @click="emit('details', row)"
           >
-            <span>⚡ Details</span>
+            <BaseIcon name="zap" size="xs" />
+            <span>Details</span>
           </button>
           <button
             class="btn btn-secondary btn-xs"
@@ -94,7 +96,8 @@ const clusterColumns: Column<Cluster>[] = [
             title="Discover Resources"
             @click="emit('discover', row)"
           >
-            <span>🔍 Probe</span>
+            <BaseIcon name="search" size="xs" />
+            <span>Probe</span>
           </button>
           <button
             class="btn btn-secondary btn-xs"
@@ -102,7 +105,8 @@ const clusterColumns: Column<Cluster>[] = [
             title="Upgrade Cluster"
             @click="emit('upgrade', row)"
           >
-            <span>⬆️ Upgrade</span>
+            <BaseIcon name="arrow-up" size="xs" />
+            <span>Upgrade</span>
           </button>
           <button
             class="btn btn-secondary btn-xs btn-remove btn-evict"
@@ -110,7 +114,8 @@ const clusterColumns: Column<Cluster>[] = [
             title="Evict Cluster"
             @click="emit('remove', row)"
           >
-            <span>🗑️ Evict</span>
+            <BaseIcon name="trash" size="xs" />
+            <span>Evict</span>
           </button>
         </div>
       </template>
@@ -132,6 +137,9 @@ const clusterColumns: Column<Cluster>[] = [
 }
 
 .table-actions-row .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 3px 6px;
   font-size: 11px;
 }
