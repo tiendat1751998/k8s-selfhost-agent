@@ -84,4 +84,46 @@ func TestRouter_AuthRateLimiting(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("Shared Rate Limit Across Auth Endpoints", func(t *testing.T) {
+		sharedIP := "198.51.100.99:9999"
+		loginBody, _ := json.Marshal(map[string]string{"email": "shared@example.com", "password": "wrong"})
+		refreshBody, _ := json.Marshal(map[string]string{})
+
+		// 5 requests to /login
+		for i := 0; i < 5; i++ {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.RemoteAddr = sharedIP
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code == http.StatusTooManyRequests {
+				t.Fatalf("login request %d should not be rate limited yet", i+1)
+			}
+		}
+
+		// 5 requests to /refresh
+		for i := 0; i < 5; i++ {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(refreshBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.RemoteAddr = sharedIP
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code == http.StatusTooManyRequests {
+				t.Fatalf("refresh request %d should not be rate limited yet", i+1)
+			}
+		}
+
+		// 11th request to /verify-mfa from same IP must be rate limited
+		mfaBody, _ := json.Marshal(map[string]string{"partial_token": "dummy", "code": "123456"})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/verify-mfa", bytes.NewReader(mfaBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = sharedIP
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusTooManyRequests {
+			t.Fatalf("11th request across auth endpoints must return 429, got %d", rec.Code)
+		}
+	})
 }

@@ -180,12 +180,21 @@ func TestAuditRepo_RecordAction_SensitiveRedaction(t *testing.T) {
 		"refresh_token": "refresh-456",
 		"apiKey":        "apikey-789",
 		"api_key":       "apikey-012",
+		"api-key":       "kebab-api-key",
+		"access-token":  "kebab-access-token",
+		"auth-token":    "kebab-auth-token",
+		"private-key":   "kebab-private-key",
 		"private_key":   "-----BEGIN RSA PRIVATE KEY-----",
 		"safe_key":      "safe_value",
 		"nested": map[string]interface{}{
 			"password": "nested-password",
 			"secret":   "nested-secret",
 			"info":     "nested-info",
+		},
+		"str_map": map[string]string{
+			"password": "str-map-password",
+			"api-key":  "str-map-api-key",
+			"visible":  "str-map-visible",
 		},
 		"slice": []interface{}{
 			map[string]interface{}{
@@ -228,6 +237,10 @@ func TestAuditRepo_RecordAction_SensitiveRedaction(t *testing.T) {
 	assert.Equal(t, "[REDACTED]", recorded["refresh_token"])
 	assert.Equal(t, "[REDACTED]", recorded["apiKey"])
 	assert.Equal(t, "[REDACTED]", recorded["api_key"])
+	assert.Equal(t, "[REDACTED]", recorded["api-key"])
+	assert.Equal(t, "[REDACTED]", recorded["access-token"])
+	assert.Equal(t, "[REDACTED]", recorded["auth-token"])
+	assert.Equal(t, "[REDACTED]", recorded["private-key"])
 	assert.Equal(t, "[REDACTED]", recorded["private_key"])
 
 	// Check safe field is preserved
@@ -239,6 +252,13 @@ func TestAuditRepo_RecordAction_SensitiveRedaction(t *testing.T) {
 	assert.Equal(t, "[REDACTED]", nested["password"])
 	assert.Equal(t, "[REDACTED]", nested["secret"])
 	assert.Equal(t, "nested-info", nested["info"])
+
+	// Check map[string]string redaction
+	strMap, ok := recorded["str_map"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "[REDACTED]", strMap["password"])
+	assert.Equal(t, "[REDACTED]", strMap["api-key"])
+	assert.Equal(t, "str-map-visible", strMap["visible"])
 
 	// Check slice redaction
 	slice, ok := recorded["slice"].([]interface{})

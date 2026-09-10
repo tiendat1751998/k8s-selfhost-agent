@@ -228,6 +228,19 @@ func TestSanitizeURL(t *testing.T) {
 			contains: []string{"TOKEN=%5BREDACTED%5D", "Secret=%5BREDACTED%5D"},
 			omits:    []string{"xyz", "shh"},
 		},
+		{
+			name:     "kebab-case query params and authorization redacted",
+			input:    "http://localhost:8080/api/v1/auth?api-key=secret-key&access-token=at-secret&auth-token=auth-sec&authorization=bearer-token&private-key=pk-val&normal=public",
+			contains: []string{
+				"normal=public",
+				"api-key=%5BREDACTED%5D",
+				"access-token=%5BREDACTED%5D",
+				"auth-token=%5BREDACTED%5D",
+				"authorization=%5BREDACTED%5D",
+				"private-key=%5BREDACTED%5D",
+			},
+			omits: []string{"secret-key", "at-secret", "auth-sec", "bearer-token", "pk-val"},
+		},
 	}
 
 	for _, tc := range tests {

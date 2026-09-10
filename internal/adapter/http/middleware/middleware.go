@@ -123,6 +123,7 @@ func Metrics(next http.Handler) http.Handler {
 var sensitiveQueryKeys = map[string]struct{}{
 	"token":         {},
 	"trace_token":   {},
+	"authorization": {},
 	"key":           {},
 	"password":      {},
 	"secret":        {},
@@ -130,10 +131,13 @@ var sensitiveQueryKeys = map[string]struct{}{
 	"apikey":        {},
 	"access_token":  {},
 	"refresh_token": {},
+	"auth_token":    {},
+	"private_key":   {},
 }
 
 func isSensitiveQueryKey(key string) bool {
 	clean := strings.ToLower(strings.TrimSpace(key))
+	clean = strings.ReplaceAll(clean, "-", "_")
 	_, exists := sensitiveQueryKeys[clean]
 	return exists
 }
