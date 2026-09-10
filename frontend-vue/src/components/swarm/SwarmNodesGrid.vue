@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { DockerNode } from '../../api/compute'
 
 const props = defineProps<{
@@ -40,7 +41,7 @@ function formatMemory(mem?: number): string {
       >
         <div class="rack-top">
           <div class="rack-header-left">
-            <span class="server-icon" aria-hidden="true">🖳</span>
+            <span class="server-icon" aria-hidden="true"><BaseIcon name="server" size="sm" /></span>
             <div>
               <h3 class="rack-node-name font-mono">{{ node.name }}</h3>
               <span class="rack-role font-mono" :class="node.role === 'manager' ? 'role-mgr' : 'role-wrk'">
@@ -93,7 +94,7 @@ function formatMemory(mem?: number): string {
               title="Drain workloads from node"
               @click="emit('drain', node.id)"
             >
-              <span>{{ props.actionLoading === `drain-${node.id}` ? '⏳ Draining...' : '⏸ Drain' }}</span>
+              <span><BaseIcon :name="props.actionLoading === `drain-${node.id}` ? 'activity' : 'pause'" size="xs" :class="{ 'spin-icon': props.actionLoading === `drain-${node.id}` }" /> {{ props.actionLoading === `drain-${node.id}` ? 'Draining...' : 'Drain' }}</span>
             </button>
             <button
               v-else-if="node.availability === 'drain'"
@@ -102,14 +103,14 @@ function formatMemory(mem?: number): string {
               title="Activate node for scheduling"
               @click="emit('activate', node.id)"
             >
-              <span>{{ props.actionLoading === `activate-${node.id}` ? '⏳ Activating...' : '▶ Activate' }}</span>
+              <span><BaseIcon :name="props.actionLoading === `activate-${node.id}` ? 'activity' : 'play'" size="xs" :class="{ 'spin-icon': props.actionLoading === `activate-${node.id}` }" /> {{ props.actionLoading === `activate-${node.id}` ? 'Activating...' : 'Activate' }}</span>
             </button>
             <button
               class="btn btn-secondary btn-xs"
               title="Inspect node specifications"
               @click="emit('inspect', node)"
             >
-              <span>🔍 Inspect</span>
+              <span><BaseIcon name="search" size="xs" /> Inspect</span>
             </button>
           </div>
         </div>

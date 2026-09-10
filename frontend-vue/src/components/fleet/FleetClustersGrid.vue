@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Cluster } from '../../api/fleet'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   clusters: Cluster[]
@@ -38,7 +39,7 @@ const emit = defineEmits<{
     <!-- Empty State for K8s Clusters -->
     <div v-else-if="clusters.length === 0" class="empty-fleet-card">
       <div class="empty-icon-wrap">
-        <span class="empty-icon">⎈</span>
+        <span class="empty-icon"><BaseIcon name="anchor" size="lg" /></span>
       </div>
       <h3 class="empty-title">No External Kubernetes Clusters Registered</h3>
       <p class="empty-desc">
@@ -48,7 +49,7 @@ const emit = defineEmits<{
       <div class="fleet-features-grid">
         <div class="feature-item glass-panel">
           <div class="feature-header">
-            <span class="feature-badge-icon">🌐</span>
+            <span class="feature-badge-icon"><BaseIcon name="globe" size="xs" /></span>
             <h4 class="feature-heading">Federated Multi-Cluster Management</h4>
           </div>
           <p class="feature-text">
@@ -58,7 +59,7 @@ const emit = defineEmits<{
 
         <div class="feature-item glass-panel">
           <div class="feature-header">
-            <span class="feature-badge-icon">🗺️</span>
+            <span class="feature-badge-icon"><BaseIcon name="globe" size="xs" /></span>
             <h4 class="feature-heading">Multi-Region Fleet Orchestration</h4>
           </div>
           <p class="feature-text">
@@ -68,7 +69,7 @@ const emit = defineEmits<{
 
         <div class="feature-item glass-panel">
           <div class="feature-header">
-            <span class="feature-badge-icon">🔑</span>
+            <span class="feature-badge-icon"><BaseIcon name="lock" size="xs" /></span>
             <h4 class="feature-heading">Kubeconfig Import & Secure Vault</h4>
           </div>
           <p class="feature-text">
@@ -78,7 +79,7 @@ const emit = defineEmits<{
 
         <div class="feature-item glass-panel">
           <div class="feature-header">
-            <span class="feature-badge-icon">🛡️</span>
+            <span class="feature-badge-icon"><BaseIcon name="shield" size="xs" /></span>
             <h4 class="feature-heading">Cluster Health Auditing</h4>
           </div>
           <p class="feature-text">
@@ -99,7 +100,7 @@ const emit = defineEmits<{
       <div v-for="cluster in clusters" :key="cluster.id" class="cluster-card glass-panel">
         <div class="card-top">
           <div class="cluster-brand">
-            <span class="cluster-icon">⎈</span>
+            <span class="cluster-icon"><BaseIcon name="anchor" size="md" /></span>
             <div>
               <h3 class="cluster-title">{{ cluster.name }}</h3>
               <span class="cluster-group font-mono">{{ cluster.group || 'default' }} · {{ (cluster.provider || 'generic').toUpperCase() }}</span>
@@ -128,27 +129,27 @@ const emit = defineEmits<{
         </div>
 
         <div class="card-actions">
-          <button class="btn btn-primary btn-xs" @click="emit('details', cluster)"><span>⚡ Essentials</span></button>
+          <button class="btn btn-primary btn-xs" @click="emit('details', cluster)"><span><BaseIcon name="zap" size="xs" /> Essentials</span></button>
           <button
             class="btn btn-secondary btn-xs"
             :disabled="actionLoading === cluster.id"
             @click="emit('discover', cluster)"
           >
-            <span>🔍 Discover</span>
+            <span><BaseIcon name="search" size="xs" /> Discover</span>
           </button>
           <button
             class="btn btn-secondary btn-xs"
             :disabled="actionLoading === cluster.id"
             @click="emit('upgrade', cluster)"
           >
-            <span>⬆️ Upgrade</span>
+            <span><BaseIcon name="arrow-up" size="xs" /> Upgrade</span>
           </button>
           <button
             class="btn btn-secondary btn-xs btn-remove btn-evict"
             :disabled="actionLoading === cluster.id"
             @click="emit('remove', cluster)"
           >
-            <span>🗑️ Evict</span>
+            <span><BaseIcon name="trash" size="xs" /> Evict</span>
           </button>
         </div>
       </div>

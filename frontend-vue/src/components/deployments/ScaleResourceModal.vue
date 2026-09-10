@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import type { DeploymentApp, UpdateResourcesPayload } from '../../api/compute'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import ScaleVerticalSection from './ScaleVerticalSection.vue'
 import { formatContainerName } from '../../utils/dockerFormat'
 
@@ -88,7 +89,7 @@ function submitApply() {
           :class="{ active: scaleModalTab === 'horizontal' }"
           @click="scaleModalTab = 'horizontal'"
         >
-          <span class="tab-icon">🌐</span>
+          <span class="tab-icon"><BaseIcon name="globe" size="xs" /></span>
           <span class="tab-title">Horizontal Scaling (Replicas)</span>
           <span class="tab-badge font-mono">{{ targetReplicas }} Pods</span>
         </button>
@@ -98,7 +99,7 @@ function submitApply() {
           :class="{ active: scaleModalTab === 'vertical' }"
           @click="scaleModalTab = 'vertical'"
         >
-          <span class="tab-icon">⚡</span>
+          <span class="tab-icon"><BaseIcon name="zap" size="xs" /></span>
           <span class="tab-title">Vertical Resources (CPU & RAM)</span>
           <span class="tab-badge font-mono">{{ targetMemoryLimit }} / {{ targetCpuLimit }}</span>
         </button>
@@ -197,7 +198,8 @@ function submitApply() {
         @click="submitApply"
       >
         <span v-if="actionLoading === 'resources' || actionLoading === 'scale'" class="spinner-inline"></span>
-        <span>{{ (actionLoading === 'resources' || actionLoading === 'scale') ? 'Applying Resource Configuration...' : 'Apply Resource Configuration ➔' }}</span>
+        <span>{{ (actionLoading === 'resources' || actionLoading === 'scale') ? 'Applying Resource Configuration...' : 'Apply Resource Configuration' }}</span>
+        <BaseIcon v-if="actionLoading !== 'resources' && actionLoading !== 'scale'" name="play" size="xs" />
       </button>
     </template>
   </ModalDrawer>

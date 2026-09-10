@@ -19,7 +19,7 @@ defineProps<{
       title="Fleet Control Planes"
       :value="totalControlPlanes"
       :subtitle="`${k8sClusterCount} K8s · ${hasSwarm ? '1 Docker Swarm' : '0 Swarm'}`"
-      icon="🌐"
+      icon="globe"
       badge="TOPOLOGY"
       badge-color="cyan"
     />
@@ -27,7 +27,7 @@ defineProps<{
       title="Healthy Control Planes"
       :value="totalControlPlanes > 0 ? `${healthyCount}/${totalControlPlanes}` : '0/0'"
       subtitle="Clusters passing control plane health checks"
-      icon="🛡️"
+      icon="shield"
       badge="HEALTH"
       badge-color="emerald"
       trend="Continuous Probing"
@@ -37,7 +37,7 @@ defineProps<{
       title="Total Fleet Nodes"
       :value="totalNodes"
       :subtitle="`${k8sNodes} K8s nodes · ${swarmNodes} Swarm nodes`"
-      icon="🖥️"
+      icon="server"
       badge="COMPUTE"
       badge-color="violet"
     />
@@ -45,7 +45,7 @@ defineProps<{
       title="Active Engine Providers"
       :value="cloudProviders.length"
       :subtitle="cloudProviders.length > 0 ? cloudProviders.join(', ') : 'No engines attached'"
-      icon="☁️"
+      icon="cloud"
       badge="HYBRID"
       badge-color="cyan"
     />

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { clusterApi, type BootstrapRequest } from '../../api/cluster'
 
 const props = withDefaults(
@@ -26,10 +27,10 @@ interface OptionItem {
 }
 
 const availableOptions: OptionItem[] = [
-  { id: 'metrics-server', name: 'Metrics Server', desc: 'Resource metrics pipeline for kubectl top and HPA.', icon: '📊' },
-  { id: 'local-storage', name: 'Local StorageClass', desc: 'Dynamic local-path-provisioner storageclass.', icon: '💾' },
-  { id: 'agent-daemonset', name: 'Agent DaemonSet', desc: 'Cluster host-agent metrics and health probe.', icon: '🤖' },
-  { id: 'master-taints', name: 'Master Taints Removal', desc: 'Allow workload pods to run on control plane nodes.', icon: '⚡' },
+  { id: 'metrics-server', name: 'Metrics Server', desc: 'Resource metrics pipeline for kubectl top and HPA.', icon: 'activity' },
+  { id: 'local-storage', name: 'Local StorageClass', desc: 'Dynamic local-path-provisioner storageclass.', icon: 'hard-drive' },
+  { id: 'agent-daemonset', name: 'Agent DaemonSet', desc: 'Cluster host-agent metrics and health probe.', icon: 'shield' },
+  { id: 'master-taints', name: 'Master Taints Removal', desc: 'Allow workload pods to run on control plane nodes.', icon: 'zap' },
 ]
 
 const selected = ref<string[]>([])
@@ -141,7 +142,7 @@ function handleClose() {
     :show="show"
     mode="modal"
     max-width="680px"
-    title="⚡ 1-Click Cluster Essentials Bootstrap"
+    title="1-Click Cluster Essentials Bootstrap"
     subtitle="Provision telemetry, local storage class, agent daemon, and configure node taints."
     @update:show="emit('update:show', $event)"
   >
@@ -167,7 +168,7 @@ function handleClose() {
             <div class="opt-check">
               <input type="checkbox" :checked="selected.includes(opt.id)" @click.stop="toggle(opt.id)" />
             </div>
-            <span class="opt-icon">{{ opt.icon }}</span>
+            <span class="opt-icon"><BaseIcon :name="opt.icon" size="sm" /></span>
             <div class="opt-text">
               <strong class="opt-title font-mono">{{ opt.name }}</strong>
               <p class="opt-desc">{{ opt.desc }}</p>
@@ -186,7 +187,7 @@ function handleClose() {
           <span class="term-title font-mono font-xs">
             {{ executing ? 'EXECUTION IN PROGRESS: ' + currentStep : finished ? 'INSTALLATION COMPLETED' : 'BOOTSTRAP TERMINAL' }}
           </span>
-          <span v-if="executing" class="spinner font-mono">⏳</span>
+          <span v-if="executing" class="spinner font-mono"><BaseIcon name="activity" size="xs" class="spin-icon" /></span>
         </div>
         <div class="term-body font-mono">
           <div v-for="(line, idx) in logs" :key="idx" class="term-line">{{ line }}</div>
@@ -194,7 +195,7 @@ function handleClose() {
       </div>
 
       <div v-if="error" class="alert-error font-mono font-xs">
-        ⚠️ {{ error }}
+        <BaseIcon name="alert-triangle" size="xs" /> {{ error }}
       </div>
     </div>
 
@@ -209,7 +210,7 @@ function handleClose() {
           :disabled="selected.length === 0 || executing"
           @click="startBootstrap"
         >
-          <span>{{ executing ? '⏳ Applying...' : '⚡ Apply Essentials (' + selected.length + ')' }}</span>
+          <span><BaseIcon :name="executing ? 'activity' : 'zap'" size="xs" :class="{ 'spin-icon': executing }" /> {{ executing ? 'Applying...' : 'Apply Essentials (' + selected.length + ')' }}</span>
         </button>
       </div>
     </template>

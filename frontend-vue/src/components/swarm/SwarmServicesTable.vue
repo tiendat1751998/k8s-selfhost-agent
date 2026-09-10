@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { DockerService } from '../../api/compute'
 
 const props = defineProps<{
@@ -48,7 +49,7 @@ function formatDate(d?: string): string {
             <!-- Service Name & Image -->
             <td>
               <div class="svc-table-name-cell">
-                <span class="svc-icon" aria-hidden="true">🐳</span>
+                <span class="svc-icon" aria-hidden="true"><BaseIcon name="box" size="sm" /></span>
                 <div>
                   <div class="svc-table-name svc-table-title font-mono" :title="svc.name" @click="emit('inspect', svc)">
                     {{ svc.name }}
@@ -69,7 +70,7 @@ function formatDate(d?: string): string {
                   aria-label="Decrease replicas"
                   @click="emit('scale', svc, -1)"
                 >
-                  <span>−</span>
+                  <span>-</span>
                 </button>
                 <span class="stepper-value font-mono" style="font-size: 13px; min-width: 20px;">
                   {{ svc.replicas }}
@@ -115,7 +116,7 @@ function formatDate(d?: string): string {
                   title="Scale service replica count"
                   @click="emit('scale', svc, 1)"
                 >
-                  <span>⚡ Scale</span>
+                  <span><BaseIcon name="zap" size="xs" /> Scale</span>
                 </button>
 
                 <button
@@ -124,7 +125,7 @@ function formatDate(d?: string): string {
                   title="Rolling update service"
                   @click="emit('update', svc)"
                 >
-                  <span>🔄 Update</span>
+                  <span><BaseIcon name="refresh" size="xs" /> Update</span>
                 </button>
 
                 <button
@@ -133,7 +134,7 @@ function formatDate(d?: string): string {
                   title="Inspect service logs"
                   @click="emit('logs', svc.id, svc.name)"
                 >
-                  <span>📄 Logs</span>
+                  <span><BaseIcon name="file-text" size="xs" /> Logs</span>
                 </button>
 
                 <button
@@ -142,7 +143,7 @@ function formatDate(d?: string): string {
                   title="Remove Swarm service"
                   @click="emit('remove', svc.id)"
                 >
-                  <span>🗑 Remove</span>
+                  <span><BaseIcon name="trash" size="xs" /> Remove</span>
                 </button>
               </div>
             </td>

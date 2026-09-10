@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import MetricCard from '../components/ui/MetricCard.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import DeploymentsTable from '../components/deployments/DeploymentsTable.vue'
 import DeploymentsMobileCards from '../components/deployments/DeploymentsMobileCards.vue'
 import CanaryStrategyModal from '../components/deployments/CanaryStrategyModal.vue'
@@ -117,14 +118,14 @@ async function onCreateApp(payload: DeploymentApp) {
     <!-- Compact 44px Mobile Command Bar (<768px) -->
     <div class="mobile-command-bar">
       <div class="mobile-search-compact-wrap">
-        <span class="mobile-search-ico">🔍</span>
+        <span class="mobile-search-ico"><BaseIcon name="search" size="xs" /></span>
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Filter workloads..."
           class="input-glass mobile-search-compact"
         />
-        <button v-if="searchQuery" type="button" class="mobile-search-clear" @click="searchQuery = ''">✕</button>
+        <button v-if="searchQuery" type="button" class="mobile-search-clear" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="mobile-compact-badge font-mono" title="Total workloads and ready pods">
@@ -138,7 +139,7 @@ async function onCreateApp(payload: DeploymentApp) {
         @click="showMobileFilters = !showMobileFilters"
         title="Toggle Filter Options"
       >
-        ⚙️ Filters
+        <BaseIcon name="sliders" size="xs" /> Filters
       </button>
 
       <button
@@ -146,18 +147,17 @@ async function onCreateApp(payload: DeploymentApp) {
         class="btn-mobile-deploy"
         title="Deploy Workload"
         @click="showCreateModal = true; selectedTemplate = null"
-      >
-        ➕
+      >+
       </button>
     </div>
 
     <!-- Mobile Micro-Telemetry Strip (<640px) -->
     <div class="micro-telemetry-strip font-mono">
-      <span>🚀 {{ totalWorkloads }} workloads</span>
+      <span><BaseIcon name="play" size="xs" /> {{ totalWorkloads }} workloads</span>
       <span class="telemetry-sep">·</span>
       <span>{{ readyReplicas }}/{{ totalReplicas }} pods</span>
       <span class="telemetry-sep">·</span>
-      <span>🛡️ {{ healthyCount }} healthy</span>
+      <span><BaseIcon name="shield" size="xs" /> {{ healthyCount }} healthy</span>
     </div>
 
     <!-- Mobile Expandable Filter Strip Accordion (<768px) -->
@@ -188,7 +188,7 @@ async function onCreateApp(payload: DeploymentApp) {
               :class="{ 'pill-active': statusFilter === 'healthy' }"
               @click="statusFilter = 'healthy'"
             >
-              🛡️ Healthy ({{ healthyCount }})
+              <BaseIcon name="shield" size="xs" /> Healthy ({{ healthyCount }})
             </button>
             <button
               type="button"
@@ -196,7 +196,7 @@ async function onCreateApp(payload: DeploymentApp) {
               :class="{ 'pill-active': statusFilter === 'degraded' }"
               @click="statusFilter = 'degraded'"
             >
-              ⚠️ Degraded ({{ degradedCount }})
+              <BaseIcon name="alert-triangle" size="xs" /> Degraded ({{ degradedCount }})
             </button>
           </div>
         </div>
@@ -218,7 +218,7 @@ async function onCreateApp(payload: DeploymentApp) {
               :class="{ 'pill-active': activeFilterTab === 'k8s' }"
               @click="activeFilterTab = 'k8s'"
             >
-              ☸️ K8s ({{ k8sCount }})
+              <BaseIcon name="anchor" size="xs" /> K8s ({{ k8sCount }})
             </button>
             <button
               type="button"
@@ -226,7 +226,7 @@ async function onCreateApp(payload: DeploymentApp) {
               :class="{ 'pill-active': activeFilterTab === 'swarm' }"
               @click="activeFilterTab = 'swarm'"
             >
-              🐳 Docker ({{ swarmCount }})
+              <BaseIcon name="box" size="xs" /> Docker ({{ swarmCount }})
             </button>
           </div>
         </div>
@@ -242,7 +242,7 @@ async function onCreateApp(payload: DeploymentApp) {
         </div>
         <h1 class="view-title">
           <span class="title-full">Deployments & App Workload Catalog</span>
-          <span class="title-compact">🚀 Deployments</span>
+          <span class="title-compact"><BaseIcon name="play" size="sm" /> Deployments</span>
         </h1>
         <p class="view-desc">
           Unified production orchestrator for Kubernetes Deployments & Docker Swarm services with full Canary traffic splits, Blue-Green zero-downtime cutovers, dynamic replica autoscaling, and rolling restarts.
@@ -251,37 +251,37 @@ async function onCreateApp(payload: DeploymentApp) {
 
       <div class="header-actions">
         <button type="button" class="btn btn-secondary" :disabled="loading" @click="fetchDeployments">
-          <span class="btn-text-full"><span :class="{ 'spin-icon': loading }">🔄</span> {{ loading ? 'Syncing...' : 'Refresh' }}</span>
-          <span class="btn-text-mobile">{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
+          <span class="btn-text-full"><BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Syncing...' : 'Refresh' }}</span>
+          <span class="btn-text-mobile"><BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Syncing...' : 'Refresh' }}</span>
         </button>
         <button type="button" class="btn btn-primary" @click="showCreateModal = true; selectedTemplate = null">
           <span class="btn-text-full">+ Deploy Workload</span>
           <span class="btn-text-mobile">+ Deploy</span>
         </button>
         <button type="button" class="btn btn-secondary" @click="openYamlViewer">
-          <span class="btn-text-full">📝 YAML Manifest</span>
-          <span class="btn-text-mobile">📝 YAML</span>
+          <span class="btn-text-full"><BaseIcon name="file-text" size="xs" /> YAML Manifest</span>
+          <span class="btn-text-mobile"><BaseIcon name="file-text" size="xs" /> YAML</span>
         </button>
         <button type="button" class="btn btn-secondary" @click="showTemplatesDrawer = true">
-          <span class="btn-text-full">📦 Blueprint Catalog</span>
-          <span class="btn-text-mobile">📦 Template</span>
+          <span class="btn-text-full"><BaseIcon name="box" size="xs" /> Blueprint Catalog</span>
+          <span class="btn-text-mobile"><BaseIcon name="box" size="xs" /> Template</span>
         </button>
       </div>
     </div>
 
     <!-- Notification Toast Banner -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <span class="toast-icon">{{ toastMessage.type === 'success' ? '✅' : toastMessage.type === 'error' ? '⚠️' : 'ℹ️' }}</span>
+      <span class="toast-icon"><BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : toastMessage.type === 'error' ? 'alert-triangle' : 'help-circle'" size="sm" /></span>
       <span class="toast-text">{{ toastMessage.text }}</span>
-      <button type="button" class="toast-close" @click="toastMessage = null">✕</button>
+      <button type="button" class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Metric HUD Grid (Desktop & Tablet >=768px) -->
     <div class="metrics-grid">
-      <MetricCard title="Total Workloads" :value="totalWorkloads" subtitle="Active microservice deployments" icon="📦" badge="SERVICES" badge-color="cyan" />
-      <MetricCard title="Running Pods" :value="`${readyReplicas} / ${totalReplicas}`" :subtitle="`${healthyCount} of ${totalWorkloads} healthy workloads`" icon="🚀" badge="REPLICAS" badge-color="emerald" trend="Auto-Scaled via KEDA" trend-type="positive" />
-      <MetricCard title="Canary & Blue-Green" :value="`${canaryCount + blueGreenCount}`" :subtitle="`${canaryCount} Canary · ${blueGreenCount} Blue-Green`" icon="🎯" badge="STRATEGY" badge-color="violet" trend="Zero Downtime" trend-type="positive" />
-      <MetricCard title="Runtime Fleet" :value="`${k8sCount} K8s / ${swarmCount} Swarm`" subtitle="Kubernetes clusters & Swarm hosts" icon="⚡" badge="RUNTIME" badge-color="cyan" />
+      <MetricCard title="Total Workloads" :value="totalWorkloads" subtitle="Active microservice deployments" icon="box" badge="SERVICES" badge-color="cyan" />
+      <MetricCard title="Running Pods" :value="`${readyReplicas} / ${totalReplicas}`" :subtitle="`${healthyCount} of ${totalWorkloads} healthy workloads`" icon="play" badge="REPLICAS" badge-color="emerald" trend="Auto-Scaled via KEDA" trend-type="positive" />
+      <MetricCard title="Canary & Blue-Green" :value="`${canaryCount + blueGreenCount}`" :subtitle="`${canaryCount} Canary · ${blueGreenCount} Blue-Green`" icon="sliders" badge="STRATEGY" badge-color="violet" trend="Zero Downtime" trend-type="positive" />
+      <MetricCard title="Runtime Fleet" :value="`${k8sCount} K8s / ${swarmCount} Swarm`" subtitle="Kubernetes clusters & Swarm hosts" icon="zap" badge="RUNTIME" badge-color="cyan" />
     </div>
 
     <!-- Main Workload Section -->
@@ -308,7 +308,7 @@ async function onCreateApp(payload: DeploymentApp) {
               title="Healthy Workloads"
               @click="statusFilter = 'healthy'"
             >
-              <span>🛡️ Healthy</span>
+              <span><BaseIcon name="shield" size="xs" /> Healthy</span>
               <span class="pill-badge">{{ healthyCount }}</span>
             </button>
             <button
@@ -318,7 +318,7 @@ async function onCreateApp(payload: DeploymentApp) {
               title="Degraded Workloads"
               @click="statusFilter = 'degraded'"
             >
-              <span>⚠️ Degraded</span>
+              <span><BaseIcon name="alert-triangle" size="xs" /> Degraded</span>
               <span class="pill-badge">{{ degradedCount }}</span>
             </button>
           </div>
@@ -327,27 +327,27 @@ async function onCreateApp(payload: DeploymentApp) {
 
           <!-- Type & Strategy Filter Pills -->
           <button type="button" class="pill-btn" :class="{ 'pill-active': activeFilterTab === 'all' }" @click="activeFilterTab = 'all'">
-            <span class="btn-text-full">🌐 All Workloads</span>
+            <span class="btn-text-full"><BaseIcon name="globe" size="xs" /> All Workloads</span>
             <span class="btn-text-mobile">All</span>
             <span class="pill-badge">{{ totalWorkloads }}</span>
           </button>
           <button type="button" class="pill-btn pill-canary" :class="{ 'pill-active': activeFilterTab === 'canary' }" @click="activeFilterTab = 'canary'">
-            <span class="btn-text-full">🐥 Canary Rollouts</span>
+            <span class="btn-text-full"><BaseIcon name="git-branch" size="xs" /> Canary Rollouts</span>
             <span class="btn-text-mobile">Canary</span>
             <span class="pill-badge">{{ canaryCount }}</span>
           </button>
           <button type="button" class="pill-btn pill-bluegreen" :class="{ 'pill-active': activeFilterTab === 'bluegreen' }" @click="activeFilterTab = 'bluegreen'">
-            <span class="btn-text-full">🔄 Blue-Green</span>
+            <span class="btn-text-full"><BaseIcon name="refresh" size="xs" /> Blue-Green</span>
             <span class="btn-text-mobile">B/G</span>
             <span class="pill-badge">{{ blueGreenCount }}</span>
           </button>
           <button type="button" class="pill-btn" :class="{ 'pill-active': activeFilterTab === 'k8s' }" @click="activeFilterTab = 'k8s'">
-            <span class="btn-text-full">☸️ Kubernetes</span>
+            <span class="btn-text-full"><BaseIcon name="anchor" size="xs" /> Kubernetes</span>
             <span class="btn-text-mobile">K8s</span>
             <span class="pill-badge">{{ k8sCount }}</span>
           </button>
           <button type="button" class="pill-btn" :class="{ 'pill-active': activeFilterTab === 'swarm' }" @click="activeFilterTab = 'swarm'">
-            <span class="btn-text-full">🐳 Docker / Swarm</span>
+            <span class="btn-text-full"><BaseIcon name="box" size="xs" /> Docker / Swarm</span>
             <span class="btn-text-mobile">Swarm</span>
             <span class="pill-badge">{{ swarmCount }}</span>
           </button>
@@ -355,9 +355,9 @@ async function onCreateApp(payload: DeploymentApp) {
 
         <div class="table-search-row">
           <div class="search-input-wrap">
-            <span class="search-ico">🔍</span>
+            <span class="search-ico"><BaseIcon name="search" size="xs" /></span>
             <input v-model="searchQuery" type="text" placeholder="Filter workloads by name, image, team..." class="input-glass search-input" />
-            <button v-if="searchQuery" type="button" class="clear-search-btn" @click="searchQuery = ''">✕</button>
+            <button v-if="searchQuery" type="button" class="clear-search-btn" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
           </div>
           <select v-model="selectedNamespaceFilter" class="input-glass select-ns font-mono">
             <option value="all">All Namespaces ({{ namespaces.length }})</option>

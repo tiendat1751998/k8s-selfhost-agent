@@ -1,8 +1,9 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { DeploymentApp } from '../../api/compute'
 import type { RolloutState } from '../../composables/useDeployments'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { formatContainerName, formatImageName } from '../../utils/dockerFormat'
 
 interface Props {
@@ -110,8 +111,8 @@ function asDeployment(row: unknown): DeploymentApp {
           </span>
           <div class="image-sub-row font-mono">
             <span class="rev-badge">rev #{{ asDeployment(row).revision || 1 }}</span>
-            <span v-if="asDeployment(row).paused" class="paused-badge font-sans">⏸️ Paused</span>
-            <span v-if="asDeployment(row).ingressHost" class="ingress-badge">🌐 {{ asDeployment(row).ingressHost }}</span>
+            <span v-if="asDeployment(row).paused" class="paused-badge font-sans"><BaseIcon name="pause" size="xs" /> Paused</span>
+            <span v-if="asDeployment(row).ingressHost" class="ingress-badge"><BaseIcon name="globe" size="xs" /> {{ asDeployment(row).ingressHost }}</span>
           </div>
         </div>
       </template>
@@ -164,7 +165,7 @@ function asDeployment(row: unknown): DeploymentApp {
             title="Inspect Real Container Logs"
             @click="emit('logs', asDeployment(row))"
           >
-            <span>📜 Logs</span>
+            <span><BaseIcon name="file-text" size="xs" /> Logs</span>
           </button>
 
           <button
@@ -173,7 +174,7 @@ function asDeployment(row: unknown): DeploymentApp {
             title="Scale Replicas"
             @click="emit('scale', asDeployment(row))"
           >
-            <span>⚡ Scale</span>
+            <span><BaseIcon name="zap" size="xs" /> Scale</span>
           </button>
 
           <button
@@ -182,7 +183,7 @@ function asDeployment(row: unknown): DeploymentApp {
             title="Manage Canary / Blue-Green Rollout Strategy"
             @click="emit('strategy', asDeployment(row))"
           >
-            <span>🎯 Strategy</span>
+            <span><BaseIcon name="git-branch" size="xs" /> Strategy</span>
           </button>
 
           <button
@@ -191,7 +192,7 @@ function asDeployment(row: unknown): DeploymentApp {
             title="Inspect Details"
             @click="emit('inspect', asDeployment(row))"
           >
-            <span>🔍 Details</span>
+            <span><BaseIcon name="search" size="xs" /> Details</span>
           </button>
 
           <button
@@ -201,7 +202,7 @@ function asDeployment(row: unknown): DeploymentApp {
             title="Rolling Restart Pods"
             @click="emit('restart', asDeployment(row))"
           >
-            <span :class="{ 'spin-icon': actionLoading === asDeployment(row).name }">🔄</span>
+            <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': actionLoading === asDeployment(row).name }" />
           </button>
 
           <button
@@ -211,7 +212,7 @@ function asDeployment(row: unknown): DeploymentApp {
             title="Terminate Deployment"
             @click="emit('delete', asDeployment(row))"
           >
-            <span>🗑️</span>
+            <span><BaseIcon name="trash" size="xs" /></span>
           </button>
         </div>
       </template>
