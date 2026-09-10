@@ -39,7 +39,7 @@
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 40px Command Bar (<768px) -->
     <div class="runbooks-mobile-command-bar mobile-only">
       <div class="command-bar-left">
         <span class="command-bar-title font-bold">📖 Runbooks ({{ filteredRunbooks.length }})</span>
@@ -65,7 +65,7 @@
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="runbooks-micro-telemetry mobile-only font-mono" role="status" aria-label="Runbooks Micro Telemetry">
       <span class="tel-item tel-rbooks">📖 {{ runbooks.length }} rbooks</span>
       <span class="tel-sep">·</span>
@@ -233,6 +233,7 @@ import ExecuteRunbookModal from '../components/runbooks/ExecuteRunbookModal.vue'
 import RunbookExecutionDrawer from '../components/runbooks/RunbookExecutionDrawer.vue'
 import { useRunbooks } from '../composables/useRunbooks'
 import '../assets/styles/views/runbooks.css'
+import '../assets/styles/components/runbooks-drawers.css'
 
 const {
   runbooks,
