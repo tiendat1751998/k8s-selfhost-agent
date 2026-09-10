@@ -235,7 +235,7 @@ async function handleRemove(cluster: Cluster) {
         v-model="searchFilter"
         type="text"
         placeholder="Filter clusters..."
-        class="input-glass mobile-search-input font-mono"
+        class="input-glass mobile-search-input"
         autofocus
       />
       <button v-if="searchFilter" class="search-clear-btn" @click="searchFilter = ''">✕</button>
@@ -335,7 +335,7 @@ async function handleRemove(cluster: Cluster) {
           v-model="searchFilter"
           type="text"
           placeholder="Filter fleet by name, provider, region, tier..."
-          class="input-glass filter-search-input font-mono"
+          class="input-glass filter-search-input"
         />
         <button
           v-if="searchFilter"

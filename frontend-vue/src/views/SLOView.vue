@@ -286,7 +286,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
         <input
           v-model="searchQuery"
           type="search"
-          class="mobile-search-input font-mono"
+          class="mobile-search-input"
           placeholder="Filter SLOs by service name..."
           autofocus
         />
@@ -331,7 +331,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
         <input
           v-model="searchQuery"
           type="search"
-          class="filter-search-input font-mono"
+          class="filter-search-input"
           placeholder="Filter SLOs by service name..."
         />
         <button v-if="searchQuery" type="button" class="clear-search-btn" title="Clear search" @click="searchQuery = ''">✕</button>

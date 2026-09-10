@@ -30,7 +30,7 @@ const emit = defineEmits<{
         <div class="mobile-stream-header">
           <span class="cluster-icon-mini">⎈</span>
           <span class="mobile-stream-name font-mono">{{ cluster.name }}</span>
-          <span class="tier-pill font-mono">{{ cluster.group || 'prod' }}</span>
+          <span class="tier-pill">{{ cluster.group || 'prod' }}</span>
           <StatusBadge :status="cluster.health_status || cluster.status || 'unknown'" size="sm" />
         </div>
         <div class="mobile-stream-sub font-mono">

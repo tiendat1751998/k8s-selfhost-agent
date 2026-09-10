@@ -1655,7 +1655,7 @@
 
 .sidebar-search-box { position: relative; display: flex; align-items: center; }
 .sidebar-search-icon { position: absolute; left: 10px; color: #64748b; }
-.sidebar-search-input { width: 100%; padding: 7px 28px 7px 30px; font-size: 0.76rem; }
+.sidebar-search-input { width: 100%; padding: 7px 28px 7px 36px; font-size: 0.76rem; }
 .sidebar-search-clear { position: absolute; right: 8px; background: none; border: none; color: #64748b; cursor: pointer; }
 
 .sidebar-section { display: flex; flex-direction: column; gap: 6px; }
