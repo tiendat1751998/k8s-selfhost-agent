@@ -47,7 +47,7 @@
 .table-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .table-scroll-wrapper {
@@ -63,7 +63,7 @@
 }
 
 th {
-  padding: 12px 18px;
+  padding: 10px 14px;
   background: rgba(15, 23, 42, 0.85);
   color: var(--text-secondary);
   font-size: 11px;
@@ -94,7 +94,7 @@ th {
 }
 
 td {
-  padding: 14px 18px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-primary);
 }

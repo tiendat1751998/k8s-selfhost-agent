@@ -25,7 +25,7 @@ const clusterColumns: Column<Cluster>[] = [
   { key: 'version', label: 'K8s Version', width: '110px', sortable: true },
   { key: 'nodes', label: 'Nodes', width: '75px', sortable: true, align: 'center' },
   { key: 'health_status', label: 'Health Status', width: '110px', sortable: true },
-  { key: 'actions', label: 'Cluster Operations', width: '280px', align: 'right' },
+  { key: 'actions', label: 'Operations', width: '260px', align: 'right' },
 ]
 </script>
 
@@ -52,7 +52,7 @@ const clusterColumns: Column<Cluster>[] = [
         <span
           class="font-mono text-cyan"
           style="font-weight: 700; cursor: pointer;"
-          title="View Cluster Essentials"
+          title="View Cluster Details"
           @click="emit('details', row)"
         >
           {{ row.name }}
@@ -83,10 +83,10 @@ const clusterColumns: Column<Cluster>[] = [
         <div class="table-actions-row">
           <button
             class="btn btn-primary btn-xs"
-            title="Cluster Essentials"
+            title="Cluster Details"
             @click="emit('details', row)"
           >
-            <span>⚡ Essentials</span>
+            <span>⚡ Details</span>
           </button>
           <button
             class="btn btn-secondary btn-xs"
@@ -94,7 +94,7 @@ const clusterColumns: Column<Cluster>[] = [
             title="Discover Resources"
             @click="emit('discover', row)"
           >
-            <span>🔍 Discover</span>
+            <span>🔍 Probe</span>
           </button>
           <button
             class="btn btn-secondary btn-xs"
