@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import type { NodeMetrics } from '../../../api/overview'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 defineProps<{
   nodes: NodeMetrics[]
@@ -141,7 +142,7 @@ function getNodePing(node: NodeMetrics): number {
               <div class="name-role-cell">
                 <span class="node-name-text font-bold" :title="node.node_name">{{ node.node_name }}</span>
                 <span class="role-badge font-mono" :class="getRoleBadge(node.role).cls">[{{ getRoleBadge(node.role).label }}]</span>
-                <span v-if="node.node_id === busiestNodeId" class="badge-hot" title="Highest traffic">🔥</span>
+                <BaseIcon v-if="node.node_id === busiestNodeId" name="flame" size="xs" class="badge-hot" title="Highest traffic" />
               </div>
             </td>
             <td class="col-ip font-mono">
@@ -171,12 +172,20 @@ function getNodePing(node: NodeMetrics): number {
             </td>
             <td class="col-probe font-mono">
               <span v-if="isOffline(node) || getNodePing(node) <= 0" class="text-muted">--</span>
-              <span v-else class="probe-val">⚡ {{ getNodePing(node) }}ms</span>
+              <span v-else class="probe-val">
+                <BaseIcon name="zap" size="xs" /> {{ getNodePing(node) }}ms
+              </span>
             </td>
             <td class="col-actions text-right" @click.stop>
               <div class="sre-suite">
-                <button type="button" class="sre-btn btn-logs" title="Stream Logs" @click="emit('logs', node)">📄 Logs</button>
-                <button type="button" class="sre-btn btn-details" title="Diagnostics & Details" @click="emit('details', node)">🔍 Details</button>
+                <button type="button" class="sre-btn btn-logs" title="Stream Logs" @click="emit('logs', node)">
+                  <BaseIcon name="file-text" size="xs" />
+                  <span>Logs</span>
+                </button>
+                <button type="button" class="sre-btn btn-details" title="Diagnostics & Details" @click="emit('details', node)">
+                  <BaseIcon name="search" size="xs" />
+                  <span>Details</span>
+                </button>
                 <div class="more-actions-wrap">
                   <button
                     type="button"
@@ -196,19 +205,27 @@ function getNodePing(node: NodeMetrics): number {
                     @click.stop
                   >
                     <button type="button" class="menu-item item-scale" @click="handleMenuAction('scale', node)">
-                      <span class="menu-item-icon">⚡</span>
+                      <span class="menu-item-icon">
+                        <BaseIcon name="zap" size="xs" />
+                      </span>
                       <span>Scale Workloads</span>
                     </button>
                     <button type="button" class="menu-item item-restart" @click="handleMenuAction('restart', node)">
-                      <span class="menu-item-icon">🔄</span>
+                      <span class="menu-item-icon">
+                        <BaseIcon name="refresh" size="xs" />
+                      </span>
                       <span>Restart Agent</span>
                     </button>
                     <button type="button" class="menu-item item-yaml" @click="handleMenuAction('yaml', node)">
-                      <span class="menu-item-icon">🎯</span>
+                      <span class="menu-item-icon">
+                        <BaseIcon name="file-text" size="xs" />
+                      </span>
                       <span>View YAML</span>
                     </button>
                     <button type="button" class="menu-item item-delete" @click="handleMenuAction('delete', node)">
-                      <span class="menu-item-icon">🗑</span>
+                      <span class="menu-item-icon">
+                        <BaseIcon name="trash" size="xs" />
+                      </span>
                       <span>Cordon / Evict</span>
                     </button>
                   </div>

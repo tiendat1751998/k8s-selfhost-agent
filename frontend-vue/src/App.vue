@@ -16,6 +16,7 @@ import TopHudAlertBell from './components/layout/TopHudAlertBell.vue'
 import AlertCenterModal from './components/overview/alerts/AlertCenterModal.vue'
 import AppMobileNav from './components/layout/AppMobileNav.vue'
 import PwaInstallBanner from './components/common/PwaInstallBanner.vue'
+import BaseIcon from './components/ui/BaseIcon.vue'
 import '@/assets/styles/layout/app-shell.css'
 
 const route = useRoute()
@@ -230,7 +231,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
             @click="mobileSidebarOpen = !mobileSidebarOpen"
             aria-label="Toggle navigation menu"
           >
-            <span>☰</span>
+            <BaseIcon name="menu" size="sm" />
           </button>
 
           <!-- Mobile Brand Logo / Title (visible on mobile only) -->
@@ -243,13 +244,15 @@ function handleNavigateToHost(nodeNameOrId: string) {
             title="K8SCONTROL Enterprise Platform"
             aria-label="K8SCONTROL Enterprise Platform Overview"
           >
-            <span class="hud-mobile-brand-icon" aria-hidden="true">⎈</span>
+            <BaseIcon name="anchor" size="md" class="hud-mobile-brand-icon" aria-hidden="true" />
             <span class="hud-mobile-brand-title">K8S<span>CONTROL</span></span>
           </div>
 
           <!-- Command Palette Search Button (Desktop) -->
           <button class="command-search-btn desktop-search" @click="showCommandPalette = true" aria-label="Quick search (Ctrl+K)">
-            <span class="search-ico" aria-hidden="true">🔍</span>
+            <span class="search-ico" aria-hidden="true">
+              <BaseIcon name="search" size="xs" />
+            </span>
             <span class="search-text">Search platform...</span>
             <kbd class="kbd-badge">Ctrl K</kbd>
           </button>
@@ -258,12 +261,16 @@ function handleNavigateToHost(nodeNameOrId: string) {
         <div class="hud-right">
           <!-- Mobile Quick Search Trigger (Mobile only) -->
           <button class="mobile-search-btn" @click="showCommandPalette = true" aria-label="Quick search (Ctrl+K)" title="Quick search (Ctrl+K)">
-            <span class="search-ico" aria-hidden="true">🔍</span>
+            <span class="search-ico" aria-hidden="true">
+              <BaseIcon name="search" size="xs" />
+            </span>
           </button>
 
           <!-- Sleek Workspace / Tenant Selector -->
           <div class="tenant-selector-wrap" title="Workspace / Multi-Tenant Organization">
-            <span class="tenant-icon" aria-hidden="true">🏢</span>
+            <span class="tenant-icon" aria-hidden="true">
+              <BaseIcon name="layers" size="xs" />
+            </span>
             <select v-model="selectedTenant" @change="handleTenantChange" class="tenant-select font-mono" aria-label="Select active workspace tenant">
               <option v-for="t in tenants" :key="t.id" :value="t.id">
                 {{ t.name }}
@@ -295,7 +302,9 @@ function handleNavigateToHost(nodeNameOrId: string) {
               <span class="user-role font-mono">{{ authStore.user.role || 'ADMIN' }}</span>
             </div>
             <button class="hud-logout-btn" title="Sign Out" aria-label="Sign Out" @click="handleLogout">
-              <span class="logout-icon" aria-hidden="true">🚪</span>
+              <span class="logout-icon" aria-hidden="true">
+                <BaseIcon name="lock" size="xs" />
+              </span>
             </button>
           </div>
         </div>

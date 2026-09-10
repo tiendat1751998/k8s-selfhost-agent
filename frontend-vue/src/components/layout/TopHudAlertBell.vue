@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAlertStore } from '../../stores/alertStore'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const alertStore = useAlertStore()
 
@@ -167,7 +168,9 @@ onUnmounted(() => {
       <template v-if="alertStore.activeAlerts.length > 0">
         <span class="bell-icon-wrap">
           <span class="pulse-dot" :class="alertStore.hasCriticalAlerts ? 'pulse-dot-rose' : 'pulse-dot-amber'"></span>
-          <span class="bell-emoji">{{ alertStore.hasCriticalAlerts ? '🚨' : '⚠️' }}</span>
+          <span class="bell-emoji">
+            <BaseIcon name="alert-triangle" size="xs" />
+          </span>
           <span class="bell-mobile-badge" :class="alertStore.hasCriticalAlerts ? 'badge-rose-bg' : 'badge-amber-bg'">
             {{ alertStore.activeAlerts.length }}
           </span>
@@ -180,7 +183,9 @@ onUnmounted(() => {
       <!-- Muted Only Mode -->
       <template v-else-if="alertStore.mutedAlertsCount > 0">
         <span class="bell-icon-wrap">
-          <span class="bell-emoji">🔕</span>
+          <span class="bell-emoji">
+            <BaseIcon name="bell-off" size="sm" />
+          </span>
           <span class="bell-mobile-badge badge-muted-bg">
             {{ alertStore.mutedAlertsCount }}
           </span>
@@ -193,7 +198,9 @@ onUnmounted(() => {
       <!-- Clean Zero Alerts Mode -->
       <template v-else>
         <span class="bell-icon-wrap">
-          <span class="bell-emoji">🔔</span>
+          <span class="bell-emoji">
+            <BaseIcon name="bell" size="sm" />
+          </span>
         </span>
         <span class="bell-count-text">0</span>
       </template>
@@ -215,7 +222,7 @@ onUnmounted(() => {
           <div class="toast-title-group" @click="handleOpenDetails">
             <span class="toast-beacon" :class="alertStore.hasCriticalAlerts ? 'beacon-rose' : 'beacon-amber'">
               <span class="beacon-pulse"></span>
-              {{ alertStore.hasCriticalAlerts ? '🚨' : '⚠️' }}
+              <BaseIcon name="alert-triangle" size="xs" />
             </span>
             <div class="toast-title-text">
               <span class="toast-title">Cluster Health Warning</span>
@@ -232,7 +239,7 @@ onUnmounted(() => {
             aria-label="Close notification"
             @click.stop.prevent="dismissToast"
           >
-            ✕
+            <BaseIcon name="x" size="xs" />
           </button>
         </div>
 
@@ -241,7 +248,9 @@ onUnmounted(() => {
           <p class="toast-preview-msg font-mono">
             {{ previewMessage }}
           </p>
-          <span v-if="isPaused" class="toast-paused-badge">⏱️ Timer Paused</span>
+          <span v-if="isPaused" class="toast-paused-badge">
+            <BaseIcon name="activity" size="xs" /> Timer Paused
+          </span>
         </div>
 
         <!-- Action Buttons -->
@@ -253,7 +262,8 @@ onUnmounted(() => {
             title="1-Click SRE Fast Failover for offline node"
             @click="handleQuickFailover"
           >
-            <span>⚡ Quick Failover</span>
+            <BaseIcon name="zap" size="xs" />
+            <span>Quick Failover</span>
           </button>
           <button
             type="button"
@@ -261,7 +271,8 @@ onUnmounted(() => {
             title="Open interactive Alert Center"
             @click="handleOpenDetails"
           >
-            <span>🔍 View Details</span>
+            <BaseIcon name="search" size="xs" />
+            <span>View Details</span>
           </button>
           <button
             type="button"
@@ -269,7 +280,8 @@ onUnmounted(() => {
             title="Silence all active node alerts until server restart"
             @click="handleMuteAll"
           >
-            <span>🔕 Mute All</span>
+            <BaseIcon name="bell-off" size="xs" />
+            <span>Mute All</span>
           </button>
           <button
             type="button"
@@ -277,7 +289,8 @@ onUnmounted(() => {
             title="Dismiss toast and dock into bell icon"
             @click.stop.prevent="dismissToast"
           >
-            <span>✕ Dismiss</span>
+            <BaseIcon name="x" size="xs" />
+            <span>Dismiss</span>
           </button>
         </div>
 

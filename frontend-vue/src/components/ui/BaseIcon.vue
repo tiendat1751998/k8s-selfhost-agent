@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
 
 export type IconSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number | string
@@ -43,6 +43,10 @@ export type KnownIconName =
   | 'zap-off'
   | 'filter'
   | 'download'
+  | 'menu'
+  | 'bell'
+  | 'bell-off'
+  | 'x'
 
 export type IconName = KnownIconName | (string & {})
 
@@ -117,6 +121,10 @@ const ICONS: Record<string, string> = {
   'zap-off': '<polyline points="12.41 6.75 13 2 10.57 4.92"/><polyline points="18.57 12.91 21 10 15.66 10"/><polygon points="8 8 3 14 12 14 11 22 16 16"/><line x1="2" x2="22" y1="2" y2="22"/>',
   filter: '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  menu: '<line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  'bell-off': '<path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><line x1="2" x2="22" y1="2" y2="22"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
 }
 
 const ALIAS_MAP: Record<string, string> = {
@@ -126,8 +134,8 @@ const ALIAS_MAP: Record<string, string> = {
   check: 'check-circle',
   success: 'check-circle',
   ok: 'check-circle',
-  close: 'x-circle',
-  cross: 'x-circle',
+  close: 'x',
+  cross: 'x',
   info: 'help-circle',
   settings: 'sliders',
   gear: 'sliders',
@@ -158,6 +166,10 @@ const ALIAS_MAP: Record<string, string> = {
   export: 'download',
   rocket: 'play',
   fire: 'flame',
+  bell: 'bell',
+  'bell-off': 'bell-off',
+  menu: 'menu',
+  hamburger: 'menu',
 }
 
 const FALLBACK_SVG = '<circle cx="12" cy="12" r="3" stroke-width="1.5" stroke-dasharray="2 2"/>'
