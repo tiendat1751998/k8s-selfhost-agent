@@ -1,13 +1,10 @@
 <script setup lang="ts">
 import type { DeploymentApp } from '../../api/compute'
-import type { RolloutState } from '../../composables/useDeployments'
 import { formatContainerName } from '../../utils/dockerFormat'
 
 interface Props {
   deployments: DeploymentApp[]
   loading?: boolean
-  actionLoading?: string | null
-  getRolloutState: (app: DeploymentApp) => RolloutState
 }
 
 defineProps<Props>()
@@ -15,10 +12,6 @@ defineProps<Props>()
 const emit = defineEmits<{
   (e: 'inspect', app: DeploymentApp): void
   (e: 'logs', app: DeploymentApp): void
-  (e: 'scale', app: DeploymentApp): void
-  (e: 'strategy', app: DeploymentApp): void
-  (e: 'restart', app: DeploymentApp): void
-  (e: 'delete', app: DeploymentApp): void
 }>()
 </script>
 

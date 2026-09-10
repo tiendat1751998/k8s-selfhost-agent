@@ -151,6 +151,15 @@ async function onCreateApp(payload: DeploymentApp) {
       </button>
     </div>
 
+    <!-- Mobile Micro-Telemetry Strip (<640px) -->
+    <div class="micro-telemetry-strip font-mono">
+      <span>🚀 {{ totalWorkloads }} workloads</span>
+      <span class="telemetry-sep">·</span>
+      <span>{{ readyReplicas }}/{{ totalReplicas }} pods</span>
+      <span class="telemetry-sep">·</span>
+      <span>🛡️ {{ healthyCount }} healthy</span>
+    </div>
+
     <!-- Mobile Expandable Filter Strip Accordion (<768px) -->
     <Transition name="filter-slide">
       <div v-if="showMobileFilters" class="mobile-filter-strip glass-panel">
@@ -379,14 +388,8 @@ async function onCreateApp(payload: DeploymentApp) {
         <DeploymentsMobileCards
           :deployments="filteredDeployments"
           :loading="loading"
-          :action-loading="actionLoading"
-          :get-rollout-state="getRolloutState"
           @inspect="openInspector($event)"
           @logs="openLogsInspector($event)"
-          @scale="openScaleModal($event)"
-          @strategy="openStrategyModal($event)"
-          @restart="handleRestart($event)"
-          @delete="handleDelete($event)"
         />
       </div>
     </div>
