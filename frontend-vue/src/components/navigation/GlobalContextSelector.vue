@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import { useGlobalContext } from '../../composables/useGlobalContext'
 
@@ -12,6 +12,7 @@ type DropdownType = 'cluster' | 'namespace' | null
 const activeDropdown = ref<DropdownType>(null)
 const searchQuery = ref('')
 const focusedIndex = ref(0)
+watch(searchQuery, () => { focusedIndex.value = 0 })
 const clusterBtnRef = ref<HTMLButtonElement | null>(null)
 const namespaceBtnRef = ref<HTMLButtonElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
