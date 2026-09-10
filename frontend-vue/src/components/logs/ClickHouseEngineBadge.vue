@@ -3,56 +3,55 @@ import { ref, computed, onMounted } from 'vue'
 import { api } from '../../api/client'
 import BaseIcon from '../ui/BaseIcon.vue'
 
-interface EngineStatus {
+interface EngineStatusPayload {
   engine: string
-  connected: boolean
-  mode: string
+  status: 'connected' | 'fallback' | string
   latency_ms: number
   retention_days: number
   total_records: number
 }
 
 const showPopover = ref(false)
-const isFallback = ref(false)
-const status = ref<EngineStatus>({
+
+const status = ref<EngineStatusPayload>({
   engine: 'ClickHouse MergeTree',
-  connected: true,
-  mode: 'Connected',
-  latency_ms: 1.4,
+  status: 'connected',
+  latency_ms: 0,
   retention_days: 30,
-  total_records: 14250800,
+  total_records: 0,
 })
+
+const isFallback = computed(() =>
+  status.value.status === 'fallback' || status.value.engine.toLowerCase().includes('fallback')
+)
 
 async function fetchStatus() {
   try {
-    const res = await api.get<Partial<EngineStatus>>('/logs/status')
+    const res = await api.get<EngineStatusPayload>('/logs/status')
     if (res?.engine) {
       status.value = {
         engine: res.engine,
-        connected: res.connected ?? true,
-        mode: res.connected ? 'Connected' : 'Degraded',
-        latency_ms: res.latency_ms ?? 1.4,
+        status: res.status || 'connected',
+        latency_ms: res.latency_ms ?? 0,
         retention_days: res.retention_days ?? 30,
-        total_records: res.total_records ?? 14250800,
+        total_records: res.total_records ?? 0,
       }
-      isFallback.value = false
-      return
     }
-  } catch { /* graceful fallback */ }
-  isFallback.value = true
-  status.value = {
-    engine: 'In-Memory RingBuffer',
-    connected: true,
-    mode: 'Ready in fallback mode',
-    latency_ms: 0.8,
-    retention_days: 7,
-    total_records: 10000,
+  } catch (err: unknown) {
+    void err
+    status.value = {
+      engine: 'In-Memory RingBuffer (Fallback)',
+      status: 'fallback',
+      latency_ms: 0.1,
+      retention_days: 7,
+      total_records: 0,
+    }
   }
 }
 
 const badgeText = computed(() => isFallback.value
   ? `${status.value.engine} · Ready`
-  : `${status.value.engine} · ${status.value.mode} · ${status.value.latency_ms.toFixed(1)}ms`)
+  : `${status.value.engine} · Connected · ${status.value.latency_ms.toFixed(1)}ms`)
 
 const formattedRecords = computed(() => new Intl.NumberFormat('en-US').format(status.value.total_records))
 
@@ -74,7 +73,7 @@ onMounted(fetchStatus)
           <span class="popover-tag" :class="isFallback ? 'tag-amber' : 'tag-emerald'">{{ isFallback ? 'FALLBACK' : 'PRIMARY' }}</span>
         </div>
         <div class="popover-row"><span>Engine:</span><strong class="text-slate">{{ status.engine }}</strong></div>
-        <div class="popover-row"><span>Status:</span><strong :class="isFallback ? 'text-cyan' : 'text-emerald'">{{ status.mode }}</strong></div>
+        <div class="popover-row"><span>Status:</span><strong :class="isFallback ? 'text-cyan' : 'text-emerald'">{{ status.status }}</strong></div>
         <div class="popover-row"><span>Retention:</span><strong class="text-amber">{{ status.retention_days }} Days</strong></div>
         <div class="popover-row"><span>Total Records:</span><strong class="text-cyan">{{ formattedRecords }}</strong></div>
         <div class="popover-row"><span>Latency:</span><strong class="text-emerald">{{ status.latency_ms.toFixed(1) }}ms</strong></div>
