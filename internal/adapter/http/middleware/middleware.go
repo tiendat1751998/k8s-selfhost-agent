@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -119,6 +120,55 @@ func Metrics(next http.Handler) http.Handler {
 	})
 }
 
+var sensitiveQueryKeys = map[string]struct{}{
+	"token":         {},
+	"trace_token":   {},
+	"authorization": {},
+	"key":           {},
+	"password":      {},
+	"secret":        {},
+	"api_key":       {},
+	"apikey":        {},
+	"access_token":  {},
+	"refresh_token": {},
+	"auth_token":    {},
+	"private_key":   {},
+}
+
+func isSensitiveQueryKey(key string) bool {
+	clean := strings.ToLower(strings.TrimSpace(key))
+	clean = strings.ReplaceAll(clean, "-", "_")
+	_, exists := sensitiveQueryKeys[clean]
+	return exists
+}
+
+// SanitizeURL returns a string representation of the URL with sensitive query parameters redacted.
+// It does not modify the input URL.
+func SanitizeURL(u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	if u.RawQuery == "" {
+		return u.String()
+	}
+
+	uCopy := *u
+	query := uCopy.Query()
+	modified := false
+
+	for k := range query {
+		if isSensitiveQueryKey(k) {
+			query.Set(k, "[REDACTED]")
+			modified = true
+		}
+	}
+
+	if modified {
+		uCopy.RawQuery = query.Encode()
+	}
+	return uCopy.String()
+}
+
 // Tracing adds OpenTelemetry tracing spans to HTTP requests.
 func Tracing(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +177,7 @@ func Tracing(next http.Handler) http.Handler {
 
 		span.SetAttributes(
 			attribute.String("http.method", r.Method),
-			attribute.String("http.url", r.URL.String()),
+			attribute.String("http.url", SanitizeURL(r.URL)),
 			attribute.String("http.user_agent", r.UserAgent()),
 		)
 

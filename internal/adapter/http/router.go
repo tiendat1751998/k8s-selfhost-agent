@@ -126,10 +126,11 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	// Auth API routes
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		if platform != nil && platform.Auth != nil {
-			r.Post("/login", platform.Auth.Login)
-			r.Post("/verify-mfa", platform.Auth.VerifyMFA)
-			r.Post("/refresh", platform.Auth.RefreshToken)
-			r.Post("/recovery/verify", platform.Auth.VerifyRecoveryCode)
+			authRateLimit := mw.RateLimit(10, time.Minute)
+			r.With(authRateLimit).Post("/login", platform.Auth.Login)
+			r.With(authRateLimit).Post("/verify-mfa", platform.Auth.VerifyMFA)
+			r.With(authRateLimit).Post("/refresh", platform.Auth.RefreshToken)
+			r.With(authRateLimit).Post("/recovery/verify", platform.Auth.VerifyRecoveryCode)
 			r.Post("/logout", platform.Auth.Logout)
 
 			// Authenticated TOTP routes

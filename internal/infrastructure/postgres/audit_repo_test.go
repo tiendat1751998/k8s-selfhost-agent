@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -161,4 +162,110 @@ func TestAuditRepo_ListLogs_NonAdminEmptyTenantIsolation(t *testing.T) {
 		assert.Equal(t, 0, total)
 		assert.Empty(t, mock.lastSQL, "database should not be queried when context has empty tenant")
 	})
+}
+
+func TestAuditRepo_RecordAction_SensitiveRedaction(t *testing.T) {
+	ctx := context.Background()
+	mock := &auditMockDBTX{}
+	repo := NewAuditRepo(mock)
+
+	details := map[string]interface{}{
+		"token":         "super-secret-token",
+		"trace_token":   "trace-token-abc",
+		"authorization": "Bearer secret-jwt",
+		"password":      "plaintext-password",
+		"secret":        "top-secret",
+		"cookie":        "session=secret-cookie",
+		"access_token":  "access-123",
+		"refresh_token": "refresh-456",
+		"apiKey":        "apikey-789",
+		"api_key":       "apikey-012",
+		"api-key":       "kebab-api-key",
+		"access-token":  "kebab-access-token",
+		"auth-token":    "kebab-auth-token",
+		"private-key":   "kebab-private-key",
+		"private_key":   "-----BEGIN RSA PRIVATE KEY-----",
+		"safe_key":      "safe_value",
+		"nested": map[string]interface{}{
+			"password": "nested-password",
+			"secret":   "nested-secret",
+			"info":     "nested-info",
+		},
+		"str_map": map[string]string{
+			"password": "str-map-password",
+			"api-key":  "str-map-api-key",
+			"visible":  "str-map-visible",
+		},
+		"slice": []interface{}{
+			map[string]interface{}{
+				"token": "slice-token",
+				"name":  "slice-item",
+			},
+		},
+	}
+
+	err := repo.RecordAction(
+		ctx,
+		"admin@example.com",
+		"login",
+		"user",
+		"u1",
+		"u1",
+		"success",
+		details,
+		"127.0.0.1",
+		"test-agent",
+	)
+	require.NoError(t, err)
+	require.Len(t, mock.lastArgs, 10)
+
+	detailsJSON, ok := mock.lastArgs[6].([]byte)
+	require.True(t, ok)
+
+	var recorded map[string]interface{}
+	err = json.Unmarshal(detailsJSON, &recorded)
+	require.NoError(t, err)
+
+	// Check top-level sensitive fields are redacted
+	assert.Equal(t, "[REDACTED]", recorded["token"])
+	assert.Equal(t, "[REDACTED]", recorded["trace_token"])
+	assert.Equal(t, "[REDACTED]", recorded["authorization"])
+	assert.Equal(t, "[REDACTED]", recorded["password"])
+	assert.Equal(t, "[REDACTED]", recorded["secret"])
+	assert.Equal(t, "[REDACTED]", recorded["cookie"])
+	assert.Equal(t, "[REDACTED]", recorded["access_token"])
+	assert.Equal(t, "[REDACTED]", recorded["refresh_token"])
+	assert.Equal(t, "[REDACTED]", recorded["apiKey"])
+	assert.Equal(t, "[REDACTED]", recorded["api_key"])
+	assert.Equal(t, "[REDACTED]", recorded["api-key"])
+	assert.Equal(t, "[REDACTED]", recorded["access-token"])
+	assert.Equal(t, "[REDACTED]", recorded["auth-token"])
+	assert.Equal(t, "[REDACTED]", recorded["private-key"])
+	assert.Equal(t, "[REDACTED]", recorded["private_key"])
+
+	// Check safe field is preserved
+	assert.Equal(t, "safe_value", recorded["safe_key"])
+
+	// Check nested map redaction
+	nested, ok := recorded["nested"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "[REDACTED]", nested["password"])
+	assert.Equal(t, "[REDACTED]", nested["secret"])
+	assert.Equal(t, "nested-info", nested["info"])
+
+	// Check map[string]string redaction
+	strMap, ok := recorded["str_map"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "[REDACTED]", strMap["password"])
+	assert.Equal(t, "[REDACTED]", strMap["api-key"])
+	assert.Equal(t, "str-map-visible", strMap["visible"])
+
+	// Check slice redaction
+	slice, ok := recorded["slice"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, slice, 1)
+	sliceItem, ok := slice[0].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "[REDACTED]", sliceItem["token"])
+	assert.Equal(t, "slice-item", sliceItem["name"])
 }
