@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { DockerService } from '../../api/compute'
 
@@ -28,7 +28,7 @@ function formatDate(d?: string): string {
 <template>
   <div class="services-table-view animate-fade-in">
     <div v-if="props.services.length === 0" class="empty-state glass-panel">
-      <span>No Swarm services deployed. Connect Swarm manager socket to discover services.</span>
+      <span>No Swarm services found matching your filter.</span>
     </div>
 
     <div v-else class="services-table-wrap">
@@ -60,12 +60,13 @@ function formatDate(d?: string): string {
 
             <!-- Replica Stepper / Display -->
             <td>
-              <div class="stepper-controls" style="display: inline-flex; padding: 2px 6px;">
+              <div class="stepper-controls" style="display: inline-flex;">
                 <button
                   class="stepper-btn"
-                  style="width: 22px; height: 22px; font-size: 14px;"
+                  style="width: 28px; height: 28px; font-size: 14px;"
                   :disabled="props.actionLoading === `scale-${svc.id}` || svc.replicas <= 0"
                   title="Decrease replicas"
+                  aria-label="Decrease replicas"
                   @click="emit('scale', svc, -1)"
                 >
                   <span>−</span>
@@ -75,9 +76,10 @@ function formatDate(d?: string): string {
                 </span>
                 <button
                   class="stepper-btn"
-                  style="width: 22px; height: 22px; font-size: 14px;"
+                  style="width: 28px; height: 28px; font-size: 14px;"
                   :disabled="props.actionLoading === `scale-${svc.id}`"
                   title="Increase replicas"
+                  aria-label="Increase replicas"
                   @click="emit('scale', svc, 1)"
                 >
                   <span>+</span>
@@ -150,3 +152,114 @@ function formatDate(d?: string): string {
     </div>
   </div>
 </template>
+
+<style scoped>
+.services-table-wrap {
+  border-radius: 14px;
+  overflow-x: auto;
+  background: rgba(11, 15, 25, 0.65);
+  border: 1px solid var(--border-subtle);
+}
+
+.services-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.services-table th {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 12px 16px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.services-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.services-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.svc-table-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.svc-icon { font-size: 24px; }
+
+.svc-table-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+}
+
+.svc-table-title:hover { color: var(--accent-cyan); }
+.svc-table-image { font-size: 11px; }
+
+.ports-list {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.port-tag {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent-cyan);
+}
+
+.svc-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-scale {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  color: #38bdf8;
+}
+.btn-scale:hover { background: rgba(6, 182, 212, 0.25); }
+
+.btn-update {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  color: #c084fc;
+}
+.btn-update:hover { background: rgba(168, 85, 247, 0.25); }
+
+.btn-logs {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+.btn-logs:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+
+.btn-remove {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #f43f5e !important;
+}
+.btn-remove:hover { background: rgba(244, 63, 94, 0.25); border-color: #f43f5e; }
+</style>
