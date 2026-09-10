@@ -115,21 +115,30 @@ const emit = defineEmits<{
 
         <button
           type="button"
+          class="btn-card-action btn-strategy"
+          title="Canary / Blue-Green Rollout Strategy"
+          @click.stop="emit('strategy', app)"
+        >
+          <span>🎯 Strategy</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn-card-action btn-details"
+          title="Inspect Details"
+          @click="emit('inspect', app)"
+        >
+          <span>🔍 Details</span>
+        </button>
+
+        <button
+          type="button"
           class="btn-card-action btn-restart"
           :disabled="actionLoading === app.name"
           title="Rolling Restart Pods"
           @click.stop="emit('restart', app)"
         >
           <span :class="{ 'spin-icon': actionLoading === app.name }">🔄 Restart</span>
-        </button>
-
-        <button
-          type="button"
-          class="btn-card-action btn-strategy"
-          title="Canary / Blue-Green Rollout Strategy"
-          @click.stop="emit('strategy', app)"
-        >
-          <span>🎯 Strategy</span>
         </button>
 
         <button

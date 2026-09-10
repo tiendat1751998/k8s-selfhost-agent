@@ -2,6 +2,7 @@ import type { DeploymentApp, DockerService, DockerContainer } from '../api/compu
 import { formatContainerName, formatImageName } from '../utils/dockerFormat'
 
 export type FilterTab = 'all' | 'canary' | 'bluegreen' | 'k8s' | 'swarm'
+export type StatusFilter = 'all' | 'healthy' | 'degraded'
 
 export interface ToastMessage {
   text: string
@@ -143,9 +144,13 @@ export function filterDeploymentsList(
   list: DeploymentApp[],
   activeFilterTab: FilterTab,
   selectedNamespaceFilter: string,
-  searchQuery: string
+  searchQuery: string,
+  statusFilter: StatusFilter = 'all'
 ): DeploymentApp[] {
   return list.filter(d => {
+    if (statusFilter === 'healthy' && d.status !== 'healthy') return false
+    if (statusFilter === 'degraded' && d.status === 'healthy') return false
+
     if (activeFilterTab === 'canary' && d.strategy !== 'Canary' && (!d.canaryWeight || d.canaryWeight <= 0)) {
       return false
     }

@@ -175,6 +175,33 @@
   font-family: var(--font-mono);
 }
 
+.status-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pills-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-subtle, rgba(255, 255, 255, 0.12));
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.pill-healthy.pill-active {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #34d399;
+}
+
+.pill-degraded.pill-active {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+}
+
 .table-search-row {
   display: flex;
   align-items: center;
@@ -643,7 +670,7 @@
 
 .card-actions-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 4px;
 }
 
@@ -691,6 +718,11 @@
 .btn-strategy:hover:not(:disabled) {
   border-color: rgba(168, 85, 247, 0.4);
   color: #c084fc;
+}
+
+.btn-details:hover:not(:disabled) {
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #818cf8;
 }
 
 .btn-delete-crimson {

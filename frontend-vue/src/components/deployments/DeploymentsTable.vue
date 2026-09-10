@@ -46,8 +46,6 @@ function asDeployment(row: unknown): DeploymentApp {
       :loading="loading"
       :error="error"
       empty-message="0 Workloads Found. No active Kubernetes deployments or Docker Swarm services detected on this cluster/node."
-      searchable
-      search-placeholder="Search inside table rows..."
     >
       <!-- Name & Namespace Cell -->
       <template #cell-name="{ row }">
