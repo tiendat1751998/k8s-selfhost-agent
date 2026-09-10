@@ -52,7 +52,7 @@
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
     <div class="secops-micro-telemetry mobile-only font-mono" role="status" aria-label="DevSecOps Micro Telemetry">
-      <span class="tel-item tel-score">🛡️ {{ securityPostureScore }}% score</span>
+      <span class="tel-item tel-score">🛡️ {{ securityPostureScore }} score</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-crit">🔥 {{ criticalCveCount }} crit</span>
       <span class="tel-sep">·</span>
