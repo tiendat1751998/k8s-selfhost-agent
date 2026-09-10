@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Cluster } from '../../api/fleet'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   clusters: Cluster[]
@@ -28,7 +29,7 @@ const emit = defineEmits<{
     >
       <div class="mobile-stream-main" title="View Cluster Essentials" @click="emit('details', cluster)">
         <div class="mobile-stream-header">
-          <span class="cluster-icon-mini">⎈</span>
+          <span class="cluster-icon-mini"><BaseIcon name="anchor" size="xs" /></span>
           <span class="mobile-stream-name font-mono">{{ cluster.name }}</span>
           <span class="tier-pill">{{ cluster.group || 'prod' }}</span>
           <StatusBadge :status="cluster.health_status || cluster.status || 'unknown'" size="sm" />
@@ -51,7 +52,7 @@ const emit = defineEmits<{
           title="Cluster Essentials"
           @click.stop="emit('details', cluster)"
         >
-          ⚡
+          <BaseIcon name="zap" size="xs" />
         </button>
         <button
           class="btn btn-secondary btn-xs"
@@ -59,7 +60,7 @@ const emit = defineEmits<{
           title="Discover Resources"
           @click.stop="emit('discover', cluster)"
         >
-          🔍
+          <BaseIcon name="search" size="xs" />
         </button>
         <button
           class="btn btn-secondary btn-xs"
@@ -67,7 +68,7 @@ const emit = defineEmits<{
           title="Upgrade Cluster"
           @click.stop="emit('upgrade', cluster)"
         >
-          ⬆️
+          <BaseIcon name="arrow-up" size="xs" />
         </button>
         <button
           class="btn btn-secondary btn-xs btn-evict"
@@ -75,7 +76,7 @@ const emit = defineEmits<{
           title="Evict Cluster"
           @click.stop="emit('remove', cluster)"
         >
-          🗑️
+          <BaseIcon name="trash" size="xs" />
         </button>
       </div>
     </div>

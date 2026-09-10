@@ -7,6 +7,7 @@ import FleetSwarmBanner from '../components/fleet/FleetSwarmBanner.vue'
 import FleetClustersGrid from '../components/fleet/FleetClustersGrid.vue'
 import FleetClustersTable from '../components/fleet/FleetClustersTable.vue'
 import FleetMobileCards from '../components/fleet/FleetMobileCards.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import FleetImportModal from '../components/fleet/FleetImportModal.vue'
 import FleetDiscoveryDrawer from '../components/fleet/FleetDiscoveryDrawer.vue'
 import {
@@ -213,18 +214,18 @@ async function handleRemove(cluster: Cluster) {
     <!-- Mobile PWA Ergonomics: 44px Command Bar (<640px) -->
     <div class="mobile-fleet-command-bar">
       <div class="mobile-command-title">
-        <span>☸️ Clusters</span>
+        <span><BaseIcon name="anchor" size="xs" /> Clusters</span>
         <span class="mobile-badge-pill font-mono">({{ filteredClusters.length }})</span>
       </div>
       <div class="mobile-command-actions">
         <button class="btn btn-secondary btn-xs" @click="showMobileSearch = !showMobileSearch" title="Search">
-          🔍
+          <BaseIcon name="search" size="xs" />
         </button>
         <button class="btn btn-secondary btn-xs" :disabled="loading" @click="fetchFleet" title="Refresh">
-          🔄
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
         </button>
         <button class="btn btn-primary btn-xs" @click="showImportModal = true">
-          ➕ Import
+          + Import
         </button>
       </div>
     </div>
@@ -238,18 +239,18 @@ async function handleRemove(cluster: Cluster) {
         class="input-glass mobile-search-input"
         autofocus
       />
-      <button v-if="searchFilter" class="search-clear-btn" @click="searchFilter = ''">✕</button>
+      <button v-if="searchFilter" class="search-clear-btn" @click="searchFilter = ''"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Mobile PWA Ergonomics: 20px Micro-telemetry strip (<640px) -->
     <div class="micro-telemetry-strip font-mono">
-      <span>☸️ {{ totalClusters }} clusters</span>
+      <span><BaseIcon name="anchor" size="xs" /> {{ totalClusters }} clusters</span>
       <span class="telemetry-sep">·</span>
-      <span>🛡️ {{ healthyClusters }} healthy</span>
+      <span><BaseIcon name="shield" size="xs" /> {{ healthyClusters }} healthy</span>
       <span class="telemetry-sep">·</span>
-      <span>💻 {{ totalNodes }} nodes</span>
+      <span><BaseIcon name="server" size="xs" /> {{ totalNodes }} nodes</span>
       <span class="telemetry-sep">·</span>
-      <span>📦 {{ totalPods }} pods</span>
+      <span><BaseIcon name="box" size="xs" /> {{ totalPods }} pods</span>
     </div>
 
     <!-- Desktop View Header -->
@@ -261,7 +262,7 @@ async function handleRemove(cluster: Cluster) {
         </div>
         <h1 class="view-title">
           <span class="title-full">Multi-Cluster Fleet Manager</span>
-          <span class="title-mobile">🌐 Fleet Clusters</span>
+          <span class="title-mobile"><BaseIcon name="globe" size="sm" /> Fleet Clusters</span>
         </h1>
         <p class="view-desc">
           Centralized topology dashboard for on-premise, edge, Docker Swarm, and cloud Kubernetes clusters with live health monitoring and zero-downtime upgrades.
@@ -269,7 +270,7 @@ async function handleRemove(cluster: Cluster) {
       </div>
 
       <div class="header-actions">
-        <!-- Segmented View Mode Toggle: [ 📋 Table ] [ 🔲 Cards ] -->
+        <!-- Segmented View Mode Toggle: [ Table ] [ Cards ] -->
         <div class="segmented-control font-mono">
           <button
             class="segmented-btn"
@@ -277,7 +278,7 @@ async function handleRemove(cluster: Cluster) {
             @click="viewMode = 'table'"
             title="Table View"
           >
-            <span>📋 Table</span>
+            <span><BaseIcon name="file-text" size="xs" /> Table</span>
           </button>
           <button
             class="segmented-btn"
@@ -285,13 +286,13 @@ async function handleRemove(cluster: Cluster) {
             @click="viewMode = 'grid'"
             title="Card Grid View"
           >
-            <span>🔲 Cards</span>
+            <span><BaseIcon name="box" size="xs" /> Cards</span>
           </button>
         </div>
 
         <button class="btn btn-secondary" :disabled="loading" @click="fetchFleet">
-          <span class="btn-text-full">{{ loading ? '⏳ Syncing...' : '🔄 Refresh Fleet' }}</span>
-          <span class="btn-text-mobile">{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
+          <span class="btn-text-full"><BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Syncing...' : 'Refresh Fleet' }}</span>
+          <span class="btn-text-mobile"><BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Syncing...' : 'Refresh' }}</span>
         </button>
         <button class="btn btn-primary" @click="showImportModal = true">
           <span class="btn-text-full">+ Import Cluster</span>
@@ -302,16 +303,16 @@ async function handleRemove(cluster: Cluster) {
 
     <!-- Notification Toast -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <span>{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" />
       <span>{{ toastMessage.text }}</span>
-      <button class="toast-close" @click="toastMessage = null">✕</button>
+      <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Error Banner -->
     <div v-if="error" class="toast-banner toast-error animate-fade-in">
-      <span>⚠️</span>
+      <BaseIcon name="alert-triangle" size="sm" />
       <span>{{ error }}</span>
-      <button class="toast-close" @click="error = null">✕</button>
+      <button class="toast-close" @click="error = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- 4-Card Metric HUD (Desktop) -->
@@ -330,7 +331,7 @@ async function handleRemove(cluster: Cluster) {
     <div class="fleet-filter-bar glass-panel">
       <!-- Search Field -->
       <div class="filter-search-wrap">
-        <span class="filter-search-icon">🔍</span>
+        <span class="filter-search-icon"><BaseIcon name="search" size="xs" /></span>
         <input
           v-model="searchFilter"
           type="text"
@@ -343,7 +344,7 @@ async function handleRemove(cluster: Cluster) {
           title="Clear search"
           @click="searchFilter = ''"
         >
-          ✕
+          <BaseIcon name="x" size="xs" />
         </button>
       </div>
 
@@ -364,14 +365,14 @@ async function handleRemove(cluster: Cluster) {
               :class="{ active: clusterTypeFilter === 'k8s' }"
               @click="clusterTypeFilter = 'k8s'"
             >
-              ☸️ Kubernetes ({{ countK8s }})
+              <BaseIcon name="anchor" size="xs" /> Kubernetes ({{ countK8s }})
             </button>
             <button
               class="filter-pill"
               :class="{ active: clusterTypeFilter === 'swarm' }"
               @click="clusterTypeFilter = 'swarm'"
             >
-              🐳 Docker Swarm ({{ countSwarm }})
+              <BaseIcon name="box" size="xs" /> Docker Swarm ({{ countSwarm }})
             </button>
           </div>
         </div>

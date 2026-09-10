@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { fleetApi } from '../../api/fleet'
 
 defineProps<{
@@ -94,7 +95,7 @@ async function handleImportCluster() {
   >
     <div class="modal-form">
       <div v-if="errorMessage" class="toast-banner toast-error animate-fade-in" style="margin-bottom: 6px;">
-        <span>⚠️</span>
+        <BaseIcon name="alert-triangle" size="xs" />
         <span>{{ errorMessage }}</span>
       </div>
 
@@ -140,7 +141,7 @@ async function handleImportCluster() {
             :class="{ active: importMode === 'file' }"
             @click="importMode = 'file'"
           >
-            📁 File Upload
+            <BaseIcon name="box" size="xs" /> File Upload
           </button>
           <button
             type="button"
@@ -148,7 +149,7 @@ async function handleImportCluster() {
             :class="{ active: importMode === 'text' }"
             @click="importMode = 'text'"
           >
-            📝 Paste YAML
+            <BaseIcon name="file-text" size="xs" /> Paste YAML
           </button>
         </div>
 
@@ -167,14 +168,14 @@ async function handleImportCluster() {
           ></textarea>
         </div>
 
-        <span class="form-hint">🔒 Kubeconfig is encrypted with AES-256 GCM in local vault before persistence. Sensitive tokens are never returned in cleartext.</span>
+        <span class="form-hint"><BaseIcon name="lock" size="xs" /> Kubeconfig is encrypted with AES-256 GCM in local vault before persistence. Sensitive tokens are never returned in cleartext.</span>
       </div>
     </div>
 
     <template #footer="{ close }">
       <button class="btn btn-secondary" @click="close">Cancel</button>
       <button class="btn btn-primary" :disabled="loading" @click="handleImportCluster">
-        <span>{{ loading ? '⏳ Importing Cluster...' : 'Import Cluster ➔' }}</span>
+        <span><BaseIcon :name="loading ? 'activity' : 'play'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Importing Cluster...' : 'Import Cluster' }}</span>
       </button>
     </template>
   </ModalDrawer>

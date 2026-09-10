@@ -1,6 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { SwarmStackDeployPayload } from '../../composables/useDockerSwarm'
 
 const props = defineProps<{
@@ -161,7 +162,7 @@ function handleDeploy() {
           :disabled="props.loading || !stackName.trim()"
           @click="handleDeploy"
         >
-          <span>{{ props.loading ? '⏳ Deploying Stack...' : '🚀 Deploy Stack' }}</span>
+          <span><BaseIcon :name="props.loading ? 'activity' : 'play'" size="xs" :class="{ 'spin-icon': props.loading }" /> {{ props.loading ? 'Deploying Stack...' : 'Deploy Stack' }}</span>
         </button>
       </div>
     </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DeploymentApp } from '../../api/compute'
 import { formatContainerName } from '../../utils/dockerFormat'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   deployments: DeploymentApp[]
@@ -18,7 +19,7 @@ const emit = defineEmits<{
 <template>
   <div class="mobile-cards-stream mobile-card-stream">
     <div v-if="deployments.length === 0 && !loading" class="empty-mobile-state font-mono">
-      <span>📦</span>
+      <span><BaseIcon name="box" size="lg" /></span>
       <p>0 Workloads matching active filters</p>
     </div>
 
@@ -39,7 +40,7 @@ const emit = defineEmits<{
               'dot-crimson': app.status === 'error' || app.status === 'failed'
             }"
             title="Workload Status"
-          >●</span>
+          ></span>
           <span class="workload-name font-semibold text-slate-100" :title="app.name">
             {{ formatContainerName(app.name).serviceName }}
           </span>
@@ -57,10 +58,10 @@ const emit = defineEmits<{
           </span>
           <span class="runtime-badge font-mono">{{ app.type }}</span>
           <span v-if="app.strategy === 'Canary'" class="canary-mini-badge font-mono">
-            🐥 {{ app.canaryWeight || 20 }}%
+            <BaseIcon name="git-branch" size="xs" /> {{ app.canaryWeight || 20 }}%
           </span>
           <span v-else-if="app.strategy === 'BlueGreen'" class="bg-mini-badge font-mono">
-            🔄 {{ (app.blueGreenActive || 'blue').toUpperCase() }}
+            <BaseIcon name="refresh" size="xs" /> {{ (app.blueGreenActive || 'blue').toUpperCase() }}
           </span>
         </div>
 
@@ -71,7 +72,7 @@ const emit = defineEmits<{
             title="Inspect Container Logs"
             @click.stop="emit('logs', app)"
           >
-            📜 Logs
+            <BaseIcon name="file-text" size="xs" /> Logs
           </button>
           <button
             type="button"
@@ -79,7 +80,7 @@ const emit = defineEmits<{
             title="Inspect Details & Operations"
             @click.stop="emit('inspect', app)"
           >
-            ⚡
+            <BaseIcon name="zap" size="xs" />
           </button>
         </div>
       </div>
@@ -89,4 +90,24 @@ const emit = defineEmits<{
 
 <style scoped>
 @import '../../assets/styles/views/deployments.css';
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  background-color: currentColor;
+}
+.status-dot.dot-healthy {
+  background-color: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+.status-dot.dot-amber {
+  background-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+}
+.status-dot.dot-crimson {
+  background-color: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
 </style>
