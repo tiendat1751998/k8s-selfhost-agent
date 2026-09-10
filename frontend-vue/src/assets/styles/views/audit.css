@@ -282,7 +282,7 @@
 /* ==========================================================================
    Responsive Breakpoints & Ergonomics
    ========================================================================== */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .audit-desktop-view { display: none !important; }
   .audit-mobile-view { display: block !important; }
   .desktop-only-actions { display: none !important; }
