@@ -4,6 +4,7 @@ import '../assets/styles/views/slo.css'
 import MetricCard from '../components/ui/MetricCard.vue'
 import SloCardsGrid from '../components/slo/SloCardsGrid.vue'
 import SloCatalogTable from '../components/slo/SloCatalogTable.vue'
+import SloMobileCards from '../components/slo/SloMobileCards.vue'
 import SloCreateModal from '../components/slo/SloCreateModal.vue'
 import SloInspectModal from '../components/slo/SloInspectModal.vue'
 import {
@@ -21,9 +22,10 @@ const snapshots = ref<SLOSnapshot[]>([])
 type TimeWindowFilter = '1h' | '6h' | '24h' | '30d'
 const selectedWindowFilter = ref<TimeWindowFilter>('30d')
 
-// Mobile Ergonomics States
+// View Mode and Search State
+const viewMode = ref<'table' | 'grid'>('table')
+const searchQuery = ref('')
 const showMobileSearch = ref(false)
-const mobileSearchQuery = ref('')
 
 const showCreateModal = ref(false)
 const showInspectModal = ref(false)
@@ -99,16 +101,52 @@ const avgBurnRate = computed(() => {
   return `${(snapshots.value.reduce((acc, s) => acc + (s.burn_rate || 0), 0) / snapshots.value.length).toFixed(2)}x`
 })
 
-// Filtered data based on search input
+// Filtered data based on unified search input
 const filteredSnapshots = computed(() => {
-  const q = mobileSearchQuery.value.trim().toLowerCase()
+  const q = searchQuery.value.trim().toLowerCase()
   return q ? snapshots.value.filter(s => s.service.toLowerCase().includes(q)) : snapshots.value
 })
 
 const filteredDefinitions = computed(() => {
-  const q = mobileSearchQuery.value.trim().toLowerCase()
+  const q = searchQuery.value.trim().toLowerCase()
   return q ? definitions.value.filter(d => d.service.toLowerCase().includes(q) || d.indicator_type.toLowerCase().includes(q)) : definitions.value
 })
+
+// Helper Functions for Mobile Card Stream and Telemetry
+function formatPercent(val?: number): string {
+  if (val === undefined || val === null || isNaN(val)) return '0.00%'
+  const pct = val > 1 ? val : val * 100
+  return `${pct.toFixed(2)}%`
+}
+
+function getEffectiveBurnRate(rawRate?: number): number {
+  if (rawRate === undefined || rawRate === null || isNaN(rawRate)) return 0
+  return rawRate
+}
+
+function getBurnRateColor(rate: number): string {
+  if (rate <= 1.0) return 'text-emerald'
+  if (rate <= 2.5) return 'text-amber'
+  return 'text-rose'
+}
+
+function getBudgetBarWidth(budget?: number): number {
+  if (budget === undefined || budget === null || isNaN(budget)) return 0
+  return Math.max(0, Math.min(100, budget))
+}
+
+function getSnapshotForDef(defId: string, serviceName: string): SLOSnapshot | undefined {
+  return snapshots.value.find(s => s.slo_id === defId || s.service === serviceName)
+}
+
+function handleMobileInspect(def: SLODefinition, snap?: SLOSnapshot) {
+  openInspect({ def, snap })
+}
+
+function handleEditSLO(def: SLODefinition) {
+  const snap = getSnapshotForDef(def.id, def.service)
+  openInspect({ def, snap })
+}
 
 function showBanner(type: 'success' | 'warning' | 'error', text: string) {
   bannerMessage.value = { type, text }
@@ -181,6 +219,28 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       </div>
 
       <div class="header-actions">
+        <!-- Segmented View Mode Toggle: [ 📑 Table ] [ 🗂 Cards ] -->
+        <div class="segmented-control font-mono">
+          <button
+            type="button"
+            class="segmented-btn"
+            :class="{ active: viewMode === 'table' }"
+            @click="viewMode = 'table'"
+            title="Catalog Table View"
+          >
+            <span>📑 Table</span>
+          </button>
+          <button
+            type="button"
+            class="segmented-btn"
+            :class="{ active: viewMode === 'grid' }"
+            @click="viewMode = 'grid'"
+            title="Card Grid View"
+          >
+            <span>🗂 Cards</span>
+          </button>
+        </div>
+
         <button class="btn btn-primary" @click="showCreateModal = true">
           <span>➕ Create SLO Definition</span>
         </button>
@@ -221,13 +281,17 @@ async function handleTriggerAlert(id: string, serviceName: string) {
 
     <!-- Mobile Collapsible Search Drawer -->
     <div v-if="showMobileSearch" class="mobile-filter-drawer mobile-only animate-fade-in">
-      <input
-        v-model="mobileSearchQuery"
-        type="search"
-        class="mobile-search-input"
-        placeholder="Filter SLOs by service name..."
-        autofocus
-      />
+      <div class="mobile-search-inner">
+        <span class="mobile-search-icon">🔍</span>
+        <input
+          v-model="searchQuery"
+          type="search"
+          class="mobile-search-input font-mono"
+          placeholder="Filter SLOs by service name..."
+          autofocus
+        />
+        <button v-if="searchQuery" type="button" class="mobile-clear-btn" title="Clear search" @click="searchQuery = ''">✕</button>
+      </div>
     </div>
 
     <!-- Alert / Toast Banner -->
@@ -261,6 +325,17 @@ async function handleTriggerAlert(id: string, serviceName: string) {
         <span v-else-if="selectedWindowFilter === '24h'">Medium-window composite: 10% budget consumed in 24h</span>
         <span v-else>Rolling 30-day baseline objective compliance window</span>
       </span>
+
+      <div class="filter-search-wrap desktop-only">
+        <span class="filter-search-icon">🔍</span>
+        <input
+          v-model="searchQuery"
+          type="search"
+          class="filter-search-input font-mono"
+          placeholder="Filter SLOs by service name..."
+        />
+        <button v-if="searchQuery" type="button" class="clear-search-btn" title="Clear search" @click="searchQuery = ''">✕</button>
+      </div>
     </div>
 
     <!-- Metric HUD (Desktop only: 4-Column Grid, hidden on mobile <640px) -->
@@ -291,8 +366,23 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       />
     </div>
 
-    <!-- Active Error Budget & Burn Rate Cards Grid Component (Stream begins immediately!) -->
+    <!-- Desktop View Mode: Table OR Grid (NEVER both at the same time on desktop!) -->
+    <SloCatalogTable
+      v-if="viewMode === 'table'"
+      class="desktop-only"
+      :definitions="filteredDefinitions"
+      :snapshots="filteredSnapshots"
+      :loading="loading"
+      :error="error"
+      @create="showCreateModal = true"
+      @inspect="openInspectFromTable"
+      @trigger-alert="handleTriggerAlert"
+      @delete-slo="handleDeleteSLO"
+    />
+
     <SloCardsGrid
+      v-else-if="viewMode === 'grid'"
+      class="desktop-only"
       :definitions="filteredDefinitions"
       :snapshots="filteredSnapshots"
       :selected-window-filter="selectedWindowFilter"
@@ -303,17 +393,19 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       @delete-slo="handleDeleteSLO"
     />
 
-    <!-- SLO Definitions Catalog Table Component (Desktop / Tablet view) -->
-    <SloCatalogTable
-      class="desktop-only"
+    <!-- First-Class Mobile Card Stream (<768px) -->
+    <SloMobileCards
+      class="mobile-only"
       :definitions="filteredDefinitions"
       :snapshots="filteredSnapshots"
-      :loading="loading"
-      :error="error"
-      @create="showCreateModal = true"
-      @inspect="openInspectFromTable"
-      @trigger-alert="handleTriggerAlert"
-      @delete-slo="handleDeleteSLO"
+      :format-percent="formatPercent"
+      :get-effective-burn-rate="getEffectiveBurnRate"
+      :get-burn-rate-color="getBurnRateColor"
+      :get-budget-bar-width="getBudgetBarWidth"
+      :get-snapshot-for-def="getSnapshotForDef"
+      @inspect="handleMobileInspect"
+      @edit="handleEditSLO"
+      @delete="handleDeleteSLO"
     />
 
     <!-- Modals -->

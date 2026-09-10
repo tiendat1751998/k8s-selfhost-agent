@@ -65,8 +65,6 @@ function formatDate(d?: unknown): string {
       :loading="loading"
       :error="error"
       empty-message="No SLO definitions configured. Click '+ Create SLO Definition' to add one."
-      searchable
-      search-placeholder="Search SLO definitions by service..."
     >
       <template #cell-service="{ row }">
         <div class="service-name-cell">
