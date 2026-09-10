@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { Incident, RCAReport, PullRequest } from '../../api/compute'
 
@@ -22,6 +23,27 @@ function isNotFoundError(err: string | null): boolean {
   const lower = err.toLowerCase()
   return lower.includes('not found') || lower.includes('404') || lower.includes('no rca report')
 }
+
+const hasDiffContent = computed(() => {
+  // Check activePR files_changed
+  if (props.activePR?.files_changed && props.activePR.files_changed.length > 0) {
+    const hasNonEmpty = props.activePR.files_changed.some(
+      f => f.content && f.content.trim() !== '' && f.content.trim() !== '--- ()'
+    )
+    if (hasNonEmpty) return true
+  }
+  // Check activePR diff (if present)
+  const prDiff = (props.activePR as any)?.diff
+  if (prDiff && typeof prDiff === 'string' && prDiff.trim() !== '' && prDiff.trim() !== '--- ()') {
+    return true
+  }
+  // Check selectedIncident remediation_pr?.diff
+  const incDiff = (props.selectedIncident as any)?.remediation_pr?.diff
+  if (incDiff && typeof incDiff === 'string' && incDiff.trim() !== '' && incDiff.trim() !== '--- ()') {
+    return true
+  }
+  return false
+})
 </script>
 
 <template>
@@ -154,20 +176,23 @@ function isNotFoundError(err: string | null): boolean {
           </div>
         </div>
 
-        <!-- Unified Diff Code Viewer -->
-        <div class="diff-code-box font-mono">
+        <!-- Unified Diff Code Viewer: Only rendered when actual diff content exists -->
+        <div v-if="hasDiffContent" class="diff-code-box font-mono">
           <template v-if="activePR?.files_changed && activePR.files_changed.length > 0">
             <div v-for="file in activePR.files_changed" :key="file.path" class="file-diff-block">
               <div class="diff-line diff-meta">--- {{ file.path }} ({{ file.action }})</div>
               <pre class="diff-file-content">{{ file.content }}</pre>
             </div>
           </template>
-          <div v-else class="diff-placeholder">
-            <span class="diff-placeholder-icon">📄</span>
-            <p class="diff-placeholder-text">
-              Remediation manifest diff will be synthesized once AI RCA identifies the corrective action.
-            </p>
-          </div>
+          <template v-else-if="(activePR as any)?.diff || (selectedIncident as any)?.remediation_pr?.diff">
+            <pre class="diff-file-content">{{ (activePR as any)?.diff || (selectedIncident as any)?.remediation_pr?.diff }}</pre>
+          </template>
+        </div>
+
+        <!-- Sleek Compact Notice when no diff exists or is empty -->
+        <div v-else class="diff-compact-notice">
+          <span class="compact-notice-icon">ℹ️</span>
+          <span class="compact-notice-text">No GitOps remediation manifest generated yet. Run AI RCA or inject scenario to synthesize corrective YAML.</span>
         </div>
 
         <!-- Bottom Action Controls: Consolidated single PR action button -->
