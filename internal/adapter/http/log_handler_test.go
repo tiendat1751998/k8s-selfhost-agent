@@ -95,18 +95,8 @@ func TestLogHandler_Ingest_Batch(t *testing.T) {
 	h := NewLogHandler(fake)
 
 	entries := []logging.LogEntry{
-		{
-			ClusterID: "cluster-1",
-			Namespace: "prod",
-			PodName:   "api-pod-1",
-			Message:   "batch entry 1",
-		},
-		{
-			ClusterID: "cluster-1",
-			Namespace: "prod",
-			PodName:   "api-pod-2",
-			Message:   "batch entry 2",
-		},
+		{ClusterID: "cluster-1", Namespace: "prod", PodName: "api-pod-1", Message: "batch entry 1"},
+		{ClusterID: "cluster-1", Namespace: "prod", PodName: "api-pod-2", Message: "batch entry 2"},
 	}
 
 	body, err := json.Marshal(entries)
@@ -147,12 +137,7 @@ func TestLogHandler_Ingest_Single(t *testing.T) {
 	fake := &fakeLoggingService{}
 	h := NewLogHandler(fake)
 
-	entry := logging.LogEntry{
-		ClusterID: "cluster-1",
-		Namespace: "kube-system",
-		PodName:   "coredns-xyz",
-		Message:   "dns query timeout",
-	}
+	entry := logging.LogEntry{ClusterID: "cluster-1", Namespace: "kube-system", PodName: "coredns-xyz", Message: "dns query timeout"}
 
 	body, _ := json.Marshal(entry)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/logs/ingest", bytes.NewReader(body))
@@ -223,13 +208,7 @@ func TestLogHandler_Search_Success(t *testing.T) {
 	fake := &fakeLoggingService{
 		searchResult: &logging.LogSearchResult{
 			Entries: []logging.LogEntry{
-				{
-					TenantID:  "tenant-search",
-					Namespace: "default",
-					PodName:   "nginx-1",
-					LogLevel:  logging.LogLevelError,
-					Message:   "502 Bad Gateway",
-				},
+				{TenantID: "tenant-search", Namespace: "default", PodName: "nginx-1", LogLevel: logging.LogLevelError, Message: "502 Bad Gateway"},
 			},
 			TotalCount: 1,
 			HasMore:    false,
@@ -294,11 +273,7 @@ func TestLogHandler_Histogram_Success(t *testing.T) {
 	bucketTime := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
 	fake := &fakeLoggingService{
 		histogramRes: []logging.LogAggregationBucket{
-			{
-				TimeBucket: bucketTime,
-				TotalCount: 42,
-				LevelCount: map[string]uint64{"info": 40, "error": 2},
-			},
+			{TimeBucket: bucketTime, TotalCount: 42, LevelCount: map[string]uint64{"info": 40, "error": 2}},
 		},
 	}
 	h := NewLogHandler(fake)
@@ -358,13 +333,7 @@ func TestLogHandler_Stream_WebSocket(t *testing.T) {
 		t.Fatalf("expected 101 Switching Protocols, got %d", resp.StatusCode)
 	}
 
-	testEntry := logging.LogEntry{
-		TenantID:  "tenant-stream",
-		Namespace: "prod",
-		PodName:   "worker-1",
-		LogLevel:  logging.LogLevelInfo,
-		Message:   "websocket streamed log line",
-	}
+	testEntry := logging.LogEntry{TenantID: "tenant-stream", Namespace: "prod", PodName: "worker-1", LogLevel: logging.LogLevelInfo, Message: "websocket streamed log line"}
 
 	fake.tailChan <- testEntry
 
@@ -448,3 +417,62 @@ func TestLogHandler_Router_RBAC_And_Auth(t *testing.T) {
 		t.Errorf("expected 202 for logs:write ingest mutation, got %d. Body: %s", w5.Code, w5.Body.String())
 	}
 }
+
+func TestLogHandler_Status(t *testing.T) {
+	fake := &fakeLoggingService{}
+	h := NewLogHandler(fake)
+
+	// 1. Default fallback status
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/logs/status", nil)
+	w := httptest.NewRecorder()
+	h.HandleStatus(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from HandleStatus, got %d", w.Code)
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode status response: %v", err)
+	}
+	if resp["engine"] != "In-Memory RingBuffer (Fallback)" || resp["status"] != "fallback" {
+		t.Errorf("unexpected status response: %+v", resp)
+	}
+
+	// 2. Custom status provider (ClickHouse connected)
+	hConnected := NewLogHandler(fake, &mockStatusProvider{
+		status: &LogEngineStatus{Engine: "ClickHouse MergeTree", Status: "connected", LatencyMS: 1.4, TotalRecords: 1250, RetentionDays: 30},
+	})
+	w2 := httptest.NewRecorder()
+	hConnected.HandleStatus(w2, req)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w2.Code)
+	}
+	var respConnected LogEngineStatus
+	if err := json.NewDecoder(w2.Body).Decode(&respConnected); err != nil {
+		t.Fatalf("failed to decode connected response: %v", err)
+	}
+	if respConnected.Engine != "ClickHouse MergeTree" || respConnected.Status != "connected" || respConnected.TotalRecords != 1250 {
+		t.Errorf("unexpected connected status: %+v", respConnected)
+	}
+
+	// 3. Mount in Router and verify /api/v1/logs/status route
+	platform := &PlatformHandlers{CentralizedLogs: hConnected}
+	hh := health.NewHandler(5 * time.Second)
+	router := NewRouterWithWS(hh, nil, platform)
+	token, _ := middleware.GenerateAccessToken("user-s", "viewer", "tenant-1")
+	routeReq := httptest.NewRequest(http.MethodGet, "/api/v1/logs/status", nil)
+	routeReq.Header.Set("Authorization", "Bearer "+token)
+	w3 := httptest.NewRecorder()
+	router.ServeHTTP(w3, routeReq)
+	if w3.Code != http.StatusOK {
+		t.Fatalf("expected 200 for routed /status, got %d", w3.Code)
+	}
+}
+
+type mockStatusProvider struct {
+	status *LogEngineStatus
+}
+
+func (m *mockStatusProvider) GetStatus(ctx context.Context) (*LogEngineStatus, error) {
+	return m.status, nil
+}
+
