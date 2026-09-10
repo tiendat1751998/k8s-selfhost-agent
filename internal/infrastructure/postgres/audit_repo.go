@@ -162,10 +162,12 @@ var sensitiveAuditKeys = map[string]struct{}{
 	"apikey":        {},
 	"api_key":       {},
 	"private_key":   {},
+	"auth_token":    {},
 }
 
 func isSensitiveAuditKey(key string) bool {
 	clean := strings.ToLower(strings.TrimSpace(key))
+	clean = strings.ReplaceAll(clean, "-", "_")
 	_, exists := sensitiveAuditKeys[clean]
 	return exists
 }
@@ -183,6 +185,16 @@ func sanitizeAuditDetails(val interface{}) interface{} {
 				sanitized[k] = "[REDACTED]"
 			} else {
 				sanitized[k] = sanitizeAuditDetails(item)
+			}
+		}
+		return sanitized
+	case map[string]string:
+		sanitized := make(map[string]string, len(v))
+		for k, val := range v {
+			if isSensitiveAuditKey(k) {
+				sanitized[k] = "[REDACTED]"
+			} else {
+				sanitized[k] = val
 			}
 		}
 		return sanitized

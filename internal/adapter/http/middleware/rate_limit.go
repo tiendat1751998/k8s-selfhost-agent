@@ -24,6 +24,7 @@ type IPRateLimiter struct {
 	window          time.Duration
 	cleanupInterval time.Duration
 	stopCh          chan struct{}
+	stopOnce        sync.Once
 }
 
 // NewIPRateLimiter constructs a new IPRateLimiter and starts its background janitor.
@@ -52,11 +53,9 @@ func NewIPRateLimiter(limit int, window time.Duration, cleanupInterval time.Dura
 
 // Close stops the background janitor goroutine.
 func (l *IPRateLimiter) Close() {
-	select {
-	case <-l.stopCh:
-	default:
+	l.stopOnce.Do(func() {
 		close(l.stopCh)
-	}
+	})
 }
 
 // janitor periodically runs cleanup to purge stale client entries.

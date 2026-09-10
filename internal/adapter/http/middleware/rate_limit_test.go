@@ -229,3 +229,16 @@ func TestRateLimit_WindowReset(t *testing.T) {
 		t.Fatalf("req 4 after window reset expected 200, got %d", rec4.Code)
 	}
 }
+
+func TestRateLimiter_ConcurrentClose(t *testing.T) {
+	limiter := NewIPRateLimiter(5, time.Minute, time.Minute)
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			limiter.Close()
+		}()
+	}
+	wg.Wait()
+}
