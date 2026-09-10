@@ -1,7 +1,7 @@
-<template>
+﻿<template>
   <div class="compliance-mobile-stream">
     <div v-if="violations.length === 0" class="empty-mobile-box glass-panel">
-      <span>🛡️ No compliance violations found.</span>
+      <span>🛡️ No compliance violations found. All controls compliant.</span>
     </div>
 
     <div
@@ -15,7 +15,7 @@
         <StatusBadge :status="v.severity" :label="v.severity.slice(0, 4).toUpperCase()" size="sm" />
       </div>
 
-      <!-- Core Content (Capped text, single line with ellipsis, zero horizontal overflow) -->
+      <!-- Core Content (Single-line capped text with ellipsis, zero horizontal overflow) -->
       <div class="mobile-card-center">
         <div class="mobile-policy-title" :title="v.policy">{{ v.policy }}</div>
         <div class="mobile-meta font-mono text-muted">
@@ -24,12 +24,22 @@
         </div>
       </div>
 
-      <!-- Quick Action Buttons -->
+      <!-- Quick Action Buttons (Touch Target >= 34px) -->
       <div class="mobile-card-right">
-        <button class="btn btn-secondary btn-icon-sm" title="Inspect" @click="$emit('inspect', v)">
+        <button
+          class="btn btn-secondary btn-icon-sm"
+          title="Inspect Finding"
+          aria-label="Inspect Finding"
+          @click="$emit('inspect', v)"
+        >
           🔍
         </button>
-        <button class="btn btn-primary btn-icon-sm" title="Remediate" @click="$emit('remediate', v)">
+        <button
+          class="btn btn-primary btn-icon-sm"
+          title="Remediate Finding"
+          aria-label="Remediate Finding"
+          @click="$emit('remediate', v)"
+        >
           ⚡
         </button>
       </div>
