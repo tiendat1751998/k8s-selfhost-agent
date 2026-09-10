@@ -297,10 +297,23 @@
 .mobile-only { display: none !important; }
 .desktop-only { display: block; }
 
+.metrics-grid.desktop-only {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 16px;
+}
+
 @media (min-width: 768px) {
   .mobile-only { display: none !important; }
   .desktop-only { display: block; }
   .view-header.desktop-only { display: flex; }
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .metrics-grid.desktop-only {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -315,7 +328,8 @@
   .desktop-header,
   .desktop-metrics,
   .desktop-only-table,
-  .pipeline-grid-container {
+  .pipeline-grid-container,
+  .metrics-grid.desktop-only {
     display: none !important;
   }
 

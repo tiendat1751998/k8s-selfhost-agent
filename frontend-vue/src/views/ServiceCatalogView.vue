@@ -316,4 +316,9 @@ const {
 <style>
 @import '../assets/styles/views/catalog.css';
 @import '../assets/styles/components/catalog-drawers.css';
+
+.view-header .header-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
 </style>
