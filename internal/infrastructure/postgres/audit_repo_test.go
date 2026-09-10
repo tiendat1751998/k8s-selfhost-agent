@@ -54,7 +54,7 @@ func TestAuditRepo_RecordAction_UUIDBugfix(t *testing.T) {
 		)
 
 		require.NoError(t, err)
-		require.Len(t, mock.lastArgs, 9)
+		require.Len(t, mock.lastArgs, 10)
 
 		// $1: actor, $2: action, $3: target_type, $4: target_id, $5: target_name, $6: result
 		assert.Equal(t, "devops@enterprise.io", mock.lastArgs[0])
@@ -66,6 +66,7 @@ func TestAuditRepo_RecordAction_UUIDBugfix(t *testing.T) {
 		// $5 must preserve the target identifier string
 		assert.Equal(t, "istio-ingress-gateway.yaml", mock.lastArgs[4])
 		assert.Equal(t, "success", mock.lastArgs[5])
+		assert.Equal(t, "default-tenant", mock.lastArgs[9])
 	})
 
 	t.Run("invalid UUID with existing target_name preserves target_name and nils target_id", func(t *testing.T) {
@@ -86,11 +87,12 @@ func TestAuditRepo_RecordAction_UUIDBugfix(t *testing.T) {
 		)
 
 		require.NoError(t, err)
-		require.Len(t, mock.lastArgs, 9)
+		require.Len(t, mock.lastArgs, 10)
 
 		var nilTargetUUID *string
 		assert.Equal(t, nilTargetUUID, mock.lastArgs[3])
 		assert.Equal(t, "payment-service", mock.lastArgs[4])
+		assert.Equal(t, "default-tenant", mock.lastArgs[9])
 	})
 
 	t.Run("valid UUID is preserved in target_id", func(t *testing.T) {
@@ -112,10 +114,11 @@ func TestAuditRepo_RecordAction_UUIDBugfix(t *testing.T) {
 		)
 
 		require.NoError(t, err)
-		require.Len(t, mock.lastArgs, 9)
+		require.Len(t, mock.lastArgs, 10)
 
 		expectedUUID := &validUUID
 		assert.Equal(t, expectedUUID, mock.lastArgs[3])
 		assert.Equal(t, "cluster-prod-1", mock.lastArgs[4])
+		assert.Equal(t, "default-tenant", mock.lastArgs[9])
 	})
 }

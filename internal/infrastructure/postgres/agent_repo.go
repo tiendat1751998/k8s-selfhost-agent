@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type agentRepo struct {
@@ -31,13 +32,17 @@ func (r *agentRepo) CreateTask(ctx context.Context, task *agent.Task) error {
 		depsJSON = []byte("[]")
 	}
 
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
 	query := `
-		INSERT INTO agent_tasks (id, phase, module, feature, title, description, status, dependencies, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO agent_tasks (id, phase, module, feature, title, description, status, dependencies, created_at, updated_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	_, err = r.getDB(ctx).Exec(ctx, query,
 		task.ID, task.Phase, task.Module, task.Feature, task.Title, task.Description,
-		string(task.Status), string(depsJSON), task.CreatedAt, task.UpdatedAt,
+		string(task.Status), string(depsJSON), task.CreatedAt, task.UpdatedAt, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("creating agent task: %w", err)
@@ -59,10 +64,11 @@ func (r *agentRepo) GetTask(ctx context.Context, id string) (*agent.Task, error)
 		FROM agent_tasks
 		WHERE id = $1
 	`
+	query, args := BuildTenantQuery(ctx, query, id)
 	var t agent.Task
 	var depsStr string
 	var statusStr string
-	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&t.ID, &t.Phase, &t.Module, &t.Feature, &t.Title, &t.Description,
 		&statusStr, &depsStr, &t.CreatedAt, &t.UpdatedAt, &t.CompletedAt,
 	)
@@ -94,7 +100,8 @@ func (r *agentRepo) ListTasks(ctx context.Context) ([]agent.Task, error) {
 		FROM agent_tasks
 		ORDER BY created_at ASC
 	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing agent tasks: %w", err)
 	}
@@ -141,10 +148,11 @@ func (r *agentRepo) UpdateTask(ctx context.Context, task *agent.Task) error {
 		    status = $6, dependencies = $7, updated_at = $8, completed_at = $9
 		WHERE id = $10
 	`
-	cmd, err := r.getDB(ctx).Exec(ctx, query,
+	query, args := BuildTenantQuery(ctx, query,
 		task.Phase, task.Module, task.Feature, task.Title, task.Description,
 		string(task.Status), string(depsJSON), task.UpdatedAt, task.CompletedAt, task.ID,
 	)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating agent task: %w", err)
 	}
@@ -156,12 +164,16 @@ func (r *agentRepo) UpdateTask(ctx context.Context, task *agent.Task) error {
 
 // Subtasks
 func (r *agentRepo) CreateSubtask(ctx context.Context, sub *agent.Subtask) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
 	query := `
-		INSERT INTO agent_subtasks (id, task_id, title, status, complexity, exec_order, completed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO agent_subtasks (id, task_id, title, status, complexity, exec_order, completed_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	_, err := r.getDB(ctx).Exec(ctx, query,
-		sub.ID, sub.TaskID, sub.Title, string(sub.Status), sub.Complexity, sub.ExecOrder, sub.CompletedAt,
+		sub.ID, sub.TaskID, sub.Title, string(sub.Status), sub.Complexity, sub.ExecOrder, sub.CompletedAt, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("creating agent subtask: %w", err)
@@ -175,7 +187,8 @@ func (r *agentRepo) UpdateSubtask(ctx context.Context, sub *agent.Subtask) error
 		SET status = $1, completed_at = $2
 		WHERE id = $3
 	`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, string(sub.Status), sub.CompletedAt, sub.ID)
+	query, args := BuildTenantQuery(ctx, query, string(sub.Status), sub.CompletedAt, sub.ID)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating agent subtask: %w", err)
 	}
@@ -192,7 +205,8 @@ func (r *agentRepo) listSubtasks(ctx context.Context, taskID string) ([]agent.Su
 		WHERE task_id = $1
 		ORDER BY exec_order ASC
 	`
-	rows, err := r.getDB(ctx).Query(ctx, query, taskID)
+	query, args := BuildTenantQuery(ctx, query, taskID)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing agent subtasks: %w", err)
 	}
@@ -214,13 +228,17 @@ func (r *agentRepo) listSubtasks(ctx context.Context, taskID string) ([]agent.Su
 
 // Executions
 func (r *agentRepo) RecordExecution(ctx context.Context, exec *agent.Execution) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
 	query := `
-		INSERT INTO agent_executions (id, task_id, agent_type, status, input, output, error_detail, created_at, completed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO agent_executions (id, task_id, agent_type, status, input, output, error_detail, created_at, completed_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 	_, err := r.getDB(ctx).Exec(ctx, query,
 		exec.ID, exec.TaskID, string(exec.AgentType), exec.Status,
-		exec.Input, exec.Output, exec.ErrorDetail, exec.CreatedAt, exec.CompletedAt,
+		exec.Input, exec.Output, exec.ErrorDetail, exec.CreatedAt, exec.CompletedAt, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("recording agent execution: %w", err)
@@ -234,10 +252,11 @@ func (r *agentRepo) GetExecution(ctx context.Context, id string) (*agent.Executi
 		FROM agent_executions
 		WHERE id = $1
 	`
+	query, args := BuildTenantQuery(ctx, query, id)
 	var e agent.Execution
 	var agentTypeStr string
 	var input, output, errorDetail *string
-	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&e.ID, &e.TaskID, &agentTypeStr, &e.Status, &input, &output, &errorDetail, &e.CreatedAt, &e.CompletedAt,
 	)
 	if err != nil {
@@ -260,24 +279,25 @@ func (r *agentRepo) GetExecution(ctx context.Context, id string) (*agent.Executi
 }
 
 func (r *agentRepo) ListExecutions(ctx context.Context, taskID string) ([]agent.Execution, error) {
-	var rows pgx.Rows
-	var err error
+	var query string
+	var args []interface{}
 	if taskID != "" {
-		query := `
+		query = `
 			SELECT id, task_id, agent_type, status, input, output, error_detail, created_at, completed_at
 			FROM agent_executions
 			WHERE task_id = $1
 			ORDER BY created_at DESC
 		`
-		rows, err = r.getDB(ctx).Query(ctx, query, taskID)
+		args = append(args, taskID)
 	} else {
-		query := `
+		query = `
 			SELECT id, task_id, agent_type, status, input, output, error_detail, created_at, completed_at
 			FROM agent_executions
 			ORDER BY created_at DESC
 		`
-		rows, err = r.getDB(ctx).Query(ctx, query)
 	}
+	query, args = BuildTenantQuery(ctx, query, args...)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing agent executions: %w", err)
 	}
@@ -315,7 +335,8 @@ func (r *agentRepo) UpdateExecution(ctx context.Context, exec *agent.Execution) 
 		SET status = $1, output = $2, error_detail = $3, completed_at = $4
 		WHERE id = $5
 	`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, exec.Status, exec.Output, exec.ErrorDetail, exec.CompletedAt, exec.ID)
+	query, args := BuildTenantQuery(ctx, query, exec.Status, exec.Output, exec.ErrorDetail, exec.CompletedAt, exec.ID)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating agent execution: %w", err)
 	}
@@ -333,9 +354,10 @@ func (r *agentRepo) GetProjectState(ctx context.Context) (*agent.ProjectState, e
 		FROM agent_project_state
 		WHERE id = 'latest'
 	`
+	query, args := BuildTenantQuery(ctx, query)
 	var s agent.ProjectState
 	var currentTaskID, currentSubtaskID *string
-	err := r.getDB(ctx).QueryRow(ctx, query).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&s.ID, &s.CurrentPhase, &s.CurrentModule, &s.CurrentFeature, &currentTaskID, &currentSubtaskID,
 		&s.RepositoryHealth, &s.TechnicalDebt, &s.ArchitectureScore, &s.QualityScore, &s.UpdatedAt,
 	)
@@ -372,10 +394,14 @@ func (r *agentRepo) GetProjectState(ctx context.Context) (*agent.ProjectState, e
 }
 
 func (r *agentRepo) UpdateProjectState(ctx context.Context, state *agent.ProjectState) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
 	query := `
 		INSERT INTO agent_project_state (id, current_phase, current_module, current_feature, current_task_id, current_subtask_id,
-		                               repository_health, technical_debt, architecture_score, quality_score, updated_at)
-		VALUES ('latest', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		                               repository_health, technical_debt, architecture_score, quality_score, updated_at, tenant_id)
+		VALUES ('latest', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (id) DO UPDATE
 		SET current_phase = EXCLUDED.current_phase,
 		    current_module = EXCLUDED.current_module,
@@ -386,11 +412,12 @@ func (r *agentRepo) UpdateProjectState(ctx context.Context, state *agent.Project
 		    technical_debt = EXCLUDED.technical_debt,
 		    architecture_score = EXCLUDED.architecture_score,
 		    quality_score = EXCLUDED.quality_score,
-		    updated_at = EXCLUDED.updated_at
+		    updated_at = EXCLUDED.updated_at,
+		    tenant_id = EXCLUDED.tenant_id
 	`
 	_, err := r.getDB(ctx).Exec(ctx, query,
 		state.CurrentPhase, state.CurrentModule, state.CurrentFeature, state.CurrentTaskID, state.CurrentSubtaskID,
-		state.RepositoryHealth, state.TechnicalDebt, state.ArchitectureScore, state.QualityScore, state.UpdatedAt,
+		state.RepositoryHealth, state.TechnicalDebt, state.ArchitectureScore, state.QualityScore, state.UpdatedAt, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating project state: %w", err)

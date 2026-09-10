@@ -41,9 +41,13 @@ func TestRouter_RBACEnforcement(t *testing.T) {
 		Docker:      NewDockerHandler(nil),
 		Agents:      NewAgentHandler(nil, nil),
 		Catalog:     NewCatalogHandler(nil, nil),
-		Deployments: NewDeploymentHandler(nil),
-		K8s:         NewK8sResourceHandler(nil, nil),
-		Audit:       NewAuditHandler(nil),
+		Deployments:  NewDeploymentHandler(nil),
+		K8s:          NewK8sResourceHandler(nil, nil),
+		K8sExec:      NewK8sExecHandler(nil, nil),
+		Audit:        NewAuditHandler(nil),
+		Capacity:     NewCapacityHandler(nil),
+		HealthCenter: NewHealthCenterHandler(nil),
+		Dashboard:    NewHandler(nil, nil, nil, nil, nil),
 	}
 
 	router := NewRouterWithWS(healthHandler, nil, platform)
@@ -115,6 +119,11 @@ func TestRouter_RBACEnforcement(t *testing.T) {
 			{http.MethodDelete, "/api/v1/automation/rules/r1"},
 			{http.MethodPut, "/api/v1/catalog/services/s1"},
 			{http.MethodPost, "/api/v1/audit/run"},
+			{http.MethodPost, "/api/v1/capacity"},
+			{http.MethodPost, "/api/v1/health/ping"},
+			{http.MethodPost, "/api/v1/incidents/simulate"},
+			{http.MethodPost, "/api/v1/prs"},
+			{http.MethodGet, "/api/v1/k8s/local/exec"},
 		}
 
 		for _, ep := range mutatingEndpoints {

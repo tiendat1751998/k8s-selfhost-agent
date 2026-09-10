@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/automation"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type automationRepo struct {
@@ -31,7 +32,8 @@ func (r *automationRepo) ListRules(ctx context.Context) ([]automation.Rule, erro
 		FROM automation_rules 
 		ORDER BY created_at DESC
 	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying automation rules: %w", err)
 	}
@@ -83,10 +85,11 @@ func (r *automationRepo) GetRule(ctx context.Context, id string) (*automation.Ru
 		FROM automation_rules 
 		WHERE id = $1
 	`
+	query, args := BuildTenantQuery(ctx, query, id)
 	var rule automation.Rule
 	var triggerBytes, actionBytes []byte
 
-	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&rule.ID, &rule.Name, &rule.TriggerType, &triggerBytes,
 		&rule.ActionType, &actionBytes, &rule.Enabled, &rule.Executions,
 		&rule.LastTriggered, &rule.CreatedAt, &rule.UpdatedAt,
@@ -125,9 +128,14 @@ func (r *automationRepo) CreateRule(ctx context.Context, rule *automation.Rule) 
 		rule.UpdatedAt = time.Now().UTC()
 	}
 
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO automation_rules (name, trigger_type, trigger_config, action_type, action_config, enabled, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO automation_rules (name, trigger_type, trigger_config, action_type, action_config, enabled, created_at, updated_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
 	`
 	
@@ -142,7 +150,7 @@ func (r *automationRepo) CreateRule(ctx context.Context, rule *automation.Rule) 
 	}
 
 	err = r.getDB(ctx).QueryRow(ctx, query,
-		rule.Name, string(rule.TriggerType), triggerBytes, string(rule.ActionType), actionBytes, rule.Enabled, rule.CreatedAt, rule.UpdatedAt,
+		rule.Name, string(rule.TriggerType), triggerBytes, string(rule.ActionType), actionBytes, rule.Enabled, rule.CreatedAt, rule.UpdatedAt, tenantID,
 	).Scan(&rule.ID)
 	
 	if err != nil {
@@ -170,9 +178,10 @@ func (r *automationRepo) UpdateRule(ctx context.Context, rule *automation.Rule) 
 		return fmt.Errorf("marshaling action config: %w", err)
 	}
 
-	cmd, err := r.getDB(ctx).Exec(ctx, query,
+	query, args := BuildTenantQuery(ctx, query,
 		rule.Name, string(rule.TriggerType), triggerBytes, string(rule.ActionType), actionBytes, rule.UpdatedAt, rule.ID,
 	)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating automation rule: %w", err)
 	}
@@ -184,7 +193,8 @@ func (r *automationRepo) UpdateRule(ctx context.Context, rule *automation.Rule) 
 
 func (r *automationRepo) DeleteRule(ctx context.Context, id string) error {
 	query := `DELETE FROM automation_rules WHERE id = $1`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
+	query, args := BuildTenantQuery(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("deleting automation rule: %w", err)
 	}
@@ -196,7 +206,8 @@ func (r *automationRepo) DeleteRule(ctx context.Context, id string) error {
 
 func (r *automationRepo) ToggleRule(ctx context.Context, id string, enabled bool) error {
 	query := `UPDATE automation_rules SET enabled = $1, updated_at = NOW() WHERE id = $2`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, enabled, id)
+	query, args := BuildTenantQuery(ctx, query, enabled, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("toggling automation rule: %w", err)
 	}
@@ -214,14 +225,16 @@ func (r *automationRepo) ListExecutions(ctx context.Context, limit, offset int) 
 		LIMIT $1 OFFSET $2
 	`
 	countQuery := `SELECT COUNT(*) FROM automation_executions`
+	countQuery, countArgs := BuildTenantQuery(ctx, countQuery)
 
 	var total int
-	err := r.getDB(ctx).QueryRow(ctx, countQuery).Scan(&total)
+	err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting automation executions: %w", err)
 	}
 
-	rows, err := r.getDB(ctx).Query(ctx, query, limit, offset)
+	query, args := BuildTenantQuery(ctx, query, limit, offset)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying automation executions: %w", err)
 	}
@@ -257,9 +270,14 @@ func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Exec
 		e.CreatedAt = time.Now().UTC()
 	}
 
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO automation_executions (rule_id, rule_name, trigger_event, action_taken, result, error_detail, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO automation_executions (rule_id, rule_name, trigger_event, action_taken, result, error_detail, created_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 	
@@ -269,7 +287,7 @@ func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Exec
 	}
 
 	err := r.getDB(ctx).QueryRow(ctx, query,
-		e.RuleID, e.RuleName, e.TriggerEvent, e.ActionTaken, e.Result, errDetail, e.CreatedAt,
+		e.RuleID, e.RuleName, e.TriggerEvent, e.ActionTaken, e.Result, errDetail, e.CreatedAt, tenantID,
 	).Scan(&e.ID)
 	
 	if err != nil {
@@ -282,7 +300,8 @@ func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Exec
 		SET executions = executions + 1, last_triggered = NOW() 
 		WHERE id = $1
 	`
-	if _, err := r.getDB(ctx).Exec(ctx, updateQuery, e.RuleID); err != nil {
+	updateQuery, updateArgs := BuildTenantQuery(ctx, updateQuery, e.RuleID)
+	if _, err := r.getDB(ctx).Exec(ctx, updateQuery, updateArgs...); err != nil {
 		return fmt.Errorf("updating rule stats: %w", err)
 	}
 	
