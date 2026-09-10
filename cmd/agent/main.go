@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -9,8 +9,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
 
 func setupHandler(collector *SystemCollector, authToken string, logServers ...*LogServer) http.Handler {
@@ -109,13 +112,17 @@ func main() {
 		interval  time.Duration
 		authToken string
 		logDir    string
+		engineDir string
 	)
 
 	flag.IntVar(&port, "port", 9100, "Port for metrics and logs HTTP server")
 	flag.DurationVar(&interval, "interval", 5*time.Second, "Metrics collection interval")
 	flag.StringVar(&authToken, "auth-token", "", "Optional Bearer token for authentication")
 	flag.StringVar(&logDir, "log-dir", "/var/log", "Directory for local log file scanning")
+	flag.StringVar(&engineDir, "engine-dir", "", "Directory for columnar log engine data")
 	flag.Parse()
+
+	logengine.InitEngineRuntime()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
@@ -127,13 +134,33 @@ func main() {
 		slog.String("log_dir", logDir),
 	)
 
-	collector := NewSystemCollector("", "", nil, WithCollectionInterval(interval))
-	logServer := NewLogServer(WithLogDir(logDir))
-
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	collector := NewSystemCollector("", "", nil, WithCollectionInterval(interval))
 	go collector.Start(ctx)
+
+	if engineDir == "" {
+		engineDir = filepath.Join(logDir, ".logengine")
+	}
+
+	var engineSrc *EngineLogSource
+	var logServer *LogServer
+
+	if eng, err := NewEngineLogSource(engineDir); err == nil {
+		engineSrc = eng
+		logger.Info("Columnar log engine initialized", slog.String("engine_dir", engineDir))
+		fileSrc := &FileLogSource{logDir: logDir}
+		go func() {
+			if err := fileSrc.IngestToWriter(ctx, engineSrc.Writer()); err != nil && ctx.Err() == nil {
+				logger.Warn("Initial log ingestion into log engine encountered warning", slog.String("error", err.Error()))
+			}
+		}()
+		logServer = NewLogServer(WithLogDir(logDir), WithLogSource(engineSrc))
+	} else {
+		logger.Warn("Failed to initialize columnar log engine, falling back to standard sources", slog.String("error", err.Error()))
+		logServer = NewLogServer(WithLogDir(logDir))
+	}
 
 	handler := setupHandler(collector, authToken, logServer)
 	srv := &http.Server{
@@ -160,6 +187,11 @@ func main() {
 	defer shutdownCancel()
 
 	collector.Stop()
+	if engineSrc != nil {
+		if err := engineSrc.Close(); err != nil {
+			logger.Error("Error closing log engine", slog.String("error", err.Error()))
+		}
+	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("Error during agent shutdown", slog.String("error", err.Error()))
 	}
