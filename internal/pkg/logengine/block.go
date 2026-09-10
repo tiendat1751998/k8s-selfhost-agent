@@ -101,42 +101,45 @@ func (b *BlockBuilder) Reset() {
 	b.maxTime = 0
 }
 
-// Pack encodes the columnar components into dst scratch buffer.
-// Returns uncompressed bytes, minTime, maxTime, and Bloom filter.
+// Pack encodes the columnar components safely into dst, growing dst if capacity is exceeded.
 func (b *BlockBuilder) Pack(dst []byte) (uncompressed []byte, minTime, maxTime int64, bloom *BlockBloomFilter) {
 	count := len(b.timestamps)
 	if count == 0 {
 		return nil, 0, 0, &b.bloom
 	}
 
-	offset := 36
+	needed := 36 + (count * 18) + len(b.messages)
+	if cap(dst) < needed {
+		dst = make([]byte, needed)
+	} else {
+		dst = dst[:cap(dst)]
+	}
 
-	// 1. DoubleDelta Timestamps
+	offset := 36
 	ddBytes := EncodeDoubleDelta(b.timestamps, dst[offset:])
 	offset += ddBytes
 
-	// 2. Labels (ServiceID uint16, LevelID uint16)
-	labelsStart := offset
 	for i := 0; i < count; i++ {
 		binary.LittleEndian.PutUint16(dst[offset:offset+2], b.serviceIDs[i])
 		binary.LittleEndian.PutUint16(dst[offset+2:offset+4], b.levelIDs[i])
 		offset += 4
 	}
-	labelsLen := offset - labelsStart
+	labelsLen := count * 4
 
-	// 3. Message Offsets / Lengths
-	offsetsStart := offset
 	for i := 0; i < count; i++ {
 		binary.LittleEndian.PutUint32(dst[offset:offset+4], b.msgLengths[i])
 		offset += 4
 	}
-	offsetsLen := offset - offsetsStart
+	offsetsLen := count * 4
 
-	// 4. Message Payloads
+	if offset+len(b.messages) > cap(dst) {
+		grown := make([]byte, offset+len(b.messages))
+		copy(grown, dst[:offset])
+		dst = grown
+	}
 	copy(dst[offset:], b.messages)
 	offset += len(b.messages)
 
-	// Fill header
 	binary.LittleEndian.PutUint32(dst[0:4], uint32(count))
 	binary.LittleEndian.PutUint64(dst[4:12], uint64(b.minTime))
 	binary.LittleEndian.PutUint64(dst[12:20], uint64(b.maxTime))
@@ -227,13 +230,11 @@ func (v *BlockView) Unpack(data []byte) error {
 	}
 
 	v.rawMsgs = data[offset : offset+msgLen]
-
 	cur := 0
 	for i := 0; i < count; i++ {
 		v.msgIndices[i] = cur
 		cur += int(v.MsgLengths[i])
 	}
-
 	return nil
 }
 

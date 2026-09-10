@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -97,21 +97,28 @@ func NewLogServer(opts ...LogServerOption) *LogServer {
 
 	// If no custom sources are injected, register default providers
 	if len(s.sources) == 0 {
-		// 1. Try Docker client
 		if dockerSrc := newDockerLogSource(); dockerSrc != nil {
 			s.sources = append(s.sources, dockerSrc)
 		}
-		// 2. File log source
 		if s.logDir != "" {
 			s.sources = append(s.sources, &FileLogSource{logDir: s.logDir})
 		}
-		// 3. Journalctl log source (Linux only)
 		if journalSrc := newJournalctlLogSource(); journalSrc != nil {
 			s.sources = append(s.sources, journalSrc)
 		}
 	}
 
 	return s
+}
+
+// AddSource registers an additional LogSource provider alongside existing ones.
+func (s *LogServer) AddSource(src LogSource) {
+	if src == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sources = append(s.sources, src)
 }
 
 // ListServices returns all unique service names available across all log sources.
@@ -247,4 +254,3 @@ func (s *LogServer) HandleSearchLogs(w http.ResponseWriter, r *http.Request) {
 		Total:   len(results),
 	})
 }
-

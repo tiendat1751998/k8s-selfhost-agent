@@ -52,6 +52,7 @@ type Writer struct {
 	closeCh       chan struct{}
 	wg            sync.WaitGroup
 	closed        bool
+	lastErr       error
 }
 
 // NewWriter initializes a Writer on the specified directory.
@@ -75,7 +76,6 @@ func NewWriter(dir string, dict *LabelDictionary, opts ...WriterOption) (*Writer
 		opt(w)
 	}
 
-	// Discover next part ID from existing parts
 	entries, _ := os.ReadDir(partsDir)
 	for _, e := range entries {
 		if e.IsDir() {
@@ -108,13 +108,22 @@ func (w *Writer) flushLoop() {
 			return
 		case <-ticker.C:
 			w.mu.Lock()
-			_ = w.flushLocked()
+			if err := w.flushLocked(); err != nil {
+				w.lastErr = err
+			}
 			w.mu.Unlock()
 		}
 	}
 }
 
-// Write appends an entry to the current staging block and flushes if maxRows is reached.
+// LastError returns the last asynchronous error encountered during periodic flush.
+func (w *Writer) LastError() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.lastErr
+}
+
+// Write appends an entry to the current staging block and flushes if threshold is reached.
 func (w *Writer) Write(entry Entry) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -129,7 +138,7 @@ func (w *Writer) Write(entry Entry) error {
 
 	w.builder.Append(ts, svcID, lvlID, []byte(entry.Message))
 
-	if w.builder.RowCount() >= w.maxRows || w.builder.EstimatedSize() >= BlockBufferSize {
+	if w.builder.RowCount() >= w.maxRows || w.builder.EstimatedSize() >= BlockBufferSize-4096 {
 		return w.flushLocked()
 	}
 	return nil
@@ -150,8 +159,9 @@ func (w *Writer) flushLocked() error {
 	partName := fmt.Sprintf("part_%016d", w.nextPartID)
 	w.nextPartID++
 	partDir := filepath.Join(w.partsDir, partName)
-	if err := os.MkdirAll(partDir, 0755); err != nil {
-		return fmt.Errorf("failed to create part directory %s: %w", partDir, err)
+	tmpDir := filepath.Join(w.partsDir, fmt.Sprintf("%s.tmp_%d", partName, time.Now().UnixNano()))
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		return fmt.Errorf("failed to create temp part dir %s: %w", tmpDir, err)
 	}
 
 	scratchBuf := GetBlockBuffer()
@@ -164,8 +174,8 @@ func (w *Writer) flushLocked() error {
 	compressed := CompressBlock(uncompressed, compBuf)
 
 	// 1. Write data.bin
-	dataPath := filepath.Join(partDir, "data.bin")
-	if err := os.WriteFile(dataPath, compressed, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "data.bin"), compressed, 0644); err != nil {
+		_ = os.RemoveAll(tmpDir)
 		return fmt.Errorf("failed to write data.bin: %w", err)
 	}
 
@@ -178,36 +188,51 @@ func (w *Writer) flushLocked() error {
 	}
 	markBytes := make([]byte, BlockMarkSize)
 	mark.Encode(markBytes)
-	if err := os.WriteFile(filepath.Join(partDir, "marks.bin"), markBytes, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "marks.bin"), markBytes, 0644); err != nil {
+		_ = os.RemoveAll(tmpDir)
 		return fmt.Errorf("failed to write marks.bin: %w", err)
 	}
 
 	// 3. Write bloom.bin
-	if err := os.WriteFile(filepath.Join(partDir, "bloom.bin"), bloom.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "bloom.bin"), bloom.Bytes(), 0644); err != nil {
+		_ = os.RemoveAll(tmpDir)
 		return fmt.Errorf("failed to write bloom.bin: %w", err)
 	}
 
-	// 4. Write primary.idx
+	// 4. Write primary.idx with deferred close helper
 	pidx := NewPrimaryIndex()
 	pidx.Add(minTime, maxTime)
-	idxFile, err := os.OpenFile(filepath.Join(partDir, "primary.idx"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to create primary.idx: %w", err)
-	}
-	if err := pidx.WritePrimaryIndex(idxFile); err != nil {
-		idxFile.Close()
+	if err := writePrimaryIndexAtomic(filepath.Join(tmpDir, "primary.idx"), pidx); err != nil {
+		_ = os.RemoveAll(tmpDir)
 		return fmt.Errorf("failed to write primary.idx: %w", err)
 	}
-	idxFile.Close()
 
-	// 5. Persist dictionary snapshot
+	// 5. Atomic Rename to final immutable part directory
+	if err := os.Rename(tmpDir, partDir); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return fmt.Errorf("failed to commit atomic part directory %s: %w", partName, err)
+	}
+
+	// 6. Persist dictionary snapshot
 	dictData, err := json.Marshal(w.dict.Export())
-	if err == nil {
-		_ = os.WriteFile(filepath.Join(w.dir, "dict.json"), dictData, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to marshal dict: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(w.dir, "dict.json"), dictData, 0644); err != nil {
+		return fmt.Errorf("failed to write dict.json: %w", err)
 	}
 
 	w.builder.Reset()
 	return nil
+}
+
+func writePrimaryIndexAtomic(path string, pidx *PrimaryIndex) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return pidx.WritePrimaryIndex(f)
 }
 
 // Close flushes buffered rows, stops the flush loop, and releases resources.

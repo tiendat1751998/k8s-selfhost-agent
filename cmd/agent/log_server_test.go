@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"bytes"
@@ -357,8 +357,9 @@ func TestEngineLogSource_Integration(t *testing.T) {
 		t.Errorf("expected columnar message, got: %s", entries[0].Message)
 	}
 
-	// Test via HTTP setupHandler
-	logServer := NewLogServer(WithLogSource(engineSrc))
+	// Test AddSource alongside standard sources
+	logServer := NewLogServer(WithLogDir(tempDir))
+	logServer.AddSource(engineSrc)
 	collector := NewSystemCollector("", "", nil)
 	handler := setupHandler(collector, "", logServer)
 
@@ -373,7 +374,8 @@ func TestEngineLogSource_Integration(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp.Count != 1 {
-		t.Errorf("expected 1 log line via HTTP, got %d", resp.Count)
+	if resp.Count < 1 {
+		t.Errorf("expected at least 1 log line via HTTP, got %d", resp.Count)
 	}
 }
+
