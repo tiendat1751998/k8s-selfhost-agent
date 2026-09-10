@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { SystemOverview, NodeMetrics } from '../../api/overview'
 import type { TrendPoint } from './hud/OverviewSaturationTrends.vue'
 import NodeTableView from './nodes/NodeTableView.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   overview: SystemOverview
@@ -178,7 +179,10 @@ const mobileMemArea = computed(() => {
     <div class="mobile-saturation-chart-card glass-panel" @click="emit('deepDive')" title="Tap to open Telemetry Deep-Dive Modal">
       <div class="chart-card-header">
         <div class="chart-header-left">
-          <span class="chart-badge">📈 SATURATION</span>
+          <span class="chart-badge">
+            <BaseIcon name="trending-up" size="xs" />
+            <span>SATURATION</span>
+          </span>
           <span class="live-pill"><span class="live-pulse"></span>Live</span>
         </div>
         <div class="chart-header-legend font-mono text-xs">
@@ -228,8 +232,14 @@ const mobileMemArea = computed(() => {
     <!-- Touch Stream of Active Nodes -->
     <div class="mobile-nodes-stream">
       <div class="stream-section-title mobile-view-toggle">
-        <button type="button" class="toggle-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">🗂 Compact</button>
-        <button type="button" class="toggle-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">📑 Table</button>
+        <button type="button" class="toggle-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">
+          <BaseIcon name="layers" size="xs" />
+          <span>Compact</span>
+        </button>
+        <button type="button" class="toggle-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">
+          <BaseIcon name="file-text" size="xs" />
+          <span>Table</span>
+        </button>
       </div>
 
       <template v-if="viewMode === 'table'">
@@ -300,4 +310,16 @@ const mobileMemArea = computed(() => {
 <style scoped>
 @import '../../assets/styles/views/overview.css';
 @import '../../assets/styles/views/overview-mobile.css';
+
+.chart-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mobile-view-toggle .toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 </style>
