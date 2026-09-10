@@ -28,8 +28,8 @@ const {
       </div>
     </transition>
 
-    <!-- Header Section -->
-    <header class="view-header">
+    <!-- Header Section (Desktop Only) -->
+    <header class="view-header desktop-header desktop-only">
       <div class="header-titles">
         <div class="title-with-badge">
           <h1>Ecosystem Auto-Detector</h1>
@@ -52,8 +52,45 @@ const {
       </div>
     </header>
 
+    <!-- Mobile Command Bar (<768px) -->
+    <div class="ecosystem-mobile-command-bar mobile-only">
+      <div class="command-bar-left">
+        <span class="command-bar-title font-bold">🌐 Ecosystem ({{ summary.total }})</span>
+      </div>
+      <div class="command-bar-actions">
+        <button
+          class="btn-icon-cmd"
+          :disabled="scanning || loading"
+          title="🔄 Sync"
+          aria-label="🔄 Sync"
+          @click="handleScan"
+        >
+          <span :class="{ 'spin-anim': scanning }">🔄</span>
+        </button>
+        <button
+          class="btn-icon-cmd"
+          title="➕ Connect"
+          aria-label="➕ Connect"
+          @click="openConnectModal()"
+        >
+          <span>➕</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Micro-Telemetry Strip (<768px) -->
+    <div class="ecosystem-micro-telemetry mobile-only font-mono" role="status" aria-label="Ecosystem Micro Telemetry">
+      <span class="tel-item tel-total">🌐 {{ summary.total }} Total</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-connected">🟢 {{ summary.healthy }} Connected</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-latency">⚡ {{ healthProbeResult?.latencyMs ? `${healthProbeResult.latencyMs}ms` : '<45ms' }} Latency</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-issues">⚠️ {{ summary.degraded }} Issues</span>
+    </div>
+
     <!-- Summary HUD Metrics -->
-    <section class="summary-hud-grid">
+    <section class="summary-hud-grid desktop-only">
       <MetricCard
         title="Detected Stack Tools"
         :value="summary.total"
@@ -157,6 +194,7 @@ const {
     <template v-else>
       <EcosystemGrid
         v-if="viewMode === 'grid'"
+        class="desktop-only"
         :tools="filteredTools"
         :deleting-id="deleting"
         :syncing-id="syncing"
@@ -170,6 +208,7 @@ const {
 
       <EcosystemTable
         v-else
+        class="desktop-only"
         :tools="filteredTools"
         :deleting-id="deleting"
         :syncing-id="syncing"
@@ -182,6 +221,7 @@ const {
       />
 
       <EcosystemMobileCards
+        class="mobile-only"
         :tools="filteredTools"
         :deleting-id="deleting"
         :syncing-id="syncing"
@@ -223,4 +263,5 @@ const {
 
 <style>
 @import '../assets/styles/views/ecosystem.css';
+@import '../assets/styles/components/ecosystem-drawers.css';
 </style>
