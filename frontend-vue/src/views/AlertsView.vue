@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '../assets/styles/components/alerts-drawers.css'
 import '../assets/styles/views/alerts.css'
 import { useAlertManager } from '../composables/useAlertManager'
 import AlertsHudMetrics from '../components/alerts/AlertsHudMetrics.vue'
@@ -29,8 +30,10 @@ const {
   firingAlerts,
   firingCount,
   criticalP1Count,
+  warningCount,
   silencedRulesCount,
   meanTimeToAcknowledge,
+  loadData,
   handleAcknowledge,
   handleSilence,
   handleResolve,
@@ -45,13 +48,13 @@ const {
 } = useAlertManager()
 
 const historyColumns: Column<AlertHistory>[] = [
-  { key: 'ID', label: 'Alert ID', sortable: true, width: '110px' },
-  { key: 'Status', label: 'State', sortable: true, width: '130px' },
-  { key: 'RuleID', label: 'Rule Identifier', sortable: true, width: '160px' },
-  { key: 'Message', label: 'Alert Message & Metric Anomaly', sortable: true },
-  { key: 'Value', label: 'Recorded Value', sortable: true, width: '130px' },
-  { key: 'CreatedAt', label: 'Triggered At', sortable: true, width: '180px' },
-  { key: 'actions', label: 'Triage Action', align: 'right', width: '150px' }
+  { key: 'ID', label: 'Alert ID', sortable: true, width: '12%' },
+  { key: 'Status', label: 'State', sortable: true, width: '10%' },
+  { key: 'RuleID', label: 'Rule Identifier', sortable: true, width: '15%' },
+  { key: 'Message', label: 'Alert Message & Metric Anomaly', sortable: true, width: '33%' },
+  { key: 'Value', label: 'Recorded Value', sortable: true, width: '10%' },
+  { key: 'CreatedAt', label: 'Triggered At', sortable: true, width: '10%' },
+  { key: 'actions', label: 'Triage Action', align: 'right', width: '10%' }
 ]
 </script>
 
@@ -79,10 +82,10 @@ const historyColumns: Column<AlertHistory>[] = [
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="alerts-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🔔 Alerts ({{ firingCount }})</span>
+        <span class="command-bar-title font-bold">🚨 Alerts ({{ firingCount }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -95,24 +98,25 @@ const historyColumns: Column<AlertHistory>[] = [
         </button>
         <button
           class="btn-icon-cmd"
-          title="Add Channel"
-          aria-label="Add Channel"
-          @click="showChannelModal = true"
+          :disabled="loading"
+          title="Sync / Refresh Telemetry"
+          aria-label="Sync / Refresh Telemetry"
+          @click="loadData"
         >
-          <span>📢</span>
+          <span :class="{ 'animate-spin': loading }">🔄</span>
         </button>
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="alerts-micro-telemetry mobile-only font-mono" role="status" aria-label="Alerts Micro Telemetry">
-      <span class="tel-item tel-firing">🔥 {{ firingCount }} firing</span>
+      <span class="tel-item tel-crit">🚨 {{ criticalP1Count }} Critical</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-crit">🛑 {{ criticalP1Count }} crit</span>
+      <span class="tel-item tel-warn">⚠️ {{ warningCount }} Warning</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-silent">🔕 {{ silencedRulesCount }} silent</span>
+      <span class="tel-item tel-silent">🔕 {{ silencedRulesCount }} Silenced</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-mtta">⚡ {{ meanTimeToAcknowledge }} MTTA</span>
+      <span class="tel-item tel-chan">📡 {{ channels.length }} Channels</span>
     </div>
 
     <div v-if="feedbackMessage" class="feedback-banner animate-fade-in">
@@ -147,6 +151,7 @@ const historyColumns: Column<AlertHistory>[] = [
 
     <div v-if="activeTab === 'history'" class="tab-content animate-fade-in">
       <ActiveAlertsStream 
+        class="desktop-only"
         :alerts="firingAlerts"
         @silence="handleSilence($event)"
         @resolve="handleResolve($event)"
@@ -154,8 +159,9 @@ const historyColumns: Column<AlertHistory>[] = [
       />
 
       <AlertsMobileCards 
-        :alerts="history" 
+        :alerts="firingAlerts" 
         @acknowledge="handleAcknowledge"
+        @silence="handleSilence($event)"
         @telemetry="openTelemetry"
       />
 
@@ -168,7 +174,7 @@ const historyColumns: Column<AlertHistory>[] = [
           searchPlaceholder="Filter alert history by ID, message, or rule..."
         >
           <template #cell-ID="{ value }">
-            <span class="font-mono text-cyan font-bold">{{ value }}</span>
+            <span class="font-mono text-cyan font-bold truncate block">{{ value }}</span>
           </template>
 
           <template #cell-Status="{ value }">
@@ -179,13 +185,13 @@ const historyColumns: Column<AlertHistory>[] = [
           </template>
 
           <template #cell-RuleID="{ value }">
-            <span class="font-mono text-muted">{{ value }}</span>
+            <span class="font-mono text-muted truncate block" :title="String(value)">{{ value }}</span>
           </template>
 
           <template #cell-Message="{ row }">
             <div class="msg-cell">
-              <span class="msg-text">{{ row.Message }}</span>
-              <small v-if="row.AcknowledgedBy" class="msg-ack font-mono text-amber">
+              <span class="msg-text truncate" :title="row.Message">{{ row.Message }}</span>
+              <small v-if="row.AcknowledgedBy" class="msg-ack font-mono text-amber truncate">
                 Ack by {{ row.AcknowledgedBy }}
               </small>
             </div>
@@ -196,7 +202,7 @@ const historyColumns: Column<AlertHistory>[] = [
           </template>
 
           <template #cell-CreatedAt="{ value }">
-            <span class="font-mono text-muted text-xs">{{ new Date(String(value)).toLocaleString() }}</span>
+            <span class="font-mono text-muted text-xs whitespace-nowrap">{{ new Date(String(value)).toLocaleString() }}</span>
           </template>
 
           <template #cell-actions="{ row }">
