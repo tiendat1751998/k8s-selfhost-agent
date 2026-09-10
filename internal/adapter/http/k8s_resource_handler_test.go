@@ -39,6 +39,9 @@ func (m *mockK8sAuditRepo) RecordRun(ctx context.Context, run *audit.AuditRun) e
 func (m *mockK8sAuditRepo) GetLastRun(ctx context.Context) (*audit.AuditRun, error) {
 	return nil, nil
 }
+func (m *mockK8sAuditRepo) ListLogs(ctx context.Context, filter audit.AuditLogFilter) ([]audit.AuditLog, int, error) {
+	return nil, 0, nil
+}
 func (m *mockK8sAuditRepo) RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error {
 	m.actions = append(m.actions, action+":"+targetType+":"+targetName)
 	return nil
