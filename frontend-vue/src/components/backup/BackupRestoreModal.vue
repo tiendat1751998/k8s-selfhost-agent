@@ -63,12 +63,12 @@ function handleSubmit() {
           <span class="badge badge-rose">POINT-IN-TIME RESTORE</span>
           <h3 class="modal-title">Restore Database from Snapshot</h3>
         </div>
-        <button class="modal-close" @click="emit('update:modelValue', false)">✕</button>
+        <button class="modal-close" @click="emit('update:modelValue', false)"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <form class="modal-body" @submit.prevent="handleSubmit">
         <div class="alert-box alert-warning">
-          <strong>⚠️ Caution:</strong> Restore will replay WAL/transaction logs and replace contents in the target database.
+          <strong><BaseIcon name="alert-triangle" size="xs" /> Caution:</strong> Restore will replay WAL/transaction logs and replace contents in the target database.
         </div>
 
         <div class="form-group">
@@ -106,7 +106,7 @@ function handleSubmit() {
         <div class="modal-footer" style="padding: 16px 0 0 0; background: transparent; border-top: none;">
           <button type="button" class="btn btn-secondary" @click="emit('update:modelValue', false)">Cancel</button>
           <button type="submit" class="btn btn-danger" :disabled="loading || !form.backup_job_id">
-            <span>{{ loading ? 'Executing Restore...' : '⚡ Execute Instant Restore' }}</span>
+            <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Executing Restore...' : 'Execute Instant Restore' }}</span>
           </button>
         </div>
       </form>

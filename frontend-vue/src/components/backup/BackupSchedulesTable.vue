@@ -14,13 +14,10 @@ const emit = defineEmits<{
 
 function getDbIcon(type: string): string {
   const t = (type || '').toLowerCase()
-  if (t.includes('postgres')) return '🐘'
-  if (t.includes('mysql')) return '🐬'
-  if (t.includes('maria')) return '🦭'
-  if (t.includes('mongo')) return '🍃'
-  if (t.includes('redis')) return '⚡'
-  if (t.includes('nats')) return '📬'
-  return '📦'
+  if (t.includes('postgres') || t.includes('mysql') || t.includes('maria') || t.includes('mongo')) return 'database'
+  if (t.includes('redis')) return 'zap'
+  if (t.includes('nats')) return 'globe'
+  return 'box'
 }
 </script>
 
@@ -34,7 +31,7 @@ function getDbIcon(type: string): string {
         :class="{ 'glass-panel-glow': policy.enabled }"
       >
         <div class="policy-card-top">
-          <div class="policy-icon-box">{{ getDbIcon(policy.db_type) }}</div>
+          <div class="policy-icon-box"><BaseIcon :name="getDbIcon(policy.db_type)" size="sm" /></div>
           <div class="policy-meta">
             <h3 class="policy-name">{{ policy.name }}</h3>
             <span class="policy-sub font-mono text-muted">
@@ -73,14 +70,14 @@ function getDbIcon(type: string): string {
             :disabled="triggeringPolicyId === policy.id"
             @click="emit('trigger', policy.id)"
           >
-            <span>{{ triggeringPolicyId === policy.id ? '⚡ Dispatching...' : '⚡ Backup Now' }}</span>
+            <BaseIcon :name="triggeringPolicyId === policy.id ? 'clock' : 'zap'" size="xs" /> <span>{{ triggeringPolicyId === policy.id ? 'Dispatching...' : 'Backup Now' }}</span>
           </button>
         </div>
       </div>
     </div>
 
     <div v-else class="empty-state-box glass-panel">
-      <span class="empty-icon">📋</span>
+      <span class="empty-icon"><BaseIcon name="file-text" size="lg" /></span>
       <h3 class="empty-title">No Backup Policies Configured</h3>
       <p class="empty-desc">Create your first automated database policy to protect workloads across clusters.</p>
       <button class="btn btn-primary" @click="emit('create')">

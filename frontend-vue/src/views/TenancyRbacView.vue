@@ -3,6 +3,7 @@ import { useTenancyRbac } from '../composables/useTenancyRbac'
 import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import TenantListTable from '../components/tenancy/TenantListTable.vue'
 import TenancyMobileCards from '../components/tenancy/TenancyMobileCards.vue'
 import RolePermissionMatrixModal from '../components/tenancy/RolePermissionMatrixModal.vue'
@@ -73,7 +74,7 @@ const {
     <!-- Mobile 40px Command Bar (<640px) -->
     <div class="tenancy-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🏢 Tenancy ({{ organizations.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="building" size="xs" /> Tenancy ({{ organizations.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -82,7 +83,7 @@ const {
           aria-label="Create Project"
           @click="showProjectModal = true"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -90,25 +91,25 @@ const {
           aria-label="New Organization"
           @click="showOrgModal = true"
         >
-          <span>🏢</span>
+          <BaseIcon name="building" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
     <div class="tenancy-micro-telemetry mobile-only font-mono" role="status" aria-label="Tenancy Micro Telemetry">
-      <span class="tel-item tel-orgs">🏢 {{ organizations.length }} orgs</span>
+      <span class="tel-item tel-orgs"><BaseIcon name="building" size="xs" /> {{ organizations.length }} orgs</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-projs">📁 {{ filteredProjects.length }} projs</span>
+      <span class="tel-item tel-projs"><BaseIcon name="folder" size="xs" /> {{ filteredProjects.length }} projs</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-wkls">📦 {{ totalWorkloads }} wkls</span>
+      <span class="tel-item tel-wkls"><BaseIcon name="box" size="xs" /> {{ totalWorkloads }} wkls</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-mbrs">👥 {{ filteredMembers.length }} mbrs</span>
+      <span class="tel-item tel-mbrs"><BaseIcon name="users" size="xs" /> {{ filteredMembers.length }} mbrs</span>
     </div>
 
     <!-- Alert Banner -->
     <div v-if="feedbackMessage" class="feedback-banner animate-fade-in">
-      <span class="feedback-icon">✓</span>
+      <BaseIcon name="check-circle" size="xs" class="feedback-icon" />
       <span>{{ feedbackMessage }}</span>
     </div>
 
@@ -125,25 +126,25 @@ const {
       <div class="scope-left">
         <label class="scope-label">Active Organization Scope:</label>
         <select v-model="selectedOrgId" class="input-glass select-scope">
-          <option value="all">🌐 All Organizations (Global Multi-Tenant)</option>
+          <option value="all">All Organizations (Global Multi-Tenant)</option>
           <option v-for="org in organizations" :key="org.id" :value="org.id">
-            🏢 {{ org.name }} ({{ org.tier }})
+            {{ org.name }} ({{ org.tier }})
           </option>
         </select>
       </div>
 
       <div class="tab-pills">
         <button class="tab-btn" :class="{ active: activeTab === 'tenants' }" @click="activeTab = 'tenants'">
-          <span>🏢 Organizations</span> <span class="tab-count">{{ organizations.length }}</span>
+          <span><BaseIcon name="building" size="xs" /> Organizations</span> <span class="tab-count">{{ organizations.length }}</span>
         </button>
         <button class="tab-btn" :class="{ active: activeTab === 'members' }" @click="activeTab = 'members'">
-          <span>👥 Members & Roles</span> <span class="tab-count">{{ filteredMembers.length }}</span>
+          <span><BaseIcon name="users" size="xs" /> Members & Roles</span> <span class="tab-count">{{ filteredMembers.length }}</span>
         </button>
         <button class="tab-btn" :class="{ active: activeTab === 'projects' }" @click="activeTab = 'projects'">
-          <span>📁 Project Namespaces</span> <span class="tab-count">{{ filteredProjects.length }}</span>
+          <span><BaseIcon name="folder" size="xs" /> Project Namespaces</span> <span class="tab-count">{{ filteredProjects.length }}</span>
         </button>
         <button class="tab-btn" :class="{ active: activeTab === 'rbac' }" @click="activeTab = 'rbac'">
-          <span>🛡️ Granular RBAC Matrix</span>
+          <span><BaseIcon name="shield" size="xs" /> Granular RBAC Matrix</span>
         </button>
       </div>
     </div>
@@ -228,7 +229,7 @@ const {
         <div v-for="proj in filteredProjects" :key="proj.id" class="project-card glass-panel">
           <div class="project-card-header">
             <div class="project-title-wrap">
-              <span class="project-icon">📦</span>
+              <BaseIcon name="box" size="sm" class="project-icon" />
               <div>
                 <h3 class="project-name">{{ proj.name }}</h3>
                 <small class="project-id font-mono">{{ proj.id }}</small>
@@ -266,7 +267,7 @@ const {
             <h3 class="rbac-title">Kubernetes RBAC Privilege Matrix</h3>
             <p class="rbac-sub">Click individual cells to toggle runtime access policies across the cluster mesh.</p>
           </div>
-          <button class="btn btn-secondary btn-sm" @click="syncRbacToApi"><span>💾 Sync to APIServer</span></button>
+          <button class="btn btn-secondary btn-sm" @click="syncRbacToApi"><BaseIcon name="save" size="xs" /> <span>Sync to APIServer</span></button>
         </div>
         <div class="rbac-table-wrap">
           <table class="rbac-table">
@@ -286,7 +287,8 @@ const {
                 </td>
                 <td v-for="role in rbacRoles" :key="role" class="td-perm" @click="toggleRbacPermission(role, res.key)">
                   <div class="perm-badge" :class="rbacMatrix[role]?.[res.key] ? 'perm-allowed' : 'perm-denied'">
-                    <span>{{ rbacMatrix[role]?.[res.key] ? '✓ ALLOWED' : '✕ DENIED' }}</span>
+                    <span v-if="rbacMatrix[role]?.[res.key]"><BaseIcon name="check" size="xs" /> ALLOWED</span>
+                    <span v-else><BaseIcon name="x" size="xs" /> DENIED</span>
                   </div>
                 </td>
               </tr>

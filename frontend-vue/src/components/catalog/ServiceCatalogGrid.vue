@@ -36,7 +36,7 @@ const emit = defineEmits<{
       <div v-for="i in 6" :key="i" class="catalog-card animate-pulse">
         <div class="catalog-card-header">
           <div class="card-title-group">
-            <span class="type-mini-icon">📦</span>
+            <BaseIcon name="box" size="xs" class="type-mini-icon" />
             <div class="h-4 bg-slate-700 rounded w-28"></div>
           </div>
           <span class="h-4 bg-slate-700 rounded w-16"></span>
@@ -106,7 +106,7 @@ const emit = defineEmits<{
             title="View service details"
             @click="emit('open-detail', service)"
           >
-            <span>🔍 Details</span>
+            <BaseIcon name="eye" size="xs" /> <span>Details</span>
           </button>
           <button
             type="button"
@@ -114,7 +114,7 @@ const emit = defineEmits<{
             title="Deploy service"
             @click="emit('deploy', service)"
           >
-            <span>📦 Deploy</span>
+            <BaseIcon name="box" size="xs" /> <span>Deploy</span>
           </button>
           <button
             type="button"
@@ -122,7 +122,7 @@ const emit = defineEmits<{
             title="Configure service"
             @click="emit('config', service)"
           >
-            <span>⚙️ Config</span>
+            <BaseIcon name="sliders" size="xs" /> <span>Config</span>
           </button>
           <button
             type="button"
@@ -130,7 +130,7 @@ const emit = defineEmits<{
             title="Delete service"
             @click="emit('delete', service)"
           >
-            <span>🗑 Delete</span>
+            <BaseIcon name="trash" size="xs" /> <span>Delete</span>
           </button>
         </div>
       </div>

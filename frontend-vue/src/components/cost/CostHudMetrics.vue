@@ -23,7 +23,7 @@ defineProps<{
       badge="RUN-RATE"
       badge-color="emerald"
       subtitle="Aggregated multi-cluster billing"
-      icon="💵"
+      icon="dollar-sign"
     />
     <MetricCard
       title="Waste Saved & Recovered"
@@ -33,7 +33,7 @@ defineProps<{
       :badge="totalWastedCost > 0 ? 'SAVINGS TARGET' : 'OPTIMIZED'"
       badge-color="emerald"
       subtitle="Right-sizing & idle reclaim"
-      icon="📉"
+      icon="trending-up"
     />
     <MetricCard
       title="Monthly Spend Forecast"
@@ -43,7 +43,7 @@ defineProps<{
       badge="30D FORECAST"
       badge-color="cyan"
       subtitle="P95 trajectory model"
-      icon="📈"
+      icon="activity"
     />
     <MetricCard
       title="Spot Instance Ratio"
@@ -53,7 +53,7 @@ defineProps<{
       badge="SPOT SAVINGS"
       badge-color="violet"
       subtitle="Preemptible & spot node workloads"
-      icon="⚡"
+      icon="zap"
     />
   </div>
 </template>

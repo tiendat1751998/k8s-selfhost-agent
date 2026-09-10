@@ -18,7 +18,7 @@ defineProps<{
       badge="ARMED"
       badge-color="cyan"
       :subtitle="`${activeRulesCount} active monitoring workflows`"
-      icon="⚡"
+      icon="zap"
     />
     <MetricCard
       title="Executions (24h)"
@@ -26,7 +26,7 @@ defineProps<{
       badge="EXECUTED"
       badge-color="emerald"
       subtitle="Self-healing & automated dispatches"
-      icon="🤖"
+      icon="cpu"
     />
     <MetricCard
       title="Success Rate"
@@ -36,7 +36,7 @@ defineProps<{
       badge="AUTO-RESOLVED"
       badge-color="emerald"
       subtitle="Closed without human escalation"
-      icon="🛡️"
+      icon="shield"
     />
     <MetricCard
       title="Saved Engineering Hours"
@@ -44,7 +44,7 @@ defineProps<{
       badge="ROI SAVINGS"
       badge-color="violet"
       subtitle="DevOps incident triage toil averted"
-      icon="⏱️"
+      icon="clock"
     />
   </div>
 </template>

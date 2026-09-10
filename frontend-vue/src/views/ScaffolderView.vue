@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useScaffolder } from '../composables/useScaffolder'
 import ScaffolderTemplatesGrid from '../components/scaffolder/ScaffolderTemplatesGrid.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import ScaffolderStepWizard from '../components/scaffolder/ScaffolderStepWizard.vue'
 import ScaffolderLogsDrawer from '../components/scaffolder/ScaffolderLogsDrawer.vue'
 import ScaffolderMobileCards from '../components/scaffolder/ScaffolderMobileCards.vue'
@@ -100,7 +101,7 @@ const handleDrawerDownload = () => {
     <!-- Toast Notification -->
     <transition name="toast">
       <div v-if="toastMessage" :class="['toast-banner', `toast-${toastMessage.type}`]">
-        <span class="toast-icon">{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+        <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="toast-icon" />
         <span>{{ toastMessage.text }}</span>
       </div>
     </transition>
@@ -108,7 +109,7 @@ const handleDrawerDownload = () => {
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="scaffolder-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🏗️ Scaffolder ({{ templates.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="layers" size="xs" /> Scaffolder ({{ templates.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -118,7 +119,7 @@ const handleDrawerDownload = () => {
           aria-label="Register Template"
           @click="openCustomTemplateModal('create')"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button
           type="button"
@@ -128,27 +129,27 @@ const handleDrawerDownload = () => {
           :disabled="loading"
           @click="loadTemplates"
         >
-          <span :class="{ 'spin-anim': loading }">🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': loading }" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="scaffolder-micro-telemetry mobile-only font-mono" role="status" aria-label="Scaffolder Micro Telemetry">
-      <span class="tel-item tel-tmpl">🏗️ {{ templates.length }} Templates</span>
+      <span class="tel-item tel-tmpl"><BaseIcon name="layers" size="xs" /> {{ templates.length }} Templates</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-deploy">⚡ {{ rendering ? 'Executing' : 'Ready' }}</span>
+      <span class="tel-item tel-deploy"><BaseIcon name="zap" size="xs" /> {{ rendering ? 'Executing' : 'Ready' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-verified">🛡️ Verified</span>
+      <span class="tel-item tel-verified"><BaseIcon name="shield" size="xs" /> Verified</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-cats">📁 {{ categories.length }} Categories</span>
+      <span class="tel-item tel-cats"><BaseIcon name="folder" size="xs" /> {{ categories.length }} Categories</span>
     </div>
 
     <!-- Header & Hero Section (Desktop View) -->
     <header class="page-header glass-panel">
       <div class="header-content desktop-header desktop-only">
         <div class="header-left">
-          <div class="header-icon-badge">🏗️</div>
+          <div class="header-icon-badge"><BaseIcon name="layers" size="md" /></div>
           <div>
             <h1 class="header-title">Application Scaffolder</h1>
             <p class="header-sub">
@@ -158,10 +159,10 @@ const handleDrawerDownload = () => {
         </div>
         <div class="header-actions">
           <button class="btn btn-primary" @click="openCustomTemplateModal('create')">
-            <span class="btn-icon">➕</span> Create Template
+            <BaseIcon name="plus" size="xs" /> Create Template
           </button>
           <button class="btn btn-secondary" :disabled="loading" @click="loadTemplates">
-            <span class="btn-icon" :class="{ 'spin-anim': loading }">🔄</span> Refresh
+            <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': loading }" /> Refresh
           </button>
         </div>
       </div>
@@ -181,14 +182,14 @@ const handleDrawerDownload = () => {
         </div>
 
         <div class="search-box">
-          <span class="search-icon">🔍</span>
+          <BaseIcon name="search" size="xs" class="search-icon" />
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Search templates, frameworks, tags..."
             class="search-input"
           />
-          <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''">✕</button>
+          <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
         </div>
       </div>
     </header>

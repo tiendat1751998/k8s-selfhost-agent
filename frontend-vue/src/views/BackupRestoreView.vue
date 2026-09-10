@@ -5,6 +5,7 @@ import '../assets/styles/components/backup-drawers.css'
 import { fleetApi } from '../api/fleet'
 import { useBackupRestore } from '../composables/useBackupRestore'
 import MetricCard from '../components/ui/MetricCard.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import BackupSchedulesTable from '../components/backup/BackupSchedulesTable.vue'
 import BackupStoragesGrid from '../components/backup/BackupStoragesGrid.vue'
 import BackupSnapshotsTable from '../components/backup/BackupSnapshotsTable.vue'
@@ -78,7 +79,7 @@ onMounted(async () => {
 
       <div class="header-actions">
         <button class="btn btn-secondary" :disabled="loading" @click="fetchAllBackupData">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
         </button>
         <button v-if="activeTab === 'policies'" class="btn btn-primary" @click="showPolicyModal = true">
           <span>+ Create Backup Policy</span>
@@ -95,7 +96,7 @@ onMounted(async () => {
     <!-- Mobile 40px Command Bar (<640px) -->
     <div class="backup-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">💾 Backup & DR ({{ policies.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="save" size="xs" /> Backup & DR ({{ policies.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -104,7 +105,7 @@ onMounted(async () => {
           aria-label="Create or restore"
           @click="activeTab === 'policies' ? showPolicyModal = true : activeTab === 'storages' ? showStorageModal = true : showRestoreModal = true"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -113,27 +114,27 @@ onMounted(async () => {
           aria-label="Refresh backup data"
           @click="fetchAllBackupData"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
     <div class="backup-micro-telemetry mobile-only font-mono" role="status" aria-label="Backup Micro Telemetry">
-      <span class="tel-item tel-policies">💾 {{ policies.length }} pol</span>
+      <span class="tel-item tel-policies"><BaseIcon name="save" size="xs" /> {{ policies.length }} pol</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-storages">🗄️ {{ storages.length }} stor</span>
+      <span class="tel-item tel-storages"><BaseIcon name="hard-drive" size="xs" /> {{ storages.length }} stor</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-snaps">🛡️ {{ completedJobsCount }} snaps</span>
+      <span class="tel-item tel-snaps"><BaseIcon name="shield" size="xs" /> {{ completedJobsCount }} snaps</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-restores">⏪ {{ restores.length }} rest</span>
+      <span class="tel-item tel-restores"><BaseIcon name="refresh" size="xs" /> {{ restores.length }} rest</span>
     </div>
 
     <!-- Notification Banner -->
     <div v-if="statusMessage" class="status-banner animate-fade-in" :class="'banner-' + statusMessage.type">
-      <span class="banner-icon">{{ statusMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="statusMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="banner-icon" />
       <span class="banner-text">{{ statusMessage.text }}</span>
-      <button class="banner-close" @click="statusMessage = null">✕</button>
+      <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Metric HUD Cards -->
@@ -144,7 +145,7 @@ onMounted(async () => {
         badge="CONFIGURED"
         badge-color="cyan"
         :subtitle="`${activePoliciesCount} automated schedules enabled`"
-        icon="📋"
+        icon="file-text"
       />
       <MetricCard
         title="Storage Repositories"
@@ -152,7 +153,7 @@ onMounted(async () => {
         badge="ATTACHED"
         badge-color="emerald"
         subtitle="Local NVMe & S3/MinIO Targets"
-        icon="💾"
+        icon="hard-drive"
       />
       <MetricCard
         title="Completed Snapshots"
@@ -162,7 +163,7 @@ onMounted(async () => {
         badge="VERIFIED"
         badge-color="emerald"
         subtitle="Cryptographically hashed (SHA-256)"
-        icon="🛡️"
+        icon="shield"
       />
       <MetricCard
         title="Executed Restores"
@@ -170,7 +171,7 @@ onMounted(async () => {
         badge="PITR ENGINE"
         badge-color="violet"
         subtitle="Instant failover testable"
-        icon="⏪"
+        icon="refresh"
       />
     </div>
 
@@ -181,35 +182,35 @@ onMounted(async () => {
         :class="{ 'tab-btn-active': activeTab === 'policies' }"
         @click="activeTab = 'policies'"
       >
-        <span>📋 Backup Policies ({{ policies.length }})</span>
+        <BaseIcon name="file-text" size="xs" /> <span>Backup Policies ({{ policies.length }})</span>
       </button>
       <button
         class="tab-btn"
         :class="{ 'tab-btn-active': activeTab === 'storages' }"
         @click="activeTab = 'storages'"
       >
-        <span>💾 Storage Targets ({{ storages.length }})</span>
+        <BaseIcon name="hard-drive" size="xs" /> <span>Storage Targets ({{ storages.length }})</span>
       </button>
       <button
         class="tab-btn"
         :class="{ 'tab-btn-active': activeTab === 'jobs' }"
         @click="activeTab = 'jobs'"
       >
-        <span>⚡ Backup History ({{ jobs.length }})</span>
+        <BaseIcon name="zap" size="xs" /> <span>Backup History ({{ jobs.length }})</span>
       </button>
       <button
         class="tab-btn"
         :class="{ 'tab-btn-active': activeTab === 'restores' }"
         @click="activeTab = 'restores'"
       >
-        <span>⏪ Restore Actions ({{ restores.length }})</span>
+        <BaseIcon name="refresh" size="xs" /> <span>Restore Actions ({{ restores.length }})</span>
       </button>
       <button
         class="tab-btn"
         :class="{ 'tab-btn-active': activeTab === 'cluster-dr' }"
         @click="activeTab = 'cluster-dr'"
       >
-        <span>🌐 Cluster DR & etcd</span>
+        <BaseIcon name="anchor" size="xs" /> <span>Cluster DR & etcd</span>
       </button>
     </div>
 

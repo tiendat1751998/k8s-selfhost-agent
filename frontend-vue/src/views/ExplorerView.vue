@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import MetricCard from '../components/ui/MetricCard.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import EventsTimeline from '../components/k8s/EventsTimeline.vue'
 
 import ExplorerResourceTable from '../components/explorer/ExplorerResourceTable.vue'
@@ -177,34 +178,26 @@ onMounted(async () => {
       <!-- Mobile 44px Command Bar (< 640px) -->
       <div class="explorer-mobile-command-bar">
         <div class="mobile-command-brand">
-          <span class="mobile-command-title font-mono">☸️ {{ currentKindLabel }}</span>
+          <span class="mobile-command-title font-mono"><BaseIcon name="anchor" size="xs" /> {{ currentKindLabel }}</span>
           <span class="mobile-count-badge font-mono">({{ totalInKind }})</span>
         </div>
         <div class="mobile-command-actions">
-          <button type="button" class="btn-mobile-cmd" title="Toggle Search" aria-label="Search" @click="showMobileSearch = !showMobileSearch">
-            🔍
-          </button>
-          <button type="button" class="btn-mobile-cmd" title="Refresh" aria-label="Refresh" :disabled="loading" @click="fetchResources">
-            {{ loading ? '⏳' : '🔄' }}
-          </button>
-          <button type="button" class="btn-mobile-cmd" title="Apply YAML" aria-label="Apply YAML" @click="openApplyYamlModal">
-            📄
-          </button>
-          <button type="button" class="btn-mobile-cmd" title="Create Resource" aria-label="Create Resource" @click="showCreateModal = true">
-            ➕
-          </button>
+          <button type="button" class="btn-mobile-cmd" title="Toggle Search" aria-label="Search" @click="showMobileSearch = !showMobileSearch"><BaseIcon name="search" size="xs" /></button>
+          <button type="button" class="btn-mobile-cmd" title="Refresh" aria-label="Refresh" :disabled="loading" @click="fetchResources"><BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /></button>
+          <button type="button" class="btn-mobile-cmd" title="Apply YAML" aria-label="Apply YAML" @click="openApplyYamlModal"><BaseIcon name="file-text" size="xs" /></button>
+          <button type="button" class="btn-mobile-cmd" title="Create Resource" aria-label="Create Resource" @click="showCreateModal = true"><BaseIcon name="plus" size="xs" /></button>
           
         </div>
       </div>
 
-      <!-- Mobile Search Strip (toggled by 🔍) -->
+      <!-- Mobile Search Strip (toggled by search) -->
       <div v-if="showMobileSearch" class="mobile-search-strip">
         <input v-model="searchQuery" type="text" placeholder="Filter resources..." class="input-glass mobile-search-input font-mono" />
       </div>
 
       <!-- Mobile Micro-Telemetry (20px) -->
       <div class="mobile-micro-telemetry font-mono">
-        🌐 {{ selectedCluster }} · 📁 {{ selectedNamespace }} · 📦 {{ totalInKind }} {{ currentKindLabel }}
+        <BaseIcon name="globe" size="xs" /> {{ selectedCluster }} · <BaseIcon name="folder" size="xs" /> {{ selectedNamespace }} · <BaseIcon name="box" size="xs" /> {{ totalInKind }} {{ currentKindLabel }}
       </div>
 
       <!-- Mobile Horizontal Kind Scroller -->
@@ -234,9 +227,9 @@ onMounted(async () => {
               <h1 class="view-title font-sans">{{ currentKindLabel }}</h1>
             </div>
             <div class="breadcrumbs font-mono">
-              <span class="crumb-pill crumb-cluster">🌐 {{ selectedCluster }}</span>
+              <span class="crumb-pill crumb-cluster"><BaseIcon name="globe" size="xs" /> {{ selectedCluster }}</span>
               <span class="crumb-sep">›</span>
-              <span class="crumb-pill crumb-ns">📁 {{ selectedNamespace === 'all' ? 'All Namespaces' : selectedNamespace }}</span>
+              <span class="crumb-pill crumb-ns"><BaseIcon name="folder" size="xs" /> {{ selectedNamespace === 'all' ? 'All Namespaces' : selectedNamespace }}</span>
               <span class="crumb-sep">›</span>
               <span class="crumb-pill crumb-kind active-kind">{{ currentKindLabel }} ({{ totalInKind }})</span>
             </div>
@@ -244,36 +237,36 @@ onMounted(async () => {
 
           <div class="header-actions">
             <button type="button" class="btn btn-secondary btn-header" :disabled="loading" @click="fetchResources">
-              <span class="btn-emoji">{{ loading ? '⏳' : '🔄' }}</span>
+              <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" />
               <span class="btn-label">{{ loading ? 'Syncing...' : 'Refresh' }}</span>
             </button>
             <button type="button" class="btn btn-secondary btn-header btn-yaml" @click="openApplyYamlModal">
-              <span class="btn-emoji">📄</span>
+              <BaseIcon name="file-text" size="xs" />
               <span class="btn-label">Apply YAML</span>
             </button>
             <button type="button" class="btn btn-primary btn-header btn-create" @click="showCreateModal = true">
-              <span class="btn-emoji">✨</span>
+              <BaseIcon name="sparkles" size="xs" />
               <span class="btn-label">+ Create {{ currentKindLabel.slice(0, -1) || 'Resource' }}</span>
             </button>
           </div>
         </div>
 
         <div class="metrics-grid">
-          <MetricCard :title="`Total ${currentKindLabel}`" :value="totalInKind" :subtitle="`Discovered in scope: ${selectedNamespace}`" icon="📦" badge="DISCOVERED" badge-color="cyan" class="hud-metric-card" />
-          <MetricCard title="Active Namespaces" :value="activeNamespacesCount" subtitle="Available workload domains" icon="📁" badge="TENANCY" badge-color="emerald" class="hud-metric-card" />
-          <MetricCard title="Cluster Target" :value="selectedCluster" subtitle="Kubernetes Control Plane" icon="🌐" badge="ONLINE" badge-color="violet" class="hud-metric-card" />
+          <MetricCard :title="`Total ${currentKindLabel}`" :value="totalInKind" :subtitle="`Discovered in scope: ${selectedNamespace}`" icon="box" badge="DISCOVERED" badge-color="cyan" class="hud-metric-card" />
+          <MetricCard title="Active Namespaces" :value="activeNamespacesCount" subtitle="Available workload domains" icon="folder" badge="TENANCY" badge-color="emerald" class="hud-metric-card" />
+          <MetricCard title="Cluster Target" :value="selectedCluster" subtitle="Kubernetes Control Plane" icon="globe" badge="ONLINE" badge-color="violet" class="hud-metric-card" />
         </div>
       </div>
 
       <!-- Toast & Offline Notifications -->
       <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-        <span class="toast-icon">{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+        <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="toast-icon" />
         <span class="toast-text font-mono font-small">{{ toastMessage.text }}</span>
-        <button class="toast-close" aria-label="Dismiss toast" @click="toastMessage = null">✕</button>
+        <button class="toast-close" aria-label="Dismiss toast" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div v-if="clusterOffline" class="offline-banner animate-fade-in">
-        <span class="offline-icon">⚠️</span>
+        <BaseIcon name="alert-triangle" size="xs" class="offline-icon" />
         <div class="offline-content">
           <strong class="offline-title">Kubernetes Cluster Disconnected</strong>
           <p class="offline-desc">No active Kubernetes control plane is attached to '{{ selectedCluster || 'primary-cluster' }}'. Import a valid Kubeconfig or manage Docker Swarm.</p>
@@ -281,7 +274,7 @@ onMounted(async () => {
           <div class="offline-actions">
             <button type="button" class="btn btn-primary btn-xs" @click="showImportModal = true">+ Import Cluster</button>
             <router-link to="/deployments" class="btn btn-secondary btn-xs">Manage Docker Swarm</router-link>
-            <button type="button" class="btn btn-secondary btn-xs" :disabled="loading" @click="fetchResources">🔄 Retry</button>
+            <button type="button" class="btn btn-secondary btn-xs" :disabled="loading" @click="fetchResources"><BaseIcon name="refresh" size="xs" /> Retry</button>
           </div>
         </div>
       </div>

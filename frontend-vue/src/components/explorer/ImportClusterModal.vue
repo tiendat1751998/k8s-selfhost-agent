@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { fleetApi } from '../../api/compute'
 
 const props = defineProps<{
@@ -132,7 +133,7 @@ async function handleImportCluster() {
           :class="{ 'is-active': importMode === 'file' }"
           @click="importMode = 'file'"
         >
-          📁 Upload Kubeconfig File
+          <BaseIcon name="folder" size="xs" /> Upload Kubeconfig File
         </button>
         <button 
           type="button" 
@@ -140,7 +141,7 @@ async function handleImportCluster() {
           :class="{ 'is-active': importMode === 'text' }"
           @click="importMode = 'text'"
         >
-          📝 Paste Kubeconfig Text
+          <BaseIcon name="edit" size="xs" /> Paste Kubeconfig Text
         </button>
       </div>
 
@@ -175,7 +176,7 @@ async function handleImportCluster() {
         :disabled="importingCluster || !importForm.name.trim()"
         @click="handleImportCluster"
       >
-        <span>{{ importingCluster ? '⏳ Importing Cluster...' : '✨ Import Cluster' }}</span>
+        <BaseIcon :name="importingCluster ? 'clock' : 'sparkles'" size="xs" /> <span>{{ importingCluster ? 'Importing Cluster...' : 'Import Cluster' }}</span>
       </button>
     </template>
   </ModalDrawer>

@@ -385,13 +385,12 @@ export function useRunbooks() {
 
   function getCategoryIcon(cat: string): string {
     const c = (cat || '').toLowerCase()
-    if (c.includes('disaster') || c.includes('dr')) return '⚡'
-
-    if (c.includes('incident')) return '🚡'
-    if (c.includes('security')) return '🔑'
-    if (c.includes('database') || c.includes('db')) return '🐘'
-    if (c.includes('network')) return '🌐'
-    return '📖'
+    if (c.includes('disaster') || c.includes('dr')) return 'zap'
+    if (c.includes('incident')) return 'alert-triangle'
+    if (c.includes('security')) return 'shield'
+    if (c.includes('database') || c.includes('db')) return 'database'
+    if (c.includes('network')) return 'globe'
+    return 'book-open'
   }
 
 

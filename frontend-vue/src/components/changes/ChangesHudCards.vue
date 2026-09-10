@@ -16,7 +16,7 @@ defineProps<{
     <MetricCard
       title="Total Changes (24h)"
       :value="totalChanges"
-      icon="📋"
+      icon="file-text"
       badge="Live Sync"
       badgeColor="cyan"
       trend="Operational Audit Activity"
@@ -34,7 +34,7 @@ defineProps<{
     <MetricCard
       title="Config Drifts"
       :value="configDrifts"
-      icon="⚠️"
+      icon="alert-triangle"
       :badge="configDrifts > 0 ? 'Drift Alert' : 'In Sync'"
       :badgeColor="configDrifts > 0 ? 'rose' : 'emerald'"
       :trend="configDrifts > 0 ? 'GitOps Desynchronization' : 'Desired State Matching'"
@@ -43,7 +43,7 @@ defineProps<{
     <MetricCard
       title="High-Risk Mutations"
       :value="highRiskMutations"
-      icon="⚡"
+      icon="zap"
       :badge="highRiskMutations > 0 ? 'Action Required' : 'Guarded'"
       :badgeColor="highRiskMutations > 0 ? 'rose' : 'cyan'"
       trend="Emergency & Critical RFCs"

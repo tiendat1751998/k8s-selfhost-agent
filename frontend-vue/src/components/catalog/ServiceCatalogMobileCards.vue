@@ -41,7 +41,7 @@ const emit = defineEmits<{
     </div>
 
     <div v-else-if="services.length === 0" class="empty-state-box glass-panel text-center text-muted">
-      <p class="font-mono text-xs">📦 No registered catalog services found. Tap ➕ Register to add a service.</p>
+      <p class="font-mono text-xs">No registered catalog services found. Tap + to register a service.</p>
     </div>
 
     <div v-else class="catalog-mobile-stream">
@@ -79,7 +79,7 @@ const emit = defineEmits<{
             aria-label="View Details"
             @click="emit('open-detail', service)"
           >
-            <span>🔍</span>
+            <BaseIcon name="eye" size="xs" />
           </button>
           <button
             type="button"
@@ -88,7 +88,7 @@ const emit = defineEmits<{
             aria-label="APIs & Documentation"
             @click="handleApiClick(service)"
           >
-            <span>⚡</span>
+            <BaseIcon name="zap" size="xs" />
           </button>
           <button
             type="button"
@@ -97,7 +97,7 @@ const emit = defineEmits<{
             aria-label="Edit Service"
             @click="emit('config', service)"
           >
-            <span>✏️</span>
+            <BaseIcon name="edit" size="xs" />
           </button>
         </div>
       </div>

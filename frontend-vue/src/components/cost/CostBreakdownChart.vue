@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { computed } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { CloudSpendBreakdown } from '../../composables/useCostFinOps'
 import type { ClusterCost } from '../../api/governance'
 
@@ -67,11 +68,11 @@ const categoryTotals = computed(() => {
 
 function getProviderIcon(provider: string): string {
   const p = (provider || '').toLowerCase()
-  if (p.includes('aws')) return '☁️'
-  if (p.includes('gcp') || p.includes('google')) return '🌐'
-  if (p.includes('azure')) return '🔷'
-  if (p.includes('baremetal') || p.includes('local')) return '🖥️'
-  return '⎈'
+  if (p.includes('aws')) return 'cloud'
+  if (p.includes('gcp') || p.includes('google')) return 'globe'
+  if (p.includes('azure')) return 'layers'
+  if (p.includes('baremetal') || p.includes('local')) return 'server'
+  return 'anchor'
 }
 </script>
 
@@ -224,11 +225,11 @@ function getProviderIcon(provider: string): string {
     </div>
 
     <div v-else-if="!loading" class="empty-state-box glass-panel">
-      <span class="empty-icon">💵</span>
+      <span class="empty-icon"><BaseIcon name="dollar-sign" size="lg" /></span>
       <h3 class="empty-title">No Cluster Cost Telemetry</h3>
       <p class="empty-desc">No cluster billing data discovered. Connect OpenCost, Kubecost, or cloud billing exports.</p>
       <button class="btn btn-secondary btn-sm" @click="emit('refresh')">
-        <span>🔄 Refresh Metrics</span>
+        <BaseIcon name="refresh" size="xs" /> <span>Refresh Metrics</span>
       </button>
     </div>
   </div>

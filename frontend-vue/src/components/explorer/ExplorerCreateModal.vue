@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { k8sApi, type ResourceKind, type K8sNamespace } from '../../api/k8s'
 import { manifestTemplates, type TemplateKey } from './templates'
 
@@ -88,14 +89,14 @@ async function handleApply() {
             :class="{ 'is-active': selectedTemplate === t.key }"
             @click="selectTemplate(t.key)"
           >
-            <span>{{ t.icon }}</span>
+            <BaseIcon :name="t.icon" size="xs" />
             <span>{{ t.label }}</span>
           </button>
         </div>
       </div>
 
       <div v-if="applyError" class="apply-error-banner font-mono">
-        <span>⚠️ {{ applyError }}</span>
+        <span><BaseIcon name="alert-triangle" size="xs" /> {{ applyError }}</span>
       </div>
 
       <div class="yaml-editor-wrap">
@@ -123,7 +124,7 @@ async function handleApply() {
         :disabled="applying || !yamlContent.trim()"
         @click="handleApply"
       >
-        <span>{{ applying ? 'Applying...' : '🚀 Apply Manifest' }}</span>
+        <BaseIcon :name="applying ? 'clock' : 'play'" size="xs" /> <span>{{ applying ? 'Applying...' : 'Apply Manifest' }}</span>
       </button>
     </template>
   </ModalDrawer>

@@ -101,12 +101,12 @@ const emit = defineEmits<{
       <template #cell-endpoint="{ row }">
         <div v-if="row.annotations && row.annotations['api.endpoint']" class="endpoint-cell font-mono">
           <span class="endpoint-badge" :title="row.annotations['api.endpoint']">
-            ⚡ {{ row.annotations['api.endpoint'] }}
+            <BaseIcon name="zap" size="xs" /> {{ row.annotations['api.endpoint'] }}
           </span>
         </div>
         <div v-else-if="row.docs_url" class="endpoint-cell font-mono">
           <a :href="row.docs_url" target="_blank" rel="noopener noreferrer" class="endpoint-link">
-            📖 Docs Spec ↗
+            <BaseIcon name="book-open" size="xs" /> Docs Spec
           </a>
         </div>
         <span v-else class="text-muted font-mono">-</span>
@@ -122,7 +122,7 @@ const emit = defineEmits<{
             class="repo-link font-mono"
             title="Open Git Repository"
           >
-            <span>🔗 Repo</span>
+            <BaseIcon name="git-branch" size="xs" /> <span>Repo</span>
             <span class="external-icon">↗</span>
           </a>
         </div>
@@ -155,7 +155,7 @@ const emit = defineEmits<{
             title="View full service details"
             @click="emit('open-detail', row)"
           >
-            <span>🔍 Details</span>
+            <BaseIcon name="eye" size="xs" /> <span>Details</span>
           </button>
           <button
             type="button"
@@ -163,7 +163,7 @@ const emit = defineEmits<{
             title="API specifications & documentation"
             @click="handleApiClick(row)"
           >
-            <span>⚡ APIs</span>
+            <BaseIcon name="zap" size="xs" /> <span>APIs</span>
           </button>
           <button
             type="button"
@@ -171,7 +171,7 @@ const emit = defineEmits<{
             title="Configure service registration"
             @click="emit('config', row)"
           >
-            <span>✏️ Edit</span>
+            <BaseIcon name="edit" size="xs" /> <span>Edit</span>
           </button>
         </div>
       </template>
