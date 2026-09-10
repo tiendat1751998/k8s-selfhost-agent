@@ -50,10 +50,10 @@ function formatDate(d?: string): string {
               <div class="svc-table-name-cell">
                 <span class="svc-icon" aria-hidden="true">🐳</span>
                 <div>
-                  <div class="svc-table-title font-mono" @click="emit('inspect', svc)">
+                  <div class="svc-table-name svc-table-title font-mono" :title="svc.name" @click="emit('inspect', svc)">
                     {{ svc.name }}
                   </div>
-                  <span class="svc-table-image font-mono text-muted">{{ svc.image }}</span>
+                  <span class="svc-table-image font-mono text-muted" :title="svc.image">{{ svc.image }}</span>
                 </div>
               </div>
             </td>
@@ -155,12 +155,14 @@ function formatDate(d?: string): string {
 
 <style scoped>
 .services-table-wrap {
+  width: 100%;
   border-radius: 14px;
   overflow-x: auto;
   background: rgba(11, 15, 25, 0.65);
   border: 1px solid var(--border-subtle);
 }
 
+table,
 .services-table {
   width: 100%;
   border-collapse: collapse;
@@ -193,19 +195,35 @@ function formatDate(d?: string): string {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
-.svc-icon { font-size: 24px; }
+.svc-icon { font-size: 24px; flex-shrink: 0; }
 
 .svc-table-title {
   font-size: 13px;
-  font-weight: 700;
-  color: #fff;
   cursor: pointer;
 }
 
 .svc-table-title:hover { color: var(--accent-cyan); }
-.svc-table-image { font-size: 11px; }
+
+.svc-table-name {
+  font-weight: 700;
+  color: var(--color-text-main, #f8fafc);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.svc-table-image {
+  font-size: 11px;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
 
 .ports-list {
   display: flex;
@@ -224,7 +242,8 @@ function formatDate(d?: string): string {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .btn-scale {
