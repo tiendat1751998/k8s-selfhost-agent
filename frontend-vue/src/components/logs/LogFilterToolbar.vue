@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import ClickHouseEngineBadge from './ClickHouseEngineBadge.vue'
@@ -94,7 +94,7 @@ function selectLevel(levelValue: string) {
           aria-label="Clear search"
           @click="emit('update:searchQuery', '')"
         >
-          &times;
+          <BaseIcon name="x" size="xs" />
         </button>
       </div>
 

@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 interface Props {
   postureScore: string
   passingRules: number
@@ -28,11 +29,13 @@ defineProps<Props>()
         </span>
       </div>
       <div class="metric-val" :class="gatePassed ? 'text-emerald' : 'text-rose'">
-        {{ gatePassed ? 'PASSED ✅' : 'BLOCKED ⚠️' }}
+        <BaseIcon :name="gatePassed ? 'check-circle' : 'alert-triangle'" size="sm" />
+        <span>{{ gatePassed ? 'PASSED' : 'BLOCKED' }}</span>
       </div>
       <div class="metric-footer">
         <span :class="criticalCves === 0 ? 'text-emerald' : 'text-rose'">
-          ● {{ criticalCves }} Critical CVEs
+          <BaseIcon :name="criticalCves === 0 ? 'check-circle' : 'alert-triangle'" size="xs" />
+          {{ criticalCves }} Critical CVEs
         </span>
         <span class="text-muted">{{ gatePassed ? 'Deployments Unblocked' : 'Action Required' }}</span>
       </div>

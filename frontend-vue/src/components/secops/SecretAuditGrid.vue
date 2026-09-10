@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { SecretAuditItem } from '../../composables/useDevSecOps'
 
 interface Props {
@@ -57,7 +58,7 @@ function getSecretTypeClass(type: string): string {
       >
         <div class="secret-card-top">
           <div class="secret-name" :title="secret.name">
-            <span>🔐 {{ secret.name }}</span>
+            <BaseIcon name="lock" size="xs" /> <span>{{ secret.name }}</span>
           </div>
           <span class="secret-type-badge badge" :class="getSecretTypeClass(secret.secret_type)">
             {{ secret.secret_type }}
@@ -95,13 +96,13 @@ function getSecretTypeClass(type: string): string {
             :class="{ 'btn-patch': secret.status !== 'COMPLIANT' }"
             @click="emit('rotateSecret', secret)"
           >
-            <span>{{ secret.status === 'COMPLIANT' ? '🔄 Resync' : '⚡ Rotate / Vault' }}</span>
+            <BaseIcon :name="secret.status === 'COMPLIANT' ? 'refresh' : 'zap'" size="xs" /> <span>{{ secret.status === 'COMPLIANT' ? 'Resync' : 'Rotate / Vault' }}</span>
           </button>
         </div>
       </div>
 
       <div v-if="secrets.length === 0" class="empty-table-cell" style="grid-column: 1 / -1;">
-        <span class="empty-icon">🔐</span>
+        <span class="empty-icon"><BaseIcon name="lock" size="lg" /></span>
         <p>No exposed secrets or expiring TLS certificates detected in cluster namespaces.</p>
       </div>
     </div>

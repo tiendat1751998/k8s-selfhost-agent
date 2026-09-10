@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
 
@@ -65,7 +66,7 @@ function getBudgetBarWidth(budget?: number): number {
     <!-- Empty State when 0 SLOs defined -->
     <div v-if="definitions.length === 0" class="slo-empty-state">
       <div class="empty-icon-wrap">
-        <span class="empty-hero-icon">🎯</span>
+        <BaseIcon name="target" size="xl" class="empty-hero-icon" />
       </div>
       <h3 class="empty-headline">No Service Level Objectives (SLOs) Defined</h3>
       <p class="empty-explanation">
@@ -74,12 +75,12 @@ function getBudgetBarWidth(budget?: number): number {
         When errors consume budget faster than scheduled (<code>Burn Rate &gt; 1.0x</code>), multi-window burn rate alerts protect user experience.
       </p>
       <div class="empty-sre-features">
-        <div class="sre-pill"><span class="sre-icon">📊</span><span class="sre-text">Google SRE Error Budgeting</span></div>
-        <div class="sre-pill"><span class="sre-icon">🔥</span><span class="sre-text">Multi-Window Burn Rate Alerts</span></div>
-        <div class="sre-pill"><span class="sre-icon">⚡</span><span class="sre-text">PromQL Telemetry SLI Queries</span></div>
+        <div class="sre-pill"><BaseIcon name="activity" size="xs" class="sre-icon" /><span class="sre-text">Google SRE Error Budgeting</span></div>
+        <div class="sre-pill"><BaseIcon name="flame" size="xs" class="sre-icon" /><span class="sre-text">Multi-Window Burn Rate Alerts</span></div>
+        <div class="sre-pill"><BaseIcon name="zap" size="xs" class="sre-icon" /><span class="sre-text">PromQL Telemetry SLI Queries</span></div>
       </div>
       <button class="btn btn-primary create-first-btn" @click="$emit('createSlo')">
-        <span>➕ Create First SLO</span>
+        <BaseIcon name="plus" size="xs" /> <span>Create First SLO</span>
       </button>
     </div>
 
@@ -89,7 +90,7 @@ function getBudgetBarWidth(budget?: number): number {
         <!-- Card Top: Service Name & Target -->
         <div class="snap-top">
           <div class="snap-title-group">
-            <span class="snap-icon">🎯</span>
+            <BaseIcon name="target" size="xs" class="snap-icon" />
             <span class="snap-service-name">{{ snap.service }}</span>
             <span class="snap-target-badge font-mono">Target: {{ formatPercent(snap.target) }}</span>
           </div>
@@ -156,7 +157,7 @@ function getBudgetBarWidth(budget?: number): number {
             title="Inspect SLI Telemetry" 
             @click="$emit('inspect', { snap })"
           >
-            <span>🔍 Inspect</span>
+            <BaseIcon name="search" size="xs" /> <span>Inspect</span>
           </button>
           <button 
             class="btn btn-secondary btn-card-action" 
@@ -164,7 +165,7 @@ function getBudgetBarWidth(budget?: number): number {
             :disabled="actionInProgress"
             @click="$emit('triggerAlert', snap.slo_id, snap.service)"
           >
-            <span>⚡ Simulate Burn</span>
+            <BaseIcon name="zap" size="xs" /> <span>Simulate Burn</span>
           </button>
           <button 
             class="btn btn-danger btn-card-action" 
@@ -172,7 +173,7 @@ function getBudgetBarWidth(budget?: number): number {
             :disabled="actionInProgress"
             @click="$emit('deleteSlo', snap.slo_id, snap.service)"
           >
-            <span>🗑️ Delete</span>
+            <BaseIcon name="trash" size="xs" /> <span>Delete</span>
           </button>
         </div>
       </div>

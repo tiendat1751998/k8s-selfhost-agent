@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import '../assets/styles/views/slo.css'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import MetricCard from '../components/ui/MetricCard.vue'
 import SloCardsGrid from '../components/slo/SloCardsGrid.vue'
 import SloCatalogTable from '../components/slo/SloCatalogTable.vue'
@@ -194,7 +195,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
   actionInProgress.value = true
   try {
     await sloApi.triggerBurnAlert(id)
-    showBanner('warning', `⚡ Fast burn-rate alert simulated for '${serviceName}'. Check alerts view.`)
+    showBanner('warning', `Fast burn-rate alert simulated for '${serviceName}'. Check alerts view.`)
   } catch (err: unknown) {
     showBanner('error', err instanceof Error ? err.message : 'Failed to simulate alert')
   } finally {
@@ -219,7 +220,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       </div>
 
       <div class="header-actions">
-        <!-- Segmented View Mode Toggle: [ 📑 Table ] [ 🗂 Cards ] -->
+        <!-- Segmented View Mode Toggle: [ Table ] [ Cards ] -->
         <div class="segmented-control font-mono">
           <button
             type="button"
@@ -228,7 +229,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
             @click="viewMode = 'table'"
             title="Catalog Table View"
           >
-            <span>📑 Table</span>
+            <BaseIcon name="table" size="xs" /> <span>Table</span>
           </button>
           <button
             type="button"
@@ -237,15 +238,15 @@ async function handleTriggerAlert(id: string, serviceName: string) {
             @click="viewMode = 'grid'"
             title="Card Grid View"
           >
-            <span>🗂 Cards</span>
+            <BaseIcon name="grid" size="xs" /> <span>Cards</span>
           </button>
         </div>
 
         <button class="btn btn-primary" @click="showCreateModal = true">
-          <span>➕ Create SLO Definition</span>
+          <BaseIcon name="plus" size="xs" /> <span>Create SLO Definition</span>
         </button>
         <button class="btn btn-secondary" :disabled="loading" @click="fetchSLOData">
-          <span>{{ loading ? '⏳ Fetching...' : '🔄 Refresh Telemetry' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Fetching...' : 'Refresh Telemetry' }}</span>
         </button>
       </div>
     </div>
@@ -253,36 +254,36 @@ async function handleTriggerAlert(id: string, serviceName: string) {
     <!-- Mobile 44px Command Bar (<=640px) -->
     <div class="slo-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🎯 SLOs ({{ totalSLOs }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="target" size="xs" /> SLOs ({{ totalSLOs }})</span>
       </div>
       <div class="command-bar-actions">
         <button class="btn-icon-cmd" title="Create SLO definition" aria-label="Create SLO definition" @click="showCreateModal = true">
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button class="btn-icon-cmd" :disabled="loading" title="Refresh telemetry" aria-label="Refresh telemetry" @click="fetchSLOData">
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
         <button class="btn-icon-cmd" :class="{ active: showMobileSearch }" title="Toggle search/filter drawer" aria-label="Toggle search/filter drawer" @click="showMobileSearch = !showMobileSearch">
-          <span>🔍</span>
+          <BaseIcon name="search" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<=640px) -->
     <div class="slo-micro-telemetry mobile-only font-mono" role="status" aria-label="SLO Micro Telemetry">
-      <span class="tel-item tel-total">🎯 {{ totalSLOs }} slos</span>
+      <span class="tel-item tel-total"><BaseIcon name="target" size="xs" /> {{ totalSLOs }} slos</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-healthy">🛡️ {{ healthySLOs }} ok</span>
+      <span class="tel-item tel-healthy"><BaseIcon name="shield" size="xs" /> {{ healthySLOs }} ok</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-warn">⚠️ {{ warningSLOs + criticalSLOs }} warn</span>
+      <span class="tel-item tel-warn"><BaseIcon name="alert-triangle" size="xs" /> {{ warningSLOs + criticalSLOs }} warn</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-burn">🔥 {{ avgBurnRate }} burn</span>
+      <span class="tel-item tel-burn"><BaseIcon name="flame" size="xs" /> {{ avgBurnRate }} burn</span>
     </div>
 
     <!-- Mobile Collapsible Search Drawer -->
     <div v-if="showMobileSearch" class="mobile-filter-drawer mobile-only animate-fade-in">
       <div class="mobile-search-inner">
-        <span class="mobile-search-icon">🔍</span>
+        <BaseIcon name="search" size="xs" class="mobile-search-icon" />
         <input
           v-model="searchQuery"
           type="search"
@@ -290,15 +291,15 @@ async function handleTriggerAlert(id: string, serviceName: string) {
           placeholder="Filter SLOs by service name..."
           autofocus
         />
-        <button v-if="searchQuery" type="button" class="mobile-clear-btn" title="Clear search" @click="searchQuery = ''">✕</button>
+        <button v-if="searchQuery" type="button" class="mobile-clear-btn" title="Clear search" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
       </div>
     </div>
 
     <!-- Alert / Toast Banner -->
     <div v-if="bannerMessage" class="banner-box animate-fade-in" :class="`banner-${bannerMessage.type}`">
-      <span>{{ bannerMessage.type === 'success' ? '✅' : bannerMessage.type === 'warning' ? '⚠️' : '🚨' }}</span>
+      <BaseIcon :name="bannerMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" />
       <span class="banner-text">{{ bannerMessage.text }}</span>
-      <button class="banner-close" @click="bannerMessage = null">✕</button>
+      <button class="banner-close" @click="bannerMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Time Window Filter Pill Strip / Mobile Segmented Pill Strip -->
@@ -306,16 +307,16 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       <div class="filter-pills">
         <span class="filter-label desktop-only">Multi-Window Analysis:</span>
         <button class="pill-btn" :class="{ active: selectedWindowFilter === '1h' }" @click="setWindowFilter('1h')">
-          <span class="desktop-only">🔥 1h Fast Burn (14.4x)</span><span class="mobile-only">1h (14x)</span>
+          <span class="desktop-only"><BaseIcon name="flame" size="xs" /> 1h Fast Burn (14.4x)</span><span class="mobile-only">1h (14x)</span>
         </button>
         <button class="pill-btn" :class="{ active: selectedWindowFilter === '6h' }" @click="setWindowFilter('6h')">
-          <span class="desktop-only">⚠️ 6h Slow Burn (6.0x)</span><span class="mobile-only">6h (6x)</span>
+          <span class="desktop-only"><BaseIcon name="alert-triangle" size="xs" /> 6h Slow Burn (6.0x)</span><span class="mobile-only">6h (6x)</span>
         </button>
         <button class="pill-btn" :class="{ active: selectedWindowFilter === '24h' }" @click="setWindowFilter('24h')">
-          <span class="desktop-only">📊 24h Composite (2.0x)</span><span class="mobile-only">24h (2x)</span>
+          <span class="desktop-only"><BaseIcon name="activity" size="xs" /> 24h Composite (2.0x)</span><span class="mobile-only">24h (2x)</span>
         </button>
         <button class="pill-btn" :class="{ active: selectedWindowFilter === '30d' }" @click="setWindowFilter('30d')">
-          <span class="desktop-only">🗓️ 30d Baseline (1.0x)</span><span class="mobile-only">30d (1x)</span>
+          <span class="desktop-only"><BaseIcon name="calendar" size="xs" /> 30d Baseline (1.0x)</span><span class="mobile-only">30d (1x)</span>
         </button>
       </div>
 
@@ -327,14 +328,14 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       </span>
 
       <div class="filter-search-wrap desktop-only">
-        <span class="filter-search-icon">🔍</span>
+        <BaseIcon name="search" size="xs" class="filter-search-icon" />
         <input
           v-model="searchQuery"
           type="search"
           class="filter-search-input"
           placeholder="Filter SLOs by service name..."
         />
-        <button v-if="searchQuery" type="button" class="clear-search-btn" title="Clear search" @click="searchQuery = ''">✕</button>
+        <button v-if="searchQuery" type="button" class="clear-search-btn" title="Clear search" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
       </div>
     </div>
 
@@ -342,7 +343,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
     <div class="metrics-grid desktop-only">
       <MetricCard
         title="Active SLOs" :value="totalSLOs" subtitle="Active services tracked against target SLIs"
-        icon="🎯" badge="OBJECTIVES" badge-color="cyan"
+        icon="target" badge="OBJECTIVES" badge-color="cyan"
       />
       <MetricCard
         title="Healthy Error Budgets" :value="snapshots.length > 0 ? `${healthySLOs}/${snapshots.length}` : '0/0'"

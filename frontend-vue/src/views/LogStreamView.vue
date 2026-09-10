@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useLogStreamer } from '../composables/useLogStreamer'
 import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
@@ -220,7 +220,8 @@ function handleExport() {
           @click="showMobileTree = !showMobileTree"
         >
           <BaseIcon name="layers" size="xs" />
-          <span>{{ selectedTarget.name }} ▾</span>
+          <span>{{ selectedTarget.name }}</span>
+          <BaseIcon name="chevron-down" size="xs" />
         </button>
       </div>
     </header>
