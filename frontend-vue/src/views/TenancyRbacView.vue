@@ -9,6 +9,7 @@ import RolePermissionMatrixModal from '../components/tenancy/RolePermissionMatri
 import TenantMemberDrawer from '../components/tenancy/TenantMemberDrawer.vue'
 import CreateTenantModal from '../components/tenancy/CreateTenantModal.vue'
 import '../assets/styles/views/tenancy.css'
+import '../assets/styles/components/tenancy-drawers.css'
 
 const {
   loading,
@@ -23,6 +24,8 @@ const {
   showRbacMatrixModal,
   selectedOrgForDrawer,
   selectedRoleForMatrix,
+  showQuotaModal,
+  selectedOrgForQuota,
   newProj,
   isSubmitting,
   feedbackMessage,
@@ -118,7 +121,7 @@ const {
     </div>
 
     <!-- Filter & Scope Bar -->
-    <div class="scope-bar glass-panel">
+    <div class="scope-bar glass-panel desktop-only">
       <div class="scope-left">
         <label class="scope-label">Active Organization Scope:</label>
         <select v-model="selectedOrgId" class="input-glass select-scope">
@@ -147,7 +150,7 @@ const {
 
     <!-- TAB 1: TENANTS LIST -->
     <div v-if="activeTab === 'tenants'" class="tab-content animate-fade-in">
-      <div class="desktop-only-table">
+      <div class="desktop-only-table desktop-only">
         <TenantListTable
           :organizations="organizations"
           :stats="organizationStats"
@@ -159,7 +162,7 @@ const {
           @create-org="showOrgModal = true"
         />
       </div>
-      <div class="mobile-only-stream">
+      <div class="mobile-only-stream mobile-only">
         <TenancyMobileCards
           :organizations="organizations"
           :stats="organizationStats"
@@ -167,6 +170,7 @@ const {
           @open-rbac="openRbacModal($event)"
           @open-quota="openQuotaModal($event)"
           @delete-org="handleDeleteOrg($event)"
+          @create-org="showOrgModal = true"
         />
       </div>
     </div>
@@ -340,5 +344,62 @@ const {
       @toggle="toggleRbacPermission"
       @sync="syncRbacToApi"
     />
+
+    <!-- Quota Configuration Modal -->
+    <ModalDrawer
+      v-model:show="showQuotaModal"
+      :title="selectedOrgForQuota ? `Resource Quota: ${selectedOrgForQuota.name}` : 'Tenant Resource Quota'"
+      subtitle="Cluster compute boundaries, pod allocation limits, and namespace quotas."
+    >
+      <div v-if="selectedOrgForQuota" class="quota-modal-body">
+        <div class="quota-info-banner">
+          <span class="font-mono text-cyan">{{ selectedOrgForQuota.id }}</span>
+          <span class="quota-tier-tag font-mono">{{ selectedOrgForQuota.tier }}</span>
+        </div>
+
+        <div class="quota-bar-group">
+          <div class="quota-bar-header">
+            <span class="quota-metric-name">Workload Pods</span>
+            <span class="quota-metric-values font-mono">{{ organizationStats[selectedOrgForQuota.id]?.workloadCount ?? 0 }} / 50 pods</span>
+          </div>
+          <div class="quota-track">
+            <div
+              class="quota-fill quota-fill-cyan"
+              :style="{ width: Math.min(100, ((organizationStats[selectedOrgForQuota.id]?.workloadCount ?? 0) / 50) * 100) + '%' }"
+            ></div>
+          </div>
+        </div>
+
+        <div class="quota-bar-group">
+          <div class="quota-bar-header">
+            <span class="quota-metric-name">Project Namespaces</span>
+            <span class="quota-metric-values font-mono">{{ organizationStats[selectedOrgForQuota.id]?.projectCount ?? 0 }} / 10 namespaces</span>
+          </div>
+          <div class="quota-track">
+            <div
+              class="quota-fill quota-fill-emerald"
+              :style="{ width: Math.min(100, ((organizationStats[selectedOrgForQuota.id]?.projectCount ?? 0) / 10) * 100) + '%' }"
+            ></div>
+          </div>
+        </div>
+
+        <div class="quota-bar-group">
+          <div class="quota-bar-header">
+            <span class="quota-metric-name">SSO Identity Seats</span>
+            <span class="quota-metric-values font-mono">{{ organizationStats[selectedOrgForQuota.id]?.memberCount ?? 0 }} / 25 seats</span>
+          </div>
+          <div class="quota-track">
+            <div
+              class="quota-fill quota-fill-amber"
+              :style="{ width: Math.min(100, ((organizationStats[selectedOrgForQuota.id]?.memberCount ?? 0) / 25) * 100) + '%' }"
+            ></div>
+          </div>
+        </div>
+      </div>
+      <template #footer="{ close }">
+        <button class="btn btn-secondary" type="button" @click="close">Close</button>
+        <button class="btn btn-primary" type="button" @click="showFeedback('Resource quota saved for ' + selectedOrgForQuota?.name); close()">Save Quota</button>
+      </template>
+    </ModalDrawer>
   </div>
 </template>
