@@ -210,7 +210,7 @@ table,
 .svc-table-name {
   font-weight: 700;
   color: var(--color-text-main, #f8fafc);
-  max-width: 280px;
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -218,7 +218,7 @@ table,
 
 .svc-table-image {
   font-size: 11px;
-  max-width: 280px;
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -241,7 +241,7 @@ table,
 .svc-actions-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: nowrap;
   white-space: nowrap;
 }
