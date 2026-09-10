@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue'
 import '../assets/styles/views/changes.css'
+import '../assets/styles/components/changes-drawers.css'
 import { useChangesTimeline } from '../composables/useChangesTimeline'
 import ChangesHudCards from '../components/changes/ChangesHudCards.vue'
 import ChangesFilterBar from '../components/changes/ChangesFilterBar.vue'
@@ -27,17 +29,28 @@ const {
   totalRollbacks,
   configDrifts,
   highRiskMutations,
+  loadTimelineData,
   handleApprove,
   handleReject,
   handleRollback,
   handleCreateChange,
   inspectDiff
 } = useChangesTimeline()
+
+const isFilterOpen = ref(false)
+
+const verifiedCount = computed(() => {
+  return filteredEvents.value.filter(e => e.status === 'approved' || e.status === 'deployed').length
+})
+
+const rolloutsCount = computed(() => {
+  return filteredEvents.value.filter(e => e.eventType === 'rollback' || e.eventType === 'gitops').length || totalRollbacks.value
+})
 </script>
 
 <template>
   <div class="changes-page">
-    <!-- Header -->
+    <!-- Desktop Header -->
     <div class="page-header desktop-header desktop-only">
       <div class="header-titles">
         <div class="header-badge">
@@ -57,12 +70,31 @@ const {
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="changes-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🔄 RFC Changes ({{ filteredEvents.length }})</span>
+        <span class="command-bar-title font-bold">📜 Changes ({{ filteredEvents.length }})</span>
       </div>
       <div class="command-bar-actions">
+        <button
+          class="btn-cmd-filter"
+          :class="{ active: isFilterOpen }"
+          title="Filter stream"
+          aria-label="Filter stream"
+          @click="isFilterOpen = !isFilterOpen"
+        >
+          <span>🔍</span>
+          <span>Filter</span>
+        </button>
+        <button
+          class="btn-icon-cmd"
+          title="Refresh stream"
+          aria-label="Refresh stream"
+          :disabled="loading"
+          @click="loadTimelineData"
+        >
+          <span :class="{ 'spin-animation': loading }">🔄</span>
+        </button>
         <button
           class="btn-icon-cmd"
           title="Submit RFC"
@@ -74,15 +106,15 @@ const {
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="changes-micro-telemetry mobile-only font-mono" role="status" aria-label="Changes Micro Telemetry">
-      <span class="tel-item tel-changes">🔄 {{ totalChanges24h }} chgs</span>
+      <span class="tel-item tel-changes">📜 {{ totalChanges24h }} Changes</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-rollbacks">⏪ {{ totalRollbacks }} rolls</span>
+      <span class="tel-item tel-rollouts">⚡ {{ rolloutsCount }} Rollouts</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-drifts">🎯 {{ configDrifts }} drift</span>
+      <span class="tel-item tel-verified">🛡️ {{ verifiedCount }} Verified</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-risk">⚠️ {{ highRiskMutations }} risk</span>
+      <span class="tel-item tel-drift">⚠️ {{ configDrifts }} Drift</span>
     </div>
 
     <!-- Feedback Banner -->
@@ -91,7 +123,7 @@ const {
       <span>{{ feedbackMessage }}</span>
     </div>
 
-    <!-- HUD KPI Cards -->
+    <!-- HUD KPI Cards (Desktop & Tablet 2x2, suppressed on <768px) -->
     <ChangesHudCards
       class="desktop-only"
       :totalChanges="totalChanges24h"
@@ -136,8 +168,9 @@ const {
       </div>
     </div>
 
-    <!-- Filter Bar -->
+    <!-- Filter Bar (Collapsible on mobile via isFilterOpen) -->
     <ChangesFilterBar
+      :class="{ 'mobile-filter-active': isFilterOpen }"
       v-model:searchQuery="searchQuery"
       v-model:selectedCluster="selectedCluster"
       v-model:selectedTimeWindow="selectedTimeWindow"
@@ -145,7 +178,7 @@ const {
       :clusters="availableClusters"
     />
 
-    <!-- Desktop: Interactive Timeline Stream -->
+    <!-- Desktop: Interactive Timeline Stream (Zero horizontal overflow) -->
     <ChangesTimelineStream
       :events="filteredEvents"
       :loading="loading"
@@ -155,7 +188,7 @@ const {
       @reject="handleReject"
     />
 
-    <!-- Mobile: Touch-Friendly Card Stream (~65px/item, 0 horizontal scroll) -->
+    <!-- Mobile: Touch-Friendly Card Stream (~68-75px high density, 0 horizontal scroll) -->
     <ChangesMobileCards
       :events="filteredEvents"
       :loading="loading"
@@ -163,6 +196,7 @@ const {
       @rollback="handleRollback"
       @approve="handleApprove"
       @reject="handleReject"
+      @refresh="loadTimelineData"
     />
 
     <!-- Side Drawer: Visual Unified Diff -->
