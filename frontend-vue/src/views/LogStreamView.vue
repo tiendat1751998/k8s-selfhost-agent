@@ -1,9 +1,12 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useLogStreamer } from '../composables/useLogStreamer'
 import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
 import LogTelemetryStrip from '../components/logs/LogTelemetryStrip.vue'
 import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
+import ClickHouseEngineBadge from '../components/logs/ClickHouseEngineBadge.vue'
+import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { LogFilterParams } from '../api/logging'
 
 const {
@@ -12,7 +15,7 @@ const {
   clearBuffer, togglePause, setTerminalRef, scrollToBottom, handleScroll,
 } = useLogStreamer()
 
-const selectedTarget = ref<LogTarget>({ type: 'all', id: 'all', name: 'All Cluster Logs', icon: '🌐' })
+const selectedTarget = ref<LogTarget>({ type: 'all', id: 'all', name: 'All Cluster Logs' })
 const showMobileTree = ref(false)
 const mode = ref<'live' | 'historical'>('live')
 const selectedTimeRange = ref('1h')
@@ -64,8 +67,10 @@ async function runHistoricalQuery(isLoadMore = false) {
     await Promise.all(promises)
     if (mode.value !== 'historical') return
     if (isLoadMore) currentOffset.value += PAGE_SIZE
-  } catch (err: any) {
-    if (mode.value === 'historical') queryError.value = err?.message || 'ClickHouse search failed'
+  } catch (err: unknown) {
+    if (mode.value === 'historical') {
+      queryError.value = err instanceof Error ? err.message : 'ClickHouse search failed'
+    }
   }
 }
 
@@ -113,38 +118,28 @@ function toggleLiveTail() {
   }
 }
 
-interface DisplayBucket { key: string; label: string; count: number; hasError: boolean; hasWarn: boolean }
-
-const sparklineBuckets = computed<DisplayBucket[]>(() => {
-  if (logStore.histogram.length > 0) {
-    return logStore.histogram.map((b) => {
-      const err = (b.level_count?.error || b.level_count?.ERROR || 0) + (b.level_count?.fatal || b.level_count?.FATAL || 0)
-      return {
-        key: b.time_bucket,
-        label: b.time_bucket.includes('T') ? b.time_bucket.split('T')[1].slice(0, 8) : b.time_bucket,
-        count: Number(b.total_count) || 0,
-        hasError: err > 0,
-        hasWarn: !!(b.level_count?.warn || b.level_count?.WARN),
-      }
-    })
+async function handleHistogramFilterRange(range: { start: string; end: string }) {
+  if (mode.value === 'live') {
+    mode.value = 'historical'
   }
-  const logs = targetFilteredLogs.value
-  if (!logs.length) return []
-  const step = Math.max(1, Math.floor(logs.length / 20))
-  return Array.from({ length: Math.min(20, Math.ceil(logs.length / step)) }, (_, i) => {
-    const slice = logs.slice(i * step, (i + 1) * step)
-    return {
-      key: 'b-' + i,
-      label: slice[slice.length - 1]?.time || String(i),
-      count: slice.length,
-      hasError: slice.some((l) => l.level.toUpperCase() === 'ERROR'),
-      hasWarn: slice.some((l) => l.level.toUpperCase() === 'WARN'),
-    }
+  const kw = searchKeyword.value.trim()
+  const target = selectedTarget.value
+  const queryParts = [kw, target.type === 'node' ? target.id : ''].filter(Boolean)
+  currentOffset.value = 0
+  await logStore.fetchHistoricalLogs({
+    start_time: range.start,
+    end_time: range.end,
+    query: queryParts.length ? queryParts.join(' ') : undefined,
+    log_level: selectedLevel.value || undefined,
+    limit: PAGE_SIZE,
+    offset: 0,
+    container_name: target.type === 'service' ? target.id : undefined,
   })
-})
+}
 
-const maxBucketVolume = computed(() => Math.max(...sparklineBuckets.value.map((b) => b.count), 1))
-const hoveredBucket = ref<DisplayBucket | null>(null)
+function handleClearHistogramFilter() {
+  runHistoricalQuery()
+}
 
 const targetFilteredLogs = computed(() => {
   const target = selectedTarget.value
@@ -198,103 +193,140 @@ function handleExport() {
   <div class="view-container log-explorer-page">
     <header class="view-header">
       <div class="header-left">
-        <div class="view-tag"><span class="pulse-dot pulse-dot-cyan"></span><span>CLICKHOUSE OBSERVABILITY & LOG EXPLORER</span></div>
+        <div class="view-tag">
+          <span class="pulse-dot pulse-dot-cyan" />
+          <span>CLICKHOUSE OBSERVABILITY & LOG EXPLORER</span>
+        </div>
         <h1 class="view-title">Enterprise Kubernetes Logs Explorer</h1>
       </div>
-      <button type="button" class="mobile-tree-toggle-btn" aria-label="Toggle log targets drawer" @click="showMobileTree = !showMobileTree">
-        <span>🌲 {{ selectedTarget.name }} ▾</span>
-      </button>
+      <div class="header-actions">
+        <ClickHouseEngineBadge />
+        <button
+          type="button"
+          class="mobile-tree-toggle-btn font-mono"
+          aria-label="Toggle log targets drawer"
+          @click="showMobileTree = !showMobileTree"
+        >
+          <BaseIcon name="layers" size="xs" />
+          <span>{{ selectedTarget.name }} ▾</span>
+        </button>
+      </div>
     </header>
 
     <LogTelemetryStrip
-      :lines-streamed="linesStreamed" :error-rate="errorRate" :buffer-size="totalBufferCount"
-      :max-buffer-size="maxBufferSize" :latency="latency" :is-connected="mode === 'live' ? isConnected : false" :is-paused="mode === 'live' ? isPaused : false"
+      :lines-streamed="linesStreamed"
+      :error-rate="errorRate"
+      :buffer-size="totalBufferCount"
+      :max-buffer-size="maxBufferSize"
+      :latency="latency"
+      :is-connected="mode === 'live' ? isConnected : false"
+      :is-paused="mode === 'live' ? isPaused : false"
     />
 
     <div class="mode-controls-bar">
       <div class="mode-switcher-tabs font-mono" role="tablist">
-        <button type="button" class="mode-tab-btn" :class="{ active: mode === 'live' }" @click="mode = 'live'"><span>⚡ Live Tail</span></button>
-        <button type="button" class="mode-tab-btn" :class="{ active: mode === 'historical' }" @click="mode = 'historical'"><span>🔍 Historical Search</span></button>
+        <button type="button" class="mode-tab-btn" :class="{ active: mode === 'live' }" @click="mode = 'live'">
+          <BaseIcon name="zap" size="xs" />
+          <span>Live Tail</span>
+        </button>
+        <button type="button" class="mode-tab-btn" :class="{ active: mode === 'historical' }" @click="mode = 'historical'">
+          <BaseIcon name="search" size="xs" />
+          <span>Historical Search</span>
+        </button>
       </div>
 
       <button
-        v-if="mode === 'live'" type="button" class="live-tail-toggle-btn font-mono"
+        v-if="mode === 'live'"
+        type="button"
+        class="live-tail-toggle-btn font-mono"
         :class="{ 'tail-active': autoScroll && !isScrollLocked, 'tail-paused': !autoScroll || isScrollLocked }"
         :title="autoScroll && !isScrollLocked ? 'Live Tail active. Click to lock.' : 'Tail paused on scroll up. Click to resume.'"
         @click="toggleLiveTail"
       >
-        <span class="tail-dot"></span>
+        <span class="tail-dot" />
         <span>{{ autoScroll && !isScrollLocked ? 'LIVE TAIL ON' : 'TAIL PAUSED (SCROLLED UP)' }}</span>
       </button>
 
       <div v-if="mode === 'historical'" class="historical-query-group font-mono">
         <div class="time-range-picker">
           <button
-            v-for="r in timeRanges" :key="r.label" type="button" class="range-pill-btn"
-            :class="{ active: selectedTimeRange === r.label }" @click="selectedTimeRange = r.label; runHistoricalQuery()"
-          >{{ r.label }}</button>
+            v-for="r in timeRanges"
+            :key="r.label"
+            type="button"
+            class="range-pill-btn"
+            :class="{ active: selectedTimeRange === r.label }"
+            @click="selectedTimeRange = r.label; runHistoricalQuery()"
+          >
+            {{ r.label }}
+          </button>
         </div>
         <button type="button" class="historical-search-btn" :disabled="logStore.isHistoricalLoading" @click="runHistoricalQuery()">
-          <span>{{ logStore.isHistoricalLoading ? '⏳ Searching...' : '⚡ Query ClickHouse' }}</span>
+          <BaseIcon name="search" size="xs" />
+          <span>{{ logStore.isHistoricalLoading ? 'Searching...' : 'Query ClickHouse' }}</span>
         </button>
         <button
           v-if="logStore.hasMoreHistorical || logStore.totalHistoricalCount > logStore.logs.length"
-          type="button" class="load-more-btn" :disabled="logStore.isHistoricalLoading" @click="loadMoreHistorical"
+          type="button"
+          class="load-more-btn"
+          :disabled="logStore.isHistoricalLoading"
+          @click="loadMoreHistorical"
         >
           <span>Load More ({{ logStore.logs.length }}/{{ logStore.totalHistoricalCount }})</span>
         </button>
-        <span v-if="logStore.totalHistoricalCount > 0" class="query-count-badge">{{ logStore.totalHistoricalCount }} logs found</span>
+        <span v-if="logStore.totalHistoricalCount > 0" class="query-count-badge">
+          {{ logStore.totalHistoricalCount }} logs found
+        </span>
       </div>
     </div>
 
-    <div v-if="queryError" class="query-error-banner font-mono">⚠️ {{ queryError }}</div>
+    <div v-if="queryError" class="query-error-banner font-mono">
+      <BaseIcon name="alert-triangle" size="xs" />
+      <span>{{ queryError }}</span>
+    </div>
 
-    <section class="log-volume-sparkline-strip glass-panel" aria-label="Log volume histogram sparkline">
-      <div class="sparkline-header font-mono">
-        <div class="sparkline-title-group">
-          <span>📊 LOG VOLUME SPARKLINE</span>
-          <span class="sparkline-meta">{{ mode === 'historical' ? 'ClickHouse Sparse Index' : 'Live Buffer' }}</span>
-        </div>
-        <div class="sparkline-stats">
-          <span>Peak: <strong>{{ maxBucketVolume }}</strong></span>
-          <span v-if="hoveredBucket">Hover: <strong>{{ hoveredBucket.count }}</strong> @ {{ hoveredBucket.label }}</span>
-        </div>
-      </div>
-      <div class="sparkline-bars">
-        <div
-          v-for="b in sparklineBuckets" :key="b.key" class="sparkline-bar-col" :title="b.label + ': ' + b.count + ' logs'"
-          @mouseenter="hoveredBucket = b" @mouseleave="hoveredBucket = null"
-        >
-          <div
-            class="sparkline-bar-fill"
-            :class="{ 'bar-error': b.hasError, 'bar-warn': !b.hasError && b.hasWarn }"
-            :style="{ height: b.count === 0 ? '0%' : Math.max(6, Math.round((b.count / maxBucketVolume) * 100)) + '%' }"
-          ></div>
-        </div>
-        <div v-if="sparklineBuckets.length === 0" class="sparkline-empty font-mono"><span>Awaiting log ingestion for histogram sparkline...</span></div>
-      </div>
-    </section>
+    <!-- 80px Interactive Stacked SVG Bar Chart Mounted Above Terminal Stream -->
+    <LogVolumeHistogram
+      :buckets="logStore.histogram"
+      :height="80"
+      @filter-range="handleHistogramFilterRange"
+      @clear-filter="handleClearHistogramFilter"
+    />
 
-    <div v-if="showMobileTree" class="mobile-backdrop" aria-hidden="true" @click="showMobileTree = false"></div>
+    <div v-if="showMobileTree" class="mobile-backdrop" aria-hidden="true" @click="showMobileTree = false" />
 
     <div class="log-explorer-grid">
       <div class="explorer-left-col" :class="{ 'mobile-tree-open': showMobileTree }">
         <div v-if="showMobileTree" class="mobile-drawer-header">
-          <span class="drawer-title font-mono">🌲 Select Target</span>
-          <button type="button" class="drawer-close-btn" aria-label="Close targets drawer" @click="showMobileTree = false">✕</button>
+          <span class="drawer-title font-mono">
+            <BaseIcon name="layers" size="xs" />
+            <span>Select Target</span>
+          </span>
+          <button type="button" class="drawer-close-btn" aria-label="Close targets drawer" @click="showMobileTree = false">&times;</button>
         </div>
         <LogTargetTree v-model="selectedTarget" :logs="logStore.logs" @select="showMobileTree = false" />
       </div>
 
       <div class="explorer-right-col">
         <LogViewerTerminal
-          :logs="targetFilteredLogs" :is-connected="mode === 'live' ? isConnected : false" :is-paused="isPaused"
-          :auto-scroll="autoScroll" :is-scroll-locked="isScrollLocked" :search-query="searchKeyword"
-          :selected-level="selectedLevel" :target-name="selectedTarget.name" :latency="latency"
-          @update:search-query="searchKeyword = $event" @update:selected-level="selectedLevel = $event"
-          @update:auto-scroll="autoScroll = $event" @toggle-pause="togglePause" @clear-buffer="clearBuffer"
-          @export-logs="handleExport" @scroll="handleScroll" @scroll-to-bottom="scrollToBottom"
-          @register-terminal="setTerminalRef" @toggle-target-tree="showMobileTree = !showMobileTree"
+          :logs="targetFilteredLogs"
+          :is-connected="mode === 'live' ? isConnected : false"
+          :is-paused="isPaused"
+          :auto-scroll="autoScroll"
+          :is-scroll-locked="isScrollLocked"
+          :search-query="searchKeyword"
+          :selected-level="selectedLevel"
+          :target-name="selectedTarget.name"
+          :latency="latency"
+          @update:search-query="searchKeyword = $event"
+          @update:selected-level="selectedLevel = $event"
+          @update:auto-scroll="autoScroll = $event"
+          @toggle-pause="togglePause"
+          @clear-buffer="clearBuffer"
+          @export-logs="handleExport"
+          @scroll="handleScroll"
+          @scroll-to-bottom="scrollToBottom"
+          @register-terminal="setTerminalRef"
+          @toggle-target-tree="showMobileTree = !showMobileTree"
         />
       </div>
     </div>
@@ -306,7 +338,7 @@ function handleExport() {
 
 .mode-controls-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 8px 12px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; }
 .mode-switcher-tabs { display: inline-flex; background: rgba(2, 6, 23, 0.6); padding: 3px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08); gap: 4px; }
-.mode-tab-btn { background: transparent; border: none; color: #94a3b8; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 4px; cursor: pointer; transition: all 0.15s ease; }
+.mode-tab-btn { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none; color: #94a3b8; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 4px; cursor: pointer; transition: all 0.15s ease; }
 .mode-tab-btn:hover { color: #f1f5f9; }
 .mode-tab-btn.active { background: rgba(56, 189, 248, 0.18); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
 .live-tail-toggle-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 11px; font-weight: 700; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
@@ -318,23 +350,10 @@ function handleExport() {
 .time-range-picker { display: inline-flex; background: rgba(2, 6, 23, 0.6); padding: 2px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.08); }
 .range-pill-btn { background: transparent; border: none; color: #94a3b8; font-size: 10px; padding: 3px 8px; border-radius: 3px; cursor: pointer; }
 .range-pill-btn.active { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
-.historical-search-btn, .load-more-btn { background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
+.historical-search-btn, .load-more-btn { display: inline-flex; align-items: center; gap: 5px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
 .historical-search-btn:hover:not(:disabled), .load-more-btn:hover:not(:disabled) { background: rgba(56, 189, 248, 0.28); }
 .query-count-badge { font-size: 11px; color: #94a3b8; padding: 2px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.04); }
-.query-error-banner { padding: 6px 12px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: #f43f5e; border-radius: 6px; font-size: 11px; }
-.log-volume-sparkline-strip { padding: 8px 12px; background: rgba(11, 15, 25, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
-.sparkline-header { display: flex; align-items: center; justify-content: space-between; font-size: 10px; }
-.sparkline-title-group { display: flex; align-items: center; gap: 6px; color: #e2e8f0; font-weight: 700; }
-.sparkline-meta { font-size: 9px; color: #38bdf8; padding: 1px 4px; border-radius: 3px; background: rgba(56, 189, 248, 0.1); font-weight: normal; }
-.sparkline-stats { display: flex; gap: 8px; color: #64748b; }
-.sparkline-stats strong { color: #f1f5f9; }
-.sparkline-bars { display: flex; align-items: flex-end; height: 28px; gap: 3px; overflow-x: auto; padding: 2px 0; }
-.sparkline-bar-col { flex: 1; min-width: 4px; max-width: 16px; height: 100%; display: flex; align-items: flex-end; cursor: pointer; }
-.sparkline-bar-fill { width: 100%; background: #38bdf8; border-radius: 2px 2px 0 0; transition: height 0.2s ease; min-height: 0; }
-.sparkline-bar-col:hover .sparkline-bar-fill { background: #7dd3fc; filter: brightness(1.2); }
-.sparkline-bar-fill.bar-error { background: #f43f5e; }
-.sparkline-bar-fill.bar-warn { background: #f59e0b; }
-.sparkline-empty { font-size: 10px; color: #64748b; margin: auto; }
+.query-error-banner { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: #f43f5e; border-radius: 6px; font-size: 11px; }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
-@media (max-width: 640px) { .mode-controls-bar { padding: 6px 8px; gap: 6px; } .sparkline-bars { height: 22px; } .log-volume-sparkline-strip { padding: 6px 8px; } }
+@media (max-width: 640px) { .mode-controls-bar { padding: 6px 8px; gap: 6px; } }
 </style>
