@@ -25,7 +25,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-  overflow: hidden;
+  flex: 1 1 auto;
 }
 
 .mobile-command-bar .command-bar-title {
@@ -34,8 +34,7 @@
   color: #f1f5f9;
   letter-spacing: -0.01em;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .mobile-command-bar .command-bar-actions {
@@ -357,6 +356,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .chart-badge {
@@ -364,6 +364,8 @@
   font-weight: 700;
   color: #f1f5f9;
   letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .live-pill {
@@ -378,6 +380,8 @@
   padding: 1px 5px;
   border-radius: 4px;
   text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .live-pulse {
@@ -425,4 +429,18 @@
   color: var(--text-muted, #64748b);
   padding: 0 4px;
   margin-top: 2px;
+}
+
+/* Adaptive narrow mobile hardening for command bar & chart pills */
+@media (max-width: 420px) {
+  .mobile-cmd-btn .cmd-label {
+    display: none;
+  }
+  .mobile-cmd-btn {
+    padding: 0 7px;
+  }
+  .chart-header-legend {
+    font-size: 10px;
+    gap: 3px;
+  }
 }

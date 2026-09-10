@@ -228,8 +228,8 @@ const mobileMemArea = computed(() => {
     <!-- Touch Stream of Active Nodes -->
     <div class="mobile-nodes-stream">
       <div class="stream-section-title mobile-view-toggle">
-        <button type="button" class="toggle-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">🗂 Thẻ gọn</button>
-        <button type="button" class="toggle-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">📑 Bảng</button>
+        <button type="button" class="toggle-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">🗂 Compact</button>
+        <button type="button" class="toggle-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">📑 Table</button>
       </div>
 
       <template v-if="viewMode === 'table'">
