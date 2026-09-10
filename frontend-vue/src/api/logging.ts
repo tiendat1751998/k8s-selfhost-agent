@@ -1,16 +1,12 @@
-﻿import { api } from './client'
+import { api } from './client'
 
 export interface LogFilterParams {
   query?: string
-  search_text?: string
   namespace?: string
   pod_name?: string
-  pod?: string
   container_name?: string
-  container?: string
   stream?: string
   log_level?: string
-  level?: string
   start_time?: string
   end_time?: string
   limit?: number
@@ -20,12 +16,9 @@ export interface LogFilterParams {
 
 export interface HistogramParams {
   query?: string
-  search_text?: string
   namespace?: string
   pod_name?: string
-  pod?: string
   container_name?: string
-  container?: string
   log_level?: string
   interval_seconds?: number
   start_time?: string
@@ -59,16 +52,12 @@ export interface LogAggregationBucket {
 
 export async function searchLogs(filter: LogFilterParams = {}): Promise<LogSearchResult> {
   const params: Record<string, string | number> = {}
-  const q = filter.query || filter.search_text
-  if (q) params.query = q
+  if (filter.query) params.query = filter.query
   if (filter.namespace) params.namespace = filter.namespace
-  const pod = filter.pod_name || filter.pod
-  if (pod) params.pod_name = pod
-  const container = filter.container_name || filter.container
-  if (container) params.container_name = container
+  if (filter.pod_name) params.pod_name = filter.pod_name
+  if (filter.container_name) params.container_name = filter.container_name
   if (filter.stream) params.stream = filter.stream
-  const level = filter.log_level || filter.level
-  if (level) params.log_level = level
+  if (filter.log_level) params.log_level = filter.log_level
   if (filter.start_time) params.start_time = filter.start_time
   if (filter.end_time) params.end_time = filter.end_time
   if (filter.limit !== undefined) params.limit = filter.limit
@@ -80,13 +69,10 @@ export async function searchLogs(filter: LogFilterParams = {}): Promise<LogSearc
 
 export async function getLogHistogram(params: HistogramParams = {}): Promise<LogAggregationBucket[]> {
   const queryParams: Record<string, string | number> = {}
-  const q = params.query || params.search_text
-  if (q) queryParams.query = q
+  if (params.query) queryParams.query = params.query
   if (params.namespace) queryParams.namespace = params.namespace
-  const pod = params.pod_name || params.pod
-  if (pod) queryParams.pod_name = pod
-  const container = params.container_name || params.container
-  if (container) queryParams.container_name = container
+  if (params.pod_name) queryParams.pod_name = params.pod_name
+  if (params.container_name) queryParams.container_name = params.container_name
   if (params.log_level) queryParams.log_level = params.log_level
   if (params.interval_seconds !== undefined) queryParams.interval_seconds = params.interval_seconds
   if (params.start_time) queryParams.start_time = params.start_time

@@ -1,4 +1,4 @@
-﻿import { defineStore } from 'pinia'
+import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
   searchLogs,
@@ -31,6 +31,7 @@ export interface LogFilterOptions {
   pod?: string
   level?: string
   keyword?: string
+  query?: string
 }
 
 export const useLogStore = defineStore('log', () => {
@@ -41,6 +42,7 @@ export const useLogStore = defineStore('log', () => {
   const maxBufferSize = 1000
   const reconnectAttempts = ref(0)
   const activeFilter = ref<LogFilterOptions>({})
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
   // Historical Search & Histogram State
   const histogram = ref<LogAggregationBucket[]>([])
@@ -50,13 +52,19 @@ export const useLogStore = defineStore('log', () => {
   const hasMoreHistorical = ref(false)
 
   function normalizeOptions(options?: LogFilterOptions | string, podArg?: string): LogFilterOptions {
-    if (typeof options === 'string') {
-      return { namespace: options, pod: podArg }
-    }
+    if (typeof options === 'string') return { namespace: options, pod: podArg }
     return options ? { ...options } : {}
   }
 
+  function clearReconnectTimer() {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+  }
+
   function connect(options?: LogFilterOptions | string, podArg?: string) {
+    clearReconnectTimer()
     const opts = normalizeOptions(options, podArg)
     activeFilter.value = opts
     logs.value = []
@@ -76,29 +84,26 @@ export const useLogStore = defineStore('log', () => {
     if (opts.namespace) params.append('namespace', opts.namespace)
     if (opts.pod) params.append('pod', opts.pod)
     if (opts.level) params.append('level', opts.level)
-    if (opts.keyword) params.append('keyword', opts.keyword)
+    const q = opts.query || opts.keyword
+    if (q) params.append('query', q)
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
-    if (token) {
-      params.append('token', token)
-    }
+    if (token) params.append('token', token)
 
     const queryStr = params.toString()
-    const wsUrl = `${proto}//${host}/api/v1/logs/stream${queryStr ? `?${queryStr}` : ''}`
+    const wsUrl = `${proto}//${host}/api/v1/logs/stream${queryStr ? '?' + queryStr : ''}`
 
     try {
       socket.value = new WebSocket(wsUrl)
-
       socket.value.onopen = () => {
         isConnected.value = true
         reconnectAttempts.value = 0
       }
-
       socket.value.onmessage = (event) => {
         if (isPaused.value) return
         try {
           const raw = JSON.parse(event.data)
-          const entry: LogEntry = {
+          appendLog({
             time: raw.timestamp || raw.time || new Date().toISOString().split('T')[1].slice(0, 12),
             level: (raw.log_level || raw.level || raw.severity || 'INFO').toUpperCase(),
             namespace: raw.namespace || raw.ns || opts.namespace || 'default',
@@ -110,8 +115,7 @@ export const useLogStore = defineStore('log', () => {
             traceId: raw.traceId || raw.trace_id || raw.attributes?.trace_id || raw.attributes?.traceId,
             stream: raw.stream || 'stdout',
             attributes: raw.attributes,
-          }
-          appendLog(entry)
+          })
         } catch {
           appendLog({
             time: new Date().toISOString().split('T')[1].slice(0, 12),
@@ -125,33 +129,29 @@ export const useLogStore = defineStore('log', () => {
           })
         }
       }
-
       socket.value.onclose = () => {
         isConnected.value = false
         if (reconnectAttempts.value < 5) {
           reconnectAttempts.value++
-          setTimeout(() => connect(activeFilter.value), 2000 * reconnectAttempts.value)
+          clearReconnectTimer()
+          reconnectTimer = setTimeout(() => connect(activeFilter.value), 2000 * reconnectAttempts.value)
         }
       }
-
-      socket.value.onerror = () => {
-        isConnected.value = false
-      }
+      socket.value.onerror = () => { isConnected.value = false }
     } catch {
       isConnected.value = false
     }
   }
 
   function setFilter(options: LogFilterOptions) {
-    const keys: (keyof LogFilterOptions)[] = ['node', 'service', 'container', 'namespace', 'pod', 'level', 'keyword']
+    const keys: (keyof LogFilterOptions)[] = ['node', 'service', 'container', 'namespace', 'pod', 'level', 'keyword', 'query']
     const hasChanged = keys.some((k) => (options[k] || '') !== (activeFilter.value[k] || ''))
-    if (!hasChanged && socket.value && socket.value.readyState === WebSocket.OPEN) {
-      return
-    }
+    if (!hasChanged && socket.value && socket.value.readyState === WebSocket.OPEN) return
     connect(options)
   }
 
   function disconnect() {
+    clearReconnectTimer()
     if (socket.value) {
       socket.value.onclose = null
       socket.value.close()
@@ -163,20 +163,13 @@ export const useLogStore = defineStore('log', () => {
 
   function appendLog(entry: LogEntry) {
     logs.value.push(entry)
-    if (logs.value.length > maxBufferSize) {
-      logs.value.splice(0, logs.value.length - maxBufferSize)
-    }
+    if (logs.value.length > maxBufferSize) logs.value.splice(0, logs.value.length - maxBufferSize)
   }
 
-  function clear() {
-    logs.value = []
-  }
+  function clear() { logs.value = [] }
+  function togglePause() { isPaused.value = !isPaused.value }
 
-  function togglePause() {
-    isPaused.value = !isPaused.value
-  }
-
-  async function fetchHistoricalLogs(filter: LogFilterParams = {}): Promise<LogSearchResult> {
+  async function fetchHistoricalLogs(filter: LogFilterParams = {}, append: boolean = false): Promise<LogSearchResult> {
     isHistoricalLoading.value = true
     try {
       const res = await searchLogs(filter)
@@ -193,7 +186,11 @@ export const useLogStore = defineStore('log', () => {
         stream: raw.stream || 'stdout',
         attributes: raw.attributes,
       }))
-      logs.value = mapped.slice(0, maxBufferSize)
+      if (append) {
+        logs.value = [...logs.value, ...mapped].slice(-maxBufferSize)
+      } else {
+        logs.value = mapped.slice(0, maxBufferSize)
+      }
       totalHistoricalCount.value = res.total_count || 0
       hasMoreHistorical.value = res.has_more || false
       return res
