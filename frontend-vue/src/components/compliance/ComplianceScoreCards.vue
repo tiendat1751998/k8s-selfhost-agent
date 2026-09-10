@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="metrics-grid">
     <MetricCard
       title="Overall Score"
@@ -56,3 +56,13 @@ defineProps<{
   lastScanTime?: string
 }>()
 </script>
+
+<style scoped>
+.metrics-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+</style>

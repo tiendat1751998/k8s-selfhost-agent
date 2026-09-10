@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <div class="view-container">
-    <!-- Desktop View Header -->
+    <!-- Desktop View Header (>=768px) -->
     <div class="view-header desktop-header desktop-only">
       <div>
         <div class="view-tag">
@@ -9,7 +9,7 @@
         </div>
         <h1 class="view-title">Compliance Frameworks & Policy Violations</h1>
         <p class="view-desc">
-          Continuous validation against industry standards (<span class="highlight">CIS Benchmark</span>, <span class="highlight">NIST SP 800-53</span>, <span class="highlight">PCI-DSS</span>, <span class="highlight">SOC 2</span>, <span class="highlight">HIPAA</span>) with automated remediation guidance.
+          Continuous validation against industry standards (<span class="highlight">CIS Benchmark</span>, <span class="highlight">NIST SP 800-53</span>, <span class="highlight">PCI-DSS</span>, <span class="highlight">SOC 2</span>, <span class="highlight">ISO 27001</span>, <span class="highlight">HIPAA</span>) with automated remediation guidance.
         </p>
       </div>
 
@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 44px Command Bar (<768px) -->
     <div class="compliance-mobile-command-bar mobile-only">
       <div class="command-bar-left">
         <span class="command-bar-title font-bold">⚖️ Compliance ({{ filteredFrameworks.length }})</span>
@@ -50,13 +50,37 @@
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 24px Centered Micro-Telemetry Strip (<768px) -->
     <div class="compliance-micro-telemetry mobile-only font-mono" role="status" aria-label="Compliance Micro Telemetry">
-      <span class="tel-item tel-score">⚖️ {{ overallScore }}% score</span>
+      <span class="tel-item tel-score">⚖️ {{ Math.round(overallScore) }}% score</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-controls">🛡️ {{ passingControlsCount }}/{{ totalControlsCount }} controls</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-crit">🛑 {{ criticalViolationsCount }} crit</span>
+    </div>
+
+    <!-- Mobile Segmented View Tabs (<768px) -->
+    <div class="compliance-mobile-tabs mobile-only" role="tablist" aria-label="Compliance View Selection">
+      <button
+        class="mobile-tab-btn"
+        :class="{ 'mobile-tab-active': mobileTab === 'violations' }"
+        role="tab"
+        :aria-selected="mobileTab === 'violations'"
+        @click="mobileTab = 'violations'"
+      >
+        <span>⚠️ Violations</span>
+        <span class="tab-badge">{{ filteredViolations.length }}</span>
+      </button>
+      <button
+        class="mobile-tab-btn"
+        :class="{ 'mobile-tab-active': mobileTab === 'frameworks' }"
+        role="tab"
+        :aria-selected="mobileTab === 'frameworks'"
+        @click="mobileTab = 'frameworks'"
+      >
+        <span>🛡️ Frameworks</span>
+        <span class="tab-badge">{{ filteredFrameworks.length }}</span>
+      </button>
     </div>
 
     <!-- Error Banner if any -->
@@ -66,7 +90,7 @@
       <button class="banner-close" @click="error = null">✕</button>
     </div>
 
-    <!-- Top HUD Cards (Overall Score, Passing Controls, Critical Failures, Automated Audit Status) -->
+    <!-- Top HUD Cards (Desktop Only, Overall Score, Passing Controls, Critical Failures, Automated Audit Status) -->
     <ComplianceScoreCards
       class="desktop-only"
       :overall-score="overallScore"
@@ -77,20 +101,22 @@
       :last-scan-time="latestRun?.start_time ? formatDate(latestRun.start_time) : undefined"
     />
 
-    <!-- Frameworks Grid with Gauges and Quick Filters -->
-    <ComplianceFrameworksGrid
-      :frameworks="filteredFrameworks"
-      :selected-framework-id="selectedFrameworkId"
-      :selected-standard="selectedStandard"
-      :loading="loading"
-      :get-progress-color-class="getProgressColorClass"
-      :format-date="formatDate"
-      @select-framework="selectFramework"
-      @select-standard="selectStandard"
-      @run-scan="triggerScan"
-    />
+    <!-- Frameworks Grid with Gauges and Quick Filters (Shown on Desktop, toggled on Mobile) -->
+    <div class="frameworks-container" :class="{ 'mobile-hidden': mobileTab !== 'frameworks' }">
+      <ComplianceFrameworksGrid
+        :frameworks="filteredFrameworks"
+        :selected-framework-id="selectedFrameworkId"
+        :selected-standard="selectedStandard"
+        :loading="loading"
+        :get-progress-color-class="getProgressColorClass"
+        :format-date="formatDate"
+        @select-framework="selectFramework"
+        @select-standard="selectStandard"
+        @run-scan="triggerScan"
+      />
+    </div>
 
-    <!-- Desktop Controls Table -->
+    <!-- Desktop Controls Table (>=768px) -->
     <div class="desktop-only">
       <ComplianceControlsTable
         :violations="filteredViolations"
@@ -109,8 +135,8 @@
       />
     </div>
 
-    <!-- Mobile Cards Stream (~65px, 0 horizontal scroll) -->
-    <div class="mobile-only">
+    <!-- Mobile Cards Stream (~72px, 0 horizontal scroll, prominent on mobile load) -->
+    <div class="mobile-only" :class="{ 'mobile-hidden': mobileTab !== 'violations' }">
       <ComplianceMobileCards
         :violations="filteredViolations"
         @inspect="inspectControl"
@@ -129,7 +155,7 @@
             />
             <h3 class="modal-title">{{ selectedViolation.policy }}</h3>
           </div>
-          <button class="modal-close" @click="closeModal">✕</button>
+          <button class="modal-close" aria-label="Close modal" @click="closeModal">✕</button>
         </div>
 
         <div class="modal-body">
@@ -147,14 +173,14 @@
 
           <div class="form-group">
             <label class="form-label">Regulatory Framework Control:</label>
-            <div class="input-glass font-mono text-cyan">{{ selectedViolation.framework_id }}</div>
+            <div class="input-glass font-mono text-cyan">{{ formatFrameworkTag(selectedViolation.framework_id) }}</div>
           </div>
 
           <div class="form-group">
             <label class="form-label">Automated Remediation Guidance:</label>
             <div class="input-glass remediation-box font-mono">
               1. Inspect manifest for {{ selectedViolation.resource }} in source Git repository.<br />
-              2. Apply compliant securityContext specs and network policies matching CIS/NIST standards.<br />
+              2. Apply compliant securityContext specs and network policies matching regulatory standards.<br />
               3. Trigger continuous GitOps reconciliation to satisfy audit posture.
             </div>
           </div>
@@ -176,13 +202,17 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import '../assets/styles/views/compliance.css'
+import '../assets/styles/components/compliance-drawers.css'
 import { useCompliance } from '../composables/useCompliance'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ComplianceScoreCards from '../components/compliance/ComplianceScoreCards.vue'
 import ComplianceFrameworksGrid from '../components/compliance/ComplianceFrameworksGrid.vue'
 import ComplianceControlsTable from '../components/compliance/ComplianceControlsTable.vue'
 import ComplianceMobileCards from '../components/compliance/ComplianceMobileCards.vue'
+
+const mobileTab = ref<'violations' | 'frameworks'>('violations')
 
 const {
   loading,
