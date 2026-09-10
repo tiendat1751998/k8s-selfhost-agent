@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="plugins-grid-wrapper">
     <!-- Starter Catalog Presets (Quick Install) if no plugins installed -->
     <section class="templates-section glass-panel" v-if="plugins.length === 0 && !loading">
@@ -37,7 +37,7 @@
         <div class="card-header">
           <div class="plugin-identity">
             <div class="plugin-avatar">{{ p.icon || '🧩' }}</div>
-            <div>
+            <div class="plugin-identity-meta">
               <div class="plugin-name-row">
                 <h3 class="plugin-name">{{ p.name }}</h3>
                 <span class="version-tag">v{{ p.version }}</span>

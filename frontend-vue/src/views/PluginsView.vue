@@ -1,7 +1,7 @@
 <template>
   <div class="plugins-page">
-    <!-- Header Section -->
-    <header class="page-header glass-panel">
+    <!-- Desktop Header -->
+    <header class="page-header glass-panel desktop-only">
       <div class="header-content">
         <div class="title-group">
           <div class="icon-bubble">🧩</div>
@@ -60,6 +60,43 @@
       </div>
     </header>
 
+    <!-- Mobile 44px Command Bar (<768px) -->
+    <div class="plugins-mobile-command-bar mobile-only">
+      <div class="command-bar-left">
+        <span class="command-bar-title">🧩 Plugins ({{ stats.enabled }}/{{ plugins.length }})</span>
+      </div>
+      <div class="command-bar-actions">
+        <button
+          class="btn-icon-cmd"
+          title="Install Plugin"
+          aria-label="Install Plugin"
+          @click="openRegisterModal"
+        >
+          <span>➕</span>
+        </button>
+        <button
+          class="btn-icon-cmd"
+          :disabled="loading"
+          title="Sync Registry"
+          aria-label="Sync Registry"
+          @click="refreshPlugins"
+        >
+          <span :class="{ 'spin-icon': loading }">🔄</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
+    <div class="plugins-micro-telemetry mobile-only font-mono" role="status" aria-label="Plugins Micro Telemetry">
+      <span class="tel-item tel-installed">🧩 {{ stats.total }} Installed</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-active">⚡ {{ stats.enabled }} Active</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-verified">🛡️ {{ wasmSandboxStatus.isolationMode === 'wasm-wasi' ? 'WASM Verified' : 'Verified' }}</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-available">📦 {{ categoryCount }} Available</span>
+    </div>
+
     <!-- Filters & Search Toolbar -->
     <div class="toolbar glass-panel">
       <div class="search-box">
@@ -102,8 +139,8 @@
             <option value="disabled">Disabled Only ({{ stats.disabled }})</option>
           </select>
 
-          <!-- View Mode Toggle -->
-          <div class="view-toggle-group">
+          <!-- View Mode Toggle (Desktop only) -->
+          <div class="view-toggle-group desktop-only">
             <button
               class="view-toggle-btn"
               :class="{ active: viewMode === 'grid' }"
@@ -137,8 +174,8 @@
       <button class="btn btn-sm btn-secondary" @click="refreshPlugins">Retry</button>
     </div>
 
-    <!-- Empty State -->
-    <div v-else-if="filteredPlugins.length === 0 && plugins.length > 0" class="empty-state glass-panel">
+    <!-- Desktop Empty Filter State -->
+    <div v-else-if="filteredPlugins.length === 0 && plugins.length > 0" class="empty-state glass-panel desktop-only">
       <div class="empty-icon">🧩</div>
       <h3>No plugins match current filters</h3>
       <p>Try adjusting your search terms, category tabs, or permission scope filter.</p>
@@ -147,37 +184,55 @@
       </div>
     </div>
 
-    <!-- Active View Component (Grid or Table) -->
-    <PluginsGrid
-      v-else-if="viewMode === 'grid'"
-      :plugins="filteredPlugins"
-      :starter-presets="starterPresets"
-      :toggling-id="togglingId"
-      :loading="loading"
-      :installing-preset="installingPreset"
-      :category-badge-class="categoryBadgeClass"
-      :get-runtime-status-label="getRuntimeStatusLabel"
-      :get-runtime-status-class="getRuntimeStatusClass"
-      @toggle="togglePlugin"
-      @configure="openConfigModal"
-      @edit="openEditModal"
-      @delete="confirmDelete"
-      @test-bundle="testBundleLoad"
-      @install-preset="installPreset"
-    />
+    <!-- Desktop / Tablet View Component (Grid or Table) -->
+    <div v-if="filteredPlugins.length > 0 || plugins.length === 0" class="desktop-only">
+      <PluginsGrid
+        v-if="viewMode === 'grid'"
+        :plugins="filteredPlugins"
+        :starter-presets="starterPresets"
+        :toggling-id="togglingId"
+        :loading="loading"
+        :installing-preset="installingPreset"
+        :category-badge-class="categoryBadgeClass"
+        :get-runtime-status-label="getRuntimeStatusLabel"
+        :get-runtime-status-class="getRuntimeStatusClass"
+        @toggle="togglePlugin"
+        @configure="openConfigModal"
+        @edit="openEditModal"
+        @delete="confirmDelete"
+        @test-bundle="testBundleLoad"
+        @install-preset="installPreset"
+      />
 
-    <PluginsTable
-      v-else-if="viewMode === 'table'"
-      :plugins="filteredPlugins"
-      :toggling-id="togglingId"
-      :category-badge-class="categoryBadgeClass"
-      :get-runtime-status-label="getRuntimeStatusLabel"
-      :get-runtime-status-class="getRuntimeStatusClass"
-      @toggle="togglePlugin"
-      @configure="openConfigModal"
-      @inspect="openEditModal"
-      @uninstall="confirmDelete"
-    />
+      <PluginsTable
+        v-else-if="viewMode === 'table'"
+        :plugins="filteredPlugins"
+        :toggling-id="togglingId"
+        :category-badge-class="categoryBadgeClass"
+        :get-runtime-status-label="getRuntimeStatusLabel"
+        :get-runtime-status-class="getRuntimeStatusClass"
+        @toggle="togglePlugin"
+        @configure="openConfigModal"
+        @inspect="openEditModal"
+        @uninstall="confirmDelete"
+      />
+    </div>
+
+    <!-- Mobile High-Density Stream Cards Component (<768px) -->
+    <div class="mobile-only">
+      <PluginsMobileCards
+        :plugins="filteredPlugins"
+        :toggling-id="togglingId"
+        :category-badge-class="categoryBadgeClass"
+        :get-runtime-status-label="getRuntimeStatusLabel"
+        :get-runtime-status-class="getRuntimeStatusClass"
+        @toggle="togglePlugin"
+        @configure="openConfigModal"
+        @edit="openEditModal"
+        @delete="confirmDelete"
+        @install="openRegisterModal"
+      />
+    </div>
 
     <!-- Modals -->
     <InstallPluginModal
@@ -220,6 +275,7 @@
 import { usePlugins } from '../composables/usePlugins'
 import PluginsGrid from '../components/plugins/PluginsGrid.vue'
 import PluginsTable from '../components/plugins/PluginsTable.vue'
+import PluginsMobileCards from '../components/plugins/PluginsMobileCards.vue'
 import PluginConfigModal from '../components/plugins/PluginConfigModal.vue'
 import InstallPluginModal from '../components/plugins/InstallPluginModal.vue'
 
