@@ -8,13 +8,14 @@ frontend-vue/src/assets/styles/views/catalog.css
 /* Layout & Visibility Utilities */
 .view-container { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 1600px; margin: 0 auto; box-sizing: border-box; overflow-x: hidden; }
 
-.view-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.view-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
 
 .view-tag { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--accent-cyan); letter-spacing: 0.08em; margin-bottom: 4px; }
 
 .view-title { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
 .view-desc { font-size: 13px; color: var(--text-secondary); max-width: 750px; margin-top: 4px; line-height: 1.45; }
-.header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.header-actions,
+.view-header .header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 
 /* View Mode Switcher */
 .view-mode-toggle { display: inline-flex; align-items: center; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 2px; gap: 2px; }
@@ -180,10 +181,19 @@ frontend-vue/src/assets/styles/views/catalog.css
 .mobile-only { display: none !important; }
 }
 
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (min-width: 768px) and (max-width: 1023.98px) {
 .mobile-only { display: none !important; }
+.view-header { flex-wrap: wrap; gap: 12px; }
+.view-header .header-actions { flex-wrap: wrap; gap: 8px; }
 .metrics-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .catalog-cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+}
+
+@media (max-width: 1024px) {
+  .view-header .header-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }
 
 @media (max-width: 767px) {

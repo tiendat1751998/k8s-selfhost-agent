@@ -249,4 +249,19 @@ const {
 
 <style>
 @import '../assets/styles/views/promotions.css';
+
+.metrics-grid.desktop-only {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .metrics-grid.desktop-only {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 767.98px) {
+  .metrics-grid.desktop-only {
+    display: none !important;
+  }
+}
 </style>
