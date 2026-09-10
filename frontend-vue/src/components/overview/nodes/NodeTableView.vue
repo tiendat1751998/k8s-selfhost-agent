@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
 import type { NodeMetrics } from '../../../api/overview'
 import BaseIcon from '../../ui/BaseIcon.vue'
+import ActionDropdown, { type ActionItem } from '../../ui/ActionDropdown.vue'
 
 defineProps<{
   nodes: NodeMetrics[]
@@ -18,41 +18,20 @@ const emit = defineEmits<{
   (e: 'delete', node: NodeMetrics): void
 }>()
 
-const activeMenuId = ref<string | null>(null)
+const nodeActions: ActionItem[] = [
+  { id: 'scale', label: 'Scale Workloads', icon: 'zap' },
+  { id: 'restart', label: 'Restart Agent', icon: 'refresh' },
+  { id: 'yaml', label: 'View YAML', icon: 'file-text' },
+  { id: 'sep-1', label: '', separator: true },
+  { id: 'delete', label: 'Cordon / Evict', icon: 'trash', variant: 'danger' },
+]
 
-function toggleMenu(nodeId: string) {
-  activeMenuId.value = activeMenuId.value === nodeId ? null : nodeId
-}
-
-function handleMenuAction(event: 'scale' | 'restart' | 'yaml' | 'delete', node: NodeMetrics) {
-  activeMenuId.value = null
+function handleMenuAction(event: string, node: NodeMetrics) {
   if (event === 'scale') emit('scale', node)
   else if (event === 'restart') emit('restart', node)
   else if (event === 'yaml') emit('yaml', node)
   else if (event === 'delete') emit('delete', node)
 }
-
-function handleDocumentClick(e: MouseEvent) {
-  if (activeMenuId.value && !(e.target as HTMLElement).closest('.more-actions-wrap')) {
-    activeMenuId.value = null
-  }
-}
-
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && activeMenuId.value) {
-    activeMenuId.value = null
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', handleDocumentClick)
-  document.addEventListener('keydown', handleKeydown)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleDocumentClick)
-  document.removeEventListener('keydown', handleKeydown)
-})
 
 function isOffline(node: NodeMetrics): boolean {
   return node.status === 'down' || node.status === 'offline' || node.status === 'disconnected' || node.memory_total === 0
@@ -126,7 +105,7 @@ function getNodePing(node: NodeMetrics): number {
         </thead>
         <tbody>
           <tr
-            v-for="(node, idx) in nodes"
+            v-for="node in nodes"
             :key="node.node_id"
             class="node-row"
             :class="{ 'row-busiest': node.node_id === busiestNodeId }"
@@ -186,50 +165,11 @@ function getNodePing(node: NodeMetrics): number {
                   <BaseIcon name="search" size="xs" />
                   <span>Details</span>
                 </button>
-                <div class="more-actions-wrap">
-                  <button
-                    type="button"
-                    class="sre-btn btn-more-actions"
-                    title="More Node Actions"
-                    :class="{ active: activeMenuId === node.node_id }"
-                    :aria-expanded="activeMenuId === node.node_id"
-                    aria-haspopup="true"
-                    @click.stop="toggleMenu(node.node_id)"
-                  >
-                    ⋯
-                  </button>
-                  <div
-                    v-if="activeMenuId === node.node_id"
-                    class="more-actions-dropdown"
-                    :class="{ dropup: idx >= nodes.length - 2 && nodes.length > 2 }"
-                    @click.stop
-                  >
-                    <button type="button" class="menu-item item-scale" @click="handleMenuAction('scale', node)">
-                      <span class="menu-item-icon">
-                        <BaseIcon name="zap" size="xs" />
-                      </span>
-                      <span>Scale Workloads</span>
-                    </button>
-                    <button type="button" class="menu-item item-restart" @click="handleMenuAction('restart', node)">
-                      <span class="menu-item-icon">
-                        <BaseIcon name="refresh" size="xs" />
-                      </span>
-                      <span>Restart Agent</span>
-                    </button>
-                    <button type="button" class="menu-item item-yaml" @click="handleMenuAction('yaml', node)">
-                      <span class="menu-item-icon">
-                        <BaseIcon name="file-text" size="xs" />
-                      </span>
-                      <span>View YAML</span>
-                    </button>
-                    <button type="button" class="menu-item item-delete" @click="handleMenuAction('delete', node)">
-                      <span class="menu-item-icon">
-                        <BaseIcon name="trash" size="xs" />
-                      </span>
-                      <span>Cordon / Evict</span>
-                    </button>
-                  </div>
-                </div>
+                <ActionDropdown
+                  size="xs"
+                  :items="nodeActions"
+                  @select="(actionId) => handleMenuAction(actionId, node)"
+                />
               </div>
             </td>
           </tr>
