@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useCostFinOps } from '../composables/useCostFinOps'
 import CostHudMetrics from '../components/cost/CostHudMetrics.vue'
 import CostBreakdownChart from '../components/cost/CostBreakdownChart.vue'
@@ -6,6 +7,7 @@ import NamespaceCostTable from '../components/cost/NamespaceCostTable.vue'
 import CostMobileCards from '../components/cost/CostMobileCards.vue'
 import DataTable, { type Column } from '../components/ui/DataTable.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
+import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import type { ResourceWaste } from '../api/governance'
 
 const {
@@ -15,6 +17,7 @@ const {
   loading,
   error,
   statusMessage,
+  selectedNamespace,
   totalMonthlyCost,
   totalDailyCost,
   totalWastedCost,
@@ -28,22 +31,25 @@ const {
   handleDismissWaste,
   setBudgetLimit,
   openNamespaceBreakdown,
+  closeNamespaceBreakdown,
   formatWasteType,
 } = useCostFinOps()
 
+const showMobileBreakdown = ref(false)
+
 const wasteColumns: Column<ResourceWaste>[] = [
-  { key: 'severity', label: 'Severity', width: '120px', sortable: true },
-  { key: 'type', label: 'Waste Category', width: '180px', sortable: true },
-  { key: 'resource', label: 'Impacted Resource', width: '240px', sortable: true },
-  { key: 'util', label: 'Measured Util', width: '150px' },
-  { key: 'wasted_cost', label: 'Idle Cost', width: '140px', sortable: true },
-  { key: 'actions', label: 'Action', width: '140px', align: 'right' },
+  { key: 'severity', label: 'Severity', width: '15%', sortable: true },
+  { key: 'type', label: 'Waste Category', width: '20%', sortable: true },
+  { key: 'resource', label: 'Impacted Resource', width: '28%', sortable: true },
+  { key: 'util', label: 'Measured Util', width: '15%' },
+  { key: 'wasted_cost', label: 'Idle Cost', width: '12%', sortable: true },
+  { key: 'actions', label: 'Action', width: '10%', align: 'right' },
 ]
 </script>
 
 <template>
   <div class="view-container">
-    <!-- Desktop View Header -->
+    <!-- Desktop View Header (>=768px) -->
     <header class="view-header desktop-header-wrap desktop-only">
       <div>
         <div class="view-tag">
@@ -63,10 +69,10 @@ const wasteColumns: Column<ResourceWaste>[] = [
       </div>
     </header>
 
-    <!-- 44px Mobile Command Bar (<640px) -->
+    <!-- 44px Mobile Command Bar (<768px) -->
     <div class="mobile-command-bar cost-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">💵 FinOps (${{ (totalMonthlyCost / 1000).toFixed(1) }}k/mo)</span>
+        <span class="command-bar-title font-bold">💰 Cost FinOps (${{ (totalMonthlyCost / 1000).toFixed(1) }}k/mo)</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -78,10 +84,18 @@ const wasteColumns: Column<ResourceWaste>[] = [
         >
           <span>{{ loading ? '⏳' : '🔄' }}</span>
         </button>
+        <button
+          class="btn-icon-cmd"
+          title="FinOps Cost Breakdown"
+          aria-label="Cost Breakdown"
+          @click="showMobileBreakdown = true"
+        >
+          <span>📊</span>
+        </button>
       </div>
     </div>
 
-    <!-- 20px Mobile Micro-Telemetry Strip (<640px) -->
+    <!-- 20px Mobile Micro-Telemetry Strip (<768px) -->
     <div class="mobile-micro-telemetry cost-micro-telemetry mobile-only font-mono" role="status" aria-label="Cost FinOps Micro Telemetry">
       <span class="tel-item tel-monthly">💵 ${{ (totalMonthlyCost / 1000).toFixed(1) }}k/mo</span>
       <span class="tel-sep">·</span>
@@ -99,7 +113,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
       <button class="banner-close" @click="statusMessage = null">✕</button>
     </div>
 
-    <!-- Desktop Metrics HUD Grid -->
+    <!-- Desktop Metrics HUD Grid (>=768px) -->
     <CostHudMetrics
       class="desktop-only"
       :total-monthly-cost="totalMonthlyCost"
@@ -112,7 +126,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
       :spot-savings="spotSavings"
     />
 
-    <!-- Multi-Cloud Infrastructure Cost Breakdown & Clusters -->
+    <!-- Multi-Cloud Infrastructure Cost Breakdown & Clusters (>=768px) -->
     <CostBreakdownChart
       class="desktop-only"
       :cloud-breakdown="cloudBreakdown"
@@ -121,7 +135,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
       @refresh="fetchCostData"
     />
 
-    <!-- Section 1: Namespace Cost Allocations -->
+    <!-- Section 1: Namespace Cost Allocations (>=768px) -->
     <NamespaceCostTable
       class="desktop-only"
       :namespaces="namespaces"
@@ -131,7 +145,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
       @select-namespace="openNamespaceBreakdown"
     />
 
-    <!-- Section 2: Resource Waste & Idle Allocation Alerts -->
+    <!-- Section 2: Resource Waste & Idle Allocation Alerts (>=768px) -->
     <div class="section-card glass-panel desktop-only">
       <div class="section-top">
         <div>
@@ -158,7 +172,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
           </template>
           <template #cell-resource="{ row }">
             <div class="resource-cell">
-              <span class="resource-title font-mono font-semibold">{{ row.resource }}</span>
+              <span class="resource-title font-mono font-semibold" :title="row.resource">{{ row.resource }}</span>
               <span class="resource-scope font-mono text-muted">{{ row.namespace }} @ {{ row.cluster }}</span>
             </div>
           </template>
@@ -180,17 +194,121 @@ const wasteColumns: Column<ResourceWaste>[] = [
       </div>
     </div>
 
-    <!-- Mobile Screen 1 Cards Stream (<640px) -->
+    <!-- Mobile High-Density Cards Stream (<768px, ~65-72px/item) -->
     <div class="mobile-only cost-mobile-container">
       <CostMobileCards
+        :namespaces="namespaces"
         :waste-alerts="wasteAlerts"
         :loading="loading"
         @right-size="handleDismissWaste"
+        @select-namespace="openNamespaceBreakdown"
       />
     </div>
+
+    <!-- Mobile Multi-Cloud Breakdown Drawer (<768px) -->
+    <ModalDrawer
+      :show="showMobileBreakdown"
+      title="FinOps Cost Breakdown"
+      :subtitle="`Multi-Cloud Run-Rate: $${totalMonthlyCost.toLocaleString()}/mo (${clusters.length} clusters)`"
+      mode="drawer"
+      placement="right"
+      max-width="420px"
+      @close="showMobileBreakdown = false"
+    >
+      <div class="mobile-drawer-breakdown font-mono">
+        <div class="breakdown-hero glass-panel">
+          <div class="hero-label">MONTHLY RUN-RATE</div>
+          <div class="hero-val font-mono">${{ totalMonthlyCost.toLocaleString() }}</div>
+          <div class="hero-sub text-muted">Daily avg: ${{ totalDailyCost }}/day · Idle Waste: ${{ totalWastedCost }}/mo</div>
+        </div>
+
+        <div class="resource-split-section">
+          <h4 class="subhead">Multi-Cloud Distribution</h4>
+          <div class="breakdown-bars">
+            <div v-for="item in cloudBreakdown" :key="item.provider" class="split-row">
+              <div class="split-meta">
+                <span :style="{ color: item.color }">{{ item.name }} ({{ item.percentage }}%)</span>
+                <span>${{ item.cost.toLocaleString() }}</span>
+              </div>
+              <div class="util-bar-bg">
+                <div class="util-bar-fill" :style="{ width: `${item.percentage}%`, backgroundColor: item.color }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="recommendations-box glass-panel">
+          <h4 class="rec-title">⚡ FinOps Right-Sizing Insights</h4>
+          <p class="rec-desc">
+            Spot usage is at <strong>{{ spotRatio }}%</strong> saving <strong>${{ spotSavings.toLocaleString() }}/mo</strong>.
+            Total actionable idle waste is <strong class="text-rose">${{ totalWastedCost.toLocaleString() }}/mo</strong>.
+          </p>
+        </div>
+      </div>
+    </ModalDrawer>
+
+    <!-- Namespace Detail Inspection Drawer -->
+    <ModalDrawer
+      :show="selectedNamespace !== null"
+      :title="`Cost Breakdown: ${selectedNamespace?.namespace || ''}`"
+      :subtitle="`Assigned Team: ${selectedNamespace?.team || ''} | Cluster: ${selectedNamespace?.cluster || ''}`"
+      mode="drawer"
+      placement="right"
+      max-width="480px"
+      @close="closeNamespaceBreakdown"
+    >
+      <div v-if="selectedNamespace" class="breakdown-details font-mono">
+        <div class="breakdown-hero glass-panel">
+          <div class="hero-label">CURRENT MONTHLY SPEND</div>
+          <div class="hero-val font-mono">${{ selectedNamespace.monthly_cost.toLocaleString() }} <small>/mo</small></div>
+          <div class="hero-sub">
+            Budget Burn: <span :class="selectedNamespace.budget_utilization > 100 ? 'text-rose' : 'text-emerald'">
+              {{ selectedNamespace.budget_utilization }}% of ${{ selectedNamespace.budget_limit.toLocaleString() }}
+            </span>
+          </div>
+        </div>
+
+        <div class="resource-split-section">
+          <h4 class="subhead">Resource Component Breakdown</h4>
+          <div class="breakdown-bars">
+            <div class="split-row">
+              <div class="split-meta">
+                <span class="text-cyan">Compute (CPU) - {{ selectedNamespace.cpu_requested }}</span>
+                <span>${{ Math.round(selectedNamespace.monthly_cost * 0.45).toLocaleString() }}</span>
+              </div>
+              <div class="util-bar-bg"><div class="util-bar-fill bg-cyan" style="width: 45%"></div></div>
+            </div>
+            <div class="split-row">
+              <div class="split-meta">
+                <span class="text-violet">Memory (RAM) - {{ selectedNamespace.memory_requested }}</span>
+                <span>${{ Math.round(selectedNamespace.monthly_cost * 0.35).toLocaleString() }}</span>
+              </div>
+              <div class="util-bar-bg"><div class="util-bar-fill bg-violet" style="width: 35%"></div></div>
+            </div>
+            <div class="split-row">
+              <div class="split-meta">
+                <span class="text-amber">Storage (PV / PVCs)</span>
+                <span>${{ Math.round(selectedNamespace.monthly_cost * 0.2).toLocaleString() }}</span>
+              </div>
+              <div class="util-bar-bg"><div class="util-bar-fill bg-amber" style="width: 20%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="recommendations-box glass-panel">
+          <h4 class="rec-title">⚡ FinOps Right-Sizing Insights</h4>
+          <p class="rec-desc">
+            Historical CPU utilization sits at <strong>{{ selectedNamespace.utilization }}%</strong>.
+            Downscaling requests by 20% recovers approx.
+            <strong class="text-emerald">${{ Math.round(selectedNamespace.monthly_cost * 0.2).toLocaleString() }}/mo</strong>.
+          </p>
+        </div>
+      </div>
+    </ModalDrawer>
   </div>
 </template>
 
 <style scoped>
 @import '../assets/styles/views/cost.css';
+@import '../assets/styles/components/cost-drawers.css';
 </style>
