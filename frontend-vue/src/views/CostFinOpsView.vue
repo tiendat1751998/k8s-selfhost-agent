@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useCostFinOps } from '../composables/useCostFinOps'
 import CostHudMetrics from '../components/cost/CostHudMetrics.vue'
 import CostBreakdownChart from '../components/cost/CostBreakdownChart.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import NamespaceCostTable from '../components/cost/NamespaceCostTable.vue'
 import CostMobileCards from '../components/cost/CostMobileCards.vue'
 import DataTable, { type Column } from '../components/ui/DataTable.vue'
@@ -64,7 +65,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
 
       <div class="header-actions">
         <button class="btn btn-secondary" :disabled="loading" @click="fetchCostData">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh Metrics' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Syncing...' : 'Refresh Metrics' }}</span>
         </button>
       </div>
     </header>
@@ -72,7 +73,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
     <!-- 44px Mobile Command Bar (<768px) -->
     <div class="mobile-command-bar cost-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">💰 Cost FinOps (${{ (totalMonthlyCost / 1000).toFixed(1) }}k/mo)</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="dollar-sign" size="xs" /> Cost FinOps (${{ (totalMonthlyCost / 1000).toFixed(1) }}k/mo)</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -82,7 +83,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
           aria-label="Refresh"
           @click="fetchCostData"
         >
-          <span>{{ loading ? '⏳' : '🔄' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -90,27 +91,27 @@ const wasteColumns: Column<ResourceWaste>[] = [
           aria-label="Cost Breakdown"
           @click="showMobileBreakdown = true"
         >
-          <span>📊</span>
+          <BaseIcon name="pie-chart" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- 20px Mobile Micro-Telemetry Strip (<768px) -->
     <div class="mobile-micro-telemetry cost-micro-telemetry mobile-only font-mono" role="status" aria-label="Cost FinOps Micro Telemetry">
-      <span class="tel-item tel-monthly">💵 ${{ (totalMonthlyCost / 1000).toFixed(1) }}k/mo</span>
+      <span class="tel-item tel-monthly"><BaseIcon name="dollar-sign" size="xs" /> ${{ (totalMonthlyCost / 1000).toFixed(1) }}k/mo</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-daily">⚡ ${{ totalDailyCost }}/d</span>
+      <span class="tel-item tel-daily"><BaseIcon name="zap" size="xs" /> ${{ totalDailyCost }}/d</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-waste">📉 ${{ totalWastedCost }} waste</span>
+      <span class="tel-item tel-waste"><BaseIcon name="trending-up" size="xs" /> ${{ totalWastedCost }} waste</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-spot">🏷️ {{ spotRatio }}% spot</span>
+      <span class="tel-item tel-spot"><BaseIcon name="tag" size="xs" /> {{ spotRatio }}% spot</span>
     </div>
 
     <!-- Notification Banner -->
     <div v-if="statusMessage" class="status-banner animate-fade-in" :class="'banner-' + statusMessage.type">
-      <span class="banner-icon">{{ statusMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="statusMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="banner-icon" />
       <span class="banner-text">{{ statusMessage.text }}</span>
-      <button class="banner-close" @click="statusMessage = null">✕</button>
+      <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Desktop Metrics HUD Grid (>=768px) -->
@@ -187,7 +188,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
           </template>
           <template #cell-actions="{ row }">
             <button class="btn btn-secondary btn-sm" @click="handleDismissWaste(row.id)">
-              <span>Right-Size 🔧</span>
+              <BaseIcon name="wrench" size="xs" /> <span>Right-Size</span>
             </button>
           </template>
         </DataTable>
@@ -238,7 +239,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
         </div>
 
         <div class="recommendations-box glass-panel">
-          <h4 class="rec-title">⚡ FinOps Right-Sizing Insights</h4>
+          <h4 class="rec-title"><BaseIcon name="zap" size="xs" /> FinOps Right-Sizing Insights</h4>
           <p class="rec-desc">
             Spot usage is at <strong>{{ spotRatio }}%</strong> saving <strong>${{ spotSavings.toLocaleString() }}/mo</strong>.
             Total actionable idle waste is <strong class="text-rose">${{ totalWastedCost.toLocaleString() }}/mo</strong>.
@@ -296,7 +297,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
         </div>
 
         <div class="recommendations-box glass-panel">
-          <h4 class="rec-title">⚡ FinOps Right-Sizing Insights</h4>
+          <h4 class="rec-title"><BaseIcon name="zap" size="xs" /> FinOps Right-Sizing Insights</h4>
           <p class="rec-desc">
             Historical CPU utilization sits at <strong>{{ selectedNamespace.utilization }}%</strong>.
             Downscaling requests by 20% recovers approx.

@@ -6,6 +6,7 @@ import AutomationRulesTable from '../components/automation/AutomationRulesTable.
 import AutomationMobileCards from '../components/automation/AutomationMobileCards.vue'
 import AutomationExecutionHistory from '../components/automation/AutomationExecutionHistory.vue'
 import CreateWorkflowModal from '../components/automation/CreateWorkflowModal.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { AutomationRule } from '../api/governance'
 import '../assets/styles/views/automation.css'
 import '../assets/styles/components/automation-drawers.css'
@@ -89,7 +90,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
 
       <div class="header-actions">
         <button class="btn btn-secondary" :disabled="loading" @click="fetchAutomationData">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
         </button>
         <button class="btn btn-primary" @click="onCreateRule">
           <span>+ Create Automation Rule</span>
@@ -100,7 +101,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
     <!-- 44px Mobile Command Bar (<768px) -->
     <div class="mobile-command-bar automation-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">⚡ Automation ({{ rules.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="zap" size="xs" /> Automation ({{ rules.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -110,7 +111,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
           aria-label="Refresh"
           @click="fetchAutomationData"
         >
-          <span>{{ loading ? '⏳' : '🔄' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -118,20 +119,20 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
           aria-label="Create Rule"
           @click="onCreateRule"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- 20px Mobile Micro-Telemetry Strip (<768px) -->
     <div class="mobile-micro-telemetry automation-micro-telemetry mobile-only font-mono" role="status" aria-label="Automation Micro Telemetry">
-      <span class="tel-item tel-rules">⚡ {{ rules.length }} rules</span>
+      <span class="tel-item tel-rules"><BaseIcon name="zap" size="xs" /> {{ rules.length }} rules</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-active">🟢 {{ activeCount }} act</span>
+      <span class="tel-item tel-active"><BaseIcon name="check-circle" size="xs" /> {{ activeCount }} act</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-healed">🛡️ 100%</span>
+      <span class="tel-item tel-healed"><BaseIcon name="shield" size="xs" /> 100%</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-saved">⏱️ {{ savedHours }}h saved</span>
+      <span class="tel-item tel-saved"><BaseIcon name="clock" size="xs" /> {{ savedHours }}h saved</span>
     </div>
 
     <!-- Mobile Segmented Tab Switcher (<768px) -->
@@ -141,22 +142,22 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
         :class="{ active: mobileTab === 'rules' }"
         @click="mobileTab = 'rules'"
       >
-        ⚡ Rules ({{ rules.length }})
+        <BaseIcon name="zap" size="xs" /> Rules ({{ rules.length }})
       </button>
       <button
         class="segmented-btn"
         :class="{ active: mobileTab === 'history' }"
         @click="mobileTab = 'history'"
       >
-        📜 History ({{ executions.length }})
+        <BaseIcon name="history" size="xs" /> History ({{ executions.length }})
       </button>
     </div>
 
     <!-- Notification Banner -->
     <div v-if="statusMessage" class="status-banner animate-fade-in" :class="'banner-' + statusMessage.type">
-      <span class="banner-icon">{{ statusMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="statusMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="banner-icon" />
       <span class="banner-text">{{ statusMessage.text }}</span>
-      <button class="banner-close" @click="statusMessage = null">✕</button>
+      <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Desktop Metrics HUD Grid -->
@@ -212,10 +213,10 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
       <!-- Rules Stream Tab -->
       <div v-if="mobileTab === 'rules'" class="mobile-rules-stream">
         <div v-if="loading && rules.length === 0" class="stream-status font-mono">
-          <span class="spin-icon">⏳</span> Loading rules...
+          <BaseIcon name="clock" size="xs" class="spin-icon" /> Loading rules...
         </div>
         <div v-else-if="rules.length === 0" class="stream-empty glass-panel font-mono">
-          <span class="empty-icon">⚡</span>
+          <span class="empty-icon"><BaseIcon name="zap" size="lg" /></span>
           <p class="empty-text">No automation rules configured yet.</p>
         </div>
         <div v-else class="mobile-rules-cards">
@@ -239,7 +240,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
             <div class="mobile-rule-center" @click="onEditRule(rule)">
               <span class="mobile-rule-name" :title="rule.name">{{ rule.name }}</span>
               <div class="mobile-rule-sub font-mono">
-                <span>{{ getTriggerIcon(rule.trigger_type) }} {{ formatType(rule.trigger_type) }}</span>
+                <span><BaseIcon :name="getTriggerIcon(rule.trigger_type)" size="xs" /> {{ formatType(rule.trigger_type) }}</span>
                 <span>·</span>
                 <span class="text-cyan">{{ formatType(rule.action_type) }}</span>
               </div>
@@ -253,7 +254,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
                 aria-label="Trigger Rule"
                 @click="handleTriggerRule(rule)"
               >
-                <span>{{ triggeringId === rule.id ? '⏳' : '⚡' }}</span>
+                <BaseIcon :name="triggeringId === rule.id ? 'clock' : 'zap'" size="xs" />
               </button>
             </div>
           </div>

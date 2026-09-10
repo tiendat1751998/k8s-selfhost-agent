@@ -224,9 +224,7 @@ const emit = defineEmits<{
               class="btn-remove-row"
               title="Remove annotation"
               @click="emit('remove-annotation', idx)"
-            >
-              ✕
-            </button>
+            ><BaseIcon name="x" size="xs" /></button>
           </div>
         </div>
       </div>
@@ -242,7 +240,7 @@ const emit = defineEmits<{
         :disabled="saving || !form.name.trim()"
         @click="emit('save')"
       >
-        <span>{{ saving ? '💾 Saving...' : (mode === 'create' ? 'Register Service' : 'Save Changes') }}</span>
+        <BaseIcon :name="saving ? 'clock' : 'save'" size="xs" /> <span>{{ saving ? 'Saving...' : (mode === 'create' ? 'Register Service' : 'Save Changes') }}</span>
       </button>
     </template>
   </ModalDrawer>

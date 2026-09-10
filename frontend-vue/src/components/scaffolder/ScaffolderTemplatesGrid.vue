@@ -25,7 +25,7 @@ const emit = defineEmits<{
     </div>
 
     <div v-else-if="templates.length === 0" class="empty-state glass-panel">
-      <div class="empty-icon">📦</div>
+      <div class="empty-icon"><BaseIcon name="box" size="lg" /></div>
       <h3>No templates found</h3>
       <p>Try adjusting your category filter or search query.</p>
       <button class="btn-secondary mt-3" @click="emit('reset-filters')">
@@ -78,7 +78,7 @@ const emit = defineEmits<{
               aria-label="Use Template"
               @click="emit('deploy', tmpl)"
             >
-              <span class="btn-icon">🚀</span>
+              <span class="btn-icon"><BaseIcon name="play" size="xs" /></span>
               <span class="btn-text">Use Template</span>
             </button>
 
@@ -89,7 +89,7 @@ const emit = defineEmits<{
               aria-label="Preview Template"
               @click="emit('preview', tmpl)"
             >
-              <span class="btn-icon">👁️</span>
+              <span class="btn-icon"><BaseIcon name="eye" size="xs" /></span>
               <span class="btn-text">Preview</span>
             </button>
           </div>
@@ -101,9 +101,7 @@ const emit = defineEmits<{
               title="Edit Custom Template"
               aria-label="Edit Custom Template"
               @click="emit('edit', tmpl)"
-            >
-              ✏️
-            </button>
+            ><BaseIcon name="edit" size="xs" /></button>
             <button
               type="button"
               class="btn-icon-action btn-icon-danger"
@@ -111,9 +109,7 @@ const emit = defineEmits<{
               aria-label="Delete Template"
               :disabled="deleting"
               @click="emit('delete', tmpl)"
-            >
-              🗑️
-            </button>
+            ><BaseIcon name="trash" size="xs" /></button>
           </div>
         </div>
       </div>

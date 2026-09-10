@@ -8,7 +8,7 @@
         :class="{ active: activeTab === 'namespaces' }"
         @click="activeTab = 'namespaces'"
       >
-        <span>📁 Namespaces ({{ (namespaces || []).length }})</span>
+        <BaseIcon name="folder" size="xs" /> <span>Namespaces ({{ (namespaces || []).length }})</span>
       </button>
       <button
         type="button"
@@ -16,19 +16,19 @@
         :class="{ active: activeTab === 'waste' }"
         @click="activeTab = 'waste'"
       >
-        <span>⚠️ Waste Findings ({{ (wasteAlerts || []).length }})</span>
+        <BaseIcon name="alert-triangle" size="xs" /> <span>Waste Findings ({{ (wasteAlerts || []).length }})</span>
       </button>
     </div>
 
     <!-- Loading State -->
     <div v-if="loading" class="stream-status font-mono">
-      <span class="spin-icon">⏳</span> Loading FinOps cost telemetry...
+      <BaseIcon name="clock" size="xs" class="spin-icon" /> Loading FinOps cost telemetry...
     </div>
 
     <!-- Tab 1: High-Density Namespace Cards Stream (~68px/item) -->
     <div v-else-if="activeTab === 'namespaces'">
       <div v-if="(namespaces || []).length === 0" class="stream-empty glass-panel font-mono">
-        <span>✅</span> No namespace cost allocations recorded.
+        <BaseIcon name="check-circle" size="xs" /> No namespace cost allocations recorded.
       </div>
       <div v-else class="cards-list">
         <div
@@ -77,7 +77,7 @@
     <!-- Tab 2: High-Density Waste Alerts Stream (~68px/item) -->
     <div v-else-if="activeTab === 'waste'">
       <div v-if="(wasteAlerts || []).length === 0" class="stream-empty glass-panel font-mono">
-        <span>✅</span> No resource waste detected. Cluster requests are optimal.
+        <BaseIcon name="check-circle" size="xs" /> No resource waste detected. Cluster requests are optimal.
       </div>
       <div v-else class="cards-list">
         <div
@@ -105,7 +105,7 @@
               title="Right-size idle resource"
               @click.stop="$emit('rightSize', item.id)"
             >
-              <span>⚡ Right-Size</span>
+              <BaseIcon name="wrench" size="xs" /> <span>Right-Size</span>
             </button>
           </div>
         </div>

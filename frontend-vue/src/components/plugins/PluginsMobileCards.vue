@@ -2,10 +2,10 @@
   <div class="plugins-mobile-stream">
     <!-- Dedicated Mobile Empty State -->
     <div v-if="plugins.length === 0" class="plugins-mobile-empty glass-panel">
-      <div class="mobile-empty-icon">🧩</div>
-      <p class="mobile-empty-title">🧩 No plugins installed matching criteria. Tap ➕ Install to browse repository.</p>
+      <div class="mobile-empty-icon"><BaseIcon name="plug" size="lg" /></div>
+      <p class="mobile-empty-title">No plugins installed matching criteria. Tap Install to browse repository.</p>
       <button class="btn btn-sm btn-primary mobile-empty-btn" @click="$emit('install')">
-        ➕ Install
+        <BaseIcon name="plus" size="xs" /> Install
       </button>
     </div>
 
@@ -18,7 +18,7 @@
       :class="{ 'plugin-disabled': !p.enabled }"
     >
       <div class="mobile-card-main">
-        <div class="mobile-card-icon">{{ p.icon || '🧩' }}</div>
+        <div class="mobile-card-icon"><BaseIcon :name="p.icon || 'plug'" size="md" /></div>
         <div class="mobile-card-details">
           <div class="mobile-name-row">
             <span class="mobile-plugin-name" :title="p.name">{{ p.name }}</span>
@@ -36,7 +36,7 @@
       </div>
 
       <div class="mobile-card-actions">
-        <!-- Toggle (⚡) min 32px Touch Target -->
+        <!-- Toggle min 32px Touch Target -->
         <button
           class="btn-icon mobile-action-btn"
           :class="{ 'btn-active-toggle': p.enabled }"
@@ -44,39 +44,31 @@
           :disabled="togglingId === p.id"
           aria-label="Toggle Plugin"
           @click="$emit('toggle', p)"
-        >
-          ⚡
-        </button>
+        ><BaseIcon name="zap" size="xs" /></button>
 
-        <!-- Configure (⚙️) min 32px Touch Target -->
+        <!-- Configure min 32px Touch Target -->
         <button
           class="btn-icon mobile-action-btn"
           title="Configure Plugin Settings"
           aria-label="Configure Plugin"
           @click="$emit('configure', p)"
-        >
-          ⚙️
-        </button>
+        ><BaseIcon name="sliders" size="xs" /></button>
 
-        <!-- Edit / Inspect (✏️) min 32px Touch Target -->
+        <!-- Edit / Inspect min 32px Touch Target -->
         <button
           class="btn-icon mobile-action-btn"
           title="Inspect / Edit"
           aria-label="Inspect Plugin"
           @click="$emit('edit', p)"
-        >
-          ✏️
-        </button>
+        ><BaseIcon name="edit" size="xs" /></button>
 
-        <!-- Delete / Uninstall (🗑️) min 32px Touch Target -->
+        <!-- Delete / Uninstall min 32px Touch Target -->
         <button
           class="btn-icon btn-danger-icon mobile-action-btn"
           title="Uninstall Plugin"
           aria-label="Uninstall Plugin"
           @click="$emit('delete', p)"
-        >
-          🗑️
-        </button>
+        ><BaseIcon name="trash" size="xs" /></button>
       </div>
     </div>
   </div>

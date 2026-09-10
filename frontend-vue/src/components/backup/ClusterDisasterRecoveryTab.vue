@@ -1,19 +1,19 @@
 <template>
   <div class="dr-tab-container">
     <div v-if="feedback" :class="['feedback-banner', `banner-${feedback.type}`]">
-      <span>{{ feedback.type === 'success' ? '✅' : '⚠️' }} {{ feedback.message }}</span>
-      <button class="btn-close" @click="feedback = null">✕</button>
+      <span><BaseIcon :name="feedback.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" /> {{ feedback.message }}</span>
+      <button class="btn-close" @click="feedback = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- 1. etcd Snapshot Management -->
     <div class="dr-card glass-panel">
       <div class="card-header">
         <div>
-          <h3 class="card-title">📸 etcd Control Plane Snapshot</h3>
+          <h3 class="card-title"><BaseIcon name="database" size="sm" /> etcd Control Plane Snapshot</h3>
           <p class="card-desc">Capture point-in-time Raft consensus state and cluster metadata.</p>
         </div>
         <button class="btn btn-secondary btn-sm" :disabled="snapshotting || !clusterId" @click="handleSnapshot">
-          <span>{{ snapshotting ? '⏳ Capturing...' : '📸 Trigger etcd Snapshot' }}</span>
+          <BaseIcon :name="snapshotting ? 'clock' : 'database'" size="xs" /> <span>{{ snapshotting ? 'Capturing...' : 'Trigger etcd Snapshot' }}</span>
         </button>
       </div>
 
@@ -36,7 +36,7 @@
         </div>
         <div class="snapshot-action">
           <button class="btn btn-danger btn-sm" :disabled="restoring || !clusterId" @click="handleRestore">
-            <span>{{ restoring ? '⚡ Restoring...' : '⚡ Restore etcd' }}</span>
+            <BaseIcon :name="restoring ? 'clock' : 'refresh'" size="xs" /> <span>{{ restoring ? 'Restoring...' : 'Restore etcd' }}</span>
           </button>
         </div>
       </div>
@@ -49,15 +49,15 @@
     <div class="dr-card glass-panel">
       <div class="card-header">
         <div>
-          <h3 class="card-title">🛡️ Velero Full-Cluster DR Backups</h3>
+          <h3 class="card-title"><BaseIcon name="shield" size="sm" /> Velero Full-Cluster DR Backups</h3>
           <p class="card-desc">Full cluster state recovery including custom resources, workloads, volumes, and secrets.</p>
         </div>
         <div class="header-btns">
           <button class="btn btn-secondary btn-sm" :disabled="loading" @click="loadData">
-            <span>{{ loading ? '⏳' : '🔄 Refresh' }}</span>
+            <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>Refresh</span>
           </button>
           <button class="btn btn-primary btn-sm" :disabled="backingUp || !clusterId" @click="handleClusterDR">
-            <span>{{ backingUp ? '🚀 Dispatching...' : '🚀 1-Click Cluster DR' }}</span>
+            <BaseIcon :name="backingUp ? 'clock' : 'play'" size="xs" /> <span>{{ backingUp ? 'Dispatching...' : '1-Click Cluster DR' }}</span>
           </button>
         </div>
       </div>

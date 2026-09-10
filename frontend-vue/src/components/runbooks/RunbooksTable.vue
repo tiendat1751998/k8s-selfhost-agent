@@ -40,7 +40,7 @@
             </td>
             <td class="col-category">
               <div class="table-category-cell" :title="rb.category">
-                <span class="table-cat-icon">{{ getCategoryIcon(rb.category) }}</span>
+                <span class="table-cat-icon"><BaseIcon :name="getCategoryIcon(rb.category)" size="xs" /></span>
                 <span class="badge badge-cyan font-mono text-truncate">{{ rb.category.toUpperCase() }}</span>
               </div>
             </td>
@@ -86,7 +86,7 @@
                   aria-label="Execute Runbook"
                   @click="$emit('execute', rb)"
                 >
-                  <span>{{ executingId === rb.id ? '⏳' : '⚡' }}</span>
+                  <BaseIcon :name="executingId === rb.id ? 'clock' : 'zap'" size="xs" />
                 </button>
                 <button 
                   class="table-action-btn btn-steps-action"
@@ -94,7 +94,7 @@
                   aria-label="Inspect Procedure Steps"
                   @click="$emit('inspect', rb)"
                 >
-                  <span>🔍</span>
+                  <BaseIcon name="eye" size="xs" />
                 </button>
                 <button 
                   class="table-action-btn btn-edit-action"
@@ -102,7 +102,7 @@
                   aria-label="Edit Runbook"
                   @click="$emit('edit', rb)"
                 >
-                  <span>⚙️</span>
+                  <BaseIcon name="sliders" size="xs" />
                 </button>
                 <button 
                   class="table-action-btn btn-delete-action btn-delete-crimson"
@@ -110,7 +110,7 @@
                   aria-label="Delete Runbook"
                   @click="$emit('delete', rb.id)"
                 >
-                  <span>🗑</span>
+                  <BaseIcon name="trash" size="xs" />
                 </button>
               </div>
             </td>
@@ -128,6 +128,7 @@
 
 <script setup lang="ts">
 import type { Runbook } from '../../api/governance'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   runbooks: Runbook[]

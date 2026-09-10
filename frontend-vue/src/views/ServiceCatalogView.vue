@@ -3,6 +3,7 @@ import MetricCard from '../components/ui/MetricCard.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import ServiceCatalogTable from '../components/catalog/ServiceCatalogTable.vue'
 import ServiceCatalogGrid from '../components/catalog/ServiceCatalogGrid.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import ServiceCatalogMobileCards from '../components/catalog/ServiceCatalogMobileCards.vue'
 import ServiceDetailDrawer from '../components/catalog/ServiceDetailDrawer.vue'
 import RegisterServiceModal from '../components/catalog/RegisterServiceModal.vue'
@@ -40,16 +41,16 @@ const {
       <div class="header-actions">
         <!-- View Mode Switcher -->
         <div class="view-mode-toggle" title="Switch layout display">
-          <button type="button" class="mode-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'" title="Table View">📋 Table</button>
+          <button type="button" class="mode-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'" title="Table View"><BaseIcon name="file-text" size="xs" /> Table</button>
           <button type="button" class="mode-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'" title="Grid View">▦ Grid</button>
-          <button type="button" class="mode-btn" :class="{ active: viewMode === 'mobile' }" @click="viewMode = 'mobile'" title="Stream View">📱 Stream</button>
+          <button type="button" class="mode-btn" :class="{ active: viewMode === 'mobile' }" @click="viewMode = 'mobile'" title="Stream View"><BaseIcon name="grid" size="xs" /> Stream</button>
         </div>
 
         <button type="button" class="btn btn-secondary" :disabled="loading" @click="fetchCatalogData" title="Refresh catalog list & stats">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
         </button>
         <router-link to="/scaffolder" class="btn btn-secondary" title="Deploy a new service from template">
-          <span>🪄 Scaffolder</span>
+          <BaseIcon name="sparkles" size="xs" /> <span>Scaffolder</span>
         </router-link>
         <button type="button" class="btn btn-primary" @click="openCreateModal" title="Register a new service">
           <span>+ Register Service</span>
@@ -60,7 +61,7 @@ const {
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="catalog-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">📦 Catalog ({{ totalServices }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="box" size="xs" /> Catalog ({{ totalServices }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -70,7 +71,7 @@ const {
           aria-label="Register Service"
           @click="openCreateModal"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button
           type="button"
@@ -80,35 +81,35 @@ const {
           :disabled="loading"
           @click="fetchCatalogData"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="catalog-micro-telemetry mobile-only font-mono" role="status" aria-label="Catalog Micro Telemetry">
-      <span class="tel-item tel-total">📦 {{ totalServices }} Services</span>
+      <span class="tel-item tel-total"><BaseIcon name="box" size="xs" /> {{ totalServices }} Services</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-prod">🟢 {{ prodCount }} Healthy</span>
+      <span class="tel-item tel-prod"><BaseIcon name="check-circle" size="xs" /> {{ prodCount }} Healthy</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-api">⚡ {{ stats.by_type['api'] || 0 }} APIs</span>
+      <span class="tel-item tel-api"><BaseIcon name="zap" size="xs" /> {{ stats.by_type['api'] || 0 }} APIs</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-teams">👥 {{ teams.length }} Teams</span>
+      <span class="tel-item tel-teams"><BaseIcon name="users" size="xs" /> {{ teams.length }} Teams</span>
     </div>
 
     <!-- Notification Toast Banner -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <span class="toast-icon">{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="toast-icon" />
       <span class="toast-text">{{ toastMessage.text }}</span>
-      <button type="button" class="toast-close" @click="toastMessage = null" aria-label="Dismiss">✕</button>
+      <button type="button" class="toast-close" @click="toastMessage = null" aria-label="Dismiss"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Metric HUD (Desktop Only) -->
     <div class="metrics-grid desktop-metrics desktop-only">
-      <MetricCard title="Total Services" :value="totalServices" subtitle="Registered ecosystem components" icon="📦" badge="CATALOG" badge-color="cyan" />
-      <MetricCard title="Production" :value="prodCount" subtitle="Live production tier services" icon="🚀" badge="LIVE" badge-color="emerald" />
-      <MetricCard title="Development" :value="devCount" subtitle="Active staging & development builds" icon="🧪" badge="DEV" badge-color="amber" />
-      <MetricCard title="Deprecated" :value="deprecatedCount" subtitle="Sunsetting / pending decommission" icon="⚠️" badge="SUNSET" badge-color="rose" />
+      <MetricCard title="Total Services" :value="totalServices" subtitle="Registered ecosystem components" icon="box" badge="CATALOG" badge-color="cyan" />
+      <MetricCard title="Production" :value="prodCount" subtitle="Live production tier services" icon="play" badge="LIVE" badge-color="emerald" />
+      <MetricCard title="Development" :value="devCount" subtitle="Active staging & development builds" icon="flask" badge="DEV" badge-color="amber" />
+      <MetricCard title="Deprecated" :value="deprecatedCount" subtitle="Sunsetting / pending decommission" icon="alert-triangle" badge="SUNSET" badge-color="rose" />
     </div>
 
     <!-- Filter Bar: Compact 32px Bar on Mobile, Full on Desktop -->
@@ -118,7 +119,7 @@ const {
         <div class="filter-group search-group">
           <label class="filter-label desktop-only" for="catalog-search">Search</label>
           <div class="search-input-wrap">
-            <span class="search-icon">🔍</span>
+            <BaseIcon name="search" size="xs" class="search-icon" />
             <input
               id="catalog-search"
               v-model="filter.search"
@@ -132,10 +133,7 @@ const {
               type="button"
               class="clear-input-btn"
               @click="filter.search = ''; fetchCatalogData()"
-              aria-label="Clear search"
-            >
-              ✕
-            </button>
+              aria-label="Clear search"><BaseIcon name="x" size="xs" /></button>
           </div>
         </div>
 
@@ -147,7 +145,7 @@ const {
           @click="showMobileFilters = !showMobileFilters"
           aria-label="Toggle filter options"
         >
-          <span>🌪️ Filters</span>
+          <BaseIcon name="filter" size="xs" /> <span>Filters</span>
           <span v-if="activeFilterCount > 0" class="badge-filter-count">{{ activeFilterCount }}</span>
         </button>
 
@@ -173,7 +171,7 @@ const {
             <label class="filter-label" for="filter-owner">Owner Team</label>
             <div class="search-input-wrap">
               <input id="filter-owner" v-model="filter.owner_team" type="text" class="input-glass owner-field" placeholder="e.g. platform-team" @keydown.enter="fetchCatalogData" />
-              <button v-if="filter.owner_team" type="button" class="clear-input-btn" @click="filter.owner_team = ''; fetchCatalogData()" aria-label="Clear owner">✕</button>
+              <button v-if="filter.owner_team" type="button" class="clear-input-btn" @click="filter.owner_team = ''; fetchCatalogData()" aria-label="Clear owner"><BaseIcon name="x" size="xs" /></button>
             </div>
           </div>
 
@@ -290,7 +288,7 @@ const {
     >
       <div v-if="serviceToDelete" class="delete-modal-content">
         <div class="delete-warning-box">
-          <span class="warning-icon">⚠️</span>
+          <BaseIcon name="alert-triangle" size="xs" class="warning-icon" />
           <div>
             <strong>This action will unregister the service from the catalog.</strong>
             <p>
@@ -306,7 +304,7 @@ const {
       <template #footer="{ close }">
         <button type="button" class="btn btn-secondary" :disabled="deleting" @click="close">Cancel</button>
         <button type="button" class="btn btn-danger-crimson" :disabled="deleting" @click="handleConfirmDelete">
-          <span>{{ deleting ? '🗑️ Deleting...' : 'Confirm Delete' }}</span>
+          <BaseIcon :name="deleting ? 'clock' : 'trash'" size="xs" /> <span>{{ deleting ? 'Deleting...' : 'Confirm Delete' }}</span>
         </button>
       </template>
     </ModalDrawer>

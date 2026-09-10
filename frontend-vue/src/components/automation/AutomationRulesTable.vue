@@ -73,7 +73,7 @@ const ruleColumns: Column<AutomationRuleRow>[] = [
       <template #cell-trigger_type="{ row }">
         <div class="trigger-cell font-mono">
           <div class="trigger-main">
-            <span>{{ getTriggerIcon(row.trigger_type) }}</span>
+            <BaseIcon :name="getTriggerIcon(row.trigger_type)" size="xs" />
             <span class="font-semibold">{{ formatType(row.trigger_type) }}</span>
           </div>
           <span class="trigger-condition-badge font-mono">
@@ -107,7 +107,7 @@ const ruleColumns: Column<AutomationRuleRow>[] = [
             aria-label="Trigger Rule Now"
             @click="emit('trigger', row)"
           >
-            <span>{{ triggeringId === row.id ? '⏳' : '⚡' }}</span>
+            <BaseIcon :name="triggeringId === row.id ? 'clock' : 'zap'" size="xs" />
           </button>
           <button
             class="btn-icon-cmd btn-edit-action"
@@ -115,7 +115,7 @@ const ruleColumns: Column<AutomationRuleRow>[] = [
             aria-label="Edit Rule Configuration"
             @click="emit('edit', row)"
           >
-            <span>⚙️</span>
+            <BaseIcon name="sliders" size="xs" />
           </button>
           <button
             class="btn-icon-cmd btn-crimson-delete"
@@ -124,7 +124,7 @@ const ruleColumns: Column<AutomationRuleRow>[] = [
             aria-label="Delete Rule"
             @click="emit('delete', row.id)"
           >
-            <span>{{ deletingId === row.id ? '⏳' : '🗑' }}</span>
+            <BaseIcon :name="deletingId === row.id ? 'clock' : 'trash'" size="xs" />
           </button>
         </div>
       </template>

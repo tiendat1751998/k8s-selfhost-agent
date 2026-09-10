@@ -20,18 +20,18 @@
             :class="viewMode === 'grid' ? 'btn-primary' : 'btn-ghost'"
             @click="viewMode = 'grid'"
           >
-            <span>⊞ Grid</span>
+            <BaseIcon name="grid" size="xs" /> <span>Grid</span>
           </button>
           <button 
             class="btn btn-sm" 
             :class="viewMode === 'table' ? 'btn-primary' : 'btn-ghost'"
             @click="viewMode = 'table'"
           >
-            <span>≡ Table</span>
+            <BaseIcon name="file-text" size="xs" /> <span>Table</span>
           </button>
         </div>
         <button class="btn btn-secondary" :disabled="loading" @click="fetchRunbooks">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
         </button>
         <button class="btn btn-primary" @click="showCreateModal = true">
           <span>+ Create Runbook</span>
@@ -42,7 +42,7 @@
     <!-- Mobile 40px Command Bar (<768px) -->
     <div class="runbooks-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">📖 Runbooks ({{ filteredRunbooks.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="book-open" size="xs" /> Runbooks ({{ filteredRunbooks.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -51,7 +51,7 @@
           aria-label="Create Runbook"
           @click="showCreateModal = true"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -60,27 +60,27 @@
           aria-label="Refresh Runbooks"
           @click="fetchRunbooks"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="runbooks-micro-telemetry mobile-only font-mono" role="status" aria-label="Runbooks Micro Telemetry">
-      <span class="tel-item tel-rbooks">📖 {{ runbooks.length }} rbooks</span>
+      <span class="tel-item tel-rbooks"><BaseIcon name="book-open" size="xs" /> {{ runbooks.length }} rbooks</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-cats">🗂️ {{ categoriesCount }} cats</span>
+      <span class="tel-item tel-cats"><BaseIcon name="folder" size="xs" /> {{ categoriesCount }} cats</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-steps">🪜 {{ totalStepsCount }} steps</span>
+      <span class="tel-item tel-steps"><BaseIcon name="list" size="xs" /> {{ totalStepsCount }} steps</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-live">⚡ Live CLI</span>
+      <span class="tel-item tel-live"><BaseIcon name="zap" size="xs" /> Live CLI</span>
     </div>
 
     <!-- Notification Banner -->
     <div v-if="statusMessage" class="status-banner animate-fade-in" :class="'banner-' + statusMessage.type">
-      <span class="banner-icon">{{ statusMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="statusMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="banner-icon" />
       <span class="banner-text">{{ statusMessage.text }}</span>
-      <button class="banner-close" @click="dismissStatus">✕</button>
+      <button class="banner-close" @click="dismissStatus"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Metrics HUD Grid -->
@@ -91,7 +91,7 @@
         badge="AVAILABLE"
         badge-color="cyan"
         subtitle="Standard operating playbooks"
-        icon="📖"
+        icon="book-open"
       />
       <MetricCard
         title="Operational Categories"
@@ -99,7 +99,7 @@
         badge="ORGANIZED"
         badge-color="violet"
         subtitle="Incident, DR, Security & DB"
-        icon="🗂️"
+        icon="folder"
       />
       <MetricCard
         title="Total Procedure Steps"
@@ -107,7 +107,7 @@
         badge="STEPS"
         badge-color="emerald"
         subtitle="Automated & verified instructions"
-        icon="🪜"
+        icon="list"
       />
       <MetricCard
         title="Execution Engine"
@@ -115,7 +115,7 @@
         badge="READY"
         badge-color="emerald"
         subtitle="One-click diagnostic run"
-        icon="⚡"
+        icon="zap"
       />
     </div>
 
@@ -225,6 +225,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import MetricCard from '../components/ui/MetricCard.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import RunbooksGrid from '../components/runbooks/RunbooksGrid.vue'
 import RunbooksTable from '../components/runbooks/RunbooksTable.vue'
 import RunbooksMobileCards from '../components/runbooks/RunbooksMobileCards.vue'

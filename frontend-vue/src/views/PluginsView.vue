@@ -4,7 +4,7 @@
     <header class="page-header glass-panel desktop-only">
       <div class="header-content">
         <div class="title-group">
-          <div class="icon-bubble">🧩</div>
+          <div class="icon-bubble"><BaseIcon name="plug" size="md" /></div>
           <div>
             <div class="badge-row">
               <span class="badge badge-cyan">RUNTIME EXTENSIBILITY</span>
@@ -19,10 +19,10 @@
         </div>
         <div class="header-actions">
           <button class="btn btn-secondary" @click="refreshPlugins" :disabled="loading">
-            <span :class="{ 'spin-icon': loading }">🔄</span> Refresh
+            <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" /> Refresh
           </button>
           <button class="btn btn-primary" @click="openRegisterModal">
-            <span>✨</span> Register Plugin
+            <BaseIcon name="plus" size="xs" /> Register Plugin
           </button>
         </div>
       </div>
@@ -30,28 +30,28 @@
       <!-- Stats Overview Cards -->
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-icon">📦</div>
+          <div class="stat-icon"><BaseIcon name="box" size="sm" /></div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.total }}</div>
             <div class="stat-label">Total Plugins</div>
           </div>
         </div>
         <div class="stat-card stat-card-active">
-          <div class="stat-icon">⚡</div>
+          <div class="stat-icon"><BaseIcon name="zap" size="sm" /></div>
           <div class="stat-info">
             <div class="stat-value text-emerald">{{ stats.enabled }}</div>
             <div class="stat-label">Active & Enabled</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon">⏸️</div>
+          <div class="stat-icon"><BaseIcon name="pause" size="sm" /></div>
           <div class="stat-info">
             <div class="stat-value text-muted">{{ stats.disabled }}</div>
             <div class="stat-label">Disabled</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon">🏷️</div>
+          <div class="stat-icon"><BaseIcon name="tag" size="sm" /></div>
           <div class="stat-info">
             <div class="stat-value text-cyan">{{ categoryCount }}</div>
             <div class="stat-label">Categories</div>
@@ -63,7 +63,7 @@
     <!-- Mobile 44px Command Bar (<768px) -->
     <div class="plugins-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title">🧩 Plugins ({{ stats.enabled }}/{{ plugins.length }})</span>
+        <span class="command-bar-title"><BaseIcon name="plug" size="xs" /> Plugins ({{ stats.enabled }}/{{ plugins.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -72,7 +72,7 @@
           aria-label="Install Plugin"
           @click="openRegisterModal"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -81,33 +81,33 @@
           aria-label="Sync Registry"
           @click="refreshPlugins"
         >
-          <span :class="{ 'spin-icon': loading }">🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="plugins-micro-telemetry mobile-only font-mono" role="status" aria-label="Plugins Micro Telemetry">
-      <span class="tel-item tel-installed">🧩 {{ stats.total }} Installed</span>
+      <span class="tel-item tel-installed"><BaseIcon name="plug" size="xs" /> {{ stats.total }} Installed</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-active">⚡ {{ stats.enabled }} Active</span>
+      <span class="tel-item tel-active"><BaseIcon name="zap" size="xs" /> {{ stats.enabled }} Active</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-verified">🛡️ {{ wasmSandboxStatus.isolationMode === 'wasm-wasi' ? 'WASM Verified' : 'Verified' }}</span>
+      <span class="tel-item tel-verified"><BaseIcon name="shield" size="xs" /> {{ wasmSandboxStatus.isolationMode === 'wasm-wasi' ? 'WASM Verified' : 'Verified' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-available">📦 {{ categoryCount }} Available</span>
+      <span class="tel-item tel-available"><BaseIcon name="box" size="xs" /> {{ categoryCount }} Available</span>
     </div>
 
     <!-- Filters & Search Toolbar -->
     <div class="toolbar glass-panel">
       <div class="search-box">
-        <span class="search-icon">🔍</span>
+        <BaseIcon name="search" size="xs" class="search-icon" />
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Search plugins by name, description, author, or permissions..."
           class="search-input"
         />
-        <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''">✕</button>
+        <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="filter-controls">
@@ -155,7 +155,7 @@
               @click="viewMode = 'table'"
               title="Table View"
             >
-              ☰ Table
+              Table
             </button>
           </div>
         </div>
@@ -169,14 +169,14 @@
     </div>
 
     <div v-else-if="error" class="error-banner glass-panel">
-      <span class="error-icon">⚠️</span>
+      <BaseIcon name="alert-triangle" size="xs" class="error-icon" />
       <div class="error-msg"><strong>Error:</strong> {{ error }}</div>
       <button class="btn btn-sm btn-secondary" @click="refreshPlugins">Retry</button>
     </div>
 
     <!-- Desktop Empty Filter State -->
     <div v-else-if="filteredPlugins.length === 0 && plugins.length > 0" class="empty-state glass-panel desktop-only">
-      <div class="empty-icon">🧩</div>
+      <div class="empty-icon"><BaseIcon name="plug" size="lg" /></div>
       <h3>No plugins match current filters</h3>
       <p>Try adjusting your search terms, category tabs, or permission scope filter.</p>
       <div class="empty-actions">
@@ -261,8 +261,8 @@
     <!-- Operation Toast Feedback -->
     <div v-if="toastMessage" class="test-feedback-toast glass-panel" :class="toastMessage.type">
       <div class="toast-header">
-        <span>{{ toastMessage.type === 'success' ? '✅ Success' : '⚠️ Action Notice' }}</span>
-        <button class="toast-close" @click="toastMessage = null">✕</button>
+        <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" /> <span>{{ toastMessage.type === 'success' ? 'Success' : 'Action Notice' }}</span>
+        <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
       </div>
       <div class="toast-body">
         {{ toastMessage.text }}
@@ -272,8 +272,8 @@
     <!-- Test Feedback Toast -->
     <div v-if="testResult" class="test-feedback-toast glass-panel" :class="testResult.status">
       <div class="toast-header">
-        <span>{{ testResult.status === 'success' ? '✅ Bundle Loaded' : '⚠️ Bundle Test Failed' }}</span>
-        <button class="toast-close" @click="testResult = null">✕</button>
+        <BaseIcon :name="testResult.status === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" /> <span>{{ testResult.status === 'success' ? 'Bundle Loaded' : 'Bundle Test Failed' }}</span>
+        <button class="toast-close" @click="testResult = null"><BaseIcon name="x" size="xs" /></button>
       </div>
       <div class="toast-body">
         <strong>{{ testResult.pluginName }}:</strong> {{ testResult.message }}
@@ -285,6 +285,7 @@
 <script setup lang="ts">
 import { usePlugins } from '../composables/usePlugins'
 import PluginsGrid from '../components/plugins/PluginsGrid.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import PluginsTable from '../components/plugins/PluginsTable.vue'
 import PluginsMobileCards from '../components/plugins/PluginsMobileCards.vue'
 import PluginConfigModal from '../components/plugins/PluginConfigModal.vue'

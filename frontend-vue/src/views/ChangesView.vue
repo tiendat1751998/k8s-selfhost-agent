@@ -5,6 +5,7 @@ import '../assets/styles/components/changes-drawers.css'
 import { useChangesTimeline } from '../composables/useChangesTimeline'
 import ChangesHudCards from '../components/changes/ChangesHudCards.vue'
 import ChangesFilterBar from '../components/changes/ChangesFilterBar.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import ChangesTimelineStream from '../components/changes/ChangesTimelineStream.vue'
 import ChangesMobileCards from '../components/changes/ChangesMobileCards.vue'
 import ChangeDiffDrawer from '../components/changes/ChangeDiffDrawer.vue'
@@ -73,7 +74,7 @@ const rolloutsCount = computed(() => {
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="changes-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">📜 Changes ({{ filteredEvents.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="git-commit" size="xs" /> Changes ({{ filteredEvents.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -83,7 +84,7 @@ const rolloutsCount = computed(() => {
           aria-label="Filter stream"
           @click="isFilterOpen = !isFilterOpen"
         >
-          <span>🔍</span>
+          <BaseIcon name="search" size="xs" />
           <span>Filter</span>
         </button>
         <button
@@ -93,7 +94,7 @@ const rolloutsCount = computed(() => {
           :disabled="loading"
           @click="loadTimelineData"
         >
-          <span :class="{ 'spin-animation': loading }">🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-animation': loading }" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -101,25 +102,25 @@ const rolloutsCount = computed(() => {
           aria-label="Submit RFC"
           @click="showCreateModal = true"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="changes-micro-telemetry mobile-only font-mono" role="status" aria-label="Changes Micro Telemetry">
-      <span class="tel-item tel-changes">📜 {{ totalChanges24h }} Changes</span>
+      <span class="tel-item tel-changes"><BaseIcon name="file-text" size="xs" /> {{ totalChanges24h }} Changes</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-rollouts">⚡ {{ rolloutsCount }} Rollouts</span>
+      <span class="tel-item tel-rollouts"><BaseIcon name="zap" size="xs" /> {{ rolloutsCount }} Rollouts</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-verified">🛡️ {{ verifiedCount }} Verified</span>
+      <span class="tel-item tel-verified"><BaseIcon name="shield" size="xs" /> {{ verifiedCount }} Verified</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-drift">⚠️ {{ configDrifts }} Drift</span>
+      <span class="tel-item tel-drift"><BaseIcon name="alert-triangle" size="xs" /> {{ configDrifts }} Drift</span>
     </div>
 
     <!-- Feedback Banner -->
     <div v-if="feedbackMessage" class="feedback-banner animate-fade-in">
-      <span class="feedback-icon">✓</span>
+      <BaseIcon name="check-circle" size="xs" class="feedback-icon" />
       <span>{{ feedbackMessage }}</span>
     </div>
 

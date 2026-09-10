@@ -24,7 +24,7 @@
           <!-- Identity -->
           <td>
             <div class="table-identity-cell">
-              <span class="table-icon">{{ p.icon || '🧩' }}</span>
+              <span class="table-icon"><BaseIcon :name="p.icon || 'plug'" size="sm" /></span>
               <div class="table-identity-meta">
                 <div class="table-name-row">
                   <span class="table-plugin-name" :title="p.name">{{ p.name }}</span>
@@ -65,7 +65,7 @@
           <!-- Config Keys Count -->
           <td>
             <span class="config-count" @click="$emit('configure', p)">
-              ⚙️ {{ Object.keys(p.config || {}).length }} keys
+              <BaseIcon name="sliders" size="xs" /> {{ Object.keys(p.config || {}).length }} keys
             </span>
           </td>
 
@@ -78,7 +78,7 @@
                 :disabled="togglingId === p.id"
                 @click="$emit('toggle', p)"
               >
-                <span>⚡</span> {{ p.enabled ? 'Disable' : 'Enable' }}
+                <BaseIcon name="zap" size="xs" /> {{ p.enabled ? 'Disable' : 'Enable' }}
               </button>
 
               <button
@@ -86,7 +86,7 @@
                 title="Configure Plugin Runtime Variables"
                 @click="$emit('configure', p)"
               >
-                <span>⚙️</span> Config
+                <BaseIcon name="sliders" size="xs" /> Config
               </button>
 
               <button
@@ -94,7 +94,7 @@
                 title="Inspect / Edit Plugin Metadata"
                 @click="$emit('inspect', p)"
               >
-                <span>🔍</span> Inspect
+                <BaseIcon name="eye" size="xs" /> Inspect
               </button>
 
               <button
@@ -102,7 +102,7 @@
                 title="Uninstall Plugin"
                 @click="$emit('uninstall', p)"
               >
-                <span>🗑️</span> Uninstall
+                <BaseIcon name="trash" size="xs" /> Uninstall
               </button>
             </div>
           </td>

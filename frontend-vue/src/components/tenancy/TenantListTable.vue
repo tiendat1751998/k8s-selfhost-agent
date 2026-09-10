@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { Organization } from '../../api/management'
 import type { TenantStatSummary } from '../../composables/useTenancyRbac'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   organizations: Organization[]
@@ -44,14 +45,14 @@ function confirmDelete(org: Organization) {
   <div class="tenant-table-wrapper glass-panel">
     <div class="table-toolbar">
       <div class="toolbar-search">
-        <span class="search-icon">🔍</span>
+        <BaseIcon name="search" size="xs" class="search-icon" />
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Filter organizations by name, slug, or tier..."
           class="input-glass search-input"
         />
-        <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''">✕</button>
+        <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="toolbar-actions">
@@ -133,7 +134,7 @@ function confirmDelete(org: Organization) {
                   aria-label="Manage Members"
                   @click="emit('openMembers', org.id)"
                 >
-                  <span>👥 Members</span>
+                  <BaseIcon name="users" size="xs" /> <span>Members</span>
                 </button>
                 <button
                   class="action-btn action-btn-rbac"
@@ -141,7 +142,7 @@ function confirmDelete(org: Organization) {
                   aria-label="Configure RBAC"
                   @click="emit('openRbac')"
                 >
-                  <span>🛡️ RBAC</span>
+                  <BaseIcon name="shield" size="xs" /> <span>RBAC</span>
                 </button>
                 <button
                   class="action-btn action-btn-quota"
@@ -149,7 +150,7 @@ function confirmDelete(org: Organization) {
                   aria-label="Configure Quota"
                   @click="emit('openQuota', org)"
                 >
-                  <span>⚙️ Quota</span>
+                  <BaseIcon name="sliders" size="xs" /> <span>Quota</span>
                 </button>
                 <button
                   class="action-btn action-btn-delete"
@@ -157,7 +158,7 @@ function confirmDelete(org: Organization) {
                   aria-label="Purge Organization"
                   @click="confirmDelete(org)"
                 >
-                  <span>🗑️ Delete</span>
+                  <BaseIcon name="trash" size="xs" /> <span>Delete</span>
                 </button>
               </div>
             </td>
