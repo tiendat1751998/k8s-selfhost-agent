@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="setup-container animate-fade-in">
-    <!-- Header -->
-    <header class="view-header">
+    <!-- Desktop Header -->
+    <header class="view-header desktop-only">
       <div class="header-left">
         <button class="btn btn-secondary btn-sm back-nav-btn" @click="router.push('/settings')">
           <span>← Back to Settings</span>
@@ -16,8 +16,47 @@
       </div>
     </header>
 
+    <!-- Mobile 40-44px Command Bar (<768px) -->
+    <div class="totp-mobile-command-bar mobile-only" role="toolbar" aria-label="Mobile Two-Factor Auth Actions">
+      <div class="command-bar-left">
+        <span class="command-bar-title font-bold">🔐 Two-Factor Auth</span>
+      </div>
+      <div class="command-bar-actions">
+        <button
+          type="button"
+          class="btn-icon-cmd"
+          title="Back to Settings"
+          aria-label="Back to Settings"
+          @click="router.push('/settings')"
+        >
+          <span>↩️</span>
+        </button>
+        <button
+          type="button"
+          class="btn-icon-cmd"
+          title="Reset Setup"
+          aria-label="Reset Setup"
+          :disabled="setup.loading.value"
+          @click="setup.resetSetup()"
+        >
+          <span>🔄</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
+    <div class="totp-micro-telemetry mobile-only font-mono" role="status" aria-label="TOTP Micro Telemetry">
+      <span class="tel-item tel-sec">🔐 2FA Status</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-totp">🛡️ TOTP</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-codes">📋 10 Codes</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-time">⏱️ Time-Based</span>
+    </div>
+
     <!-- Desktop Step Wizard Navigation -->
-    <TOTPStepWizard :current-step="setup.currentStep.value" />
+    <TOTPStepWizard class="desktop-only" :current-step="setup.currentStep.value" />
 
     <!-- Error Banner Alert -->
     <div v-if="setup.errorMessage.value" class="error-banner animate-fade-in" role="alert">
@@ -194,6 +233,7 @@ import TOTPStepWizard from '../components/totp/TOTPStepWizard.vue'
 import QRCodeDisplay from '../components/totp/QRCodeDisplay.vue'
 import RecoveryCodesCard from '../components/totp/RecoveryCodesCard.vue'
 import TOTPMobileCards from '../components/totp/TOTPMobileCards.vue'
+import '../assets/styles/components/totp-drawers.css'
 import '../assets/styles/views/totp.css'
 
 const router = useRouter()

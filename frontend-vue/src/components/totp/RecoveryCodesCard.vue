@@ -20,29 +20,29 @@
       </div>
     </div>
 
-    <!-- Action Bar: [ 📋 Copy ], [ 📥 Download TXT ], [ 🖨 Print ] -->
+    <!-- Action Bar: [ 📋 Copy ], [ 💾 Download ], [ 🖨 Print ] -->
     <div class="recovery-actions-bar">
       <button
         type="button"
-        class="btn btn-secondary btn-sm"
+        class="recovery-action-btn btn btn-secondary btn-sm"
         :aria-label="allCodesCopied ? 'All recovery codes copied' : 'Copy all recovery codes to clipboard'"
         @click="$emit('copy-codes')"
       >
-        <span>{{ allCodesCopied ? '✓ All Codes Copied' : '📋 Copy All Codes' }}</span>
+        <span>{{ allCodesCopied ? '✓ Copied' : '📋 Copy All' }}</span>
       </button>
 
       <button
         type="button"
-        class="btn btn-secondary btn-sm"
+        class="recovery-action-btn btn btn-secondary btn-sm"
         aria-label="Download recovery codes as a plaintext file"
         @click="$emit('download-txt')"
       >
-        <span>📥 Download TXT</span>
+        <span>💾 Download</span>
       </button>
 
       <button
         type="button"
-        class="btn btn-secondary btn-sm"
+        class="recovery-action-btn btn btn-secondary btn-sm"
         aria-label="Print recovery codes document"
         @click="$emit('print')"
       >

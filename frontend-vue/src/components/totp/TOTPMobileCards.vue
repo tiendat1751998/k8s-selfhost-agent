@@ -70,7 +70,7 @@
         <div class="mobile-card-icon" aria-hidden="true">📦</div>
         <div class="mobile-card-content">
           <span class="mobile-card-title">3. Backup Scratch Tokens</span>
-          <span class="mobile-card-desc">8 emergency recovery codes</span>
+          <span class="mobile-card-desc">Emergency recovery backup codes</span>
         </div>
       </div>
       <span
