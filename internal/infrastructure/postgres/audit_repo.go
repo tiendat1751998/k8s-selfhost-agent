@@ -244,6 +244,11 @@ func (r *auditRepo) ListLogs(ctx context.Context, filter audit.AuditLogFilter) (
 	argIdx := 1
 	tenantID := tenancy.TenantIDFromContext(ctx)
 	userRole := tenancy.UserRoleFromContext(ctx)
+	if userRole != "platform_admin" {
+		if tenantID == "" {
+			return []audit.AuditLog{}, 0, nil
+		}
+	}
 	whereClause := " WHERE 1=1"
 	if userRole != "platform_admin" && tenantID != "" {
 		whereClause += fmt.Sprintf(" AND tenant_id = $%d", argIdx)

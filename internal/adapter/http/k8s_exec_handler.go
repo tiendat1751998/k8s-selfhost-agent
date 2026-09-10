@@ -22,6 +22,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // K8sExecHandler provides WebSocket HTTP handlers for interactive terminal exec into Kubernetes pods.
@@ -127,6 +128,19 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 		namespace = "default"
 	}
 
+	// Enforce tenant boundary check if not platform_admin
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole != "platform_admin" && (userRole != "" || tenancy.TenantIDFromContext(r.Context()) != "" || namespace != "default") {
+		tenantID := tenancy.TenantIDFromContext(r.Context())
+		if tenantID == "" {
+			tenantID = strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+		}
+		if !isTenantNamespaceAllowed(tenantID, namespace) {
+			writeError(w, http.StatusForbidden, "forbidden: access to namespace not allowed for tenant", nil)
+			return
+		}
+	}
+
 	container := strings.TrimSpace(r.URL.Query().Get("container"))
 
 	var cmdArgs []string
@@ -161,6 +175,17 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
+		}
+	}
+
+	if userRole != "platform_admin" && (userRole != "" || tenancy.TenantIDFromContext(r.Context()) != "" || namespace != "default") {
+		tenantID := tenancy.TenantIDFromContext(r.Context())
+		if tenantID == "" {
+			tenantID = strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+		}
+		if !isTenantNamespaceAllowed(tenantID, namespace) {
+			writeError(w, http.StatusForbidden, "forbidden: access to namespace not allowed for tenant", nil)
+			return
 		}
 	}
 
@@ -270,4 +295,20 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\nSession closed: %v\r\n", err)))
 		writeMu.Unlock()
 	}
+}
+
+func isTenantNamespaceAllowed(tenantID, namespace string) bool {
+	if tenantID == "" || namespace == "" {
+		return false
+	}
+	if namespace == tenantID {
+		return true
+	}
+	if strings.HasPrefix(namespace, tenantID+"-") || strings.HasPrefix(namespace, tenantID+"_") || strings.HasPrefix(namespace, tenantID+".") {
+		return true
+	}
+	if (tenantID == "default-tenant" || tenantID == "default") && namespace == "default" {
+		return true
+	}
+	return false
 }
