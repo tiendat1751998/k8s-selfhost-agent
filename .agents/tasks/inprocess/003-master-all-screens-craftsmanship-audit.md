@@ -8,31 +8,39 @@
 
 ---
 
-## 📐 BINDING CRAFTSMANSHIP CRITERIA (THE 5 NON-NEGOTIABLES)
+## 👑 SUPREME CRAFTSMANSHIP CONSTITUTION (CHỈ THỊ THI CÔNG TUYỆT ĐỐI — KHÔNG ĐỐI PHÓ, KHÔNG LÀM TẮT)
 
-1. **Zero Desktop Table Leakage on Mobile**:
-   - Every `<table>` or `.desktop-table-view` MUST have `display: none !important;` on screens `<768px`.
-   - Never allow background borders, text, or horizontal scrollbars to leak through on touch devices.
+> **MỆNH LỆNH TỪ USER**: *"Làm việc cẩn thận, chi tiết, chất lượng cao, không làm cho có hay làm nhanh để đối phó. Không quan tâm tốn token, chỉ quan tâm sản phẩm chuẩn Enterprise thực sự."*
 
-2. **Mobile Header Height < 50px**:
-   - Single clean command bar + search / filter toggle.
-   - Prohibit stacking 5-6 header bars (Search + Filter + Status + Telemetry + Badges).
+### 1. Triệt tiêu tư duy "Hide instead of Adapt" (Ẩn tính năng để né việc):
+- Bất kỳ màn nào có biểu đồ (line chart, trend graphs, saturation splines, breakdown bars) trên Desktop thì **BẮT BUỘC phải thiết kế phiên bản Mobile-First tương ứng** (SVG sparkline card ~120-140px, live pulse dot, compact time axis).
+- **CẤM TUYỆT ĐỐI** hành vi đặt `display: none !important;` lên toàn bộ component biểu đồ để né overflow trên mobile. Mọi PR vi phạm = **LẬP TỨC REJECT VÀ ROLLBACK**.
 
-3. **High-Density Mobile Card Streams (~60-75px/item)**:
-   - High information density displaying 4-5 workloads/nodes on the initial viewport without scrolling.
-   - No 6-button card monsters. Quick actions limited to 1-2 essential buttons (`📜 Logs`, `⋯ Actions`). Tapping the card or `⋯` opens the full Inspector Drawer / Action Sheet.
+### 2. Tiêu chuẩn 3-Tier Viewports Bắt buộc (Không bỏ quên Tablet & Desktop):
+- **Desktop (1440x900 / 1920x1080)**:
+  - Bảng dữ liệu chiếm 100% độ rộng khả dụng, `hasScroll: false` (zero horizontal scrollbar).
+  - Không được cắt cụt cột Actions ở mép phải màn hình.
+  - Mọi nút bấm (`Logs`, `Details`, `Scale`, `Restart`, `YAML`, `Delete`) phải gọi API thật, mở drawer/modal thật, **0 lỗi console, 0 lỗi HTTP 500**.
+- **Tablet (768x1024 - iPad Standard)**:
+  - Cụm HUD Cards tự động chia thành **lưới 2x2 cân xứng** (`grid-template-columns: repeat(2, 1fr)`), không được ép dồn 4 cột làm vỡ layout.
+  - Bảng dữ liệu tự động co giãn (`table-layout: fixed; width: 100%;`), không tràn viền ngang +300px.
+  - Sidebar chuyển thành off-canvas drawer để dành 100% diện tích cho nội dung.
+- **Mobile (375x812 - iPhone Standard)**:
+  - Command bar $\le 44\text{px}$ + Micro-telemetry $\le 20\text{px}$.
+  - **Live SVG Line Chart / Saturation Spline** sắc nét, hiển thị CPU, RAM, RPS theo thời gian.
+  - Mobile Card Stream ~60–75px/item, hiển thị 4–5 workloads ngay trên màn hình đầu tiên, touch targets $\ge 32\text{px}$.
+  - Zero horizontal overflow (`document.documentElement.scrollWidth === 375px`).
 
-4. **Table-First on Desktop (1440x900)**:
-   - 100% available container width with zero cramped double sidebars and zero unnecessary horizontal scrollbars.
+### 3. Xóa bỏ triệt để "Hội chứng Spam Nút Bấm" (Button Suite Clutter):
+- Cấm lặp lại 5–6 nút text to đùng trên mỗi hàng (`Logs`, `Scale`, `Restart`, `YAML`, `Details`, `Delete`).
+- Chuẩn hóa kiến trúc nút bấm Enterprise:
+  - **Tối đa 2 nút chính inline** (ví dụ: `📄 Logs`, `🔍 Details`).
+  - Toàn bộ hành động phụ gom vào nút menu `[ ⋯ ]` (`.btn-more-actions`) tinh tế hoặc bộ icon 30px có tooltip.
 
-5. **Visual Sanity & Zero Clutter**:
-   - Prohibit neon badge storms (no 7-pill color explosions). Use subtle slate/neutral badges.
-   - Sanitize all typos (`k8smater` -> `k8smaster`).
-
-6. **Standardized Action Toolbars (Zero Button Spam / Benchmark Overview Standard)**:
-   - Prohibit repeating 5-6 chunky text buttons across every row in tables (as seen in user uploaded images).
-   - Every table must standardize on: 2 quick-access primary actions (e.g. `📄 Logs`, `🔍 Details`) + a sleek `[ ⋯ ]` dropdown / drawer menu for secondary actions, or compact 30x30px icon buttons with tooltips.
-   - Benchmark: Every screen must strictly achieve the elegance, clean typography, and zero-clutter standard of the Cluster Overview (`/`) screen.
+### 4. Kiểm toán Thật 100% Trước Khi Báo Cáo (Evidence Over Claims):
+- Coder phải tự chạy `npm run type-check && npm run build` và kiểm tra layout trước khi handoff.
+- Reviewer duyệt theo **8-Point Adversarial Checklist** (đặc biệt điểm số 8: Anti-Lazy & Feature Parity).
+- QA bắt buộc dùng `chrome-devtools-mcp` chụp ảnh màn hình và đo đạc kích thước thực tế trên **cả 3 viewports: Desktop, Tablet, Mobile** trước khi xác nhận PASS.
 
 ---
 
