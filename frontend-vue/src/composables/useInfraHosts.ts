@@ -6,16 +6,15 @@ import {
   type HostTestHistoryItem,
   type ModalTestResult,
   type HostFormData,
-  hostTypeDefinitions,
   createDefaultHostForm,
   populateHostForm,
   buildHostPayload,
   matchesHostFilters,
-  getHostTypeMeta,
   getLatencyBadgeClass,
   formatDate,
   formatUptime,
 } from '../types/hosts'
+import type { HostTypeDefinition } from '../types/hosts'
 
 // Re-export domain types and utilities for consumers
 export type {
@@ -26,16 +25,28 @@ export type {
   HostTypeDefinition,
 } from '../types/hosts'
 export {
-  hostTypeDefinitions,
   createDefaultHostForm,
   populateHostForm,
   buildHostPayload,
   matchesHostFilters,
-  getHostTypeMeta,
   getLatencyBadgeClass,
   formatDate,
   formatUptime,
 } from '../types/hosts'
+
+export const hostTypeDefinitions: HostTypeDefinition[] = [
+  { type: 'agent', label: 'K8s-Agent', icon: 'server', color: 'cyan', badgeClass: 'badge-slate text-muted', desc: 'System metrics telemetry (CPU/RAM/Disk/Network) via host daemon', placeholder: 'http://10.10.10.200:9100', hint: 'Run ./deploy-agent.sh user@server-ip to install agent daemon' },
+  { type: 'docker', label: 'Docker Engine', icon: 'box', color: 'blue', badgeClass: 'badge-slate text-muted', desc: 'Standalone Docker Engine socket / TCP container manager', placeholder: 'tcp://10.10.10.133:2375', hint: 'Use port 2376 for TLS mTLS authenticated socket endpoints' },
+  { type: 'k8s', label: 'Kubernetes API', icon: 'cpu', color: 'purple', badgeClass: 'badge-slate text-muted', desc: 'Direct Kubernetes Control Plane API Server endpoint', placeholder: 'https://k8s-master:6443', hint: 'Connects directly to API server with optional client certificates' },
+  { type: 'prometheus', label: 'Prometheus Target', icon: 'activity', color: 'orange', badgeClass: 'badge-slate text-muted', desc: 'Prometheus metrics scraping and time-series query target', placeholder: 'http://prometheus:9090', hint: 'Validates /-/healthy and build status endpoints' },
+  { type: 'git', label: 'Git Repository', icon: 'link', color: 'green', badgeClass: 'badge-slate text-muted', desc: 'GitHub, GitLab, Gitea GitOps repository endpoint', placeholder: 'https://github.com/org/repo', hint: 'Git repository URL used for automated pipeline synchronization' },
+  { type: 'database', label: 'Database Server', icon: 'database', color: 'amber', badgeClass: 'badge-slate text-muted', desc: 'PostgreSQL, MySQL, Redis, or MongoDB connection target', placeholder: 'postgresql://user:pass@host:5432/db', hint: 'Accepts standard DSN or host:port connection targets' },
+  { type: 'custom', label: 'Custom HTTP', icon: 'settings', color: 'gray', badgeClass: 'badge-slate text-muted', desc: 'Generic HTTP microservice or health check target', placeholder: 'https://service:8080/health', hint: 'Accepts any HTTP/HTTPS health verification URI' },
+]
+
+export function getHostTypeMeta(type?: string): HostTypeDefinition {
+  return hostTypeDefinitions.find(d => d.type === (type || 'agent')) || hostTypeDefinitions[0]
+}
 
 export function useInfraHosts() {
   let route: ReturnType<typeof useRoute> | null = null
@@ -332,7 +343,7 @@ export function useInfraHosts() {
       if (isSuccess) {
         if (res?.agent_info?.hostname) {
           showToast(latency > 0
-            ? `Connected to ${res.agent_info.hostname} (${res.agent_info.os} ${res.agent_info.arch}) • ${latency}ms latency`
+            ? `Connected to ${res.agent_info.hostname} (${res.agent_info.os} ${res.agent_info.arch}) - ${latency}ms latency`
             : `Connected to ${res.agent_info.hostname} (${res.agent_info.os} ${res.agent_info.arch})`
           )
         } else {
