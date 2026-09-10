@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import '../assets/styles/views/backup.css'
+import '../assets/styles/components/backup-drawers.css'
 import { fleetApi } from '../api/fleet'
 import { useBackupRestore } from '../composables/useBackupRestore'
 import MetricCard from '../components/ui/MetricCard.vue'
 import BackupSchedulesTable from '../components/backup/BackupSchedulesTable.vue'
 import BackupStoragesGrid from '../components/backup/BackupStoragesGrid.vue'
 import BackupSnapshotsTable from '../components/backup/BackupSnapshotsTable.vue'
+import BackupMobileCards from '../components/backup/BackupMobileCards.vue'
 import RestoreActionsTable from '../components/backup/RestoreActionsTable.vue'
 import ClusterDisasterRecoveryTab from '../components/backup/ClusterDisasterRecoveryTab.vue'
 import BackupCreateModal from '../components/backup/BackupCreateModal.vue'
@@ -23,6 +25,9 @@ const {
   error,
   statusMessage,
   triggeringPolicyId,
+  deletingJobId,
+  downloadingJobId,
+  volumeProgress,
   showPolicyModal,
   showStorageModal,
   showRestoreModal,
@@ -36,6 +41,8 @@ const {
   handleCreatePolicy,
   handleCreateStorage,
   handleTriggerBackup,
+  handleDeleteJob,
+  handleDownloadSnapshot,
   openRestoreModalWithJob,
   handleExecuteRestore,
 } = useBackupRestore()
@@ -227,10 +234,25 @@ onMounted(async () => {
     <!-- TAB 3: BACKUP HISTORY / JOBS -->
     <div v-if="activeTab === 'jobs'" class="tab-content animate-fade-in">
       <BackupSnapshotsTable
+        class="desktop-only"
         :jobs="jobs"
         :loading="loading"
         :error="error"
+        :deleting-job-id="deletingJobId"
+        :downloading-job-id="downloadingJobId"
+        :volume-progress="volumeProgress"
         @restore="openRestoreModalWithJob"
+        @download="handleDownloadSnapshot"
+        @delete="handleDeleteJob"
+      />
+      <BackupMobileCards
+        class="mobile-only"
+        :jobs="jobs"
+        :deleting-job-id="deletingJobId"
+        :downloading-job-id="downloadingJobId"
+        @restore="openRestoreModalWithJob"
+        @download="handleDownloadSnapshot"
+        @delete="handleDeleteJob"
       />
     </div>
 

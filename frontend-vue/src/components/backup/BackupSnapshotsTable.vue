@@ -22,13 +22,13 @@ const emit = defineEmits<{
 const inspectedJob = ref<BackupJob | null>(null)
 
 const columns: Column<BackupJob>[] = [
-  { key: 'status', label: 'Status', width: '130px', sortable: true },
-  { key: 'id', label: 'Job & Policy', width: '210px', sortable: true },
-  { key: 'size', label: 'Raw → Compressed Size', width: '190px' },
-  { key: 'checksum', label: 'Security & Hash', width: '180px' },
-  { key: 'progress', label: 'Volume Snapshot', width: '150px' },
-  { key: 'timing', label: 'Started & Duration' },
-  { key: 'actions', label: 'Actions', width: '280px', align: 'right' },
+  { key: 'status', label: 'Status', width: '100px', sortable: true },
+  { key: 'id', label: 'Job & Policy', width: '150px', sortable: true },
+  { key: 'size', label: 'Size', width: '120px' },
+  { key: 'checksum', label: 'Security', width: '120px' },
+  { key: 'progress', label: 'Volume Stream', width: '110px' },
+  { key: 'timing', label: 'Started & Duration', width: '160px' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 function formatBytes(bytes?: number): string {
@@ -111,37 +111,41 @@ function formatDate(d?: string): string {
       </template>
 
       <template #cell-actions="{ row }">
-        <div class="actions-cell">
+        <div class="actions-cell compact-actions">
           <button 
-            class="btn btn-secondary btn-sm"
+            class="btn-action-icon"
             :disabled="row.status !== 'completed' && row.status !== 'verified'"
             title="Restore snapshot to database"
+            aria-label="Restore snapshot to database"
             @click="emit('restore', row)"
           >
-            <span>🔄 Restore</span>
+            <span>🔄</span>
           </button>
           <button 
-            class="btn btn-secondary btn-sm"
+            class="btn-action-icon"
             :disabled="downloadingJobId === row.id"
             title="Download snapshot metadata"
+            aria-label="Download snapshot metadata"
             @click="emit('download', row)"
           >
-            <span>{{ downloadingJobId === row.id ? '⏳' : '📥 Download' }}</span>
+            <span>{{ downloadingJobId === row.id ? '⏳' : '📥' }}</span>
           </button>
           <button 
-            class="btn btn-secondary btn-sm"
+            class="btn-action-icon"
             title="Inspect snapshot metadata and cryptographic signatures"
+            aria-label="Inspect snapshot metadata"
             @click="inspectedJob = row"
           >
-            <span>🔍 Inspect</span>
+            <span>🔍</span>
           </button>
           <button 
-            class="btn btn-sm btn-delete-crimson"
+            class="btn-action-icon btn-action-delete"
             :disabled="deletingJobId === row.id"
             title="Delete snapshot permanently"
+            aria-label="Delete snapshot permanently"
             @click="emit('delete', row.id)"
           >
-            <span>{{ deletingJobId === row.id ? '🗑️ Deleting...' : '🗑 Delete' }}</span>
+            <span>{{ deletingJobId === row.id ? '⏳' : '🗑' }}</span>
           </button>
         </div>
       </template>

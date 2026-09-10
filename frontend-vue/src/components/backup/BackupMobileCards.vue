@@ -1,10 +1,11 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { BackupJob } from '../../api/governance'
 import StatusBadge from '../ui/StatusBadge.vue'
 
 defineProps<{
   jobs: BackupJob[]
   deletingJobId?: string | null
+  downloadingJobId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -46,38 +47,48 @@ function formatDateShort(d?: string): string {
         </div>
         <div class="mobile-stream-sub font-mono">
           <span class="text-emerald">{{ formatBytes(job.compressed_size_bytes || job.size_bytes) }}</span>
-          <span>•</span>
+          <span>&bull;</span>
           <span class="text-muted">Pol #{{ job.policy_id.slice(0, 6) }}</span>
-          <span>•</span>
+          <span>&bull;</span>
           <span class="text-muted">{{ formatDateShort(job.started_at || job.created_at) }}</span>
         </div>
       </div>
 
       <div class="mobile-stream-actions">
         <button 
-          class="btn btn-secondary btn-sm"
+          class="btn-action-icon"
           :disabled="job.status !== 'completed' && job.status !== 'verified'"
           title="Restore Snapshot"
+          aria-label="Restore Snapshot"
           @click="emit('restore', job)"
         >
           <span>🔄</span>
         </button>
         <button 
-          class="btn btn-secondary btn-sm"
+          class="btn-action-icon"
+          :disabled="downloadingJobId === job.id"
           title="Download Snapshot"
+          aria-label="Download Snapshot"
           @click="emit('download', job)"
         >
-          <span>📥</span>
+          <span>{{ downloadingJobId === job.id ? '⏳' : '📥' }}</span>
         </button>
         <button 
-          class="btn btn-sm btn-delete-crimson"
+          class="btn-action-icon btn-action-delete"
           :disabled="deletingJobId === job.id"
           title="Delete Snapshot"
+          aria-label="Delete Snapshot"
           @click="emit('delete', job.id)"
         >
-          <span>🗑️</span>
+          <span>{{ deletingJobId === job.id ? '⏳' : '🗑' }}</span>
         </button>
       </div>
+    </div>
+
+    <div v-if="jobs.length === 0" class="empty-state-box glass-panel">
+      <span class="empty-icon">📦</span>
+      <h3 class="empty-title">No Backup Snapshots</h3>
+      <p class="empty-desc">No backup snapshots found in repository.</p>
     </div>
   </div>
 </template>
