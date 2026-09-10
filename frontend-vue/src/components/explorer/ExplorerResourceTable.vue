@@ -161,47 +161,47 @@ function toResource(row: unknown): K8sResource {
       <template #cell-osArch="{ row }"><span class="font-mono text-muted font-small">{{ getNodeOSArch(toResource(row)) }}</span></template>
       <template #cell-podsCount="{ row }"><span class="font-mono font-small">{{ getNodePodsCount(toResource(row)) }}</span></template>
 
-      <!-- Single-Line Action Toolbar (28px height, 4px gap) -->
+      <!-- Standardized High-Density Action Toolbar (Compact 28x28px Buttons) -->
       <template #cell-actions="{ row }">
         <div class="action-toolbar">
           <template v-if="selectedKind === 'pods'">
-            <button type="button" class="action-btn action-btn-cyan" title="Details" @click="emit('detail', toResource(row))"><span class="action-text">Details</span></button>
-            <button type="button" class="action-btn action-btn-amber" title="Logs" @click="emit('logs', toResource(row))"><span class="action-text">Logs</span></button>
-            <button type="button" class="action-btn action-btn-emerald" title="Exec" @click="emit('terminal', toResource(row))"><span class="action-text">Exec</span></button>
-            <button type="button" class="action-btn action-btn-secondary" title="YAML" @click="emit('yaml', toResource(row))"><span class="action-text">YAML</span></button>
-            <button type="button" class="action-btn action-btn-danger" title="Delete" @click="emit('delete', toResource(row))"><span class="action-text">✕</span></button>
+            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><span>🔍</span></button>
+            <button type="button" class="action-btn action-btn-amber" title="Stream Logs" @click="emit('logs', toResource(row))"><span>📄</span></button>
+            <button type="button" class="action-btn action-btn-emerald" title="Terminal Exec" @click="emit('terminal', toResource(row))"><span>💻</span></button>
+            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><span>🎯</span></button>
+            <button type="button" class="action-btn action-btn-danger" title="Delete Pod" @click="emit('delete', toResource(row))"><span>✕</span></button>
           </template>
           <template v-else-if="selectedKind === 'nodes'">
-            <button type="button" class="action-btn action-btn-cyan" title="Details" @click="emit('detail', toResource(row))"><span class="action-text">Details</span></button>
-            <button type="button" class="action-btn action-btn-secondary" title="YAML" @click="emit('yaml', toResource(row))"><span class="action-text">YAML</span></button>
-            <button v-if="isNodeUnschedulable(toResource(row))" type="button" class="action-btn action-btn-emerald" :disabled="operatingNode" title="Uncordon" @click="emit('uncordon', toResource(row))"><span class="action-text">Uncordon</span></button>
-            <button v-else type="button" class="action-btn action-btn-amber" :disabled="operatingNode" title="Cordon" @click="emit('cordon', toResource(row))"><span class="action-text">Cordon</span></button>
-            <button type="button" class="action-btn action-btn-danger" :disabled="operatingNode" title="Drain" @click="emit('drain', toResource(row))"><span class="action-text">Drain</span></button>
+            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><span>🔍</span></button>
+            <button v-if="isNodeUnschedulable(toResource(row))" type="button" class="action-btn action-btn-emerald" :disabled="operatingNode" title="Uncordon Node" @click="emit('uncordon', toResource(row))"><span>🔓</span></button>
+            <button v-else type="button" class="action-btn action-btn-amber" :disabled="operatingNode" title="Cordon Node" @click="emit('cordon', toResource(row))"><span>🚫</span></button>
+            <button type="button" class="action-btn action-btn-danger" :disabled="operatingNode" title="Drain Node" @click="emit('drain', toResource(row))"><span>⚠️</span></button>
+            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><span>🎯</span></button>
           </template>
           <template v-else-if="selectedKind === 'deployments'">
-            <button type="button" class="action-btn action-btn-emerald" title="Scale" @click="emit('scale', toResource(row))"><span class="action-text">Scale</span></button>
-            <button type="button" class="action-btn action-btn-amber" title="Restart" @click="emit('restart', toResource(row))"><span class="action-text">Restart</span></button>
-            <button type="button" class="action-btn action-btn-cyan" title="Details" @click="emit('detail', toResource(row))"><span class="action-text">Details</span></button>
-            <button type="button" class="action-btn action-btn-secondary" title="YAML" @click="emit('yaml', toResource(row))"><span class="action-text">YAML</span></button>
-            <button type="button" class="action-btn action-btn-danger" title="Delete" @click="emit('delete', toResource(row))"><span class="action-text">✕</span></button>
+            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><span>🔍</span></button>
+            <button type="button" class="action-btn action-btn-emerald" title="Scale Replicas" @click="emit('scale', toResource(row))"><span>⚡</span></button>
+            <button type="button" class="action-btn action-btn-amber" title="Restart Rollout" @click="emit('restart', toResource(row))"><span>🔄</span></button>
+            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><span>🎯</span></button>
+            <button type="button" class="action-btn action-btn-danger" title="Delete Deployment" @click="emit('delete', toResource(row))"><span>✕</span></button>
           </template>
           <template v-else-if="selectedKind === 'statefulsets'">
-            <button type="button" class="action-btn action-btn-emerald" title="Scale" @click="emit('scale', toResource(row))"><span class="action-text">Scale</span></button>
-            <button type="button" class="action-btn action-btn-cyan" title="Details" @click="emit('detail', toResource(row))"><span class="action-text">Details</span></button>
-            <button type="button" class="action-btn action-btn-secondary" title="YAML" @click="emit('yaml', toResource(row))"><span class="action-text">YAML</span></button>
-            <button type="button" class="action-btn action-btn-danger" title="Delete" @click="emit('delete', toResource(row))"><span class="action-text">✕</span></button>
+            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><span>🔍</span></button>
+            <button type="button" class="action-btn action-btn-emerald" title="Scale Replicas" @click="emit('scale', toResource(row))"><span>⚡</span></button>
+            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><span>🎯</span></button>
+            <button type="button" class="action-btn action-btn-danger" title="Delete StatefulSet" @click="emit('delete', toResource(row))"><span>✕</span></button>
           </template>
           <template v-else-if="selectedKind === 'cronjobs'">
-            <button type="button" class="action-btn action-btn-emerald" title="Trigger" @click="emit('trigger-cronjob', toResource(row))"><span class="action-text">Trigger</span></button>
-            <button type="button" class="action-btn" :class="(toResource(row).spec as { suspend?: boolean })?.suspend ? 'action-btn-emerald' : 'action-btn-amber'" title="Toggle Suspend" @click="emit('toggle-suspend', toResource(row))"><span class="action-text">{{ (toResource(row).spec as { suspend?: boolean })?.suspend ? 'Resume' : 'Suspend' }}</span></button>
-            <button type="button" class="action-btn action-btn-cyan" title="Details" @click="emit('detail', toResource(row))"><span class="action-text">Details</span></button>
-            <button type="button" class="action-btn action-btn-secondary" title="YAML" @click="emit('yaml', toResource(row))"><span class="action-text">YAML</span></button>
-            <button type="button" class="action-btn action-btn-danger" title="Delete" @click="emit('delete', toResource(row))"><span class="action-text">✕</span></button>
+            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><span>🔍</span></button>
+            <button type="button" class="action-btn action-btn-emerald" title="Trigger Job" @click="emit('trigger-cronjob', toResource(row))"><span>⚡</span></button>
+            <button type="button" class="action-btn" :class="(toResource(row).spec as { suspend?: boolean })?.suspend ? 'action-btn-emerald' : 'action-btn-amber'" :title="(toResource(row).spec as { suspend?: boolean })?.suspend ? 'Resume CronJob' : 'Suspend CronJob'" @click="emit('toggle-suspend', toResource(row))"><span>{{ (toResource(row).spec as { suspend?: boolean })?.suspend ? '▶' : '⏸' }}</span></button>
+            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><span>🎯</span></button>
+            <button type="button" class="action-btn action-btn-danger" title="Delete CronJob" @click="emit('delete', toResource(row))"><span>✕</span></button>
           </template>
           <template v-else>
-            <button type="button" class="action-btn action-btn-cyan" title="Details" @click="emit('detail', toResource(row))"><span class="action-text">Details</span></button>
-            <button type="button" class="action-btn action-btn-secondary" title="YAML" @click="emit('yaml', toResource(row))"><span class="action-text">YAML</span></button>
-            <button type="button" class="action-btn action-btn-danger" title="Delete" @click="emit('delete', toResource(row))"><span class="action-text">✕</span></button>
+            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><span>🔍</span></button>
+            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><span>🎯</span></button>
+            <button type="button" class="action-btn action-btn-danger" title="Delete Resource" @click="emit('delete', toResource(row))"><span>✕</span></button>
           </template>
         </div>
       </template>
