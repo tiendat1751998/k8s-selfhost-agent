@@ -1,8 +1,9 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { Cluster } from '../../api/fleet'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
+import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 
 defineProps<{
   clusters: Cluster[]
@@ -19,6 +20,13 @@ const emit = defineEmits<{
   (e: 'import'): void
 }>()
 
+const CLUSTER_ACTIONS: ActionItem[] = [
+  { id: 'discover', label: 'Discover Resources', icon: 'search' },
+  { id: 'upgrade', label: 'Upgrade Cluster', icon: 'arrow-up' },
+  { id: 'sep-1', label: '', separator: true },
+  { id: 'remove', label: 'Evict Cluster', icon: 'trash', variant: 'danger' },
+]
+
 const clusterColumns: Column<Cluster>[] = [
   { key: 'name', label: 'Cluster Name', sortable: true },
   { key: 'group', label: 'Fleet Tier', width: '100px', sortable: true },
@@ -26,8 +34,14 @@ const clusterColumns: Column<Cluster>[] = [
   { key: 'version', label: 'K8s Version', width: '95px', sortable: true },
   { key: 'nodes', label: 'Nodes', width: '65px', sortable: true, align: 'center' },
   { key: 'health_status', label: 'Health Status', width: '110px', sortable: true },
-  { key: 'actions', label: 'Operations', width: '245px', align: 'right' },
+  { key: 'actions', label: 'Operations', width: '120px', align: 'right' },
 ]
+
+function handleClusterAction(actionId: string, cluster: Cluster) {
+  if (actionId === 'discover') emit('discover', cluster)
+  else if (actionId === 'upgrade') emit('upgrade', cluster)
+  else if (actionId === 'remove') emit('remove', cluster)
+}
 </script>
 
 <template>
@@ -83,6 +97,7 @@ const clusterColumns: Column<Cluster>[] = [
       <template #cell-actions="{ row }">
         <div class="table-actions-row">
           <button
+            type="button"
             class="btn btn-primary btn-xs"
             title="Cluster Details"
             @click="emit('details', row)"
@@ -90,33 +105,12 @@ const clusterColumns: Column<Cluster>[] = [
             <BaseIcon name="zap" size="xs" />
             <span>Details</span>
           </button>
-          <button
-            class="btn btn-secondary btn-xs"
+          <ActionDropdown
+            size="xs"
+            :items="CLUSTER_ACTIONS"
             :disabled="actionLoading === row.id"
-            title="Discover Resources"
-            @click="emit('discover', row)"
-          >
-            <BaseIcon name="search" size="xs" />
-            <span>Probe</span>
-          </button>
-          <button
-            class="btn btn-secondary btn-xs"
-            :disabled="actionLoading === row.id"
-            title="Upgrade Cluster"
-            @click="emit('upgrade', row)"
-          >
-            <BaseIcon name="arrow-up" size="xs" />
-            <span>Upgrade</span>
-          </button>
-          <button
-            class="btn btn-secondary btn-xs btn-remove btn-evict"
-            :disabled="actionLoading === row.id"
-            title="Evict Cluster"
-            @click="emit('remove', row)"
-          >
-            <BaseIcon name="trash" size="xs" />
-            <span>Evict</span>
-          </button>
+            @select="(actionId) => handleClusterAction(actionId, row)"
+          />
         </div>
       </template>
     </DataTable>
@@ -133,7 +127,7 @@ const clusterColumns: Column<Cluster>[] = [
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 6px;
 }
 
 .table-actions-row .btn {
