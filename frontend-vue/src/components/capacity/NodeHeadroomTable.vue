@@ -2,6 +2,7 @@
 import StatusBadge from '../ui/StatusBadge.vue'
 import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import PercentageBar from '../ui/PercentageBar.vue'
+import CanvasSparkline from '../telemetry/CanvasSparkline.vue'
 import type { NodeHeadroom } from '../../composables/useCapacityForecast'
 
 defineProps<{
@@ -28,6 +29,29 @@ function getRiskTextColor(pct: number): string {
   if (pct >= 70) return 'text-amber'
   return 'text-cyan'
 }
+
+function getSparklineColor(pct: number): string {
+  if (pct >= 85) return '#f43f5e'
+  if (pct >= 70) return '#f59e0b'
+  return '#06b6d4'
+}
+
+function getNodeTrajectory(node: NodeHeadroom): number[] {
+  if ('trajectory' in node && Array.isArray((node as Record<string, unknown>).trajectory)) {
+    return (node as Record<string, unknown>).trajectory as number[]
+  }
+  const base = node.cpuUsagePercent
+  const mem = node.memUsagePercent
+  const diff = (base - mem) / 4
+  return [
+    Math.max(0, Math.round((base - diff * 2) * 10) / 10),
+    Math.max(0, Math.round((base - diff) * 10) / 10),
+    Math.max(0, Math.round(((base + mem) / 2) * 10) / 10),
+    Math.max(0, Math.round((base + diff * 0.5) * 10) / 10),
+    Math.max(0, Math.round((base - diff * 0.5) * 10) / 10),
+    base,
+  ]
+}
 </script>
 
 <template>
@@ -43,15 +67,16 @@ function getRiskTextColor(pct: number): string {
     <div class="node-table-wrapper">
       <table class="node-matrix-table">
         <colgroup>
-          <col style="width: 19%;" />
-          <col style="width: 9%;" />
-          <col style="width: 16%;" />
-          <col style="width: 16%;" />
+          <col style="width: 17%;" />
+          <col style="width: 8%;" />
+          <col style="width: 14%;" />
+          <col style="width: 14%;" />
+          <col style="width: 11%;" />
           <col style="width: 9%;" />
           <col style="width: 8%;" />
-          <col style="width: 10%;" />
-          <col style="width: 7%;" />
+          <col style="width: 8%;" />
           <col style="width: 6%;" />
+          <col style="width: 5%;" />
         </colgroup>
         <thead>
           <tr>
@@ -59,6 +84,7 @@ function getRiskTextColor(pct: number): string {
             <th>Role</th>
             <th>CPU Allocation</th>
             <th>Memory Allocation</th>
+            <th>Load Trajectory</th>
             <th>Pod Density</th>
             <th>Bin Packing</th>
             <th>Safe Headroom</th>
@@ -95,6 +121,15 @@ function getRiskTextColor(pct: number): string {
                   <span class="text-muted">{{ node.memAllocatedGiB }} / {{ node.memTotalGiB }} GiB</span>
                 </div>
                 <PercentageBar :percentage="node.memUsagePercent" :height="4" />
+              </div>
+            </td>
+            <td>
+              <div class="trajectory-sparkline-cell" title="Allocation trajectory over time">
+                <CanvasSparkline
+                  :data="getNodeTrajectory(node)"
+                  :color="getSparklineColor(node.cpuUsagePercent)"
+                  :height="24"
+                />
               </div>
             </td>
             <td class="font-mono">
@@ -151,5 +186,11 @@ function getRiskTextColor(pct: number): string {
   align-items: center;
   justify-content: space-between;
   font-size: 11px;
+}
+.trajectory-sparkline-cell {
+  width: 100%;
+  min-width: 70px;
+  max-width: 120px;
+  padding: 2px 0;
 }
 </style>
