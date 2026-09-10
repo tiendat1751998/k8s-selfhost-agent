@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"bytes"
@@ -322,3 +322,60 @@ func TestFileLogSource_ReadLogs(t *testing.T) {
 		t.Errorf("expected disk error message, got %s", entries[0].Message)
 	}
 }
+
+func TestEngineLogSource_Integration(t *testing.T) {
+	tempDir := t.TempDir()
+	logContent := "2026-08-24T12:00:00Z [INFO] Engine initialized\n" +
+		"2026-08-24T12:05:00Z [WARN] Memory high\n" +
+		"2026-08-24T12:10:00Z [ERROR] Critical columnar engine test event\n"
+
+	err := os.WriteFile(filepath.Join(tempDir, "myservice.log"), []byte(logContent), 0644)
+	if err != nil {
+		t.Fatalf("failed to write test log file: %v", err)
+	}
+
+	engineDir := filepath.Join(tempDir, "engine")
+	engineSrc, err := NewEngineLogSource(engineDir)
+	if err != nil {
+		t.Fatalf("NewEngineLogSource failed: %v", err)
+	}
+	defer engineSrc.Close()
+
+	fileSrc := &FileLogSource{logDir: tempDir}
+	if err := fileSrc.IngestToWriter(context.Background(), engineSrc.Writer()); err != nil {
+		t.Fatalf("IngestToWriter failed: %v", err)
+	}
+
+	entries, err := engineSrc.GetLogs(context.Background(), "myservice", 10, nil, nil, "columnar", "error")
+	if err != nil {
+		t.Fatalf("engineSrc.GetLogs failed: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry from engine, got %d", len(entries))
+	}
+	if !strings.Contains(entries[0].Message, "Critical columnar") {
+		t.Errorf("expected columnar message, got: %s", entries[0].Message)
+	}
+
+	// Test AddSource alongside standard sources
+	logServer := NewLogServer(WithLogDir(tempDir))
+	logServer.AddSource(engineSrc)
+	collector := NewSystemCollector("", "", nil)
+	handler := setupHandler(collector, "", logServer)
+
+	req := httptest.NewRequest(http.MethodGet, "/logs?app=myservice&q=columnar&format=json", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HTTP /logs expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp LogsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Count < 1 {
+		t.Errorf("expected at least 1 log line via HTTP, got %d", resp.Count)
+	}
+}
+
