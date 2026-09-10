@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { DetectedTool } from '../../api/ecosystem'
 
 interface Props {
@@ -22,14 +22,22 @@ const emit = defineEmits<{
 <template>
   <div class="ecosystem-table-container glass-panel">
     <table class="ecosystem-table">
+      <colgroup>
+        <col style="width: 22%;" />
+        <col style="width: 24%;" />
+        <col style="width: 16%;" />
+        <col style="width: 12%;" />
+        <col style="width: 10%;" />
+        <col style="width: 16%;" />
+      </colgroup>
       <thead>
         <tr>
-          <th>Integration Tool</th>
-          <th>Endpoint & Version</th>
-          <th>Health Status</th>
-          <th>Discovery</th>
-          <th>Last Checked</th>
-          <th style="text-align: right;">Actions</th>
+          <th style="width: 22%;">Integration Tool</th>
+          <th style="width: 24%;">Endpoint & Version</th>
+          <th style="width: 16%;">Health Status</th>
+          <th style="width: 12%;">Discovery</th>
+          <th style="width: 10%;">Last Checked</th>
+          <th style="width: 16%; text-align: right;">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -38,7 +46,7 @@ const emit = defineEmits<{
             <div class="table-tool-cell">
               <span class="table-tool-icon">{{ getToolIcon(tool) }}</span>
               <div class="table-tool-meta">
-                <span class="table-tool-name">{{ tool.name }}</span>
+                <span class="table-tool-name" :title="tool.name">{{ tool.name }}</span>
                 <span class="category-badge">{{ tool.category.toUpperCase() }}</span>
               </div>
             </div>
@@ -98,38 +106,38 @@ const emit = defineEmits<{
           <td>
             <div class="table-actions-cell">
               <button
-                class="table-btn btn-sync"
+                class="table-btn btn-ping"
                 :disabled="syncingId === tool.id"
-                title="Sync Webhook Probe"
+                title="⚡ Ping"
+                aria-label="⚡ Ping"
                 @click="emit('sync', tool)"
               >
-                <span>{{ syncingId === tool.id ? '⏳' : '🔄' }}</span>
-                <span>Sync</span>
-              </button>
-              <button
-                class="table-btn btn-config"
-                title="Configure Integration"
-                @click="emit('configure', tool)"
-              >
-                <span>⚙️</span>
-                <span>Configure</span>
+                <span :class="{ 'spin-anim': syncingId === tool.id }">{{ syncingId === tool.id ? '⏳' : '⚡' }}</span>
               </button>
               <button
                 class="table-btn btn-health"
-                title="Inspect Health Latency & Logs"
+                title="🩺 Health"
+                aria-label="🩺 Health"
                 @click="emit('inspectHealth', tool)"
               >
-                <span>🔍</span>
-                <span>Health</span>
+                <span>🩺</span>
+              </button>
+              <button
+                class="table-btn btn-config"
+                title="⚙️ Config"
+                aria-label="⚙️ Config"
+                @click="emit('configure', tool)"
+              >
+                <span>⚙️</span>
               </button>
               <button
                 class="table-btn btn-disconnect"
                 :disabled="deletingId === tool.id"
-                title="Disconnect Integration"
+                title="🗑️ Disconnect"
+                aria-label="🗑️ Disconnect"
                 @click="emit('delete', tool)"
               >
-                <span>🗑</span>
-                <span>Disconnect</span>
+                <span>🗑️</span>
               </button>
             </div>
           </td>
