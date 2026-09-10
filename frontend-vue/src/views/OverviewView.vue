@@ -76,7 +76,39 @@ const {
 
 <template>
   <div class="overview-dashboard animate-fade-in">
-    <!-- Desktop Header Bar -->
+    <!-- Sleek 44px Mobile Command Bar (<768px) -->
+    <div v-if="overview" class="mobile-command-bar">
+      <div class="command-bar-left">
+        <span class="command-bar-title font-semibold text-slate-100">
+          🖥️ Overview • {{ overview.healthy_nodes }}/{{ overview.total_nodes }} Online
+        </span>
+      </div>
+      <div class="command-bar-actions">
+        <button
+          type="button"
+          class="mobile-cmd-btn"
+          :disabled="loading"
+          title="Refresh Telemetry"
+          aria-label="Refresh Telemetry"
+          @click="pollClusterMetrics"
+        >
+          <span class="cmd-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
+          <span class="cmd-label">Refresh</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-cmd-btn"
+          title="Deep-Dive Telemetry"
+          aria-label="Deep-Dive Telemetry"
+          @click="openDeepDiveModal"
+        >
+          <span class="cmd-icon">📊</span>
+          <span class="cmd-label">Deep-Dive</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Desktop Header Bar (>=768px) -->
     <header class="dashboard-header">
       <div class="header-titles">
         <div class="header-badge-group">
@@ -348,4 +380,5 @@ const {
 
 <style scoped>
 @import '../assets/styles/views/overview.css';
+@import '../assets/styles/views/overview-mobile.css';
 </style>

@@ -132,8 +132,8 @@ function formatBytes(bytes: number): string {
       </div>
       <div class="hud-card-footer-text font-mono">
         <span class="text-violet">
-          <span class="footer-full">🔥 Peak: {{ peakCpuNode?.node_name || 'k8smater' }} ({{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%)</span>
-          <span class="footer-mobile">🔥 {{ peakCpuNode?.node_name || 'k8smater' }} {{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%</span>
+          <span class="footer-full">🔥 Peak: {{ peakCpuNode?.node_name || 'k8smaster' }} ({{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%)</span>
+          <span class="footer-mobile">🔥 {{ peakCpuNode?.node_name || 'k8smaster' }} {{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%</span>
         </span>
       </div>
     </div>
