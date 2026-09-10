@@ -58,6 +58,11 @@
 .btn-mobile-deploy { height: 32px; width: 32px; border-radius: 6px; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; background: var(--accent-primary, #0284c7); border: 1px solid rgba(255, 255, 255, 0.15); color: #fff; flex-shrink: 0; }
 .btn-mobile-deploy:hover { background: #0369a1; }
 
+/* Micro-Telemetry Strip (<640px) */
+.micro-telemetry-strip { display: none; align-items: center; justify-content: center; gap: 6px; height: 20px; font-size: 10px; color: var(--text-muted, #94a3b8); overflow-x: auto; white-space: nowrap; padding: 0 4px; scrollbar-width: none; }
+.micro-telemetry-strip::-webkit-scrollbar { display: none; }
+.telemetry-sep { opacity: 0.4; }
+
 /* Mobile Filter Strip Accordion */
 .mobile-filter-strip { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; width: 100%; box-sizing: border-box; }
 .mobile-filter-row { display: flex; align-items: center; gap: 8px; width: 100%; }
@@ -73,7 +78,7 @@
 /* High-Density Mobile Cards Stream (~68-75px/item) */
 .mobile-cards-stream, .mobile-card-stream { width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; overflow-x: hidden; }
 .empty-mobile-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px; background: rgba(15, 23, 42, 0.4); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 12px; color: var(--text-muted, #94a3b8); font-size: 12px; gap: 6px; }
-.mobile-workload-card { width: 100%; box-sizing: border-box; min-height: 68px; max-height: 75px; padding: 10px 12px; border-radius: 10px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; overflow: hidden; transition: border-color 0.15s ease, background 0.15s ease; }
+.mobile-workload-card { width: 100%; box-sizing: border-box; min-height: 70px; padding: 10px 12px; border-radius: 10px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; overflow: hidden; transition: border-color 0.15s ease, background 0.15s ease; }
 .mobile-workload-card:hover { border-color: rgba(6, 182, 212, 0.35); background: rgba(15, 23, 42, 0.9); }
 .card-row-1 { display: flex; align-items: center; justify-content: space-between; min-width: 0; width: 100%; }
 .card-name-group { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
@@ -90,11 +95,14 @@
 .runtime-badge { font-size: 9px; color: var(--text-muted, #94a3b8); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); padding: 1px 5px; border-radius: 3px; text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
 .canary-mini-badge { font-size: 9px; color: #fbbf24; background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.25); padding: 1px 5px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; }
 .bg-mini-badge { font-size: 9px; color: #c084fc; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.25); padding: 1px 5px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; }
-.card-quick-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
-.btn-quick-action { height: 26px; padding: 0 8px; border-radius: 5px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text-secondary, #cbd5e1); transition: all 0.15s ease; white-space: nowrap; }
+
+/* Quick Action Buttons (Touch Hit Expansion >=32px Target) */
+.card-quick-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.btn-quick-action { position: relative; height: 30px; min-height: 30px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text-secondary, #cbd5e1); transition: all 0.15s ease; white-space: nowrap; }
+.btn-quick-action::after { content: ''; position: absolute; inset: -6px; }
 .btn-quick-action:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
 .btn-quick-logs:hover { border-color: rgba(56, 189, 248, 0.45); color: #38bdf8; }
-.btn-quick-inspect { padding: 0 7px; }
+.btn-quick-inspect { padding: 0 8px; }
 .btn-quick-inspect:hover { border-color: rgba(168, 85, 247, 0.45); color: #c084fc; }
 
 /* DeploymentsTable.vue Styles */
@@ -162,6 +170,7 @@
 @media (min-width: 768px) {
   .mobile-command-bar { display: none !important; }
   .mobile-filter-strip { display: none !important; }
+  .micro-telemetry-strip { display: none !important; }
   .mobile-cards-view { display: none !important; }
   .desktop-table-container,
   .desktop-table-view { display: block !important; }
@@ -178,4 +187,10 @@
   .mobile-cards-view { display: block !important; padding: 0 !important; }
   .mobile-command-bar { display: flex !important; }
   .section-box.table-box { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
+}
+
+/* RWD: Handheld Mobile < 640px — Hide badge in bar to give search input >200px breathing room, show micro-telemetry strip */
+@media (max-width: 639px) {
+  .mobile-compact-badge { display: none !important; }
+  .micro-telemetry-strip { display: flex !important; }
 }
