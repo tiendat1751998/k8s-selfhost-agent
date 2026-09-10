@@ -224,8 +224,12 @@
 /* Command Palette Modal Content */
 .command-palette-content { display: flex; flex-direction: column; gap: 14px; }
 .palette-input-wrap { position: relative; display: flex; align-items: center; }
-.palette-search-icon { position: absolute; left: 16px; font-size: 14px; color: var(--text-muted); }
-.palette-search-input { width: 100%; padding: 12px 38px 12px 48px; font-size: 14px; }
+.palette-search-icon { position: absolute; left: 16px; font-size: 14px; color: var(--text-muted); pointer-events: none; z-index: 2; }
+.palette-search-input {
+  width: 100%;
+  padding: 12px 38px 12px 46px !important;
+  font-size: 14px;
+}
 .palette-clear { position: absolute; right: 14px; cursor: pointer; color: var(--text-muted); }
 .palette-results { max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .palette-item {
