@@ -643,24 +643,19 @@
 .badge-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
 .badge-violet { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
 
-@media (max-width: 1200px) {
+/* Tablet (768px - 1023px): 2 columns (2+2 + 1 full width) */
+@media (min-width: 768px) and (max-width: 1023px) {
   .summary-hud-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-}
-
-@media (max-width: 1024px) {
-  .summary-hud-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
   }
   .hud-card:nth-child(5) {
-    grid-column: 1 / -1;
+    grid-column: span 2;
   }
 }
 
-@media (max-width: 640px) {
+/* Mobile (< 768px): Compact clean cards with 0 overflow */
+@media (max-width: 767px) {
   .summary-hud-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
@@ -1138,11 +1133,6 @@
 }
 
 /* === OverviewHudMetrics.vue === */
-.summary-hud-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-}
 
 .hud-card {
   padding: 18px 20px;

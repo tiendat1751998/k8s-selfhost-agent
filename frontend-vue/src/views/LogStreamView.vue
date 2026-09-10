@@ -20,6 +20,7 @@ const showMobileTree = ref(false)
 const mode = ref<'live' | 'historical'>('live')
 const selectedTimeRange = ref('1h')
 const queryError = ref<string | null>(null)
+const isSearching = ref(false)
 const currentOffset = ref(0)
 const PAGE_SIZE = 100
 
@@ -51,6 +52,7 @@ async function runHistoricalQuery(isLoadMore = false) {
   }
 
   try {
+    isSearching.value = true
     const promises: [Promise<unknown>, Promise<unknown>?] = [
       logStore.fetchHistoricalLogs(filter, isLoadMore),
     ]
@@ -71,6 +73,8 @@ async function runHistoricalQuery(isLoadMore = false) {
     if (mode.value === 'historical') {
       queryError.value = err instanceof Error ? err.message : 'ClickHouse search failed'
     }
+  } finally {
+    isSearching.value = false
   }
 }
 
@@ -126,15 +130,23 @@ async function handleHistogramFilterRange(range: { start: string; end: string })
   const target = selectedTarget.value
   const queryParts = [kw, target.type === 'node' ? target.id : ''].filter(Boolean)
   currentOffset.value = 0
-  await logStore.fetchHistoricalLogs({
-    start_time: range.start,
-    end_time: range.end,
-    query: queryParts.length ? queryParts.join(' ') : undefined,
-    log_level: selectedLevel.value || undefined,
-    limit: PAGE_SIZE,
-    offset: 0,
-    container_name: target.type === 'service' ? target.id : undefined,
-  })
+  try {
+    isSearching.value = true
+    queryError.value = null
+    await logStore.fetchHistoricalLogs({
+      start_time: range.start,
+      end_time: range.end,
+      query: queryParts.length ? queryParts.join(' ') : undefined,
+      log_level: selectedLevel.value || undefined,
+      limit: PAGE_SIZE,
+      offset: 0,
+      container_name: target.type === 'service' ? target.id : undefined,
+    })
+  } catch (err: unknown) {
+    queryError.value = err instanceof Error ? err.message : 'Historical search failed'
+  } finally {
+    isSearching.value = false
+  }
 }
 
 function handleClearHistogramFilter() {
