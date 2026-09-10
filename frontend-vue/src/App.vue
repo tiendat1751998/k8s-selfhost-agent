@@ -36,6 +36,7 @@ const userInitials = computed(() => {
 const selectedTenant = ref('default-tenant')
 const showCommandPalette = ref(false)
 const mobileSidebarOpen = ref(false)
+const isSidebarCollapsed = ref(false)
 
 watch(() => route.path, () => {
   mobileSidebarOpen.value = false
@@ -209,6 +210,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
     <!-- Enterprise Multi-Group Sidebar -->
     <AppSidebar
       :mobile-open="mobileSidebarOpen"
+      v-model:collapsed="isSidebarCollapsed"
       v-model:selected-tenant="selectedTenant"
       :tenants="tenants"
       :user-initials="userInitials"
@@ -218,7 +220,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
     />
 
     <!-- Main Wrapper -->
-    <div class="main-wrapper">
+    <div class="main-wrapper" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
       <!-- Enterprise Top Navigation / HUD -->
       <header class="top-hud">
         <div class="hud-left">
@@ -300,7 +302,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
       </header>
 
       <!-- Main Page Content -->
-      <main class="page-container animate-fade-in" :class="{ 'route-logs': route.path.startsWith('/logs') }">
+      <main class="page-container main-content animate-fade-in" :class="{ 'route-logs': route.path.startsWith('/logs') }">
         <RouterView />
       </main>
     </div>
