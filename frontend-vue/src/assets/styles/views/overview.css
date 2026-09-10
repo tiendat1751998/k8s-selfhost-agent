@@ -1,4 +1,6 @@
-﻿.overview-dashboard {
+@import './overview-mobile.css';
+
+.overview-dashboard {
   padding: 24px 32px 48px;
   max-width: 1680px;
   margin: 0 auto;
@@ -61,18 +63,54 @@
 }
 
 /* Desktop vs Mobile Toggle */
-.mobile-command-bar {
-  display: none !important;
+@media (min-width: 768px) {
+  .mobile-command-bar {
+    display: none !important;
+  }
+
+  .mobile-stream-section {
+    display: none !important;
+  }
+
+  .desktop-overview-sections {
+    display: flex !important;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .dashboard-header {
+    display: flex !important;
+  }
 }
 
-.mobile-stream-section {
-  display: none !important;
-}
+@media (max-width: 767px) {
+  .dashboard-header {
+    display: none !important;
+  }
 
-.desktop-overview-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  .desktop-overview-sections {
+    display: none !important;
+  }
+
+  .mobile-command-bar {
+    display: flex !important;
+  }
+
+  .mobile-stream-section {
+    display: flex !important;
+    flex-direction: column;
+    gap: 12px;
+    width: 100% !important;
+  }
+
+  .overview-dashboard {
+    padding: 10px 12px 24px;
+    gap: 12px;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
 }
 
 /* Skeletons & Error States */
