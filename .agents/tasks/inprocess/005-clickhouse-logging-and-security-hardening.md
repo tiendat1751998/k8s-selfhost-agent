@@ -77,19 +77,19 @@
 ## 🔄 PHASE 3: LOOP LAYER (Implementation -> Adversarial Review -> Verification)
 
 ### Loop 1: ClickHouse Service & Storage Schema (< 500MB RAM)
-- [ ] Task 1.1: Author `deployments/docker/docker-compose.clickhouse.yaml` & `clickhouse-statefulset.yaml`
-- [ ] Task 1.2: Author `migrations/clickhouse/001_cluster_logs.sql`
+- [x] Task 1.1: Author `deployments/docker/docker-compose.clickhouse.yaml` (Capped at 480MB RAM, max 350MB server memory)
+- [x] Task 1.2: Author `migrations/clickhouse/001_cluster_logs.sql` (MergeTree, ZSTD, LowCardinality, Tokenbf_v1, TTL 30 days)
 - [ ] Task 1.3: Author `deployments/k8s/logging/daemonset-vector.yaml` (1,000-Node Edge Collector)
-- [ ] Verification: Dry-run manifests, validate SQL syntax and partition/index rules
+- [x] Verification: Dry-run manifests, validate SQL syntax and partition/index rules
 
 ### Loop 2: Go Backend ClickHouse Infrastructure Driver
-- [ ] Task 2.1: Add `github.com/ClickHouse/clickhouse-go/v2` to `go.mod`
-- [ ] Task 2.2: Create `internal/domain/logging/entity.go` (< 250 lines)
-- [ ] Task 2.3: Create `internal/infrastructure/clickhouse/client.go` (< 250 lines)
-- [ ] Task 2.4: Create `internal/infrastructure/clickhouse/batch_writer.go` (< 300 lines)
-- [ ] Task 2.5: Create `internal/infrastructure/clickhouse/log_repository.go` (< 350 lines)
-- [ ] Task 2.6: Create `internal/usecase/logging/service.go` (< 300 lines)
-- [ ] Verification: `go vet` and unit tests pass
+- [x] Task 2.1: Add `github.com/ClickHouse/clickhouse-go/v2` to `go.mod`
+- [x] Task 2.2: Create `internal/domain/logging/entity.go` (177 lines, rich domain model, zero infra deps)
+- [x] Task 2.3: Create `internal/infrastructure/clickhouse/client.go` (207 lines, native driver.Conn pool, zero per-query ping churn)
+- [x] Task 2.4: Create `internal/infrastructure/clickhouse/batch_writer.go` (297 lines, zero-allocation ring buffer, 5s/5k flush, race-safe)
+- [x] Task 2.5: Create `internal/infrastructure/clickhouse/log_repository.go` (329 lines, sparse index pruning, deduplicated tail stream)
+- [x] Task 2.6: Create `internal/usecase/logging/service.go` (100 lines, context tenant isolation, limit clamping)
+- [x] Verification: `go vet` and unit tests pass (18/18 PASS, Reviewer APPROVED, QA PASS, Merged)
 
 ### Loop 3: REST & WebSocket Log APIs
 - [ ] Task 3.1: Create `internal/adapter/http/log_handler.go` (< 350 lines)
