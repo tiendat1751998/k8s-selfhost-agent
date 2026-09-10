@@ -103,6 +103,16 @@ function formatDate(d?: string) {
           </button>
 
           <button
+            v-if="row.status === 'pending'"
+            class="btn btn-xs btn-reject"
+            :disabled="actionLoading === row.id"
+            title="Reject Promotion Request"
+            @click="emit('reject', row)"
+          >
+            <span>[ 🛑 Reject ]</span>
+          </button>
+
+          <button
             v-else-if="row.status === 'approved' || row.status === 'promoting'"
             class="btn btn-primary btn-xs btn-promote"
             :disabled="actionLoading === row.id"
@@ -123,7 +133,7 @@ function formatDate(d?: string) {
           </button>
 
           <button
-            v-if="row.status === 'pending' || row.status === 'promoting' || row.status === 'approved'"
+            v-if="row.status === 'promoting' || row.status === 'approved'"
             class="btn btn-xs btn-abort"
             :disabled="actionLoading === row.id"
             title="Abort this promotion pipeline"

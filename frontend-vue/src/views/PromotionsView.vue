@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import MetricCard from '../components/ui/MetricCard.vue'
 import { usePromotions } from '../composables/usePromotions'
 import PromotionPipelinesGrid from '../components/promotions/PromotionPipelinesGrid.vue'
@@ -6,6 +7,8 @@ import PromotionsTable from '../components/promotions/PromotionsTable.vue'
 import PromotionsMobileCards from '../components/promotions/PromotionsMobileCards.vue'
 import TriggerPromotionModal from '../components/promotions/TriggerPromotionModal.vue'
 import PromotionDiffDrawer from '../components/promotions/PromotionDiffDrawer.vue'
+
+const viewMode = ref<'table' | 'pipeline'>('table')
 
 const {
   loading,
@@ -46,7 +49,7 @@ const {
 
 <template>
   <div class="view-container animate-fade-in">
-    <!-- Desktop Header (>640px) -->
+    <!-- Desktop Header (>=768px) -->
     <div class="view-header desktop-header desktop-only">
       <div>
         <div class="view-tag">
@@ -60,6 +63,26 @@ const {
       </div>
 
       <div class="header-actions">
+        <!-- Segmented View Mode Toggle: [ 📑 Table ] [ 🔀 Pipeline ] -->
+        <div class="segmented-control font-mono">
+          <button
+            class="segmented-btn"
+            :class="{ active: viewMode === 'table' }"
+            @click="viewMode = 'table'"
+            title="Table View"
+          >
+            <span>📑 Table</span>
+          </button>
+          <button
+            class="segmented-btn"
+            :class="{ active: viewMode === 'pipeline' }"
+            @click="viewMode = 'pipeline'"
+            title="Pipeline View"
+          >
+            <span>🔀 Pipeline</span>
+          </button>
+        </div>
+
         <button class="btn btn-secondary" :disabled="loading || loadingServices" @click="refreshAll">
           <span>{{ loading || loadingServices ? '⏳ Querying...' : '🔄 Refresh' }}</span>
         </button>
@@ -69,7 +92,7 @@ const {
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<=640px) -->
+    <!-- Mobile 44px Command Bar (<768px) -->
     <div class="promotions-mobile-command-bar mobile-only">
       <div class="command-bar-left">
         <span class="command-bar-title font-bold">🚀 Promotions ({{ promotions.length }})</span>
@@ -84,7 +107,7 @@ const {
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<=640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="promotions-micro-telemetry mobile-only font-mono" role="status" aria-label="Promotions Micro Telemetry">
       <span class="tel-item tel-pend">⏳ {{ pendingCount }} pend</span>
       <span class="tel-sep">·</span>
@@ -102,7 +125,7 @@ const {
       <button class="toast-close" @click="toastMessage = null">✕</button>
     </div>
 
-    <!-- Metric HUD (Desktop only) -->
+    <!-- Metric HUD (Desktop only >=768px) -->
     <div class="metrics-grid desktop-metrics desktop-only">
       <MetricCard
         title="Pending Approvals"
@@ -144,21 +167,22 @@ const {
       />
     </div>
 
-    <!-- Visual Release Pipeline Grid (Dev -> QA -> Staging -> Production) -->
-    <PromotionPipelinesGrid
-      :environments="environments"
-      :promotions="promotions"
-      :action-loading="actionLoading"
-      @approve="handleApprove"
-      @reject="handleReject"
-      @complete="handleComplete"
-      @diff="openDiffDrawer"
-      @rollback="handleRollback"
-      @request-promotion="openCreateModal"
-    />
+    <!-- Desktop Pipeline Board OR Table (Mutually exclusive on desktop, suppressed on mobile) -->
+    <div v-if="viewMode === 'pipeline'" class="desktop-only pipeline-grid-container animate-fade-in">
+      <PromotionPipelinesGrid
+        :environments="environments"
+        :promotions="promotions"
+        :action-loading="actionLoading"
+        @approve="handleApprove"
+        @reject="handleReject"
+        @complete="handleComplete"
+        @diff="openDiffDrawer"
+        @rollback="handleRollback"
+        @request-promotion="openCreateModal"
+      />
+    </div>
 
-    <!-- Desktop History Data Table -->
-    <div class="desktop-only-table">
+    <div v-else-if="viewMode === 'table'" class="desktop-only desktop-only-table animate-fade-in">
       <PromotionsTable
         :promotions="promotions"
         :loading="loading"
@@ -173,19 +197,21 @@ const {
       />
     </div>
 
-    <!-- Mobile Touch-Optimized Promotion Card Stream -->
-    <PromotionsMobileCards
-      :promotions="promotions"
-      :loading="loading"
-      :action-loading="actionLoading"
-      @approve="handleApprove"
-      @reject="handleReject"
-      @complete="handleComplete"
-      @diff="openDiffDrawer"
-      @rollback="handleRollback"
-      @abort="handleAbort"
-      @request-promotion="openCreateModal"
-    />
+    <!-- Mobile Touch-Optimized Promotion Card Stream (<768px) -->
+    <div class="mobile-only mobile-stream-wrapper">
+      <PromotionsMobileCards
+        :promotions="promotions"
+        :loading="loading"
+        :action-loading="actionLoading"
+        @approve="handleApprove"
+        @reject="handleReject"
+        @complete="handleComplete"
+        @diff="openDiffDrawer"
+        @rollback="handleRollback"
+        @abort="handleAbort"
+        @request-promotion="openCreateModal"
+      />
+    </div>
 
     <!-- Trigger Promotion Modal -->
     <TriggerPromotionModal

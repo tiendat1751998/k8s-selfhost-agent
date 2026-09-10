@@ -76,11 +76,12 @@ function getPromotionsForEnv(env: Environment): Promotion[] {
 
               <template v-if="p.status === 'pending'">
                 <button
-                  class="btn btn-secondary btn-xs"
+                  class="btn btn-xs btn-reject"
                   :disabled="actionLoading === p.id"
+                  title="Reject Promotion"
                   @click="emit('reject', p)"
                 >
-                  ✕ Reject
+                  🛑 Reject
                 </button>
                 <button
                   class="btn btn-primary btn-xs"
