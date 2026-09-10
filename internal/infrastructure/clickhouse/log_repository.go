@@ -1,13 +1,17 @@
-﻿package clickhouse
+package clickhouse
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/datdt/k8sselfhost/internal/domain/logging"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 // LogRepository implements domain.LogRepository backed by ClickHouse.
@@ -26,15 +30,10 @@ func NewLogRepository(client *Client, writer *BatchWriter) *LogRepository {
 	}
 }
 
-// IngestBatch validates and persists log entries via BatchWriter or direct batch insert.
+// IngestBatch persists log entries via BatchWriter or direct batch insert.
 func (r *LogRepository) IngestBatch(ctx context.Context, entries []logging.LogEntry) error {
 	if len(entries) == 0 {
 		return nil
-	}
-	for i := range entries {
-		if err := entries[i].Validate(); err != nil {
-			return err
-		}
 	}
 	if r.writer != nil {
 		return r.writer.WriteBatch(entries)
@@ -75,7 +74,7 @@ func (r *LogRepository) insertBatchDirect(ctx context.Context, entries []logging
 }
 
 // BuildLogQuery constructs a parameterized SQL query utilizing ClickHouse sparse index pruning.
-// Order: tenant_id -> cluster_id -> namespace -> log_level -> timestamp -> tokenbf_v1 -> attributes.
+// Order: tenant_id -> cluster_id -> namespace -> timestamp -> log_level -> tokenbf_v1 -> attributes.
 func BuildLogQuery(f logging.LogFilter, table string) (string, []any) {
 	clauses := []string{"tenant_id = ?"}
 	args := []any{f.TenantID}
@@ -88,8 +87,8 @@ func BuildLogQuery(f logging.LogFilter, table string) (string, []any) {
 	}
 	add("cluster_id", f.ClusterID)
 	add("namespace", f.Namespace)
-	add("log_level", string(f.LogLevel))
 
+	// Primary index column 4 & partition pruning: timestamp
 	if !f.StartTime.IsZero() {
 		clauses = append(clauses, "timestamp >= ?")
 		args = append(args, f.StartTime)
@@ -98,17 +97,34 @@ func BuildLogQuery(f logging.LogFilter, table string) (string, []any) {
 		clauses = append(clauses, "timestamp <= ?")
 		args = append(args, f.EndTime)
 	}
+
+	// Primary index column 5: log_level
+	add("log_level", string(f.LogLevel))
+
+	// Low-cardinality & secondary filters
 	add("pod_name", f.PodName)
 	add("container_name", f.ContainerName)
 	add("stream", f.Stream)
+
+	// Token Bloom Filter index idx_msg on message
 	if strings.TrimSpace(f.SearchText) != "" {
 		clauses = append(clauses, "hasToken(message, ?)")
 		args = append(args, f.SearchText)
 	}
-	for k, v := range f.Attributes {
-		clauses = append(clauses, "attributes[?] = ?")
-		args = append(args, k, v)
+
+	// Sorted deterministic attributes map lookup for query caching
+	if len(f.Attributes) > 0 {
+		keys := make([]string, 0, len(f.Attributes))
+		for k := range f.Attributes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			clauses = append(clauses, "attributes[?] = ?")
+			args = append(args, k, f.Attributes[k])
+		}
 	}
+
 	limit := f.Limit
 	if limit <= 0 {
 		limit = 50
@@ -145,7 +161,7 @@ func (r *LogRepository) QueryLogs(ctx context.Context, filter logging.LogFilter)
 	}
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil {
-			fmt.Printf("clickhouse rows close notice: %v\n", closeErr)
+			logger.WithContext(ctx).Warn("clickhouse rows close error", zap.Error(closeErr))
 		}
 	}()
 
@@ -224,7 +240,7 @@ func (r *LogRepository) GetHistogram(
 	}
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil {
-			fmt.Printf("clickhouse histogram rows close notice: %v\n", closeErr)
+			logger.WithContext(ctx).Warn("clickhouse histogram rows close error", zap.Error(closeErr))
 		}
 	}()
 
@@ -261,7 +277,7 @@ func (r *LogRepository) GetHistogram(
 	return result, nil
 }
 
-// TailLogs establishes an active polling stream that channels newly arriving logs until ctx is canceled.
+// TailLogs establishes an active polling stream that channels newly arriving logs without duplicates.
 func (r *LogRepository) TailLogs(ctx context.Context, filter logging.LogFilter) (<-chan logging.LogEntry, error) {
 	if err := filter.Validate(); err != nil {
 		return nil, err
@@ -290,13 +306,16 @@ func (r *LogRepository) TailLogs(ctx context.Context, filter logging.LogFilter) 
 
 				res, err := r.QueryLogs(ctx, currentFilter)
 				if err != nil {
+					logger.WithContext(ctx).Warn("clickhouse tail logs query error", zap.Error(err))
 					continue
 				}
 				for i := len(res.Entries) - 1; i >= 0; i-- {
 					entry := res.Entries[i]
-					if entry.Timestamp.After(lastSeen) {
-						lastSeen = entry.Timestamp
+					// Strict greater-than check prevents repeating identical timestamp entries on every tick
+					if !entry.Timestamp.After(lastSeen) {
+						continue
 					}
+					lastSeen = entry.Timestamp
 					select {
 					case outCh <- entry:
 					case <-ctx.Done():

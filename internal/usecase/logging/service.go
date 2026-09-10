@@ -1,4 +1,4 @@
-﻿package logging
+package logging
 
 import (
 	"context"
@@ -30,7 +30,7 @@ func (s *Service) resolveTenant(ctx context.Context) (string, error) {
 	return tenantID, nil
 }
 
-// sanitizeFilter enforces tenant isolation and query constraints: limit clamped <= 100.
+// sanitizeFilter enforces tenant isolation and query constraints.
 func (s *Service) sanitizeFilter(ctx context.Context, filter logging.LogFilter) (logging.LogFilter, error) {
 	tenantID, err := s.resolveTenant(ctx)
 	if err != nil {
@@ -45,14 +45,6 @@ func (s *Service) sanitizeFilter(ctx context.Context, filter logging.LogFilter) 
 	}
 
 	filter.Sanitize()
-
-	// Hard clamp on pagination limit max 100
-	if filter.Limit > 100 {
-		filter.Limit = 100
-	} else if filter.Limit <= 0 {
-		filter.Limit = 50
-	}
-
 	return filter, nil
 }
 

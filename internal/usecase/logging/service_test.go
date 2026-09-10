@@ -1,4 +1,4 @@
-﻿package logging_test
+package logging_test
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func TestService_TenantIsolationAndLimitClamping(t *testing.T) {
 	filter := domainLog.LogFilter{
 		TenantID:  "tenant-bravo",
 		ClusterID: "c1",
-		Limit:     500, // Should be clamped to 100
+		Limit:     500, // Should be clamped to 100 by Sanitize
 	}
 
 	res, err := svc.QueryLogs(ctx, filter)

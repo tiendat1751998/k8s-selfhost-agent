@@ -1,4 +1,4 @@
-﻿services:
+services:
   clickhouse:
     image: clickhouse/clickhouse-server:24.3-alpine
     container_name: k8sselfhost-clickhouse
@@ -11,17 +11,17 @@
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: ""
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-    mem_limit: 512m
+    mem_limit: 480m
     mem_reservation: 256m
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 480m
         reservations:
           memory: 256m
     command:
-      - "--max_server_memory_usage=450000000"
-      - "--mark_cache_size=67108864"
+      - "--max_server_memory_usage=350000000"
+      - "--mark_cache_size=33554432"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ../../migrations/clickhouse:/docker-entrypoint-initdb.d
