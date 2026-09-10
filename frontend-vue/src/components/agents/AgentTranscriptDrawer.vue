@@ -150,4 +150,5 @@ function formatTime(d: string) {
 
 <style scoped>
 @import '../../assets/styles/views/agents.css';
+@import '../../assets/styles/components/agents-drawers.css';
 </style>

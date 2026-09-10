@@ -21,8 +21,8 @@ const {
 
 <template>
   <div class="agents-view-container animate-fade-in">
-    <!-- Header -->
-    <div class="view-header">
+    <!-- Desktop Header -->
+    <div class="view-header desktop-only">
       <div>
         <div class="view-tag">
           <span class="pulse-dot pulse-dot-cyan"></span>
@@ -44,6 +44,43 @@ const {
       </div>
     </div>
 
+    <!-- Mobile 44px Command Bar (<768px) -->
+    <div class="agents-mobile-command-bar mobile-only">
+      <div class="command-bar-left">
+        <span class="command-bar-title font-bold">🤖 Agent Swarm ({{ agentSwarm.filter(a => a.status === 'running').length }}/{{ agentSwarm.length }})</span>
+      </div>
+      <div class="command-bar-actions">
+        <button 
+          class="btn-icon-cmd" 
+          title="Dispatch Task" 
+          aria-label="Dispatch Task"
+          @click="showDispatchModal = true"
+        >
+          <span>➕</span>
+        </button>
+        <button 
+          class="btn-icon-cmd" 
+          :disabled="loading" 
+          title="Refresh Swarm" 
+          aria-label="Refresh Swarm" 
+          @click="fetchAgentData"
+        >
+          <span>🔄</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
+    <div class="agents-micro-telemetry mobile-only font-mono" role="status" aria-label="Agent Swarm Micro Telemetry">
+      <span class="tel-item tel-arch">🏛️ {{ projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? `${Math.round(projectState.architecture_score * 100)}%` : '—' }}</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-health">🛡️ {{ projectState?.repository_health !== undefined && projectState.repository_health !== null ? `${Math.round(projectState.repository_health * 100)}%` : '—' }}</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-tasks">📋 {{ tasks.length > 0 ? `${completedTasksCount}/${tasks.length}` : '0/0' }}</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-runs">⚡ {{ executions.length }}</span>
+    </div>
+
     <!-- Error Alert -->
     <div v-if="error" class="error-banner">
       <span class="error-icon">⚠️</span>
@@ -51,7 +88,7 @@ const {
     </div>
 
     <!-- Metrics HUD -->
-    <div class="metrics-grid">
+    <div class="metrics-grid desktop-only">
       <MetricCard
         title="Architecture Score"
         :value="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? `${Math.round(projectState.architecture_score * 100)}%` : '—'"
@@ -230,4 +267,5 @@ const {
 
 <style>
 @import '../assets/styles/views/agents.css';
+@import '../assets/styles/components/agents-drawers.css';
 </style>
