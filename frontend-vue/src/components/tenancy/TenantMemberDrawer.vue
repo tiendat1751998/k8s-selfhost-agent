@@ -157,5 +157,5 @@ function handleInviteSubmit() {
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/tenancy.css';
+@import '../../assets/styles/components/tenancy-drawers.css';
 </style>
