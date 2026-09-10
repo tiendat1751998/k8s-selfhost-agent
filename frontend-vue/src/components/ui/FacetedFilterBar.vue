@@ -58,8 +58,14 @@ const hasActiveFilters = computed(() => {
   return activeTokens.value.length > 0 || Boolean(props.modelValue && props.modelValue.trim())
 })
 
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
 function onSearchInput(e: Event) {
-  emit('update:modelValue', (e.target as HTMLInputElement).value)
+  const val = (e.target as HTMLInputElement).value
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    emit('update:modelValue', val)
+  }, 150)
 }
 
 function removeFilter(key: string) {
@@ -77,6 +83,7 @@ function selectFacetOption(facetKey: string, val: string) {
 }
 
 function clearAll() {
+  if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
   emit('update:modelValue', '')
   emit('update:activeFilters', {})
   emit('clear')
@@ -93,7 +100,7 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   )
   if (e.key === '/' && !isEditing && !e.ctrlKey && !e.metaKey && !e.altKey) {
     e.preventDefault(); searchInputRef.value?.focus(); searchInputRef.value?.select()
-  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && !isEditing) {
     e.preventDefault(); searchInputRef.value?.focus(); searchInputRef.value?.select()
   } else if (e.key === 'Escape' && openFacetKey.value) {
     openFacetKey.value = null
@@ -112,6 +119,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
   window.removeEventListener('keydown', handleGlobalKeydown)
   document.removeEventListener('click', onDocClick)
 })

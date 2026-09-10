@@ -34,22 +34,31 @@ function setStored(key: string, value: string): void {
 const activeClusterId = ref<string>(getStored('k8s_active_cluster', 'staging-k8s'))
 const activeNamespace = ref<string>(getStored('k8s_active_namespace', 'all'))
 const availableClusters = ref<ClusterContextItem[]>([])
-const availableNamespaces = ref<string[]>(['all', 'default', 'kube-system', 'monitoring'])
+const availableNamespaces = ref<string[]>(['all'])
 
 async function loadNamespacesForCluster(clusterId: string): Promise<void> {
-  if (!clusterId) return
+  if (!clusterId) {
+    availableNamespaces.value = ['all']
+    if (activeNamespace.value !== 'all') {
+      setNamespace('all')
+    }
+    return
+  }
   try {
     const list = await k8sApi.listNamespaces(clusterId)
     if (list && list.length > 0) {
       const names = list.map(n => n.name).filter(Boolean)
       availableNamespaces.value = Array.from(new Set(['all', ...names]))
-      return
+    } else {
+      availableNamespaces.value = ['all']
     }
   } catch {
-    // Fallback if listNamespaces fails
+    availableNamespaces.value = ['all']
   }
-  if (availableNamespaces.value.length <= 1) {
-    availableNamespaces.value = ['all', 'default', 'kube-system', 'monitoring', 'ingress-nginx']
+
+  // Fix state desync on cluster switch
+  if (activeNamespace.value !== 'all' && !availableNamespaces.value.includes(activeNamespace.value)) {
+    setNamespace('all')
   }
 }
 
@@ -68,21 +77,11 @@ async function loadClusters(): Promise<void> {
         activeClusterId.value = availableClusters.value[0].id
         setStored('k8s_active_cluster', activeClusterId.value)
       }
-    } else if (availableClusters.value.length === 0) {
-      availableClusters.value = [
-        { id: 'staging-k8s', name: 'staging-k8s', status: 'healthy', region: 'us-east-1' },
-        { id: 'prod-us-east', name: 'prod-us-east', status: 'healthy', region: 'us-east-2' },
-        { id: 'prod-eu-west', name: 'prod-eu-west', status: 'healthy', region: 'eu-west-1' }
-      ]
+    } else {
+      availableClusters.value = []
     }
   } catch {
-    if (availableClusters.value.length === 0) {
-      availableClusters.value = [
-        { id: 'staging-k8s', name: 'staging-k8s', status: 'healthy', region: 'us-east-1' },
-        { id: 'prod-us-east', name: 'prod-us-east', status: 'healthy', region: 'us-east-2' },
-        { id: 'prod-eu-west', name: 'prod-eu-west', status: 'healthy', region: 'eu-west-1' }
-      ]
-    }
+    availableClusters.value = []
   }
   await loadNamespacesForCluster(activeClusterId.value)
 }
