@@ -1,8 +1,8 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
 import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
+import PercentageBar from '../ui/PercentageBar.vue'
 import type { NodeHeadroom } from '../../composables/useCapacityForecast'
-import { getUsageColorBg, getUsageColorText } from '../../composables/useCapacityForecast'
 
 defineProps<{
   nodes: NodeHeadroom[]
@@ -21,6 +21,12 @@ const nodeActions: ActionItem[] = [
 function handleNodeAction(actionId: string, nodeId: string) {
   if (actionId === 'rebalance') emit('rebalance', nodeId)
   else if (actionId === 'inspect') emit('inspect', nodeId)
+}
+
+function getRiskTextColor(pct: number): string {
+  if (pct >= 85) return 'text-rose'
+  if (pct >= 70) return 'text-amber'
+  return 'text-cyan'
 }
 </script>
 
@@ -76,31 +82,19 @@ function handleNodeAction(actionId: string, nodeId: string) {
             <td>
               <div class="resource-bar-cell">
                 <div class="resource-bar-info font-mono">
-                  <span :class="getUsageColorText(node.cpuUsagePercent)">{{ node.cpuUsagePercent.toFixed(1) }}%</span>
+                  <span :class="getRiskTextColor(node.cpuUsagePercent)">{{ node.cpuUsagePercent.toFixed(1) }}%</span>
                   <span class="text-muted">{{ node.cpuAllocatedCores }} / {{ node.cpuTotalCores }} C</span>
                 </div>
-                <div class="gauge-bar-bg">
-                  <div
-                    class="gauge-bar-fill"
-                    :class="getUsageColorBg(node.cpuUsagePercent)"
-                    :style="{ width: `${Math.min(100, node.cpuUsagePercent)}%` }"
-                  ></div>
-                </div>
+                <PercentageBar :percentage="node.cpuUsagePercent" :height="4" />
               </div>
             </td>
             <td>
               <div class="resource-bar-cell">
                 <div class="resource-bar-info font-mono">
-                  <span :class="getUsageColorText(node.memUsagePercent)">{{ node.memUsagePercent.toFixed(1) }}%</span>
+                  <span :class="getRiskTextColor(node.memUsagePercent)">{{ node.memUsagePercent.toFixed(1) }}%</span>
                   <span class="text-muted">{{ node.memAllocatedGiB }} / {{ node.memTotalGiB }} GiB</span>
                 </div>
-                <div class="gauge-bar-bg">
-                  <div
-                    class="gauge-bar-fill"
-                    :class="getUsageColorBg(node.memUsagePercent)"
-                    :style="{ width: `${Math.min(100, node.memUsagePercent)}%` }"
-                  ></div>
-                </div>
+                <PercentageBar :percentage="node.memUsagePercent" :height="4" />
               </div>
             </td>
             <td class="font-mono">
@@ -146,5 +140,16 @@ function handleNodeAction(actionId: string, nodeId: string) {
 .node-matrix-table {
   table-layout: fixed;
   width: 100%;
+}
+.resource-bar-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.resource-bar-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
 }
 </style>
