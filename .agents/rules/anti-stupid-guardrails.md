@@ -1,4 +1,4 @@
-﻿# ANTI-STUPIDITY & ANTI-LAZY GUARDRAILS (ENTERPRISE DEFENSE SYSTEM)
+# ANTI-STUPIDITY & ANTI-LAZY GUARDRAILS (ENTERPRISE DEFENSE SYSTEM)
 
 > Strictly binding for ALL agents (Orchestrator, Coder, Reviewer, QA, Architect, Planner).
 > Any violation is classified as a CRITICAL DEFECT requiring immediate rejection and rollback.
@@ -43,6 +43,16 @@
 - **Violation**: Executing tasks without loading assigned skills from system prompt.
 - **Enforcement**: Mandatory execution of Step 0 skill loading. Subagents must state the techniques they are applying from their assigned skills.
 
+### 7. THE "HIDE INSTEAD OF ADAPT" LAZY SHORTCUT & BUTTON CLUTTER SPAM
+- **Violation**:
+  - **Hiding complex UI features**: Hiding charts, graphs, data visualizations, or telemetry curves on mobile (`display: none !important;`) instead of adapting them into a responsive mobile-first component (e.g. hiding the live saturation line chart on mobile overview!).
+  - **Button Spam**: Cramming 5-6 chunky text buttons onto every row of a table (`Logs`, `Scale`, `Restart`, `YAML`, `Details`, `Delete`) instead of designing clean enterprise actions (2 primary actions + `[ ⋯ ]` dropdown / action drawer).
+  - **Superficial "Check-the-Box" Fixes**: Making a test pass by deleting or commenting out code, or doing the bare minimum to get 0 overflow while ruining the user experience.
+- **Enforcement**:
+  - **Mandatory Mobile Data Parity**: Any chart or visualization on desktop MUST have an adapted mobile-first equivalent (e.g. compact SVG sparkline, 120-140px mobile trend card). Completely hiding a chart is an AUTOMATIC REJECTION.
+  - **Max 2 Inline Table Actions**: Every table row must have at most 2 primary actions inline; all secondary operations must be inside a `[ ⋯ ]` menu.
+  - **Reviewer & QA Failure Gate**: Reviewer and QA MUST explicitly reject any PR that suppresses charts or spams buttons.
+
 ---
 
 ## 🛡️ 4 HARD ENFORCEMENT GATES
@@ -56,7 +66,7 @@ Every dispatch prompt from Orchestrator MUST contain:
 5. `NEGATIVE CONSTRAINTS`: Zero stubs, zero mocks, zero `_ :=`, strict < 500 lines/file.
 6. `REQUIRED EVIDENCE`: Exact command to run and expected output format.
 
-### Gate 2: The 7-Point Adversarial Reviewer Checklist
+### Gate 2: The 8-Point Adversarial Reviewer Checklist
 `reviewer` must evaluate every coder diff against:
 1. **Concurrency Safety**: Data race prevention, sync primitives, channel deadlocks.
 2. **Resource Leaks**: Unclosed response bodies, leaked goroutines, uncancelled contexts.
@@ -65,13 +75,15 @@ Every dispatch prompt from Orchestrator MUST contain:
 5. **Performance & Allocations**: N+1 query elimination, indexing, memory allocations.
 6. **Security & RBAC**: Input sanitization, authorization middleware, least privilege.
 7. **Simplicity (`ponytail-review`)**: Elimination of dead code, speculative abstractions, and bloat.
+8. **Anti-Lazy & Feature Parity**: Zero lazy hiding of charts/data on mobile (`display: none` on charts is an instant reject), max 2 inline table actions (zero button spam).
 
-### Gate 3: Exhaustive QA Matrix (Happy + Unhappy + Edge Cases)
+### Gate 3: Exhaustive QA Matrix (Happy + Unhappy + Edge Cases + Charts)
 `qa-test-engineer` MUST audit:
 1. **Happy Path**: Expected valid workflows return 200 OK.
 2. **Unhappy Path**: Invalid inputs return 400 Bad Request, unauthorized calls return 401/403.
 3. **Boundary / Edge Cases**: Empty arrays, nil pointers, malformed UUIDs, maximum payload sizes.
 4. **Multi-Viewport Visual Audit**: Mobile (375x812), Tablet (768x1024), Desktop (1440x900).
+5. **Chart & Visual Density Verification**: Confirm live charts (splines, bars, SVG trends) actually render on mobile and desktop without clipping, horizontal overflow, or being hidden.
 
 ### Gate 4: Fail-Closed Governor Handoff Audit
 Before any merge, Orchestrator or `governor` inspects the transcript:
