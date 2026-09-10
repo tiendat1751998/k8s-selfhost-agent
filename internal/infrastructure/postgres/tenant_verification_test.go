@@ -100,9 +100,6 @@ func TestAllPostgresRepos_QueryCallsUseBuildTenantQuery(t *testing.T) {
 	}
 
 	knownExceptions := map[string][]string{
-		"agent_repo.go":         {"*"},                             // Non-tenant tables (agent_tasks, agent_subtasks, agent_executions, agent_project_state)
-		"audit_repo.go":         {"*"},                             // Non-tenant tables (audit_findings, audit_runs, audit_logs)
-		"automation_repo.go":    {"*"},                             // Non-tenant tables (automation_rules, automation_executions)
 		"backup_repo.go":        {"*"},                             // Non-tenant tables (backup_history)
 		"changes_repo.go":       {"*"},                             // Non-tenant tables (change_requests, maintenance_windows)
 		"capacity_repo.go":      {"*"},                             // Non-tenant tables (capacity_forecasts)

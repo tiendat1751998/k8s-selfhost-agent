@@ -124,7 +124,9 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 
 	// Strategic merge patch for cordoning
 	patchBytes := []byte(`{"spec":{"unschedulable":true}}`)
-	_, _ = client.CoreV1().Nodes().Patch(ctx, nodeName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	if _, patchErr := client.CoreV1().Nodes().Patch(ctx, nodeName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}); patchErr != nil {
+		c.logger.Debug("cordon strategic merge patch non-critical error", zap.String("node", nodeName), zap.Error(patchErr))
+	}
 
 	// Ensure node struct reflects unschedulable = true for fake and live clients
 	if !node.Spec.Unschedulable {

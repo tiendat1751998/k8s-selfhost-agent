@@ -109,8 +109,9 @@ func TestCORS_Preflight(t *testing.T) {
 	if w.Code != http.StatusNoContent {
 		t.Errorf("expected 204 for OPTIONS, got %d", w.Code)
 	}
-	if w.Header().Get("Access-Control-Allow-Methods") == "" {
-		t.Error("expected CORS Allow-Methods header")
+	methods := w.Header().Get("Access-Control-Allow-Methods")
+	if methods == "" || !strings.Contains(methods, "PATCH") {
+		t.Errorf("expected CORS Allow-Methods header to contain PATCH, got: %s", methods)
 	}
 	if w.Header().Get("Access-Control-Allow-Headers") == "" {
 		t.Error("expected CORS Allow-Headers header")
@@ -129,6 +130,7 @@ func TestSecurityHeaders(t *testing.T) {
 	checks := map[string]string{
 		"X-Content-Type-Options":    "nosniff",
 		"X-Frame-Options":           "DENY",
+		"X-XSS-Protection":          "1; mode=block",
 		"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
 		"Referrer-Policy":           "strict-origin-when-cross-origin",
 		"Permissions-Policy":        "camera=(), microphone=(), geolocation=()",
@@ -138,11 +140,6 @@ func TestSecurityHeaders(t *testing.T) {
 		if w.Header().Get(header) != expected {
 			t.Errorf("expected %s: %s, got %s", header, expected, w.Header().Get(header))
 		}
-	}
-
-	// Verify X-XSS-Protection is removed
-	if xss := w.Header().Get("X-XSS-Protection"); xss != "" {
-		t.Errorf("expected X-XSS-Protection to be absent, got %s", xss)
 	}
 
 	// Verify CSP removes unsafe-inline from script-src but keeps in style-src
