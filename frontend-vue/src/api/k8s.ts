@@ -454,4 +454,27 @@ export const k8sApi = {
   ): Promise<{ status?: string; message?: string }> {
     return this.suspendCronJob(cluster, name, namespace, suspend)
   },
+
+  async getPodLogs(
+    cluster: string,
+    pod: string,
+    namespace?: string
+  ): Promise<{ logs?: string[]; error?: string }> {
+    const q = namespace && namespace !== 'all' ? `?namespace=${encodeURIComponent(namespace)}` : ''
+    const path = `/k8s/${encodeURIComponent(cluster)}/pods/${encodeURIComponent(pod)}/logs${q}`
+    const res = await api.get<any>(path)
+    if (res && res.data && typeof res.data.logs === 'string') {
+      return { logs: res.data.logs.split('\n') }
+    }
+    if (res && typeof res.logs === 'string') {
+      return { logs: res.logs.split('\n') }
+    }
+    if (res && Array.isArray(res.logs)) {
+      return { logs: res.logs }
+    }
+    if (res && res.data && Array.isArray(res.data.logs)) {
+      return { logs: res.data.logs }
+    }
+    return res || {}
+  },
 }

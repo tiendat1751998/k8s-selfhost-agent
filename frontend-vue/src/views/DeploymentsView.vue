@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import MetricCard from '../components/ui/MetricCard.vue'
 import DeploymentsTable from '../components/deployments/DeploymentsTable.vue'
 import DeploymentsMobileCards from '../components/deployments/DeploymentsMobileCards.vue'
@@ -19,12 +19,14 @@ const {
   toastMessage,
   templates,
   activeFilterTab,
+  statusFilter,
   searchQuery,
   selectedNamespaceFilter,
   totalWorkloads,
   totalReplicas,
   readyReplicas,
   healthyCount,
+  degradedCount,
   canaryCount,
   blueGreenCount,
   k8sCount,
@@ -48,7 +50,6 @@ const {
 
 // Mobile PWA Ergonomics
 const showMobileSearch = ref(false)
-const degradedCount = computed(() => Math.max(0, totalWorkloads.value - healthyCount.value))
 
 // Drawers & Modals State
 const selectedApp = ref<DeploymentApp | null>(null)
@@ -209,6 +210,43 @@ async function onCreateApp(payload: DeploymentApp) {
       <!-- Filter Controls Bar -->
       <div class="table-controls-bar">
         <div class="filter-pills-row">
+          <!-- Status Filter Pill Group -->
+          <div class="status-filter-group">
+            <button
+              type="button"
+              class="pill-btn"
+              :class="{ 'pill-active': statusFilter === 'all' }"
+              title="All Workload Statuses"
+              @click="statusFilter = 'all'"
+            >
+              <span>All</span>
+              <span class="pill-badge">{{ totalWorkloads }}</span>
+            </button>
+            <button
+              type="button"
+              class="pill-btn pill-healthy"
+              :class="{ 'pill-active': statusFilter === 'healthy' }"
+              title="Healthy Workloads"
+              @click="statusFilter = 'healthy'"
+            >
+              <span>🛡️ Healthy</span>
+              <span class="pill-badge">{{ healthyCount }}</span>
+            </button>
+            <button
+              type="button"
+              class="pill-btn pill-degraded"
+              :class="{ 'pill-active': statusFilter === 'degraded' }"
+              title="Degraded Workloads"
+              @click="statusFilter = 'degraded'"
+            >
+              <span>⚠️ Degraded</span>
+              <span class="pill-badge">{{ degradedCount }}</span>
+            </button>
+          </div>
+
+          <div class="pills-divider" aria-hidden="true"></div>
+
+          <!-- Type & Strategy Filter Pills -->
           <button type="button" class="pill-btn" :class="{ 'pill-active': activeFilterTab === 'all' }" @click="activeFilterTab = 'all'">
             <span class="btn-text-full">🌐 All Workloads</span>
             <span class="btn-text-mobile">All</span>

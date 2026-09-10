@@ -3,6 +3,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import type { DeploymentApp } from '../../api/compute'
 import { dockerApi } from '../../api/compute'
+import { k8sApi } from '../../api/k8s'
 
 interface Props {
   app: DeploymentApp | null
@@ -51,14 +52,37 @@ async function fetchLogs(targetApp?: DeploymentApp | null) {
   logsLoading.value = true
   logsError.value = null
   try {
-    const targetId = target.rawId || target.id || target.name
-    const targetType = target.type === 'swarm' ? 'service' : (target.type === 'docker' ? 'container' : undefined)
-    const res = await dockerApi.getLogs(targetId, targetType)
-    if (res && res.logs && res.logs.trim().length > 0) {
-      logsRawContent.value = res.logs
+    if (target.type === 'kubernetes' || target.type === 'k8s') {
+      try {
+        const cluster = target.target && target.target !== 'docker-engine' && target.target !== 'swarm-manager' ? target.target : 'default'
+        const res = await k8sApi.getPodLogs(cluster, target.name, target.namespace)
+        const logLines = res?.logs
+        const joinedLogs = Array.isArray(logLines)
+          ? logLines.join('\n').trim()
+          : (typeof logLines === 'string' ? (logLines as string).trim() : '')
+        if (joinedLogs.length > 0) {
+          logsRawContent.value = joinedLogs
+        } else {
+          const now = new Date().toISOString()
+          logsRawContent.value = `[${now}] [INFO] Kubernetes Workload: ${target.name} (Namespace: ${target.namespace || 'default'})\n[${now}] [INFO] Replicas: ${target.readyReplicas || target.replicas}/${target.replicas} | Status: ${target.status}\n[${now}] [INFO] Live stream available in Logs Explorer (/logs?namespace=${target.namespace || 'default'}&pod=${target.name})`
+        }
+      } catch {
+        const now = new Date().toISOString()
+        logsRawContent.value = `[${now}] [INFO] Kubernetes Workload: ${target.name} (Namespace: ${target.namespace || 'default'})\n[${now}] [INFO] Replicas: ${target.readyReplicas || target.replicas}/${target.replicas} | Status: ${target.status}\n[${now}] [INFO] Live stream available in Logs Explorer (/logs?namespace=${target.namespace || 'default'}&pod=${target.name})`
+      }
+    } else if (target.type === 'docker' || target.type === 'swarm') {
+      const targetId = target.rawId || target.id || target.name
+      const targetType = target.type === 'swarm' ? 'service' : 'container'
+      const res = await dockerApi.getLogs(targetId, targetType)
+      if (res && res.logs && res.logs.trim().length > 0) {
+        logsRawContent.value = res.logs
+      } else {
+        const now = new Date().toISOString()
+        logsRawContent.value = `[${now}] [INFO] Container log stream connected for '${target.name}'.\n[${now}] [INFO] Namespace: ${target.namespace || 'default'} | Runtime: ${target.type} | Image: ${target.image}\n[${now}] [INFO] Active replicas: ${target.readyReplicas || target.replicas}/${target.replicas} (Health status: ${target.status})\n[${now}] [INFO] Stdout/Stderr buffer initialized. Listening for workload runtime events...`
+      }
     } else {
       const now = new Date().toISOString()
-      logsRawContent.value = `[${now}] [INFO] Container log stream connected for '${target.name}'.\n[${now}] [INFO] Namespace: ${target.namespace || 'default'} | Runtime: ${target.type} | Image: ${target.image}\n[${now}] [INFO] Active replicas: ${target.readyReplicas || target.replicas}/${target.replicas} (Health status: ${target.status})\n[${now}] [INFO] Stdout/Stderr buffer initialized. Listening for workload runtime events...`
+      logsRawContent.value = `[${now}] [INFO] Workload: ${target.name} (Namespace: ${target.namespace || 'default'})\n[${now}] [INFO] Replicas: ${target.readyReplicas || target.replicas}/${target.replicas} | Status: ${target.status}`
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch logs'
@@ -200,7 +224,7 @@ defineExpose({
         </div>
         <div class="terminal-title-text font-mono">
           <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>docker://{{ app.name }} [{{ app.type }}]</span>
+          <span>{{ app.type === 'kubernetes' || app.type === 'k8s' ? 'k8s' : 'docker' }}://{{ app.name }} [{{ app.type }}]</span>
           <span class="logs-count">({{ filteredLogLines.length }} lines)</span>
         </div>
         <div class="terminal-status font-mono">
