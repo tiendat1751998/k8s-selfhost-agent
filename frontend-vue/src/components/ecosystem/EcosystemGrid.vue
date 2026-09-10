@@ -35,7 +35,7 @@ const emit = defineEmits<{
       <div class="card-header">
         <div class="tool-main-info">
           <div class="tool-icon-wrap">
-            {{ getToolIcon(tool) }}
+            <BaseIcon :name="getToolIcon(tool)" size="md" />
           </div>
           <div style="min-width: 0;">
             <h3 class="tool-name" :title="tool.name">{{ tool.name }}</h3>

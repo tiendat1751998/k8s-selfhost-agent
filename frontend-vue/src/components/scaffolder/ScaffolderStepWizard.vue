@@ -42,7 +42,7 @@ const emit = defineEmits<{
     <div class="wizard-modal-container">
       <!-- Template Summary Banner -->
       <div class="wizard-summary glass-panel">
-        <div class="summary-avatar">{{ getFrameworkIcon(activeTemplate.framework) }}</div>
+        <div class="summary-avatar"><BaseIcon :name="getFrameworkIcon(activeTemplate.framework)" size="md" /></div>
         <div class="summary-info">
           <h4>{{ activeTemplate.name }}</h4>
           <p>{{ activeTemplate.description }}</p>

@@ -152,19 +152,19 @@ export function useServiceCatalog() {
   const formErrors = reactive<{ name?: string; repo_url?: string; docs_url?: string }>({})
 
   const serviceTypes: { value: ServiceType; label: string; icon: string }[] = [
-    { value: 'service', label: 'Backend Service', icon: '⚙️' },
-    { value: 'api', label: 'REST / gRPC API', icon: '⚡' },
-    { value: 'library', label: 'Shared Library', icon: '📚' },
-    { value: 'database', label: 'Database / Storage', icon: '🗄️' },
-    { value: 'frontend', label: 'Frontend App', icon: '🌐' },
-    { value: 'worker', label: 'Background Worker', icon: '⏳' },
+    { value: 'service', label: 'Backend Service', icon: 'server' },
+    { value: 'api', label: 'REST / gRPC API', icon: 'zap' },
+    { value: 'library', label: 'Shared Library', icon: 'book-open' },
+    { value: 'database', label: 'Database / Storage', icon: 'database' },
+    { value: 'frontend', label: 'Frontend App', icon: 'globe' },
+    { value: 'worker', label: 'Background Worker', icon: 'layers' },
   ]
 
   const lifecycles: { value: ServiceLifecycle; label: string; icon: string }[] = [
-    { value: 'production', label: 'Production', icon: '🟢' },
-    { value: 'staging', label: 'Staging', icon: '🔵' },
-    { value: 'development', label: 'Development', icon: '🟠' },
-    { value: 'deprecated', label: 'Deprecated', icon: '🔴' },
+    { value: 'production', label: 'Production', icon: 'check-circle' },
+    { value: 'staging', label: 'Staging', icon: 'activity' },
+    { value: 'development', label: 'Development', icon: 'code' },
+    { value: 'deprecated', label: 'Deprecated', icon: 'alert-triangle' },
   ]
 
   function showToast(text: string, type: 'success' | 'error' = 'success') {
@@ -293,13 +293,13 @@ export function useServiceCatalog() {
 
   function getTypeIcon(type: string): string {
     switch (type?.toLowerCase()) {
-      case 'service': return '⚙️'
-      case 'api': return '⚡'
-      case 'library': return '📚'
-      case 'database': return '🗄️'
-      case 'frontend': return '🌐'
-      case 'worker': return '⏳'
-      default: return '📦'
+      case 'service': return 'server'
+      case 'api': return 'zap'
+      case 'library': return 'book-open'
+      case 'database': return 'database'
+      case 'frontend': return 'globe'
+      case 'worker': return 'layers'
+      default: return 'box'
     }
   }
 

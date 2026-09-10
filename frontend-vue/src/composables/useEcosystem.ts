@@ -52,25 +52,25 @@ export interface ConnectFormData extends CreateToolRequest {
 }
 
 export const PRESET_CONNECTORS: ConnectorPreset[] = [
-  { id: 'argocd', name: 'ArgoCD', category: 'gitops', icon: '🐙', defaultEndpoint: 'https://argocd.corp.internal', description: 'GitOps CD for Kubernetes', authType: 'token' },
-  { id: 'prometheus', name: 'Prometheus', category: 'monitoring', icon: '🔥', defaultEndpoint: 'http://prometheus-k8s.monitoring.svc:9090', description: 'Monitoring & alerting toolkit', authType: 'basic' },
-  { id: 'vault', name: 'HashiCorp Vault', category: 'secrets', icon: '🔐', defaultEndpoint: 'https://vault.corp.internal:8200', description: 'Secrets & encryption manager', authType: 'token' },
-  { id: 'crossplane', name: 'Crossplane', category: 'compute', icon: '⚡', defaultEndpoint: 'https://crossplane.system.svc', description: 'Universal control plane', authType: 'token' },
-  { id: 'cilium', name: 'Cilium', category: 'mesh', icon: '🐝', defaultEndpoint: 'http://cilium-agent.kube-system.svc:9879', description: 'eBPF networking & security', authType: 'mtls' },
-  { id: 'istio', name: 'Istio Service Mesh', category: 'mesh', icon: '⛵', defaultEndpoint: 'http://istiod.istio-system.svc:15014', description: 'Service mesh traffic control', authType: 'mtls' }
+  { id: 'argocd', name: 'ArgoCD', category: 'gitops', icon: 'layers', defaultEndpoint: 'https://argocd.corp.internal', description: 'GitOps CD for Kubernetes', authType: 'token' },
+  { id: 'prometheus', name: 'Prometheus', category: 'monitoring', icon: 'activity', defaultEndpoint: 'http://prometheus-k8s.monitoring.svc:9090', description: 'Monitoring & alerting toolkit', authType: 'basic' },
+  { id: 'vault', name: 'HashiCorp Vault', category: 'secrets', icon: 'lock', defaultEndpoint: 'https://vault.corp.internal:8200', description: 'Secrets & encryption manager', authType: 'token' },
+  { id: 'crossplane', name: 'Crossplane', category: 'compute', icon: 'zap', defaultEndpoint: 'https://crossplane.system.svc', description: 'Universal control plane', authType: 'token' },
+  { id: 'cilium', name: 'Cilium', category: 'mesh', icon: 'shield', defaultEndpoint: 'http://cilium-agent.kube-system.svc:9879', description: 'eBPF networking & security', authType: 'mtls' },
+  { id: 'istio', name: 'Istio Service Mesh', category: 'mesh', icon: 'globe', defaultEndpoint: 'http://istiod.istio-system.svc:15014', description: 'Service mesh traffic control', authType: 'mtls' }
 ]
 
 export const ECOSYSTEM_CATEGORIES = [
-  { key: 'all', label: 'All Categories', icon: '🌐' },
-  { key: 'compute', label: 'Compute & Containers', icon: '🐳' },
-  { key: 'database', label: 'Databases & Storage', icon: '🗄️' },
-  { key: 'messaging', label: 'Messaging & Streaming', icon: '⚡' },
-  { key: 'mesh', label: 'Ingress & Mesh', icon: '⛵' },
-  { key: 'gitops', label: 'GitOps & CI/CD', icon: '🐙' },
-  { key: 'security', label: 'Security & Posture', icon: '🛡️' },
-  { key: 'monitoring', label: 'Monitoring & Telemetry', icon: '📈' },
-  { key: 'secrets', label: 'Secrets & KMS', icon: '🔐' },
-  { key: 'policy', label: 'Policy & Guardrails', icon: '📜' }
+  { key: 'all', label: 'All Categories', icon: 'globe' },
+  { key: 'compute', label: 'Compute & Containers', icon: 'box' },
+  { key: 'database', label: 'Databases & Storage', icon: 'database' },
+  { key: 'messaging', label: 'Messaging & Streaming', icon: 'zap' },
+  { key: 'mesh', label: 'Ingress & Mesh', icon: 'globe' },
+  { key: 'gitops', label: 'GitOps & CI/CD', icon: 'layers' },
+  { key: 'security', label: 'Security & Posture', icon: 'shield' },
+  { key: 'monitoring', label: 'Monitoring & Telemetry', icon: 'activity' },
+  { key: 'secrets', label: 'Secrets & KMS', icon: 'key' },
+  { key: 'policy', label: 'Policy & Guardrails', icon: 'file-text' }
 ]
 
 export function useEcosystem() {
@@ -112,28 +112,28 @@ export function useEcosystem() {
 
   function getToolIcon(tool: DetectedTool): string {
     const name = tool.name.toLowerCase()
-    if (name.includes('docker')) return '🐳'
-    if (name.includes('postgres')) return '🐘'
-    if (name.includes('redis')) return '🔴'
-    if (name.includes('nats')) return '⚡'
-    if (name.includes('traefik')) return '🚦'
-    if (name.includes('drone')) return '🚁'
-    if (name.includes('argo')) return '🐙'
-    if (name.includes('trivy')) return '🛡️'
-    if (name.includes('grafana')) return '📈'
-    if (name.includes('vault')) return '🔐'
-    if (name.includes('prometheus')) return '🔥'
-    if (name.includes('crossplane')) return '⚡'
-    if (name.includes('cilium')) return '🐝'
-    if (name.includes('kyverno')) return '📜'
-    if (name.includes('istio')) return '⛵'
-    if (name.includes('cert-manager') || name.includes('cert')) return '🔒'
+    if (name.includes('docker')) return 'box'
+    if (name.includes('postgres')) return 'database'
+    if (name.includes('redis')) return 'database'
+    if (name.includes('nats')) return 'zap'
+    if (name.includes('traefik')) return 'globe'
+    if (name.includes('drone')) return 'layers'
+    if (name.includes('argo')) return 'layers'
+    if (name.includes('trivy')) return 'shield'
+    if (name.includes('grafana')) return 'activity'
+    if (name.includes('vault')) return 'key'
+    if (name.includes('prometheus')) return 'activity'
+    if (name.includes('crossplane')) return 'zap'
+    if (name.includes('cilium')) return 'shield'
+    if (name.includes('kyverno')) return 'file-text'
+    if (name.includes('istio')) return 'globe'
+    if (name.includes('cert-manager') || name.includes('cert')) return 'lock'
 
     const catMap: Record<string, string> = {
-      compute: '🐳', database: '🗄️', messaging: '⚡', gitops: '🐙',
-      security: '🛡️', monitoring: '📊', secrets: '🔑', policy: '⚖️', mesh: '🌐', certificates: '📜'
+      compute: 'box', database: 'database', messaging: 'zap', gitops: 'layers',
+      security: 'shield', monitoring: 'activity', secrets: 'key', policy: 'file-text', mesh: 'globe', certificates: 'lock'
     }
-    return catMap[tool.category.toLowerCase()] || '🧩'
+    return catMap[tool.category.toLowerCase()] || 'box'
   }
 
   function formatRelativeTime(dateStr: string): string {

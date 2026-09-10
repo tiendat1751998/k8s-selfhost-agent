@@ -53,7 +53,7 @@ const emit = defineEmits<{
       >
         <div class="mobile-card-left">
           <div class="mobile-type-icon">
-            {{ getTypeIcon(service.type) }}
+            <BaseIcon :name="getTypeIcon(service.type)" size="xs" />
           </div>
           <div class="mobile-card-meta">
             <div class="mobile-card-title font-mono">

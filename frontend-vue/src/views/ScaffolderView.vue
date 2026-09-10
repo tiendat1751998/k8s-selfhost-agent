@@ -176,7 +176,7 @@ const handleDrawerDownload = () => {
             :class="['tab-btn', { active: selectedCategory === cat.key }]"
             @click="selectedCategory = cat.key"
           >
-            <span class="tab-icon">{{ cat.icon }}</span>
+            <span class="tab-icon"><BaseIcon :name="cat.icon" size="xs" /></span>
             <span class="tab-label">{{ cat.label }}</span>
           </button>
         </div>
