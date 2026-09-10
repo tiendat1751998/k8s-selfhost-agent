@@ -301,5 +301,5 @@ function getValuesString(): string {
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/helm.css';
+@import '../../assets/styles/components/helm-drawers.css';
 </style>

@@ -1,0 +1,426 @@
+/* ==========================================================================
+   Helm Drawers, Modals & Values Editor Styles
+   ========================================================================== */
+
+/* Common Modal & Drawer Form Elements */
+.modal-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group.full-width {
+  grid-column: span 2;
+}
+
+.form-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cyber-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: #090c10;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.checkbox-group {
+  grid-column: span 2;
+}
+
+.cyber-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.cyber-checkbox {
+  accent-color: var(--color-primary);
+}
+
+.danger-warning-box {
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(244, 63, 94, 0.1);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: #fb7185;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.alert-box {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.alert-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+.modal-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Repository Presets Chips */
+.presets-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.preset-chip-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--transition-fast);
+}
+
+.preset-chip-btn:hover {
+  background: rgba(252, 213, 53, 0.1);
+  border-color: rgba(252, 213, 53, 0.3);
+  color: var(--color-primary);
+}
+
+/* Install Wizard Step Header & Container */
+.install-wizard-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 4px 0;
+}
+
+.wizard-steps-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.step-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.step-badge.active {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.step-badge.active .step-num {
+  background: var(--color-primary);
+  color: #000;
+  font-weight: 700;
+}
+
+.step-connector {
+  width: 32px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.step-connector.active {
+  background: var(--color-primary);
+}
+
+.wizard-step-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.values-editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.summary-card {
+  padding: 16px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summary-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.summary-val {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+/* Helm Release Details Drawer */
+.drawer-inner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.release-header-card {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(18, 24, 38, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.header-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.release-title-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.release-title-block .title-icon {
+  font-size: 24px;
+}
+
+.release-hero-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.header-details-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.detail-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-metric .metric-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.detail-metric .metric-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.header-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.drawer-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 8px;
+}
+
+.subtab-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.subtab-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+
+.subtab-btn.active {
+  background: rgba(252, 213, 53, 0.1);
+  border-color: rgba(252, 213, 53, 0.3);
+  color: var(--color-primary);
+}
+
+.drawer-tab-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notes-panel, .values-panel, .manifest-panel, .history-table-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.notes-panel-header, .panel-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-group-sm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cyber-code-block {
+  padding: 14px;
+  border-radius: 8px;
+  background: #080b11;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: #e2e8f0;
+  max-height: 500px;
+}
+
+.yaml-display {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.table-compact th, .table-compact td {
+  padding: 8px 10px;
+  font-size: 11px;
+}
+
+.row-highlight {
+  background: rgba(252, 213, 53, 0.06);
+}
+
+.current-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  margin-left: 6px;
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-group.full-width {
+    grid-column: span 1;
+  }
+  .header-details-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

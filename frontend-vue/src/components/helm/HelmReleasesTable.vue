@@ -147,8 +147,8 @@ function formatReleaseDate(dateStr?: string): string {
               <td>
                 <div class="release-name-cell" @click="emit('openDetail', rel)">
                   <span class="release-icon">⛵</span>
-                  <div>
-                    <span class="release-name-text">{{ rel.name }}</span>
+                  <div class="release-info-col">
+                    <span class="release-name-text release-title-strong">{{ rel.name }}</span>
                     <span v-if="getFormattedReleaseDescription(rel) || rel.description" class="release-desc-sub">
                       {{ getFormattedReleaseDescription(rel) || rel.description }}
                     </span>
@@ -238,4 +238,26 @@ function formatReleaseDate(dateStr?: string): string {
 
 <style scoped>
 @import '../../assets/styles/views/helm.css';
+
+.table-scroll-wrapper,
+table.cyber-table {
+  width: 100%;
+}
+
+.release-desc-sub {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.release-title-strong,
+.release-name-text {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
 </style>
