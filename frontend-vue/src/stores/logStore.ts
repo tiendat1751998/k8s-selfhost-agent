@@ -1,5 +1,13 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import {
+  searchLogs,
+  getLogHistogram,
+  type LogFilterParams,
+  type HistogramParams,
+  type LogAggregationBucket,
+  type LogSearchResult,
+} from '../api/logging'
 
 export interface LogEntry {
   time: string
@@ -11,6 +19,8 @@ export interface LogEntry {
   service?: string
   msg: string
   traceId?: string
+  stream?: string
+  attributes?: Record<string, string>
 }
 
 export interface LogFilterOptions {
@@ -28,9 +38,16 @@ export const useLogStore = defineStore('log', () => {
   const isConnected = ref(false)
   const isPaused = ref(false)
   const socket = ref<WebSocket | null>(null)
-  const maxBufferSize = 300
+  const maxBufferSize = 1000
   const reconnectAttempts = ref(0)
   const activeFilter = ref<LogFilterOptions>({})
+
+  // Historical Search & Histogram State
+  const histogram = ref<LogAggregationBucket[]>([])
+  const isHistoricalLoading = ref(false)
+  const isHistogramLoading = ref(false)
+  const totalHistoricalCount = ref(0)
+  const hasMoreHistorical = ref(false)
 
   function normalizeOptions(options?: LogFilterOptions | string, podArg?: string): LogFilterOptions {
     if (typeof options === 'string') {
@@ -42,8 +59,6 @@ export const useLogStore = defineStore('log', () => {
   function connect(options?: LogFilterOptions | string, podArg?: string) {
     const opts = normalizeOptions(options, podArg)
     activeFilter.value = opts
-
-    // Immediately flush buffer on target switch or reconnect to avoid mixing history
     logs.value = []
 
     if (socket.value) {
@@ -84,19 +99,20 @@ export const useLogStore = defineStore('log', () => {
         try {
           const raw = JSON.parse(event.data)
           const entry: LogEntry = {
-            time: raw.time || raw.timestamp || new Date().toISOString().split('T')[1].slice(0, 12),
-            level: (raw.level || raw.severity || 'INFO').toUpperCase(),
-            namespace: raw.namespace || raw.ns || 'default',
-            pod: raw.pod || raw.container || raw.service || 'system',
-            container: raw.container || raw.pod,
-            node: raw.node || raw.host,
-            service: raw.service || raw.app || raw.container,
-            msg: raw.msg || raw.message || raw.log || event.data,
-            traceId: raw.traceId || raw.trace_id,
+            time: raw.timestamp || raw.time || new Date().toISOString().split('T')[1].slice(0, 12),
+            level: (raw.log_level || raw.level || raw.severity || 'INFO').toUpperCase(),
+            namespace: raw.namespace || raw.ns || opts.namespace || 'default',
+            pod: raw.pod_name || raw.pod || raw.container_name || raw.container || raw.service || 'system',
+            container: raw.container_name || raw.container || raw.pod,
+            node: raw.node || raw.host || raw.attributes?.node,
+            service: raw.service || raw.app || raw.container_name || raw.container,
+            msg: raw.message || raw.msg || raw.log || event.data,
+            traceId: raw.traceId || raw.trace_id || raw.attributes?.trace_id || raw.attributes?.traceId,
+            stream: raw.stream || 'stdout',
+            attributes: raw.attributes,
           }
           appendLog(entry)
         } catch {
-          // Plain text fallback
           appendLog({
             time: new Date().toISOString().split('T')[1].slice(0, 12),
             level: 'INFO',
@@ -105,13 +121,13 @@ export const useLogStore = defineStore('log', () => {
             node: opts.node,
             service: opts.service,
             msg: event.data,
+            stream: 'stdout',
           })
         }
       }
 
       socket.value.onclose = () => {
         isConnected.value = false
-        // Soft reconnect
         if (reconnectAttempts.value < 5) {
           reconnectAttempts.value++
           setTimeout(() => connect(activeFilter.value), 2000 * reconnectAttempts.value)
@@ -160,17 +176,61 @@ export const useLogStore = defineStore('log', () => {
     isPaused.value = !isPaused.value
   }
 
+  async function fetchHistoricalLogs(filter: LogFilterParams = {}): Promise<LogSearchResult> {
+    isHistoricalLoading.value = true
+    try {
+      const res = await searchLogs(filter)
+      const mapped: LogEntry[] = (res.entries || []).map((raw) => ({
+        time: raw.timestamp || new Date().toISOString(),
+        level: (raw.log_level || 'INFO').toUpperCase(),
+        namespace: raw.namespace || 'default',
+        pod: raw.pod_name || 'system',
+        container: raw.container_name,
+        node: raw.attributes?.node,
+        service: raw.attributes?.service || raw.attributes?.app || raw.container_name,
+        msg: raw.message || '',
+        traceId: raw.attributes?.trace_id || raw.attributes?.traceId,
+        stream: raw.stream || 'stdout',
+        attributes: raw.attributes,
+      }))
+      logs.value = mapped.slice(0, maxBufferSize)
+      totalHistoricalCount.value = res.total_count || 0
+      hasMoreHistorical.value = res.has_more || false
+      return res
+    } finally {
+      isHistoricalLoading.value = false
+    }
+  }
+
+  async function fetchHistogram(params: HistogramParams = {}): Promise<LogAggregationBucket[]> {
+    isHistogramLoading.value = true
+    try {
+      const buckets = await getLogHistogram(params)
+      histogram.value = buckets || []
+      return histogram.value
+    } finally {
+      isHistogramLoading.value = false
+    }
+  }
+
   return {
     logs,
     isConnected,
     isPaused,
     activeFilter,
     maxBufferSize,
+    histogram,
+    isHistoricalLoading,
+    isHistogramLoading,
+    totalHistoricalCount,
+    hasMoreHistorical,
     connect,
     setFilter,
     disconnect,
     appendLog,
     clear,
     togglePause,
+    fetchHistoricalLogs,
+    fetchHistogram,
   }
 })
