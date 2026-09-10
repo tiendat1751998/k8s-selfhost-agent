@@ -294,10 +294,14 @@
 .mobile-action-btn.btn-reject:hover:not(:disabled), .mobile-action-btn.btn-abort:hover:not(:disabled) { background: rgba(244, 63, 94, 0.25); border-color: #f43f5e; color: #fff; box-shadow: 0 0 8px rgba(244, 63, 94, 0.25); }
 
 /* --- Visibility Controls & 4-Tier RWD --- */
-/* Desktop (>=768px): mobile elements are hidden */
 .mobile-only { display: none !important; }
 .desktop-only { display: block; }
-.view-header.desktop-only { display: flex !important; }
+
+@media (min-width: 768px) {
+  .mobile-only { display: none !important; }
+  .desktop-only { display: block; }
+  .view-header.desktop-only { display: flex; }
+}
 
 @media (max-width: 1024px) {
   .pipeline-board { grid-template-columns: repeat(2, 1fr); }
@@ -305,6 +309,8 @@
 
 /* Mobile Viewport (<768px): Complete Suppression of Desktop Grid/Table & Zero Overflow */
 @media (max-width: 767.98px) {
+  .view-header.desktop-only,
+  .view-header.desktop-header,
   .desktop-only,
   .desktop-header,
   .desktop-metrics,
