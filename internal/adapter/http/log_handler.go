@@ -1,4 +1,4 @@
-package http
+﻿package http
 
 import (
 	"bytes"
@@ -28,14 +28,38 @@ type LoggingService interface {
 	TailLogs(ctx context.Context, filter logging.LogFilter) (<-chan logging.LogEntry, error)
 }
 
-// LogHandler provides HTTP and WebSocket endpoints for centralized logging.
-type LogHandler struct {
-	service LoggingService
+// LogEngineStatus represents the engine status metadata.
+type LogEngineStatus struct {
+	Engine        string  `json:"engine"`
+	Status        string  `json:"status"`
+	LatencyMS     float64 `json:"latency_ms"`
+	TotalRecords  int64   `json:"total_records"`
+	RetentionDays int     `json:"retention_days"`
 }
 
-// NewLogHandler constructs a new LogHandler.
-func NewLogHandler(service LoggingService) *LogHandler {
-	return &LogHandler{service: service}
+// LogStatusProvider provides status metadata for the centralized logging engine.
+type LogStatusProvider interface {
+	GetStatus(ctx context.Context) (*LogEngineStatus, error)
+}
+
+// LogHandler provides HTTP and WebSocket endpoints for centralized logging.
+type LogHandler struct {
+	service        LoggingService
+	statusProvider any
+}
+
+// NewLogHandler constructs a new LogHandler with optional status providers.
+func NewLogHandler(service LoggingService, statusProviders ...any) *LogHandler {
+	h := &LogHandler{service: service}
+	if len(statusProviders) > 0 && statusProviders[0] != nil {
+		h.statusProvider = statusProviders[0]
+	}
+	return h
+}
+
+// SetStatusProvider assigns a status provider to the handler.
+func (h *LogHandler) SetStatusProvider(sp any) {
+	h.statusProvider = sp
 }
 
 // RegisterRoutes mounts the centralized log routes.
@@ -44,6 +68,49 @@ func (h *LogHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/search", h.HandleSearch)
 	r.Get("/histogram", h.HandleHistogram)
 	r.Get("/stream", h.HandleStream)
+	r.Get("/status", h.HandleStatus)
+}
+
+// HandleStatus returns metadata on the storage engine, latency, total records, and retention.
+func (h *LogHandler) HandleStatus(w http.ResponseWriter, r *http.Request) {
+	if h.statusProvider != nil {
+		if sp, ok := h.statusProvider.(LogStatusProvider); ok {
+			st, err := sp.GetStatus(r.Context())
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to get log engine status", err)
+				return
+			}
+			writeJSON(w, http.StatusOK, st)
+			return
+		}
+		type simpleStatusProvider interface {
+			GetStatus() any
+		}
+		if ssp, ok := h.statusProvider.(simpleStatusProvider); ok {
+			st := ssp.GetStatus()
+			writeJSON(w, http.StatusOK, st)
+			return
+		}
+	}
+
+	if h.service != nil {
+		type simpleStatusProvider interface {
+			GetStatus() any
+		}
+		if ssp, ok := h.service.(simpleStatusProvider); ok {
+			st := ssp.GetStatus()
+			writeJSON(w, http.StatusOK, st)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, LogEngineStatus{
+		Engine:        "In-Memory RingBuffer (Fallback)",
+		Status:        "fallback",
+		LatencyMS:     0.1,
+		TotalRecords:  0,
+		RetentionDays: 30,
+	})
 }
 
 // HandleIngest accepts a batch or single LogEntry and persists them into storage.
@@ -337,3 +404,5 @@ func parseTimeRangeParams(q url.Values) (time.Time, time.Time, error) {
 	}
 	return startTime, endTime, nil
 }
+
+
