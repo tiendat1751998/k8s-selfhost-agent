@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import '../assets/styles/views/capacity.css'
+import '../assets/styles/components/capacity-drawers.css'
 import { useCapacityForecast } from '../composables/useCapacityForecast'
 import CapacityHudCards from '../components/capacity/CapacityHudCards.vue'
 import ResourceForecastChart from '../components/capacity/ResourceForecastChart.vue'
+import CapacityMobileTrendCard from '../components/capacity/CapacityMobileTrendCard.vue'
 import NodeHeadroomTable from '../components/capacity/NodeHeadroomTable.vue'
 import CapacityMobileCards from '../components/capacity/CapacityMobileCards.vue'
+import CapacityInspectionDrawer from '../components/capacity/CapacityInspectionDrawer.vue'
 import AddCapacityPolicyModal from '../components/capacity/AddCapacityPolicyModal.vue'
 
 const {
@@ -22,11 +25,17 @@ const {
   handleRecordForecast,
   addPolicy,
   rebalanceNode,
-  inspectNode,
 } = useCapacityForecast()
 
 const showPolicyModal = ref(false)
 const showRecordModal = ref(false)
+const showInspectionDrawer = ref(false)
+const selectedNodeId = ref<string | null>(null)
+
+const selectedNode = computed(() => {
+  if (!selectedNodeId.value) return null
+  return nodesHeadroom.value.find(n => n.id === selectedNodeId.value) || null
+})
 
 const newForecast = reactive({
   cluster: 'k8s-prod-primary',
@@ -44,17 +53,18 @@ async function submitRecordCheckpoint() {
 }
 
 function handleInspectNode(nodeId: string) {
-  inspectNode(nodeId)
-  statusMessage.value = {
-    type: 'error',
-    text: 'Node inspection requires backend implementation',
-  }
+  selectedNodeId.value = nodeId
+  showInspectionDrawer.value = true
+}
+
+function handleRebalanceFromDrawer(nodeId: string) {
+  rebalanceNode(nodeId)
 }
 </script>
 
 <template>
   <div class="capacity-view-container">
-    <!-- View Header -->
+    <!-- View Header (Desktop) -->
     <div class="view-header desktop-header desktop-only">
       <div>
         <div class="view-tag">
@@ -80,7 +90,7 @@ function handleInspectNode(nodeId: string) {
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 40px Command Bar (<768px) -->
     <div class="capacity-mobile-command-bar mobile-only">
       <div class="command-bar-left">
         <span class="command-bar-title font-bold">📈 Capacity ({{ forecasts.length }})</span>
@@ -106,7 +116,7 @@ function handleInspectNode(nodeId: string) {
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="capacity-micro-telemetry mobile-only font-mono" role="status" aria-label="Capacity Micro Telemetry">
       <span class="tel-item tel-sat">📈 {{ clusterSaturation?.value || '0%' }} sat</span>
       <span class="tel-sep">·</span>
@@ -133,10 +143,17 @@ function handleInspectNode(nodeId: string) {
       :headroom="safeHeadroom"
     />
 
-    <!-- Resource Forecast Predictive Trend Chart -->
+    <!-- Resource Forecast Predictive Trend Chart (Desktop Full linear regression) -->
     <ResourceForecastChart
       class="desktop-only"
       :forecasts="forecasts"
+    />
+
+    <!-- Bespoke Mobile SVG Forecast Trend Card (Mobile Adaption) -->
+    <CapacityMobileTrendCard
+      class="mobile-only"
+      :forecasts="forecasts"
+      :exhaustion="daysToExhaustion"
     />
 
     <!-- Node Headroom Matrix: Desktop Table -->
@@ -187,6 +204,14 @@ function handleInspectNode(nodeId: string) {
         </div>
       </div>
     </div>
+
+    <!-- Node Inspection Telemetry Drawer -->
+    <CapacityInspectionDrawer
+      :open="showInspectionDrawer"
+      :node="selectedNode"
+      @close="showInspectionDrawer = false"
+      @rebalance="handleRebalanceFromDrawer"
+    />
 
     <!-- Policy Modal -->
     <AddCapacityPolicyModal

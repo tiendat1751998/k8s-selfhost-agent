@@ -273,10 +273,6 @@ export function useCapacityForecast() {
   }
 
   function inspectNode(nodeId: string): NodeHeadroom | undefined {
-    statusMessage.value = {
-      type: 'error',
-      text: 'Node inspection requires backend implementation',
-    }
     return nodesHeadroom.value.find(n => n.id === nodeId)
   }
 

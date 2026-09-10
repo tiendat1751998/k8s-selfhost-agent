@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { NodeHeadroom } from '../../composables/useCapacityForecast'
 import { getUsageColorBg, getUsageColorText } from '../../composables/useCapacityForecast'
@@ -25,6 +25,17 @@ const emit = defineEmits<{
 
     <div class="node-table-wrapper">
       <table class="node-matrix-table">
+        <colgroup>
+          <col style="width: 17%;" />
+          <col style="width: 9%;" />
+          <col style="width: 16%;" />
+          <col style="width: 16%;" />
+          <col style="width: 9%;" />
+          <col style="width: 8%;" />
+          <col style="width: 9%;" />
+          <col style="width: 6%;" />
+          <col style="width: 10%;" />
+        </colgroup>
         <thead>
           <tr>
             <th>Node Identifier</th>
@@ -42,8 +53,8 @@ const emit = defineEmits<{
           <tr v-for="node in nodes" :key="node.id">
             <td>
               <div class="node-name-cell">
-                <span class="node-name font-mono">{{ node.name }}</span>
-                <span class="node-role-tag font-mono text-muted">{{ node.id }}</span>
+                <span class="node-name font-mono" :title="node.name">{{ node.name }}</span>
+                <span class="node-role-tag font-mono text-muted" :title="node.id">{{ node.id }}</span>
               </div>
             </td>
             <td>
@@ -55,7 +66,7 @@ const emit = defineEmits<{
               <div class="resource-bar-cell">
                 <div class="resource-bar-info font-mono">
                   <span :class="getUsageColorText(node.cpuUsagePercent)">{{ node.cpuUsagePercent.toFixed(1) }}%</span>
-                  <span class="text-muted">{{ node.cpuAllocatedCores }} / {{ node.cpuTotalCores }} Cores</span>
+                  <span class="text-muted">{{ node.cpuAllocatedCores }} / {{ node.cpuTotalCores }} C</span>
                 </div>
                 <div class="gauge-bar-bg">
                   <div
@@ -126,3 +137,15 @@ const emit = defineEmits<{
     </div>
   </div>
 </template>
+
+<style scoped>
+:deep(.node-table-wrapper),
+.node-table-wrapper {
+  overflow-x: hidden !important;
+  width: 100%;
+}
+.node-matrix-table {
+  table-layout: fixed;
+  width: 100%;
+}
+</style>

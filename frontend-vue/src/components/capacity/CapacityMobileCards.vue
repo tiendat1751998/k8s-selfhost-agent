@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { NodeHeadroom } from '../../composables/useCapacityForecast'
 import { getUsageColorBg, getUsageColorText } from '../../composables/useCapacityForecast'
 
@@ -14,6 +14,13 @@ const emit = defineEmits<{
 
 <template>
   <div class="mobile-stream-container">
+    <!-- Empty State -->
+    <div v-if="nodes.length === 0" class="empty-state-box font-mono">
+      <span class="empty-icon">📈</span>
+      <p class="empty-desc">No cluster nodes reporting headroom telemetry.</p>
+    </div>
+
+    <!-- High-Density Node Rows -->
     <div
       v-for="node in nodes"
       :key="node.id"
@@ -25,7 +32,7 @@ const emit = defineEmits<{
             class="pulse-dot"
             :class="node.status === 'healthy' ? 'pulse-dot-emerald' : node.status === 'warning' ? 'pulse-dot-amber' : 'pulse-dot-rose'"
           ></span>
-          <span class="mobile-card-title font-mono">{{ node.name }}</span>
+          <span class="mobile-card-title font-mono" :title="node.name">{{ node.name }}</span>
           <span class="badge font-mono" :class="node.role === 'control-plane' ? 'badge-violet' : 'badge-cyan'" style="padding: 1px 5px; font-size: 9px;">
             {{ node.role === 'control-plane' ? 'CP' : 'WRK' }}
           </span>
@@ -66,8 +73,8 @@ const emit = defineEmits<{
         <button
           type="button"
           class="btn-table-action"
-          style="padding: 6px 8px; font-size: 11px;"
           title="Rebalance"
+          aria-label="Rebalance node"
           @click="emit('rebalance', node.id)"
         >
           ⚡
@@ -75,8 +82,8 @@ const emit = defineEmits<{
         <button
           type="button"
           class="btn-table-action"
-          style="padding: 6px 8px; font-size: 11px;"
           title="Inspect"
+          aria-label="Inspect node"
           @click="emit('inspect', node.id)"
         >
           🔍
