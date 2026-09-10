@@ -4,6 +4,7 @@ import StatusBadge from '../ui/StatusBadge.vue'
 
 defineProps<{
   clusters: Cluster[]
+  totalClustersCount?: number
   actionLoading?: string | null
   loading?: boolean
 }>()
@@ -24,13 +25,18 @@ const emit = defineEmits<{
         <h2 class="box-title">Kubernetes Fleet Control Planes</h2>
         <p class="box-subtitle">Managed multi-region Kubernetes clusters with live status and telemetry</p>
       </div>
-      <button v-if="clusters.length > 0" class="btn btn-secondary btn-xs" @click="emit('import')">
+      <button class="btn btn-secondary btn-xs" @click="emit('import')">
         <span>+ Add Cluster</span>
       </button>
     </div>
 
+    <!-- Filtered Empty State -->
+    <div v-if="clusters.length === 0 && (totalClustersCount || 0) > 0" class="empty-state font-mono">
+      <p>No clusters found matching current search/filter criteria.</p>
+    </div>
+
     <!-- Empty State for K8s Clusters -->
-    <div v-if="clusters.length === 0" class="empty-fleet-card">
+    <div v-else-if="clusters.length === 0" class="empty-fleet-card">
       <div class="empty-icon-wrap">
         <span class="empty-icon">⎈</span>
       </div>

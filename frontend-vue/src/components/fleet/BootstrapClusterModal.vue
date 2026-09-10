@@ -140,7 +140,7 @@ function handleClose() {
   <ModalDrawer
     :show="show"
     mode="modal"
-    width="680px"
+    max-width="680px"
     title="⚡ 1-Click Cluster Essentials Bootstrap"
     subtitle="Provision telemetry, local storage class, agent daemon, and configure node taints."
     @update:show="emit('update:show', $event)"
