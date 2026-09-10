@@ -8,6 +8,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/datdt/k8sselfhost/internal/domain/audit"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type auditMockDBTX struct {
@@ -120,5 +123,42 @@ func TestAuditRepo_RecordAction_UUIDBugfix(t *testing.T) {
 		assert.Equal(t, expectedUUID, mock.lastArgs[3])
 		assert.Equal(t, "cluster-prod-1", mock.lastArgs[4])
 		assert.Equal(t, "default-tenant", mock.lastArgs[9])
+	})
+}
+func TestAuditRepo_ListLogs_NonAdminEmptyTenantIsolation(t *testing.T) {
+	t.Run("tenant_admin with empty tenant returns empty logs without DB query", func(t *testing.T) {
+		mock := &auditMockDBTX{}
+		repo := NewAuditRepo(mock)
+
+		ctx := tenancy.WithUserRole(context.Background(), "tenant_admin")
+		logs, total, err := repo.ListLogs(ctx, audit.AuditLogFilter{})
+		require.NoError(t, err)
+		assert.Empty(t, logs)
+		assert.Equal(t, 0, total)
+		assert.Empty(t, mock.lastSQL, "database should not be queried when tenant_admin has empty tenant")
+	})
+
+	t.Run("operator with empty tenant returns empty logs without DB query", func(t *testing.T) {
+		mock := &auditMockDBTX{}
+		repo := NewAuditRepo(mock)
+
+		ctx := tenancy.WithUserRole(context.Background(), "operator")
+		logs, total, err := repo.ListLogs(ctx, audit.AuditLogFilter{})
+		require.NoError(t, err)
+		assert.Empty(t, logs)
+		assert.Equal(t, 0, total)
+		assert.Empty(t, mock.lastSQL, "database should not be queried when operator has empty tenant")
+	})
+
+	t.Run("unauthenticated/empty context returns empty logs without DB query", func(t *testing.T) {
+		mock := &auditMockDBTX{}
+		repo := NewAuditRepo(mock)
+
+		ctx := context.Background()
+		logs, total, err := repo.ListLogs(ctx, audit.AuditLogFilter{})
+		require.NoError(t, err)
+		assert.Empty(t, logs)
+		assert.Equal(t, 0, total)
+		assert.Empty(t, mock.lastSQL, "database should not be queried when context has empty tenant")
 	})
 }
