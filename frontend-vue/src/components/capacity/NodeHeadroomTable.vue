@@ -1,6 +1,6 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
-import BaseIcon from '../ui/BaseIcon.vue'
+import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import type { NodeHeadroom } from '../../composables/useCapacityForecast'
 import { getUsageColorBg, getUsageColorText } from '../../composables/useCapacityForecast'
 
@@ -12,6 +12,16 @@ const emit = defineEmits<{
   (e: 'rebalance', nodeId: string): void
   (e: 'inspect', nodeId: string): void
 }>()
+
+const nodeActions: ActionItem[] = [
+  { id: 'rebalance', label: 'Rebalance Pods', icon: 'zap' },
+  { id: 'inspect', label: 'Inspect Telemetry', icon: 'search' },
+]
+
+function handleNodeAction(actionId: string, nodeId: string) {
+  if (actionId === 'rebalance') emit('rebalance', nodeId)
+  else if (actionId === 'inspect') emit('inspect', nodeId)
+}
 </script>
 
 <template>
@@ -27,15 +37,15 @@ const emit = defineEmits<{
     <div class="node-table-wrapper">
       <table class="node-matrix-table">
         <colgroup>
-          <col style="width: 17%;" />
+          <col style="width: 19%;" />
           <col style="width: 9%;" />
           <col style="width: 16%;" />
           <col style="width: 16%;" />
           <col style="width: 9%;" />
           <col style="width: 8%;" />
-          <col style="width: 9%;" />
-          <col style="width: 6%;" />
           <col style="width: 10%;" />
+          <col style="width: 7%;" />
+          <col style="width: 6%;" />
         </colgroup>
         <thead>
           <tr>
@@ -112,27 +122,12 @@ const emit = defineEmits<{
             <td>
               <StatusBadge :status="node.status" :label="node.status.toUpperCase()" size="sm" />
             </td>
-            <td>
-              <div class="table-action-btns" style="justify-content: flex-end;">
-                <button
-                  type="button"
-                  class="btn-table-action"
-                  title="Rebalance Pods onto under-utilized nodes"
-                  @click="emit('rebalance', node.id)"
-                >
-                  <BaseIcon name="zap" size="xs" />
-                  <span>Rebalance</span>
-                </button>
-                <button
-                  type="button"
-                  class="btn-table-action"
-                  title="Inspect node telemetry breakdown"
-                  @click="emit('inspect', node.id)"
-                >
-                  <BaseIcon name="search" size="xs" />
-                  <span>Inspect</span>
-                </button>
-              </div>
+            <td style="text-align: right;">
+              <ActionDropdown
+                size="xs"
+                :items="nodeActions"
+                @select="(actionId) => handleNodeAction(actionId, node.id)"
+              />
             </td>
           </tr>
         </tbody>
@@ -151,10 +146,5 @@ const emit = defineEmits<{
 .node-matrix-table {
   table-layout: fixed;
   width: 100%;
-}
-.btn-table-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
 }
 </style>
