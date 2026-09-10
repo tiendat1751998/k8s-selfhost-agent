@@ -5,7 +5,7 @@
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <header class="login-mobile-command-bar mobile-only" role="banner">
       <div class="command-bar-left">
-        <span class="command-bar-icon">🔐</span>
+        <BaseIcon name="lock" size="sm" class="command-bar-icon" />
         <span class="command-bar-title font-bold">Enterprise Access</span>
       </div>
       <div class="command-bar-right">
@@ -22,7 +22,7 @@
         <!-- Mobile-only Brand Header (visible when hero banner is hidden on narrow screens) -->
         <div class="mobile-brand">
           <div class="brand-icon-wrapper">
-            <div class="brand-icon">⎈</div>
+            <div class="brand-icon"><BaseIcon name="anchor" size="lg" /></div>
             <div class="brand-glow"></div>
           </div>
           <h1 class="brand-title">K8S<span>CONTROL</span></h1>
@@ -38,7 +38,7 @@
 
         <!-- Error Box -->
         <div v-if="errorMessage" class="error-banner animate-fade-in" role="alert">
-          <span class="error-icon">⚠️</span>
+          <BaseIcon name="alert-triangle" size="sm" class="error-icon" />
           <span class="error-text">{{ errorMessage }}</span>
         </div>
 
@@ -76,15 +76,15 @@
         <!-- Security Disclaimer Badges -->
         <div class="security-disclaimer-badges" role="complementary" aria-label="Security Disclaimers">
           <div class="sec-badge" title="FIPS 140-3 Cryptographic Boundary">
-            <span class="sec-badge-icon">🛡️</span>
+            <BaseIcon name="shield" size="xs" class="sec-badge-icon" />
             <span class="sec-badge-text">FIPS 140-3 Enforced</span>
           </div>
           <div class="sec-badge" title="ZeroTrust Multi-Factor Identity Gate">
-            <span class="sec-badge-icon">🔒</span>
+            <BaseIcon name="lock" size="xs" class="sec-badge-icon" />
             <span class="sec-badge-text">ZeroTrust MFA Gate</span>
           </div>
           <div class="sec-badge" title="Immutable SOC2 Audit Stream">
-            <span class="sec-badge-icon">📋</span>
+            <BaseIcon name="file-text" size="xs" class="sec-badge-icon" />
             <span class="sec-badge-text">SOC2 Audit Stream</span>
           </div>
         </div>

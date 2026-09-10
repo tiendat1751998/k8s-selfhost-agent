@@ -92,7 +92,7 @@ const emit = defineEmits<{
         <div class="section-divider"></div>
         <div class="user-2fa-header">
           <div class="user-2fa-info">
-            <h3 class="subsection-title">🔐 Personal Two-Factor Authentication (TOTP)</h3>
+            <h3 class="subsection-title"><BaseIcon name="lock" size="sm" /> Personal Two-Factor Authentication (TOTP)</h3>
             <p class="field-desc">
               Protect your individual operator credentials with Google Authenticator or RFC 6238 compliant TOTP apps.
             </p>
@@ -100,10 +100,10 @@ const emit = defineEmits<{
           <div class="user-2fa-badge-wrap">
             <span v-if="loadingTotpStatus" class="spinner"></span>
             <span v-else-if="totpStatus?.enabled" class="badge badge-emerald">
-              ✅ 2FA ACTIVE
+              <BaseIcon name="check-circle" size="xs" /> 2FA ACTIVE
             </span>
             <span v-else class="badge badge-amber">
-              ⚠️ NOT CONFIGURED
+              <BaseIcon name="alert-triangle" size="xs" /> NOT CONFIGURED
             </span>
           </div>
         </div>
@@ -111,7 +111,7 @@ const emit = defineEmits<{
         <div class="user-2fa-card">
           <div v-if="totpStatus?.enabled" class="user-2fa-active-view">
             <div class="status-detail">
-              <span class="status-icon">🛡️</span>
+              <span class="status-icon"><BaseIcon name="shield" size="md" /></span>
               <div>
                 <span class="status-title">Two-Factor Authentication is Enabled</span>
                 <p class="status-sub">
@@ -132,7 +132,7 @@ const emit = defineEmits<{
 
           <div v-else class="user-2fa-inactive-view">
             <div class="status-detail">
-              <span class="status-icon">🔒</span>
+              <span class="status-icon"><BaseIcon name="lock" size="md" /></span>
               <div>
                 <span class="status-title">Two-Factor Authentication is Not Enabled</span>
                 <p class="status-sub">
@@ -155,7 +155,7 @@ const emit = defineEmits<{
 
       <div class="security-info-box">
         <div class="info-box-header">
-          <span>🔒 Zero-Trust Enforcement Notice</span>
+          <span><BaseIcon name="lock" size="xs" /> Zero-Trust Enforcement Notice</span>
         </div>
         <p>
           Modifications to security policies are applied across all active tenant sessions immediately upon saving.
@@ -165,7 +165,7 @@ const emit = defineEmits<{
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary" :disabled="saving">
-          <span>{{ saving ? '💾 Saving Changes...' : '💾 Save Security Settings' }}</span>
+          <BaseIcon name="hard-drive" size="xs" /> <span>{{ saving ? 'Saving Changes...' : 'Save Security Settings' }}</span>
         </button>
       </div>
     </form>

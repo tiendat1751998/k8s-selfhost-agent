@@ -5,7 +5,7 @@
   <div class="about-container animate-fade-in">
     <div class="settings-card glass-panel">
       <div class="about-hero">
-        <div class="about-logo">⎈</div>
+        <div class="about-logo"><BaseIcon name="anchor" size="xl" /></div>
         <div class="about-hero-text">
           <div class="about-version-tag">
             <span class="badge badge-emerald">v0.1.0 STABLE</span>
@@ -21,7 +21,7 @@
 
       <div class="spec-grid">
         <div class="spec-card glass-panel">
-          <div class="spec-icon">⚡</div>
+          <div class="spec-icon"><BaseIcon name="zap" size="md" /></div>
           <div class="spec-meta">
             <span class="spec-label">Backend Control Plane</span>
             <span class="spec-value">Go 1.22+ (Chi Router / Hexagonal Arch)</span>
@@ -29,7 +29,7 @@
         </div>
 
         <div class="spec-card glass-panel">
-          <div class="spec-icon">🎨</div>
+          <div class="spec-icon"><BaseIcon name="grid" size="md" /></div>
           <div class="spec-meta">
             <span class="spec-label">Frontend Framework</span>
             <span class="spec-value">Vue 3.4+ / Vite 5 / TypeScript</span>
@@ -37,7 +37,7 @@
         </div>
 
         <div class="spec-card glass-panel">
-          <div class="spec-icon">🗄️</div>
+          <div class="spec-icon"><BaseIcon name="database" size="md" /></div>
           <div class="spec-meta">
             <span class="spec-label">Primary Database</span>
             <span class="spec-value">PostgreSQL 16 Multi-Tenant</span>
@@ -45,7 +45,7 @@
         </div>
 
         <div class="spec-card glass-panel">
-          <div class="spec-icon">🚀</div>
+          <div class="spec-icon"><BaseIcon name="play" size="md" /></div>
           <div class="spec-meta">
             <span class="spec-label">In-Memory Cache & PubSub</span>
             <span class="spec-value">Redis 7 Alpine</span>
@@ -53,7 +53,7 @@
         </div>
 
         <div class="spec-card glass-panel">
-          <div class="spec-icon">📜</div>
+          <div class="spec-icon"><BaseIcon name="file-text" size="md" /></div>
           <div class="spec-meta">
             <span class="spec-label">Software License</span>
             <span class="spec-value">MIT Open Source License</span>
@@ -61,7 +61,7 @@
         </div>
 
         <div class="spec-card glass-panel">
-          <div class="spec-icon">🔒</div>
+          <div class="spec-icon"><BaseIcon name="lock" size="md" /></div>
           <div class="spec-meta">
             <span class="spec-label">Authentication Scheme</span>
             <span class="spec-value">JWT Bearer Auth & Tenant Isolation</span>

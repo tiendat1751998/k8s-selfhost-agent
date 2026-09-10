@@ -61,21 +61,21 @@ export interface SettingsFormState {
 }
 
 export const timezoneOptions = [
-  { value: 'UTC', label: '🌐 UTC — Coordinated Universal Time' },
-  { value: 'Asia/Ho_Chi_Minh', label: '🇻🇳 Asia/Ho_Chi_Minh — Indochina Time (UTC+7)' },
-  { value: 'Asia/Singapore', label: '🇸🇬 Asia/Singapore — Singapore Time (UTC+8)' },
-  { value: 'Asia/Tokyo', label: '🇯🇵 Asia/Tokyo — Japan Standard Time (UTC+9)' },
-  { value: 'Europe/London', label: '🇬🇧 Europe/London — Greenwich Mean Time (UTC+0/+1)' },
-  { value: 'Europe/Berlin', label: '🇩🇪 Europe/Berlin — Central European Time (UTC+1/+2)' },
-  { value: 'America/New_York', label: '🇺🇸 America/New_York — Eastern Time (UTC-5/-4)' },
-  { value: 'America/Chicago', label: '🇺🇸 America/Chicago — Central Time (UTC-6/-5)' },
-  { value: 'America/Los_Angeles', label: '🇺🇸 America/Los_Angeles — Pacific Time (UTC-8/-7)' },
-  { value: 'Australia/Sydney', label: '🇦🇺 Australia/Sydney — Eastern Australia (UTC+10/+11)' },
+  { value: 'UTC', label: 'UTC — Coordinated Universal Time' },
+  { value: 'Asia/Ho_Chi_Minh', label: 'Asia/Ho_Chi_Minh — Indochina Time (UTC+7)' },
+  { value: 'Asia/Singapore', label: 'Asia/Singapore — Singapore Time (UTC+8)' },
+  { value: 'Asia/Tokyo', label: 'Asia/Tokyo — Japan Standard Time (UTC+9)' },
+  { value: 'Europe/London', label: 'Europe/London — Greenwich Mean Time (UTC+0/+1)' },
+  { value: 'Europe/Berlin', label: 'Europe/Berlin — Central European Time (UTC+1/+2)' },
+  { value: 'America/New_York', label: 'America/New_York — Eastern Time (UTC-5/-4)' },
+  { value: 'America/Chicago', label: 'America/Chicago — Central Time (UTC-6/-5)' },
+  { value: 'America/Los_Angeles', label: 'America/Los_Angeles — Pacific Time (UTC-8/-7)' },
+  { value: 'Australia/Sydney', label: 'Australia/Sydney — Eastern Australia (UTC+10/+11)' },
 ]
 
 export const languageOptions = [
-  { value: 'en', label: '🇺🇸 English (United States)' },
-  { value: 'vi', label: '🇻🇳 Vietnamese (Vietnam)' },
+  { value: 'en', label: 'English (United States)' },
+  { value: 'vi', label: 'Vietnamese (Vietnam)' },
 ]
 
 export const environmentOptions = [
@@ -86,10 +86,10 @@ export const environmentOptions = [
 ]
 
 export const backupProviderOptions = [
-  { id: 'minio', name: 'MinIO Self-Host', icon: '🗄️', desc: 'On-premise S3-compatible high-speed blob storage' },
-  { id: 's3', name: 'AWS S3 Glacier', icon: '☁️', desc: 'Cloud multi-AZ replicated object vault' },
-  { id: 'local_nvme', name: 'Local NVMe Direct', icon: '⚡', desc: 'Zero-latency local cluster volume backup' },
-  { id: 'gcs', name: 'Google Cloud Storage', icon: '🌐', desc: 'Enterprise GCS Nearline/Coldline bucket' },
+  { id: 'minio', name: 'MinIO Self-Host', icon: 'database', desc: 'On-premise S3-compatible high-speed blob storage' },
+  { id: 's3', name: 'AWS S3 Glacier', icon: 'cloud', desc: 'Cloud multi-AZ replicated object vault' },
+  { id: 'local_nvme', name: 'Local NVMe Direct', icon: 'hard-drive', desc: 'Zero-latency local cluster volume backup' },
+  { id: 'gcs', name: 'Google Cloud Storage', icon: 'globe', desc: 'Enterprise GCS Nearline/Coldline bucket' },
 ]
 
 const initialDefaults: SettingsFormState = {
@@ -459,38 +459,14 @@ export function useSettings() {
   })
 
   return {
-    activeTab,
-    form,
-    initialForm,
-    defaultSettings,
-    loading,
-    saving,
-    statusMessage,
-    showMessage,
-    clearMessage,
-    isDirty,
-    dirtyFields,
-    dirtyCount,
-    isDirtyCategory,
-    saveCategory,
-    saveAllSettings,
-    resetCategoryToDefaults,
-    loadSettings,
-    totpStatus,
-    loadingTotpStatus,
-    showDisable2FAModal,
-    disablePassword,
-    disableTotpCode,
-    disabling2FA,
-    disableError,
-    fetchTOTPStatus,
-    handleDisable2FA,
-    integrationTests,
-    testService,
-    configuredIntegrationsCount,
-    activeSecurityPolicyCount,
-    telemetryHealthStatus,
-    backupStatusSummary,
+    activeTab, form, initialForm, defaultSettings,
+    loading, saving, statusMessage, showMessage, clearMessage,
+    isDirty, dirtyFields, dirtyCount, isDirtyCategory,
+    saveCategory, saveAllSettings, resetCategoryToDefaults, loadSettings,
+    totpStatus, loadingTotpStatus, showDisable2FAModal, disablePassword,
+    disableTotpCode, disabling2FA, disableError, fetchTOTPStatus, handleDisable2FA,
+    integrationTests, testService, configuredIntegrationsCount,
+    activeSecurityPolicyCount, telemetryHealthStatus, backupStatusSummary,
   }
 }
 

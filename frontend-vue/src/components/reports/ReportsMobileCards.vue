@@ -31,8 +31,8 @@ function onDownload(item: PlatformReport) {
 
     <!-- Dedicated Empty State -->
     <div v-else-if="reports.length === 0" class="mobile-reports-empty">
-      <div class="empty-icon">📊</div>
-      <p class="empty-text">📊 No generated reports available. Tap ➕ Schedule to create a report.</p>
+      <div class="empty-icon"><BaseIcon name="file-text" size="xl" /></div>
+      <p class="empty-text">No generated reports available. Tap + Schedule to create a report.</p>
     </div>
 
     <div 
@@ -74,7 +74,7 @@ function onDownload(item: PlatformReport) {
             :aria-label="`Download ${item.format.toUpperCase()}`"
             @click="onDownload(item)"
           >
-            <span>📥</span>
+            <BaseIcon name="download" size="xs" />
           </button>
           <button 
             class="mobile-action-btn" 
@@ -82,7 +82,7 @@ function onDownload(item: PlatformReport) {
             aria-label="View Report"
             @click="emit('preview', item)"
           >
-            <span>👁️</span>
+            <BaseIcon name="eye" size="xs" />
           </button>
           <button 
             class="mobile-action-btn btn-delete-crimson" 
@@ -90,7 +90,7 @@ function onDownload(item: PlatformReport) {
             aria-label="Delete Report"
             @click="emit('delete', item.id)"
           >
-            <span>🗑️</span>
+            <BaseIcon name="trash" size="xs" />
           </button>
         </div>
       </div>

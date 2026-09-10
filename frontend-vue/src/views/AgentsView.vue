@@ -36,7 +36,7 @@ const {
 
       <div class="header-actions">
         <button class="btn btn-secondary" :disabled="loading" @click="fetchAgentData">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh Swarm' }}</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" /> <span>{{ loading ? 'Syncing...' : 'Refresh Swarm' }}</span>
         </button>
         <button class="btn btn-primary" @click="showDispatchModal = true">
           <span>+ Dispatch Task</span>
@@ -47,7 +47,7 @@ const {
     <!-- Mobile 44px Command Bar (<768px) -->
     <div class="agents-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🤖 Agent Swarm ({{ agentSwarm.filter(a => a.status === 'running').length }}/{{ agentSwarm.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="bot" size="sm" /> Agent Swarm ({{ agentSwarm.filter(a => a.status === 'running').length }}/{{ agentSwarm.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button 
@@ -56,7 +56,7 @@ const {
           aria-label="Dispatch Task"
           @click="showDispatchModal = true"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button 
           class="btn-icon-cmd" 
@@ -65,25 +65,25 @@ const {
           aria-label="Refresh Swarm" 
           @click="fetchAgentData"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="agents-micro-telemetry mobile-only font-mono" role="status" aria-label="Agent Swarm Micro Telemetry">
-      <span class="tel-item tel-arch">🏛️ {{ projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? `${Math.round(projectState.architecture_score * 100)}%` : '—' }}</span>
+      <span class="tel-item tel-arch"><BaseIcon name="layers" size="xs" /> {{ projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? `${Math.round(projectState.architecture_score * 100)}%` : '—' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-health">🛡️ {{ projectState?.repository_health !== undefined && projectState.repository_health !== null ? `${Math.round(projectState.repository_health * 100)}%` : '—' }}</span>
+      <span class="tel-item tel-health"><BaseIcon name="shield" size="xs" /> {{ projectState?.repository_health !== undefined && projectState.repository_health !== null ? `${Math.round(projectState.repository_health * 100)}%` : '—' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-tasks">📋 {{ tasks.length > 0 ? `${completedTasksCount}/${tasks.length}` : '0/0' }}</span>
+      <span class="tel-item tel-tasks"><BaseIcon name="file-text" size="xs" /> {{ tasks.length > 0 ? `${completedTasksCount}/${tasks.length}` : '0/0' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-runs">⚡ {{ executions.length }}</span>
+      <span class="tel-item tel-runs"><BaseIcon name="zap" size="xs" /> {{ executions.length }}</span>
     </div>
 
     <!-- Error Alert -->
     <div v-if="error" class="error-banner">
-      <span class="error-icon">⚠️</span>
+      <BaseIcon name="alert-triangle" size="sm" class="error-icon" />
       <span>{{ error }}</span>
     </div>
 
@@ -93,7 +93,7 @@ const {
         title="Architecture Score"
         :value="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? `${Math.round(projectState.architecture_score * 100)}%` : '—'"
         :subtitle="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'Zero cyclic dependencies & strict layering' : 'No architecture telemetry recorded'"
-        icon="🏛️"
+        icon="layers"
         :badge="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'SCORE' : 'NO DATA'"
         :badge-color="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'cyan' : 'muted'"
         :trend="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'High Cohesion' : 'Uncalculated'"
@@ -103,7 +103,7 @@ const {
         title="Repository Health"
         :value="projectState?.repository_health !== undefined && projectState.repository_health !== null ? `${Math.round(projectState.repository_health * 100)}%` : '—'"
         :subtitle="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'Full type safety & lint compliance' : 'No health telemetry recorded'"
-        icon="🛡️"
+        icon="shield"
         :badge="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'HEALTH' : 'NO DATA'"
         :badge-color="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'emerald' : 'muted'"
         :trend="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'Continuous Clean' : 'Uncalculated'"
@@ -113,7 +113,7 @@ const {
         title="Task Backlog"
         :value="tasks.length > 0 ? `${completedTasksCount}/${tasks.length}` : '0/0'"
         :subtitle="tasks.length > 0 ? `${activeTasksCount} in progress · ${blockedTasksCount} blocked` : 'No tasks in backlog'"
-        icon="📋"
+        icon="file-text"
         badge="PIPELINE"
         :badge-color="tasks.length > 0 ? 'violet' : 'muted'"
         :trend="tasks.length > 0 ? 'DAG Scheduled' : 'Queue Empty'"
@@ -123,7 +123,7 @@ const {
         title="Swarm Executions"
         :value="executions.length"
         :subtitle="executions.length > 0 ? 'Total autonomous agent runs executed' : 'No agent runs recorded'"
-        icon="⚡"
+        icon="zap"
         badge="RUNS"
         :badge-color="executions.length > 0 ? 'emerald' : 'muted'"
         :trend="executions.length > 0 ? 'Real-Time Step Logs' : 'Idle'"
@@ -136,7 +136,7 @@ const {
       <div class="box-header">
         <div>
           <h2 class="box-title">Multi-Agent Pipeline DAG Execution Flow</h2>
-          <p class="box-subtitle">Specialized role handover pipeline: Requirements ➔ Code ➔ K8s Manifests ➔ Security Verification</p>
+          <p class="box-subtitle">Specialized role handover pipeline: Requirements &rarr; Code &rarr; K8s Manifests &rarr; Security Verification</p>
         </div>
         <div class="dag-legend font-mono">
           <span class="legend-item"><span class="dot-emerald"></span> Verified</span>
@@ -152,7 +152,7 @@ const {
           class="dag-node-item"
         >
           <div class="dag-node-card glass-panel" :class="`node-state-${stage.status}`">
-            <div class="node-icon">{{ stage.icon }}</div>
+            <div class="node-icon"><BaseIcon :name="stage.icon" size="sm" /></div>
             <div class="node-body">
               <span class="node-name">{{ stage.name }}</span>
               <span class="node-role font-mono text-muted">{{ stage.role }}</span>
@@ -162,7 +162,7 @@ const {
 
           <div v-if="idx < dagStages.length - 1" class="dag-connector">
             <div class="connector-line" :class="{ 'connector-active': stage.status === 'completed' }"></div>
-            <span class="connector-arrow">➔</span>
+            <span class="connector-arrow"><BaseIcon name="chevron-right" size="xs" /></span>
           </div>
         </div>
       </div>

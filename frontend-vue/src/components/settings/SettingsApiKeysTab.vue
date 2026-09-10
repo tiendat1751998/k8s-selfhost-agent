@@ -106,7 +106,7 @@ function handleRevokeKey(id: string) {
         class="btn btn-secondary btn-sm"
         @click="showCreateForm = !showCreateForm"
       >
-        <span>{{ showCreateForm ? '✕ Cancel' : '+ Generate API Key' }}</span>
+        <span>{{ showCreateForm ? 'Cancel' : '+ Generate API Key' }}</span>
       </button>
     </div>
 
@@ -191,7 +191,7 @@ function handleRevokeKey(id: string) {
                     :aria-label="'Copy ' + k.name"
                     @click="handleCopyKey(k.prefix, k.id)"
                   >
-                    <span>{{ copiedId === k.id ? '✅ Copied' : '📋 Copy' }}</span>
+                    <BaseIcon :name="copiedId === k.id ? 'check' : 'copy'" size="xs" /> <span>{{ copiedId === k.id ? 'Copied' : 'Copy' }}</span>
                   </button>
                   <button
                     type="button"
@@ -200,7 +200,7 @@ function handleRevokeKey(id: string) {
                     :aria-label="'Revoke ' + k.name"
                     @click="handleRevokeKey(k.id)"
                   >
-                    <span>🗑️ Revoke</span>
+                    <BaseIcon name="trash" size="xs" /> <span>Revoke</span>
                   </button>
                 </div>
               </td>

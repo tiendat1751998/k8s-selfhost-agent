@@ -48,25 +48,25 @@ const emit = defineEmits<{
             v-if="tool.status === 'not_configured'"
             class="status-pill pill-muted"
           >
-            ⚪ Not Configured
+            <BaseIcon name="clock" size="xs" /> Not Configured
           </span>
           <span
             v-else-if="tool.health === 'healthy'"
             class="status-pill pill-healthy"
           >
-            🟢 Healthy
+            <BaseIcon name="check-circle" size="xs" /> Healthy
           </span>
           <span
             v-else-if="tool.status === 'unreachable'"
             class="status-pill pill-degraded"
           >
-            🔴 Unreachable
+            <BaseIcon name="x-circle" size="xs" /> Unreachable
           </span>
           <span
             v-else
             class="status-pill pill-warning"
           >
-            🟡 Degraded
+            <BaseIcon name="alert-triangle" size="xs" /> Degraded
           </span>
         </div>
       </div>
@@ -100,7 +100,7 @@ const emit = defineEmits<{
         <div class="detail-row">
           <span class="detail-label">Discovery Source:</span>
           <span class="source-badge" :class="`source-${tool.source}`">
-            {{ tool.source === 'settings' ? '⚙️ Settings' : tool.source === 'manual' ? '✍️ Manual' : '☸️ K8s' }}
+            <template v-if="tool.source === 'settings'"><BaseIcon name="sliders" size="xs" /> Settings</template><template v-else-if="tool.source === 'manual'"><BaseIcon name="edit" size="xs" /> Manual</template><template v-else><BaseIcon name="anchor" size="xs" /> K8s</template>
           </span>
         </div>
 
@@ -119,46 +119,46 @@ const emit = defineEmits<{
       <!-- Card Footer -->
       <div class="card-footer">
         <span class="last-checked">
-          🕒 {{ formatRelativeTime(tool.last_checked) }}
+          <BaseIcon name="clock" size="xs" /> {{ formatRelativeTime(tool.last_checked) }}
         </span>
 
         <div class="card-actions-quick">
           <button
             class="btn-card-action btn-ping"
             :disabled="syncingId === tool.id"
-            title="⚡ Ping"
-            aria-label="⚡ Ping"
+            title="Ping"
+            aria-label="Ping"
             @click="emit('sync', tool)"
           >
-            <span :class="{ 'spin-anim': syncingId === tool.id }">{{ syncingId === tool.id ? '⏳' : '⚡' }}</span>
+            <BaseIcon :name="syncingId === tool.id ? 'refresh' : 'zap'" size="xs" :class="{ 'spin-anim': syncingId === tool.id }" />
             <span>Ping</span>
           </button>
           <button
             class="btn-card-action btn-health"
-            title="🩺 Health"
-            aria-label="🩺 Health"
+            title="Health"
+            aria-label="Health"
             @click="emit('inspectHealth', tool)"
           >
-            <span>🩺</span>
+            <BaseIcon name="activity" size="xs" />
             <span>Health</span>
           </button>
           <button
             class="btn-card-action btn-config"
-            title="⚙️ Config"
-            aria-label="⚙️ Config"
+            title="Config"
+            aria-label="Config"
             @click="emit('configure', tool)"
           >
-            <span>⚙️</span>
+            <BaseIcon name="sliders" size="xs" />
           </button>
           <button
             v-if="tool.source === 'manual' || tool.id"
             class="btn-card-action btn-card-delete"
             :disabled="deletingId === tool.id"
-            title="🗑️ Disconnect"
-            aria-label="🗑️ Disconnect"
+            title="Disconnect"
+            aria-label="Disconnect"
             @click="emit('delete', tool)"
           >
-            <span>🗑️</span>
+            <BaseIcon name="trash" size="xs" />
           </button>
         </div>
       </div>
