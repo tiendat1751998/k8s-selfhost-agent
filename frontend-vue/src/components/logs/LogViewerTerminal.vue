@@ -113,7 +113,7 @@ function getTargetBadge(log: LogEntry): string {
             @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
           />
           <span v-if="isRegex" class="regex-tag font-mono">REGEX</span>
-          <button v-if="searchQuery" type="button" class="search-clear-btn" aria-label="Clear filter" @click="emit('update:searchQuery', '')">✕</button>
+          <button v-if="searchQuery" type="button" class="search-clear-btn" aria-label="Clear filter" @click="emit('update:searchQuery', '')"><BaseIcon name="x" size="xs" /></button>
         </div>
         <select
           :value="selectedLevel"
@@ -207,7 +207,7 @@ function getTargetBadge(log: LogEntry): string {
           aria-label="Filter logs mobile"
           @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
         />
-        <button v-if="searchQuery" type="button" class="search-clear-btn" aria-label="Clear filter" @click="emit('update:searchQuery', '')">✕</button>
+        <button v-if="searchQuery" type="button" class="search-clear-btn" aria-label="Clear filter" @click="emit('update:searchQuery', '')"><BaseIcon name="x" size="xs" /></button>
       </div>
       <select
         :value="selectedLevel"

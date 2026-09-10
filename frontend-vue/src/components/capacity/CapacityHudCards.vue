@@ -20,7 +20,7 @@ defineProps<{
       :badge="saturation.badge"
       :badge-color="saturation.badgeColor"
       :subtitle="saturation.subtitle"
-      icon="⚡"
+      icon="zap"
     />
     <MetricCard
       title="Days to Exhaustion"
@@ -30,7 +30,7 @@ defineProps<{
       :badge="exhaustion.badge"
       :badge-color="exhaustion.badgeColor"
       :subtitle="exhaustion.subtitle"
-      icon="⏳"
+      icon="clock"
     />
     <MetricCard
       title="Bin-Packing Efficiency"
@@ -40,7 +40,7 @@ defineProps<{
       :badge="binPacking.badge"
       :badge-color="binPacking.badgeColor"
       :subtitle="binPacking.subtitle"
-      icon="📦"
+      icon="box"
     />
     <MetricCard
       title="Safe Headroom"
@@ -50,7 +50,7 @@ defineProps<{
       :badge="headroom.badge"
       :badge-color="headroom.badgeColor"
       :subtitle="headroom.subtitle"
-      icon="🛡️"
+      icon="shield"
     />
   </div>
 </template>

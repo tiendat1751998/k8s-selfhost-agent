@@ -17,11 +17,11 @@
       <div class="filter-actions-group">
         <div v-if="selectedFrameworkName" class="active-filter-badge">
           <span>Framework: {{ selectedFrameworkName }}</span>
-          <button class="clear-btn" title="Clear filter" @click="emit('clear-framework')">✕</button>
+          <button class="clear-btn" title="Clear filter" aria-label="Clear filter" @click="emit('clear-framework')"><BaseIcon name="x" size="xs" /></button>
         </div>
 
         <button class="btn btn-secondary btn-sm export-btn" title="Export Remediation Playbook" @click="emit('export')">
-          <span>📥 Export Playbook</span>
+          <BaseIcon name="download" size="xs" /> <span>Export Playbook</span>
         </button>
       </div>
     </div>
@@ -64,10 +64,10 @@
       <template #cell-actions="{ row }">
         <div class="control-actions">
           <button class="btn btn-secondary btn-xs btn-inspect" title="Inspect Control" @click="emit('inspect', row)">
-            <span>🔍 Inspect</span>
+            <BaseIcon name="search" size="xs" /> <span>Inspect</span>
           </button>
           <button class="btn btn-primary btn-xs btn-remediate" title="Remediate Control" @click="emit('remediate', row)">
-            <span>⚡ Remediate</span>
+            <BaseIcon name="zap" size="xs" /> <span>Remediate</span>
           </button>
         </div>
       </template>
@@ -79,6 +79,7 @@
 import { computed } from 'vue'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { ComplianceViolation } from '../../api/governance'
 import type { ComplianceControlItem, SeverityFilter } from '../../composables/useCompliance'
 

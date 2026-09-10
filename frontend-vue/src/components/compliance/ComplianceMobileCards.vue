@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="compliance-mobile-stream">
     <div v-if="violations.length === 0" class="empty-mobile-box glass-panel">
-      <span>🛡️ No compliance violations found. All controls compliant.</span>
+      <BaseIcon name="shield" size="xs" /> <span>No compliance violations found. All controls compliant.</span>
     </div>
 
     <div
@@ -32,7 +32,7 @@
           aria-label="Inspect Finding"
           @click="$emit('inspect', v)"
         >
-          🔍
+          <BaseIcon name="search" size="xs" />
         </button>
         <button
           class="btn btn-primary btn-icon-sm"
@@ -40,7 +40,7 @@
           aria-label="Remediate Finding"
           @click="$emit('remediate', v)"
         >
-          ⚡
+          <BaseIcon name="zap" size="xs" />
         </button>
       </div>
     </div>
@@ -49,6 +49,7 @@
 
 <script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { ComplianceViolation } from '../../api/governance'
 
 defineProps<{

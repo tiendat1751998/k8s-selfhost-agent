@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { ref } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { LogEntry } from '../../stores/logStore'
 
 interface Props {
@@ -61,7 +62,7 @@ function toggleExpand(idx: number) {
 
     <!-- Empty mobile state -->
     <div v-if="logs.length === 0" class="empty-terminal" style="padding: 40px 16px;">
-      <span class="empty-icon" aria-hidden="true">⚡</span>
+      <BaseIcon name="file-text" size="lg" class="empty-icon" />
       <p>
         {{ isConnected ? 'No logs matching current filter' : 'Disconnected from stream...' }}
       </p>
@@ -75,7 +76,7 @@ function toggleExpand(idx: number) {
         style="padding: 6px 12px; font-size: 11px;"
         @click="emit('togglePause')"
       >
-        <span>{{ isPaused ? '▶ Resume' : '⏸ Pause' }}</span>
+        <BaseIcon :name="isPaused ? 'play' : 'pause'" size="xs" /> <span>{{ isPaused ? 'Resume' : 'Pause' }}</span>
       </button>
 
       <span class="buffer-count" style="font-size: 11px;">
@@ -90,7 +91,7 @@ function toggleExpand(idx: number) {
           title="Scroll to bottom"
           @click="emit('scrollToBottom')"
         >
-          <span>⬇ Bottom</span>
+          <BaseIcon name="chevron-down" size="xs" /> <span>Bottom</span>
         </button>
         <button
           type="button"
@@ -99,7 +100,7 @@ function toggleExpand(idx: number) {
           title="Clear buffer"
           @click="emit('clearBuffer')"
         >
-          <span>🧹</span>
+          <BaseIcon name="trash" size="xs" />
         </button>
       </div>
     </div>
