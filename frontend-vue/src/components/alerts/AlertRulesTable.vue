@@ -20,12 +20,12 @@ const emit = defineEmits<{
 const tableRows = computed<AlertRuleRow[]>(() => props.rules as unknown as AlertRuleRow[])
 
 const ruleColumns: Column<AlertRuleRow>[] = [
-  { key: 'Name', label: 'Rule Name & Description', sortable: true },
-  { key: 'MetricName', label: 'Prometheus Metric / PromQL', sortable: true },
-  { key: 'Condition', label: 'Trigger Condition', sortable: true, width: '160px' },
-  { key: 'Severity', label: 'Severity', sortable: true, width: '120px' },
-  { key: 'Enabled', label: 'Status', sortable: true, width: '110px' },
-  { key: 'actions', label: 'Management', align: 'right', width: '160px' }
+  { key: 'Name', label: 'Rule Name & Description', sortable: true, width: '28%' },
+  { key: 'MetricName', label: 'Prometheus Metric / PromQL', sortable: true, width: '24%' },
+  { key: 'Condition', label: 'Trigger Condition', sortable: true, width: '16%' },
+  { key: 'Severity', label: 'Severity', sortable: true, width: '10%' },
+  { key: 'Enabled', label: 'Status', sortable: true, width: '10%' },
+  { key: 'actions', label: 'Management', align: 'right', width: '12%' }
 ]
 </script>
 
@@ -45,17 +45,17 @@ const ruleColumns: Column<AlertRuleRow>[] = [
 
     <template #cell-Name="{ row }">
       <div class="rule-name-cell">
-        <span class="rule-title">{{ row.Name }}</span>
-        <small class="rule-desc">{{ row.Description }}</small>
+        <span class="rule-title" :title="row.Name">{{ row.Name }}</span>
+        <small class="rule-desc" :title="row.Description">{{ row.Description }}</small>
       </div>
     </template>
 
     <template #cell-MetricName="{ value }">
-      <span class="font-mono text-cyan">{{ value }}</span>
+      <span class="font-mono text-cyan truncate block" :title="String(value)">{{ value }}</span>
     </template>
 
     <template #cell-Condition="{ row }">
-      <span class="font-mono text-amber font-bold">
+      <span class="font-mono text-amber font-bold truncate block">
         {{ row.Condition }} {{ row.Threshold }} ({{ row.DurationSeconds }}s)
       </span>
     </template>
@@ -80,7 +80,7 @@ const ruleColumns: Column<AlertRuleRow>[] = [
     </template>
 
     <template #cell-actions="{ row }">
-      <div class="flex items-center justify-end gap-2">
+      <div class="rule-actions-cell flex items-center justify-end gap-2">
         <button 
           class="btn btn-secondary btn-sm" 
           title="Edit Rule Configuration" 
@@ -93,7 +93,7 @@ const ruleColumns: Column<AlertRuleRow>[] = [
           title="Delete Rule" 
           @click="emit('delete', String(row.ID))"
         >
-          <span>🗑 Delete</span>
+          <span>🗑️ Delete</span>
         </button>
       </div>
     </template>
