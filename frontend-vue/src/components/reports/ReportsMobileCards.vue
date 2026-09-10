@@ -13,6 +13,14 @@ const emit = defineEmits<{
   viewCsv: [report: PlatformReport]
   delete: [id: string]
 }>()
+
+function onDownload(item: PlatformReport) {
+  if (item.format === 'csv') {
+    emit('viewCsv', item)
+  } else {
+    emit('downloadPdf', item)
+  }
+}
 </script>
 
 <template>
@@ -21,8 +29,10 @@ const emit = defineEmits<{
       Loading compiled platform reports...
     </div>
 
-    <div v-else-if="reports.length === 0" class="text-center py-6 text-muted text-xs">
-      No platform reports found.
+    <!-- Dedicated Empty State -->
+    <div v-else-if="reports.length === 0" class="mobile-reports-empty">
+      <div class="empty-icon">📊</div>
+      <p class="empty-text">📊 No generated reports available. Tap ➕ Schedule to create a report.</p>
     </div>
 
     <div 
@@ -58,17 +68,29 @@ const emit = defineEmits<{
         </div>
 
         <div class="mobile-card-actions">
-          <button class="mobile-action-btn" title="Preview" @click="emit('preview', item)">
+          <button 
+            class="mobile-action-btn" 
+            :title="`Download ${item.format.toUpperCase()}`"
+            :aria-label="`Download ${item.format.toUpperCase()}`"
+            @click="onDownload(item)"
+          >
+            <span>📥</span>
+          </button>
+          <button 
+            class="mobile-action-btn" 
+            title="View Report"
+            aria-label="View Report"
+            @click="emit('preview', item)"
+          >
             <span>👁️</span>
           </button>
-          <button class="mobile-action-btn" title="Download PDF" @click="emit('downloadPdf', item)">
-            <span>📥 PDF</span>
-          </button>
-          <button class="mobile-action-btn" title="View CSV" @click="emit('viewCsv', item)">
-            <span>📊 CSV</span>
-          </button>
-          <button class="mobile-action-btn btn-delete-crimson" title="Delete" @click="emit('delete', item.id)">
-            <span>🗑</span>
+          <button 
+            class="mobile-action-btn btn-delete-crimson" 
+            title="Delete Report"
+            aria-label="Delete Report"
+            @click="emit('delete', item.id)"
+          >
+            <span>🗑️</span>
           </button>
         </div>
       </div>

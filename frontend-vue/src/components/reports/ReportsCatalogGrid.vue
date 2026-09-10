@@ -86,3 +86,25 @@ function selectTemplate(tpl: ReportTemplate) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .template-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .template-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+}
+</style>
