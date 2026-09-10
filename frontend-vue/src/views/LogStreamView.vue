@@ -47,7 +47,18 @@ watch(selectedTarget, (target) => {
 const targetFilteredLogs = computed(() => {
   const target = selectedTarget.value
   const level = selectedLevel.value
-  const kw = searchKeyword.value.trim().toLowerCase()
+  const rawKw = searchKeyword.value.trim()
+
+  // Real safe regex compilation with graceful fallback
+  let reg: RegExp | null = null
+  if (rawKw) {
+    try {
+      reg = new RegExp(rawKw, 'i')
+    } catch {
+      reg = null
+    }
+  }
+  const kw = rawKw.toLowerCase()
 
   return logStore.logs.filter((log) => {
     // 1. Level filter
@@ -69,12 +80,21 @@ const targetFilteredLogs = computed(() => {
       if (!matchSvc && !matchCtr && !matchPod && !matchNs) return false
     }
 
-    // 3. Search keyword or regex
-    if (kw) {
-      const matchMsg = log.msg.toLowerCase().includes(kw)
-      const matchPod = log.pod.toLowerCase().includes(kw)
-      const matchTrace = log.traceId?.toLowerCase().includes(kw)
-      if (!matchMsg && !matchPod && !matchTrace) return false
+    // 3. Search keyword or real regex
+    if (rawKw) {
+      if (reg) {
+        const matchMsg = reg.test(log.msg)
+        const matchPod = reg.test(log.pod)
+        const matchTrace = log.traceId ? reg.test(log.traceId) : false
+        const matchSvc = log.service ? reg.test(log.service) : false
+        if (!matchMsg && !matchPod && !matchTrace && !matchSvc) return false
+      } else {
+        const matchMsg = log.msg.toLowerCase().includes(kw)
+        const matchPod = log.pod.toLowerCase().includes(kw)
+        const matchTrace = log.traceId?.toLowerCase().includes(kw)
+        const matchSvc = log.service?.toLowerCase().includes(kw)
+        if (!matchMsg && !matchPod && !matchTrace && !matchSvc) return false
+      }
     }
 
     return true

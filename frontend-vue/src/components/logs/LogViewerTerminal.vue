@@ -31,6 +31,7 @@ const emit = defineEmits<{
 
 const terminalBody = ref<HTMLElement | null>(null)
 const mobileSearchOpen = ref(false)
+const wrapLines = ref(true)
 
 onMounted(() => emit('registerTerminal', terminalBody.value))
 
@@ -134,9 +135,18 @@ function getTargetBadge(log: LogEntry): string {
           />
           <span>Auto-Scroll</span>
         </label>
-        
+
         <!-- Desktop Buttons -->
         <div class="desktop-only action-group">
+          <button
+            type="button"
+            class="term-btn"
+            :class="{ 'btn-active': wrapLines }"
+            :title="wrapLines ? 'Switch to nowrap mode (horizontal scroll)' : 'Switch to line wrap mode'"
+            @click="wrapLines = !wrapLines"
+          >
+            <span>[ ↵ Wrap ]</span>
+          </button>
           <button type="button" class="term-btn" :class="{ 'btn-paused': isPaused }" :title="isPaused ? 'Resume live stream' : 'Pause live stream'" @click="emit('togglePause')">
             <span>{{ isPaused ? '▶ Resume' : '⏸ Pause' }}</span>
           </button>
@@ -150,6 +160,15 @@ function getTargetBadge(log: LogEntry): string {
 
         <!-- Mobile Buttons (30x30px Compact Icons) -->
         <div class="mobile-only action-group">
+          <button
+            type="button"
+            class="term-btn term-icon-btn"
+            :class="{ 'btn-active': wrapLines }"
+            :title="wrapLines ? 'Line wrap on' : 'Line wrap off'"
+            @click="wrapLines = !wrapLines"
+          >
+            <span>↵</span>
+          </button>
           <button type="button" class="term-btn term-icon-btn" :class="{ 'btn-paused': isPaused }" :title="isPaused ? 'Resume' : 'Pause'" @click="emit('togglePause')">
             <span>{{ isPaused ? '▶' : '⏸' }}</span>
           </button>
@@ -194,9 +213,14 @@ function getTargetBadge(log: LogEntry): string {
       </select>
     </div>
 
-    <!-- Terminal Body / Logs Output -->
+    <!-- Terminal Body / Logs Output with Wrap Toggle Support -->
     <div ref="terminalBody" class="terminal-body font-mono" tabindex="0" aria-label="Terminal log output" @scroll="emit('scroll', $event)">
-      <div v-for="(log, idx) in logs" :key="idx" class="log-line" :class="'log-' + log.level.toLowerCase()">
+      <div
+        v-for="(log, idx) in logs"
+        :key="idx"
+        class="log-line"
+        :class="['log-' + log.level.toLowerCase(), wrapLines ? 'log-wrap' : 'log-nowrap']"
+      >
         <span class="log-idx">{{ idx + 1 }}</span>
         <span class="badge-time font-mono">[{{ formatTime(log.time) }}]</span>
         <span class="badge-level font-mono" :class="'badge-' + log.level.toLowerCase()">[{{ log.level.padEnd(5) }}]</span>

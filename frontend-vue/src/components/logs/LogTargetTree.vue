@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import type { LogEntry } from '../../stores/logStore'
+import { useInfraHosts } from '../../composables/useInfraHosts'
+import { api } from '../../api/client'
 
 export interface LogTarget {
   type: 'all' | 'node' | 'service'
@@ -9,29 +11,156 @@ export interface LogTarget {
   icon?: string
 }
 
+export interface TargetNodeItem {
+  id: string
+  name: string
+  icon: string
+  role: string
+}
+
+export interface TargetServiceItem {
+  id: string
+  name: string
+  icon: string
+  type: string
+}
+
 const props = defineProps<{ modelValue: LogTarget; logs: LogEntry[] }>()
 const emit = defineEmits<{ (e: 'update:modelValue', target: LogTarget): void; (e: 'select', target: LogTarget): void }>()
 
-const hostNodes = [
-  { id: 'k8smater', name: 'k8smater', icon: '👑', role: 'Control Plane' },
-  { id: 'worker1', name: 'worker1', icon: '🖥️', role: 'Worker Node' },
-  { id: 'worker2', name: 'worker2', icon: '🖥️', role: 'Worker Node' },
-  { id: 'k8sworker3', name: 'k8sworker3', icon: '🖥️', role: 'Worker Node' },
-  { id: 'masterdb', name: 'masterdb', icon: '🗄️', role: 'Primary DB' },
-  { id: 'workerdb1', name: 'workerdb1', icon: '🗄️', role: 'Replica DB' },
-]
-
-const services = [
-  { id: 'traefik', name: 'traefik', icon: '🚦', type: 'Ingress Proxy' },
-  { id: 'postgres', name: 'postgres', icon: '🐘', type: 'Stateful DB' },
-  { id: 'nats', name: 'nats', icon: '⚡', type: 'Message Broker' },
-  { id: 'k8s-agent', name: 'k8s-agent', icon: '🛰️', type: 'Cluster Agent' },
-  { id: 'standalone', name: 'standalone', icon: '⚙️', type: 'Core Daemon' },
-  { id: 'docker', name: 'docker', icon: '🐳', type: 'Container Engine' },
-]
-
+const { hosts } = useInfraHosts()
+const apiServices = ref<TargetServiceItem[]>([])
+const targetSearch = ref('')
 const nodesExpanded = ref(true)
 const servicesExpanded = ref(true)
+
+function getServiceIcon(name: string): string {
+  const lower = name.toLowerCase()
+  if (lower.includes('traefik') || lower.includes('ingress') || lower.includes('gateway')) return '🚦'
+  if (lower.includes('postg') || lower.includes('sql') || lower.includes('mysql') || lower.includes('redis') || lower.includes('db')) return '🐘'
+  if (lower.includes('nats') || lower.includes('kafka') || lower.includes('queue') || lower.includes('mq')) return '⚡'
+  if (lower.includes('agent')) return '🛰️'
+  if (lower.includes('docker') || lower.includes('containerd')) return '🐳'
+  if (lower.includes('auth') || lower.includes('vault') || lower.includes('security')) return '🔒'
+  if (lower.includes('monitor') || lower.includes('prom') || lower.includes('grafana')) return '📊'
+  return '⚙️'
+}
+
+async function fetchClusterServices() {
+  try {
+    const res = await api.get<any>('/k8s/default/resources', { kind: 'Service' })
+    const items = Array.isArray(res) ? res : (res?.data || res?.items || [])
+    if (Array.isArray(items) && items.length > 0) {
+      apiServices.value = items.map((s: any) => {
+        const name = s.metadata?.name || s.name || String(s)
+        return {
+          id: name,
+          name,
+          icon: getServiceIcon(name),
+          type: s.spec?.type || 'Service',
+        }
+      })
+    }
+  } catch {
+    // API endpoint is optional; gracefully fallback to logs and default services
+  }
+}
+
+onMounted(() => {
+  fetchClusterServices()
+})
+
+// Dynamic host nodes: loaded from useInfraHosts() API + dynamic log discovery + fallback defaults
+const dynamicHostNodes = computed<TargetNodeItem[]>(() => {
+  const map = new Map<string, TargetNodeItem>()
+
+  if (hosts.value && hosts.value.length > 0) {
+    for (const h of hosts.value) {
+      const name = h.name || h.id
+      const isMaster = name.toLowerCase().includes('master') || (h.host_role?.toLowerCase().includes('control') ?? false)
+      const icon = isMaster ? '👑' : (h.host_type === 'database' ? '🗄️' : '🖥️')
+      const role = h.host_role || (isMaster ? 'Control Plane' : 'Worker Node')
+      map.set(name.toLowerCase(), { id: name, name, icon, role })
+    }
+  } else {
+    // Real node defaults (fixing typo 'k8smater' -> 'master')
+    const defaults: TargetNodeItem[] = [
+      { id: 'master', name: 'master', icon: '👑', role: 'Control Plane' },
+      { id: 'worker1', name: 'worker1', icon: '🖥️', role: 'Worker Node' },
+      { id: 'worker2', name: 'worker2', icon: '🖥️', role: 'Worker Node' },
+      { id: 'worker3', name: 'worker3', icon: '🖥️', role: 'Worker Node' },
+      { id: 'masterdb', name: 'masterdb', icon: '🗄️', role: 'Primary DB' },
+      { id: 'workerdb1', name: 'workerdb1', icon: '🗄️', role: 'Replica DB' },
+    ]
+    for (const d of defaults) {
+      map.set(d.id.toLowerCase(), d)
+    }
+  }
+
+  // Also collect any unique nodes present in incoming log stream
+  for (const log of props.logs) {
+    if (log.node && !map.has(log.node.toLowerCase())) {
+      const isMaster = log.node.toLowerCase().includes('master')
+      map.set(log.node.toLowerCase(), {
+        id: log.node,
+        name: log.node,
+        icon: isMaster ? '👑' : '🖥️',
+        role: isMaster ? 'Control Plane' : 'Host Node',
+      })
+    }
+  }
+
+  return Array.from(map.values())
+})
+
+// Dynamic services: baseline defaults + API /k8s/default/resources?kind=Service + dynamically collected from props.logs
+const dynamicServices = computed<TargetServiceItem[]>(() => {
+  const map = new Map<string, TargetServiceItem>()
+
+  const defaultServices: TargetServiceItem[] = [
+    { id: 'traefik', name: 'traefik', icon: '🚦', type: 'Ingress Proxy' },
+    { id: 'postgres', name: 'postgres', icon: '🐘', type: 'Stateful DB' },
+    { id: 'nats', name: 'nats', icon: '⚡', type: 'Message Broker' },
+    { id: 'k8s-agent', name: 'k8s-agent', icon: '🛰️', type: 'Cluster Agent' },
+    { id: 'standalone', name: 'standalone', icon: '⚙️', type: 'Core Daemon' },
+    { id: 'docker', name: 'docker', icon: '🐳', type: 'Container Engine' },
+  ]
+  for (const s of defaultServices) {
+    map.set(s.id.toLowerCase(), s)
+  }
+
+  for (const s of apiServices.value) {
+    map.set(s.id.toLowerCase(), s)
+  }
+
+  // Dynamically collect unique services/workloads from incoming log entries
+  for (const log of props.logs) {
+    const svc = log.service || log.container
+    if (svc && !map.has(svc.toLowerCase())) {
+      map.set(svc.toLowerCase(), {
+        id: svc,
+        name: svc,
+        icon: getServiceIcon(svc),
+        type: 'Workload',
+      })
+    }
+  }
+
+  return Array.from(map.values())
+})
+
+// Quick filter search applied across targets
+const filteredHostNodes = computed(() => {
+  const q = targetSearch.value.trim().toLowerCase()
+  if (!q) return dynamicHostNodes.value
+  return dynamicHostNodes.value.filter(n => n.name.toLowerCase().includes(q) || n.role.toLowerCase().includes(q))
+})
+
+const filteredServices = computed(() => {
+  const q = targetSearch.value.trim().toLowerCase()
+  if (!q) return dynamicServices.value
+  return dynamicServices.value.filter(s => s.name.toLowerCase().includes(q) || s.type.toLowerCase().includes(q))
+})
 
 function selectTarget(target: LogTarget) {
   emit('update:modelValue', target)
@@ -54,6 +183,25 @@ function getServiceCount(serviceId: string): number {
     <div class="tree-header">
       <div class="tree-title"><span class="tree-icon">🌲</span><span>Log Targets</span></div>
       <span class="tree-badge font-mono">{{ logs.length }} logs</span>
+    </div>
+
+    <!-- Quick Filter Search Input -->
+    <div class="tree-search-bar">
+      <span class="tree-search-ico" aria-hidden="true">🔍</span>
+      <input
+        v-model="targetSearch"
+        type="text"
+        placeholder="Filter targets..."
+        class="tree-search-input font-mono"
+        aria-label="Filter targets"
+      />
+      <button
+        v-if="targetSearch"
+        type="button"
+        class="tree-search-clear"
+        aria-label="Clear target filter"
+        @click="targetSearch = ''"
+      >✕</button>
     </div>
 
     <div class="tree-content">
@@ -80,11 +228,11 @@ function getServiceCount(serviceId: string): number {
         <div class="section-toggle" @click="nodesExpanded = !nodesExpanded">
           <span class="section-caret" :class="{ 'caret-down': nodesExpanded }">▸</span>
           <span class="section-label">Host Nodes</span>
-          <span class="section-count font-mono">{{ hostNodes.length }}</span>
+          <span class="section-count font-mono">{{ filteredHostNodes.length }}</span>
         </div>
         <div v-show="nodesExpanded" class="section-items">
           <button
-            v-for="node in hostNodes"
+            v-for="node in filteredHostNodes"
             :key="node.id"
             type="button"
             role="treeitem"
@@ -109,11 +257,11 @@ function getServiceCount(serviceId: string): number {
         <div class="section-toggle" @click="servicesExpanded = !servicesExpanded">
           <span class="section-caret" :class="{ 'caret-down': servicesExpanded }">▸</span>
           <span class="section-label">Services & Containers</span>
-          <span class="section-count font-mono">{{ services.length }}</span>
+          <span class="section-count font-mono">{{ filteredServices.length }}</span>
         </div>
         <div v-show="servicesExpanded" class="section-items">
           <button
-            v-for="svc in services"
+            v-for="svc in filteredServices"
             :key="svc.id"
             type="button"
             role="treeitem"
