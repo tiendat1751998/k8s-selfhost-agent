@@ -1,0 +1,219 @@
+/* ==========================================================================
+   Enterprise Collapsible Sidebar Rail (64px Icon Rail) & Floating Tooltip
+   ========================================================================== */
+
+/* Brand Header & Toggle Button in Sidebar */
+.sidebar-brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: padding 0.2s ease;
+  min-height: 64px;
+}
+
+.sidebar-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle-btn:hover {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: rgba(6, 182, 212, 0.4);
+  color: #38bdf8;
+  transform: scale(1.05);
+}
+
+/* Collapsed Rail (64px Icon Rail) */
+.sidebar.is-collapsed {
+  width: 64px !important;
+  min-width: 64px !important;
+}
+
+.sidebar.is-collapsed .sidebar-brand-header {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0 8px;
+  gap: 6px;
+}
+
+.sidebar.is-collapsed .brand-container {
+  justify-content: center;
+  width: 100%;
+}
+
+.sidebar.is-collapsed .sidebar-toggle-btn {
+  width: 32px;
+  height: 22px;
+  font-size: 13px;
+}
+
+/* Gracefully hide elements in collapsed rail */
+.sidebar.is-collapsed .nav-label,
+.sidebar.is-collapsed .nav-badge-live,
+.sidebar.is-collapsed .nav-section-header,
+.sidebar.is-collapsed .brand-info,
+.sidebar.is-collapsed .env-pill,
+.sidebar.is-collapsed .drawer-mobile-meta,
+.sidebar.is-collapsed .telemetry-card {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  pointer-events: none;
+  display: none !important;
+}
+
+.sidebar.is-collapsed .nav-menu {
+  padding: 6px 4px;
+  gap: 4px;
+  overflow-x: hidden;
+}
+
+.sidebar.is-collapsed .nav-group-wrapper {
+  gap: 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+.sidebar.is-collapsed .nav-group-wrapper:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sidebar.is-collapsed .nav-item {
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.sidebar.is-collapsed .nav-icon {
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Active route indicator on 64px rail */
+.sidebar.is-collapsed .nav-item.nav-active {
+  background: rgba(6, 182, 212, 0.18);
+  border-color: rgba(6, 182, 212, 0.5);
+  color: #38bdf8;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.35), inset 0 0 8px rgba(6, 182, 212, 0.2);
+}
+
+.sidebar.is-collapsed .nav-item.nav-active::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: var(--accent-cyan, #38bdf8);
+  border-radius: 0 4px 4px 0;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+}
+
+.sidebar.is-collapsed .nav-item.nav-active .nav-icon {
+  color: #38bdf8;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6));
+}
+
+.sidebar.is-collapsed .sidebar-footer {
+  padding: 8px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Floating Tooltip for Collapsed Rail */
+.sidebar-rail-tooltip {
+  position: fixed;
+  left: 72px;
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(6, 182, 212, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.rail-tooltip-arrow {
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: rgba(15, 23, 42, 0.96);
+  border-left: 1px solid rgba(6, 182, 212, 0.35);
+  border-bottom: 1px solid rgba(6, 182, 212, 0.35);
+}
+
+.rail-tooltip-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: 0.02em;
+}
+
+.rail-tooltip-sub {
+  font-size: 10px;
+  color: var(--text-muted, #94a3b8);
+  padding-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.rail-tooltip-badge {
+  font-size: 9px;
+  font-weight: 800;
+  background: rgba(244, 63, 94, 0.2);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-family: var(--font-mono, monospace);
+  animation: pulse 1.5s infinite;
+}
+
+.tooltip-fade-enter-active,
+.tooltip-fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.tooltip-fade-enter-from,
+.tooltip-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-50%) translateX(-4px);
+}
