@@ -44,7 +44,7 @@ const emit = defineEmits<{
         <tr v-for="tool in tools" :key="tool.id || tool.name">
           <td>
             <div class="table-tool-cell">
-              <span class="table-tool-icon">{{ getToolIcon(tool) }}</span>
+              <span class="table-tool-icon"><BaseIcon :name="getToolIcon(tool)" size="sm" /></span>
               <div class="table-tool-meta">
                 <span class="table-tool-name" :title="tool.name">{{ tool.name }}</span>
                 <span class="category-badge">{{ tool.category.toUpperCase() }}</span>

@@ -31,7 +31,7 @@ const emit = defineEmits<{
       <!-- Drawer Header -->
       <div class="drawer-header">
         <div class="drawer-title-group">
-          <span style="font-size: 24px;">{{ getToolIcon(tool) }}</span>
+          <BaseIcon :name="getToolIcon(tool)" size="xl" />
           <div>
             <h2>{{ tool.name }}</h2>
             <span class="category-badge">{{ tool.category.toUpperCase() }}</span>

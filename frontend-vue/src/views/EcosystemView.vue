@@ -135,7 +135,7 @@ const {
           :class="{ active: activeCategory === cat.key }"
           @click="activeCategory = cat.key"
         >
-          <span class="tab-icon">{{ cat.icon }}</span>
+          <span class="tab-icon"><BaseIcon :name="cat.icon" size="xs" /></span>
           <span class="tab-label">{{ cat.label }}</span>
           <span v-if="cat.key === 'all'" class="tab-count">{{ tools.length }}</span>
           <span v-else-if="summary.by_category && summary.by_category[cat.key]" class="tab-count">
