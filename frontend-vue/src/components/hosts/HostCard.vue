@@ -131,7 +131,7 @@ function formatUptime(seconds?: number): string {
           <span>✏️ Edit</span>
         </button>
         <button class="btn btn-danger-outline btn-xs" title="Delete Host" @click="emit('delete', host)">
-          <span>[🗑 Delete]</span>
+          <span>🗑 Delete</span>
         </button>
       </div>
     </div>
