@@ -48,6 +48,15 @@ function getLatencyColor(name: string, p: AIProvider) {
   <div class="ai-table-wrap animate-fade-in">
     <div v-if="providers.length > 0" class="ai-table-container glass-panel">
       <table class="ai-gateway-table">
+        <colgroup>
+          <col style="width: 19%;" />
+          <col style="width: 15%;" />
+          <col style="width: 10%;" />
+          <col style="width: 15%;" />
+          <col style="width: 11%;" />
+          <col style="width: 8%;" />
+          <col style="width: 22%;" />
+        </colgroup>
         <thead>
           <tr>
             <th>Provider & Gateway</th>
@@ -64,19 +73,19 @@ function getLatencyColor(name: string, p: AIProvider) {
             <!-- Provider Info -->
             <td>
               <div class="table-provider-cell">
-                <div class="table-provider-name">
-                  <span>{{ p.name }}</span>
-                  <span v-if="p.default" class="badge badge-cyan" style="font-size: 9px; padding: 1px 4px;">DEFAULT</span>
+                <div class="table-provider-name" :title="p.name">
+                  <span class="truncate-text">{{ p.name }}</span>
+                  <span v-if="p.default" class="badge badge-cyan" style="font-size: 9px; padding: 1px 4px; flex-shrink: 0;">DEFAULT</span>
                 </div>
-                <span class="font-mono text-muted" style="font-size: 10px;">{{ p.endpoint }}</span>
+                <span class="font-mono text-muted truncate-text" style="font-size: 10px;" :title="p.endpoint">{{ p.endpoint }}</span>
               </div>
             </td>
 
             <!-- Model Info -->
             <td>
               <div class="table-provider-cell">
-                <span class="font-mono text-cyan" style="font-weight: 600;">{{ p.model }}</span>
-                <span class="badge badge-violet" style="font-size: 9px; width: fit-content;">{{ p.type }}</span>
+                <span class="font-mono text-cyan truncate-text" style="font-weight: 600;" :title="p.model">{{ p.model }}</span>
+                <span class="badge badge-violet" style="font-size: 9px; width: fit-content; flex-shrink: 0;">{{ p.type }}</span>
               </div>
             </td>
 
@@ -91,11 +100,11 @@ function getLatencyColor(name: string, p: AIProvider) {
             </td>
 
             <!-- Quota Bar -->
-            <td style="min-width: 150px;">
+            <td>
               <div class="provider-quota-bar-wrap">
                 <div class="quota-bar-labels">
                   <span>{{ getQuotaPercent(p.name) }}%</span>
-                  <span class="font-mono" v-if="quotas?.[p.name]">
+                  <span class="font-mono truncate-text" v-if="quotas?.[p.name]">
                     {{ (quotas[p.name].usedTokens / 1000).toFixed(0) }}k / {{ (quotas[p.name].maxTokens / 1000).toFixed(0) }}k
                   </span>
                 </div>
@@ -113,10 +122,10 @@ function getLatencyColor(name: string, p: AIProvider) {
 
             <!-- Fallback Route -->
             <td>
-              <div class="table-routing-route font-mono">
-                <span class="text-secondary">Primary</span>
-                <span class="text-cyan">➔</span>
-                <span class="text-muted">{{ fallbackRoutes?.[p.name]?.fallbackProviderName || 'Ollama Local' }}</span>
+              <div class="table-routing-route font-mono truncate-text" :title="fallbackRoutes?.[p.name]?.fallbackProviderName || 'Ollama Local'">
+                <span class="text-secondary" style="flex-shrink: 0;">Pri</span>
+                <span class="text-cyan" style="flex-shrink: 0;">➔</span>
+                <span class="text-muted truncate-text">{{ fallbackRoutes?.[p.name]?.fallbackProviderName || 'Ollama Local' }}</span>
               </div>
             </td>
 
@@ -129,32 +138,33 @@ function getLatencyColor(name: string, p: AIProvider) {
             <td>
               <div class="table-actions-cell">
                 <button 
-                  class="btn btn-secondary btn-sm" 
-                  title="Test in Console"
-                  @click="emit('testInConsole', p.name)"
+                  class="btn-table-action" 
+                  :disabled="probingName === p.name"
+                  title="Probe Health"
+                  @click="emit('probe', p.name)"
                 >
-                  <span>⚡ Test</span>
+                  <span>{{ probingName === p.name ? '⏳...' : '⚡ Probe' }}</span>
                 </button>
                 <button 
-                  class="btn btn-secondary btn-sm" 
+                  class="btn-table-action" 
+                  title="View Metrics & Quota"
+                  @click="emit('openMetrics', p)"
+                >
+                  <span>📊 Metrics</span>
+                </button>
+                <button 
+                  class="btn-table-action" 
                   title="Routing Configuration"
                   @click="emit('openRouting', p)"
                 >
-                  <span>⚙️ Routing</span>
+                  <span>⚙️ Route</span>
                 </button>
                 <button 
-                  class="btn btn-secondary btn-sm" 
-                  title="View Token Quota & Cost"
-                  @click="emit('openMetrics', p)"
-                >
-                  <span>📊 Quota</span>
-                </button>
-                <button 
-                  class="btn btn-secondary btn-sm btn-danger-crimson" 
+                  class="btn-table-action btn-danger-crimson" 
                   title="Remove Provider"
                   @click="emit('remove', p.name)"
                 >
-                  <span>🗑 Remove</span>
+                  <span>🗑️ Delete</span>
                 </button>
               </div>
             </td>
