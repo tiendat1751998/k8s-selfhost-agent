@@ -13,7 +13,7 @@
           class="template-card"
           @click="$emit('installPreset', tpl)"
         >
-          <div class="tpl-icon">{{ tpl.icon }}</div>
+          <div class="tpl-icon"><BaseIcon :name="getPresetIcon(tpl.name)" size="sm" /></div>
           <div class="tpl-info">
             <h4>{{ tpl.name }} <span class="badge" :class="categoryBadgeClass(tpl.category || 'devtools')">{{ tpl.category }}</span></h4>
             <p>{{ tpl.description }}</p>
@@ -154,4 +154,14 @@ defineEmits<{
   (e: 'testBundle', plugin: Plugin): void
   (e: 'installPreset', preset: CreatePluginDTO): void
 }>()
+
+function getPresetIcon(name: string): string {
+  const n = (name || '').toLowerCase()
+  if (n.includes('security') || n.includes('trivy')) return 'shield'
+  if (n.includes('grafana') || n.includes('dashboard')) return 'pie-chart'
+  if (n.includes('prometheus') || n.includes('alert')) return 'flame'
+  if (n.includes('log') || n.includes('vector')) return 'file-text'
+  return 'plug'
+}
+
 </script>

@@ -38,7 +38,7 @@ const emit = defineEmits<{
       <div class="service-hero glass-panel">
         <div class="hero-top">
           <div class="hero-brand">
-            <span class="hero-icon">{{ getTypeIcon(service.type) }}</span>
+            <span class="hero-icon"><BaseIcon :name="getTypeIcon(service.type)" size="md" /></span>
             <div>
               <h3 class="hero-title">{{ service.name }}</h3>
               <span class="hero-id font-mono text-muted">ID: {{ service.id }}</span>

@@ -42,7 +42,7 @@ const emit = defineEmits<{
       >
         <div class="card-header">
           <div class="framework-avatar">
-            {{ getFrameworkIcon(tmpl.framework) }}
+            <BaseIcon :name="getFrameworkIcon(tmpl.framework)" size="md" />
           </div>
           <div class="card-badges">
             <span :class="['badge', getCategoryBadgeClass(tmpl.category)]">
