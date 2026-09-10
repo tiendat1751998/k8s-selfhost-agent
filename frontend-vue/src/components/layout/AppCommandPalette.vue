@@ -120,7 +120,8 @@ onUnmounted(() => {
 
     <template #footer>
       <div class="palette-footer-tips font-mono">
-        <span class="desktop-tips">Navigate with click • <kbd>Esc</kbd> to close</span>\n        <span class="mobile-tips">Tap backdrop or ✕ to close</span>
+        <span class="desktop-tips">Navigate with click • <kbd>Esc</kbd> to close</span>
+        <span class="mobile-tips">Tap backdrop or ✕ to close</span>
       </div>
     </template>
   </ModalDrawer>
