@@ -1,4 +1,4 @@
-﻿# AGENTS.md — k8s-selfhost-agent Constitution
+# AGENTS.md — k8s-selfhost-agent Constitution
 
 > Binding project constitution for `k8sseflhost`. Applies to all agents and subagents operating in this workspace.
 
@@ -7,9 +7,9 @@
 - **ANTI-TOY PROJECT SYNDROME**:
   - Absolute prohibition on "make it run temporarily" mentality. Every piece of code must meet Production Enterprise standards: strict typing, comprehensive error handling, concurrency safety, clean architecture, and scalability.
   - No monkey-patching, no temporary stubs/mocks, no sloppy leftovers. Every touched module must be strictly clean, under 500 lines, and defect-free.
-- **SURGICAL SKILL SELECTION**:
-  - Do NOT spam or inject dozens of skills into context.
-  - For any specific task, select ONLY 1 TO 2 relevant skills directly serving that task (e.g., `systematic-debugging` for bugfix, `chrome-devtools-mcp` for UI audit). Omit all other skills to keep context razor-sharp.
+- **EMPOWERED SKILL UTILIZATION & MANDATORY ORCHESTRATOR DUTY**:
+  - Subagents and orchestrator are fully empowered to leverage any and all relevant skills needed (e.g., `verification-before-completion`, `systematic-debugging`, `test-driven-development`, `chrome-devtools-mcp`, `receiving-code-review`) without artificial caps, as long as it avoids over-engineering and bloated context.
+  - **Orchestrator Duty**: The Orchestrator MUST proactively mandate and remind subagents to load and apply their relevant `SKILL.md` instructions in every dispatch prompt. Never allow subagents to forget or skip skill directives.
 - **ZERO DEFENSIVENESS & ZERO EMPTY THEORIZING**:
   - When a defect or oversight is discovered, no defensive justifications, no theoretical diagrams, no empty promises.
   - Acknowledge reality, slow down, verify factual evidence, and solve the root cause.
