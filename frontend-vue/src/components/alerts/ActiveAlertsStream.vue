@@ -24,7 +24,7 @@ const emit = defineEmits<{
     </div>
 
     <div v-if="alerts.length === 0" class="empty-list glass-panel">
-      ✨ All metric thresholds nominal. No active anomalies currently firing.
+      <BaseIcon name="check-circle" size="md" /> All metric thresholds nominal. No active anomalies currently firing.
     </div>
 
     <div v-else class="stream-cards-list">
@@ -48,21 +48,21 @@ const emit = defineEmits<{
             title="Silence alert for 1 hour"
             @click="emit('silence', alert)"
           >
-            <span>🔕 Silence</span>
+            <BaseIcon name="bell-off" size="xs" /> <span>Silence</span>
           </button>
           <button 
             class="btn btn-primary btn-sm" 
             title="Resolve alert anomaly"
             @click="emit('resolve', alert)"
           >
-            <span>⚡ Resolve</span>
+            <BaseIcon name="check-circle" size="xs" /> <span>Resolve</span>
           </button>
           <button 
             class="btn btn-cyan btn-sm" 
             title="Inspect related telemetry and runbook"
             @click="emit('telemetry', alert)"
           >
-            <span>🔍 Details</span>
+            <BaseIcon name="search" size="xs" /> <span>Details</span>
           </button>
         </div>
       </div>

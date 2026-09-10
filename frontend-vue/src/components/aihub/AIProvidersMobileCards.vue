@@ -65,7 +65,7 @@ function getLatencyColor(name: string, p: AIProvider) {
             aria-label="Probe Health"
             @click="emit('probe', p.name)"
           >
-            <span>{{ probingName === p.name ? '⏳' : '⚡' }}</span>
+            <BaseIcon :name="probingName === p.name ? 'refresh' : 'zap'" size="xs" :class="{ 'animate-spin': probingName === p.name }" />
           </button>
           <button 
             class="mobile-btn-icon" 
@@ -73,7 +73,7 @@ function getLatencyColor(name: string, p: AIProvider) {
             aria-label="Metrics & Quota"
             @click="emit('openMetrics', p)"
           >
-            <span>📊</span>
+            <BaseIcon name="activity" size="xs" />
           </button>
           <button 
             class="mobile-btn-icon" 
@@ -81,7 +81,7 @@ function getLatencyColor(name: string, p: AIProvider) {
             aria-label="Test in Console"
             @click="emit('testInConsole', p.name)"
           >
-            <span>💬</span>
+            <BaseIcon name="message-square" size="xs" />
           </button>
           <button 
             class="mobile-btn-icon btn-danger-crimson" 
@@ -89,16 +89,16 @@ function getLatencyColor(name: string, p: AIProvider) {
             aria-label="Remove Provider"
             @click="emit('remove', p.name)"
           >
-            <span>🗑</span>
+            <BaseIcon name="trash" size="xs" />
           </button>
         </div>
       </div>
     </div>
 
     <div v-else class="empty-state-box glass-panel">
-      <span class="empty-icon">🤖</span>
+      <BaseIcon name="bot" size="lg" class="empty-icon" />
       <h3 class="empty-title">No AI Gateways Configured</h3>
-      <p class="empty-desc">🤖 No AI providers configured. Tap + to register an LLM gateway.</p>
+      <p class="empty-desc">No AI providers configured. Tap + to register an LLM gateway.</p>
       <button class="btn btn-primary btn-sm" @click="emit('register')">
         <span>+ Register Provider</span>
       </button>

@@ -102,10 +102,10 @@ defineEmits<{
 }>()
 
 const ssoProviders: SSOProviderItem[] = [
-  { id: 'github', name: 'GitHub', icon: '🐙' },
-  { id: 'google', name: 'Google', icon: '🌐' },
-  { id: 'keycloak', name: 'Keycloak', icon: '🔑' },
-  { id: 'saml', name: 'SAML 2.0', icon: '🏛️' },
-  { id: 'oidc', name: 'OIDC', icon: '🆔' },
+  { id: 'github', name: 'GitHub', icon: 'git-branch' },
+  { id: 'google', name: 'Google', icon: 'globe' },
+  { id: 'keycloak', name: 'Keycloak', icon: 'key' },
+  { id: 'saml', name: 'SAML 2.0', icon: 'shield' },
+  { id: 'oidc', name: 'OIDC', icon: 'lock' },
 ]
 </script>

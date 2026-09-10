@@ -56,7 +56,7 @@ function formatReleaseDate(dateStr?: string): string {
     <!-- Table Filter Bar -->
     <div class="table-toolbar glass-panel">
       <div class="toolbar-search">
-        <span class="search-icon">🔍</span>
+        <BaseIcon name="search" size="xs" class="search-icon" />
         <input
           :value="search"
           type="text"
@@ -70,7 +70,7 @@ function formatReleaseDate(dateStr?: string): string {
           class="btn-clear"
           @click="emit('update:search', '')"
         >
-          ✕
+          <BaseIcon name="x" size="xs" />
         </button>
       </div>
 
@@ -100,7 +100,7 @@ function formatReleaseDate(dateStr?: string): string {
       </div>
 
       <div v-else-if="error" class="error-state">
-        <span class="error-icon">⚠️</span>
+        <BaseIcon name="alert-triangle" size="xs" class="error-icon" />
         <h4 class="error-title">Failed to load releases</h4>
         <p class="error-desc">{{ error }}</p>
         <button type="button" class="btn-cyber btn-primary btn-sm" @click="emit('retry')">
@@ -109,7 +109,7 @@ function formatReleaseDate(dateStr?: string): string {
       </div>
 
       <div v-else-if="releases.length === 0" class="empty-state">
-        <span class="empty-icon">⛵</span>
+        <BaseIcon name="anchor" size="xl" class="empty-icon" />
         <h4 class="empty-title">No Helm Releases Found</h4>
         <p class="empty-desc">
           No releases match your current filters on cluster <code class="text-gold">{{ selectedCluster }}</code>.
@@ -146,7 +146,7 @@ function formatReleaseDate(dateStr?: string): string {
               <!-- Release Name -->
               <td>
                 <div class="release-name-cell" @click="emit('openDetail', rel)">
-                  <span class="release-icon">⛵</span>
+                  <BaseIcon name="anchor" size="xs" class="release-icon" />
                   <div class="release-info-col">
                     <span class="release-name-text release-title-strong">{{ rel.name }}</span>
                     <span v-if="getFormattedReleaseDescription(rel) || rel.description" class="release-desc-sub">
@@ -173,7 +173,7 @@ function formatReleaseDate(dateStr?: string): string {
 
               <!-- Namespace -->
               <td>
-                <span class="ns-badge font-mono">🏷️ {{ rel.namespace }}</span>
+                <span class="ns-badge font-mono"><BaseIcon name="grid" size="xs" /> {{ rel.namespace }}</span>
               </td>
 
               <!-- Status Badge -->
@@ -200,7 +200,7 @@ function formatReleaseDate(dateStr?: string): string {
                     title="Inspect Release Values & Details"
                     @click="emit('openDetail', rel)"
                   >
-                    <span>🔍 Values</span>
+                    <BaseIcon name="search" size="xs" /> <span>Values</span>
                   </button>
                   <button
                     type="button"
@@ -208,7 +208,7 @@ function formatReleaseDate(dateStr?: string): string {
                     title="Upgrade Release"
                     @click="emit('upgrade', rel)"
                   >
-                    <span>🔄 Upgrade</span>
+                    <BaseIcon name="refresh" size="xs" /> <span>Upgrade</span>
                   </button>
                   <button
                     type="button"
@@ -216,7 +216,7 @@ function formatReleaseDate(dateStr?: string): string {
                     title="Rollback Release Revision"
                     @click="emit('rollback', rel)"
                   >
-                    <span>⏪ Rollback</span>
+                    <BaseIcon name="rotate-ccw" size="xs" /> <span>Rollback</span>
                   </button>
                   <button
                     type="button"
@@ -224,7 +224,7 @@ function formatReleaseDate(dateStr?: string): string {
                     title="Uninstall Release"
                     @click="emit('uninstall', rel)"
                   >
-                    <span>🗑 Uninstall</span>
+                    <BaseIcon name="trash" size="xs" /> <span>Uninstall</span>
                   </button>
                 </div>
               </td>

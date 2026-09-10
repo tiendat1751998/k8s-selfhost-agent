@@ -86,14 +86,14 @@ const ruleColumns: Column<AlertRuleRow>[] = [
           title="Edit Rule Configuration" 
           @click="emit('edit', row as AlertRule)"
         >
-          <span>⚙️ Edit</span>
+          <BaseIcon name="edit" size="xs" /> <span>Edit</span>
         </button>
         <button 
           class="btn btn-sm btn-delete-crimson" 
           title="Delete Rule" 
           @click="emit('delete', String(row.ID))"
         >
-          <span>🗑️ Delete</span>
+          <BaseIcon name="trash" size="xs" /> <span>Delete</span>
         </button>
       </div>
     </template>

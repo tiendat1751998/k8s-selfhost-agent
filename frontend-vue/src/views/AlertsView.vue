@@ -85,7 +85,7 @@ const historyColumns: Column<AlertHistory>[] = [
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="alerts-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🚨 Alerts ({{ firingCount }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="bell" size="sm" /> Alerts ({{ firingCount }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -94,7 +94,7 @@ const historyColumns: Column<AlertHistory>[] = [
           aria-label="New Alert Rule"
           @click="openCreateRule"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -103,24 +103,24 @@ const historyColumns: Column<AlertHistory>[] = [
           aria-label="Sync / Refresh Telemetry"
           @click="loadData"
         >
-          <span :class="{ 'animate-spin': loading }">🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="alerts-micro-telemetry mobile-only font-mono" role="status" aria-label="Alerts Micro Telemetry">
-      <span class="tel-item tel-crit">🚨 {{ criticalP1Count }} Critical</span>
+      <span class="tel-item tel-crit"><BaseIcon name="alert-triangle" size="xs" /> {{ criticalP1Count }} Critical</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-warn">⚠️ {{ warningCount }} Warning</span>
+      <span class="tel-item tel-warn"><BaseIcon name="alert-triangle" size="xs" /> {{ warningCount }} Warning</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-silent">🔕 {{ silencedRulesCount }} Silenced</span>
+      <span class="tel-item tel-silent"><BaseIcon name="bell-off" size="xs" /> {{ silencedRulesCount }} Silenced</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-chan">📡 {{ channels.length }} Channels</span>
+      <span class="tel-item tel-chan"><BaseIcon name="radio" size="xs" /> {{ channels.length }} Channels</span>
     </div>
 
     <div v-if="feedbackMessage" class="feedback-banner animate-fade-in">
-      <span class="feedback-icon">✓</span>
+      <BaseIcon name="check-circle" size="xs" class="feedback-icon" />
       <span>{{ feedbackMessage }}</span>
     </div>
 
@@ -135,15 +135,15 @@ const historyColumns: Column<AlertHistory>[] = [
     <div class="tab-bar glass-panel">
       <div class="tab-buttons">
         <button class="tbtn" :class="{ active: activeTab === 'history' }" @click="activeTab = 'history'">
-          <span>🔥 Firing Alerts & History</span>
+          <BaseIcon name="flame" size="xs" /> <span>Firing Alerts & History</span>
           <span class="tbadge">{{ history.length }}</span>
         </button>
         <button class="tbtn" :class="{ active: activeTab === 'rules' }" @click="activeTab = 'rules'">
-          <span>⚙️ Alert Rules Engine</span>
+          <BaseIcon name="sliders" size="xs" /> <span>Alert Rules Engine</span>
           <span class="tbadge">{{ rules.length }}</span>
         </button>
         <button class="tbtn" :class="{ active: activeTab === 'channels' }" @click="activeTab = 'channels'">
-          <span>📡 Delivery Channels</span>
+          <BaseIcon name="radio" size="xs" /> <span>Delivery Channels</span>
           <span class="tbadge">{{ channels.length }}</span>
         </button>
       </div>
@@ -212,14 +212,14 @@ const historyColumns: Column<AlertHistory>[] = [
                 class="btn btn-primary btn-sm" 
                 @click="handleAcknowledge(row)"
               >
-                <span>✓ Ack</span>
+                <BaseIcon name="check" size="xs" /> <span>Ack</span>
               </button>
               <button 
                 class="btn btn-secondary btn-sm" 
                 title="Inspect Telemetry"
                 @click="openTelemetry(row)"
               >
-                <span>🔍</span>
+                <BaseIcon name="search" size="xs" />
               </button>
             </div>
           </template>

@@ -58,12 +58,12 @@ const {
         </div>
         <h1 class="view-title">Multi-Stage Release Promotions</h1>
         <p class="view-desc">
-          Automated gate approvals and progressive environment promotion pipeline across Dev ➔ QA ➔ Staging ➔ Production.
+          Automated gate approvals and progressive environment promotion pipeline across Dev &rarr; QA &rarr; Staging &rarr; Production.
         </p>
       </div>
 
       <div class="header-actions">
-        <!-- Segmented View Mode Toggle: [ 📑 Table ] [ 🔀 Pipeline ] -->
+        <!-- Segmented View Mode Toggle: [ Table ] [ Pipeline ] -->
         <div class="segmented-control font-mono">
           <button
             class="segmented-btn"
@@ -71,7 +71,7 @@ const {
             @click="viewMode = 'table'"
             title="Table View"
           >
-            <span>📑 Table</span>
+            <BaseIcon name="file-text" size="xs" /> <span>Table</span>
           </button>
           <button
             class="segmented-btn"
@@ -79,12 +79,12 @@ const {
             @click="viewMode = 'pipeline'"
             title="Pipeline View"
           >
-            <span>🔀 Pipeline</span>
+            <BaseIcon name="git-branch" size="xs" /> <span>Pipeline</span>
           </button>
         </div>
 
         <button class="btn btn-secondary" :disabled="loading || loadingServices" @click="refreshAll">
-          <span>{{ loading || loadingServices ? '⏳ Querying...' : '🔄 Refresh' }}</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading || loadingServices }" /> <span>{{ loading || loadingServices ? 'Querying...' : 'Refresh' }}</span>
         </button>
         <button class="btn btn-primary" @click="openCreateModal">
           <span>+ Request Promotion</span>
@@ -95,34 +95,34 @@ const {
     <!-- Mobile 44px Command Bar (<768px) -->
     <div class="promotions-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🚀 Promotions ({{ promotions.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="play" size="sm" /> Promotions ({{ promotions.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button class="btn-icon-cmd" title="Request Promotion" aria-label="Request Promotion" @click="openCreateModal">
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button class="btn-icon-cmd" :disabled="loading || loadingServices" title="Refresh" aria-label="Refresh" @click="refreshAll">
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="promotions-micro-telemetry mobile-only font-mono" role="status" aria-label="Promotions Micro Telemetry">
-      <span class="tel-item tel-pend">⏳ {{ pendingCount }} pend</span>
+      <span class="tel-item tel-pend"><BaseIcon name="clock" size="xs" /> {{ pendingCount }} pend</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-act">🚀 {{ approvedCount }} act</span>
+      <span class="tel-item tel-act"><BaseIcon name="play" size="xs" /> {{ approvedCount }} act</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-done">✅ {{ completedCount }} done</span>
+      <span class="tel-item tel-done"><BaseIcon name="check-circle" size="xs" /> {{ completedCount }} done</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-rej">🛑 {{ rejectedCount }} rej</span>
+      <span class="tel-item tel-rej"><BaseIcon name="x-circle" size="xs" /> {{ rejectedCount }} rej</span>
     </div>
 
     <!-- Notification Toast -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <span>{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" />
       <span>{{ toastMessage.text }}</span>
-      <button class="toast-close" @click="toastMessage = null">✕</button>
+      <button class="toast-close" @click="toastMessage = null" aria-label="Close"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Metric HUD (Desktop only >=768px) -->
@@ -131,7 +131,7 @@ const {
         title="Pending Approvals"
         :value="pendingCount"
         subtitle="Promotion requests awaiting review"
-        icon="⏳"
+        icon="clock"
         badge="GATE"
         :badge-color="pendingCount > 0 ? 'amber' : 'emerald'"
         :trend="pendingCount > 0 ? 'Review Required' : 'All Clear'"
@@ -141,7 +141,7 @@ const {
         title="Active Promoting"
         :value="approvedCount"
         subtitle="Canary rollout & staging verification"
-        icon="🚀"
+        icon="play"
         badge="ROLLOUT"
         badge-color="cyan"
         trend="In-Flight Verification"
@@ -151,7 +151,7 @@ const {
         title="Completed Releases"
         :value="completedCount"
         subtitle="Successfully promoted to destination"
-        icon="✅"
+        icon="check-circle"
         badge="SHIPPED"
         badge-color="emerald"
         trend="Continuous Delivery"
@@ -161,7 +161,7 @@ const {
         title="Rejected / Aborted"
         :value="rejectedCount"
         subtitle="Failed quality gates or security review"
-        icon="🛑"
+        icon="x-circle"
         badge="REJECTED"
         :badge-color="rejectedCount > 0 ? 'rose' : 'emerald'"
       />

@@ -36,7 +36,7 @@ const emit = defineEmits<{
             <div class="diff-service-name font-mono text-cyan">{{ promotion.service }}</div>
             <div class="diff-route-pill font-mono">
               <span>{{ promotion.from_env }}</span>
-              <span class="route-arrow">➔</span>
+              <BaseIcon name="chevron-right" size="xs" class="route-arrow" />
               <span class="text-cyan font-bold">{{ promotion.to_env }}</span>
             </div>
           </div>
@@ -53,11 +53,11 @@ const emit = defineEmits<{
 
       <div class="diff-section">
         <div class="diff-section-title font-mono">
-          <span>🛡️ AUTOMATED QUALITY & SECURITY GATES</span>
+          <BaseIcon name="shield" size="xs" /> <span>AUTOMATED QUALITY & SECURITY GATES</span>
         </div>
         <div class="approval-gates-grid font-mono">
           <div class="gate-item gate-pass">
-            <span class="gate-icon">✓</span>
+            <BaseIcon name="check-circle" size="xs" class="gate-icon" />
             <div class="gate-info">
               <span class="gate-name">Container Security Scan</span>
               <span class="gate-status">0 Critical / 0 High CVEs</span>
@@ -65,7 +65,7 @@ const emit = defineEmits<{
           </div>
 
           <div class="gate-item gate-pass">
-            <span class="gate-icon">✓</span>
+            <BaseIcon name="check-circle" size="xs" class="gate-icon" />
             <div class="gate-info">
               <span class="gate-name">E2E Regression Suite</span>
               <span class="gate-status">48/48 Test Specs Passed</span>
@@ -73,7 +73,7 @@ const emit = defineEmits<{
           </div>
 
           <div class="gate-item gate-pass">
-            <span class="gate-icon">✓</span>
+            <BaseIcon name="check-circle" size="xs" class="gate-icon" />
             <div class="gate-info">
               <span class="gate-name">Performance & SLO Budget</span>
               <span class="gate-status">Latency Regression: +0.02ms</span>
@@ -81,7 +81,7 @@ const emit = defineEmits<{
           </div>
 
           <div class="gate-item gate-pass">
-            <span class="gate-icon">✓</span>
+            <BaseIcon name="check-circle" size="xs" class="gate-icon" />
             <div class="gate-info">
               <span class="gate-name">GitOps Signature (Cosign)</span>
               <span class="gate-status">Keyless Sigstore Verified</span>
@@ -92,7 +92,7 @@ const emit = defineEmits<{
 
       <div class="diff-section">
         <div class="diff-section-title font-mono">
-          <span>📜 GITOPS DECLARATIVE MANIFEST DIFF</span>
+          <BaseIcon name="file-text" size="xs" /> <span>GITOPS DECLARATIVE MANIFEST DIFF</span>
           <span class="diff-filename">deployments/{{ promotion.service }}.yaml</span>
         </div>
 
@@ -117,14 +117,14 @@ const emit = defineEmits<{
 
       <div class="diff-section">
         <div class="diff-section-title font-mono">
-          <span>📋 APPROVAL AUDIT LOGS</span>
+          <BaseIcon name="file-text" size="xs" /> <span>APPROVAL AUDIT LOGS</span>
         </div>
         <div class="audit-trail-timeline font-mono">
           <div class="timeline-step">
             <span class="step-dot step-pass"></span>
             <div class="step-content">
               <span class="step-title">Promotion Request Created</span>
-              <span class="step-meta">Initiated by {{ promotion.requester }} ➔ Target: {{ promotion.to_env }}</span>
+              <span class="step-meta">Initiated by {{ promotion.requester }} &rarr; Target: {{ promotion.to_env }}</span>
             </div>
           </div>
           <div v-if="promotion.status !== 'pending'" class="timeline-step">
@@ -147,14 +147,14 @@ const emit = defineEmits<{
           :disabled="actionLoading === promotion.id"
           @click="emit('reject', promotion)"
         >
-          ✕ Reject
+          <BaseIcon name="x-circle" size="xs" /> Reject
         </button>
         <button
           class="btn btn-primary"
           :disabled="actionLoading === promotion.id"
           @click="emit('approve', promotion)"
         >
-          ✓ Approve & Gated Rollout
+          <BaseIcon name="check-circle" size="xs" /> Approve & Gated Rollout
         </button>
       </template>
 
@@ -164,7 +164,7 @@ const emit = defineEmits<{
           :disabled="actionLoading === promotion.id"
           @click="emit('complete', promotion)"
         >
-          Complete Deployment ➔
+          Complete Deployment <BaseIcon name="chevron-right" size="xs" />
         </button>
       </template>
 
@@ -174,7 +174,7 @@ const emit = defineEmits<{
           :disabled="actionLoading === promotion.id"
           @click="emit('rollback', promotion)"
         >
-          ⏪ Revert / Rollback
+          <BaseIcon name="rotate-ccw" size="xs" /> Revert / Rollback
         </button>
       </template>
     </template>

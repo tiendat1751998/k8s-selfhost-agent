@@ -37,19 +37,19 @@ const emit = defineEmits<{
             <span class="category-badge">{{ tool.category.toUpperCase() }}</span>
           </div>
         </div>
-        <button class="modal-close-btn" @click="emit('close')">✕</button>
+        <button class="modal-close-btn" @click="emit('close')" aria-label="Close"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <!-- Latency & Health Probe Section -->
       <div class="drawer-section">
         <div class="drawer-section-title">
-          <span>📡 Latency Probe & Diagnostics</span>
+          <BaseIcon name="activity" size="xs" /> <span>Latency Probe & Diagnostics</span>
           <button
             class="table-btn btn-health"
             :disabled="isProbing"
             @click="emit('probe', tool)"
           >
-            <span :class="{ 'spin-anim': isProbing }">🔄</span>
+            <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': isProbing }" />
             <span>{{ isProbing ? 'Probing...' : 'Run Probe Now' }}</span>
           </button>
         </div>
@@ -92,12 +92,12 @@ const emit = defineEmits<{
       <!-- Webhook Sync History Section -->
       <div class="drawer-section">
         <div class="drawer-section-title">
-          <span>🔄 Webhook Sync Heartbeats</span>
+          <BaseIcon name="refresh" size="xs" /> <span>Webhook Sync Heartbeats</span>
           <button
             class="table-btn btn-sync"
             @click="emit('sync', tool)"
           >
-            ⚡ Trigger Sync
+            <BaseIcon name="zap" size="xs" /> Trigger Sync
           </button>
         </div>
 
@@ -129,7 +129,7 @@ const emit = defineEmits<{
       <!-- Error Logs Stream Section -->
       <div class="drawer-section">
         <div class="drawer-section-title">
-          <span>📋 Error & Discovery Logs</span>
+          <BaseIcon name="file-text" size="xs" /> <span>Error & Discovery Logs</span>
         </div>
 
         <div v-if="errorLogs.length > 0" class="error-logs-terminal">

@@ -62,7 +62,7 @@ const {
 
       <div class="header-actions">
         <button class="btn btn-secondary" @click="activeSection = 'console'">
-          <span>⚡ Prompt Console</span>
+          <BaseIcon name="sparkles" size="xs" /> <span>Prompt Console</span>
         </button>
         <button class="btn btn-primary" @click="showAddModal = true">
           <span>+ Add Custom Provider</span>
@@ -73,7 +73,7 @@ const {
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="aihub-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🤖 AI Hub ({{ providers.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="bot" size="sm" /> AI Hub ({{ providers.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -82,7 +82,7 @@ const {
           aria-label="Add Provider"
           @click="showAddModal = true"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -90,27 +90,27 @@ const {
           aria-label="Toggle Console"
           @click="activeSection = activeSection === 'console' ? 'matrix' : 'console'"
         >
-          <span>⚡</span>
+          <BaseIcon name="sparkles" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="aihub-micro-telemetry mobile-only font-mono" role="status" aria-label="AI Hub Micro Telemetry">
-      <span class="tel-item tel-gw">🤖 {{ providers.length }} gw</span>
+      <span class="tel-item tel-gw"><BaseIcon name="bot" size="xs" /> {{ providers.length }} gw</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-models">🧠 {{ distinctModelsCount }} models</span>
+      <span class="tel-item tel-models"><BaseIcon name="cpu" size="xs" /> {{ distinctModelsCount }} models</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-lat">⚡ {{ avgLatency }}</span>
+      <span class="tel-item tel-lat"><BaseIcon name="zap" size="xs" /> {{ avgLatency }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-failover">🛡️ {{ failoverResilience }}</span>
+      <span class="tel-item tel-failover"><BaseIcon name="shield" size="xs" /> {{ failoverResilience }}</span>
     </div>
 
     <!-- Error Banner -->
     <div v-if="error" class="status-banner banner-error animate-fade-in">
-      <span class="banner-icon">⚠️</span>
+      <BaseIcon name="alert-triangle" size="sm" class="banner-icon" />
       <span class="banner-text">{{ error }}</span>
-      <button class="banner-close" @click="error = null">✕</button>
+      <button class="banner-close" @click="error = null" aria-label="Close"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Summary Metrics -->
@@ -149,7 +149,7 @@ const {
           :class="{ active: activeSection === 'providers' || activeSection === 'matrix' }" 
           @click="activeSection = 'providers'"
         >
-          <span>🔌 Grid Matrix</span>
+          <BaseIcon name="grid" size="xs" /> <span>Grid Matrix</span>
           <span class="vtab-count">{{ providers.length }}</span>
         </button>
         <button 
@@ -157,21 +157,21 @@ const {
           :class="{ active: activeSection === 'table' }" 
           @click="activeSection = 'table'"
         >
-          <span>📋 Routes Table</span>
+          <BaseIcon name="file-text" size="xs" /> <span>Routes Table</span>
         </button>
         <button 
           class="vtab-btn" 
           :class="{ active: activeSection === 'mobile' }" 
           @click="activeSection = 'mobile'"
         >
-          <span>📱 Mobile Stream</span>
+          <BaseIcon name="box" size="xs" /> <span>Mobile Stream</span>
         </button>
         <button 
           class="vtab-btn" 
           :class="{ active: activeSection === 'console' }" 
           @click="activeSection = 'console'"
         >
-          <span>⚡ Interactive Prompt Console</span>
+          <BaseIcon name="sparkles" size="xs" /> <span>Interactive Prompt Console</span>
         </button>
       </div>
     </div>
