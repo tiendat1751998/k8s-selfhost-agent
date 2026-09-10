@@ -1,5 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { SystemOverview, NodeMetrics } from '../../../api/overview'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 interface Props {
   overview: SystemOverview
@@ -66,7 +67,7 @@ function formatBytes(bytes: number): string {
       </div>
       <div class="hud-card-footer-text font-mono">
         <span :class="overview.healthy_nodes === overview.total_nodes ? 'text-emerald' : 'text-amber'">
-          <span class="footer-full">🖥️ {{ overview.healthy_nodes }} Online · {{ (overview.total_nodes || 0) - (overview.healthy_nodes || 0) }} Offline</span>
+          <span class="footer-full"><BaseIcon name="server" size="xs" /> {{ overview.healthy_nodes }} Online · {{ (overview.total_nodes || 0) - (overview.healthy_nodes || 0) }} Offline</span>
           <span class="footer-mobile">{{ overview.healthy_nodes }} up · {{ (overview.total_nodes || 0) - (overview.healthy_nodes || 0) }} down</span>
         </span>
       </div>
@@ -79,7 +80,7 @@ function formatBytes(bytes: number): string {
           <span class="label-full">Containers</span>
           <span class="label-mobile">Containers</span>
         </span>
-        <span class="hud-icon">📦</span>
+        <span class="hud-icon"><BaseIcon name="box" size="sm" /></span>
       </div>
       <div class="hud-value-row">
         <span
@@ -100,7 +101,7 @@ function formatBytes(bytes: number): string {
       </div>
       <div class="hud-card-footer-text font-mono">
         <span class="text-cyan">
-          <span class="footer-full">🚀 Across {{ overview.healthy_nodes || 0 }} Active Nodes</span>
+          <span class="footer-full"><BaseIcon name="play" size="xs" /> Across {{ overview.healthy_nodes || 0 }} Active Nodes</span>
           <span class="footer-mobile">{{ overview.healthy_nodes || 0 }} active node{{ (overview.healthy_nodes || 0) === 1 ? '' : 's' }}</span>
         </span>
       </div>
@@ -113,7 +114,7 @@ function formatBytes(bytes: number): string {
           <span class="label-full">Avg CPU Saturation</span>
           <span class="label-mobile">CPU</span>
         </span>
-        <span class="hud-icon">⚡</span>
+        <span class="hud-icon"><BaseIcon name="zap" size="sm" /></span>
       </div>
       <div class="hud-value-row">
         <span class="hud-value smooth-value" :class="`text-${getUtilizationColor(overview.total_cpu_percent)}`">
@@ -132,8 +133,8 @@ function formatBytes(bytes: number): string {
       </div>
       <div class="hud-card-footer-text font-mono">
         <span class="text-violet">
-          <span class="footer-full">🔥 Peak: {{ peakCpuNode?.node_name || 'k8smaster' }} ({{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%)</span>
-          <span class="footer-mobile">🔥 {{ peakCpuNode?.node_name || 'k8smaster' }} {{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%</span>
+          <span class="footer-full"><BaseIcon name="flame" size="xs" /> Peak: {{ peakCpuNode?.node_name || 'k8smaster' }} ({{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%)</span>
+          <span class="footer-mobile"><BaseIcon name="flame" size="xs" /> {{ peakCpuNode?.node_name || 'k8smaster' }} {{ Math.round(peakCpuNode?.cpu_percent || overview.total_cpu_percent) }}%</span>
         </span>
       </div>
     </div>
@@ -145,7 +146,7 @@ function formatBytes(bytes: number): string {
           <span class="label-full">Avg Memory Saturation</span>
           <span class="label-mobile">Memory</span>
         </span>
-        <span class="hud-icon">🧠</span>
+        <span class="hud-icon"><BaseIcon name="cpu" size="sm" /></span>
       </div>
       <div class="hud-value-row">
         <span class="hud-value smooth-value" :class="`text-${getUtilizationColor(overview.total_mem_percent)}`">
@@ -164,7 +165,7 @@ function formatBytes(bytes: number): string {
       </div>
       <div class="hud-card-footer-text font-mono">
         <span class="text-cyan">
-          <span class="footer-full">📊 {{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}</span>
+          <span class="footer-full"><BaseIcon name="activity" size="xs" /> {{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}</span>
           <span class="footer-mobile">{{ formatBytes(clusterUsedMemBytes) }} / {{ formatBytes(clusterTotalMemBytes) }}</span>
         </span>
       </div>
@@ -177,7 +178,7 @@ function formatBytes(bytes: number): string {
           <span class="label-full">Cluster Storage</span>
           <span class="label-mobile">Storage</span>
         </span>
-        <span class="hud-icon">💾</span>
+        <span class="hud-icon"><BaseIcon name="hard-drive" size="sm" /></span>
       </div>
       <div class="hud-value-row">
         <span class="hud-value smooth-value" :class="`text-${getUtilizationColor(overview.total_disk_percent)}`">
@@ -196,7 +197,7 @@ function formatBytes(bytes: number): string {
       </div>
       <div class="hud-card-footer-text font-mono">
         <span class="text-emerald">
-          <span class="footer-full">💽 {{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }}</span>
+          <span class="footer-full"><BaseIcon name="database" size="xs" /> {{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }}</span>
           <span class="footer-mobile">{{ formatBytes(clusterUsedDiskBytes) }} / {{ formatBytes(clusterTotalDiskBytes) }}</span>
         </span>
       </div>
