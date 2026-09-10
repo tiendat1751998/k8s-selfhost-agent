@@ -41,6 +41,7 @@ const {
 
   loadTemplates,
   openWizard,
+  previewTemplate,
   closeWizard,
   nextStep,
   prevStep,
@@ -104,7 +105,7 @@ const handleDrawerDownload = () => {
       </div>
     </transition>
 
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="scaffolder-mobile-command-bar mobile-only">
       <div class="command-bar-left">
         <span class="command-bar-title font-bold">🏗️ Scaffolder ({{ templates.length }})</span>
@@ -113,8 +114,8 @@ const handleDrawerDownload = () => {
         <button
           type="button"
           class="btn-icon-cmd"
-          title="Create Template"
-          aria-label="Create Template"
+          title="Register Template"
+          aria-label="Register Template"
           @click="openCustomTemplateModal('create')"
         >
           <span>➕</span>
@@ -122,23 +123,25 @@ const handleDrawerDownload = () => {
         <button
           type="button"
           class="btn-icon-cmd"
-          title="Refresh"
-          aria-label="Refresh"
+          title="Sync Templates"
+          aria-label="Sync Templates"
           :disabled="loading"
           @click="loadTemplates"
         >
-          <span>🔄</span>
+          <span :class="{ 'spin-anim': loading }">🔄</span>
         </button>
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="scaffolder-micro-telemetry mobile-only font-mono" role="status" aria-label="Scaffolder Micro Telemetry">
-      <span class="tel-item tel-tmpl">🏗️ {{ templates.length }} tmpl</span>
+      <span class="tel-item tel-tmpl">🏗️ {{ templates.length }} Templates</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-cats">📦 {{ categories.length }} cats</span>
+      <span class="tel-item tel-deploy">⚡ {{ rendering ? 'Executing' : 'Ready' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-deploy">⚡ 1-Click Deploy</span>
+      <span class="tel-item tel-verified">🛡️ Verified</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-cats">📁 {{ categories.length }} Categories</span>
     </div>
 
     <!-- Header & Hero Section (Desktop View) -->
@@ -197,6 +200,7 @@ const handleDrawerDownload = () => {
         :loading="loading"
         :deleting="deleting"
         @deploy="openWizard"
+        @preview="previewTemplate"
         @edit="openCustomTemplateModal('edit', $event)"
         @delete="handleDeleteCustomTemplate"
         @reset-filters="resetFilters"
@@ -210,6 +214,7 @@ const handleDrawerDownload = () => {
         :loading="loading"
         :deleting="deleting"
         @deploy="openWizard"
+        @preview="previewTemplate"
         @edit="openCustomTemplateModal('edit', $event)"
         @delete="handleDeleteCustomTemplate"
         @reset-filters="resetFilters"

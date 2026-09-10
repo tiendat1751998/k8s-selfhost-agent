@@ -295,6 +295,18 @@ export function useScaffolder() {
     showWizardModal.value = true
   }
 
+  function previewTemplate(tmpl: Template) {
+    activeTemplate.value = tmpl
+    isDryRun.value = true
+    activeOutputTab.value = 'yaml'
+    renderResult.value = {
+      rendered_yaml: tmpl.manifest_yaml || '# No Kubernetes manifest specified',
+      rendered_compose: tmpl.docker_compose || '# No Docker Compose specified',
+      rendered_helm: tmpl.helm_values || '# No Helm values specified',
+    }
+    showLogsDrawer.value = true
+  }
+
   function closeWizard() { showWizardModal.value = false; activeTemplate.value = null }
   function nextStep() { if (currentStep.value < 3) currentStep.value = (currentStep.value + 1) as 1 | 2 | 3 }
   function prevStep() { if (currentStep.value > 1) currentStep.value = (currentStep.value - 1) as 1 | 2 | 3 }
@@ -420,7 +432,7 @@ export function useScaffolder() {
     currentStep, activeTemplate, formVariables, repoConfig, cicdConfig, registerInCatalog,
     ownerTeam, ownerEmail, showLogsDrawer, renderResult, activeOutputTab, copySuccess,
     logs, isDryRun, showCustomModal, customModalMode, customTemplate, loadTemplates,
-    openWizard, closeWizard, nextStep, prevStep, goToStep, triggerScaffoldJob, copyToClipboard,
+    openWizard, previewTemplate, closeWizard, nextStep, prevStep, goToStep, triggerScaffoldJob, copyToClipboard,
     downloadFile, openCustomTemplateModal, addVariableToCustomTemplate,
     removeVariableFromCustomTemplate, handleSaveCustomTemplate, handleDeleteCustomTemplate, resetFilters,
   }
