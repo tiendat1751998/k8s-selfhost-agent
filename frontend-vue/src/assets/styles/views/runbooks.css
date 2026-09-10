@@ -100,7 +100,7 @@
   background: rgba(0, 0, 0, 0.25); padding: 10px 12px; border-radius: 8px;
 }
 .rb-meta-row { display: flex; justify-content: space-between; }
-.rb-actions { display: flex; gap: 8px; margin-top: auto; }
+.rb-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
 
 /* Action Buttons & Utilities */
 .btn-delete-crimson {

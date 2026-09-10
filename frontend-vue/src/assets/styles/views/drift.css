@@ -4,7 +4,7 @@
    ========================================================================== */
 
 /* Visibility Utilities */
-@media (min-width: 769px) {
+@media (min-width: 768px) {
   .mobile-only { display: none !important; }
   .drift-mobile-view { display: none !important; }
   .drift-desktop-view { display: block !important; }
