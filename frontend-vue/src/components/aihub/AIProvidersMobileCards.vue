@@ -36,14 +36,14 @@ function getLatencyColor(name: string, p: AIProvider) {
         <div class="mobile-card-main">
           <StatusBadge :status="p.status || 'healthy'" size="sm" />
           <div class="mobile-card-info">
-            <div class="mobile-card-title">
-              {{ p.name }}
-              <span v-if="p.default" class="badge badge-cyan" style="font-size: 8px; padding: 1px 4px;">DEF</span>
+            <div class="mobile-card-title" :title="p.name">
+              <span class="truncate-text">{{ p.name }}</span>
+              <span v-if="p.default" class="badge badge-cyan" style="font-size: 8px; padding: 1px 4px; flex-shrink: 0;">DEF</span>
             </div>
             <div class="mobile-card-sub font-mono">
-              <span class="text-cyan">{{ p.model }}</span>
+              <span class="text-cyan truncate-text" :title="p.model">{{ p.model }}</span>
               <span>•</span>
-              <span class="text-muted">{{ p.type }}</span>
+              <span class="text-muted" style="flex-shrink: 0;">{{ p.type }}</span>
             </div>
           </div>
         </div>
@@ -62,6 +62,7 @@ function getLatencyColor(name: string, p: AIProvider) {
             class="mobile-btn-icon" 
             :disabled="probingName === p.name"
             title="Probe Health"
+            aria-label="Probe Health"
             @click="emit('probe', p.name)"
           >
             <span>{{ probingName === p.name ? '⏳' : '⚡' }}</span>
@@ -69,6 +70,7 @@ function getLatencyColor(name: string, p: AIProvider) {
           <button 
             class="mobile-btn-icon" 
             title="Metrics & Quota"
+            aria-label="Metrics & Quota"
             @click="emit('openMetrics', p)"
           >
             <span>📊</span>
@@ -76,6 +78,7 @@ function getLatencyColor(name: string, p: AIProvider) {
           <button 
             class="mobile-btn-icon" 
             title="Test in Console"
+            aria-label="Test in Console"
             @click="emit('testInConsole', p.name)"
           >
             <span>💬</span>
@@ -83,6 +86,7 @@ function getLatencyColor(name: string, p: AIProvider) {
           <button 
             class="mobile-btn-icon btn-danger-crimson" 
             title="Remove Provider"
+            aria-label="Remove Provider"
             @click="emit('remove', p.name)"
           >
             <span>🗑</span>
@@ -92,9 +96,9 @@ function getLatencyColor(name: string, p: AIProvider) {
     </div>
 
     <div v-else class="empty-state-box glass-panel">
-      <span class="empty-icon">🔌</span>
-      <h3 class="empty-title">No AI Gateways</h3>
-      <p class="empty-desc">Register your first AI provider endpoint.</p>
+      <span class="empty-icon">🤖</span>
+      <h3 class="empty-title">No AI Gateways Configured</h3>
+      <p class="empty-desc">🤖 No AI providers configured. Tap + to register an LLM gateway.</p>
       <button class="btn btn-primary btn-sm" @click="emit('register')">
         <span>+ Register Provider</span>
       </button>

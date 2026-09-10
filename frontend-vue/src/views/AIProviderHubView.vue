@@ -8,6 +8,7 @@ import RegisterAIProviderModal from '../components/aihub/RegisterAIProviderModal
 import AIProviderMetricsDrawer from '../components/aihub/AIProviderMetricsDrawer.vue'
 import { useAIProviderHub } from '../composables/useAIProviderHub'
 import '../assets/styles/views/aihub.css'
+import '../assets/styles/components/aihub-drawers.css'
 
 const {
   error,
@@ -69,7 +70,7 @@ const {
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="aihub-mobile-command-bar mobile-only">
       <div class="command-bar-left">
         <span class="command-bar-title font-bold">🤖 AI Hub ({{ providers.length }})</span>
@@ -94,7 +95,7 @@ const {
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="aihub-micro-telemetry mobile-only font-mono" role="status" aria-label="AI Hub Micro Telemetry">
       <span class="tel-item tel-gw">🤖 {{ providers.length }} gw</span>
       <span class="tel-sep">·</span>
