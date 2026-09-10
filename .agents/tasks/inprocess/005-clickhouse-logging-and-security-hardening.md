@@ -1,4 +1,4 @@
-# 🎯 005: CLICKHOUSE HIGH-THROUGHPUT LOGGING ENGINE & COMPREHENSIVE SECURITY HARDENING
+# 🎯 005: CLICKHOUSE HIGH-THROUGHPUT LOGGING ENGINE (1,000 NODES, <500MB RAM) & SECURITY HARDENING
 
 > **Location**: `.agents/tasks/inprocess/005-clickhouse-logging-and-security-hardening.md`  
 > **Status**: IN PROCESS  
@@ -11,6 +11,7 @@
 ## 🛡️ PHASE 1: HARNESS LAYER (Pre-Flight, Baselines & Vulnerability Models)
 - [ ] **1.1 ClickHouse Infrastructure & Memory Constraint Harness**
   - File: `deployments/docker/docker-compose.clickhouse.yaml`
+  - File: `deployments/k8s/logging/clickhouse-statefulset.yaml`
   - Hard constraints:
     - `mem_limit: 512m`, `mem_reservation: 256m`
     - `max_server_memory_usage: 450000000` (450MB hard limit)
@@ -24,6 +25,7 @@
     - Partitioning: `PARTITION BY toYYYYMMDD(timestamp)`
     - Order: `ORDER BY (tenant_id, cluster_id, namespace, log_level, timestamp)`
     - Auto TTL: `TTL timestamp + INTERVAL 30 DAY DELETE`
+  - File: `deployments/k8s/logging/daemonset-vector.yaml` (1,000-Node Edge Log Collector from `/var/log/pods/*/*/*.log`)
 - [ ] **1.2 Monolith Baseline Audit**
   - Record line count: `internal/domain/scaffold/builtin.go` (780 lines)
   - Record line count: `internal/usecase/ecosystem/detector_k8s.go` (502 lines)
@@ -40,7 +42,7 @@
 [Harness Verification]
          │
          ▼
-[Step 1: ClickHouse DDL & Infra Config]
+[Step 1: ClickHouse DDL, Compose & 1,000-Node DaemonSet]
          │
          ▼
 [Step 2: Go ClickHouse Native Driver & Domain Entity]
@@ -75,9 +77,10 @@
 ## 🔄 PHASE 3: LOOP LAYER (Implementation -> Adversarial Review -> Verification)
 
 ### Loop 1: ClickHouse Service & Storage Schema (< 500MB RAM)
-- [ ] Task 1.1: Author `deployments/docker/docker-compose.clickhouse.yaml`
+- [ ] Task 1.1: Author `deployments/docker/docker-compose.clickhouse.yaml` & `clickhouse-statefulset.yaml`
 - [ ] Task 1.2: Author `migrations/clickhouse/001_cluster_logs.sql`
-- [ ] Verification: Dry-run manifest, validate SQL syntax and partition/index rules
+- [ ] Task 1.3: Author `deployments/k8s/logging/daemonset-vector.yaml` (1,000-Node Edge Collector)
+- [ ] Verification: Dry-run manifests, validate SQL syntax and partition/index rules
 
 ### Loop 2: Go Backend ClickHouse Infrastructure Driver
 - [ ] Task 2.1: Add `github.com/ClickHouse/clickhouse-go/v2` to `go.mod`
