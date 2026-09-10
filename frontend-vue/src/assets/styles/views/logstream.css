@@ -912,6 +912,14 @@
 
 /* === LogTargetTree.vue === */
 .log-target-tree { display: flex; flex-direction: column; background: rgba(11, 15, 25, 0.85); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; overflow: hidden; height: 100%; min-height: 520px; }
+
+/* Tree Filter Search Input */
+.tree-search-bar { position: relative; display: flex; align-items: center; padding: 6px 8px; background: rgba(15, 23, 42, 0.6); border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.tree-search-ico { position: absolute; left: 14px; font-size: 11px; color: #64748b; pointer-events: none; }
+.tree-search-input { width: 100%; height: 26px; padding-left: 24px; padding-right: 22px; font-size: 11px; background: rgba(2, 6, 23, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; color: #f1f5f9; outline: none; transition: border-color 0.15s ease; }
+.tree-search-input:focus { border-color: rgba(56, 189, 248, 0.5); }
+.tree-search-clear { position: absolute; right: 12px; background: none; border: none; color: #64748b; font-size: 10px; cursor: pointer; padding: 0 4px; }
+.tree-search-clear:hover { color: #fff; }
 .tree-header { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
 .tree-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; }
 .tree-badge { font-size: 10px; color: #38bdf8; background: rgba(56, 189, 248, 0.12); padding: 1px 6px; border-radius: 4px; }
@@ -980,6 +988,12 @@
 .term-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
 .term-btn.btn-paused { background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
 .terminal-body { flex: 1; padding: 10px 14px; overflow-y: auto; font-size: 11.5px; line-height: 1.6; background: #060911; }
+
+/* Line Wrap and Nowrap Toggle Modes */
+.log-line.log-wrap { white-space: pre-wrap; word-break: break-all; }
+.log-line.log-nowrap { white-space: pre; word-break: normal; flex-wrap: nowrap !important; }
+.log-line.log-nowrap .log-msg { white-space: pre; word-break: normal; flex: none; }
+.term-btn.btn-active { background: rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.5); color: #38bdf8; }
 .log-line { display: flex; align-items: baseline; gap: 8px; padding: 2px 4px; border-radius: 3px; transition: background 0.1s ease; white-space: pre-wrap; word-break: break-all; }
 .log-line:hover { background: rgba(255, 255, 255, 0.04); }
 .log-idx { color: rgba(255, 255, 255, 0.18); font-size: 9.5px; width: 32px; text-align: right; flex-shrink: 0; user-select: none; }
@@ -989,7 +1003,7 @@
 .badge-warn { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
 .badge-error { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.25); }
 .badge-debug { background: rgba(100, 116, 139, 0.18); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.25); }
-.badge-target { color: #38bdf8; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.badge-target { color: #38bdf8; font-size: 11px; font-weight: 600; flex-shrink: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .log-msg { color: #e2e8f0; flex: 1; }
 .log-warn { background: transparent; }
 .log-warn .log-msg { color: #e2e8f0; }
@@ -1013,7 +1027,7 @@
   .mobile-search-bar.mobile-only { display: flex !important; }
   .terminal-window { border-radius: 0; border-left: none; border-right: none; min-height: 0; height: 100%; }
   .terminal-titlebar { height: 38px; padding: 0 8px; gap: 6px; }
-  .mobile-target-btn { height: 26px; padding: 0 8px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 4px; color: #38bdf8; font-size: 11px; font-weight: 700; cursor: pointer; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-target-btn { height: 26px; padding: 0 8px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 4px; color: #38bdf8; font-size: 11px; font-weight: 700; cursor: pointer; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .term-icon-btn { width: 30px; height: 30px; min-width: 30px; padding: 0; align-items: center; justify-content: center; font-size: 12px; }
   .term-icon-btn.btn-active { background: rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.5); color: #38bdf8; }
   .mobile-search-bar { height: 28px; padding: 2px 8px; background: rgba(15, 23, 42, 0.98); border-bottom: 1px solid rgba(255, 255, 255, 0.08); gap: 6px; align-items: center; }
@@ -1024,6 +1038,6 @@
   .log-idx { display: none !important; }
   .badge-time { font-size: 10px; color: #64748b; }
   .badge-level { font-size: 9.5px; padding: 0 3px; }
-  .badge-target { font-size: 10.5px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge-target { font-size: 10.5px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .log-msg { font-size: 11px; line-height: 1.35; width: 100%; flex: 1 1 100%; word-break: break-word; }
 }

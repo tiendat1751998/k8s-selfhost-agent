@@ -28,7 +28,7 @@ export const useLogStore = defineStore('log', () => {
   const isConnected = ref(false)
   const isPaused = ref(false)
   const socket = ref<WebSocket | null>(null)
-  const maxBufferSize = 1000
+  const maxBufferSize = 300
   const reconnectAttempts = ref(0)
   const activeFilter = ref<LogFilterOptions>({})
 
@@ -42,6 +42,9 @@ export const useLogStore = defineStore('log', () => {
   function connect(options?: LogFilterOptions | string, podArg?: string) {
     const opts = normalizeOptions(options, podArg)
     activeFilter.value = opts
+
+    // Immediately flush buffer on target switch or reconnect to avoid mixing history
+    logs.value = []
 
     if (socket.value) {
       socket.value.onclose = null
@@ -145,7 +148,7 @@ export const useLogStore = defineStore('log', () => {
   function appendLog(entry: LogEntry) {
     logs.value.push(entry)
     if (logs.value.length > maxBufferSize) {
-      logs.value.shift()
+      logs.value.splice(0, logs.value.length - maxBufferSize)
     }
   }
 
@@ -162,6 +165,7 @@ export const useLogStore = defineStore('log', () => {
     isConnected,
     isPaused,
     activeFilter,
+    maxBufferSize,
     connect,
     setFilter,
     disconnect,
