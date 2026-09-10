@@ -63,7 +63,7 @@ function formatTime(isoStr: string): string {
       <small class="empty-subtext">Adjust the cluster picker, time window, or clear search queries.</small>
     </div>
 
-    <!-- Timeline List -->
+    <!-- Timeline List (Zero Horizontal Overflow) -->
     <div v-else class="timeline-list">
       <div
         v-for="event in events"
@@ -98,14 +98,14 @@ function formatTime(isoStr: string): string {
           </div>
 
           <div class="card-body">
-            <h3 class="card-title">{{ event.title }}</h3>
-            <p class="card-description">{{ event.description }}</p>
+            <h3 class="card-title" :title="event.title">{{ event.title }}</h3>
+            <p class="card-description" :title="event.description">{{ event.description }}</p>
 
             <div class="card-resource-meta font-mono">
-              <span class="tc-resource text-cyan">📦 {{ event.resource }}</span>
-              <span class="tc-cluster text-muted">🖥️ {{ event.cluster }} / {{ event.namespace }}</span>
-              <span v-if="event.requester" class="tc-user text-muted">👤 {{ event.requester }}</span>
-              <span v-if="event.approver" class="tc-approver text-emerald">✓ Approved by {{ event.approver }}</span>
+              <span class="tc-resource text-cyan" :title="event.resource">📦 {{ event.resource }}</span>
+              <span class="tc-cluster text-muted" :title="`${event.cluster} / ${event.namespace}`">🖥️ {{ event.cluster }} / {{ event.namespace }}</span>
+              <span v-if="event.requester" class="tc-user text-muted" :title="`Requester: ${event.requester}`">👤 {{ event.requester }}</span>
+              <span v-if="event.approver" class="tc-approver text-emerald" :title="`Approver: ${event.approver}`">✓ Approved by {{ event.approver }}</span>
             </div>
 
             <!-- Expandable Details Drawer/Block -->
@@ -125,7 +125,7 @@ function formatTime(isoStr: string): string {
             </div>
           </div>
 
-          <!-- Action Buttons Bar -->
+          <!-- Action Buttons Bar (Compact 32px Buttons) -->
           <div class="card-actions-bar">
             <div class="primary-actions">
               <button
@@ -133,7 +133,7 @@ function formatTime(isoStr: string): string {
                 title="Inspect Visual Unified Diff"
                 @click="$emit('diff', event)"
               >
-                <span>📝 Diff</span>
+                <span>🔍 Inspect Diff</span>
               </button>
 
               <button
@@ -142,7 +142,7 @@ function formatTime(isoStr: string): string {
                 :title="event.canRollback ? 'Rollback to this state' : 'Rollback unavailable for this record'"
                 @click="$emit('rollback', event)"
               >
-                <span>↺ Rollback</span>
+                <span>⏪ Rollback</span>
               </button>
 
               <button
