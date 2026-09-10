@@ -107,19 +107,19 @@
 - [x] Verification: `powershell scripts\verify_quality_gate.ps1 -SkipBuild` confirms 100% of 814 source files strictly < 500 lines (Reviewer APPROVED, QA PASS, Merged)
 
 ### Loop 6: Security Vulnerability Remediation (11 Findings)
-- [ ] Task 6.1 (Batch 1 - P0 Critical):
-  - VULN-001: Fix cross-tenant leak in `internal/infrastructure/postgres/tenant_query.go`
-  - VULN-002: Wrap `/k8s/{cluster}/exec` in `internal/adapter/http/router.go` with RBAC
-  - VULN-004: Apply mandatory tenant isolation filter in `internal/infrastructure/postgres/audit_query.go`
-- [ ] Task 6.2 (Batch 2 - P1 High):
-  - VULN-005: Eliminate fallback dev cryptographic keys in `pkg/crypto/crypto.go`
-  - VULN-006: Sanitize local backup storage paths in `internal/infrastructure/storage/storage_local.go`
-  - VULN-003 & VULN-011: SafeHTTPClient SSRF defense
+- [x] Task 6.1 (Batch 1 - P0 Critical):
+  - [x] VULN-001: Fix cross-tenant leak in `internal/infrastructure/postgres/tenant_query.go` (pruned `nonTenantTables`, enforced tenant query rewrite)
+  - [x] VULN-002: Wrap `/k8s/{cluster}/exec` in `internal/adapter/http/k8s_exec_handler.go` with strict tenant namespace RBAC check
+  - [x] VULN-004: Apply mandatory tenant isolation filter in `internal/infrastructure/postgres/audit_repo.go:ListLogs`
+- [x] Task 6.2 (Batch 2 - P1 High):
+  - [x] VULN-005: Eliminate fallback dev cryptographic keys in `internal/pkg/crypto/crypto.go`
+  - [x] VULN-006: Sanitize local backup storage paths in `internal/infrastructure/backup/storage/local.go` against path traversal
+  - [x] VULN-003 & VULN-011: SafeHTTPClient SSRF defense (`internal/pkg/httputil/ssrf.go`)
 - [ ] Task 6.3 (Batch 3 - P2 Medium):
   - VULN-007: Trace token redaction in audit logs
-  - VULN-008: Payload size limit on log ingest (prevent DoS)
+  - [x] VULN-008: Payload size limit on log ingest (10MB limit enforced in Loop 3)
   - VULN-009 & VULN-010: Rate limiting & auth hardening
-- [ ] Verification: Security regression suite passes
+- [x] Verification: Security regression suite passes (100% PASS, Reviewer APPROVED, QA PASS, Merged)
 
 ---
 
