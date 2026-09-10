@@ -48,8 +48,8 @@ const {
   handleCreateApp,
 } = useDeployments()
 
-// Mobile PWA Ergonomics
-const showMobileSearch = ref(false)
+// Mobile PWA Ergonomics (<768px)
+const showMobileFilters = ref(false)
 
 // Drawers & Modals State
 const selectedApp = ref<DeploymentApp | null>(null)
@@ -114,47 +114,117 @@ async function onCreateApp(payload: DeploymentApp) {
 
 <template>
   <div class="view-container animate-fade-in">
-    <!-- Mobile PWA Ergonomics: 44px Command Bar (<640px) -->
+    <!-- Compact 44px Mobile Command Bar (<768px) -->
     <div class="mobile-command-bar">
-      <div class="mobile-command-title">
-        <span>🚀 Workloads</span>
-        <span class="mobile-badge-pill font-mono">({{ totalWorkloads }})</span>
+      <div class="mobile-search-compact-wrap">
+        <span class="mobile-search-ico">🔍</span>
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Filter workloads..."
+          class="input-glass mobile-search-compact font-mono"
+        />
+        <button v-if="searchQuery" type="button" class="mobile-search-clear" @click="searchQuery = ''">✕</button>
       </div>
-      <div class="mobile-command-actions">
-        <button type="button" class="btn btn-secondary btn-xs" @click="showMobileSearch = !showMobileSearch" title="Search">
-          🔍
-        </button>
-        <button type="button" class="btn btn-secondary btn-xs" :disabled="loading" @click="fetchDeployments" title="Refresh">
-          <span :class="{ 'spin-icon': loading }">🔄</span>
-        </button>
-        <button type="button" class="btn btn-primary btn-xs" @click="showCreateModal = true; selectedTemplate = null">
-          ➕ Deploy
-        </button>
+
+      <div class="mobile-compact-badge font-mono" title="Total workloads and ready pods">
+        {{ totalWorkloads }} Workloads • {{ readyReplicas }}/{{ totalReplicas }} Ready
       </div>
+
+      <button
+        type="button"
+        class="btn-filters-toggle"
+        :class="{ 'filters-active': showMobileFilters }"
+        @click="showMobileFilters = !showMobileFilters"
+        title="Toggle Filter Options"
+      >
+        ⚙️ Filters
+      </button>
+
+      <button
+        type="button"
+        class="btn-mobile-deploy"
+        title="Deploy Workload"
+        @click="showCreateModal = true; selectedTemplate = null"
+      >
+        ➕
+      </button>
     </div>
 
-    <!-- Mobile Expandable Search Strip -->
-    <div v-if="showMobileSearch" class="mobile-search-strip animate-fade-in">
-      <input
-        v-model="searchQuery"
-        type="text"
-        placeholder="Filter workloads by name, image..."
-        class="input-glass mobile-search-input font-mono"
-        autofocus
-      />
-      <button v-if="searchQuery" type="button" class="search-clear-btn" @click="searchQuery = ''">✕</button>
-    </div>
+    <!-- Mobile Expandable Filter Strip Accordion (<768px) -->
+    <Transition name="filter-slide">
+      <div v-if="showMobileFilters" class="mobile-filter-strip glass-panel">
+        <div class="mobile-filter-row">
+          <label class="mobile-filter-label">Namespace:</label>
+          <select v-model="selectedNamespaceFilter" class="input-glass select-ns-mobile font-mono">
+            <option value="all">All Namespaces ({{ namespaces.length }})</option>
+            <option v-for="ns in namespaces" :key="ns" :value="ns">{{ ns }}</option>
+          </select>
+        </div>
 
-    <!-- Mobile PWA Ergonomics: 20px Micro-telemetry strip (<640px) -->
-    <div class="micro-telemetry-strip font-mono">
-      <span>🚀 {{ totalWorkloads }} workloads</span>
-      <span class="telemetry-sep">·</span>
-      <span>🛡️ {{ healthyCount }} healthy</span>
-      <span class="telemetry-sep">·</span>
-      <span>⚠️ {{ degradedCount }} degraded</span>
-    </div>
+        <div class="mobile-filter-row">
+          <label class="mobile-filter-label">Status:</label>
+          <div class="mobile-pills-group">
+            <button
+              type="button"
+              class="pill-btn pill-xs"
+              :class="{ 'pill-active': statusFilter === 'all' }"
+              @click="statusFilter = 'all'"
+            >
+              All ({{ totalWorkloads }})
+            </button>
+            <button
+              type="button"
+              class="pill-btn pill-xs pill-healthy"
+              :class="{ 'pill-active': statusFilter === 'healthy' }"
+              @click="statusFilter = 'healthy'"
+            >
+              🛡️ Healthy ({{ healthyCount }})
+            </button>
+            <button
+              type="button"
+              class="pill-btn pill-xs pill-degraded"
+              :class="{ 'pill-active': statusFilter === 'degraded' }"
+              @click="statusFilter = 'degraded'"
+            >
+              ⚠️ Degraded ({{ degradedCount }})
+            </button>
+          </div>
+        </div>
 
-    <!-- View Header (Desktop & Tablet) -->
+        <div class="mobile-filter-row">
+          <label class="mobile-filter-label">Type:</label>
+          <div class="mobile-pills-group">
+            <button
+              type="button"
+              class="pill-btn pill-xs"
+              :class="{ 'pill-active': activeFilterTab === 'all' }"
+              @click="activeFilterTab = 'all'"
+            >
+              All
+            </button>
+            <button
+              type="button"
+              class="pill-btn pill-xs"
+              :class="{ 'pill-active': activeFilterTab === 'k8s' }"
+              @click="activeFilterTab = 'k8s'"
+            >
+              ☸️ K8s ({{ k8sCount }})
+            </button>
+            <button
+              type="button"
+              class="pill-btn pill-xs"
+              :class="{ 'pill-active': activeFilterTab === 'swarm' }"
+              @click="activeFilterTab = 'swarm'"
+            >
+              🐳 Docker ({{ swarmCount }})
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- View Header (Desktop & Tablet >=768px) -->
     <div class="view-header">
       <div class="header-info">
         <div class="view-tag">
@@ -197,7 +267,7 @@ async function onCreateApp(payload: DeploymentApp) {
       <button type="button" class="toast-close" @click="toastMessage = null">✕</button>
     </div>
 
-    <!-- Metric HUD Grid -->
+    <!-- Metric HUD Grid (Desktop & Tablet >=768px) -->
     <div class="metrics-grid">
       <MetricCard title="Total Workloads" :value="totalWorkloads" subtitle="Active microservice deployments" icon="📦" badge="SERVICES" badge-color="cyan" />
       <MetricCard title="Running Pods" :value="`${readyReplicas} / ${totalReplicas}`" :subtitle="`${healthyCount} of ${totalWorkloads} healthy workloads`" icon="🚀" badge="REPLICAS" badge-color="emerald" trend="Auto-Scaled via KEDA" trend-type="positive" />
@@ -207,7 +277,7 @@ async function onCreateApp(payload: DeploymentApp) {
 
     <!-- Main Workload Section -->
     <div class="section-box glass-panel table-box">
-      <!-- Filter Controls Bar -->
+      <!-- Filter Controls Bar (Desktop & Tablet >=768px) -->
       <div class="table-controls-bar">
         <div class="filter-pills-row">
           <!-- Status Filter Pill Group -->
@@ -287,8 +357,8 @@ async function onCreateApp(payload: DeploymentApp) {
         </div>
       </div>
 
-      <!-- Desktop Data Table View -->
-      <div class="desktop-table-view">
+      <!-- Desktop Data Table View (Completely suppressed on mobile <768px) -->
+      <div class="desktop-table-container desktop-table-view">
         <DeploymentsTable
           :deployments="filteredDeployments"
           :loading="loading"
@@ -304,7 +374,7 @@ async function onCreateApp(payload: DeploymentApp) {
         />
       </div>
 
-      <!-- Mobile Touch-Friendly Card View -->
+      <!-- Mobile Touch-Friendly Card View (Visible only on mobile <768px) -->
       <div class="mobile-cards-view">
         <DeploymentsMobileCards
           :deployments="filteredDeployments"
