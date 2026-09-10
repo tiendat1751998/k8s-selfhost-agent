@@ -23,7 +23,7 @@ const {
     <!-- Toast Notification -->
     <transition name="fade">
       <div v-if="toastMessage" class="toast-popup" :class="toastMessage.type">
-        <span>{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+        <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" />
         <span>{{ toastMessage.text }}</span>
       </div>
     </transition>
@@ -42,11 +42,11 @@ const {
 
       <div class="header-actions">
         <button class="btn-secondary" :disabled="scanning || loading" @click="handleScan">
-          <span class="btn-icon" :class="{ 'spin-anim': scanning }">🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': scanning }" />
           <span>{{ scanning ? 'Scanning Stack...' : 'Scan Now' }}</span>
         </button>
         <button class="btn-primary" @click="openConnectModal()">
-          <span class="btn-icon">➕</span>
+          <BaseIcon name="plus" size="xs" />
           <span>Register Tool</span>
         </button>
       </div>
@@ -55,38 +55,38 @@ const {
     <!-- Mobile Command Bar (<768px) -->
     <div class="ecosystem-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🌐 Ecosystem ({{ summary.total }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="globe" size="sm" /> Ecosystem ({{ summary.total }})</span>
       </div>
       <div class="command-bar-actions">
         <button
           class="btn-icon-cmd"
           :disabled="scanning || loading"
-          title="🔄 Sync"
-          aria-label="🔄 Sync"
+          title="Sync"
+          aria-label="Sync"
           @click="handleScan"
         >
-          <span :class="{ 'spin-anim': scanning }">🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': scanning }" />
         </button>
         <button
           class="btn-icon-cmd"
-          title="➕ Connect"
-          aria-label="➕ Connect"
+          title="Connect"
+          aria-label="Connect"
           @click="openConnectModal()"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile Micro-Telemetry Strip (<768px) -->
     <div class="ecosystem-micro-telemetry mobile-only font-mono" role="status" aria-label="Ecosystem Micro Telemetry">
-      <span class="tel-item tel-total">🌐 {{ summary.total }} Total</span>
+      <span class="tel-item tel-total"><BaseIcon name="globe" size="xs" /> {{ summary.total }} Total</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-connected">🟢 {{ summary.healthy }} Connected</span>
+      <span class="tel-item tel-connected"><BaseIcon name="check-circle" size="xs" /> {{ summary.healthy }} Connected</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-latency">⚡ {{ healthProbeResult?.latencyMs ? `${healthProbeResult.latencyMs}ms` : '<45ms' }} Latency</span>
+      <span class="tel-item tel-latency"><BaseIcon name="zap" size="xs" /> {{ healthProbeResult?.latencyMs ? `${healthProbeResult.latencyMs}ms` : '<45ms' }} Latency</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-issues">⚠️ {{ summary.degraded }} Issues</span>
+      <span class="tel-item tel-issues"><BaseIcon name="alert-triangle" size="xs" /> {{ summary.degraded }} Issues</span>
     </div>
 
     <!-- Summary HUD Metrics -->
@@ -94,7 +94,7 @@ const {
       <MetricCard
         title="Detected Stack Tools"
         :value="summary.total"
-        icon="🧩"
+        icon="layers"
         subtitle="Across configured integration URLs"
         badge="Platform"
         badgeColor="cyan"
@@ -102,7 +102,7 @@ const {
       <MetricCard
         title="Healthy Services"
         :value="summary.healthy"
-        icon="💚"
+        icon="check-circle"
         subtitle="Responding with status 200 OK"
         badge="Online"
         badgeColor="emerald"
@@ -110,7 +110,7 @@ const {
       <MetricCard
         title="Degraded / Unreachable"
         :value="summary.degraded"
-        icon="⚠️"
+        icon="alert-triangle"
         subtitle="Failed probes or sealed state"
         :badge="summary.degraded > 0 ? 'Attention' : 'Optimal'"
         :badgeColor="summary.degraded > 0 ? 'rose' : 'emerald'"
@@ -118,7 +118,7 @@ const {
       <MetricCard
         title="Active Categories"
         :value="Object.keys(summary.by_category || {}).length"
-        icon="🏷️"
+        icon="grid"
         subtitle="GitOps, Security, Mesh, Policy, etc."
         badge="Coverage"
         badgeColor="violet"
@@ -148,9 +148,9 @@ const {
     <!-- Filter & Search Bar -->
     <section class="filter-toolbar glass-panel">
       <div class="search-box">
-        <span class="search-icon">🔍</span>
+        <BaseIcon name="search" size="xs" class="search-icon" />
         <input v-model="searchQuery" type="text" placeholder="Search by tool name, endpoint, version..." class="search-input" />
-        <button v-if="searchQuery" class="clear-search-btn" @click="searchQuery = ''">✕</button>
+        <button v-if="searchQuery" class="clear-search-btn" @click="searchQuery = ''" aria-label="Clear"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="filter-group">
@@ -171,20 +171,20 @@ const {
 
     <!-- Loading State -->
     <div v-if="loading && tools.length === 0" class="loading-state glass-panel">
-      <div class="spinner-icon">🔄</div>
+      <BaseIcon name="refresh" size="md" class="spin-anim" />
       <p>Discovering ecosystem components...</p>
     </div>
 
     <!-- Error State -->
     <div v-else-if="error && tools.length === 0" class="error-state glass-panel">
-      <span class="error-icon">⚠️</span>
+      <BaseIcon name="alert-triangle" size="md" class="error-icon" />
       <p>{{ error }}</p>
       <button class="btn-secondary" @click="loadData">Try Again</button>
     </div>
 
     <!-- Empty State -->
     <div v-else-if="filteredTools.length === 0" class="empty-state glass-panel">
-      <span class="empty-icon">🔎</span>
+      <BaseIcon name="search" size="xl" class="empty-icon" />
       <h3>No ecosystem tools found</h3>
       <p>No tools matched your current filters. Try changing category or clicking "Scan Now".</p>
       <button class="btn-primary" @click="handleScan">Run Scan</button>

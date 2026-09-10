@@ -21,7 +21,7 @@ const emit = defineEmits<{
         <div class="channel-card-header">
           <div class="chan-title-wrap">
             <span class="chan-icon">
-              {{ chan.Type === 'slack' ? '💬' : chan.Type === 'telegram' ? '✈️' : chan.Type === 'email' ? '✉️' : '🔗' }}
+              <BaseIcon :name="chan.Type === 'slack' ? 'message-square' : chan.Type === 'telegram' ? 'send' : chan.Type === 'email' ? 'mail' : 'webhook'" size="sm" />
             </span>
             <div>
               <h3 class="chan-name">{{ chan.Name }}</h3>
@@ -52,7 +52,7 @@ const emit = defineEmits<{
 
         <div class="channel-footer">
           <button class="btn btn-secondary btn-sm" @click="emit('test', chan.Name)">
-            <span>⚡ Test Dispatch</span>
+            <BaseIcon name="zap" size="xs" /> <span>Test Dispatch</span>
           </button>
         </div>
       </div>

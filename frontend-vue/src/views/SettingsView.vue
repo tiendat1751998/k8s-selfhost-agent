@@ -41,12 +41,12 @@ const {
 } = useSettings()
 
 const tabsList: { id: TabKey; label: string; icon: string; category?: CategoryKey; count?: number }[] = [
-  { id: 'general', label: 'General', icon: '⚙️', category: 'platform' },
-  { id: 'security', label: 'Security', icon: '🛡️', category: 'security' },
-  { id: 'tenancy', label: 'Tenancy', icon: '🏢', category: 'tenancy' },
-  { id: 'notifications', label: 'Notifications', icon: '🔔', category: 'notifications' },
-  { id: 'apikeys', label: 'API Keys', icon: '🔑', category: 'apikeys', count: 3 },
-  { id: 'about', label: 'About', icon: 'ℹ️' },
+  { id: 'general', label: 'General', icon: 'sliders', category: 'platform' },
+  { id: 'security', label: 'Security', icon: 'shield', category: 'security' },
+  { id: 'tenancy', label: 'Tenancy', icon: 'server', category: 'tenancy' },
+  { id: 'notifications', label: 'Notifications', icon: 'bell', category: 'notifications' },
+  { id: 'apikeys', label: 'API Keys', icon: 'key', category: 'apikeys', count: 3 },
+  { id: 'about', label: 'About', icon: 'help-circle' },
 ]
 
 const activeTabLabel = computed(() => {
@@ -100,7 +100,7 @@ function handleMobileReset() {
 
       <div class="header-actions">
         <button class="btn btn-secondary" :disabled="loading" @click="loadSettings">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh Settings' }}</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" /> <span>{{ loading ? 'Syncing...' : 'Refresh Settings' }}</span>
         </button>
       </div>
     </div>
@@ -108,7 +108,7 @@ function handleMobileReset() {
     <!-- Mobile 40-44px Command Bar (<768px) with 32x32px Action Buttons -->
     <div class="settings-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">⚙️ Settings</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="sliders" size="sm" /> Settings</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -119,7 +119,7 @@ function handleMobileReset() {
           :disabled="saving"
           @click="handleMobileSave"
         >
-          <span v-if="!saving">💾</span>
+          <BaseIcon v-if="!saving" name="hard-drive" size="xs" />
           <span v-else class="spinner spinner-sm"></span>
         </button>
         <button
@@ -130,20 +130,20 @@ function handleMobileReset() {
           :disabled="loading || saving"
           @click="handleMobileReset"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px): ⚙️ Active Tab · 🛡️ 2FA · 🔑 API Keys · 🏢 Org -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px): Active Tab · 2FA · API Keys · Org -->
     <div class="settings-micro-telemetry mobile-only font-mono" role="status" aria-label="Settings Micro Telemetry">
-      <span class="tel-item tel-name">⚙️ {{ activeTabLabel }}</span>
+      <span class="tel-item tel-name"><BaseIcon name="sliders" size="xs" /> {{ activeTabLabel }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-sec">🛡️ {{ totpStatus?.enabled ? '2FA' : 'No 2FA' }}</span>
+      <span class="tel-item tel-sec"><BaseIcon name="shield" size="xs" /> {{ totpStatus?.enabled ? '2FA' : 'No 2FA' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-alert">🔑 3 Keys</span>
+      <span class="tel-item tel-alert"><BaseIcon name="key" size="xs" /> 3 Keys</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-tenancy">🏢 {{ form.name ? 'Active' : 'Default' }}</span>
+      <span class="tel-item tel-tenancy"><BaseIcon name="server" size="xs" /> {{ form.name ? 'Active' : 'Default' }}</span>
     </div>
 
     <!-- Mobile Tabs Navigation (Pills with snap, <768px) -->
@@ -159,9 +159,9 @@ function handleMobileReset() {
       class="status-banner animate-fade-in"
       :class="'banner-' + statusMessage.type"
     >
-      <span class="banner-icon">{{ statusMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="statusMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" class="banner-icon" />
       <span class="banner-text">{{ statusMessage.text }}</span>
-      <button class="banner-close" aria-label="Close Banner" @click="statusMessage = null">✕</button>
+      <button class="banner-close" aria-label="Close Banner" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Key Metrics Summary HUD (Desktop/Tablet >=768px) -->
@@ -172,7 +172,7 @@ function handleMobileReset() {
         badge="ONLINE"
         badge-color="cyan"
         :subtitle="`Zone: ${form.timezone} | Lang: ${form.language.toUpperCase()}`"
-        icon="🌐"
+        icon="globe"
       />
       <MetricCard
         title="Security Policy"
@@ -180,7 +180,7 @@ function handleMobileReset() {
         :badge="form.require_2fa ? 'STRICT' : 'FLEXIBLE'"
         badge-color="emerald"
         :subtitle="`Timeout: ${form.session_timeout_minutes}m | Min Pass: ${form.password_min_length}`"
-        icon="🛡️"
+        icon="shield"
       />
       <MetricCard
         title="Alert Transports"
@@ -188,7 +188,7 @@ function handleMobileReset() {
         :badge="form.smtp_enabled || form.webhook_url ? 'ACTIVE' : 'IDLE'"
         :badge-color="form.smtp_enabled || form.webhook_url ? 'emerald' : 'muted'"
         :subtitle="form.webhook_url ? 'Webhook URL Configured' : 'No Webhook Set'"
-        icon="🔔"
+        icon="bell"
       />
       <MetricCard
         title="Multi-Tenancy"
@@ -196,7 +196,7 @@ function handleMobileReset() {
         badge="SECURE"
         badge-color="emerald"
         subtitle="Network Policies & RBAC Enforced"
-        icon="🏢"
+        icon="server"
       />
     </div>
 
@@ -209,7 +209,7 @@ function handleMobileReset() {
         :class="{ 'tab-btn-active': activeTab === tab.id }"
         @click="activeTab = tab.id"
       >
-        <span>{{ tab.icon }} {{ tab.label }}</span>
+        <span><BaseIcon :name="tab.icon" size="xs" /> {{ tab.label }}</span>
         <span v-if="tab.category && isDirtyCategory(tab.category)" class="dirty-dot"></span>
         <span v-if="tab.count !== undefined" class="tab-badge">{{ tab.count }}</span>
       </button>

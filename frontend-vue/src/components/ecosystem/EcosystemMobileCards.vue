@@ -24,7 +24,7 @@ const emit = defineEmits<{
     <!-- Dedicated Empty State -->
     <div v-if="tools.length === 0" class="mobile-empty-state glass-panel">
       <p class="mobile-empty-text">
-        🌐 No ecosystem integrations connected. Tap ➕ Connect to link an integration.
+        <BaseIcon name="globe" size="sm" /> No ecosystem integrations connected. Tap + Connect to link an integration.
       </p>
     </div>
 
@@ -56,56 +56,44 @@ const emit = defineEmits<{
         <span
           v-if="tool.health === 'healthy'"
           class="status-pill pill-healthy"
-        >
-          🟢
-        </span>
+        ><BaseIcon name="check-circle" size="xs" /></span>
         <span
           v-else-if="tool.status === 'unreachable'"
           class="status-pill pill-degraded"
-        >
-          🔴
-        </span>
+        ><BaseIcon name="x-circle" size="xs" /></span>
         <span
           v-else
           class="status-pill pill-warning"
-        >
-          🟡
-        </span>
+        ><BaseIcon name="alert-triangle" size="xs" /></span>
 
         <button
           class="mobile-action-btn btn-ping"
           :disabled="syncingId === tool.id"
-          title="⚡ Ping"
-          aria-label="⚡ Ping"
+          title="Ping"
+          aria-label="Ping"
           @click="emit('sync', tool)"
         >
-          <span :class="{ 'spin-anim': syncingId === tool.id }">{{ syncingId === tool.id ? '⏳' : '⚡' }}</span>
+          <BaseIcon :name="syncingId === tool.id ? 'refresh' : 'zap'" size="xs" :class="{ 'spin-anim': syncingId === tool.id }" />
         </button>
         <button
           class="mobile-action-btn btn-health"
-          title="🩺 Health"
-          aria-label="🩺 Health"
+          title="Health"
+          aria-label="Health"
           @click="emit('inspectHealth', tool)"
-        >
-          🩺
-        </button>
+        ><BaseIcon name="activity" size="xs" /></button>
         <button
           class="mobile-action-btn btn-config"
-          title="⚙️ Config"
-          aria-label="⚙️ Config"
+          title="Config"
+          aria-label="Config"
           @click="emit('configure', tool)"
-        >
-          ⚙️
-        </button>
+        ><BaseIcon name="sliders" size="xs" /></button>
         <button
           class="mobile-action-btn btn-card-delete"
           :disabled="deletingId === tool.id"
-          title="🗑️ Disconnect"
-          aria-label="🗑️ Disconnect"
+          title="Disconnect"
+          aria-label="Disconnect"
           @click="emit('delete', tool)"
-        >
-          🗑️
-        </button>
+        ><BaseIcon name="trash" size="xs" /></button>
       </div>
     </div>
   </div>

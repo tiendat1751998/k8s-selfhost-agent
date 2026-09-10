@@ -58,7 +58,7 @@ onMounted(() => {
         </p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary" @click="showScheduleModal = true"><span>🕒 Schedule Cadence</span></button>
+        <button class="btn btn-secondary" @click="showScheduleModal = true"><BaseIcon name="clock" size="xs" /> <span>Schedule Cadence</span></button>
         <button class="btn btn-primary" @click="showGenerateModal = true"><span>+ Generate New Report</span></button>
       </div>
     </div>
@@ -66,42 +66,42 @@ onMounted(() => {
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="reports-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">📊 Reports ({{ filteredReports.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="file-text" size="sm" /> Reports ({{ filteredReports.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
           class="btn-icon-cmd"
-          title="➕ Schedule"
+          title="Schedule"
           aria-label="Schedule Cadence"
           @click="showScheduleModal = true"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
-          title="🔄 Sync"
+          title="Sync"
           aria-label="Sync Reports"
           :disabled="loading"
           @click="loadReports"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="reports-micro-telemetry mobile-only font-mono" role="status" aria-label="Reports Micro Telemetry">
-      <span class="tel-item tel-compiled">📊 {{ reports.length }} Total Reports</span>
+      <span class="tel-item tel-compiled"><BaseIcon name="file-text" size="xs" /> {{ reports.length }} Total Reports</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-cadence">⚡ {{ schedules.length }} Scheduled</span>
+      <span class="tel-item tel-cadence"><BaseIcon name="clock" size="xs" /> {{ schedules.length }} Scheduled</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-footprint">📁 3 Formats</span>
+      <span class="tel-item tel-footprint"><BaseIcon name="hard-drive" size="xs" /> 3 Formats</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-score">⏱️ 1.2s Avg Time</span>
+      <span class="tel-item tel-score"><BaseIcon name="activity" size="xs" /> 1.2s Avg Time</span>
     </div>
 
     <div v-if="feedbackMessage" class="feedback-banner animate-fade-in">
-      <span class="feedback-icon">✓</span>
+      <BaseIcon name="check-circle" size="xs" class="feedback-icon" />
       <span>{{ feedbackMessage }}</span>
     </div>
 
@@ -203,10 +203,10 @@ onMounted(() => {
         <div class="preview-section">
           <h4>Compliance & Verification Scorecard</h4>
           <ul class="preview-checklist">
-            <li><span class="check-icon text-emerald">✓</span> CIS Kubernetes Benchmark Level 2: <strong>100% Passed</strong></li>
-            <li><span class="check-icon text-emerald">✓</span> Air-Gapped NetworkPolicies: <strong>Enforced across all namespaces</strong></li>
-            <li><span class="check-icon text-emerald">✓</span> Dual-Sync S3 Replication: <strong>Zero Lag Observed (RPO &lt; 15s)</strong></li>
-            <li><span class="check-icon text-emerald">✓</span> Secret Encryption at Rest: <strong>AES-256 Vault KMS Armed</strong></li>
+            <li><BaseIcon name="check-circle" size="xs" class="check-icon text-emerald" /> CIS Kubernetes Benchmark Level 2: <strong>100% Passed</strong></li>
+            <li><BaseIcon name="check-circle" size="xs" class="check-icon text-emerald" /> Air-Gapped NetworkPolicies: <strong>Enforced across all namespaces</strong></li>
+            <li><BaseIcon name="check-circle" size="xs" class="check-icon text-emerald" /> Dual-Sync S3 Replication: <strong>Zero Lag Observed (RPO &lt; 15s)</strong></li>
+            <li><BaseIcon name="check-circle" size="xs" class="check-icon text-emerald" /> Secret Encryption at Rest: <strong>AES-256 Vault KMS Armed</strong></li>
           </ul>
         </div>
       </div>

@@ -135,13 +135,13 @@ const filteredTasks = computed(() => {
             <td>
               <div v-if="task.dependencies && task.dependencies.length > 0" class="deps-chips font-mono">
                 <span v-for="dep in task.dependencies" :key="dep" class="dep-chip" :title="dep">
-                  ⛓️ {{ dep.slice(0, 12) }}
+                  <BaseIcon name="git-branch" size="xs" /> {{ dep.slice(0, 12) }}
                 </span>
               </div>
               <span v-else class="text-muted font-mono text-xs">None (Root DAG)</span>
             </td>
 
-            <!-- Action Buttons: [ 📜 Transcript ], [ ⏸️ Pause ], [ 🛑 Terminate ] -->
+            <!-- Action Buttons: [ Transcript ], [ Pause ], [ Terminate ] -->
             <td class="text-right">
               <div class="task-actions-group">
                 <button 
@@ -149,21 +149,21 @@ const filteredTasks = computed(() => {
                   title="Inspect Live Step Transcript"
                   @click="emit('logs', task)"
                 >
-                  📜 Transcript
+                  <BaseIcon name="file-text" size="xs" /> Transcript
                 </button>
                 <button 
                   class="btn-table-act btn-pause-act font-mono"
                   :title="task.status === 'blocked' ? 'Resume Task' : 'Pause Task'"
                   @click="emit('pause', task.id)"
                 >
-                  {{ task.status === 'blocked' ? '▶️ Resume' : '⏸️ Pause' }}
+                  <BaseIcon :name="task.status === 'blocked' ? 'play' : 'pause'" size="xs" /> {{ task.status === 'blocked' ? 'Resume' : 'Pause' }}
                 </button>
                 <button 
                   class="btn-table-act btn-terminate font-mono"
                   title="Terminate Autonomous Worker"
                   @click="emit('terminate', task.id)"
                 >
-                  🛑 Terminate
+                  <BaseIcon name="x-circle" size="xs" /> Terminate
                 </button>
               </div>
             </td>

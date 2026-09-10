@@ -16,7 +16,7 @@ const emit = defineEmits<{
 <template>
   <div class="alerts-mobile-stream">
     <div v-if="alerts.length === 0" class="mobile-empty-alerts glass-panel">
-      <span>🚨 No active firing alerts. All services operating normally.</span>
+      <span><BaseIcon name="check-circle" size="sm" /> No active firing alerts. All services operating normally.</span>
     </div>
 
     <div 
@@ -53,7 +53,7 @@ const emit = defineEmits<{
           aria-label="Silence Alert"
           @click="emit('silence', alert)"
         >
-          <span>🔕</span>
+          <BaseIcon name="bell-off" size="xs" />
         </button>
         <button 
           v-if="alert.Status === 'firing'" 
@@ -62,7 +62,7 @@ const emit = defineEmits<{
           aria-label="Acknowledge Alert"
           @click="emit('acknowledge', alert)"
         >
-          <span>✓</span>
+          <BaseIcon name="check" size="xs" />
         </button>
         <button 
           class="btn-mobile-action btn-mobile-details" 
@@ -70,7 +70,7 @@ const emit = defineEmits<{
           aria-label="Inspect Telemetry Details"
           @click="emit('telemetry', alert)"
         >
-          <span>🔍</span>
+          <BaseIcon name="search" size="xs" />
         </button>
       </div>
     </div>

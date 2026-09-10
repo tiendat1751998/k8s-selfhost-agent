@@ -93,7 +93,7 @@ const emit = defineEmits<{
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary" :disabled="saving">
-          <span>{{ saving ? '💾 Saving Changes...' : '💾 Save Notification Settings' }}</span>
+          <BaseIcon name="hard-drive" size="xs" /> <span>{{ saving ? 'Saving Changes...' : 'Save Notification Settings' }}</span>
         </button>
       </div>
     </form>

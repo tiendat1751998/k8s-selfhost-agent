@@ -1,3 +1,4 @@
+import BaseIcon from './components/ui/BaseIcon.vue'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import router from './router'
@@ -6,6 +7,8 @@ import './style.css'
 import { registerSW } from './registerServiceWorker'
 
 const app = createApp(App)
+
+app.component('BaseIcon', BaseIcon)
 
 app.use(createPinia())
 app.use(router)

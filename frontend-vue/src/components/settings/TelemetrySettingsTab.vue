@@ -28,7 +28,7 @@ const scrapeIntervalOptions = [5, 10, 15, 30, 60]
             Configure Prometheus scraping, Loki log retention, Alertmanager webhooks, and SMTP relay dispatch.
           </p>
         </div>
-        <span v-if="isDirty" class="dirty-indicator-pill">● Unsaved Changes</span>
+        <span v-if="isDirty" class="dirty-indicator-pill">Unsaved Changes</span>
       </div>
       <button
         type="button"
@@ -44,19 +44,19 @@ const scrapeIntervalOptions = [5, 10, 15, 30, 60]
       <div class="integration-item glass-panel">
         <div class="integration-header">
           <div class="integration-title-group">
-            <div class="integration-icon">📈</div>
+            <div class="integration-icon"><BaseIcon name="trending-up" size="md" /></div>
             <div>
               <h3 class="integration-name">Prometheus Metric Collector</h3>
               <p class="integration-desc">High-resolution cluster compute, memory, and TPS time-series telemetry.</p>
             </div>
           </div>
           <div class="integration-status">
-            <span v-if="integrationTests.prometheus_endpoint?.testing" class="badge badge-amber">⏳ Testing...</span>
+            <span v-if="integrationTests.prometheus_endpoint?.testing" class="badge badge-amber">Testing...</span>
             <span v-else-if="integrationTests.prometheus_endpoint?.result?.reachable" class="badge badge-emerald">
-              ✓ HTTP {{ integrationTests.prometheus_endpoint.result.status_code }} ({{ integrationTests.prometheus_endpoint.result.latency_ms }}ms)
+              <BaseIcon name="check-circle" size="xs" /> HTTP {{ integrationTests.prometheus_endpoint.result.status_code }} ({{ integrationTests.prometheus_endpoint.result.latency_ms }}ms)
             </span>
             <span v-else-if="integrationTests.prometheus_endpoint?.error" class="badge badge-rose">
-              ✗ {{ integrationTests.prometheus_endpoint.error }}
+              <BaseIcon name="x-circle" size="xs" /> {{ integrationTests.prometheus_endpoint.error }}
             </span>
             <span v-else-if="form.prometheus_endpoint" class="badge badge-cyan">CONFIGURED</span>
             <span v-else class="badge badge-muted">NOT CONFIGURED</span>
@@ -80,7 +80,7 @@ const scrapeIntervalOptions = [5, 10, 15, 30, 60]
                 :disabled="integrationTests.prometheus_endpoint?.testing || !form.prometheus_endpoint"
                 @click="emit('testService', 'prometheus_endpoint')"
               >
-                <span>{{ integrationTests.prometheus_endpoint?.testing ? '⏳ Testing...' : '⚡ Test Reachability' }}</span>
+                <BaseIcon name="zap" size="xs" /> <span>Test Reachability</span>
               </button>
             </div>
           </div>
@@ -89,7 +89,7 @@ const scrapeIntervalOptions = [5, 10, 15, 30, 60]
             <label class="form-label" for="prom-scrape">Scrape Interval (Seconds)</label>
             <select id="prom-scrape" v-model.number="form.prometheus_scrape_interval_sec" class="input-glass form-select">
               <option v-for="sec in scrapeIntervalOptions" :key="sec" :value="sec">
-                ⚡ {{ sec }}s Interval ({{ sec <= 10 ? 'High Fidelity' : 'Standard' }})
+                {{ sec }}s Interval ({{ sec <= 10 ? 'High Fidelity' : 'Standard' }})
               </option>
             </select>
           </div>
@@ -100,19 +100,19 @@ const scrapeIntervalOptions = [5, 10, 15, 30, 60]
       <div class="integration-item glass-panel">
         <div class="integration-header">
           <div class="integration-title-group">
-            <div class="integration-icon">📜</div>
+            <div class="integration-icon"><BaseIcon name="file-text" size="md" /></div>
             <div>
               <h3 class="integration-name">Grafana Loki Log Gateway</h3>
               <p class="integration-desc">Centralized pod stdout/stderr log stream aggregator and indexer.</p>
             </div>
           </div>
           <div class="integration-status">
-            <span v-if="integrationTests.loki_endpoint?.testing" class="badge badge-amber">⏳ Testing...</span>
+            <span v-if="integrationTests.loki_endpoint?.testing" class="badge badge-amber">Testing...</span>
             <span v-else-if="integrationTests.loki_endpoint?.result?.reachable" class="badge badge-emerald">
-              ✓ HTTP {{ integrationTests.loki_endpoint.result.status_code }} ({{ integrationTests.loki_endpoint.result.latency_ms }}ms)
+              <BaseIcon name="check-circle" size="xs" /> HTTP {{ integrationTests.loki_endpoint.result.status_code }} ({{ integrationTests.loki_endpoint.result.latency_ms }}ms)
             </span>
             <span v-else-if="integrationTests.loki_endpoint?.error" class="badge badge-rose">
-              ✗ {{ integrationTests.loki_endpoint.error }}
+              <BaseIcon name="x-circle" size="xs" /> {{ integrationTests.loki_endpoint.error }}
             </span>
             <span v-else-if="form.loki_endpoint" class="badge badge-cyan">CONFIGURED</span>
             <span v-else class="badge badge-muted">NOT CONFIGURED</span>
@@ -136,7 +136,7 @@ const scrapeIntervalOptions = [5, 10, 15, 30, 60]
                 :disabled="integrationTests.loki_endpoint?.testing || !form.loki_endpoint"
                 @click="emit('testService', 'loki_endpoint')"
               >
-                <span>{{ integrationTests.loki_endpoint?.testing ? '⏳ Testing...' : '⚡ Test Reachability' }}</span>
+                <BaseIcon name="zap" size="xs" /> <span>Test Reachability</span>
               </button>
             </div>
           </div>
@@ -145,7 +145,7 @@ const scrapeIntervalOptions = [5, 10, 15, 30, 60]
             <label class="form-label" for="loki-retention">Log Retention Period (Days)</label>
             <select id="loki-retention" v-model.number="form.loki_retention_days" class="input-glass form-select">
               <option v-for="days in retentionOptions" :key="days" :value="days">
-                📦 {{ days }} Days (Auto-Rotate)
+                {{ days }} Days (Auto-Rotate)
               </option>
             </select>
           </div>
@@ -156,19 +156,19 @@ const scrapeIntervalOptions = [5, 10, 15, 30, 60]
       <div class="integration-item glass-panel">
         <div class="integration-header">
           <div class="integration-title-group">
-            <div class="integration-icon">🚨</div>
+            <div class="integration-icon"><BaseIcon name="bell" size="md" /></div>
             <div>
               <h3 class="integration-name">Prometheus Alertmanager</h3>
               <p class="integration-desc">Incident grouping, deduplication, and notification dispatch bus.</p>
             </div>
           </div>
           <div class="integration-status">
-            <span v-if="integrationTests.alertmanager_endpoint?.testing" class="badge badge-amber">⏳ Testing...</span>
+            <span v-if="integrationTests.alertmanager_endpoint?.testing" class="badge badge-amber">Testing...</span>
             <span v-else-if="integrationTests.alertmanager_endpoint?.result?.reachable" class="badge badge-emerald">
-              ✓ HTTP {{ integrationTests.alertmanager_endpoint.result.status_code }} ({{ integrationTests.alertmanager_endpoint.result.latency_ms }}ms)
+              <BaseIcon name="check-circle" size="xs" /> HTTP {{ integrationTests.alertmanager_endpoint.result.status_code }} ({{ integrationTests.alertmanager_endpoint.result.latency_ms }}ms)
             </span>
             <span v-else-if="integrationTests.alertmanager_endpoint?.error" class="badge badge-rose">
-              ✗ {{ integrationTests.alertmanager_endpoint.error }}
+              <BaseIcon name="x-circle" size="xs" /> {{ integrationTests.alertmanager_endpoint.error }}
             </span>
             <span v-else-if="form.alertmanager_endpoint" class="badge badge-cyan">CONFIGURED</span>
             <span v-else class="badge badge-muted">NOT CONFIGURED</span>
@@ -192,7 +192,7 @@ const scrapeIntervalOptions = [5, 10, 15, 30, 60]
                 :disabled="integrationTests.alertmanager_endpoint?.testing || !form.alertmanager_endpoint"
                 @click="emit('testService', 'alertmanager_endpoint')"
               >
-                <span>{{ integrationTests.alertmanager_endpoint?.testing ? '⏳ Testing...' : '⚡ Test Reachability' }}</span>
+                <BaseIcon name="zap" size="xs" /> <span>Test Reachability</span>
               </button>
             </div>
           </div>
@@ -252,7 +252,7 @@ const scrapeIntervalOptions = [5, 10, 15, 30, 60]
         <span class="field-desc">Scrape metrics and log rotation policies synchronize to cluster daemons automatically.</span>
         <button type="submit" class="btn btn-primary" :disabled="saving">
           <span v-if="saving" class="spinner spinner-sm"></span>
-          <span>{{ saving ? '💾 Saving Changes...' : '💾 Save Telemetry Settings' }}</span>
+          <BaseIcon name="hard-drive" size="xs" /> <span>{{ saving ? 'Saving Changes...' : 'Save Telemetry Settings' }}</span>
         </button>
       </div>
     </form>

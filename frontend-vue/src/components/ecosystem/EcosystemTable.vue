@@ -74,30 +74,30 @@ const emit = defineEmits<{
               v-if="tool.status === 'not_configured'"
               class="status-pill pill-muted"
             >
-              ⚪ Not Configured
+              <BaseIcon name="clock" size="xs" /> Not Configured
             </span>
             <span
               v-else-if="tool.health === 'healthy'"
               class="status-pill pill-healthy"
             >
-              🟢 Healthy
+              <BaseIcon name="check-circle" size="xs" /> Healthy
             </span>
             <span
               v-else-if="tool.status === 'unreachable'"
               class="status-pill pill-degraded"
             >
-              🔴 Unreachable
+              <BaseIcon name="x-circle" size="xs" /> Unreachable
             </span>
             <span
               v-else
               class="status-pill pill-warning"
             >
-              🟡 Degraded
+              <BaseIcon name="alert-triangle" size="xs" /> Degraded
             </span>
           </td>
           <td>
             <span class="source-badge">
-              {{ tool.source === 'settings' ? '⚙️ Settings' : tool.source === 'manual' ? '✍️ Manual' : '☸️ K8s' }}
+              <template v-if="tool.source === 'settings'"><BaseIcon name="sliders" size="xs" /> Settings</template><template v-else-if="tool.source === 'manual'"><BaseIcon name="edit" size="xs" /> Manual</template><template v-else><BaseIcon name="anchor" size="xs" /> K8s</template>
             </span>
           </td>
           <td class="font-mono text-muted" style="font-size: 12px;">
@@ -108,36 +108,36 @@ const emit = defineEmits<{
               <button
                 class="table-btn btn-ping"
                 :disabled="syncingId === tool.id"
-                title="⚡ Ping"
-                aria-label="⚡ Ping"
+                title="Ping"
+                aria-label="Ping"
                 @click="emit('sync', tool)"
               >
-                <span :class="{ 'spin-anim': syncingId === tool.id }">{{ syncingId === tool.id ? '⏳' : '⚡' }}</span>
+                <BaseIcon :name="syncingId === tool.id ? 'refresh' : 'zap'" size="xs" :class="{ 'spin-anim': syncingId === tool.id }" />
               </button>
               <button
                 class="table-btn btn-health"
-                title="🩺 Health"
-                aria-label="🩺 Health"
+                title="Health"
+                aria-label="Health"
                 @click="emit('inspectHealth', tool)"
               >
-                <span>🩺</span>
+                <BaseIcon name="activity" size="xs" />
               </button>
               <button
                 class="table-btn btn-config"
-                title="⚙️ Config"
-                aria-label="⚙️ Config"
+                title="Config"
+                aria-label="Config"
                 @click="emit('configure', tool)"
               >
-                <span>⚙️</span>
+                <BaseIcon name="sliders" size="xs" />
               </button>
               <button
                 class="table-btn btn-disconnect"
                 :disabled="deletingId === tool.id"
-                title="🗑️ Disconnect"
-                aria-label="🗑️ Disconnect"
+                title="Disconnect"
+                aria-label="Disconnect"
                 @click="emit('delete', tool)"
               >
-                <span>🗑️</span>
+                <BaseIcon name="trash" size="xs" />
               </button>
             </div>
           </td>

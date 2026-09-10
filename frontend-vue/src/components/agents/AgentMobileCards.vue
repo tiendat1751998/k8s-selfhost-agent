@@ -32,7 +32,7 @@ function toggleExpand(taskId: string) {
 
     <!-- Dedicated Empty State -->
     <div v-if="tasks.length === 0" class="empty-state mobile-empty-card font-mono">
-      <span>🤖 No agent tasks active. Tap + to dispatch a task.</span>
+      <span><BaseIcon name="bot" size="sm" /> No agent tasks active. Tap + to dispatch a task.</span>
     </div>
 
     <!-- Mobile Cards Stream (~68-75px High Density) -->
@@ -46,7 +46,7 @@ function toggleExpand(taskId: string) {
         <!-- Compact Summary Row (~68-75px height) -->
         <div class="mobile-compact-row" @click="toggleExpand(task.id)">
           <div class="mobile-card-left">
-            <span class="mobile-card-icon">⚡</span>
+            <BaseIcon name="zap" size="xs" class="mobile-card-icon" />
             <div class="mobile-card-info">
               <div class="mobile-title-row">
                 <span class="mobile-card-title" :title="task.title">{{ task.title }}</span>
@@ -65,33 +65,27 @@ function toggleExpand(taskId: string) {
               title="Dispatch Task"
               aria-label="Dispatch Task"
               @click="emit('dispatch', task)"
-            >
-              ⚡
-            </button>
+            ><BaseIcon name="zap" size="xs" /></button>
             <button 
               class="btn-icon-sm btn-logs-act" 
               title="View Transcript Logs"
               aria-label="View Transcript Logs"
               @click="emit('logs', task)"
-            >
-              📜
-            </button>
+            ><BaseIcon name="file-text" size="xs" /></button>
             <button 
               class="btn-icon-sm btn-pause-act" 
               :title="task.status === 'blocked' ? 'Resume' : 'Pause'"
               :aria-label="task.status === 'blocked' ? 'Resume' : 'Pause'"
               @click="emit('pause', task.id)"
             >
-              {{ task.status === 'blocked' ? '▶' : '⏸' }}
+              <BaseIcon :name="task.status === 'blocked' ? 'play' : 'pause'" size="xs" />
             </button>
             <button 
               class="btn-icon-sm btn-terminate" 
               title="Terminate Task"
               aria-label="Terminate Task"
               @click="emit('terminate', task.id)"
-            >
-              🛑
-            </button>
+            ><BaseIcon name="x-circle" size="xs" /></button>
           </div>
         </div>
 
