@@ -1,4 +1,4 @@
-﻿package http
+package http
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/logging"
@@ -21,10 +22,10 @@ import (
 
 // LoggingService defines the operations needed for log ingestion, querying, and streaming.
 type LoggingService interface {
-	IngestBatch(ctx context.Context, entries []logging.LogEntry) error
+	Ingest(ctx context.Context, entries []logging.LogEntry) error
 	QueryLogs(ctx context.Context, filter logging.LogFilter) (*logging.LogSearchResult, error)
 	GetHistogram(ctx context.Context, filter logging.LogFilter, intervalSeconds int) ([]logging.LogAggregationBucket, error)
-	Tail(ctx context.Context, filter logging.LogFilter) (<-chan logging.LogEntry, error)
+	TailLogs(ctx context.Context, filter logging.LogFilter) (<-chan logging.LogEntry, error)
 }
 
 // LogHandler provides HTTP and WebSocket endpoints for centralized logging.
@@ -88,27 +89,24 @@ func (h *LogHandler) HandleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := tenancy.TenantIDFromContext(r.Context())
-	now := time.Now().UTC()
+	tenantID := resolveTenant(r.Context(), r)
+	if tenantID == "" {
+		writeError(w, http.StatusUnauthorized, "tenant context or X-Tenant-ID header required", nil)
+		return
+	}
+
 	for i := range entries {
-		if tenantID != "" {
-			entries[i].TenantID = tenantID
-		}
+		entries[i].TenantID = tenantID
 		if entries[i].ClusterID == "" {
 			entries[i].ClusterID = "default"
 		}
-		if entries[i].Timestamp.IsZero() {
-			entries[i].Timestamp = now
-		}
-		if entries[i].Stream == "" {
-			entries[i].Stream = "stdout"
-		}
-		if entries[i].LogLevel == "" {
-			entries[i].LogLevel = logging.LogLevelInfo
+		if err := entries[i].Validate(); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid log entry", err)
+			return
 		}
 	}
 
-	if err := h.service.IngestBatch(r.Context(), entries); err != nil {
+	if err := h.service.Ingest(r.Context(), entries); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to ingest logs", err)
 		return
 	}
@@ -126,6 +124,12 @@ func (h *LogHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := resolveTenant(r.Context(), r)
+	if tenantID == "" {
+		writeError(w, http.StatusUnauthorized, "tenant context required", nil)
+		return
+	}
+
 	q := r.URL.Query()
 	logLevel, err := parseLogLevelParam(q, "log_level")
 	if err != nil {
@@ -140,7 +144,7 @@ func (h *LogHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := logging.LogFilter{
-		TenantID:      resolveTenant(r.Context()),
+		TenantID:      tenantID,
 		ClusterID:     q.Get("cluster_id"),
 		Namespace:     q.Get("namespace"),
 		PodName:       firstNonEmpty(q.Get("pod_name"), q.Get("pod")),
@@ -170,6 +174,12 @@ func (h *LogHandler) HandleHistogram(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := resolveTenant(r.Context(), r)
+	if tenantID == "" {
+		writeError(w, http.StatusUnauthorized, "tenant context required", nil)
+		return
+	}
+
 	q := r.URL.Query()
 	startTime, endTime, err := parseTimeRangeParams(q)
 	if err != nil {
@@ -184,7 +194,7 @@ func (h *LogHandler) HandleHistogram(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := logging.LogFilter{
-		TenantID:      resolveTenant(r.Context()),
+		TenantID:      tenantID,
 		Namespace:     q.Get("namespace"),
 		PodName:       firstNonEmpty(q.Get("pod_name"), q.Get("pod")),
 		ContainerName: firstNonEmpty(q.Get("container_name"), q.Get("container")),
@@ -206,28 +216,10 @@ func (h *LogHandler) HandleHistogram(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, buckets)
 }
 
-// HandleStream provides a WebSocket live tail for matching log events.
+// HandleStream provides a WebSocket live tail for matching log events with keepalive and cancellation.
 func (h *LogHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeError(w, http.StatusServiceUnavailable, "logging service unavailable", nil)
-		return
-	}
-
-	q := r.URL.Query()
-	logLevel, _ := parseLogLevelParam(q, "log_level")
-
-	filter := logging.LogFilter{
-		TenantID:      resolveTenant(r.Context()),
-		Namespace:     q.Get("namespace"),
-		PodName:       firstNonEmpty(q.Get("pod_name"), q.Get("pod")),
-		ContainerName: firstNonEmpty(q.Get("container_name"), q.Get("container")),
-		LogLevel:      logLevel,
-		SearchText:    firstNonEmpty(q.Get("query"), q.Get("search_text")),
-	}
-
-	ch, err := h.service.Tail(r.Context(), filter)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "failed to start tail stream", err)
 		return
 	}
 
@@ -238,9 +230,36 @@ func (h *LogHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	clientDone := make(chan struct{})
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	q := r.URL.Query()
+	logLevel, _ := parseLogLevelParam(q, "log_level")
+
+	filter := logging.LogFilter{
+		TenantID:      resolveTenant(r.Context(), r),
+		Namespace:     q.Get("namespace"),
+		PodName:       firstNonEmpty(q.Get("pod_name"), q.Get("pod")),
+		ContainerName: firstNonEmpty(q.Get("container_name"), q.Get("container")),
+		LogLevel:      logLevel,
+		SearchText:    firstNonEmpty(q.Get("query"), q.Get("search_text")),
+	}
+
+	ch, err := h.service.TailLogs(ctx, filter)
+	if err != nil {
+		_ = conn.WriteJSON(map[string]string{"error": "failed to start tail stream"})
+		return
+	}
+
+	conn.SetReadLimit(512)
+	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
 	go func() {
-		defer close(clientDone)
+		defer cancel()
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
 				return
@@ -248,16 +267,22 @@ func (h *LogHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
-		case <-r.Context().Done():
+		case <-ctx.Done():
 			return
-		case <-clientDone:
-			return
+		case <-ticker.C:
+			if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(5*time.Second)); err != nil {
+				return
+			}
 		case entry, ok := <-ch:
 			if !ok {
 				return
 			}
+			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			if err := conn.WriteJSON(entry); err != nil {
 				return
 			}
@@ -265,11 +290,16 @@ func (h *LogHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func resolveTenant(ctx context.Context) string {
+func resolveTenant(ctx context.Context, r *http.Request) string {
 	if tenantID := tenancy.TenantIDFromContext(ctx); strings.TrimSpace(tenantID) != "" {
-		return tenantID
+		return strings.TrimSpace(tenantID)
 	}
-	return "default-tenant"
+	if r != nil {
+		if hTenant := strings.TrimSpace(r.Header.Get("X-Tenant-ID")); hTenant != "" {
+			return hTenant
+		}
+	}
+	return ""
 }
 
 func firstNonEmpty(vals ...string) string {

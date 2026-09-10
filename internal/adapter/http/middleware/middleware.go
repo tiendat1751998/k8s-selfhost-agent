@@ -89,6 +89,10 @@ func (rw *responseWriter) Flush() {
 func RequestBodyLimit(maxBytes int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if maxBytes <= (1<<20) && strings.HasPrefix(r.URL.Path, "/api/v1/logs") {
+				next.ServeHTTP(w, r)
+				return
+			}
 			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 			next.ServeHTTP(w, r)
 		})
