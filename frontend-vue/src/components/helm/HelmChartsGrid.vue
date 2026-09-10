@@ -171,5 +171,5 @@ function getChartIcon(chart: HelmChart): string {
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/helm.css';
+@import '../../assets/styles/views/helm-catalog-grid.css';
 </style>

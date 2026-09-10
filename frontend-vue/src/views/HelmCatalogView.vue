@@ -115,7 +115,7 @@ const cleanSelectedRelease = computed(() => {
     <div class="helm-micro-telemetry mobile-only font-mono" role="status" aria-label="Helm Micro Telemetry">
       <span class="tel-item tel-rel">⛵ {{ totalReleasesCount }} rel</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-ok">🛡️ {{ deployedRate }}% ok</span>
+      <span class="tel-item tel-ok">🛡️ {{ deployedRate }} ok</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-charts">📦 {{ charts.length }} charts</span>
       <span class="tel-sep">·</span>
@@ -123,7 +123,7 @@ const cleanSelectedRelease = computed(() => {
     </div>
 
     <!-- Slim Mobile Cluster & Namespace Pill Row (<=640px) -->
-    <div class="helm-mobile-cluster-bar mobile-only">
+    <div class="helm-mobile-cluster-bar helm-mobile-selectors mobile-only">
       <div class="pill-select-wrap">
         <span class="pill-prefix">☸️</span>
         <select v-model="selectedCluster" class="pill-select" aria-label="Target Cluster">
@@ -293,4 +293,6 @@ const cleanSelectedRelease = computed(() => {
 
 <style>
 @import '../assets/styles/views/helm.css';
+@import '../assets/styles/views/helm-catalog-grid.css';
+@import '../assets/styles/components/helm-drawers.css';
 </style>

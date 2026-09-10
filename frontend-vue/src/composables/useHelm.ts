@@ -137,21 +137,32 @@ export function getFormattedReleaseChart(rel: HelmRelease): string {
  * Returns clean truncated description for a release (~100 chars with ellipsis)
  */
 export function getFormattedReleaseDescription(rel: HelmRelease): string {
-  const parsed = parseHelmChart(rel.chart, rel.description, rel.version || rel.appVersion || rel.app_version)
+  const rawInfo = (rel as any)?.info || {}
+  const desc = rel.description || rawInfo?.description || ''
+  const parsed = parseHelmChart(rel.chart, desc, rel.version || rel.appVersion || rel.app_version)
   return parsed.truncatedDescription
 }
 
 /**
- * Sanitizes a Helm release object so that `chart` and `description` are never raw JSON/base64
+ * Sanitizes a Helm release object so that `chart` and `description` are never raw JSON/base64,
+ * and unpacks Helm Go SDK status, timestamps, and descriptions from info.
  */
 export function sanitizeHelmRelease<T extends HelmRelease>(rel: T): T & {
   cleanChart: string
   cleanDescription: string
   chartDisplay: string
 } {
-  const parsed = parseHelmChart(rel.chart, rel.description, rel.version || rel.appVersion || rel.app_version)
+  const rawInfo = (rel as any)?.info || {}
+  const status = String(rel?.status || rawInfo?.status || 'unknown').toLowerCase()
+  const updated = rel?.updated || rawInfo?.last_deployed || rawInfo?.first_deployed || ''
+  const description = rel?.description || rawInfo?.description || ''
+
+  const parsed = parseHelmChart(rel.chart, description, rel.version || rel.appVersion || rel.app_version)
   return {
     ...rel,
+    status,
+    updated,
+    description: description || parsed.description,
     cleanChart: parsed.chartDisplay,
     cleanDescription: parsed.truncatedDescription,
     chartDisplay: parsed.chartDisplay,
