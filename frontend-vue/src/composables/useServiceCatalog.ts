@@ -269,14 +269,14 @@ export function useServiceCatalog() {
   })
 
   const columns: Column<ServiceEntry>[] = [
-    { key: 'name', label: 'Service Name', sortable: true },
-    { key: 'type', label: 'Type', width: '130px', sortable: true },
-    { key: 'lifecycle', label: 'Lifecycle', width: '130px', sortable: true },
-    { key: 'owner_team', label: 'Owner & Team', width: '160px', sortable: true },
-    { key: 'endpoint', label: 'API Endpoint', width: '220px' },
-    { key: 'repo_url', label: 'Repository', width: '130px' },
-    { key: 'tags', label: 'Tags', width: '170px' },
-    { key: 'actions', label: 'Actions', width: '280px', align: 'right' },
+    { key: 'name', label: 'Service Name', width: '20%', sortable: true },
+    { key: 'type', label: 'Type', width: '10%', sortable: true },
+    { key: 'lifecycle', label: 'Lifecycle', width: '10%', sortable: true },
+    { key: 'owner_team', label: 'Owner & Team', width: '13%', sortable: true },
+    { key: 'endpoint', label: 'API Endpoint', width: '14%' },
+    { key: 'repo_url', label: 'Repository', width: '9%' },
+    { key: 'tags', label: 'Tags', width: '11%' },
+    { key: 'actions', label: 'Actions', width: '13%', align: 'right' },
   ]
 
   function getTypeBadgeClass(type: string): string {

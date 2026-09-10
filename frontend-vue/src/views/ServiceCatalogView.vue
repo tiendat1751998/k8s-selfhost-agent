@@ -12,7 +12,7 @@ const {
   loading, deleting, saving, error, toastMessage, services, stats, viewMode,
   filter, showFormModal, modalMode, showDetailDrawer, showDeleteModal,
   selectedService, serviceToDelete, copiedKey, form, formErrors,
-  serviceTypes, lifecycles, columns, totalServices, prodCount, devCount, deprecatedCount,
+  serviceTypes, lifecycles, columns, totalServices, prodCount, devCount, deprecatedCount, teams,
   selectedServiceDependencies, showMobileFilters, activeFilterCount,
   fetchCatalogData, resetFilters,
   getTypeBadgeClass, getTypeIcon, getLifecycleBadgeClass, getLifecycleDotClass,
@@ -57,7 +57,7 @@ const {
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="catalog-mobile-command-bar mobile-only">
       <div class="command-bar-left">
         <span class="command-bar-title font-bold">📦 Catalog ({{ totalServices }})</span>
@@ -75,8 +75,8 @@ const {
         <button
           type="button"
           class="btn-icon-cmd"
-          title="Refresh"
-          aria-label="Refresh"
+          title="Sync / Refresh"
+          aria-label="Sync"
           :disabled="loading"
           @click="fetchCatalogData"
         >
@@ -85,15 +85,15 @@ const {
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="catalog-micro-telemetry mobile-only font-mono" role="status" aria-label="Catalog Micro Telemetry">
-      <span class="tel-item tel-total">📦 {{ totalServices }} svcs</span>
+      <span class="tel-item tel-total">📦 {{ totalServices }} Services</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-prod">🚀 {{ prodCount }} prod</span>
+      <span class="tel-item tel-prod">🟢 {{ prodCount }} Healthy</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-dev">🧪 {{ devCount }} dev</span>
+      <span class="tel-item tel-api">⚡ {{ stats.by_type['api'] || 0 }} APIs</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-depr">⚠️ {{ deprecatedCount }} sunset</span>
+      <span class="tel-item tel-teams">👥 {{ teams.length }} Teams</span>
     </div>
 
     <!-- Notification Toast Banner -->
@@ -315,4 +315,5 @@ const {
 
 <style>
 @import '../assets/styles/views/catalog.css';
+@import '../assets/styles/components/catalog-drawers.css';
 </style>

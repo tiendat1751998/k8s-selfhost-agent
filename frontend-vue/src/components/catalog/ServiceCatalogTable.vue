@@ -13,6 +13,14 @@ defineProps<{
   getLifecycleDotClass: (lifecycle: string) => string
 }>()
 
+function handleApiClick(service: ServiceEntry) {
+  if (service.docs_url) {
+    window.open(service.docs_url, '_blank', 'noopener,noreferrer')
+  } else {
+    emit('open-detail', service)
+  }
+}
+
 const emit = defineEmits<{
   (e: 'open-detail', service: ServiceEntry): void
   (e: 'deploy', service: ServiceEntry): void
@@ -152,10 +160,10 @@ const emit = defineEmits<{
           <button
             type="button"
             class="btn btn-secondary btn-xs btn-action-labeled"
-            title="Deploy service via scaffolder"
-            @click="emit('deploy', row)"
+            title="API specifications & documentation"
+            @click="handleApiClick(row)"
           >
-            <span>📦 Deploy</span>
+            <span>⚡ APIs</span>
           </button>
           <button
             type="button"
@@ -163,15 +171,7 @@ const emit = defineEmits<{
             title="Configure service registration"
             @click="emit('config', row)"
           >
-            <span>⚙️ Config</span>
-          </button>
-          <button
-            type="button"
-            class="btn btn-danger-crimson btn-xs btn-action-labeled"
-            title="Delete service from catalog"
-            @click="emit('delete', row)"
-          >
-            <span>🗑 Delete</span>
+            <span>✏️ Edit</span>
           </button>
         </div>
       </template>
