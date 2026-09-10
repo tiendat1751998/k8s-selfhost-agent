@@ -239,42 +239,60 @@ func (f *FileLogSource) GetLogs(ctx context.Context, app string, tail int, since
 	return allEntries, nil
 }
 
-// IngestToWriter pipes all existing .log files into the columnar logengine.Writer.
+// IngestToWriter pipes all existing .log files into the columnar logengine.Writer safely.
 func (f *FileLogSource) IngestToWriter(ctx context.Context, w *logengine.Writer) error {
 	if f.logDir == "" || w == nil {
 		return nil
 	}
 	dirEntries, err := os.ReadDir(f.logDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read log dir %s: %w", f.logDir, err)
 	}
+
+	var writeErrors int
 	for _, e := range dirEntries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
 			continue
 		}
 		svcName := strings.TrimSuffix(e.Name(), ".log")
-		file, err := os.Open(filepath.Join(f.logDir, e.Name()))
-		if err != nil {
-			continue
-		}
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			if ctx.Err() != nil {
-				_ = file.Close()
-				return ctx.Err()
+		filePath := filepath.Join(f.logDir, e.Name())
+
+		err := func() error {
+			file, err := os.Open(filePath)
+			if err != nil {
+				return err
 			}
-			entry := parseLogLine(scanner.Text(), svcName)
-			_ = w.Write(logengine.Entry{
-				Timestamp: entry.Timestamp,
-				Service:   entry.Service,
-				Level:     entry.Level,
-				Message:   entry.Message,
-				Raw:       entry.Raw,
-			})
+			defer file.Close()
+
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				entry := parseLogLine(scanner.Text(), svcName)
+				if err := w.Write(logengine.Entry{
+					Timestamp: entry.Timestamp,
+					Service:   entry.Service,
+					Level:     entry.Level,
+					Message:   entry.Message,
+					Raw:       entry.Raw,
+				}); err != nil {
+					writeErrors++
+				}
+			}
+			return scanner.Err()
+		}()
+		if err != nil && ctx.Err() != nil {
+			return err
 		}
-		_ = file.Close()
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return fmt.Errorf("failed to flush writer: %w", err)
+	}
+	if writeErrors > 0 {
+		return fmt.Errorf("encountered %d write errors during ingestion", writeErrors)
+	}
+	return nil
 }
 
 func readLogFile(path, service string, sinceTime, untilTime *time.Time, query string, level string) ([]LogEntry, error) {

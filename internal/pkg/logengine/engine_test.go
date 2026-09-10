@@ -89,14 +89,25 @@ func TestEngine_Ingest20k_Compression_Pruning_Memory(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Search for unique token (pruning 99% of blocks via Bloom filter)
-	res, err := reader.Search(ctx, QueryParams{
-		Query: targetSecretToken,
-		Limit: 10,
+	// Search with ExactMatch: true (prunes blocks via Bloom filter)
+	resExact, err := reader.Search(ctx, QueryParams{
+		Query:      targetSecretToken,
+		ExactMatch: true,
+		Limit:      10,
 	})
 	require.NoError(t, err)
-	require.Len(t, res, 1, "should find exactly one log entry containing the secret token")
-	assert.Contains(t, res[0].Message, targetSecretToken)
+	require.Len(t, resExact, 1, "exact token search should find target entry")
+	assert.Contains(t, resExact[0].Message, targetSecretToken)
+
+	// Search with substring query (guarantees zero false negatives)
+	resSub, err := reader.Search(ctx, QueryParams{
+		Query:      "PAYMENT_FAILURE",
+		ExactMatch: false,
+		Limit:      10,
+	})
+	require.NoError(t, err)
+	require.Len(t, resSub, 1, "substring search should find entry without false negatives")
+	assert.Contains(t, resSub[0].Message, targetSecretToken)
 
 	// Time range query
 	startTime := baseTime.Add(100 * time.Second)

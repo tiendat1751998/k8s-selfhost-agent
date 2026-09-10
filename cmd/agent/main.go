@@ -144,22 +144,22 @@ func main() {
 		engineDir = filepath.Join(logDir, ".logengine")
 	}
 
+	logServer := NewLogServer(WithLogDir(logDir))
 	var engineSrc *EngineLogSource
-	var logServer *LogServer
 
 	if eng, err := NewEngineLogSource(engineDir); err == nil {
 		engineSrc = eng
 		logger.Info("Columnar log engine initialized", slog.String("engine_dir", engineDir))
+		logServer.AddSource(engineSrc)
+
 		fileSrc := &FileLogSource{logDir: logDir}
 		go func() {
 			if err := fileSrc.IngestToWriter(ctx, engineSrc.Writer()); err != nil && ctx.Err() == nil {
 				logger.Warn("Initial log ingestion into log engine encountered warning", slog.String("error", err.Error()))
 			}
 		}()
-		logServer = NewLogServer(WithLogDir(logDir), WithLogSource(engineSrc))
 	} else {
 		logger.Warn("Failed to initialize columnar log engine, falling back to standard sources", slog.String("error", err.Error()))
-		logServer = NewLogServer(WithLogDir(logDir))
 	}
 
 	handler := setupHandler(collector, authToken, logServer)
