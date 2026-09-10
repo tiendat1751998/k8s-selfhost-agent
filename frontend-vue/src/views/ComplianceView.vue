@@ -91,15 +91,16 @@
     </div>
 
     <!-- Top HUD Cards (Desktop Only, Overall Score, Passing Controls, Critical Failures, Automated Audit Status) -->
-    <ComplianceScoreCards
-      class="desktop-only"
-      :overall-score="overallScore"
-      :passing-controls="passingControlsCount"
-      :total-controls="totalControlsCount"
-      :critical-failures="criticalViolationsCount"
-      :audit-status="auditStatus"
-      :last-scan-time="latestRun?.start_time ? formatDate(latestRun.start_time) : undefined"
-    />
+    <div class="desktop-only">
+      <ComplianceScoreCards
+        :overall-score="overallScore"
+        :passing-controls="passingControlsCount"
+        :total-controls="totalControlsCount"
+        :critical-failures="criticalViolationsCount"
+        :audit-status="auditStatus"
+        :last-scan-time="latestRun?.start_time ? formatDate(latestRun.start_time) : undefined"
+      />
+    </div>
 
     <!-- Frameworks Grid with Gauges and Quick Filters (Shown on Desktop, toggled on Mobile) -->
     <div class="frameworks-container" :class="{ 'mobile-hidden': mobileTab !== 'frameworks' }">
