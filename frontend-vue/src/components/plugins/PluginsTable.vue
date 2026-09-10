@@ -1,6 +1,14 @@
-﻿<template>
+<template>
   <div class="plugins-table-container glass-panel">
     <table class="plugins-table">
+      <colgroup>
+        <col style="width: 25%;" />
+        <col style="width: 13%;" />
+        <col style="width: 14%;" />
+        <col style="width: 19%;" />
+        <col style="width: 10%;" />
+        <col style="width: 19%;" />
+      </colgroup>
       <thead>
         <tr>
           <th>Extension</th>
@@ -17,12 +25,12 @@
           <td>
             <div class="table-identity-cell">
               <span class="table-icon">{{ p.icon || '🧩' }}</span>
-              <div>
+              <div class="table-identity-meta">
                 <div class="table-name-row">
-                  <span class="table-plugin-name">{{ p.name }}</span>
+                  <span class="table-plugin-name" :title="p.name">{{ p.name }}</span>
                   <span class="version-tag">v{{ p.version }}</span>
                 </div>
-                <div class="table-author" v-if="p.author">by {{ p.author }}</div>
+                <div class="table-author" v-if="p.author" :title="p.author">by {{ p.author }}</div>
               </div>
             </div>
           </td>
@@ -61,7 +69,7 @@
             </span>
           </td>
 
-          <!-- Actions -->
+          <!-- Compact 32px Actions -->
           <td>
             <div class="table-actions-cell">
               <button
@@ -78,7 +86,7 @@
                 title="Configure Plugin Runtime Variables"
                 @click="$emit('configure', p)"
               >
-                <span>⚙️</span> Configure
+                <span>⚙️</span> Config
               </button>
 
               <button
@@ -94,7 +102,7 @@
                 title="Uninstall Plugin"
                 @click="$emit('uninstall', p)"
               >
-                <span>🗑</span> Uninstall
+                <span>🗑️</span> Uninstall
               </button>
             </div>
           </td>
