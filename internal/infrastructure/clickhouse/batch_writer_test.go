@@ -1,4 +1,4 @@
-﻿package clickhouse_test
+package clickhouse_test
 
 import (
 	"context"
@@ -90,7 +90,47 @@ func TestBatchWriter_IntervalFlush(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestBatchWriter_ConcurrentWrites(t *testing.T) {
+func TestBatchWriter_FlushDrainsPendingAndClearsError(t *testing.T) {
+	var flushedCount int64
+
+	flushFn := func(ctx context.Context, batch []logging.LogEntry) error {
+		atomic.AddInt64(&flushedCount, int64(len(batch)))
+		return nil
+	}
+
+	cfg := clickhouse.BatchWriterConfig{
+		BatchSize:       1000,
+		FlushInterval:   10 * time.Second,
+		ChannelCapacity: 100,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	writer := clickhouse.NewBatchWriterWithFn(ctx, nil, cfg, flushFn)
+
+	for i := 0; i < 5; i++ {
+		err := writer.Write(logging.LogEntry{
+			TenantID:  "t1",
+			ClusterID: "c1",
+			Message:   "flush test",
+		})
+		require.NoError(t, err)
+	}
+
+	// Flush should drain the 5 items immediately
+	flushCtx, flushCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer flushCancel()
+	err := writer.Flush(flushCtx)
+	require.NoError(t, err)
+
+	require.Equal(t, int64(5), atomic.LoadInt64(&flushedCount))
+
+	err = writer.Close()
+	require.NoError(t, err)
+}
+
+func TestBatchWriter_ConcurrentWritesAndClose(t *testing.T) {
 	var flushedCount int64
 
 	flushFn := func(ctx context.Context, batch []logging.LogEntry) error {
@@ -100,7 +140,7 @@ func TestBatchWriter_ConcurrentWrites(t *testing.T) {
 
 	cfg := clickhouse.BatchWriterConfig{
 		BatchSize:       50,
-		FlushInterval:   100 * time.Millisecond,
+		FlushInterval:   50 * time.Millisecond,
 		ChannelCapacity: 1000,
 	}
 
@@ -125,7 +165,7 @@ func TestBatchWriter_ConcurrentWrites(t *testing.T) {
 					Message:   "concurrent message",
 				})
 				if writeErr != nil {
-					t.Errorf("unexpected write error: %v", writeErr)
+					t.Errorf("write error: %v", writeErr)
 				}
 			}
 		}()

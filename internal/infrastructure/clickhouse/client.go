@@ -1,4 +1,4 @@
-﻿package clickhouse
+package clickhouse
 
 import (
 	"context"
@@ -138,38 +138,21 @@ func (c *Client) Ping(ctx context.Context) error {
 	return c.conn.Ping(ctx)
 }
 
-// Conn returns the active driver.Conn, automatically reconnecting if Ping fails.
+// Conn returns the active driver.Conn pool without per-call ping overhead.
 func (c *Client) Conn(ctx context.Context) (driver.Conn, error) {
 	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	if c.closed {
-		c.mu.RUnlock()
 		return nil, errors.New("clickhouse client is closed")
 	}
-	conn := c.conn
-	c.mu.RUnlock()
-
-	if conn == nil {
-		if err := c.Reconnect(ctx); err != nil {
-			return nil, err
-		}
-		c.mu.RLock()
-		defer c.mu.RUnlock()
-		return c.conn, nil
+	if c.conn == nil {
+		return nil, errors.New("clickhouse connection is nil")
 	}
-
-	if err := conn.Ping(ctx); err != nil {
-		if recErr := c.Reconnect(ctx); recErr != nil {
-			return nil, fmt.Errorf("auto-reconnect failed (%w) after ping failure: %v", recErr, err)
-		}
-		c.mu.RLock()
-		defer c.mu.RUnlock()
-		return c.conn, nil
-	}
-
-	return conn, nil
+	return c.conn, nil
 }
 
-// Reconnect closes any existing connection and re-establishes a fresh connection pool.
+// Reconnect establishes a fresh connection pool and replaces the current connection.
 func (c *Client) Reconnect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -180,7 +163,8 @@ func (c *Client) Reconnect(ctx context.Context) error {
 
 	if c.conn != nil {
 		if closeErr := c.conn.Close(); closeErr != nil {
-			fmt.Printf("clickhouse reconnect: previous connection close notice: %v\n", closeErr)
+			// Record error if close fails during reconnect
+			return fmt.Errorf("closing previous clickhouse connection: %w", closeErr)
 		}
 		c.conn = nil
 	}

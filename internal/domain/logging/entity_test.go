@@ -1,4 +1,4 @@
-﻿package logging_test
+package logging_test
 
 import (
 	"testing"
@@ -44,9 +44,9 @@ func TestLogEntry_Validate(t *testing.T) {
 		ClusterID: "cluster-1",
 		Message:   "pod started",
 	}
-	// Missing TenantID
+	// Missing TenantID returns ErrLogIngestionFailed
 	err := entry.Validate()
-	require.ErrorIs(t, err, logging.ErrInvalidLogQuery)
+	require.ErrorIs(t, err, logging.ErrLogIngestionFailed)
 
 	entry.TenantID = "tenant-1"
 	err = entry.Validate()
@@ -54,6 +54,11 @@ func TestLogEntry_Validate(t *testing.T) {
 	require.False(t, entry.Timestamp.IsZero())
 	require.Equal(t, "stdout", entry.Stream)
 	require.Equal(t, logging.LogLevelInfo, entry.LogLevel)
+
+	// Invalid log level returns ErrLogIngestionFailed
+	entry.LogLevel = "bogus"
+	err = entry.Validate()
+	require.ErrorIs(t, err, logging.ErrLogIngestionFailed)
 }
 
 func TestLogFilter_ValidateAndSanitize(t *testing.T) {
@@ -68,6 +73,13 @@ func TestLogFilter_ValidateAndSanitize(t *testing.T) {
 	require.False(t, filter.StartTime.IsZero())
 	require.False(t, filter.EndTime.IsZero())
 	require.True(t, filter.EndTime.After(filter.StartTime))
+
+	// Invalid log level in filter returns ErrInvalidLogQuery
+	invalidLevelFilter := logging.LogFilter{
+		TenantID: "tenant-1",
+		LogLevel: "unknown",
+	}
+	require.ErrorIs(t, invalidLevelFilter.Validate(), logging.ErrInvalidLogQuery)
 
 	// Invalid time range
 	invalidFilter := logging.LogFilter{

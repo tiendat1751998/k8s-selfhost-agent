@@ -1,4 +1,4 @@
-﻿package logging
+package logging
 
 import (
 	"context"
@@ -79,10 +79,10 @@ type LogEntry struct {
 // Validate ensures all mandatory fields in LogEntry are populated with sensible defaults.
 func (e *LogEntry) Validate() error {
 	if strings.TrimSpace(e.TenantID) == "" {
-		return fmt.Errorf("%w: tenant_id is required", ErrInvalidLogQuery)
+		return fmt.Errorf("%w: tenant_id is required", ErrLogIngestionFailed)
 	}
 	if strings.TrimSpace(e.ClusterID) == "" {
-		return fmt.Errorf("%w: cluster_id is required", ErrInvalidLogQuery)
+		return fmt.Errorf("%w: cluster_id is required", ErrLogIngestionFailed)
 	}
 	if e.Timestamp.IsZero() {
 		e.Timestamp = time.Now().UTC()
@@ -92,6 +92,9 @@ func (e *LogEntry) Validate() error {
 	}
 	if strings.TrimSpace(string(e.LogLevel)) == "" {
 		e.LogLevel = LogLevelInfo
+	}
+	if !e.LogLevel.IsValid() {
+		return fmt.Errorf("%w: invalid log level '%s'", ErrLogIngestionFailed, e.LogLevel)
 	}
 	return nil
 }
@@ -117,6 +120,9 @@ type LogFilter struct {
 func (f *LogFilter) Validate() error {
 	if strings.TrimSpace(f.TenantID) == "" {
 		return fmt.Errorf("%w: tenant_id is required", ErrInvalidLogQuery)
+	}
+	if strings.TrimSpace(string(f.LogLevel)) != "" && !f.LogLevel.IsValid() {
+		return fmt.Errorf("%w: invalid log level '%s'", ErrInvalidLogQuery, f.LogLevel)
 	}
 	if !f.StartTime.IsZero() && !f.EndTime.IsZero() && f.StartTime.After(f.EndTime) {
 		return fmt.Errorf("%w: start_time cannot be after end_time", ErrInvalidLogQuery)

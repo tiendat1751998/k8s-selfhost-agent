@@ -1,4 +1,4 @@
-﻿package clickhouse
+package clickhouse
 
 import (
 	"context"
@@ -29,6 +29,7 @@ func DefaultBatchWriterConfig() BatchWriterConfig {
 }
 
 type flushRequest struct {
+	ctx   context.Context
 	errCh chan error
 }
 
@@ -86,13 +87,14 @@ func NewBatchWriterWithFn(
 }
 
 // Write enqueues a log entry into the channel buffer.
+// Holding RLock prevents racing with Close() and channel close panics.
 func (w *BatchWriter) Write(entry logging.LogEntry) error {
 	w.mu.RLock()
+	defer w.mu.RUnlock()
+
 	if w.closed {
-		w.mu.RUnlock()
 		return errors.New("batch writer is closed")
 	}
-	w.mu.RUnlock()
 
 	select {
 	case w.logCh <- entry:
@@ -112,7 +114,7 @@ func (w *BatchWriter) WriteBatch(entries []logging.LogEntry) error {
 	return nil
 }
 
-// Flush synchronously forces an immediate batch write of all buffered items.
+// Flush synchronously drains pending channel items and forces an immediate batch write honoring caller ctx.
 func (w *BatchWriter) Flush(ctx context.Context) error {
 	w.mu.RLock()
 	if w.closed {
@@ -121,7 +123,11 @@ func (w *BatchWriter) Flush(ctx context.Context) error {
 	}
 	w.mu.RUnlock()
 
-	req := flushRequest{errCh: make(chan error, 1)}
+	req := flushRequest{
+		ctx:   ctx,
+		errCh: make(chan error, 1),
+	}
+
 	select {
 	case w.flushReqCh <- req:
 	case <-ctx.Done():
@@ -138,13 +144,13 @@ func (w *BatchWriter) Flush(ctx context.Context) error {
 	}
 }
 
-// Close gracefully closes the log channel, drains all items, and flushes them to ClickHouse.
+// Close gracefully marks writer closed, closes channel under write lock, and waits for final flush.
 func (w *BatchWriter) Close() error {
 	w.closeOnce.Do(func() {
 		w.mu.Lock()
 		w.closed = true
-		w.mu.Unlock()
 		close(w.logCh)
+		w.mu.Unlock()
 	})
 
 	<-w.doneCh
@@ -161,42 +167,37 @@ func (w *BatchWriter) flusherLoop(ctx context.Context) {
 	ticker := time.NewTicker(w.cfg.FlushInterval)
 	defer ticker.Stop()
 
-	// Pre-allocate buffer to prevent dynamic heap reallocations during streaming
-	buf := make([]logging.LogEntry, 0, w.cfg.BatchSize)
+	// Pre-allocate buffer covering BatchSize + ChannelCapacity to guarantee zero dynamic reallocations
+	buf := make([]logging.LogEntry, 0, w.cfg.BatchSize+w.cfg.ChannelCapacity)
 
 	for {
 		select {
 		case <-ctx.Done():
-			// Context canceled: gracefully drain any pending items in channel
 			buf = w.drainRemaining(buf)
 			if len(buf) > 0 {
 				flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				if err := w.executeFlush(flushCtx, buf); err != nil {
-					w.recordFlushError(err)
-				}
+				err := w.executeFlush(flushCtx, buf)
+				w.recordFlushError(err)
 				cancel()
 			}
 			return
 
 		case req := <-w.flushReqCh:
+			buf = w.drainRemaining(buf)
 			var err error
 			if len(buf) > 0 {
-				err = w.executeFlush(ctx, buf)
+				err = w.executeFlush(req.ctx, buf)
 				buf = buf[:0] // Zero-allocation reset
-				if err != nil {
-					w.recordFlushError(err)
-				}
+				w.recordFlushError(err)
 			}
 			req.errCh <- err
 
 		case entry, ok := <-w.logCh:
 			if !ok {
-				// Channel closed via Close(): flush remaining buffer
 				if len(buf) > 0 {
 					flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					if err := w.executeFlush(flushCtx, buf); err != nil {
-						w.recordFlushError(err)
-					}
+					err := w.executeFlush(flushCtx, buf)
+					w.recordFlushError(err)
 					cancel()
 					buf = buf[:0]
 				}
@@ -205,17 +206,15 @@ func (w *BatchWriter) flusherLoop(ctx context.Context) {
 
 			buf = append(buf, entry)
 			if len(buf) >= w.cfg.BatchSize {
-				if err := w.executeFlush(ctx, buf); err != nil {
-					w.recordFlushError(err)
-				}
+				err := w.executeFlush(ctx, buf)
+				w.recordFlushError(err)
 				buf = buf[:0] // Zero-allocation reset
 			}
 
 		case <-ticker.C:
 			if len(buf) > 0 {
-				if err := w.executeFlush(ctx, buf); err != nil {
-					w.recordFlushError(err)
-				}
+				err := w.executeFlush(ctx, buf)
+				w.recordFlushError(err)
 				buf = buf[:0] // Zero-allocation reset
 			}
 		}
@@ -243,7 +242,7 @@ func (w *BatchWriter) recordFlushError(err error) {
 	w.mu.Unlock()
 }
 
-// executeFlush writes the given entries using either the custom flush function or native ClickHouse batch insert.
+// executeFlush writes entries using either injected flushFn or native ClickHouse batch insert.
 func (w *BatchWriter) executeFlush(ctx context.Context, entries []logging.LogEntry) error {
 	if len(entries) == 0 {
 		return nil
