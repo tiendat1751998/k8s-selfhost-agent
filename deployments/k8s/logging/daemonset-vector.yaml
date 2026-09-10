@@ -1,0 +1,156 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-edge-config
+  namespace: logging
+  labels:
+    app.kubernetes.io/name: vector-edge
+    app.kubernetes.io/component: log-collector
+data:
+  vector.yaml: |
+    data_dir: /var/lib/vector
+
+    sources:
+      edge_pod_logs:
+        type: file
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/logging_*/*/*.log
+        read_from: beginning
+
+    transforms:
+      enrich_edge_logs:
+        type: remap
+        inputs: ["edge_pod_logs"]
+        source: |
+          # Zero K8s API overhead: parse metadata directly from filesystem path
+          # Format: /var/log/pods/<namespace>_<pod_name>_<pod_uid>/<container_name>/<retry>.log
+          path_parts, err = parse_regex(.file, r'^/var/log/pods/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_[^/]+/(?P<container_name>[^/]+)/')
+          if err == null {
+            .namespace = path_parts.namespace
+            .pod_name = path_parts.pod_name
+            .container_name = path_parts.container_name
+          } else {
+            .namespace = "default"
+            .pod_name = "unknown"
+            .container_name = "unknown"
+          }
+
+          # Parse standard CRI log format: <timestamp> <stream> [F|P] <message>
+          cri, cri_err = parse_regex(.message, r'^(?P<ts>\S+)\s+(?P<str>stdout|stderr)\s+[FP]\s+(?P<msg>.*)$')
+          if cri_err == null {
+            .timestamp = cri.ts
+            .stream = cri.str
+            .message = cri.msg
+          } else {
+            .stream = "stdout"
+          }
+
+          # Infer log level from payload if JSON or standard keywords
+          structured, s_err = parse_json(.message)
+          if s_err == null {
+            .log_level = downcase(string(structured.level ?? structured.log_level ?? "info"))
+          } else if match(.message, r'(?i)(fatal|panic)') {
+            .log_level = "fatal"
+          } else if match(.message, r'(?i)(error|err)') {
+            .log_level = "error"
+          } else if match(.message, r'(?i)(warn|warning)') {
+            .log_level = "warn"
+          } else if match(.message, r'(?i)(debug|trace)') {
+            .log_level = "debug"
+          } else {
+            .log_level = "info"
+          }
+
+          .tenant_id = "default"
+          .cluster_id = "edge-cluster"
+
+    sinks:
+      server_ingest:
+        type: http
+        inputs: ["enrich_edge_logs"]
+        uri: http://k8sselfhost-server:8080/api/v1/logs/ingest
+        method: post
+        auth:
+          strategy: bearer
+          token: ""
+        encoding:
+          codec: json
+        buffer:
+          type: disk
+          max_size: 52428800 # 50MB per node buffer
+          when_full: block
+        batch:
+          max_bytes: 1048576 # 1MB batch chunks
+          timeout_secs: 2
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vector-edge-collector
+  namespace: logging
+  labels:
+    app.kubernetes.io/name: vector-edge-collector
+    app.kubernetes.io/component: log-collector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vector-edge-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vector-edge-collector
+    spec:
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: vector
+          image: timberio/vector:0.38.0-alpine
+          args: ["--config", "/etc/vector/vector.yaml"]
+          env:
+            - name: VECTOR_INGEST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vector-ingest-secret
+                  key: token
+                  optional: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["DAC_READ_SEARCH"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vector
+              readOnly: true
+            - name: buffer-storage
+              mountPath: /var/lib/vector
+            - name: var-log
+              mountPath: /var/log
+              readOnly: true
+            - name: var-log-pods
+              mountPath: /var/log/pods
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: vector-edge-config
+        - name: buffer-storage
+          hostPath:
+            path: /var/lib/vector-edge
+            type: DirectoryOrCreate
+        - name: var-log
+          hostPath:
+            path: /var/log
+        - name: var-log-pods
+          hostPath:
+            path: /var/log/pods

@@ -63,6 +63,7 @@ type PlatformHandlers struct {
 	LogStream     *LogStreamHandler
 	Helm          *HelmHandler
 	DR            *DRHandler
+	CentralizedLogs *LogHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -363,7 +364,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			if platform.Ecosystem != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/ecosystem", platform.Ecosystem.RegisterRoutes)
 			}
-			if platform.LogStream != nil {
+			if platform.CentralizedLogs != nil {
+				r.With(mw.RequestBodyLimit(10 << 20)).With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator", "logs:write")).Route("/logs", platform.CentralizedLogs.RegisterRoutes)
+			} else if platform.LogStream != nil {
 				r.Get("/logs/stream", platform.LogStream.ServeHTTP)
 			}
 			if platform.Helm != nil {
