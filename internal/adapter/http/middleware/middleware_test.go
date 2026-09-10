@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -193,5 +194,86 @@ func TestResponseWriter_WriteHeader(t *testing.T) {
 
 	if rw.statusCode != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", rw.statusCode)
+	}
+}
+
+func TestSanitizeURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		contains []string
+		omits    []string
+	}{
+		{
+			name:     "no query params",
+			input:    "http://localhost:8080/api/v1/clusters",
+			contains: []string{"http://localhost:8080/api/v1/clusters"},
+			omits:    []string{"[REDACTED]"},
+		},
+		{
+			name:     "safe query params only",
+			input:    "http://localhost:8080/api/v1/pods?namespace=prod&limit=50",
+			contains: []string{"namespace=prod", "limit=50"},
+			omits:    []string{"[REDACTED]"},
+		},
+		{
+			name:     "sensitive query params redacted",
+			input:    "http://localhost:8080/api/v1/auth?token=my-secret-token&trace_token=trace-99&key=my-key&password=supersecret&secret=classified&normal=ok",
+			contains: []string{"normal=ok", "token=%5BREDACTED%5D", "trace_token=%5BREDACTED%5D", "key=%5BREDACTED%5D", "password=%5BREDACTED%5D", "secret=%5BREDACTED%5D"},
+			omits:    []string{"my-secret-token", "trace-99", "my-key", "supersecret", "classified"},
+		},
+		{
+			name:     "case insensitive matching",
+			input:    "http://localhost:8080/api/v1/auth?TOKEN=xyz&Secret=shh",
+			contains: []string{"TOKEN=%5BREDACTED%5D", "Secret=%5BREDACTED%5D"},
+			omits:    []string{"xyz", "shh"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := url.Parse(tc.input)
+			if err != nil {
+				t.Fatalf("failed to parse url: %v", err)
+			}
+			origRawQuery := parsed.RawQuery
+			result := SanitizeURL(parsed)
+
+			// Ensure original parsed URL was not modified
+			if parsed.RawQuery != origRawQuery {
+				t.Errorf("SanitizeURL mutated original URL RawQuery")
+			}
+
+			for _, expected := range tc.contains {
+				if !strings.Contains(result, expected) {
+					t.Errorf("expected result to contain %q, got: %s", expected, result)
+				}
+			}
+			for _, omitted := range tc.omits {
+				if strings.Contains(result, omitted) {
+					t.Errorf("expected result to NOT contain %q, got: %s", omitted, result)
+				}
+			}
+		})
+	}
+}
+
+func TestTracing_SanitizesSensitiveQueryParams(t *testing.T) {
+	handler := Tracing(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify downstream handler still sees original query params
+		token := r.URL.Query().Get("token")
+		if token != "my-secret-token" {
+			t.Errorf("expected downstream handler to see original token 'my-secret-token', got: %s", token)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/test?token=my-secret-token&safe=hello", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 OK, got %d", rec.Code)
 	}
 }
