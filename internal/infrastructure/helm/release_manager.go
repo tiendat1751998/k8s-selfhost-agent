@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
+	"helm.sh/helm/v3/cmd/helm/search"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/release"
@@ -25,12 +27,14 @@ import (
 
 // ReleaseManager handles Helm operations across multiple Kubernetes clusters and manages Helm chart repositories.
 type ReleaseManager struct {
-	clientManager *cluster.ClientManager
-	defaultConfig *rest.Config
-	settings      *cli.EnvSettings
-	repoFile      string
-	repoCacheDir  string
-	mu            sync.RWMutex
+	clientManager   *cluster.ClientManager
+	defaultConfig   *rest.Config
+	settings        *cli.EnvSettings
+	repoFile        string
+	repoCacheDir    string
+	cachedIndex     *search.Index
+	cachedIndexTime time.Time
+	mu              sync.RWMutex
 }
 
 // NewReleaseManager creates a new ReleaseManager instance with client manager, default config, and optional base home directory.
