@@ -238,91 +238,101 @@ const {
 
       <!-- 4. INFRASTRUCTURE SERVER TOPOLOGY & NODE CARDS -->
       <section class="topology-section">
-        <div class="topology-header-row">
-          <div class="topology-title-group">
-            <div class="topology-title-with-pulse">
-              <span class="pulse-beacon"></span>
-              <h2 class="section-title">Infrastructure Hosts &amp; Node Mesh</h2>
-            </div>
-            <p class="section-subtitle">
-              Interactive cluster server topology with live telemetry gauges, drag-and-drop reordering, and deep diagnostics.
-            </p>
+        <div class="hosts-header-row topology-header-row">
+          <div class="hosts-title-group">
+            <span class="hosts-pulse-dot"></span>
+            <h2 class="hosts-section-title">Infrastructure Hosts</h2>
           </div>
 
-          <!-- Mesh Topology Connections Indicator -->
-          <div class="topology-mesh-indicator glass-panel font-mono">
-            <span class="mesh-dot-active"></span>
-            <span class="mesh-label">Full Mesh Connected</span>
-            <span class="mesh-stats font-bold text-cyan">{{ overview.healthy_nodes }}/{{ overview.total_nodes }} Online</span>
+          <!-- Compact Monospace Live Status Badge -->
+          <div class="hosts-status-badge font-mono" title="Online servers out of total cluster servers">
+            <span class="hosts-dot-online"></span>
+            <span class="hosts-status-text font-bold text-cyan">{{ overview.healthy_nodes }}/{{ overview.total_nodes }} Online</span>
           </div>
         </div>
 
-        <!-- Topology Filter Pills Bar -->
-        <div class="topology-filter-bar glass-panel">
-          <div class="topology-filter-pills">
+        <!-- Sleek Unified 38px Host Controls Toolbar -->
+        <div class="hosts-controls-toolbar topology-filter-bar glass-panel">
+          <!-- Left side: Smooth Capsule Pills -->
+          <div class="hosts-capsule-pills topology-filter-pills" role="tablist" aria-label="Filter servers by state">
             <button
               type="button"
-              class="filter-pill-btn"
+              class="hosts-capsule-pill filter-pill-btn"
               :class="{ active: selectedTopologyFilter === 'all' }"
               @click="selectedTopologyFilter = 'all'"
             >
-              <span>All Servers</span>
-              <span class="pill-count font-mono">{{ topologyFilterCounts.all }}</span>
+              All ({{ topologyFilterCounts.all }})
             </button>
 
             <button
               type="button"
-              class="filter-pill-btn"
+              class="hosts-capsule-pill filter-pill-btn"
               :class="{ active: selectedTopologyFilter === 'control_plane' }"
               @click="selectedTopologyFilter = 'control_plane'"
             >
-              <span><BaseIcon name="shield" size="xs" /> Control-Plane</span>
-              <span class="pill-count font-mono">{{ topologyFilterCounts.control }}</span>
+              Control-Plane ({{ topologyFilterCounts.control }})
             </button>
 
             <button
               type="button"
-              class="filter-pill-btn"
+              class="hosts-capsule-pill filter-pill-btn"
               :class="{ active: selectedTopologyFilter === 'worker' }"
               @click="selectedTopologyFilter = 'worker'"
             >
-              <span><BaseIcon name="radio" size="xs" /> Workers / Agents</span>
-              <span class="pill-count font-mono">{{ topologyFilterCounts.worker }}</span>
+              Workers ({{ topologyFilterCounts.worker }})
             </button>
 
             <button
               type="button"
-              class="filter-pill-btn"
+              class="hosts-capsule-pill filter-pill-btn"
               :class="{ active: selectedTopologyFilter === 'hot' }"
               @click="selectedTopologyFilter = 'hot'"
             >
-              <span><BaseIcon name="flame" size="xs" /> Hot Nodes</span>
-              <span class="pill-count font-mono">{{ topologyFilterCounts.hot }}</span>
+              Hot ({{ topologyFilterCounts.hot }})
             </button>
 
             <button
               type="button"
-              class="filter-pill-btn"
+              class="hosts-capsule-pill filter-pill-btn"
               :class="{ active: selectedTopologyFilter === 'overloaded' }"
               @click="selectedTopologyFilter = 'overloaded'"
             >
-              <span><BaseIcon name="alert-triangle" size="xs" /> Overloaded / Down</span>
-              <span class="pill-count font-mono">{{ topologyFilterCounts.overloaded }}</span>
+              Overloaded ({{ topologyFilterCounts.overloaded }})
             </button>
           </div>
 
-          <div class="topology-order-actions">
-            <div class="view-mode-toggle glass-panel">
-              <button class="toggle-btn" :class="{ active: nodeViewMode === 'table' }" @click="nodeViewMode = 'table'">
+          <!-- Right side: Segmented View Mode Toggle & Reset Order -->
+          <div class="hosts-toolbar-right topology-order-actions">
+            <div class="hosts-segmented-toggle view-mode-toggle" role="group" aria-label="View mode">
+              <button
+                type="button"
+                class="hosts-seg-btn toggle-btn"
+                :class="{ active: nodeViewMode === 'table' }"
+                @click="nodeViewMode = 'table'"
+                title="Table view"
+              >
                 <BaseIcon name="file-text" size="xs" /> Table
               </button>
-              <button class="toggle-btn" :class="{ active: nodeViewMode === 'grid' }" @click="nodeViewMode = 'grid'">
+              <button
+                type="button"
+                class="hosts-seg-btn toggle-btn"
+                :class="{ active: nodeViewMode === 'grid' }"
+                @click="nodeViewMode = 'grid'"
+                title="Grid view"
+              >
                 <BaseIcon name="grid" size="xs" /> Grid
               </button>
             </div>
-            
-            <button v-if="customNodeOrder.length > 0" class="btn-reset-order font-mono" @click="resetNodeOrder" title="Reset customized card order">
-              <span><BaseIcon name="refresh" size="xs" /> Reset Card Order</span>
+
+            <button
+              v-if="customNodeOrder.length > 0"
+              type="button"
+              class="hosts-btn-reset-order btn-reset-order-icon font-mono"
+              @click="resetNodeOrder"
+              title="Reset customized card order"
+              aria-label="Reset customized card order"
+            >
+              <BaseIcon name="refresh" size="xs" />
             </button>
           </div>
         </div>
