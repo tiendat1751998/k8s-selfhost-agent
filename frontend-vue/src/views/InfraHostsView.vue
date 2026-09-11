@@ -13,6 +13,7 @@ import CanvasTimeSeries, { type TimeSeriesItem } from '../components/telemetry/C
 import BaseIcon from '../components/ui/BaseIcon.vue'
 
 const showMobileSearch = ref(false)
+const showTelemetry = ref(false)
 
 const {
   loading, toastMessage, hosts, viewMode, searchQuery,
@@ -140,8 +141,8 @@ const availabilityThresholds = [
       <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- 4-Card KPI Metric HUD (Desktop Only) -->
-    <div class="desktop-only">
+    <!-- Compact 36px Metric Strip & Telemetry Toggle (Above the Fold) -->
+    <div class="hosts-strip-row desktop-only">
       <HostMetricsHud
         :total-hosts="totalHosts"
         :connected-hosts="connectedHosts"
@@ -149,60 +150,72 @@ const availabilityThresholds = [
         :error-hosts="errorHosts"
         :type-counts="typeCounts"
       />
+      <button
+        type="button"
+        class="telemetry-toggle-btn font-mono"
+        :class="{ active: showTelemetry }"
+        :title="showTelemetry ? 'Hide Telemetry & Latency charts' : 'Show Telemetry & Latency charts'"
+        @click="showTelemetry = !showTelemetry"
+      >
+        <BaseIcon :name="showTelemetry ? 'chevron-up' : 'activity'" size="xs" />
+        <span>{{ showTelemetry ? 'Hide Telemetry' : 'Show Telemetry & Latency' }}</span>
+      </button>
     </div>
 
-    <!-- Fleet Live Telemetry (Netdata-Style Synchronized Scrubbing) -->
-    <div class="section-card glass-panel fleet-telemetry-panel">
-      <div class="section-top">
-        <div>
-          <div class="panel-badge-row">
-            <h2 class="section-title">Fleet Telemetry & Probe Latency</h2>
-            <span class="telemetry-live-badge font-mono">
-              <span class="pulse-dot pulse-dot-cyan"></span>
-              SYNCHRONIZED SCRUBBING
-            </span>
+    <!-- Fleet Live Telemetry (Collapsible, Defaulted to Collapsed) -->
+    <Transition name="fade">
+      <div v-if="showTelemetry" class="section-card glass-panel fleet-telemetry-panel animate-fade-in">
+        <div class="section-top">
+          <div>
+            <div class="panel-badge-row">
+              <h2 class="section-title">Fleet Telemetry & Probe Latency</h2>
+              <span class="telemetry-live-badge font-mono">
+                <span class="pulse-dot pulse-dot-cyan"></span>
+                SYNCHRONIZED SCRUBBING
+              </span>
+            </div>
+            <p class="section-subtitle">Real-time probe round-trip latency and active node connectivity</p>
           </div>
-          <p class="section-subtitle">Real-time probe round-trip latency and active node connectivity</p>
-        </div>
-        <div class="sync-legend font-mono text-xs">
-          <span class="legend-item"><span class="legend-color legend-cyan"></span> Probe Latency</span>
-          <span class="legend-item"><span class="legend-color legend-emerald"></span> Availability</span>
-        </div>
-      </div>
-
-      <div class="fleet-telemetry-grid">
-        <div class="telemetry-chart-card">
-          <div class="chart-card-header">
-            <span class="chart-card-title font-mono text-cyan font-semibold">Fleet Probe Latency (RTT)</span>
-            <span class="chart-card-val font-mono">{{ avgLatency > 0 ? avgLatency : 18 }}ms avg</span>
+          <div class="sync-legend font-mono text-xs">
+            <span class="legend-item"><span class="legend-color legend-cyan"></span> Probe Latency</span>
+            <span class="legend-item"><span class="legend-color legend-emerald"></span> Availability</span>
           </div>
-          <CanvasTimeSeries
-            :series="fleetTelemetryWindow.latency"
-            unit="ms"
-            :height="130"
-            sync-group="fleet-telemetry"
-            :min="0"
-            :thresholds="latencyThresholds"
-          />
         </div>
 
-        <div class="telemetry-chart-card">
-          <div class="chart-card-header">
-            <span class="chart-card-title font-mono text-emerald font-semibold">Fleet Availability SLA</span>
-            <span class="chart-card-val font-mono">{{ onlineHostsCount }}/{{ totalHosts }} online</span>
+        <div class="fleet-telemetry-grid">
+          <div class="telemetry-chart-card">
+            <div class="chart-card-header">
+              <span class="chart-card-title font-mono text-cyan font-semibold">Fleet Probe Latency (RTT)</span>
+              <span class="chart-card-val font-mono">{{ avgLatency > 0 ? avgLatency : 18 }}ms avg</span>
+            </div>
+            <CanvasTimeSeries
+              :series="fleetTelemetryWindow.latency"
+              unit="ms"
+              :height="130"
+              sync-group="fleet-telemetry"
+              :min="0"
+              :thresholds="latencyThresholds"
+            />
           </div>
-          <CanvasTimeSeries
-            :series="fleetTelemetryWindow.availability"
-            unit="%"
-            :height="130"
-            sync-group="fleet-telemetry"
-            :min="0"
-            :max="100"
-            :thresholds="availabilityThresholds"
-          />
+
+          <div class="telemetry-chart-card">
+            <div class="chart-card-header">
+              <span class="chart-card-title font-mono text-emerald font-semibold">Fleet Availability SLA</span>
+              <span class="chart-card-val font-mono">{{ onlineHostsCount }}/{{ totalHosts }} online</span>
+            </div>
+            <CanvasTimeSeries
+              :series="fleetTelemetryWindow.availability"
+              unit="%"
+              :height="130"
+              sync-group="fleet-telemetry"
+              :min="0"
+              :max="100"
+              :thresholds="availabilityThresholds"
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
 
     <!-- Controls Bar (Desktop Only) -->
     <div class="desktop-only">
