@@ -459,7 +459,7 @@ func wireCentralizedLogging(ctx context.Context, log *zap.Logger) (*adapthttp.Lo
 		log.Info("ClickHouse not configured, using resilient in-memory ringbuffer fallback")
 	}
 
-	memRepo := logging.NewMemoryLogRepo(5000)
+	memRepo := logging.NewMemoryLogRepo(50000)
 	return adapthttp.NewLogHandler(usecaseLogging.NewService(memRepo), memRepo), nil
 }
 
@@ -490,7 +490,3 @@ func (p *chStatusProvider) GetStatus(ctx context.Context) (*adapthttp.LogEngineS
 		RetentionDays: 30,
 	}, nil
 }
-
-
-
-

@@ -82,16 +82,16 @@ func TestService_TenantIsolationAndLimitClamping(t *testing.T) {
 	filter := domainLog.LogFilter{
 		TenantID:  "tenant-bravo",
 		ClusterID: "c1",
-		Limit:     500, // Should be clamped to 100 by Sanitize
+		Limit:     50000, // Should be clamped to 10000 by Sanitize
 	}
 
 	res, err := svc.QueryLogs(ctx, filter)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
-	// Verify tenant isolation forced tenant-alpha and clamped limit to 100
+	// Verify tenant isolation forced tenant-alpha and clamped limit to 10000
 	require.Equal(t, "tenant-alpha", repo.lastFilter.TenantID)
-	require.Equal(t, 100, repo.lastFilter.Limit)
+	require.Equal(t, 10000, repo.lastFilter.Limit)
 }
 
 func TestService_IngestEnforcesTenantID(t *testing.T) {
