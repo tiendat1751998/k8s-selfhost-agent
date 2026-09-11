@@ -8,7 +8,7 @@
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   padding: 0 12px;
   border-radius: 10px;
@@ -16,33 +16,34 @@
   border: 1px solid rgba(148, 163, 184, 0.12);
   backdrop-filter: blur(12px);
   width: 100%;
-  overflow-x: visible;
+  overflow: hidden;
   flex-wrap: nowrap;
 }
 
-/* Search Input: compact 140px - 200px */
+/* Search Input: compact 120px - 140px */
 .deployments-toolbar-sleek .toolbar-search-wrap {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 0 1 180px;
-  min-width: 140px;
-  max-width: 200px;
-  height: 32px;
+  width: 130px;
+  min-width: 120px;
+  max-width: 140px;
+  height: 30px;
+  flex: 0 0 130px;
   flex-shrink: 0;
 }
 .deployments-toolbar-sleek .search-icon {
   position: absolute;
-  left: 10px;
-  font-size: 12px;
+  left: 8px;
+  font-size: 11.5px;
   color: #94a3b8;
   pointer-events: none;
   transition: color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .deployments-toolbar-sleek .toolbar-search-input {
   width: 100%;
-  height: 32px;
-  padding: 0 26px 0 30px;
+  height: 30px;
+  padding: 0 22px 0 26px;
   font-size: 12px;
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.6);
@@ -60,11 +61,11 @@
 }
 .deployments-toolbar-sleek .clear-input-btn {
   position: absolute;
-  right: 6px;
+  right: 5px;
   top: 50%;
   transform: translateY(-50%);
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -82,20 +83,21 @@
 .deployments-toolbar-sleek .toolbar-capsule-pills {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
   flex-shrink: 0;
   user-select: none;
+  max-width: 360px;
 }
 .deployments-toolbar-sleek .capsule-pill {
   border-radius: 9999px;
-  height: 30px;
-  padding: 0 12px;
-  font-size: 12px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 11.5px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
@@ -118,7 +120,7 @@
 }
 .deployments-toolbar-sleek .capsule-count {
   font-family: var(--font-mono, monospace);
-  font-size: 11px;
+  font-size: 10.5px;
   opacity: 0.85;
 }
 .deployments-toolbar-sleek .capsule-pill.active .capsule-count {
@@ -128,16 +130,18 @@
 
 /* Refined Compact Dropdown (Status) */
 .deployments-toolbar-sleek .toolbar-select {
-  height: 30px;
+  width: 110px;
+  min-width: 110px;
+  max-width: 115px;
+  height: 28px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 11.5px;
   border: 1px solid rgba(148, 163, 184, 0.15);
   background: rgba(15, 23, 42, 0.6);
   color: #cbd5e1;
-  padding: 0 8px;
+  padding: 0 6px;
   cursor: pointer;
   flex-shrink: 0;
-  max-width: 140px;
   box-sizing: border-box;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -155,67 +159,116 @@
 .deployments-toolbar-sleek .toolbar-actions-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-shrink: 0;
 }
 .deployments-toolbar-sleek .toolbar-btn {
-  height: 30px;
-  min-height: 30px;
-  font-size: 12px;
+  height: 28px;
+  min-height: 28px;
+  font-size: 11.5px;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 5px;
   white-space: nowrap;
   cursor: pointer;
   box-sizing: border-box;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.deployments-toolbar-sleek .toolbar-btn.btn-primary {
-  padding: 0 12px;
+.deployments-toolbar-sleek .toolbar-btn.btn-primary.toolbar-btn-deploy {
+  width: 80px;
+  min-width: 80px;
+  max-width: 85px;
+  padding: 0 8px;
   font-weight: 600;
   background: linear-gradient(135deg, #10b981, #059669);
   border: 1px solid rgba(16, 185, 129, 0.3);
   color: #ffffff;
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
 }
-.deployments-toolbar-sleek .toolbar-btn.btn-primary:hover {
+.deployments-toolbar-sleek .toolbar-btn.btn-primary.toolbar-btn-deploy:hover {
   background: linear-gradient(135deg, #059669, #047857);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
   transform: translateY(-1px);
 }
-.deployments-toolbar-sleek .toolbar-secondary-group {
+.deployments-toolbar-sleek .toolbar-more-wrap {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  overflow: hidden;
-  flex-shrink: 0;
 }
-.deployments-toolbar-sleek .toolbar-secondary-group .toolbar-btn.btn-grouped {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 0 10px;
-  height: 30px;
-  color: #cbd5e1;
-}
-.deployments-toolbar-sleek .toolbar-secondary-group .toolbar-btn.btn-grouped:not(:last-child) {
-  border-right: 1px solid rgba(148, 163, 184, 0.15);
-}
-.deployments-toolbar-sleek .toolbar-secondary-group .toolbar-btn.btn-grouped:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f8fafc;
-}
-.deployments-toolbar-sleek .toolbar-btn.btn-secondary {
-  padding: 0 10px;
+.deployments-toolbar-sleek .toolbar-btn-more {
+  width: 62px;
+  min-width: 62px;
+  max-width: 65px;
+  padding: 0 6px;
   font-weight: 500;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(148, 163, 184, 0.15);
   color: #cbd5e1;
 }
-.deployments-toolbar-sleek .toolbar-btn.btn-secondary:hover:not(:disabled) {
+.deployments-toolbar-sleek .toolbar-btn-more:hover,
+.deployments-toolbar-sleek .toolbar-btn-more.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #f8fafc;
+}
+.deployments-toolbar-sleek .more-chevron {
+  transition: transform 0.15s ease;
+  opacity: 0.7;
+}
+.deployments-toolbar-sleek .toolbar-btn-more.active .more-chevron {
+  transform: rotate(180deg);
+}
+.deployments-toolbar-sleek .toolbar-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 100;
+  min-width: 145px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(16px);
+}
+.deployments-toolbar-sleek .more-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  color: #cbd5e1;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  width: 100%;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+.deployments-toolbar-sleek .more-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.deployments-toolbar-sleek .toolbar-btn-refresh {
+  width: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+}
+.deployments-toolbar-sleek .toolbar-btn-refresh:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(148, 163, 184, 0.25);
   color: #f8fafc;
@@ -228,13 +281,11 @@
 /* Responsive Laptop Optimization (1280px - 1440px) */
 @media (max-width: 1440px) {
   .deployments-toolbar-sleek { gap: 6px; padding: 0 8px; }
-  .deployments-toolbar-sleek .toolbar-search-wrap { flex: 0 1 150px; min-width: 130px; }
-  .deployments-toolbar-sleek .capsule-pill { padding: 0 9px; font-size: 11.5px; }
+  .deployments-toolbar-sleek .toolbar-search-wrap { flex: 0 0 125px; width: 125px; }
+  .deployments-toolbar-sleek .capsule-pill { padding: 0 7px; font-size: 11px; gap: 2px; }
 }
 @media (max-width: 1366px) {
-  .deployments-toolbar-sleek .btn-label-desktop { display: none; }
-  .deployments-toolbar-sleek .toolbar-secondary-group .toolbar-btn.btn-grouped { padding: 0 8px; }
-  .deployments-toolbar-sleek .toolbar-btn-refresh { padding: 0 8px; }
+  .deployments-toolbar-sleek .toolbar-actions-group { gap: 4px; }
 }
 
 /* Toast Notification Banner */
