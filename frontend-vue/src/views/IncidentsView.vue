@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
+import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import IncidentDetailPane from '../components/incidents/IncidentDetailPane.vue'
 import IncidentSimulationModal from '../components/incidents/IncidentSimulationModal.vue'
 import IncidentCreatePrModal from '../components/incidents/IncidentCreatePrModal.vue'
@@ -24,6 +25,9 @@ const {
   reportError,
   showPRModal,
   showSimulateModal,
+  showCreateModal,
+  createForm,
+  handleCreateIncident,
   prForm,
   filteredIncidents,
   totalIncidents,
@@ -47,6 +51,23 @@ function resetFilters() {
   filterStatus.value = 'all'
   filterSeverity.value = 'all'
   searchQuery.value = ''
+}
+
+function openDeclareModal() {
+  createForm.value = {
+    pod_name: '',
+    namespace: 'default',
+    cluster_name: 'prod-us-east-1',
+    type: 'CrashLoopBackOff',
+    severity: 'critical',
+    message: ''
+  }
+  showCreateModal.value = true
+}
+
+function submitDeclareIncident() {
+  if (!createForm.value.pod_name.trim()) return
+  handleCreateIncident(createForm.value)
 }
 
 // Mobile Ergonomics States
@@ -105,48 +126,21 @@ function formatRelativeTime(dateStr?: string): string {
       <!-- Status tabs / pills with count badges -->
       <div class="toolbar-status-pills" role="tablist" aria-label="Filter incidents by status">
         <button
+          v-for="tab in [
+            { key: 'all', label: 'All', count: countAll },
+            { key: 'open', label: 'Open', count: countOpen },
+            { key: 'in_progress', label: 'In Progress', count: countInProgress },
+            { key: 'resolved', label: 'Resolved', count: countResolved }
+          ]"
+          :key="tab.key"
           type="button"
           role="tab"
-          :aria-selected="filterStatus === 'all'"
+          :aria-selected="filterStatus === tab.key"
           class="toolbar-pill-btn"
-          :class="{ active: filterStatus === 'all' }"
-          @click="filterStatus = 'all'"
+          :class="{ active: filterStatus === tab.key }"
+          @click="filterStatus = tab.key"
         >
-          <span>All</span>
-          <span class="pill-badge">{{ countAll }}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="filterStatus === 'open'"
-          class="toolbar-pill-btn"
-          :class="{ active: filterStatus === 'open' }"
-          @click="filterStatus = 'open'"
-        >
-          <span>Open</span>
-          <span class="pill-badge">{{ countOpen }}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="filterStatus === 'in_progress'"
-          class="toolbar-pill-btn"
-          :class="{ active: filterStatus === 'in_progress' }"
-          @click="filterStatus = 'in_progress'"
-        >
-          <span>In Progress</span>
-          <span class="pill-badge">{{ countInProgress }}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="filterStatus === 'resolved'"
-          class="toolbar-pill-btn"
-          :class="{ active: filterStatus === 'resolved' }"
-          @click="filterStatus = 'resolved'"
-        >
-          <span>Resolved</span>
-          <span class="pill-badge">{{ countResolved }}</span>
+          {{ tab.label }} ({{ tab.count }})
         </button>
       </div>
 
@@ -165,9 +159,8 @@ function formatRelativeTime(dateStr?: string): string {
 
       <!-- Inline compact KPI badge strip font-mono -->
       <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Incident metrics summary">
-        <span class="kpi-badge font-mono">
-          {{ totalIncidents }} Incidents ({{ criticalCount }} Critical · {{ analyzingCount }} Remediation · {{ resolvedCount }} Resolved)
-        </span>
+        <span class="kpi-live-dot"></span>
+        <span class="kpi-live-text">{{ totalIncidents }} Incidents ({{ criticalCount }} Critical · {{ resolvedCount }} Resolved)</span>
       </div>
 
       <!-- Action buttons -->
@@ -175,10 +168,21 @@ function formatRelativeTime(dateStr?: string): string {
         <button
           type="button"
           class="toolbar-btn btn-primary"
+          aria-label="Declare Operational Incident"
+          @click="openDeclareModal"
+        >
+          <BaseIcon name="plus" size="xs" />
+          <span>Declare Incident</span>
+        </button>
+        <button
+          type="button"
+          class="toolbar-btn btn-secondary"
+          title="Simulate Test Incident (Demo Mode)"
+          aria-label="Simulate Test Incident"
           @click="showSimulateModal = true"
         >
           <BaseIcon name="zap" size="xs" />
-          <span>Simulate Incident</span>
+          <span>Simulate</span>
         </button>
         <button
           type="button"
@@ -201,8 +205,16 @@ function formatRelativeTime(dateStr?: string): string {
       <div class="mobile-command-actions">
         <button
           class="mobile-action-btn"
-          title="Simulate Incident"
-          aria-label="Simulate Incident"
+          title="Declare Incident"
+          aria-label="Declare Incident"
+          @click="openDeclareModal"
+        >
+          <BaseIcon name="plus" size="xs" />
+        </button>
+        <button
+          class="mobile-action-btn"
+          title="Simulate Test Incident (Demo Mode)"
+          aria-label="Simulate Test Incident"
           @click="showSimulateModal = true"
         >
           <BaseIcon name="zap" size="xs" />
@@ -241,32 +253,18 @@ function formatRelativeTime(dateStr?: string): string {
     <div v-if="showMobileSearch" class="mobile-filter-bar mobile-only animate-fade-in">
       <div class="status-tab-group mobile-status-tabs">
         <button
+          v-for="tab in [
+            { key: 'all', label: 'All', count: countAll },
+            { key: 'open', label: 'Open', count: countOpen },
+            { key: 'in_progress', label: 'In Progress', count: countInProgress },
+            { key: 'resolved', label: 'Resolved', count: countResolved }
+          ]"
+          :key="tab.key"
           class="status-tab-btn"
-          :class="{ active: filterStatus === 'all' }"
-          @click="filterStatus = 'all'"
+          :class="{ active: filterStatus === tab.key }"
+          @click="filterStatus = tab.key"
         >
-          All ({{ countAll }})
-        </button>
-        <button
-          class="status-tab-btn"
-          :class="{ active: filterStatus === 'open' }"
-          @click="filterStatus = 'open'"
-        >
-          Open ({{ countOpen }})
-        </button>
-        <button
-          class="status-tab-btn"
-          :class="{ active: filterStatus === 'in_progress' }"
-          @click="filterStatus = 'in_progress'"
-        >
-          In Progress ({{ countInProgress }})
-        </button>
-        <button
-          class="status-tab-btn"
-          :class="{ active: filterStatus === 'resolved' }"
-          @click="filterStatus = 'resolved'"
-        >
-          Resolved ({{ countResolved }})
+          {{ tab.label }} ({{ tab.count }})
         </button>
       </div>
       <div class="mobile-filter-inputs">
@@ -371,6 +369,96 @@ function formatRelativeTime(dateStr?: string): string {
         />
       </div>
     </div>
+
+    <!-- Declare Operational Incident Modal -->
+    <ModalDrawer
+      v-model:show="showCreateModal"
+      mode="modal"
+      title="Declare Operational Incident"
+      subtitle="Log an active Kubernetes workload anomaly for autonomous AI RCA and remediation"
+      max-width="560px"
+    >
+      <form class="modal-form" @submit.prevent="submitDeclareIncident">
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label">Pod / Workload Name</label>
+            <input
+              v-model="createForm.pod_name"
+              type="text"
+              class="toolbar-search-input font-mono"
+              placeholder="e.g. checkout-api-7b9c6f8d"
+              required
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">Namespace</label>
+            <input
+              v-model="createForm.namespace"
+              type="text"
+              class="toolbar-search-input font-mono"
+              placeholder="e.g. ecommerce"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label">Cluster</label>
+            <input
+              v-model="createForm.cluster_name"
+              type="text"
+              class="toolbar-search-input font-mono"
+              placeholder="e.g. prod-us-east-1"
+              required
+            />
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">Anomaly Type</label>
+            <input
+              v-model="createForm.type"
+              type="text"
+              class="toolbar-search-input font-mono"
+              placeholder="e.g. CrashLoopBackOff"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Severity Level</label>
+          <select v-model="createForm.severity" class="toolbar-select">
+            <option value="critical">Critical (P1 Outage)</option>
+            <option value="high">High (P2 Degradation)</option>
+            <option value="medium">Medium (P3 Warning)</option>
+            <option value="low">Low (P4 Info)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Incident Symptoms / Failure Log</label>
+          <textarea
+            v-model="createForm.message"
+            rows="3"
+            class="toolbar-search-input font-mono form-textarea"
+            placeholder="Describe symptoms, container exit code, or error output..."
+          ></textarea>
+        </div>
+      </form>
+
+      <template #footer="{ close }">
+        <button type="button" class="btn-slate" @click="close">Cancel</button>
+        <button
+          type="button"
+          class="btn-slate-primary"
+          :disabled="actionLoading === 'create-incident' || !createForm.pod_name.trim()"
+          @click="submitDeclareIncident"
+        >
+          <BaseIcon :name="actionLoading === 'create-incident' ? 'clock' : 'alert-triangle'" size="xs" />
+          <span>{{ actionLoading === 'create-incident' ? 'Declaring...' : 'Declare Incident' }}</span>
+        </button>
+      </template>
+    </ModalDrawer>
 
     <!-- Create PR Modal Component -->
     <IncidentCreatePrModal
