@@ -175,7 +175,7 @@
 .framework-card:hover { transform: translateY(-2px); }
 .framework-card-selected {
   border-color: var(--accent-cyan, #06b6d4) !important;
-  box-shadow: 0 0 16px rgba(6, 182, 212, 0.3) !important;
+  background: rgba(6, 182, 212, 0.05) !important;
 }
 .fw-header { display: flex; align-items: center; gap: 12px; }
 .fw-icon-box {
@@ -258,12 +258,16 @@
 }
 .clear-btn { background: none; border: none; color: inherit; cursor: pointer; font-size: 12px; }
 
-.resource-cell { display: flex; flex-direction: column; gap: 2px; }
-.resource-name { font-weight: 600; color: #fff; font-size: 12px; }
-.resource-ns { font-size: 11px; }
-.policy-cell { display: flex; flex-direction: column; gap: 2px; }
-.policy-name { font-weight: 600; color: var(--text-primary, #f8fafc); font-size: 13px; }
-.policy-msg { font-size: 11px; }
+.violations-section .data-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.resource-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.resource-name { font-weight: 600; color: #fff; font-size: 12px; overflow-wrap: anywhere; word-break: break-word; }
+.resource-ns { font-size: 11px; overflow-wrap: anywhere; word-break: break-word; }
+.policy-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.policy-name { font-weight: 600; color: var(--text-primary, #f8fafc); font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; word-break: break-word; }
+.policy-msg { font-size: 11px; line-height: 1.3; overflow-wrap: anywhere; word-break: break-word; }
 .fw-tag {
   font-size: 10px;
   font-weight: 700;

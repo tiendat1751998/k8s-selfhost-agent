@@ -95,12 +95,9 @@ const hasDiffContent = computed(() => {
             </div>
           </div>
 
-          <!-- Confidence Gauge -->
-          <div v-if="selectedReport" class="confidence-gauge">
-            <div class="gauge-dial font-mono">
-              <span class="gauge-pct">{{ Math.round((selectedReport?.confidence || 0.94) * 100) }}%</span>
-              <span class="gauge-label">Confidence</span>
-            </div>
+          <!-- Confidence Badge -->
+          <div v-if="selectedReport" class="confidence-badge font-mono">
+            <span>Confidence: {{ Math.round((selectedReport?.confidence || 0.94) * 100) }}%</span>
           </div>
         </div>
 

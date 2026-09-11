@@ -234,8 +234,3 @@ function getProviderIcon(provider: string): string {
     </div>
   </div>
 </template>
-
-<style scoped>
-@import '../../assets/styles/views/cost.css';
-@import '../../assets/styles/components/cost-drawers.css';
-</style>
