@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import '../assets/styles/views/capacity.css'
 import '../assets/styles/components/capacity-drawers.css'
@@ -22,6 +22,7 @@ const {
 const showPolicyModal = ref(false)
 const showRecordModal = ref(false)
 const showInspectionDrawer = ref(false)
+const showTelemetry = ref(false)
 const selectedNodeId = ref<string | null>(null)
 
 const selectedNode = computed(() => {
@@ -98,11 +99,10 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
 
 <template>
   <div class="capacity-view-container">
-    <!-- View Header (Desktop) -->
+    <!-- View Header (Desktop, De-neonized: clean view-tag without pulse-dot) -->
     <div class="view-header desktop-header desktop-only">
       <div>
         <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
           <span>PREDICTIVE WORKLOAD CAPACITY & SIZING</span>
         </div>
         <h1 class="view-title">Cluster Capacity Planning & Resource Forecasting</h1>
@@ -170,87 +170,105 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
       :headroom="safeHeadroom"
     />
 
-    <!-- Live Cluster Saturation Telemetry (Netdata-Style Synchronized Scrubbing) -->
-    <div class="section-card glass-panel live-telemetry-panel">
-      <div class="section-top">
-        <div>
-          <div class="panel-badge-row">
-            <h2 class="section-title">Live Cluster Saturation Telemetry</h2>
-            <span class="telemetry-live-badge font-mono">
-              <span class="pulse-dot pulse-dot-emerald"></span>
-              SYNCHRONIZED SCRUBBING
-            </span>
-          </div>
-          <p class="section-subtitle">Real-time correlated canvas telemetry across compute, memory, and storage runway</p>
-        </div>
-        <div class="sync-legend font-mono text-xs">
-          <span class="legend-item"><span class="legend-color legend-cyan"></span> CPU</span>
-          <span class="legend-item"><span class="legend-color legend-amber"></span> Memory</span>
-          <span class="legend-item"><span class="legend-color legend-emerald"></span> Storage</span>
-        </div>
-      </div>
-
-      <div class="live-telemetry-grid">
-        <div class="telemetry-chart-card">
-          <div class="chart-card-header">
-            <span class="chart-card-title font-mono text-cyan font-semibold">Cluster CPU Allocation</span>
-            <span class="chart-card-val font-mono">{{ (forecasts.find(f => f.resource_type.toLowerCase() === 'cpu')?.current_usage ?? 62.4).toFixed(1) }}%</span>
-          </div>
-          <CanvasTimeSeries
-            :series="telemetryWindow.cpu"
-            unit="%"
-            :height="150"
-            sync-group="capacity-saturation"
-            :min="0"
-            :max="100"
-            :thresholds="cpuThresholds"
-          />
-        </div>
-
-        <div class="telemetry-chart-card">
-          <div class="chart-card-header">
-            <span class="chart-card-title font-mono text-amber font-semibold">Memory Saturation</span>
-            <span class="chart-card-val font-mono">{{ (forecasts.find(f => ['memory', 'ram'].includes(f.resource_type.toLowerCase()))?.current_usage ?? 69.0).toFixed(1) }}%</span>
-          </div>
-          <CanvasTimeSeries
-            :series="telemetryWindow.memory"
-            unit="%"
-            :height="150"
-            sync-group="capacity-saturation"
-            :min="0"
-            :max="100"
-            :thresholds="memThresholds"
-          />
-        </div>
-
-        <div class="telemetry-chart-card">
-          <div class="chart-card-header">
-            <span class="chart-card-title font-mono text-emerald font-semibold">Storage / Disk I/O</span>
-            <span class="chart-card-val font-mono">{{ (forecasts.find(f => ['storage', 'disk', 'nvme'].includes(f.resource_type.toLowerCase()))?.current_usage ?? 54.2).toFixed(1) }}%</span>
-          </div>
-          <CanvasTimeSeries
-            :series="telemetryWindow.storage"
-            unit="%"
-            :height="150"
-            sync-group="capacity-saturation"
-            :min="0"
-            :max="100"
-            :thresholds="storageThresholds"
-          />
-        </div>
-      </div>
+    <!-- Desktop Telemetry & Forecast Toggle (Above the fold, matches /hosts pattern) -->
+    <div class="capacity-telemetry-toggle-row desktop-only">
+      <button
+        type="button"
+        class="telemetry-toggle-btn font-mono"
+        :class="{ active: showTelemetry }"
+        :title="showTelemetry ? 'Hide Forecast & Telemetry' : 'Show Forecast & Telemetry'"
+        @click="showTelemetry = !showTelemetry"
+      >
+        <BaseIcon :name="showTelemetry ? 'chevron-up' : 'activity'" size="xs" />
+        <span>{{ showTelemetry ? 'Hide Forecast & Telemetry' : 'Show Forecast & Telemetry' }}</span>
+      </button>
     </div>
 
-    <!-- Resource Forecast Predictive Trend Chart (Desktop Full linear regression) -->
-    <ResourceForecastChart class="desktop-only" :forecasts="forecasts" />
+    <!-- Collapsible Live Telemetry & Predictive Forecast (Desktop Only, Default Collapsed) -->
+    <Transition name="fade">
+      <div v-if="showTelemetry" class="collapsible-telemetry-wrapper desktop-only animate-fade-in">
+        <!-- Live Cluster Saturation Telemetry (De-neonized: clean telemetry-live-badge) -->
+        <div class="section-card glass-panel live-telemetry-panel">
+          <div class="section-top">
+            <div>
+              <div class="panel-badge-row">
+                <h2 class="section-title">Live Cluster Saturation Telemetry</h2>
+                <span class="telemetry-live-badge font-mono">
+                  SYNCHRONIZED SCRUBBING
+                </span>
+              </div>
+              <p class="section-subtitle">Real-time correlated canvas telemetry across compute, memory, and storage runway</p>
+            </div>
+            <div class="sync-legend font-mono text-xs">
+              <span class="legend-item"><span class="legend-color legend-cyan"></span> CPU</span>
+              <span class="legend-item"><span class="legend-color legend-amber"></span> Memory</span>
+              <span class="legend-item"><span class="legend-color legend-emerald"></span> Storage</span>
+            </div>
+          </div>
 
-    <!-- Bespoke Mobile SVG Forecast Trend Card (Mobile Adaption) -->
-    <CapacityMobileTrendCard class="mobile-only" :forecasts="forecasts" :exhaustion="daysToExhaustion" />
+          <div class="live-telemetry-grid">
+            <div class="telemetry-chart-card">
+              <div class="chart-card-header">
+                <span class="chart-card-title font-mono text-cyan font-semibold">Cluster CPU Allocation</span>
+                <span class="chart-card-val font-mono">{{ (forecasts.find(f => f.resource_type.toLowerCase() === 'cpu')?.current_usage ?? 62.4).toFixed(1) }}%</span>
+              </div>
+              <CanvasTimeSeries
+                :series="telemetryWindow.cpu"
+                unit="%"
+                :height="150"
+                sync-group="capacity-saturation"
+                :min="0"
+                :max="100"
+                :thresholds="cpuThresholds"
+              />
+            </div>
 
-    <!-- Node Headroom Matrix: Desktop Table -->
+            <div class="telemetry-chart-card">
+              <div class="chart-card-header">
+                <span class="chart-card-title font-mono text-amber font-semibold">Memory Saturation</span>
+                <span class="chart-card-val font-mono">{{ (forecasts.find(f => ['memory', 'ram'].includes(f.resource_type.toLowerCase()))?.current_usage ?? 69.0).toFixed(1) }}%</span>
+              </div>
+              <CanvasTimeSeries
+                :series="telemetryWindow.memory"
+                unit="%"
+                :height="150"
+                sync-group="capacity-saturation"
+                :min="0"
+                :max="100"
+                :thresholds="memThresholds"
+              />
+            </div>
+
+            <div class="telemetry-chart-card">
+              <div class="chart-card-header">
+                <span class="chart-card-title font-mono text-emerald font-semibold">Storage / Disk I/O</span>
+                <span class="chart-card-val font-mono">{{ (forecasts.find(f => ['storage', 'disk', 'nvme'].includes(f.resource_type.toLowerCase()))?.current_usage ?? 54.2).toFixed(1) }}%</span>
+              </div>
+              <CanvasTimeSeries
+                :series="telemetryWindow.storage"
+                unit="%"
+                :height="150"
+                sync-group="capacity-saturation"
+                :min="0"
+                :max="100"
+                :thresholds="storageThresholds"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Resource Forecast Predictive Trend Chart (Desktop Full linear regression) -->
+        <ResourceForecastChart :forecasts="forecasts" />
+      </div>
+    </Transition>
+
+    <!-- Node Headroom Matrix: Desktop Table (Visible immediately below CapacityHudCards when collapsed!) -->
     <div class="desktop-only-wrapper">
       <NodeHeadroomTable :nodes="nodesHeadroom" @rebalance="rebalanceNode" @inspect="handleInspectNode" />
     </div>
+
+    <!-- Bespoke Mobile SVG Forecast Trend Card (Mobile Adaption) -->
+    <CapacityMobileTrendCard class="mobile-only" :forecasts="forecasts" :exhaustion="daysToExhaustion" />
 
     <!-- High-Density Mobile Capacity Stream -->
     <div class="mobile-only-wrapper section-card glass-panel">
@@ -364,31 +382,3 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
     </div>
   </div>
 </template>
-
-<style scoped>
-.live-telemetry-panel { margin-bottom: 24px; }
-.panel-badge-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.telemetry-live-badge {
-  display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 9999px;
-  font-size: 10px; font-weight: 600; background: rgba(16, 185, 129, 0.12); color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.25); letter-spacing: 0.05em;
-}
-.sync-legend { display: flex; align-items: center; gap: 12px; color: #94a3b8; }
-.legend-item { display: inline-flex; align-items: center; gap: 5px; }
-.legend-color { width: 8px; height: 8px; border-radius: 2px; }
-.legend-cyan { background-color: #06b6d4; }
-.legend-amber { background-color: #f59e0b; }
-.legend-emerald { background-color: #10b981; }
-.live-telemetry-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
-@media (max-width: 1024px) {
-  .live-telemetry-grid { grid-template-columns: 1fr; gap: 12px; }
-}
-.telemetry-chart-card {
-  background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(56, 189, 248, 0.12); border-radius: 8px; padding: 10px;
-}
-.chart-card-header {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 11px;
-}
-.chart-card-val { color: #f1f5f9; }
-</style>
-
