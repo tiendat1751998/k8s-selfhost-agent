@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue'
 import { useScaffolder } from '../composables/useScaffolder'
 import ScaffolderTemplatesGrid from '../components/scaffolder/ScaffolderTemplatesGrid.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
@@ -14,10 +15,7 @@ const {
   deleting,
   toastMessage,
   templates,
-  selectedCategory,
   searchQuery,
-  filteredTemplates,
-  categories,
 
   showWizardModal,
   currentStep,
@@ -57,6 +55,74 @@ const {
   handleDeleteCustomTemplate,
   resetFilters,
 } = useScaffolder()
+
+interface CategoryOptionItem {
+  key: string
+  label: string
+  icon?: string
+}
+
+const filterCategories: CategoryOptionItem[] = [
+  { key: 'all', label: 'All', icon: 'sparkles' },
+  { key: 'backend', label: 'Backend', icon: 'server' },
+  { key: 'frontend', label: 'Frontend', icon: 'globe' },
+  { key: 'fullstack', label: 'Fullstack', icon: 'layers' },
+  { key: 'k8s', label: 'K8s', icon: 'box' },
+  { key: 'devops', label: 'DevOps', icon: 'cpu' },
+  { key: 'ai', label: 'AI', icon: 'zap' },
+]
+
+const activeCategory = ref('all')
+
+const filteredTemplates = computed(() => {
+  return templates.value.filter(t => {
+    // 1. Category Filter
+    if (activeCategory.value !== 'all') {
+      const cat = activeCategory.value.toLowerCase()
+      const tCat = (t.category || '').toLowerCase()
+      const tTags = (t.tags || []).map(tag => tag.toLowerCase())
+      const tName = (t.name || '').toLowerCase()
+      const tDesc = (t.description || '').toLowerCase()
+
+      let matches = false
+      if (tCat === cat || tTags.includes(cat)) {
+        matches = true
+      } else if (cat === 'backend') {
+        matches = tCat === 'api' || tCat === 'worker' || tCat === 'database' || tTags.some(tg => ['backend', 'api', 'rest', 'grpc', 'golang', 'python', 'go', 'node'].includes(tg))
+      } else if (cat === 'frontend') {
+        matches = tCat === 'web' || tTags.some(tg => ['frontend', 'web', 'ui', 'react', 'vue', 'nginx'].includes(tg))
+      } else if (cat === 'fullstack') {
+        matches = tCat === 'fullstack' || tTags.includes('fullstack')
+      } else if (cat === 'k8s') {
+        matches = tCat === 'k8s' || tTags.includes('k8s') || tTags.includes('kubernetes') || tName.includes('k8s') || tDesc.includes('k8s')
+      } else if (cat === 'devops') {
+        matches = tCat === 'devops' || tTags.some(tg => ['devops', 'docker', 'helm', 'ingress', 'proxy'].includes(tg))
+      } else if (cat === 'ai') {
+        matches = tCat === 'ai' || tTags.some(tg => ['ai', 'llm', 'ml', 'openai'].includes(tg)) || tName.includes('ai') || tDesc.includes('ai')
+      }
+
+      if (!matches) return false
+    }
+
+    // 2. Search Query Filter (filters templates by title, description, tags)
+    if (searchQuery.value.trim()) {
+      const q = searchQuery.value.trim().toLowerCase()
+      const matchName = t.name.toLowerCase().includes(q)
+      const matchDesc = t.description.toLowerCase().includes(q)
+      const matchFramework = t.framework.toLowerCase().includes(q)
+      const matchTags = t.tags && t.tags.some(tag => tag.toLowerCase().includes(q))
+      if (!matchName && !matchDesc && !matchFramework && !matchTags) return false
+    }
+
+    return true
+  })
+})
+
+const handleResetFilters = () => {
+  activeCategory.value = 'all'
+  searchQuery.value = ''
+  resetFilters()
+}
 
 const handleDrawerCopy = async () => {
   let content = ''
@@ -109,7 +175,7 @@ const handleDrawerDownload = () => {
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="scaffolder-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold"><BaseIcon name="layers" size="xs" /> Scaffolder ({{ templates.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="layers" size="xs" /> Scaffolder ({{ filteredTemplates.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -136,63 +202,96 @@ const handleDrawerDownload = () => {
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="scaffolder-micro-telemetry mobile-only font-mono" role="status" aria-label="Scaffolder Micro Telemetry">
-      <span class="tel-item tel-tmpl"><BaseIcon name="layers" size="xs" /> {{ templates.length }} Templates</span>
+      <span class="tel-item tel-tmpl"><BaseIcon name="layers" size="xs" /> {{ filteredTemplates.length }} Templates</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-deploy"><BaseIcon name="zap" size="xs" /> {{ rendering ? 'Executing' : 'Ready' }}</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-verified"><BaseIcon name="shield" size="xs" /> Verified</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-cats"><BaseIcon name="folder" size="xs" /> {{ categories.length }} Categories</span>
+      <span class="tel-item tel-cats"><BaseIcon name="folder" size="xs" /> {{ filterCategories.length }} Categories</span>
     </div>
 
-    <!-- Header & Hero Section (Desktop View) -->
-    <header class="page-header glass-panel">
-      <div class="header-content desktop-header desktop-only">
-        <div class="header-left">
-          <div class="header-icon-badge"><BaseIcon name="layers" size="md" /></div>
-          <div>
-            <h1 class="header-title">Application Scaffolder</h1>
-            <p class="header-sub">
-              1-Click Deploy & Template Engine • Generates Cloud-Native K8s Manifests, Helm Charts & Compose Files
-            </p>
-          </div>
-        </div>
-        <div class="header-actions">
-          <button class="btn btn-primary" @click="openCustomTemplateModal('create')">
-            <BaseIcon name="plus" size="xs" /> Create Template
-          </button>
-          <button class="btn btn-secondary" :disabled="loading" @click="loadTemplates">
-            <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': loading }" /> Refresh
-          </button>
-        </div>
+    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <div class="scaffolder-toolbar-sleek glass-panel">
+      <!-- Search input with search icon and clear button -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search templates, tags..."
+          class="toolbar-search-input"
+          aria-label="Search templates by title, description, tags"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
       </div>
 
-      <!-- Controls: Category Filter Tabs + Search -->
-      <div class="filter-bar">
-        <div class="category-tabs">
-          <button
-            v-for="cat in categories"
-            :key="cat.key"
-            :class="['tab-btn', { active: selectedCategory === cat.key }]"
-            @click="selectedCategory = cat.key"
-          >
-            <span class="tab-icon"><BaseIcon :name="cat.icon" size="xs" /></span>
-            <span class="tab-label">{{ cat.label }}</span>
-          </button>
-        </div>
-
-        <div class="search-box">
-          <BaseIcon name="search" size="xs" class="search-icon" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search templates, frameworks, tags..."
-            class="search-input"
-          />
-          <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
-        </div>
+      <!-- Category Filter Pills (Desktop) -->
+      <div class="toolbar-category-pills desktop-only" role="tablist" aria-label="Template categories">
+        <button
+          v-for="cat in filterCategories"
+          :key="cat.key"
+          type="button"
+          role="tab"
+          :aria-selected="activeCategory === cat.key"
+          class="toolbar-pill-btn"
+          :class="{ active: activeCategory === cat.key }"
+          @click="activeCategory = cat.key"
+        >
+          <BaseIcon v-if="cat.icon" :name="cat.icon" size="xs" />
+          <span>{{ cat.label }}</span>
+        </button>
       </div>
-    </header>
+
+      <!-- Category Filter Dropdown (Tablet / Mobile Fallback) -->
+      <select
+        v-model="activeCategory"
+        class="toolbar-select category-dropdown"
+        aria-label="Filter templates by category"
+      >
+        <option v-for="cat in filterCategories" :key="cat.key" :value="cat.key">
+          {{ cat.label }}
+        </option>
+      </select>
+
+      <!-- Inline compact template count font-mono -->
+      <div class="toolbar-kpi-strip font-mono desktop-only" role="status" aria-label="Template count">
+        <span class="kpi-badge font-mono">{{ filteredTemplates.length }} Templates</span>
+      </div>
+
+      <!-- Action Buttons: + Custom Template & Refresh -->
+      <div class="toolbar-actions-group">
+        <button
+          type="button"
+          class="btn btn-primary toolbar-btn"
+          title="Create Custom Template"
+          aria-label="Create Custom Template"
+          @click="openCustomTemplateModal('create')"
+        >
+          <BaseIcon name="plus" size="xs" />
+          <span>Custom Template</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary toolbar-btn"
+          title="Refresh Templates"
+          aria-label="Refresh Templates"
+          :disabled="loading"
+          @click="loadTemplates"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': loading }" />
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
 
     <!-- Desktop Grid Gallery View -->
     <div class="desktop-view">
@@ -204,7 +303,7 @@ const handleDrawerDownload = () => {
         @preview="previewTemplate"
         @edit="openCustomTemplateModal('edit', $event)"
         @delete="handleDeleteCustomTemplate"
-        @reset-filters="resetFilters"
+        @reset-filters="handleResetFilters"
       />
     </div>
 
@@ -218,7 +317,7 @@ const handleDrawerDownload = () => {
         @preview="previewTemplate"
         @edit="openCustomTemplateModal('edit', $event)"
         @delete="handleDeleteCustomTemplate"
-        @reset-filters="resetFilters"
+        @reset-filters="handleResetFilters"
       />
     </div>
 

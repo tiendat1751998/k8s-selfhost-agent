@@ -19,7 +19,53 @@ import AppMobileNav from './components/layout/AppMobileNav.vue'
 import PwaInstallBanner from './components/common/PwaInstallBanner.vue'
 import BaseIcon from './components/ui/BaseIcon.vue'
 import GlobalContextSelector from './components/navigation/GlobalContextSelector.vue'
+import { navGroups } from './config/navigation'
 import '@/assets/styles/layout/app-shell.css'
+
+const routeBreadcrumbs: Record<string, { category: string; title: string }> = {
+  '/': { category: 'Observability', title: 'Fleet Overview' },
+  '/incidents': { category: 'Observability', title: 'Incidents & RCA' },
+  '/slo': { category: 'Observability', title: 'SLOs & Budgets' },
+  '/logs': { category: 'Observability', title: 'Real-Time Logs' },
+  '/fleet': { category: 'Compute & Fleet', title: 'Fleet Clusters' },
+  '/hosts': { category: 'Infrastructure', title: 'Hosts' },
+  '/deployments': { category: 'Compute', title: 'Deployments & Apps' },
+  '/promotions': { category: 'Delivery', title: 'Promotions' },
+  '/explorer': { category: 'Cluster', title: 'Cluster Explorer' },
+  '/helm': { category: 'Compute', title: 'Helm Catalog' },
+  '/audit': { category: 'Governance', title: 'Audit & CVEs' },
+  '/compliance': { category: 'Governance', title: 'Compliance & CIS' },
+  '/drift': { category: 'Governance', title: 'Config Drift' },
+  '/backup': { category: 'Governance', title: 'Disaster Recovery' },
+  '/automation': { category: 'Automation', title: 'Automation Rules' },
+  '/runbooks': { category: 'Automation', title: 'SRE Runbooks' },
+  '/cost': { category: 'FinOps', title: 'Cost Optimization' },
+  '/capacity': { category: 'Compute', title: 'Capacity Planning' },
+  '/tenancy': { category: 'Management', title: 'Tenancy & RBAC' },
+  '/ai-hub': { category: 'Management', title: 'AI Provider Hub' },
+  '/changes': { category: 'Management', title: 'Change Requests' },
+  '/alerts': { category: 'Management', title: 'Alerts & Channels' },
+  '/reports': { category: 'Management', title: 'Reports Center' },
+  '/catalog': { category: 'Developer Portal', title: 'Service Catalog' },
+  '/scaffolder': { category: 'Developer Portal', title: 'Scaffolder Templates' },
+  '/ecosystem': { category: 'Management', title: 'Ecosystem Tools' },
+  '/plugins': { category: 'Management', title: 'Plugin Hub' },
+  '/settings': { category: 'Management', title: 'System Settings' },
+}
+
+const currentBreadcrumb = computed(() => {
+  const p = route.path
+  if (routeBreadcrumbs[p]) return routeBreadcrumbs[p]
+  for (const group of navGroups) {
+    const item = group.items.find(i => i.path === p || (i.path !== '/' && p.startsWith(i.path)))
+    if (item) {
+      const cat = group.label.split('&')[0].trim()
+      const formatted = cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()
+      return { category: formatted, title: item.name }
+    }
+  }
+  return { category: 'Platform', title: (route.name as string) || 'Dashboard' }
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -263,12 +309,19 @@ function handleNavigateToHost(nodeNameOrId: string) {
             <span class="hud-mobile-brand-title">K8S<span>CONTROL</span></span>
           </div>
 
-          <!-- Command Palette Search Button (Desktop) -->
+          <!-- Dynamic Screen Title & Category Breadcrumb -->
+          <div class="hud-breadcrumb" aria-label="Screen location breadcrumb">
+            <span class="bc-cat font-mono">{{ currentBreadcrumb.category }}</span>
+            <span class="bc-sep font-mono">/</span>
+            <span class="bc-title">{{ currentBreadcrumb.title }}</span>
+          </div>
+
+          <!-- Compact Command Palette Search Button (~180px) -->
           <button class="command-search-btn desktop-search" @click="showCommandPalette = true" aria-label="Quick search (Ctrl+K)">
             <span class="search-ico" aria-hidden="true">
               <BaseIcon name="search" size="xs" />
             </span>
-            <span class="search-text">Search platform...</span>
+            <span class="search-text">Search...</span>
             <kbd class="kbd-badge">Ctrl K</kbd>
           </button>
         </div>
@@ -337,7 +390,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
       </header>
 
       <!-- Main Page Content -->
-      <main class="page-container main-content animate-fade-in" :class="{ 'route-logs': route.path.startsWith('/logs') }">
+      <main class="page-container main-content animate-fade-in" :class="{ 'route-logs': route.path.startsWith('/logs'), 'route-hosts': route.path.startsWith('/hosts') }">
         <RouterView />
       </main>
     </div>

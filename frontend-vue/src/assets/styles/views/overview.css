@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Cluster Overview Page Shell & Layout
    frontend-vue/src/assets/styles/views/overview.css
    ========================================================================== */
@@ -10,65 +10,176 @@
 @import '../components/overview-hosts.css';
 
 .overview-dashboard {
-  padding: 24px 32px 48px;
+  padding: 16px 32px 48px;
   max-width: 1680px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
 }
 
-/* Header */
-.dashboard-header {
+/* Sleek Unified 38px Enterprise Toolbar */
+.overview-toolbar-sleek {
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.header-titles {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.overview-toolbar-sleek::-webkit-scrollbar {
+  display: none;
 }
 
-.header-badge-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.last-sync-text {
-  font-size: 11px;
-  color: var(--text-muted, #64748b);
-  font-family: var(--font-mono, monospace);
-  margin-left: 4px;
-}
-
-.page-title {
-  font-size: var(--text-title-fluid, 24px);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--text-primary, #f8fafc);
-  margin: 0;
-  line-height: 1.25;
-}
-
-.page-desc {
-  font-size: var(--text-desc-fluid, 13px);
-  color: var(--text-secondary, #94a3b8);
-  margin: 0;
-  max-width: 800px;
-  line-height: 1.5;
-}
-
-.header-actions {
+.overview-toolbar-sleek .toolbar-left-group {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-shrink: 0;
+}
+
+.overview-toolbar-sleek .badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.overview-toolbar-sleek .badge-auto-refresh {
+  font-size: 10.5px;
+}
+
+.overview-toolbar-sleek .last-sync-text {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Inline Compact KPI Badge Strip */
+.overview-toolbar-sleek .toolbar-kpi-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.overview-toolbar-sleek .kpi-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-cyan, #38bdf8);
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+/* Toolbar Actions Group */
+.overview-toolbar-sleek .toolbar-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Segmented Node View Mode Toggle */
+.overview-toolbar-sleek .view-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.overview-toolbar-sleek .mode-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  font-size: 11px;
+  font-weight: 600;
+  height: 22px;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.overview-toolbar-sleek .mode-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.overview-toolbar-sleek .mode-btn.active {
+  background: var(--accent-cyan, #0284c7);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Action Buttons */
+.overview-toolbar-sleek .btn-toolbar {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary, #cbd5e1);
+}
+
+.overview-toolbar-sleek .btn-toolbar:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.overview-toolbar-sleek .btn-toolbar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.overview-toolbar-sleek .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Desktop vs Mobile Toggle */
@@ -84,16 +195,16 @@
   .desktop-overview-sections {
     display: flex !important;
     flex-direction: column;
-    gap: 20px;
+    gap: 12px;
   }
 
-  .dashboard-header {
+  .overview-toolbar-sleek {
     display: flex !important;
   }
 }
 
 @media (max-width: 767px) {
-  .dashboard-header {
+  .overview-toolbar-sleek {
     display: none !important;
   }
 
@@ -166,7 +277,7 @@
 .dashboard-body {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
 /* Common Indicators & Badges */
@@ -197,20 +308,7 @@
 @media (max-width: 768px) {
   .overview-dashboard {
     padding: 16px 16px 32px;
-    gap: 16px;
-  }
-
-  .page-title {
-    font-size: clamp(18px, 4vw, 22px);
-  }
-
-  .page-desc {
-    font-size: 12px;
-  }
-
-  .header-actions .btn {
-    font-size: 11.5px;
-    padding: 6px 12px;
+    gap: 12px;
   }
 }
 
@@ -220,7 +318,7 @@
     gap: 12px;
   }
 
-  .dashboard-header,
+  .overview-toolbar-sleek,
   .desktop-overview-sections,
   .topology-section {
     display: none !important;

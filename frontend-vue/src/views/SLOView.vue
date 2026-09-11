@@ -1,8 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import '../assets/styles/views/slo.css'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import MetricCard from '../components/ui/MetricCard.vue'
 import SloCardsGrid from '../components/slo/SloCardsGrid.vue'
 import SloCatalogTable from '../components/slo/SloCatalogTable.vue'
 import SloMobileCards from '../components/slo/SloMobileCards.vue'
@@ -22,6 +21,12 @@ const snapshots = ref<SLOSnapshot[]>([])
 
 type TimeWindowFilter = '1h' | '6h' | '24h' | '30d'
 const selectedWindowFilter = ref<TimeWindowFilter>('30d')
+const windowPills = [
+  { key: '1h' as const, label: '1h (Fast Burn)', title: '1h Fast Burn (14.4x rate)', icon: 'flame', short: 'Fast' },
+  { key: '6h' as const, label: '6h (Slow Burn)', title: '6h Slow Burn (6.0x rate)', icon: 'alert-triangle', short: 'Slow' },
+  { key: '24h' as const, label: '24h (Composite)', title: '24h Composite (2.0x rate)', icon: 'activity', short: 'Comp' },
+  { key: '30d' as const, label: '30d (Baseline)', title: '30d Baseline (1.0x rate)', icon: 'calendar', short: 'Base' }
+]
 
 // View Mode and Search State
 const viewMode = ref<'table' | 'grid'>('table')
@@ -98,19 +103,32 @@ const healthySLOs = computed(() => snapshots.value.filter(s => s.budget_status =
 const warningSLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'warning').length)
 const criticalSLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'critical').length)
 const avgBurnRate = computed(() => {
-  if (!snapshots.value.length) return 'â€”'
+  if (!snapshots.value.length) return '—'
   return `${(snapshots.value.reduce((acc, s) => acc + (s.burn_rate || 0), 0) / snapshots.value.length).toFixed(2)}x`
 })
 
-// Filtered data based on unified search input
-const filteredSnapshots = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  return q ? snapshots.value.filter(s => s.service.toLowerCase().includes(q)) : snapshots.value
-})
-
+// Filtered data based on unified search input (filters SLOs by service name or indicator)
 const filteredDefinitions = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
-  return q ? definitions.value.filter(d => d.service.toLowerCase().includes(q) || d.indicator_type.toLowerCase().includes(q)) : definitions.value
+  if (!q) return definitions.value
+  return definitions.value.filter(d =>
+    d.service.toLowerCase().includes(q) ||
+    (d.indicator_type && d.indicator_type.toLowerCase().includes(q))
+  )
+})
+
+const filteredSnapshots = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return snapshots.value
+  const matchingDefIds = new Set(
+    definitions.value
+      .filter(d => d.service.toLowerCase().includes(q) || (d.indicator_type && d.indicator_type.toLowerCase().includes(q)))
+      .map(d => d.id)
+  )
+  return snapshots.value.filter(s =>
+    s.service.toLowerCase().includes(q) ||
+    matchingDefIds.has(s.slo_id)
+  )
 })
 
 // Helper Functions for Mobile Card Stream and Telemetry
@@ -206,49 +224,114 @@ async function handleTriggerAlert(id: string, serviceName: string) {
 
 <template>
   <div class="slo-view-container animate-fade-in">
-    <!-- Desktop Header (>640px) -->
-    <div class="view-header desktop-only">
-      <div>
+    <!-- Alert / Toast Banner -->
+    <div v-if="bannerMessage" class="banner-box animate-fade-in" :class="`banner-${bannerMessage.type}`">
+      <BaseIcon :name="bannerMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" />
+      <span class="banner-text">{{ bannerMessage.text }}</span>
+      <button class="banner-close" @click="bannerMessage = null"><BaseIcon name="x" size="xs" /></button>
+    </div>
 
-        <h1 class="view-title">Service Level Objectives & Error Budgets</h1>
-        <p class="view-desc">
-          Automated multi-window burn rate calculation, Google SRE error budgeting, and real-time PromQL telemetry compliance.
-        </p>
+    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <div class="slo-toolbar-sleek glass-panel desktop-only">
+      <!-- Search input with search icon and clear button -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Filter by service or indicator..."
+          class="toolbar-search-input"
+          aria-label="Filter SLOs by service name or indicator"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
       </div>
 
-      <div class="header-actions">
-        <!-- Segmented View Mode Toggle: [ Table ] [ Cards ] -->
-        <div class="segmented-control font-mono">
+      <!-- Time Window multi-window analysis pills -->
+      <div class="toolbar-window-pills font-mono" role="tablist" aria-label="Multi-window analysis">
+        <button
+          v-for="w in windowPills"
+          :key="w.key"
+          type="button"
+          role="tab"
+          :aria-selected="selectedWindowFilter === w.key"
+          class="toolbar-pill-btn"
+          :class="{ active: selectedWindowFilter === w.key }"
+          :title="w.title"
+          @click="setWindowFilter(w.key)"
+        >
+          <BaseIcon :name="w.icon" size="xs" />
+          <span>{{ w.label }}</span>
+        </button>
+      </div>
+
+      <!-- Inline compact KPI badge strip font-mono -->
+      <div class="toolbar-kpi-strip font-mono" role="status" aria-label="SLO metrics summary">
+        <span class="kpi-badge font-mono">{{ totalSLOs }} SLOs ({{ healthySLOs }} Healthy · {{ warningSLOs + criticalSLOs }} Warning · {{ avgBurnRate }} Burn)</span>
+      </div>
+
+      <!-- Right: Segmented viewMode toggle & Action buttons -->
+      <div class="toolbar-actions-group">
+        <!-- Segmented viewMode toggle: [ Table ] and [ Cards ] -->
+        <div class="view-mode-toggle font-mono" role="group" aria-label="View mode">
           <button
             type="button"
-            class="segmented-btn"
+            class="mode-btn"
             :class="{ active: viewMode === 'table' }"
-            @click="viewMode = 'table'"
             title="Catalog Table View"
+            aria-label="Table View"
+            @click="viewMode = 'table'"
           >
-            <BaseIcon name="table" size="xs" /> <span>Table</span>
+            <BaseIcon name="table" size="xs" />
+            <span>Table</span>
           </button>
           <button
             type="button"
-            class="segmented-btn"
+            class="mode-btn"
             :class="{ active: viewMode === 'grid' }"
-            @click="viewMode = 'grid'"
             title="Card Grid View"
+            aria-label="Cards View"
+            @click="viewMode = 'grid'"
           >
-            <BaseIcon name="grid" size="xs" /> <span>Cards</span>
+            <BaseIcon name="grid" size="xs" />
+            <span>Cards</span>
           </button>
         </div>
 
-        <button class="btn btn-primary" @click="showCreateModal = true">
-          <BaseIcon name="plus" size="xs" /> <span>Create SLO Definition</span>
+        <!-- Action buttons: + Create SLO (primary) and Refresh (secondary with spinner) -->
+        <button
+          type="button"
+          class="toolbar-btn btn-primary"
+          title="Create SLO Definition"
+          aria-label="Create SLO Definition"
+          @click="showCreateModal = true"
+        >
+          <BaseIcon name="plus" size="xs" />
+          <span>+ Create SLO</span>
         </button>
-        <button class="btn btn-secondary" :disabled="loading" @click="fetchSLOData">
-          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Fetching...' : 'Refresh Telemetry' }}</span>
+
+        <button
+          type="button"
+          class="toolbar-btn btn-secondary"
+          :disabled="loading"
+          title="Refresh SLO telemetry"
+          aria-label="Refresh SLO telemetry"
+          @click="fetchSLOData"
+        >
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" />
+          <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
         </button>
       </div>
     </div>
 
-    <!-- Mobile 44px Command Bar (<=640px) -->
+    <!-- Mobile 44px Command Bar (<=767px) -->
     <div class="slo-mobile-command-bar mobile-only">
       <div class="command-bar-left">
         <span class="command-bar-title font-bold"><BaseIcon name="target" size="xs" /> SLOs ({{ totalSLOs }})</span>
@@ -258,7 +341,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
           <BaseIcon name="plus" size="xs" />
         </button>
         <button class="btn-icon-cmd" :disabled="loading" title="Refresh telemetry" aria-label="Refresh telemetry" @click="fetchSLOData">
-          <BaseIcon name="refresh" size="xs" />
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" />
         </button>
         <button class="btn-icon-cmd" :class="{ active: showMobileSearch }" title="Toggle search/filter drawer" aria-label="Toggle search/filter drawer" @click="showMobileSearch = !showMobileSearch">
           <BaseIcon name="search" size="xs" />
@@ -266,14 +349,14 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<=640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<=767px) -->
     <div class="slo-micro-telemetry mobile-only font-mono" role="status" aria-label="SLO Micro Telemetry">
       <span class="tel-item tel-total"><BaseIcon name="target" size="xs" /> {{ totalSLOs }} slos</span>
-      <span class="tel-sep">Â·</span>
+      <span class="tel-sep">·</span>
       <span class="tel-item tel-healthy"><BaseIcon name="shield" size="xs" /> {{ healthySLOs }} ok</span>
-      <span class="tel-sep">Â·</span>
+      <span class="tel-sep">·</span>
       <span class="tel-item tel-warn"><BaseIcon name="alert-triangle" size="xs" /> {{ warningSLOs + criticalSLOs }} warn</span>
-      <span class="tel-sep">Â·</span>
+      <span class="tel-sep">·</span>
       <span class="tel-item tel-burn"><BaseIcon name="flame" size="xs" /> {{ avgBurnRate }} burn</span>
     </div>
 
@@ -285,83 +368,27 @@ async function handleTriggerAlert(id: string, serviceName: string) {
           v-model="searchQuery"
           type="search"
           class="mobile-search-input"
-          placeholder="Filter SLOs by service name..."
+          placeholder="Filter SLOs by service name or indicator..."
           autofocus
         />
         <button v-if="searchQuery" type="button" class="mobile-clear-btn" title="Clear search" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
       </div>
     </div>
 
-    <!-- Alert / Toast Banner -->
-    <div v-if="bannerMessage" class="banner-box animate-fade-in" :class="`banner-${bannerMessage.type}`">
-      <BaseIcon :name="bannerMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" />
-      <span class="banner-text">{{ bannerMessage.text }}</span>
-      <button class="banner-close" @click="bannerMessage = null"><BaseIcon name="x" size="xs" /></button>
-    </div>
-
-    <!-- Time Window Filter Pill Strip / Mobile Segmented Pill Strip -->
-    <div class="filter-strip glass-panel mobile-pill-strip">
-      <div class="filter-pills">
-        <span class="filter-label desktop-only">Multi-Window Analysis:</span>
-        <button class="pill-btn" :class="{ active: selectedWindowFilter === '1h' }" @click="setWindowFilter('1h')">
-          <span class="desktop-only"><BaseIcon name="flame" size="xs" /> 1h Fast Burn (14.4x)</span><span class="mobile-only">1h (14x)</span>
-        </button>
-        <button class="pill-btn" :class="{ active: selectedWindowFilter === '6h' }" @click="setWindowFilter('6h')">
-          <span class="desktop-only"><BaseIcon name="alert-triangle" size="xs" /> 6h Slow Burn (6.0x)</span><span class="mobile-only">6h (6x)</span>
-        </button>
-        <button class="pill-btn" :class="{ active: selectedWindowFilter === '24h' }" @click="setWindowFilter('24h')">
-          <span class="desktop-only"><BaseIcon name="activity" size="xs" /> 24h Composite (2.0x)</span><span class="mobile-only">24h (2x)</span>
-        </button>
-        <button class="pill-btn" :class="{ active: selectedWindowFilter === '30d' }" @click="setWindowFilter('30d')">
-          <span class="desktop-only"><BaseIcon name="calendar" size="xs" /> 30d Baseline (1.0x)</span><span class="mobile-only">30d (1x)</span>
+    <!-- Mobile Time Window Pills (<768px) -->
+    <div class="slo-mobile-window-strip mobile-only">
+      <div class="mobile-window-pills font-mono">
+        <button
+          v-for="w in windowPills"
+          :key="w.key"
+          type="button"
+          class="mobile-window-btn"
+          :class="{ active: selectedWindowFilter === w.key }"
+          @click="setWindowFilter(w.key)"
+        >
+          {{ w.key }} ({{ w.short }})
         </button>
       </div>
-
-      <span class="filter-desc font-mono desktop-only">
-        <span v-if="selectedWindowFilter === '1h'">Fast-burn detection: 2% budget consumed in 1h window</span>
-        <span v-else-if="selectedWindowFilter === '6h'">Slow-burn detection: 5% budget consumed in 6h window</span>
-        <span v-else-if="selectedWindowFilter === '24h'">Medium-window composite: 10% budget consumed in 24h</span>
-        <span v-else>Rolling 30-day baseline objective compliance window</span>
-      </span>
-
-      <div class="filter-search-wrap desktop-only">
-        <BaseIcon name="search" size="xs" class="filter-search-icon" />
-        <input
-          v-model="searchQuery"
-          type="search"
-          class="filter-search-input"
-          placeholder="Filter SLOs by service name..."
-        />
-        <button v-if="searchQuery" type="button" class="clear-search-btn" title="Clear search" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
-      </div>
-    </div>
-
-    <!-- Metric HUD (Desktop only: 4-Column Grid, hidden on mobile <640px) -->
-    <div class="metrics-grid desktop-only">
-      <MetricCard
-        title="Active SLOs" :value="totalSLOs" subtitle="Active services tracked against target SLIs"
-        icon="target" badge="OBJECTIVES" badge-color="cyan"
-      />
-      <MetricCard
-        title="Healthy Error Budgets" :value="snapshots.length > 0 ? `${healthySLOs}/${snapshots.length}` : '0/0'"
-        :subtitle="snapshots.length > 0 ? 'Services with >20% remaining budget' : 'No active budget snapshots'"
-        icon="shield" badge="HEALTHY" :badge-color="snapshots.length > 0 ? 'emerald' : 'muted'"
-        :trend="snapshots.length > 0 ? 'Within Budget' : 'No active budgets'" :trend-type="snapshots.length > 0 ? 'positive' : 'neutral'"
-      />
-      <MetricCard
-        title="Budget Warnings" :value="warningSLOs + criticalSLOs" subtitle="Error budget consumption > 80%"
-        icon="alert" :badge="snapshots.length === 0 ? 'ZERO' : (warningSLOs + criticalSLOs) > 0 ? 'ALERT' : 'ZERO'"
-        :badge-color="snapshots.length === 0 ? 'muted' : (warningSLOs + criticalSLOs) > 0 ? 'rose' : 'emerald'"
-        :trend="snapshots.length === 0 ? 'No active budgets' : (warningSLOs + criticalSLOs) > 0 ? 'Elevated Failure Rate' : 'Optimal Traffic'"
-        :trend-type="snapshots.length === 0 ? 'neutral' : (warningSLOs + criticalSLOs) > 0 ? 'negative' : 'positive'"
-      />
-      <MetricCard
-        title="Average Burn Rate" :value="avgBurnRate" :subtitle="`Computed for ${selectedWindowFilter} time window`"
-        icon="fire" :badge="snapshots.length === 0 ? 'NO DATA' : criticalSLOs > 0 ? 'EXHAUSTING' : warningSLOs > 0 ? 'ELEVATED' : 'NOMINAL'"
-        :badge-color="snapshots.length === 0 ? 'muted' : criticalSLOs > 0 ? 'rose' : warningSLOs > 0 ? 'amber' : 'emerald'"
-        :trend="snapshots.length === 0 ? 'No snapshots' : criticalSLOs > 0 ? 'Fast Burn Alert Active' : 'Normal Rate'"
-        :trend-type="snapshots.length === 0 ? 'neutral' : criticalSLOs > 0 ? 'negative' : 'positive'"
-      />
     </div>
 
     <!-- Desktop View Mode: Table OR Grid (NEVER both at the same time on desktop!) -->

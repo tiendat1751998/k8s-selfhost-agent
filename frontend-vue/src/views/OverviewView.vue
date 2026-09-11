@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOverviewDashboard } from '../composables/useOverviewDashboard'
@@ -113,38 +113,79 @@ const {
       </div>
     </div>
 
-    <!-- Desktop Header Bar (>=768px) -->
-    <header class="dashboard-header">
-      <div class="header-titles">
-        <div class="header-badge-group">
-          <span class="badge" :class="isLiveWs ? 'badge-emerald' : 'badge-cyan'">
-            <span class="pulse-dot" :class="{ 'pulse-active': isLiveWs }"></span>
-            <span>{{ isLiveWs ? 'Live Stream' : 'Telemetry Synced' }}</span>
+    <!-- Sleek 38px Enterprise Desktop Toolbar (>=768px) -->
+    <div v-if="overview" class="overview-toolbar-sleek">
+      <div class="toolbar-left-group">
+        <!-- Live stream status pill -->
+        <span class="badge" :class="isLiveWs ? 'badge-emerald' : 'badge-cyan'">
+          <span class="pulse-dot" :class="{ 'pulse-active': isLiveWs }"></span>
+          <span>{{ isLiveWs ? 'Live Stream' : 'Telemetry Synced' }}</span>
+        </span>
+
+        <!-- Auto-Refresh badge / timer pill & timestamp -->
+        <span class="badge badge-indigo badge-auto-refresh">Auto-Refresh 5s</span>
+        <span class="last-sync-text font-mono">Updated: {{ lastUpdated.toLocaleTimeString() }}</span>
+
+        <!-- Inline compact KPI badge strip font-mono -->
+        <div class="toolbar-kpi-strip font-mono">
+          <span class="kpi-badge">
+            {{ overview?.healthy_nodes || 0 }}/{{ overview?.total_nodes || 0 }} Nodes Online · {{ totalContainers }} Containers · {{ effectiveHttpRps }} RPS
           </span>
-          <span class="badge badge-indigo badge-auto-refresh">Auto-Refresh 5s</span>
-          <span class="last-sync-text">Updated: {{ lastUpdated.toLocaleTimeString() }}</span>
         </div>
-        <h1 class="page-title">Cluster Overview</h1>
-        <p class="page-desc">
-          Real-time cluster topology, container saturation metrics, dynamic resource gauges, and autonomous threshold alerting.
-        </p>
       </div>
 
-      <div class="header-actions">
-        <button class="btn btn-secondary" @click="pollClusterMetrics" :disabled="loading" title="Refresh Telemetry">
-          <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">
-            <BaseIcon name="refresh" size="sm" />
-          </span>
-          <span>Refresh</span>
-        </button>
-        <button class="btn btn-secondary" @click="openDeepDiveModal" title="Deep-Dive Telemetry">
+      <div class="toolbar-actions-group">
+        <!-- Segmented Node View Mode Toggle -->
+        <div class="view-mode-toggle" role="group" aria-label="Node view mode">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: nodeViewMode === 'table' }"
+            @click="nodeViewMode = 'table'"
+            title="Table View"
+          >
+            <BaseIcon name="file-text" size="xs" />
+            <span>Table</span>
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: nodeViewMode === 'grid' }"
+            @click="nodeViewMode = 'grid'"
+            title="Grid View"
+          >
+            <BaseIcon name="grid" size="xs" />
+            <span>Grid</span>
+          </button>
+        </div>
+
+        <!-- Action Buttons -->
+        <button
+          type="button"
+          class="btn-toolbar"
+          @click="openDeepDiveModal"
+          title="Deep-Dive Telemetry"
+        >
           <span class="btn-icon">
             <BaseIcon name="activity" size="sm" />
           </span>
           <span>Deep-Dive Telemetry</span>
         </button>
+
+        <button
+          type="button"
+          class="btn-toolbar"
+          @click="pollClusterMetrics"
+          :disabled="loading"
+          title="Refresh Telemetry"
+        >
+          <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">
+            <BaseIcon name="refresh" size="sm" />
+          </span>
+          <span>Refresh</span>
+        </button>
       </div>
-    </header>
+    </div>
 
     <!-- LOADING SKELETON -->
     <div v-if="loading && !overview" class="skeleton-hud-grid">
@@ -313,7 +354,7 @@ const {
                 <BaseIcon name="file-text" size="xs" /> Table
               </button>
               <button class="toggle-btn" :class="{ active: nodeViewMode === 'grid' }" @click="nodeViewMode = 'grid'">
-                <BaseIcon name="layers" size="xs" /> Cards
+                <BaseIcon name="grid" size="xs" /> Grid
               </button>
             </div>
             

@@ -21,15 +21,6 @@ const emit = defineEmits<{
 
 <template>
   <div class="section-box glass-panel">
-    <div class="box-header">
-      <div>
-        <h2 class="box-title">Kubernetes Fleet Control Planes</h2>
-        <p class="box-subtitle">Managed multi-region Kubernetes clusters with live status and telemetry</p>
-      </div>
-      <button class="btn btn-secondary btn-xs" @click="emit('import')">
-        <span>+ Add Cluster</span>
-      </button>
-    </div>
 
     <!-- Filtered Empty State -->
     <div v-if="clusters.length === 0 && (totalClustersCount || 0) > 0" class="empty-state font-mono">

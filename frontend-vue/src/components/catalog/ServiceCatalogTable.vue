@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import type { ServiceEntry } from '../../api/catalog'
 
@@ -31,26 +31,12 @@ const emit = defineEmits<{
 
 <template>
   <div class="section-box glass-panel table-box">
-    <div class="box-header">
-      <div class="box-header-title">
-        <h2 class="box-title">Registered Services & Component Directory</h2>
-        <p class="box-subtitle">
-          Backstage-compliant software inventory with metadata links and live Kubernetes annotations.
-        </p>
-      </div>
-      <div class="box-header-meta">
-        <span class="badge badge-cyan font-mono">{{ services.length }} Services</span>
-      </div>
-    </div>
-
     <DataTable
       :columns="columns"
       :data="services"
       :loading="loading"
       :error="error"
       empty-message="No services registered matching current filter criteria."
-      searchable
-      search-placeholder="Filter loaded rows by name, owner, repo..."
     >
       <!-- Cell: Name -->
       <template #cell-name="{ row }">

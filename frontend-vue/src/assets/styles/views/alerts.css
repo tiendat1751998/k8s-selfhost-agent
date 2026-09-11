@@ -10,7 +10,7 @@
   .mobile-only { display: none !important; }
 }
 @media (max-width: 767.98px) {
-  .desktop-header, .desktop-only { display: none !important; }
+  .desktop-only { display: none !important; }
 }
 
 /* 2. Mobile 40-44px Command Bar (<768px) */
@@ -52,40 +52,141 @@
 .alerts-micro-telemetry .tel-chan { color: #38bdf8; }
 .alerts-micro-telemetry .tel-sep { color: rgba(148, 163, 184, 0.4); font-weight: 400; }
 
-/* 3. Page Layout & Header */
-.alerts-page { display: flex; flex-direction: column; gap: 24px; width: 100%; }
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
-.header-titles { flex: 1; }
-.header-badge { display: flex; gap: 8px; margin-bottom: 8px; }
-.page-title { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; color: #fff; margin-bottom: 6px; }
-.page-desc { font-size: 13px; color: var(--text-secondary); max-width: 840px; line-height: 1.5; }
-.header-actions { display: flex; align-items: center; gap: 12px; }
+/* Mobile Tab Navigation Strip (<768px) */
+.alerts-mobile-tabs {
+  display: flex; align-items: center; gap: 6px;
+  overflow-x: auto; padding: 2px 0; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.alerts-mobile-tabs::-webkit-scrollbar { display: none; }
+.mobile-tab-btn {
+  height: 30px; padding: 0 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; flex-shrink: 0;
+  background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.2);
+  color: var(--text-secondary, #94a3b8); cursor: pointer; transition: all 0.15s ease;
+}
+.mobile-tab-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.mobile-tab-btn.active {
+  background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-weight: 700;
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+/* 3. Page Layout */
+.alerts-page { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 
 /* Feedback Banner */
 .feedback-banner {
   background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #34d399; padding: 12px 18px; border-radius: 12px;
-  display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600;
+  color: #34d399; padding: 8px 14px; border-radius: 8px;
+  display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600;
 }
-.feedback-icon { font-size: 15px; font-weight: 800; }
+.feedback-icon { font-size: 14px; font-weight: 800; }
 
-/* 4. HUD Metrics Grid (4-tier: 4 cols desktop, 2x2 tablet/mobile) */
-.metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-
-/* 5. Tab Navigation */
-.tab-bar { padding: 10px 16px; }
-.tab-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
-.tbtn {
-  display: flex; align-items: center; gap: 8px; padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle);
-  border-radius: 10px; color: var(--text-secondary); font-size: 13px;
-  font-weight: 600; cursor: pointer; transition: all 0.15s ease;
+/* 4. Sleek Unified 38px Enterprise Toolbar */
+.alerts-toolbar-sleek {
+  height: 38px; min-height: 38px; max-height: 38px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  border-radius: 8px; background: rgba(15, 23, 42, 0.75);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
+  backdrop-filter: blur(12px); width: 100%;
 }
-.tbtn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
-.tbtn.active { background: rgba(6, 182, 212, 0.15); border-color: rgba(6, 182, 212, 0.4); color: #38bdf8; }
-.tbadge { background: rgba(255, 255, 255, 0.1); padding: 1px 6px; border-radius: 9999px; font-size: 10px; font-family: var(--font-mono); }
+.alerts-toolbar-sleek .toolbar-search-wrap {
+  position: relative; display: flex; align-items: center;
+  flex: 0 1 210px; min-width: 130px; height: 28px;
+}
+.alerts-toolbar-sleek .search-icon {
+  position: absolute; left: 8px; font-size: 11px;
+  color: var(--text-muted, #94a3b8); pointer-events: none;
+}
+.alerts-toolbar-sleek .toolbar-search-input {
+  width: 100%; height: 28px; padding: 0 24px 0 26px; font-size: 12px;
+  border-radius: 6px; background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
+  color: #fff; box-sizing: border-box; transition: border-color 0.15s ease;
+}
+.alerts-toolbar-sleek .toolbar-search-input:focus {
+  border-color: var(--accent-cyan, #06b6d4); outline: none;
+}
+.alerts-toolbar-sleek .clear-input-btn {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; display: inline-flex; align-items: center;
+  justify-content: center; background: none; border: none;
+  color: var(--text-muted, #94a3b8); cursor: pointer; padding: 0;
+}
+.alerts-toolbar-sleek .clear-input-btn:hover { color: #fff; }
 
-/* 6. Active Alerts Stream (Zero Horizontal Overflow) */
+.alerts-toolbar-sleek .toolbar-nav-pills {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 6px; padding: 2px; flex-shrink: 0;
+}
+.alerts-toolbar-sleek .toolbar-pill-btn {
+  height: 24px; padding: 0 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+  cursor: pointer; border: none; background: transparent; color: var(--text-secondary, #94a3b8);
+  display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s ease; white-space: nowrap;
+}
+.alerts-toolbar-sleek .toolbar-pill-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.alerts-toolbar-sleek .toolbar-pill-btn.active {
+  background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+}
+.alerts-toolbar-sleek .pill-badge {
+  font-size: 10px; line-height: 1; padding: 1px 5px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08); color: inherit; font-family: var(--font-mono, monospace);
+}
+.alerts-toolbar-sleek .toolbar-pill-btn.active .pill-badge {
+  background: rgba(56, 189, 248, 0.25); color: #38bdf8;
+}
+
+.alerts-toolbar-sleek .toolbar-kpi-strip {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; user-select: none;
+}
+.alerts-toolbar-sleek .kpi-badge {
+  font-size: 11px; font-weight: 600; color: var(--accent-cyan, #38bdf8);
+  background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 3px 8px; border-radius: 6px; white-space: nowrap;
+}
+
+.alerts-toolbar-sleek .toolbar-actions-group {
+  display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0;
+}
+.alerts-toolbar-sleek .toolbar-btn {
+  height: 28px; min-height: 28px; padding: 0 10px; border-radius: 6px;
+  font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center;
+  gap: 5px; cursor: pointer; white-space: nowrap; transition: all 0.15s ease; line-height: 1;
+}
+.alerts-toolbar-sleek .toolbar-btn.btn-primary {
+  background: #22c55e; color: #020617; border: none; font-weight: 700;
+}
+.alerts-toolbar-sleek .toolbar-btn.btn-primary:hover {
+  background: #16a34a; color: #fff;
+}
+.alerts-toolbar-sleek .toolbar-btn.btn-secondary {
+  background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.25); color: #e2e8f0;
+}
+.alerts-toolbar-sleek .toolbar-btn.btn-secondary:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.85); color: #fff;
+}
+.alerts-toolbar-sleek .toolbar-btn:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1200px) {
+  .alerts-toolbar-sleek .toolbar-kpi-strip { display: none; }
+}
+@media (max-width: 900px) {
+  .alerts-toolbar-sleek .toolbar-search-wrap { flex: 0 1 140px; min-width: 100px; }
+}
+
+/* 5. Active Alerts Stream (Zero Horizontal Overflow) */
 .active-alerts-stream { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; width: 100%; overflow-x: hidden !important; }
 .stream-banner-header {
   display: flex; justify-content: space-between; align-items: center; padding: 10px 14px;
@@ -134,7 +235,7 @@
 .state-active { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
 .state-disabled { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
 
-/* 7. Mobile Cards Stream (AlertsMobileCards.vue, 68-75px) */
+/* 6. Mobile Cards Stream (AlertsMobileCards.vue, 68-75px) */
 .alerts-mobile-stream { display: none; flex-direction: column; gap: 8px; width: 100%; overflow-x: hidden; }
 .mobile-alert-card {
   min-height: 68px; max-height: 75px; height: 72px; padding: 8px 12px;
@@ -164,7 +265,7 @@
   display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px;
 }
 
-/* 8. Desktop Table View & Zero Horizontal Overflow */
+/* 7. Desktop Table View & Zero Horizontal Overflow */
 .desktop-table-view { width: 100%; overflow-x: hidden !important; }
 .desktop-table-view table, .data-table { width: 100%; table-layout: fixed; }
 
@@ -176,7 +277,7 @@
 .rule-title { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rule-desc { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* 9. Channels Grid */
+/* 8. Channels Grid */
 .channels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
 .channel-card { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 .channel-card-header { display: flex; justify-content: space-between; align-items: flex-start; }
@@ -196,22 +297,15 @@
 .channel-footer { display: flex; justify-content: flex-end; }
 .channel-footer .btn { height: 32px; min-height: 32px; padding: 0 12px; font-size: 12px; }
 
-/* 10. Common Utilities */
+/* 9. Common Utilities */
 .empty-list { padding: 32px 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
 .text-xs { font-size: 11px; }
 .btn-sm { padding: 0 10px; height: 32px; min-height: 32px; font-size: 12px; }
 
-/* 11. Responsive Breakpoint Overhaul */
-/* Tablet Breakpoint (768px – 1023.98px): 2x2 HUD Grid */
-@media (min-width: 768px) and (max-width: 1023.98px) {
-  .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
-}
-
+/* 10. Responsive Breakpoint Overhaul */
 /* Mobile Breakpoint (<768px) */
 @media (max-width: 767.98px) {
   .alerts-page { gap: 10px; }
-  .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
-  .tab-buttons { overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; flex-wrap: nowrap; }
   .channels-grid { grid-template-columns: 1fr; gap: 12px; }
   .desktop-table-view { display: none !important; }
   .alerts-mobile-stream { display: flex !important; }

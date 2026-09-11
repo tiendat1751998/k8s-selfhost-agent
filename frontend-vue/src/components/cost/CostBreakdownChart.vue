@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import type { CloudSpendBreakdown } from '../../composables/useCostFinOps'
@@ -92,7 +92,7 @@ function getProviderIcon(provider: string): string {
       <!-- Donut Chart & Cloud Legend -->
       <div class="donut-section glass-panel">
         <div class="donut-chart-wrapper">
-          <svg class="donut-svg" viewBox="0 0 100 100">
+          <svg class="donut-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
             <circle class="donut-bg" cx="50" cy="50" :r="RADIUS" />
             <circle
               v-for="seg in donutSegments"
@@ -108,7 +108,7 @@ function getProviderIcon(provider: string): string {
           </svg>
           <div class="donut-center-text">
             <span class="donut-center-val font-mono">${{ totalSpend.toLocaleString() }}</span>
-            <span class="donut-center-label">RUN-RATE</span>
+            <span class="donut-center-label font-mono">RUN-RATE</span>
           </div>
         </div>
 
@@ -119,14 +119,14 @@ function getProviderIcon(provider: string): string {
             class="legend-item font-mono"
           >
             <div class="legend-color-dot" :style="{ backgroundColor: item.color }"></div>
-            <div class="legend-info">
+            <div class="legend-info font-mono">
               <div class="legend-name-row">
                 <span class="legend-name">{{ item.name }}</span>
-                <span class="legend-pct">{{ item.percentage }}%</span>
+                <span class="legend-pct font-mono">{{ item.percentage }}%</span>
               </div>
-              <div class="legend-meta text-muted">
-                <span>${{ item.cost.toLocaleString() }}</span>
-                <span>• {{ item.clusterCount }} {{ item.clusterCount === 1 ? 'cluster' : 'clusters' }}</span>
+              <div class="legend-meta text-muted font-mono">
+                <span class="legend-cost font-mono">${{ item.cost.toLocaleString() }}</span>
+                <span class="legend-clusters font-mono">• {{ item.clusterCount }} {{ item.clusterCount === 1 ? 'cluster' : 'clusters' }}</span>
               </div>
             </div>
           </div>

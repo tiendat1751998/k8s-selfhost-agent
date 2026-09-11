@@ -1,69 +1,122 @@
 <template>
   <div class="plugins-page">
-    <!-- Desktop Header -->
-    <header class="page-header glass-panel desktop-only">
-      <div class="header-content">
-        <div class="title-group">
-          <div class="icon-bubble"><BaseIcon name="plug" size="md" /></div>
-          <div>
-            <div class="badge-row">
-              <span class="badge badge-cyan">RUNTIME EXTENSIBILITY</span>
-              <span class="badge badge-emerald">HEADLAMP COMPLIANT</span>
-              <span class="badge badge-indigo">WASM SANDBOX {{ wasmSandboxStatus.isolationMode.toUpperCase() }}</span>
-            </div>
-            <h1 class="page-title">Frontend Plugin Hub</h1>
-            <p class="page-subtitle">
-              Extend platform dashboards, workload views, and telemetry graphs dynamically using isolated custom JavaScript/WASM bundles.
-            </p>
-          </div>
-        </div>
-        <div class="header-actions">
-          <button class="btn btn-secondary" @click="refreshPlugins" :disabled="loading">
-            <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" /> Refresh
-          </button>
-          <button class="btn btn-primary" @click="openRegisterModal">
-            <BaseIcon name="plus" size="xs" /> Register Plugin
-          </button>
-        </div>
+    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <div class="plugins-toolbar-sleek glass-panel">
+      <!-- Search input with search icon and clear button (filters by name, id, author, description) -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          id="plugin-search"
+          v-model="searchQuery"
+          type="text"
+          class="toolbar-search-input"
+          placeholder="Search name, id, author, description..."
+          aria-label="Search plugins"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
       </div>
 
-      <!-- Stats Overview Cards -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon"><BaseIcon name="box" size="sm" /></div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stats.total }}</div>
-            <div class="stat-label">Total Plugins</div>
-          </div>
-        </div>
-        <div class="stat-card stat-card-active">
-          <div class="stat-icon"><BaseIcon name="zap" size="sm" /></div>
-          <div class="stat-info">
-            <div class="stat-value text-emerald">{{ stats.enabled }}</div>
-            <div class="stat-label">Active & Enabled</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon"><BaseIcon name="pause" size="sm" /></div>
-          <div class="stat-info">
-            <div class="stat-value text-muted">{{ stats.disabled }}</div>
-            <div class="stat-label">Disabled</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon"><BaseIcon name="tag" size="sm" /></div>
-          <div class="stat-info">
-            <div class="stat-value text-cyan">{{ categoryCount }}</div>
-            <div class="stat-label">Categories</div>
-          </div>
-        </div>
+      <!-- Scope filter dropdown (All Scopes, UI, API, Core, Custom) -->
+      <select
+        id="filter-scope"
+        v-model="selectedScope"
+        class="toolbar-select desktop-only"
+        aria-label="Filter by Scope"
+      >
+        <option value="all">All Scopes</option>
+        <option value="ui">UI</option>
+        <option value="api">API</option>
+        <option value="core">Core</option>
+        <option value="custom">Custom</option>
+        <template v-for="scope in availablePermissionScopes" :key="scope">
+          <option
+            v-if="!['ui', 'api', 'core', 'custom'].includes(scope.toLowerCase())"
+            :value="scope"
+          >
+            {{ scope.toUpperCase() }}
+          </option>
+        </template>
+      </select>
+
+      <!-- Status filter dropdown (All Statuses, Active, Disabled) -->
+      <select
+        id="filter-status"
+        v-model="selectedStatus"
+        class="toolbar-select desktop-only"
+        aria-label="Filter by Status"
+      >
+        <option value="all">All Statuses</option>
+        <option value="active">Active</option>
+        <option value="disabled">Disabled</option>
+      </select>
+
+      <!-- Inline compact KPI badge strip font-mono: {{ plugins.length }} Plugins ({{ activeCount }} Active · {{ installedCount }} Installed) -->
+      <div class="toolbar-kpi-strip font-mono desktop-only" role="status" aria-label="Plugin count metrics">
+        <span class="kpi-badge font-mono">{{ plugins.length }} Plugins ({{ activeCount }} Active · {{ installedCount }} Installed)</span>
       </div>
-    </header>
+
+      <!-- Action buttons: View mode toggle, Refresh, + Register Plugin (primary button) -->
+      <div class="toolbar-actions-group">
+        <!-- View mode toggle (Grid / Table) -->
+        <div class="view-mode-toggle desktop-only" title="Switch layout display">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'grid' }"
+            title="Grid View"
+            aria-label="Grid View"
+            @click="viewMode = 'grid'"
+          >
+            <BaseIcon name="grid" size="xs" /> <span>Grid</span>
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'table' }"
+            title="Table View"
+            aria-label="Table View"
+            @click="viewMode = 'table'"
+          >
+            <BaseIcon name="file-text" size="xs" /> <span>Table</span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="btn btn-secondary toolbar-btn desktop-only"
+          title="Refresh plugins"
+          aria-label="Refresh plugins"
+          :disabled="loading"
+          @click="refreshPlugins"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
+          <span>Refresh</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-primary toolbar-btn"
+          title="Register a new plugin"
+          aria-label="+ Register Plugin"
+          @click="openRegisterModal"
+        >
+          <BaseIcon name="plus" size="xs" /> <span>+ Register Plugin</span>
+        </button>
+      </div>
+    </div>
 
     <!-- Mobile 44px Command Bar (<768px) -->
     <div class="plugins-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title"><BaseIcon name="plug" size="xs" /> Plugins ({{ stats.enabled }}/{{ plugins.length }})</span>
+        <span class="command-bar-title"><BaseIcon name="plug" size="xs" /> Plugins ({{ activeCount }}/{{ installedCount }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -88,78 +141,13 @@
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="plugins-micro-telemetry mobile-only font-mono" role="status" aria-label="Plugins Micro Telemetry">
-      <span class="tel-item tel-installed"><BaseIcon name="plug" size="xs" /> {{ stats.total }} Installed</span>
+      <span class="tel-item tel-installed"><BaseIcon name="plug" size="xs" /> {{ installedCount }} Installed</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-active"><BaseIcon name="zap" size="xs" /> {{ stats.enabled }} Active</span>
+      <span class="tel-item tel-active"><BaseIcon name="zap" size="xs" /> {{ activeCount }} Active</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-verified"><BaseIcon name="shield" size="xs" /> {{ wasmSandboxStatus.isolationMode === 'wasm-wasi' ? 'WASM Verified' : 'Verified' }}</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-available"><BaseIcon name="box" size="xs" /> {{ categoryCount }} Available</span>
-    </div>
-
-    <!-- Filters & Search Toolbar -->
-    <div class="toolbar glass-panel">
-      <div class="search-box">
-        <BaseIcon name="search" size="xs" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search plugins by name, description, author, or permissions..."
-          class="search-input"
-        />
-        <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
-      </div>
-
-      <div class="filter-controls">
-        <div class="category-tabs">
-          <button
-            v-for="cat in categories"
-            :key="cat.value"
-            class="tab-btn"
-            :class="{ active: selectedCategory === cat.value }"
-            @click="selectedCategory = cat.value"
-          >
-            <BaseIcon :name="getCategoryIcon(cat.value)" size="xs" /> {{ cat.label }}
-          </button>
-        </div>
-
-        <div class="status-filters">
-          <!-- Permission Scopes Filter -->
-          <select v-if="availablePermissionScopes.length > 0" v-model="selectedScope" class="select-input">
-            <option value="all">All Scopes</option>
-            <option v-for="scope in availablePermissionScopes" :key="scope" :value="scope">
-              Scope: {{ scope }}
-            </option>
-          </select>
-
-          <!-- Status Filter -->
-          <select v-model="selectedStatus" class="select-input">
-            <option value="all">All Status ({{ plugins.length }})</option>
-            <option value="enabled">Enabled Only ({{ stats.enabled }})</option>
-            <option value="disabled">Disabled Only ({{ stats.disabled }})</option>
-          </select>
-
-          <!-- View Mode Toggle (Desktop only) -->
-          <div class="view-toggle-group desktop-only">
-            <button
-              class="view-toggle-btn"
-              :class="{ active: viewMode === 'grid' }"
-              @click="viewMode = 'grid'"
-              title="Grid View"
-            >
-              <BaseIcon name="grid" size="xs" /> Grid
-            </button>
-            <button
-              class="view-toggle-btn"
-              :class="{ active: viewMode === 'table' }"
-              @click="viewMode = 'table'"
-              title="Table View"
-            >
-              Table
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Loading & Error States -->
@@ -178,7 +166,7 @@
     <div v-else-if="filteredPlugins.length === 0 && plugins.length > 0" class="empty-state glass-panel desktop-only">
       <div class="empty-icon"><BaseIcon name="plug" size="lg" /></div>
       <h3>No plugins match current filters</h3>
-      <p>Try adjusting your search terms, category tabs, or permission scope filter.</p>
+      <p>Try adjusting your search terms, scope, or status filters.</p>
       <div class="empty-actions">
         <button class="btn btn-secondary" @click="resetFilters">Reset Filters</button>
       </div>
@@ -292,20 +280,11 @@ import PluginConfigModal from '../components/plugins/PluginConfigModal.vue'
 import InstallPluginModal from '../components/plugins/InstallPluginModal.vue'
 
 
-function getCategoryIcon(val: string): string {
-  switch (val) {
-    case 'monitoring': return 'pie-chart'
-    case 'security': return 'shield'
-    case 'devtools': return 'wrench'
-    case 'integration': return 'plug'
-    default: return 'globe'
-  }
-}
-
 const {
-  plugins, stats, loading, error, toastMessage, viewMode, categoryCount, starterPresets, categories,
-  availablePermissionScopes, wasmSandboxStatus, searchQuery, selectedCategory,
+  plugins, loading, error, toastMessage, viewMode, categoryCount, starterPresets,
+  availablePermissionScopes, wasmSandboxStatus, searchQuery,
   selectedStatus, selectedScope, filteredPlugins, togglingId, installingPreset,
+  activeCount, installedCount,
   testResult, testBundleLoad, getRuntimeStatusLabel, getRuntimeStatusClass,
   refreshPlugins, resetFilters, categoryBadgeClass, togglePlugin, installPreset, confirmDelete,
   showFormModal, isEditing, form, formPermissionsRaw, formSubmitting, formError,

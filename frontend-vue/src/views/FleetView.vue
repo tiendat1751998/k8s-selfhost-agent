@@ -2,7 +2,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAppStore } from '../stores/app'
 import ClusterDetailsDrawer from '../components/fleet/ClusterDetailsDrawer.vue'
-import FleetMetricHud from '../components/fleet/FleetMetricHud.vue'
 import FleetSwarmBanner from '../components/fleet/FleetSwarmBanner.vue'
 import FleetClustersGrid from '../components/fleet/FleetClustersGrid.vue'
 import FleetClustersTable from '../components/fleet/FleetClustersTable.vue'
@@ -34,7 +33,7 @@ const swarmInfo = ref<SwarmClusterInfo | null>(null)
 const viewMode = ref<'table' | 'grid'>('table')
 
 // Filter state
-const clusterTypeFilter = ref<'all' | 'k8s' | 'swarm'>('all')
+const providerFilter = ref<string>('all')
 const statusFilter = ref<'all' | 'healthy' | 'degraded' | 'offline'>('all')
 const searchFilter = ref('')
 const showMobileSearch = ref(false)
@@ -70,41 +69,50 @@ onMounted(() => {
 })
 
 // Metrics computation
-const k8sClusterCount = computed(() => clusters.value.length)
 const hasSwarm = computed(() => swarmInfo.value !== null && (swarmInfo.value.node_count > 0 || Boolean(swarmInfo.value.id)))
-const totalControlPlanes = computed(() => clusters.value.length + (hasSwarm.value ? 1 : 0))
 const totalClusters = computed(() => clusters.value.length)
-
-const countK8s = computed(() => clusters.value.length)
-const countSwarm = computed(() => hasSwarm.value ? 1 : 0)
-const countAll = computed(() => countK8s.value + countSwarm.value)
-
-const k8sNodes = computed(() => clusters.value.reduce((acc, c) => acc + (c.nodes || 0), 0))
-const swarmNodes = computed(() => (hasSwarm.value && swarmInfo.value ? swarmInfo.value.node_count : 0))
-const totalNodes = computed(() => k8sNodes.value + swarmNodes.value)
 
 const HEALTHY_STATUSES = new Set(['healthy', 'active', 'ready', 'connected', 'online', 'live', 'ok'])
 const DEGRADED_STATUSES = new Set(['warning', 'pending', 'standby', 'degraded', 'in_progress', 'promoting'])
 const OFFLINE_STATUSES = new Set(['critical', 'danger', 'failed', 'error', 'offline', 'disconnected', 'down', 'unhealthy'])
 
-const healthyK8sCount = computed(() =>
+const onlineCount = computed(() =>
   clusters.value.filter(c => HEALTHY_STATUSES.has((c.health_status || c.status || '').toLowerCase())).length
 )
-const healthyCount = computed(() => healthyK8sCount.value + (hasSwarm.value ? 1 : 0))
-const healthyClusters = computed(() => healthyK8sCount.value)
+
+const healthyClusters = computed(() => onlineCount.value)
+
+const totalNodes = computed(() =>
+  clusters.value.reduce((acc, c) => acc + (c.nodes || 0), 0)
+)
+
+const totalCores = computed(() => {
+  return clusters.value.reduce((acc, c) => {
+    const rawCores = (c as any).cores || (c as any).cpu_cores || (c.discovered_resources as any)?.total_cores || (c.discovered_resources as any)?.cpu_cores
+    if (typeof rawCores === 'number') return acc + rawCores
+    const nodes = c.nodes && c.nodes > 0 ? c.nodes : 1
+    return acc + nodes * 4
+  }, 0)
+})
 
 const totalPods = computed(() => {
   return appStore.latestMetrics?.total_containers || clusters.value.reduce((acc, c) => acc + ((c as any).pods || 0), 0) || 0
 })
 
-const cloudProviders = computed(() => {
-  const providers = new Set<string>()
-  clusters.value.forEach(c => {
-    if (c.provider) providers.add(c.provider.toUpperCase())
-  })
-  if (hasSwarm.value) providers.add('SWARM')
-  return Array.from(providers)
-})
+function matchesProvider(cluster: Cluster, provider: string): boolean {
+  if (provider === 'all') return true
+  const p = (cluster.provider || '').toLowerCase()
+  const g = (cluster.group || '').toLowerCase()
+  if (provider === 'bare-metal') {
+    return p === 'bare-metal' || p === 'baremetal' || p === 'onprem' || p === 'metal' || p === 'generic' || p === 'local'
+  }
+  if (provider === 'aws') return p === 'aws' || p === 'eks'
+  if (provider === 'gcp') return p === 'gcp' || p === 'gke'
+  if (provider === 'azure') return p === 'azure' || p === 'aks'
+  if (provider === 'edge') return p === 'edge' || g === 'edge'
+  if (provider === 'swarm') return p === 'swarm'
+  return p === provider.toLowerCase()
+}
 
 function matchesStatus(cluster: Cluster, status: 'all' | 'healthy' | 'degraded' | 'offline'): boolean {
   if (status === 'all') return true
@@ -115,13 +123,9 @@ function matchesStatus(cluster: Cluster, status: 'all' | 'healthy' | 'degraded' 
   return false
 }
 
-const showK8sClusters = computed(() => {
-  return clusterTypeFilter.value === 'all' || clusterTypeFilter.value === 'k8s'
-})
-
 const showSwarmBanner = computed(() => {
   if (!hasSwarm.value || !swarmInfo.value) return false
-  if (clusterTypeFilter.value === 'k8s') return false
+  if (providerFilter.value !== 'all' && providerFilter.value !== 'swarm') return false
   if (statusFilter.value !== 'all' && statusFilter.value !== 'healthy') return false
   if (searchFilter.value.trim()) {
     const q = searchFilter.value.toLowerCase().trim()
@@ -132,19 +136,22 @@ const showSwarmBanner = computed(() => {
 })
 
 const filteredClusters = computed(() => {
-  if (!showK8sClusters.value) return []
   let result = clusters.value
 
+  if (providerFilter.value !== 'all') {
+    result = result.filter(c => matchesProvider(c, providerFilter.value))
+  }
   if (statusFilter.value !== 'all') {
     result = result.filter(c => matchesStatus(c, statusFilter.value))
   }
   if (searchFilter.value.trim()) {
     const q = searchFilter.value.toLowerCase().trim()
     result = result.filter(c =>
-      c.name.toLowerCase().includes(q) ||
+      (c.name || '').toLowerCase().includes(q) ||
       (c.group || '').toLowerCase().includes(q) ||
       (c.provider || '').toLowerCase().includes(q) ||
-      (c.region || '').toLowerCase().includes(q)
+      (c.region || '').toLowerCase().includes(q) ||
+      (c.health_status || c.status || '').toLowerCase().includes(q)
     )
   }
   return result
@@ -218,28 +225,49 @@ async function handleRemove(cluster: Cluster) {
         <span class="mobile-badge-pill font-mono">({{ filteredClusters.length }})</span>
       </div>
       <div class="mobile-command-actions">
-        <button class="btn btn-secondary btn-xs" @click="showMobileSearch = !showMobileSearch" title="Search">
+        <button class="btn btn-secondary btn-xs" @click="showMobileSearch = !showMobileSearch" title="Search & Filter">
           <BaseIcon name="search" size="xs" />
         </button>
-        <button class="btn btn-secondary btn-xs" :disabled="loading" @click="fetchFleet" title="Refresh">
+        <button class="btn btn-secondary btn-xs" :disabled="loading" @click="fetchFleet" title="Sync">
           <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
         </button>
         <button class="btn btn-primary btn-xs" @click="showImportModal = true">
-          + Import
+          + Connect
         </button>
       </div>
     </div>
 
-    <!-- Mobile Expandable Search Strip -->
+    <!-- Mobile Expandable Search & Filter Strip -->
     <div v-if="showMobileSearch" class="mobile-search-strip animate-fade-in">
-      <input
-        v-model="searchFilter"
-        type="text"
-        placeholder="Filter clusters..."
-        class="input-glass mobile-search-input"
-        autofocus
-      />
-      <button v-if="searchFilter" class="search-clear-btn" @click="searchFilter = ''"><BaseIcon name="x" size="xs" /></button>
+      <div class="mobile-search-input-wrap">
+        <input
+          v-model="searchFilter"
+          type="text"
+          placeholder="Filter clusters..."
+          class="input-glass mobile-search-input font-mono"
+          autofocus
+        />
+        <button v-if="searchFilter" class="search-clear-btn" @click="searchFilter = ''">
+          <BaseIcon name="x" size="xs" />
+        </button>
+      </div>
+      <div class="mobile-filter-selects">
+        <select v-model="providerFilter" class="toolbar-select mobile-select font-mono">
+          <option value="all">All Providers</option>
+          <option value="bare-metal">Bare-Metal</option>
+          <option value="aws">AWS</option>
+          <option value="gcp">GCP</option>
+          <option value="azure">Azure</option>
+          <option value="swarm">Swarm</option>
+          <option value="edge">Edge</option>
+        </select>
+        <select v-model="statusFilter" class="toolbar-select mobile-select font-mono">
+          <option value="all">All Statuses</option>
+          <option value="healthy">Healthy</option>
+          <option value="degraded">Degraded</option>
+          <option value="offline">Offline</option>
+        </select>
+      </div>
     </div>
 
     <!-- Mobile PWA Ergonomics: 20px Micro-telemetry strip (<640px) -->
@@ -253,52 +281,97 @@ async function handleRemove(cluster: Cluster) {
       <span><BaseIcon name="box" size="xs" /> {{ totalPods }} pods</span>
     </div>
 
-    <!-- Desktop View Header -->
-    <div class="view-header">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>HYBRID & MULTI-CLOUD FEDERATION</span>
-        </div>
-        <h1 class="view-title">
-          <span class="title-full">Multi-Cluster Fleet Manager</span>
-          <span class="title-mobile"><BaseIcon name="globe" size="sm" /> Fleet Clusters</span>
-        </h1>
-        <p class="view-desc">
-          Centralized topology dashboard for on-premise, edge, Docker Swarm, and cloud Kubernetes clusters with live health monitoring and zero-downtime upgrades.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <!-- Segmented View Mode Toggle: [ Table ] [ Cards ] -->
-        <div class="segmented-control font-mono">
-          <button
-            class="segmented-btn"
-            :class="{ active: viewMode === 'table' }"
-            @click="viewMode = 'table'"
-            title="Table View"
-          >
-            <span><BaseIcon name="file-text" size="xs" /> Table</span>
-          </button>
-          <button
-            class="segmented-btn"
-            :class="{ active: viewMode === 'grid' }"
-            @click="viewMode = 'grid'"
-            title="Card Grid View"
-          >
-            <span><BaseIcon name="box" size="xs" /> Cards</span>
-          </button>
-        </div>
-
-        <button class="btn btn-secondary" :disabled="loading" @click="fetchFleet">
-          <span class="btn-text-full"><BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Syncing...' : 'Refresh Fleet' }}</span>
-          <span class="btn-text-mobile"><BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Syncing...' : 'Refresh' }}</span>
-        </button>
-        <button class="btn btn-primary" @click="showImportModal = true">
-          <span class="btn-text-full">+ Import Cluster</span>
-          <span class="btn-text-mobile">+ Import</span>
+    <!-- Sleek Unified 38px Enterprise Toolbar (Desktop & Tablet) -->
+    <div class="fleet-toolbar-sleek">
+      <!-- Search input with search icon and clear button -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="toolbar-search-icon" />
+        <input
+          v-model="searchFilter"
+          type="text"
+          placeholder="Search clusters..."
+          class="toolbar-search-input font-mono"
+        />
+        <button
+          v-if="searchFilter"
+          type="button"
+          class="toolbar-search-clear"
+          title="Clear search"
+          @click="searchFilter = ''"
+        >
+          <BaseIcon name="x" size="xs" />
         </button>
       </div>
+
+      <!-- Provider filter dropdown -->
+      <select v-model="providerFilter" class="toolbar-select font-mono" title="Filter by provider">
+        <option value="all">All Providers</option>
+        <option value="bare-metal">Bare-Metal</option>
+        <option value="aws">AWS</option>
+        <option value="gcp">GCP</option>
+        <option value="azure">Azure</option>
+        <option value="swarm">Swarm</option>
+        <option value="edge">Edge</option>
+      </select>
+
+      <!-- Status filter dropdown -->
+      <select v-model="statusFilter" class="toolbar-select font-mono" title="Filter by status">
+        <option value="all">All Statuses</option>
+        <option value="healthy">Healthy</option>
+        <option value="degraded">Degraded</option>
+        <option value="offline">Offline</option>
+      </select>
+
+      <!-- Inline compact KPI badge strip font-mono -->
+      <div class="toolbar-kpi-badge font-mono">
+        <span class="kpi-count">{{ clusters.length }} Clusters</span>
+        <span class="kpi-meta">({{ onlineCount }} Online · {{ totalNodes }} Nodes · {{ totalCores }} Cores)</span>
+      </div>
+
+      <div class="toolbar-spacer"></div>
+
+      <!-- Segmented View Mode Toggle: [ Table ] [ Cards ] -->
+      <div class="segmented-control font-mono">
+        <button
+          type="button"
+          class="segmented-btn"
+          :class="{ active: viewMode === 'table' }"
+          @click="viewMode = 'table'"
+          title="Table View"
+        >
+          <BaseIcon name="file-text" size="xs" />
+          <span>Table</span>
+        </button>
+        <button
+          type="button"
+          class="segmented-btn"
+          :class="{ active: viewMode === 'grid' }"
+          @click="viewMode = 'grid'"
+          title="Card Grid View"
+        >
+          <BaseIcon name="box" size="xs" />
+          <span>Cards</span>
+        </button>
+      </div>
+
+      <!-- Action buttons: Sync and + Connect Cluster -->
+      <button
+        type="button"
+        class="btn btn-secondary toolbar-btn"
+        :disabled="loading"
+        @click="fetchFleet"
+        title="Sync Fleet"
+      >
+        <BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" />
+        <span>Sync</span>
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary toolbar-btn"
+        @click="showImportModal = true"
+      >
+        <span>+ Connect Cluster</span>
+      </button>
     </div>
 
     <!-- Notification Toast -->
@@ -315,110 +388,11 @@ async function handleRemove(cluster: Cluster) {
       <button class="toast-close" @click="error = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Single-Line Metric KPI Bar (Desktop) -->
-    <FleetMetricHud
-      :total-control-planes="totalControlPlanes"
-      :k8s-cluster-count="k8sClusterCount"
-      :has-swarm="hasSwarm"
-      :healthy-count="healthyCount"
-      :total-nodes="totalNodes"
-      :k8s-nodes="k8sNodes"
-      :swarm-nodes="swarmNodes"
-      :cloud-providers="cloudProviders"
-    />
-
-    <!-- Enterprise Unified Filter Bar -->
-    <div class="fleet-filter-bar glass-panel">
-      <!-- Search Field -->
-      <div class="filter-search-wrap">
-        <span class="filter-search-icon"><BaseIcon name="search" size="xs" /></span>
-        <input
-          v-model="searchFilter"
-          type="text"
-          placeholder="Filter fleet by name, provider, tier..."
-          class="input-glass filter-search-input"
-        />
-        <button
-          v-if="searchFilter"
-          class="filter-search-clear"
-          title="Clear search"
-          @click="searchFilter = ''"
-        >
-          <BaseIcon name="x" size="xs" />
-        </button>
-      </div>
-
-      <div class="filter-groups-wrap">
-        <!-- Cluster Type Pills -->
-        <div class="filter-group">
-          <span class="filter-group-label">TYPE:</span>
-          <div class="filter-pills">
-            <button
-              class="filter-pill"
-              :class="{ active: clusterTypeFilter === 'all' }"
-              @click="clusterTypeFilter = 'all'"
-            >
-              All ({{ countAll }})
-            </button>
-            <button
-              class="filter-pill"
-              :class="{ active: clusterTypeFilter === 'k8s' }"
-              @click="clusterTypeFilter = 'k8s'"
-            >
-              <BaseIcon name="anchor" size="xs" /> Kubernetes ({{ countK8s }})
-            </button>
-            <button
-              class="filter-pill"
-              :class="{ active: clusterTypeFilter === 'swarm' }"
-              @click="clusterTypeFilter = 'swarm'"
-            >
-              <BaseIcon name="box" size="xs" /> Docker Swarm ({{ countSwarm }})
-            </button>
-          </div>
-        </div>
-
-        <!-- Status Filter Pills -->
-        <div class="filter-group">
-          <span class="filter-group-label">STATUS:</span>
-          <div class="filter-pills">
-            <button
-              class="filter-pill"
-              :class="{ active: statusFilter === 'all' }"
-              @click="statusFilter = 'all'"
-            >
-              All
-            </button>
-            <button
-              class="filter-pill pill-healthy"
-              :class="{ active: statusFilter === 'healthy' }"
-              @click="statusFilter = 'healthy'"
-            >
-              <span class="status-dot dot-emerald"></span> Healthy
-            </button>
-            <button
-              class="filter-pill pill-degraded"
-              :class="{ active: statusFilter === 'degraded' }"
-              @click="statusFilter = 'degraded'"
-            >
-              <span class="status-dot dot-amber"></span> Degraded
-            </button>
-            <button
-              class="filter-pill pill-offline"
-              :class="{ active: statusFilter === 'offline' }"
-              @click="statusFilter = 'offline'"
-            >
-              <span class="status-dot dot-rose"></span> Offline
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Docker Swarm Cluster Banner (When Active & Filtered) -->
     <FleetSwarmBanner v-if="showSwarmBanner && swarmInfo" :swarm-info="swarmInfo" />
 
     <!-- Desktop Kubernetes Fleet Section (Single viewMode: Table OR Grid, NEVER both) -->
-    <div v-if="showK8sClusters" class="desktop-only">
+    <div class="desktop-only">
       <FleetClustersTable
         v-if="viewMode === 'table'"
         :clusters="filteredClusters"
@@ -447,7 +421,7 @@ async function handleRemove(cluster: Cluster) {
     </div>
 
     <!-- Mobile-First Touch-Optimized Cluster Stream (<768px) -->
-    <div v-if="showK8sClusters" class="mobile-only">
+    <div class="mobile-only">
       <FleetMobileCards
         :clusters="filteredClusters"
         :action-loading="actionLoading"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import '../assets/styles/views/cost.css'
 import { useCostFinOps } from '../composables/useCostFinOps'
 import CostHudMetrics from '../components/cost/CostHudMetrics.vue'
@@ -38,6 +38,54 @@ const {
 } = useCostFinOps()
 
 const showMobileBreakdown = ref(false)
+const showBudgetLimitsModal = ref(false)
+const searchQuery = ref('')
+const clusterFilter = ref('all')
+const severityFilter = ref('all')
+const namespaceFilter = ref('all')
+
+const uniqueNamespaces = computed(() => {
+  const set = new Set<string>()
+  namespaces.value.forEach((n) => set.add(n.namespace))
+  return Array.from(set).sort()
+})
+
+const filteredClusters = computed(() => {
+  if (clusterFilter.value === 'all') return clusters.value
+  return clusters.value.filter((c) => c.name === clusterFilter.value)
+})
+
+const filteredNamespaces = computed(() => {
+  return namespaces.value.filter((ns) => {
+    if (clusterFilter.value !== 'all' && ns.cluster !== clusterFilter.value) return false
+    if (namespaceFilter.value !== 'all' && ns.namespace !== namespaceFilter.value) return false
+    if (searchQuery.value) {
+      const q = searchQuery.value.toLowerCase().trim()
+      const matchNs = ns.namespace.toLowerCase().includes(q)
+      const matchTeam = (ns.team || '').toLowerCase().includes(q)
+      const matchCluster = (ns.cluster || '').toLowerCase().includes(q)
+      if (!matchNs && !matchTeam && !matchCluster) return false
+    }
+    return true
+  })
+})
+
+const filteredWasteAlerts = computed(() => {
+  return wasteAlerts.value.filter((w) => {
+    if (clusterFilter.value !== 'all' && w.cluster !== clusterFilter.value) return false
+    if (severityFilter.value !== 'all' && w.severity.toLowerCase() !== severityFilter.value.toLowerCase()) return false
+    if (namespaceFilter.value !== 'all' && w.namespace !== namespaceFilter.value) return false
+    if (searchQuery.value) {
+      const q = searchQuery.value.toLowerCase().trim()
+      const matchRes = (w.resource || '').toLowerCase().includes(q)
+      const matchType = (w.type || '').toLowerCase().includes(q)
+      const matchNs = (w.namespace || '').toLowerCase().includes(q)
+      const matchCluster = (w.cluster || '').toLowerCase().includes(q)
+      if (!matchRes && !matchType && !matchNs && !matchCluster) return false
+    }
+    return true
+  })
+})
 
 const wasteColumns: Column<ResourceWaste>[] = [
   { key: 'severity', label: 'Severity', width: '14%', sortable: true },
@@ -51,21 +99,85 @@ const wasteColumns: Column<ResourceWaste>[] = [
 
 <template>
   <div class="view-container">
-    <!-- Desktop View Header (>=768px) -->
-    <header class="view-header desktop-header-wrap desktop-only">
-      <div>
-        <h1 class="view-title">Cluster Cost Intelligence & Resource Waste Analytics</h1>
-        <p class="view-desc">
-          Real-time unit economics breakdown across Kubernetes clusters, namespaces, and workloads with <span class="highlight">idle resource waste detection</span> and right-sizing recommendations.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn btn-secondary" :disabled="loading" @click="fetchCostData">
-          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Syncing...' : 'Refresh Metrics' }}</span>
+    <!-- Sleek Unified 38px Enterprise Toolbar (>=768px) -->
+    <div class="cost-toolbar-sleek desktop-only" role="toolbar" aria-label="FinOps Controls Toolbar">
+      <!-- Search input with search icon and clear button -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="toolbar-search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search costs, namespaces..."
+          class="toolbar-search-input font-mono"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="toolbar-search-clear"
+          title="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
         </button>
       </div>
-    </header>
+
+      <!-- Cluster filter dropdown -->
+      <select v-model="clusterFilter" class="toolbar-select font-mono" title="Filter by cluster">
+        <option value="all">All Clusters ({{ clusters.length }})</option>
+        <option v-for="c in clusters" :key="c.id" :value="c.name">
+          {{ c.name }} ({{ c.provider.toUpperCase() }})
+        </option>
+      </select>
+
+      <!-- Waste severity filter dropdown -->
+      <select v-model="severityFilter" class="toolbar-select font-mono" title="Filter by waste severity">
+        <option value="all">All Severities</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+
+      <!-- Namespace filter dropdown -->
+      <select v-model="namespaceFilter" class="toolbar-select font-mono" title="Filter by namespace">
+        <option value="all">All Namespaces ({{ uniqueNamespaces.length }})</option>
+        <option v-for="ns in uniqueNamespaces" :key="ns" :value="ns">{{ ns }}</option>
+      </select>
+
+      <!-- Inline compact KPI badge strip font-mono -->
+      <div class="toolbar-kpi-badge font-mono" role="status" aria-label="FinOps Run-Rate Summary">
+        <span class="kpi-runrate">${{ totalMonthlyCost.toLocaleString() }} / mo (Run-Rate)</span>
+        <span class="kpi-sep">·</span>
+        <span class="kpi-idle">${{ totalWastedCost.toLocaleString() }} Idle</span>
+        <span class="kpi-sep">·</span>
+        <span class="kpi-spot">{{ spotRatio }}% Spot</span>
+      </div>
+
+      <div class="toolbar-spacer"></div>
+
+      <!-- Action buttons: Refresh and Budget Limits -->
+      <div class="toolbar-actions-group">
+        <button
+          type="button"
+          class="btn btn-secondary toolbar-btn"
+          :disabled="loading"
+          title="Refresh FinOps metrics"
+          @click="fetchCostData"
+        >
+          <BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" />
+          <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary toolbar-btn"
+          title="Configure FinOps budget limits"
+          @click="showBudgetLimitsModal = true"
+        >
+          <BaseIcon name="sliders" size="xs" />
+          <span>Budget Limits</span>
+        </button>
+      </div>
+    </div>
 
     <!-- 44px Mobile Command Bar (<768px) -->
     <div class="mobile-command-bar cost-mobile-command-bar mobile-only">
@@ -128,7 +240,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
     <CostBreakdownChart
       class="desktop-only"
       :cloud-breakdown="cloudBreakdown"
-      :clusters="clusters"
+      :clusters="filteredClusters"
       :loading="loading"
       @refresh="fetchCostData"
     />
@@ -136,7 +248,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
     <!-- Section 1: Namespace Cost Allocations (>=768px) -->
     <NamespaceCostTable
       class="desktop-only"
-      :namespaces="namespaces"
+      :namespaces="filteredNamespaces"
       :loading="loading"
       :error="error"
       @save-budget="setBudgetLimit"
@@ -150,13 +262,13 @@ const wasteColumns: Column<ResourceWaste>[] = [
           <h2 class="section-title">Resource Waste & Idle Allocation Alerts</h2>
           <p class="section-subtitle">Identified overprovisioned pods, unattached persistent volumes, and orphan resources</p>
         </div>
-        <span class="badge badge-rose">{{ wasteAlerts.length }} Waste Findings</span>
+        <span class="badge badge-rose">{{ filteredWasteAlerts.length }} Waste Findings</span>
       </div>
 
       <div class="cost-desktop-table">
         <DataTable
           :columns="wasteColumns"
-          :data="wasteAlerts"
+          :data="filteredWasteAlerts"
           :loading="loading"
           searchable
           search-placeholder="Search resource name, waste type, or namespace..."
@@ -195,8 +307,8 @@ const wasteColumns: Column<ResourceWaste>[] = [
     <!-- Mobile High-Density Cards Stream (<768px, ~65-72px/item) -->
     <div class="mobile-only cost-mobile-container">
       <CostMobileCards
-        :namespaces="namespaces"
-        :waste-alerts="wasteAlerts"
+        :namespaces="filteredNamespaces"
+        :waste-alerts="filteredWasteAlerts"
         :loading="loading"
         @right-size="handleDismissWaste"
         @select-namespace="openNamespaceBreakdown"
@@ -302,6 +414,48 @@ const wasteColumns: Column<ResourceWaste>[] = [
           </p>
         </div>
       </div>
+    </ModalDrawer>
+
+    <!-- Global FinOps Budget Limits Governance Modal -->
+    <ModalDrawer
+      :show="showBudgetLimitsModal"
+      title="FinOps Budget Governance & Allocations"
+      subtitle="Configure monthly spending caps and alert thresholds across team namespaces"
+      mode="modal"
+      max-width="520px"
+      @close="showBudgetLimitsModal = false"
+    >
+      <div class="budget-modal-content font-mono">
+        <div class="budget-modal-desc text-muted">
+          Adjust namespace budget thresholds below. Allocations reaching &gt;80% trigger FinOps alerts, while &gt;100% flag cost overruns.
+        </div>
+        <div class="budget-list">
+          <div v-for="ns in namespaces" :key="ns.namespace" class="budget-list-row glass-panel">
+            <div class="budget-row-meta">
+              <span class="budget-row-ns font-bold text-white">{{ ns.namespace }}</span>
+              <span class="budget-row-team text-muted">{{ ns.team }} · Spend: ${{ ns.monthly_cost.toLocaleString() }}/mo</span>
+            </div>
+            <div class="budget-row-controls">
+              <div class="budget-input-inline">
+                <span class="currency-sym">$</span>
+                <input
+                  type="number"
+                  min="100"
+                  step="500"
+                  :value="ns.budget_limit"
+                  class="budget-num-input font-mono"
+                  @change="(e) => setBudgetLimit(ns.namespace, Number((e.target as HTMLInputElement).value))"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="modal-actions">
+          <button class="btn btn-primary" @click="showBudgetLimitsModal = false">Done</button>
+        </div>
+      </template>
     </ModalDrawer>
   </div>
 </template>

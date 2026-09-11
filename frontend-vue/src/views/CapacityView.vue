@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import '../assets/styles/views/capacity.css'
 import '../assets/styles/components/capacity-drawers.css'
@@ -99,28 +99,47 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
 
 <template>
   <div class="capacity-view-container">
-    <!-- View Header (Desktop, De-neonized: clean view-tag without pulse-dot) -->
-    <div class="view-header desktop-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span>PREDICTIVE WORKLOAD CAPACITY & SIZING</span>
-        </div>
-        <h1 class="view-title">Cluster Capacity Planning & Resource Forecasting</h1>
-        <p class="view-desc">
-          Predictive ML forecasting for <span class="highlight">CPU, Memory, and Storage</span> exhaustion runways with automated node headroom sizing.
-        </p>
+    <!-- Compact 38px Capacity Toolbar (Desktop) -->
+    <div class="capacity-toolbar desktop-only">
+      <div class="capacity-toolbar-left">
+        <BaseIcon name="trending-up" size="sm" class="text-cyan" />
+        <span class="capacity-toolbar-title font-bold">Capacity Planning & Forecasting</span>
+        <span class="badge badge-cyan font-mono text-xs">ML Sizing</span>
       </div>
 
-      <div class="header-actions">
-        <button class="btn btn-secondary" :disabled="loading" @click="() => fetchCapacityData()">
-          <BaseIcon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
+      <div class="capacity-toolbar-actions">
+        <button
+          type="button"
+          class="telemetry-toggle-btn font-mono"
+          :class="{ active: showTelemetry }"
+          :title="showTelemetry ? 'Hide Live Telemetry' : 'Live Telemetry'"
+          @click="showTelemetry = !showTelemetry"
+        >
+          <BaseIcon :name="showTelemetry ? 'chevron-up' : 'activity'" size="xs" />
+          <span>{{ showTelemetry ? 'Hide Telemetry' : 'Live Telemetry' }}</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary btn-toolbar"
+          :disabled="loading"
+          @click="() => fetchCapacityData()"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
           <span>{{ loading ? 'Syncing...' : 'Refresh Forecasts' }}</span>
         </button>
-        <button class="btn btn-secondary" @click="showPolicyModal = true">
-          <BaseIcon name="sliders" size="sm" />
+        <button
+          type="button"
+          class="btn btn-secondary btn-toolbar"
+          @click="showPolicyModal = true"
+        >
+          <BaseIcon name="sliders" size="xs" />
           <span>Capacity Policy</span>
         </button>
-        <button class="btn btn-primary" @click="showRecordModal = true">
+        <button
+          type="button"
+          class="btn btn-primary btn-toolbar"
+          @click="showRecordModal = true"
+        >
           <span class="font-bold">+</span>
           <span>Record Checkpoint</span>
         </button>
@@ -161,7 +180,7 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
       <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Metrics HUD Grid (Top 4 Metrics) -->
+    <!-- Metrics HUD Grid (Top 4 Metrics - Sleek High-Density Horizontal KPI Ribbon) -->
     <CapacityHudCards
       class="desktop-only"
       :saturation="clusterSaturation"
@@ -170,21 +189,17 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
       :headroom="safeHeadroom"
     />
 
-    <!-- Desktop Telemetry & Forecast Toggle (Above the fold, matches /hosts pattern) -->
-    <div class="capacity-telemetry-toggle-row desktop-only">
-      <button
-        type="button"
-        class="telemetry-toggle-btn font-mono"
-        :class="{ active: showTelemetry }"
-        :title="showTelemetry ? 'Hide Forecast & Telemetry' : 'Show Forecast & Telemetry'"
-        @click="showTelemetry = !showTelemetry"
-      >
-        <BaseIcon :name="showTelemetry ? 'chevron-up' : 'activity'" size="xs" />
-        <span>{{ showTelemetry ? 'Hide Forecast & Telemetry' : 'Show Forecast & Telemetry' }}</span>
-      </button>
+    <!-- Node Headroom Matrix: Desktop Table (Directly Above the Fold) -->
+    <div class="desktop-only-wrapper">
+      <NodeHeadroomTable :nodes="nodesHeadroom" @rebalance="rebalanceNode" @inspect="handleInspectNode" />
     </div>
 
-    <!-- Collapsible Live Telemetry & Predictive Forecast (Desktop Only, Default Collapsed) -->
+    <!-- Resource Forecast Predictive Trend Chart (Desktop Directly Above the Fold) -->
+    <div class="desktop-only-wrapper">
+      <ResourceForecastChart :forecasts="forecasts" />
+    </div>
+
+    <!-- Collapsible Live Telemetry Scrubbers (Desktop Only, Default Collapsed) -->
     <Transition name="fade">
       <div v-if="showTelemetry" class="collapsible-telemetry-wrapper desktop-only animate-fade-in">
         <!-- Live Cluster Saturation Telemetry (De-neonized: clean telemetry-live-badge) -->
@@ -256,16 +271,8 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
             </div>
           </div>
         </div>
-
-        <!-- Resource Forecast Predictive Trend Chart (Desktop Full linear regression) -->
-        <ResourceForecastChart :forecasts="forecasts" />
       </div>
     </Transition>
-
-    <!-- Node Headroom Matrix: Desktop Table (Visible immediately below CapacityHudCards when collapsed!) -->
-    <div class="desktop-only-wrapper">
-      <NodeHeadroomTable :nodes="nodesHeadroom" @rebalance="rebalanceNode" @inspect="handleInspectNode" />
-    </div>
 
     <!-- Bespoke Mobile SVG Forecast Trend Card (Mobile Adaption) -->
     <CapacityMobileTrendCard class="mobile-only" :forecasts="forecasts" :exhaustion="daysToExhaustion" />
