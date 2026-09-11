@@ -127,17 +127,17 @@ const {
         <!-- Compact Deep-Dive and Refresh Buttons -->
         <button
           type="button"
-          class="btn-toolbar"
+          class="btn-telemetry-action"
           @click="openDeepDiveModal"
           title="Deep-Dive Telemetry"
         >
           <BaseIcon name="activity" size="xs" />
-          <span>Deep-Dive</span>
+          <span>Deep-Dive Telemetry</span>
         </button>
 
         <button
           type="button"
-          class="btn-toolbar btn-toolbar-icon"
+          class="btn-telemetry-refresh"
           @click="pollClusterMetrics"
           :disabled="loading"
           title="Refresh Telemetry"
