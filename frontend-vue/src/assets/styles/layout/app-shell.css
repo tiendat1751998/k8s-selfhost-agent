@@ -54,7 +54,7 @@
 }
 
 /* Nav Menu */
-.nav-menu { padding: 8px 12px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.nav-menu { padding: 8px 12px 48px 12px; overscroll-behavior: contain; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .nav-group-wrapper { display: flex; flex-direction: column; gap: 2px; }
 .nav-section-header {
   display: flex; align-items: center;
@@ -93,7 +93,16 @@
   font-family: var(--font-mono); animation: pulse 1.5s infinite;
 }
 .sidebar-footer { flex-shrink: 0; padding: 14px 16px; border-top: 1px solid var(--border-subtle); background: rgba(11, 15, 25, 0.95); }
-.telemetry-card { background: rgba(16, 24, 40, 0.6); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; }
+.telemetry-card {
+  background: rgba(16, 24, 40, 0.6); border: 1px solid var(--border-subtle);
+  border-radius: 10px; padding: 10px 12px; cursor: pointer;
+  transition: all 0.2s ease; user-select: none;
+}
+.telemetry-card:hover {
+  background: rgba(16, 24, 40, 0.85); border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.2), inset 0 0 12px rgba(16, 185, 129, 0.05);
+  transform: translateY(-1px);
+}
 .telemetry-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; margin-bottom: 4px; }
 .telemetry-key { color: var(--text-muted); }
 .telemetry-val { font-weight: 600; }
@@ -194,17 +203,21 @@
   cursor: pointer; padding: 0;
 }
 .tenant-select option { background: var(--bg-sidebar); color: #fff; }
-.tenant-chevron { position: absolute; right: 8px; font-size: 9px; color: var(--text-muted); pointer-events: none; }
+.tenant-chevron { position: absolute; right: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); pointer-events: none; }
 .hud-status-pill {
   display: inline-flex; align-items: center;
   gap: 7px; height: 32px;
   padding: 0 10px; border-radius: 6px;
   background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle);
   font-size: 12px; font-weight: 600;
-  cursor: help; transition: all 0.15s ease;
+  cursor: pointer; transition: all 0.15s ease;
   user-select: none;
 }
-.hud-status-pill:hover { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.2); }
+.hud-status-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.25);
+}
 .status-label { letter-spacing: 0.02em; }
 .hud-user { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--border-subtle); height: 32px; }
 .user-profile-badge {

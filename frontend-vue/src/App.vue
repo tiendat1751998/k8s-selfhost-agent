@@ -11,6 +11,7 @@ import { api } from './api/client'
 import { tenancyApi } from './api/management'
 import { overviewApi } from './api/overview'
 import AppSidebar from './components/layout/AppSidebar.vue'
+import ZeroTrustDrawer from './components/layout/ZeroTrustDrawer.vue'
 import AppCommandPalette from './components/layout/AppCommandPalette.vue'
 import TopHudAlertBell from './components/layout/TopHudAlertBell.vue'
 import AlertCenterModal from './components/overview/alerts/AlertCenterModal.vue'
@@ -39,6 +40,7 @@ const selectedTenant = ref('default-tenant')
 const showCommandPalette = ref(false)
 const mobileSidebarOpen = ref(false)
 const isSidebarCollapsed = ref(false)
+const showZeroTrustDrawer = ref(false)
 
 watch(() => route.path, () => {
   mobileSidebarOpen.value = false
@@ -219,6 +221,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
       @tenant-change="handleTenantChange"
       @logout="handleLogout"
       @close-mobile="mobileSidebarOpen = false"
+      @open-zerotrust="showZeroTrustDrawer = true"
     />
 
     <!-- Main Wrapper -->
@@ -281,15 +284,22 @@ function handleNavigateToHost(nodeNameOrId: string) {
                 {{ t.name }}
               </option>
             </select>
-            <span class="tenant-chevron" aria-hidden="true">▾</span>
+            <span class="tenant-chevron" aria-hidden="true">
+              <BaseIcon name="chevron-down" size="xs" />
+            </span>
           </div>
 
-          <!-- Consolidated System Telemetry Pill -->
+          <!-- Consolidated System Telemetry Pill (Clickable) -->
           <div
             class="hud-status-pill"
-            :title="systemStatusTooltip"
-            role="status"
+            :title="`${systemStatusTooltip} — Click to inspect down nodes`"
+            role="button"
+            tabindex="0"
+            aria-label="Inspect down nodes in Hosts view"
             aria-live="polite"
+            @click="router.push('/hosts?status=offline')"
+            @keydown.enter="router.push('/hosts?status=offline')"
+            @keydown.space.prevent="router.push('/hosts?status=offline')"
           >
             <span class="pulse-dot" :class="systemStatus.dotClass"></span>
             <span class="status-label" :class="systemStatus.textClass">
@@ -341,6 +351,9 @@ function handleNavigateToHost(nodeNameOrId: string) {
 
     <!-- Mobile Bottom Navigation Bar (Docked) -->
     <AppMobileNav />
+
+    <!-- ZeroTrust KMS & Dual-Sync Attestation Drawer -->
+    <ZeroTrustDrawer v-model:show="showZeroTrustDrawer" />
 
     <!-- PWA Install Floating Banner -->
     <PwaInstallBanner />
