@@ -4,6 +4,7 @@ import type { RolloutState } from '../../composables/useDeployments'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
+import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import { formatContainerName, formatImageName } from '../../utils/dockerFormat'
 
 interface Props {
@@ -14,7 +15,7 @@ interface Props {
   getRolloutState: (app: DeploymentApp) => RolloutState
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   (e: 'inspect', app: DeploymentApp): void
@@ -26,16 +27,33 @@ const emit = defineEmits<{
 }>()
 
 const columns: Column<Record<string, unknown>>[] = [
-  { key: 'name', label: 'Workload & Namespace', sortable: true },
-  { key: 'strategy', label: 'Strategy / Pipeline', width: '180px', sortable: true },
-  { key: 'image', label: 'Container Image & Rev', sortable: true },
-  { key: 'replicas', label: 'Replicas & Scale', width: '140px', sortable: true, align: 'center' },
-  { key: 'status', label: 'Health Status', width: '130px', sortable: true },
-  { key: 'actions', label: 'Operations', width: '380px', align: 'right' },
+  { key: 'name', label: 'Workload & Namespace', width: '220px', sortable: true },
+  { key: 'strategy', label: 'Strategy', width: '130px', sortable: true },
+  { key: 'image', label: 'Container Image', width: '180px', sortable: true },
+  { key: 'replicas', label: 'Pods / Scale', width: '130px', sortable: true, align: 'center' },
+  { key: 'status', label: 'Status', width: '110px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '130px', align: 'right' },
 ]
 
 function asDeployment(row: unknown): DeploymentApp {
   return row as DeploymentApp
+}
+
+function getRowActions(app: DeploymentApp): ActionItem[] {
+  return [
+    { id: 'inspect', label: 'Inspect Details', icon: 'search' },
+    { id: 'strategy', label: 'Rollout Strategy', icon: 'git-branch' },
+    { id: 'restart', label: props.actionLoading === app.name ? 'Restarting...' : 'Restart Pods', icon: 'refresh', disabled: props.actionLoading === app.name },
+    { id: 'sep', label: '', separator: true },
+    { id: 'delete', label: 'Delete Workload', icon: 'trash', variant: 'danger', disabled: props.actionLoading === app.name },
+  ]
+}
+
+function handleActionSelect(actionId: string, app: DeploymentApp) {
+  if (actionId === 'inspect') emit('inspect', app)
+  else if (actionId === 'strategy') emit('strategy', app)
+  else if (actionId === 'restart') emit('restart', app)
+  else if (actionId === 'delete') emit('delete', app)
 }
 </script>
 
@@ -46,7 +64,7 @@ function asDeployment(row: unknown): DeploymentApp {
       :data="(deployments as unknown as Record<string, unknown>[])"
       :loading="loading"
       :error="error"
-      empty-message="0 Workloads Found. No active Kubernetes deployments or Docker Swarm services detected on this cluster/node."
+      empty-message="0 Workloads Found. No active workloads match the selected filter criteria."
     >
       <!-- Name & Namespace Cell -->
       <template #cell-name="{ row }">
@@ -156,7 +174,7 @@ function asDeployment(row: unknown): DeploymentApp {
         <StatusBadge :status="asDeployment(row).status" size="sm" />
       </template>
 
-      <!-- Operations Cell -->
+      <!-- Operations Cell: Max 2 Inline Buttons + [ ⋯ ] ActionDropdown -->
       <template #cell-actions="{ row }">
         <div class="action-buttons">
           <button
@@ -165,7 +183,8 @@ function asDeployment(row: unknown): DeploymentApp {
             title="Inspect Real Container Logs"
             @click="emit('logs', asDeployment(row))"
           >
-            <span><BaseIcon name="file-text" size="xs" /> Logs</span>
+            <BaseIcon name="file-text" size="xs" />
+            <span>Logs</span>
           </button>
 
           <button
@@ -174,46 +193,16 @@ function asDeployment(row: unknown): DeploymentApp {
             title="Scale Replicas"
             @click="emit('scale', asDeployment(row))"
           >
-            <span><BaseIcon name="zap" size="xs" /> Scale</span>
+            <BaseIcon name="zap" size="xs" />
+            <span>Scale</span>
           </button>
 
-          <button
-            type="button"
-            class="btn btn-secondary btn-xs btn-strategy"
-            title="Manage Canary / Blue-Green Rollout Strategy"
-            @click="emit('strategy', asDeployment(row))"
-          >
-            <span><BaseIcon name="git-branch" size="xs" /> Strategy</span>
-          </button>
-
-          <button
-            type="button"
-            class="btn btn-secondary btn-xs"
-            title="Inspect Details"
-            @click="emit('inspect', asDeployment(row))"
-          >
-            <span><BaseIcon name="search" size="xs" /> Details</span>
-          </button>
-
-          <button
-            type="button"
-            class="btn btn-secondary btn-xs"
-            :disabled="actionLoading === asDeployment(row).name"
-            title="Rolling Restart Pods"
-            @click="emit('restart', asDeployment(row))"
-          >
-            <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': actionLoading === asDeployment(row).name }" />
-          </button>
-
-          <button
-            type="button"
-            class="btn btn-secondary btn-xs btn-remove"
-            :disabled="actionLoading === asDeployment(row).name"
-            title="Terminate Deployment"
-            @click="emit('delete', asDeployment(row))"
-          >
-            <span><BaseIcon name="trash" size="xs" /></span>
-          </button>
+          <ActionDropdown
+            :items="getRowActions(asDeployment(row))"
+            size="xs"
+            trigger-title="Workload Operations"
+            @select="handleActionSelect($event, asDeployment(row))"
+          />
         </div>
       </template>
     </DataTable>
