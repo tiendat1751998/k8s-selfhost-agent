@@ -368,3 +368,11 @@
     font-size: 12px;
   }
 }
+
+/* Unification Utility Styles */
+.fleet-toolbar-sleek {
+  transition: all 0.2s ease;
+}
+.text-blue {
+  color: #60a5fa;
+}
