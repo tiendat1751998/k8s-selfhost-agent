@@ -81,12 +81,13 @@
 
 /* Smooth Capsule Pill Bar (Linear / Audit style) */
 .deployments-toolbar-sleek .toolbar-capsule-pills {
+  flex: 0 0 auto;
+  width: auto;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  flex-shrink: 0;
+  gap: 4px;
+  position: static;
   user-select: none;
-  max-width: 360px;
 }
 .deployments-toolbar-sleek .capsule-pill {
   border-radius: 9999px;
@@ -130,9 +131,11 @@
 
 /* Refined Compact Dropdown (Status) */
 .deployments-toolbar-sleek .toolbar-select {
-  width: 110px;
-  min-width: 110px;
-  max-width: 115px;
+  flex: 0 0 115px;
+  width: 115px;
+  min-width: 115px;
+  position: static;
+  margin: 0;
   height: 28px;
   border-radius: 6px;
   font-size: 11.5px;
@@ -141,7 +144,6 @@
   color: #cbd5e1;
   padding: 0 6px;
   cursor: pointer;
-  flex-shrink: 0;
   box-sizing: border-box;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -156,11 +158,14 @@
 }
 
 /* Primary CTA & Secondary Action Buttons */
+.deployments-toolbar-sleek .toolbar-actions,
 .deployments-toolbar-sleek .toolbar-actions-group {
-  display: flex;
+  margin-left: auto;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   flex-shrink: 0;
+  position: static;
 }
 .deployments-toolbar-sleek .toolbar-btn {
   height: 28px;
@@ -285,6 +290,7 @@
   .deployments-toolbar-sleek .capsule-pill { padding: 0 7px; font-size: 11px; gap: 2px; }
 }
 @media (max-width: 1366px) {
+  .deployments-toolbar-sleek .toolbar-actions,
   .deployments-toolbar-sleek .toolbar-actions-group { gap: 4px; }
 }
 
