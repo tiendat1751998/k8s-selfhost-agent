@@ -1,0 +1,255 @@
+/* ==========================================================================
+   Enterprise LogTargetTree Stylesheet
+   ========================================================================== */
+.log-target-tree {
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  overflow: hidden;
+  height: 100%;
+  min-height: 520px;
+}
+
+.tree-header {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  background: #131b2e;
+  border-bottom: 1px solid #1e293b;
+}
+
+.tree-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
+.tree-badge {
+  font-size: 10px;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.tree-search-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  background: #0b0f19;
+  border-bottom: 1px solid #1e293b;
+}
+
+.tree-search-ico {
+  position: absolute;
+  left: 14px;
+  font-size: 11px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.tree-search-input {
+  width: 100%;
+  height: 28px;
+  padding-left: 32px;
+  padding-right: 22px;
+  font-size: 11px;
+  background: #131b2e;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  color: #f8fafc;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.tree-search-input:focus {
+  border-color: #38bdf8;
+}
+
+.tree-search-clear {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.tree-search-clear:hover {
+  color: #f8fafc;
+}
+
+.tree-content {
+  padding: 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tree-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #94a3b8;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tree-item:hover {
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+.tree-item.active {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.tree-item.active .item-name {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.tree-accent-bar {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: #38bdf8;
+  border-radius: 0 2px 2px 0;
+}
+
+.tree-item.active .tree-accent-bar {
+  display: block;
+}
+
+.item-icon {
+  font-size: 13px;
+  line-height: 1;
+  color: #64748b;
+}
+
+.tree-item:hover .item-icon,
+.tree-item.active .item-icon {
+  color: #38bdf8;
+}
+
+.item-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.item-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-sub {
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.1;
+}
+
+.item-count {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: #131b2e;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  color: #64748b;
+}
+
+.item-count.has-logs {
+  color: #94a3b8;
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.tree-item.active .item-count {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.tree-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 4px;
+}
+
+.section-toggle:hover {
+  color: #cbd5e1;
+}
+
+.section-caret {
+  font-size: 10px;
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.section-caret.caret-down {
+  transform: rotate(90deg);
+}
+
+.section-label {
+  flex: 1;
+}
+
+.section-count {
+  font-size: 9px;
+  background: #131b2e;
+  border: 1px solid #1e293b;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 6px;
+}

@@ -39,7 +39,21 @@ export const useLogStore = defineStore('log', () => {
   const isConnected = ref(false)
   const isPaused = ref(false)
   const socket = ref<WebSocket | null>(null)
-  const maxBufferSize = 1000
+  const maxBufferSize = ref(10000)
+
+  function setMaxBufferSize(size: number) {
+    const parsed = Number(size)
+    if (isNaN(parsed) || parsed < 1000) {
+      maxBufferSize.value = 1000
+    } else if (parsed > 50000) {
+      maxBufferSize.value = 50000
+    } else {
+      maxBufferSize.value = parsed
+    }
+    if (logs.value.length > maxBufferSize.value) {
+      logs.value = logs.value.slice(-maxBufferSize.value)
+    }
+  }
   const reconnectAttempts = ref(0)
   const activeFilter = ref<LogFilterOptions>({})
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -163,7 +177,7 @@ export const useLogStore = defineStore('log', () => {
 
   function appendLog(entry: LogEntry) {
     logs.value.push(entry)
-    if (logs.value.length > maxBufferSize) logs.value.splice(0, logs.value.length - maxBufferSize)
+    if (logs.value.length > maxBufferSize.value) logs.value.splice(0, logs.value.length - maxBufferSize.value)
   }
 
   function clear() { logs.value = [] }
@@ -187,9 +201,9 @@ export const useLogStore = defineStore('log', () => {
         attributes: raw.attributes,
       }))
       if (append) {
-        logs.value = [...logs.value, ...mapped].slice(-maxBufferSize)
+        logs.value = [...logs.value, ...mapped].slice(-maxBufferSize.value)
       } else {
-        logs.value = mapped.slice(0, maxBufferSize)
+        logs.value = mapped.slice(0, maxBufferSize.value)
       }
       totalHistoricalCount.value = res.total_count || 0
       hasMoreHistorical.value = res.has_more || false
@@ -216,6 +230,7 @@ export const useLogStore = defineStore('log', () => {
     isPaused,
     activeFilter,
     maxBufferSize,
+    setMaxBufferSize,
     histogram,
     isHistoricalLoading,
     isHistogramLoading,
