@@ -1,0 +1,256 @@
+/* ==========================================
+   POD LOG VIEWER - STREAM & TERMINAL WINDOW
+   ========================================== */
+
+/* Terminal Window Shell */
+.log-terminal-window {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #080c14;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
+  min-height: 380px;
+}
+
+.terminal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 10px;
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.tdot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.tdot-red { background: #ef4444; }
+.tdot-yellow { background: #f59e0b; }
+.tdot-green { background: #10b981; }
+
+.terminal-title {
+  font-size: 11.5px;
+  color: var(--text-secondary, #94a3b8);
+  letter-spacing: 0.02em;
+  flex: 1;
+}
+
+.terminal-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stream-badge-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.stream-badge-paused {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+/* Live Dot (De-neonized) */
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: logPulse 2s infinite ease-in-out;
+  display: inline-block;
+}
+
+@keyframes logPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.spin-icon {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Terminal Body */
+.terminal-body {
+  flex: 1;
+  position: relative;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 8px 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  background: #080c14;
+}
+
+.terminal-loading,
+.terminal-empty,
+.terminal-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-muted, #64748b);
+  gap: 10px;
+}
+
+.terminal-spinner {
+  width: 26px;
+  height: 26px;
+  border: 2px solid rgba(56, 189, 248, 0.2);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Log Lines List */
+.log-lines-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.log-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  transition: background 0.1s ease;
+  box-sizing: border-box;
+}
+
+.log-line:hover { background: rgba(255, 255, 255, 0.04); }
+
+.log-line-error {
+  background: rgba(244, 63, 94, 0.08);
+  border-left: 2px solid #f43f5e;
+}
+
+.log-line-warn {
+  background: rgba(245, 158, 11, 0.06);
+  border-left: 2px solid #f59e0b;
+}
+
+.log-line-num {
+  width: 32px;
+  color: rgba(255, 255, 255, 0.25);
+  text-align: right;
+  flex-shrink: 0;
+  user-select: none;
+  font-size: 10px;
+}
+
+.log-line-time {
+  font-size: 10px;
+  flex-shrink: 0;
+  color: #64748b;
+  user-select: none;
+}
+
+.log-line-level {
+  width: 50px;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.log-line-content {
+  flex: 1;
+  white-space: nowrap;
+  color: #e2e8f0;
+}
+
+.wrap-text .log-line-content {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-line-error .log-line-content { color: #fda4af; }
+.log-line-warn .log-line-content { color: #fde68a; }
+
+/* Jump to bottom button */
+.jump-bottom-btn {
+  position: absolute;
+  bottom: 14px;
+  right: 20px;
+  z-index: 15;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.jump-bottom-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+}
+
+/* Terminal Footer */
+.terminal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  background: rgba(15, 23, 42, 0.7);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  gap: 10px;
+}
+
+.cluster-tag { color: var(--text-secondary, #94a3b8); }
+.text-rose { color: #f43f5e; }
+.text-amber { color: #f59e0b; }
+.text-emerald { color: #10b981; }
+.text-cyan { color: #38bdf8; }
+.text-slate { color: #94a3b8; }
+.text-muted { color: #64748b; }
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
