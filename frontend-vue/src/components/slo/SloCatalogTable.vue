@@ -21,13 +21,13 @@ const emit = defineEmits<{
 
 const sloColumns: Column<SLORow>[] = [
   { key: 'service', label: 'Service / Workload', sortable: true },
-  { key: 'indicator_type', label: 'Indicator Type (SLI)', width: '130px', sortable: true },
-  { key: 'target', label: 'Target Objective', width: '110px', sortable: true },
-  { key: 'window', label: 'Rolling Window', width: '100px', sortable: true },
-  { key: 'query', label: 'PromQL SLI Query', width: '200px' },
-  { key: 'alert_threshold', label: 'Burn Alert Threshold', width: '130px', sortable: true },
-  { key: 'created_at', label: 'Defined At', width: '100px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '110px', align: 'right' },
+  { key: 'indicator_type', label: 'SLI Type', width: '100px', sortable: true },
+  { key: 'target', label: 'Target', width: '80px', sortable: true },
+  { key: 'window', label: 'Window', width: '75px', sortable: true },
+  { key: 'query', label: 'SLI Query', width: '160px' },
+  { key: 'alert_threshold', label: 'Burn Alert', width: '100px', sortable: true },
+  { key: 'created_at', label: 'Created', width: '85px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '115px', align: 'right' },
 ]
 
 function formatPercent(val?: unknown): string {
@@ -87,7 +87,7 @@ function formatDate(d?: unknown): string {
       </template>
 
       <template #cell-query="{ row }">
-        <span class="query-snippet font-mono" :title="String(row.query || '')">
+        <span class="query-code font-mono" :title="String(row.query || '')">
           {{ row.query || '—' }}
         </span>
       </template>

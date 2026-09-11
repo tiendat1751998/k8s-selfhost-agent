@@ -193,7 +193,7 @@ function getProviderIcon(provider: string): string {
     <div v-if="clusters.length > 0" class="clusters-cost-grid">
       <div v-for="cluster in clusters" :key="cluster.id" class="cluster-cost-card glass-panel">
         <div class="cluster-cost-top">
-          <div class="provider-icon-box">{{ getProviderIcon(cluster.provider) }}</div>
+          <div class="provider-icon-box"><BaseIcon :name="getProviderIcon(cluster.provider)" size="xs" /></div>
           <div class="cluster-cost-meta">
             <h3 class="cluster-name">{{ cluster.name }}</h3>
             <span class="provider-name font-mono text-muted">{{ cluster.provider.toUpperCase() }}</span>
