@@ -173,6 +173,13 @@
 .fill-rose { background: #f43f5e; }
 .resource-text { font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
 .sub-dim { color: var(--text-muted, #64748b); font-size: 10px; }
+
+@media (max-width: 1024px) {
+  .node-table .sub-dim,
+  .resource-text .sub-dim {
+    display: none !important;
+  }
+}
 .badge-workload { font-size: 10.5px; color: #38bdf8; background: rgba(56, 189, 248, 0.1); padding: 1px 5px; border-radius: 4px; }
 .probe-val { color: #10b981; font-size: 11px; }
 

@@ -55,45 +55,14 @@
 .overview-toolbar-sleek .badge {
   display: inline-flex;
   align-items: center;
-  height: 24px;
+  gap: 6px;
+  height: 26px;
   padding: 0 8px;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
-}
-
-.overview-toolbar-sleek .badge-auto-refresh {
-  font-size: 10.5px;
-}
-
-.overview-toolbar-sleek .last-sync-text {
-  font-size: 11px;
-  color: var(--text-muted, #64748b);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-/* Inline Compact KPI Badge Strip */
-.overview-toolbar-sleek .toolbar-kpi-strip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  user-select: none;
-}
-
-.overview-toolbar-sleek .kpi-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent-cyan, #38bdf8);
-  background: rgba(56, 189, 248, 0.08);
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  padding: 2px 8px;
-  border-radius: 6px;
-  white-space: nowrap;
-  letter-spacing: -0.01em;
 }
 
 /* Toolbar Actions Group */
@@ -105,64 +74,30 @@
   flex-shrink: 0;
 }
 
-/* Segmented Node View Mode Toggle */
-.overview-toolbar-sleek .view-mode-toggle {
-  display: inline-flex;
-  align-items: center;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
-  border-radius: 6px;
-  padding: 2px;
-  gap: 2px;
-  height: 28px;
-  box-sizing: border-box;
-}
-
-.overview-toolbar-sleek .mode-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted, #94a3b8);
-  font-size: 11px;
-  font-weight: 600;
-  height: 22px;
-  min-height: 22px;
-  padding: 0 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.15s ease;
-}
-
-.overview-toolbar-sleek .mode-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.overview-toolbar-sleek .mode-btn.active {
-  background: var(--accent-cyan, #0284c7);
-  color: #fff;
-  font-weight: 700;
-}
-
 /* Action Buttons */
 .overview-toolbar-sleek .btn-toolbar {
-  height: 28px;
-  min-height: 28px;
+  height: 30px;
+  min-height: 30px;
   padding: 0 10px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   white-space: nowrap;
   cursor: pointer;
   transition: all 0.15s ease;
   border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-secondary, #cbd5e1);
+}
+
+.overview-toolbar-sleek .btn-toolbar.btn-toolbar-icon {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
+  justify-content: center;
 }
 
 .overview-toolbar-sleek .btn-toolbar:hover:not(:disabled) {
