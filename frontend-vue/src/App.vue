@@ -61,7 +61,9 @@ async function loadTenants() {
     const orgs = await tenancyApi.getOrganizations()
     if (orgs && orgs.length > 0) {
       tenants.value = orgs.map(o => ({ id: o.id, name: o.name || o.id }))
-      if (!tenants.value.some(t => t.id === selectedTenant.value)) {
+      if (authStore.user?.tenant_id && tenants.value.some(t => t.id === authStore.user?.tenant_id)) {
+        selectedTenant.value = authStore.user.tenant_id
+      } else if (!tenants.value.some(t => t.id === selectedTenant.value)) {
         selectedTenant.value = tenants.value[0].id
       }
     } else {
@@ -93,6 +95,15 @@ async function syncGlobalTelemetry() {
     // Background telemetry fallback
   }
 }
+
+watch(() => authStore.isAuthenticated, (authed) => {
+  if (authed) {
+    loadTenants().catch(() => {})
+    backupStore.fetchAll().catch(() => {})
+    securityStore.fetchAll().catch(() => {})
+    syncGlobalTelemetry().catch(() => {})
+  }
+})
 
 onMounted(() => {
   if (authStore.isAuthenticated) {
