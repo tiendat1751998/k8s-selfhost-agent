@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { ref, computed, watch } from 'vue'
 import type { HelmChart, HelmRepo } from '../../api/helm'
 
-defineProps<{
+const props = defineProps<{
   charts: HelmChart[]
   repos: HelmRepo[]
   loading: boolean
@@ -10,6 +11,26 @@ defineProps<{
   selectedCategory: string
   categoryTags: Array<{ key: string; label: string; icon: string }>
 }>()
+
+const pageSize = ref<number>(24)
+const currentPage = ref<number>(1)
+
+const totalPages = computed(() => Math.max(1, Math.ceil(props.charts.length / pageSize.value)))
+
+const paginatedCharts = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return props.charts.slice(start, start + pageSize.value)
+})
+
+watch([() => props.search, () => props.selectedRepo, () => props.selectedCategory], () => {
+  currentPage.value = 1
+})
+
+watch(() => props.charts.length, () => {
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = 1
+  }
+})
 
 const emit = defineEmits<{
   (e: 'update:search', val: string): void
@@ -109,7 +130,7 @@ function getChartIcon(chart: HelmChart): string {
     <!-- Charts Grid -->
     <div v-else class="charts-grid">
       <div
-        v-for="chart in charts"
+        v-for="chart in paginatedCharts"
         :key="`${chart.repo}/${chart.name}`"
         class="chart-card glass-panel glass-panel-glow"
       >
@@ -165,6 +186,40 @@ function getChartIcon(chart: HelmChart): string {
             <BaseIcon name="play" size="xs" /> <span>Install Chart</span>
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Pagination Controls -->
+    <div v-if="!loading && charts.length > 0" class="catalog-pagination-bar glass-panel font-mono">
+      <div class="pagination-info">
+        <span>Showing {{ ((currentPage - 1) * pageSize) + 1 }}-{{ Math.min(currentPage * pageSize, charts.length) }} of {{ charts.length }} charts</span>
+        <div class="page-size-selector">
+          <label class="font-xs text-muted">Per page:</label>
+          <select v-model.number="pageSize" class="input-glass select-page-size" @change="currentPage = 1">
+            <option :value="24">24</option>
+            <option :value="48">48</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pagination-controls">
+        <button
+          type="button"
+          class="btn-cyber btn-secondary btn-sm"
+          :disabled="currentPage <= 1"
+          @click="currentPage--"
+        >
+          <BaseIcon name="chevron-left" size="xs" /> <span>Prev</span>
+        </button>
+        <span class="page-indicator">Page {{ currentPage }} of {{ totalPages }}</span>
+        <button
+          type="button"
+          class="btn-cyber btn-secondary btn-sm"
+          :disabled="currentPage >= totalPages"
+          @click="currentPage++"
+        >
+          <span>Next</span> <BaseIcon name="chevron-right" size="xs" />
+        </button>
       </div>
     </div>
   </div>

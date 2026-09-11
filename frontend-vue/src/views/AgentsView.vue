@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useAgentMesh } from '../composables/useAgentMesh'
-import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import AgentSwarmGrid from '../components/agents/AgentSwarmGrid.vue'
 import AgentTasksTable from '../components/agents/AgentTasksTable.vue'
@@ -13,7 +12,7 @@ const {
   agentSwarm, dagStages, showDispatchModal, showTranscriptDrawer,
   selectedTask, selectedAgent, transcriptViewMode, newTask,
   dependencyInput, selectedCapabilities, terminalLogs, autoScroll,
-  completedTasksCount, activeTasksCount, blockedTasksCount,
+  completedTasksCount,
   fetchAgentData, handleCreateTask, pauseTask, terminateTask,
   openTranscript, clearLogs, formatTime
 } = useAgentMesh()
@@ -42,6 +41,11 @@ const {
           <span>+ Dispatch Task</span>
         </button>
       </div>
+    </div>
+
+    <!-- Single-Line KPI Strip (Desktop) -->
+    <div class="agents-kpi-strip font-mono text-muted desktop-only">
+      <span>Arch Score: {{ Math.round((projectState?.architecture_score || 1) * 100) }}%</span> · <span>Repo Health: {{ Math.round((projectState?.repository_health || 1) * 100) }}%</span> · <span>Backlog: {{ completedTasksCount }}/{{ tasks.length }}</span> · <span>Executions: {{ executions.length }}</span>
     </div>
 
     <!-- Mobile 44px Command Bar (<768px) -->
@@ -86,51 +90,6 @@ const {
       <BaseIcon name="alert-triangle" size="sm" class="error-icon" />
       <span>{{ error }}</span>
     </div>
-
-    <!-- Metrics HUD -->
-    <div class="metrics-grid desktop-only">
-      <MetricCard
-        title="Architecture Score"
-        :value="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? `${Math.round(projectState.architecture_score * 100)}%` : '—'"
-        :subtitle="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'Zero cyclic dependencies & strict layering' : 'No architecture telemetry recorded'"
-        icon="layers"
-        :badge="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'SCORE' : 'NO DATA'"
-        :badge-color="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'cyan' : 'muted'"
-        :trend="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'High Cohesion' : 'Uncalculated'"
-        :trend-type="projectState?.architecture_score !== undefined && projectState.architecture_score !== null ? 'positive' : 'neutral'"
-      />
-      <MetricCard
-        title="Repository Health"
-        :value="projectState?.repository_health !== undefined && projectState.repository_health !== null ? `${Math.round(projectState.repository_health * 100)}%` : '—'"
-        :subtitle="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'Full type safety & lint compliance' : 'No health telemetry recorded'"
-        icon="shield"
-        :badge="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'HEALTH' : 'NO DATA'"
-        :badge-color="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'emerald' : 'muted'"
-        :trend="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'Continuous Clean' : 'Uncalculated'"
-        :trend-type="projectState?.repository_health !== undefined && projectState.repository_health !== null ? 'positive' : 'neutral'"
-      />
-      <MetricCard
-        title="Task Backlog"
-        :value="tasks.length > 0 ? `${completedTasksCount}/${tasks.length}` : '0/0'"
-        :subtitle="tasks.length > 0 ? `${activeTasksCount} in progress · ${blockedTasksCount} blocked` : 'No tasks in backlog'"
-        icon="file-text"
-        badge="PIPELINE"
-        :badge-color="tasks.length > 0 ? 'violet' : 'muted'"
-        :trend="tasks.length > 0 ? 'DAG Scheduled' : 'Queue Empty'"
-        trend-type="neutral"
-      />
-      <MetricCard
-        title="Swarm Executions"
-        :value="executions.length"
-        :subtitle="executions.length > 0 ? 'Total autonomous agent runs executed' : 'No agent runs recorded'"
-        icon="zap"
-        badge="RUNS"
-        :badge-color="executions.length > 0 ? 'emerald' : 'muted'"
-        :trend="executions.length > 0 ? 'Real-Time Step Logs' : 'Idle'"
-        :trend-type="executions.length > 0 ? 'positive' : 'neutral'"
-      />
-    </div>
-
     <!-- Pipeline DAG Execution Visualizer -->
     <div class="section-box glass-panel dag-section">
       <div class="box-header">
