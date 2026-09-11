@@ -299,7 +299,11 @@ export function useHelmCatalog() {
 
     await loadClusters()
     await loadNamespaces()
-    await Promise.all([fetchReleases(), fetchCharts(), fetchRepos()])
+    const initialFetches: Promise<void>[] = [fetchReleases(), fetchRepos()]
+    if (activeTab.value === 'charts') {
+      initialFetches.push(fetchCharts())
+    }
+    await Promise.all(initialFetches)
   })
 
   onUnmounted(() => {

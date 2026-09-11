@@ -18,11 +18,11 @@
 
 /* Page Header (Desktop) */
 .page-header {
-  padding: 24px;
+  padding: 18px 24px;
   border-radius: 16px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 .header-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
 .title-group { display: flex; flex-direction: column; gap: 6px; }
@@ -52,6 +52,17 @@
 .header-select { padding: 8px 12px; border-radius: 8px; font-size: 13px; min-width: 170px; }
 .header-actions-group { display: flex; align-items: center; gap: 8px; }
 .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.helm-kpi-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-top: 6px;
+  color: var(--text-muted);
+}
+.helm-kpi-strip span {
+  color: var(--text-secondary);
+}
 
 /* Tabs Bar */
 .catalog-tabs-bar {

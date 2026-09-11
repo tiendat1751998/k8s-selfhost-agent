@@ -315,7 +315,7 @@ async function handleRemove(cluster: Cluster) {
       <button class="toast-close" @click="error = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- 4-Card Metric HUD (Desktop) -->
+    <!-- Single-Line Metric KPI Bar (Desktop) -->
     <FleetMetricHud
       :total-control-planes="totalControlPlanes"
       :k8s-cluster-count="k8sClusterCount"
