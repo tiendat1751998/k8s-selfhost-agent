@@ -285,6 +285,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
     <div class="main-wrapper" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
       <!-- Enterprise Top Navigation / HUD -->
       <header class="top-hud">
+        <!-- Left: Mobile menu & Screen Breadcrumb -->
         <div class="hud-left">
           <!-- Mobile Menu Toggle Button -->
           <button
@@ -315,8 +316,10 @@ function handleNavigateToHost(nodeNameOrId: string) {
             <span class="bc-sep font-mono">/</span>
             <span class="bc-title">{{ currentBreadcrumb.title }}</span>
           </div>
+        </div>
 
-          <!-- Compact Command Palette Search Button (~180px) -->
+        <!-- Center: Command Palette / Search Trigger (Fixed 160px) -->
+        <div class="hud-center">
           <button class="command-search-btn desktop-search" @click="showCommandPalette = true" aria-label="Quick search (Ctrl+K)">
             <span class="search-ico" aria-hidden="true">
               <BaseIcon name="search" size="xs" />
@@ -326,19 +329,12 @@ function handleNavigateToHost(nodeNameOrId: string) {
           </button>
         </div>
 
-        <div class="hud-right">
-          <!-- Mobile Quick Search Trigger (Mobile only) -->
-          <button class="mobile-search-btn" @click="showCommandPalette = true" aria-label="Quick search (Ctrl+K)" title="Quick search (Ctrl+K)">
-            <span class="search-ico" aria-hidden="true">
-              <BaseIcon name="search" size="xs" />
-            </span>
-          </button>
-
+        <!-- Center-Right: Cluster / Namespace Scope Dropdowns & Tenant -->
+        <div class="hud-center-right">
           <!-- Global Context Selector: Cluster & Namespace (Tasks 021 & 015) -->
           <GlobalContextSelector />
 
           <!-- Sleek Workspace / Tenant Selector -->
-
           <div class="tenant-selector-wrap" title="Workspace / Multi-Tenant Organization">
             <span class="tenant-icon" aria-hidden="true">
               <BaseIcon name="layers" size="xs" />
@@ -352,6 +348,16 @@ function handleNavigateToHost(nodeNameOrId: string) {
               <BaseIcon name="chevron-down" size="xs" />
             </span>
           </div>
+        </div>
+
+        <!-- Right: Cluster health, Alerts, User Profile -->
+        <div class="hud-right">
+          <!-- Mobile Quick Search Trigger (Mobile only) -->
+          <button class="mobile-search-btn" @click="showCommandPalette = true" aria-label="Quick search (Ctrl+K)" title="Quick search (Ctrl+K)">
+            <span class="search-ico" aria-hidden="true">
+              <BaseIcon name="search" size="xs" />
+            </span>
+          </button>
 
           <!-- Consolidated System Telemetry Pill (Clickable) -->
           <div
