@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useGlobalContext } from '../composables/useGlobalContext'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import DeploymentsTable from '../components/deployments/DeploymentsTable.vue'
 import DeploymentsMobileCards from '../components/deployments/DeploymentsMobileCards.vue'
@@ -45,6 +46,11 @@ const {
   handleDelete,
   handleCreateApp,
 } = useDeployments()
+
+const { activeNamespace } = useGlobalContext()
+watch(activeNamespace, (newNs) => {
+  selectedNamespaceFilter.value = newNs || 'all'
+}, { immediate: true })
 
 // Segmented Tab Bar State: 'All' (first), 'Deployments', 'StatefulSets', 'DaemonSets', 'CronJobs'
 export type WorkloadSegmentTab = 'All' | 'Deployments' | 'StatefulSets' | 'DaemonSets' | 'CronJobs'
@@ -284,33 +290,22 @@ async function onCreateApp(payload: DeploymentApp) {
         </button>
       </div>
 
-      <!-- Segmented kind control: All (32), Deployments (32), StatefulSets (3), DaemonSets (1), CronJobs (0) -->
-      <div class="toolbar-segmented-control" role="tablist" aria-label="Workload Kind">
+      <!-- Segmented kind capsule pills: All (32), Deployments (32), StatefulSets (3), DaemonSets (1), CronJobs (0) -->
+      <div class="toolbar-capsule-pills" role="tablist" aria-label="Workload Kind">
         <button
           v-for="tab in segmentTabs"
           :key="tab.id"
           type="button"
           role="tab"
           :aria-selected="selectedSegmentTab === tab.id"
-          class="toolbar-segment-btn font-mono"
+          class="capsule-pill font-mono"
           :class="{ active: selectedSegmentTab === tab.id }"
           @click="selectedSegmentTab = tab.id"
         >
-          <BaseIcon :name="tab.icon" size="xs" />
           <span>{{ tab.label }}</span>
-          <span class="tab-count-badge font-mono">{{ getSegmentCount(tab.id) }}</span>
+          <span class="capsule-count">({{ getSegmentCount(tab.id) }})</span>
         </button>
       </div>
-
-      <!-- Namespace filter dropdown -->
-      <select
-        v-model="selectedNamespaceFilter"
-        class="toolbar-select font-mono"
-        aria-label="Filter by Namespace"
-      >
-        <option value="all">All Namespaces ({{ namespaces.length }})</option>
-        <option v-for="ns in namespaces" :key="ns" :value="ns">{{ ns }}</option>
-      </select>
 
       <!-- Status filter dropdown -->
       <select
@@ -323,14 +318,6 @@ async function onCreateApp(payload: DeploymentApp) {
         <option value="degraded">Degraded ({{ degradedCount }})</option>
       </select>
 
-      <!-- KPI Pill: subtle, elegant monospace status badge -->
-      <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Fleet KPI Summary">
-        <span class="toolbar-kpi-badge font-mono">
-          <span class="kpi-live-dot"></span>
-          <span>{{ totalWorkloads }} Workloads ({{ readyReplicas }}/{{ totalReplicas }} Pods · {{ healthyCount }} Healthy)</span>
-        </span>
-      </div>
-
       <!-- Action buttons -->
       <div class="toolbar-actions-group">
         <button
@@ -341,33 +328,37 @@ async function onCreateApp(payload: DeploymentApp) {
         >
           <span>+ Deploy Workload</span>
         </button>
+
+        <div class="toolbar-secondary-group">
+          <button
+            type="button"
+            class="toolbar-btn btn-secondary btn-grouped"
+            title="YAML Manifest"
+            @click="openYamlViewer"
+          >
+            <BaseIcon name="file-text" size="xs" />
+            <span class="btn-label-desktop">YAML</span>
+          </button>
+          <button
+            type="button"
+            class="toolbar-btn btn-secondary btn-grouped"
+            title="Blueprint Catalog"
+            @click="showTemplatesDrawer = true"
+          >
+            <BaseIcon name="box" size="xs" />
+            <span class="btn-label-desktop">Blueprints</span>
+          </button>
+        </div>
+
         <button
           type="button"
-          class="toolbar-btn btn-secondary"
-          title="YAML Manifest"
-          @click="openYamlViewer"
-        >
-          <BaseIcon name="file-text" size="xs" />
-          <span>YAML</span>
-        </button>
-        <button
-          type="button"
-          class="toolbar-btn btn-secondary"
-          title="Blueprint Catalog"
-          @click="showTemplatesDrawer = true"
-        >
-          <BaseIcon name="box" size="xs" />
-          <span>Blueprints</span>
-        </button>
-        <button
-          type="button"
-          class="toolbar-btn btn-secondary"
+          class="toolbar-btn btn-secondary toolbar-btn-refresh"
           :disabled="loading"
           title="Refresh Workloads"
           @click="fetchDeployments"
         >
           <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
-          <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
+          <span class="btn-label-desktop">{{ loading ? 'Syncing...' : 'Refresh' }}</span>
         </button>
       </div>
     </div>

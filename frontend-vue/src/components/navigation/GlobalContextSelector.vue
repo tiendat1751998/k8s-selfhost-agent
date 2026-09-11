@@ -197,6 +197,7 @@ onUnmounted(() => {
 .pill-divider { width: 1px; height: 16px; background: var(--border-subtle, rgba(255, 255, 255, 0.1)); }
 .pill-caret { opacity: 0.5; transition: transform 0.15s ease; }
 .context-pill.is-active .pill-caret { transform: rotate(180deg); }
+@media (max-width: 1366px) { .pill-text { max-width: 80px; } }
 @media (max-width: 768px) { .pill-text { max-width: 75px; } }
 </style>
 
