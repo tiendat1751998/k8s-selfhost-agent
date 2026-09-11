@@ -21,7 +21,12 @@ const emit = defineEmits<{
   (e: 'tenantChange'): void
   (e: 'logout'): void
   (e: 'closeMobile'): void
+  (e: 'open-zerotrust'): void
 }>()
+
+function handleOpenZeroTrust() {
+  emit('open-zerotrust')
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -156,9 +161,11 @@ function handleItemClick() {
         class="sidebar-toggle-btn"
         @click="toggleCollapse"
         aria-label="Toggle sidebar collapse"
-        :title="isCollapsed ? 'Expand sidebar (»)' : 'Collapse sidebar («)'"
+        :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
       >
-        <span class="toggle-icon">{{ isCollapsed ? '»' : '«' }}</span>
+        <span class="toggle-icon">
+          <BaseIcon :name="isCollapsed ? 'chevron-right' : 'chevron-left'" size="xs" />
+        </span>
       </button>
     </div>
 
@@ -192,8 +199,8 @@ function handleItemClick() {
             </span>
             <span>{{ group.label }}</span>
           </span>
-          <span class="section-caret" :class="{ 'caret-collapsed': collapsedSections[group.key] }">
-            ▾
+          <span class="section-caret">
+            <BaseIcon :name="collapsedSections[group.key] ? 'chevron-right' : 'chevron-down'" size="xs" />
           </span>
         </div>
 
@@ -256,7 +263,16 @@ function handleItemClick() {
         </div>
       </div>
 
-      <div class="telemetry-card">
+      <div
+        class="telemetry-card"
+        role="button"
+        tabindex="0"
+        aria-label="Open ZeroTrust KMS & Dual-Sync Attestation"
+        title="ZeroTrust KMS & Dual-Sync Attestation — Click to inspect"
+        @click="handleOpenZeroTrust"
+        @keydown.enter="handleOpenZeroTrust"
+        @keydown.space.prevent="handleOpenZeroTrust"
+      >
         <div class="telemetry-row">
           <span class="telemetry-key">ZeroTrust KMS</span>
           <span class="telemetry-val text-emerald">ARMED</span>
