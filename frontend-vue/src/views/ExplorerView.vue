@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import MetricCard from '../components/ui/MetricCard.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import EventsTimeline from '../components/k8s/EventsTimeline.vue'
 
@@ -234,6 +233,9 @@ onMounted(async () => {
               <span class="crumb-sep">›</span>
               <span class="crumb-pill crumb-kind active-kind">{{ currentKindLabel }} ({{ totalInKind }})</span>
             </div>
+            <div class="explorer-kpi-strip font-mono text-muted">
+              <span class="explorer-kpi-badge font-mono">{{ totalInKind }} {{ currentKindLabel }}</span> · <span class="explorer-kpi-badge font-mono">{{ activeNamespacesCount }} Namespaces</span> · <span class="explorer-kpi-badge font-mono">{{ selectedCluster }}</span>
+            </div>
           </div>
 
           <div class="header-actions">
@@ -250,12 +252,6 @@ onMounted(async () => {
               <span class="btn-label">+ Create {{ currentKindLabel.slice(0, -1) || 'Resource' }}</span>
             </button>
           </div>
-        </div>
-
-        <div class="metrics-grid">
-          <MetricCard :title="`Total ${currentKindLabel}`" :value="totalInKind" :subtitle="`Discovered in scope: ${selectedNamespace}`" icon="box" badge="DISCOVERED" badge-color="cyan" class="hud-metric-card" />
-          <MetricCard title="Active Namespaces" :value="activeNamespacesCount" subtitle="Available workload domains" icon="folder" badge="TENANCY" badge-color="emerald" class="hud-metric-card" />
-          <MetricCard title="Cluster Target" :value="selectedCluster" subtitle="Kubernetes Control Plane" icon="globe" badge="ONLINE" badge-color="violet" class="hud-metric-card" />
         </div>
       </div>
 

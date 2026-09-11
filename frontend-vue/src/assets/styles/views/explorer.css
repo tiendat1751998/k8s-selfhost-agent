@@ -70,6 +70,23 @@
 }
 .btn-create:hover { filter: brightness(1.1); transform: translateY(-1px); }
 
+/* Explorer KPI Strip & Badges */
+.explorer-kpi-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  margin-top: 4px;
+}
+
+.explorer-kpi-badge {
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  color: var(--text-secondary, #cbd5e1);
+}
+
 /* HUD Metrics Grid */
 .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
 .hud-metric-card { min-height: 108px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid rgba(255, 255, 255, 0.08); border-top: 1px solid rgba(255, 255, 255, 0.15); background: rgba(16, 24, 40, 0.75); transition: border-color 0.2s ease, transform 0.2s ease; }

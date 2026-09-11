@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import MetricCard from '../components/ui/MetricCard.vue'
 import { useHelmCatalog } from '../composables/useHelmCatalog'
 import { sanitizeHelmRelease } from '../composables/useHelm'
 import HelmChartsGrid from '../components/helm/HelmChartsGrid.vue'
@@ -22,7 +21,7 @@ const {
   showInstallModal, selectedChartForInstall, installStep, installForm, installing,
   repos, loadingRepos, showAddRepoModal, addRepoForm, addingRepo, updatingAllRepos, showRemoveRepoModal, repoToRemove, removingRepo,
   repoPresets, categoryTags,
-  totalReleasesCount, deployedReleasesCount, failedReleasesCount, deployedRate, filteredReleases, filteredCharts,
+  totalReleasesCount, deployedRate, filteredReleases, filteredCharts,
   fetchReleases, refreshActiveTab, onChartSearchInput,
   openReleaseDetail, openUpgradeModal, handleUpgradeRelease, openRollbackModal, handleRollbackRelease, promptUninstall, handleUninstallRelease,
   openInstallWizard, handleInstallChart, openAddRepoModal, applyRepoPreset, handleAddRepo, handleUpdateAllRepos, promptRemoveRepo, handleRemoveRepo,
@@ -59,6 +58,9 @@ const cleanSelectedRelease = computed(() => {
           <h1 class="page-title title-full">Helm Application Catalog</h1>
           <h1 class="page-title title-compact">Helm Catalog</h1>
           <p class="page-subtitle">Browse repositories, deploy pre-packaged cloud-native charts & manage lifecycle releases</p>
+          <div class="helm-kpi-strip font-mono text-muted">
+            <span>{{ totalReleasesCount }} Releases</span> · <span>{{ deployedRate }} Health</span> · <span>{{ repos.length }} Repositories</span>
+          </div>
         </div>
 
         <div class="header-controls">
@@ -85,14 +87,6 @@ const cleanSelectedRelease = computed(() => {
             </button>
           </div>
         </div>
-      </div>
-
-      <!-- Metrics Row -->
-      <div class="metrics-grid">
-        <MetricCard title="Total Releases" :value="totalReleasesCount" :subtitle="`${deployedReleasesCount} Deployed • ${failedReleasesCount} Failed`" icon="anchor" badge="Live" badge-color="emerald" />
-        <MetricCard title="Deployed Health" :value="deployedRate" subtitle="Successful rollout ratio" icon="check-circle" :trend="failedReleasesCount > 0 ? `${failedReleasesCount} Degraded` : '100% Healthy'" :trend-type="failedReleasesCount > 0 ? 'negative' : 'positive'" />
-        <MetricCard title="Catalog Charts" :value="charts.length" subtitle="Available packages across repos" icon="package" badge="Searchable" badge-color="cyan" />
-        <MetricCard title="Helm Repos" :value="repos.length" subtitle="Configured chart repositories" icon="database" badge="Sync Ready" badge-color="violet" />
       </div>
     </header>
 
