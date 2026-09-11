@@ -46,21 +46,20 @@ const {
   handleCreateApp,
 } = useDeployments()
 
-// Mobile PWA Ergonomics (<768px)
-// Segmented Tab Bar State ('Deployments', 'StatefulSets', 'DaemonSets', 'CronJobs', 'All Workloads')
-export type WorkloadSegmentTab = 'Deployments' | 'StatefulSets' | 'DaemonSets' | 'CronJobs' | 'All Workloads'
-const selectedSegmentTab = ref<WorkloadSegmentTab>('Deployments')
+// Segmented Tab Bar State: 'All' (first), 'Deployments', 'StatefulSets', 'DaemonSets', 'CronJobs'
+export type WorkloadSegmentTab = 'All' | 'Deployments' | 'StatefulSets' | 'DaemonSets' | 'CronJobs'
+const selectedSegmentTab = ref<WorkloadSegmentTab>('All')
 
 const segmentTabs: { id: WorkloadSegmentTab; label: string; icon: string }[] = [
+  { id: 'All', label: 'All', icon: 'globe' },
   { id: 'Deployments', label: 'Deployments', icon: 'play' },
   { id: 'StatefulSets', label: 'StatefulSets', icon: 'database' },
   { id: 'DaemonSets', label: 'DaemonSets', icon: 'shield' },
   { id: 'CronJobs', label: 'CronJobs', icon: 'clock' },
-  { id: 'All Workloads', label: 'All Workloads', icon: 'globe' },
 ]
 
 function matchWorkloadKind(app: DeploymentApp, kind: WorkloadSegmentTab): boolean {
-  if (kind === 'All Workloads') return true
+  if (kind === 'All') return true
   const n = (app.name || '').toLowerCase(), t = (app.type || '').toLowerCase()
   if (kind === 'Deployments') return !n.includes('stateful') && !n.includes('daemon') && !n.includes('cron') && !n.includes('job')
   if (kind === 'StatefulSets') return n.includes('stateful') || n.includes('db') || n.includes('postgres') || n.includes('redis') || n.includes('sql') || t === 'statefulset'
@@ -262,7 +261,7 @@ async function onCreateApp(payload: DeploymentApp) {
       <button type="button" class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <!-- Sleek Unified Enterprise Toolbar -->
     <div class="deployments-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Deployments Fleet Toolbar">
       <!-- Search input with search icon and clear button (filters workloads by name, image, namespace) -->
       <div class="toolbar-search-wrap">
@@ -285,15 +284,15 @@ async function onCreateApp(payload: DeploymentApp) {
         </button>
       </div>
 
-      <!-- Segmented kind pills: Deployments, StatefulSets, DaemonSets, CronJobs, All Workloads -->
-      <div class="toolbar-kind-pills" role="tablist" aria-label="Workload Kind">
+      <!-- Segmented kind control: All (32), Deployments (32), StatefulSets (3), DaemonSets (1), CronJobs (0) -->
+      <div class="toolbar-segmented-control" role="tablist" aria-label="Workload Kind">
         <button
           v-for="tab in segmentTabs"
           :key="tab.id"
           type="button"
           role="tab"
           :aria-selected="selectedSegmentTab === tab.id"
-          class="toolbar-pill-btn font-mono"
+          class="toolbar-segment-btn font-mono"
           :class="{ active: selectedSegmentTab === tab.id }"
           @click="selectedSegmentTab = tab.id"
         >
@@ -324,10 +323,11 @@ async function onCreateApp(payload: DeploymentApp) {
         <option value="degraded">Degraded ({{ degradedCount }})</option>
       </select>
 
-      <!-- Inline compact KPI badge strip font-mono -->
+      <!-- KPI Pill: subtle, elegant monospace status badge -->
       <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Fleet KPI Summary">
-        <span class="kpi-badge font-mono">
-          {{ totalWorkloads }} Workloads ({{ readyReplicas }}/{{ totalReplicas }} Pods · {{ healthyCount }} Healthy)
+        <span class="toolbar-kpi-badge font-mono">
+          <span class="kpi-live-dot"></span>
+          <span>{{ totalWorkloads }} Workloads ({{ readyReplicas }}/{{ totalReplicas }} Pods · {{ healthyCount }} Healthy)</span>
         </span>
       </div>
 
@@ -348,7 +348,7 @@ async function onCreateApp(payload: DeploymentApp) {
           @click="openYamlViewer"
         >
           <BaseIcon name="file-text" size="xs" />
-          <span>YAML Manifest</span>
+          <span>YAML</span>
         </button>
         <button
           type="button"
@@ -357,7 +357,7 @@ async function onCreateApp(payload: DeploymentApp) {
           @click="showTemplatesDrawer = true"
         >
           <BaseIcon name="box" size="xs" />
-          <span>Blueprint Catalog</span>
+          <span>Blueprints</span>
         </button>
         <button
           type="button"
@@ -374,7 +374,6 @@ async function onCreateApp(payload: DeploymentApp) {
 
     <!-- Main Workload Section -->
     <div class="section-box glass-panel table-box">
-
       <!-- Desktop Data Table View (Completely suppressed on mobile <768px) -->
       <div class="desktop-table-container desktop-table-view">
         <DeploymentsTable
