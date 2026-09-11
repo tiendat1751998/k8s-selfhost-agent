@@ -320,7 +320,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
           <nav class="hud-breadcrumb" aria-label="Screen location breadcrumb">
             <span class="bc-cat font-mono">{{ currentBreadcrumb.category }}</span>
             <span class="bc-sep font-mono">/</span>
-            <span class="bc-title">{{ currentBreadcrumb.title }}</span>
+            <span class="bc-title" :title="currentBreadcrumb.title">{{ currentBreadcrumb.title }}</span>
           </nav>
         </div>
 

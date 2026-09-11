@@ -123,8 +123,8 @@
   position: sticky; top: 0; z-index: 40; box-sizing: border-box;
 }
 .hud-left {
-  min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  display: inline-flex; align-items: center; gap: 10px; position: static;
+  min-width: 140px; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 10px; position: static;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .hud-breadcrumb {
   display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
@@ -320,6 +320,8 @@
 
 /* Responsive HUD Compact Mode (<= 1440px) */
 @media (max-width: 1440px) {
+  .hud-breadcrumb .bc-cat,
+  .hud-breadcrumb .bc-sep { display: none !important; }
   .status-word { display: none !important; }
   .hud-bell-pill { padding: 0 8px; gap: 4px; height: 30px; }
   .pill-critical .bell-count-text,

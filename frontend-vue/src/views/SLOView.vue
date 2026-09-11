@@ -22,8 +22,8 @@ const snapshots = ref<SLOSnapshot[]>([])
 type TimeWindowFilter = '1h' | '6h' | '24h' | '30d'
 const selectedWindowFilter = ref<TimeWindowFilter>('30d')
 const windowPills = [
-  { key: '1h' as const, label: '1h (Fast Burn)', title: '1h Fast Burn (14.4x rate)', icon: 'flame', short: 'Fast' },
-  { key: '6h' as const, label: '6h (Slow Burn)', title: '6h Slow Burn (6.0x rate)', icon: 'alert-triangle', short: 'Slow' },
+  { key: '1h' as const, label: '1h (Fast)', title: '1h Fast Burn (14.4x rate)', icon: 'flame', short: 'Fast' },
+  { key: '6h' as const, label: '6h (Slow)', title: '6h Slow Burn (6.0x rate)', icon: 'alert-triangle', short: 'Slow' },
   { key: '24h' as const, label: '24h (Composite)', title: '24h Composite (2.0x rate)', icon: 'activity', short: 'Comp' },
   { key: '30d' as const, label: '30d (Baseline)', title: '30d Baseline (1.0x rate)', icon: 'calendar', short: 'Base' }
 ]
@@ -239,7 +239,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Filter by service or indicator..."
+          placeholder="Filter SLOs..."
           class="toolbar-search-input"
           aria-label="Filter SLOs by service name or indicator"
         />
@@ -272,9 +272,10 @@ async function handleTriggerAlert(id: string, serviceName: string) {
         </button>
       </div>
 
-      <!-- Inline compact KPI badge strip font-mono -->
-      <div class="toolbar-kpi-strip font-mono" role="status" aria-label="SLO metrics summary">
-        <span class="kpi-badge font-mono">{{ totalSLOs }} SLOs ({{ healthySLOs }} Healthy · {{ warningSLOs + criticalSLOs }} Warning · {{ avgBurnRate }} Burn)</span>
+      <!-- Subtle monospace status in muted slate -->
+      <div class="toolbar-kpi-status font-mono" role="status" aria-label="SLO metrics summary">
+        <span class="kpi-live-dot" aria-hidden="true"></span>
+        <span>{{ totalSLOs }} SLOs ({{ healthySLOs }} Healthy)</span>
       </div>
 
       <!-- Right: Segmented viewMode toggle & Action buttons -->
@@ -305,16 +306,16 @@ async function handleTriggerAlert(id: string, serviceName: string) {
           </button>
         </div>
 
-        <!-- Action buttons: + Create SLO (primary) and Refresh (secondary with spinner) -->
+        <!-- Action buttons: + Add Target (primary) and Refresh (secondary with spinner) -->
         <button
           type="button"
           class="toolbar-btn btn-primary"
-          title="Create SLO Definition"
-          aria-label="Create SLO Definition"
+          title="Add Target"
+          aria-label="Add Target"
           @click="showCreateModal = true"
         >
           <BaseIcon name="plus" size="xs" />
-          <span>+ Create SLO</span>
+          <span>+ Add Target</span>
         </button>
 
         <button
