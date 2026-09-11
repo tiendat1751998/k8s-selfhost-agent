@@ -2,8 +2,10 @@ package helm
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"helm.sh/helm/v3/cmd/helm/search"
 	"helm.sh/helm/v3/pkg/action"
@@ -82,6 +84,9 @@ func (m *ReleaseManager) AddRepo(name, url string) error {
 		return fmt.Errorf("saving repo file: %w", err)
 	}
 
+	m.cachedIndex = nil
+	m.cachedIndexTime = time.Time{}
+
 	return nil
 }
 
@@ -89,6 +94,9 @@ func (m *ReleaseManager) AddRepo(name, url string) error {
 func (m *ReleaseManager) UpdateRepos() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.cachedIndex = nil
+	m.cachedIndexTime = time.Time{}
 
 	if !fileExists(m.repoFile) {
 		return nil
@@ -119,13 +127,48 @@ func (m *ReleaseManager) UpdateRepos() error {
 	return nil
 }
 
-// SearchCharts searches for charts across all configured repositories matching a keyword.
-func (m *ReleaseManager) SearchCharts(keyword string) ([]*search.Result, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+// RemoveRepo removes a configured Helm repository and its cached index file.
+func (m *ReleaseManager) RemoveRepo(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("repo name cannot be empty")
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if !fileExists(m.repoFile) {
-		return make([]*search.Result, 0), nil
+		return fmt.Errorf("no repo named %q found", name)
+	}
+
+	repoFile, err := repo.LoadFile(m.repoFile)
+	if err != nil {
+		return fmt.Errorf("loading repo file: %w", err)
+	}
+
+	if !repoFile.Remove(name) {
+		return fmt.Errorf("no repo named %q found", name)
+	}
+
+	if err := repoFile.WriteFile(m.repoFile, 0644); err != nil {
+		return fmt.Errorf("saving repo file: %w", err)
+	}
+
+	indexPath := filepath.Join(m.repoCacheDir, fmt.Sprintf("%s-index.yaml", name))
+	_ = os.Remove(indexPath)
+
+	m.cachedIndex = nil
+	m.cachedIndexTime = time.Time{}
+
+	return nil
+}
+
+// buildSearchIndexLocked builds a fresh search index across all configured repositories.
+// Caller must hold m.mu Lock.
+func (m *ReleaseManager) buildSearchIndexLocked() (*search.Index, error) {
+	index := search.NewIndex()
+	if !fileExists(m.repoFile) {
+		return index, nil
 	}
 
 	repoFile, err := repo.LoadFile(m.repoFile)
@@ -133,7 +176,6 @@ func (m *ReleaseManager) SearchCharts(keyword string) ([]*search.Result, error) 
 		return nil, fmt.Errorf("loading repo file: %w", err)
 	}
 
-	index := search.NewIndex()
 	for _, entry := range repoFile.Repositories {
 		indexPath := filepath.Join(m.repoCacheDir, fmt.Sprintf("%s-index.yaml", entry.Name))
 		if !fileExists(indexPath) {
@@ -146,11 +188,43 @@ func (m *ReleaseManager) SearchCharts(keyword string) ([]*search.Result, error) 
 		index.AddRepo(entry.Name, indexFile, true)
 	}
 
-	results, err := index.Search(keyword, 100, false)
+	return index, nil
+}
+
+const maxSearchResults = 120
+
+// SearchCharts searches for charts across all configured repositories matching a keyword.
+func (m *ReleaseManager) SearchCharts(keyword string) ([]*search.Result, error) {
+	m.mu.RLock()
+	if m.cachedIndex == nil {
+		m.mu.RUnlock()
+		m.mu.Lock()
+		if m.cachedIndex == nil {
+			idx, err := m.buildSearchIndexLocked()
+			if err != nil {
+				m.mu.Unlock()
+				return nil, err
+			}
+			m.cachedIndex = idx
+			m.cachedIndexTime = time.Now()
+		}
+		m.mu.Unlock()
+		m.mu.RLock()
+	}
+	defer m.mu.RUnlock()
+
+	if m.cachedIndex == nil {
+		return make([]*search.Result, 0), nil
+	}
+
+	results, err := m.cachedIndex.Search(keyword, maxSearchResults, false)
 	if err != nil {
 		return nil, fmt.Errorf("searching charts: %w", err)
 	}
 	search.SortScore(results)
+	if len(results) > maxSearchResults {
+		results = results[:maxSearchResults]
+	}
 	if results == nil {
 		results = make([]*search.Result, 0)
 	}
