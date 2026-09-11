@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useGlobalContext } from '../composables/useGlobalContext'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import DeploymentsTable from '../components/deployments/DeploymentsTable.vue'
@@ -59,10 +59,27 @@ const selectedSegmentTab = ref<WorkloadSegmentTab>('All')
 const segmentTabs: { id: WorkloadSegmentTab; label: string; icon: string }[] = [
   { id: 'All', label: 'All', icon: 'globe' },
   { id: 'Deployments', label: 'Deployments', icon: 'play' },
-  { id: 'StatefulSets', label: 'StatefulSets', icon: 'database' },
-  { id: 'DaemonSets', label: 'DaemonSets', icon: 'shield' },
-  { id: 'CronJobs', label: 'CronJobs', icon: 'clock' },
+  { id: 'StatefulSets', label: 'Stateful', icon: 'database' },
+  { id: 'DaemonSets', label: 'Daemon', icon: 'shield' },
+  { id: 'CronJobs', label: 'Cron', icon: 'clock' },
 ]
+
+const showMoreActions = ref(false)
+const moreMenuRef = ref<HTMLElement | null>(null)
+
+function onMoreDocClick(e: MouseEvent) {
+  if (showMoreActions.value && moreMenuRef.value && !moreMenuRef.value.contains(e.target as Node)) {
+    showMoreActions.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', onMoreDocClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onMoreDocClick)
+})
 
 function matchWorkloadKind(app: DeploymentApp, kind: WorkloadSegmentTab): boolean {
   if (kind === 'All') return true
@@ -313,7 +330,7 @@ async function onCreateApp(payload: DeploymentApp) {
         class="toolbar-select font-mono"
         aria-label="Filter by Status"
       >
-        <option value="all">All Statuses ({{ totalWorkloads }})</option>
+        <option value="all">All Status ({{ totalWorkloads }})</option>
         <option value="healthy">Healthy ({{ healthyCount }})</option>
         <option value="degraded">Degraded ({{ degradedCount }})</option>
       </select>
@@ -322,32 +339,47 @@ async function onCreateApp(payload: DeploymentApp) {
       <div class="toolbar-actions-group">
         <button
           type="button"
-          class="toolbar-btn btn-primary"
+          class="toolbar-btn btn-primary toolbar-btn-deploy"
           title="Deploy Workload"
           @click="showCreateModal = true; selectedTemplate = null"
         >
-          <span>+ Deploy Workload</span>
+          <span>+ Deploy</span>
         </button>
 
-        <div class="toolbar-secondary-group">
+        <!-- Sleek Secondary Actions Dropdown [More] -->
+        <div ref="moreMenuRef" class="toolbar-more-wrap">
           <button
             type="button"
-            class="toolbar-btn btn-secondary btn-grouped"
-            title="YAML Manifest"
-            @click="openYamlViewer"
+            class="toolbar-btn btn-secondary toolbar-btn-more"
+            :class="{ active: showMoreActions }"
+            title="More Actions"
+            aria-haspopup="true"
+            :aria-expanded="showMoreActions"
+            @click="showMoreActions = !showMoreActions"
           >
-            <BaseIcon name="file-text" size="xs" />
-            <span class="btn-label-desktop">YAML</span>
+            <span>More</span>
+            <BaseIcon name="chevron-down" size="xs" class="more-chevron" />
           </button>
-          <button
-            type="button"
-            class="toolbar-btn btn-secondary btn-grouped"
-            title="Blueprint Catalog"
-            @click="showTemplatesDrawer = true"
-          >
-            <BaseIcon name="box" size="xs" />
-            <span class="btn-label-desktop">Blueprints</span>
-          </button>
+          <div v-if="showMoreActions" class="toolbar-more-menu glass-panel" role="menu">
+            <button
+              type="button"
+              class="more-menu-item"
+              role="menuitem"
+              @click="openYamlViewer(); showMoreActions = false"
+            >
+              <BaseIcon name="file-text" size="xs" />
+              <span>YAML Manifest</span>
+            </button>
+            <button
+              type="button"
+              class="more-menu-item"
+              role="menuitem"
+              @click="showTemplatesDrawer = true; showMoreActions = false"
+            >
+              <BaseIcon name="box" size="xs" />
+              <span>Blueprint Catalog</span>
+            </button>
+          </div>
         </div>
 
         <button
@@ -355,10 +387,10 @@ async function onCreateApp(payload: DeploymentApp) {
           class="toolbar-btn btn-secondary toolbar-btn-refresh"
           :disabled="loading"
           title="Refresh Workloads"
+          aria-label="Refresh Workloads"
           @click="fetchDeployments"
         >
           <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
-          <span class="btn-label-desktop">{{ loading ? 'Syncing...' : 'Refresh' }}</span>
         </button>
       </div>
     </div>

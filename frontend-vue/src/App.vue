@@ -219,6 +219,8 @@ const systemStatus = computed(() => {
   if (downNodeCount.value > 0) {
     return {
       label: `${downNodeCount.value} Down`,
+      compactLabel: `${downNodeCount.value}`,
+      word: ' Down',
       fullLabel: `${downNodeCount.value} Nodes Down`,
       dotClass: 'pulse-dot-rose',
       textClass: 'text-rose font-bold'
@@ -227,6 +229,8 @@ const systemStatus = computed(() => {
   if (clusterMeshStatus.value === 'DEGRADED') {
     return {
       label: 'Degraded',
+      compactLabel: 'Degraded',
+      word: '',
       fullLabel: 'Degraded',
       dotClass: 'pulse-dot-amber',
       textClass: 'text-amber'
@@ -234,6 +238,8 @@ const systemStatus = computed(() => {
   }
   return {
     label: 'Operational',
+    compactLabel: 'Operational',
+    word: '',
     fullLabel: 'Operational',
     dotClass: 'pulse-dot-emerald',
     textClass: 'text-emerald'
@@ -373,7 +379,8 @@ function handleNavigateToHost(nodeNameOrId: string) {
           >
             <span class="pulse-dot" :class="systemStatus.dotClass"></span>
             <span class="status-label" :class="systemStatus.textClass">
-              {{ systemStatus.label }}
+              <span class="status-num">{{ systemStatus.compactLabel }}</span>
+              <span v-if="systemStatus.word" class="status-word">{{ systemStatus.word }}</span>
             </span>
           </div>
 
