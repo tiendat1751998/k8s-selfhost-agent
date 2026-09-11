@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useInfraHosts } from '../composables/useInfraHosts'
 import HostMetricsHud from '../components/hosts/HostMetricsHud.vue'
@@ -72,33 +72,6 @@ const availabilityThresholds = [
 
 <template>
   <div class="infra-hosts-view animate-fade-in">
-    <!-- Desktop Header -->
-    <div class="view-header desktop-only">
-      <div class="header-titles">
-        <div class="header-badge">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>ENTERPRISE MULTI-TYPE INFRASTRUCTURE REGISTRY</span>
-        </div>
-        <h1 class="view-title">
-          <BaseIcon name="server" size="lg" />
-          <span>Infrastructure Fleet Registry</span>
-        </h1>
-        <p class="view-desc">
-          Register, monitor, and manage compute nodes, databases, Git endpoints, and monitoring targets across your infrastructure.
-        </p>
-      </div>
-      <div class="header-actions">
-        <button class="btn btn-secondary" :disabled="loading" @click="fetchHosts">
-          <BaseIcon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
-          <span>{{ loading ? 'Refreshing...' : 'Refresh' }}</span>
-        </button>
-        <button class="btn btn-primary" @click="openAddHostModal">
-          <span class="font-bold">+</span>
-          <span>Add Host</span>
-        </button>
-      </div>
-    </div>
-
     <!-- 44px Mobile Command Bar (< 640px) -->
     <div class="hosts-mobile-command-bar mobile-only">
       <div class="command-bar-left">
@@ -141,30 +114,37 @@ const availabilityThresholds = [
       <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Compact 36px Metric Strip & Telemetry Toggle (Above the Fold) -->
-    <div class="hosts-strip-row desktop-only">
-      <HostMetricsHud
+    <!-- Unified 38px Controls Toolbar (Desktop Only) -->
+    <div class="desktop-only">
+      <HostControlsBar
+        v-model:search-query="searchQuery"
+        v-model:selected-type-filter="selectedTypeFilter"
+        v-model:selected-status-filter="selectedStatusFilter"
+        v-model:selected-label-filter="selectedLabelFilter"
+        v-model:view-mode="viewMode"
+        v-model:show-telemetry="showTelemetry"
         :total-hosts="totalHosts"
-        :connected-hosts="connectedHosts"
-        :disconnected-hosts="disconnectedHosts"
-        :error-hosts="errorHosts"
         :type-counts="typeCounts"
+        :available-labels="availableLabels"
+        :host-type-definitions="hostTypeDefinitions"
+        :loading="loading"
+        @refresh="fetchHosts"
+        @add-host="openAddHostModal"
       />
-      <button
-        type="button"
-        class="telemetry-toggle-btn font-mono"
-        :class="{ active: showTelemetry }"
-        :title="showTelemetry ? 'Hide Telemetry & Latency charts' : 'Show Telemetry & Latency charts'"
-        @click="showTelemetry = !showTelemetry"
-      >
-        <BaseIcon :name="showTelemetry ? 'chevron-up' : 'activity'" size="xs" />
-        <span>{{ showTelemetry ? 'Hide Telemetry' : 'Show Telemetry & Latency' }}</span>
-      </button>
     </div>
 
     <!-- Fleet Live Telemetry (Collapsible, Defaulted to Collapsed) -->
     <Transition name="fade">
-      <div v-if="showTelemetry" class="section-card glass-panel fleet-telemetry-panel animate-fade-in">
+      <div v-if="showTelemetry" class="section-card glass-panel fleet-telemetry-panel animate-fade-in desktop-only">
+        <div class="hosts-telemetry-hud-strip">
+          <HostMetricsHud
+            :total-hosts="totalHosts"
+            :connected-hosts="connectedHosts"
+            :disconnected-hosts="disconnectedHosts"
+            :error-hosts="errorHosts"
+            :type-counts="typeCounts"
+          />
+        </div>
         <div class="section-top">
           <div>
             <div class="panel-badge-row">
@@ -216,21 +196,6 @@ const availabilityThresholds = [
         </div>
       </div>
     </Transition>
-
-    <!-- Controls Bar (Desktop Only) -->
-    <div class="desktop-only">
-      <HostControlsBar
-        v-model:search-query="searchQuery"
-        v-model:selected-type-filter="selectedTypeFilter"
-        v-model:selected-status-filter="selectedStatusFilter"
-        v-model:selected-label-filter="selectedLabelFilter"
-        v-model:view-mode="viewMode"
-        :total-hosts="totalHosts"
-        :type-counts="typeCounts"
-        :available-labels="availableLabels"
-        :host-type-definitions="hostTypeDefinitions"
-      />
-    </div>
 
     <!-- Loading State -->
     <div v-if="loading && hosts.length === 0" class="loading-state glass-panel">
@@ -345,7 +310,8 @@ const availabilityThresholds = [
 <style>
 @import '../assets/styles/views/infra-hosts.css';
 
-.fleet-telemetry-panel { margin-bottom: 20px; }
+.fleet-telemetry-panel { margin-bottom: 16px; }
+.hosts-telemetry-hud-strip { margin-bottom: 12px; }
 .panel-badge-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .telemetry-live-badge {
   display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 9999px;

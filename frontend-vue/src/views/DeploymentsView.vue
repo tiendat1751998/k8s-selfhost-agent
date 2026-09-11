@@ -255,42 +255,6 @@ async function onCreateApp(payload: DeploymentApp) {
       </div>
     </Transition>
 
-    <!-- View Header (Desktop & Tablet >=768px) -->
-    <div class="view-header">
-      <div class="header-info">
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>COMPUTE & FLEET ORCHESTRATION</span>
-        </div>
-        <h1 class="view-title">
-          <span class="title-full">Deployments & App Workload Catalog</span>
-          <span class="title-compact"><BaseIcon name="play" size="sm" /> Deployments</span>
-        </h1>
-        <p class="view-desc">
-          Unified production orchestrator for Kubernetes Deployments & Docker Swarm services with full Canary traffic splits, Blue-Green zero-downtime cutovers, dynamic replica autoscaling, and rolling restarts.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button type="button" class="btn btn-secondary" :disabled="loading" @click="fetchDeployments">
-          <span class="btn-text-full"><BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Syncing...' : 'Refresh' }}</span>
-          <span class="btn-text-mobile"><BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Syncing...' : 'Refresh' }}</span>
-        </button>
-        <button type="button" class="btn btn-primary" @click="showCreateModal = true; selectedTemplate = null">
-          <span class="btn-text-full">+ Deploy Workload</span>
-          <span class="btn-text-mobile">+ Deploy</span>
-        </button>
-        <button type="button" class="btn btn-secondary" @click="openYamlViewer">
-          <span class="btn-text-full"><BaseIcon name="file-text" size="xs" /> YAML Manifest</span>
-          <span class="btn-text-mobile"><BaseIcon name="file-text" size="xs" /> YAML</span>
-        </button>
-        <button type="button" class="btn btn-secondary" @click="showTemplatesDrawer = true">
-          <span class="btn-text-full"><BaseIcon name="box" size="xs" /> Blueprint Catalog</span>
-          <span class="btn-text-mobile"><BaseIcon name="box" size="xs" /> Template</span>
-        </button>
-      </div>
-    </div>
-
     <!-- Notification Toast Banner -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
       <span class="toast-icon"><BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : toastMessage.type === 'error' ? 'alert-triangle' : 'help-circle'" size="sm" /></span>
@@ -298,102 +262,118 @@ async function onCreateApp(payload: DeploymentApp) {
       <button type="button" class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Compact 36px Horizontal Metric Strip (Above the Fold) -->
-    <div class="workloads-metric-strip font-mono" role="status" aria-label="Workload Fleet Metrics">
-      <div class="strip-item">
-        <span class="pulse-dot pulse-dot-cyan"></span>
-        <span class="strip-val font-bold text-slate">{{ totalWorkloads }} Deployments</span>
+    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <div class="deployments-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Deployments Fleet Toolbar">
+      <!-- Search input with search icon and clear button (filters workloads by name, image, namespace) -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Filter workloads..."
+          class="toolbar-search-input"
+          aria-label="Filter workloads by name, image, namespace"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
       </div>
-      <span class="strip-sep">·</span>
-      <div class="strip-item">
-        <BaseIcon name="layers" size="xs" />
-        <span>{{ namespaces.length }} Namespaces</span>
+
+      <!-- Segmented kind pills: Deployments, StatefulSets, DaemonSets, CronJobs, All Workloads -->
+      <div class="toolbar-kind-pills" role="tablist" aria-label="Workload Kind">
+        <button
+          v-for="tab in segmentTabs"
+          :key="tab.id"
+          type="button"
+          role="tab"
+          :aria-selected="selectedSegmentTab === tab.id"
+          class="toolbar-pill-btn font-mono"
+          :class="{ active: selectedSegmentTab === tab.id }"
+          @click="selectedSegmentTab = tab.id"
+        >
+          <BaseIcon :name="tab.icon" size="xs" />
+          <span>{{ tab.label }}</span>
+          <span class="tab-count-badge font-mono">{{ getSegmentCount(tab.id) }}</span>
+        </button>
       </div>
-      <span class="strip-sep">·</span>
-      <div class="strip-item">
-        <BaseIcon name="server" size="xs" />
-        <span class="text-emerald">k8snode Online</span>
+
+      <!-- Namespace filter dropdown -->
+      <select
+        v-model="selectedNamespaceFilter"
+        class="toolbar-select font-mono"
+        aria-label="Filter by Namespace"
+      >
+        <option value="all">All Namespaces ({{ namespaces.length }})</option>
+        <option v-for="ns in namespaces" :key="ns" :value="ns">{{ ns }}</option>
+      </select>
+
+      <!-- Status filter dropdown -->
+      <select
+        v-model="statusFilter"
+        class="toolbar-select font-mono"
+        aria-label="Filter by Status"
+      >
+        <option value="all">All Statuses ({{ totalWorkloads }})</option>
+        <option value="healthy">Healthy ({{ healthyCount }})</option>
+        <option value="degraded">Degraded ({{ degradedCount }})</option>
+      </select>
+
+      <!-- Inline compact KPI badge strip font-mono -->
+      <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Fleet KPI Summary">
+        <span class="kpi-badge font-mono">
+          {{ totalWorkloads }} Workloads ({{ readyReplicas }}/{{ totalReplicas }} Pods · {{ healthyCount }} Healthy)
+        </span>
       </div>
-      <span class="strip-sep">·</span>
-      <div class="strip-item">
-        <BaseIcon name="check-circle" size="xs" class="text-emerald" />
-        <span>{{ readyReplicas }}/{{ totalReplicas }} Pods Ready</span>
-      </div>
-      <span class="strip-sep">·</span>
-      <div class="strip-item">
-        <span class="text-emerald">{{ healthyCount }} Healthy</span>
-        <span v-if="degradedCount > 0" class="text-amber">({{ degradedCount }} Degraded)</span>
-      </div>
-      <span class="strip-sep">·</span>
-      <div class="strip-item text-muted">
-        <span>{{ k8sCount }} K8s / {{ swarmCount }} Swarm</span>
+
+      <!-- Action buttons -->
+      <div class="toolbar-actions-group">
+        <button
+          type="button"
+          class="toolbar-btn btn-primary"
+          title="Deploy Workload"
+          @click="showCreateModal = true; selectedTemplate = null"
+        >
+          <span>+ Deploy Workload</span>
+        </button>
+        <button
+          type="button"
+          class="toolbar-btn btn-secondary"
+          title="YAML Manifest"
+          @click="openYamlViewer"
+        >
+          <BaseIcon name="file-text" size="xs" />
+          <span>YAML Manifest</span>
+        </button>
+        <button
+          type="button"
+          class="toolbar-btn btn-secondary"
+          title="Blueprint Catalog"
+          @click="showTemplatesDrawer = true"
+        >
+          <BaseIcon name="box" size="xs" />
+          <span>Blueprint Catalog</span>
+        </button>
+        <button
+          type="button"
+          class="toolbar-btn btn-secondary"
+          :disabled="loading"
+          title="Refresh Workloads"
+          @click="fetchDeployments"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
+          <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
+        </button>
       </div>
     </div>
 
     <!-- Main Workload Section -->
     <div class="section-box glass-panel table-box">
-      <!-- Flat Segmented Tab Bar & Search Controls -->
-      <div class="table-controls-bar">
-        <div class="segmented-tabs-bar" role="tablist" aria-label="Workload Type Navigation">
-          <button
-            v-for="tab in segmentTabs"
-            :key="tab.id"
-            type="button"
-            role="tab"
-            class="segmented-tab-btn font-mono"
-            :class="{ active: selectedSegmentTab === tab.id }"
-            :aria-selected="selectedSegmentTab === tab.id"
-            @click="selectedSegmentTab = tab.id"
-          >
-            <BaseIcon :name="tab.icon" size="xs" />
-            <span>{{ tab.label }}</span>
-            <span class="tab-count-badge font-mono">{{ getSegmentCount(tab.id) }}</span>
-          </button>
-        </div>
-
-        <div class="table-search-row">
-          <div class="search-input-wrap">
-            <span class="search-ico"><BaseIcon name="search" size="xs" /></span>
-            <input v-model="searchQuery" type="text" placeholder="Filter workloads by name, image, team..." class="input-glass search-input" />
-            <button v-if="searchQuery" type="button" class="clear-search-btn" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
-          </div>
-
-          <div class="status-filter-group">
-            <button
-              type="button"
-              class="pill-btn"
-              :class="{ 'pill-active': statusFilter === 'all' }"
-              title="All Statuses"
-              @click="statusFilter = 'all'"
-            >
-              <span>All</span>
-              <span class="pill-badge">{{ totalWorkloads }}</span>
-            </button>
-            <button
-              type="button"
-              class="pill-btn pill-healthy"
-              :class="{ 'pill-active': statusFilter === 'healthy' }"
-              title="Healthy Workloads"
-              @click="statusFilter = 'healthy'"
-            >
-              <BaseIcon name="shield" size="xs" />
-              <span>Healthy</span>
-              <span class="pill-badge">{{ healthyCount }}</span>
-            </button>
-            <button
-              type="button"
-              class="pill-btn pill-degraded"
-              :class="{ 'pill-active': statusFilter === 'degraded' }"
-              title="Degraded Workloads"
-              @click="statusFilter = 'degraded'"
-            >
-              <BaseIcon name="alert-triangle" size="xs" />
-              <span>Degraded</span>
-              <span class="pill-badge">{{ degradedCount }}</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
       <!-- Desktop Data Table View (Completely suppressed on mobile <768px) -->
       <div class="desktop-table-container desktop-table-view">

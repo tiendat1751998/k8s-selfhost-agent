@@ -1,11 +1,11 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Automation & Self-Healing Workflow Styles (<400 lines, 4-Tier RWD)
    Mobile (<768px) | Tablet (768-1023px) | Desktop (1024-1439px) | Wide (>=1440px)
    ========================================================================== */
 
 /* 1. Responsive Visibility Utilities (Standardized 768px Breakpoint) */
 @media (max-width: 767.98px) {
-  .desktop-only, .desktop-header-wrap { display: none !important; }
+  .desktop-only { display: none !important; }
   .mobile-only { display: flex !important; }
 }
 @media (min-width: 768px) {
@@ -70,34 +70,217 @@
 .mobile-segmented-control { width: 100%; display: flex; box-sizing: border-box; }
 .mobile-segmented-control .segmented-btn { flex: 1; justify-content: center; text-align: center; padding: 7px 10px; }
 
-/* 5. View Container & Desktop Header */
-.view-container { display: flex; flex-direction: column; gap: 22px; width: 100%; max-width: 100%; box-sizing: border-box; }
-.view-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
-.view-tag {
-  display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700;
-  color: var(--accent-cyan, #06b6d4); letter-spacing: 0.05em; margin-bottom: 6px;
+/* 5. View Container Layout (Elevated ~65-75px directly below Top HUD) */
+.view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
-.view-title { font-size: 24px; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
-.view-desc { font-size: 13px; color: var(--text-secondary, #94a3b8); max-width: 820px; margin-top: 4px; line-height: 1.5; }
-.highlight { color: #fff; font-weight: 600; }
-.header-actions { display: flex; gap: 12px; }
 
 /* 6. Status / Alert Banner */
-.status-banner { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 12px; font-size: 13px; }
+.status-banner { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 8px; font-size: 12.5px; }
 .banner-success { background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; }
 .banner-error { background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3); color: #fda4af; }
 .banner-icon { font-size: 16px; }
 .banner-text { flex: 1; font-weight: 500; }
-.banner-close { background: none; border: none; color: inherit; font-size: 14px; cursor: pointer; }
+.banner-close { background: none; border: none; color: inherit; font-size: 14px; cursor: pointer; padding: 0; }
 
-/* 7. HUD Metrics Grid & Section Panels */
-.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+/* 7. Sleek Unified 38px Enterprise Toolbar */
+.automation-toolbar-sleek {
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
+  backdrop-filter: blur(12px);
+  width: 100%;
+  overflow: hidden;
+}
+
+.automation-toolbar-sleek .toolbar-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 240px;
+  min-width: 130px;
+  height: 28px;
+}
+
+.automation-toolbar-sleek .search-icon {
+  position: absolute;
+  left: 8px;
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  pointer-events: none;
+}
+
+.automation-toolbar-sleek .toolbar-search-input {
+  width: 100%;
+  height: 28px;
+  padding: 0 24px 0 26px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
+  color: #fff;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.automation-toolbar-sleek .toolbar-search-input:focus {
+  border-color: var(--accent-cyan, #06b6d4);
+  outline: none;
+}
+
+.automation-toolbar-sleek .clear-input-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  padding: 0;
+}
+
+.automation-toolbar-sleek .clear-input-btn:hover {
+  color: #fff;
+}
+
+/* Trigger Filter Pills / Tabs */
+.automation-toolbar-sleek .toolbar-trigger-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.automation-toolbar-sleek .toolbar-pill-btn {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary, #94a3b8);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.automation-toolbar-sleek .toolbar-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.automation-toolbar-sleek .toolbar-pill-btn.active {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: rgba(6, 182, 212, 0.5);
+  color: #38bdf8;
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.2);
+}
+
+/* Inline Compact Execution Badge Strip */
+.automation-toolbar-sleek .toolbar-kpi-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.automation-toolbar-sleek .kpi-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-cyan, #38bdf8);
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* Toolbar Action Buttons Group */
+.automation-toolbar-sleek .toolbar-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.automation-toolbar-sleek .toolbar-btn {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.automation-toolbar-sleek .toolbar-btn.btn-primary {
+  background: #22c55e;
+  color: #020617;
+  border: none;
+  font-weight: 700;
+}
+
+.automation-toolbar-sleek .toolbar-btn.btn-primary:hover {
+  background: #16a34a;
+  color: #fff;
+}
+
+.automation-toolbar-sleek .toolbar-btn.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
+  color: #e2e8f0;
+}
+
+.automation-toolbar-sleek .toolbar-btn.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.automation-toolbar-sleek .toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 8. Section Panels */
 .section-card { display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 14px; box-sizing: border-box; }
 .section-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
 .section-title { font-size: 16px; font-weight: 700; color: #fff; }
 .section-subtitle { font-size: 12px; color: var(--text-muted, #64748b); margin-top: 2px; }
 
-/* 8. Toggle Switch */
+/* 9. Toggle Switch */
 .toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .slider {
@@ -111,8 +294,9 @@
 input:checked + .slider { background-color: var(--accent-cyan, #06b6d4); }
 input:checked + .slider:before { transform: translateX(16px); }
 
-/* 9. Desktop Table Structure, Fixed Layout & Truncation */
+/* 10. Desktop Table Structure, Fixed Layout & Truncation */
 .desktop-table-container { width: 100%; box-sizing: border-box; }
+.desktop-table-container .table-toolbar { display: none !important; }
 .desktop-table-container .data-table { table-layout: fixed; width: 100%; }
 .desktop-table-container .data-table th,
 .desktop-table-container .data-table td {
@@ -151,7 +335,7 @@ input:checked + .slider:before { transform: translateX(16px); }
   border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 4px; font-size: 11px; color: #e2e8f0;
 }
 
-/* 10. Mobile Containers & Cards Stream */
+/* 11. Mobile Containers & Cards Stream */
 .automation-mobile-container { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 100%; box-sizing: border-box; }
 .automation-mobile-cards { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; }
 .stream-status, .stream-empty { padding: 20px 16px; text-align: center; font-size: 12px; color: var(--text-muted, #64748b); }
@@ -191,26 +375,19 @@ input:checked + .slider:before { transform: translateX(16px); }
 .mobile-rule-sub { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-muted, #64748b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mobile-rule-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
-/* 11. Responsive Breakpoints (<768px and <640px) */
-@media (max-width: 767.98px) {
-  .view-container { gap: 10px; }
-  .view-header { flex-direction: column; align-items: stretch; gap: 16px; }
-  .header-actions {
-    display: flex !important; flex-direction: row !important; width: 100% !important; gap: 8px !important; flex-wrap: wrap !important;
-  }
-  .header-actions .btn, .header-actions button, .header-actions a {
-    flex: 1 1 calc(50% - 4px) !important; min-width: 0 !important; padding: 7px 10px !important;
-    font-size: 11.5px !important; white-space: nowrap !important; justify-content: center !important;
-  }
-  .header-actions > :last-child:nth-child(odd) { flex: 1 1 100% !important; }
-  .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
-  .section-card { padding: 14px; }
-  .section-top { flex-direction: column; align-items: stretch; gap: 8px; }
+/* 12. Spin Utilities */
+.spin-icon { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* 13. Responsive Breakpoints */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .automation-toolbar-sleek { gap: 6px; padding: 0 8px; }
+  .automation-toolbar-sleek .toolbar-search-wrap { min-width: 110px; flex: 0 1 160px; }
+  .automation-toolbar-sleek .kpi-badge { font-size: 10px; padding: 2px 6px; }
 }
 
-@media (max-width: 640px) {
-  .btn, .header-actions .btn, .header-actions button {
-    height: 32px; min-height: 32px; padding: 0 10px !important;
-  }
-  .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+@media (max-width: 767.98px) {
+  .view-container { gap: 10px; }
+  .section-card { padding: 14px; }
+  .section-top { flex-direction: column; align-items: stretch; gap: 8px; }
 }

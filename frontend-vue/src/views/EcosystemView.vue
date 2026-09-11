@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import MetricCard from '../components/ui/MetricCard.vue'
 import EcosystemGrid from '../components/ecosystem/EcosystemGrid.vue'
 import EcosystemTable from '../components/ecosystem/EcosystemTable.vue'
 import EcosystemMobileCards from '../components/ecosystem/EcosystemMobileCards.vue'
@@ -27,30 +26,6 @@ const {
         <span>{{ toastMessage.text }}</span>
       </div>
     </transition>
-
-    <!-- Header Section (Desktop Only) -->
-    <header class="view-header desktop-header desktop-only">
-      <div class="header-titles">
-        <div class="title-with-badge">
-          <h1>Ecosystem Auto-Detector</h1>
-          <span class="badge-tag live-badge">Auto-Discovery</span>
-        </div>
-        <p class="header-subtitle">
-          Real-time discovery and operational status for platform infrastructure, service meshes, and GitOps toolchains.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn-secondary" :disabled="scanning || loading" @click="handleScan">
-          <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': scanning }" />
-          <span>{{ scanning ? 'Scanning Stack...' : 'Scan Now' }}</span>
-        </button>
-        <button class="btn-primary" @click="openConnectModal()">
-          <BaseIcon name="plus" size="xs" />
-          <span>Register Tool</span>
-        </button>
-      </div>
-    </header>
 
     <!-- Mobile Command Bar (<768px) -->
     <div class="ecosystem-mobile-command-bar mobile-only">
@@ -89,83 +64,116 @@ const {
       <span class="tel-item tel-issues"><BaseIcon name="alert-triangle" size="xs" /> {{ summary.degraded }} Issues</span>
     </div>
 
-    <!-- Summary HUD Metrics -->
-    <section class="summary-hud-grid desktop-only">
-      <MetricCard
-        title="Detected Stack Tools"
-        :value="summary.total"
-        icon="layers"
-        subtitle="Across configured integration URLs"
-        badge="Platform"
-        badgeColor="cyan"
-      />
-      <MetricCard
-        title="Healthy Services"
-        :value="summary.healthy"
-        icon="check-circle"
-        subtitle="Responding with status 200 OK"
-        badge="Online"
-        badgeColor="emerald"
-      />
-      <MetricCard
-        title="Degraded / Unreachable"
-        :value="summary.degraded"
-        icon="alert-triangle"
-        subtitle="Failed probes or sealed state"
-        :badge="summary.degraded > 0 ? 'Attention' : 'Optimal'"
-        :badgeColor="summary.degraded > 0 ? 'rose' : 'emerald'"
-      />
-      <MetricCard
-        title="Active Categories"
-        :value="Object.keys(summary.by_category || {}).length"
-        icon="grid"
-        subtitle="GitOps, Security, Mesh, Policy, etc."
-        badge="Coverage"
-        badgeColor="violet"
-      />
-    </section>
+    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <div class="ecosystem-toolbar-sleek glass-panel">
+      <!-- Search input with search icon and clear button -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search tools, endpoints, versions..."
+          class="toolbar-search-input"
+          aria-label="Search tools, endpoints, versions"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
+      </div>
 
-    <!-- Category Tabs Navigation -->
-    <section class="category-tabs-container">
-      <div class="category-tabs">
+      <!-- Status select dropdown (All Statuses, Healthy, Degraded, Unknown) -->
+      <select
+        v-model="selectedStatus"
+        class="toolbar-select"
+        aria-label="Filter by health status"
+      >
+        <option value="all">All Statuses</option>
+        <option value="healthy">Healthy</option>
+        <option value="degraded">Degraded</option>
+        <option value="not_configured">Unknown</option>
+      </select>
+
+      <!-- Inline compact KPI badge strip font-mono -->
+      <div class="toolbar-kpi-strip font-mono desktop-only" role="status" aria-label="Ecosystem summary metrics">
+        <span class="kpi-badge font-mono">{{ summary.total }} Tools ({{ summary.healthy }} Healthy · {{ summary.degraded }} Issues)</span>
+      </div>
+
+      <!-- Right: View Mode Toggle & Action Buttons -->
+      <div class="toolbar-actions-group">
+        <!-- View mode toggle (Table / Grid) -->
+        <div class="view-mode-toggle desktop-only" title="Switch layout display">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'table' }"
+            title="Table View"
+            aria-label="Table View"
+            @click="viewMode = 'table'"
+          >
+            <BaseIcon name="file-text" size="xs" />
+            <span>Table</span>
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'grid' }"
+            title="Grid View"
+            aria-label="Grid View"
+            @click="viewMode = 'grid'"
+          >
+            <BaseIcon name="grid" size="xs" />
+            <span>Grid</span>
+          </button>
+        </div>
+
+        <!-- Action buttons: Scan Now and + Register Tool -->
+        <button
+          type="button"
+          class="btn-toolbar btn-secondary desktop-only"
+          :disabled="scanning || loading"
+          title="Run discovery scan"
+          @click="handleScan"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': scanning }" />
+          <span>{{ scanning ? 'Scanning...' : 'Scan Now' }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn-toolbar btn-primary desktop-only"
+          title="Register new ecosystem integration"
+          @click="openConnectModal()"
+        >
+          <BaseIcon name="plus" size="xs" />
+          <span>Register Tool</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Category Filter Pills Navigation Bar -->
+    <section class="category-pills-bar category-tabs-container">
+      <div class="category-pills category-tabs">
         <button
           v-for="cat in categories"
           :key="cat.key"
-          class="category-tab-btn"
+          type="button"
+          class="category-pill-btn category-tab-btn"
           :class="{ active: activeCategory === cat.key }"
           @click="activeCategory = cat.key"
         >
-          <span class="tab-icon"><BaseIcon :name="cat.icon" size="xs" /></span>
-          <span class="tab-label">{{ cat.label }}</span>
-          <span v-if="cat.key === 'all'" class="tab-count">{{ tools.length }}</span>
-          <span v-else-if="summary.by_category && summary.by_category[cat.key]" class="tab-count">
+          <BaseIcon :name="cat.icon" size="xs" class="pill-icon" />
+          <span class="pill-label tab-label">{{ cat.label }}</span>
+          <span v-if="cat.key === 'all'" class="pill-count tab-count">{{ tools.length }}</span>
+          <span v-else-if="summary.by_category && summary.by_category[cat.key]" class="pill-count tab-count">
             {{ summary.by_category[cat.key] }}
           </span>
         </button>
-      </div>
-    </section>
-
-    <!-- Filter & Search Bar -->
-    <section class="filter-toolbar glass-panel">
-      <div class="search-box">
-        <BaseIcon name="search" size="xs" class="search-icon" />
-        <input v-model="searchQuery" type="text" placeholder="Search by tool name, endpoint, version..." class="search-input" />
-        <button v-if="searchQuery" class="clear-search-btn" @click="searchQuery = ''" aria-label="Clear"><BaseIcon name="x" size="xs" /></button>
-      </div>
-
-      <div class="filter-group">
-        <label class="filter-label">Health Status:</label>
-        <select v-model="selectedStatus" class="filter-select">
-          <option value="all">All Statuses</option>
-          <option value="healthy">Healthy Only</option>
-          <option value="degraded">Degraded / Unreachable</option>
-          <option value="not_configured">Not Configured</option>
-        </select>
-
-        <div class="view-mode-toggle">
-          <button class="toggle-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">Grid</button>
-          <button class="toggle-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">Table</button>
-        </div>
       </div>
     </section>
 
@@ -192,8 +200,8 @@ const {
 
     <!-- Data Presentation -->
     <template v-else>
-      <EcosystemGrid
-        v-if="viewMode === 'grid'"
+      <EcosystemTable
+        v-if="viewMode === 'table'"
         class="desktop-only"
         :tools="filteredTools"
         :deleting-id="deleting"
@@ -206,7 +214,7 @@ const {
         @delete="handleDeleteTool"
       />
 
-      <EcosystemTable
+      <EcosystemGrid
         v-else
         class="desktop-only"
         :tools="filteredTools"

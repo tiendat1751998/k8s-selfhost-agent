@@ -147,54 +147,6 @@
   border-radius: 8px;
 }
 
-/* 1. Header Styles */
-.view-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.header-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
-  border-radius: 9999px;
-  background: rgba(6, 182, 212, 0.08);
-  border: 1px solid rgba(6, 182, 212, 0.3);
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  font-weight: 700;
-  color: #38bdf8;
-  letter-spacing: 0.05em;
-  margin-bottom: 4px;
-}
-
-.view-title {
-  font-size: 22px;
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: -0.02em;
-  margin: 0 0 4px 0;
-}
-
-.view-desc {
-  font-size: 13px;
-  color: var(--text-muted, #94a3b8);
-  max-width: 780px;
-  margin: 0;
-  line-height: 1.4;
-  font-size: 12px;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
 /* Toast Banner */
 .toast-banner {
   display: flex;

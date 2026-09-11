@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import IncidentDetailPane from '../components/incidents/IncidentDetailPane.vue'
 import IncidentSimulationModal from '../components/incidents/IncidentSimulationModal.vue'
@@ -73,22 +72,121 @@ function formatRelativeTime(dateStr?: string): string {
 
 <template>
   <div class="view-container animate-fade-in">
-    <!-- Desktop Header -->
-    <div class="view-header desktop-only">
-      <div>
-        <h1 class="view-title">Kubernetes Incident Command Center</h1>
-        <p class="view-desc">
-          Live anomaly stream, AI Root Cause Analysis (RCA) reasoning engine, and GitOps pull request diff visualizer.
-        </p>
+    <!-- Notification Toast -->
+    <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
+      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" />
+      <span>{{ toastMessage.text }}</span>
+      <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
+    </div>
+
+    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <div class="incidents-toolbar-sleek glass-panel desktop-only">
+      <!-- Search input with search icon and clear button -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Filter pod, cluster, ns, error..."
+          class="toolbar-search-input"
+          aria-label="Filter incidents by pod, cluster, namespace, or error"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
       </div>
 
-      <div class="header-actions">
-        <button class="btn-slate-primary" @click="showSimulateModal = true">
+      <!-- Status tabs / pills with count badges -->
+      <div class="toolbar-status-pills" role="tablist" aria-label="Filter incidents by status">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="filterStatus === 'all'"
+          class="toolbar-pill-btn"
+          :class="{ active: filterStatus === 'all' }"
+          @click="filterStatus = 'all'"
+        >
+          <span>All</span>
+          <span class="pill-badge">{{ countAll }}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="filterStatus === 'open'"
+          class="toolbar-pill-btn"
+          :class="{ active: filterStatus === 'open' }"
+          @click="filterStatus = 'open'"
+        >
+          <span>Open</span>
+          <span class="pill-badge">{{ countOpen }}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="filterStatus === 'in_progress'"
+          class="toolbar-pill-btn"
+          :class="{ active: filterStatus === 'in_progress' }"
+          @click="filterStatus = 'in_progress'"
+        >
+          <span>In Progress</span>
+          <span class="pill-badge">{{ countInProgress }}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="filterStatus === 'resolved'"
+          class="toolbar-pill-btn"
+          :class="{ active: filterStatus === 'resolved' }"
+          @click="filterStatus = 'resolved'"
+        >
+          <span>Resolved</span>
+          <span class="pill-badge">{{ countResolved }}</span>
+        </button>
+      </div>
+
+      <!-- Severity filter dropdown -->
+      <select
+        v-model="filterSeverity"
+        class="toolbar-select severity-dropdown"
+        aria-label="Filter incidents by severity"
+      >
+        <option value="all">All Severities</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+
+      <!-- Inline compact KPI badge strip font-mono -->
+      <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Incident metrics summary">
+        <span class="kpi-badge font-mono">
+          {{ totalIncidents }} Incidents ({{ criticalCount }} Critical · {{ analyzingCount }} Remediation · {{ resolvedCount }} Resolved)
+        </span>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="toolbar-actions-group">
+        <button
+          type="button"
+          class="toolbar-btn btn-primary"
+          @click="showSimulateModal = true"
+        >
           <BaseIcon name="zap" size="xs" />
           <span>Simulate Incident</span>
         </button>
-        <button class="btn-slate" :disabled="loading" @click="fetchIncidents">
-          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" />
+        <button
+          type="button"
+          class="toolbar-btn btn-secondary"
+          :disabled="loading"
+          @click="fetchIncidents"
+        >
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" :class="{ 'spin-animate': loading }" />
           <span>{{ loading ? 'Querying...' : 'Refresh Feed' }}</span>
         </button>
       </div>
@@ -188,55 +286,6 @@ function formatRelativeTime(dateStr?: string): string {
       </div>
     </div>
 
-    <!-- Notification Toast -->
-    <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" />
-      <span>{{ toastMessage.text }}</span>
-      <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
-    </div>
-
-    <!-- Desktop Metric HUD (4 cards, hidden on mobile) -->
-    <div class="metrics-grid desktop-only">
-      <MetricCard
-        title="Detected Incidents"
-        :value="totalIncidents"
-        subtitle="Total cluster anomalies logged"
-        icon="zap"
-        badge="TELEMETRY"
-        badge-color="cyan"
-      />
-      <MetricCard
-        title="Critical Severity"
-        :value="criticalCount"
-        subtitle="Workloads requiring urgent fix"
-        icon="flame"
-        badge="HIGH PRIORITY"
-        :badge-color="criticalCount > 0 ? 'rose' : 'emerald'"
-        :trend="criticalCount > 0 ? 'Action Required' : 'Zero Critical'"
-        :trend-type="criticalCount > 0 ? 'negative' : 'positive'"
-      />
-      <MetricCard
-        title="Active Remediation"
-        :value="analyzingCount"
-        subtitle="AI reasoning & PR synthesis in progress"
-        icon="cpu"
-        badge="AI AGENT"
-        badge-color="violet"
-        trend="Autonomous Pipeline"
-        trend-type="positive"
-      />
-      <MetricCard
-        title="Resolved & Verified"
-        :value="resolvedCount"
-        subtitle="Incidents successfully healed"
-        icon="shield"
-        badge="CLOSED"
-        badge-color="emerald"
-        trend="Auto-Remediated"
-        trend-type="positive"
-      />
-    </div>
-
     <!-- Specialized Split-Pane Incident Inspector -->
     <div class="split-pane-layout" :class="{ 'mobile-showing-detail': showMobileDetail }">
       <!-- Left Pane: Incident Feed List -->
@@ -245,51 +294,6 @@ function formatRelativeTime(dateStr?: string): string {
           <div class="pane-title-wrap">
             <span class="pane-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
             <h2 class="pane-title">Incident Queue ({{ filteredIncidents.length }})</h2>
-          </div>
-          <div class="status-tab-group">
-            <button
-              class="status-tab-btn"
-              :class="{ active: filterStatus === 'all' }"
-              @click="filterStatus = 'all'"
-            >
-              All ({{ countAll }})
-            </button>
-            <button
-              class="status-tab-btn"
-              :class="{ active: filterStatus === 'open' }"
-              @click="filterStatus = 'open'"
-            >
-              Open ({{ countOpen }})
-            </button>
-            <button
-              class="status-tab-btn"
-              :class="{ active: filterStatus === 'in_progress' }"
-              @click="filterStatus = 'in_progress'"
-            >
-              In Progress ({{ countInProgress }})
-            </button>
-            <button
-              class="status-tab-btn"
-              :class="{ active: filterStatus === 'resolved' }"
-              @click="filterStatus = 'resolved'"
-            >
-              Resolved ({{ countResolved }})
-            </button>
-          </div>
-          <div class="filter-controls">
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Filter pod, cluster..."
-              class="search-mini"
-            />
-            <select v-model="filterSeverity" class="select-mini">
-              <option value="all">All Severities</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
           </div>
         </div>
 
