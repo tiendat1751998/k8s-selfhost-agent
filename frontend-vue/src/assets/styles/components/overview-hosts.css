@@ -257,3 +257,66 @@
 .more-actions-dropdown .item-delete { color: #fb7185; }
 .more-actions-dropdown .item-delete:hover { background: rgba(244, 63, 94, 0.15); color: #f43f5e; }
 .more-actions-dropdown .menu-item-icon { font-size: 12px; }
+/* ==========================================================================
+   Infrastructure Hosts Header & Sleek 38px Toolbar Controls
+   ========================================================================== */
+.topology-section { display: flex; flex-direction: column; gap: 10px; }
+.hosts-header-row.topology-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 2px; margin-bottom: 0; flex-wrap: nowrap; }
+.hosts-title-group { display: inline-flex; align-items: center; gap: 8px; }
+.hosts-pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: #06b6d4; box-shadow: 0 0 8px rgba(6, 182, 212, 0.6); flex-shrink: 0; }
+.hosts-section-title { font-size: 14.5px; font-weight: 600; color: var(--text-secondary, #94a3b8); letter-spacing: -0.01em; margin: 0; line-height: 1.3; }
+
+/* Compact Monospace Live Status Badge */
+.hosts-status-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 9999px; background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.08); font-size: 11px; }
+.hosts-dot-online { width: 6px; height: 6px; border-radius: 50%; background: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); flex-shrink: 0; }
+.hosts-status-text { font-weight: 600; color: #38bdf8; letter-spacing: -0.01em; }
+
+/* Sleek Unified 38px Host Controls Toolbar */
+.hosts-controls-toolbar.topology-filter-bar {
+  height: 38px; min-height: 38px; max-height: 38px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 0 8px; border-radius: 10px; background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  width: 100%; flex-wrap: nowrap;
+}
+
+/* Left Side: Smooth Capsule Pills */
+.hosts-capsule-pills.topology-filter-pills {
+  display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  min-width: 0; flex: 1 1 auto; flex-wrap: nowrap;
+}
+.hosts-capsule-pills::-webkit-scrollbar { display: none; }
+
+.hosts-capsule-pill.filter-pill-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  height: 28px; min-height: 28px; max-height: 28px; padding: 0 10px;
+  border-radius: 9999px; font-size: 11.5px; font-weight: 500; white-space: nowrap;
+  flex-shrink: 0; cursor: pointer; background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-secondary, #94a3b8);
+  transition: all 0.15s ease; user-select: none; box-sizing: border-box;
+}
+.hosts-capsule-pill.filter-pill-btn:hover { background: rgba(255, 255, 255, 0.08); color: #f1f5f9; border-color: rgba(255, 255, 255, 0.14); }
+.hosts-capsule-pill.filter-pill-btn.active { background: rgba(6, 182, 212, 0.12); border-color: rgba(6, 182, 212, 0.35); color: #38bdf8; font-weight: 600; box-shadow: none; }
+
+/* Right Side: Segmented View Mode Toggle & Reset Order */
+.hosts-toolbar-right.topology-order-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto; }
+.hosts-segmented-toggle.view-mode-toggle {
+  height: 28px; min-height: 28px; max-height: 28px; box-sizing: border-box;
+  display: inline-flex; align-items: center; gap: 2px; padding: 2px;
+  border-radius: 9999px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.hosts-seg-btn.toggle-btn {
+  height: 22px; padding: 0 9px; border-radius: 9999px; font-size: 11px; font-weight: 500;
+  border: none; background: transparent; color: var(--text-secondary, #94a3b8); cursor: pointer;
+  transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+}
+.hosts-seg-btn.toggle-btn:hover { color: #f8fafc; background: rgba(255, 255, 255, 0.06); }
+.hosts-seg-btn.toggle-btn.active { background: rgba(56, 189, 248, 0.16); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+
+.hosts-btn-reset-order.btn-reset-order-icon {
+  width: 28px; height: 28px; min-height: 28px; max-height: 28px; padding: 0;
+  border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary, #94a3b8); cursor: pointer; transition: all 0.15s ease; box-sizing: border-box;
+}
+.hosts-btn-reset-order.btn-reset-order-icon:hover { background: rgba(56, 189, 248, 0.14); border-color: rgba(56, 189, 248, 0.35); color: #38bdf8; }
