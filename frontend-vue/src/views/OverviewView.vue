@@ -119,70 +119,33 @@ const {
         <!-- Live stream status pill -->
         <span class="badge" :class="isLiveWs ? 'badge-emerald' : 'badge-cyan'">
           <span class="pulse-dot" :class="{ 'pulse-active': isLiveWs }"></span>
-          <span>{{ isLiveWs ? 'Live Stream' : 'Telemetry Synced' }}</span>
+          <span class="font-mono text-xs">Live · {{ lastUpdated.toLocaleTimeString() }}</span>
         </span>
-
-        <!-- Auto-Refresh badge / timer pill & timestamp -->
-        <span class="badge badge-indigo badge-auto-refresh">Auto-Refresh 5s</span>
-        <span class="last-sync-text font-mono">Updated: {{ lastUpdated.toLocaleTimeString() }}</span>
-
-        <!-- Inline compact KPI badge strip font-mono -->
-        <div class="toolbar-kpi-strip font-mono">
-          <span class="kpi-badge">
-            {{ overview?.healthy_nodes || 0 }}/{{ overview?.total_nodes || 0 }} Nodes Online · {{ totalContainers }} Containers · {{ effectiveHttpRps }} RPS
-          </span>
-        </div>
       </div>
 
       <div class="toolbar-actions-group">
-        <!-- Segmented Node View Mode Toggle -->
-        <div class="view-mode-toggle" role="group" aria-label="Node view mode">
-          <button
-            type="button"
-            class="mode-btn"
-            :class="{ active: nodeViewMode === 'table' }"
-            @click="nodeViewMode = 'table'"
-            title="Table View"
-          >
-            <BaseIcon name="file-text" size="xs" />
-            <span>Table</span>
-          </button>
-          <button
-            type="button"
-            class="mode-btn"
-            :class="{ active: nodeViewMode === 'grid' }"
-            @click="nodeViewMode = 'grid'"
-            title="Grid View"
-          >
-            <BaseIcon name="grid" size="xs" />
-            <span>Grid</span>
-          </button>
-        </div>
-
-        <!-- Action Buttons -->
+        <!-- Compact Deep-Dive and Refresh Buttons -->
         <button
           type="button"
           class="btn-toolbar"
           @click="openDeepDiveModal"
           title="Deep-Dive Telemetry"
         >
-          <span class="btn-icon">
-            <BaseIcon name="activity" size="sm" />
-          </span>
-          <span>Deep-Dive Telemetry</span>
+          <BaseIcon name="activity" size="xs" />
+          <span>Deep-Dive</span>
         </button>
 
         <button
           type="button"
-          class="btn-toolbar"
+          class="btn-toolbar btn-toolbar-icon"
           @click="pollClusterMetrics"
           :disabled="loading"
           title="Refresh Telemetry"
+          aria-label="Refresh Telemetry"
         >
           <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">
-            <BaseIcon name="refresh" size="sm" />
+            <BaseIcon name="refresh" size="xs" />
           </span>
-          <span>Refresh</span>
         </button>
       </div>
     </div>

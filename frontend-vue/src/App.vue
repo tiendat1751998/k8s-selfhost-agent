@@ -317,26 +317,15 @@ function handleNavigateToHost(nodeNameOrId: string) {
           </div>
 
           <!-- Dynamic Screen Title & Category Breadcrumb -->
-          <div class="hud-breadcrumb" aria-label="Screen location breadcrumb">
+          <nav class="hud-breadcrumb" aria-label="Screen location breadcrumb">
             <span class="bc-cat font-mono">{{ currentBreadcrumb.category }}</span>
             <span class="bc-sep font-mono">/</span>
             <span class="bc-title">{{ currentBreadcrumb.title }}</span>
-          </div>
+          </nav>
         </div>
 
-        <!-- Center: Command Palette / Search Trigger (Fixed 160px) -->
+        <!-- Center: Cluster / Namespace Scope Dropdowns & Tenant -->
         <div class="hud-center">
-          <button class="command-search-btn desktop-search" @click="showCommandPalette = true" aria-label="Quick search (Ctrl+K)">
-            <span class="search-ico" aria-hidden="true">
-              <BaseIcon name="search" size="xs" />
-            </span>
-            <span class="search-text">Search...</span>
-            <kbd class="kbd-badge">Ctrl K</kbd>
-          </button>
-        </div>
-
-        <!-- Center-Right: Cluster / Namespace Scope Dropdowns & Tenant -->
-        <div class="hud-center-right">
           <!-- Global Context Selector: Cluster & Namespace (Tasks 021 & 015) -->
           <GlobalContextSelector />
 
@@ -356,8 +345,17 @@ function handleNavigateToHost(nodeNameOrId: string) {
           </div>
         </div>
 
-        <!-- Right: Cluster health, Alerts, User Profile -->
+        <!-- Right: Search, Cluster health, Alerts, User Profile -->
         <div class="hud-right">
+          <!-- Desktop Quick Search Trigger (125px compact) -->
+          <button class="command-search-btn desktop-search" @click="showCommandPalette = true" aria-label="Quick search (Ctrl+K)">
+            <span class="search-ico" aria-hidden="true">
+              <BaseIcon name="search" size="xs" />
+            </span>
+            <span class="search-text">Search...</span>
+            <kbd class="kbd-badge">Ctrl K</kbd>
+          </button>
+
           <!-- Mobile Quick Search Trigger (Mobile only) -->
           <button class="mobile-search-btn" @click="showCommandPalette = true" aria-label="Quick search (Ctrl+K)" title="Quick search (Ctrl+K)">
             <span class="search-ico" aria-hidden="true">
