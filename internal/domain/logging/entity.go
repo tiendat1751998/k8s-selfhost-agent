@@ -136,12 +136,12 @@ func (f *LogFilter) Validate() error {
 	return nil
 }
 
-// Sanitize applies standard bounds: limit clamped between 1 and 100, default time range.
+// Sanitize applies standard bounds: limit clamped between 1 and 10000, default time range.
 func (f *LogFilter) Sanitize() {
 	if f.Limit <= 0 {
-		f.Limit = 50
-	} else if f.Limit > 100 {
 		f.Limit = 100
+	} else if f.Limit > 10000 {
+		f.Limit = 10000
 	}
 	if f.Offset < 0 {
 		f.Offset = 0

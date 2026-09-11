@@ -62,17 +62,33 @@ func TestLogEntry_Validate(t *testing.T) {
 }
 
 func TestLogFilter_ValidateAndSanitize(t *testing.T) {
-	filter := logging.LogFilter{
+	// Limit <= 0 defaults to 100
+	defaultFilter := logging.LogFilter{
 		TenantID: "tenant-1",
-		Limit:    500, // Should be clamped to 100
+		Limit:    0,
 	}
-	require.NoError(t, filter.Validate())
+	defaultFilter.Sanitize()
+	require.Equal(t, 100, defaultFilter.Limit)
 
-	filter.Sanitize()
-	require.Equal(t, 100, filter.Limit)
-	require.False(t, filter.StartTime.IsZero())
-	require.False(t, filter.EndTime.IsZero())
-	require.True(t, filter.EndTime.After(filter.StartTime))
+	// Limit within [1, 10000] is preserved
+	midFilter := logging.LogFilter{
+		TenantID: "tenant-1",
+		Limit:    5000,
+	}
+	midFilter.Sanitize()
+	require.Equal(t, 5000, midFilter.Limit)
+
+	// Limit > 10000 is clamped to 10000
+	excessiveFilter := logging.LogFilter{
+		TenantID: "tenant-1",
+		Limit:    20000,
+	}
+	require.NoError(t, excessiveFilter.Validate())
+	excessiveFilter.Sanitize()
+	require.Equal(t, 10000, excessiveFilter.Limit)
+	require.False(t, excessiveFilter.StartTime.IsZero())
+	require.False(t, excessiveFilter.EndTime.IsZero())
+	require.True(t, excessiveFilter.EndTime.After(excessiveFilter.StartTime))
 
 	// Invalid log level in filter returns ErrInvalidLogQuery
 	invalidLevelFilter := logging.LogFilter{
