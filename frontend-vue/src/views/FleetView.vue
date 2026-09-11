@@ -2,7 +2,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAppStore } from '../stores/app'
 import ClusterDetailsDrawer from '../components/fleet/ClusterDetailsDrawer.vue'
-import FleetSwarmBanner from '../components/fleet/FleetSwarmBanner.vue'
 import FleetClustersGrid from '../components/fleet/FleetClustersGrid.vue'
 import FleetClustersTable from '../components/fleet/FleetClustersTable.vue'
 import FleetMobileCards from '../components/fleet/FleetMobileCards.vue'
@@ -13,7 +12,8 @@ import {
   fleetApi,
   type Cluster,
   type ClusterDiscoveryData,
-  type SwarmClusterInfo
+  type SwarmClusterInfo,
+  mapSwarmToFleetCluster
 } from '../api/fleet'
 import '@/assets/styles/views/fleet.css'
 
@@ -70,24 +70,36 @@ onMounted(() => {
 
 // Metrics computation
 const hasSwarm = computed(() => swarmInfo.value !== null && (swarmInfo.value.node_count > 0 || Boolean(swarmInfo.value.id)))
-const totalClusters = computed(() => clusters.value.length)
+
+// Unified clusters list: Kubernetes clusters + Swarm cluster (if active)
+const unifiedClusters = computed<Cluster[]>(() => {
+  const k8sClusters = clusters.value.map(c => ({
+    ...c,
+    orchestrator: (c.orchestrator || 'kubernetes') as 'kubernetes' | 'swarm',
+  }))
+  if (hasSwarm.value && swarmInfo.value) {
+    return [mapSwarmToFleetCluster(swarmInfo.value), ...k8sClusters]
+  }
+  return k8sClusters
+})
+
+const totalClusters = computed(() => unifiedClusters.value.length)
 
 const HEALTHY_STATUSES = new Set(['healthy', 'active', 'ready', 'connected', 'online', 'live', 'ok'])
 const DEGRADED_STATUSES = new Set(['warning', 'pending', 'standby', 'degraded', 'in_progress', 'promoting'])
 const OFFLINE_STATUSES = new Set(['critical', 'danger', 'failed', 'error', 'offline', 'disconnected', 'down', 'unhealthy'])
 
 const onlineCount = computed(() =>
-  clusters.value.filter(c => HEALTHY_STATUSES.has((c.health_status || c.status || '').toLowerCase())).length
+  unifiedClusters.value.filter(c => HEALTHY_STATUSES.has((c.health_status || c.status || '').toLowerCase())).length
 )
-
 const healthyClusters = computed(() => onlineCount.value)
 
 const totalNodes = computed(() =>
-  clusters.value.reduce((acc, c) => acc + (c.nodes || 0), 0)
+  unifiedClusters.value.reduce((acc, c) => acc + (c.nodes || 0), 0)
 )
 
 const totalCores = computed(() => {
-  return clusters.value.reduce((acc, c) => {
+  return unifiedClusters.value.reduce((acc, c) => {
     const rawCores = (c as any).cores || (c as any).cpu_cores || (c.discovered_resources as any)?.total_cores || (c.discovered_resources as any)?.cpu_cores
     if (typeof rawCores === 'number') return acc + rawCores
     const nodes = c.nodes && c.nodes > 0 ? c.nodes : 1
@@ -103,6 +115,9 @@ function matchesProvider(cluster: Cluster, provider: string): boolean {
   if (provider === 'all') return true
   const p = (cluster.provider || '').toLowerCase()
   const g = (cluster.group || '').toLowerCase()
+  const orch = (cluster.orchestrator || '').toLowerCase()
+  if (provider === 'kubernetes') return orch === 'kubernetes' || p !== 'swarm'
+  if (provider === 'swarm') return orch === 'swarm' || p === 'swarm'
   if (provider === 'bare-metal') {
     return p === 'bare-metal' || p === 'baremetal' || p === 'onprem' || p === 'metal' || p === 'generic' || p === 'local'
   }
@@ -110,7 +125,6 @@ function matchesProvider(cluster: Cluster, provider: string): boolean {
   if (provider === 'gcp') return p === 'gcp' || p === 'gke'
   if (provider === 'azure') return p === 'azure' || p === 'aks'
   if (provider === 'edge') return p === 'edge' || g === 'edge'
-  if (provider === 'swarm') return p === 'swarm'
   return p === provider.toLowerCase()
 }
 
@@ -123,20 +137,8 @@ function matchesStatus(cluster: Cluster, status: 'all' | 'healthy' | 'degraded' 
   return false
 }
 
-const showSwarmBanner = computed(() => {
-  if (!hasSwarm.value || !swarmInfo.value) return false
-  if (providerFilter.value !== 'all' && providerFilter.value !== 'swarm') return false
-  if (statusFilter.value !== 'all' && statusFilter.value !== 'healthy') return false
-  if (searchFilter.value.trim()) {
-    const q = searchFilter.value.toLowerCase().trim()
-    const match = 'docker swarm'.includes(q) || 'swarm'.includes(q) || (swarmInfo.value.id || '').toLowerCase().includes(q)
-    if (!match) return false
-  }
-  return true
-})
-
 const filteredClusters = computed(() => {
-  let result = clusters.value
+  let result = unifiedClusters.value
 
   if (providerFilter.value !== 'all') {
     result = result.filter(c => matchesProvider(c, providerFilter.value))
@@ -151,6 +153,7 @@ const filteredClusters = computed(() => {
       (c.group || '').toLowerCase().includes(q) ||
       (c.provider || '').toLowerCase().includes(q) ||
       (c.region || '').toLowerCase().includes(q) ||
+      (c.orchestrator || '').toLowerCase().includes(q) ||
       (c.health_status || c.status || '').toLowerCase().includes(q)
     )
   }
@@ -225,10 +228,10 @@ async function handleRemove(cluster: Cluster) {
         <span class="mobile-badge-pill font-mono">({{ filteredClusters.length }})</span>
       </div>
       <div class="mobile-command-actions">
-        <button class="btn btn-secondary btn-xs" @click="showMobileSearch = !showMobileSearch" title="Search & Filter">
+        <button class="btn btn-secondary btn-xs" @click="showMobileSearch = !showMobileSearch" title="Search">
           <BaseIcon name="search" size="xs" />
         </button>
-        <button class="btn btn-secondary btn-xs" :disabled="loading" @click="fetchFleet" title="Sync">
+        <button class="btn btn-secondary btn-xs" :disabled="loading" @click="fetchFleet" title="Refresh">
           <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
         </button>
         <button class="btn btn-primary btn-xs" @click="showImportModal = true">
@@ -237,14 +240,14 @@ async function handleRemove(cluster: Cluster) {
       </div>
     </div>
 
-    <!-- Mobile Expandable Search & Filter Strip -->
+    <!-- Mobile Expandable Search Strip -->
     <div v-if="showMobileSearch" class="mobile-search-strip animate-fade-in">
-      <div class="mobile-search-input-wrap">
+      <div class="mobile-search-row">
         <input
           v-model="searchFilter"
           type="text"
           placeholder="Filter clusters..."
-          class="input-glass mobile-search-input font-mono"
+          class="input-glass mobile-search-input"
           autofocus
         />
         <button v-if="searchFilter" class="search-clear-btn" @click="searchFilter = ''">
@@ -254,11 +257,12 @@ async function handleRemove(cluster: Cluster) {
       <div class="mobile-filter-selects">
         <select v-model="providerFilter" class="toolbar-select mobile-select font-mono">
           <option value="all">All Providers</option>
+          <option value="kubernetes">Kubernetes</option>
+          <option value="swarm">Docker Swarm</option>
           <option value="bare-metal">Bare-Metal</option>
           <option value="aws">AWS</option>
           <option value="gcp">GCP</option>
           <option value="azure">Azure</option>
-          <option value="swarm">Swarm</option>
           <option value="edge">Edge</option>
         </select>
         <select v-model="statusFilter" class="toolbar-select mobile-select font-mono">
@@ -273,11 +277,11 @@ async function handleRemove(cluster: Cluster) {
     <!-- Mobile PWA Ergonomics: 20px Micro-telemetry strip (<640px) -->
     <div class="micro-telemetry-strip font-mono">
       <span><BaseIcon name="anchor" size="xs" /> {{ totalClusters }} clusters</span>
-      <span class="telemetry-sep">·</span>
+      <span class="telemetry-sep">?</span>
       <span><BaseIcon name="shield" size="xs" /> {{ healthyClusters }} healthy</span>
-      <span class="telemetry-sep">·</span>
+      <span class="telemetry-sep">?</span>
       <span><BaseIcon name="server" size="xs" /> {{ totalNodes }} nodes</span>
-      <span class="telemetry-sep">·</span>
+      <span class="telemetry-sep">?</span>
       <span><BaseIcon name="box" size="xs" /> {{ totalPods }} pods</span>
     </div>
 
@@ -303,14 +307,15 @@ async function handleRemove(cluster: Cluster) {
         </button>
       </div>
 
-      <!-- Provider filter dropdown -->
-      <select v-model="providerFilter" class="toolbar-select font-mono" title="Filter by provider">
+      <!-- Provider / Orchestrator filter dropdown -->
+      <select v-model="providerFilter" class="toolbar-select font-mono" title="Filter by provider / orchestrator">
         <option value="all">All Providers</option>
+        <option value="kubernetes">Kubernetes</option>
+        <option value="swarm">Docker Swarm</option>
         <option value="bare-metal">Bare-Metal</option>
         <option value="aws">AWS</option>
         <option value="gcp">GCP</option>
         <option value="azure">Azure</option>
-        <option value="swarm">Swarm</option>
         <option value="edge">Edge</option>
       </select>
 
@@ -324,8 +329,8 @@ async function handleRemove(cluster: Cluster) {
 
       <!-- Inline compact KPI badge strip font-mono -->
       <div class="toolbar-kpi-badge font-mono">
-        <span class="kpi-count">{{ clusters.length }} Clusters</span>
-        <span class="kpi-meta">({{ onlineCount }} Online · {{ totalNodes }} Nodes · {{ totalCores }} Cores)</span>
+        <span class="kpi-count">{{ totalClusters }} Clusters</span>
+        <span class="kpi-meta">({{ healthyClusters }} Online ? {{ totalNodes }} Nodes ? {{ totalCores }} Cores)</span>
       </div>
 
       <div class="toolbar-spacer"></div>
@@ -388,10 +393,7 @@ async function handleRemove(cluster: Cluster) {
       <button class="toast-close" @click="error = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Docker Swarm Cluster Banner (When Active & Filtered) -->
-    <FleetSwarmBanner v-if="showSwarmBanner && swarmInfo" :swarm-info="swarmInfo" />
-
-    <!-- Desktop Kubernetes Fleet Section (Single viewMode: Table OR Grid, NEVER both) -->
+    <!-- Desktop Fleet Section (Single viewMode: Table OR Grid, NEVER both) -->
     <div class="desktop-only">
       <FleetClustersTable
         v-if="viewMode === 'table'"
@@ -409,7 +411,7 @@ async function handleRemove(cluster: Cluster) {
       <FleetClustersGrid
         v-else-if="viewMode === 'grid'"
         :clusters="filteredClusters"
-        :total-clusters-count="clusters.length"
+        :total-clusters-count="unifiedClusters.length"
         :action-loading="actionLoading"
         :loading="loading"
         @discover="handleDiscover"

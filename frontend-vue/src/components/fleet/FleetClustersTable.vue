@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import type { Cluster } from '../../api/fleet'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
@@ -20,27 +21,43 @@ const emit = defineEmits<{
   (e: 'import'): void
 }>()
 
-const CLUSTER_ACTIONS: ActionItem[] = [
+const router = useRouter()
+
+const K8S_ACTIONS: ActionItem[] = [
+  { id: 'details', label: 'Cluster Details', icon: 'zap' },
   { id: 'discover', label: 'Discover Resources', icon: 'search' },
   { id: 'upgrade', label: 'Upgrade Cluster', icon: 'arrow-up' },
   { id: 'sep-1', label: '', separator: true },
   { id: 'remove', label: 'Evict Cluster', icon: 'trash', variant: 'danger' },
 ]
 
+const SWARM_ACTIONS: ActionItem[] = [
+  { id: 'details', label: 'Cluster Details', icon: 'zap' },
+  { id: 'swarm-hosts', label: 'View Compute Hosts', icon: 'server' },
+  { id: 'swarm-services', label: 'View Services', icon: 'layers' },
+]
+
+function getClusterActions(cluster: Cluster): ActionItem[] {
+  return cluster.orchestrator === 'swarm' ? SWARM_ACTIONS : K8S_ACTIONS
+}
+
 const clusterColumns: Column<Cluster>[] = [
   { key: 'name', label: 'Cluster Name', sortable: true },
-  { key: 'group', label: 'Fleet Tier', width: '100px', sortable: true },
-  { key: 'provider', label: 'Provider / Region', width: '125px', sortable: true },
-  { key: 'version', label: 'K8s Version', width: '95px', sortable: true },
+  { key: 'group', label: 'Fleet Tier', width: '90px', sortable: true },
+  { key: 'provider', label: 'Provider / Region', width: '130px', sortable: true },
+  { key: 'version', label: 'Version', width: '150px', sortable: true },
   { key: 'nodes', label: 'Nodes', width: '65px', sortable: true, align: 'center' },
   { key: 'health_status', label: 'Health Status', width: '110px', sortable: true },
-  { key: 'actions', label: 'Operations', width: '120px', align: 'right' },
+  { key: 'actions', label: 'Operations', width: '130px', align: 'right' },
 ]
 
 function handleClusterAction(actionId: string, cluster: Cluster) {
-  if (actionId === 'discover') emit('discover', cluster)
+  if (actionId === 'details') emit('details', cluster)
+  else if (actionId === 'discover') emit('discover', cluster)
   else if (actionId === 'upgrade') emit('upgrade', cluster)
   else if (actionId === 'remove') emit('remove', cluster)
+  else if (actionId === 'swarm-hosts') router.push('/infra/hosts')
+  else if (actionId === 'swarm-services') router.push('/compute')
 }
 </script>
 
@@ -54,14 +71,32 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
       empty-message="No clusters found matching current filters."
     >
       <template #cell-name="{ row }">
-        <span
-          class="font-mono text-cyan"
-          style="font-weight: 700; cursor: pointer;"
-          title="View Cluster Details"
-          @click="emit('details', row)"
-        >
-          {{ row.name }}
-        </span>
+        <div class="cluster-name-cell">
+          <span
+            class="font-mono cluster-name-link"
+            :class="row.orchestrator === 'swarm' ? 'text-blue' : 'text-cyan'"
+            title="View Cluster Details"
+            @click="emit('details', row)"
+          >
+            {{ row.name }}
+          </span>
+          <span
+            v-if="row.orchestrator === 'swarm'"
+            class="orchestrator-badge badge-swarm font-mono"
+            title="Docker Swarm Cluster"
+          >
+            <BaseIcon name="layers" size="xs" />
+            <span>Docker Swarm</span>
+          </span>
+          <span
+            v-else
+            class="orchestrator-badge badge-k8s font-mono"
+            title="Kubernetes Cluster"
+          >
+            <BaseIcon name="anchor" size="xs" />
+            <span>Kubernetes</span>
+          </span>
+        </div>
       </template>
 
       <template #cell-group="{ row }">
@@ -73,7 +108,10 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
       </template>
 
       <template #cell-version="{ row }">
-        <span class="font-mono text-emerald">{{ row.version || '—' }}</span>
+        <span v-if="row.orchestrator === 'swarm'" class="font-mono text-cyan">
+          SwarmKit <span v-if="row.swarm_meta" class="text-muted">({{ row.swarm_meta.manager_count }}M / {{ row.swarm_meta.worker_count }}W)</span>
+        </span>
+        <span v-else class="font-mono text-emerald">{{ row.version || '?' }}</span>
       </template>
 
       <template #cell-nodes="{ row }">
@@ -97,7 +135,7 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
           </button>
           <ActionDropdown
             size="xs"
-            :items="CLUSTER_ACTIONS"
+            :items="getClusterActions(row)"
             :disabled="actionLoading === row.id"
             @select="(actionId) => handleClusterAction(actionId, row)"
           />
@@ -111,6 +149,50 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
 .tier-pill {
   font-family: var(--font-sans);
   font-weight: 600;
+}
+
+.cluster-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cluster-name-link {
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cluster-name-link:hover {
+  text-decoration: underline;
+}
+
+.orchestrator-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.badge-k8s {
+  background: rgba(6, 182, 212, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.badge-swarm {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.text-blue {
+  color: #60a5fa;
 }
 
 .table-actions-row {
