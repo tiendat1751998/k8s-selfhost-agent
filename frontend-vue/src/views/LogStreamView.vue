@@ -22,7 +22,7 @@ const selectedTimeRange = ref('1h')
 const queryError = ref<string | null>(null)
 const isSearching = ref(false)
 const currentOffset = ref(0)
-const PAGE_SIZE = 100
+const selectedHistoricalLimit = ref(1000)
 
 const timeRanges = [
   { label: '15m', ms: 900000, interval: 15 },
@@ -46,7 +46,7 @@ async function runHistoricalQuery(isLoadMore = false) {
     end_time: now.toISOString(),
     query: queryParts.length ? queryParts.join(' ') : undefined,
     log_level: selectedLevel.value || undefined,
-    limit: PAGE_SIZE,
+    limit: selectedHistoricalLimit.value,
     offset: currentOffset.value,
     container_name: target.type === 'service' ? target.id : undefined,
   }
@@ -68,7 +68,7 @@ async function runHistoricalQuery(isLoadMore = false) {
     }
     await Promise.all(promises)
     if (mode.value !== 'historical') return
-    if (isLoadMore) currentOffset.value += PAGE_SIZE
+    if (isLoadMore) currentOffset.value += selectedHistoricalLimit.value
   } catch (err: unknown) {
     if (mode.value === 'historical') {
       queryError.value = err instanceof Error ? err.message : 'ClickHouse search failed'
@@ -79,7 +79,7 @@ async function runHistoricalQuery(isLoadMore = false) {
 }
 
 function loadMoreHistorical() {
-  currentOffset.value += PAGE_SIZE
+  currentOffset.value += selectedHistoricalLimit.value
   runHistoricalQuery(true)
 }
 
@@ -138,7 +138,7 @@ async function handleHistogramFilterRange(range: { start: string; end: string })
       end_time: range.end,
       query: queryParts.length ? queryParts.join(' ') : undefined,
       log_level: selectedLevel.value || undefined,
-      limit: PAGE_SIZE,
+      limit: selectedHistoricalLimit.value,
       offset: 0,
       container_name: target.type === 'service' ? target.id : undefined,
     })
@@ -261,6 +261,13 @@ function handleExport() {
       </button>
 
       <div v-if="mode === 'historical'" class="historical-query-group font-mono">
+        <select v-model="selectedHistoricalLimit" class="historical-limit-select font-mono" title="Max Log Entries to Fetch" aria-label="Historical log limit">
+          <option :value="100">100 logs</option>
+          <option :value="500">500 logs</option>
+          <option :value="1000">1,000 logs</option>
+          <option :value="5000">5,000 logs</option>
+          <option :value="10000">10,000 logs</option>
+        </select>
         <div class="time-range-picker">
           <button
             v-for="r in timeRanges"

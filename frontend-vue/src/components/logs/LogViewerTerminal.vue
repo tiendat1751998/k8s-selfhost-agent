@@ -107,7 +107,7 @@ function getTargetBadge(log: LogEntry): string {
           <input
             :value="searchQuery"
             type="text"
-            placeholder="Filter logs or regex..."
+            placeholder="Filter in stream..."
             class="terminal-search-input font-mono"
             aria-label="Filter logs"
             @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"

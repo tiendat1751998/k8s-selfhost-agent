@@ -127,7 +127,7 @@ export function useLogStreamer(options: LogStreamerOptions = {}) {
     const total = logStore.logs.length
     return total === 0 ? 0 : parseFloat(((errorCount.value / total) * 100).toFixed(1))
   })
-  const bufferSaturation = computed(() => Math.min(100, Math.round((logStore.logs.length / maxBufferSize) * 100)))
+  const bufferSaturation = computed(() => Math.min(100, Math.round((logStore.logs.length / (logStore.maxBufferSize || 10000)) * 100)))
 
   function setTerminalRef(el: HTMLElement | null) {
     terminalElement.value = el
