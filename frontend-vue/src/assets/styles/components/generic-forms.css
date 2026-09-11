@@ -1,0 +1,139 @@
+﻿/* ==========================================================================
+   Generic Platform - Form Controls & Inputs Stylesheet
+   Decomposed sub-sheet - Target < 250 lines
+   ========================================================================== */
+
+.panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon-inline {
+  position: absolute;
+  left: 10px;
+  font-size: 12px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.search-field {
+  padding: 6px 12px 6px 30px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  min-width: 200px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.search-field:focus {
+  border-color: var(--color-primary, #06b6d4);
+}
+
+.status-select {
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.status-select:focus {
+  border-color: var(--color-primary, #06b6d4);
+}
+
+/* Action Buttons */
+.btn-inspect {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.btn-inspect:hover {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: rgba(6, 182, 212, 0.4);
+  color: #38bdf8;
+}
+
+/* Drawer Toolbar & Format Switcher */
+.drawer-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.format-switch {
+  display: flex;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 6px;
+  padding: 2px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.switch-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #94a3b8);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.switch-tab:hover {
+  color: #f1f5f9;
+}
+
+.switch-tab.active {
+  background: rgba(6, 182, 212, 0.15);
+  color: #38bdf8;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+/* Responsive Form Overrides */
+@media (max-width: 768px) {
+  .panel-controls {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .search-input-wrap,
+  .search-field,
+  .status-select {
+    width: 100%;
+    min-width: 0;
+  }
+}
