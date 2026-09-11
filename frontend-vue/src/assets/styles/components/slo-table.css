@@ -1,0 +1,146 @@
+﻿/* ==========================================================================
+   SLO Catalog Table Stylesheet (SloCatalogTable)
+   Strict Enterprise Modularity - Target < 300 lines
+   ========================================================================== */
+
+.section-box.table-box {
+  border-radius: 12px;
+  background: var(--bg-card, #0f172a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+}
+
+.table-box .box-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.table-box .box-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.table-box .box-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary, #94a3b8);
+  margin-top: 2px;
+}
+
+.service-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.service-icon {
+  font-size: 14px;
+  color: var(--accent-cyan, #06b6d4);
+  flex-shrink: 0;
+}
+
+.service-text {
+  font-size: 13px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.indicator-pill {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.target-val {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.window-badge,
+.threshold-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary, #94a3b8);
+  white-space: nowrap;
+  display: inline-block;
+}
+
+/* PromQL Query Monospace Truncation with Ellipsis */
+.query-snippet {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted, #64748b);
+  max-width: 200px;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.table-actions-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* De-neonized Table Action Icon Buttons */
+.btn-icon-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #0b0f19;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.btn-icon-action:hover {
+  border-color: #3b82f6;
+  color: #fff;
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.btn-icon-action.btn-icon-warn:hover {
+  border-color: #f59e0b;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.btn-icon-action.btn-icon-del {
+  transition: all 0.15s ease;
+}
+
+.btn-icon-action.btn-icon-del:hover {
+  border-color: #f43f5e;
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.15);
+}
+
+.text-emerald { color: #10b981; }
+.text-muted { color: var(--text-muted, #64748b); }
+.font-mono { font-family: var(--font-mono, monospace); }
+.font-bold { font-weight: 700; }
