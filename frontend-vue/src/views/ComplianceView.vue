@@ -1,3 +1,50 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import '../assets/styles/views/compliance.css'
+import '../assets/styles/components/compliance-drawers.css'
+import { useCompliance } from '../composables/useCompliance'
+import StatusBadge from '../components/ui/StatusBadge.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
+import ComplianceScoreCards from '../components/compliance/ComplianceScoreCards.vue'
+import ComplianceFrameworksGrid from '../components/compliance/ComplianceFrameworksGrid.vue'
+import ComplianceControlsTable from '../components/compliance/ComplianceControlsTable.vue'
+import ComplianceMobileCards from '../components/compliance/ComplianceMobileCards.vue'
+
+const mobileTab = ref<'violations' | 'frameworks'>('violations')
+
+const {
+  loading,
+  isScanning,
+  error,
+  selectedFrameworkId,
+  selectedStandard,
+  activeSeverity,
+  auditStatus,
+  latestRun,
+  selectedViolation,
+  modalMode,
+  overallScore,
+  passingControlsCount,
+  totalControlsCount,
+  criticalViolationsCount,
+  severityFilters,
+  filteredFrameworks,
+  filteredViolations,
+  fetchComplianceData,
+  triggerScan,
+  selectFramework,
+  selectStandard,
+  getSelectedFrameworkName,
+  inspectControl,
+  remediateControl,
+  closeModal,
+  exportRemediationReport,
+  getProgressColorClass,
+  formatFrameworkTag,
+  formatDate,
+} = useCompliance()
+</script>
+
 <template>
   <div class="view-container">
     <!-- Desktop View Header (>=768px) -->
@@ -201,50 +248,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref } from 'vue'
-import '../assets/styles/views/compliance.css'
-import '../assets/styles/components/compliance-drawers.css'
-import { useCompliance } from '../composables/useCompliance'
-import StatusBadge from '../components/ui/StatusBadge.vue'
-import BaseIcon from '../components/ui/BaseIcon.vue'
-import ComplianceScoreCards from '../components/compliance/ComplianceScoreCards.vue'
-import ComplianceFrameworksGrid from '../components/compliance/ComplianceFrameworksGrid.vue'
-import ComplianceControlsTable from '../components/compliance/ComplianceControlsTable.vue'
-import ComplianceMobileCards from '../components/compliance/ComplianceMobileCards.vue'
-
-const mobileTab = ref<'violations' | 'frameworks'>('violations')
-
-const {
-  loading,
-  isScanning,
-  error,
-  selectedFrameworkId,
-  selectedStandard,
-  activeSeverity,
-  auditStatus,
-  latestRun,
-  selectedViolation,
-  modalMode,
-  overallScore,
-  passingControlsCount,
-  totalControlsCount,
-  criticalViolationsCount,
-  severityFilters,
-  filteredFrameworks,
-  filteredViolations,
-  fetchComplianceData,
-  triggerScan,
-  selectFramework,
-  selectStandard,
-  getSelectedFrameworkName,
-  inspectControl,
-  remediateControl,
-  closeModal,
-  exportRemediationReport,
-  getProgressColorClass,
-  formatFrameworkTag,
-  formatDate,
-} = useCompliance()
-</script>

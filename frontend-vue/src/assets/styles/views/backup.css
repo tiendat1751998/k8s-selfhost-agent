@@ -173,25 +173,25 @@
 .job-id-cell, .target-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
 .job-id { font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-policy { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.size-cell { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11px; }
-.size-arrow { color: var(--text-muted, #94a3b8); font-size: 10px; }
-.crypto-cell { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.size-cell { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 11px; min-width: 0; overflow: hidden; }
+.size-arrow { color: var(--text-muted, #94a3b8); font-size: 10px; flex-shrink: 0; }
+.crypto-cell { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
 .cipher-pill {
-  font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+  font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px;
   background: rgba(139, 92, 246, 0.15); color: #a78bfa; flex-shrink: 0;
 }
 .hash-text { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.timing-cell { font-size: 11px; display: flex; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.timing-cell { font-size: 11px; display: flex; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .log-preview { font-size: 11px; color: var(--text-secondary, #94a3b8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 12. Compact Action Buttons (<180px Width Fitting) */
 .actions-cell { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
-.compact-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-shrink: 0; }
+.compact-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex-shrink: 0; }
 .btn-action-icon {
-  width: 32px; height: 32px; min-width: 32px; min-height: 32px; padding: 0;
-  display: inline-flex; align-items: center; justify-content: center; font-size: 13px;
+  width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
   background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 8px; color: #e2e8f0; cursor: pointer; transition: all 0.15s ease; touch-action: manipulation;
+  border-radius: 6px; color: #e2e8f0; cursor: pointer; transition: all 0.15s ease; touch-action: manipulation;
 }
 .btn-action-icon:hover:not(:disabled) { background: rgba(51, 65, 85, 0.9); color: #fff; border-color: rgba(6, 182, 212, 0.4); }
 .btn-action-icon:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -201,14 +201,14 @@
 }
 .btn-action-delete:hover:not(:disabled), .btn-crimson:hover:not(:disabled), .btn-delete-crimson:hover:not(:disabled) {
   background: rgba(244, 63, 94, 0.25) !important; border-color: #f43f5e !important;
-  color: #fff !important; box-shadow: 0 0 10px rgba(244, 63, 94, 0.35);
+  color: #fff !important;
 }
 
 /* 13. Volume Snapshot Progress Bar */
 .snapshot-progress-wrapper { display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 80px; }
 .snapshot-progress-info { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted, #94a3b8); }
 .snapshot-progress-bar { width: 100%; height: 4px; background: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
-.snapshot-progress-fill { height: 100%; background: linear-gradient(90deg, #06b6d4, #10b981); border-radius: 2px; transition: width 0.3s ease; }
+.snapshot-progress-fill { height: 100%; background: var(--accent-cyan, #06b6d4); border-radius: 2px; transition: width 0.3s ease; }
 
 /* 14. High-Density Mobile Cards (~65px/item) */
 .backup-mobile-stream { display: none; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; }

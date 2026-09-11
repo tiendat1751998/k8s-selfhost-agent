@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import '../assets/styles/views/cost.css'
 import { useCostFinOps } from '../composables/useCostFinOps'
 import CostHudMetrics from '../components/cost/CostHudMetrics.vue'
 import CostBreakdownChart from '../components/cost/CostBreakdownChart.vue'
@@ -53,10 +54,6 @@ const wasteColumns: Column<ResourceWaste>[] = [
     <!-- Desktop View Header (>=768px) -->
     <header class="view-header desktop-header-wrap desktop-only">
       <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-emerald"></span>
-          <span>FINOPS CLOUD COST GOVERNANCE & OPTIMIZATION</span>
-        </div>
         <h1 class="view-title">Cluster Cost Intelligence & Resource Waste Analytics</h1>
         <p class="view-desc">
           Real-time unit economics breakdown across Kubernetes clusters, namespaces, and workloads with <span class="highlight">idle resource waste detection</span> and right-sizing recommendations.
@@ -308,19 +305,3 @@ const wasteColumns: Column<ResourceWaste>[] = [
     </ModalDrawer>
   </div>
 </template>
-
-<style scoped>
-@import '../assets/styles/views/cost.css';
-@import '../assets/styles/components/cost-drawers.css';
-
-.cost-desktop-table :deep(.table-scroll-wrapper) {
-  overflow-x: auto !important;
-  width: 100%;
-}
-
-.cost-desktop-table :deep(.data-table) {
-  table-layout: fixed !important;
-  width: 100%;
-  min-width: 720px;
-}
-</style>

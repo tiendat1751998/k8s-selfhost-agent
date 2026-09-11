@@ -22,13 +22,13 @@ const emit = defineEmits<{
 const inspectedJob = ref<BackupJob | null>(null)
 
 const columns: Column<BackupJob>[] = [
-  { key: 'status', label: 'Status', width: '100px', sortable: true },
-  { key: 'id', label: 'Job & Policy', width: '150px', sortable: true },
-  { key: 'size', label: 'Size', width: '120px' },
-  { key: 'checksum', label: 'Security', width: '120px' },
-  { key: 'progress', label: 'Volume Stream', width: '110px' },
-  { key: 'timing', label: 'Started & Duration', width: '160px' },
-  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
+  { key: 'status', label: 'Status', width: '90px', sortable: true },
+  { key: 'id', label: 'Job & Policy', width: '15%', sortable: true },
+  { key: 'size', label: 'Size', width: '13%' },
+  { key: 'checksum', label: 'Security', width: '14%' },
+  { key: 'progress', label: 'Volume Stream', width: '14%' },
+  { key: 'timing', label: 'Started & Duration', width: '16%' },
+  { key: 'actions', label: 'Actions', width: '145px', align: 'right' },
 ]
 
 function formatBytes(bytes?: number): string {

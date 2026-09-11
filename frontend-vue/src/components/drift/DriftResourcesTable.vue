@@ -20,12 +20,12 @@ const emit = defineEmits<{
 }>()
 
 const columns: Column<EnrichedDriftRecord>[] = [
-  { key: 'status', label: 'Status & Severity', width: '110px', sortable: true },
-  { key: 'resource', label: 'Resource & Scope', width: '180px', sortable: true },
-  { key: 'driftType', label: 'Mutation Type', width: '130px', sortable: true },
+  { key: 'status', label: 'Status & Severity', width: '100px', sortable: true },
+  { key: 'resource', label: 'Resource & Scope', width: '22%', sortable: true },
+  { key: 'driftType', label: 'Mutation Type', width: '110px', sortable: true },
   { key: 'diff', label: 'State Mutation Preview' },
-  { key: 'detected_at', label: 'Detected At', width: '120px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '170px', align: 'right' },
+  { key: 'detected_at', label: 'Detected At', width: '110px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '150px', align: 'right' },
 ]
 
 function formatDriftStatus(s: string): string {
