@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import '../assets/styles/views/slo.css'
 import BaseIcon from '../components/ui/BaseIcon.vue'
@@ -98,7 +98,7 @@ const healthySLOs = computed(() => snapshots.value.filter(s => s.budget_status =
 const warningSLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'warning').length)
 const criticalSLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'critical').length)
 const avgBurnRate = computed(() => {
-  if (!snapshots.value.length) return '—'
+  if (!snapshots.value.length) return 'â€”'
   return `${(snapshots.value.reduce((acc, s) => acc + (s.burn_rate || 0), 0) / snapshots.value.length).toFixed(2)}x`
 })
 
@@ -209,10 +209,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
     <!-- Desktop Header (>640px) -->
     <div class="view-header desktop-only">
       <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>ENTERPRISE RELIABILITY ENGINEERING & OBSERVABILITY</span>
-        </div>
+
         <h1 class="view-title">Service Level Objectives & Error Budgets</h1>
         <p class="view-desc">
           Automated multi-window burn rate calculation, Google SRE error budgeting, and real-time PromQL telemetry compliance.
@@ -272,11 +269,11 @@ async function handleTriggerAlert(id: string, serviceName: string) {
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<=640px) -->
     <div class="slo-micro-telemetry mobile-only font-mono" role="status" aria-label="SLO Micro Telemetry">
       <span class="tel-item tel-total"><BaseIcon name="target" size="xs" /> {{ totalSLOs }} slos</span>
-      <span class="tel-sep">·</span>
+      <span class="tel-sep">Â·</span>
       <span class="tel-item tel-healthy"><BaseIcon name="shield" size="xs" /> {{ healthySLOs }} ok</span>
-      <span class="tel-sep">·</span>
+      <span class="tel-sep">Â·</span>
       <span class="tel-item tel-warn"><BaseIcon name="alert-triangle" size="xs" /> {{ warningSLOs + criticalSLOs }} warn</span>
-      <span class="tel-sep">·</span>
+      <span class="tel-sep">Â·</span>
       <span class="tel-item tel-burn"><BaseIcon name="flame" size="xs" /> {{ avgBurnRate }} burn</span>
     </div>
 

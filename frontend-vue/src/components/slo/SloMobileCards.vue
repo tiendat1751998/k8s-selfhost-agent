@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
 
@@ -108,5 +108,5 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/slo.css';
+@import '../../assets/styles/components/slo-mobile.css';
 </style>

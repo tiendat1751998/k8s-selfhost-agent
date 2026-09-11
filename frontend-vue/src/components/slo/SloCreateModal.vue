@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { reactive, watch } from 'vue'
 import type { CreateSLOPayload } from '../../api/compute'
 
@@ -177,5 +177,5 @@ function handleSubmit() {
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/slo.css';
+@import '../../assets/styles/components/slo-drawers.css';
 </style>

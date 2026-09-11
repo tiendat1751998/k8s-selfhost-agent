@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
@@ -182,5 +182,5 @@ function getBudgetBarWidth(budget?: number): number {
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/slo.css';
+@import '../../assets/styles/components/slo-cards.css';
 </style>

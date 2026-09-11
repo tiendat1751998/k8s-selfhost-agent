@@ -1,4 +1,4 @@
-/* Capacity Planning & Workload Forecasting Styles (< 350 lines) */
+﻿/* Capacity Planning & Workload Forecasting Styles (< 350 lines) */
 @import '../components/capacity-drawers.css';
 
 /* 1. Visibility & Breakpoint System (Standardized at 768px) */
@@ -104,8 +104,8 @@
 .bg-emerald { background: #10b981; } .bg-amber { background: #f59e0b; } .bg-rose { background: #f43f5e; } .bg-cyan { background: #06b6d4; }
 .text-emerald { color: #34d399; } .text-amber { color: #fbbf24; } .text-rose { color: #fb7185; } .text-cyan { color: #38bdf8; }
 
-/* 6. Desktop Node Headroom Table (Zero Horizontal Overflow) */
-.node-table-wrapper { width: 100%; overflow-x: hidden !important; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08); }
+/* 6. Desktop Node Headroom Table (Zero Horizontal Overflow, auto scrolling) */
+.node-table-wrapper { width: 100%; overflow-x: auto; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08); }
 .node-matrix-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12px; text-align: left; }
 .node-matrix-table th { padding: 12px 14px; background: rgba(0, 0, 0, 0.3); color: #94a3b8; font-weight: 600; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; border-bottom: 1px solid rgba(255, 255, 255, 0.1); white-space: nowrap; }
 .node-matrix-table td { padding: 12px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); vertical-align: middle; }
@@ -213,7 +213,72 @@
 .empty-title { font-size: 15px; font-weight: 700; color: #fff; }
 .empty-desc { font-size: 12px; color: #64748b; max-width: 480px; }
 
-/* 12. Responsive Adjustments (<767.98px Mobile) */
+/* 12. Telemetry Toggle & Collapsible Panel (Moved from CapacityView) */
+.capacity-telemetry-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.telemetry-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: #131b2e;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.telemetry-toggle-btn:hover {
+  background: #1e293b;
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #fff;
+}
+
+.telemetry-toggle-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+}
+
+.collapsible-telemetry-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.live-telemetry-panel { margin-bottom: 0; }
+.panel-badge-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.telemetry-live-badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 9999px;
+  font-size: 10px; font-weight: 600; background: rgba(16, 185, 129, 0.12); color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25); letter-spacing: 0.05em;
+}
+.sync-legend { display: flex; align-items: center; gap: 12px; color: #94a3b8; }
+.legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.legend-color { width: 8px; height: 8px; border-radius: 2px; }
+.legend-cyan { background-color: #06b6d4; }
+.legend-amber { background-color: #f59e0b; }
+.legend-emerald { background-color: #10b981; }
+.live-telemetry-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
+@media (max-width: 1024px) {
+  .live-telemetry-grid { grid-template-columns: 1fr; gap: 12px; }
+}
+.telemetry-chart-card {
+  background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(56, 189, 248, 0.12); border-radius: 8px; padding: 10px;
+}
+.chart-card-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 11px;
+}
+.chart-card-val { color: #f1f5f9; }
+
+/* 13. Responsive Adjustments (<767.98px Mobile) */
 @media (max-width: 767.98px) {
   .capacity-view-container { gap: 10px; }
   .recommendations-grid { grid-template-columns: 1fr; }
