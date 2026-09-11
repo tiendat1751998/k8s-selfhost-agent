@@ -67,28 +67,22 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
     <div class="node-table-wrapper">
       <table class="node-matrix-table">
         <colgroup>
-          <col style="width: 17%;" />
-          <col style="width: 8%;" />
-          <col style="width: 14%;" />
-          <col style="width: 14%;" />
-          <col style="width: 11%;" />
+          <col style="width: 18%;" />
           <col style="width: 9%;" />
+          <col style="width: 25%;" />
+          <col style="width: 13%;" />
+          <col style="width: 13%;" />
+          <col style="width: 14%;" />
           <col style="width: 8%;" />
-          <col style="width: 8%;" />
-          <col style="width: 6%;" />
-          <col style="width: 5%;" />
         </colgroup>
         <thead>
           <tr>
             <th>Node Identifier</th>
             <th>Role</th>
-            <th>CPU Allocation</th>
-            <th>Memory Allocation</th>
+            <th>Compute & Memory</th>
             <th>Load Trajectory</th>
-            <th>Pod Density</th>
-            <th>Bin Packing</th>
+            <th>Pods & Density</th>
             <th>Safe Headroom</th>
-            <th>Health</th>
             <th style="text-align: right;">Actions</th>
           </tr>
         </thead>
@@ -106,21 +100,23 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
               </span>
             </td>
             <td>
-              <div class="resource-bar-cell">
-                <div class="resource-bar-info font-mono">
-                  <span :class="getRiskTextColor(node.cpuUsagePercent)">{{ node.cpuUsagePercent.toFixed(1) }}%</span>
-                  <span class="text-muted">{{ node.cpuAllocatedCores }} / {{ node.cpuTotalCores }} C</span>
+              <div class="dual-resource-cell">
+                <div class="resource-row">
+                  <div class="resource-row-info font-mono">
+                    <span class="res-tag text-cyan font-bold">CPU</span>
+                    <span :class="getRiskTextColor(node.cpuUsagePercent)" class="font-bold">{{ node.cpuUsagePercent.toFixed(1) }}%</span>
+                    <span class="text-muted text-xs">({{ node.cpuAllocatedCores }}/{{ node.cpuTotalCores }}C)</span>
+                  </div>
+                  <PercentageBar :percentage="node.cpuUsagePercent" :height="4" />
                 </div>
-                <PercentageBar :percentage="node.cpuUsagePercent" :height="4" />
-              </div>
-            </td>
-            <td>
-              <div class="resource-bar-cell">
-                <div class="resource-bar-info font-mono">
-                  <span :class="getRiskTextColor(node.memUsagePercent)">{{ node.memUsagePercent.toFixed(1) }}%</span>
-                  <span class="text-muted">{{ node.memAllocatedGiB }} / {{ node.memTotalGiB }} GiB</span>
+                <div class="resource-row">
+                  <div class="resource-row-info font-mono">
+                    <span class="res-tag text-amber font-bold">MEM</span>
+                    <span :class="getRiskTextColor(node.memUsagePercent)" class="font-bold">{{ node.memUsagePercent.toFixed(1) }}%</span>
+                    <span class="text-muted text-xs">({{ node.memAllocatedGiB }}/{{ node.memTotalGiB }}G)</span>
+                  </div>
+                  <PercentageBar :percentage="node.memUsagePercent" :height="4" />
                 </div>
-                <PercentageBar :percentage="node.memUsagePercent" :height="4" />
               </div>
             </td>
             <td>
@@ -132,24 +128,26 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
                 />
               </div>
             </td>
-            <td class="font-mono">
-              <span :class="node.podCount >= node.podCapacity * 0.9 ? 'text-amber font-bold' : ''">
-                {{ node.podCount }} / {{ node.podCapacity }}
-              </span>
-            </td>
-            <td class="font-mono text-cyan font-bold">
-              {{ node.binPackingScore.toFixed(1) }}%
+            <td>
+              <div class="pod-density-cell font-mono">
+                <div :class="node.podCount >= node.podCapacity * 0.9 ? 'text-amber font-bold' : ''">
+                  {{ node.podCount }}/{{ node.podCapacity }} pods
+                </div>
+                <div class="text-xs text-muted">
+                  Packing: <span class="text-cyan font-bold">{{ node.binPackingScore.toFixed(1) }}%</span>
+                </div>
+              </div>
             </td>
             <td>
-              <span
-                class="font-mono font-bold"
-                :class="node.headroomPercent < 20 ? 'text-rose' : node.headroomPercent < 35 ? 'text-amber' : 'text-emerald'"
-              >
-                {{ node.headroomPercent.toFixed(1) }}%
-              </span>
-            </td>
-            <td>
-              <StatusBadge :status="node.status" :label="node.status.toUpperCase()" size="sm" />
+              <div class="headroom-health-cell">
+                <span
+                  class="font-mono font-bold"
+                  :class="node.headroomPercent < 20 ? 'text-rose' : node.headroomPercent < 35 ? 'text-amber' : 'text-emerald'"
+                >
+                  {{ node.headroomPercent.toFixed(1) }}%
+                </span>
+                <StatusBadge :status="node.status" :label="node.status.toUpperCase()" size="sm" />
+              </div>
             </td>
             <td style="text-align: right;">
               <ActionDropdown
@@ -168,7 +166,7 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
 <style scoped>
 :deep(.node-table-wrapper),
 .node-table-wrapper {
-  overflow-x: auto !important;
+  overflow-x: auto;
   max-width: 100%;
   width: 100%;
 }
@@ -176,21 +174,44 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
   table-layout: fixed;
   width: 100%;
 }
-.resource-bar-cell {
+.dual-resource-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
 }
-.resource-bar-info {
+.resource-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.resource-row-info {
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-size: 11px;
 }
+.res-tag {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
 .trajectory-sparkline-cell {
   width: 100%;
-  min-width: 70px;
+  min-width: 60px;
   max-width: 120px;
   padding: 2px 0;
 }
+.pod-density-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+}
+.headroom-health-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 </style>
+

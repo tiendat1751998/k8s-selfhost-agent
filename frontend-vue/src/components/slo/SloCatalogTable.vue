@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
@@ -21,13 +21,13 @@ const emit = defineEmits<{
 
 const sloColumns: Column<SLORow>[] = [
   { key: 'service', label: 'Service / Workload', sortable: true },
-  { key: 'indicator_type', label: 'Indicator Type (SLI)', width: '160px', sortable: true },
-  { key: 'target', label: 'Target Objective', width: '140px', sortable: true },
-  { key: 'window', label: 'Rolling Window', width: '130px', sortable: true },
-  { key: 'query', label: 'PromQL SLI Query', width: '280px' },
-  { key: 'alert_threshold', label: 'Burn Alert Threshold', width: '160px', sortable: true },
-  { key: 'created_at', label: 'Defined At', width: '130px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '160px', align: 'right' },
+  { key: 'indicator_type', label: 'Indicator Type (SLI)', width: '130px', sortable: true },
+  { key: 'target', label: 'Target Objective', width: '110px', sortable: true },
+  { key: 'window', label: 'Rolling Window', width: '100px', sortable: true },
+  { key: 'query', label: 'PromQL SLI Query', width: '200px' },
+  { key: 'alert_threshold', label: 'Burn Alert Threshold', width: '130px', sortable: true },
+  { key: 'created_at', label: 'Defined At', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '110px', align: 'right' },
 ]
 
 function formatPercent(val?: unknown): string {
@@ -118,5 +118,5 @@ function formatDate(d?: unknown): string {
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/slo.css';
+@import '../../assets/styles/components/slo-table.css';
 </style>
