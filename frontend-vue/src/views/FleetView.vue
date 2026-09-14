@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAppStore } from '../stores/app'
 import ClusterDetailsDrawer from '../components/fleet/ClusterDetailsDrawer.vue'
 import FleetClustersGrid from '../components/fleet/FleetClustersGrid.vue'
@@ -18,6 +19,7 @@ import {
 import '@/assets/styles/views/fleet.css'
 
 const appStore = useAppStore()
+const route = useRoute()
 
 // Async loading & error states
 const loading = ref(false)
@@ -65,6 +67,9 @@ async function fetchFleet() {
 }
 
 onMounted(() => {
+  if (route.query.provider === 'swarm') {
+    providerFilter.value = 'swarm'
+  }
   fetchFleet()
 })
 
