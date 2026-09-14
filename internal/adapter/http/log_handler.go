@@ -220,6 +220,12 @@ func (h *LogHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		Offset:        parseIntParam(r, "offset", 0),
 	}
 	filter.Sanitize()
+	if nodeParam := firstNonEmpty(q.Get("node"), q.Get("node_name"), q.Get("host")); nodeParam != "" {
+		if filter.Attributes == nil {
+			filter.Attributes = make(map[string]string)
+		}
+		filter.Attributes["node"] = nodeParam
+	}
 
 	res, err := h.service.QueryLogs(r.Context(), filter)
 	if err != nil {
@@ -266,6 +272,12 @@ func (h *LogHandler) HandleHistogram(w http.ResponseWriter, r *http.Request) {
 		EndTime:       endTime,
 	}
 	filter.Sanitize()
+	if nodeParam := firstNonEmpty(q.Get("node"), q.Get("node_name"), q.Get("host")); nodeParam != "" {
+		if filter.Attributes == nil {
+			filter.Attributes = make(map[string]string)
+		}
+		filter.Attributes["node"] = nodeParam
+	}
 
 	buckets, err := h.service.GetHistogram(r.Context(), filter, intervalSeconds)
 	if err != nil {
