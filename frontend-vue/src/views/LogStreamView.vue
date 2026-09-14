@@ -104,10 +104,26 @@ function loadMoreHistorical() {
   runHistoricalQuery(true)
 }
 
+async function preloadRecentLogs(target: LogTarget) {
+  try {
+    const kw = searchKeyword.value.trim()
+    const queryParts = [kw, target.type === 'node' ? target.id : ''].filter(Boolean)
+    await logStore.fetchHistoricalLogs({
+      limit: 50,
+      query: queryParts.length ? queryParts.join(' ') : undefined,
+      container_name: target.type === 'service' ? target.id : undefined,
+      log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
+    }, false)
+  } catch {
+    // Gracefully ignore if offline or no historical logs
+  }
+}
+
 function connectTarget(target: LogTarget) {
   if (target.type === 'node') logStore.connect({ node: target.id })
   else if (target.type === 'service') logStore.connect({ service: target.id })
   else logStore.connect()
+  preloadRecentLogs(target)
 }
 
 watch(selectedTarget, (t) => {
@@ -130,7 +146,12 @@ async function fetchLiveHistogram() {
   }).catch(() => {})
 }
 
-onMounted(() => { if (mode.value === 'live') fetchLiveHistogram() })
+onMounted(() => {
+  if (mode.value === 'live') {
+    connectTarget(selectedTarget.value)
+    fetchLiveHistogram()
+  }
+})
 
 function toggleLiveTail() {
   if (autoScroll.value && !isScrollLocked.value) {
