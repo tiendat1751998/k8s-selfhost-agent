@@ -19,7 +19,7 @@ type JournalTailer struct {
 	writer         *logengine.Writer
 	logger         *slog.Logger
 	availableCheck func() bool
-	streamReader   func(ctx context.Context) (ioCloserReader, error)
+	streamReader   func(ctx context.Context) (io.ReadCloser, error)
 }
 
 // NewJournalTailer initializes a JournalTailer.
@@ -88,7 +88,7 @@ func (j *JournalTailer) streamLoop(ctx context.Context) {
 	}
 }
 
-func (j *JournalTailer) openStream(ctx context.Context) (ioCloserReader, error) {
+func (j *JournalTailer) openStream(ctx context.Context) (io.ReadCloser, error) {
 	if j.streamReader != nil {
 		return j.streamReader(ctx)
 	}
