@@ -1,7 +1,7 @@
-# Project State — Checkpoint 2026-09-14T11:06:00+07:00
+# Project State — Checkpoint 2026-09-14T11:27:00+07:00
 
 ## Branch: `feat/enterprise-console-phase1`
-## Head Commit: `1f6b19b` (`merge: fix(secops): adjust KPI strip breakpoint to 1300px and clean up unused props`)
+## Head Commit: `4a3b7c1` (`feat(explorer): merge sleek enterprise toolbar and standardized row actions`)
 ## Working Tree: Clean (0 unstaged changes)
 ## Verification: 100% PRODUCTION ENTERPRISE PASS (Build Exit Code 0, Zero Console Errors, Reviewer Approved, QA DevTools MCP Verified)
 
@@ -67,6 +67,19 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
     - Monospace telemetry badge (`[GATE RESTRICTED] 0 Crit · 3 Secrets · 100% Posture`) displayed at 1440x900 desktop viewport, safely suppressed on laptop <= 1300px with 0px horizontal overflow.
     - Purged dead `searchQuery` prop/emit from `VulnerabilityScanTable.vue`.
     - All files strictly < 500 lines (`DevSecOpsView.vue`: 287 lines, `secops.css`: 404 lines, `VulnerabilityScanTable.vue`: 131 lines).
+12. **Cluster Explorer Unified Enterprise Toolbar & Row Action Standardization** (`ExplorerView.vue`, `ExplorerResourceTable.vue`, `explorer.css`, `explorer-toolbar.css`):
+    - Commit `b355065`, `4a3b7c1`.
+    - Completely eradicated legacy clunky `.top-resource-bar` (1/3 viewport selector box with duplicate cluster/namespace selects and 5 native select elements) and duplicate header card `.desktop-header-wrap` / `.header-banner`.
+    - Wired `ExplorerView.vue` and `useK8sExplorer.ts` to `useGlobalContext()` (`activeClusterId`, `activeNamespace`) to reactively sync cluster and namespace selections directly from the Top HUD context selector.
+    - Implemented Sleek Unified 38px Enterprise Toolbar (`.explorer-toolbar-sleek`):
+      1. Zone 1: Compact search wrapper (150px) with `<BaseIcon name="search" size="xs" />` and clear button.
+      2. Zone 2: 28px Capsule Pill Tabs for 5 categories (`Workloads`, `Config & Storage`, `Networking & Security`, `Cluster`, `Events`). Clicking switches category and defaults to that category's primary resource kind.
+      3. Zone 3: Monospace telemetry status badge (`[LIVE] {{ totalInKind }} {{ currentKindLabel }}`) taking 0 extra vertical space, with clean responsive suppression at `<= 1300px`.
+      4. Zone 4: Right-aligned action buttons (`Refresh` with spin-icon, `Apply YAML`, `+ Create`) and `More` dropdown (`Import Cluster`, `New Namespace`).
+    - Implemented compact 28px Kind Sub-Strip (`.explorer-kind-substrip`) rendering 24px capsule pills for 1-click resource kind switching.
+    - Standardized `ExplorerResourceTable.vue` row actions: eradicated 5 multi-colored rainbow buttons (`action-btn-cyan`, `action-btn-amber`, `action-btn-emerald`, `action-btn-secondary`, `action-btn-danger`), replacing them with exactly 1 inline secondary button (`Scale`/`Logs`/`Cordon`/`Trigger`/`Details`) + 1 standard `[ ⋯ ] ActionDropdown` (`Diagnostics & Details`, `View YAML Manifest`, contextual action, `Delete Resource`).
+    - Modularity confirmed: all 4 files strictly < 500 lines (`ExplorerView.vue`: 414 lines, `ExplorerResourceTable.vue`: 284 lines, `explorer.css`: 141 lines, `explorer-toolbar.css`: 195 lines). Zero emojis. Dark OLED Slate tokens used.
+    - Verified 100% PASS via Chrome DevTools MCP across Desktop (1440x900), Laptop (1280x800), and Tablet (768x1024) with 0px horizontal scroll overflow and 0 console errors.
 
 ---
 
