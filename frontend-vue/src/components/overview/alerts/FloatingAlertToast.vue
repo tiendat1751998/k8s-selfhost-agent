@@ -2,6 +2,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import type { MetricAlert } from '../../../api/overview'
 import type { MutedAlertConfig } from '../../../stores/alertStore'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 interface Props {
   activeAlerts: MetricAlert[]
@@ -118,7 +119,7 @@ const previewMessage = computed(() => {
         <div class="toast-title-group" @click="handleOpenDetails">
           <span class="toast-beacon" :class="hasCriticalAlerts ? 'beacon-rose' : 'beacon-amber'">
             <span class="beacon-pulse"></span>
-            {{ hasCriticalAlerts ? '🚨' : '⚠️' }}
+            <BaseIcon name="alert-triangle" size="xs" />
           </span>
           <div class="toast-title-text">
             <span class="toast-title">Cluster Health Warning</span>
@@ -127,20 +128,20 @@ const previewMessage = computed(() => {
             </span>
           </div>
         </div>
-        <button class="btn-toast-close" @click.stop="dismissToast" title="Dismiss notification" aria-label="Close notification">✕</button>
+        <button class="btn-toast-close" @click.stop="dismissToast" title="Dismiss notification" aria-label="Close notification"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="toast-body" @click="handleOpenDetails">
         <p class="toast-preview-msg">{{ previewMessage }}</p>
-        <span v-if="isPaused" class="toast-paused-badge">⏱️ Timer Paused</span>
+        <span v-if="isPaused" class="toast-paused-badge"><BaseIcon name="clock" size="xs" /> <span>Timer Paused</span></span>
       </div>
 
       <div class="toast-actions">
         <button class="btn-toast-action btn-toast-details" @click="handleOpenDetails" title="Open interactive Alert Center">
-          <span>🔍 View Details</span>
+          <BaseIcon name="search" size="xs" /> <span>View Details</span>
         </button>
         <button class="btn-toast-action btn-toast-mute" @click="handleMuteAll" title="Silence all active node alerts until restart">
-          <span>🔕 Mute All (Until Restart)</span>
+          <BaseIcon name="bell-off" size="xs" /> <span>Mute All (Until Restart)</span>
         </button>
       </div>
 
@@ -168,7 +169,7 @@ const previewMessage = computed(() => {
     >
       <span class="docked-icon">
         <span v-if="activeAlerts.length > 0" class="docked-pulse-dot" :class="hasCriticalAlerts ? 'pulse-rose' : 'pulse-amber'"></span>
-        {{ activeAlerts.length > 0 ? (hasCriticalAlerts ? '🚨' : '⚠️') : '🔕' }}
+        <BaseIcon :name="activeAlerts.length > 0 ? 'alert-triangle' : 'bell-off'" size="xs" />
       </span>
       <span class="docked-label">
         {{ activeAlerts.length > 0 ? `${activeAlerts.length} Alert${activeAlerts.length > 1 ? 's' : ''}` : `${mutedAlertsList.length} Muted` }}
