@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
@@ -66,6 +67,26 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 		if len(hosts) == 0 || err != nil {
 			hosts, _ = r.hostRepo.ListAll(ctx)
 		}
+	}
+
+	// When filter.Attributes["node"] or filter.Attributes["node_name"] is specified,
+	// filter candidate hosts to ONLY query that specific node instead of all hosts.
+	targetNode := ""
+	if filter.Attributes != nil {
+		if n := strings.TrimSpace(filter.Attributes["node"]); n != "" {
+			targetNode = n
+		} else if n := strings.TrimSpace(filter.Attributes["node_name"]); n != "" {
+			targetNode = n
+		}
+	}
+	if targetNode != "" {
+		var filtered []docker.ComputeHost
+		for _, h := range hosts {
+			if h.ID == targetNode || strings.EqualFold(h.Name, targetNode) || h.Endpoint == targetNode {
+				filtered = append(filtered, h)
+			}
+		}
+		hosts = filtered
 	}
 
 	// Prepare remote search request
@@ -268,4 +289,88 @@ func (r *DistributedAgentLogRepo) GetStatus(ctx context.Context) (*domainLogging
 		TotalRecords:  totalRecords,
 		RetentionDays: 7,
 	}, nil
+}
+
+// ListServices queries active compute hosts via logClient.GetNodeServices in parallel,
+// merges the results, deduplicates them, and returns a sorted list of unique service names.
+func (r *DistributedAgentLogRepo) ListServices(ctx context.Context) ([]string, error) {
+	var hosts []docker.ComputeHost
+	if r.hostRepo != nil {
+		var err error
+		hosts, err = r.hostRepo.ListAll(ctx)
+		if err != nil {
+			return []string{}, nil
+		}
+	}
+
+	if len(hosts) == 0 || r.logClient == nil {
+		return []string{}, nil
+	}
+
+	// Filter candidate hosts that are active and have valid endpoints
+	var candidates []docker.ComputeHost
+	for _, h := range hosts {
+		endpoint := strings.TrimSpace(h.Endpoint)
+		if endpoint == "" {
+			continue
+		}
+		if strings.EqualFold(h.Status, "disconnected") || strings.EqualFold(h.Status, "disabled") || strings.EqualFold(h.Status, "down") {
+			continue
+		}
+		candidates = append(candidates, h)
+	}
+
+	if len(candidates) == 0 {
+		return []string{}, nil
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+
+	var (
+		mu         sync.Mutex
+		serviceSet = make(map[string]struct{})
+		wg         sync.WaitGroup
+	)
+
+	for _, h := range candidates {
+		host := h
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			token := ""
+			if host.Labels != nil {
+				if t, ok := host.Labels["auth_token"]; ok && t != "" {
+					token = t
+				} else if t, ok := host.Labels["token"]; ok && t != "" {
+					token = t
+				}
+			}
+
+			services, err := r.logClient.GetNodeServices(timeoutCtx, host.Endpoint, token)
+			if err != nil {
+				return
+			}
+
+			mu.Lock()
+			for _, s := range services {
+				s = strings.TrimSpace(s)
+				if s != "" {
+					serviceSet[s] = struct{}{}
+				}
+			}
+			mu.Unlock()
+		}()
+	}
+
+	wg.Wait()
+
+	result := make([]string, 0, len(serviceSet))
+	for s := range serviceSet {
+		result = append(result, s)
+	}
+	sort.Strings(result)
+
+	return result, nil
 }

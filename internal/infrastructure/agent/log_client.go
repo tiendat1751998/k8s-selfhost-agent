@@ -42,6 +42,8 @@ type LogClientInterface interface {
 	GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string) (string, error)
 	SearchNodeLogs(ctx context.Context, hostEndpoint, authToken string, req SearchLogsRequest) ([]LogSearchResult, error)
 	SearchClusterLogs(ctx context.Context, hosts []docker.ComputeHost, req SearchLogsRequest) ([]LogSearchResult, error)
+	ListNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error)
+	GetNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error)
 }
 
 // AgentLogClient implements communication with distributed k8s-agents (:9100).
@@ -348,4 +350,62 @@ func (c *AgentLogClient) SearchClusterLogs(ctx context.Context, hosts []docker.C
 	}
 
 	return allResults, nil
+}
+
+// ListNodeServices queries the list of available services from a single node agent (/logs/services).
+func (c *AgentLogClient) ListNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error) {
+	baseURL := NormalizeHostEndpoint(hostEndpoint)
+	if baseURL == "" {
+		return nil, fmt.Errorf("invalid or empty host endpoint: %q", hostEndpoint)
+	}
+
+	reqCtx := ctx
+	if c.nodeTimeout > 0 {
+		var cancel context.CancelFunc
+		reqCtx, cancel = context.WithTimeout(ctx, c.nodeTimeout)
+		defer cancel()
+	}
+
+	httpReq, err := http.NewRequestWithContext(reqCtx, http.MethodGet, baseURL+"/logs/services", nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating http request: %w", err)
+	}
+
+	if authToken != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+authToken)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("executing request to %s: %w", baseURL, err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("agent returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(bodyBytes)))
+	}
+
+	var envelope struct {
+		Services []string `json:"services"`
+	}
+	if err := json.Unmarshal(bodyBytes, &envelope); err == nil && envelope.Services != nil {
+		return envelope.Services, nil
+	}
+
+	var direct []string
+	if err := json.Unmarshal(bodyBytes, &direct); err == nil {
+		return direct, nil
+	}
+
+	return []string{}, nil
+}
+
+// GetNodeServices is an alias for ListNodeServices to query services on a specific node agent.
+func (c *AgentLogClient) GetNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error) {
+	return c.ListNodeServices(ctx, hostEndpoint, authToken)
 }

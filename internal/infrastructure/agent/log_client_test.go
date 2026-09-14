@@ -244,3 +244,62 @@ func TestAgentLogClient_SearchClusterLogs_ScatterGather(t *testing.T) {
 		}
 	})
 }
+
+func TestAgentLogClient_ListNodeServices(t *testing.T) {
+	expectedToken := "test-agent-secret"
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/logs/services" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer "+expectedToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"services": []string{"cart-svc", "payment-svc", "auth-svc"},
+		})
+	}))
+	defer mockServer.Close()
+
+	client := NewAgentLogClient()
+
+	t.Run("Successful ListNodeServices", func(t *testing.T) {
+		services, err := client.ListNodeServices(context.Background(), mockServer.URL, expectedToken)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(services) != 3 {
+			t.Fatalf("expected 3 services, got %d", len(services))
+		}
+		if services[0] != "cart-svc" || services[1] != "payment-svc" || services[2] != "auth-svc" {
+			t.Errorf("unexpected services list: %v", services)
+		}
+
+		// Also check GetNodeServices alias
+		aliasServices, err := client.GetNodeServices(context.Background(), mockServer.URL, expectedToken)
+		if err != nil {
+			t.Fatalf("unexpected alias error: %v", err)
+		}
+		if len(aliasServices) != 3 {
+			t.Fatalf("expected 3 alias services, got %d", len(aliasServices))
+		}
+	})
+
+	t.Run("Unauthorized ListNodeServices", func(t *testing.T) {
+		_, err := client.ListNodeServices(context.Background(), mockServer.URL, "wrong-token")
+		if err == nil {
+			t.Fatalf("expected error for unauthorized request, got nil")
+		}
+	})
+
+	t.Run("Empty Endpoint returns error", func(t *testing.T) {
+		_, err := client.ListNodeServices(context.Background(), "", expectedToken)
+		if err == nil {
+			t.Fatalf("expected error for empty endpoint, got nil")
+		}
+	})
+}
