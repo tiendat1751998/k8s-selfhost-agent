@@ -55,7 +55,7 @@
 .secops-micro-telemetry .tel-sep { color: rgba(148, 163, 184, 0.4); font-weight: 400; }
 
 /* View Container & Header */
-.view-container { display: flex; flex-direction: column; gap: 24px; }
+.view-container { display: flex; flex-direction: column; gap: 24px; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
 .view-header {
   display: flex; justify-content: space-between; align-items: flex-start;
   flex-wrap: wrap; gap: 16px;
@@ -133,16 +133,22 @@
   background: rgba(6, 182, 212, 0.2); border-color: var(--accent-sky, #06b6d4); color: #fff;
 }
 .search-box { display: flex; align-items: center; }
+.search-box input {
+  flex: 0 1 240px;
+  min-width: 160px;
+  max-width: 260px;
+  width: 100%;
+}
 
 /* Table Section */
-.table-container { overflow: hidden; display: flex; flex-direction: column; }
+.table-container { overflow: hidden; display: flex; flex-direction: column; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
 .table-header {
   padding: 20px; display: flex; justify-content: space-between; align-items: center;
   border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
 }
 .table-title { font-size: 16px; color: #fff; margin: 0; font-weight: 700; }
 .table-subtitle { font-size: 12px; color: var(--text-muted, #64748b); margin-top: 2px; }
-.table-scroll { overflow-x: auto; }
+.table-scroll { overflow-x: auto; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
 .enterprise-table { width: 100%; border-collapse: collapse; text-align: left; }
 .enterprise-table th {
   padding: 8px 14px; font-size: 11px; font-weight: 700;
@@ -200,7 +206,7 @@
 }
 
 /* Secret & Certificates Audit Matrix Grid */
-.secops-section { display: flex; flex-direction: column; gap: 12px; }
+.secops-section { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
 .secops-section-header {
   display: flex; justify-content: space-between; align-items: center; padding: 14px 20px;
 }
@@ -283,6 +289,40 @@
 .text-violet { color: #60a5fa; }
 .text-muted { color: var(--text-muted, #64748b); }
 .font-mono { font-family: var(--font-mono, monospace); }
+
+/* Desktop Table Container Sizing */
+.desktop-only-table {
+  width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box;
+}
+
+/* Enterprise Gate Status Badge & Clean Typography */
+.gate-metric-val {
+  display: flex; align-items: center; min-height: 36px;
+}
+.gate-status-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.gate-badge-passed {
+  background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399;
+}
+.gate-badge-blocked {
+  background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: #fb7185;
+}
+.gate-badge-restricted {
+  background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24;
+}
+.gate-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 4px;
+}
+.gate-reasons {
+  display: flex; align-items: center; gap: 6px; font-weight: 500;
+}
+.gate-status-text {
+  font-weight: 600; letter-spacing: -0.01em;
+}
 
 /* ==========================================================================
    Responsive Breakpoints & Layout Rules

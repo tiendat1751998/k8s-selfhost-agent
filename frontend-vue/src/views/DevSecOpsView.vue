@@ -5,11 +5,11 @@
       <div>
         <div class="view-tag">
           <span class="pulse-dot pulse-dot-emerald"></span>
-          <span>DEVSECOPS SHIFT-LEFT & SECRETS GOVERNANCE</span>
+          <span>SECURITY GOVERNANCE</span>
         </div>
-        <h1 class="view-title">Automated Security Gates, CVE Scanner & Vault Sync</h1>
+        <h1 class="view-title">Security Gates & Vulnerability Audit</h1>
         <p class="view-desc">
-          Continuous Container Image Vulnerability Analysis (<span class="highlight">Trivy</span>), IaC Security & CIS Benchmarks (<span class="highlight">Checkov</span>), and Dynamic Secrets (<span class="highlight">HashiCorp Vault + ESO</span>).
+          Continuous container vulnerability scanning, deployment gate enforcement, and secret exposure monitoring.
         </p>
       </div>
 
@@ -86,7 +86,7 @@
     />
 
     <!-- Desktop View: High-density Vulnerability Matrix & Secrets Grid -->
-    <div class="desktop-only-table" style="display: flex; flex-direction: column; gap: 24px;">
+    <div class="desktop-only-table" style="min-width: 0; width: 100%; max-width: 100%; display: flex; flex-direction: column; gap: 24px; box-sizing: border-box;">
       <VulnerabilityScanTable
         :findings="filteredCveFindings"
         :severities="severities"

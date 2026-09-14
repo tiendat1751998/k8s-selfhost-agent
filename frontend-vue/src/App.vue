@@ -35,6 +35,8 @@ const routeBreadcrumbs: Record<string, { category: string; title: string }> = {
   '/helm': { category: 'Compute', title: 'Helm Catalog' },
   '/audit': { category: 'Governance', title: 'Audit & CVEs' },
   '/compliance': { category: 'Governance', title: 'Compliance & CIS' },
+  '/security': { category: 'Governance', title: 'Security Gates' },
+  '/devsecops': { category: 'Governance', title: 'Security Gates' },
   '/drift': { category: 'Governance', title: 'Config Drift' },
   '/backup': { category: 'Governance', title: 'Disaster Recovery' },
   '/automation': { category: 'Automation', title: 'Automation Rules' },
