@@ -23,27 +23,27 @@ export interface WorkflowActionOption {
 
 export const TRIGGER_OPTIONS: WorkflowTriggerOption[] = [
   // Alert-to-Scale & Thresholds
-  { value: 'high_cpu', label: 'High CPU Utilization (> 90%)', category: 'event', icon: '📈', description: 'Triggers when node or pod CPU exceeds threshold' },
-  { value: 'high_memory', label: 'High Memory Utilization (> 85%)', category: 'event', icon: '🧠', description: 'Triggers on elevated container memory pressure' },
-  { value: 'slo_breach', label: 'SLO / Latency SLA Breach (> 200ms p99)', category: 'event', icon: '⏱️', description: 'Fires when API p99 latency breaches target SLO' },
-  { value: 'error_rate', label: 'HTTP 5xx Error Rate Spike (> 2%)', category: 'event', icon: '🚨', description: 'Monitors inbound edge HTTP response codes' },
+  { value: 'high_cpu', label: 'High CPU Utilization (> 90%)', category: 'event', icon: 'trending-up', description: 'Triggers when node or pod CPU exceeds threshold' },
+  { value: 'high_memory', label: 'High Memory Utilization (> 85%)', category: 'event', icon: 'cpu', description: 'Triggers on elevated container memory pressure' },
+  { value: 'slo_breach', label: 'SLO / Latency SLA Breach (> 200ms p99)', category: 'event', icon: 'clock', description: 'Fires when API p99 latency breaches target SLO' },
+  { value: 'error_rate', label: 'HTTP 5xx Error Rate Spike (> 2%)', category: 'event', icon: 'alert-triangle', description: 'Monitors inbound edge HTTP response codes' },
   // Auto-Restart & Remediation
-  { value: 'deployment_failure', label: 'Deployment Failure / CrashLoop', category: 'event', icon: '💥', description: 'Detects rollout degradation and CrashLoopBackOff' },
-  { value: 'pod_restart', label: 'Repeated Pod Restart Count > 5', category: 'event', icon: '🔄', description: 'Alerts on rapid container restarts in namespace' },
-  { value: 'node_pressure', label: 'Node Disk / Memory Pressure', category: 'event', icon: '🛑', description: 'Detects underlying Kubernetes node resource saturation' },
+  { value: 'deployment_failure', label: 'Deployment Failure / CrashLoop', category: 'event', icon: 'flame', description: 'Detects rollout degradation and CrashLoopBackOff' },
+  { value: 'pod_restart', label: 'Repeated Pod Restart Count > 5', category: 'event', icon: 'refresh', description: 'Alerts on rapid container restarts in namespace' },
+  { value: 'node_pressure', label: 'Node Disk / Memory Pressure', category: 'event', icon: 'shield', description: 'Detects underlying Kubernetes node resource saturation' },
   // Time-based & Webhooks
-  { value: 'cron_schedule', label: 'Cron Schedule (Scheduled Workflow)', category: 'schedule', icon: '⏰', description: 'Automated periodic jobs and recurring health sweeps' },
-  { value: 'webhook_trigger', label: 'Inbound Webhook / Alertmanager', category: 'webhook', icon: '🔗', description: 'Fired by external CI/CD pipelines or monitoring alerts' },
+  { value: 'cron_schedule', label: 'Cron Schedule (Scheduled Workflow)', category: 'schedule', icon: 'clock', description: 'Automated periodic jobs and recurring health sweeps' },
+  { value: 'webhook_trigger', label: 'Inbound Webhook / Alertmanager', category: 'webhook', icon: 'globe', description: 'Fired by external CI/CD pipelines or monitoring alerts' },
 ]
 
 export const ACTION_OPTIONS: WorkflowActionOption[] = [
-  { value: 'rollback', label: 'Rollback to Previous Stable Git Revision', icon: '⏪', description: 'Reverts git/k8s revision to latest healthy replica set' },
-  { value: 'generate_rca', label: 'Trigger AI Root Cause Analysis (RCA)', icon: '🔍', description: 'Gathers events, logs, and triggers automated AI diagnostics' },
-  { value: 'scale_deployment', label: 'Auto-Scale Deployment Replicas (+2)', icon: '📈', description: 'Dynamically scales replica count to mitigate load spike' },
-  { value: 'restart_pod', label: 'Graceful Pod Rolling Restart', icon: '♻️', description: 'Initiates rolling restart of impacted deployment pods' },
-  { value: 'cordon_node', label: 'Cordon & Drain Impacted Node', icon: '🚧', description: 'Evacuates workloads from distressed Kubernetes node' },
-  { value: 'send_notification', label: 'Send High-Priority Slack / Webhook Alert', icon: '📢', description: 'Dispatches rich incident payloads to on-call channels' },
-  { value: 'create_incident', label: 'Open P1 Incident in Health Center', icon: '🎫', description: 'Creates tracked incident ticket with severity metadata' },
+  { value: 'rollback', label: 'Rollback to Previous Stable Git Revision', icon: 'refresh', description: 'Reverts git/k8s revision to latest healthy replica set' },
+  { value: 'generate_rca', label: 'Trigger AI Root Cause Analysis (RCA)', icon: 'search', description: 'Gathers events, logs, and triggers automated AI diagnostics' },
+  { value: 'scale_deployment', label: 'Auto-Scale Deployment Replicas (+2)', icon: 'trending-up', description: 'Dynamically scales replica count to mitigate load spike' },
+  { value: 'restart_pod', label: 'Graceful Pod Rolling Restart', icon: 'refresh', description: 'Initiates rolling restart of impacted deployment pods' },
+  { value: 'cordon_node', label: 'Cordon & Drain Impacted Node', icon: 'shield', description: 'Evacuates workloads from distressed Kubernetes node' },
+  { value: 'send_notification', label: 'Send High-Priority Slack / Webhook Alert', icon: 'bell', description: 'Dispatches rich incident payloads to on-call channels' },
+  { value: 'create_incident', label: 'Open P1 Incident in Health Center', icon: 'file-text', description: 'Creates tracked incident ticket with severity metadata' },
 ]
 
 export function useAutomationEngine() {
@@ -234,12 +234,12 @@ export function useAutomationEngine() {
     const tr = (t || '').toLowerCase()
     const opt = TRIGGER_OPTIONS.find(o => o.value === tr)
     if (opt) return opt.icon
-    if (tr.includes('restart') || tr.includes('crash')) return '🔄'
-    if (tr.includes('pressure') || tr.includes('node')) return '🛑'
-    if (tr.includes('cpu') || tr.includes('memory')) return '📈'
-    if (tr.includes('cron') || tr.includes('time')) return '⏰'
-    if (tr.includes('webhook')) return '🔗'
-    return '⚡'
+    if (tr.includes('restart') || tr.includes('crash')) return 'refresh'
+    if (tr.includes('pressure') || tr.includes('node')) return 'shield'
+    if (tr.includes('cpu') || tr.includes('memory')) return 'activity'
+    if (tr.includes('cron') || tr.includes('time')) return 'clock'
+    if (tr.includes('webhook')) return 'globe'
+    return 'zap'
   }
 
   function formatType(t: string): string {

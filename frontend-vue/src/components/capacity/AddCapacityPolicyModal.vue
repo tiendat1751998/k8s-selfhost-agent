@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { reactive } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { CapacityPolicy } from '../../composables/useCapacityForecast'
 
 const emit = defineEmits<{
@@ -32,7 +33,7 @@ function handleSubmit() {
           <span class="badge badge-cyan">AUTONOMOUS GOVERNANCE</span>
           <h3 class="modal-title">Define Capacity & Headroom Policy</h3>
         </div>
-        <button type="button" class="modal-close" @click="emit('close')">✕</button>
+        <button type="button" class="modal-close" aria-label="Close modal" @click="emit('close')"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <form class="modal-body" @submit.prevent="handleSubmit">

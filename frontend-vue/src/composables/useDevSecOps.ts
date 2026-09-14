@@ -123,7 +123,9 @@ export function useDevSecOps() {
   const passingRulesCount = computed(() => securityStore.frameworks.reduce((acc, f) => acc + (f.passing_rules || f.passed_checks || 0), 0))
 
   const securityPostureScore = computed(() => {
-    if (totalRulesCount.value === 0) return '94.6%'
+    if (totalRulesCount.value === 0) {
+      return totalViolationsCount.value === 0 ? '100%' : '--'
+    }
     return `${((passingRulesCount.value / totalRulesCount.value) * 100).toFixed(1)}%`
   })
 
@@ -136,7 +138,7 @@ export function useDevSecOps() {
     { name: 'ALL', count: totalViolationsCount.value, badgeClass: 'badge-cyan' },
     { name: 'CRITICAL', count: criticalCveCount.value, badgeClass: 'badge-rose' },
     { name: 'HIGH', count: highCveCount.value, badgeClass: 'badge-amber' },
-    { name: 'MEDIUM', count: mediumCveCount.value, badgeClass: 'badge-violet' },
+    { name: 'MEDIUM', count: mediumCveCount.value, badgeClass: 'badge-slate' },
     { name: 'LOW', count: lowCveCount.value, badgeClass: 'badge-emerald' },
   ])
 
@@ -174,7 +176,7 @@ export function useDevSecOps() {
     switch ((severity || '').toUpperCase()) {
       case 'CRITICAL': return 'badge-rose'
       case 'HIGH': return 'badge-amber'
-      case 'MEDIUM': return 'badge-violet'
+      case 'MEDIUM': return 'badge-slate'
       case 'LOW': return 'badge-emerald'
       default: return 'badge-cyan'
     }

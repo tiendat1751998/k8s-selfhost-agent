@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { Incident, RCAReport, PullRequest } from '../../api/compute'
 import type { BlastRadiusInfo } from '../../composables/useIncidents'
@@ -27,7 +28,7 @@ const emit = defineEmits<{
 <template>
   <div class="inspector-wrapper">
     <div v-if="!incident" class="no-selection">
-      <span class="no-sel-icon">🔑</span>
+      <span class="no-sel-icon"><BaseIcon name="lock" size="xl" /></span>
       <h3>Select an Incident to Inspect</h3>
       <p>Choose an incident from the queue on the left to trigger AI Root Cause Analysis and review GitOps remediation pull requests.</p>
     </div>
@@ -56,14 +57,14 @@ const emit = defineEmits<{
             :disabled="actionLoading === 'analyze' || incident.status === 'analyzing'"
             @click="emit('analyze', incident)"
           >
-            <span>{{ actionLoading === 'analyze' ? '⏳ Reasoning...' : '🤖 AI Root Cause' }}</span>
+            <BaseIcon :name="actionLoading === 'analyze' ? 'clock' : 'cpu'" size="xs" /> <span>{{ actionLoading === 'analyze' ? 'Reasoning...' : 'AI Root Cause' }}</span>
           </button>
           <button
             type="button"
             class="btn btn-secondary btn-sm"
             @click="emit('openRcaModal', incident)"
           >
-            <span>⬰ￏ Chronology</span>
+            <BaseIcon name="clock" size="xs" /> <span>Chronology</span>
           </button>
           <button
             v-if="!activePr"
@@ -71,7 +72,7 @@ const emit = defineEmits<{
             class="btn btn-primary btn-sm"
             @click="emit('openPrModal')"
           >
-            <span>🚁 Generate Fix PR</span>
+            <BaseIcon name="git-branch" size="xs" /> <span>Generate Fix PR</span>
           </button>
         </div>
       </div>
@@ -81,7 +82,7 @@ const emit = defineEmits<{
       <div class="rca-inspector-card glass-panel">
         <div class="rca-card-header">
           <div class="rca-title-wrap">
-            <span class="ai-sparkle">✨</span>
+            <span class="ai-sparkle"><BaseIcon name="zap" size="sm" /></span>
             <div>
               <h3 class="rca-title">AI Root Cause Analysis (RCA)</h3>
               <span class="ai-model-tag font-mono">{{ report?.llm_model || 'Claude 3.5 Sonnet / Multi-Agent' }}</span>
@@ -100,7 +101,7 @@ const emit = defineEmits<{
 
 
         <div v-if="loadingReport" class="rca-loading text-muted font-mono" style="padding: 16px;">
-          ⏳ Loading Root Cause Analysis...
+          <BaseIcon name="clock" size="xs" /> <span>Loading Root Cause Analysis...</span>
         </div>
         <div v-else-if="report" class="rca-body">
           <div class="rca-explanation font-mono">
@@ -113,14 +114,14 @@ const emit = defineEmits<{
             <h4 class="evidence-title">Telemetry Evidence & Alert Correlation</h4>
             <div class="evidence-grid">
               <div v-for="(ev, idx) in report.evidence" :key="idx" class="evidence-tag font-mono">
-                <span class="ev-bullet">▸</span>
+                <BaseIcon name="chevron-right" size="xs" class="ev-bullet" />
                 <span>{{ ev }}</span>
               </div>
             </div>
           </div>
         </div>
         <div v-else class="empty-rca-box text-muted font-mono" style="padding: 16px; font-size: 13px;">
-          <span>{{ reportError || 'No RCA report generated yet. Click "🤖 AI Root Cause" above to run diagnostics.' }}</span>
+          <span>{{ reportError || 'No RCA report generated yet. Click "AI Root Cause" above to run diagnostics.' }}</span>
         </div>
       </div>
 
@@ -129,7 +130,7 @@ const emit = defineEmits<{
       <div v-if="blastRadius" class="blast-radius-box glass-panel">
         <div class="blast-header">
           <div class="blast-title-wrap">
-            <span class="blast-icon">🌊</span>
+            <span class="blast-icon"><BaseIcon name="activity" size="sm" /></span>
             <div>
               <h4 class="blast-title">Impact Blast Radius Analysis</h4>
               <span class="blast-subtitle font-mono">{{ blastRadius.riskLevel }} · Impact Score {{ blastRadius.impactScore }}/100</span>
@@ -166,7 +167,7 @@ const emit = defineEmits<{
       <div class="diff-panel glass-panel">
         <div class="diff-header">
           <div class="diff-title-wrap">
-            <span class="diff-icon">📗</span>
+            <span class="diff-icon"><BaseIcon name="file-text" size="sm" /></span>
             <div>
               <h3 class="diff-title">GitOps Remediation Manifest Diff</h3>
               <span class="diff-subtitle font-mono">deployments/{{ incident.namespace }}/{{ (incident.pod_name || 'workload').split('-')[0] }}.yaml</span>
@@ -211,7 +212,7 @@ const emit = defineEmits<{
               :disabled="actionLoading === 'create-pr'"
               @click="emit('openPrModal')"
             >
-              <span>🚁 Create Remediation PR ⚙</span>
+              <BaseIcon name="git-branch" size="xs" /> <span>Create Remediation PR</span>
             </button>
 
 
@@ -222,12 +223,12 @@ const emit = defineEmits<{
               :disabled="actionLoading === 'merge-pr'"
               @click="emit('mergePr')"
             >
-              <span>{{ actionLoading === 'merge-pr' ? '⏳ Merging PR...' : '⁡ Merge PR & Apply Fix' }}</span>
+              <BaseIcon :name="actionLoading === 'merge-pr' ? 'clock' : 'check-circle'" size="xs" /> <span>{{ actionLoading === 'merge-pr' ? 'Merging PR...' : 'Merge PR & Apply Fix' }}</span>
             </button>
 
 
             <div v-else-if="activePr.status === 'merged'" class="merged-badge font-mono">
-              <span>✅ REMEDIATION DEPLOYED</span>
+              <BaseIcon name="check-circle" size="xs" /> <span>REMEDIATION DEPLOYED</span>
             </div>
           </div>
         </div>

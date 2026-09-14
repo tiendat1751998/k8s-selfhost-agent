@@ -79,7 +79,7 @@ function getValuesString(): string {
       <div class="release-header-card glass-panel">
         <div class="header-card-row">
           <div class="release-title-block">
-            <span class="title-icon">⛵</span>
+            <BaseIcon name="anchor" size="sm" class="title-icon" />
             <div>
               <h3 class="release-hero-title">{{ release.name }}</h3>
               <span class="font-mono font-xs text-muted">
@@ -115,21 +115,21 @@ function getValuesString(): string {
             class="btn-cyber btn-primary btn-sm"
             @click="emit('upgrade', release)"
           >
-            🔄 Upgrade Release
+            <BaseIcon name="refresh" size="xs" /> Upgrade Release
           </button>
           <button
             type="button"
             class="btn-cyber btn-secondary btn-sm"
             @click="emit('rollback', release)"
           >
-            ⏪ Rollback Revision
+            <BaseIcon name="rotate-ccw" size="xs" /> Rollback Revision
           </button>
           <button
             type="button"
             class="btn-cyber btn-danger btn-sm"
             @click="emit('uninstall', release)"
           >
-            🗑️ Uninstall
+            <BaseIcon name="trash" size="xs" /> Uninstall
           </button>
         </div>
       </div>
@@ -142,7 +142,7 @@ function getValuesString(): string {
           :class="{ active: activeDrawerTab === 'overview' }"
           @click="emit('update:activeDrawerTab', 'overview')"
         >
-          <span>📜 Notes & Overview</span>
+          <BaseIcon name="file-text" size="xs" /> <span>Notes & Overview</span>
         </button>
         <button
           type="button"
@@ -150,7 +150,7 @@ function getValuesString(): string {
           :class="{ active: activeDrawerTab === 'values' }"
           @click="emit('update:activeDrawerTab', 'values')"
         >
-          <span>⚙️ Values (YAML)</span>
+          <BaseIcon name="sliders" size="xs" /> <span>Values (YAML)</span>
         </button>
         <button
           type="button"
@@ -158,7 +158,7 @@ function getValuesString(): string {
           :class="{ active: activeDrawerTab === 'manifest' }"
           @click="emit('update:activeDrawerTab', 'manifest')"
         >
-          <span>📄 K8s Manifest</span>
+          <BaseIcon name="file-text" size="xs" /> <span>K8s Manifest</span>
         </button>
         <button
           type="button"
@@ -166,7 +166,7 @@ function getValuesString(): string {
           :class="{ active: activeDrawerTab === 'history' }"
           @click="emit('update:activeDrawerTab', 'history')"
         >
-          <span>⏱️ Revision History</span>
+          <BaseIcon name="clock" size="xs" /> <span>Revision History</span>
         </button>
       </div>
 
@@ -181,7 +181,7 @@ function getValuesString(): string {
               class="btn-cyber btn-outline-cyan btn-xs"
               @click="emit('copyNotes', release.notes)"
             >
-              📋 Copy Notes
+              <BaseIcon name="copy" size="xs" /> Copy Notes
             </button>
           </div>
           <pre v-if="release.notes" class="cyber-code-block">{{ release.notes }}</pre>
@@ -202,14 +202,14 @@ function getValuesString(): string {
                 class="btn-cyber btn-outline-cyan btn-xs"
                 @click="emit('copyValues', getValuesString())"
               >
-                <span>{{ valuesCopied ? '✓ Copied!' : '📋 Copy YAML' }}</span>
+                <BaseIcon :name="valuesCopied ? 'check' : 'copy'" size="xs" /> <span>{{ valuesCopied ? 'Copied!' : 'Copy YAML' }}</span>
               </button>
               <button
                 type="button"
                 class="btn-cyber btn-secondary btn-xs"
                 @click="emit('downloadValues', `${release.name}-values.yaml`, getValuesString())"
               >
-                <span>💾 Download</span>
+                <BaseIcon name="download" size="xs" /> <span>Download</span>
               </button>
             </div>
           </div>
@@ -228,14 +228,14 @@ function getValuesString(): string {
                 class="btn-cyber btn-outline-cyan btn-xs"
                 @click="emit('copyManifest', release.manifest || '')"
               >
-                <span>{{ manifestCopied ? '✓ Copied!' : '📋 Copy Manifest' }}</span>
+                <BaseIcon :name="manifestCopied ? 'check' : 'copy'" size="xs" /> <span>{{ manifestCopied ? 'Copied!' : 'Copy Manifest' }}</span>
               </button>
               <button
                 type="button"
                 class="btn-cyber btn-secondary btn-xs"
                 @click="emit('downloadManifest', `${release.name}-manifest.yaml`, release.manifest || '')"
               >
-                <span>💾 Download</span>
+                <BaseIcon name="download" size="xs" /> <span>Download</span>
               </button>
             </div>
           </div>
@@ -251,7 +251,7 @@ function getValuesString(): string {
         </div>
 
         <div v-else-if="releaseHistory.length === 0" class="empty-state">
-          <span class="empty-icon">⏱️</span>
+          <BaseIcon name="clock" size="xl" class="empty-icon" />
           <p class="font-mono text-muted">No revision history found.</p>
         </div>
 
@@ -288,7 +288,7 @@ function getValuesString(): string {
                     class="btn-cyber btn-secondary btn-xs"
                     @click="emit('rollbackRevision', hist.revision)"
                   >
-                    ⏪ Rollback
+                    <BaseIcon name="rotate-ccw" size="xs" /> Rollback
                   </button>
                 </td>
               </tr>
@@ -301,5 +301,5 @@ function getValuesString(): string {
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/helm.css';
+@import '../../assets/styles/components/helm-drawers.css';
 </style>

@@ -17,13 +17,13 @@
 
       <div class="audit-header-actions">
         <span class="audit-live-badge" :class="{ 'live-active': isLiveTailing }">
-          <span>{{ isLiveTailing ? '● STREAMING' : '○ STANDBY' }}</span>
+          <BaseIcon :name="isLiveTailing ? 'radio' : 'pause'" size="xs" /> <span>{{ isLiveTailing ? 'STREAMING' : 'STANDBY' }}</span>
         </span>
         <button class="btn btn-secondary" :disabled="isLoading" @click="fetchLogs">
-          <span>{{ isLoading ? '⏳ Syncing...' : '🔄 Refresh Trail' }}</span>
+          <BaseIcon :name="isLoading ? 'clock' : 'refresh'" size="xs" /> <span>{{ isLoading ? 'Syncing...' : 'Refresh Trail' }}</span>
         </button>
         <button class="btn btn-primary" :disabled="isTriggeringScan" @click="triggerAuditScan">
-          <span>{{ isTriggeringScan ? '⚡ Scanning...' : '⚡ Trigger Audit Scan' }}</span>
+          <BaseIcon name="zap" size="xs" /> <span>{{ isTriggeringScan ? 'Scanning...' : 'Trigger Audit Scan' }}</span>
         </button>
       </div>
     </div>
@@ -31,7 +31,7 @@
     <!-- Mobile 40px Command Bar (<640px) -->
     <div class="audit-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🛡️ Audit Trail ({{ filteredLogs.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="shield" size="xs" /> Audit Trail ({{ filteredLogs.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -41,7 +41,7 @@
           aria-label="Trigger Audit Scan"
           @click="triggerAuditScan"
         >
-          <span>⚡</span>
+          <BaseIcon name="zap" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -50,7 +50,7 @@
           aria-label="Refresh Trail"
           @click="fetchLogs"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -59,20 +59,20 @@
           aria-label="Toggle Live Tail"
           @click="toggleLiveTail"
         >
-          <span>🔴</span>
+          <BaseIcon name="radio" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
     <div class="audit-micro-telemetry mobile-only font-mono" role="status" aria-label="Audit Micro Telemetry">
-      <span class="tel-item tel-events">🛡️ {{ filteredLogs.length }} evts</span>
+      <span class="tel-item tel-events"><BaseIcon name="shield" size="xs" /> {{ filteredLogs.length }} evts</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-signed">⚡ {{ kpiMetrics.signedPercentage }}% signed</span>
+      <span class="tel-item tel-signed"><BaseIcon name="zap" size="xs" /> {{ kpiMetrics.signedPercentage }}% signed</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-viol">⚠️ {{ kpiMetrics.securityViolations }} viol</span>
+      <span class="tel-item tel-viol"><BaseIcon name="alert-triangle" size="xs" /> {{ kpiMetrics.securityViolations }} viol</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-trust">🔒 Zero-Trust</span>
+      <span class="tel-item tel-trust"><BaseIcon name="lock" size="xs" /> Zero-Trust</span>
     </div>
 
     <!-- Notification Banner -->
@@ -81,9 +81,9 @@
       class="audit-banner animate-fade-in"
       :class="statusMessage.type === 'success' ? 'banner-success' : 'banner-error'"
     >
-      <span class="banner-icon">{{ statusMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="statusMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="banner-icon" />
       <span class="banner-text">{{ statusMessage.text }}</span>
-      <button class="banner-close" @click="statusMessage = null">✕</button>
+      <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- 1. HUD Metric Cards -->
@@ -136,6 +136,7 @@
 <script setup lang="ts">
 import '../assets/styles/views/audit.css'
 import { useAuditLogs } from '../composables/useAuditLogs'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import AuditHudCards from '../components/audit/AuditHudCards.vue'
 import AuditTrailTable from '../components/audit/AuditTrailTable.vue'
 import AuditFilterToolbar from '../components/audit/AuditFilterToolbar.vue'

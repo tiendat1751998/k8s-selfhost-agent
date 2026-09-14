@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import MetricCard from '../components/ui/MetricCard.vue'
 import { usePromotions } from '../composables/usePromotions'
 import PromotionPipelinesGrid from '../components/promotions/PromotionPipelinesGrid.vue'
@@ -6,6 +7,8 @@ import PromotionsTable from '../components/promotions/PromotionsTable.vue'
 import PromotionsMobileCards from '../components/promotions/PromotionsMobileCards.vue'
 import TriggerPromotionModal from '../components/promotions/TriggerPromotionModal.vue'
 import PromotionDiffDrawer from '../components/promotions/PromotionDiffDrawer.vue'
+
+const viewMode = ref<'table' | 'pipeline'>('table')
 
 const {
   loading,
@@ -46,7 +49,7 @@ const {
 
 <template>
   <div class="view-container animate-fade-in">
-    <!-- Desktop Header (>640px) -->
+    <!-- Desktop Header (>=768px) -->
     <div class="view-header desktop-header desktop-only">
       <div>
         <div class="view-tag">
@@ -55,13 +58,33 @@ const {
         </div>
         <h1 class="view-title">Multi-Stage Release Promotions</h1>
         <p class="view-desc">
-          Automated gate approvals and progressive environment promotion pipeline across Dev ➔ QA ➔ Staging ➔ Production.
+          Automated gate approvals and progressive environment promotion pipeline across Dev &rarr; QA &rarr; Staging &rarr; Production.
         </p>
       </div>
 
       <div class="header-actions">
+        <!-- Segmented View Mode Toggle: [ Table ] [ Pipeline ] -->
+        <div class="segmented-control font-mono">
+          <button
+            class="segmented-btn"
+            :class="{ active: viewMode === 'table' }"
+            @click="viewMode = 'table'"
+            title="Table View"
+          >
+            <BaseIcon name="file-text" size="xs" /> <span>Table</span>
+          </button>
+          <button
+            class="segmented-btn"
+            :class="{ active: viewMode === 'pipeline' }"
+            @click="viewMode = 'pipeline'"
+            title="Pipeline View"
+          >
+            <BaseIcon name="git-branch" size="xs" /> <span>Pipeline</span>
+          </button>
+        </div>
+
         <button class="btn btn-secondary" :disabled="loading || loadingServices" @click="refreshAll">
-          <span>{{ loading || loadingServices ? '⏳ Querying...' : '🔄 Refresh' }}</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading || loadingServices }" /> <span>{{ loading || loadingServices ? 'Querying...' : 'Refresh' }}</span>
         </button>
         <button class="btn btn-primary" @click="openCreateModal">
           <span>+ Request Promotion</span>
@@ -69,46 +92,46 @@ const {
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<=640px) -->
+    <!-- Mobile 44px Command Bar (<768px) -->
     <div class="promotions-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🚀 Promotions ({{ promotions.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="play" size="sm" /> Promotions ({{ promotions.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button class="btn-icon-cmd" title="Request Promotion" aria-label="Request Promotion" @click="openCreateModal">
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button class="btn-icon-cmd" :disabled="loading || loadingServices" title="Refresh" aria-label="Refresh" @click="refreshAll">
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
         </button>
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<=640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="promotions-micro-telemetry mobile-only font-mono" role="status" aria-label="Promotions Micro Telemetry">
-      <span class="tel-item tel-pend">⏳ {{ pendingCount }} pend</span>
+      <span class="tel-item tel-pend"><BaseIcon name="clock" size="xs" /> {{ pendingCount }} pend</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-act">🚀 {{ approvedCount }} act</span>
+      <span class="tel-item tel-act"><BaseIcon name="play" size="xs" /> {{ approvedCount }} act</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-done">✅ {{ completedCount }} done</span>
+      <span class="tel-item tel-done"><BaseIcon name="check-circle" size="xs" /> {{ completedCount }} done</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-rej">🛑 {{ rejectedCount }} rej</span>
+      <span class="tel-item tel-rej"><BaseIcon name="x-circle" size="xs" /> {{ rejectedCount }} rej</span>
     </div>
 
     <!-- Notification Toast -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <span>{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" />
       <span>{{ toastMessage.text }}</span>
-      <button class="toast-close" @click="toastMessage = null">✕</button>
+      <button class="toast-close" @click="toastMessage = null" aria-label="Close"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Metric HUD (Desktop only) -->
+    <!-- Metric HUD (Desktop only >=768px) -->
     <div class="metrics-grid desktop-metrics desktop-only">
       <MetricCard
         title="Pending Approvals"
         :value="pendingCount"
         subtitle="Promotion requests awaiting review"
-        icon="⏳"
+        icon="clock"
         badge="GATE"
         :badge-color="pendingCount > 0 ? 'amber' : 'emerald'"
         :trend="pendingCount > 0 ? 'Review Required' : 'All Clear'"
@@ -118,7 +141,7 @@ const {
         title="Active Promoting"
         :value="approvedCount"
         subtitle="Canary rollout & staging verification"
-        icon="🚀"
+        icon="play"
         badge="ROLLOUT"
         badge-color="cyan"
         trend="In-Flight Verification"
@@ -128,7 +151,7 @@ const {
         title="Completed Releases"
         :value="completedCount"
         subtitle="Successfully promoted to destination"
-        icon="✅"
+        icon="check-circle"
         badge="SHIPPED"
         badge-color="emerald"
         trend="Continuous Delivery"
@@ -138,27 +161,28 @@ const {
         title="Rejected / Aborted"
         :value="rejectedCount"
         subtitle="Failed quality gates or security review"
-        icon="🛑"
+        icon="x-circle"
         badge="REJECTED"
         :badge-color="rejectedCount > 0 ? 'rose' : 'emerald'"
       />
     </div>
 
-    <!-- Visual Release Pipeline Grid (Dev -> QA -> Staging -> Production) -->
-    <PromotionPipelinesGrid
-      :environments="environments"
-      :promotions="promotions"
-      :action-loading="actionLoading"
-      @approve="handleApprove"
-      @reject="handleReject"
-      @complete="handleComplete"
-      @diff="openDiffDrawer"
-      @rollback="handleRollback"
-      @request-promotion="openCreateModal"
-    />
+    <!-- Desktop Pipeline Board OR Table (Mutually exclusive on desktop, suppressed on mobile) -->
+    <div v-if="viewMode === 'pipeline'" class="desktop-only pipeline-grid-container animate-fade-in">
+      <PromotionPipelinesGrid
+        :environments="environments"
+        :promotions="promotions"
+        :action-loading="actionLoading"
+        @approve="handleApprove"
+        @reject="handleReject"
+        @complete="handleComplete"
+        @diff="openDiffDrawer"
+        @rollback="handleRollback"
+        @request-promotion="openCreateModal"
+      />
+    </div>
 
-    <!-- Desktop History Data Table -->
-    <div class="desktop-only-table">
+    <div v-else-if="viewMode === 'table'" class="desktop-only desktop-only-table animate-fade-in">
       <PromotionsTable
         :promotions="promotions"
         :loading="loading"
@@ -173,19 +197,21 @@ const {
       />
     </div>
 
-    <!-- Mobile Touch-Optimized Promotion Card Stream -->
-    <PromotionsMobileCards
-      :promotions="promotions"
-      :loading="loading"
-      :action-loading="actionLoading"
-      @approve="handleApprove"
-      @reject="handleReject"
-      @complete="handleComplete"
-      @diff="openDiffDrawer"
-      @rollback="handleRollback"
-      @abort="handleAbort"
-      @request-promotion="openCreateModal"
-    />
+    <!-- Mobile Touch-Optimized Promotion Card Stream (<768px) -->
+    <div class="mobile-only mobile-stream-wrapper">
+      <PromotionsMobileCards
+        :promotions="promotions"
+        :loading="loading"
+        :action-loading="actionLoading"
+        @approve="handleApprove"
+        @reject="handleReject"
+        @complete="handleComplete"
+        @diff="openDiffDrawer"
+        @rollback="handleRollback"
+        @abort="handleAbort"
+        @request-promotion="openCreateModal"
+      />
+    </div>
 
     <!-- Trigger Promotion Modal -->
     <TriggerPromotionModal
@@ -223,4 +249,19 @@ const {
 
 <style>
 @import '../assets/styles/views/promotions.css';
+
+.metrics-grid.desktop-only {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .metrics-grid.desktop-only {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 767.98px) {
+  .metrics-grid.desktop-only {
+    display: none !important;
+  }
+}
 </style>

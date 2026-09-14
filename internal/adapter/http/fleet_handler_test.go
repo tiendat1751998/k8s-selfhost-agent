@@ -79,6 +79,9 @@ func (m *mockFleetAuditRepo) GetLastRun(ctx context.Context) (*audit.AuditRun, e
 func (m *mockFleetAuditRepo) RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error {
 	return nil
 }
+func (m *mockFleetAuditRepo) ListLogs(ctx context.Context, filter audit.AuditLogFilter) ([]audit.AuditLog, int, error) {
+	return nil, 0, nil
+}
 
 type mockDiscoveryPort struct{}
 

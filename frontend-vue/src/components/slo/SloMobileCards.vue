@@ -1,4 +1,5 @@
 ﻿<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
 
 const props = defineProps<{
@@ -7,7 +8,7 @@ const props = defineProps<{
   formatPercent: (val?: number) => string
   getEffectiveBurnRate: (rate?: number) => number
   getBurnRateColor: (rate: number) => string
-  getBudgetBarWidth: (budget: number) => number
+  getBudgetBarWidth: (budget?: number) => number
   getSnapshotForDef: (defId: string, serviceName: string) => SLOSnapshot | undefined
 }>()
 
@@ -21,8 +22,8 @@ const emit = defineEmits<{
 <template>
   <div class="mobile-stream-container">
     <div class="mobile-stream-header">
-      <span class="mobile-stream-title">📱 Touch-Optimized SLO Workload Stream</span>
-      <span class="mobile-stream-count">{{ definitions.length }} Objectives</span>
+      <span class="mobile-stream-title"><BaseIcon name="target" size="xs" /> Touch-Optimized SLO Workload Stream</span>
+      <span class="mobile-stream-count font-mono">{{ definitions.length }} Objectives</span>
     </div>
 
     <div v-if="definitions.length === 0" class="mobile-stream-empty">
@@ -74,28 +75,38 @@ const emit = defineEmits<{
         <!-- Right: Touch Actions -->
         <div class="mobile-item-actions">
           <button 
+            type="button"
             class="mobile-action-btn mobile-btn-inspect" 
             title="Inspect SLI"
+            aria-label="Inspect SLI"
             @click="emit('inspect', def, getSnapshotForDef(def.id, def.service))"
           >
-            📈
+            <BaseIcon name="trending-up" size="xs" />
           </button>
           <button 
+            type="button"
             class="mobile-action-btn mobile-btn-edit" 
             title="Edit SLO"
+            aria-label="Edit SLO"
             @click="emit('edit', def)"
           >
-            ✏️
+            <BaseIcon name="edit" size="xs" />
           </button>
           <button 
+            type="button"
             class="mobile-action-btn mobile-btn-del" 
             title="Delete SLO"
+            aria-label="Delete SLO"
             @click="emit('delete', def.id, def.service)"
           >
-            🗑️
+            <BaseIcon name="trash" size="xs" />
           </button>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/components/slo-mobile.css';
+</style>

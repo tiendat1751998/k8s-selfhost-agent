@@ -28,33 +28,9 @@ type Token struct {
 }
 
 var nonTenantTables = map[string]bool{
-	// Tables without tenant_id column in database schema:
-	// TODO: Add migrations to add tenant_id column to these tables for full tenant isolation:
-	"backup_history":        true, // TODO: needs migration to add tenant_id
-	"change_requests":       true, // TODO: needs migration to add tenant_id
-	"maintenance_windows":   true, // TODO: needs migration to add tenant_id
-	"compliance_frameworks": true, // TODO: needs migration to add tenant_id
-	"compliance_violations": true, // TODO: needs migration to add tenant_id
-	"correlated_events":     true, // TODO: needs migration to add tenant_id
-	"cluster_costs":         true, // TODO: needs migration to add tenant_id
-	"namespace_costs":       true, // TODO: needs migration to add tenant_id
-	"resource_waste":        true, // TODO: needs migration to add tenant_id
-	"capacity_forecasts":    true, // TODO: needs migration to add tenant_id
-	"drift_records":         true, // TODO: needs migration to add tenant_id
-	"notifications":        true, // TODO: needs migration to add tenant_id
-	"slo_definitions":       true, // TODO: needs migration to add tenant_id
-	"slo_snapshots":         true, // TODO: needs migration to add tenant_id
-	"promotions":            true, // TODO: needs migration to add tenant_id
-	"reports":               true, // TODO: needs migration to add tenant_id
-	"reporting":             true, // TODO: needs migration to add tenant_id
-	"tags":                  true, // TODO: needs migration to add tenant_id
-	"resource_tags":         true, // TODO: needs migration to add tenant_id
-	"organizations":         true, // Root tenant table (id is tenant ID)
-	"projects":              true, // TODO: scoped by org_id; needs migration or mapping to tenant_id
-	"tenant_members":        true, // TODO: scoped by org_id; needs migration or mapping to tenant_id
-	"rbac_matrix":           true, // Global RBAC definitions
-	"timeline_events":       true, // TODO: needs migration to add tenant_id
-	"users":                 true, // Global user accounts
+	"organizations": true, // Root tenant table (id is tenant ID)
+	"rbac_matrix":   true, // Global RBAC definitions
+	"users":         true, // Global user accounts
 }
 
 // BuildTenantQuery appends tenant filtering to a query if the user is not platform_admin.

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import '../assets/styles/views/slo.css'
-import MetricCard from '../components/ui/MetricCard.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import SloCardsGrid from '../components/slo/SloCardsGrid.vue'
 import SloCatalogTable from '../components/slo/SloCatalogTable.vue'
+import SloMobileCards from '../components/slo/SloMobileCards.vue'
 import SloCreateModal from '../components/slo/SloCreateModal.vue'
 import SloInspectModal from '../components/slo/SloInspectModal.vue'
 import {
@@ -20,10 +21,17 @@ const snapshots = ref<SLOSnapshot[]>([])
 
 type TimeWindowFilter = '1h' | '6h' | '24h' | '30d'
 const selectedWindowFilter = ref<TimeWindowFilter>('30d')
+const windowPills = [
+  { key: '1h' as const, label: '1h (Fast)', title: '1h Fast Burn (14.4x rate)', icon: 'flame', short: 'Fast' },
+  { key: '6h' as const, label: '6h (Slow)', title: '6h Slow Burn (6.0x rate)', icon: 'alert-triangle', short: 'Slow' },
+  { key: '24h' as const, label: '24h (Composite)', title: '24h Composite (2.0x rate)', icon: 'activity', short: 'Comp' },
+  { key: '30d' as const, label: '30d (Baseline)', title: '30d Baseline (1.0x rate)', icon: 'calendar', short: 'Base' }
+]
 
-// Mobile Ergonomics States
+// View Mode and Search State
+const viewMode = ref<'table' | 'grid'>('table')
+const searchQuery = ref('')
 const showMobileSearch = ref(false)
-const mobileSearchQuery = ref('')
 
 const showCreateModal = ref(false)
 const showInspectModal = ref(false)
@@ -99,16 +107,65 @@ const avgBurnRate = computed(() => {
   return `${(snapshots.value.reduce((acc, s) => acc + (s.burn_rate || 0), 0) / snapshots.value.length).toFixed(2)}x`
 })
 
-// Filtered data based on search input
-const filteredSnapshots = computed(() => {
-  const q = mobileSearchQuery.value.trim().toLowerCase()
-  return q ? snapshots.value.filter(s => s.service.toLowerCase().includes(q)) : snapshots.value
+// Filtered data based on unified search input (filters SLOs by service name or indicator)
+const filteredDefinitions = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return definitions.value
+  return definitions.value.filter(d =>
+    d.service.toLowerCase().includes(q) ||
+    (d.indicator_type && d.indicator_type.toLowerCase().includes(q))
+  )
 })
 
-const filteredDefinitions = computed(() => {
-  const q = mobileSearchQuery.value.trim().toLowerCase()
-  return q ? definitions.value.filter(d => d.service.toLowerCase().includes(q) || d.indicator_type.toLowerCase().includes(q)) : definitions.value
+const filteredSnapshots = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return snapshots.value
+  const matchingDefIds = new Set(
+    definitions.value
+      .filter(d => d.service.toLowerCase().includes(q) || (d.indicator_type && d.indicator_type.toLowerCase().includes(q)))
+      .map(d => d.id)
+  )
+  return snapshots.value.filter(s =>
+    s.service.toLowerCase().includes(q) ||
+    matchingDefIds.has(s.slo_id)
+  )
 })
+
+// Helper Functions for Mobile Card Stream and Telemetry
+function formatPercent(val?: number): string {
+  if (val === undefined || val === null || isNaN(val)) return '0.00%'
+  const pct = val > 1 ? val : val * 100
+  return `${pct.toFixed(2)}%`
+}
+
+function getEffectiveBurnRate(rawRate?: number): number {
+  if (rawRate === undefined || rawRate === null || isNaN(rawRate)) return 0
+  return rawRate
+}
+
+function getBurnRateColor(rate: number): string {
+  if (rate <= 1.0) return 'text-emerald'
+  if (rate <= 2.5) return 'text-amber'
+  return 'text-rose'
+}
+
+function getBudgetBarWidth(budget?: number): number {
+  if (budget === undefined || budget === null || isNaN(budget)) return 0
+  return Math.max(0, Math.min(100, budget))
+}
+
+function getSnapshotForDef(defId: string, serviceName: string): SLOSnapshot | undefined {
+  return snapshots.value.find(s => s.slo_id === defId || s.service === serviceName)
+}
+
+function handleMobileInspect(def: SLODefinition, snap?: SLOSnapshot) {
+  openInspect({ def, snap })
+}
+
+function handleEditSLO(def: SLODefinition) {
+  const snap = getSnapshotForDef(def.id, def.service)
+  openInspect({ def, snap })
+}
 
 function showBanner(type: 'success' | 'warning' | 'error', text: string) {
   bannerMessage.value = { type, text }
@@ -156,7 +213,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
   actionInProgress.value = true
   try {
     await sloApi.triggerBurnAlert(id)
-    showBanner('warning', `⚡ Fast burn-rate alert simulated for '${serviceName}'. Check alerts view.`)
+    showBanner('warning', `Fast burn-rate alert simulated for '${serviceName}'. Check alerts view.`)
   } catch (err: unknown) {
     showBanner('error', err instanceof Error ? err.message : 'Failed to simulate alert')
   } finally {
@@ -167,132 +224,191 @@ async function handleTriggerAlert(id: string, serviceName: string) {
 
 <template>
   <div class="slo-view-container animate-fade-in">
-    <!-- Desktop Header (>640px) -->
-    <div class="view-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>ENTERPRISE RELIABILITY ENGINEERING & OBSERVABILITY</span>
-        </div>
-        <h1 class="view-title">Service Level Objectives & Error Budgets</h1>
-        <p class="view-desc">
-          Automated multi-window burn rate calculation, Google SRE error budgeting, and real-time PromQL telemetry compliance.
-        </p>
+    <!-- Alert / Toast Banner -->
+    <div v-if="bannerMessage" class="banner-box animate-fade-in" :class="`banner-${bannerMessage.type}`">
+      <BaseIcon :name="bannerMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" />
+      <span class="banner-text">{{ bannerMessage.text }}</span>
+      <button class="banner-close" @click="bannerMessage = null"><BaseIcon name="x" size="xs" /></button>
+    </div>
+
+    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <div class="slo-toolbar-sleek glass-panel desktop-only">
+      <!-- Search input with search icon and clear button -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Filter SLOs..."
+          class="toolbar-search-input"
+          aria-label="Filter SLOs by service name or indicator"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
       </div>
 
-      <div class="header-actions">
-        <button class="btn btn-primary" @click="showCreateModal = true">
-          <span>➕ Create SLO Definition</span>
+      <!-- Time Window multi-window analysis pills -->
+      <div class="toolbar-window-pills font-mono" role="tablist" aria-label="Multi-window analysis">
+        <button
+          v-for="w in windowPills"
+          :key="w.key"
+          type="button"
+          role="tab"
+          :aria-selected="selectedWindowFilter === w.key"
+          class="toolbar-pill-btn"
+          :class="{ active: selectedWindowFilter === w.key }"
+          :title="w.title"
+          @click="setWindowFilter(w.key)"
+        >
+          <BaseIcon :name="w.icon" size="xs" />
+          <span>{{ w.label }}</span>
         </button>
-        <button class="btn btn-secondary" :disabled="loading" @click="fetchSLOData">
-          <span>{{ loading ? '⏳ Fetching...' : '🔄 Refresh Telemetry' }}</span>
+      </div>
+
+      <!-- Subtle monospace status in muted slate -->
+      <div class="toolbar-kpi-status font-mono" role="status" aria-label="SLO metrics summary">
+        <span class="kpi-live-dot" aria-hidden="true"></span>
+        <span>{{ totalSLOs }} SLOs ({{ healthySLOs }} Healthy)</span>
+      </div>
+
+      <!-- Right: Segmented viewMode toggle & Action buttons -->
+      <div class="toolbar-actions-group">
+        <!-- Segmented viewMode toggle: [ Table ] and [ Cards ] -->
+        <div class="view-mode-toggle font-mono" role="group" aria-label="View mode">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'table' }"
+            title="Catalog Table View"
+            aria-label="Table View"
+            @click="viewMode = 'table'"
+          >
+            <BaseIcon name="table" size="xs" />
+            <span>Table</span>
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'grid' }"
+            title="Card Grid View"
+            aria-label="Cards View"
+            @click="viewMode = 'grid'"
+          >
+            <BaseIcon name="grid" size="xs" />
+            <span>Cards</span>
+          </button>
+        </div>
+
+        <!-- Action buttons: + Add Target (primary) and Refresh (secondary with spinner) -->
+        <button
+          type="button"
+          class="toolbar-btn btn-primary"
+          title="Add Target"
+          aria-label="Add Target"
+          @click="showCreateModal = true"
+        >
+          <BaseIcon name="plus" size="xs" />
+          <span>+ Add Target</span>
+        </button>
+
+        <button
+          type="button"
+          class="toolbar-btn btn-secondary"
+          :disabled="loading"
+          title="Refresh SLO telemetry"
+          aria-label="Refresh SLO telemetry"
+          @click="fetchSLOData"
+        >
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" />
+          <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
         </button>
       </div>
     </div>
 
-    <!-- Mobile 44px Command Bar (<=640px) -->
+    <!-- Mobile 44px Command Bar (<=767px) -->
     <div class="slo-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🎯 SLOs ({{ totalSLOs }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="target" size="xs" /> SLOs ({{ totalSLOs }})</span>
       </div>
       <div class="command-bar-actions">
         <button class="btn-icon-cmd" title="Create SLO definition" aria-label="Create SLO definition" @click="showCreateModal = true">
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button class="btn-icon-cmd" :disabled="loading" title="Refresh telemetry" aria-label="Refresh telemetry" @click="fetchSLOData">
-          <span>🔄</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" />
         </button>
         <button class="btn-icon-cmd" :class="{ active: showMobileSearch }" title="Toggle search/filter drawer" aria-label="Toggle search/filter drawer" @click="showMobileSearch = !showMobileSearch">
-          <span>🔍</span>
+          <BaseIcon name="search" size="xs" />
         </button>
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<=640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<=767px) -->
     <div class="slo-micro-telemetry mobile-only font-mono" role="status" aria-label="SLO Micro Telemetry">
-      <span class="tel-item tel-total">🎯 {{ totalSLOs }} slos</span>
+      <span class="tel-item tel-total"><BaseIcon name="target" size="xs" /> {{ totalSLOs }} slos</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-healthy">🛡️ {{ healthySLOs }} ok</span>
+      <span class="tel-item tel-healthy"><BaseIcon name="shield" size="xs" /> {{ healthySLOs }} ok</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-warn">⚠️ {{ warningSLOs + criticalSLOs }} warn</span>
+      <span class="tel-item tel-warn"><BaseIcon name="alert-triangle" size="xs" /> {{ warningSLOs + criticalSLOs }} warn</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-burn">🔥 {{ avgBurnRate }} burn</span>
+      <span class="tel-item tel-burn"><BaseIcon name="flame" size="xs" /> {{ avgBurnRate }} burn</span>
     </div>
 
     <!-- Mobile Collapsible Search Drawer -->
     <div v-if="showMobileSearch" class="mobile-filter-drawer mobile-only animate-fade-in">
-      <input
-        v-model="mobileSearchQuery"
-        type="search"
-        class="mobile-search-input"
-        placeholder="Filter SLOs by service name..."
-        autofocus
-      />
+      <div class="mobile-search-inner">
+        <BaseIcon name="search" size="xs" class="mobile-search-icon" />
+        <input
+          v-model="searchQuery"
+          type="search"
+          class="mobile-search-input"
+          placeholder="Filter SLOs by service name or indicator..."
+          autofocus
+        />
+        <button v-if="searchQuery" type="button" class="mobile-clear-btn" title="Clear search" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
+      </div>
     </div>
 
-    <!-- Alert / Toast Banner -->
-    <div v-if="bannerMessage" class="banner-box animate-fade-in" :class="`banner-${bannerMessage.type}`">
-      <span>{{ bannerMessage.type === 'success' ? '✅' : bannerMessage.type === 'warning' ? '⚠️' : '🚨' }}</span>
-      <span class="banner-text">{{ bannerMessage.text }}</span>
-      <button class="banner-close" @click="bannerMessage = null">✕</button>
-    </div>
-
-    <!-- Time Window Filter Pill Strip / Mobile Segmented Pill Strip -->
-    <div class="filter-strip glass-panel mobile-pill-strip">
-      <div class="filter-pills">
-        <span class="filter-label desktop-only">Multi-Window Analysis:</span>
-        <button class="pill-btn" :class="{ active: selectedWindowFilter === '1h' }" @click="setWindowFilter('1h')">
-          <span class="desktop-only">🔥 1h Fast Burn (14.4x)</span><span class="mobile-only">1h (14x)</span>
-        </button>
-        <button class="pill-btn" :class="{ active: selectedWindowFilter === '6h' }" @click="setWindowFilter('6h')">
-          <span class="desktop-only">⚠️ 6h Slow Burn (6.0x)</span><span class="mobile-only">6h (6x)</span>
-        </button>
-        <button class="pill-btn" :class="{ active: selectedWindowFilter === '24h' }" @click="setWindowFilter('24h')">
-          <span class="desktop-only">📊 24h Composite (2.0x)</span><span class="mobile-only">24h (2x)</span>
-        </button>
-        <button class="pill-btn" :class="{ active: selectedWindowFilter === '30d' }" @click="setWindowFilter('30d')">
-          <span class="desktop-only">🗓️ 30d Baseline (1.0x)</span><span class="mobile-only">30d (1x)</span>
+    <!-- Mobile Time Window Pills (<768px) -->
+    <div class="slo-mobile-window-strip mobile-only">
+      <div class="mobile-window-pills font-mono">
+        <button
+          v-for="w in windowPills"
+          :key="w.key"
+          type="button"
+          class="mobile-window-btn"
+          :class="{ active: selectedWindowFilter === w.key }"
+          @click="setWindowFilter(w.key)"
+        >
+          {{ w.key }} ({{ w.short }})
         </button>
       </div>
-
-      <span class="filter-desc font-mono desktop-only">
-        <span v-if="selectedWindowFilter === '1h'">Fast-burn detection: 2% budget consumed in 1h window</span>
-        <span v-else-if="selectedWindowFilter === '6h'">Slow-burn detection: 5% budget consumed in 6h window</span>
-        <span v-else-if="selectedWindowFilter === '24h'">Medium-window composite: 10% budget consumed in 24h</span>
-        <span v-else>Rolling 30-day baseline objective compliance window</span>
-      </span>
     </div>
 
-    <!-- Metric HUD (Desktop only: 4-Column Grid, hidden on mobile <640px) -->
-    <div class="metrics-grid desktop-only">
-      <MetricCard
-        title="Active SLOs" :value="totalSLOs" subtitle="Active services tracked against target SLIs"
-        icon="🎯" badge="OBJECTIVES" badge-color="cyan"
-      />
-      <MetricCard
-        title="Healthy Error Budgets" :value="snapshots.length > 0 ? `${healthySLOs}/${snapshots.length}` : '0/0'"
-        :subtitle="snapshots.length > 0 ? 'Services with >20% remaining budget' : 'No active budget snapshots'"
-        icon="shield" badge="HEALTHY" :badge-color="snapshots.length > 0 ? 'emerald' : 'muted'"
-        :trend="snapshots.length > 0 ? 'Within Budget' : 'No active budgets'" :trend-type="snapshots.length > 0 ? 'positive' : 'neutral'"
-      />
-      <MetricCard
-        title="Budget Warnings" :value="warningSLOs + criticalSLOs" subtitle="Error budget consumption > 80%"
-        icon="alert" :badge="snapshots.length === 0 ? 'ZERO' : (warningSLOs + criticalSLOs) > 0 ? 'ALERT' : 'ZERO'"
-        :badge-color="snapshots.length === 0 ? 'muted' : (warningSLOs + criticalSLOs) > 0 ? 'rose' : 'emerald'"
-        :trend="snapshots.length === 0 ? 'No active budgets' : (warningSLOs + criticalSLOs) > 0 ? 'Elevated Failure Rate' : 'Optimal Traffic'"
-        :trend-type="snapshots.length === 0 ? 'neutral' : (warningSLOs + criticalSLOs) > 0 ? 'negative' : 'positive'"
-      />
-      <MetricCard
-        title="Average Burn Rate" :value="avgBurnRate" :subtitle="`Computed for ${selectedWindowFilter} time window`"
-        icon="fire" :badge="snapshots.length === 0 ? 'NO DATA' : criticalSLOs > 0 ? 'EXHAUSTING' : warningSLOs > 0 ? 'ELEVATED' : 'NOMINAL'"
-        :badge-color="snapshots.length === 0 ? 'muted' : criticalSLOs > 0 ? 'rose' : warningSLOs > 0 ? 'amber' : 'emerald'"
-        :trend="snapshots.length === 0 ? 'No snapshots' : criticalSLOs > 0 ? 'Fast Burn Alert Active' : 'Normal Rate'"
-        :trend-type="snapshots.length === 0 ? 'neutral' : criticalSLOs > 0 ? 'negative' : 'positive'"
-      />
-    </div>
+    <!-- Desktop View Mode: Table OR Grid (NEVER both at the same time on desktop!) -->
+    <SloCatalogTable
+      v-if="viewMode === 'table'"
+      class="desktop-only"
+      :definitions="filteredDefinitions"
+      :snapshots="filteredSnapshots"
+      :loading="loading"
+      :error="error"
+      @create="showCreateModal = true"
+      @inspect="openInspectFromTable"
+      @trigger-alert="handleTriggerAlert"
+      @delete-slo="handleDeleteSLO"
+    />
 
-    <!-- Active Error Budget & Burn Rate Cards Grid Component (Stream begins immediately!) -->
     <SloCardsGrid
+      v-else-if="viewMode === 'grid'"
+      class="desktop-only"
       :definitions="filteredDefinitions"
       :snapshots="filteredSnapshots"
       :selected-window-filter="selectedWindowFilter"
@@ -303,17 +419,19 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       @delete-slo="handleDeleteSLO"
     />
 
-    <!-- SLO Definitions Catalog Table Component (Desktop / Tablet view) -->
-    <SloCatalogTable
-      class="desktop-only"
+    <!-- First-Class Mobile Card Stream (<768px) -->
+    <SloMobileCards
+      class="mobile-only"
       :definitions="filteredDefinitions"
       :snapshots="filteredSnapshots"
-      :loading="loading"
-      :error="error"
-      @create="showCreateModal = true"
-      @inspect="openInspectFromTable"
-      @trigger-alert="handleTriggerAlert"
-      @delete-slo="handleDeleteSLO"
+      :format-percent="formatPercent"
+      :get-effective-burn-rate="getEffectiveBurnRate"
+      :get-burn-rate-color="getBurnRateColor"
+      :get-budget-bar-width="getBudgetBarWidth"
+      :get-snapshot-for-def="getSnapshotForDef"
+      @inspect="handleMobileInspect"
+      @edit="handleEditSLO"
+      @delete="handleDeleteSLO"
     />
 
     <!-- Modals -->

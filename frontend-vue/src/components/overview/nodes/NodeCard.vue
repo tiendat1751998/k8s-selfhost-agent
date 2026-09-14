@@ -1,7 +1,8 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { NodeMetrics } from '../../../api/overview'
 import NodeCardGauges from './NodeCardGauges.vue'
 import NodeCardMetaGrid from './NodeCardMetaGrid.vue'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 interface Props {
   node: NodeMetrics
@@ -87,16 +88,24 @@ function formatOsSummary(node?: NodeMetrics | null): string {
           <h3 class="node-name" :title="node.node_name">{{ node.node_name }}</h3>
         </div>
         <div class="node-header-badges">
-          <span v-if="isNodeOffline(node)" class="badge badge-offline" title="Node Offline">🔴 OFFLINE</span>
-          <span v-else-if="node.node_id === busiestNodeId" class="badge badge-amber badge-traffic-pulse" title="Highest traffic node">🔥 HOT NODE</span>
-          <span v-else-if="node.role?.toLowerCase() === 'master' || node.role?.toLowerCase() === 'control-plane' || node.role?.toLowerCase() === 'manager'" class="badge badge-purple" title="Cluster Manager">👑 MANAGER</span>
-          <span v-else class="badge badge-indigo" title="Telemetry Agent">📡 AGENT</span>
+          <span v-if="isNodeOffline(node)" class="badge badge-offline" title="Node Offline">OFFLINE</span>
+          <span v-else-if="node.node_id === busiestNodeId" class="badge badge-amber badge-traffic-pulse" title="Highest traffic node">
+            <BaseIcon name="flame" size="xs" /> HOT NODE
+          </span>
+          <span v-else-if="node.role?.toLowerCase() === 'master' || node.role?.toLowerCase() === 'control-plane' || node.role?.toLowerCase() === 'manager'" class="badge badge-purple" title="Cluster Manager">
+            <BaseIcon name="shield" size="xs" /> MANAGER
+          </span>
+          <span v-else class="badge badge-indigo" title="Telemetry Agent">
+            <BaseIcon name="radio" size="xs" /> AGENT
+          </span>
         </div>
       </div>
       <div class="node-header-meta">
-        <span class="badge-meta font-mono" :title="formatOsSummary(node)">🐧 {{ formatOsSummary(node) }}</span>
+        <span class="badge-meta font-mono" :title="formatOsSummary(node)">
+          <BaseIcon name="server" size="xs" /> {{ formatOsSummary(node) }}
+        </span>
         <span class="badge-meta font-mono" :title="`${node.running_count ?? node.container_count ?? 0} Active Containers · ${node.processes || 0} Host PIDs`">
-          📦 {{ isNodeOffline(node) ? '—' : (node.running_count ?? node.container_count ?? 0) }} ctr · {{ isNodeOffline(node) ? '—' : (node.processes || 0) }} pids
+          <BaseIcon name="box" size="xs" /> {{ isNodeOffline(node) ? '—' : (node.running_count ?? node.container_count ?? 0) }} ctr · {{ isNodeOffline(node) ? '—' : (node.processes || 0) }} pids
         </span>
       </div>
     </div>
@@ -111,10 +120,12 @@ function formatOsSummary(node?: NodeMetrics | null): string {
     <div class="node-card-footer">
       <div class="node-footer-actions">
         <button type="button" class="btn-node-action btn-inspect-node" @click.stop="$emit('inspect', node)" title="Inspect real-time telemetry, hardware saturation, and top processes">
-          <span>🔍 Inspect Telemetry &amp; Apps</span>
+          <BaseIcon name="search" size="xs" />
+          <span>Inspect Telemetry &amp; Apps</span>
         </button>
         <button type="button" class="btn-node-action btn-manage-host" @click.stop="$emit('manage', node)" title="Manage server in Infrastructure Registry">
-          <span>⚙️ Manage</span>
+          <BaseIcon name="sliders" size="xs" />
+          <span>Manage</span>
         </button>
       </div>
     </div>

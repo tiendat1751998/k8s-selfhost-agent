@@ -1,5 +1,6 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { CloudSpendBreakdown } from '../../composables/useCostFinOps'
 import type { ClusterCost } from '../../api/governance'
 
@@ -67,11 +68,11 @@ const categoryTotals = computed(() => {
 
 function getProviderIcon(provider: string): string {
   const p = (provider || '').toLowerCase()
-  if (p.includes('aws')) return '☁️'
-  if (p.includes('gcp') || p.includes('google')) return '🌐'
-  if (p.includes('azure')) return '🔷'
-  if (p.includes('baremetal') || p.includes('local')) return '🖥️'
-  return '⎈'
+  if (p.includes('aws')) return 'cloud'
+  if (p.includes('gcp') || p.includes('google')) return 'globe'
+  if (p.includes('azure')) return 'layers'
+  if (p.includes('baremetal') || p.includes('local')) return 'server'
+  return 'anchor'
 }
 </script>
 
@@ -91,7 +92,7 @@ function getProviderIcon(provider: string): string {
       <!-- Donut Chart & Cloud Legend -->
       <div class="donut-section glass-panel">
         <div class="donut-chart-wrapper">
-          <svg class="donut-svg" viewBox="0 0 100 100">
+          <svg class="donut-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
             <circle class="donut-bg" cx="50" cy="50" :r="RADIUS" />
             <circle
               v-for="seg in donutSegments"
@@ -107,7 +108,7 @@ function getProviderIcon(provider: string): string {
           </svg>
           <div class="donut-center-text">
             <span class="donut-center-val font-mono">${{ totalSpend.toLocaleString() }}</span>
-            <span class="donut-center-label">RUN-RATE</span>
+            <span class="donut-center-label font-mono">RUN-RATE</span>
           </div>
         </div>
 
@@ -118,14 +119,14 @@ function getProviderIcon(provider: string): string {
             class="legend-item font-mono"
           >
             <div class="legend-color-dot" :style="{ backgroundColor: item.color }"></div>
-            <div class="legend-info">
+            <div class="legend-info font-mono">
               <div class="legend-name-row">
                 <span class="legend-name">{{ item.name }}</span>
-                <span class="legend-pct">{{ item.percentage }}%</span>
+                <span class="legend-pct font-mono">{{ item.percentage }}%</span>
               </div>
-              <div class="legend-meta text-muted">
-                <span>${{ item.cost.toLocaleString() }}</span>
-                <span>• {{ item.clusterCount }} {{ item.clusterCount === 1 ? 'cluster' : 'clusters' }}</span>
+              <div class="legend-meta text-muted font-mono">
+                <span class="legend-cost font-mono">${{ item.cost.toLocaleString() }}</span>
+                <span class="legend-clusters font-mono">• {{ item.clusterCount }} {{ item.clusterCount === 1 ? 'cluster' : 'clusters' }}</span>
               </div>
             </div>
           </div>
@@ -192,7 +193,7 @@ function getProviderIcon(provider: string): string {
     <div v-if="clusters.length > 0" class="clusters-cost-grid">
       <div v-for="cluster in clusters" :key="cluster.id" class="cluster-cost-card glass-panel">
         <div class="cluster-cost-top">
-          <div class="provider-icon-box">{{ getProviderIcon(cluster.provider) }}</div>
+          <div class="provider-icon-box"><BaseIcon :name="getProviderIcon(cluster.provider)" size="xs" /></div>
           <div class="cluster-cost-meta">
             <h3 class="cluster-name">{{ cluster.name }}</h3>
             <span class="provider-name font-mono text-muted">{{ cluster.provider.toUpperCase() }}</span>
@@ -224,11 +225,11 @@ function getProviderIcon(provider: string): string {
     </div>
 
     <div v-else-if="!loading" class="empty-state-box glass-panel">
-      <span class="empty-icon">💵</span>
+      <span class="empty-icon"><BaseIcon name="dollar-sign" size="lg" /></span>
       <h3 class="empty-title">No Cluster Cost Telemetry</h3>
       <p class="empty-desc">No cluster billing data discovered. Connect OpenCost, Kubecost, or cloud billing exports.</p>
       <button class="btn btn-secondary btn-sm" @click="emit('refresh')">
-        <span>🔄 Refresh Metrics</span>
+        <BaseIcon name="refresh" size="xs" /> <span>Refresh Metrics</span>
       </button>
     </div>
   </div>

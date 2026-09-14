@@ -30,6 +30,7 @@ import {
   initInstallWizardForm,
   buildInstallPayload,
 } from './helmCatalogConstants'
+import { sanitizeHelmRelease } from './useHelm'
 
 export { REPO_PRESETS, CATEGORY_TAGS, type ActiveTab, type ActiveDrawerTab }
 
@@ -98,7 +99,8 @@ export function useHelmCatalog() {
     loading.value = true; error.value = null
     try {
       const ns = selectedNamespace.value !== 'all' ? selectedNamespace.value : undefined
-      releases.value = (await helmApi.listReleases(selectedCluster.value, ns)) || []
+      const rawList = (await helmApi.listReleases(selectedCluster.value, ns)) || []
+      releases.value = rawList.map(r => sanitizeHelmRelease(r))
     } catch (err: unknown) {
       error.value = getErrorMessage(err, 'Failed to fetch Helm releases')
       releases.value = []
@@ -297,7 +299,11 @@ export function useHelmCatalog() {
 
     await loadClusters()
     await loadNamespaces()
-    await Promise.all([fetchReleases(), fetchCharts(), fetchRepos()])
+    const initialFetches: Promise<void>[] = [fetchReleases(), fetchRepos()]
+    if (activeTab.value === 'charts') {
+      initialFetches.push(fetchCharts())
+    }
+    await Promise.all(initialFetches)
   })
 
   onUnmounted(() => {

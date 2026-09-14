@@ -10,4 +10,5 @@ type Repository interface {
 	RecordRun(ctx context.Context, run *AuditRun) error
 	GetLastRun(ctx context.Context) (*AuditRun, error)
 	RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error
+	ListLogs(ctx context.Context, filter AuditLogFilter) ([]AuditLog, int, error)
 }

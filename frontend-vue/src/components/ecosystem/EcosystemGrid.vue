@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { DetectedTool } from '../../api/ecosystem'
 
 interface Props {
@@ -35,10 +35,10 @@ const emit = defineEmits<{
       <div class="card-header">
         <div class="tool-main-info">
           <div class="tool-icon-wrap">
-            {{ getToolIcon(tool) }}
+            <BaseIcon :name="getToolIcon(tool)" size="md" />
           </div>
-          <div>
-            <h3 class="tool-name">{{ tool.name }}</h3>
+          <div style="min-width: 0;">
+            <h3 class="tool-name" :title="tool.name">{{ tool.name }}</h3>
             <span class="category-badge">{{ tool.category.toUpperCase() }}</span>
           </div>
         </div>
@@ -48,25 +48,25 @@ const emit = defineEmits<{
             v-if="tool.status === 'not_configured'"
             class="status-pill pill-muted"
           >
-            ⚪ Not Configured
+            <BaseIcon name="clock" size="xs" /> Not Configured
           </span>
           <span
             v-else-if="tool.health === 'healthy'"
             class="status-pill pill-healthy"
           >
-            🟢 Healthy
+            <BaseIcon name="check-circle" size="xs" /> Healthy
           </span>
           <span
             v-else-if="tool.status === 'unreachable'"
             class="status-pill pill-degraded"
           >
-            🔴 Unreachable
+            <BaseIcon name="x-circle" size="xs" /> Unreachable
           </span>
           <span
             v-else
             class="status-pill pill-warning"
           >
-            🟡 Degraded
+            <BaseIcon name="alert-triangle" size="xs" /> Degraded
           </span>
         </div>
       </div>
@@ -100,7 +100,7 @@ const emit = defineEmits<{
         <div class="detail-row">
           <span class="detail-label">Discovery Source:</span>
           <span class="source-badge" :class="`source-${tool.source}`">
-            {{ tool.source === 'settings' ? '⚙️ Settings' : tool.source === 'manual' ? '✍️ Manual' : '☸️ K8s' }}
+            <template v-if="tool.source === 'settings'"><BaseIcon name="sliders" size="xs" /> Settings</template><template v-else-if="tool.source === 'manual'"><BaseIcon name="edit" size="xs" /> Manual</template><template v-else><BaseIcon name="anchor" size="xs" /> K8s</template>
           </span>
         </div>
 
@@ -119,40 +119,46 @@ const emit = defineEmits<{
       <!-- Card Footer -->
       <div class="card-footer">
         <span class="last-checked">
-          🕒 {{ formatRelativeTime(tool.last_checked) }}
+          <BaseIcon name="clock" size="xs" /> {{ formatRelativeTime(tool.last_checked) }}
         </span>
 
         <div class="card-actions-quick">
           <button
-            class="btn-card-action"
-            title="Inspect Health"
-            @click="emit('inspectHealth', tool)"
-          >
-            🔍 Health
-          </button>
-          <button
-            class="btn-card-action"
+            class="btn-card-action btn-ping"
             :disabled="syncingId === tool.id"
-            title="Sync Webhook"
+            title="Ping"
+            aria-label="Ping"
             @click="emit('sync', tool)"
           >
-            {{ syncingId === tool.id ? '⏳' : '🔄' }} Sync
+            <BaseIcon :name="syncingId === tool.id ? 'refresh' : 'zap'" size="xs" :class="{ 'spin-anim': syncingId === tool.id }" />
+            <span>Ping</span>
           </button>
           <button
-            class="btn-card-action"
-            title="Configure Credentials"
+            class="btn-card-action btn-health"
+            title="Health"
+            aria-label="Health"
+            @click="emit('inspectHealth', tool)"
+          >
+            <BaseIcon name="activity" size="xs" />
+            <span>Health</span>
+          </button>
+          <button
+            class="btn-card-action btn-config"
+            title="Config"
+            aria-label="Config"
             @click="emit('configure', tool)"
           >
-            ⚙️
+            <BaseIcon name="sliders" size="xs" />
           </button>
           <button
             v-if="tool.source === 'manual' || tool.id"
             class="btn-card-action btn-card-delete"
             :disabled="deletingId === tool.id"
-            title="Disconnect integration"
+            title="Disconnect"
+            aria-label="Disconnect"
             @click="emit('delete', tool)"
           >
-            🗑️
+            <BaseIcon name="trash" size="xs" />
           </button>
         </div>
       </div>

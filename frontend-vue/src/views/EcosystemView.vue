@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import MetricCard from '../components/ui/MetricCard.vue'
 import EcosystemGrid from '../components/ecosystem/EcosystemGrid.vue'
 import EcosystemTable from '../components/ecosystem/EcosystemTable.vue'
 import EcosystemMobileCards from '../components/ecosystem/EcosystemMobileCards.vue'
@@ -23,131 +22,177 @@ const {
     <!-- Toast Notification -->
     <transition name="fade">
       <div v-if="toastMessage" class="toast-popup" :class="toastMessage.type">
-        <span>{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+        <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" />
         <span>{{ toastMessage.text }}</span>
       </div>
     </transition>
 
-    <!-- Header Section -->
-    <header class="view-header">
-      <div class="header-titles">
-        <div class="title-with-badge">
-          <h1>Ecosystem Auto-Detector</h1>
-          <span class="badge-tag live-badge">Auto-Discovery</span>
-        </div>
-        <p class="header-subtitle">
-          Real-time discovery and operational status for platform infrastructure, service meshes, and GitOps toolchains.
-        </p>
+    <!-- Mobile Command Bar (<768px) -->
+    <div class="ecosystem-mobile-command-bar mobile-only">
+      <div class="command-bar-left">
+        <span class="command-bar-title font-bold"><BaseIcon name="globe" size="sm" /> Ecosystem ({{ summary.total }})</span>
+      </div>
+      <div class="command-bar-actions">
+        <button
+          class="btn-icon-cmd"
+          :disabled="scanning || loading"
+          title="Sync"
+          aria-label="Sync"
+          @click="handleScan"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': scanning }" />
+        </button>
+        <button
+          class="btn-icon-cmd"
+          title="Connect"
+          aria-label="Connect"
+          @click="openConnectModal()"
+        >
+          <BaseIcon name="plus" size="xs" />
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Micro-Telemetry Strip (<768px) -->
+    <div class="ecosystem-micro-telemetry mobile-only font-mono" role="status" aria-label="Ecosystem Micro Telemetry">
+      <span class="tel-item tel-total"><BaseIcon name="globe" size="xs" /> {{ summary.total }} Total</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-connected"><BaseIcon name="check-circle" size="xs" /> {{ summary.healthy }} Connected</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-latency"><BaseIcon name="zap" size="xs" /> {{ healthProbeResult?.latencyMs ? `${healthProbeResult.latencyMs}ms` : '<45ms' }} Latency</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-issues"><BaseIcon name="alert-triangle" size="xs" /> {{ summary.degraded }} Issues</span>
+    </div>
+
+    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <div class="ecosystem-toolbar-sleek glass-panel">
+      <!-- Search input with search icon and clear button -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search tools, endpoints, versions..."
+          class="toolbar-search-input"
+          aria-label="Search tools, endpoints, versions"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
       </div>
 
-      <div class="header-actions">
-        <button class="btn-secondary" :disabled="scanning || loading" @click="handleScan">
-          <span class="btn-icon" :class="{ 'spin-anim': scanning }">🔄</span>
-          <span>{{ scanning ? 'Scanning Stack...' : 'Scan Now' }}</span>
+      <!-- Status select dropdown (All Statuses, Healthy, Degraded, Unknown) -->
+      <select
+        v-model="selectedStatus"
+        class="toolbar-select"
+        aria-label="Filter by health status"
+      >
+        <option value="all">All Statuses</option>
+        <option value="healthy">Healthy</option>
+        <option value="degraded">Degraded</option>
+        <option value="not_configured">Unknown</option>
+      </select>
+
+      <!-- Inline compact KPI badge strip font-mono -->
+      <div class="toolbar-kpi-strip font-mono desktop-only" role="status" aria-label="Ecosystem summary metrics">
+        <span class="kpi-badge font-mono">{{ summary.total }} Tools ({{ summary.healthy }} Healthy · {{ summary.degraded }} Issues)</span>
+      </div>
+
+      <!-- Right: View Mode Toggle & Action Buttons -->
+      <div class="toolbar-actions-group">
+        <!-- View mode toggle (Table / Grid) -->
+        <div class="view-mode-toggle desktop-only" title="Switch layout display">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'table' }"
+            title="Table View"
+            aria-label="Table View"
+            @click="viewMode = 'table'"
+          >
+            <BaseIcon name="file-text" size="xs" />
+            <span>Table</span>
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'grid' }"
+            title="Grid View"
+            aria-label="Grid View"
+            @click="viewMode = 'grid'"
+          >
+            <BaseIcon name="grid" size="xs" />
+            <span>Grid</span>
+          </button>
+        </div>
+
+        <!-- Action buttons: Scan Now and + Register Tool -->
+        <button
+          type="button"
+          class="btn-toolbar btn-secondary desktop-only"
+          :disabled="scanning || loading"
+          title="Run discovery scan"
+          @click="handleScan"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': scanning }" />
+          <span>{{ scanning ? 'Scanning...' : 'Scan Now' }}</span>
         </button>
-        <button class="btn-primary" @click="openConnectModal()">
-          <span class="btn-icon">➕</span>
+
+        <button
+          type="button"
+          class="btn-toolbar btn-primary desktop-only"
+          title="Register new ecosystem integration"
+          @click="openConnectModal()"
+        >
+          <BaseIcon name="plus" size="xs" />
           <span>Register Tool</span>
         </button>
       </div>
-    </header>
+    </div>
 
-    <!-- Summary HUD Metrics -->
-    <section class="summary-hud-grid">
-      <MetricCard
-        title="Detected Stack Tools"
-        :value="summary.total"
-        icon="🧩"
-        subtitle="Across configured integration URLs"
-        badge="Platform"
-        badgeColor="cyan"
-      />
-      <MetricCard
-        title="Healthy Services"
-        :value="summary.healthy"
-        icon="💚"
-        subtitle="Responding with status 200 OK"
-        badge="Online"
-        badgeColor="emerald"
-      />
-      <MetricCard
-        title="Degraded / Unreachable"
-        :value="summary.degraded"
-        icon="⚠️"
-        subtitle="Failed probes or sealed state"
-        :badge="summary.degraded > 0 ? 'Attention' : 'Optimal'"
-        :badgeColor="summary.degraded > 0 ? 'rose' : 'emerald'"
-      />
-      <MetricCard
-        title="Active Categories"
-        :value="Object.keys(summary.by_category || {}).length"
-        icon="🏷️"
-        subtitle="GitOps, Security, Mesh, Policy, etc."
-        badge="Coverage"
-        badgeColor="violet"
-      />
-    </section>
-
-    <!-- Category Tabs Navigation -->
-    <section class="category-tabs-container">
-      <div class="category-tabs">
+    <!-- Category Filter Pills Navigation Bar -->
+    <section class="category-pills-bar category-tabs-container">
+      <div class="category-pills category-tabs">
         <button
           v-for="cat in categories"
           :key="cat.key"
-          class="category-tab-btn"
+          type="button"
+          class="category-pill-btn category-tab-btn"
           :class="{ active: activeCategory === cat.key }"
           @click="activeCategory = cat.key"
         >
-          <span class="tab-icon">{{ cat.icon }}</span>
-          <span class="tab-label">{{ cat.label }}</span>
-          <span v-if="cat.key === 'all'" class="tab-count">{{ tools.length }}</span>
-          <span v-else-if="summary.by_category && summary.by_category[cat.key]" class="tab-count">
+          <BaseIcon :name="cat.icon" size="xs" class="pill-icon" />
+          <span class="pill-label tab-label">{{ cat.label }}</span>
+          <span v-if="cat.key === 'all'" class="pill-count tab-count">{{ tools.length }}</span>
+          <span v-else-if="summary.by_category && summary.by_category[cat.key]" class="pill-count tab-count">
             {{ summary.by_category[cat.key] }}
           </span>
         </button>
       </div>
     </section>
 
-    <!-- Filter & Search Bar -->
-    <section class="filter-toolbar glass-panel">
-      <div class="search-box">
-        <span class="search-icon">🔍</span>
-        <input v-model="searchQuery" type="text" placeholder="Search by tool name, endpoint, version..." class="search-input" />
-        <button v-if="searchQuery" class="clear-search-btn" @click="searchQuery = ''">✕</button>
-      </div>
-
-      <div class="filter-group">
-        <label class="filter-label">Health Status:</label>
-        <select v-model="selectedStatus" class="filter-select">
-          <option value="all">All Statuses</option>
-          <option value="healthy">Healthy Only</option>
-          <option value="degraded">Degraded / Unreachable</option>
-          <option value="not_configured">Not Configured</option>
-        </select>
-
-        <div class="view-mode-toggle">
-          <button class="toggle-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">Grid</button>
-          <button class="toggle-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">Table</button>
-        </div>
-      </div>
-    </section>
-
     <!-- Loading State -->
     <div v-if="loading && tools.length === 0" class="loading-state glass-panel">
-      <div class="spinner-icon">🔄</div>
+      <BaseIcon name="refresh" size="md" class="spin-anim" />
       <p>Discovering ecosystem components...</p>
     </div>
 
     <!-- Error State -->
     <div v-else-if="error && tools.length === 0" class="error-state glass-panel">
-      <span class="error-icon">⚠️</span>
+      <BaseIcon name="alert-triangle" size="md" class="error-icon" />
       <p>{{ error }}</p>
       <button class="btn-secondary" @click="loadData">Try Again</button>
     </div>
 
     <!-- Empty State -->
     <div v-else-if="filteredTools.length === 0" class="empty-state glass-panel">
-      <span class="empty-icon">🔎</span>
+      <BaseIcon name="search" size="xl" class="empty-icon" />
       <h3>No ecosystem tools found</h3>
       <p>No tools matched your current filters. Try changing category or clicking "Scan Now".</p>
       <button class="btn-primary" @click="handleScan">Run Scan</button>
@@ -155,8 +200,9 @@ const {
 
     <!-- Data Presentation -->
     <template v-else>
-      <EcosystemGrid
-        v-if="viewMode === 'grid'"
+      <EcosystemTable
+        v-if="viewMode === 'table'"
+        class="desktop-only"
         :tools="filteredTools"
         :deleting-id="deleting"
         :syncing-id="syncing"
@@ -168,8 +214,9 @@ const {
         @delete="handleDeleteTool"
       />
 
-      <EcosystemTable
+      <EcosystemGrid
         v-else
+        class="desktop-only"
         :tools="filteredTools"
         :deleting-id="deleting"
         :syncing-id="syncing"
@@ -182,6 +229,7 @@ const {
       />
 
       <EcosystemMobileCards
+        class="mobile-only"
         :tools="filteredTools"
         :deleting-id="deleting"
         :syncing-id="syncing"
@@ -223,4 +271,5 @@ const {
 
 <style>
 @import '../assets/styles/views/ecosystem.css';
+@import '../assets/styles/components/ecosystem-drawers.css';
 </style>

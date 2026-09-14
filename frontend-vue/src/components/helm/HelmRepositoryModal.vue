@@ -78,7 +78,7 @@ const emit = defineEmits<{
           :disabled="addingRepo || !addRepoForm.name.trim() || !addRepoForm.url.trim()"
           @click="emit('addRepo')"
         >
-          <span :class="{ 'spin-anim': addingRepo }">➕</span>
+          <BaseIcon name="plus" size="xs" :class="{ 'spin-anim': addingRepo }" />
           <span>{{ addingRepo ? 'Adding & Indexing...' : 'Add Repository' }}</span>
         </button>
       </div>
@@ -87,5 +87,5 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/helm.css';
+@import '../../assets/styles/components/helm-drawers.css';
 </style>

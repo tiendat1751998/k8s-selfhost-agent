@@ -3,10 +3,10 @@
     <div class="modal-card glass-panel">
       <div class="modal-header">
         <div class="modal-title-row">
-          <span class="modal-icon">{{ isEditing ? '✏️' : '✨' }}</span>
+          <span class="modal-icon"><BaseIcon :name="isEditing ? 'edit' : 'sparkles'" size="sm" /></span>
           <h3>{{ isEditing ? 'Edit Plugin Extension' : 'Register New Plugin' }}</h3>
         </div>
-        <button class="modal-close" @click="$emit('close')">✕</button>
+        <button class="modal-close" @click="$emit('close')"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <form @submit.prevent="$emit('submit')" class="modal-form">
@@ -35,10 +35,10 @@
           <div class="form-group">
             <label>Category</label>
             <select v-model="form.category" class="select-input">
-              <option value="monitoring">📊 Monitoring</option>
-              <option value="security">🛡️ Security</option>
-              <option value="devtools">🛠️ Developer Tools</option>
-              <option value="integration">🔌 Integration</option>
+              <option value="monitoring">Monitoring</option>
+              <option value="security">Security</option>
+              <option value="devtools">Developer Tools</option>
+              <option value="integration">Integration</option>
             </select>
           </div>
 
@@ -47,7 +47,7 @@
             <input
               v-model="form.icon"
               type="text"
-              placeholder="e.g. 📊, ⚡, 🛡️"
+              placeholder="e.g. activity, zap, shield"
               class="text-input"
             />
           </div>
@@ -97,7 +97,7 @@
         </div>
 
         <div v-if="error" class="form-error-msg">
-          ⚠️ {{ error }}
+          <BaseIcon name="alert-triangle" size="xs" /> {{ error }}
         </div>
 
         <div class="modal-footer">

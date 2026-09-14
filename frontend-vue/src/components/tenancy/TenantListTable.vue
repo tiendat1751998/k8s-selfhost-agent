@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { Organization } from '../../api/management'
 import type { TenantStatSummary } from '../../composables/useTenancyRbac'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   organizations: Organization[]
@@ -44,14 +45,14 @@ function confirmDelete(org: Organization) {
   <div class="tenant-table-wrapper glass-panel">
     <div class="table-toolbar">
       <div class="toolbar-search">
-        <span class="search-icon">🔍</span>
+        <BaseIcon name="search" size="xs" class="search-icon" />
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Filter organizations by name, slug, or tier..."
           class="input-glass search-input"
         />
-        <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''">✕</button>
+        <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="toolbar-actions">
@@ -73,6 +74,15 @@ function confirmDelete(org: Organization) {
 
     <div v-else class="table-scroll">
       <table class="tenant-table">
+        <colgroup>
+          <col style="width: 22%;" />
+          <col style="width: 15%;" />
+          <col style="width: 9%;" />
+          <col style="width: 11%;" />
+          <col style="width: 9%;" />
+          <col style="width: 12%;" />
+          <col style="width: 22%;" />
+        </colgroup>
         <thead>
           <tr>
             <th class="th-left">Organization Container</th>
@@ -90,22 +100,28 @@ function confirmDelete(org: Organization) {
               <div class="tenant-info-cell">
                 <div class="tenant-icon">{{ org.name.charAt(0).toUpperCase() }}</div>
                 <div class="tenant-details">
-                  <span class="tenant-title">{{ org.name }}</span>
-                  <span class="tenant-slug font-mono">{{ org.id }}</span>
+                  <span class="tenant-title" :title="org.name">{{ org.name }}</span>
+                  <span class="tenant-slug font-mono" :title="org.id">{{ org.id }}</span>
                 </div>
               </div>
             </td>
             <td>
-              <span class="tenant-tier-chip font-mono">{{ org.tier }}</span>
+              <span class="tenant-tier-chip font-mono" :title="org.tier">{{ org.tier }}</span>
             </td>
             <td>
-              <span class="stat-num font-mono text-cyan">{{ stats[org.id]?.projectCount ?? 0 }}</span>
+              <span class="stat-num font-mono text-cyan" :title="`${stats[org.id]?.projectCount ?? 0} namespaces`">
+                {{ stats[org.id]?.projectCount ?? 0 }}
+              </span>
             </td>
             <td>
-              <span class="stat-num font-mono text-emerald">{{ stats[org.id]?.workloadCount ?? 0 }} pods</span>
+              <span class="stat-num font-mono text-emerald" :title="`${stats[org.id]?.workloadCount ?? 0} pods`">
+                {{ stats[org.id]?.workloadCount ?? 0 }} pods
+              </span>
             </td>
             <td>
-              <span class="stat-num font-mono">{{ stats[org.id]?.memberCount ?? 0 }}</span>
+              <span class="stat-num font-mono" :title="`${stats[org.id]?.memberCount ?? 0} members`">
+                {{ stats[org.id]?.memberCount ?? 0 }}
+              </span>
             </td>
             <td>
               <StatusBadge status="healthy" label="ISOLATED" size="sm" />
@@ -115,30 +131,34 @@ function confirmDelete(org: Organization) {
                 <button
                   class="action-btn action-btn-members"
                   title="Manage Organization Members"
+                  aria-label="Manage Members"
                   @click="emit('openMembers', org.id)"
                 >
-                  <span>👥 Members</span>
+                  <BaseIcon name="users" size="xs" /> <span>Members</span>
                 </button>
                 <button
                   class="action-btn action-btn-rbac"
                   title="Configure RBAC Roles"
+                  aria-label="Configure RBAC"
                   @click="emit('openRbac')"
                 >
-                  <span>🔑 RBAC</span>
+                  <BaseIcon name="shield" size="xs" /> <span>RBAC</span>
                 </button>
                 <button
                   class="action-btn action-btn-quota"
                   title="Configure Resource Quotas"
+                  aria-label="Configure Quota"
                   @click="emit('openQuota', org)"
                 >
-                  <span>⚙️ Quota</span>
+                  <BaseIcon name="sliders" size="xs" /> <span>Quota</span>
                 </button>
                 <button
                   class="action-btn action-btn-delete"
                   title="Purge Organization Container"
+                  aria-label="Purge Organization"
                   @click="confirmDelete(org)"
                 >
-                  <span>🗑 Delete</span>
+                  <BaseIcon name="trash" size="xs" /> <span>Delete</span>
                 </button>
               </div>
             </td>

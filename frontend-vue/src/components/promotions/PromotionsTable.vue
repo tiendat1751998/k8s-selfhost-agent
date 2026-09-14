@@ -89,7 +89,7 @@ function formatDate(d?: string) {
             title="Inspect Git Manifest Diff"
             @click="emit('diff', row)"
           >
-            <span>[ 🔍 Diff ]</span>
+            <BaseIcon name="search" size="xs" /> <span>Diff</span>
           </button>
 
           <button
@@ -99,7 +99,17 @@ function formatDate(d?: string) {
             title="Approve & Promote Release"
             @click="emit('approve', row)"
           >
-            <span>[ 🚀 Promote ]</span>
+            <BaseIcon name="play" size="xs" /> <span>Promote</span>
+          </button>
+
+          <button
+            v-if="row.status === 'pending'"
+            class="btn btn-xs btn-reject"
+            :disabled="actionLoading === row.id"
+            title="Reject Promotion Request"
+            @click="emit('reject', row)"
+          >
+            <BaseIcon name="x-circle" size="xs" /> <span>Reject</span>
           </button>
 
           <button
@@ -109,7 +119,7 @@ function formatDate(d?: string) {
             title="Complete Rollout"
             @click="emit('complete', row)"
           >
-            <span>[ 🚀 Promote ]</span>
+            <BaseIcon name="play" size="xs" /> <span>Promote</span>
           </button>
 
           <button
@@ -119,17 +129,17 @@ function formatDate(d?: string) {
             title="Rollback to previous revision"
             @click="emit('rollback', row)"
           >
-            <span>[ ⏪ Rollback ]</span>
+            <BaseIcon name="rotate-ccw" size="xs" /> <span>Rollback</span>
           </button>
 
           <button
-            v-if="row.status === 'pending' || row.status === 'promoting' || row.status === 'approved'"
+            v-if="row.status === 'promoting' || row.status === 'approved'"
             class="btn btn-xs btn-abort"
             :disabled="actionLoading === row.id"
             title="Abort this promotion pipeline"
             @click="emit('abort', row)"
           >
-            <span>[ 🗑 Abort ]</span>
+            <BaseIcon name="trash" size="xs" /> <span>Abort</span>
           </button>
         </div>
       </template>

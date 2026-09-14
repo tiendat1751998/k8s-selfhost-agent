@@ -63,6 +63,7 @@ type PlatformHandlers struct {
 	LogStream     *LogStreamHandler
 	Helm          *HelmHandler
 	DR            *DRHandler
+	CentralizedLogs *LogHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -125,10 +126,11 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	// Auth API routes
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		if platform != nil && platform.Auth != nil {
-			r.Post("/login", platform.Auth.Login)
-			r.Post("/verify-mfa", platform.Auth.VerifyMFA)
-			r.Post("/refresh", platform.Auth.RefreshToken)
-			r.Post("/recovery/verify", platform.Auth.VerifyRecoveryCode)
+			authRateLimit := mw.RateLimit(10, time.Minute)
+			r.With(authRateLimit).Post("/login", platform.Auth.Login)
+			r.With(authRateLimit).Post("/verify-mfa", platform.Auth.VerifyMFA)
+			r.With(authRateLimit).Post("/refresh", platform.Auth.RefreshToken)
+			r.With(authRateLimit).Post("/recovery/verify", platform.Auth.VerifyRecoveryCode)
 			r.Post("/logout", platform.Auth.Logout)
 
 			// Authenticated TOTP routes
@@ -152,7 +154,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			_, _ = w.Write([]byte(`{"service":"k8sselfhost","version":"0.1.0"}`))
 		})
 
-		r.Post("/telemetry", func(w http.ResponseWriter, r *http.Request) {
+		r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator", "viewer")).Post("/telemetry", func(w http.ResponseWriter, r *http.Request) {
 			var payload map[string]interface{}
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				http.Error(w, "invalid json body", http.StatusBadRequest)
@@ -195,13 +197,13 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 		}
 
 		if platform != nil && platform.Capacity != nil {
-			r.Route("/capacity", platform.Capacity.RegisterRoutes)
+			r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/capacity", platform.Capacity.RegisterRoutes)
 		} else {
 			mountK8sUnavailable(r, "/capacity")
 		}
 
 		if platform != nil && platform.HealthCenter != nil {
-			r.Route("/health", platform.HealthCenter.RegisterRoutes)
+			r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/health", platform.HealthCenter.RegisterRoutes)
 		} else {
 			mountK8sUnavailable(r, "/health")
 		}
@@ -242,9 +244,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 					})
 				}
 				if platform.K8sExec != nil {
-					sub.HandleFunc("/exec", platform.K8sExec.HandleExec)
-					sub.HandleFunc("/exec/{pod}", platform.K8sExec.HandleExec)
-					sub.HandleFunc("/pods/{pod}/exec", platform.K8sExec.HandleExec)
+					sub.With(mw.RBACMiddleware("platform_admin", "tenant_admin", "operator")).HandleFunc("/exec", platform.K8sExec.HandleExec)
+					sub.With(mw.RBACMiddleware("platform_admin", "tenant_admin", "operator")).HandleFunc("/exec/{pod}", platform.K8sExec.HandleExec)
+					sub.With(mw.RBACMiddleware("platform_admin", "tenant_admin", "operator")).HandleFunc("/pods/{pod}/exec", platform.K8sExec.HandleExec)
 				}
 				if platform.K8sLogs != nil {
 					sub.Get("/logs", platform.K8sLogs.HandlePodLogs)
@@ -262,7 +264,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 					mountK8sUnavailable(sub, "/storage/volumes")
 				}
 				if platform.DR != nil {
-					sub.Route("/dr", platform.DR.RegisterRoutes)
+					sub.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/dr", platform.DR.RegisterRoutes)
 				}
 			})
 		} else {
@@ -272,7 +274,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 		// Other platform feature routes (nil-safe for standalone mode)
 		if platform != nil {
 			if platform.Dashboard != nil {
-				platform.Dashboard.RegisterRoutes(r)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Group(func(dashRouter chi.Router) {
+					platform.Dashboard.RegisterRoutes(dashRouter)
+				})
 			}
 			if platform.Notification != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/notifications", platform.Notification.RegisterRoutes)
@@ -314,7 +318,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 				r.With(mw.RBACMiddleware("platform_admin")).Route("/fleet", platform.Fleet.RegisterRoutes)
 			}
 			if platform.Audit != nil {
-				r.Route("/audit", platform.Audit.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/audit", platform.Audit.RegisterRoutes)
 			}
 			if platform.Docker != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/docker", platform.Docker.RegisterRoutes)
@@ -361,7 +365,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			if platform.Ecosystem != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/ecosystem", platform.Ecosystem.RegisterRoutes)
 			}
-			if platform.LogStream != nil {
+			if platform.CentralizedLogs != nil {
+				r.With(mw.RequestBodyLimit(10 << 20)).With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator", "logs:write")).Route("/logs", platform.CentralizedLogs.RegisterRoutes)
+			} else if platform.LogStream != nil {
 				r.Get("/logs/stream", platform.LogStream.ServeHTTP)
 			}
 			if platform.Helm != nil {

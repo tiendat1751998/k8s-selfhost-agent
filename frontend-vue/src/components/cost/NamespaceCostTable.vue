@@ -15,13 +15,13 @@ const budgetTarget = ref<TeamNamespaceCost | null>(null)
 const newBudgetLimit = ref<number>(0)
 
 const columns: Column<TeamNamespaceCost>[] = [
-  { key: 'namespace', label: 'Namespace & Team', width: '240px', sortable: true },
-  { key: 'cluster', label: 'Cluster', width: '130px', sortable: true },
-  { key: 'cpu_requested', label: 'CPU Request', width: '120px' },
-  { key: 'memory_requested', label: 'RAM Request', width: '120px' },
-  { key: 'monthly_cost', label: 'Monthly Cost', width: '130px', sortable: true },
-  { key: 'budget_limit', label: 'Budget & Burn Rate', width: '190px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '220px', align: 'right' },
+  { key: 'namespace', label: 'Namespace & Team', width: '25%', sortable: true },
+  { key: 'cluster', label: 'Cluster', width: '13%', sortable: true },
+  { key: 'cpu_requested', label: 'CPU Request', width: '11%' },
+  { key: 'memory_requested', label: 'RAM Request', width: '11%' },
+  { key: 'monthly_cost', label: 'Monthly Cost', width: '12%', sortable: true },
+  { key: 'budget_limit', label: 'Budget & Burn Rate', width: '14%', sortable: true },
+  { key: 'actions', label: 'Actions', width: '14%', align: 'right' },
 ]
 
 function getUtilColorClass(util: number): string {
@@ -77,7 +77,7 @@ function handleSaveBudget() {
       <template #cell-namespace="{ row }">
         <div class="ns-cell">
           <div class="ns-title-row">
-            <span class="ns-name font-mono font-semibold">{{ row.namespace }}</span>
+            <span class="ns-name font-mono font-semibold" :title="row.namespace">{{ row.namespace }}</span>
             <span class="team-tag font-mono">{{ row.team }}</span>
           </div>
           <span class="ns-cluster font-mono text-muted">{{ row.cluster }}</span>
@@ -123,11 +123,19 @@ function handleSaveBudget() {
 
       <template #cell-actions="{ row }">
         <div class="action-btn-group">
-          <button class="btn btn-secondary btn-sm action-btn" title="Inspect detailed breakdown" @click="openBreakdown(row)">
-            <span>🔍 Breakdown</span>
+          <button
+            class="btn-compact-32 btn-action-opt"
+            title="Right-size and optimize resource quotas"
+            @click="openBudgetModal(row)"
+          >
+            <BaseIcon name="sliders" size="xs" /> <span>Optimize</span>
           </button>
-          <button class="btn btn-secondary btn-sm action-btn" title="Configure budget cap" @click="openBudgetModal(row)">
-            <span>⚙️ Budget Limit</span>
+          <button
+            class="btn-compact-32 btn-action-breakdown"
+            title="Inspect detailed cost breakdown"
+            @click="openBreakdown(row)"
+          >
+            <BaseIcon name="pie-chart" size="xs" /> <span>Breakdown</span>
           </button>
         </div>
       </template>
@@ -182,7 +190,7 @@ function handleSaveBudget() {
         </div>
 
         <div class="recommendations-box glass-panel">
-          <h4 class="rec-title">⚡ FinOps Right-Sizing Insights</h4>
+          <h4 class="rec-title"><BaseIcon name="zap" size="xs" /> FinOps Right-Sizing Insights</h4>
           <p class="rec-desc">
             Historical CPU utilization sits at <strong>{{ breakdownTarget.utilization }}%</strong>.
             Downscaling requests by 20% recovers approx.
@@ -226,9 +234,32 @@ function handleSaveBudget() {
       <template #footer>
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="budgetTarget = null">Cancel</button>
-          <button class="btn btn-primary" :disabled="newBudgetLimit <= 0" @click="handleSaveBudget">Save Budget Cap 💾</button>
+          <button class="btn btn-primary" :disabled="newBudgetLimit <= 0" @click="handleSaveBudget">Save Budget Cap</button>
         </div>
       </template>
     </ModalDrawer>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/cost.css';
+@import '../../assets/styles/components/cost-drawers.css';
+
+:deep(.table-scroll-wrapper) {
+  overflow-x: hidden !important;
+  width: 100% !important;
+}
+
+:deep(.data-table) {
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
+.ns-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  display: block;
+}
+</style>

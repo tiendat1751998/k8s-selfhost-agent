@@ -85,6 +85,17 @@ export function useAlertManager() {
     }).length
   })
 
+  const warningCount = computed(() => {
+    return history.value.filter(h => {
+      if (h.Status !== 'firing') return false
+      const matchedRule = rules.value.find(r => r.ID === h.RuleID)
+      if (matchedRule?.Severity === 'critical' || h.Value >= 90 || h.Message.toLowerCase().includes('critical')) {
+        return false
+      }
+      return matchedRule?.Severity === 'high' || matchedRule?.Severity === 'medium' || h.Value >= 70 || h.Message.toLowerCase().includes('warn')
+    }).length
+  })
+
   const silencedRulesCount = computed(() => {
     const disabledRules = rules.value.filter(r => !r.Enabled).length
     const activeSilences = Object.keys(silencedAlerts.value).filter(id => isAlertSilenced(id)).length
@@ -249,6 +260,7 @@ export function useAlertManager() {
     firingAlerts,
     firingCount,
     criticalP1Count,
+    warningCount,
     silencedRulesCount,
     meanTimeToAcknowledge,
     loadData,

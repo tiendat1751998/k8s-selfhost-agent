@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="setup-container animate-fade-in">
-    <!-- Header -->
-    <header class="view-header">
+    <!-- Desktop Header -->
+    <header class="view-header desktop-only">
       <div class="header-left">
         <button class="btn btn-secondary btn-sm back-nav-btn" @click="router.push('/settings')">
           <span>← Back to Settings</span>
@@ -16,16 +16,55 @@
       </div>
     </header>
 
+    <!-- Mobile 40-44px Command Bar (<768px) -->
+    <div class="totp-mobile-command-bar mobile-only" role="toolbar" aria-label="Mobile Two-Factor Auth Actions">
+      <div class="command-bar-left">
+        <span class="command-bar-title font-bold"><BaseIcon name="lock" size="sm" /> Two-Factor Auth</span>
+      </div>
+      <div class="command-bar-actions">
+        <button
+          type="button"
+          class="btn-icon-cmd"
+          title="Back to Settings"
+          aria-label="Back to Settings"
+          @click="router.push('/settings')"
+        >
+          <BaseIcon name="rotate-ccw" size="xs" />
+        </button>
+        <button
+          type="button"
+          class="btn-icon-cmd"
+          title="Reset Setup"
+          aria-label="Reset Setup"
+          :disabled="setup.loading.value"
+          @click="setup.resetSetup()"
+        >
+          <BaseIcon name="refresh" size="xs" />
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
+    <div class="totp-micro-telemetry mobile-only font-mono" role="status" aria-label="TOTP Micro Telemetry">
+      <span class="tel-item tel-sec"><BaseIcon name="lock" size="xs" /> 2FA Status</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-totp"><BaseIcon name="shield" size="xs" /> TOTP</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-codes"><BaseIcon name="file-text" size="xs" /> 10 Codes</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item tel-time"><BaseIcon name="clock" size="xs" /> Time-Based</span>
+    </div>
+
     <!-- Desktop Step Wizard Navigation -->
-    <TOTPStepWizard :current-step="setup.currentStep.value" />
+    <TOTPStepWizard class="desktop-only" :current-step="setup.currentStep.value" />
 
     <!-- Error Banner Alert -->
     <div v-if="setup.errorMessage.value" class="error-banner animate-fade-in" role="alert">
-      <span class="error-icon" aria-hidden="true">⚠️</span>
+      <BaseIcon name="alert-triangle" size="sm" class="error-icon" />
       <div class="error-content">
         <span class="error-text">{{ setup.errorMessage.value }}</span>
       </div>
-      <button class="banner-close-btn" aria-label="Dismiss error" @click="setup.errorMessage.value = ''">✕</button>
+      <button class="banner-close-btn" aria-label="Dismiss error" @click="setup.errorMessage.value = ''"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Wizard Card -->
@@ -34,7 +73,7 @@
         <!-- STEP 1: Overview -->
         <div v-if="setup.currentStep.value === 'intro'" key="intro" class="wizard-step-content">
           <div class="step-hero">
-            <div class="hero-icon-wrap"><span class="hero-icon">🛡️</span></div>
+            <div class="hero-icon-wrap"><BaseIcon name="shield" size="xl" class="hero-icon" /></div>
             <h2 class="hero-title">Protect Your Operator Account</h2>
             <p class="hero-text">
               Two-factor authentication adds an essential second layer of defense. In addition to your password, you will be prompted for a temporary 6-digit verification code whenever signing in.
@@ -42,7 +81,7 @@
           </div>
           <div class="info-cards-grid">
             <div class="info-card">
-              <div class="info-card-icon">📱</div>
+              <div class="info-card-icon"><BaseIcon name="lock" size="md" /></div>
               <div class="info-card-body">
                 <h3>Supported Authenticator Apps</h3>
                 <p>Google Authenticator, Microsoft Authenticator, 1Password, Bitwarden, or Authy.</p>
@@ -50,7 +89,7 @@
               </div>
             </div>
             <div class="info-card">
-              <div class="info-card-icon">⚡</div>
+              <div class="info-card-icon"><BaseIcon name="zap" size="md" /></div>
               <div class="info-card-body">
                 <h3>Air-Gapped Ready</h3>
                 <p>TOTP relies strictly on offline cryptographic HMAC-SHA1 time synchronization (RFC 6238). No external telemetry required.</p>
@@ -88,7 +127,7 @@
         <!-- STEP 3: Verify Code -->
         <div v-else-if="setup.currentStep.value === 'verify'" key="verify" class="wizard-step-content">
           <div class="step-hero">
-            <div class="hero-icon-wrap"><span class="hero-icon">🔢</span></div>
+            <div class="hero-icon-wrap"><BaseIcon name="key" size="xl" class="hero-icon" /></div>
             <h2 class="hero-title">Verify Authenticator Code</h2>
             <p class="hero-text">Enter the 6-digit code currently shown in your authenticator app to confirm correct synchronization.</p>
           </div>
@@ -127,7 +166,7 @@
         <!-- STEP 4: Recovery Codes -->
         <div v-else-if="setup.currentStep.value === 'recovery'" key="recovery" class="wizard-step-content">
           <div class="step-hero">
-            <div class="hero-icon-wrap alert-icon-wrap"><span class="hero-icon">📦</span></div>
+            <div class="hero-icon-wrap alert-icon-wrap"><BaseIcon name="package" size="xl" class="hero-icon" /></div>
             <h2 class="hero-title">Save Your Emergency Recovery Codes</h2>
             <p class="hero-text">If you lose access to your authenticator app, these one-time recovery codes are the <strong>only way</strong> to access your account.</p>
           </div>
@@ -149,21 +188,21 @@
         <!-- STEP 5: Success -->
         <div v-else-if="setup.currentStep.value === 'success'" key="success" class="wizard-step-content">
           <div class="step-hero">
-            <div class="hero-icon-wrap success-icon-wrap"><span class="hero-icon">✅</span></div>
+            <div class="hero-icon-wrap success-icon-wrap"><BaseIcon name="check-circle" size="xl" class="hero-icon" /></div>
             <h2 class="hero-title">Two-Factor Authentication is Active!</h2>
             <p class="hero-text">Your account is now secured with TOTP multi-factor authentication. You will be asked for a verification code upon subsequent sign-ins.</p>
           </div>
           <div class="success-features-card">
             <div class="feature-row">
-              <span class="feature-icon">🛡️</span>
+              <BaseIcon name="shield" size="xs" class="feature-icon" />
               <div class="feature-info"><h4>Cluster Perimeter Hardened</h4><p>Brute-force and credential leak vectors mitigated.</p></div>
             </div>
             <div class="feature-row">
-              <span class="feature-icon">🔑</span>
+              <BaseIcon name="key" size="xs" class="feature-icon" />
               <div class="feature-info"><h4>Recovery Codes Ready</h4><p>Emergency single-use scratch tokens active.</p></div>
             </div>
             <div class="feature-row">
-              <span class="feature-icon">🔄</span>
+              <BaseIcon name="refresh" size="xs" class="feature-icon" />
               <div class="feature-info"><h4>Auto-Refreshed Sessions</h4><p>Secure HttpOnly token rotation active across all endpoints.</p></div>
             </div>
           </div>
@@ -194,6 +233,7 @@ import TOTPStepWizard from '../components/totp/TOTPStepWizard.vue'
 import QRCodeDisplay from '../components/totp/QRCodeDisplay.vue'
 import RecoveryCodesCard from '../components/totp/RecoveryCodesCard.vue'
 import TOTPMobileCards from '../components/totp/TOTPMobileCards.vue'
+import '../assets/styles/components/totp-drawers.css'
 import '../assets/styles/views/totp.css'
 
 const router = useRouter()

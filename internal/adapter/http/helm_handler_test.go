@@ -40,6 +40,9 @@ func (m *mockHelmAuditRepo) RecordRun(ctx context.Context, run *audit.AuditRun) 
 func (m *mockHelmAuditRepo) GetLastRun(ctx context.Context) (*audit.AuditRun, error) {
 	return nil, nil
 }
+func (m *mockHelmAuditRepo) ListLogs(ctx context.Context, filter audit.AuditLogFilter) ([]audit.AuditLog, int, error) {
+	return nil, 0, nil
+}
 func (m *mockHelmAuditRepo) RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

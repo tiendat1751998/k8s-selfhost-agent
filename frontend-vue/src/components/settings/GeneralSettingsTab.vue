@@ -24,7 +24,7 @@ const emit = defineEmits<{
             Configure cluster identity, operational environment tier, maintenance windows, and localization.
           </p>
         </div>
-        <span v-if="isDirty" class="dirty-indicator-pill">● Unsaved Changes</span>
+        <span v-if="isDirty" class="dirty-indicator-pill">Unsaved Changes</span>
       </div>
       <button
         type="button"
@@ -121,7 +121,7 @@ const emit = defineEmits<{
         <span class="field-desc">Changes take effect globally across all active tenant nodes.</span>
         <button type="submit" class="btn btn-primary" :disabled="saving">
           <span v-if="saving" class="spinner spinner-sm"></span>
-          <span>{{ saving ? '💾 Saving Changes...' : '💾 Save General Settings' }}</span>
+          <BaseIcon name="hard-drive" size="xs" /> <span>{{ saving ? 'Saving Changes...' : 'Save General Settings' }}</span>
         </button>
       </div>
     </form>

@@ -2,7 +2,7 @@
   <div class="recovery-codes-card-printable">
     <!-- Warning Alert -->
     <div class="alert-box-warning" role="alert">
-      <span class="alert-icon" aria-hidden="true">⚠️</span>
+      <BaseIcon name="alert-triangle" size="sm" class="alert-icon" />
       <div class="alert-text">
         <strong>CRITICAL:</strong> These backup codes will <u>NEVER</u> be displayed again. Store them in a secure password manager or encrypted drive.
       </div>
@@ -20,33 +20,33 @@
       </div>
     </div>
 
-    <!-- Action Bar: [ 📋 Copy ], [ 📥 Download TXT ], [ 🖨 Print ] -->
+    <!-- Action Bar: [ Copy ], [ Download ], [ Print ] -->
     <div class="recovery-actions-bar">
       <button
         type="button"
-        class="btn btn-secondary btn-sm"
+        class="recovery-action-btn btn btn-secondary btn-sm"
         :aria-label="allCodesCopied ? 'All recovery codes copied' : 'Copy all recovery codes to clipboard'"
         @click="$emit('copy-codes')"
       >
-        <span>{{ allCodesCopied ? '✓ All Codes Copied' : '📋 Copy All Codes' }}</span>
+        <BaseIcon :name="allCodesCopied ? 'check' : 'copy'" size="xs" /> <span>{{ allCodesCopied ? 'Copied' : 'Copy All' }}</span>
       </button>
 
       <button
         type="button"
-        class="btn btn-secondary btn-sm"
+        class="recovery-action-btn btn btn-secondary btn-sm"
         aria-label="Download recovery codes as a plaintext file"
         @click="$emit('download-txt')"
       >
-        <span>📥 Download TXT</span>
+        <BaseIcon name="download" size="xs" /> <span>Download</span>
       </button>
 
       <button
         type="button"
-        class="btn btn-secondary btn-sm"
+        class="recovery-action-btn btn btn-secondary btn-sm"
         aria-label="Print recovery codes document"
         @click="$emit('print')"
       >
-        <span>🖨 Print</span>
+        <BaseIcon name="printer" size="xs" /> <span>Print</span>
       </button>
     </div>
 

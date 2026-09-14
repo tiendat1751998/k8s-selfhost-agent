@@ -1,0 +1,194 @@
+﻿/* ==========================================================================
+   Explorer - Sleek Unified 38px Enterprise Toolbar & Kind Sub-strip
+   Dark OLED Slate tokens (rgba(15, 23, 42, 0.75), borders rgba(148, 163, 184, 0.15))
+   Target < 250 lines
+   ========================================================================== */
+
+/* Sleek Unified 38px Enterprise Toolbar */
+.explorer-toolbar-sleek {
+  height: 38px; min-height: 38px; max-height: 38px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px; border-radius: 8px; margin-bottom: 8px; box-sizing: border-box;
+  background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(148, 163, 184, 0.15);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  width: 100%; overflow: hidden; flex-wrap: nowrap; gap: 8px;
+}
+
+/* Zone 1 (Left - Search): 140px-180px, height: 28px */
+.explorer-toolbar-sleek .toolbar-search-wrap {
+  position: relative; display: flex; align-items: center;
+  width: 150px; min-width: 120px; max-width: 170px; height: 28px; flex: 0 0 150px; flex-shrink: 0;
+}
+.explorer-toolbar-sleek .search-icon {
+  position: absolute; left: 8px; font-size: 11.5px; color: #94a3b8; pointer-events: none;
+}
+.explorer-toolbar-sleek .toolbar-search-input {
+  width: 100%; height: 28px; padding: 0 22px 0 26px; font-size: 11.5px;
+  border-radius: 6px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.15);
+  color: #f8fafc; box-sizing: border-box; transition: all 0.15s ease;
+}
+.explorer-toolbar-sleek .toolbar-search-input::placeholder { color: #64748b; }
+.explorer-toolbar-sleek .toolbar-search-input:focus {
+  border-color: rgba(56, 189, 248, 0.5); outline: none; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+}
+.explorer-toolbar-sleek .clear-input-btn {
+  position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+  width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0; border-radius: 4px;
+}
+.explorer-toolbar-sleek .clear-input-btn:hover { color: #f8fafc; background: rgba(255, 255, 255, 0.08); }
+
+/* Zone 2 (Center-Left - Category Capsule Pills): 28px Capsule Pill Tabs */
+.explorer-toolbar-sleek .toolbar-nav-pills {
+  display: inline-flex; align-items: center; gap: 4px; user-select: none; flex-shrink: 0;
+}
+.explorer-toolbar-sleek .capsule-pill {
+  border-radius: 9999px; height: 28px; min-height: 28px; line-height: 28px;
+  padding: 0 10px; font-size: 11.5px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  cursor: pointer; white-space: nowrap; user-select: none;
+  background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #94a3b8; transition: all 0.15s ease; box-sizing: border-box;
+}
+.explorer-toolbar-sleek .capsule-pill:hover {
+  background: rgba(51, 65, 85, 0.8); color: #f8fafc; border-color: rgba(255, 255, 255, 0.12);
+}
+.explorer-toolbar-sleek .capsule-pill.active {
+  background: rgba(6, 182, 212, 0.15); border: 1px solid #0284c7; color: #ffffff;
+}
+
+/* Zone 3 (Center-Right - Telemetry Badge) */
+.explorer-toolbar-sleek .toolbar-kpi-strip {
+  display: inline-flex; align-items: center; margin-left: auto; margin-right: 4px; flex-shrink: 0;
+}
+.explorer-toolbar-sleek .kpi-badge {
+  font-size: 11px; padding: 2px 8px; border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(148, 163, 184, 0.15);
+  color: #38bdf8; white-space: nowrap;
+}
+@media (max-width: 1300px) {
+  .explorer-toolbar-sleek .toolbar-kpi-strip { display: none !important; }
+}
+
+/* Zone 4 (Right - Actions Group) */
+.explorer-toolbar-sleek .toolbar-actions-group {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+.explorer-toolbar-sleek .toolbar-btn {
+  height: 28px; min-height: 28px; padding: 0 9px; font-size: 11.5px; font-weight: 500;
+  border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+  gap: 5px; white-space: nowrap; cursor: pointer; box-sizing: border-box; transition: all 0.15s ease;
+}
+.explorer-toolbar-sleek .toolbar-btn.btn-secondary {
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(148, 163, 184, 0.15); color: #cbd5e1;
+}
+.explorer-toolbar-sleek .toolbar-btn.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09); border-color: rgba(148, 163, 184, 0.3); color: #f8fafc;
+}
+.explorer-toolbar-sleek .toolbar-btn.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+.explorer-toolbar-sleek .toolbar-btn.btn-primary {
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  border: 1px solid rgba(6, 182, 212, 0.4); color: #ffffff; font-weight: 600;
+}
+.explorer-toolbar-sleek .toolbar-btn.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1); transform: translateY(-1px);
+}
+.spin-icon { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Kind Sub-Strip (compact 28px row) */
+.explorer-kind-substrip {
+  height: 28px; min-height: 28px; max-height: 28px;
+  display: flex; align-items: center; gap: 6px; padding: 0 2px;
+  margin-bottom: 8px; overflow-x: auto; scrollbar-width: none; box-sizing: border-box;
+}
+.explorer-kind-substrip::-webkit-scrollbar { display: none; }
+.explorer-kind-substrip .substrip-pill {
+  border-radius: 9999px; height: 24px; min-height: 24px; line-height: 24px;
+  padding: 0 9px; font-size: 11px; font-weight: 500;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; white-space: nowrap; user-select: none;
+  background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(148, 163, 184, 0.12);
+  color: #94a3b8; transition: all 0.15s ease; box-sizing: border-box;
+}
+.explorer-kind-substrip .substrip-pill:hover {
+  background: rgba(30, 41, 59, 0.8); color: #f8fafc; border-color: rgba(148, 163, 184, 0.25);
+}
+.explorer-kind-substrip .substrip-pill.active {
+  background: rgba(6, 182, 212, 0.15); border: 1px solid #0284c7; color: #38bdf8; font-weight: 600;
+}
+
+/* Standardized Table Row Action Cell */
+.row-actions-wrap {
+  display: inline-flex; align-items: center; justify-content: flex-end;
+  gap: 6px; flex-wrap: nowrap; white-space: nowrap;
+}
+.row-actions-wrap .inline-action-btn {
+  height: 24px; min-height: 24px; padding: 0 8px; font-size: 11px;
+  display: inline-flex; align-items: center; gap: 4px; border-radius: 4px;
+  white-space: nowrap; background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.15); color: #cbd5e1;
+  cursor: pointer; transition: all 0.15s ease;
+}
+.row-actions-wrap .inline-action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1); border-color: rgba(148, 163, 184, 0.3); color: #f8fafc;
+}
+.row-actions-wrap .inline-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Responsive Overrides (1024px & 768px tablet) */
+@media (max-width: 960px) {
+  .explorer-toolbar-sleek .toolbar-search-wrap { width: 120px; flex: 0 0 120px; }
+  .explorer-toolbar-sleek .capsule-pill { padding: 0 7px; font-size: 11px; }
+}
+@media (max-width: 820px) {
+  .explorer-toolbar-sleek .toolbar-btn span { display: none; }
+  .explorer-toolbar-sleek .toolbar-btn { padding: 0 6px; width: 28px; min-width: 28px; }
+}
+
+/* Mobile Command Bar (44px) & Micro-Telemetry (< 640px) */
+.explorer-mobile-command-bar,
+.mobile-command-bar {
+  display: none; height: 44px; align-items: center; justify-content: space-between;
+  padding: 0 10px; background: rgba(11, 15, 25, 0.95); border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); margin-bottom: 6px;
+}
+.mobile-command-brand { display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-command-title { font-size: 0.85rem; font-weight: 700; color: #fff; font-family: var(--font-mono); }
+.mobile-count-badge { font-size: 0.72rem; color: #06b6d4; background: rgba(6, 182, 212, 0.12); padding: 1px 6px; border-radius: 9999px; font-weight: 600; }
+.mobile-command-actions { display: flex; align-items: center; gap: 4px; }
+.btn-mobile-cmd {
+  height: 32px; min-height: 32px; width: 32px; padding: 0; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #38bdf8; font-size: 0.85rem; font-family: var(--font-mono); font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: all 0.15s ease; flex-shrink: 0;
+}
+.btn-mobile-cmd:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(6, 182, 212, 0.4); }
+.btn-mobile-cmd:active { transform: scale(0.95); background: rgba(6, 182, 212, 0.2); }
+.mobile-micro-telemetry {
+  display: none; height: 20px; line-height: 20px; font-size: 0.68rem; color: #94a3b8;
+  font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; margin-bottom: 6px;
+}
+.mobile-kind-scroller {
+  display: none; align-items: center; gap: 6px; overflow-x: auto; padding-bottom: 6px;
+  margin-bottom: 10px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.mobile-kind-scroller::-webkit-scrollbar { display: none; }
+.mobile-kind-scroller .mobile-kind-pill {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px; color: #94a3b8; font-size: 0.75rem; white-space: nowrap;
+  flex-shrink: 0; cursor: pointer; scroll-snap-align: start; min-height: 30px; transition: all 0.15s ease;
+}
+.mobile-kind-scroller .mobile-kind-pill.is-active {
+  background: rgba(6, 182, 212, 0.2); border-color: #06b6d4; color: #fff; font-weight: 600;
+}
+.mobile-search-strip { display: none; padding: 4px 0 8px 0; }
+.mobile-search-input { width: 100%; padding: 6px 10px; font-size: 0.8rem; }
+
+@media (max-width: 640px) {
+  .explorer-mobile-command-bar, .mobile-command-bar { display: flex !important; }
+  .mobile-micro-telemetry { display: block !important; }
+  .mobile-kind-scroller { display: flex !important; }
+  .mobile-search-strip { display: block !important; }
+}

@@ -102,11 +102,11 @@ export function useAgentMesh() {
   // Reactive DAG Stages Definition
   const dagStages = computed<DAGStage[]>(() => {
     const stageDefs = [
-      { id: 'planner', name: '1. Planner & Architect', role: 'Planner', icon: '📐', agentType: 'planner' },
-      { id: 'backend', name: '2. Backend / Go Engine', role: 'Backend Engineer', icon: '⚙️', agentType: 'backend' },
-      { id: 'frontend', name: '3. Frontend Coder', role: 'Frontend Engineer', icon: '🎨', agentType: 'frontend' },
-      { id: 'k8s', name: '4. K8s / Swarm Ops', role: 'Kubernetes Engineer', icon: '☸️', agentType: 'k8s' },
-      { id: 'qa', name: '5. Security & QA Gate', role: 'QA Engineer', icon: '🛡️', agentType: 'qa' },
+      { id: 'planner', name: '1. Planner & Architect', role: 'Planner', icon: 'layers', agentType: 'planner' },
+      { id: 'backend', name: '2. Backend / Go Engine', role: 'Backend Engineer', icon: 'server', agentType: 'backend' },
+      { id: 'frontend', name: '3. Frontend Coder', role: 'Frontend Engineer', icon: 'grid', agentType: 'frontend' },
+      { id: 'k8s', name: '4. K8s / Swarm Ops', role: 'Kubernetes Engineer', icon: 'anchor', agentType: 'k8s' },
+      { id: 'qa', name: '5. Security & QA Gate', role: 'QA Engineer', icon: 'shield', agentType: 'qa' },
     ]
     return stageDefs.map(def => {
       const matchingExecs = executions.value.filter(e =>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 
 export interface SimulationScenario {
@@ -29,7 +30,7 @@ const emit = defineEmits<{
 const simulationScenarios: SimulationScenario[] = [
   {
     key: 'oom',
-    icon: '🔥',
+    icon: 'flame',
     title: 'Pod OOMKilled (Exit Code 137)',
     subtitle: 'JVM Heap Memory Exhaustion on checkout-api',
     workload: 'checkout-api-7b9c6f8d-4x2kl',
@@ -42,7 +43,7 @@ const simulationScenarios: SimulationScenario[] = [
   },
   {
     key: 'node_down',
-    icon: '🚨',
+    icon: 'alert-triangle',
     title: 'Server Node Down (NodeNotReady)',
     subtitle: 'Infrastructure Host masterdb Unreachable',
     workload: 'masterdb',
@@ -55,7 +56,7 @@ const simulationScenarios: SimulationScenario[] = [
   },
   {
     key: 'crashloop',
-    icon: '⚠️',
+    icon: 'alert-triangle',
     title: 'CrashLoopBackOff',
     subtitle: 'PostgreSQL Connection Refused on payment-gateway',
     workload: 'payment-gateway-5f8d9b-w9z7x',
@@ -73,14 +74,14 @@ const simulationScenarios: SimulationScenario[] = [
   <ModalDrawer
     :show="show"
     mode="modal"
-    title="⚡ Incident Simulation & Telemetry Injection (Debug / Demo Mode)"
+    title="Incident Simulation & Telemetry Injection (Debug / Demo Mode)"
     subtitle="[Debug / Demo Mode] Inject synthetic Kubernetes cluster anomalies to test Autonomous RCA and GitOps remediation"
     max-width="640px"
     @update:show="emit('update:show', $event)"
   >
     <div class="simulation-modal-body">
       <div class="debug-demo-banner">
-        <span class="badge badge-amber font-mono">⚠️ DEBUG / DEMO MODE</span>
+        <span class="badge badge-amber font-mono"><BaseIcon name="alert-triangle" size="xs" /> DEBUG / DEMO MODE</span>
         <span class="debug-banner-text">Synthetic cluster failure scenarios for demonstration and debugging</span>
       </div>
       <p class="simulation-guide-text">
@@ -97,7 +98,7 @@ const simulationScenarios: SimulationScenario[] = [
         >
           <div class="sim-card-header">
             <div class="sim-card-icon-wrap">
-              <span class="sim-card-icon">{{ scenario.icon }}</span>
+              <span class="sim-card-icon"><BaseIcon :name="scenario.icon" size="md" /></span>
               <div class="sim-card-titles">
                 <h4 class="sim-card-title">{{ scenario.title }}</h4>
                 <span class="sim-card-subtitle font-mono">{{ scenario.subtitle }}</span>
@@ -120,7 +121,7 @@ const simulationScenarios: SimulationScenario[] = [
               :disabled="actionLoading === `sim-${scenario.key}`"
               @click.stop="emit('simulate', scenario)"
             >
-              <span>{{ actionLoading === `sim-${scenario.key}` ? '⏳ Injecting...' : '⚡ Inject Scenario' }}</span>
+              <BaseIcon :name="actionLoading === `sim-${scenario.key}` ? 'clock' : 'zap'" size="xs" /> <span>{{ actionLoading === `sim-${scenario.key}` ? 'Injecting...' : 'Inject Scenario' }}</span>
             </button>
           </div>
         </div>

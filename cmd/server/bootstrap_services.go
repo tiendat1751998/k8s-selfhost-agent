@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,8 +28,10 @@ import (
 	"github.com/datdt/k8sselfhost/internal/infrastructure/backup/storage"
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
+	infraClickhouse "github.com/datdt/k8sselfhost/internal/infrastructure/clickhouse"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	infraLB "github.com/datdt/k8sselfhost/internal/infrastructure/loadbalancer"
+	usecaseLogging "github.com/datdt/k8sselfhost/internal/usecase/logging"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
@@ -161,27 +165,16 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	}
 
 	tpsCollector := usecaseMetrics.NewTPSCollector(
-		metricsCollector,
-		infra.pgClient.Pool(),
-		log,
-		usecaseMetrics.WithLoadBalancerProvider(lbProvider),
-		usecaseMetrics.WithTraefikURL(lbURL),
+		metricsCollector, infra.pgClient.Pool(), log,
+		usecaseMetrics.WithLoadBalancerProvider(lbProvider), usecaseMetrics.WithTraefikURL(lbURL),
 		usecaseMetrics.WithNATSMonitorURL(usecaseMetrics.DeriveNATSMonitorURL(cfg.NATS.URL)),
 		usecaseMetrics.WithTPSRequestCountFn(mw.GetRequestCount),
 	)
 	go tpsCollector.Start(ctx)
 
 	if infra.dockerClient != nil {
-		dockerWatcher := event.NewDockerEventWatcher(
-			infra.dockerClient,
-			incRepo,
-			bridge,
-			log,
-			event.WithDockerClusterName("fleet-primary"),
-		)
-		eg.Go(func() error {
-			return dockerWatcher.Start(ctx)
-		})
+		dockerWatcher := event.NewDockerEventWatcher(infra.dockerClient, incRepo, bridge, log, event.WithDockerClusterName("fleet-primary"))
+		eg.Go(func() error { return dockerWatcher.Start(ctx) })
 	}
 
 	nodeMetricsRepo := postgres.NewNodeMetricsRepo(infra.pgClient.Pool())
@@ -202,26 +195,10 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	sloUpdater := usecaseSLO.NewSLOSnapshotUpdater(obsRepo, log)
 	go sloUpdater.Start(ctx)
 
-	// Postgres-backed repos
-	driftRepo := postgres.NewDriftRepo(infra.pgClient.Pool())
-	correlationRepo := postgres.NewCorrelationRepo(infra.pgClient.Pool())
-	complianceRepo := postgres.NewComplianceRepo(infra.pgClient.Pool())
-	taggingRepo := postgres.NewTaggingRepo(infra.pgClient.Pool())
 	auditRepo := postgres.NewAuditRepo(infra.pgClient.Pool())
-	timelineRepo := postgres.NewTimelineRepo(infra.pgClient.Pool())
-	runbookRepo := postgres.NewRunbookRepo(infra.pgClient.Pool())
-	automationRepo := postgres.NewAutomationRepo(infra.pgClient.Pool())
-	changesRepo := postgres.NewChangesRepo(infra.pgClient.Pool())
-	promotionRepo := postgres.NewPromotionRepo(infra.pgClient.Pool())
-	reportingRepo := postgres.NewReportingRepo(infra.pgClient.Pool())
-	notificationRepo := postgres.NewNotificationRepo(infra.pgClient.Pool())
 	fleetRepo := postgres.NewFleetRepo(infra.pgClient.Pool())
 	backupRepo := postgres.NewBackupRepo(infra.pgClient.Pool())
-	backupEngine := infraBackup.NewEngine(
-		backupRepo,
-		drivers.NewDriverRegistry(),
-		storage.NewStorageRegistry(storage.NewLocalStorage("")),
-	)
+	backupEngine := infraBackup.NewEngine(backupRepo, drivers.NewDriverRegistry(), storage.NewStorageRegistry(storage.NewLocalStorage("")))
 	backupPool := infraBackup.NewWorkerPool(backupEngine, log, 50)
 	backupPool.Start(3)
 	stopFns = append(stopFns, backupPool.Stop)
@@ -239,7 +216,14 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		"email":   notifier.NewEmailNotifier(),
 		"webhook": notifier.NewWebhookNotifier(),
 	}
-	_ = usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers)
+	ruleEngine, err := usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers, usecaseAlert.WithLogger(log))
+	if err != nil {
+		for i := len(stopFns) - 1; i >= 0; i-- {
+			stopFns[i]()
+		}
+		return nil, fmt.Errorf("initializing alert rule engine: %w", err)
+	}
+	_ = ruleEngine
 	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
 
 	clientManager := infraCluster.NewClientManager(fleetRepo)
@@ -264,40 +248,24 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 
 	searchRepo := postgres.NewSearchRepo(infra.pgClient.Pool(), infra.cacheManager)
 	searchUsecase := usecaseSearch.NewUsecase(searchRepo)
-	promotionUsecase := usecasePromotion.NewUsecase(promotionRepo, infra.dockerRepo, auditRepo)
-
+	promotionUsecase := usecasePromotion.NewUsecase(postgres.NewPromotionRepo(infra.pgClient.Pool()), infra.dockerRepo, auditRepo)
 	gitopsController := usecaseGitops.NewController(prRepo, incRepo, txManager)
 	tenancyRepo := postgres.NewTenancyRepo(infra.pgClient.Pool())
 
-	costCalculator := usecaseCost.NewCalculator(computeHostRepo, metricsCollector)
-	capacityForecaster := usecaseCapacity.NewForecaster(
-		metricsCollector,
-		usecaseCapacity.WithComputeHostRepo(computeHostRepo),
-		usecaseCapacity.WithRepository(postgres.NewCapacityRepo(infra.pgClient.Pool())),
-	)
-	capacityHandler := adapthttp.NewCapacityHandler(capacityForecaster)
-
-	deploymentsHandler := adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(infra.k8sClient, infra.dockerRepo, fleetRepo, clientManager)))
-	explorerHandler := adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(infra.k8sClient, infra.dockerRepo, clientManager))
-
 	var healthCenterHandler *adapthttp.HealthCenterHandler
-	var k8sHandler *adapthttp.K8sResourceHandler
-	var k8sExecHandler *adapthttp.K8sExecHandler
-	var k8sLogsHandler *adapthttp.K8sLogsHandler
-
 	if infra.k8sAvailable {
 		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(infra.k8sClient, clientManager))
-		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(infra.k8sClient, clientManager), auditRepo)
-		k8sExecHandler = adapthttp.NewK8sExecHandler(infra.k8sClient, clientManager)
-		k8sLogsHandler = adapthttp.NewK8sLogsHandler(infra.k8sClient, clientManager)
-	} else {
-		k8sHandler = adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(nil, clientManager), auditRepo)
-		k8sExecHandler = adapthttp.NewK8sExecHandler(nil, clientManager)
-		k8sLogsHandler = adapthttp.NewK8sLogsHandler(nil, clientManager)
 	}
+	k8sHandler := adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(infra.k8sClient, clientManager), auditRepo)
+	k8sExecHandler := adapthttp.NewK8sExecHandler(infra.k8sClient, clientManager)
+	k8sLogsHandler := adapthttp.NewK8sLogsHandler(infra.k8sClient, clientManager)
 
 	logAggregator := logging.NewLogAggregator(2000)
 	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator)
+	centralizedLogs, chCleanup := wireCentralizedLogging(ctx, log)
+	if chCleanup != nil {
+		stopFns = append(stopFns, chCleanup)
+	}
 
 	if infra.dockerClient != nil {
 		startDockerLogStreamer(ctx, infra.dockerClient, logAggregator, log)
@@ -308,36 +276,37 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, publisher, gitopsController),
 		Docker:        adapthttp.NewDockerHandler(infra.dockerRepo, computeHostRepo, authUsecase, metricsCollector),
 		Overview:      overviewHandler,
-		Drift:         adapthttp.NewDriftHandler(driftRepo),
-		Correlation:   adapthttp.NewCorrelationHandler(correlationRepo),
-		Compliance:    adapthttp.NewComplianceHandler(complianceRepo),
-		Tagging:       adapthttp.NewTaggingHandler(taggingRepo),
-		Runbook:       adapthttp.NewRunbookHandler(runbookRepo, auditRepo),
+		Drift:         adapthttp.NewDriftHandler(postgres.NewDriftRepo(infra.pgClient.Pool())),
+		Correlation:   adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(infra.pgClient.Pool())),
+		Compliance:    adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(infra.pgClient.Pool())),
+		Tagging:       adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(infra.pgClient.Pool())),
+		Runbook:       adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(infra.pgClient.Pool()), auditRepo),
 		Observability: adapthttp.NewObservabilityHandler(obsRepo),
-		Capacity:      capacityHandler,
-		Changes:       adapthttp.NewChangeHandler(changesRepo),
+		Capacity:      adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(metricsCollector, usecaseCapacity.WithComputeHostRepo(computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(infra.pgClient.Pool())))),
+		Changes:       adapthttp.NewChangeHandler(postgres.NewChangesRepo(infra.pgClient.Pool())),
 		Promotion:     adapthttp.NewPromotionHandler(promotionUsecase),
-		Explorer:      explorerHandler,
-		Reporting:     adapthttp.NewReportingHandler(reportingRepo),
+		Explorer:      adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(infra.k8sClient, infra.dockerRepo, clientManager)),
+		Reporting:     adapthttp.NewReportingHandler(postgres.NewReportingRepo(infra.pgClient.Pool())),
 		HealthCenter:  healthCenterHandler,
 		Fleet:         adapthttp.NewFleetHandler(fleetRepo, auditRepo, importUsecase),
 		Audit:         adapthttp.NewAuditHandler(auditRepo),
-		Notification:  adapthttp.NewNotificationHandler(notificationRepo),
-		Automation:    adapthttp.NewAutomationHandler(automationRepo),
-		Timeline:      adapthttp.NewTimelineHandler(timelineRepo),
+		Notification:  adapthttp.NewNotificationHandler(postgres.NewNotificationRepo(infra.pgClient.Pool())),
+		Automation:    adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(infra.pgClient.Pool())),
+		Timeline:      adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(infra.pgClient.Pool())),
 		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo),
 		Search:        adapthttp.NewSearchHandler(searchUsecase),
-		Cost:          adapthttp.NewCostHandler(costCalculator),
+		Cost:          adapthttp.NewCostHandler(usecaseCost.NewCalculator(computeHostRepo, metricsCollector)),
 		Backup:        adapthttp.NewBackupHandler(backupUsecase),
 		Agents:        adapthttp.NewAgentHandler(agentRepo, orchestrator),
-		Deployments:   deploymentsHandler,
+		Deployments:   adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(infra.k8sClient, infra.dockerRepo, fleetRepo, clientManager))),
 		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
 		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
 		K8s:           k8sHandler,
 		K8sExec:       k8sExecHandler,
 		K8sLogs:       k8sLogsHandler,
 		Cloud:         cloudHandler,
-		LogStream:     logStreamHandler,
+		LogStream:       logStreamHandler,
+		CentralizedLogs: centralizedLogs,
 	}
 
 	return &appServices{
@@ -349,39 +318,27 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 
 func initLLMRegistry(cfg *config.Config, log *zap.Logger) *llm.ProviderRegistry {
 	registry := llm.NewProviderRegistry()
-	for _, pCfg := range cfg.LLM.Providers {
-		var client llm.Client
-		switch pCfg.Type {
+	for _, p := range cfg.LLM.Providers {
+		var c llm.Client
+		switch p.Type {
 		case "ollama":
-			client = llm.NewOllamaClientDynamic(llm.OllamaClientConfig{Endpoint: pCfg.Endpoint, Model: pCfg.Model})
+			c = llm.NewOllamaClientDynamic(llm.OllamaClientConfig{Endpoint: p.Endpoint, Model: p.Model})
 		case "openai":
-			client = llm.NewOpenAIClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
+			c = llm.NewOpenAIClient(p.Endpoint, p.Model, p.APIKey)
 		case "vllm":
-			client = llm.NewVLLMClient(pCfg.Endpoint, pCfg.Model, pCfg.APIKey)
+			c = llm.NewVLLMClient(p.Endpoint, p.Model, p.APIKey)
 		default:
-			log.Warn("unknown LLM provider type, skipping", zap.String("type", pCfg.Type))
+			log.Warn("unknown LLM provider type, skipping", zap.String("type", p.Type))
 			continue
 		}
-		cbClient := llm.NewCircuitBreakerClient(pCfg.Name, client, llm.DefaultCircuitBreakerConfig())
-		registry.Register(pCfg.Name, cbClient, llm.ProviderInfo{
-			Type:     pCfg.Type,
-			Model:    pCfg.Model,
-			Endpoint: pCfg.Endpoint,
-			Default:  pCfg.Default,
-		})
+		cb := llm.NewCircuitBreakerClient(p.Name, c, llm.DefaultCircuitBreakerConfig())
+		registry.Register(p.Name, cb, llm.ProviderInfo{Type: p.Type, Model: p.Model, Endpoint: p.Endpoint, Default: p.Default})
 	}
-
 	if registry.Count() == 0 && cfg.LLM.Endpoint != "" {
-		client := llm.NewOllamaClientDynamic(llm.OllamaClientConfig{Endpoint: cfg.LLM.Endpoint, Model: cfg.LLM.Model})
-		cbClient := llm.NewCircuitBreakerClient("default", client, llm.DefaultCircuitBreakerConfig())
-		registry.Register("default", cbClient, llm.ProviderInfo{
-			Type:     "ollama",
-			Model:    cfg.LLM.Model,
-			Endpoint: cfg.LLM.Endpoint,
-			Default:  true,
-		})
+		c := llm.NewOllamaClientDynamic(llm.OllamaClientConfig{Endpoint: cfg.LLM.Endpoint, Model: cfg.LLM.Model})
+		cb := llm.NewCircuitBreakerClient("default", c, llm.DefaultCircuitBreakerConfig())
+		registry.Register("default", cb, llm.ProviderInfo{Type: "ollama", Model: cfg.LLM.Model, Endpoint: cfg.LLM.Endpoint, Default: true})
 	}
-
 	return registry
 }
 
@@ -392,56 +349,34 @@ func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Clie
 			log.Warn("Failed to list Docker containers for log streaming", zap.Error(err))
 			return
 		}
-
 		for _, c := range containers {
 			cID := c.ID
 			cName := cID
-			if len(cID) > 12 {
-				cName = cID[:12]
-			}
-			if len(c.Names) > 0 {
-				cName = strings.TrimPrefix(c.Names[0], "/")
-			}
+			if len(cID) > 12 { cName = cID[:12] }
+			if len(c.Names) > 0 { cName = strings.TrimPrefix(c.Names[0], "/") }
 			ns := getContainerNamespace(cName)
-
 			go func(id, name, namespace string) {
-				reader, logErr := dockerClient.ContainerLogs(ctx, id, container.LogsOptions{
-					ShowStdout: true,
-					ShowStderr: true,
-					Follow:     true,
-					Tail:       "50",
-				})
+				reader, logErr := dockerClient.ContainerLogs(ctx, id, container.LogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "50"})
 				if logErr != nil {
 					log.Debug("Failed to open Docker log stream", zap.String("container", name), zap.Error(logErr))
 					return
 				}
 				defer reader.Close()
-
 				stdoutReader, stdoutWriter := io.Pipe()
 				stderrReader, stderrWriter := io.Pipe()
-
 				pipeStream := func(r io.Reader, stream, defaultLvl string) {
 					scanner := bufio.NewScanner(r)
 					for scanner.Scan() {
 						line := strings.TrimSpace(scanner.Text())
-						if line == "" {
-							continue
-						}
+						if line == "" { continue }
 						logAggregator.Ingest(logging.LogEntry{
-							Timestamp: time.Now().UTC(),
-							Namespace: namespace,
-							Pod:       name,
-							Container: name,
-							Stream:    stream,
-							Level:     detectLogLevel(line, defaultLvl),
-							Message:   line,
+							Timestamp: time.Now().UTC(), Namespace: namespace, Pod: name, Container: name,
+							Stream: stream, Level: detectLogLevel(line, defaultLvl), Message: line,
 						})
 					}
 				}
-
 				go pipeStream(stdoutReader, "stdout", "INFO")
 				go pipeStream(stderrReader, "stderr", "WARN")
-
 				_, _ = stdcopy.StdCopy(stdoutWriter, stderrWriter, reader)
 				_ = stdoutWriter.Close()
 				_ = stderrWriter.Close()
@@ -451,15 +386,15 @@ func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Clie
 }
 
 func detectLogLevel(msg string, defaultLvl string) string {
-	upper := strings.ToUpper(msg)
+	u := strings.ToUpper(msg)
 	switch {
-	case strings.Contains(upper, "ERROR") || strings.Contains(upper, "FATAL") || strings.Contains(upper, "PANIC") || strings.Contains(upper, "ERR"):
+	case strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC") || strings.Contains(u, "ERR"):
 		return "ERROR"
-	case strings.Contains(upper, "WARN"):
+	case strings.Contains(u, "WARN"):
 		return "WARN"
-	case strings.Contains(upper, "DEBUG") || strings.Contains(upper, "TRACE"):
+	case strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE"):
 		return "DEBUG"
-	case strings.Contains(upper, "INFO"):
+	case strings.Contains(u, "INFO"):
 		return "INFO"
 	default:
 		return defaultLvl
@@ -467,15 +402,85 @@ func detectLogLevel(msg string, defaultLvl string) string {
 }
 
 func getContainerNamespace(name string) string {
-	lower := strings.ToLower(name)
-	if strings.Contains(lower, "log") || strings.Contains(lower, "nats") {
+	l := strings.ToLower(name)
+	switch {
+	case strings.Contains(l, "log") || strings.Contains(l, "nats"):
 		return "logging"
-	}
-	if strings.Contains(lower, "vault") {
+	case strings.Contains(l, "vault"):
 		return "vault"
-	}
-	if strings.Contains(lower, "stage") || strings.Contains(lower, "staging") {
+	case strings.Contains(l, "stage") || strings.Contains(l, "staging"):
 		return "staging"
+	default:
+		return "production"
 	}
-	return "production"
+}
+
+func wireCentralizedLogging(ctx context.Context, log *zap.Logger) (*adapthttp.LogHandler, func()) {
+	chHost := os.Getenv("CLICKHOUSE_HOST")
+	if chHost == "" {
+		chHost = os.Getenv("K8S_CLICKHOUSE_HOST")
+	}
+	chDSN := os.Getenv("CLICKHOUSE_DSN")
+	if chDSN == "" {
+		chDSN = os.Getenv("K8S_CLICKHOUSE_DSN")
+	}
+
+	if chHost != "" || chDSN != "" {
+		cfg := infraClickhouse.DefaultConfig()
+		cfg.Host = chHost
+		if p, err := strconv.Atoi(os.Getenv("CLICKHOUSE_PORT")); err == nil {
+			cfg.Port = p
+		}
+		if db := os.Getenv("CLICKHOUSE_DB"); db != "" {
+			cfg.Database = db
+		}
+		if u := os.Getenv("CLICKHOUSE_USER"); u != "" {
+			cfg.Username = u
+		}
+		cfg.Password = os.Getenv("CLICKHOUSE_PASSWORD")
+		cfg.DialTimeout = 3 * time.Second
+
+		cCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		client, err := infraClickhouse.NewClient(cCtx, cfg)
+		cancel()
+		if err == nil {
+			log.Info("ClickHouse centralized logging connected", zap.String("host", cfg.Host))
+			service := usecaseLogging.NewService(infraClickhouse.NewLogRepository(client, nil))
+			return adapthttp.NewLogHandler(service, &chStatusProvider{client: client}), func() { _ = client.Close() }
+		}
+		log.Warn("ClickHouse connection failed, using in-memory ringbuffer fallback", zap.Error(err))
+	} else {
+		log.Info("ClickHouse not configured, using resilient in-memory ringbuffer fallback")
+	}
+
+	memRepo := logging.NewMemoryLogRepo(50000)
+	return adapthttp.NewLogHandler(usecaseLogging.NewService(memRepo), memRepo), nil
+}
+
+type chStatusProvider struct {
+	client *infraClickhouse.Client
+}
+
+func (p *chStatusProvider) GetStatus(ctx context.Context) (*adapthttp.LogEngineStatus, error) {
+	start := time.Now()
+	err := p.client.Ping(ctx)
+	latency := float64(time.Since(start).Microseconds()) / 1000.0
+	status := "connected"
+	if err != nil {
+		status = "fallback"
+	}
+	var total int64
+	if conn, cErr := p.client.Conn(ctx); cErr == nil {
+		var cnt uint64
+		if scanErr := conn.QueryRow(ctx, "SELECT count() FROM cluster_logs").Scan(&cnt); scanErr == nil {
+			total = int64(cnt)
+		}
+	}
+	return &adapthttp.LogEngineStatus{
+		Engine:        "ClickHouse MergeTree",
+		Status:        status,
+		LatencyMS:     latency,
+		TotalRecords:  total,
+		RetentionDays: 30,
+	}, nil
 }

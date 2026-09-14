@@ -1,0 +1,342 @@
+﻿/* ==========================================================================
+   TOTP 2FA Setup Drawers, Stepper & Security Widgets Stylesheet (< 350 lines)
+   frontend-vue/src/assets/styles/components/totp-drawers.css
+   RFC 6238 Time-based One-Time Password Architecture
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Stepper Navigation Indicators (TOTPStepWizard.vue)
+   -------------------------------------------------------------------------- */
+.stepper-card {
+  padding: 16px 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  width: 100%;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.step-circle {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted, #94a3b8);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.step-label-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.step-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted, #94a3b8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.step-desc {
+  font-size: 10px;
+  color: var(--text-muted, #94a3b8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border-subtle, rgba(255, 255, 255, 0.08));
+  margin: 0 10px;
+  min-width: 12px;
+}
+
+/* Stepper States */
+.step-item.step-active .step-circle {
+  background: var(--accent-cyan, #06b6d4);
+  border-color: var(--accent-cyan, #06b6d4);
+  color: #000;
+  box-shadow: 0 0 14px rgba(6, 182, 212, 0.5);
+}
+.step-item.step-active .step-title { color: var(--accent-cyan, #06b6d4); }
+.step-item.step-completed .step-circle {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--accent-emerald, #10b981);
+  color: var(--accent-emerald, #10b981);
+}
+.step-item.step-completed .step-title { color: var(--text-primary, #f8fafc); }
+.step-item.step-completed .step-line { background: rgba(16, 185, 129, 0.4); }
+.step-item.step-disabled { opacity: 0.5; }
+
+/* --------------------------------------------------------------------------
+   2. QR Code Viewer & Secret Key Widget (QRCodeDisplay.vue)
+   -------------------------------------------------------------------------- */
+.qr-showcase {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.qr-box-wrapper {
+  padding: 16px;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(6, 182, 212, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.qr-box-wrapper:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.6), 0 0 28px rgba(6, 182, 212, 0.35);
+}
+
+.qr-image-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 100%;
+}
+.qr-img {
+  width: 220px;
+  height: 220px;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  display: block;
+  object-fit: contain;
+}
+
+.qr-loading-placeholder {
+  width: 220px;
+  height: 220px;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #000;
+  font-size: 12px;
+}
+
+.manual-secret-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 500px;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+}
+.manual-label { font-size: 12px; color: var(--text-secondary, #94a3b8); line-height: 1.4; }
+
+.secret-display-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
+  padding: 8px 14px;
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.secret-key {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-cyan, #06b6d4);
+  letter-spacing: 1.5px;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  text-align: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.copy-btn {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  touch-action: manipulation;
+}
+
+.secret-hint { font-size: 11px; color: var(--text-muted, #94a3b8); word-break: break-word; }
+
+/* --------------------------------------------------------------------------
+   3. Recovery Codes Card, Actions & Print (RecoveryCodesCard.vue)
+   -------------------------------------------------------------------------- */
+.recovery-codes-card-printable {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.alert-box-warning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 12px;
+  color: #fcd34d;
+  font-size: 13px;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+.alert-box-warning .alert-icon { font-size: 18px; flex-shrink: 0; }
+.alert-box-warning .alert-text { flex: 1; }
+
+.recovery-codes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.recovery-code-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  position: relative;
+  transition: border-color 0.2s, background 0.2s;
+  box-sizing: border-box;
+}
+.recovery-code-card:hover {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.code-number { font-size: 11px; color: var(--text-muted, #94a3b8); font-weight: 600; }
+.code-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-amber, #f59e0b);
+  letter-spacing: 2px;
+}
+
+.recovery-actions-bar {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.recovery-action-btn,
+.recovery-actions-bar .btn {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  touch-action: manipulation;
+}
+
+.acknowledgement-group {
+  margin-top: 4px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed var(--border-medium, rgba(255, 255, 255, 0.15));
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+
+.custom-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.custom-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-cyan, #06b6d4);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.checkbox-text {
+  font-size: 13px;
+  color: var(--text-primary, #f8fafc);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Print Stylesheet for Recovery Codes */
+@media print {
+  body * { visibility: hidden; }
+  .recovery-codes-card-printable,
+  .recovery-codes-card-printable * { visibility: visible; }
+  .recovery-codes-card-printable {
+    position: absolute; left: 0; top: 0; width: 100%;
+    color: #000 !important; background: #fff !important; padding: 20px;
+  }
+  .recovery-code-card {
+    background: #f4f4f5 !important; border: 1px solid #d4d4d8 !important; color: #000 !important;
+  }
+  .code-value { color: #000 !important; }
+  .recovery-actions-bar,
+  .acknowledgement-group,
+  .step-actions { display: none !important; }
+}

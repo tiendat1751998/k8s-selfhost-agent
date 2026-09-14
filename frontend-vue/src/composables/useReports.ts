@@ -80,13 +80,13 @@ export function useReports() {
   ])
 
   const reportColumns: Column<PlatformReport>[] = [
-    { key: 'id', label: 'Report ID', sortable: true, width: '110px' },
-    { key: 'title', label: 'Report Title & Executive Scope', sortable: true },
-    { key: 'type', label: 'Category', sortable: true, width: '130px' },
-    { key: 'format', label: 'Format', sortable: true, width: '110px' },
-    { key: 'status', label: 'Status', sortable: true, width: '130px' },
-    { key: 'created_at', label: 'Generated Date', sortable: true, width: '170px' },
-    { key: 'actions', label: 'Actions', align: 'right', width: '280px' }
+    { key: 'id', label: 'Report ID', sortable: true, width: '10%' },
+    { key: 'title', label: 'Report Title & Executive Scope', sortable: true, width: '36%' },
+    { key: 'type', label: 'Category', sortable: true, width: '12%' },
+    { key: 'format', label: 'Format', sortable: true, width: '8%' },
+    { key: 'status', label: 'Status', sortable: true, width: '12%' },
+    { key: 'created_at', label: 'Generated Date', sortable: true, width: '10%' },
+    { key: 'actions', label: 'Actions', align: 'right', width: '12%' }
   ]
 
   let feedbackTimer: ReturnType<typeof setTimeout> | null = null

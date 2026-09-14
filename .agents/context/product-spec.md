@@ -8,22 +8,22 @@
 
 ## 1. Vision
 
-Xây dựng **all-in-one self-hosted platform** cho dev/devops/devsecops — kết hợp sức mạnh multi-cluster management của Rancher, tính modular của KubeSphere, và tính lightweight dễ deploy của Portainer. Tích hợp **AI-powered** monitoring & auto-remediation mà không platform nào trên thị trường có.
+Build an **all-in-one self-hosted platform** for dev/devops/devsecops — combining the multi-cluster management power of Rancher, the modularity of KubeSphere, and the lightweight deployment ease of Portainer, coupled with **AI-powered** monitoring and auto-remediation.
 
 ### One-liner
-> **"Rancher + KubeSphere + AI Auto-Remediation trong một binary dễ deploy."**
+> **"Rancher + KubeSphere + AI Auto-Remediation in a single easy-to-deploy binary."**
 
 ---
 
 ## 2. Target Users
 
-| Tier | Persona | Nhu cầu chính |
+| Tier | Persona | Primary Needs |
 |---|---|---|
-| **Solo Dev** | Freelancer / indie dev tự manage infra | Simple deploy, 1-click app install, DB backup |
+| **Solo Dev** | Freelancer / indie dev managing own infra | Simple deploy, 1-click app install, DB backup |
 | **Small Team** (2-10) | Startup / small company | Multi-user RBAC, shared cluster, CI/CD |
 | **Enterprise** (10+) | Multi-team, multi-project | Multi-tenant, compliance, audit trail, fleet management |
 
-Platform phải **scale down** cho solo dev (single binary, 5 phút setup) và **scale up** cho enterprise (HA, multi-cluster, policy enforcement).
+The platform must **scale down** for solo devs (single binary, 5-minute setup) and **scale up** for enterprises (HA, multi-cluster, policy enforcement).
 
 ---
 
@@ -41,9 +41,9 @@ Platform phải **scale down** cho solo dev (single binary, 5 phút setup) và *
 | Open Source | ✅ | ✅ | ⚠️ CE/BE | ❌ Paid | ✅ |
 
 ### Differentiators (3 pillars)
-1. **AI-Powered** — RCA, auto-remediation, intelligent monitoring (không ai có)
-2. **All-in-One** — Dev + DevOps + DevSecOps trong 1 platform
-3. **Lightweight Self-Host** — Single binary, 5 phút deploy, không cần 3-node cluster như Rancher
+1. **AI-Powered** — RCA, auto-remediation, intelligent monitoring (unique)
+2. **All-in-One** — Dev + DevOps + DevSecOps in one unified platform
+3. **Lightweight Self-Host** — Single binary, 5-minute deployment, no 3-node cluster prerequisite
 
 ---
 
@@ -56,28 +56,28 @@ Platform phải **scale down** cho solo dev (single binary, 5 phút setup) và *
 - Cluster health dashboard (CPU, memory, pods, nodes)
 - Resource explorer (Pods, Deployments, Services, ConfigMaps, Secrets)
 - Multi-cluster fleet view
-- **Đã có:** ✅ Phần lớn
+- **Status:** ✅ Substantially implemented
 
 #### M02: AI Incident Center
 - Real-time anomaly detection
 - AI-powered Root Cause Analysis (Gemini)
 - Confidence scoring & risk assessment
 - Auto-remediation suggestions + execution
-- **Đã có:** ✅ Core implemented
+- **Status:** ✅ Core implemented
 
 #### M03: GitOps Engine
 - Git baseline configuration management
 - Live drift detection (cluster state vs Git)
 - Auto-reconciliation & rollback
 - Multi-cluster GitOps deployment (Fleet-like)
-- **Đã có:** ✅ Drift detection, ⚠️ cần mở rộng multi-cluster deploy
+- **Status:** ✅ Drift detection, ⚠️ expand multi-cluster deployments
 
 #### M04: RBAC & Multi-Tenancy
 - User/team/role management
 - Tenant isolation (data + namespace level)
 - Project-level & namespace-level permissions
 - Audit trail (who did what, when)
-- **Đã có:** ✅ Core RBAC + tenant isolation
+- **Status:** ✅ Core RBAC + tenant isolation
 
 #### M05: Observability Stack
 - Metrics dashboard (Prometheus integration)
@@ -85,11 +85,11 @@ Platform phải **scale down** cho solo dev (single binary, 5 phút setup) và *
 - Distributed tracing (OTEL)
 - SLO tracking & burn rate
 - Alert rules + notification channels (Slack, email, webhook)
-- **Đã có:** ✅ Metrics + tracing, ⚠️ log aggregation cần thêm, ⚠️ alerting cần mở rộng
+- **Status:** ✅ Metrics + tracing, ⚠️ log aggregation pending, ⚠️ alerting expansion
 
 ---
 
-### P1 — DevOps Essentials (Ship trong Phase 2)
+### P1 — DevOps Essentials (Ship in Phase 2)
 
 #### M06: DB Backup & Restore 🆕
 - **Architecture:** Operator-pattern CRD-driven
@@ -150,15 +150,15 @@ Platform phải **scale down** cho solo dev (single binary, 5 phút setup) và *
   - GitHub Actions webhook integration
 
 #### M09: Secret Management 🆕
-- Encrypted secret storage (AES-256-GCM — đã có crypto package)
+- Encrypted secret storage (AES-256-GCM — implemented in crypto package)
 - Secret rotation scheduling
 - HashiCorp Vault integration (optional)
 - Leaked secret scanning in Git repos
 - Secret injection into pods (mutating webhook)
 
 #### M10: Centralized Logging 🆕
-- Log collection agent (DaemonSet, tương tự Fluentd/Promtail)
-- Log storage (embedded hoặc external Loki)
+- Log collection agent (DaemonSet, similar to Fluentd/Promtail)
+- Log storage (embedded or external Loki)
 - Full-text search & filter
 - Log-based alerting
 - Log retention & rotation policies
@@ -242,10 +242,10 @@ Platform phải **scale down** cho solo dev (single binary, 5 phút setup) và *
 ```
 
 ### Design Principles
-1. **Core monolith first** — API, RBAC, cluster management, UI đều trong 1 binary
-2. **Optional microservices** — Backup engine, log collector, pipeline runner có thể chạy riêng khi cần scale
-3. **Single binary deploy** — Solo dev chỉ cần `./k8sselfhost` + Postgres + Redis
-4. **HA deploy** — Enterprise chạy 3 replicas + external Postgres + Redis cluster
+1. **Core monolith first** — API, RBAC, cluster management, UI all in single binary
+2. **Optional microservices** — Backup engine, log collector, pipeline runner can run independently when scaling
+3. **Single binary deploy** — Solo devs only need `./k8sselfhost` + Postgres + Redis
+4. **HA deploy** — Enterprise runs 3 replicas + external Postgres + Redis cluster
 
 ---
 
@@ -253,7 +253,7 @@ Platform phải **scale down** cho solo dev (single binary, 5 phút setup) và *
 
 | Requirement | Target |
 |---|---|
-| **Startup time** | < 10 giây (cold start) |
+| **Startup time** | < 10 seconds (cold start) |
 | **Memory footprint** | < 512MB (core monolith, idle) |
 | **API latency** | P99 < 200ms (CRUD operations) |
 | **Concurrent users** | 100+ (single instance) |
@@ -275,7 +275,7 @@ Platform phải **scale down** cho solo dev (single binary, 5 phút setup) và *
 | Database | PostgreSQL 16 | Already built, 26 migrations |
 | Cache | Redis 7 | Already built |
 | Messaging | NATS JetStream | Already built |
-| Frontend | **Vue.js** (migration from Vanilla JS) | Rancher dashboard dùng Vue, scalable cho 14+ modules |
+| Frontend | **Vue.js** (migration from Vanilla JS) | Rancher dashboard uses Vue, proven scale for 14+ modules |
 | K8s Client | client-go v0.36 | Already built |
 | Container | Docker API v28.5 | Already built |
 | Observability | OTEL + Prometheus + Zap | Already built |
@@ -290,8 +290,9 @@ Platform phải **scale down** cho solo dev (single binary, 5 phút setup) và *
 
 | Question | Decision |
 |---|---|
-| **Q1: Tên sản phẩm** | Giữ "K8s Self-Host" tạm thời, đặt tên chính thức sau |
-| **Q2: Frontend** | ✅ **Chuyển sang Vue.js** — scalable cho 14+ modules, Rancher dashboard cũng dùng Vue |
-| **Q3: Backup storage** | ✅ **Embedded MinIO + external S3 + local filesystem** — zero-config cho solo dev |
-| **Q4: Log aggregation** | ✅ **Built-in simple + external Loki/Elasticsearch** — flexible cho mọi tier |
-| **Q5: Timeline** | Không deadline cụ thể, iterate từng phase, quality over speed |
+| **Q1: Product Name** | Keep "K8s Self-Host" temporarily, formalize branding later |
+| **Q2: Frontend** | ✅ **Migrate to Vue.js** — proven scale for 14+ modules, matches Rancher architecture |
+| **Q3: Backup storage** | ✅ **Embedded MinIO + external S3 + local filesystem** — zero-config for solo dev |
+| **Q4: Log aggregation** | ✅ **Built-in simple + external Loki/Elasticsearch** — flexible across tiers |
+| **Q5: Timeline** | No rigid deadlines, iterate through phases, craftsmanship over speed |
+
