@@ -6,11 +6,7 @@ import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
 import ClickHouseEngineBadge from '../components/logs/ClickHouseEngineBadge.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import type { LogFilterParams as ApiLogFilterParams } from '../api/logging'
-
-export interface LogFilterParams extends ApiLogFilterParams {
-  attributes?: Record<string, string>
-}
+import type { LogFilterParams } from '../api/logging'
 
 const {
   logStore, searchKeyword, selectedLevel, autoScroll, isScrollLocked, linesStreamed,
@@ -73,6 +69,7 @@ async function runHistoricalQuery(isLoadMore = false) {
     limit: selectedHistoricalLimit.value,
     offset: currentOffset.value,
     container_name: target.type === 'service' ? target.id : undefined,
+    node: target.type === 'node' ? target.id : undefined,
     attributes: target.type === 'node' ? { node: target.id } : undefined,
   }
 
@@ -89,6 +86,8 @@ async function runHistoricalQuery(isLoadMore = false) {
         log_level: filter.log_level,
         interval_seconds: cfg.interval,
         container_name: filter.container_name,
+        node: target.type === 'node' ? target.id : undefined,
+        attributes: target.type === 'node' ? { node: target.id } : undefined,
       }))
     }
     await Promise.all(promises)
@@ -115,6 +114,7 @@ async function preloadRecentLogs(target: LogTarget) {
       limit: 50,
       query: kw ? kw : undefined,
       container_name: target.type === 'service' ? target.id : undefined,
+      node: target.type === 'node' ? target.id : undefined,
       attributes: target.type === 'node' ? { node: target.id } : undefined,
       log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
     }
@@ -149,6 +149,8 @@ async function fetchLiveHistogram() {
     end_time: now.toISOString(),
     interval_seconds: 60,
     container_name: target.type === 'service' ? target.id : undefined,
+    node: target.type === 'node' ? target.id : undefined,
+    attributes: target.type === 'node' ? { node: target.id } : undefined,
   }).catch(() => {})
 }
 
@@ -183,6 +185,7 @@ async function handleHistogramFilterRange(range: { start: string; end: string })
     limit: selectedHistoricalLimit.value,
     offset: 0,
     container_name: target.type === 'service' ? target.id : undefined,
+    node: target.type === 'node' ? target.id : undefined,
     attributes: target.type === 'node' ? { node: target.id } : undefined,
   }
   try {
@@ -222,7 +225,7 @@ const targetFilteredLogs = computed(() => {
     if (mode.value === 'live') {
       const q = target.id.toLowerCase()
       if (target.type === 'node') {
-        const n = (log.node || log.attributes?.node || log.pod || '').toLowerCase()
+        const n = (log.node || log.attributes?.node || log.attributes?.node_name || log.pod || '').toLowerCase()
         if (!n.includes(q)) return false
       } else if (target.type === 'service') {
         const s = (log.service || log.container || log.attributes?.app || log.attributes?.service || log.pod || '').toLowerCase()
