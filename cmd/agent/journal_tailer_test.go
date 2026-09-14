@@ -2,6 +2,7 @@
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"strings"
 	"testing"
@@ -56,7 +57,7 @@ func TestJournalTailer_IngestsJSONEntries(t *testing.T) {
 	fakeOutput := `{"MESSAGE":"Service started successfully","__REALTIME_TIMESTAMP":"1726315200000000","_SYSTEMD_UNIT":"kubelet.service","PRIORITY":"6"}
 {"MESSAGE":"Connection reset by peer","__REALTIME_TIMESTAMP":"1726315201000000","_SYSTEMD_UNIT":"docker.service","PRIORITY":"3"}
 `
-	tailer.streamReader = func(ctx context.Context) (ioCloserReader, error) {
+	tailer.streamReader = func(ctx context.Context) (io.ReadCloser, error) {
 		return &stringCloser{Reader: strings.NewReader(fakeOutput)}, nil
 	}
 
@@ -101,11 +102,6 @@ func TestJournalTailer_IngestsJSONEntries(t *testing.T) {
 	if results[1].Level != "error" {
 		t.Errorf("expected priority 3 to map to 'error', got '%s'", results[1].Level)
 	}
-}
-
-type ioCloserReader interface {
-	Read(p []byte) (n int, err error)
-	Close() error
 }
 
 type stringCloser struct {
