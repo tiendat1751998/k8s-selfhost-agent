@@ -1,24 +1,101 @@
 <template>
   <div class="view-container">
-    <!-- Desktop View Header -->
-    <div class="view-header desktop-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-emerald"></span>
-          <span>SECURITY GOVERNANCE</span>
-        </div>
-        <h1 class="view-title">Security Gates & Vulnerability Audit</h1>
-        <p class="view-desc">
-          Continuous container vulnerability scanning, deployment gate enforcement, and secret exposure monitoring.
-        </p>
+    <!-- Sleek Unified 38px Enterprise Toolbar (.secops-toolbar-sleek) -->
+    <div class="secops-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="DevSecOps Management Toolbar">
+      <!-- Zone 1 (Left - Search) -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Filter CVE, package, secret..."
+          class="toolbar-search-input"
+          aria-label="Filter CVE, package, secret"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
       </div>
 
-      <div class="header-actions">
-        <button class="btn btn-secondary" :disabled="securityStore.loading || isScanning" @click="securityStore.fetchAll()">
-          <BaseIcon :name="securityStore.loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ securityStore.loading ? 'Syncing...' : 'Refresh Compliance' }}</span>
+      <!-- Zone 2 (Center-Left - Capsule Tabs) -->
+      <div class="toolbar-nav-pills" role="tablist" aria-label="DevSecOps Navigation Tabs">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'vulnerabilities'"
+          class="toolbar-pill-btn"
+          :class="{ active: activeTab === 'vulnerabilities' }"
+          @click="activeTab = 'vulnerabilities'"
+        >
+          <BaseIcon name="shield" size="xs" />
+          <span>Vulnerabilities</span>
+          <span class="pill-badge">{{ filteredCveFindings.length }}</span>
         </button>
-        <button class="btn btn-primary" :disabled="securityStore.loading || isScanning" @click="runSecurityScan">
-          <BaseIcon name="zap" size="xs" /> <span>{{ isScanning ? 'Auditing Cluster...' : 'Run Full Security Audit' }}</span>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'secrets'"
+          class="toolbar-pill-btn"
+          :class="{ active: activeTab === 'secrets' }"
+          @click="activeTab = 'secrets'"
+        >
+          <BaseIcon name="lock" size="xs" />
+          <span>Exposed Secrets</span>
+          <span class="pill-badge">{{ filteredSecretAudits.length }}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'all'"
+          class="toolbar-pill-btn"
+          :class="{ active: activeTab === 'all' }"
+          @click="activeTab = 'all'"
+        >
+          <BaseIcon name="layers" size="xs" />
+          <span>All</span>
+          <span class="pill-badge">{{ filteredCveFindings.length + filteredSecretAudits.length }}</span>
+        </button>
+      </div>
+
+      <!-- Zone 3 (Center-Right - Inline KPI Strip) -->
+      <div class="toolbar-kpi-strip font-mono" role="status" aria-label="DevSecOps Telemetry KPI summary">
+        <span
+          class="kpi-badge font-mono"
+          :class="gatePassed ? 'kpi-badge-passed' : 'kpi-badge-restricted'"
+        >
+          [GATE {{ gatePassed ? 'PASSED' : 'RESTRICTED' }}] {{ criticalCveCount }} Crit · {{ exposedSecretsCount }} Secrets · {{ securityPostureScore }} Posture
+        </span>
+      </div>
+
+      <!-- Zone 4 (Right - Actions) -->
+      <div class="toolbar-actions-group">
+        <button
+          type="button"
+          class="toolbar-btn btn-secondary"
+          :disabled="securityStore.loading || isScanning"
+          title="Refresh Compliance"
+          aria-label="Sync Compliance"
+          @click="securityStore.fetchAll()"
+        >
+          <BaseIcon :name="securityStore.loading ? 'clock' : 'refresh'" size="xs" :class="{ 'spin-icon': securityStore.loading }" />
+          <span>Sync</span>
+        </button>
+        <button
+          type="button"
+          class="toolbar-btn btn-primary"
+          :disabled="securityStore.loading || isScanning"
+          title="Run Full Security Audit"
+          aria-label="Run Audit"
+          @click="runSecurityScan"
+        >
+          <BaseIcon name="zap" size="xs" />
+          <span>Run Audit</span>
         </button>
       </div>
     </div>
@@ -68,26 +145,10 @@
       <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Security HUD Metric Cards -->
-    <SecurityScoreCards
-      class="desktop-only"
-      :posture-score="securityPostureScore"
-      :passing-rules="passingRulesCount"
-      :total-rules="totalRulesCount"
-      :critical-cves="criticalCveCount"
-      :gate-passed="gatePassed"
-      :exposed-secrets="exposedSecretsCount"
-      :total-violations="totalViolationsCount"
-      :high-violations="highCveCount"
-      :med-violations="mediumCveCount"
-      :low-violations="lowCveCount"
-      :frameworks-count="securityStore.frameworks.length"
-      :framework-names="frameworkNames"
-    />
-
     <!-- Desktop View: High-density Vulnerability Matrix & Secrets Grid -->
     <div class="desktop-only-table" style="min-width: 0; width: 100%; max-width: 100%; display: flex; flex-direction: column; gap: 24px; box-sizing: border-box;">
       <VulnerabilityScanTable
+        v-if="activeTab === 'all' || activeTab === 'vulnerabilities'"
         :findings="filteredCveFindings"
         :severities="severities"
         :active-filter="activeFilter"
@@ -103,6 +164,7 @@
       />
 
       <SecretAuditGrid
+        v-if="activeTab === 'all' || activeTab === 'secrets'"
         :secrets="filteredSecretAudits"
         :loading="securityStore.loading"
         @rotate-secret="rotateSecret"
@@ -191,13 +253,15 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import '../assets/styles/views/secops.css'
 import { useDevSecOps } from '../composables/useDevSecOps'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import SecurityScoreCards from '../components/secops/SecurityScoreCards.vue'
 import VulnerabilityScanTable from '../components/secops/VulnerabilityScanTable.vue'
 import SecretAuditGrid from '../components/secops/SecretAuditGrid.vue'
 import SecOpsMobileCards from '../components/secops/SecOpsMobileCards.vue'
+
+const activeTab = ref<'all' | 'vulnerabilities' | 'secrets'>('all')
 
 const {
   securityStore,
@@ -211,15 +275,9 @@ const {
   filteredSecretAudits,
   criticalCveCount,
   highCveCount,
-  mediumCveCount,
-  lowCveCount,
-  totalViolationsCount,
   exposedSecretsCount,
   gatePassed,
-  totalRulesCount,
-  passingRulesCount,
   securityPostureScore,
-  frameworkNames,
   severities,
   getResourceIcon,
   getSeverityBadgeClass,
