@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BaseIcon from '../../ui/BaseIcon.vue'
+
 export type AlertTabType = 'active' | 'muted' | 'all'
 
 interface Props {
@@ -15,45 +17,53 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="alert-modal-tabs">
-    <button
-      type="button"
-      class="tab-btn"
-      :class="{ 'tab-btn-active': activeTab === 'active' }"
-      @click="emit('update:activeTab', 'active')"
-    >
-      <span class="tab-icon">🚨</span>
-      <span>Active Alerts</span>
-      <span class="tab-count" :class="activeCount > 0 ? 'count-rose' : 'count-muted'">
-        {{ activeCount }}
-      </span>
-    </button>
+  <div class="alert-modal-tabs-wrapper">
+    <div class="alert-modal-tabs" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === 'active'"
+        class="tab-btn"
+        :class="{ 'tab-btn-active': activeTab === 'active' }"
+        @click="emit('update:activeTab', 'active')"
+      >
+        <span class="tab-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
+        <span>Active Alerts</span>
+        <span class="tab-count" :class="activeCount > 0 ? 'count-rose' : 'count-muted'">
+          {{ activeCount }}
+        </span>
+      </button>
 
-    <button
-      type="button"
-      class="tab-btn"
-      :class="{ 'tab-btn-active': activeTab === 'muted' }"
-      @click="emit('update:activeTab', 'muted')"
-    >
-      <span class="tab-icon">🔕</span>
-      <span>Silenced / Muted</span>
-      <span class="tab-count" :class="mutedCount > 0 ? 'count-amber' : 'count-muted'">
-        {{ mutedCount }}
-      </span>
-    </button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === 'muted'"
+        class="tab-btn"
+        :class="{ 'tab-btn-active': activeTab === 'muted' }"
+        @click="emit('update:activeTab', 'muted')"
+      >
+        <span class="tab-icon"><BaseIcon name="bell-off" size="xs" /></span>
+        <span>Silenced / Muted</span>
+        <span class="tab-count" :class="mutedCount > 0 ? 'count-amber' : 'count-muted'">
+          {{ mutedCount }}
+        </span>
+      </button>
 
-    <button
-      type="button"
-      class="tab-btn"
-      :class="{ 'tab-btn-active': activeTab === 'all' }"
-      @click="emit('update:activeTab', 'all')"
-    >
-      <span class="tab-icon">📋</span>
-      <span>All Alerts</span>
-      <span class="tab-count count-cyan">
-        {{ activeCount + mutedCount }}
-      </span>
-    </button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === 'all'"
+        class="tab-btn"
+        :class="{ 'tab-btn-active': activeTab === 'all' }"
+        @click="emit('update:activeTab', 'all')"
+      >
+        <span class="tab-icon"><BaseIcon name="layers" size="xs" /></span>
+        <span>All Alerts</span>
+        <span class="tab-count count-cyan">
+          {{ activeCount + mutedCount }}
+        </span>
+      </button>
+    </div>
   </div>
 </template>
 
