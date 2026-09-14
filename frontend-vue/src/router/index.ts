@@ -77,9 +77,7 @@ const router = createRouter({
     },
     {
       path: '/docker',
-      name: 'docker',
-      component: () => import('../views/DockerSwarmView.vue'),
-      meta: { requiresAuth: true }
+      redirect: (to) => ({ path: '/fleet', query: { provider: 'swarm', ...to.query } })
     },
     {
       path: '/explorer',
