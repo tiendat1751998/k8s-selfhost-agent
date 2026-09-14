@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	dockerclient "github.com/docker/docker/client"
+
 	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
 
@@ -53,6 +55,22 @@ func setupHandler(collector *SystemCollector, authToken string, logServers ...*L
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(metrics)
+	})
+
+	mux.HandleFunc("/logs/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+			return
+		}
+		if !isAuthorized(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+		ls.HandleEngineStatus(w, r)
 	})
 
 	mux.HandleFunc("/logs/services", func(w http.ResponseWriter, r *http.Request) {
@@ -158,6 +176,16 @@ func main() {
 				logger.Warn("Initial log ingestion into log engine encountered warning", slog.String("error", err.Error()))
 			}
 		}()
+
+		// Continuous container log tailing
+		if dockerCli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation()); err == nil {
+			containerTailer := NewContainerTailer(dockerCli, engineSrc.Writer(), logger)
+			go containerTailer.Start(ctx)
+		}
+
+		// Continuous journalctl log tailing
+		journalTailer := NewJournalTailer(engineSrc.Writer(), logger)
+		go journalTailer.Start(ctx)
 	} else {
 		logger.Warn("Failed to initialize columnar log engine, falling back to standard sources", slog.String("error", err.Error()))
 	}

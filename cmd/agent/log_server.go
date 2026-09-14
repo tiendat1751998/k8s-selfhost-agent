@@ -59,9 +59,10 @@ type LogSource interface {
 
 // LogServer manages log reading and HTTP handling on k8s-agent.
 type LogServer struct {
-	logDir  string
-	sources []LogSource
-	mu      sync.RWMutex
+	logDir    string
+	sources   []LogSource
+	engineSrc *EngineLogSource
+	mu        sync.RWMutex
 }
 
 // LogServerOption configures LogServer.
@@ -81,6 +82,9 @@ func WithLogSource(src LogSource) LogServerOption {
 	return func(s *LogServer) {
 		if src != nil {
 			s.sources = append(s.sources, src)
+			if eng, ok := src.(*EngineLogSource); ok {
+				s.engineSrc = eng
+			}
 		}
 	}
 }
@@ -119,6 +123,37 @@ func (s *LogServer) AddSource(src LogSource) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sources = append(s.sources, src)
+	if eng, ok := src.(*EngineLogSource); ok {
+		s.engineSrc = eng
+	}
+}
+
+// BlockCount returns total indexed blocks in the embedded columnar log engine.
+func (e *EngineLogSource) BlockCount() int {
+	if e == nil || e.reader == nil {
+		return 0
+	}
+	return e.reader.BlockCount()
+}
+
+// HandleEngineStatus handles GET /logs/status reporting columnar engine health and blocks.
+func (s *LogServer) HandleEngineStatus(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	eng := s.engineSrc
+	s.mu.RUnlock()
+
+	blocks := 0
+	if eng != nil {
+		blocks = eng.BlockCount()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"engine": "k8s-agent embedded logengine",
+		"blocks": blocks,
+		"status": "healthy",
+	})
 }
 
 // ListServices returns all unique service names available across all log sources.
