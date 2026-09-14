@@ -123,7 +123,9 @@ export function useDevSecOps() {
   const passingRulesCount = computed(() => securityStore.frameworks.reduce((acc, f) => acc + (f.passing_rules || f.passed_checks || 0), 0))
 
   const securityPostureScore = computed(() => {
-    if (totalRulesCount.value === 0) return '94.6%'
+    if (totalRulesCount.value === 0) {
+      return totalViolationsCount.value === 0 ? '100%' : '--'
+    }
     return `${((passingRulesCount.value / totalRulesCount.value) * 100).toFixed(1)}%`
   })
 

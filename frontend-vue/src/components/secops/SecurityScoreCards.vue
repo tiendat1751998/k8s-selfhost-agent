@@ -24,20 +24,32 @@ defineProps<Props>()
     <div class="metric-card glass-panel glass-panel-glow">
       <div class="metric-header">
         <span class="metric-title">PRODUCTION SECURITY GATE</span>
-        <span class="badge" :class="gatePassed ? 'badge-emerald' : 'badge-rose'">
-          {{ gatePassed ? 'ACTIVE & ENFORCED' : 'GATE BLOCKED' }}
+        <span class="badge" :class="gatePassed ? 'badge-emerald' : (criticalCves > 0 ? 'badge-rose' : 'badge-amber')">
+          {{ gatePassed ? 'ACTIVE & ENFORCED' : (criticalCves > 0 ? 'GATE BLOCKED' : 'GATE RESTRICTED') }}
         </span>
       </div>
-      <div class="metric-val" :class="gatePassed ? 'text-emerald' : 'text-rose'">
-        <BaseIcon :name="gatePassed ? 'check-circle' : 'alert-triangle'" size="sm" />
-        <span>{{ gatePassed ? 'PASSED' : 'BLOCKED' }}</span>
+      <div class="metric-val gate-metric-val">
+        <div
+          class="gate-status-badge"
+          :class="gatePassed ? 'gate-badge-passed' : (criticalCves > 0 ? 'gate-badge-blocked' : 'gate-badge-restricted')"
+        >
+          <BaseIcon :name="gatePassed ? 'check-circle' : (criticalCves > 0 ? 'alert-triangle' : 'shield')" size="xs" />
+          <span>{{ gatePassed ? 'GATE PASSED' : (criticalCves > 0 ? 'GATE BLOCKED' : 'GATE RESTRICTED') }}</span>
+        </div>
       </div>
-      <div class="metric-footer">
-        <span :class="criticalCves === 0 ? 'text-emerald' : 'text-rose'">
-          <BaseIcon :name="criticalCves === 0 ? 'check-circle' : 'alert-triangle'" size="xs" />
-          {{ criticalCves }} Critical CVEs
+      <div class="metric-footer gate-footer">
+        <div class="gate-reasons">
+          <span :class="criticalCves === 0 ? 'text-emerald' : 'text-rose'">
+            {{ criticalCves }} Critical CVEs
+          </span>
+          <span class="text-muted">·</span>
+          <span :class="exposedSecrets === 0 ? 'text-emerald' : 'text-amber'">
+            {{ exposedSecrets }} Exposed Secrets
+          </span>
+        </div>
+        <span class="gate-status-text" :class="gatePassed ? 'text-muted' : (criticalCves > 0 ? 'text-rose' : 'text-amber')">
+          {{ criticalCves > 0 && exposedSecrets > 0 ? 'Blocked by CVEs & Secrets' : (criticalCves > 0 ? 'Blocked by Critical CVEs' : (exposedSecrets > 0 ? 'Blocked by Exposed Secrets' : 'Deployments Unblocked')) }}
         </span>
-        <span class="text-muted">{{ gatePassed ? 'Deployments Unblocked' : 'Action Required' }}</span>
       </div>
     </div>
 
@@ -52,7 +64,7 @@ defineProps<Props>()
       </div>
       <div class="metric-footer">
         <span class="text-emerald">{{ passingRules }} Passing Rules</span>
-        <span class="text-muted">of {{ totalRules > 0 ? totalRules : 42 }} Rules</span>
+        <span class="text-muted">{{ totalRules > 0 ? `of ${totalRules} Rules` : 'No Active Rules' }}</span>
       </div>
     </div>
 

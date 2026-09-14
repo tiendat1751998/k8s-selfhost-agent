@@ -40,7 +40,7 @@ function getSecretTypeClass(type: string): string {
       <div>
         <h2 class="table-title">Exposed Secrets & TLS Certificates Governance Matrix</h2>
         <p class="table-subtitle">
-          Continuous detection across pods, container crash logs, HashiCorp Vault dynamic leases, and External Secrets Operator (ESO)
+          Plaintext credentials, expiring certificates, and token exposures.
         </p>
       </div>
       <span class="badge badge-slate">{{ secrets.length }} Monitored Credentials</span>
@@ -103,7 +103,7 @@ function getSecretTypeClass(type: string): string {
 
       <div v-if="secrets.length === 0" class="empty-table-cell" style="grid-column: 1 / -1;">
         <span class="empty-icon"><BaseIcon name="lock" size="lg" /></span>
-        <p>No exposed secrets or expiring TLS certificates detected in cluster namespaces.</p>
+        <p>No exposed secrets or certificates detected.</p>
       </div>
     </div>
   </div>
