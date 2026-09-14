@@ -362,7 +362,7 @@
 /* ==========================================================================
    Responsive Breakpoints & Layout Rules
    ========================================================================== */
-@media (max-width: 1450px) {
+@media (max-width: 1300px) {
   .secops-toolbar-sleek .toolbar-kpi-strip { display: none !important; }
 }
 @media (max-width: 1024px) {
