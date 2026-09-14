@@ -126,7 +126,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocumentClick))
                 <span class="mute-icon"><BaseIcon name="bell-off" size="xs" /></span>
                 <span class="btn-text-full">Mute (Until Restart)</span><span class="btn-text-mobile">Mute</span>
               </button>
-              <button type="button" class="btn-card-snooze-caret" @click.stop="toggleSnoozeDropdown(getAlertKey(alert))" title="More snooze options">▾</button>
+              <button type="button" class="btn-card-snooze-caret" @click.stop="toggleSnoozeDropdown(getAlertKey(alert))" title="More snooze options"><BaseIcon name="chevron-down" size="xs" /></button>
 
               <div v-if="openSnoozeDropdownKey === getAlertKey(alert)" class="snooze-menu glass-panel animate-scale-in" @click.stop>
                 <div class="snooze-menu-header">Snooze Duration</div>
@@ -143,7 +143,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocumentClick))
                   <div class="snooze-item-text"><span class="snooze-item-title">Snooze 24 Hours</span><span class="snooze-item-desc">Re-evaluate after 1 day</span></div>
                 </button>
                 <button type="button" class="snooze-menu-item" @click="handleMuteAlert(alert, 'session')">
-                  <span class="snooze-item-icon"><BaseIcon name="window" size="xs" /></span>
+                  <span class="snooze-item-icon"><BaseIcon name="pause" size="xs" /></span>
                   <div class="snooze-item-text"><span class="snooze-item-title">Dismiss for Session</span><span class="snooze-item-desc">Muted until browser tab closes</span></div>
                 </button>
               </div>
