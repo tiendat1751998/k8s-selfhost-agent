@@ -10,8 +10,11 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
+
+	dockerclient "github.com/docker/docker/client"
 
 	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
@@ -53,6 +56,22 @@ func setupHandler(collector *SystemCollector, authToken string, logServers ...*L
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(metrics)
+	})
+
+	mux.HandleFunc("/logs/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+			return
+		}
+		if !isAuthorized(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+		ls.HandleEngineStatus(w, r)
 	})
 
 	mux.HandleFunc("/logs/services", func(w http.ResponseWriter, r *http.Request) {
@@ -106,6 +125,86 @@ func setupHandler(collector *SystemCollector, authToken string, logServers ...*L
 	return mux
 }
 
+// applyEnvOverrides updates configuration parameters from environment variables
+// when their respective flags remain at default or empty values.
+func applyEnvOverrides(port int, logDir, engineDir, authToken string) (int, string, string, string) {
+	if port == 9100 {
+		if p := os.Getenv("AGENT_PORT"); p != "" {
+			if parsedPort, err := strconv.Atoi(p); err == nil && parsedPort > 0 {
+				port = parsedPort
+			}
+		}
+	}
+	if logDir == "/var/log" {
+		if envLogDir := os.Getenv("AGENT_LOG_DIR"); envLogDir != "" {
+			logDir = envLogDir
+		}
+	}
+	if engineDir == "" {
+		if envEngineDir := os.Getenv("AGENT_ENGINE_DIR"); envEngineDir != "" {
+			engineDir = envEngineDir
+		}
+	}
+	if authToken == "" {
+		if envToken := os.Getenv("AGENT_AUTH_TOKEN"); envToken != "" {
+			authToken = envToken
+		}
+	}
+	return port, logDir, engineDir, authToken
+}
+
+// isDirWritable checks if the specified directory can be created and written to.
+func isDirWritable(dir string) bool {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return false
+	}
+	probe, err := os.CreateTemp(dir, ".probe-*")
+	if err != nil {
+		return false
+	}
+	_ = probe.Close()
+	_ = os.Remove(probe.Name())
+	return true
+}
+
+// resolveEngineDir selects a writable directory for the columnar log engine using a prioritized
+// candidate list with permission-aware fallback:
+// Candidate 1: requestedEngineDir if specified
+// Candidate 2: filepath.Join(logDir, ".logengine")
+// Candidate 3: filepath.Join(homeDir, ".k8s-agent", "logengine")
+// Candidate 4: filepath.Join(os.TempDir(), "k8s-agent-logengine") as ultimate fallback
+func resolveEngineDir(logDir, requestedEngineDir string, logger *slog.Logger) string {
+	candidates := make([]string, 0, 4)
+	if requestedEngineDir != "" {
+		candidates = append(candidates, requestedEngineDir)
+	}
+	if logDir != "" {
+		candidates = append(candidates, filepath.Join(logDir, ".logengine"))
+	}
+	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
+		candidates = append(candidates, filepath.Join(homeDir, ".k8s-agent", "logengine"))
+	}
+	tempFallback := filepath.Join(os.TempDir(), "k8s-agent-logengine")
+	candidates = append(candidates, tempFallback)
+
+	for _, candidate := range candidates {
+		if isDirWritable(candidate) {
+			if logger != nil {
+				logger.Info("Columnar engine directory selected", slog.String("engine_dir", candidate))
+			}
+			return candidate
+		}
+		if logger != nil {
+			logger.Warn("Candidate engine directory not writable, trying next fallback", slog.String("candidate", candidate))
+		}
+	}
+
+	if logger != nil {
+		logger.Warn("All engine directory candidates failed writability check, defaulting to temp", slog.String("engine_dir", tempFallback))
+	}
+	return tempFallback
+}
+
 func main() {
 	var (
 		port      int
@@ -121,6 +220,8 @@ func main() {
 	flag.StringVar(&logDir, "log-dir", "/var/log", "Directory for local log file scanning")
 	flag.StringVar(&engineDir, "engine-dir", "", "Directory for columnar log engine data")
 	flag.Parse()
+
+	port, logDir, engineDir, authToken = applyEnvOverrides(port, logDir, engineDir, authToken)
 
 	logengine.InitEngineRuntime()
 
@@ -140,9 +241,7 @@ func main() {
 	collector := NewSystemCollector("", "", nil, WithCollectionInterval(interval))
 	go collector.Start(ctx)
 
-	if engineDir == "" {
-		engineDir = filepath.Join(logDir, ".logengine")
-	}
+	engineDir = resolveEngineDir(logDir, engineDir, logger)
 
 	logServer := NewLogServer(WithLogDir(logDir))
 	var engineSrc *EngineLogSource
@@ -158,6 +257,16 @@ func main() {
 				logger.Warn("Initial log ingestion into log engine encountered warning", slog.String("error", err.Error()))
 			}
 		}()
+
+		// Continuous container log tailing
+		if dockerCli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation()); err == nil {
+			containerTailer := NewContainerTailer(dockerCli, engineSrc.Writer(), logger)
+			go containerTailer.Start(ctx)
+		}
+
+		// Continuous journalctl log tailing
+		journalTailer := NewJournalTailer(engineSrc.Writer(), logger)
+		go journalTailer.Start(ctx)
 	} else {
 		logger.Warn("Failed to initialize columnar log engine, falling back to standard sources", slog.String("error", err.Error()))
 	}

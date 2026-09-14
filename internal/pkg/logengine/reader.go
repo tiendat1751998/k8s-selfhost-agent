@@ -221,6 +221,27 @@ func loadPrimaryIndex(path string) (*PrimaryIndex, error) {
 	return pidx, nil
 }
 
+// BlockCount returns total indexed blocks across all parts.
+func (r *Reader) BlockCount() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	partEntries, err := os.ReadDir(r.partsDir)
+	if err != nil {
+		return 0
+	}
+	total := 0
+	for _, e := range partEntries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), "part_") {
+			pidx, err := loadPrimaryIndex(filepath.Join(r.partsDir, e.Name(), "primary.idx"))
+			if err == nil {
+				total += pidx.Len()
+			}
+		}
+	}
+	return total
+}
+
 func (r *Reader) Close() error { return nil }
 
 func matchFilter(actual, pattern string) bool {

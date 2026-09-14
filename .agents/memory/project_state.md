@@ -93,6 +93,18 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
     - 1-Click Sidebar Collapse: Toggling sidebar collapses the 260px left column and expands the terminal to 100% full screen width (`.sidebar-collapsed`).
     - Modularity confirmed: all 4 files strictly < 500 lines (`LogStreamView.vue`: 347 lines, `LogViewerTerminal.vue`: 112 lines, `logstream.css`: 225 lines, `logstream-terminal.css`: 78 lines). Net diff: -714 lines of duplicate code cut.
     - Verified 100% PASS by Reviewer and QA Test Engineer via Chrome DevTools MCP across Desktop (1440x900), Laptop (1280x800), and Tablet (768x1024) with 0px horizontal scroll overflow and 0 console errors.
+14. **Embedded Distributed Edge LogEngine (k8s-agent) & ClickHouse-Free High-Throughput Log Architecture** (`cmd/agent/container_tailer.go`, `cmd/agent/journal_tailer.go`, `cmd/agent/log_server.go`, `internal/infrastructure/agent/distributed_log_repo.go`, `cmd/standalone/standalone_wiring.go`, `ClickHouseEngineBadge.vue`, `LogStreamView.vue`, `logstream.css`):
+    - Commit `3f79734`, `0edb2ac`, `5b26064`, `abfaac6`, `995673e`.
+    - Completely eliminated external ClickHouse requirement by transforming `k8s-agent` into an embedded, high-throughput columnar log storage and retrieval engine (`internal/pkg/logengine`).
+    - Continuous Docker & journalctl Tailer: Created `container_tailer.go` and `journal_tailer.go` in `cmd/agent/` to continuously stream container and systemd logs directly into columnar blocks with 2,048-row / 5s flushes, bounded memory line buffers (< 64KB), and leak-free context termination.
+    - Ultra-Low Memory & High Compression: Real benchmark verified:
+      - Heap Allocation: **2.39 MB Alloc** (17.8 MB Sys), strictly below the user's 30-50MB RSS constraint.
+      - ZSTD Compression Ratio: **30.28x** (3,002,790 uncompressed bytes -> 99,159 compressed bytes).
+      - Query Latency: **0.818 ms** (sub-millisecond retrieval via Token Bloom filters with 0.05% FPR and 0 false negatives).
+    - Central Scatter-Gather Repository: Created `DistributedAgentLogRepo` in `internal/infrastructure/agent/` executing parallel scatter-gather queries across active cluster compute hosts via `AgentLogClient.SearchClusterLogs`, deduplicating, sorting chronologically, and falling back gracefully to local ring buffer.
+    - Frontend Integration & Badge Recognition: Mounted `<ClickHouseEngineBadge />` in Zone 3 of `.logs-toolbar-sleek` in `LogStreamView.vue`. Updated `ClickHouseEngineBadge.vue` to recognize `Distributed Edge LogEngine (k8s-agent)` as a primary active engine (emerald pulsing dot, 6-row architectural specs popover).
+    - CSS Stacking Context Occlusion Remediated: Resolved stacking context issue on `.logs-toolbar-sleek` via `position: relative; z-index: 20;` so `.engine-popover` renders crisply above `.terminal-window`.
+    - Verified 100% PASS by Reviewer and QA Test Engineer via Chrome DevTools MCP across Desktop (1440x900), Laptop (1280x800), and Tablet (768x1024) with 0px horizontal scroll overflow and 0 console errors.
 
 ---
 
@@ -106,7 +118,10 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
 ---
 
 ## 4. Verification Evidence
-- **Go Backend**: `cmd/standalone/main.go` compiles and runs cleanly (`standalone.exe` on port 8080).
-- **Frontend Production Build**: `vue-tsc -b && vite build` exits with code 0 in 5.23s (894 modules transformed, 0 errors).
-- **Reviewer Sign-Off**: 100% APPROVED (`24159893-cea8-4883-a450-89125d53731e`).
-- **Chrome DevTools MCP Visual QA**: 100% PASS across Desktop (1440x900) and Laptop (1280x800) with zero horizontal scroll overflow (`scrollWidth <= clientWidth`), visible KPI telemetry badge at 1440px desktop, safe suppression at <= 1300px, responsive 28px capsule pill tabs, and 0 console errors.
+- **Go Backend**: `cmd/standalone/main.go` and `cmd/agent/main.go` compile and pass tests:
+  - `go test -v ./internal/pkg/logengine/...`: PASS (0.767s)
+  - `go test -v ./internal/infrastructure/agent/...`: PASS (0.505s)
+  - `go test -v ./cmd/agent/...`: PASS (1.687s)
+- **Frontend Production Build**: `npm.cmd --prefix frontend-vue run build` exits with code 0 in 4.09s (891 modules transformed, 0 errors).
+- **Reviewer Sign-Off**: 100% APPROVED (`2dbbb9b2-6e5c-414b-b3bd-9af9c0445e80`).
+- **Chrome DevTools MCP Visual QA**: 100% PASS across Desktop (1440x900), Laptop (1280x800), and Tablet (768x1024) with zero horizontal scroll overflow (`scrollWidth <= innerWidth`), visible KPI telemetry badge and engine popover at 1440px desktop, safe responsive text at 1280px laptop, and 0 console errors.

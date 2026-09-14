@@ -175,3 +175,12 @@ type LogRepository interface {
 	GetHistogram(ctx context.Context, filter LogFilter, intervalSeconds int) ([]LogAggregationBucket, error)
 	TailLogs(ctx context.Context, filter LogFilter) (<-chan LogEntry, error)
 }
+
+// LogEngineStatus summarizes status and health metrics for the log engine.
+type LogEngineStatus struct {
+	Engine        string  `json:"engine"`
+	Status        string  `json:"status"`
+	LatencyMS     float64 `json:"latency_ms"`
+	TotalRecords  int64   `json:"total_records"`
+	RetentionDays int     `json:"retention_days"`
+}
