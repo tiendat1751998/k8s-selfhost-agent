@@ -1,6 +1,8 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
+import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import type { K8sResource, ResourceKind } from '../../api/k8s'
 import {
   getResourceAge,
@@ -66,7 +68,7 @@ import {
   getNodePodsCount,
 } from '../../composables/useK8sExplorer'
 
-defineProps<{
+const props = defineProps<{
   columns: Column<K8sResource>[]
   resources: K8sResource[]
   loading: boolean
@@ -92,6 +94,48 @@ const emit = defineEmits<{
 
 function toResource(row: unknown): K8sResource {
   return row as K8sResource
+}
+
+function getRowActions(res: K8sResource): ActionItem[] {
+  const actions: ActionItem[] = [
+    { id: 'detail', label: 'Diagnostics & Details', icon: 'search' },
+    { id: 'yaml', label: 'View YAML Manifest', icon: 'file-code' },
+  ]
+
+  if (props.selectedKind === 'pods') {
+    actions.push({ id: 'terminal', label: 'Terminal Exec', icon: 'terminal' })
+  } else if (props.selectedKind === 'deployments') {
+    actions.push({ id: 'restart', label: 'Restart Rollout', icon: 'refresh' })
+  } else if (props.selectedKind === 'cronjobs') {
+    const isSuspended = (res.spec as { suspend?: boolean } | undefined)?.suspend
+    actions.push({
+      id: 'toggle-suspend',
+      label: isSuspended ? 'Resume CronJob' : 'Suspend CronJob',
+      icon: isSuspended ? 'play' : 'pause',
+    })
+  } else if (props.selectedKind === 'nodes') {
+    actions.push({
+      id: 'drain',
+      label: 'Drain Node',
+      icon: 'alert-triangle',
+      disabled: props.operatingNode,
+    })
+  }
+
+  actions.push({ id: 'sep', label: '', separator: true })
+  actions.push({ id: 'delete', label: 'Delete Resource', icon: 'x', variant: 'danger' })
+
+  return actions
+}
+
+function handleRowAction(actionId: string, res: K8sResource) {
+  if (actionId === 'detail') emit('detail', res)
+  else if (actionId === 'yaml') emit('yaml', res)
+  else if (actionId === 'terminal') emit('terminal', res)
+  else if (actionId === 'restart') emit('restart', res)
+  else if (actionId === 'toggle-suspend') emit('toggle-suspend', res)
+  else if (actionId === 'drain') emit('drain', res)
+  else if (actionId === 'delete') emit('delete', res)
 }
 </script>
 
@@ -161,48 +205,73 @@ function toResource(row: unknown): K8sResource {
       <template #cell-osArch="{ row }"><span class="font-mono text-muted font-small">{{ getNodeOSArch(toResource(row)) }}</span></template>
       <template #cell-podsCount="{ row }"><span class="font-mono font-small">{{ getNodePodsCount(toResource(row)) }}</span></template>
 
-      <!-- Standardized High-Density Action Toolbar (Compact 28x28px Buttons) -->
+      <!-- Standardized High-Density Action Cell (1 Inline Button + ActionDropdown [ ⋯ ]) -->
       <template #cell-actions="{ row }">
-        <div class="action-toolbar">
-          <template v-if="selectedKind === 'pods'">
-            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><BaseIcon name="search" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-amber" title="Stream Logs" @click="emit('logs', toResource(row))"><BaseIcon name="file-text" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-emerald" title="Terminal Exec" @click="emit('terminal', toResource(row))"><BaseIcon name="terminal" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><BaseIcon name="file-code" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-danger" title="Delete Pod" @click="emit('delete', toResource(row))"><BaseIcon name="x" size="xs" /></button>
-          </template>
-          <template v-else-if="selectedKind === 'nodes'">
-            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><BaseIcon name="search" size="xs" /></button>
-            <button v-if="isNodeUnschedulable(toResource(row))" type="button" class="action-btn action-btn-emerald" :disabled="operatingNode" title="Uncordon Node" @click="emit('uncordon', toResource(row))"><BaseIcon name="shield" size="xs" /></button>
-            <button v-else type="button" class="action-btn action-btn-amber" :disabled="operatingNode" title="Cordon Node" @click="emit('cordon', toResource(row))"><BaseIcon name="lock" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-danger" :disabled="operatingNode" title="Drain Node" @click="emit('drain', toResource(row))"><BaseIcon name="alert-triangle" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><BaseIcon name="file-code" size="xs" /></button>
-          </template>
-          <template v-else-if="selectedKind === 'deployments'">
-            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><BaseIcon name="search" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-emerald" title="Scale Replicas" @click="emit('scale', toResource(row))"><BaseIcon name="zap" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-amber" title="Restart Rollout" @click="emit('restart', toResource(row))"><BaseIcon name="refresh" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><BaseIcon name="file-code" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-danger" title="Delete Deployment" @click="emit('delete', toResource(row))"><BaseIcon name="x" size="xs" /></button>
-          </template>
-          <template v-else-if="selectedKind === 'statefulsets'">
-            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><BaseIcon name="search" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-emerald" title="Scale Replicas" @click="emit('scale', toResource(row))"><BaseIcon name="zap" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><BaseIcon name="file-code" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-danger" title="Delete StatefulSet" @click="emit('delete', toResource(row))"><BaseIcon name="x" size="xs" /></button>
-          </template>
-          <template v-else-if="selectedKind === 'cronjobs'">
-            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><BaseIcon name="search" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-emerald" title="Trigger Job" @click="emit('trigger-cronjob', toResource(row))"><BaseIcon name="zap" size="xs" /></button>
-            <button type="button" class="action-btn" :class="(toResource(row).spec as { suspend?: boolean })?.suspend ? 'action-btn-emerald' : 'action-btn-amber'" :title="(toResource(row).spec as { suspend?: boolean })?.suspend ? 'Resume CronJob' : 'Suspend CronJob'" @click="emit('toggle-suspend', toResource(row))"><BaseIcon :name="(toResource(row).spec as { suspend?: boolean })?.suspend ? 'play' : 'pause'" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><BaseIcon name="file-code" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-danger" title="Delete CronJob" @click="emit('delete', toResource(row))"><BaseIcon name="x" size="xs" /></button>
-          </template>
-          <template v-else>
-            <button type="button" class="action-btn action-btn-cyan" title="Diagnostics & Details" @click="emit('detail', toResource(row))"><BaseIcon name="search" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-secondary" title="View YAML Manifest" @click="emit('yaml', toResource(row))"><BaseIcon name="file-code" size="xs" /></button>
-            <button type="button" class="action-btn action-btn-danger" title="Delete Resource" @click="emit('delete', toResource(row))"><BaseIcon name="x" size="xs" /></button>
-          </template>
+        <div class="row-actions-wrap">
+          <!-- 1 Inline Secondary Button -->
+          <button
+            v-if="selectedKind === 'pods'"
+            type="button"
+            class="btn btn-secondary btn-xs inline-action-btn"
+            title="Stream Logs"
+            @click="emit('logs', toResource(row))"
+          >
+            <BaseIcon name="file-text" size="xs" />
+            <span>Logs</span>
+          </button>
+
+          <button
+            v-else-if="selectedKind === 'deployments' || selectedKind === 'statefulsets'"
+            type="button"
+            class="btn btn-secondary btn-xs inline-action-btn"
+            title="Scale Replicas"
+            @click="emit('scale', toResource(row))"
+          >
+            <BaseIcon name="zap" size="xs" />
+            <span>Scale</span>
+          </button>
+
+          <button
+            v-else-if="selectedKind === 'nodes'"
+            type="button"
+            class="btn btn-secondary btn-xs inline-action-btn"
+            :disabled="operatingNode"
+            :title="isNodeUnschedulable(toResource(row)) ? 'Uncordon Node' : 'Cordon Node'"
+            @click="isNodeUnschedulable(toResource(row)) ? emit('uncordon', toResource(row)) : emit('cordon', toResource(row))"
+          >
+            <BaseIcon :name="isNodeUnschedulable(toResource(row)) ? 'shield' : 'lock'" size="xs" />
+            <span>{{ isNodeUnschedulable(toResource(row)) ? 'Uncordon' : 'Cordon' }}</span>
+          </button>
+
+          <button
+            v-else-if="selectedKind === 'cronjobs'"
+            type="button"
+            class="btn btn-secondary btn-xs inline-action-btn"
+            title="Trigger Job"
+            @click="emit('trigger-cronjob', toResource(row))"
+          >
+            <BaseIcon name="zap" size="xs" />
+            <span>Trigger</span>
+          </button>
+
+          <button
+            v-else
+            type="button"
+            class="btn btn-secondary btn-xs inline-action-btn"
+            title="Diagnostics & Details"
+            @click="emit('detail', toResource(row))"
+          >
+            <BaseIcon name="search" size="xs" />
+            <span>Details</span>
+          </button>
+
+          <!-- 1 Standard ActionDropdown [ ⋯ ] -->
+          <ActionDropdown
+            :items="getRowActions(toResource(row))"
+            size="xs"
+            trigger-title="Resource Actions"
+            @select="handleRowAction($event, toResource(row))"
+          />
         </div>
       </template>
     </DataTable>
