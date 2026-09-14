@@ -63,6 +63,7 @@ func (h *LogHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/histogram", h.HandleHistogram)
 	r.Get("/stream", h.HandleStream)
 	r.Get("/status", h.HandleStatus)
+	r.Get("/services", h.HandleGetServices)
 }
 
 // HandleStatus returns metadata on the storage engine, latency, total records, and retention.
@@ -399,4 +400,33 @@ func parseTimeRangeParams(q url.Values) (time.Time, time.Time, error) {
 	return startTime, endTime, nil
 }
 
+// HandleGetServices returns a deduplicated list of discovered services across compute hosts.
+func (h *LogHandler) HandleGetServices(w http.ResponseWriter, r *http.Request) {
+	type serviceLister interface {
+		ListServices(ctx context.Context) ([]string, error)
+	}
 
+	var services []string
+	var err error
+
+	if sl, ok := h.service.(serviceLister); ok {
+		services, err = sl.ListServices(r.Context())
+	} else if sl, ok := h.statusProvider.(serviceLister); ok {
+		services, err = sl.ListServices(r.Context())
+	} else {
+		services = []string{}
+	}
+
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list services", err)
+		return
+	}
+
+	if services == nil {
+		services = []string{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"services": services,
+	})
+}

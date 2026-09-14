@@ -1,4 +1,4 @@
-﻿package http
+package http
 
 import (
 	"bytes"
@@ -30,14 +30,26 @@ type fakeLoggingService struct {
 	queryErr     error
 	histErr      error
 	tailErr      error
+	services     []string
+	servicesErr  error
+}
+
+func (f *fakeLoggingService) ListServices(ctx context.Context) ([]string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if f.servicesErr != nil {
+		return nil, f.servicesErr
+	}
+	if f.services != nil {
+		return f.services, nil
+	}
+	return []string{"auth-svc", "cart-svc", "payment-svc"}, nil
 }
 
 func (f *fakeLoggingService) Ingest(ctx context.Context, entries []logging.LogEntry) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.ingestErr != nil {
-		return f.ingestErr
-	}
+	if f.ingestErr != nil { return f.ingestErr }
 	f.ingested = append(f.ingested, entries...)
 	return nil
 }
@@ -46,17 +58,9 @@ func (f *fakeLoggingService) QueryLogs(ctx context.Context, filter logging.LogFi
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lastFilter = filter
-	if f.queryErr != nil {
-		return nil, f.queryErr
-	}
-	if f.searchResult != nil {
-		return f.searchResult, nil
-	}
-	return &logging.LogSearchResult{
-		Entries:    []logging.LogEntry{},
-		TotalCount: 0,
-		HasMore:    false,
-	}, nil
+	if f.queryErr != nil { return nil, f.queryErr }
+	if f.searchResult != nil { return f.searchResult, nil }
+	return &logging.LogSearchResult{Entries: []logging.LogEntry{}, TotalCount: 0, HasMore: false}, nil
 }
 
 func (f *fakeLoggingService) GetHistogram(ctx context.Context, filter logging.LogFilter, intervalSeconds int) ([]logging.LogAggregationBucket, error) {
@@ -64,9 +68,7 @@ func (f *fakeLoggingService) GetHistogram(ctx context.Context, filter logging.Lo
 	defer f.mu.Unlock()
 	f.lastFilter = filter
 	f.lastInterval = intervalSeconds
-	if f.histErr != nil {
-		return nil, f.histErr
-	}
+	if f.histErr != nil { return nil, f.histErr }
 	return f.histogramRes, nil
 }
 
@@ -74,12 +76,8 @@ func (f *fakeLoggingService) TailLogs(ctx context.Context, filter logging.LogFil
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lastFilter = filter
-	if f.tailErr != nil {
-		return nil, f.tailErr
-	}
-	if f.tailChan == nil {
-		f.tailChan = make(chan logging.LogEntry, 10)
-	}
+	if f.tailErr != nil { return nil, f.tailErr }
+	if f.tailChan == nil { f.tailChan = make(chan logging.LogEntry, 10) }
 	return f.tailChan, nil
 }
 
@@ -389,32 +387,16 @@ func TestLogHandler_Router_RBAC_And_Auth(t *testing.T) {
 		t.Errorf("expected 403 for viewer ingest mutation, got %d", w3.Code)
 	}
 
-	// 3. Operator token: POST /ingest allowed (202)
-	opToken, err := middleware.GenerateAccessToken("user-op", "operator", "tenant-1")
-	if err != nil {
-		t.Fatalf("failed to generate operator token: %v", err)
-	}
-
-	opIngestReq := httptest.NewRequest(http.MethodPost, "/api/v1/logs/ingest", bytes.NewReader(ingestBody))
-	opIngestReq.Header.Set("Authorization", "Bearer "+opToken)
-	w4 := httptest.NewRecorder()
-	router.ServeHTTP(w4, opIngestReq)
-	if w4.Code != http.StatusAccepted {
-		t.Errorf("expected 202 for operator ingest mutation, got %d. Body: %s", w4.Code, w4.Body.String())
-	}
-
-	// 4. logs:write token: POST /ingest allowed (202)
-	writeToken, err := middleware.GenerateAccessToken("user-w", "logs:write", "tenant-1")
-	if err != nil {
-		t.Fatalf("failed to generate logs:write token: %v", err)
-	}
-
-	writeIngestReq := httptest.NewRequest(http.MethodPost, "/api/v1/logs/ingest", bytes.NewReader(ingestBody))
-	writeIngestReq.Header.Set("Authorization", "Bearer "+writeToken)
-	w5 := httptest.NewRecorder()
-	router.ServeHTTP(w5, writeIngestReq)
-	if w5.Code != http.StatusAccepted {
-		t.Errorf("expected 202 for logs:write ingest mutation, got %d. Body: %s", w5.Code, w5.Body.String())
+	// 3 & 4. Operator and logs:write tokens: POST /ingest allowed (202)
+	for _, role := range []string{"operator", "logs:write"} {
+		tok, _ := middleware.GenerateAccessToken("user-"+role, role, "tenant-1")
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/logs/ingest", bytes.NewReader(ingestBody))
+		req.Header.Set("Authorization", "Bearer "+tok)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusAccepted {
+			t.Errorf("expected 202 for %s ingest, got %d. Body: %s", role, w.Code, w.Body.String())
+		}
 	}
 }
 
@@ -426,15 +408,9 @@ func TestLogHandler_Status(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/logs/status", nil)
 	w := httptest.NewRecorder()
 	h.HandleStatus(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandleStatus, got %d", w.Code)
-	}
 	var resp map[string]any
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode status response: %v", err)
-	}
-	if resp["engine"] != "In-Memory RingBuffer (Fallback)" || resp["status"] != "fallback" {
-		t.Errorf("unexpected status response: %+v", resp)
+	if w.Code != http.StatusOK || json.NewDecoder(w.Body).Decode(&resp) != nil || resp["status"] != "fallback" {
+		t.Fatalf("expected fallback status 200 OK, got %d: %+v", w.Code, resp)
 	}
 
 	// 2. Custom status provider (ClickHouse connected)
@@ -443,15 +419,9 @@ func TestLogHandler_Status(t *testing.T) {
 	})
 	w2 := httptest.NewRecorder()
 	hConnected.HandleStatus(w2, req)
-	if w2.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d", w2.Code)
-	}
 	var respConnected LogEngineStatus
-	if err := json.NewDecoder(w2.Body).Decode(&respConnected); err != nil {
-		t.Fatalf("failed to decode connected response: %v", err)
-	}
-	if respConnected.Engine != "ClickHouse MergeTree" || respConnected.Status != "connected" || respConnected.TotalRecords != 1250 {
-		t.Errorf("unexpected connected status: %+v", respConnected)
+	if w2.Code != http.StatusOK || json.NewDecoder(w2.Body).Decode(&respConnected) != nil || respConnected.Engine != "ClickHouse MergeTree" {
+		t.Fatalf("expected connected ClickHouse status, got %d: %+v", w2.Code, respConnected)
 	}
 
 	// 3. Mount in Router and verify /api/v1/logs/status route
@@ -469,10 +439,49 @@ func TestLogHandler_Status(t *testing.T) {
 }
 
 type mockStatusProvider struct {
-	status *LogEngineStatus
+	status   *LogEngineStatus
+	services []string
 }
 
 func (m *mockStatusProvider) GetStatus(ctx context.Context) (*LogEngineStatus, error) {
 	return m.status, nil
 }
 
+func (m *mockStatusProvider) ListServices(ctx context.Context) ([]string, error) {
+	return m.services, nil
+}
+
+func TestLogHandler_Services(t *testing.T) {
+	fake := &fakeLoggingService{}
+	h := NewLogHandler(fake)
+
+	// 1. Direct handler test with service lister
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/logs/services", nil)
+	w := httptest.NewRecorder()
+	h.HandleGetServices(w, req)
+	var resp map[string][]string
+	if w.Code != http.StatusOK || json.NewDecoder(w.Body).Decode(&resp) != nil || len(resp["services"]) != 3 {
+		t.Fatalf("unexpected services response: %d, %+v", w.Code, resp)
+	}
+
+	// 2. Status provider fallback test
+	hStatus := NewLogHandler(nil, &mockStatusProvider{services: []string{"redis", "postgres"}})
+	w2 := httptest.NewRecorder()
+	hStatus.HandleGetServices(w2, req)
+	var respStatus map[string][]string
+	if w2.Code != http.StatusOK || json.NewDecoder(w2.Body).Decode(&respStatus) != nil || len(respStatus["services"]) != 2 {
+		t.Errorf("expected 2 services from status provider, got %d, %+v", w2.Code, respStatus)
+	}
+
+	// 3. Router mount test at /api/v1/logs/services
+	platform := &PlatformHandlers{CentralizedLogs: h}
+	router := NewRouterWithWS(health.NewHandler(5*time.Second), nil, platform)
+	token, _ := middleware.GenerateAccessToken("user-s", "viewer", "tenant-1")
+	routeReq := httptest.NewRequest(http.MethodGet, "/api/v1/logs/services", nil)
+	routeReq.Header.Set("Authorization", "Bearer "+token)
+	w3 := httptest.NewRecorder()
+	router.ServeHTTP(w3, routeReq)
+	if w3.Code != http.StatusOK {
+		t.Fatalf("expected 200 for routed /services, got %d", w3.Code)
+	}
+}

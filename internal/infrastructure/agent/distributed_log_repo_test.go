@@ -55,6 +55,11 @@ func (m *mockComputeHostRepo) UpdateStatus(ctx context.Context, id string, statu
 type mockLogClient struct {
 	clusterResults []agent.LogSearchResult
 	clusterErr     error
+	services       []string
+	hostServices   map[string][]string
+	servicesErr    error
+	lastHosts      []docker.ComputeHost
+	lastReq        agent.SearchLogsRequest
 }
 
 func (m *mockLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string) (string, error) {
@@ -66,11 +71,30 @@ func (m *mockLogClient) SearchNodeLogs(ctx context.Context, hostEndpoint, authTo
 }
 
 func (m *mockLogClient) SearchClusterLogs(ctx context.Context, hosts []docker.ComputeHost, req agent.SearchLogsRequest) ([]agent.LogSearchResult, error) {
+	m.lastHosts = hosts
+	m.lastReq = req
 	if m.clusterErr != nil {
 		return nil, m.clusterErr
 	}
 	return m.clusterResults, nil
 }
+
+func (m *mockLogClient) ListNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error) {
+	if m.servicesErr != nil {
+		return nil, m.servicesErr
+	}
+	if m.hostServices != nil {
+		if s, ok := m.hostServices[hostEndpoint]; ok {
+			return s, nil
+		}
+	}
+	return m.services, nil
+}
+
+func (m *mockLogClient) GetNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error) {
+	return m.ListNodeServices(ctx, hostEndpoint, authToken)
+}
+
 
 func TestDistributedAgentLogRepo_QueryLogs(t *testing.T) {
 	ctx := context.Background()
@@ -289,5 +313,106 @@ func TestDistributedAgentLogRepo_FallbackWhenNoHosts(t *testing.T) {
 	}
 	if len(res.Entries) != 1 || res.Entries[0].Message != "fallback in-memory message" {
 		t.Fatalf("expected 1 fallback entry, got %v", res.Entries)
+	}
+}
+
+func TestDistributedAgentLogRepo_QueryLogs_NodeFilter(t *testing.T) {
+	ctx := context.Background()
+	hosts := []docker.ComputeHost{
+		{ID: "node-1", Name: "worker-1", Endpoint: "http://10.0.0.1:9100", Status: "connected"},
+		{ID: "node-2", Name: "worker-2", Endpoint: "http://10.0.0.2:9100", Status: "connected"},
+	}
+	hostRepo := &mockComputeHostRepo{hosts: hosts}
+	logClient := &mockLogClient{}
+	repo := agent.NewDistributedAgentLogRepo(hostRepo, logClient)
+
+	// 1. Filter by node ID "node-1"
+	filterNode := domainLogging.LogFilter{
+		SearchText: "critical error",
+		Attributes: map[string]string{
+			"node": "node-1",
+		},
+	}
+	_, err := repo.QueryLogs(ctx, filterNode)
+	if err != nil {
+		t.Fatalf("QueryLogs failed: %v", err)
+	}
+	if len(logClient.lastHosts) != 1 || logClient.lastHosts[0].ID != "node-1" {
+		t.Fatalf("expected only node-1 in candidate hosts, got %v", logClient.lastHosts)
+	}
+	// Acceptance criteria: SearchLogsRequest.Query does NOT contain node name
+	if logClient.lastReq.Query != "critical error" {
+		t.Fatalf("expected SearchLogsRequest.Query to be 'critical error', got '%s'", logClient.lastReq.Query)
+	}
+
+	// 2. Filter by node_name "worker-2"
+	filterNodeName := domainLogging.LogFilter{
+		SearchText: "oom kill",
+		Attributes: map[string]string{
+			"node_name": "worker-2",
+		},
+	}
+	_, err = repo.QueryLogs(ctx, filterNodeName)
+	if err != nil {
+		t.Fatalf("QueryLogs failed: %v", err)
+	}
+	if len(logClient.lastHosts) != 1 || logClient.lastHosts[0].Name != "worker-2" {
+		t.Fatalf("expected only worker-2 in candidate hosts, got %v", logClient.lastHosts)
+	}
+	if logClient.lastReq.Query != "oom kill" {
+		t.Fatalf("expected SearchLogsRequest.Query to be 'oom kill', got '%s'", logClient.lastReq.Query)
+	}
+
+	// 3. No node filter -> queries all hosts
+	filterAll := domainLogging.LogFilter{
+		SearchText: "general search",
+	}
+	_, err = repo.QueryLogs(ctx, filterAll)
+	if err != nil {
+		t.Fatalf("QueryLogs failed: %v", err)
+	}
+	if len(logClient.lastHosts) != 2 {
+		t.Fatalf("expected all 2 hosts when no node filter provided, got %d", len(logClient.lastHosts))
+	}
+}
+
+func TestDistributedAgentLogRepo_ListServices(t *testing.T) {
+	ctx := context.Background()
+	hosts := []docker.ComputeHost{
+		{ID: "node-1", Name: "worker-1", Endpoint: "http://10.0.0.1:9100", Status: "connected", Labels: map[string]string{"auth_token": "tok-1"}},
+		{ID: "node-2", Name: "worker-2", Endpoint: "http://10.0.0.2:9100", Status: "connected", Labels: map[string]string{"token": "tok-2"}},
+		{ID: "node-3", Name: "worker-3", Endpoint: "http://10.0.0.3:9100", Status: "disconnected"},
+		{ID: "node-4", Name: "worker-4", Endpoint: "", Status: "connected"},
+	}
+	hostRepo := &mockComputeHostRepo{hosts: hosts}
+	logClient := &mockLogClient{
+		hostServices: map[string][]string{
+			"http://10.0.0.1:9100": {"cart-svc", "auth-svc"},
+			"http://10.0.0.2:9100": {"auth-svc", "payment-svc", "cart-svc"},
+		},
+	}
+	repo := agent.NewDistributedAgentLogRepo(hostRepo, logClient)
+
+	services, err := repo.ListServices(ctx)
+	if err != nil {
+		t.Fatalf("ListServices failed: %v", err)
+	}
+
+	// Should deduplicate and sort: auth-svc, cart-svc, payment-svc
+	if len(services) != 3 {
+		t.Fatalf("expected 3 deduplicated services, got %d: %v", len(services), services)
+	}
+	if services[0] != "auth-svc" || services[1] != "cart-svc" || services[2] != "payment-svc" {
+		t.Errorf("unexpected sorted services: %v", services)
+	}
+
+	// When no active hosts exist, returns empty slice and nil error
+	emptyRepo := agent.NewDistributedAgentLogRepo(&mockComputeHostRepo{hosts: nil}, logClient)
+	emptyServices, err := emptyRepo.ListServices(ctx)
+	if err != nil {
+		t.Fatalf("expected nil error on empty hosts, got %v", err)
+	}
+	if len(emptyServices) != 0 {
+		t.Errorf("expected empty services slice, got %v", emptyServices)
 	}
 }
