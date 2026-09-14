@@ -1,7 +1,8 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import BaseIcon from '../components/ui/BaseIcon.vue'
+import ActionDropdown, { type ActionItem } from '../components/ui/ActionDropdown.vue'
 import EventsTimeline from '../components/k8s/EventsTimeline.vue'
 
 import ExplorerResourceTable from '../components/explorer/ExplorerResourceTable.vue'
@@ -18,83 +19,125 @@ import ExplorerCreateNsModal from '../components/explorer/ExplorerCreateNsModal.
 import PodLogsDrawer from '../components/explorer/PodLogsDrawer.vue'
 import PodTerminalDrawer from '../components/explorer/PodTerminalDrawer.vue'
 import { useK8sExplorer } from '../composables/useK8sExplorer'
+import { useGlobalContext } from '../composables/useGlobalContext'
 import type { ResourceKind } from '../api/k8s'
 import '../assets/styles/views/explorer.css'
 
 const route = useRoute()
 const {
-  loading,
-  error,
-  toastMessage,
-  clusterOffline,
-  offlineErrorMessage,
-  clusters,
-  selectedCluster,
-  namespaces,
-  selectedNamespace,
-  selectedKind,
-  resources,
-  filteredKindCategories,
-  allKindItems,
-  totalInKind,
-  activeNamespacesCount,
-  currentKindLabel,
-  columns,
-  loadClusters,
-  loadNamespaces,
-  fetchResources,
-  selectKind,
-  showCreateModal,
-  showYamlModal,
-  yamlEditorMode,
-  yamlEditorInitialContent,
-  yamlEditorTitle,
-  showDetailDrawer,
-  selectedResource,
-  showScaleModal,
-  scaleTarget,
-  scalingResource,
-  showRestartModal,
-  restartTarget,
-  restartingResource,
-  showDeleteModal,
-  resourceToDelete,
-  deletingResource,
-  showDrainModal,
-  drainTargetNode,
-  drainingNode,
-  operatingNode,
-  showNewNsModal,
-  creatingNs,
-  newNsError,
-  showImportModal,
-  importingCluster,
-  showLogsDrawer,
-  logsPod,
-  showTerminalDrawer,
-  terminalPod,
-  openDetailDrawer,
-  openLogsDrawer,
-  openTerminalDrawer,
-  openScaleModal,
-  openRestartModal,
-  openDeleteModal,
-  openDrainModal,
-  openApplyYamlModal,
-  openYamlEditModal,
-  handleScaleConfirm,
-  handleRestartConfirm,
-  handleDeleteConfirm,
-  handleDrainConfirm,
-  handleCordonNode,
-  handleUncordonNode,
-  handleTriggerCronJob,
-  handleToggleSuspend,
-  handleImportCluster,
-  handleCreateNs,
-  handleYamlApplied,
-  handleCreateApplied,
+  loading, error, toastMessage, clusterOffline, offlineErrorMessage,
+  selectedCluster, namespaces, selectedNamespace, selectedKind, resources,
+  allKindItems, totalInKind, currentKindLabel, columns,
+  loadClusters, loadNamespaces, fetchResources, selectKind,
+  showCreateModal, showYamlModal, yamlEditorMode, yamlEditorInitialContent, yamlEditorTitle,
+  showDetailDrawer, selectedResource, showScaleModal, scaleTarget, scalingResource,
+  showRestartModal, restartTarget, restartingResource, showDeleteModal, resourceToDelete, deletingResource,
+  showDrainModal, drainTargetNode, drainingNode, operatingNode, showNewNsModal, creatingNs, newNsError,
+  showImportModal, importingCluster, showLogsDrawer, logsPod, showTerminalDrawer, terminalPod,
+  openDetailDrawer, openLogsDrawer, openTerminalDrawer, openScaleModal, openRestartModal, openDeleteModal,
+  openDrainModal, openApplyYamlModal, openYamlEditModal,
+  handleScaleConfirm, handleRestartConfirm, handleDeleteConfirm, handleDrainConfirm,
+  handleCordonNode, handleUncordonNode, handleTriggerCronJob, handleToggleSuspend,
+  handleImportCluster, handleCreateNs, handleYamlApplied, handleCreateApplied,
 } = useK8sExplorer()
+
+const { activeClusterId, activeNamespace } = useGlobalContext()
+
+// Sync with Global Context Top HUD
+watch(activeClusterId, (newCluster) => {
+  if (newCluster && selectedCluster.value !== newCluster) {
+    selectedCluster.value = newCluster
+  }
+})
+
+watch(activeNamespace, (newNs) => {
+  if (newNs && selectedNamespace.value !== newNs) {
+    selectedNamespace.value = newNs
+  }
+})
+
+// Sleek Category Pills Configuration
+interface CategoryConfig {
+  id: string
+  label: string
+  icon: string
+  defaultKind: ResourceKind
+  items: { label: string; kind: ResourceKind }[]
+}
+
+const explorerCategories: CategoryConfig[] = [
+  {
+    id: 'workloads', label: 'Workloads', icon: 'layers', defaultKind: 'deployments',
+    items: [
+      { label: 'Pods', kind: 'pods' }, { label: 'Deployments', kind: 'deployments' },
+      { label: 'StatefulSets', kind: 'statefulsets' }, { label: 'DaemonSets', kind: 'daemonsets' },
+      { label: 'Jobs', kind: 'jobs' }, { label: 'CronJobs', kind: 'cronjobs' },
+    ],
+  },
+  {
+    id: 'config-storage', label: 'Config & Storage', icon: 'database', defaultKind: 'configmaps',
+    items: [
+      { label: 'ConfigMaps', kind: 'configmaps' }, { label: 'Secrets', kind: 'secrets' },
+      { label: 'PersistentVolumeClaims', kind: 'persistentvolumeclaims' },
+      { label: 'HorizontalPodAutoscalers', kind: 'horizontalpodautoscalers' },
+    ],
+  },
+  {
+    id: 'networking-security', label: 'Networking & Security', icon: 'globe', defaultKind: 'services',
+    items: [
+      { label: 'Services', kind: 'services' }, { label: 'Ingresses', kind: 'ingresses' },
+      { label: 'NetworkPolicies', kind: 'networkpolicies' }, { label: 'ServiceAccounts', kind: 'serviceaccounts' },
+    ],
+  },
+  {
+    id: 'cluster', label: 'Cluster', icon: 'server', defaultKind: 'nodes',
+    items: [
+      { label: 'Nodes', kind: 'nodes' }, { label: 'PersistentVolumes', kind: 'persistentvolumes' },
+      { label: 'StorageClasses', kind: 'storageclasses' },
+    ],
+  },
+  {
+    id: 'events', label: 'Events', icon: 'clock', defaultKind: 'events',
+    items: [{ label: 'Events', kind: 'events' }],
+  },
+]
+
+const activeCategory = ref<string>('workloads')
+
+// Automatically track active category when selectedKind updates
+watch(selectedKind, (newKind) => {
+  const matching = explorerCategories.find((cat) =>
+    cat.items.some((item) => item.kind === newKind)
+  )
+  if (matching && activeCategory.value !== matching.id) {
+    activeCategory.value = matching.id
+  }
+}, { immediate: true })
+
+function handleCategorySelect(cat: CategoryConfig) {
+  activeCategory.value = cat.id
+  if (!cat.items.some((item) => item.kind === selectedKind.value)) {
+    selectKind(cat.defaultKind)
+  }
+}
+
+const currentCategoryKinds = computed(() => {
+  const cat = explorerCategories.find((c) => c.id === activeCategory.value)
+  return cat ? cat.items : []
+})
+
+const moreActions: ActionItem[] = [
+  { id: 'import-cluster', label: 'Import Cluster', icon: 'cloud' },
+  { id: 'new-namespace', label: 'New Namespace', icon: 'plus' },
+]
+
+function handleMoreActionSelect(actionId: string) {
+  if (actionId === 'import-cluster') {
+    showImportModal.value = true
+  } else if (actionId === 'new-namespace') {
+    showNewNsModal.value = true
+  }
+}
 
 const showMobileSearch = ref(false)
 const searchQuery = ref('')
@@ -118,8 +161,16 @@ watch([selectedNamespace, selectedKind], () => {
 })
 
 onMounted(async () => {
-  if (typeof route.query.cluster === 'string') selectedCluster.value = route.query.cluster
-  if (typeof route.query.namespace === 'string') selectedNamespace.value = route.query.namespace
+  if (typeof route.query.cluster === 'string') {
+    selectedCluster.value = route.query.cluster
+  } else if (activeClusterId.value) {
+    selectedCluster.value = activeClusterId.value
+  }
+  if (typeof route.query.namespace === 'string') {
+    selectedNamespace.value = route.query.namespace
+  } else if (activeNamespace.value) {
+    selectedNamespace.value = activeNamespace.value
+  }
   if (typeof route.query.kind === 'string') selectedKind.value = route.query.kind as ResourceKind
   await loadClusters()
   await loadNamespaces()
@@ -129,50 +180,6 @@ onMounted(async () => {
 
 <template>
   <div class="explorer-layout animate-fade-in">
-    <!-- Top Resource Bar (Replaces Sidebar) -->
-    <div class="top-resource-bar glass-panel desktop-only">
-      <div class="top-selectors">
-        <div class="selector-group">
-          <span class="selector-label">Cluster</span>
-          <div class="selector-input-wrap">
-            <select v-model="selectedCluster" class="input-glass top-select font-mono">
-              <option v-for="c in clusters" :key="c.id || c.name" :value="c.name || c.id">{{ c.name || c.id }}</option>
-            </select>
-            <button type="button" class="btn-icon" @click="showImportModal = true" title="Import Cluster">+</button>
-          </div>
-        </div>
-        <div class="selector-divider"></div>
-        <div class="selector-group">
-          <span class="selector-label">Namespace</span>
-          <div class="selector-input-wrap">
-            <select v-model="selectedNamespace" class="input-glass top-select font-mono">
-              <option value="all">All Namespaces</option>
-              <option v-for="ns in namespaces" :key="ns.name" :value="ns.name">{{ ns.name }}</option>
-            </select>
-            <button type="button" class="btn-icon" @click="showNewNsModal = true" title="New Namespace">+</button>
-          </div>
-        </div>
-        <div class="selector-divider"></div>
-        <div class="selector-group kind-selectors">
-          <span class="selector-label">Resource</span>
-          <div class="kind-dropdowns">
-            <select
-              v-for="category in filteredKindCategories"
-              :key="category.title"
-              class="input-glass top-select font-mono dropdown-selector"
-              :class="{ 'active-category': category.items.some(i => i.kind === selectedKind) }"
-              @change="selectKind(($event.target as HTMLSelectElement).value as any)"
-            >
-              <option value="" disabled :selected="!category.items.some(i => i.kind === selectedKind)">{{ category.title }}</option>
-              <option v-for="item in category.items" :key="item.kind" :value="item.kind" :selected="selectedKind === item.kind">
-                {{ item.label }}
-              </option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <main class="explorer-main">
       <!-- Mobile 44px Command Bar (< 640px) -->
       <div class="explorer-mobile-command-bar">
@@ -185,7 +192,6 @@ onMounted(async () => {
           <button type="button" class="btn-mobile-cmd" title="Refresh" aria-label="Refresh" :disabled="loading" @click="fetchResources"><BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /></button>
           <button type="button" class="btn-mobile-cmd" title="Apply YAML" aria-label="Apply YAML" @click="openApplyYamlModal"><BaseIcon name="file-text" size="xs" /></button>
           <button type="button" class="btn-mobile-cmd" title="Create Resource" aria-label="Create Resource" @click="showCreateModal = true"><BaseIcon name="plus" size="xs" /></button>
-          
         </div>
       </div>
 
@@ -214,45 +220,107 @@ onMounted(async () => {
         </button>
       </div>
 
-      <!-- Desktop Header & 3 KPI Cards wrapped in .desktop-header-wrap (Hidden on <640px) -->
-      <div class="desktop-header-wrap">
-        <div class="view-header glass-panel header-banner">
-          <div class="header-left">
-            <div class="view-tag">
-              <span class="pulse-dot pulse-dot-cyan"></span>
-              <span class="tag-title">KUBERNETES CONTROL PLANE</span>
-              <span class="status-live-chip">LIVE</span>
-            </div>
-            <div class="title-with-icon">
-              <h1 class="view-title font-sans">{{ currentKindLabel }}</h1>
-            </div>
-            <div class="breadcrumbs font-mono">
-              <span class="crumb-pill crumb-cluster"><BaseIcon name="globe" size="xs" /> {{ selectedCluster }}</span>
-              <span class="crumb-sep">›</span>
-              <span class="crumb-pill crumb-ns"><BaseIcon name="folder" size="xs" /> {{ selectedNamespace === 'all' ? 'All Namespaces' : selectedNamespace }}</span>
-              <span class="crumb-sep">›</span>
-              <span class="crumb-pill crumb-kind active-kind">{{ currentKindLabel }} ({{ totalInKind }})</span>
-            </div>
-            <div class="explorer-kpi-strip font-mono text-muted">
-              <span class="explorer-kpi-badge font-mono">{{ totalInKind }} {{ currentKindLabel }}</span> · <span class="explorer-kpi-badge font-mono">{{ activeNamespacesCount }} Namespaces</span> · <span class="explorer-kpi-badge font-mono">{{ selectedCluster }}</span>
-            </div>
-          </div>
-
-          <div class="header-actions">
-            <button type="button" class="btn btn-secondary btn-header" :disabled="loading" @click="fetchResources">
-              <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" />
-              <span class="btn-label">{{ loading ? 'Syncing...' : 'Refresh' }}</span>
-            </button>
-            <button type="button" class="btn btn-secondary btn-header btn-yaml" @click="openApplyYamlModal">
-              <BaseIcon name="file-text" size="xs" />
-              <span class="btn-label">Apply YAML</span>
-            </button>
-            <button type="button" class="btn btn-primary btn-header btn-create" @click="showCreateModal = true">
-              <BaseIcon name="sparkles" size="xs" />
-              <span class="btn-label">+ Create {{ currentKindLabel.slice(0, -1) || 'Resource' }}</span>
-            </button>
-          </div>
+      <!-- Sleek Unified 38px Enterprise Toolbar -->
+      <div class="explorer-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Kubernetes Explorer Toolbar">
+        <!-- Zone 1 (Left - Search): 140px-180px, height: 28px -->
+        <div class="toolbar-search-wrap">
+          <BaseIcon name="search" size="xs" class="search-icon" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Filter resources..."
+            class="toolbar-search-input font-mono"
+            aria-label="Filter resources by name, namespace"
+          />
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="clear-input-btn"
+            aria-label="Clear search"
+            @click="searchQuery = ''"
+          >
+            <BaseIcon name="x" size="xs" />
+          </button>
         </div>
+
+        <!-- Zone 2 (Center-Left - Category Capsule Pills): 28px Capsule Pill Tabs -->
+        <div class="toolbar-nav-pills" role="tablist" aria-label="Resource Categories">
+          <button
+            v-for="cat in explorerCategories"
+            :key="cat.id"
+            type="button"
+            role="tab"
+            :aria-selected="activeCategory === cat.id"
+            class="capsule-pill"
+            :class="{ active: activeCategory === cat.id }"
+            @click="handleCategorySelect(cat)"
+          >
+            <BaseIcon :name="cat.icon" size="xs" />
+            <span>{{ cat.label }}</span>
+          </button>
+        </div>
+
+        <!-- Zone 3 (Center-Right - Telemetry Badge): Monospace status badge -->
+        <div class="toolbar-kpi-strip font-mono">
+          <span class="kpi-badge font-mono">[LIVE] {{ totalInKind }} {{ currentKindLabel }}</span>
+        </div>
+
+        <!-- Zone 4 (Right - Actions Group) -->
+        <div class="toolbar-actions-group">
+          <button
+            type="button"
+            class="toolbar-btn btn-secondary"
+            :disabled="loading"
+            title="Refresh Resources"
+            @click="fetchResources"
+          >
+            <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" />
+            <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
+          </button>
+
+          <button
+            type="button"
+            class="toolbar-btn btn-secondary"
+            title="Apply YAML Manifest"
+            @click="openApplyYamlModal"
+          >
+            <BaseIcon name="file-text" size="xs" />
+            <span>Apply YAML</span>
+          </button>
+
+          <button
+            type="button"
+            class="toolbar-btn btn-primary"
+            title="Create Resource"
+            @click="showCreateModal = true"
+          >
+            <BaseIcon name="plus" size="xs" />
+            <span>+ Create</span>
+          </button>
+
+          <ActionDropdown
+            :items="moreActions"
+            size="sm"
+            trigger-title="More"
+            @select="handleMoreActionSelect"
+          />
+        </div>
+      </div>
+
+      <!-- Kind Sub-Strip (Directly beneath toolbar, compact 28px row) -->
+      <div class="explorer-kind-substrip desktop-only" role="tablist" aria-label="Resource Sub-kinds">
+        <button
+          v-for="item in currentCategoryKinds"
+          :key="item.kind"
+          type="button"
+          role="tab"
+          :aria-selected="selectedKind === item.kind"
+          class="substrip-pill font-mono"
+          :class="{ active: selectedKind === item.kind }"
+          @click="selectKind(item.kind)"
+        >
+          <span>{{ item.label }}</span>
+        </button>
       </div>
 
       <!-- Toast & Offline Notifications -->
