@@ -1,13 +1,13 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import type { LogEntry } from '../../stores/logStore'
 import { useInfraHosts } from '../../composables/useInfraHosts'
 import { api } from '../../api/client'
-import { fleetApi } from '../../api/fleet'
+import { dockerApi } from '../../api/docker'
 import BaseIcon from '../ui/BaseIcon.vue'
 
 export interface LogTarget {
-  type: 'all' | 'node' | 'service'
+  type: 'service' | 'node' | 'all'
   id: string
   name: string
   icon?: string
@@ -18,6 +18,7 @@ export interface TargetNodeItem {
   name: string
   icon: string
   role: string
+  systemd?: boolean
 }
 
 export interface TargetServiceItem {
@@ -37,17 +38,20 @@ const props = withDefaults(
     cluster: '',
   }
 )
-const emit = defineEmits<{ (e: 'update:modelValue', target: LogTarget): void; (e: 'select', target: LogTarget): void }>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', target: LogTarget): void
+  (e: 'select', target: LogTarget): void
+}>()
 
 const { hosts } = useInfraHosts()
 const apiServices = ref<TargetServiceItem[]>([])
 const targetSearch = ref('')
+const appsExpanded = ref(true)
 const nodesExpanded = ref(true)
-const servicesExpanded = ref(true)
 
 function getServiceIcon(name: string): string {
   const lower = name.toLowerCase()
-  if (lower.includes('traefik') || lower.includes('ingress') || lower.includes('gateway')) return 'radio'
+  if (lower.includes('traefik') || lower.includes('ingress') || lower.includes('gateway') || lower.includes('nginx')) return 'radio'
   if (lower.includes('postg') || lower.includes('sql') || lower.includes('mysql') || lower.includes('redis') || lower.includes('db')) return 'database'
   if (lower.includes('nats') || lower.includes('kafka') || lower.includes('queue') || lower.includes('mq')) return 'zap'
   if (lower.includes('agent')) return 'cloud'
@@ -57,128 +61,130 @@ function getServiceIcon(name: string): string {
   return 'sliders'
 }
 
-async function fetchClusterServices() {
+async function fetchDynamicServices() {
+  const foundNames = new Set<string>()
+  const items: TargetServiceItem[] = []
+
+  // 1. Try GET /logs/services (centralized logging or agent services)
   try {
-    // Verify active cluster exists before querying or query fleet
-    let targetCluster = props.cluster
-    if (!targetCluster) {
-      try {
-        const clusters = await fleetApi.list()
-        if (clusters && clusters.length > 0) {
-          targetCluster = clusters[0].name || clusters[0].id || ''
-        }
-      } catch {
-        // Fleet list failed or offline; continue without active cluster
-      }
-    }
-
-    if (!targetCluster) {
-      // No verified active cluster; retain default services and logs discovery without firing 404
-      return
-    }
-
-    const res = await api.get<any>(`/k8s/${encodeURIComponent(targetCluster)}/resources`, { kind: 'Service' })
-    const items = Array.isArray(res) ? res : (res?.data || res?.items || [])
-    if (Array.isArray(items) && items.length > 0) {
-      apiServices.value = items.map((s: any) => {
-        const name = s.metadata?.name || s.name || String(s)
-        return {
+    const res = await api.get<{ services?: string[] } | string[]>('/logs/services')
+    const rawList = Array.isArray(res) ? res : (res?.services || [])
+    for (const item of rawList) {
+      const name = typeof item === 'string' ? item : (item as { name?: string })?.name || String(item)
+      if (name && !foundNames.has(name.toLowerCase())) {
+        foundNames.add(name.toLowerCase())
+        items.push({
           id: name,
           name,
           icon: getServiceIcon(name),
-          type: s.spec?.type || 'Service',
-        }
-      })
+          type: 'App Container',
+        })
+      }
     }
   } catch {
-    // Gracefully catch HTTP 404 and endpoint errors without unhandled console errors
-    // Baseline defaults and dynamic log stream discovery provide complete coverage
+    // Graceful fallback to docker services
+  }
+
+  // 2. Try GET /docker/services and /docker/containers
+  try {
+    const [dockerServices, dockerContainers] = await Promise.allSettled([
+      dockerApi.listServices(),
+      dockerApi.listContainers(),
+    ])
+
+    if (dockerServices.status === 'fulfilled' && Array.isArray(dockerServices.value)) {
+      for (const s of dockerServices.value) {
+        const name = s.name || s.id
+        if (name && !foundNames.has(name.toLowerCase())) {
+          foundNames.add(name.toLowerCase())
+          items.push({
+            id: name,
+            name,
+            icon: getServiceIcon(name),
+            type: 'Swarm Service',
+          })
+        }
+      }
+    }
+
+    if (dockerContainers.status === 'fulfilled' && Array.isArray(dockerContainers.value)) {
+      for (const c of dockerContainers.value) {
+        const name = (c.name || c.id).replace(/^\//, '')
+        if (name && !foundNames.has(name.toLowerCase())) {
+          foundNames.add(name.toLowerCase())
+          items.push({
+            id: name,
+            name,
+            icon: getServiceIcon(name),
+            type: c.state || 'Container',
+          })
+        }
+      }
+    }
+  } catch {
+    // Graceful fallback
+  }
+
+  // 3. Fallback cluster resources if cluster specified
+  if (props.cluster) {
+    try {
+      const res = await api.get<any>(`/k8s/${encodeURIComponent(props.cluster)}/resources`, { kind: 'Service' })
+      const k8sItems = Array.isArray(res) ? res : (res?.data || res?.items || [])
+      if (Array.isArray(k8sItems)) {
+        for (const s of k8sItems) {
+          const name = s.metadata?.name || s.name
+          if (name && !foundNames.has(name.toLowerCase())) {
+            foundNames.add(name.toLowerCase())
+            items.push({
+              id: name,
+              name,
+              icon: getServiceIcon(name),
+              type: s.spec?.type || 'Service',
+            })
+          }
+        }
+      }
+    } catch {
+      // Graceful fallback
+    }
+  }
+
+  if (items.length > 0) {
+    apiServices.value = items
   }
 }
 
-watch(
-  () => props.cluster,
-  () => {
-    fetchClusterServices()
-  }
-)
-
-onMounted(() => {
-  fetchClusterServices()
-})
-
-// Dynamic host nodes: loaded from useInfraHosts() API + dynamic log discovery + fallback defaults
-const dynamicHostNodes = computed<TargetNodeItem[]>(() => {
-  const map = new Map<string, TargetNodeItem>()
-
-  if (hosts.value && hosts.value.length > 0) {
-    for (const h of hosts.value) {
-      const name = h.name || h.id
-      const isMaster = name.toLowerCase().includes('master') || (h.host_role?.toLowerCase().includes('control') ?? false)
-      const icon = isMaster ? 'shield' : (h.host_type === 'database' ? 'database' : 'server')
-      const role = h.host_role || (isMaster ? 'Control Plane' : 'Worker Node')
-      map.set(name.toLowerCase(), { id: name, name, icon, role })
-    }
-  } else {
-    // Real node defaults
-    const defaults: TargetNodeItem[] = [
-      { id: 'master', name: 'master', icon: 'shield', role: 'Control Plane' },
-      { id: 'worker1', name: 'worker1', icon: 'server', role: 'Worker Node' },
-      { id: 'worker2', name: 'worker2', icon: 'server', role: 'Worker Node' },
-      { id: 'worker3', name: 'worker3', icon: 'server', role: 'Worker Node' },
-      { id: 'masterdb', name: 'masterdb', icon: 'database', role: 'Primary DB' },
-      { id: 'workerdb1', name: 'workerdb1', icon: 'database', role: 'Replica DB' },
-    ]
-    for (const d of defaults) {
-      map.set(d.id.toLowerCase(), d)
-    }
-  }
-
-  // Also collect any unique nodes present in incoming log stream
-  for (const log of props.logs) {
-    if (log.node && !map.has(log.node.toLowerCase())) {
-      const isMaster = log.node.toLowerCase().includes('master')
-      map.set(log.node.toLowerCase(), {
-        id: log.node,
-        name: log.node,
-        icon: isMaster ? 'shield' : 'server',
-        role: isMaster ? 'Control Plane' : 'Host Node',
-      })
-    }
-  }
-
-  return Array.from(map.values())
-})
-
-// Dynamic services: baseline defaults + API /k8s/default/resources?kind=Service + dynamically collected from props.logs
+// Section 1: Running Apps (Log App)
+// Lists actual running application containers: postgres_db, tiki_redis, my-nginx, nats, traefik, etc.
 const dynamicServices = computed<TargetServiceItem[]>(() => {
   const map = new Map<string, TargetServiceItem>()
 
-  const defaultServices: TargetServiceItem[] = [
-    { id: 'traefik', name: 'traefik', icon: 'radio', type: 'Ingress Proxy' },
-    { id: 'postgres', name: 'postgres', icon: 'database', type: 'Stateful DB' },
+  // Production running apps defaults
+  const defaultApps: TargetServiceItem[] = [
+    { id: 'postgres_db', name: 'postgres_db', icon: 'database', type: 'Database' },
+    { id: 'tiki_redis', name: 'tiki_redis', icon: 'database', type: 'Cache Store' },
+    { id: 'my-nginx', name: 'my-nginx', icon: 'radio', type: 'Web Server' },
     { id: 'nats', name: 'nats', icon: 'zap', type: 'Message Broker' },
-    { id: 'k8s-agent', name: 'k8s-agent', icon: 'cloud', type: 'Cluster Agent' },
-    { id: 'standalone', name: 'standalone', icon: 'sliders', type: 'Core Daemon' },
-    { id: 'docker', name: 'docker', icon: 'box', type: 'Container Engine' },
+    { id: 'traefik', name: 'traefik', icon: 'radio', type: 'Edge Proxy' },
   ]
-  for (const s of defaultServices) {
-    map.set(s.id.toLowerCase(), s)
+  for (const app of defaultApps) {
+    map.set(app.id.toLowerCase(), app)
   }
 
+  // API discovered services
   for (const s of apiServices.value) {
     map.set(s.id.toLowerCase(), s)
   }
 
-  // Dynamically collect unique services/workloads from incoming log entries
+  // Dynamically collect unique running apps/containers from incoming logs
   for (const log of props.logs) {
-    const svc = log.service || log.container
+    const svc = log.service || log.container || log.attributes?.app || log.attributes?.service
     if (svc && !map.has(svc.toLowerCase())) {
       map.set(svc.toLowerCase(), {
         id: svc,
         name: svc,
         icon: getServiceIcon(svc),
-        type: 'Workload',
+        type: 'App Container',
       })
     }
   }
@@ -186,17 +192,67 @@ const dynamicServices = computed<TargetServiceItem[]>(() => {
   return Array.from(map.values())
 })
 
-// Quick filter search applied across targets
-const filteredHostNodes = computed(() => {
-  const q = targetSearch.value.trim().toLowerCase()
-  if (!q) return dynamicHostNodes.value
-  return dynamicHostNodes.value.filter(n => n.name.toLowerCase().includes(q) || n.role.toLowerCase().includes(q))
+// Section 2: Node Systems (Log Node / SystemD)
+// Lists host nodes: k8smater133, 10.10.10.60, 10.10.10.80.
+// When a node is selected, views host OS & systemd journal logs.
+const dynamicHostNodes = computed<TargetNodeItem[]>(() => {
+  const map = new Map<string, TargetNodeItem>()
+
+  if (hosts.value && hosts.value.length > 0) {
+    for (const h of hosts.value) {
+      const name = h.name || h.id || h.endpoint
+      const isMaster = name.toLowerCase().includes('mater') || name.toLowerCase().includes('master')
+      const role = isMaster ? 'Control Plane · SystemD' : 'Worker Node · SystemD'
+      map.set(name.toLowerCase(), {
+        id: name,
+        name,
+        icon: 'server',
+        role,
+        systemd: true,
+      })
+    }
+  }
+
+  // Host node defaults specified in requirements: k8smater133, 10.10.10.60, 10.10.10.80
+  const defaultNodes: TargetNodeItem[] = [
+    { id: 'k8smater133', name: 'k8smater133', icon: 'server', role: 'Control Plane · SystemD', systemd: true },
+    { id: '10.10.10.60', name: '10.10.10.60', icon: 'server', role: 'Worker Node · SystemD', systemd: true },
+    { id: '10.10.10.80', name: '10.10.10.80', icon: 'server', role: 'Worker Node · SystemD', systemd: true },
+  ]
+  for (const d of defaultNodes) {
+    if (!map.has(d.id.toLowerCase())) {
+      map.set(d.id.toLowerCase(), d)
+    }
+  }
+
+  // Dynamically collect unique nodes present in incoming log entries
+  for (const log of props.logs) {
+    const node = log.node || log.attributes?.node
+    if (node && !map.has(node.toLowerCase())) {
+      map.set(node.toLowerCase(), {
+        id: node,
+        name: node,
+        icon: 'server',
+        role: 'Host Node · SystemD',
+        systemd: true,
+      })
+    }
+  }
+
+  return Array.from(map.values())
 })
 
+// Filter search applied across targets
 const filteredServices = computed(() => {
   const q = targetSearch.value.trim().toLowerCase()
   if (!q) return dynamicServices.value
   return dynamicServices.value.filter(s => s.name.toLowerCase().includes(q) || s.type.toLowerCase().includes(q))
+})
+
+const filteredHostNodes = computed(() => {
+  const q = targetSearch.value.trim().toLowerCase()
+  if (!q) return dynamicHostNodes.value
+  return dynamicHostNodes.value.filter(n => n.name.toLowerCase().includes(q) || n.role.toLowerCase().includes(q))
 })
 
 function selectTarget(target: LogTarget) {
@@ -206,13 +262,59 @@ function selectTarget(target: LogTarget) {
 
 function getNodeCount(nodeId: string): number {
   const q = nodeId.toLowerCase()
-  return props.logs.filter(l => (l.node && l.node.toLowerCase().includes(q)) || (l.pod && l.pod.toLowerCase().includes(q)) || (l.namespace && l.namespace.toLowerCase().includes(q))).length
+  return props.logs.filter(l =>
+    (l.node && l.node.toLowerCase().includes(q)) ||
+    (l.attributes?.node && l.attributes.node.toLowerCase().includes(q)) ||
+    (l.pod && l.pod.toLowerCase().includes(q)) ||
+    (l.namespace && l.namespace.toLowerCase().includes(q))
+  ).length
 }
 
 function getServiceCount(serviceId: string): number {
   const q = serviceId.toLowerCase()
-  return props.logs.filter(l => (l.service && l.service.toLowerCase().includes(q)) || (l.container && l.container.toLowerCase().includes(q)) || (l.pod && l.pod.toLowerCase().includes(q)) || (l.namespace && l.namespace.toLowerCase().includes(q))).length
+  return props.logs.filter(l =>
+    (l.service && l.service.toLowerCase().includes(q)) ||
+    (l.container && l.container.toLowerCase().includes(q)) ||
+    (l.attributes?.app && l.attributes.app.toLowerCase().includes(q)) ||
+    (l.attributes?.service && l.attributes.service.toLowerCase().includes(q)) ||
+    (l.pod && l.pod.toLowerCase().includes(q)) ||
+    (l.namespace && l.namespace.toLowerCase().includes(q))
+  ).length
 }
+
+// Default selection when page opens: first available running app or first available node.
+function autoSelectDefaultTarget() {
+  if (props.modelValue && props.modelValue.type !== 'all' && props.modelValue.id && props.modelValue.id !== 'all') {
+    return
+  }
+  if (dynamicServices.value.length > 0) {
+    const first = dynamicServices.value[0]
+    selectTarget({ type: 'service', id: first.id, name: first.name, icon: first.icon })
+  } else if (dynamicHostNodes.value.length > 0) {
+    const first = dynamicHostNodes.value[0]
+    selectTarget({ type: 'node', id: first.id, name: first.name, icon: 'server' })
+  }
+}
+
+watch(
+  () => props.cluster,
+  () => {
+    fetchDynamicServices()
+  }
+)
+
+watch(
+  [dynamicServices, dynamicHostNodes],
+  () => {
+    autoSelectDefaultTarget()
+  },
+  { immediate: true }
+)
+
+onMounted(async () => {
+  await fetchDynamicServices()
+  autoSelectDefaultTarget()
+})
 </script>
 
 <template>
@@ -249,65 +351,15 @@ function getServiceCount(serviceId: string): number {
     </div>
 
     <div class="tree-content">
-      <!-- All Cluster Logs -->
-      <button
-        type="button"
-        role="treeitem"
-        :aria-selected="modelValue.type === 'all'"
-        class="tree-item tree-root-item"
-        :class="{ active: modelValue.type === 'all' }"
-        @click="selectTarget({ type: 'all', id: 'all', name: 'All Cluster Logs', icon: 'globe' })"
-      >
-        <span class="tree-accent-bar"></span>
-        <span class="item-icon">
-          <BaseIcon name="globe" size="sm" />
-        </span>
-        <div class="item-meta">
-          <span class="item-name">All Cluster Logs</span>
-          <span class="item-sub font-mono">Unified aggregator</span>
-        </div>
-        <span class="item-count font-mono" :class="{ 'has-logs': logs.length > 0 }">{{ logs.length }}</span>
-      </button>
-
-      <!-- Host Nodes Section -->
+      <!-- Section 1: Running Apps (Log App) -->
       <div class="tree-section">
-        <div class="section-toggle" @click="nodesExpanded = !nodesExpanded">
-          <span class="section-caret" :class="{ 'caret-down': nodesExpanded }">▸</span>
-          <span class="section-label">Host Nodes</span>
-          <span class="section-count font-mono">{{ filteredHostNodes.length }}</span>
-        </div>
-        <div v-show="nodesExpanded" class="section-items">
-          <button
-            v-for="node in filteredHostNodes"
-            :key="node.id"
-            type="button"
-            role="treeitem"
-            :aria-selected="modelValue.type === 'node' && modelValue.id === node.id"
-            class="tree-item"
-            :class="{ active: modelValue.type === 'node' && modelValue.id === node.id }"
-            @click="selectTarget({ type: 'node', id: node.id, name: node.name, icon: node.icon })"
-          >
-            <span class="tree-accent-bar"></span>
-            <span class="item-icon">
-              <BaseIcon :name="node.icon" size="sm" />
-            </span>
-            <div class="item-meta">
-              <span class="item-name font-mono">{{ node.name }}</span>
-              <span class="item-sub font-mono">{{ node.role }}</span>
-            </div>
-            <span class="item-count font-mono" :class="{ 'has-logs': getNodeCount(node.id) > 0 }">{{ getNodeCount(node.id) }}</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Services & Containers Section -->
-      <div class="tree-section">
-        <div class="section-toggle" @click="servicesExpanded = !servicesExpanded">
-          <span class="section-caret" :class="{ 'caret-down': servicesExpanded }">▸</span>
-          <span class="section-label">Services & Containers</span>
+        <div class="section-toggle" @click="appsExpanded = !appsExpanded">
+          <span class="section-caret" :class="{ 'caret-down': appsExpanded }">&#9656;</span>
+          <BaseIcon name="box" size="xs" />
+          <span class="section-label">Running Apps (Log App)</span>
           <span class="section-count font-mono">{{ filteredServices.length }}</span>
         </div>
-        <div v-show="servicesExpanded" class="section-items">
+        <div v-show="appsExpanded" class="section-items">
           <button
             v-for="svc in filteredServices"
             :key="svc.id"
@@ -320,13 +372,45 @@ function getServiceCount(serviceId: string): number {
           >
             <span class="tree-accent-bar"></span>
             <span class="item-icon">
-              <BaseIcon :name="svc.icon" size="sm" />
+              <BaseIcon :name="svc.icon || 'box'" size="sm" />
             </span>
             <div class="item-meta">
               <span class="item-name font-mono">{{ svc.name }}</span>
               <span class="item-sub font-mono">{{ svc.type }}</span>
             </div>
             <span class="item-count font-mono" :class="{ 'has-logs': getServiceCount(svc.id) > 0 }">{{ getServiceCount(svc.id) }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 2: Node Systems (Log Node / SystemD) -->
+      <div class="tree-section">
+        <div class="section-toggle" @click="nodesExpanded = !nodesExpanded">
+          <span class="section-caret" :class="{ 'caret-down': nodesExpanded }">&#9656;</span>
+          <BaseIcon name="server" size="xs" />
+          <span class="section-label">Node Systems (Log Node / SystemD)</span>
+          <span class="section-count font-mono">{{ filteredHostNodes.length }}</span>
+        </div>
+        <div v-show="nodesExpanded" class="section-items">
+          <button
+            v-for="node in filteredHostNodes"
+            :key="node.id"
+            type="button"
+            role="treeitem"
+            :aria-selected="modelValue.type === 'node' && modelValue.id === node.id"
+            class="tree-item"
+            :class="{ active: modelValue.type === 'node' && modelValue.id === node.id }"
+            @click="selectTarget({ type: 'node', id: node.id, name: node.name, icon: 'server' })"
+          >
+            <span class="tree-accent-bar"></span>
+            <span class="item-icon">
+              <BaseIcon name="server" size="sm" />
+            </span>
+            <div class="item-meta">
+              <span class="item-name font-mono">{{ node.name }}</span>
+              <span class="item-sub font-mono">{{ node.role }}</span>
+            </div>
+            <span class="item-count font-mono" :class="{ 'has-logs': getNodeCount(node.id) > 0 }">{{ getNodeCount(node.id) }}</span>
           </button>
         </div>
       </div>
