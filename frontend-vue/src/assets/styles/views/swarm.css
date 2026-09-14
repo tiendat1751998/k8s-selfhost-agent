@@ -27,7 +27,7 @@
 }
 
 .view-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
@@ -346,7 +346,7 @@
 
 .swarm-micro-telemetry .tel-svcs { color: #38bdf8; }
 .swarm-micro-telemetry .tel-nodes { color: #34d399; }
-.swarm-micro-telemetry .tel-ctrs { color: #c084fc; }
+.swarm-micro-telemetry .tel-ctrs { color: #60a5fa; }
 .swarm-micro-telemetry .tel-vip { color: #38bdf8; }
 .swarm-micro-telemetry .tel-sep {
   color: rgba(148, 163, 184, 0.4);
@@ -357,7 +357,7 @@
 .font-mono { font-family: var(--font-mono); }
 .text-cyan { color: var(--accent-cyan); }
 .text-emerald { color: var(--accent-emerald); }
-.text-violet { color: #a78bfa; }
+.text-violet { color: #60a5fa; }
 .text-muted { color: var(--text-muted); }
 .text-xs { font-size: 10px; }
 
