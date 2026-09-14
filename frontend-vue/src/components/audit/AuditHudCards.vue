@@ -48,7 +48,7 @@ defineProps<{
       :badge="metrics.policyDenials === 0 ? 'SECURE' : 'ACTION REQ'"
       :badge-color="metrics.policyDenials === 0 ? 'emerald' : 'rose'"
       subtitle="Policy enforcement blocked actions"
-      icon="alert-octagon"
+      icon="alert-triangle"
     />
   </div>
 </template>
