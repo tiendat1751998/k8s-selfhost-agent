@@ -26,7 +26,7 @@ function getStatusBadgeClass(status: string): string {
 function getSecretTypeClass(type: string): string {
   switch (type) {
     case 'TLS Certificate': return 'badge-cyan'
-    case 'Vault Secret': return 'badge-violet'
+    case 'Vault Secret': return 'badge-slate'
     case 'API Key': return 'badge-amber'
     case 'JWT Token': return 'badge-rose'
     default: return 'badge-muted'
@@ -43,7 +43,7 @@ function getSecretTypeClass(type: string): string {
           Continuous detection across pods, container crash logs, HashiCorp Vault dynamic leases, and External Secrets Operator (ESO)
         </p>
       </div>
-      <span class="badge badge-violet">{{ secrets.length }} Monitored Credentials</span>
+      <span class="badge badge-slate">{{ secrets.length }} Monitored Credentials</span>
     </div>
 
     <div class="secrets-grid">
@@ -68,7 +68,7 @@ function getSecretTypeClass(type: string): string {
         <div class="secret-meta">
           <div class="secret-source">
             <span>Namespace:</span>
-            <span class="badge badge-violet font-mono" style="font-size: 10px;">{{ secret.namespace }}</span>
+            <span class="badge badge-slate font-mono" style="font-size: 10px;">{{ secret.namespace }}</span>
             <span class="text-muted">• {{ secret.source_resource }}</span>
           </div>
 

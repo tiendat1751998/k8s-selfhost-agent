@@ -145,7 +145,7 @@ function getSecretBorderClass(status: string): string {
             </span>
           </div>
           <div class="mobile-card-row-2">
-            <span class="badge badge-violet" style="font-size: 9px; padding: 0 4px;">{{ secret.namespace }}</span>
+            <span class="badge badge-slate" style="font-size: 9px; padding: 0 4px;">{{ secret.namespace }}</span>
             <span class="text-muted font-mono">{{ secret.masked_value }}</span>
           </div>
         </div>
