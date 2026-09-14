@@ -20,6 +20,8 @@
 
 /* Sleek Unified 38px Enterprise Toolbar */
 .logs-toolbar-sleek {
+  position: relative;
+  z-index: 20;
   height: 38px; min-height: 38px; max-height: 38px; display: flex; align-items: center; justify-content: space-between;
   padding: 0 10px; border-radius: 8px; margin-bottom: 8px; box-sizing: border-box;
   background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(148, 163, 184, 0.15);
@@ -145,7 +147,8 @@
 
 .logs-toolbar-sleek .engine-popover,
 .logs-toolbar-sleek :deep(.engine-popover) {
-  z-index: 100;
+  position: absolute;
+  z-index: 50;
   top: calc(100% + 6px);
 }
 
