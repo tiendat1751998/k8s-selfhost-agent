@@ -41,6 +41,19 @@ const badgeText = computed(() => {
   return `${status.value.engine} · Ready · ${latency}`
 })
 
+const shortEngineName = computed(() => {
+  const eng = status.value.engine
+  if (eng.includes('ClickHouse')) return 'ClickHouse'
+  if (eng.includes('Distributed') || eng.includes('Edge')) return 'Edge LogEngine'
+  if (eng.includes('RingBuffer')) return 'RingBuffer'
+  return eng.split(' ')[0] || eng
+})
+
+const shortBadgeText = computed(() => {
+  if (isFallback.value) return `${shortEngineName.value} · Fallback`
+  return `${shortEngineName.value} · Ready`
+})
+
 async function fetchStatus() {
   try {
     const res = await api.get<EngineStatusPayload>('/logs/status')
@@ -68,12 +81,23 @@ onMounted(fetchStatus)
 </script>
 
 <template>
-  <div class="engine-badge-container" @mouseenter="showPopover = true" @mouseleave="showPopover = false">
-    <div class="engine-badge font-mono" :class="isFallback ? 'badge-fallback' : 'badge-connected'" role="status">
+  <div class="engine-badge-container log-engine-badge-wrapper" @mouseenter="showPopover = true" @mouseleave="showPopover = false">
+    <button
+      type="button"
+      class="engine-badge engine-badge-trigger font-mono"
+      :class="isFallback ? 'badge-fallback' : 'badge-connected'"
+      role="status"
+      aria-haspopup="dialog"
+      :aria-expanded="showPopover"
+      @click="showPopover = !showPopover"
+    >
       <span class="pulse-dot" :class="isFallback ? 'pulse-dot-cyan' : 'pulse-dot-emerald'" />
-      <span class="engine-badge-text">{{ badgeText }}</span>
+      <span class="engine-badge-text">
+        <span class="badge-text-full">{{ badgeText }}</span>
+        <span class="badge-text-compact">{{ shortBadgeText }}</span>
+      </span>
       <BaseIcon name="info" size="xs" style="opacity: 0.6;" />
-    </div>
+    </button>
 
     <transition name="fade">
       <div v-if="showPopover" class="engine-popover glass-panel font-mono" role="tooltip">
@@ -119,7 +143,27 @@ onMounted(fetchStatus)
 
 <style scoped>
 .engine-badge-container { position: relative; display: inline-flex; align-items: center; }
-.engine-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; user-select: none; }
+.engine-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  min-height: 28px;
+  line-height: 28px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  font-family: inherit;
+  border: 1px solid transparent;
+  background: transparent;
+  box-sizing: border-box;
+}
+.badge-text-compact { display: none; }
+.badge-text-full { display: inline; }
 .badge-connected { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; }
 .badge-connected:hover { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.5); }
 .badge-fallback { background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); color: #22d3ee; }
@@ -128,7 +172,32 @@ onMounted(fetchStatus)
 .pulse-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .pulse-dot-emerald { background: #10b981; box-shadow: 0 0 6px #10b981; }
 .pulse-dot-cyan { background: #06b6d4; box-shadow: 0 0 6px #06b6d4; }
-.engine-popover { position: absolute; top: calc(100% + 6px); left: 0; width: 310px; padding: 10px 12px; border-radius: 8px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); z-index: 100; display: flex; flex-direction: column; gap: 6px; }
+.engine-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 310px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+}
+@media (max-width: 1300px) {
+  .badge-text-full { display: none !important; }
+  .badge-text-compact { display: inline !important; }
+}
+@media (max-width: 1200px) {
+  .engine-popover { left: auto; right: 0; }
+}
 .popover-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 6px; margin-bottom: 2px; }
 .popover-title-group { display: inline-flex; align-items: center; gap: 6px; color: #94a3b8; }
 .popover-title { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; color: #94a3b8; }
