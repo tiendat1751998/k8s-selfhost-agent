@@ -1,7 +1,7 @@
-# Project State — Checkpoint 2026-09-14T11:27:00+07:00
+# Project State — Checkpoint 2026-09-14T13:36:00+07:00
 
 ## Branch: `feat/enterprise-console-phase1`
-## Head Commit: `4a3b7c1` (`feat(explorer): merge sleek enterprise toolbar and standardized row actions`)
+## Head Commit: `6345b87` (`feat(logs): merge sleek enterprise toolbar and deduplicated controls`)
 ## Working Tree: Clean (0 unstaged changes)
 ## Verification: 100% PRODUCTION ENTERPRISE PASS (Build Exit Code 0, Zero Console Errors, Reviewer Approved, QA DevTools MCP Verified)
 
@@ -80,6 +80,19 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
     - Standardized `ExplorerResourceTable.vue` row actions: eradicated 5 multi-colored rainbow buttons (`action-btn-cyan`, `action-btn-amber`, `action-btn-emerald`, `action-btn-secondary`, `action-btn-danger`), replacing them with exactly 1 inline secondary button (`Scale`/`Logs`/`Cordon`/`Trigger`/`Details`) + 1 standard `[ ⋯ ] ActionDropdown` (`Diagnostics & Details`, `View YAML Manifest`, contextual action, `Delete Resource`).
     - Modularity confirmed: all 4 files strictly < 500 lines (`ExplorerView.vue`: 414 lines, `ExplorerResourceTable.vue`: 284 lines, `explorer.css`: 141 lines, `explorer-toolbar.css`: 195 lines). Zero emojis. Dark OLED Slate tokens used.
     - Verified 100% PASS via Chrome DevTools MCP across Desktop (1440x900), Laptop (1280x800), and Tablet (768x1024) with 0px horizontal scroll overflow and 0 console errors.
+13. **Log Stream Explorer 5-Layer Header Stacking Eradication & Sleek Toolbar Overhaul** (`LogStreamView.vue`, `LogViewerTerminal.vue`, `logstream.css`, `logstream-terminal.css`):
+    - Commit `4ae04be`, `6345b87`.
+    - Completely eradicated the legacy 5-layer header stacking syndrome (> 300px vertical space waste): removed `.view-header`, `<LogTelemetryStrip>`, and `.mode-controls-bar` (with giant `● LIVE TAIL ON` green button).
+    - Implemented Sleek Unified 38px Enterprise Toolbar (`.logs-toolbar-sleek`):
+      1. Zone 1: 1-click Target Sidebar toggle button (`isSidebarCollapsed`), active target badge (`{{ selectedTarget.name }}`), and compact search input (regex-enabled, clear button).
+      2. Zone 2: 28px Capsule Pill Tabs for Mode (`Live Tail` ⚡, `Historical Search` 🔍). In Live Tail: 28px quick severity pills (`ALL`, `ERR`, `WARN`, `INFO`, `DEBUG`). In Historical Search: time range pills (`15m`, `1h`, `6h`, `24h`), limit selector (`100`–`10k`), and `Query ClickHouse` button.
+      3. Zone 3: Monospace telemetry badge `[LIVE STREAM] {{ linesStreamed }} ev · {{ errorRate }}% err · {{ latency }}ms · RingBuffer Ready` with responsive suppression at `<= 1300px`.
+      4. Zone 4: Stream actions (`Auto-Scroll / Live Tail`, `Wrap`, `Volume` toggle, `Clear`, `Export`).
+    - Collapsible Log Volume Histogram: Made `<LogVolumeHistogram>` collapsible via `Volume` toggle button (auto-expanded in Historical mode, collapsed in Live Tail mode), maximizing the terminal viewing area to > 85% of the viewport.
+    - Streamlined `LogViewerTerminal.vue`: Deduplicated redundant center search, level select, and action buttons, replacing them with a sleek 26px stream status indicator.
+    - 1-Click Sidebar Collapse: Toggling sidebar collapses the 260px left column and expands the terminal to 100% full screen width (`.sidebar-collapsed`).
+    - Modularity confirmed: all 4 files strictly < 500 lines (`LogStreamView.vue`: 347 lines, `LogViewerTerminal.vue`: 112 lines, `logstream.css`: 225 lines, `logstream-terminal.css`: 78 lines). Net diff: -714 lines of duplicate code cut.
+    - Verified 100% PASS by Reviewer and QA Test Engineer via Chrome DevTools MCP across Desktop (1440x900), Laptop (1280x800), and Tablet (768x1024) with 0px horizontal scroll overflow and 0 console errors.
 
 ---
 
