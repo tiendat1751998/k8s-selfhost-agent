@@ -2,27 +2,47 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useLogStreamer } from '../composables/useLogStreamer'
 import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
-import LogTelemetryStrip from '../components/logs/LogTelemetryStrip.vue'
 import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
-import ClickHouseEngineBadge from '../components/logs/ClickHouseEngineBadge.vue'
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { LogFilterParams } from '../api/logging'
 
 const {
   logStore, searchKeyword, selectedLevel, autoScroll, isScrollLocked, linesStreamed,
-  latency, errorRate, maxBufferSize, isConnected, isPaused, totalBufferCount,
-  clearBuffer, togglePause, setTerminalRef, scrollToBottom, handleScroll,
+  latency, errorRate, isConnected, isPaused,
+  clearBuffer, scrollToBottom, handleScroll, setTerminalRef,
 } = useLogStreamer()
 
 const selectedTarget = ref<LogTarget>({ type: 'all', id: 'all', name: 'All Cluster Logs' })
 const showMobileTree = ref(false)
+const isSidebarCollapsed = ref(false)
+const showHistogram = ref(false)
+const wrapLines = ref(true)
+
 const mode = ref<'live' | 'historical'>('live')
 const selectedTimeRange = ref('1h')
 const queryError = ref<string | null>(null)
 const isSearching = ref(false)
 const currentOffset = ref(0)
 const selectedHistoricalLimit = ref(1000)
+
+const severityFilters = [
+  { label: 'ALL', value: '' },
+  { label: 'ERR', value: 'ERROR' },
+  { label: 'WARN', value: 'WARN' },
+  { label: 'INFO', value: 'INFO' },
+  { label: 'DEBUG', value: 'DEBUG' },
+]
+
+function isCurrentLevel(val: string): boolean {
+  if (!val) return !selectedLevel.value || selectedLevel.value === 'ALL'
+  if (val === 'ERROR') return selectedLevel.value === 'ERROR' || selectedLevel.value === 'ERR'
+  return selectedLevel.value.toUpperCase() === val.toUpperCase()
+}
+
+function setLevel(val: string) {
+  selectedLevel.value = val
+}
 
 const timeRanges = [
   { label: '15m', ms: 900000, interval: 15 },
@@ -45,7 +65,7 @@ async function runHistoricalQuery(isLoadMore = false) {
     start_time: new Date(now.getTime() - cfg.ms).toISOString(),
     end_time: now.toISOString(),
     query: queryParts.length ? queryParts.join(' ') : undefined,
-    log_level: selectedLevel.value || undefined,
+    log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
     limit: selectedHistoricalLimit.value,
     offset: currentOffset.value,
     container_name: target.type === 'service' ? target.id : undefined,
@@ -123,9 +143,7 @@ function toggleLiveTail() {
 }
 
 async function handleHistogramFilterRange(range: { start: string; end: string }) {
-  if (mode.value === 'live') {
-    mode.value = 'historical'
-  }
+  if (mode.value === 'live') mode.value = 'historical'
   const kw = searchKeyword.value.trim()
   const target = selectedTarget.value
   const queryParts = [kw, target.type === 'node' ? target.id : ''].filter(Boolean)
@@ -137,7 +155,7 @@ async function handleHistogramFilterRange(range: { start: string; end: string })
       start_time: range.start,
       end_time: range.end,
       query: queryParts.length ? queryParts.join(' ') : undefined,
-      log_level: selectedLevel.value || undefined,
+      log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
       limit: selectedHistoricalLimit.value,
       offset: 0,
       container_name: target.type === 'service' ? target.id : undefined,
@@ -164,7 +182,14 @@ const targetFilteredLogs = computed(() => {
   const kw = rawKw.toLowerCase()
 
   return logStore.logs.filter((log) => {
-    if (level && log.level.toUpperCase() !== level.toUpperCase()) return false
+    if (level && level !== 'ALL') {
+      const l = log.level.toUpperCase()
+      const f = level.toUpperCase()
+      const match = (f === 'ERR' || f === 'ERROR') ? (l === 'ERROR' || l === 'ERR')
+        : (f === 'WARN' || f === 'WARNING') ? (l === 'WARN' || l === 'WARNING')
+        : l === f
+      if (!match) return false
+    }
     if (mode.value === 'live') {
       const q = target.id.toLowerCase()
       if (target.type === 'node' && !log.node?.toLowerCase().includes(q) && !log.pod?.toLowerCase().includes(q)) return false
@@ -203,124 +228,95 @@ function handleExport() {
 
 <template>
   <div class="view-container log-explorer-page">
-    <header class="view-header">
-      <div class="header-left">
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan" />
-          <span>CLICKHOUSE OBSERVABILITY & LOG EXPLORER</span>
+    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <div class="logs-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Kubernetes Log Stream Controls">
+      <!-- Zone 1 (Left - Sidebar & Stream Search) -->
+      <div class="toolbar-zone-left">
+        <button type="button" class="toolbar-btn btn-secondary" :class="{ active: isSidebarCollapsed }" title="Toggle Log Targets Sidebar" aria-label="Toggle Log Targets Sidebar" @click="isSidebarCollapsed = !isSidebarCollapsed"><BaseIcon name="sidebar" size="xs" /></button>
+        <span class="toolbar-target-badge font-mono" :title="selectedTarget.name"><BaseIcon name="layers" size="xs" /> <span>{{ selectedTarget.name }}</span></span>
+        <div class="toolbar-search-wrap">
+          <BaseIcon name="search" size="xs" class="search-icon" />
+          <input v-model="searchKeyword" type="text" placeholder="Filter logs (regex)..." class="toolbar-search-input font-mono" aria-label="Filter logs" />
+          <button v-if="searchKeyword" type="button" class="clear-input-btn" aria-label="Clear filter" @click="searchKeyword = ''"><BaseIcon name="x" size="xs" /></button>
         </div>
-        <h1 class="view-title">Enterprise Kubernetes Logs Explorer</h1>
-      </div>
-      <div class="header-actions">
-        <ClickHouseEngineBadge />
-        <button
-          type="button"
-          class="mobile-tree-toggle-btn font-mono"
-          aria-label="Toggle log targets drawer"
-          @click="showMobileTree = !showMobileTree"
-        >
-          <BaseIcon name="layers" size="xs" />
-          <span>{{ selectedTarget.name }}</span>
-          <BaseIcon name="chevron-down" size="xs" />
-        </button>
-      </div>
-    </header>
-
-    <LogTelemetryStrip
-      :lines-streamed="linesStreamed"
-      :error-rate="errorRate"
-      :buffer-size="totalBufferCount"
-      :max-buffer-size="maxBufferSize"
-      :latency="latency"
-      :is-connected="mode === 'live' ? isConnected : false"
-      :is-paused="mode === 'live' ? isPaused : false"
-    />
-
-    <div class="mode-controls-bar">
-      <div class="mode-switcher-tabs font-mono" role="tablist">
-        <button type="button" class="mode-tab-btn" :class="{ active: mode === 'live' }" @click="mode = 'live'">
-          <BaseIcon name="zap" size="xs" />
-          <span>Live Tail</span>
-        </button>
-        <button type="button" class="mode-tab-btn" :class="{ active: mode === 'historical' }" @click="mode = 'historical'">
-          <BaseIcon name="search" size="xs" />
-          <span>Historical Search</span>
-        </button>
       </div>
 
-      <button
-        v-if="mode === 'live'"
-        type="button"
-        class="live-tail-toggle-btn font-mono"
-        :class="{ 'tail-active': autoScroll && !isScrollLocked, 'tail-paused': !autoScroll || isScrollLocked }"
-        :title="autoScroll && !isScrollLocked ? 'Live Tail active. Click to lock.' : 'Tail paused on scroll up. Click to resume.'"
-        @click="toggleLiveTail"
-      >
-        <span class="tail-dot" />
-        <span>{{ autoScroll && !isScrollLocked ? 'LIVE TAIL ON' : 'TAIL PAUSED (SCROLLED UP)' }}</span>
-      </button>
-
-      <div v-if="mode === 'historical'" class="historical-query-group font-mono">
-        <select v-model="selectedHistoricalLimit" class="historical-limit-select font-mono" title="Max Log Entries to Fetch" aria-label="Historical log limit">
-          <option :value="100">100 logs</option>
-          <option :value="500">500 logs</option>
-          <option :value="1000">1,000 logs</option>
-          <option :value="5000">5,000 logs</option>
-          <option :value="10000">10,000 logs</option>
-        </select>
-        <div class="time-range-picker">
-          <button
-            v-for="r in timeRanges"
-            :key="r.label"
-            type="button"
-            class="range-pill-btn"
-            :class="{ active: selectedTimeRange === r.label }"
-            @click="selectedTimeRange = r.label; runHistoricalQuery()"
-          >
-            {{ r.label }}
-          </button>
+      <!-- Zone 2 (Center-Left - Mode Tabs & Severity Pills) -->
+      <div class="toolbar-zone-mode">
+        <div class="toolbar-nav-pills font-mono" role="tablist" aria-label="Stream Mode">
+          <button type="button" role="tab" :aria-selected="mode === 'live'" class="toolbar-pill-btn" :class="{ active: mode === 'live' }" @click="mode = 'live'"><BaseIcon name="zap" size="xs" /> <span>Live Tail</span></button>
+          <button type="button" role="tab" :aria-selected="mode === 'historical'" class="toolbar-pill-btn" :class="{ active: mode === 'historical' }" @click="mode = 'historical'"><BaseIcon name="search" size="xs" /> <span>Historical Search</span></button>
         </div>
-        <button type="button" class="historical-search-btn" :disabled="logStore.isHistoricalLoading" @click="runHistoricalQuery()">
-          <BaseIcon name="search" size="xs" />
-          <span>{{ logStore.isHistoricalLoading ? 'Searching...' : 'Query ClickHouse' }}</span>
-        </button>
-        <button
-          v-if="logStore.hasMoreHistorical || logStore.totalHistoricalCount > logStore.logs.length"
-          type="button"
-          class="load-more-btn"
-          :disabled="logStore.isHistoricalLoading"
-          @click="loadMoreHistorical"
-        >
-          <span>Load More ({{ logStore.logs.length }}/{{ logStore.totalHistoricalCount }})</span>
-        </button>
-        <span v-if="logStore.totalHistoricalCount > 0" class="query-count-badge">
-          {{ logStore.totalHistoricalCount }} logs found
-        </span>
+
+        <!-- In Live Tail mode: 28px quick severity filter pills -->
+        <div v-if="mode === 'live'" class="toolbar-severity-pills font-mono" role="group" aria-label="Filter by Severity">
+          <button v-for="lvl in severityFilters" :key="lvl.value" type="button" class="severity-pill-btn" :class="['pill-' + lvl.label.toLowerCase(), { active: isCurrentLevel(lvl.value) }]" @click="setLevel(lvl.value)">{{ lvl.label }}</button>
+        </div>
+
+        <!-- In Historical Search mode: time range pills, limit select + query button -->
+        <div v-if="mode === 'historical'" class="toolbar-historical-group font-mono">
+          <div class="toolbar-time-pills">
+            <button v-for="r in timeRanges" :key="r.label" type="button" class="time-pill-btn" :class="{ active: selectedTimeRange === r.label }" @click="selectedTimeRange = r.label; runHistoricalQuery()">{{ r.label }}</button>
+          </div>
+          <select v-model="selectedHistoricalLimit" class="historical-limit-select font-mono" title="Max Log Entries to Fetch" aria-label="Historical log limit" @change="runHistoricalQuery()">
+            <option :value="100">100</option>
+            <option :value="500">500</option>
+            <option :value="1000">1k</option>
+            <option :value="5000">5k</option>
+            <option :value="10000">10k</option>
+          </select>
+          <button type="button" class="toolbar-btn btn-secondary" :disabled="logStore.isHistoricalLoading" title="Query ClickHouse" @click="runHistoricalQuery()"><BaseIcon name="search" size="xs" /> <span>{{ logStore.isHistoricalLoading ? 'Searching...' : 'Query ClickHouse' }}</span></button>
+          <button v-if="logStore.hasMoreHistorical || logStore.totalHistoricalCount > logStore.logs.length" type="button" class="toolbar-btn btn-secondary load-more-compact" :disabled="logStore.isHistoricalLoading" title="Load more historical logs" @click="loadMoreHistorical"><span>+More ({{ logStore.logs.length }}/{{ logStore.totalHistoricalCount }})</span></button>
+        </div>
+      </div>
+
+      <!-- Zone 3 (Center-Right - Telemetry Badge) -->
+      <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Live Stream Telemetry">
+        <span class="kpi-badge font-mono">[LIVE STREAM] {{ linesStreamed }} ev · {{ errorRate }}% err · {{ latency > 0 ? latency + 'ms' : '<50ms' }} · RingBuffer Ready</span>
+      </div>
+
+      <!-- Zone 4 (Right - Stream Actions Group) -->
+      <div class="toolbar-actions-group">
+        <button type="button" class="toolbar-btn btn-secondary" :class="{ 'btn-tail-active': autoScroll && !isScrollLocked, 'btn-tail-paused': !autoScroll || isScrollLocked }" @click="toggleLiveTail"><span class="tail-dot" /> <span>{{ autoScroll && !isScrollLocked ? 'Live Tail' : 'Paused' }}</span></button>
+        <button type="button" class="toolbar-btn btn-secondary" :class="{ active: wrapLines }" title="Toggle Line Wrap" @click="wrapLines = !wrapLines"><span>Wrap</span></button>
+        <button type="button" class="toolbar-btn btn-secondary" :class="{ active: showHistogram }" title="Toggle Volume Histogram" @click="showHistogram = !showHistogram"><BaseIcon name="bar-chart-2" size="xs" /> <span>Volume</span></button>
+        <button type="button" class="toolbar-btn btn-secondary" title="Clear Buffer" aria-label="Clear Buffer" @click="clearBuffer"><BaseIcon name="trash" size="xs" /></button>
+        <button type="button" class="toolbar-btn btn-secondary" title="Export Logs" aria-label="Export Logs" @click="handleExport"><BaseIcon name="download" size="xs" /></button>
       </div>
     </div>
 
+    <!-- Mobile Command Bar (<768px) -->
+    <div class="logs-mobile-command-bar mobile-only">
+      <div class="mobile-bar-left">
+        <button type="button" class="mobile-tree-toggle-btn font-mono" aria-label="Toggle log targets drawer" @click="showMobileTree = !showMobileTree"><BaseIcon name="layers" size="xs" /> <span>{{ selectedTarget.name }}</span><BaseIcon name="chevron-down" size="xs" /></button>
+      </div>
+      <div class="mobile-bar-actions">
+        <button type="button" class="mobile-btn font-mono" :class="{ active: mode === 'live' }" @click="mode = mode === 'live' ? 'historical' : 'live'"><BaseIcon :name="mode === 'live' ? 'zap' : 'search'" size="xs" /> <span>{{ mode === 'live' ? 'Live' : 'History' }}</span></button>
+        <button type="button" class="mobile-btn font-mono" :class="{ 'btn-tail-active': autoScroll && !isScrollLocked, 'btn-tail-paused': !autoScroll || isScrollLocked }" @click="toggleLiveTail"><span class="tail-dot" /> <span>{{ autoScroll && !isScrollLocked ? 'Tail' : 'Pause' }}</span></button>
+        <button type="button" class="mobile-btn font-mono" :class="{ active: showHistogram }" aria-label="Toggle Volume Histogram" @click="showHistogram = !showHistogram"><BaseIcon name="bar-chart-2" size="xs" /></button>
+        <button type="button" class="mobile-btn font-mono" title="Clear Buffer" aria-label="Clear Buffer" @click="clearBuffer"><BaseIcon name="trash" size="xs" /></button>
+      </div>
+    </div>
+
+    <!-- Query Error Banner -->
     <div v-if="queryError" class="query-error-banner font-mono">
       <BaseIcon name="alert-triangle" size="xs" />
       <span>{{ queryError }}</span>
+      <button type="button" class="query-error-dismiss" aria-label="Dismiss error" @click="queryError = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- 80px Interactive Stacked SVG Bar Chart Mounted Above Terminal Stream -->
-    <LogVolumeHistogram
-      :buckets="logStore.histogram"
-      :height="80"
-      @filter-range="handleHistogramFilterRange"
-      @clear-filter="handleClearHistogramFilter"
-    />
+    <!-- Collapsible Log Volume Histogram (70px height above grid) -->
+    <div v-if="showHistogram || mode === 'historical'" class="histogram-wrapper">
+      <LogVolumeHistogram :buckets="logStore.histogram" :height="70" @filter-range="handleHistogramFilterRange" @clear-filter="handleClearHistogramFilter" />
+    </div>
 
     <div v-if="showMobileTree" class="mobile-backdrop" aria-hidden="true" @click="showMobileTree = false" />
 
-    <div class="log-explorer-grid">
+    <!-- 2-Column Explorer Grid with Sidebar Collapse Affordance -->
+    <div class="log-explorer-grid" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
       <div class="explorer-left-col" :class="{ 'mobile-tree-open': showMobileTree }">
         <div v-if="showMobileTree" class="mobile-drawer-header">
-          <span class="drawer-title font-mono">
-            <BaseIcon name="layers" size="xs" />
-            <span>Select Target</span>
-          </span>
+          <span class="drawer-title font-mono"><BaseIcon name="layers" size="xs" /> <span>Select Target</span></span>
           <button type="button" class="drawer-close-btn" aria-label="Close targets drawer" @click="showMobileTree = false">&times;</button>
         </div>
         <LogTargetTree v-model="selectedTarget" :logs="logStore.logs" @select="showMobileTree = false" />
@@ -333,20 +329,12 @@ function handleExport() {
           :is-paused="isPaused"
           :auto-scroll="autoScroll"
           :is-scroll-locked="isScrollLocked"
-          :search-query="searchKeyword"
-          :selected-level="selectedLevel"
           :target-name="selectedTarget.name"
           :latency="latency"
-          @update:search-query="searchKeyword = $event"
-          @update:selected-level="selectedLevel = $event"
-          @update:auto-scroll="autoScroll = $event"
-          @toggle-pause="togglePause"
-          @clear-buffer="clearBuffer"
-          @export-logs="handleExport"
+          :wrap-lines="wrapLines"
           @scroll="handleScroll"
           @scroll-to-bottom="scrollToBottom"
           @register-terminal="setTerminalRef"
-          @toggle-target-tree="showMobileTree = !showMobileTree"
         />
       </div>
     </div>
@@ -355,25 +343,4 @@ function handleExport() {
 
 <style scoped>
 @import '../assets/styles/views/logstream.css';
-
-.mode-controls-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 8px 12px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; }
-.mode-switcher-tabs { display: inline-flex; background: rgba(2, 6, 23, 0.6); padding: 3px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08); gap: 4px; }
-.mode-tab-btn { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none; color: #94a3b8; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 4px; cursor: pointer; transition: all 0.15s ease; }
-.mode-tab-btn:hover { color: #f1f5f9; }
-.mode-tab-btn.active { background: rgba(56, 189, 248, 0.18); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
-.live-tail-toggle-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 11px; font-weight: 700; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
-.live-tail-toggle-btn.tail-active { background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.35); color: #34d399; }
-.live-tail-toggle-btn.tail-paused { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.35); color: #fbbf24; }
-.tail-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.tail-active .tail-dot { animation: pulse-dot 1.5s infinite; }
-.historical-query-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.time-range-picker { display: inline-flex; background: rgba(2, 6, 23, 0.6); padding: 2px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.08); }
-.range-pill-btn { background: transparent; border: none; color: #94a3b8; font-size: 10px; padding: 3px 8px; border-radius: 3px; cursor: pointer; }
-.range-pill-btn.active { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
-.historical-search-btn, .load-more-btn { display: inline-flex; align-items: center; gap: 5px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
-.historical-search-btn:hover:not(:disabled), .load-more-btn:hover:not(:disabled) { background: rgba(56, 189, 248, 0.28); }
-.query-count-badge { font-size: 11px; color: #94a3b8; padding: 2px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.04); }
-.query-error-banner { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: #f43f5e; border-radius: 6px; font-size: 11px; }
-@keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
-@media (max-width: 640px) { .mode-controls-bar { padding: 6px 8px; gap: 6px; } }
 </style>

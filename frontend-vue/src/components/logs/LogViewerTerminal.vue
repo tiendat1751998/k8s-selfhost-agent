@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+<script setup lang="ts">
+import { ref, watch, nextTick, onMounted } from 'vue'
 import type { LogEntry } from '../../stores/logStore'
 import BaseIcon from '../ui/BaseIcon.vue'
 
@@ -7,32 +7,27 @@ interface Props {
   logs: LogEntry[]
   isConnected: boolean
   isPaused: boolean
-  autoScroll: boolean
-  isScrollLocked: boolean
-  searchQuery: string
-  selectedLevel: string
+  autoScroll?: boolean
+  isScrollLocked?: boolean
   targetName: string
   latency?: number
+  wrapLines?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  autoScroll: true,
+  isScrollLocked: false,
+  wrapLines: true,
+  latency: 0,
+})
 
 const emit = defineEmits<{
-  (e: 'update:searchQuery', val: string): void
-  (e: 'update:selectedLevel', val: string): void
-  (e: 'update:autoScroll', val: boolean): void
-  (e: 'togglePause'): void
-  (e: 'clearBuffer'): void
-  (e: 'exportLogs'): void
   (e: 'scroll', event: Event): void
   (e: 'scrollToBottom'): void
   (e: 'registerTerminal', el: HTMLElement | null): void
-  (e: 'toggleTargetTree'): void
 }>()
 
 const terminalBody = ref<HTMLElement | null>(null)
-const mobileSearchOpen = ref(false)
-const wrapLines = ref(true)
 
 onMounted(() => emit('registerTerminal', terminalBody.value))
 
@@ -41,11 +36,6 @@ watch(() => props.logs.length, async () => {
     await nextTick()
     terminalBody.value.scrollTop = terminalBody.value.scrollHeight
   }
-})
-
-const isRegex = computed(() => {
-  if (!props.searchQuery) return false
-  return /[[\]{}()*+?^$\\.|]/.test(props.searchQuery)
 })
 
 function formatTime(t: string): string {
@@ -72,155 +62,16 @@ function getTargetBadge(log: LogEntry): string {
 
 <template>
   <div class="terminal-window glass-panel" role="region" aria-label="Kubernetes Terminal Log Stream">
-    <!-- Modern Terminal Bar: Unified Mobile 38px / Desktop 34px -->
+    <!-- Sleek 24-28px Stream Info Strip -->
     <div class="terminal-titlebar">
-      <!-- Left: Status & Mobile Target Pill -->
       <div class="terminal-stream-status font-mono">
-        <button
-          type="button"
-          class="mobile-target-btn font-mono mobile-only"
-          aria-label="Toggle log targets drawer"
-          @click="emit('toggleTargetTree')"
-        >
-          <span>
-            <BaseIcon name="layers" size="xs" /> {{ targetName || 'All' }} ▾
-          </span>
-        </button>
-
         <span class="pulse-dot" :class="!isConnected ? 'pulse-dot-rose' : (isPaused ? 'pulse-dot-amber' : 'pulse-dot-emerald')"></span>
-        <span class="status-text desktop-only" :class="isConnected ? (isPaused ? 'text-amber' : 'text-emerald') : 'text-rose'">
+        <span class="status-text font-mono" :class="isConnected ? (isPaused ? 'text-amber' : 'text-emerald') : 'text-rose'">
           {{ !isConnected ? 'RECONNECTING' : (isPaused ? 'PAUSED' : 'CONNECTED') }}
         </span>
-        <span class="status-text mobile-only font-mono" :class="isConnected ? (isPaused ? 'text-amber' : 'text-emerald') : 'text-rose'">
-          {{ !isConnected ? 'DISC' : (isPaused ? 'PAUSED' : 'LIVE') }}
-        </span>
-        <span class="terminal-target-badge desktop-only font-mono">{{ targetName }}</span>
-        <span class="buffer-count font-mono">({{ logs.length }})</span>
+        <span class="terminal-target-badge font-mono">{{ targetName }}</span>
+        <span class="buffer-count font-mono">({{ logs.length }} entries)</span>
       </div>
-
-      <!-- Center Search & Regex Filter (Desktop) -->
-      <div class="terminal-search-group desktop-only">
-        <div class="search-wrap">
-          <span class="search-ico" aria-hidden="true">
-            <BaseIcon name="search" size="xs" />
-          </span>
-          <input
-            :value="searchQuery"
-            type="text"
-            placeholder="Filter in stream..."
-            class="terminal-search-input font-mono"
-            aria-label="Filter logs"
-            @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
-          />
-          <span v-if="isRegex" class="regex-tag font-mono">REGEX</span>
-          <button v-if="searchQuery" type="button" class="search-clear-btn" aria-label="Clear filter" @click="emit('update:searchQuery', '')"><BaseIcon name="x" size="xs" /></button>
-        </div>
-        <select
-          :value="selectedLevel"
-          class="terminal-level-select font-mono"
-          aria-label="Filter by level"
-          @change="emit('update:selectedLevel', ($event.target as HTMLSelectElement).value)"
-        >
-          <option value="">ALL LEVELS</option>
-          <option value="INFO">INFO</option>
-          <option value="WARN">WARN</option>
-          <option value="ERROR">ERROR</option>
-          <option value="DEBUG">DEBUG</option>
-        </select>
-      </div>
-
-      <!-- Right Actions: Desktop & Mobile Rows -->
-      <div class="terminal-actions">
-        <label class="terminal-autoscroll-toggle font-mono desktop-only">
-          <input
-            :checked="autoScroll"
-            type="checkbox"
-            class="toggle-cb"
-            @change="emit('update:autoScroll', ($event.target as HTMLInputElement).checked)"
-          />
-          <span>Auto-Scroll</span>
-        </label>
-
-        <!-- Desktop Buttons -->
-        <div class="desktop-only action-group">
-          <button
-            type="button"
-            class="term-btn"
-            :class="{ 'btn-active': wrapLines }"
-            :title="wrapLines ? 'Switch to nowrap mode (horizontal scroll)' : 'Switch to line wrap mode'"
-            @click="wrapLines = !wrapLines"
-          >
-            <span>[ Wrap ]</span>
-          </button>
-          <button type="button" class="term-btn" :class="{ 'btn-paused': isPaused }" :title="isPaused ? 'Resume live stream' : 'Pause live stream'" @click="emit('togglePause')">
-            <BaseIcon :name="isPaused ? 'play' : 'pause'" size="xs" />
-            <span>{{ isPaused ? 'Resume' : 'Pause' }}</span>
-          </button>
-          <button type="button" class="term-btn" title="Clear buffer" @click="emit('clearBuffer')">
-            <BaseIcon name="trash" size="xs" />
-            <span>Clear</span>
-          </button>
-          <button type="button" class="term-btn" title="Export logs" @click="emit('exportLogs')">
-            <BaseIcon name="download" size="xs" />
-            <span>Export</span>
-          </button>
-        </div>
-
-        <!-- Mobile Buttons (30x30px Compact Icons) -->
-        <div class="mobile-only action-group">
-          <button
-            type="button"
-            class="term-btn term-icon-btn"
-            :class="{ 'btn-active': wrapLines }"
-            :title="wrapLines ? 'Line wrap on' : 'Line wrap off'"
-            @click="wrapLines = !wrapLines"
-          >
-            <span>Wrap</span>
-          </button>
-          <button type="button" class="term-btn term-icon-btn" :class="{ 'btn-paused': isPaused }" :title="isPaused ? 'Resume' : 'Pause'" @click="emit('togglePause')">
-            <BaseIcon :name="isPaused ? 'play' : 'pause'" size="xs" />
-          </button>
-          <button type="button" class="term-btn term-icon-btn" title="Clear buffer" @click="emit('clearBuffer')">
-            <BaseIcon name="trash" size="xs" />
-          </button>
-          <button type="button" class="term-btn term-icon-btn" :class="{ 'btn-active': mobileSearchOpen || searchQuery }" title="Toggle search" @click="mobileSearchOpen = !mobileSearchOpen">
-            <BaseIcon name="search" size="xs" />
-          </button>
-          <button type="button" class="term-btn term-icon-btn" title="Export logs" @click="emit('exportLogs')">
-            <BaseIcon name="download" size="xs" />
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Collapsible Mobile Search & Level Bar (Slim 28px) -->
-    <div v-show="mobileSearchOpen" class="mobile-search-bar mobile-only font-mono">
-      <div class="search-wrap">
-        <span class="search-ico" aria-hidden="true">
-          <BaseIcon name="search" size="xs" />
-        </span>
-        <input
-          :value="searchQuery"
-          type="text"
-          placeholder="Filter or regex..."
-          class="terminal-search-input font-mono"
-          aria-label="Filter logs mobile"
-          @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
-        />
-        <button v-if="searchQuery" type="button" class="search-clear-btn" aria-label="Clear filter" @click="emit('update:searchQuery', '')"><BaseIcon name="x" size="xs" /></button>
-      </div>
-      <select
-        :value="selectedLevel"
-        class="terminal-level-select font-mono"
-        aria-label="Filter by level mobile"
-        @change="emit('update:selectedLevel', ($event.target as HTMLSelectElement).value)"
-      >
-        <option value="">ALL</option>
-        <option value="INFO">INFO</option>
-        <option value="WARN">WARN</option>
-        <option value="ERROR">ERR</option>
-        <option value="DEBUG">DEBUG</option>
-      </select>
     </div>
 
     <!-- Terminal Body / Logs Output with Wrap Toggle Support -->
@@ -241,9 +92,7 @@ function getTargetBadge(log: LogEntry): string {
 
       <!-- Clean Empty Terminal State -->
       <div v-if="logs.length === 0" class="empty-terminal font-mono">
-        <span class="empty-icon" aria-hidden="true">
-          <BaseIcon name="radio" size="lg" />
-        </span>
+        <span class="empty-icon" aria-hidden="true"><BaseIcon name="radio" size="lg" /></span>
         <p class="empty-title">{{ isConnected ? `Waiting for logs from [${targetName || 'cluster'}]...` : 'Disconnected from log stream. Reconnecting...' }}</p>
         <p class="empty-sub">Live stream is active. Matching log events will appear in real-time as they are emitted.</p>
       </div>
