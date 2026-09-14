@@ -6,7 +6,11 @@ import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
 import ClickHouseEngineBadge from '../components/logs/ClickHouseEngineBadge.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import type { LogFilterParams } from '../api/logging'
+import type { LogFilterParams as ApiLogFilterParams } from '../api/logging'
+
+export interface LogFilterParams extends ApiLogFilterParams {
+  attributes?: Record<string, string>
+}
 
 const {
   logStore, searchKeyword, selectedLevel, autoScroll, isScrollLocked, linesStreamed,
@@ -14,7 +18,7 @@ const {
   clearBuffer, scrollToBottom, handleScroll, setTerminalRef,
 } = useLogStreamer()
 
-const selectedTarget = ref<LogTarget>({ type: 'all', id: 'all', name: 'All Cluster Logs' })
+const selectedTarget = ref<LogTarget>({ type: 'service', id: 'postgres_db', name: 'postgres_db', icon: 'database' })
 const showMobileTree = ref(false)
 const isSidebarCollapsed = ref(false)
 const showHistogram = ref(false)
@@ -60,16 +64,16 @@ async function runHistoricalQuery(isLoadMore = false) {
   const now = new Date()
   const kw = searchKeyword.value.trim()
   const target = selectedTarget.value
-  const queryParts = [kw, target.type === 'node' ? target.id : ''].filter(Boolean)
 
   const filter: LogFilterParams = {
     start_time: new Date(now.getTime() - cfg.ms).toISOString(),
     end_time: now.toISOString(),
-    query: queryParts.length ? queryParts.join(' ') : undefined,
+    query: kw ? kw : undefined,
     log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
     limit: selectedHistoricalLimit.value,
     offset: currentOffset.value,
     container_name: target.type === 'service' ? target.id : undefined,
+    attributes: target.type === 'node' ? { node: target.id } : undefined,
   }
 
   try {
@@ -107,22 +111,23 @@ function loadMoreHistorical() {
 async function preloadRecentLogs(target: LogTarget) {
   try {
     const kw = searchKeyword.value.trim()
-    const queryParts = [kw, target.type === 'node' ? target.id : ''].filter(Boolean)
-    await logStore.fetchHistoricalLogs({
+    const filter: LogFilterParams = {
       limit: 50,
-      query: queryParts.length ? queryParts.join(' ') : undefined,
+      query: kw ? kw : undefined,
       container_name: target.type === 'service' ? target.id : undefined,
+      attributes: target.type === 'node' ? { node: target.id } : undefined,
       log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
-    }, false)
+    }
+    await logStore.fetchHistoricalLogs(filter, false)
   } catch {
     // Gracefully ignore if offline or no historical logs
   }
 }
 
 function connectTarget(target: LogTarget) {
+  if (!target || !target.id) return
   if (target.type === 'node') logStore.connect({ node: target.id })
   else if (target.type === 'service') logStore.connect({ service: target.id })
-  else logStore.connect()
   preloadRecentLogs(target)
 }
 
@@ -138,16 +143,17 @@ watch(mode, (newMode) => {
 
 async function fetchLiveHistogram() {
   const now = new Date()
+  const target = selectedTarget.value
   await logStore.fetchHistogram({
     start_time: new Date(now.getTime() - 3600000).toISOString(),
     end_time: now.toISOString(),
     interval_seconds: 60,
-    container_name: selectedTarget.value.type === 'service' ? selectedTarget.value.id : undefined,
+    container_name: target.type === 'service' ? target.id : undefined,
   }).catch(() => {})
 }
 
 onMounted(() => {
-  if (mode.value === 'live') {
+  if (mode.value === 'live' && selectedTarget.value.id) {
     connectTarget(selectedTarget.value)
     fetchLiveHistogram()
   }
@@ -168,20 +174,21 @@ async function handleHistogramFilterRange(range: { start: string; end: string })
   if (mode.value === 'live') mode.value = 'historical'
   const kw = searchKeyword.value.trim()
   const target = selectedTarget.value
-  const queryParts = [kw, target.type === 'node' ? target.id : ''].filter(Boolean)
   currentOffset.value = 0
+  const filter: LogFilterParams = {
+    start_time: range.start,
+    end_time: range.end,
+    query: kw ? kw : undefined,
+    log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
+    limit: selectedHistoricalLimit.value,
+    offset: 0,
+    container_name: target.type === 'service' ? target.id : undefined,
+    attributes: target.type === 'node' ? { node: target.id } : undefined,
+  }
   try {
     isSearching.value = true
     queryError.value = null
-    await logStore.fetchHistoricalLogs({
-      start_time: range.start,
-      end_time: range.end,
-      query: queryParts.length ? queryParts.join(' ') : undefined,
-      log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
-      limit: selectedHistoricalLimit.value,
-      offset: 0,
-      container_name: target.type === 'service' ? target.id : undefined,
-    })
+    await logStore.fetchHistoricalLogs(filter)
   } catch (err: unknown) {
     queryError.value = err instanceof Error ? err.message : 'Historical search failed'
   } finally {
@@ -214,8 +221,13 @@ const targetFilteredLogs = computed(() => {
     }
     if (mode.value === 'live') {
       const q = target.id.toLowerCase()
-      if (target.type === 'node' && !log.node?.toLowerCase().includes(q) && !log.pod?.toLowerCase().includes(q)) return false
-      if (target.type === 'service' && !log.service?.toLowerCase().includes(q) && !log.container?.toLowerCase().includes(q)) return false
+      if (target.type === 'node') {
+        const n = (log.node || log.attributes?.node || log.pod || '').toLowerCase()
+        if (!n.includes(q)) return false
+      } else if (target.type === 'service') {
+        const s = (log.service || log.container || log.attributes?.app || log.attributes?.service || log.pod || '').toLowerCase()
+        if (!s.includes(q)) return false
+      }
     }
     if (rawKw) {
       if (reg) {
@@ -255,7 +267,7 @@ function handleExport() {
       <!-- Zone 1 (Left - Sidebar & Stream Search) -->
       <div class="toolbar-zone-left">
         <button type="button" class="toolbar-btn btn-secondary" :class="{ active: isSidebarCollapsed }" title="Toggle Log Targets Sidebar" aria-label="Toggle Log Targets Sidebar" @click="isSidebarCollapsed = !isSidebarCollapsed"><BaseIcon name="sidebar" size="xs" /></button>
-        <span class="toolbar-target-badge font-mono" :title="selectedTarget.name"><BaseIcon name="layers" size="xs" /> <span>{{ selectedTarget.name }}</span></span>
+        <span class="toolbar-target-badge font-mono" :title="selectedTarget.name"><BaseIcon :name="selectedTarget.type === 'node' ? 'server' : (selectedTarget.icon || 'box')" size="xs" /> <span>{{ selectedTarget.name }}</span></span>
         <div class="toolbar-search-wrap">
           <BaseIcon name="search" size="xs" class="search-icon" />
           <input v-model="searchKeyword" type="text" placeholder="Filter logs (regex)..." class="toolbar-search-input font-mono" aria-label="Filter logs" />
@@ -311,7 +323,7 @@ function handleExport() {
     <!-- Mobile Command Bar (<768px) -->
     <div class="logs-mobile-command-bar mobile-only">
       <div class="mobile-bar-left">
-        <button type="button" class="mobile-tree-toggle-btn font-mono" aria-label="Toggle log targets drawer" @click="showMobileTree = !showMobileTree"><BaseIcon name="layers" size="xs" /> <span>{{ selectedTarget.name }}</span><BaseIcon name="chevron-down" size="xs" /></button>
+        <button type="button" class="mobile-tree-toggle-btn font-mono" aria-label="Toggle log targets drawer" @click="showMobileTree = !showMobileTree"><BaseIcon :name="selectedTarget.type === 'node' ? 'server' : (selectedTarget.icon || 'box')" size="xs" /> <span>{{ selectedTarget.name }}</span><BaseIcon name="chevron-down" size="xs" /></button>
       </div>
       <div class="mobile-bar-actions">
         <button type="button" class="mobile-btn font-mono" :class="{ active: mode === 'live' }" @click="mode = mode === 'live' ? 'historical' : 'live'"><BaseIcon :name="mode === 'live' ? 'zap' : 'search'" size="xs" /> <span>{{ mode === 'live' ? 'Live' : 'History' }}</span></button>
