@@ -4,6 +4,7 @@ import { useLogStreamer } from '../composables/useLogStreamer'
 import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
 import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
+import ClickHouseEngineBadge from '../components/logs/ClickHouseEngineBadge.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { LogFilterParams } from '../api/logging'
 
@@ -270,9 +271,10 @@ function handleExport() {
         </div>
       </div>
 
-      <!-- Zone 3 (Center-Right - Telemetry Badge) -->
+      <!-- Zone 3 (Center-Right - Telemetry & Engine Badge) -->
       <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Live Stream Telemetry">
-        <span class="kpi-badge font-mono">[LIVE STREAM] {{ linesStreamed }} ev · {{ errorRate }}% err · {{ latency > 0 ? latency + 'ms' : '<50ms' }} · RingBuffer Ready</span>
+        <ClickHouseEngineBadge />
+        <span class="kpi-badge font-mono"><span class="kpi-tag">[LIVE STREAM] </span><span class="kpi-metrics">{{ linesStreamed }} ev · {{ errorRate }}% err</span><span class="kpi-latency"> · {{ latency > 0 ? latency + 'ms' : '<50ms' }}</span></span>
       </div>
 
       <!-- Zone 4 (Right - Stream Actions Group) -->
