@@ -193,6 +193,7 @@ const router = createRouter({
       path: '/catalog',
       name: 'ServiceCatalog',
       component: () => import('../views/ServiceCatalogView.vue'),
+      alias: ['/services'],
       meta: { requiresAuth: true, title: 'Service Catalog' }
     },
     {
@@ -223,6 +224,7 @@ const router = createRouter({
       path: '/settings/2fa-setup',
       name: 'totp-setup',
       component: () => import('../views/TOTPSetupView.vue'),
+      alias: ['/totp', '/2fa', '/mfa'],
       meta: { requiresAuth: true, title: 'Two-Factor Authentication Setup' }
     },
 
