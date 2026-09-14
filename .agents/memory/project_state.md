@@ -1,7 +1,7 @@
-# Project State — Checkpoint 2026-09-14T10:25:00+07:00
+# Project State — Checkpoint 2026-09-14T11:06:00+07:00
 
 ## Branch: `feat/enterprise-console-phase1`
-## Head Commit: `45c302a` (`refactor(secops): enterprise overhaul of gate cards, eliminate fake data, add breadcrumbs, and fix layout clipping`)
+## Head Commit: `1f6b19b` (`merge: fix(secops): adjust KPI strip breakpoint to 1300px and clean up unused props`)
 ## Working Tree: Clean (0 unstaged changes)
 ## Verification: 100% PRODUCTION ENTERPRISE PASS (Build Exit Code 0, Zero Console Errors, Reviewer Approved, QA DevTools MCP Verified)
 
@@ -14,8 +14,13 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
 - **Fleet & Docker Swarm Unification**: Completely purged floating `FleetSwarmBanner.vue`. Docker Swarm clusters are mapped as first-class citizens in `FleetClustersTable.vue` and `FleetClustersGrid.vue` via `mapSwarmToFleetCluster` adapter with `Type / Orchestrator` badges (`Kubernetes` vs `Docker Swarm`), unified filtering, and contextual operations. Route `/docker` cleanly redirects to `/fleet?provider=swarm` and auto-activates Swarm provider filters.
 - **Operational Incident Command Center**: Replaced the oversized neon green `+ Simulate Incident` button with an enterprise operational `+ Declare Incident` modal drawer (relegating simulation to a secondary test action). Purged all violet/magenta glows (`#6366f1`, `#8b5cf6`) in favor of Dark OLED Slate tokens.
 - **Zero-Emoji Cleanout & Icon Harmonization**: Completely eradicated emojis across Alert Center Modal, Alert Table, Batch Actions, Floating Toasts, and Audit HUD Cards. All iconography is powered by registered `<BaseIcon>` SVG components.
-- **High-Density Typography & Responsive Layout**: Compacted table rows to 38-42px across nodes, SLOs, and DevSecOps; scaled page titles to 20px; suppressed `.toolbar-kpi-strip` below 1450px to guarantee 0px horizontal scroll overflow (`scrollWidth <= clientWidth`) across 1440px, 1280px, and 768px viewports.
-- **Truthful SecOps Governance & Zero Fake Precision**: Eradicated hardcoded `'94.6%'` precision stub and arbitrary `42` rules fallback; replaced alarming `⚠️BLOCKED` text with enterprise status badge (`GATE RESTRICTED` / `GATE BLOCKED` / `GATE PASSED`) backed by registered SVG icons; footer provides unambiguous breakdown (`0 Critical CVEs · 3 Exposed Secrets`) with explicit reason `Blocked by Exposed Secrets`. Fixed table horizontal clipping via `min-width: 0; box-sizing: border-box;` and responsive search wrapper.
+- **High-Density Typography & Responsive Layout**: Compacted table rows to 38-42px across nodes, SLOs, and DevSecOps; scaled page titles to 20px; suppressed `.toolbar-kpi-strip` below 1300px to guarantee 0px horizontal scroll overflow (`scrollWidth <= clientWidth`) across 1440px, 1280px, and 768px viewports.
+- **Truthful SecOps Governance & Sleek Unified Toolbar**: Eradicated the 4 bulky, nonsensical KPI scorecard boxes (`<SecurityScoreCards>`) and bulky multi-line paragraph header in `/security`. Replaced with the standard Sleek Unified 38px Enterprise Toolbar (`.secops-toolbar-sleek`):
+  1. Zone 1: Compact search wrapper with search icon and clear button.
+  2. Zone 2: 28px Capsule Pill Tabs (`Vulnerabilities (5)`, `Exposed Secrets (3)`, `All (8)`) with dynamic tab switching.
+  3. Zone 3: Inline monospace KPI telemetry badge (`[GATE RESTRICTED] 0 Crit · 3 Secrets · 100% Posture`) taking 0 extra vertical space, visible at 1440px desktop with 215px free headroom and suppressed on viewports <= 1300px.
+  4. Zone 4: Standardized action buttons (`Sync`, `Run Audit`).
+  Elevated tables directly onto the first screen with zero initial mouse scroll required.
 
 ---
 
@@ -53,7 +58,15 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
     - Eradicated fake precision stub `'94.6%'` and arbitrary `42` rules fallback, dynamically computing compliant score from actual evaluated rules.
     - Replaced alarming `⚠️BLOCKED` text with enterprise status badge (`GATE RESTRICTED`, `GATE BLOCKED`, `GATE PASSED`) with SVG icons and truthful footer breakdown showing both Critical CVEs (0) and Exposed Secrets (3) with explicit reason `Blocked by Exposed Secrets`.
     - Replaced wordy marketing copy and vendor tool lists with concise, high-density technical developer text.
-    - Fixed table horizontal clipping via `min-width: 0; box-sizing: border-box;` and responsive search wrapper, guaranteeing all 6 columns remain fully visible with 0px overflow across 1440px and 1280px viewports.
+    - Fixed table horizontal clipping via `min-width: 0; box-sizing: border-box;` and responsive search wrapper.
+11. **SecOps Toolbar Unification & Bulky Card Elimination** (`DevSecOpsView.vue`, `VulnerabilityScanTable.vue`, `secops.css`):
+    - Commit `a8e1684`, `c243f78`, `b09e95b`, `1f6b19b`.
+    - Eradicated the 4 bulky KPI scorecards and `<SecurityScoreCards>` component, saving > 180px of vertical space.
+    - Implemented Sleek Unified 38px Enterprise Toolbar (`.secops-toolbar-sleek`) matching `/alerts` and `/incidents`.
+    - 28px capsule pill tabs with dynamic tab switching (`Vulnerabilities`, `Exposed Secrets`, `All`).
+    - Monospace telemetry badge (`[GATE RESTRICTED] 0 Crit · 3 Secrets · 100% Posture`) displayed at 1440x900 desktop viewport, safely suppressed on laptop <= 1300px with 0px horizontal overflow.
+    - Purged dead `searchQuery` prop/emit from `VulnerabilityScanTable.vue`.
+    - All files strictly < 500 lines (`DevSecOpsView.vue`: 287 lines, `secops.css`: 404 lines, `VulnerabilityScanTable.vue`: 131 lines).
 
 ---
 
@@ -68,7 +81,6 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
 
 ## 4. Verification Evidence
 - **Go Backend**: `cmd/standalone/main.go` compiles and runs cleanly (`standalone.exe` on port 8080).
-- **Frontend Production Build**: `npm.cmd --prefix frontend-vue run build` exits with code 0 in 4.06s (896 modules transformed, 0 errors).
-- **Reviewer Sign-Off**: 100% APPROVED across all batches and defect remediations.
-- **Chrome DevTools MCP Visual QA**: 100% PASS across Desktop (1440x900) and Laptop (1280x800) with zero text truncation, zero horizontal scroll overflow (`scrollWidth <= clientWidth`), truthful gate badges and metrics, crisp technical copy, and fully visible 6-column tables.
-
+- **Frontend Production Build**: `vue-tsc -b && vite build` exits with code 0 in 5.23s (894 modules transformed, 0 errors).
+- **Reviewer Sign-Off**: 100% APPROVED (`24159893-cea8-4883-a450-89125d53731e`).
+- **Chrome DevTools MCP Visual QA**: 100% PASS across Desktop (1440x900) and Laptop (1280x800) with zero horizontal scroll overflow (`scrollWidth <= clientWidth`), visible KPI telemetry badge at 1440px desktop, safe suppression at <= 1300px, responsive 28px capsule pill tabs, and 0 console errors.
