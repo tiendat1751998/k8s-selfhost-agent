@@ -9,11 +9,14 @@ services:
       - /proc:/proc:ro
       - /sys:/sys:ro
       - /var/log:/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - agent_data:/var/lib/k8s-agent:rw
     ports:
       - "9100:9100"
     environment:
       - AGENT_PORT=9100
       - AGENT_LOG_DIR=/var/log
+      - AGENT_ENGINE_DIR=/var/lib/k8s-agent/logengine
     command: ["--port", "9100", "--log-dir", "/var/log"]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:9100/health || curl -f http://localhost:9100/health || exit 1"]
@@ -24,3 +27,6 @@ services:
     labels:
       app.kubernetes.io/name: k8s-control-agent
       app.kubernetes.io/part-of: k8sselfhost
+
+volumes:
+  agent_data:

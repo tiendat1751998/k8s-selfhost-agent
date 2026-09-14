@@ -29,13 +29,7 @@ type LoggingService interface {
 }
 
 // LogEngineStatus represents the engine status metadata.
-type LogEngineStatus struct {
-	Engine        string  `json:"engine"`
-	Status        string  `json:"status"`
-	LatencyMS     float64 `json:"latency_ms"`
-	TotalRecords  int64   `json:"total_records"`
-	RetentionDays int     `json:"retention_days"`
-}
+type LogEngineStatus = logging.LogEngineStatus
 
 // LogStatusProvider provides status metadata for the centralized logging engine.
 type LogStatusProvider interface {
