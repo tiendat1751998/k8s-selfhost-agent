@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import type { ServiceEntry } from '../../api/catalog'
 
@@ -13,6 +13,14 @@ defineProps<{
   getLifecycleDotClass: (lifecycle: string) => string
 }>()
 
+function handleApiClick(service: ServiceEntry) {
+  if (service.docs_url) {
+    window.open(service.docs_url, '_blank', 'noopener,noreferrer')
+  } else {
+    emit('open-detail', service)
+  }
+}
+
 const emit = defineEmits<{
   (e: 'open-detail', service: ServiceEntry): void
   (e: 'deploy', service: ServiceEntry): void
@@ -23,31 +31,17 @@ const emit = defineEmits<{
 
 <template>
   <div class="section-box glass-panel table-box">
-    <div class="box-header">
-      <div class="box-header-title">
-        <h2 class="box-title">Registered Services & Component Directory</h2>
-        <p class="box-subtitle">
-          Backstage-compliant software inventory with metadata links and live Kubernetes annotations.
-        </p>
-      </div>
-      <div class="box-header-meta">
-        <span class="badge badge-cyan font-mono">{{ services.length }} Services</span>
-      </div>
-    </div>
-
     <DataTable
       :columns="columns"
       :data="services"
       :loading="loading"
       :error="error"
       empty-message="No services registered matching current filter criteria."
-      searchable
-      search-placeholder="Filter loaded rows by name, owner, repo..."
     >
       <!-- Cell: Name -->
       <template #cell-name="{ row }">
         <div class="service-name-cell">
-          <div class="type-mini-icon">{{ getTypeIcon(row.type) }}</div>
+          <div class="type-mini-icon"><BaseIcon :name="getTypeIcon(row.type)" size="xs" /></div>
           <div class="name-meta">
             <a
               href="javascript:void(0)"
@@ -66,7 +60,7 @@ const emit = defineEmits<{
       <!-- Cell: Type -->
       <template #cell-type="{ row }">
         <span class="type-badge" :class="getTypeBadgeClass(row.type)">
-          <span class="type-icon-dot">{{ getTypeIcon(row.type) }}</span>
+          <span class="type-icon-dot"><BaseIcon :name="getTypeIcon(row.type)" size="xs" /></span>
           <span>{{ row.type }}</span>
         </span>
       </template>
@@ -93,12 +87,12 @@ const emit = defineEmits<{
       <template #cell-endpoint="{ row }">
         <div v-if="row.annotations && row.annotations['api.endpoint']" class="endpoint-cell font-mono">
           <span class="endpoint-badge" :title="row.annotations['api.endpoint']">
-            ⚡ {{ row.annotations['api.endpoint'] }}
+            <BaseIcon name="zap" size="xs" /> {{ row.annotations['api.endpoint'] }}
           </span>
         </div>
         <div v-else-if="row.docs_url" class="endpoint-cell font-mono">
           <a :href="row.docs_url" target="_blank" rel="noopener noreferrer" class="endpoint-link">
-            📖 Docs Spec ↗
+            <BaseIcon name="book-open" size="xs" /> Docs Spec
           </a>
         </div>
         <span v-else class="text-muted font-mono">-</span>
@@ -114,7 +108,7 @@ const emit = defineEmits<{
             class="repo-link font-mono"
             title="Open Git Repository"
           >
-            <span>🔗 Repo</span>
+            <BaseIcon name="git-branch" size="xs" /> <span>Repo</span>
             <span class="external-icon">↗</span>
           </a>
         </div>
@@ -147,15 +141,15 @@ const emit = defineEmits<{
             title="View full service details"
             @click="emit('open-detail', row)"
           >
-            <span>🔍 Details</span>
+            <BaseIcon name="eye" size="xs" /> <span>Details</span>
           </button>
           <button
             type="button"
             class="btn btn-secondary btn-xs btn-action-labeled"
-            title="Deploy service via scaffolder"
-            @click="emit('deploy', row)"
+            title="API specifications & documentation"
+            @click="handleApiClick(row)"
           >
-            <span>📦 Deploy</span>
+            <BaseIcon name="zap" size="xs" /> <span>APIs</span>
           </button>
           <button
             type="button"
@@ -163,15 +157,7 @@ const emit = defineEmits<{
             title="Configure service registration"
             @click="emit('config', row)"
           >
-            <span>⚙️ Config</span>
-          </button>
-          <button
-            type="button"
-            class="btn btn-danger-crimson btn-xs btn-action-labeled"
-            title="Delete service from catalog"
-            @click="emit('delete', row)"
-          >
-            <span>🗑 Delete</span>
+            <BaseIcon name="edit" size="xs" /> <span>Edit</span>
           </button>
         </div>
       </template>

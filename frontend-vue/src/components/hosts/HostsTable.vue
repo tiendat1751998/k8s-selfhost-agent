@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import type { ComputeHost } from '../../api/compute'
 import type { HostTestResult, HostTypeDefinition } from '../../types/hosts'
 
-defineProps<{
+const props = defineProps<{
   hosts: ComputeHost[]
   hostTestResults: Record<string, HostTestResult>
   testingHostId: string | null
@@ -19,6 +21,21 @@ const emit = defineEmits<{
   (e: 'select', host: ComputeHost): void
   (e: 'copy', text: string): void
 }>()
+
+function getRowActions(): ActionItem[] {
+  return [
+    { id: 'select', label: 'View Host Details', icon: 'search' },
+    { id: 'copy', label: 'Copy Endpoint', icon: 'copy' },
+    { id: 'sep', label: '', separator: true },
+    { id: 'delete', label: 'Delete Host', icon: 'trash', variant: 'danger' },
+  ]
+}
+
+function handleActionSelect(actionId: string, host: ComputeHost) {
+  if (actionId === 'select') emit('select', host)
+  else if (actionId === 'copy') emit('copy', host.endpoint)
+  else if (actionId === 'delete') emit('delete', host)
+}
 </script>
 
 <template>
@@ -26,21 +43,21 @@ const emit = defineEmits<{
     <table class="hosts-table">
       <thead>
         <tr>
-          <th>HOST NAME</th>
-          <th>TYPE</th>
-          <th>ENDPOINT</th>
-          <th>STATUS</th>
-          <th>LATENCY</th>
-          <th>LAST SEEN</th>
-          <th>LABELS</th>
-          <th class="text-right">ACTIONS</th>
+          <th class="th-name">HOST NAME</th>
+          <th class="th-type">TYPE</th>
+          <th class="th-endpoint">ENDPOINT</th>
+          <th class="th-status">STATUS</th>
+          <th class="th-latency">LATENCY</th>
+          <th class="th-lastseen">LAST SEEN</th>
+          <th class="th-labels">LABELS</th>
+          <th class="th-actions text-right">ACTIONS</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="host in hosts" :key="host.id" class="host-row">
           <td class="col-name" @click="emit('select', host)">
             <div class="row-name-group">
-              <span class="row-type-icon">{{ getHostTypeMeta(host.host_type).icon }}</span>
+              <span class="row-type-icon"><BaseIcon :name="getHostTypeMeta(host.host_type).icon" size="sm" /></span>
               <div>
                 <div class="row-name font-bold">{{ host.name }}</div>
                 <div class="row-id font-mono text-muted">{{ host.id }}</div>
@@ -58,11 +75,12 @@ const emit = defineEmits<{
             <div class="endpoint-copy-wrap">
               <span class="text-cyan">{{ host.endpoint }}</span>
               <button
+                type="button"
                 class="btn-copy-mini"
                 title="Copy endpoint"
                 @click.stop="emit('copy', host.endpoint)"
               >
-                📋
+                <BaseIcon name="copy" size="xs" />
               </button>
             </div>
           </td>
@@ -73,7 +91,7 @@ const emit = defineEmits<{
 
           <td class="col-latency font-mono">
             <span v-if="hostTestResults[host.id] && hostTestResults[host.id].latency_ms > 0" :class="getLatencyBadgeClass(hostTestResults[host.id].latency_ms)">
-              ⚡ {{ hostTestResults[host.id].latency_ms }}ms
+              <BaseIcon name="zap" size="xs" /> {{ hostTestResults[host.id].latency_ms }}ms
             </span>
             <span v-else class="text-muted">--</span>
           </td>
@@ -98,27 +116,28 @@ const emit = defineEmits<{
           <td class="col-actions text-right">
             <div class="table-actions-group">
               <button
+                type="button"
                 class="btn btn-secondary btn-xs"
                 :disabled="testingHostId === host.id"
                 title="Test Connectivity"
                 @click.stop="emit('test', host)"
               >
-                <span>{{ testingHostId === host.id ? '⏳' : '⚡' }}</span>
+                <BaseIcon :name="testingHostId === host.id ? 'refresh' : 'zap'" size="xs" :class="{ 'animate-spin': testingHostId === host.id }" />
               </button>
               <button
+                type="button"
                 class="btn btn-secondary btn-xs"
                 title="Edit Configuration"
                 @click.stop="emit('edit', host)"
               >
-                <span>✏️</span>
+                <BaseIcon name="edit" size="xs" />
               </button>
-              <button
-                class="btn btn-danger-outline btn-xs"
-                title="Delete Host"
-                @click.stop="emit('delete', host)"
-              >
-                <span>🗑️</span>
-              </button>
+              <ActionDropdown
+                :items="getRowActions()"
+                size="xs"
+                trigger-title="More actions"
+                @select="handleActionSelect($event, host)"
+              />
             </div>
           </td>
         </tr>
@@ -126,3 +145,7 @@ const emit = defineEmits<{
     </table>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/infra-hosts.css';
+</style>

@@ -3,13 +3,13 @@
     <div class="modal-card glass-panel config-modal">
       <div class="modal-header">
         <div class="modal-title-row">
-          <span class="modal-icon">⚙️</span>
+          <span class="modal-icon"><BaseIcon name="sliders" size="sm" /></span>
           <div>
             <h3>Plugin Configuration</h3>
             <p class="modal-subtitle">{{ plugin.name }} (v{{ plugin.version }})</p>
           </div>
         </div>
-        <button class="modal-close" @click="$emit('close')">✕</button>
+        <button class="modal-close" @click="$emit('close')"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="config-modal-body">
@@ -45,7 +45,7 @@
                   />
                 </td>
                 <td>
-                  <button class="btn-icon btn-danger-icon" @click="$emit('removePair', idx)">✕</button>
+                  <button class="btn-icon btn-danger-icon" @click="$emit('removePair', idx)"><BaseIcon name="x" size="xs" /></button>
                 </td>
               </tr>
             </tbody>
@@ -60,7 +60,7 @@
         </button>
 
         <div v-if="error" class="form-error-msg">
-          ⚠️ {{ error }}
+          <BaseIcon name="alert-triangle" size="xs" /> {{ error }}
         </div>
       </div>
 

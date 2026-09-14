@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"bufio"
@@ -19,6 +19,8 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
 
 // DockerClientInterface abstracts Docker SDK client methods needed for log reading.
@@ -28,7 +30,6 @@ type DockerClientInterface interface {
 	Ping(ctx context.Context) (types.Ping, error)
 	Close() error
 }
-
 
 // DockerLogSource reads container logs from the Docker socket / engine.
 type DockerLogSource struct {
@@ -66,21 +67,14 @@ func (d *DockerLogSource) ListServices(ctx context.Context) ([]string, error) {
 	var services []string
 	seen := make(map[string]bool)
 	for _, c := range containers {
-		// Swarm service name label
-		if swarmSvc, ok := c.Labels["com.docker.swarm.service.name"]; ok && swarmSvc != "" {
-			if !seen[swarmSvc] {
-				seen[swarmSvc] = true
-				services = append(services, swarmSvc)
-			}
+		if swarmSvc, ok := c.Labels["com.docker.swarm.service.name"]; ok && swarmSvc != "" && !seen[swarmSvc] {
+			seen[swarmSvc] = true
+			services = append(services, swarmSvc)
 		}
-		// Compose service name label
-		if composeSvc, ok := c.Labels["com.docker.compose.service"]; ok && composeSvc != "" {
-			if !seen[composeSvc] {
-				seen[composeSvc] = true
-				services = append(services, composeSvc)
-			}
+		if composeSvc, ok := c.Labels["com.docker.compose.service"]; ok && composeSvc != "" && !seen[composeSvc] {
+			seen[composeSvc] = true
+			services = append(services, composeSvc)
 		}
-		// Container names
 		for _, name := range c.Names {
 			cleanName := strings.TrimPrefix(name, "/")
 			if cleanName != "" && !seen[cleanName] {
@@ -109,11 +103,10 @@ func (d *DockerLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 		tailStr = strconv.Itoa(tail)
 	}
 
-	var sinceStr string
+	var sinceStr, untilStr string
 	if sinceTime != nil {
 		sinceStr = sinceTime.Format(time.RFC3339Nano)
 	}
-	var untilStr string
 	if untilTime != nil {
 		untilStr = untilTime.Format(time.RFC3339Nano)
 	}
@@ -127,7 +120,6 @@ func (d *DockerLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 		swarmSvc := c.Labels["com.docker.swarm.service.name"]
 		composeSvc := c.Labels["com.docker.compose.service"]
 
-		// If app specified, check match
 		if app != "" {
 			matched := strings.EqualFold(name, app) ||
 				strings.Contains(strings.ToLower(name), strings.ToLower(app)) ||
@@ -181,13 +173,7 @@ func readDockerLogStream(reader io.Reader, serviceName string, sinceTime, untilT
 	for scanner.Scan() {
 		line := scanner.Text()
 		entry := parseLogLine(line, serviceName)
-		if !matchTime(entry.Timestamp, sinceTime, untilTime) {
-			continue
-		}
-		if !matchLevel(entry.Level, level) {
-			continue
-		}
-		if !matchQuery(entry.Raw, entry.Message, query) {
+		if !matchTime(entry.Timestamp, sinceTime, untilTime) || !matchLevel(entry.Level, level) || !matchQuery(entry.Raw, entry.Message, query) {
 			continue
 		}
 		entries = append(entries, entry)
@@ -195,9 +181,10 @@ func readDockerLogStream(reader io.Reader, serviceName string, sinceTime, untilT
 	return entries
 }
 
-// FileLogSource reads local .log files in log directory.
+// FileLogSource reads local .log files in log directory and can pipe to log engine.
 type FileLogSource struct {
 	logDir string
+	writer *logengine.Writer
 }
 
 func (f *FileLogSource) ListServices(ctx context.Context) ([]string, error) {
@@ -212,13 +199,11 @@ func (f *FileLogSource) ListServices(ctx context.Context) ([]string, error) {
 	var services []string
 	for _, e := range entries {
 		if e.IsDir() {
-			services = append(services, e.Name())
 			continue
 		}
 		name := e.Name()
 		if strings.HasSuffix(name, ".log") {
-			svcName := strings.TrimSuffix(name, ".log")
-			services = append(services, svcName)
+			services = append(services, strings.TrimSuffix(name, ".log"))
 		}
 	}
 	return services, nil
@@ -235,20 +220,15 @@ func (f *FileLogSource) GetLogs(ctx context.Context, app string, tail int, since
 
 	var allEntries []LogEntry
 	for _, e := range dirEntries {
-		if e.IsDir() {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
 			continue
 		}
-		fileName := e.Name()
-		if !strings.HasSuffix(fileName, ".log") {
-			continue
-		}
-		svcName := strings.TrimSuffix(fileName, ".log")
-
+		svcName := strings.TrimSuffix(e.Name(), ".log")
 		if app != "" && !strings.EqualFold(svcName, app) && !strings.Contains(strings.ToLower(svcName), strings.ToLower(app)) {
 			continue
 		}
 
-		filePath := filepath.Join(f.logDir, fileName)
+		filePath := filepath.Join(f.logDir, e.Name())
 		fileEntries, err := readLogFile(filePath, svcName, sinceTime, untilTime, query, level)
 		if err != nil {
 			continue
@@ -257,6 +237,62 @@ func (f *FileLogSource) GetLogs(ctx context.Context, app string, tail int, since
 	}
 
 	return allEntries, nil
+}
+
+// IngestToWriter pipes all existing .log files into the columnar logengine.Writer safely.
+func (f *FileLogSource) IngestToWriter(ctx context.Context, w *logengine.Writer) error {
+	if f.logDir == "" || w == nil {
+		return nil
+	}
+	dirEntries, err := os.ReadDir(f.logDir)
+	if err != nil {
+		return fmt.Errorf("failed to read log dir %s: %w", f.logDir, err)
+	}
+
+	var writeErrors int
+	for _, e := range dirEntries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
+			continue
+		}
+		svcName := strings.TrimSuffix(e.Name(), ".log")
+		filePath := filepath.Join(f.logDir, e.Name())
+
+		err := func() error {
+			file, err := os.Open(filePath)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				entry := parseLogLine(scanner.Text(), svcName)
+				if err := w.Write(logengine.Entry{
+					Timestamp: entry.Timestamp,
+					Service:   entry.Service,
+					Level:     entry.Level,
+					Message:   entry.Message,
+					Raw:       entry.Raw,
+				}); err != nil {
+					writeErrors++
+				}
+			}
+			return scanner.Err()
+		}()
+		if err != nil && ctx.Err() != nil {
+			return err
+		}
+	}
+	if err := w.Flush(); err != nil {
+		return fmt.Errorf("failed to flush writer: %w", err)
+	}
+	if writeErrors > 0 {
+		return fmt.Errorf("encountered %d write errors during ingestion", writeErrors)
+	}
+	return nil
 }
 
 func readLogFile(path, service string, sinceTime, untilTime *time.Time, query string, level string) ([]LogEntry, error) {
@@ -269,15 +305,8 @@ func readLogFile(path, service string, sinceTime, untilTime *time.Time, query st
 	var entries []LogEntry
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		line := scanner.Text()
-		entry := parseLogLine(line, service)
-		if !matchTime(entry.Timestamp, sinceTime, untilTime) {
-			continue
-		}
-		if !matchLevel(entry.Level, level) {
-			continue
-		}
-		if !matchQuery(entry.Raw, entry.Message, query) {
+		entry := parseLogLine(scanner.Text(), service)
+		if !matchTime(entry.Timestamp, sinceTime, untilTime) || !matchLevel(entry.Level, level) || !matchQuery(entry.Raw, entry.Message, query) {
 			continue
 		}
 		entries = append(entries, entry)
@@ -291,8 +320,7 @@ type JournalctlLogSource struct {
 }
 
 func newJournalctlLogSource() *JournalctlLogSource {
-	_, err := exec.LookPath("journalctl")
-	if err != nil {
+	if _, err := exec.LookPath("journalctl"); err != nil {
 		return nil
 	}
 	return &JournalctlLogSource{available: true}
@@ -327,12 +355,8 @@ func (j *JournalctlLogSource) GetLogs(ctx context.Context, app string, tail int,
 	var entries []LogEntry
 	scanner := bufio.NewScanner(bytes.NewReader(out))
 	for scanner.Scan() {
-		line := scanner.Text()
-		entry := parseLogLine(line, app)
-		if !matchLevel(entry.Level, level) {
-			continue
-		}
-		if !matchQuery(entry.Raw, entry.Message, query) {
+		entry := parseLogLine(scanner.Text(), app)
+		if !matchLevel(entry.Level, level) || !matchQuery(entry.Raw, entry.Message, query) {
 			continue
 		}
 		entries = append(entries, entry)
@@ -348,9 +372,7 @@ type MemoryLogSource struct {
 
 // NewMemoryLogSource creates an empty MemoryLogSource.
 func NewMemoryLogSource() *MemoryLogSource {
-	return &MemoryLogSource{
-		logs: make(map[string][]LogEntry),
-	}
+	return &MemoryLogSource{logs: make(map[string][]LogEntry)}
 }
 
 // AddEntry adds a single log entry.
@@ -388,13 +410,7 @@ func (m *MemoryLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 			continue
 		}
 		for _, e := range entries {
-			if !matchTime(e.Timestamp, sinceTime, untilTime) {
-				continue
-			}
-			if !matchLevel(e.Level, level) {
-				continue
-			}
-			if !matchQuery(e.Raw, e.Message, query) {
+			if !matchTime(e.Timestamp, sinceTime, untilTime) || !matchLevel(e.Level, level) || !matchQuery(e.Raw, e.Message, query) {
 				continue
 			}
 			allEntries = append(allEntries, e)
@@ -403,3 +419,76 @@ func (m *MemoryLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 	return allEntries, nil
 }
 
+// EngineLogSource wraps the embedded columnar log engine as a LogSource.
+type EngineLogSource struct {
+	writer *logengine.Writer
+	reader *logengine.Reader
+	dict   *logengine.LabelDictionary
+}
+
+// NewEngineLogSource creates a new EngineLogSource backed by logengine.
+func NewEngineLogSource(engineDir string) (*EngineLogSource, error) {
+	dict := logengine.NewLabelDictionary()
+	w, err := logengine.NewWriter(engineDir, dict)
+	if err != nil {
+		return nil, err
+	}
+	r, err := logengine.NewReader(engineDir, dict)
+	if err != nil {
+		_ = w.Close()
+		return nil, err
+	}
+	return &EngineLogSource{writer: w, reader: r, dict: dict}, nil
+}
+
+func (e *EngineLogSource) Writer() *logengine.Writer { return e.writer }
+func (e *EngineLogSource) Reader() *logengine.Reader { return e.reader }
+
+func (e *EngineLogSource) Close() error {
+	if e.writer != nil {
+		return e.writer.Close()
+	}
+	return nil
+}
+
+func (e *EngineLogSource) ListServices(ctx context.Context) ([]string, error) {
+	if e.dict == nil {
+		return nil, nil
+	}
+	return e.dict.Export(), nil
+}
+
+func (e *EngineLogSource) GetLogs(ctx context.Context, app string, tail int, sinceTime, untilTime *time.Time, query string, level string) ([]LogEntry, error) {
+	if e.reader == nil {
+		return nil, nil
+	}
+	var since, until time.Time
+	if sinceTime != nil {
+		since = *sinceTime
+	}
+	if untilTime != nil {
+		until = *untilTime
+	}
+	entries, err := e.reader.Search(ctx, logengine.QueryParams{
+		Service: app,
+		Level:   level,
+		Query:   query,
+		Since:   since,
+		Until:   until,
+		Limit:   tail,
+	})
+	if err != nil {
+		return nil, err
+	}
+	results := make([]LogEntry, len(entries))
+	for i, en := range entries {
+		results[i] = LogEntry{
+			Timestamp: en.Timestamp,
+			Service:   en.Service,
+			Level:     en.Level,
+			Message:   en.Message,
+			Raw:       formatLogEntry(LogEntry{Timestamp: en.Timestamp, Service: en.Service, Level: en.Level, Message: en.Message}),
+		}
+	}
+	return results, nil
+}

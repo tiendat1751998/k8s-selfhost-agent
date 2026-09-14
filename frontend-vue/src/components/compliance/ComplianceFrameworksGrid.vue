@@ -26,7 +26,7 @@
         @click="$emit('select-framework', fw.id)"
       >
         <div class="fw-header">
-          <div class="fw-icon-box">{{ fw.icon || '🛡️' }}</div>
+          <div class="fw-icon-box"><BaseIcon :name="fw.icon || 'shield'" size="md" /></div>
           <div class="fw-title-group">
             <h3 class="fw-name">{{ fw.name }}</h3>
             <span class="fw-last-scan text-muted font-mono">Scanned: {{ formatDate(fw.last_scan_at) }}</span>
@@ -78,13 +78,13 @@
 
     <!-- Empty Frameworks State -->
     <div v-else-if="!loading" class="empty-frameworks-box glass-panel">
-      <span class="empty-icon">🛡️</span>
+      <span class="empty-icon"><BaseIcon name="shield" size="xl" /></span>
       <h3 class="empty-title">No Compliance Frameworks Found</h3>
       <p class="empty-desc">
         No matching regulatory benchmarks (CIS Benchmark, NIST SP 800-53, PCI-DSS, SOC 2, HIPAA) detected.
       </p>
       <button class="btn btn-secondary btn-sm" @click="$emit('run-scan')">
-        <span>🔄 Run Compliance Scan</span>
+        <BaseIcon name="refresh" size="xs" /> <span>Run Compliance Scan</span>
       </button>
     </div>
   </div>
@@ -93,6 +93,7 @@
 <script setup lang="ts">
 import { COMPLIANCE_STANDARDS, type ComplianceStandard } from '../../composables/useCompliance'
 import type { ComplianceFramework } from '../../api/governance'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const standards = COMPLIANCE_STANDARDS
 

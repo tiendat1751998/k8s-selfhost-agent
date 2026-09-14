@@ -81,11 +81,7 @@ export function useIncidents() {
     loading.value = true
     error.value = null
     try {
-      const params: Record<string, string> = {}
-      if (filterSeverity.value !== 'all') params.severity = filterSeverity.value
-      if (filterStatus.value !== 'all') params.status = filterStatus.value
-
-      const res = await incidentsApi.list(params)
+      const res = await incidentsApi.list()
       incidents.value = res.data
 
       if (incidents.value.length > 0 && !selectedIncident.value) {
@@ -296,7 +292,20 @@ export function useIncidents() {
       list = list.filter(i => (i.severity || '').toLowerCase() === filterSeverity.value.toLowerCase())
     }
     if (filterStatus.value !== 'all') {
-      list = list.filter(i => (i.status || '').toLowerCase() === filterStatus.value.toLowerCase())
+      const fs = filterStatus.value.toLowerCase()
+      list = list.filter(i => {
+        const s = (i.status || '').toLowerCase()
+        if (fs === 'open') {
+          return s === 'open' || s === 'detected'
+        }
+        if (fs === 'in_progress') {
+          return s === 'in_progress' || s === 'analyzing' || s === 'remediating'
+        }
+        if (fs === 'resolved') {
+          return s === 'resolved'
+        }
+        return s === fs
+      })
     }
     if (searchQuery.value.trim()) {
       const q = searchQuery.value.toLowerCase().trim()
@@ -314,6 +323,21 @@ export function useIncidents() {
   const criticalCount = computed(() => incidents.value.filter(i => i.severity === 'critical').length)
   const analyzingCount = computed(() => incidents.value.filter(i => i.status === 'analyzing' || i.status === 'remediating').length)
   const resolvedCount = computed(() => incidents.value.filter(i => i.status === 'resolved').length)
+
+  // Status Tab Counts for UI tabs: All, Open, In Progress, Resolved
+  const countAll = computed(() => incidents.value.length)
+  const countOpen = computed(() => incidents.value.filter(i => {
+    const s = (i.status || '').toLowerCase()
+    return s === 'open' || s === 'detected'
+  }).length)
+  const countInProgress = computed(() => incidents.value.filter(i => {
+    const s = (i.status || '').toLowerCase()
+    return s === 'in_progress' || s === 'analyzing' || s === 'remediating'
+  }).length)
+  const countResolved = computed(() => incidents.value.filter(i => {
+    const s = (i.status || '').toLowerCase()
+    return s === 'resolved'
+  }).length)
 
   const selectedBlastRadius = computed<BlastRadiusInfo | null>(() =>
     calculateBlastRadius(selectedIncident.value)
@@ -358,6 +382,10 @@ export function useIncidents() {
     criticalCount,
     analyzingCount,
     resolvedCount,
+    countAll,
+    countOpen,
+    countInProgress,
+    countResolved,
     selectedBlastRadius,
     rcaTimelineEvents,
     showToast,

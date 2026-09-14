@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 import type { Incident, RCAReport, PullRequest } from '../../api/compute'
 import type { RcaTimelineEvent } from '../../composables/useIncidents'
@@ -24,14 +25,14 @@ function formatTime(d?: string) {
   }
 }
 
-function getIconForType(type: RcaTimelineEvent['type']) {
+function getIconForType(type: RcaTimelineEvent['type']): string {
   switch (type) {
-    case 'detection': return '⚠️'
-    case 'correlation': return '🔗'
-    case 'analysis': return '🧠'
-    case 'pr': return '🔀'
-    case 'resolution': return '🛡️'
-    default: return '⏱️'
+    case 'detection': return 'alert-triangle'
+    case 'correlation': return 'external-link'
+    case 'analysis': return 'cpu'
+    case 'pr': return 'git-branch'
+    case 'resolution': return 'shield'
+    default: return 'clock'
   }
 }
 </script>
@@ -40,7 +41,7 @@ function getIconForType(type: RcaTimelineEvent['type']) {
   <ModalDrawer
     :show="show"
     mode="modal"
-    title="🔬 Interactive RCA Chronology & Reasoning Timeline"
+    title="Interactive RCA Chronology & Reasoning Timeline"
     :subtitle="incident ? `Workload: ${incident.pod_name} (${incident.cluster_name} · ns/${incident.namespace})` : 'Root Cause Analysis Timeline'"
     max-width="700px"
     @update:show="emit('update:show', $event)"
@@ -61,7 +62,7 @@ function getIconForType(type: RcaTimelineEvent['type']) {
           <!-- Timeline Node Line & Icon -->
           <div class="step-rail">
             <div class="step-icon-circle">
-              <span>{{ getIconForType(evt.type) }}</span>
+              <BaseIcon :name="getIconForType(evt.type)" size="xs" />
             </div>
             <div v-if="idx < events.length - 1" class="step-connector"></div>
           </div>
@@ -81,7 +82,7 @@ function getIconForType(type: RcaTimelineEvent['type']) {
             <!-- Evidence List -->
             <div v-if="evt.evidence && evt.evidence.length > 0" class="step-evidence">
               <div v-for="(ev, evIdx) in evt.evidence" :key="evIdx" class="step-ev-tag font-mono">
-                <span class="step-bullet">▸</span>
+                <BaseIcon name="chevron-right" size="xs" class="step-bullet" />
                 <span>{{ ev }}</span>
               </div>
             </div>

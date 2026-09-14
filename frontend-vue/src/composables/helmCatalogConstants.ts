@@ -112,16 +112,24 @@ export function filterReleases(releases: HelmRelease[], filter: string, search: 
   let list = [...releases]
   if (filter !== 'all') {
     const s = filter.toLowerCase()
-    list = list.filter(r => (r.status || '').toLowerCase().includes(s))
+    list = list.filter(r => {
+      const rawInfo = (r as any)?.info || {}
+      const status = String(r?.status || rawInfo?.status || '').toLowerCase()
+      return status.includes(s)
+    })
   }
   if (search.trim()) {
     const q = search.toLowerCase().trim()
-    list = list.filter(r =>
-      (r.name || '').toLowerCase().includes(q) ||
-      (r.chart || '').toLowerCase().includes(q) ||
-      (r.namespace || '').toLowerCase().includes(q) ||
-      (r.description || '').toLowerCase().includes(q)
-    )
+    list = list.filter(r => {
+      const rawInfo = (r as any)?.info || {}
+      const desc = r.description || rawInfo?.description || ''
+      return (
+        (r.name || '').toLowerCase().includes(q) ||
+        (r.chart || '').toLowerCase().includes(q) ||
+        (r.namespace || '').toLowerCase().includes(q) ||
+        desc.toLowerCase().includes(q)
+      )
+    })
   }
   return list
 }
@@ -142,8 +150,16 @@ export function filterCharts(charts: HelmChart[], repoFilter: string, tagFilter:
 
 export function computeReleaseStats(releases: HelmRelease[]) {
   const total = releases.length
-  const deployed = releases.filter(r => (r.status || '').toLowerCase().includes('deploy')).length
-  const failed = releases.filter(r => (r.status || '').toLowerCase().includes('fail') || (r.status || '').toLowerCase().includes('error')).length
+  const deployed = releases.filter(r => {
+    const rawInfo = (r as any)?.info || {}
+    const status = String(r?.status || rawInfo?.status || '').toLowerCase()
+    return status === 'deployed' || status.includes('deploy')
+  }).length
+  const failed = releases.filter(r => {
+    const rawInfo = (r as any)?.info || {}
+    const status = String(r?.status || rawInfo?.status || '').toLowerCase()
+    return status.includes('fail') || status.includes('error')
+  }).length
   const rate = total === 0 ? '100%' : `${Math.round((deployed / total) * 100)}%`
   return { total, deployed, failed, rate }
 }

@@ -2,6 +2,7 @@ import type { DeploymentApp, DockerService, DockerContainer } from '../api/compu
 import { formatContainerName, formatImageName } from '../utils/dockerFormat'
 
 export type FilterTab = 'all' | 'canary' | 'bluegreen' | 'k8s' | 'swarm'
+export type StatusFilter = 'all' | 'healthy' | 'degraded'
 
 export interface ToastMessage {
   text: string
@@ -53,18 +54,18 @@ export function getRolloutState(row: DeploymentApp): RolloutState {
 
   let statusText = `${ready}/${desired} Ready`
   let badgeClass = 'chip-ready'
-  let label = '✓ Ready'
+  let label = 'Ready'
 
   if (isPaused) {
-    label = '⏸ Paused'
+    label = 'Paused'
     badgeClass = 'chip-paused'
     statusText = `${ready}/${desired} Ready (Paused)`
   } else if (isUpdating) {
-    label = `⟳ Updating (${pending} pending)`
+    label = `Updating (${pending} pending)`
     badgeClass = 'chip-updating'
     statusText = `${ready}/${desired} Ready • ${updated}/${desired} Updated (${pending} pending)`
   } else if (ready === desired && desired > 0) {
-    label = '✓ Ready'
+    label = 'Ready'
     badgeClass = 'chip-ready'
     statusText = `${desired}/${desired} Ready (Rollout complete)`
   } else if (desired === 0) {
@@ -143,9 +144,13 @@ export function filterDeploymentsList(
   list: DeploymentApp[],
   activeFilterTab: FilterTab,
   selectedNamespaceFilter: string,
-  searchQuery: string
+  searchQuery: string,
+  statusFilter: StatusFilter = 'all'
 ): DeploymentApp[] {
   return list.filter(d => {
+    if (statusFilter === 'healthy' && d.status !== 'healthy') return false
+    if (statusFilter === 'degraded' && d.status === 'healthy') return false
+
     if (activeFilterTab === 'canary' && d.strategy !== 'Canary' && (!d.canaryWeight || d.canaryWeight <= 0)) {
       return false
     }

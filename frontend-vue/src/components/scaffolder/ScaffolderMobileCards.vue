@@ -10,6 +10,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'deploy', template: Template): void
+  (e: 'preview', template: Template): void
   (e: 'edit', template: Template): void
   (e: 'delete', template: Template): void
   (e: 'reset-filters'): void
@@ -23,9 +24,10 @@ const emit = defineEmits<{
       <p>Loading templates...</p>
     </div>
 
-    <div v-else-if="templates.length === 0" class="empty-state glass-panel">
-      <div class="empty-icon">📦</div>
-      <h3>No templates</h3>
+    <div v-else-if="templates.length === 0" class="mobile-empty-state glass-panel">
+      <div class="empty-icon"><BaseIcon name="layers" size="lg" /></div>
+      <p class="empty-title">No scaffolder templates found matching filters.</p>
+      <p class="empty-hint">Tap + to register a template.</p>
       <button class="btn btn-secondary btn-sm mt-2" @click="emit('reset-filters')">
         Reset Filters
       </button>
@@ -39,7 +41,7 @@ const emit = defineEmits<{
     >
       <div class="mobile-card-left">
         <div class="mobile-avatar">
-          {{ getFrameworkIcon(tmpl.framework) }}
+          <BaseIcon :name="getFrameworkIcon(tmpl.framework)" size="md" />
         </div>
         <div class="mobile-details">
           <span class="mobile-title font-mono">{{ tmpl.name }}</span>
@@ -55,33 +57,36 @@ const emit = defineEmits<{
       <div class="mobile-card-right" @click.stop>
         <button
           type="button"
-          class="btn-mobile-deploy"
-          title="1-Click Deploy"
+          class="btn-icon-action"
+          title="Use Template"
+          aria-label="Use Template"
           @click="emit('deploy', tmpl)"
-        >
-          🚀 Deploy
-        </button>
+        ><BaseIcon name="play" size="xs" /></button>
+
+        <button
+          type="button"
+          class="btn-icon-action"
+          title="Preview Template"
+          aria-label="Preview Template"
+          @click="emit('preview', tmpl)"
+        ><BaseIcon name="eye" size="xs" /></button>
 
         <template v-if="!tmpl.built_in">
           <button
             type="button"
-            class="btn-icon-action btn-sm"
-            title="Edit"
+            class="btn-icon-action"
+            title="Edit Template"
             aria-label="Edit Template"
             @click="emit('edit', tmpl)"
-          >
-            ✏️
-          </button>
+          ><BaseIcon name="edit" size="xs" /></button>
           <button
             type="button"
-            class="btn-icon-action btn-icon-danger btn-sm"
-            title="Delete"
+            class="btn-icon-action btn-icon-danger"
+            title="Delete Template"
             aria-label="Delete Template"
             :disabled="deleting"
             @click="emit('delete', tmpl)"
-          >
-            🗑️
-          </button>
+          ><BaseIcon name="trash" size="xs" /></button>
         </template>
       </div>
     </div>

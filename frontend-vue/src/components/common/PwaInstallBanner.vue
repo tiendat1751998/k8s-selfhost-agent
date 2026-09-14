@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { usePwaInstall } from '../../registerServiceWorker'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const { isInstallable, isInstalled, promptInstall } = usePwaInstall()
 
@@ -76,7 +77,7 @@ async function handleInstallClick() {
 
       <div class="banner-content">
         <div class="banner-icon-box">
-          <span class="banner-icon">☸️</span>
+          <span class="banner-icon"><BaseIcon name="anchor" size="md" /></span>
           <span class="banner-pulse"></span>
         </div>
 
@@ -94,7 +95,7 @@ async function handleInstallClick() {
             @click="handleInstallClick" 
             title="Install K8sControl to your device"
           >
-            <span>📲 Install Now</span>
+            <BaseIcon name="download" size="xs" /> <span>Install Now</span>
           </button>
           <button 
             class="btn-dismiss" 
@@ -102,7 +103,7 @@ async function handleInstallClick() {
             title="Dismiss installation banner for 7 days"
             aria-label="Dismiss banner"
           >
-            <span>✕</span>
+            <BaseIcon name="x" size="xs" />
           </button>
         </div>
       </div>
@@ -110,13 +111,13 @@ async function handleInstallClick() {
       <!-- iOS Instruction Tooltip / Dropdown -->
       <div v-if="showIosInstructions" class="ios-instructions-box animate-fade-in">
         <div class="ios-header">
-          <span class="ios-icon">🍎</span>
+          <span class="ios-icon"><BaseIcon name="info" size="xs" /></span>
           <span class="ios-title font-mono">iOS Installation Guide</span>
-          <button class="ios-close" @click="showIosInstructions = false">✕</button>
+          <button class="ios-close" @click="showIosInstructions = false" aria-label="Close iOS guide"><BaseIcon name="x" size="xs" /></button>
         </div>
         <ol class="ios-steps font-mono">
-          <li>1. Tap Safari's Share button <span class="share-icon">⎙ / 📤</span> at the bottom bar.</li>
-          <li>2. Scroll down and tap <strong class="text-cyan">"Add to Home Screen"</strong> (➕).</li>
+          <li>1. Tap Safari's Share button <span class="share-icon"><BaseIcon name="external-link" size="xs" /></span> at the bottom bar.</li>
+          <li>2. Scroll down and tap <strong class="text-cyan">"Add to Home Screen"</strong> (+).</li>
           <li>3. Tap <strong class="text-cyan">"Add"</strong> in the top-right corner to launch fullscreen.</li>
         </ol>
       </div>

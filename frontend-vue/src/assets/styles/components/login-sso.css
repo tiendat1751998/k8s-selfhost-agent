@@ -1,0 +1,286 @@
+﻿/* ==========================================================================
+   Enterprise SSO Gateway, MFA Overlays & Security Badges
+   Component Styles for LoginView (<300 lines modular invariant)
+   ========================================================================== */
+
+/* 1. SSO Gateway Divider */
+.sso-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sso-divider .divider-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+}
+
+.sso-divider .divider-text {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted, #94a3b8);
+  white-space: nowrap;
+}
+
+/* 2. SSO OAuth Providers Grid & Buttons */
+.sso-providers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+}
+
+.sso-btn {
+  height: 40px;
+  min-height: 40px;
+  min-width: 32px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #f1f5f9;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sso-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.sso-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.sso-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.sso-icon {
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sso-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Provider Color Accents */
+.sso-btn-github:hover:not(:disabled) {
+  border-color: rgba(240, 246, 252, 0.4);
+  box-shadow: 0 4px 16px rgba(240, 246, 252, 0.15);
+}
+
+.sso-btn-google:hover:not(:disabled) {
+  border-color: rgba(66, 133, 244, 0.5);
+  box-shadow: 0 4px 16px rgba(66, 133, 244, 0.2);
+}
+
+.sso-btn-keycloak:hover:not(:disabled) {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 4px 16px rgba(6, 182, 212, 0.2);
+}
+
+.sso-btn-saml:hover:not(:disabled) {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
+}
+
+.sso-btn-oidc:hover:not(:disabled) {
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.2);
+}
+
+/* 3. MFA / TOTP Challenge Overlay & Challenge Inputs */
+.mfa-prompt-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.totp-input-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.totp-input {
+  width: 100%;
+  max-width: 320px;
+  height: 48px;
+  min-height: 44px;
+  text-align: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 8px;
+  padding: 8px 12px;
+  color: var(--accent-cyan, #06b6d4);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.totp-input:focus {
+  outline: none;
+  border-color: var(--accent-cyan, #06b6d4);
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.35);
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.recovery-input {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  text-align: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  padding: 8px 12px;
+  text-transform: uppercase;
+  color: var(--accent-amber, #f59e0b);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.recovery-input:focus {
+  outline: none;
+  border-color: var(--accent-amber, #f59e0b);
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.35);
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.mfa-time-sync-notice {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+/* 4. Security Disclaimer Badges (ZeroTrust / FIPS / SOC2) */
+.security-disclaimer-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 18px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sec-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.sec-badge:hover {
+  border-color: rgba(6, 182, 212, 0.25);
+}
+
+.sec-badge-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.sec-badge-text {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* 5. Responsive Overrides for SSO & MFA (<768px) */
+@media (max-width: 767.98px) {
+  .sso-providers-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .sso-btn {
+    height: 40px;
+    min-height: 40px;
+    font-size: 11.5px;
+    padding: 0 8px;
+  }
+
+  .sso-btn:last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+
+  .totp-input {
+    font-size: 20px;
+    letter-spacing: 5px;
+    height: 44px;
+    min-height: 44px;
+    padding: 6px 8px;
+  }
+
+  .recovery-input {
+    font-size: 15px;
+    letter-spacing: 2.5px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .security-disclaimer-badges {
+    gap: 5px;
+    margin-top: 14px;
+  }
+
+  .sec-badge {
+    padding: 3px 6px;
+  }
+
+  .sec-badge-text {
+    font-size: 9.5px;
+  }
+}

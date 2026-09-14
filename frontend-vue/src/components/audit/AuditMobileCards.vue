@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AuditLogEntry } from '../../api/governance'
+import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 
 defineProps<{
@@ -39,7 +40,7 @@ function formatRelativeTime(d: string): string {
 <template>
   <div class="mobile-cards-stream">
     <div v-if="loading" class="text-muted font-mono" style="padding: 16px; text-align: center;">
-      ⏳ Loading audit events...
+      <BaseIcon name="clock" size="xs" /> <span>Loading audit events...</span>
     </div>
 
     <div v-else-if="logs.length === 0" class="text-muted font-mono" style="padding: 24px; text-align: center;">
@@ -52,6 +53,7 @@ function formatRelativeTime(d: string): string {
       class="mobile-audit-card glass-panel"
       role="button"
       tabindex="0"
+      aria-label="View audit event payload"
       @click="$emit('select-payload', entry)"
       @keydown.enter="$emit('select-payload', entry)"
     >
@@ -65,10 +67,10 @@ function formatRelativeTime(d: string): string {
         <span class="mobile-card-time font-mono">{{ formatRelativeTime(entry.timestamp) }}</span>
       </div>
 
-      <!-- Row 2: Actor + Target Resource + Payload Button -->
+      <!-- Row 2: Actor + Target Resource + Payload Button (>=32px) -->
       <div class="mobile-card-row-bottom">
         <div class="mobile-card-bottom-left">
-          <span class="mobile-actor font-mono">👤 {{ entry.actor }}</span>
+          <span class="mobile-actor font-mono"><BaseIcon name="user" size="xs" /> {{ entry.actor }}</span>
           <span class="text-muted">•</span>
           <span class="mobile-target font-mono" :title="entry.target_resource">
             {{ entry.target_resource }}
@@ -77,9 +79,10 @@ function formatRelativeTime(d: string): string {
         <button
           class="mobile-payload-btn font-mono"
           type="button"
+          aria-label="Inspect Event Payload"
           @click.stop="$emit('select-payload', entry)"
         >
-          🔍 Payload
+          <BaseIcon name="search" size="xs" /> <span>Payload</span>
         </button>
       </div>
     </div>

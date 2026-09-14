@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOverviewDashboard } from '../composables/useOverviewDashboard'
 
@@ -7,13 +8,16 @@ import RequestFlowBar from '../components/overview/hud/RequestFlowBar.vue'
 import OverviewSaturationTrends from '../components/overview/hud/OverviewSaturationTrends.vue'
 import OverviewMobileStream from '../components/overview/OverviewMobileStream.vue'
 import NodeCard from '../components/overview/nodes/NodeCard.vue'
+import NodeTableView from '../components/overview/nodes/NodeTableView.vue'
 import NodeDiagnosticsDrawer from '../components/overview/drawer/NodeDiagnosticsDrawer.vue'
 import DeepDiveTrafficModal from '../components/overview/modals/DeepDiveTrafficModal.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { MutedAlertConfig } from '../stores/alertStore'
 
 export type { MutedAlertConfig }
 
 const router = useRouter()
+const nodeViewMode = ref<'grid' | 'table'>('table')
 
 const {
   overview,
@@ -73,54 +77,78 @@ const {
 
 <template>
   <div class="overview-dashboard animate-fade-in">
-    <!-- Desktop Header Bar -->
-    <header class="dashboard-header">
-      <div class="header-titles">
-        <div class="header-badge-group">
-          <span class="badge" :class="isLiveWs ? 'badge-emerald' : 'badge-cyan'">
-            <span class="pulse-dot" :class="{ 'pulse-active': isLiveWs }"></span>
-            <span>{{ isLiveWs ? 'Live Stream' : 'Telemetry Synced' }}</span>
-          </span>
-          <span class="badge badge-indigo badge-auto-refresh">Auto-Refresh 5s</span>
-          <span class="last-sync-text">Updated: {{ lastUpdated.toLocaleTimeString() }}</span>
-        </div>
-        <h1 class="page-title">Cluster Overview</h1>
-        <p class="page-desc">
-          Real-time cluster topology, container saturation metrics, dynamic resource gauges, and autonomous threshold alerting.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn btn-secondary" @click="pollClusterMetrics" :disabled="loading" title="Refresh Telemetry">
-          <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
-          <span>Refresh</span>
-        </button>
-        <button class="btn btn-secondary" @click="openDeepDiveModal" title="Deep-Dive Telemetry">
-          <span class="btn-icon">📊</span>
-          <span>Deep-Dive Telemetry</span>
-        </button>
-      </div>
-    </header>
-
-    <!-- Mobile 44px Command Bar (<640px) -->
-    <header class="mobile-command-bar">
-      <div class="mobile-command-left">
-        <h1 class="mobile-title">Overview</h1>
-        <span class="badge" :class="isLiveWs ? 'badge-emerald' : 'badge-cyan'">
-          <span class="pulse-dot" :class="{ 'pulse-active': isLiveWs }"></span>
-          <span>{{ isLiveWs ? 'Live' : 'Synced' }}</span>
+    <!-- Sleek 44px Mobile Command Bar (<768px) -->
+    <div v-if="overview" class="mobile-command-bar">
+      <div class="command-bar-left">
+        <span class="command-bar-title font-semibold text-slate-100">
+          <BaseIcon name="server" size="xs" /> Overview • {{ overview.healthy_nodes }}/{{ overview.total_nodes }} Online
         </span>
       </div>
-      <div class="mobile-command-actions">
-        <button class="btn btn-secondary btn-compact" @click="pollClusterMetrics" :disabled="loading" title="Refresh">
-          <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">🔄</span>
+      <div class="command-bar-actions">
+        <button
+          type="button"
+          class="mobile-cmd-btn"
+          :disabled="loading"
+          title="Refresh Telemetry"
+          aria-label="Refresh Telemetry"
+          @click="pollClusterMetrics"
+        >
+          <span class="cmd-icon" :class="{ 'spin-icon': loading || tpsLoading }">
+            <BaseIcon name="refresh" size="sm" />
+          </span>
+          <span class="cmd-label">Refresh</span>
         </button>
-        <button class="btn btn-secondary btn-compact" @click="openDeepDiveModal" title="Deep-Dive Telemetry">
-          <span class="btn-icon">📊</span>
-          <span>Deep-Dive</span>
+        <button
+          type="button"
+          class="mobile-cmd-btn"
+          title="Deep-Dive Telemetry"
+          aria-label="Deep-Dive Telemetry"
+          @click="openDeepDiveModal"
+        >
+          <span class="cmd-icon">
+            <BaseIcon name="activity" size="sm" />
+          </span>
+          <span class="cmd-label">Deep-Dive</span>
         </button>
       </div>
-    </header>
+    </div>
+
+    <!-- Sleek 38px Enterprise Desktop Toolbar (>=768px) -->
+    <div v-if="overview" class="overview-toolbar-sleek">
+      <div class="toolbar-left-group">
+        <!-- Live stream status pill -->
+        <span class="badge" :class="isLiveWs ? 'badge-emerald' : 'badge-cyan'">
+          <span class="pulse-dot" :class="{ 'pulse-active': isLiveWs }"></span>
+          <span class="font-mono text-xs">Live · {{ lastUpdated.toLocaleTimeString() }}</span>
+        </span>
+      </div>
+
+      <div class="toolbar-actions-group">
+        <!-- Compact Deep-Dive and Refresh Buttons -->
+        <button
+          type="button"
+          class="btn-telemetry-action"
+          @click="openDeepDiveModal"
+          title="Deep-Dive Telemetry"
+        >
+          <BaseIcon name="activity" size="xs" />
+          <span>Deep-Dive Telemetry</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn-telemetry-refresh"
+          @click="pollClusterMetrics"
+          :disabled="loading"
+          title="Refresh Telemetry"
+          aria-label="Refresh Telemetry"
+        >
+          <span class="btn-icon" :class="{ 'spin-icon': loading || tpsLoading }">
+            <BaseIcon name="refresh" size="xs" />
+          </span>
+        </button>
+      </div>
+    </div>
 
     <!-- LOADING SKELETON -->
     <div v-if="loading && !overview" class="skeleton-hud-grid">
@@ -129,7 +157,9 @@ const {
 
     <!-- ERROR STATE -->
     <div v-else-if="error && !overview" class="error-banner glass-panel">
-      <div class="error-icon">⚠️</div>
+      <div class="error-icon">
+        <BaseIcon name="alert-triangle" size="xl" />
+      </div>
       <div class="error-info">
         <h3>Telemetry Connection Interrupted</h3>
         <p>{{ error }}</p>
@@ -139,7 +169,9 @@ const {
 
     <!-- EMPTY STATE -->
     <div v-else-if="nodes.length === 0 && !loading" class="empty-state-card glass-panel">
-      <div class="empty-icon">🖥️</div>
+      <div class="empty-icon">
+        <BaseIcon name="server" size="xl" />
+      </div>
       <h2>No Infrastructure Servers Connected</h2>
       <p>Deploy k8s-agent (port 9100) on your hosts or attach compute clusters to enable real-time telemetry streaming.</p>
       <div class="empty-actions">
@@ -158,9 +190,12 @@ const {
           :runningContainers="runningContainers"
           :totalContainers="totalContainers"
           :effectiveHttpRps="effectiveHttpRps"
+          :tpsData="tpsData"
           :isLiveWs="isLiveWs"
           :lastUpdated="lastUpdated"
           :loading="loading"
+          :trendHistory="trendHistory"
+          :clusterAvgLatencyMs="clusterAvgLatencyMs"
           @inspect="inspectNode"
           @refresh="pollClusterMetrics"
           @deepDive="openDeepDiveModal"
@@ -203,93 +238,128 @@ const {
 
       <!-- 4. INFRASTRUCTURE SERVER TOPOLOGY & NODE CARDS -->
       <section class="topology-section">
-        <div class="topology-header-row">
-          <div class="topology-title-group">
-            <div class="topology-title-with-pulse">
-              <span class="pulse-beacon"></span>
-              <h2 class="section-title">Infrastructure Hosts &amp; Node Mesh</h2>
-            </div>
-            <p class="section-subtitle">
-              Interactive cluster server topology with live telemetry gauges, drag-and-drop reordering, and deep diagnostics.
-            </p>
+        <div class="hosts-header-row topology-header-row">
+          <div class="hosts-title-group">
+            <span class="hosts-pulse-dot"></span>
+            <h2 class="hosts-section-title">Infrastructure Hosts</h2>
           </div>
 
-          <!-- Mesh Topology Connections Indicator -->
-          <div class="topology-mesh-indicator glass-panel font-mono">
-            <span class="mesh-dot-active"></span>
-            <span class="mesh-label">Full Mesh Connected</span>
-            <span class="mesh-stats font-bold text-cyan">{{ overview.healthy_nodes }}/{{ overview.total_nodes }} Online</span>
+          <!-- Compact Monospace Live Status Badge -->
+          <div class="hosts-status-badge font-mono" title="Online servers out of total cluster servers">
+            <span class="hosts-dot-online"></span>
+            <span class="hosts-status-text font-bold text-cyan">{{ overview.healthy_nodes }}/{{ overview.total_nodes }} Online</span>
           </div>
         </div>
 
-        <!-- Topology Filter Pills Bar -->
-        <div class="topology-filter-bar glass-panel">
-          <div class="topology-filter-pills">
+        <!-- Sleek Unified 38px Host Controls Toolbar -->
+        <div class="hosts-controls-toolbar topology-filter-bar glass-panel">
+          <!-- Left side: Smooth Capsule Pills -->
+          <div class="hosts-capsule-pills topology-filter-pills" role="tablist" aria-label="Filter servers by state">
             <button
               type="button"
-              class="filter-pill-btn"
+              class="hosts-capsule-pill filter-pill-btn"
               :class="{ active: selectedTopologyFilter === 'all' }"
               @click="selectedTopologyFilter = 'all'"
             >
-              <span>All Servers</span>
-              <span class="pill-count font-mono">{{ topologyFilterCounts.all }}</span>
+              All ({{ topologyFilterCounts.all }})
             </button>
 
             <button
               type="button"
-              class="filter-pill-btn"
+              class="hosts-capsule-pill filter-pill-btn"
               :class="{ active: selectedTopologyFilter === 'control_plane' }"
               @click="selectedTopologyFilter = 'control_plane'"
             >
-              <span>👑 Control-Plane</span>
-              <span class="pill-count font-mono">{{ topologyFilterCounts.control }}</span>
+              Control-Plane ({{ topologyFilterCounts.control }})
             </button>
 
             <button
               type="button"
-              class="filter-pill-btn"
+              class="hosts-capsule-pill filter-pill-btn"
               :class="{ active: selectedTopologyFilter === 'worker' }"
               @click="selectedTopologyFilter = 'worker'"
             >
-              <span>📡 Workers / Agents</span>
-              <span class="pill-count font-mono">{{ topologyFilterCounts.worker }}</span>
+              Workers ({{ topologyFilterCounts.worker }})
             </button>
 
             <button
               type="button"
-              class="filter-pill-btn"
+              class="hosts-capsule-pill filter-pill-btn"
               :class="{ active: selectedTopologyFilter === 'hot' }"
               @click="selectedTopologyFilter = 'hot'"
             >
-              <span>🔥 Hot Nodes</span>
-              <span class="pill-count font-mono">{{ topologyFilterCounts.hot }}</span>
+              Hot ({{ topologyFilterCounts.hot }})
             </button>
 
             <button
               type="button"
-              class="filter-pill-btn"
+              class="hosts-capsule-pill filter-pill-btn"
               :class="{ active: selectedTopologyFilter === 'overloaded' }"
               @click="selectedTopologyFilter = 'overloaded'"
             >
-              <span>⚠️ Overloaded / Down</span>
-              <span class="pill-count font-mono">{{ topologyFilterCounts.overloaded }}</span>
+              Overloaded ({{ topologyFilterCounts.overloaded }})
             </button>
           </div>
 
-          <div class="topology-order-actions" v-if="customNodeOrder.length > 0">
-            <button class="btn-reset-order font-mono" @click="resetNodeOrder" title="Reset customized card order">
-              <span>↺ Reset Card Order</span>
+          <!-- Right side: Segmented View Mode Toggle & Reset Order -->
+          <div class="hosts-toolbar-right topology-order-actions">
+            <div class="hosts-segmented-toggle view-mode-toggle" role="group" aria-label="View mode">
+              <button
+                type="button"
+                class="hosts-seg-btn toggle-btn"
+                :class="{ active: nodeViewMode === 'table' }"
+                @click="nodeViewMode = 'table'"
+                title="Table view"
+              >
+                <BaseIcon name="file-text" size="xs" /> Table
+              </button>
+              <button
+                type="button"
+                class="hosts-seg-btn toggle-btn"
+                :class="{ active: nodeViewMode === 'grid' }"
+                @click="nodeViewMode = 'grid'"
+                title="Grid view"
+              >
+                <BaseIcon name="grid" size="xs" /> Grid
+              </button>
+            </div>
+
+            <button
+              v-if="customNodeOrder.length > 0"
+              type="button"
+              class="hosts-btn-reset-order btn-reset-order-icon font-mono"
+              @click="resetNodeOrder"
+              title="Reset customized card order"
+              aria-label="Reset customized card order"
+            >
+              <BaseIcon name="refresh" size="xs" />
             </button>
           </div>
         </div>
 
-        <!-- Node Cards Grid -->
-        <div class="node-cards-grid">
+        <template v-if="nodeViewMode === 'table'">
+          <NodeTableView
+            :nodes="filteredTopologyNodes"
+            :busiestNodeId="busiestNodeId"
+            @click="handleNodeCardClick"
+            @details="inspectNode"
+            @logs="manageNode"
+            @scale="manageNode"
+            @restart="manageNode"
+            @yaml="manageNode"
+            @delete="manageNode"
+          />
+        </template>
+        <template v-else>
+          <!-- Node Cards Grid -->
+          <div class="node-cards-grid">
           <div
             v-if="filteredTopologyNodes.length === 0"
             class="empty-topology-state glass-panel"
           >
-            <span class="empty-topology-icon">🔍</span>
+            <span class="empty-topology-icon">
+              <BaseIcon name="search" size="lg" />
+            </span>
             <span class="empty-topology-text">No servers match the selected filter "{{ selectedTopologyFilter }}".</span>
             <button class="btn-reset-filters" @click="selectedTopologyFilter = 'all'">Show All Servers</button>
           </div>
@@ -305,6 +375,7 @@ const {
             @dragstart="onDragStart" @dragover="onDragOver" @dragenter="onDragEnter" @dragleave="onDragLeave" @drop="onDrop" @dragend="onDragEnd"
           />
         </div>
+        </template>
       </section>
       </div>
     </div>
@@ -342,4 +413,5 @@ const {
 
 <style scoped>
 @import '../assets/styles/views/overview.css';
+@import '../assets/styles/views/overview-mobile.css';
 </style>

@@ -9,7 +9,7 @@ export const pvcColumns: Column<K8sResource>[] = [
   { key: 'storageClass', label: 'StorageClass', width: '130px', sortable: true },
   { key: 'volume', label: 'Volume', width: '150px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const pvColumns: Column<K8sResource>[] = [
@@ -21,7 +21,7 @@ export const pvColumns: Column<K8sResource>[] = [
   { key: 'storageClass', label: 'StorageClass', width: '130px', sortable: true },
   { key: 'claim', label: 'Claim', width: '170px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]
 
 export const storageClassColumns: Column<K8sResource>[] = [
@@ -31,5 +31,5 @@ export const storageClassColumns: Column<K8sResource>[] = [
   { key: 'volumeBindingMode', label: 'VolumeBindingMode', width: '160px', sortable: true },
   { key: 'defaultClass', label: 'Default', width: '80px', sortable: true },
   { key: 'age', label: 'Age', width: '85px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '190px', align: 'right' },
+  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
 ]

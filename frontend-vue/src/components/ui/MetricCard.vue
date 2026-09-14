@@ -1,5 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
+import BaseIcon from './BaseIcon.vue'
 
 const props = defineProps<{
   title: string
@@ -13,28 +14,27 @@ const props = defineProps<{
 }>()
 
 const iconMap: Record<string, string> = {
-  alert: '⚠️',
-  warning: '⚠️',
-  fire: '🔥',
-  danger: '🚨',
-  critical: '🚨',
-  ok: '✅',
-  success: '✅',
-  check: '✔️',
-  info: 'ℹ️',
-  clock: '⏱️',
-  shield: '🛡️',
-  cpu: '⚡',
-  ram: '🧠',
-  disk: '💾',
-  network: '🌐'
+  alert: 'alert-triangle',
+  warning: 'alert-triangle',
+  fire: 'flame',
+  danger: 'alert-triangle',
+  critical: 'alert-triangle',
+  ok: 'check-circle',
+  success: 'check-circle',
+  check: 'check-circle',
+  info: 'help-circle',
+  clock: 'activity',
+  shield: 'shield',
+  cpu: 'zap',
+  ram: 'cpu',
+  disk: 'hard-drive',
+  network: 'globe',
 }
 
-const resolvedIcon = computed(() => {
+const resolvedIconName = computed<string>(() => {
   if (!props.icon) return ''
-  const trimmed = props.icon.trim()
-  const key = trimmed.toLowerCase()
-  return iconMap[key] || trimmed
+  const trimmed = props.icon.trim().toLowerCase()
+  return iconMap[trimmed] || trimmed
 })
 </script>
 
@@ -42,7 +42,9 @@ const resolvedIcon = computed(() => {
   <div class="metric-card glass-panel">
     <div class="metric-header">
       <div class="metric-title-group">
-        <span v-if="resolvedIcon" class="metric-icon" aria-hidden="true">{{ resolvedIcon }}</span>
+        <span v-if="resolvedIconName" class="metric-icon" aria-hidden="true">
+          <BaseIcon :name="resolvedIconName" size="sm" />
+        </span>
         <span class="metric-title">{{ title }}</span>
       </div>
       <span v-if="badge" class="metric-badge" :class="`badge-${badgeColor || 'cyan'}`">

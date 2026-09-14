@@ -35,7 +35,6 @@ class PluginLoaderService {
         registeredPlugins: new Map<string, any>(),
         registerPlugin: (name: string, pluginDef: any) => {
           (window as any).__K8S_PLUGIN_SYSTEM__.registeredPlugins.set(name, pluginDef)
-          console.log(`[PluginLoader] Plugin "${name}" registered successfully.`, pluginDef)
         },
       }
     }

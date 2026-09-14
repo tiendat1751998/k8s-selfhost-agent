@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 defineProps<{
   linesStreamed: number
   errorRate: number
@@ -23,7 +24,7 @@ defineProps<{
 
       <span class="telemetry-sep">|</span>
       <div class="telemetry-item">
-        <span class="telemetry-icon">⚡</span>
+        <BaseIcon name="zap" size="xs" class="telemetry-icon" />
         <span class="telemetry-label">Ingested:</span>
         <span class="telemetry-val text-cyan">{{ linesStreamed.toLocaleString() }}</span>
         <span class="telemetry-unit">events</span>
@@ -31,7 +32,7 @@ defineProps<{
 
       <span class="telemetry-sep">|</span>
       <div class="telemetry-item">
-        <span class="telemetry-icon">🚨</span>
+        <BaseIcon name="alert-triangle" size="xs" class="telemetry-icon" />
         <span class="telemetry-label">Error Rate:</span>
         <span class="telemetry-val" :class="errorRate === 0 ? 'text-emerald' : (errorRate > 5 ? 'text-rose' : 'text-amber')">
           {{ errorRate }}%
@@ -40,7 +41,7 @@ defineProps<{
 
       <span class="telemetry-sep">|</span>
       <div class="telemetry-item">
-        <span class="telemetry-icon">💾</span>
+        <BaseIcon name="hard-drive" size="xs" class="telemetry-icon" />
         <span class="telemetry-label">Buffer:</span>
         <span class="telemetry-val text-slate">{{ bufferSize }}/{{ maxBufferSize }}</span>
         <div class="mini-gauge">
@@ -50,7 +51,7 @@ defineProps<{
 
       <span class="telemetry-sep">|</span>
       <div class="telemetry-item">
-        <span class="telemetry-icon">🌐</span>
+        <BaseIcon name="globe" size="xs" class="telemetry-icon" />
         <span class="telemetry-label">Latency:</span>
         <span class="telemetry-val text-emerald">{{ isConnected ? (latency > 0 ? `${latency}ms` : '<50ms') : '--' }}</span>
       </div>
@@ -58,11 +59,11 @@ defineProps<{
 
     <!-- Mobile Ultra-Compact Micro-Telemetry -->
     <div class="mobile-micro-telemetry">
-      <span>⚡ {{ linesStreamed.toLocaleString() }} ev</span>
+      <span><BaseIcon name="zap" size="xs" /> {{ linesStreamed.toLocaleString() }} ev</span>
       <span class="sep">·</span>
-      <span :class="errorRate === 0 ? 'text-emerald' : (errorRate > 5 ? 'text-rose' : 'text-amber')">🚨 {{ errorRate }}% err</span>
+      <span :class="errorRate === 0 ? 'text-emerald' : (errorRate > 5 ? 'text-rose' : 'text-amber')"><BaseIcon name="alert-triangle" size="xs" /> {{ errorRate }}% err</span>
       <span class="sep">·</span>
-      <span class="text-slate">💾 {{ bufferSize }}/{{ maxBufferSize }}</span>
+      <span class="text-slate"><BaseIcon name="hard-drive" size="xs" /> {{ bufferSize }}/{{ maxBufferSize }}</span>
       <span class="sep">·</span>
       <span class="text-emerald">{{ isConnected ? (latency > 0 ? `${latency}ms` : '<50ms') : 'OFF' }}</span>
     </div>

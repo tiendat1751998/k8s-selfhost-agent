@@ -68,7 +68,9 @@ func (r *ecosystemRepo) GetAll(ctx context.Context, tenantID string) ([]ecosyste
 
 		tool.Metadata = make(map[string]string)
 		if len(metadataJSON) > 0 {
-			_ = json.Unmarshal(metadataJSON, &tool.Metadata)
+			if err := json.Unmarshal(metadataJSON, &tool.Metadata); err != nil {
+				return nil, fmt.Errorf("unmarshaling tool metadata: %w", err)
+			}
 		}
 
 		items = append(items, tool)
@@ -118,7 +120,9 @@ func (r *ecosystemRepo) GetByID(ctx context.Context, tenantID, id string) (*ecos
 
 	tool.Metadata = make(map[string]string)
 	if len(metadataJSON) > 0 {
-		_ = json.Unmarshal(metadataJSON, &tool.Metadata)
+		if err := json.Unmarshal(metadataJSON, &tool.Metadata); err != nil {
+			return nil, fmt.Errorf("unmarshaling tool metadata: %w", err)
+		}
 	}
 
 	return &tool, nil

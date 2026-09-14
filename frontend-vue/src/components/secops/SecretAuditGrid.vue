@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { SecretAuditItem } from '../../composables/useDevSecOps'
 
 interface Props {
@@ -25,7 +26,7 @@ function getStatusBadgeClass(status: string): string {
 function getSecretTypeClass(type: string): string {
   switch (type) {
     case 'TLS Certificate': return 'badge-cyan'
-    case 'Vault Secret': return 'badge-violet'
+    case 'Vault Secret': return 'badge-slate'
     case 'API Key': return 'badge-amber'
     case 'JWT Token': return 'badge-rose'
     default: return 'badge-muted'
@@ -39,10 +40,10 @@ function getSecretTypeClass(type: string): string {
       <div>
         <h2 class="table-title">Exposed Secrets & TLS Certificates Governance Matrix</h2>
         <p class="table-subtitle">
-          Continuous detection across pods, container crash logs, HashiCorp Vault dynamic leases, and External Secrets Operator (ESO)
+          Plaintext credentials, expiring certificates, and token exposures.
         </p>
       </div>
-      <span class="badge badge-violet">{{ secrets.length }} Monitored Credentials</span>
+      <span class="badge badge-slate">{{ secrets.length }} Monitored Credentials</span>
     </div>
 
     <div class="secrets-grid">
@@ -57,7 +58,7 @@ function getSecretTypeClass(type: string): string {
       >
         <div class="secret-card-top">
           <div class="secret-name" :title="secret.name">
-            <span>🔐 {{ secret.name }}</span>
+            <BaseIcon name="lock" size="xs" /> <span>{{ secret.name }}</span>
           </div>
           <span class="secret-type-badge badge" :class="getSecretTypeClass(secret.secret_type)">
             {{ secret.secret_type }}
@@ -67,7 +68,7 @@ function getSecretTypeClass(type: string): string {
         <div class="secret-meta">
           <div class="secret-source">
             <span>Namespace:</span>
-            <span class="badge badge-violet font-mono" style="font-size: 10px;">{{ secret.namespace }}</span>
+            <span class="badge badge-slate font-mono" style="font-size: 10px;">{{ secret.namespace }}</span>
             <span class="text-muted">• {{ secret.source_resource }}</span>
           </div>
 
@@ -95,14 +96,14 @@ function getSecretTypeClass(type: string): string {
             :class="{ 'btn-patch': secret.status !== 'COMPLIANT' }"
             @click="emit('rotateSecret', secret)"
           >
-            <span>{{ secret.status === 'COMPLIANT' ? '🔄 Resync' : '⚡ Rotate / Vault' }}</span>
+            <BaseIcon :name="secret.status === 'COMPLIANT' ? 'refresh' : 'zap'" size="xs" /> <span>{{ secret.status === 'COMPLIANT' ? 'Resync' : 'Rotate / Vault' }}</span>
           </button>
         </div>
       </div>
 
       <div v-if="secrets.length === 0" class="empty-table-cell" style="grid-column: 1 / -1;">
-        <span class="empty-icon">🔐</span>
-        <p>No exposed secrets or expiring TLS certificates detected in cluster namespaces.</p>
+        <span class="empty-icon"><BaseIcon name="lock" size="lg" /></span>
+        <p>No exposed secrets or certificates detected.</p>
       </div>
     </div>
   </div>

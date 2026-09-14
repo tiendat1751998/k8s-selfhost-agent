@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"log"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -88,7 +89,9 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 	}
 
 	if testErr != nil {
-		_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now)
+		if err := h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now); err != nil {
+			log.Printf("failed to update host status to error: %v", err)
+		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"status":     "error",
 			"message":    testErr.Error(),
@@ -97,7 +100,9 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	_ = h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now)
+	if err := h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now); err != nil {
+		log.Printf("failed to update host status to connected: %v", err)
+	}
 	resp := map[string]interface{}{
 		"status":     "connected",
 		"message":    msg,

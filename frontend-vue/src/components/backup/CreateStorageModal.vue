@@ -24,7 +24,7 @@ const emit = defineEmits<{
           <span class="badge badge-emerald">STORAGE REPOSITORY</span>
           <h3 class="modal-title">Attach Storage Target</h3>
         </div>
-        <button class="modal-close" @click="emit('update:modelValue', false)">✕</button>
+        <button class="modal-close" @click="emit('update:modelValue', false)"><BaseIcon name="x" size="xs" /></button>
       </div>
       <form class="modal-body" @submit.prevent="emit('submit')">
         <div class="form-group">

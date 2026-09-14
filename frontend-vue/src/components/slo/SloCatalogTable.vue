@@ -1,4 +1,5 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
 
@@ -20,13 +21,13 @@ const emit = defineEmits<{
 
 const sloColumns: Column<SLORow>[] = [
   { key: 'service', label: 'Service / Workload', sortable: true },
-  { key: 'indicator_type', label: 'Indicator Type (SLI)', width: '160px', sortable: true },
-  { key: 'target', label: 'Target Objective', width: '140px', sortable: true },
-  { key: 'window', label: 'Rolling Window', width: '130px', sortable: true },
-  { key: 'query', label: 'PromQL SLI Query', width: '280px' },
-  { key: 'alert_threshold', label: 'Burn Alert Threshold', width: '160px', sortable: true },
-  { key: 'created_at', label: 'Defined At', width: '130px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '160px', align: 'right' },
+  { key: 'indicator_type', label: 'SLI Type', width: '100px', sortable: true },
+  { key: 'target', label: 'Target', width: '80px', sortable: true },
+  { key: 'window', label: 'Window', width: '75px', sortable: true },
+  { key: 'query', label: 'SLI Query', width: '160px' },
+  { key: 'alert_threshold', label: 'Burn Alert', width: '100px', sortable: true },
+  { key: 'created_at', label: 'Created', width: '85px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '115px', align: 'right' },
 ]
 
 function formatPercent(val?: unknown): string {
@@ -55,7 +56,7 @@ function formatDate(d?: unknown): string {
         <p class="box-subtitle">Configured Service Level Objectives with sliding compliance windows and alert thresholds</p>
       </div>
       <button class="btn btn-sm btn-primary" @click="emit('create')">
-        <span>➕ Add Target</span>
+        <BaseIcon name="plus" size="xs" /> <span>Add Target</span>
       </button>
     </div>
 
@@ -65,12 +66,10 @@ function formatDate(d?: unknown): string {
       :loading="loading"
       :error="error"
       empty-message="No SLO definitions configured. Click '+ Create SLO Definition' to add one."
-      searchable
-      search-placeholder="Search SLO definitions by service..."
     >
       <template #cell-service="{ row }">
         <div class="service-name-cell">
-          <span class="service-icon">⚡</span>
+          <BaseIcon name="zap" size="xs" class="service-icon" />
           <span class="service-text font-mono font-bold">{{ row.service }}</span>
         </div>
       </template>
@@ -88,7 +87,7 @@ function formatDate(d?: unknown): string {
       </template>
 
       <template #cell-query="{ row }">
-        <span class="query-snippet font-mono" :title="String(row.query || '')">
+        <span class="query-code font-mono" :title="String(row.query || '')">
           {{ row.query || '—' }}
         </span>
       </template>
@@ -104,13 +103,13 @@ function formatDate(d?: unknown): string {
       <template #cell-actions="{ row }">
         <div class="table-actions-cell">
           <button class="btn-icon-action" title="Inspect SLI" @click="emit('inspect', (row as unknown as SLODefinition))">
-            <span>🔍</span>
+            <BaseIcon name="search" size="xs" />
           </button>
           <button class="btn-icon-action btn-icon-warn" title="Test Burn Alert" @click="emit('triggerAlert', String(row.id || ''), String(row.service || ''))">
-            <span>⚡</span>
+            <BaseIcon name="zap" size="xs" />
           </button>
           <button class="btn-icon-action btn-icon-del" title="Delete SLO" @click="emit('deleteSlo', String(row.id || ''), String(row.service || ''))">
-            <span>🗑️</span>
+            <BaseIcon name="trash" size="xs" />
           </button>
         </div>
       </template>
@@ -119,5 +118,5 @@ function formatDate(d?: unknown): string {
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/slo.css';
+@import '../../assets/styles/components/slo-table.css';
 </style>

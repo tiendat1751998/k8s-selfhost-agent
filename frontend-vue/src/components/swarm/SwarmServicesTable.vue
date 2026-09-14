@@ -1,5 +1,6 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { DockerService } from '../../api/compute'
 
 const props = defineProps<{
@@ -28,7 +29,7 @@ function formatDate(d?: string): string {
 <template>
   <div class="services-table-view animate-fade-in">
     <div v-if="props.services.length === 0" class="empty-state glass-panel">
-      <span>No Swarm services deployed. Connect Swarm manager socket to discover services.</span>
+      <span>No Swarm services found matching your filter.</span>
     </div>
 
     <div v-else class="services-table-wrap">
@@ -48,36 +49,38 @@ function formatDate(d?: string): string {
             <!-- Service Name & Image -->
             <td>
               <div class="svc-table-name-cell">
-                <span class="svc-icon" aria-hidden="true">🐳</span>
+                <span class="svc-icon" aria-hidden="true"><BaseIcon name="box" size="sm" /></span>
                 <div>
-                  <div class="svc-table-title font-mono" @click="emit('inspect', svc)">
+                  <div class="svc-table-name svc-table-title font-mono" :title="svc.name" @click="emit('inspect', svc)">
                     {{ svc.name }}
                   </div>
-                  <span class="svc-table-image font-mono text-muted">{{ svc.image }}</span>
+                  <span class="svc-table-image font-mono text-muted" :title="svc.image">{{ svc.image }}</span>
                 </div>
               </div>
             </td>
 
             <!-- Replica Stepper / Display -->
             <td>
-              <div class="stepper-controls" style="display: inline-flex; padding: 2px 6px;">
+              <div class="stepper-controls" style="display: inline-flex;">
                 <button
                   class="stepper-btn"
-                  style="width: 22px; height: 22px; font-size: 14px;"
+                  style="width: 28px; height: 28px; font-size: 14px;"
                   :disabled="props.actionLoading === `scale-${svc.id}` || svc.replicas <= 0"
                   title="Decrease replicas"
+                  aria-label="Decrease replicas"
                   @click="emit('scale', svc, -1)"
                 >
-                  <span>−</span>
+                  <span>-</span>
                 </button>
                 <span class="stepper-value font-mono" style="font-size: 13px; min-width: 20px;">
                   {{ svc.replicas }}
                 </span>
                 <button
                   class="stepper-btn"
-                  style="width: 22px; height: 22px; font-size: 14px;"
+                  style="width: 28px; height: 28px; font-size: 14px;"
                   :disabled="props.actionLoading === `scale-${svc.id}`"
                   title="Increase replicas"
+                  aria-label="Increase replicas"
                   @click="emit('scale', svc, 1)"
                 >
                   <span>+</span>
@@ -113,7 +116,7 @@ function formatDate(d?: string): string {
                   title="Scale service replica count"
                   @click="emit('scale', svc, 1)"
                 >
-                  <span>⚡ Scale</span>
+                  <span><BaseIcon name="zap" size="xs" /> Scale</span>
                 </button>
 
                 <button
@@ -122,7 +125,7 @@ function formatDate(d?: string): string {
                   title="Rolling update service"
                   @click="emit('update', svc)"
                 >
-                  <span>🔄 Update</span>
+                  <span><BaseIcon name="refresh" size="xs" /> Update</span>
                 </button>
 
                 <button
@@ -131,7 +134,7 @@ function formatDate(d?: string): string {
                   title="Inspect service logs"
                   @click="emit('logs', svc.id, svc.name)"
                 >
-                  <span>📄 Logs</span>
+                  <span><BaseIcon name="file-text" size="xs" /> Logs</span>
                 </button>
 
                 <button
@@ -140,7 +143,7 @@ function formatDate(d?: string): string {
                   title="Remove Swarm service"
                   @click="emit('remove', svc.id)"
                 >
-                  <span>🗑 Remove</span>
+                  <span><BaseIcon name="trash" size="xs" /> Remove</span>
                 </button>
               </div>
             </td>
@@ -150,3 +153,133 @@ function formatDate(d?: string): string {
     </div>
   </div>
 </template>
+
+<style scoped>
+.services-table-wrap {
+  width: 100%;
+  border-radius: 14px;
+  overflow-x: auto;
+  background: rgba(11, 15, 25, 0.65);
+  border: 1px solid var(--border-subtle);
+}
+
+table,
+.services-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.services-table th {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 12px 16px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.services-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.services-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.svc-table-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.svc-icon { font-size: 24px; flex-shrink: 0; }
+
+.svc-table-title {
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.svc-table-title:hover { color: var(--accent-cyan); }
+
+.svc-table-name {
+  font-weight: 700;
+  color: var(--color-text-main, #f8fafc);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.svc-table-image {
+  font-size: 11px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.ports-list {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.port-tag {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent-cyan);
+}
+
+.svc-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.btn-scale {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  color: #38bdf8;
+}
+.btn-scale:hover { background: rgba(6, 182, 212, 0.25); }
+
+.btn-update {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  color: #c084fc;
+}
+.btn-update:hover { background: rgba(168, 85, 247, 0.25); }
+
+.btn-logs {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+.btn-logs:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+
+.btn-remove {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #f43f5e !important;
+}
+.btn-remove:hover { background: rgba(244, 63, 94, 0.25); border-color: #f43f5e; }
+</style>

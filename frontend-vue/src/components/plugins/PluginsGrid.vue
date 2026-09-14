@@ -1,9 +1,9 @@
-﻿<template>
+<template>
   <div class="plugins-grid-wrapper">
     <!-- Starter Catalog Presets (Quick Install) if no plugins installed -->
     <section class="templates-section glass-panel" v-if="plugins.length === 0 && !loading">
       <div class="section-title-row">
-        <h3>🚀 Starter Plugin Catalog</h3>
+        <h3><BaseIcon name="play" size="sm" /> Starter Plugin Catalog</h3>
         <span class="section-hint">Click any preset to install and activate instantly</span>
       </div>
       <div class="templates-grid">
@@ -13,12 +13,12 @@
           class="template-card"
           @click="$emit('installPreset', tpl)"
         >
-          <div class="tpl-icon">{{ tpl.icon }}</div>
+          <div class="tpl-icon"><BaseIcon :name="getPresetIcon(tpl.name)" size="sm" /></div>
           <div class="tpl-info">
             <h4>{{ tpl.name }} <span class="badge" :class="categoryBadgeClass(tpl.category || 'devtools')">{{ tpl.category }}</span></h4>
             <p>{{ tpl.description }}</p>
           </div>
-          <button class="btn btn-sm btn-primary" :disabled="installingPreset">
+          <button class="btn btn-sm btn-primary" :disabled="installingPreset" @click.stop="$emit('installPreset', tpl)">
             + Install
           </button>
         </div>
@@ -36,8 +36,8 @@
         <!-- Card Header -->
         <div class="card-header">
           <div class="plugin-identity">
-            <div class="plugin-avatar">{{ p.icon || '🧩' }}</div>
-            <div>
+            <div class="plugin-avatar"><BaseIcon :name="p.icon || 'plug'" size="md" /></div>
+            <div class="plugin-identity-meta">
               <div class="plugin-name-row">
                 <h3 class="plugin-name">{{ p.name }}</h3>
                 <span class="version-tag">v{{ p.version }}</span>
@@ -72,7 +72,7 @@
 
         <!-- Entry Point URL -->
         <div class="entrypoint-box" v-if="p.entry_point">
-          <span class="entry-icon">🔗</span>
+          <BaseIcon name="external-link" size="xs" class="entry-icon" />
           <span class="entry-url" :title="p.entry_point">{{ p.entry_point }}</span>
         </div>
 
@@ -94,7 +94,7 @@
         <div class="card-footer">
           <div class="footer-left">
             <span class="config-count" @click="$emit('configure', p)">
-              ⚙️ {{ Object.keys(p.config || {}).length }} config keys
+              <BaseIcon name="sliders" size="xs" /> {{ Object.keys(p.config || {}).length }} config keys
             </span>
             <span 
               class="runtime-status-pill"
@@ -109,30 +109,22 @@
               class="btn-icon" 
               title="Test bundle load / Hot-reload" 
               @click="$emit('testBundle', p)"
-            >
-              ⚡
-            </button>
+            ><BaseIcon name="zap" size="xs" /></button>
             <button 
               class="btn-icon" 
               title="Configure Settings" 
               @click="$emit('configure', p)"
-            >
-              ⚙️
-            </button>
+            ><BaseIcon name="sliders" size="xs" /></button>
             <button 
               class="btn-icon" 
               title="Edit Plugin" 
               @click="$emit('edit', p)"
-            >
-              ✏️
-            </button>
+            ><BaseIcon name="edit" size="xs" /></button>
             <button 
               class="btn-icon btn-danger-icon" 
               title="Delete Plugin" 
               @click="$emit('delete', p)"
-            >
-              🗑️
-            </button>
+            ><BaseIcon name="trash" size="xs" /></button>
           </div>
         </div>
       </div>
@@ -162,4 +154,14 @@ defineEmits<{
   (e: 'testBundle', plugin: Plugin): void
   (e: 'installPreset', preset: CreatePluginDTO): void
 }>()
+
+function getPresetIcon(name: string): string {
+  const n = (name || '').toLowerCase()
+  if (n.includes('security') || n.includes('trivy')) return 'shield'
+  if (n.includes('grafana') || n.includes('dashboard')) return 'pie-chart'
+  if (n.includes('prometheus') || n.includes('alert')) return 'flame'
+  if (n.includes('log') || n.includes('vector')) return 'file-text'
+  return 'plug'
+}
+
 </script>

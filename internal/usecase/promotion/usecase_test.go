@@ -490,6 +490,9 @@ func (m *mockAuditRepoForUsecase) RecordRun(ctx context.Context, run *audit.Audi
 func (m *mockAuditRepoForUsecase) GetLastRun(ctx context.Context) (*audit.AuditRun, error) {
 	return nil, nil
 }
+func (m *mockAuditRepoForUsecase) ListLogs(ctx context.Context, filter audit.AuditLogFilter) ([]audit.AuditLog, int, error) {
+	return nil, 0, nil
+}
 func (m *mockAuditRepoForUsecase) RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error {
 	m.records = append(m.records, auditRecord{
 		Actor:      actor,

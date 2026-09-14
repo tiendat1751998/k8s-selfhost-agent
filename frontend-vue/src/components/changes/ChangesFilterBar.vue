@@ -36,7 +36,7 @@ const statuses = [
     <div class="filter-top-row">
       <!-- Search Input -->
       <div class="search-input-wrap">
-        <span class="search-icon">🔍</span>
+        <BaseIcon name="search" size="xs" class="search-icon" />
         <input
           :value="searchQuery"
           type="text"
@@ -49,9 +49,7 @@ const statuses = [
           class="clear-search-btn"
           title="Clear search"
           @click="$emit('update:searchQuery', '')"
-        >
-          ✕
-        </button>
+        ><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <!-- Cluster Selector -->

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { NodeMetrics } from '../../../api/overview'
+import BaseIcon from '../../ui/BaseIcon.vue'
+import ActionDropdown, { type ActionItem } from '../../ui/ActionDropdown.vue'
 
 defineProps<{
   nodes: NodeMetrics[]
   busiestNodeId?: string | null
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'click', node: NodeMetrics): void
   (e: 'details', node: NodeMetrics): void
   (e: 'logs', node: NodeMetrics): void
@@ -15,6 +17,21 @@ defineEmits<{
   (e: 'yaml', node: NodeMetrics): void
   (e: 'delete', node: NodeMetrics): void
 }>()
+
+const nodeActions: ActionItem[] = [
+  { id: 'scale', label: 'Scale Workloads', icon: 'zap' },
+  { id: 'restart', label: 'Restart Agent', icon: 'refresh' },
+  { id: 'yaml', label: 'View YAML', icon: 'file-text' },
+  { id: 'sep-1', label: '', separator: true },
+  { id: 'delete', label: 'Cordon / Evict', icon: 'trash', variant: 'danger' },
+]
+
+function handleMenuAction(event: string, node: NodeMetrics) {
+  if (event === 'scale') emit('scale', node)
+  else if (event === 'restart') emit('restart', node)
+  else if (event === 'yaml') emit('yaml', node)
+  else if (event === 'delete') emit('delete', node)
+}
 
 function isOffline(node: NodeMetrics): boolean {
   return node.status === 'down' || node.status === 'offline' || node.status === 'disconnected' || node.memory_total === 0
@@ -83,11 +100,17 @@ function getNodePing(node: NodeMetrics): number {
             <th class="col-disk">Disk Storage</th>
             <th class="col-workloads">Workloads</th>
             <th class="col-probe">Probes / Ping</th>
-            <th class="col-actions text-right">Node Operations Suite</th>
+            <th class="col-actions text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="node in nodes" :key="node.node_id" class="node-row" :class="{ 'row-busiest': node.node_id === busiestNodeId }" @click="$emit('click', node)">
+          <tr
+            v-for="node in nodes"
+            :key="node.node_id"
+            class="node-row"
+            :class="{ 'row-busiest': node.node_id === busiestNodeId }"
+            @click="emit('click', node)"
+          >
             <td class="col-status">
               <span class="status-wrap font-mono" :class="`status-${getNodeStatus(node).type}`">
                 <span class="pulse-dot" :class="`dot-${getNodeStatus(node).type}`"></span>
@@ -98,7 +121,7 @@ function getNodePing(node: NodeMetrics): number {
               <div class="name-role-cell">
                 <span class="node-name-text font-bold" :title="node.node_name">{{ node.node_name }}</span>
                 <span class="role-badge font-mono" :class="getRoleBadge(node.role).cls">[{{ getRoleBadge(node.role).label }}]</span>
-                <span v-if="node.node_id === busiestNodeId" class="badge-hot" title="Highest traffic">🔥</span>
+                <BaseIcon v-if="node.node_id === busiestNodeId" name="flame" size="xs" class="badge-hot" title="Highest traffic" />
               </div>
             </td>
             <td class="col-ip font-mono">
@@ -128,16 +151,25 @@ function getNodePing(node: NodeMetrics): number {
             </td>
             <td class="col-probe font-mono">
               <span v-if="isOffline(node) || getNodePing(node) <= 0" class="text-muted">--</span>
-              <span v-else class="probe-val">⚡ {{ getNodePing(node) }}ms</span>
+              <span v-else class="probe-val">
+                <BaseIcon name="zap" size="xs" /> {{ getNodePing(node) }}ms
+              </span>
             </td>
             <td class="col-actions text-right" @click.stop>
               <div class="sre-suite">
-                <button type="button" class="sre-btn btn-logs" title="Stream Logs" @click="$emit('logs', node)">📄 Logs</button>
-                <button type="button" class="sre-btn btn-scale" title="Scale Workloads" @click="$emit('scale', node)">⚡ Scale</button>
-                <button type="button" class="sre-btn btn-restart" title="Restart Agent" @click="$emit('restart', node)">🔄 Restart</button>
-                <button type="button" class="sre-btn btn-yaml" title="View Manifest YAML" @click="$emit('yaml', node)">🎯 YAML</button>
-                <button type="button" class="sre-btn btn-details" title="Diagnostics & Details" @click="$emit('details', node)">🔍 Details</button>
-                <button type="button" class="sre-btn btn-delete" title="Cordon / Evict" @click="$emit('delete', node)">🗑 Delete</button>
+                <button type="button" class="sre-btn btn-logs" title="Stream Logs" @click="emit('logs', node)">
+                  <BaseIcon name="file-text" size="xs" />
+                  <span>Logs</span>
+                </button>
+                <button type="button" class="sre-btn btn-details" title="Diagnostics & Details" @click="emit('details', node)">
+                  <BaseIcon name="search" size="xs" />
+                  <span>Details</span>
+                </button>
+                <ActionDropdown
+                  size="xs"
+                  :items="nodeActions"
+                  @select="(actionId) => handleMenuAction(actionId, node)"
+                />
               </div>
             </td>
           </tr>
@@ -150,4 +182,3 @@ function getNodePing(node: NodeMetrics): number {
 <style scoped>
 @import '../../../assets/styles/views/overview.css';
 </style>
-

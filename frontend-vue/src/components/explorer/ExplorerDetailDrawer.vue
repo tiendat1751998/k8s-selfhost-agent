@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import EventsTimeline from '../k8s/EventsTimeline.vue'
 import { jsonToYaml } from '../../utils/yaml'
 import type { K8sResource, ResourceKind } from '../../api/k8s'
@@ -56,13 +57,13 @@ const isWorkload = computed(() => {
       <!-- Tabs Navigation -->
       <div class="drawer-tabs font-mono">
         <button type="button" class="drawer-tab-btn" :class="{ 'is-active': activeTab === 'overview' }" @click="activeTab = 'overview'">
-          📋 Overview
+          <BaseIcon name="file-text" size="xs" /> Overview
         </button>
         <button type="button" class="drawer-tab-btn" :class="{ 'is-active': activeTab === 'events' }" @click="activeTab = 'events'">
-          ⚡ Events
+          <BaseIcon name="zap" size="xs" /> Events
         </button>
         <button type="button" class="drawer-tab-btn" :class="{ 'is-active': activeTab === 'yaml' }" @click="activeTab = 'yaml'">
-          📄 YAML
+          <BaseIcon name="file-code" size="xs" /> YAML
         </button>
       </div>
 
@@ -112,10 +113,10 @@ const isWorkload = computed(() => {
       <div v-else-if="activeTab === 'yaml'" class="tab-content yaml-tab">
         <div class="yaml-toolbar font-mono">
           <button type="button" class="btn btn-secondary btn-xs" @click="copyYaml">
-            {{ yamlCopied ? '✅ Copied!' : '📋 Copy YAML' }}
+            <BaseIcon :name="yamlCopied ? 'check-circle' : 'copy'" size="xs" /> {{ yamlCopied ? 'Copied!' : 'Copy YAML' }}
           </button>
           <button type="button" class="btn btn-primary btn-xs" @click="$emit('edit-yaml', resource)">
-            ✏️ Edit Manifest
+            <BaseIcon name="edit" size="xs" /> Edit Manifest
           </button>
         </div>
         <pre class="yaml-code font-mono">{{ resourceYaml }}</pre>
@@ -125,10 +126,10 @@ const isWorkload = computed(() => {
     <template #footer>
       <div class="drawer-footer-actions">
         <button v-if="isWorkload" type="button" class="btn btn-secondary btn-xs font-mono" @click="resource && $emit('scale', resource)">
-          ⚖️ Scale
+          <BaseIcon name="sliders" size="xs" /> Scale
         </button>
         <button v-if="isWorkload" type="button" class="btn btn-secondary btn-xs font-mono" @click="resource && $emit('restart', resource)">
-          🔄 Restart
+          <BaseIcon name="refresh" size="xs" /> Restart
         </button>
         <button type="button" class="btn btn-secondary btn-xs font-mono" @click="$emit('close')">
           Close

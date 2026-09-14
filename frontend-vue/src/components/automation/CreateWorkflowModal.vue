@@ -2,6 +2,7 @@
 import { reactive, watch } from 'vue'
 import type { AutomationRule } from '../../api/governance'
 import { TRIGGER_OPTIONS, ACTION_OPTIONS } from '../../composables/useAutomationEngine'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = defineProps<{
   show: boolean
@@ -77,7 +78,7 @@ function handleSubmit() {
           <span class="badge badge-cyan">AUTOMATION PIPELINE</span>
           <h3 class="modal-title">{{ ruleToEdit ? 'Edit Automation Rule' : 'Create Workflow Automation Rule' }}</h3>
         </div>
-        <button class="modal-close" @click="emit('close')">✕</button>
+        <button class="modal-close" @click="emit('close')"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <form class="modal-body" @submit.prevent="handleSubmit">
@@ -97,12 +98,12 @@ function handleSubmit() {
           <select v-model="formData.trigger_type" class="input-glass">
             <optgroup label="Event-Driven Self Healing">
               <option v-for="t in TRIGGER_OPTIONS.filter(o => o.category === 'event')" :key="t.value" :value="t.value">
-                {{ t.icon }} {{ t.label }}
+                {{ t.label }}
               </option>
             </optgroup>
             <optgroup label="Scheduled & Webhook Triggers">
               <option v-for="t in TRIGGER_OPTIONS.filter(o => o.category !== 'event')" :key="t.value" :value="t.value">
-                {{ t.icon }} {{ t.label }}
+                {{ t.label }}
               </option>
             </optgroup>
           </select>
@@ -127,7 +128,7 @@ function handleSubmit() {
           <label class="form-label">Automated Remediation Action:</label>
           <select v-model="formData.action_type" class="input-glass">
             <option v-for="a in ACTION_OPTIONS" :key="a.value" :value="a.value">
-              {{ a.icon }} {{ a.label }}
+              {{ a.label }}
             </option>
           </select>
           <span class="form-hint">

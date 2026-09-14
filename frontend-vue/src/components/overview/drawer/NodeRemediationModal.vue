@@ -91,7 +91,7 @@ onUnmounted(() => {
           <div class="safety-banner">
             <span class="safety-icon">🛡️</span>
             <p class="safety-text">
-              <span class="safety-full">Automated &lt;30s fast-failover cordons the failed node (spec.unschedulable=true) and force-evicts stuck pods with zero grace period, immediately triggering replica controllers to reschedule workloads onto surviving nodes (worker1, worker2, k8smater).</span>
+              <span class="safety-full">Automated &lt;30s fast-failover cordons the failed node (spec.unschedulable=true) and force-evicts stuck pods with zero grace period, immediately triggering replica controllers to reschedule workloads onto surviving nodes (worker1, worker2, k8smaster).</span>
               <span class="safety-mobile">Automated &lt;30s failover cordons node and force-evicts stuck pods to surviving nodes.</span>
             </p>
           </div>

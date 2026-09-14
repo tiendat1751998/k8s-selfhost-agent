@@ -48,12 +48,12 @@ export interface CustomTemplateForm {
 }
 
 export const SCAFFOLDER_CATEGORIES: CategoryOption[] = [
-  { key: 'all', label: 'All Templates', icon: '✨' },
-  { key: 'web', label: 'Web Applications', icon: '🌐' },
-  { key: 'api', label: 'REST & gRPC APIs', icon: '⚡' },
-  { key: 'database', label: 'Databases & Storage', icon: '🗄️' },
-  { key: 'worker', label: 'Background Workers', icon: '⏳' },
-  { key: 'fullstack', label: 'Full-Stack Apps', icon: '🚀' },
+  { key: 'all', label: 'All Templates', icon: 'sparkles' },
+  { key: 'web', label: 'Web Applications', icon: 'globe' },
+  { key: 'api', label: 'REST & gRPC APIs', icon: 'zap' },
+  { key: 'database', label: 'Databases & Storage', icon: 'database' },
+  { key: 'worker', label: 'Background Workers', icon: 'layers' },
+  { key: 'fullstack', label: 'Full-Stack Apps', icon: 'server' },
 ]
 
 export const BUILTIN_SCAFFOLD_TEMPLATES: Template[] = [
@@ -154,23 +154,23 @@ export function getFrameworkIcon(framework: string): string {
   switch (framework.toLowerCase()) {
     case 'go-chi':
     case 'golang':
-    case 'go': return '🐹'
+    case 'go': return 'code'
     case 'node-fastify':
-    case 'fastify': return '⚡'
+    case 'fastify': return 'zap'
     case 'node-express':
     case 'nodejs':
-    case 'node': return '💚'
+    case 'node': return 'server'
     case 'python-fastapi':
     case 'fastapi':
-    case 'python': return '🐍'
+    case 'python': return 'code'
     case 'rust':
-    case 'rust-actix': return '🦀'
-    case 'nginx': return '🌐'
+    case 'rust-actix': return 'layers'
+    case 'nginx': return 'globe'
     case 'postgres':
-    case 'postgresql': return '🐘'
-    case 'react': return '⚛️'
-    case 'vue': return '💚'
-    default: return '📦'
+    case 'postgresql': return 'database'
+    case 'react': return 'code'
+    case 'vue': return 'code'
+    default: return 'box'
   }
 }
 
@@ -293,6 +293,18 @@ export function useScaffolder() {
     logs.value = []; parseTemplateVariables(tmpl)
     repoConfig.repoName = tmpl.name.toLowerCase().replace(/[^a-z0-9]/g, '-')
     showWizardModal.value = true
+  }
+
+  function previewTemplate(tmpl: Template) {
+    activeTemplate.value = tmpl
+    isDryRun.value = true
+    activeOutputTab.value = 'yaml'
+    renderResult.value = {
+      rendered_yaml: tmpl.manifest_yaml || '# No Kubernetes manifest specified',
+      rendered_compose: tmpl.docker_compose || '# No Docker Compose specified',
+      rendered_helm: tmpl.helm_values || '# No Helm values specified',
+    }
+    showLogsDrawer.value = true
   }
 
   function closeWizard() { showWizardModal.value = false; activeTemplate.value = null }
@@ -420,7 +432,7 @@ export function useScaffolder() {
     currentStep, activeTemplate, formVariables, repoConfig, cicdConfig, registerInCatalog,
     ownerTeam, ownerEmail, showLogsDrawer, renderResult, activeOutputTab, copySuccess,
     logs, isDryRun, showCustomModal, customModalMode, customTemplate, loadTemplates,
-    openWizard, closeWizard, nextStep, prevStep, goToStep, triggerScaffoldJob, copyToClipboard,
+    openWizard, previewTemplate, closeWizard, nextStep, prevStep, goToStep, triggerScaffoldJob, copyToClipboard,
     downloadFile, openCustomTemplateModal, addVariableToCustomTemplate,
     removeVariableFromCustomTemplate, handleSaveCustomTemplate, handleDeleteCustomTemplate, resetFilters,
   }

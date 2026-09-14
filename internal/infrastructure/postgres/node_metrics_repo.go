@@ -411,7 +411,9 @@ func (r *nodeMetricsRepo) DownsampleAndPrune(ctx context.Context, olderThan7Days
 		WHERE resolution = '1m' AND recorded_at < $1
 		GROUP BY tenant_id, node_id, node_name, hour_bucket
 	`
-	_, _ = db.Exec(ctx, rollupQuery, olderThan7Days)
+	if _, err := db.Exec(ctx, rollupQuery, olderThan7Days); err != nil {
+		return fmt.Errorf("aggregating 1m rollups to 1h: %w", err)
+	}
 
 	// 2. Delete raw 1m data older than 7 days
 	prune1mQuery := `DELETE FROM node_metric_rollups WHERE resolution = '1m' AND recorded_at < $1`

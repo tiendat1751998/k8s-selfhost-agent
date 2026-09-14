@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import MetricCard from '../components/ui/MetricCard.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import ServiceCatalogTable from '../components/catalog/ServiceCatalogTable.vue'
 import ServiceCatalogGrid from '../components/catalog/ServiceCatalogGrid.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import ServiceCatalogMobileCards from '../components/catalog/ServiceCatalogMobileCards.vue'
 import ServiceDetailDrawer from '../components/catalog/ServiceDetailDrawer.vue'
 import RegisterServiceModal from '../components/catalog/RegisterServiceModal.vue'
@@ -12,7 +12,7 @@ const {
   loading, deleting, saving, error, toastMessage, services, stats, viewMode,
   filter, showFormModal, modalMode, showDetailDrawer, showDeleteModal,
   selectedService, serviceToDelete, copiedKey, form, formErrors,
-  serviceTypes, lifecycles, columns, totalServices, prodCount, devCount, deprecatedCount,
+  serviceTypes, lifecycles, columns, totalServices, prodCount, devCount, teams,
   selectedServiceDependencies, showMobileFilters, activeFilterCount,
   fetchCatalogData, resetFilters,
   getTypeBadgeClass, getTypeIcon, getLifecycleBadgeClass, getLifecycleDotClass,
@@ -20,47 +20,27 @@ const {
   removeAnnotationRow, addPresetAnnotation, handleSaveService, promptDelete,
   handleConfirmDelete, handleDeploy, handleConfig, copyToClipboard, formatDate
 } = useServiceCatalog()
+
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+function handleSearchInput() {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    fetchCatalogData()
+  }, 250)
+}
+
+function handleClearSearch() {
+  filter.search = ''
+  fetchCatalogData()
+}
 </script>
 
 <template>
   <div class="view-container animate-fade-in">
-    <!-- Desktop View Header -->
-    <div class="view-header desktop-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>BACKSTAGE-INSPIRED DEVELOPER PORTAL</span>
-        </div>
-        <h1 class="view-title">Service Catalog</h1>
-        <p class="view-desc">
-          Centralized software ecosystem registry. Discover, govern, and explore microservices, APIs, libraries, and cloud infrastructure components.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <!-- View Mode Switcher -->
-        <div class="view-mode-toggle" title="Switch layout display">
-          <button type="button" class="mode-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'" title="Table View">📋 Table</button>
-          <button type="button" class="mode-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'" title="Grid View">▦ Grid</button>
-          <button type="button" class="mode-btn" :class="{ active: viewMode === 'mobile' }" @click="viewMode = 'mobile'" title="Stream View">📱 Stream</button>
-        </div>
-
-        <button type="button" class="btn btn-secondary" :disabled="loading" @click="fetchCatalogData" title="Refresh catalog list & stats">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
-        </button>
-        <router-link to="/scaffolder" class="btn btn-secondary" title="Deploy a new service from template">
-          <span>🪄 Scaffolder</span>
-        </router-link>
-        <button type="button" class="btn btn-primary" @click="openCreateModal" title="Register a new service">
-          <span>+ Register Service</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Mobile 40px Command Bar (<640px) -->
+    <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="catalog-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">📦 Catalog ({{ totalServices }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="box" size="xs" /> Catalog ({{ totalServices }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -70,118 +50,198 @@ const {
           aria-label="Register Service"
           @click="openCreateModal"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
         <button
           type="button"
           class="btn-icon-cmd"
-          title="Refresh"
-          aria-label="Refresh"
+          title="Sync / Refresh"
+          aria-label="Sync"
           :disabled="loading"
           @click="fetchCatalogData"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
         </button>
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="catalog-micro-telemetry mobile-only font-mono" role="status" aria-label="Catalog Micro Telemetry">
-      <span class="tel-item tel-total">📦 {{ totalServices }} svcs</span>
+      <span class="tel-item tel-total"><BaseIcon name="box" size="xs" /> {{ totalServices }} Services</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-prod">🚀 {{ prodCount }} prod</span>
+      <span class="tel-item tel-prod"><BaseIcon name="check-circle" size="xs" /> {{ prodCount }} Healthy</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-dev">🧪 {{ devCount }} dev</span>
+      <span class="tel-item tel-api"><BaseIcon name="zap" size="xs" /> {{ stats.by_type['api'] || 0 }} APIs</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-depr">⚠️ {{ deprecatedCount }} sunset</span>
+      <span class="tel-item tel-teams"><BaseIcon name="users" size="xs" /> {{ teams.length }} Teams</span>
     </div>
 
     <!-- Notification Toast Banner -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <span class="toast-icon">{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="toast-icon" />
       <span class="toast-text">{{ toastMessage.text }}</span>
-      <button type="button" class="toast-close" @click="toastMessage = null" aria-label="Dismiss">✕</button>
+      <button type="button" class="toast-close" @click="toastMessage = null" aria-label="Dismiss"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Metric HUD (Desktop Only) -->
-    <div class="metrics-grid desktop-metrics desktop-only">
-      <MetricCard title="Total Services" :value="totalServices" subtitle="Registered ecosystem components" icon="📦" badge="CATALOG" badge-color="cyan" />
-      <MetricCard title="Production" :value="prodCount" subtitle="Live production tier services" icon="🚀" badge="LIVE" badge-color="emerald" />
-      <MetricCard title="Development" :value="devCount" subtitle="Active staging & development builds" icon="🧪" badge="DEV" badge-color="amber" />
-      <MetricCard title="Deprecated" :value="deprecatedCount" subtitle="Sunsetting / pending decommission" icon="⚠️" badge="SUNSET" badge-color="rose" />
-    </div>
+    <!-- Unified 38px Enterprise Catalog Toolbar -->
+    <div class="catalog-toolbar-sleek glass-panel">
+      <!-- Search input with search icon and clear button (filters by name, owner team, tags) -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          id="catalog-search"
+          v-model="filter.search"
+          type="text"
+          class="input-glass toolbar-search-input"
+          placeholder="Search name, owner team, tags..."
+          @input="handleSearchInput"
+          @keydown.enter="fetchCatalogData"
+        />
+        <button
+          v-if="filter.search"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="handleClearSearch"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
+      </div>
 
-    <!-- Filter Bar: Compact 32px Bar on Mobile, Full on Desktop -->
-    <div class="filter-bar glass-panel" :class="{ 'mobile-filters-open': showMobileFilters }">
-      <div class="filter-row">
-        <!-- Search Input -->
-        <div class="filter-group search-group">
-          <label class="filter-label desktop-only" for="catalog-search">Search</label>
-          <div class="search-input-wrap">
-            <span class="search-icon">🔍</span>
-            <input
-              id="catalog-search"
-              v-model="filter.search"
-              type="text"
-              class="input-glass search-field"
-              placeholder="Search name, description, tags..."
-              @keydown.enter="fetchCatalogData"
-            />
-            <button
-              v-if="filter.search"
-              type="button"
-              class="clear-input-btn"
-              @click="filter.search = ''; fetchCatalogData()"
-              aria-label="Clear search"
-            >
-              ✕
-            </button>
-          </div>
+      <!-- Type select dropdown (All Types, Service, Library, API, etc.) -->
+      <select
+        id="filter-type"
+        v-model="filter.type"
+        class="input-glass toolbar-select desktop-only"
+        aria-label="Filter by Type"
+        @change="fetchCatalogData"
+      >
+        <option value="">All Types ({{ totalServices }})</option>
+        <option v-for="t in serviceTypes" :key="t.value" :value="t.value">
+          {{ t.label }} ({{ stats.by_type[t.value] || 0 }})
+        </option>
+      </select>
+
+      <!-- Lifecycle select dropdown (All Lifecycles, Production, Development, Deprecated) -->
+      <select
+        id="filter-lifecycle"
+        v-model="filter.lifecycle"
+        class="input-glass toolbar-select desktop-only"
+        aria-label="Filter by Lifecycle"
+        @change="fetchCatalogData"
+      >
+        <option value="">All Lifecycles</option>
+        <option v-for="l in lifecycles" :key="l.value" :value="l.value">
+          {{ l.label }} ({{ stats.by_lifecycle[l.value] || 0 }})
+        </option>
+      </select>
+
+      <!-- Mobile Filter Toggle Button (<768px) -->
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm mobile-only btn-filter-toggle"
+        :class="{ active: showMobileFilters || activeFilterCount > 0 }"
+        aria-label="Toggle filter options"
+        @click="showMobileFilters = !showMobileFilters"
+      >
+        <BaseIcon name="filter" size="xs" /> <span>Filters</span>
+        <span v-if="activeFilterCount > 0" class="badge-filter-count">{{ activeFilterCount }}</span>
+      </button>
+
+      <!-- Inline compact KPI badge strip font-mono: e.g. {{ totalServices }} Services ({{ prodCount }} Prod · {{ devCount }} Dev) -->
+      <div class="toolbar-kpi-strip font-mono desktop-only" role="status" aria-label="Catalog summary metrics">
+        <span class="kpi-badge font-mono">{{ totalServices }} Services ({{ prodCount }} Prod · {{ devCount }} Dev)</span>
+      </div>
+
+      <!-- Right: View Mode Toggle + Action Buttons -->
+      <div class="toolbar-actions-group">
+        <!-- View mode toggle (Table / Grid) -->
+        <div class="view-mode-toggle desktop-only" title="Switch layout display">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'table' }"
+            title="Table View"
+            @click="viewMode = 'table'"
+          >
+            <BaseIcon name="file-text" size="xs" /> <span>Table</span>
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'grid' }"
+            title="Grid View"
+            @click="viewMode = 'grid'"
+          >
+            <BaseIcon name="grid" size="xs" /> <span>Grid</span>
+          </button>
         </div>
 
-        <!-- Mobile Filter Toggle Button (32px standard height) -->
+        <router-link
+          to="/scaffolder"
+          class="btn btn-secondary toolbar-btn desktop-only"
+          title="Deploy a new service from template"
+        >
+          <BaseIcon name="sparkles" size="xs" /> <span>Scaffolder</span>
+        </router-link>
+
         <button
           type="button"
-          class="btn btn-secondary btn-sm mobile-only btn-filter-toggle"
-          :class="{ active: showMobileFilters || activeFilterCount > 0 }"
-          @click="showMobileFilters = !showMobileFilters"
-          aria-label="Toggle filter options"
+          class="btn btn-primary toolbar-btn desktop-only"
+          title="Register a new service"
+          @click="openCreateModal"
         >
-          <span>🌪️ Filters</span>
-          <span v-if="activeFilterCount > 0" class="badge-filter-count">{{ activeFilterCount }}</span>
+          <span>+ Register Service</span>
         </button>
 
-        <!-- Secondary Filter Controls (Inline on Desktop, Expandable on Mobile) -->
-        <div class="filter-secondary-group" :class="{ 'is-open': showMobileFilters }">
-          <div class="filter-group select-group">
-            <label class="filter-label" for="filter-type">Type</label>
-            <select id="filter-type" v-model="filter.type" class="input-glass filter-select" @change="fetchCatalogData">
-              <option value="">All Types ({{ totalServices }})</option>
-              <option v-for="t in serviceTypes" :key="t.value" :value="t.value">{{ t.icon }} {{ t.label }} ({{ stats.by_type[t.value] || 0 }})</option>
-            </select>
-          </div>
+        <button
+          type="button"
+          class="btn btn-secondary toolbar-btn"
+          :disabled="loading"
+          title="Refresh catalog list & stats"
+          @click="fetchCatalogData"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
+          <span class="desktop-only">{{ loading ? 'Syncing...' : 'Refresh' }}</span>
+        </button>
+      </div>
+    </div>
 
-          <div class="filter-group select-group">
-            <label class="filter-label" for="filter-lifecycle">Lifecycle</label>
-            <select id="filter-lifecycle" v-model="filter.lifecycle" class="input-glass filter-select" @change="fetchCatalogData">
-              <option value="">All Lifecycles</option>
-              <option v-for="l in lifecycles" :key="l.value" :value="l.value">{{ l.icon }} {{ l.label }} ({{ stats.by_lifecycle[l.value] || 0 }})</option>
-            </select>
-          </div>
+    <!-- Mobile Secondary Filters Drawer (Expandable on <768px) -->
+    <div v-if="showMobileFilters" class="mobile-filter-drawer glass-panel mobile-only animate-fade-in">
+      <div class="mobile-filter-row">
+        <label class="filter-label" for="mobile-filter-type">Type</label>
+        <select
+          id="mobile-filter-type"
+          v-model="filter.type"
+          class="input-glass toolbar-select"
+          @change="fetchCatalogData"
+        >
+          <option value="">All Types ({{ totalServices }})</option>
+          <option v-for="t in serviceTypes" :key="t.value" :value="t.value">
+            {{ t.label }} ({{ stats.by_type[t.value] || 0 }})
+          </option>
+        </select>
+      </div>
 
-          <div class="filter-group owner-group">
-            <label class="filter-label" for="filter-owner">Owner Team</label>
-            <div class="search-input-wrap">
-              <input id="filter-owner" v-model="filter.owner_team" type="text" class="input-glass owner-field" placeholder="e.g. platform-team" @keydown.enter="fetchCatalogData" />
-              <button v-if="filter.owner_team" type="button" class="clear-input-btn" @click="filter.owner_team = ''; fetchCatalogData()" aria-label="Clear owner">✕</button>
-            </div>
-          </div>
+      <div class="mobile-filter-row">
+        <label class="filter-label" for="mobile-filter-lifecycle">Lifecycle</label>
+        <select
+          id="mobile-filter-lifecycle"
+          v-model="filter.lifecycle"
+          class="input-glass toolbar-select"
+          @change="fetchCatalogData"
+        >
+          <option value="">All Lifecycles</option>
+          <option v-for="l in lifecycles" :key="l.value" :value="l.value">
+            {{ l.label }} ({{ stats.by_lifecycle[l.value] || 0 }})
+          </option>
+        </select>
+      </div>
 
-          <div class="filter-actions">
-            <button type="button" class="btn btn-secondary btn-sm" title="Apply filters" @click="fetchCatalogData"><span>Apply</span></button>
-            <button type="button" class="btn btn-secondary btn-sm" title="Reset all filters" @click="resetFilters"><span>↺ Clear</span></button>
-          </div>
-        </div>
+      <div class="mobile-filter-actions">
+        <button type="button" class="btn btn-secondary btn-sm" @click="resetFilters"><span>↺ Clear</span></button>
+        <button type="button" class="btn btn-primary btn-sm" @click="showMobileFilters = false"><span>Done</span></button>
       </div>
     </div>
 
@@ -290,7 +350,7 @@ const {
     >
       <div v-if="serviceToDelete" class="delete-modal-content">
         <div class="delete-warning-box">
-          <span class="warning-icon">⚠️</span>
+          <BaseIcon name="alert-triangle" size="xs" class="warning-icon" />
           <div>
             <strong>This action will unregister the service from the catalog.</strong>
             <p>
@@ -306,7 +366,7 @@ const {
       <template #footer="{ close }">
         <button type="button" class="btn btn-secondary" :disabled="deleting" @click="close">Cancel</button>
         <button type="button" class="btn btn-danger-crimson" :disabled="deleting" @click="handleConfirmDelete">
-          <span>{{ deleting ? '🗑️ Deleting...' : 'Confirm Delete' }}</span>
+          <BaseIcon :name="deleting ? 'clock' : 'trash'" size="xs" /> <span>{{ deleting ? 'Deleting...' : 'Confirm Delete' }}</span>
         </button>
       </template>
     </ModalDrawer>
@@ -315,4 +375,5 @@ const {
 
 <style>
 @import '../assets/styles/views/catalog.css';
+@import '../assets/styles/components/catalog-drawers.css';
 </style>

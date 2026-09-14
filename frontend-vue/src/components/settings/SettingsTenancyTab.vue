@@ -56,9 +56,9 @@ function handleSave() {
         </label>
         <p class="field-desc">Determines how tenant boundaries are partitioned on physical infrastructure.</p>
         <select id="tenancy-mode" v-model="tenancyConfig.isolation_mode" class="input-glass form-select">
-          <option value="namespace">📦 Namespace Isolation (ResourceQuota + LimitRange + NetworkPolicy)</option>
-          <option value="vcluster">🌐 Virtual Cluster (vCluster Synced Control Plane)</option>
-          <option value="dedicated_nodes">⚡ Dedicated Worker Node Pools (Taints & Tolerations)</option>
+          <option value="namespace">Namespace Isolation (ResourceQuota + LimitRange + NetworkPolicy)</option>
+          <option value="vcluster">Virtual Cluster (vCluster Synced Control Plane)</option>
+          <option value="dedicated_nodes">Dedicated Worker Node Pools (Taints & Tolerations)</option>
         </select>
       </div>
 
@@ -137,7 +137,7 @@ function handleSave() {
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary" :disabled="saving">
-          <span>{{ saving ? '💾 Saving Changes...' : '💾 Save Tenancy Settings' }}</span>
+          <BaseIcon name="hard-drive" size="xs" /> <span>{{ saving ? 'Saving Changes...' : 'Save Tenancy Settings' }}</span>
         </button>
       </div>
     </form>

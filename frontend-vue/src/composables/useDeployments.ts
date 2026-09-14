@@ -4,11 +4,11 @@ import {
   type UpdateResourcesPayload, type ScaleDeploymentPayload
 } from '../api/compute'
 import {
-  type FilterTab, type ToastMessage, type RolloutState,
+  type FilterTab, type StatusFilter, type ToastMessage, type RolloutState,
   getRolloutState, buildSwarmAppItem, buildDockerContainerAppItem, filterDeploymentsList
 } from './deploymentHelpers'
 
-export type { FilterTab, ToastMessage, RolloutState }
+export type { FilterTab, StatusFilter, ToastMessage, RolloutState }
 export { getRolloutState }
 
 export function useDeployments() {
@@ -21,6 +21,7 @@ export function useDeployments() {
   const templates = ref<DeploymentTemplate[]>([])
 
   const activeFilterTab = ref<FilterTab>('all')
+  const statusFilter = ref<StatusFilter>('all')
   const searchQuery = ref('')
   const selectedNamespaceFilter = ref<string>('all')
 
@@ -104,6 +105,7 @@ export function useDeployments() {
   const totalReplicas = computed(() => deployments.value.reduce((acc, d) => acc + (d.replicas || 0), 0))
   const readyReplicas = computed(() => deployments.value.reduce((acc, d) => acc + (d.readyReplicas || d.replicas || 0), 0))
   const healthyCount = computed(() => deployments.value.filter(d => d.status === 'healthy').length)
+  const degradedCount = computed(() => deployments.value.filter(d => d.status !== 'healthy').length)
 
   const canaryCount = computed(() => deployments.value.filter(d => d.strategy === 'Canary' || (d.canaryWeight !== undefined && d.canaryWeight > 0)).length)
   const blueGreenCount = computed(() => deployments.value.filter(d => d.strategy === 'BlueGreen').length)
@@ -119,7 +121,7 @@ export function useDeployments() {
   })
 
   const filteredDeployments = computed(() =>
-    filterDeploymentsList(deployments.value, activeFilterTab.value, selectedNamespaceFilter.value, searchQuery.value)
+    filterDeploymentsList(deployments.value, activeFilterTab.value, selectedNamespaceFilter.value, searchQuery.value, statusFilter.value)
   )
 
   // Operations
@@ -357,8 +359,8 @@ export function useDeployments() {
 
   return {
     loading, error, actionLoading, toastMessage, deployments, templates,
-    activeFilterTab, searchQuery, selectedNamespaceFilter,
-    totalWorkloads, totalReplicas, readyReplicas, healthyCount,
+    activeFilterTab, statusFilter, searchQuery, selectedNamespaceFilter,
+    totalWorkloads, totalReplicas, readyReplicas, healthyCount, degradedCount,
     canaryCount, blueGreenCount, k8sCount, swarmCount, namespaces,
     filteredDeployments, showToast, fetchDeployments, getRolloutState,
     handleApplyResources, handleScale, handleRestart,

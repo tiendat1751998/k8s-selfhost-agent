@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import type { EnrichedDriftRecord } from '../../composables/useDriftDetection'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   drifts: EnrichedDriftRecord[]
@@ -33,11 +34,11 @@ function formatRelativeTime(d: string): string {
 <template>
   <div class="drift-mobile-stream">
     <div v-if="loading && drifts.length === 0" class="drift-mobile-empty text-muted font-mono">
-      <span>⏳ Scanning workloads...</span>
+      <span>Scanning workloads...</span>
     </div>
 
     <div v-else-if="drifts.length === 0" class="drift-mobile-empty text-muted font-mono">
-      <span>✅ No configuration drift detected. All cluster workloads in sync.</span>
+      <BaseIcon name="check-circle" size="xs" /> <span>No configuration drift detected. All cluster workloads in sync.</span>
     </div>
 
     <div
@@ -77,7 +78,7 @@ function formatRelativeTime(d: string): string {
           aria-label="Inspect Diff"
           @click="emit('inspect', item)"
         >
-          <span>🔍</span>
+          <BaseIcon name="search" size="xs" />
         </button>
         <button
           v-if="item.status === 'drifted'"
@@ -88,7 +89,7 @@ function formatRelativeTime(d: string): string {
           aria-label="Sync to Git"
           @click="emit('sync', item.id)"
         >
-          <span>{{ resolvingId === item.id ? '⏳' : '⚡' }}</span>
+          <BaseIcon :name="resolvingId === item.id ? 'refresh' : 'zap'" size="xs" :class="{ 'spin-icon': resolvingId === item.id }" />
         </button>
       </div>
     </div>

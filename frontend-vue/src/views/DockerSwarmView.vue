@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue'
 import MetricCard from '../components/ui/MetricCard.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import SwarmNodesGrid from '../components/swarm/SwarmNodesGrid.vue'
 import SwarmServicesTable from '../components/swarm/SwarmServicesTable.vue'
@@ -10,6 +12,7 @@ import SwarmServiceDrawer from '../components/swarm/SwarmServiceDrawer.vue'
 import SwarmNodeDrawer from '../components/swarm/SwarmNodeDrawer.vue'
 import { useDockerSwarm } from '../composables/useDockerSwarm'
 import '../assets/styles/views/swarm.css'
+import '../assets/styles/components/swarm-drawers.css'
 
 const {
   loading,
@@ -49,11 +52,54 @@ const {
   inspectNode,
   inspectService,
 } = useDockerSwarm()
+
+const searchQuery = ref('')
+const showMobileSearch = ref(false)
+
+const filteredServices = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return services.value
+  return services.value.filter(
+    (s) =>
+      (s.name && s.name.toLowerCase().includes(q)) ||
+      (s.image && s.image.toLowerCase().includes(q))
+  )
+})
+
+const filteredNodes = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return nodes.value
+  return nodes.value.filter(
+    (n) =>
+      (n.name && n.name.toLowerCase().includes(q)) ||
+      (n.hostname && n.hostname.toLowerCase().includes(q)) ||
+      (n.role && n.role.toLowerCase().includes(q)) ||
+      (n.ip && n.ip.toLowerCase().includes(q))
+  )
+})
+
+const filteredContainers = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return containers.value
+  return containers.value.filter(
+    (c) =>
+      (c.name && c.name.toLowerCase().includes(q)) ||
+      (c.image && c.image.toLowerCase().includes(q)) ||
+      (c.state && c.state.toLowerCase().includes(q)) ||
+      (c.status && c.status.toLowerCase().includes(q))
+  )
+})
+
+const searchPlaceholder = computed(() => {
+  if (activeTab.value === 'services') return 'Filter services by name, image...'
+  if (activeTab.value === 'nodes') return 'Filter nodes by name, role, IP...'
+  return 'Filter containers by name, image, state...'
+})
 </script>
 
 <template>
   <div class="view-container animate-fade-in">
-    <!-- Desktop Header (>640px) -->
+    <!-- Desktop Header (>=768px) -->
     <div class="view-header desktop-header desktop-only">
       <div>
         <div class="view-tag">
@@ -68,52 +114,85 @@ const {
 
       <div class="header-actions">
         <button class="btn btn-primary" @click="showDeployModal = true">
-          <span>🚀 Deploy Stack</span>
+          <span><BaseIcon name="play" size="xs" /> Deploy Stack</span>
         </button>
         <button class="btn btn-secondary" :disabled="loading" @click="fetchDockerData">
-          <span>{{ loading ? '⏳ Querying...' : '🔄 Refresh Daemon' }}</span>
+          <span><BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Querying...' : 'Refresh Daemon' }}</span>
         </button>
       </div>
     </div>
 
-    <!-- Mobile 40px Command Bar (<=640px) -->
+    <!-- Mobile 44px Command Bar (<768px) -->
     <div class="swarm-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">🐳 Swarm ({{ totalServices }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="box" size="xs" /> Swarm ({{ searchQuery ? filteredServices.length : totalServices }})</span>
       </div>
       <div class="command-bar-actions">
+        <button
+          class="btn-icon-cmd"
+          :class="{ 'btn-icon-cmd-active': showMobileSearch }"
+          title="Toggle Search Filter"
+          aria-label="Toggle Search Filter"
+          @click="showMobileSearch = !showMobileSearch"
+        >
+          <BaseIcon name="search" size="xs" />
+        </button>
         <button class="btn-icon-cmd" title="Deploy Stack" aria-label="Deploy Stack" @click="showDeployModal = true">
-          <span>🚀</span>
+          <BaseIcon name="play" size="xs" />
         </button>
         <button class="btn-icon-cmd" :disabled="loading" title="Refresh Daemon" aria-label="Refresh Daemon" @click="fetchDockerData">
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
         </button>
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<=640px) -->
+    <!-- Mobile Expandable Search Drawer (<768px) -->
+    <div v-if="showMobileSearch" class="mobile-search-strip mobile-only animate-fade-in">
+      <div class="mobile-search-inner">
+        <span class="search-lens-icon"><BaseIcon name="search" size="xs" /></span>
+        <input
+          v-model="searchQuery"
+          type="search"
+          class="mobile-search-input"
+          :placeholder="searchPlaceholder"
+          autofocus
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="search-clear-btn"
+          title="Clear search"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
     <div class="swarm-micro-telemetry mobile-only font-mono" role="status" aria-label="Docker Swarm Micro Telemetry">
-      <span class="tel-item tel-svcs">🐳 {{ totalServices }} svcs</span>
+      <span class="tel-item tel-svcs"><BaseIcon name="box" size="xs" /> {{ totalServices }} svcs</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-nodes">🖥️ {{ totalNodes }} nodes</span>
+      <span class="tel-item tel-nodes"><BaseIcon name="server" size="xs" /> {{ totalNodes }} nodes</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-ctrs">📦 {{ totalContainers }} ctrs</span>
+      <span class="tel-item tel-ctrs"><BaseIcon name="box" size="xs" /> {{ totalContainers }} ctrs</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-vip">⚡ VIP Mesh</span>
+      <span class="tel-item tel-vip"><BaseIcon name="zap" size="xs" /> VIP Mesh</span>
     </div>
 
     <!-- Notification Toast -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <span>{{ toastMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" />
       <span>{{ toastMessage.text }}</span>
-      <button class="toast-close" aria-label="Close notification" @click="toastMessage = null">✕</button>
+      <button class="toast-close" aria-label="Close notification" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Error Banner -->
     <div v-if="error" class="toast-banner toast-error animate-fade-in">
-      <span>⚠️</span>
+      <BaseIcon name="alert-triangle" size="sm" />
       <span>{{ error }}</span>
-      <button class="toast-close" aria-label="Close error" @click="error = null">✕</button>
+      <button class="toast-close" aria-label="Close error" @click="error = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Metric HUD (Desktop only) -->
@@ -122,7 +201,7 @@ const {
         title="Swarm Services"
         :value="totalServices"
         subtitle="Active replicated overlay services"
-        icon="🐳"
+        icon="box"
         badge="SERVICES"
         badge-color="cyan"
       />
@@ -130,7 +209,7 @@ const {
         title="Compute Nodes"
         :value="totalNodes"
         :subtitle="`${activeManagers} Active Swarm Managers`"
-        icon="🖥️"
+        icon="server"
         badge="NODES"
         badge-color="emerald"
         trend="Quorum Healthy"
@@ -140,7 +219,7 @@ const {
         title="Running Containers"
         :value="totalContainers"
         subtitle="Standalone socket container instances"
-        icon="📦"
+        icon="box"
         badge="CONTAINERS"
         badge-color="violet"
       />
@@ -148,7 +227,7 @@ const {
         title="Engine VIP Mesh"
         value="Overlay Ready"
         subtitle="Zero-loss virtual IP round-robin routing"
-        icon="⚡"
+        icon="zap"
         badge="VIP MESH"
         badge-color="cyan"
         trend="Active Mesh"
@@ -156,38 +235,61 @@ const {
       />
     </div>
 
-    <!-- Tab Control Bar (3 Tabs) -->
-    <div class="tab-control-bar">
-      <button
-        class="tab-btn"
-        :class="{ 'tab-active': activeTab === 'services' }"
-        @click="activeTab = 'services'"
-      >
-        <span>🐳 Swarm Services ({{ services.length }})</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-active': activeTab === 'nodes' }"
-        @click="activeTab = 'nodes'"
-      >
-        <span>🖥️ Node Racks & Utilization ({{ nodes.length }})</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-active': activeTab === 'containers' }"
-        @click="activeTab = 'containers'"
-      >
-        <span>⚡ Containers ({{ containers.length }})</span>
-      </button>
+    <!-- Tab & Search Toolbar Row -->
+    <div class="swarm-toolbar-row">
+      <div class="tab-control-bar">
+        <button
+          class="tab-btn"
+          :class="{ 'tab-active': activeTab === 'services' }"
+          @click="activeTab = 'services'"
+        >
+          <span><BaseIcon name="box" size="xs" /> Swarm Services ({{ filteredServices.length }})</span>
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ 'tab-active': activeTab === 'nodes' }"
+          @click="activeTab = 'nodes'"
+        >
+          <span><BaseIcon name="server" size="xs" /> Node Racks & Utilization ({{ filteredNodes.length }})</span>
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ 'tab-active': activeTab === 'containers' }"
+          @click="activeTab = 'containers'"
+        >
+          <span><BaseIcon name="zap" size="xs" /> Containers ({{ filteredContainers.length }})</span>
+        </button>
+      </div>
+
+      <!-- Desktop Search Bar -->
+      <div class="swarm-desktop-search desktop-only">
+        <span class="search-lens-icon"><BaseIcon name="search" size="xs" /></span>
+        <input
+          v-model="searchQuery"
+          type="search"
+          class="swarm-search-input"
+          :placeholder="searchPlaceholder"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="search-clear-btn"
+          title="Clear search"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
+      </div>
     </div>
 
     <!-- Mobile Card Stream (Mobile Viewports) -->
     <div class="mobile-only-stream">
       <SwarmMobileCards
         :active-tab="activeTab"
-        :services="services"
-        :nodes="nodes"
-        :containers="containers"
+        :services="filteredServices"
+        :nodes="filteredNodes"
+        :containers="filteredContainers"
         :action-loading="actionLoading"
         @inspect-service="inspectService"
         @inspect-node="inspectNode"
@@ -202,7 +304,7 @@ const {
       <!-- 1. Swarm Services Tab -->
       <SwarmServicesTable
         v-if="activeTab === 'services'"
-        :services="services"
+        :services="filteredServices"
         :action-loading="actionLoading"
         @inspect="inspectService"
         @scale="stepReplicas"
@@ -214,7 +316,7 @@ const {
       <!-- 2. Compute Node Racks Tab -->
       <SwarmNodesGrid
         v-else-if="activeTab === 'nodes'"
-        :nodes="nodes"
+        :nodes="filteredNodes"
         :action-loading="actionLoading"
         @inspect="inspectNode"
         @drain="drainNode"
@@ -224,7 +326,7 @@ const {
       <!-- 3. Container Power Switches View -->
       <SwarmContainersGrid
         v-else-if="activeTab === 'containers'"
-        :containers="containers"
+        :containers="filteredContainers"
         :action-loading="actionLoading"
         @toggle="handleToggleContainer"
         @logs="(id, name) => viewLogs(id, name, 'container')"

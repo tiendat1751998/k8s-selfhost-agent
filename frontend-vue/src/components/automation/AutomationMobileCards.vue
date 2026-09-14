@@ -1,10 +1,10 @@
-﻿<template>
+<template>
   <div class="automation-mobile-cards">
     <div v-if="loading" class="stream-status font-mono">
-      <span class="spin-icon">⏳</span> Loading executions...
+      <BaseIcon name="clock" size="xs" class="spin-icon" /> Loading executions...
     </div>
     <div v-else-if="executions.length === 0" class="stream-empty glass-panel font-mono">
-      <span class="empty-icon">📜</span>
+      <span class="empty-icon"><BaseIcon name="file-text" size="lg" /></span>
       <p class="empty-text">No automated executions recorded yet.</p>
     </div>
     <div v-else class="cards-list">
@@ -41,7 +41,7 @@
 
         <!-- Bottom Row: Duration & Timestamp -->
         <div class="card-footer-row font-mono">
-          <span class="meta-duration text-emerald">⏱️ {{ getDuration(item) }}</span>
+          <span class="meta-duration text-emerald"><BaseIcon name="clock" size="xs" /> {{ getDuration(item) }}</span>
           <span class="meta-time text-muted">{{ formatDate(item.created_at) }}</span>
         </div>
       </div>
@@ -51,6 +51,7 @@
 
 <script setup lang="ts">
 import type { AutomationExecution } from '../../api/governance'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   executions: AutomationExecution[]
@@ -96,7 +97,3 @@ function formatDate(dateStr?: string): string {
   }
 }
 </script>
-
-<style scoped>
-@import '../../assets/styles/views/automation.css';
-</style>

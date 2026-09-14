@@ -10,6 +10,7 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 func TestNewK8sExecHandler(t *testing.T) {
@@ -125,4 +126,97 @@ func TestK8sExecHandler_WithClientManager(t *testing.T) {
 	if rec.Code != http.StatusServiceUnavailable && rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected error status, got %d", rec.Code)
 	}
+}
+
+func TestK8sExecHandler_TenantIsolation(t *testing.T) {
+	handler := NewK8sExecHandler(nil, nil)
+
+	r := chi.NewRouter()
+	r.HandleFunc("/k8s/{cluster}/exec", handler.HandleExec)
+
+	t.Run("non-admin accessing forbidden namespace returns 403", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod&ns=kube-system", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		ctx = tenancy.WithTenantID(ctx, "tenant-a")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected status 403 Forbidden, got %d", rec.Code)
+		}
+	})
+
+	t.Run("non-admin accessing another tenant namespace returns 403", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod&ns=tenant-b", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		ctx = tenancy.WithTenantID(ctx, "tenant-a")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected status 403 Forbidden, got %d", rec.Code)
+		}
+	})
+
+	t.Run("non-admin with empty tenant returns 403", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod&ns=tenant-a", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		// no tenant ID
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected status 403 Forbidden, got %d", rec.Code)
+		}
+	})
+
+	t.Run("non-admin with matching tenant namespace passes tenant check", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod&ns=tenant-a", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		ctx = tenancy.WithTenantID(ctx, "tenant-a")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		// Passes tenant check, then fails on k8s unavailable (503) because client is nil
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status 503 Service Unavailable after passing tenant check, got %d", rec.Code)
+		}
+	})
+
+	t.Run("non-admin with matching tenant prefix passes tenant check", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod&ns=tenant-a-prod", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		ctx = tenancy.WithTenantID(ctx, "tenant-a")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		// Passes tenant check, then fails on k8s unavailable (503) because client is nil
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status 503 Service Unavailable after passing tenant check, got %d", rec.Code)
+		}
+	})
+
+	t.Run("platform_admin bypasses tenant check for any namespace", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod&ns=kube-system", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "platform_admin")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		// Bypasses tenant check, fails on k8s unavailable (503)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status 503 Service Unavailable after platform admin bypass, got %d", rec.Code)
+		}
+	})
 }

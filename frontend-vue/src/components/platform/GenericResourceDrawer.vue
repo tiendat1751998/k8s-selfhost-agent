@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import type { GenericPlatformItem } from '../../composables/useGenericPlatform'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -83,7 +84,7 @@ function handleDownload() {
     @close="emit('close')"
   >
     <template #header-prefix>
-      <span class="drawer-header-icon">🔎</span>
+      <BaseIcon name="search" size="sm" class="drawer-header-icon" />
     </template>
 
     <div v-if="item" class="drawer-inspect-body">
@@ -145,7 +146,7 @@ function handleDownload() {
             :title="copied ? 'Copied to clipboard' : 'Copy code to clipboard'"
             @click="handleCopy"
           >
-            <span>{{ copied ? '✓ Copied' : '📋 Copy' }}</span>
+            <BaseIcon :name="copied ? 'check' : 'copy'" size="xs" /> <span>{{ copied ? 'Copied' : 'Copy' }}</span>
           </button>
           <button
             type="button"
@@ -153,7 +154,7 @@ function handleDownload() {
             title="Download manifest file"
             @click="handleDownload"
           >
-            <span>💾 Download</span>
+            <BaseIcon name="download" size="xs" /> <span>Download</span>
           </button>
         </div>
       </div>

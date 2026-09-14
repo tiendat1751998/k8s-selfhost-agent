@@ -94,7 +94,7 @@ const executionColumns: Column<AutomationExecutionRow>[] = [
 
       <template #cell-inspector="{ row }">
         <button class="btn btn-secondary btn-sm" @click="inspectRun(row)">
-          <span>📜 Logs</span>
+          <BaseIcon name="file-text" size="xs" /> <span>Logs</span>
         </button>
       </template>
     </DataTable>
@@ -114,7 +114,7 @@ const executionColumns: Column<AutomationExecutionRow>[] = [
             </div>
             <h3 class="modal-title font-mono">{{ activeExecution.rule_name }}</h3>
           </div>
-          <button class="modal-close" @click="closeInspector">✕</button>
+          <button class="modal-close" @click="closeInspector"><BaseIcon name="x" size="xs" /></button>
         </div>
 
         <div class="modal-body">

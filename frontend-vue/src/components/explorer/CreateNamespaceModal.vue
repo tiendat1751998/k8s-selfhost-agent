@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { k8sApi } from '../../api/k8s'
 
 const props = defineProps<{
@@ -72,7 +73,7 @@ async function handleCreateNamespace() {
         :disabled="creatingNs || !newNsName.trim()"
         @click="handleCreateNamespace"
       >
-        <span>{{ creatingNs ? '⏳ Creating...' : '✨ Create Namespace' }}</span>
+        <BaseIcon :name="creatingNs ? 'clock' : 'sparkles'" size="xs" /> <span>{{ creatingNs ? 'Creating...' : 'Create Namespace' }}</span>
       </button>
     </template>
   </ModalDrawer>

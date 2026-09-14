@@ -66,14 +66,14 @@ function formatTime(d: string) {
             :class="{ active: viewMode === 'steps' }"
             @click="emit('update:viewMode', 'steps')"
           >
-            🧠 Reasoning Trace ({{ logs.length }})
+            <BaseIcon name="cpu" size="xs" /> Reasoning Trace ({{ logs.length }})
           </button>
           <button 
             class="tab-btn" 
             :class="{ active: viewMode === 'raw' }"
             @click="emit('update:viewMode', 'raw')"
           >
-            📜 Raw JSONL Stream
+            <BaseIcon name="file-text" size="xs" /> Raw JSONL Stream
           </button>
         </div>
 
@@ -114,13 +114,13 @@ function formatTime(d: string) {
 
           <!-- Step Reasoning Trace Box -->
           <div v-if="step.reasoning" class="step-reasoning-box font-mono">
-            <div class="reasoning-lbl text-muted">🧠 Step Reasoning & Decision:</div>
+            <div class="reasoning-lbl text-muted"><BaseIcon name="cpu" size="xs" /> Step Reasoning & Decision:</div>
             <div>{{ step.reasoning }}</div>
           </div>
 
           <!-- Tool Call Box -->
           <div v-if="step.toolCall" class="step-tool-call font-mono">
-            <span class="text-muted">🔧 Tool Invocation: </span>
+            <span class="text-muted"><BaseIcon name="sliders" size="xs" /> Tool Invocation: </span>
             <code>{{ step.toolCall }}</code>
           </div>
         </div>
@@ -150,4 +150,5 @@ function formatTime(d: string) {
 
 <style scoped>
 @import '../../assets/styles/views/agents.css';
+@import '../../assets/styles/components/agents-drawers.css';
 </style>

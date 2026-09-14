@@ -44,10 +44,10 @@ const emit = defineEmits<{
       <!-- Quick Templates -->
       <div class="template-chips">
         <span class="template-label">Quick Prompts:</span>
-        <button class="tchip" @click="emit('selectTemplate', 'rca')">🔍 OOM RCA</button>
-        <button class="tchip" @click="emit('selectTemplate', 'netpol')">🛡️ NetworkPolicy</button>
-        <button class="tchip" @click="emit('selectTemplate', 'cve')">⚠️ Trivy CVE Fix</button>
-        <button class="tchip" @click="emit('selectTemplate', 'hpa')">📈 KEDA Scaler</button>
+        <button class="tchip" @click="emit('selectTemplate', 'rca')"><BaseIcon name="search" size="xs" /> OOM RCA</button>
+        <button class="tchip" @click="emit('selectTemplate', 'netpol')"><BaseIcon name="shield" size="xs" /> NetworkPolicy</button>
+        <button class="tchip" @click="emit('selectTemplate', 'cve')"><BaseIcon name="alert-triangle" size="xs" /> Trivy CVE Fix</button>
+        <button class="tchip" @click="emit('selectTemplate', 'hpa')"><BaseIcon name="trending-up" size="xs" /> KEDA Scaler</button>
       </div>
 
       <div class="console-form-group">
@@ -78,7 +78,7 @@ const emit = defineEmits<{
           :disabled="isRunning || !userPrompt.trim()" 
           @click="emit('runPrompt')"
         >
-          <span>{{ isRunning ? 'Synthesizing Response...' : '🚀 Execute Completion' }}</span>
+          <BaseIcon v-if="isRunning" name="refresh" size="xs" class="animate-spin" /><BaseIcon v-else name="send" size="xs" /> <span>{{ isRunning ? 'Synthesizing Response...' : 'Execute Completion' }}</span>
         </button>
       </div>
     </div>
@@ -101,7 +101,7 @@ const emit = defineEmits<{
         </div>
 
         <div v-else-if="promptError" class="output-empty text-rose">
-          <span class="empty-emoji">⚠️</span>
+          <BaseIcon name="alert-triangle" size="xl" class="empty-emoji" />
           <span>{{ promptError }}</span>
         </div>
 
@@ -110,7 +110,7 @@ const emit = defineEmits<{
         </div>
 
         <div v-else class="output-empty">
-          <span class="empty-emoji">🤖</span>
+          <BaseIcon name="bot" size="xl" class="empty-emoji" />
           <span>Ready for diagnostic prompt execution. Click "Execute Completion" above.</span>
         </div>
       </div>

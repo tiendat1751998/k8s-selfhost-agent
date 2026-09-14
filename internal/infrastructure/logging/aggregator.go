@@ -19,6 +19,7 @@ type LogEntry struct {
 	Stream    string    `json:"stream"` // stdout, stderr
 	Level     string    `json:"level"`  // INFO, WARN, ERROR, DEBUG
 	Message   string    `json:"message"`
+	seq       uint64
 }
 
 func (e LogEntry) MarshalJSON() ([]byte, error) {
@@ -212,12 +213,14 @@ type Subscriber struct {
 }
 
 type LogAggregator struct {
-	mu          sync.RWMutex
-	buffers     map[string]*RingBuffer
-	subscribers map[string]*Subscriber
-	bufCapacity int
-	ttl         time.Duration
-	maxBuffers  int
+	mu                sync.RWMutex
+	buffers           map[string]*RingBuffer
+	subscribers       map[string]*Subscriber
+	bufCapacity       int
+	ttl               time.Duration
+	maxBuffers        int
+	seq               uint64
+	lastGeneratedTime time.Time
 }
 
 func NewLogAggregator(bufCapacity int) *LogAggregator {
@@ -282,13 +285,21 @@ func (a *LogAggregator) key(namespace, pod string) string {
 }
 
 func (a *LogAggregator) Ingest(entry LogEntry) {
-	if entry.Timestamp.IsZero() {
-		entry.Timestamp = time.Now().UTC()
-	}
-
 	k := a.key(entry.Namespace, entry.Pod)
 
 	a.mu.Lock()
+	a.seq++
+	entry.seq = a.seq
+
+	if entry.Timestamp.IsZero() {
+		now := time.Now().UTC()
+		if !now.After(a.lastGeneratedTime) {
+			now = a.lastGeneratedTime.Add(time.Nanosecond)
+		}
+		entry.Timestamp = now
+		a.lastGeneratedTime = now
+	}
+
 	buf, exists := a.buffers[k]
 	if !exists {
 		buf = NewRingBuffer(a.bufCapacity)
@@ -344,6 +355,9 @@ func (a *LogAggregator) Subscribe(subID string, filter LogFilter, chSize int) (*
 	}
 	if len(historical) > 1 {
 		sort.SliceStable(historical, func(i, j int) bool {
+			if historical[i].Timestamp.Equal(historical[j].Timestamp) {
+				return historical[i].seq < historical[j].seq
+			}
 			return historical[i].Timestamp.Before(historical[j].Timestamp)
 		})
 	}

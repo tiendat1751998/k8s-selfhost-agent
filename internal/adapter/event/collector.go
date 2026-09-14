@@ -121,7 +121,9 @@ func (c *Collector) Collect(ctx context.Context, namespace, podName string) (*Co
 		return nil
 	})
 
-	_ = eg.Wait()
+	if err := eg.Wait(); err != nil {
+		log.Error("failed waiting for diagnostic data collection", zap.Error(err))
+	}
 
 	log.Info("diagnostic data collection complete",
 		zap.Int("log_containers", len(data.PodLogs)),

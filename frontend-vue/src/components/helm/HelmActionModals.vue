@@ -75,7 +75,7 @@ function formatReleaseDate(dateStr?: string): string {
         <div class="modal-footer-actions">
           <button type="button" class="btn-cyber btn-secondary" @click="emit('update:showUpgradeModal', false)">Cancel</button>
           <button type="button" class="btn-cyber btn-primary" :disabled="upgrading" @click="emit('upgrade')">
-            <span :class="{ 'spin-anim': upgrading }">🔄</span>
+            <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': upgrading }" />
             <span>{{ upgrading ? 'Upgrading Release...' : 'Deploy Upgrade' }}</span>
           </button>
         </div>
@@ -106,13 +106,13 @@ function formatReleaseDate(dateStr?: string): string {
             </select>
           </div>
           <div class="alert-box alert-warning full-width">
-            <span>⚠️ Rollback will revert cluster resources to Revision #{{ rollbackRevision || '—' }}.</span>
+            <BaseIcon name="alert-triangle" size="xs" /> <span>Rollback will revert cluster resources to Revision #{{ rollbackRevision || '—' }}.</span>
           </div>
         </div>
         <div class="modal-footer-actions">
           <button type="button" class="btn-cyber btn-secondary" @click="emit('update:showRollbackModal', false)">Cancel</button>
           <button type="button" class="btn-cyber btn-warning" :disabled="rollingBack || rollbackRevision === null" @click="emit('rollback')">
-            <span :class="{ 'spin-anim': rollingBack }">↩️</span>
+            <BaseIcon name="rotate-ccw" size="xs" :class="{ 'spin-anim': rollingBack }" />
             <span>{{ rollingBack ? 'Rolling back...' : 'Confirm Rollback' }}</span>
           </button>
         </div>
@@ -130,7 +130,7 @@ function formatReleaseDate(dateStr?: string): string {
     >
       <div v-if="uninstallTarget" class="modal-form-body">
         <div class="danger-warning-box">
-          <span class="warning-icon">⚠️</span>
+          <BaseIcon name="alert-triangle" size="xs" class="warning-icon" />
           <p>
             You are about to uninstall <strong class="text-rose font-mono">{{ uninstallTarget.name }}</strong> in namespace <strong class="text-cyan font-mono">{{ uninstallTarget.namespace }}</strong>. All Kubernetes workloads and resources managed by this Helm release will be deleted.
           </p>
@@ -169,5 +169,5 @@ function formatReleaseDate(dateStr?: string): string {
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/helm.css';
+@import '../../assets/styles/components/helm-drawers.css';
 </style>

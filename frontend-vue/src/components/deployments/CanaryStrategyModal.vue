@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import type { DeploymentApp } from '../../api/compute'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import CanaryTrafficSection from './CanaryTrafficSection.vue'
 import BlueGreenTrafficSection from './BlueGreenTrafficSection.vue'
 import { formatContainerName } from '../../utils/dockerFormat'
@@ -67,7 +68,7 @@ function onStrategyTabClick(strat: string) {
           :class="{ 'strat-active': activeStrategy === 'Canary' }"
           @click="onStrategyTabClick('Canary')"
         >
-          <span>🐥 Canary Traffic Split</span>
+          <span><BaseIcon name="git-branch" size="xs" /> Canary Traffic Split</span>
         </button>
         <button
           type="button"
@@ -75,7 +76,7 @@ function onStrategyTabClick(strat: string) {
           :class="{ 'strat-active': activeStrategy === 'BlueGreen' }"
           @click="onStrategyTabClick('BlueGreen')"
         >
-          <span>🔄 Blue-Green Zero-Downtime</span>
+          <span><BaseIcon name="refresh" size="xs" /> Blue-Green Zero-Downtime</span>
         </button>
         <button
           type="button"
@@ -83,7 +84,7 @@ function onStrategyTabClick(strat: string) {
           :class="{ 'strat-active': activeStrategy === 'RollingUpdate' || !activeStrategy }"
           @click="onStrategyTabClick('RollingUpdate')"
         >
-          <span>📦 Rolling Update</span>
+          <span><BaseIcon name="box" size="xs" /> Rolling Update</span>
         </button>
       </div>
 
@@ -117,7 +118,7 @@ function onStrategyTabClick(strat: string) {
               :disabled="actionLoading === 'pause'"
               @click="emit('togglePause', app)"
             >
-              <span>{{ app.paused ? '▶️ Resume Rollout' : '⏸️ Pause Rollout' }}</span>
+              <span><BaseIcon :name="app.paused ? 'play' : 'pause'" size="xs" /> {{ app.paused ? 'Resume Rollout' : 'Pause Rollout' }}</span>
             </button>
             <button
               type="button"
@@ -125,7 +126,7 @@ function onStrategyTabClick(strat: string) {
               :disabled="actionLoading === 'rollback'"
               @click="emit('rollback', app)"
             >
-              <span>⏮️ Rollback to Previous</span>
+              <span><BaseIcon name="refresh" size="xs" /> Rollback to Previous</span>
             </button>
           </div>
         </div>
@@ -160,7 +161,7 @@ function onStrategyTabClick(strat: string) {
         :disabled="actionLoading === 'canary'"
         @click="emit('applyCanaryWeight', canarySliderWeight)"
       >
-        <span>Apply Canary Weight ({{ canarySliderWeight }}%) ➔</span>
+        <span>Apply Canary Weight ({{ canarySliderWeight }}%) <BaseIcon name="play" size="xs" /></span>
       </button>
     </template>
   </ModalDrawer>

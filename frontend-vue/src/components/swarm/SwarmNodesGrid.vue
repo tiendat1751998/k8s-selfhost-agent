@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { DockerNode } from '../../api/compute'
 
 const props = defineProps<{
@@ -28,7 +29,7 @@ function formatMemory(mem?: number): string {
 <template>
   <div class="nodes-rack-view animate-fade-in">
     <div v-if="props.nodes.length === 0" class="empty-state glass-panel">
-      <span>No Swarm nodes discovered on the network.</span>
+      <span>No Swarm nodes discovered on the network matching your filter.</span>
     </div>
 
     <div v-else class="nodes-grid">
@@ -40,7 +41,7 @@ function formatMemory(mem?: number): string {
       >
         <div class="rack-top">
           <div class="rack-header-left">
-            <span class="server-icon" aria-hidden="true">🖳</span>
+            <span class="server-icon" aria-hidden="true"><BaseIcon name="server" size="sm" /></span>
             <div>
               <h3 class="rack-node-name font-mono">{{ node.name }}</h3>
               <span class="rack-role font-mono" :class="node.role === 'manager' ? 'role-mgr' : 'role-wrk'">
@@ -93,7 +94,7 @@ function formatMemory(mem?: number): string {
               title="Drain workloads from node"
               @click="emit('drain', node.id)"
             >
-              <span>{{ props.actionLoading === `drain-${node.id}` ? '⏳ Draining...' : '⏸ Drain' }}</span>
+              <span><BaseIcon :name="props.actionLoading === `drain-${node.id}` ? 'activity' : 'pause'" size="xs" :class="{ 'spin-icon': props.actionLoading === `drain-${node.id}` }" /> {{ props.actionLoading === `drain-${node.id}` ? 'Draining...' : 'Drain' }}</span>
             </button>
             <button
               v-else-if="node.availability === 'drain'"
@@ -102,14 +103,14 @@ function formatMemory(mem?: number): string {
               title="Activate node for scheduling"
               @click="emit('activate', node.id)"
             >
-              <span>{{ props.actionLoading === `activate-${node.id}` ? '⏳ Activating...' : '▶ Activate' }}</span>
+              <span><BaseIcon :name="props.actionLoading === `activate-${node.id}` ? 'activity' : 'play'" size="xs" :class="{ 'spin-icon': props.actionLoading === `activate-${node.id}` }" /> {{ props.actionLoading === `activate-${node.id}` ? 'Activating...' : 'Activate' }}</span>
             </button>
             <button
               class="btn btn-secondary btn-xs"
               title="Inspect node specifications"
               @click="emit('inspect', node)"
             >
-              <span>🔍 Inspect</span>
+              <span><BaseIcon name="search" size="xs" /> Inspect</span>
             </button>
           </div>
         </div>
@@ -117,3 +118,77 @@ function formatMemory(mem?: number): string {
     </div>
   </div>
 </template>
+
+<style scoped>
+.nodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.node-rack-card {
+  padding: 18px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(11, 15, 25, 0.65);
+}
+
+.node-draining {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.rack-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.rack-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.server-icon { font-size: 22px; }
+.rack-node-name { font-size: 14px; font-weight: 700; color: #fff; }
+.rack-role { font-size: 10px; font-weight: 700; }
+.role-mgr { color: #c4b5fd; }
+.role-wrk { color: var(--text-muted); }
+
+.rack-meters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  border-radius: 10px;
+}
+
+.meter-item { display: flex; flex-direction: column; gap: 4px; }
+.meter-meta { display: flex; justify-content: space-between; font-size: 11px; }
+
+.meter-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.meter-bar-fill { height: 100%; border-radius: 9999px; }
+.fill-cyan { background: var(--grad-cyan); }
+.fill-emerald { background: var(--grad-emerald); }
+
+.rack-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+}
+
+.rack-actions { display: flex; align-items: center; gap: 6px; }
+</style>

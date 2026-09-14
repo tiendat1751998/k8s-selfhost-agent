@@ -58,8 +58,12 @@ export function useOverviewDashboard() {
 
   // 2. Computed Metrics & Topology Aggregations
   const orderedNodes = computed<NodeMetrics[]>(() => {
-    const incoming = overview.value?.nodes || []
-    if (!incoming.length) return []
+    const raw = overview.value?.nodes || []
+    if (!raw.length) return []
+    const incoming = raw.map(n => ({
+      ...n,
+      node_name: n.node_name === 'k8smater' ? 'k8smaster' : n.node_name
+    }))
     if (!customNodeOrder.value.length) return incoming
 
     const orderMap = new Map<string, number>()
@@ -73,7 +77,7 @@ export function useOverviewDashboard() {
   })
 
   const busiestNodeId = computed<string | null>(() => {
-    const incoming = overview.value?.nodes || []
+    const incoming = nodes.value
     if (!incoming.length) return null
     let maxRate = -1
     let bestId: string | null = null

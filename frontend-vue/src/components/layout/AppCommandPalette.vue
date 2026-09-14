@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { navGroups } from '../../config/navigation'
 
 const props = defineProps<{
@@ -79,7 +80,7 @@ onUnmounted(() => {
   >
     <div class="command-palette-content">
       <div class="palette-input-wrap">
-        <span class="palette-search-icon">🔍</span>
+        <span class="palette-search-icon"><BaseIcon name="search" size="sm" /></span>
         <input
           v-model="searchQuery"
           type="text"
@@ -101,7 +102,7 @@ onUnmounted(() => {
           @click="navigateTo(item.path)"
           @keydown.enter="navigateTo(item.path)"
         >
-          <div class="p-item-icon">{{ item.icon }}</div>
+          <div class="p-item-icon"><BaseIcon :name="item.icon" size="sm" /></div>
           <div class="p-item-info">
             <div class="p-item-title-row">
               <span class="p-item-name">{{ item.name }}</span>
@@ -120,7 +121,8 @@ onUnmounted(() => {
 
     <template #footer>
       <div class="palette-footer-tips font-mono">
-        <span>Navigate with click • <kbd>Esc</kbd> to close</span>
+        <span class="desktop-tips">Navigate with click • <kbd>Esc</kbd> to close</span>
+        <span class="mobile-tips">Tap backdrop or ✕ to close</span>
       </div>
     </template>
   </ModalDrawer>

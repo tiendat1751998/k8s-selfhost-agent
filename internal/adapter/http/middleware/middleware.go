@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -89,6 +90,10 @@ func (rw *responseWriter) Flush() {
 func RequestBodyLimit(maxBytes int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if maxBytes <= (1<<20) && strings.HasPrefix(r.URL.Path, "/api/v1/logs") {
+				next.ServeHTTP(w, r)
+				return
+			}
 			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 			next.ServeHTTP(w, r)
 		})
@@ -115,6 +120,55 @@ func Metrics(next http.Handler) http.Handler {
 	})
 }
 
+var sensitiveQueryKeys = map[string]struct{}{
+	"token":         {},
+	"trace_token":   {},
+	"authorization": {},
+	"key":           {},
+	"password":      {},
+	"secret":        {},
+	"api_key":       {},
+	"apikey":        {},
+	"access_token":  {},
+	"refresh_token": {},
+	"auth_token":    {},
+	"private_key":   {},
+}
+
+func isSensitiveQueryKey(key string) bool {
+	clean := strings.ToLower(strings.TrimSpace(key))
+	clean = strings.ReplaceAll(clean, "-", "_")
+	_, exists := sensitiveQueryKeys[clean]
+	return exists
+}
+
+// SanitizeURL returns a string representation of the URL with sensitive query parameters redacted.
+// It does not modify the input URL.
+func SanitizeURL(u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	if u.RawQuery == "" {
+		return u.String()
+	}
+
+	uCopy := *u
+	query := uCopy.Query()
+	modified := false
+
+	for k := range query {
+		if isSensitiveQueryKey(k) {
+			query.Set(k, "[REDACTED]")
+			modified = true
+		}
+	}
+
+	if modified {
+		uCopy.RawQuery = query.Encode()
+	}
+	return uCopy.String()
+}
+
 // Tracing adds OpenTelemetry tracing spans to HTTP requests.
 func Tracing(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +177,7 @@ func Tracing(next http.Handler) http.Handler {
 
 		span.SetAttributes(
 			attribute.String("http.method", r.Method),
-			attribute.String("http.url", r.URL.String()),
+			attribute.String("http.url", SanitizeURL(r.URL)),
 			attribute.String("http.user_agent", r.UserAgent()),
 		)
 
@@ -183,8 +237,8 @@ func CORS(next http.Handler) http.Handler {
 			}
 		}
 
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == http.MethodOptions {
@@ -201,6 +255,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:")

@@ -16,10 +16,10 @@ const emit = defineEmits<{
 }>()
 
 const schedulePresets = [
-  { label: '⚡ Hourly Snapshot', cron: '0 * * * *' },
-  { label: '🌙 Daily @ 02:00 UTC', cron: '0 2 * * *' },
-  { label: '📅 Weekly (Sun 03:00)', cron: '0 3 * * 0' },
-  { label: '📊 Monthly (1st @ 04:00)', cron: '0 4 1 * *' },
+  { label: 'Hourly Snapshot', cron: '0 * * * *' },
+  { label: 'Daily @ 02:00 UTC', cron: '0 2 * * *' },
+  { label: 'Weekly (Sun 03:00)', cron: '0 3 * * 0' },
+  { label: 'Monthly (1st @ 04:00)', cron: '0 4 1 * *' },
 ]
 
 const retentionPresets = [7, 14, 30, 60, 90, 180, 365]
@@ -35,14 +35,14 @@ const retentionPresets = [7, 14, 30, 60, 90, 180, 365]
             Configure S3 / MinIO storage targets, cron schedules, snapshot retention, and encryption policies.
           </p>
         </div>
-        <span v-if="isDirty" class="dirty-indicator-pill">● Unsaved Changes</span>
+        <span v-if="isDirty" class="dirty-indicator-pill">Unsaved Changes</span>
       </div>
       <button
         type="button"
         class="btn btn-secondary btn-sm"
         @click="emit('reset', 'backup')"
       >
-        <span>↺ Reset Defaults</span>
+        <BaseIcon name="rotate-ccw" size="xs" /> <span>Reset Defaults</span>
       </button>
     </div>
 
@@ -62,7 +62,7 @@ const retentionPresets = [7, 14, 30, 60, 90, 180, 365]
             @click="form.backup_provider = prov.id as any"
           >
             <div class="provider-card-head">
-              <span class="provider-icon">{{ prov.icon }}</span>
+              <BaseIcon :name="prov.icon" size="sm" class="provider-icon" />
               <span class="provider-name">{{ prov.name }}</span>
             </div>
             <p class="provider-desc">{{ prov.desc }}</p>
@@ -74,19 +74,19 @@ const retentionPresets = [7, 14, 30, 60, 90, 180, 365]
       <div class="integration-item glass-panel">
         <div class="integration-header">
           <div class="integration-title-group">
-            <div class="integration-icon">🗄️</div>
+            <div class="integration-icon"><BaseIcon name="database" size="md" /></div>
             <div>
               <h3 class="integration-name">Object Storage Bucket Credentials</h3>
               <p class="integration-desc">Target endpoint and bucket parameters for Velero / K8s snapshot sync.</p>
             </div>
           </div>
           <div class="integration-status">
-            <span v-if="integrationTests.backup_s3_endpoint?.testing" class="badge badge-amber">⏳ Testing...</span>
+            <span v-if="integrationTests.backup_s3_endpoint?.testing" class="badge badge-amber"><BaseIcon name="refresh" size="xs" class="animate-spin" /> Testing...</span>
             <span v-else-if="integrationTests.backup_s3_endpoint?.result?.reachable" class="badge badge-emerald">
-              ✓ HTTP {{ integrationTests.backup_s3_endpoint.result.status_code }} ({{ integrationTests.backup_s3_endpoint.result.latency_ms }}ms)
+              <BaseIcon name="check-circle" size="xs" /> HTTP {{ integrationTests.backup_s3_endpoint.result.status_code }} ({{ integrationTests.backup_s3_endpoint.result.latency_ms }}ms)
             </span>
             <span v-else-if="integrationTests.backup_s3_endpoint?.error" class="badge badge-rose">
-              ✗ {{ integrationTests.backup_s3_endpoint.error }}
+              <BaseIcon name="x-circle" size="xs" /> {{ integrationTests.backup_s3_endpoint.error }}
             </span>
             <span v-else-if="form.backup_s3_endpoint" class="badge badge-cyan">CONFIGURED</span>
             <span v-else class="badge badge-muted">NOT CONFIGURED</span>
@@ -110,7 +110,7 @@ const retentionPresets = [7, 14, 30, 60, 90, 180, 365]
                 :disabled="integrationTests.backup_s3_endpoint?.testing || !form.backup_s3_endpoint"
                 @click="emit('testService', 'backup_s3_endpoint')"
               >
-                <span>{{ integrationTests.backup_s3_endpoint?.testing ? '⏳ Testing...' : '⚡ Test Connection' }}</span>
+                <BaseIcon :name="integrationTests.backup_s3_endpoint?.testing ? 'refresh' : 'zap'" size="xs" :class="{ 'animate-spin': integrationTests.backup_s3_endpoint?.testing }" /> <span>{{ integrationTests.backup_s3_endpoint?.testing ? 'Testing...' : 'Test Connection' }}</span>
               </button>
             </div>
           </div>
@@ -239,7 +239,7 @@ const retentionPresets = [7, 14, 30, 60, 90, 180, 365]
         <span class="field-desc">Automated backups synchronize with platform disaster recovery daemon.</span>
         <button type="submit" class="btn btn-primary" :disabled="saving">
           <span v-if="saving" class="spinner spinner-sm"></span>
-          <span>{{ saving ? '💾 Saving Changes...' : '💾 Save Backup Settings' }}</span>
+          <BaseIcon name="hard-drive" size="xs" /> <span>{{ saving ? 'Saving Changes...' : 'Save Backup Settings' }}</span>
         </button>
       </div>
     </form>

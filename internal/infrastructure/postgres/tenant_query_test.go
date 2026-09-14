@@ -73,3 +73,34 @@ func TestBuildTenantQuery_EdgeCasesAndLimitations(t *testing.T) {
 		}
 	})
 }
+
+func TestBuildTenantQuery_TenantScopedTables(t *testing.T) {
+	ctx := context.WithValue(context.Background(), middleware.TenantIDKey, "tenant-123")
+
+	tables := []string{
+		"backup_history",
+		"notifications",
+		"slo_definitions",
+		"promotions",
+		"reports",
+		"change_requests",
+		"drift_records",
+		"compliance_violations",
+		"correlated_events",
+	}
+
+	for _, table := range tables {
+		t.Run(table, func(t *testing.T) {
+			q := "SELECT * FROM " + table
+			gotQ, gotArgs := BuildTenantQuery(ctx, q)
+
+			expected := "WHERE tenant_id = $1"
+			if !strings.Contains(gotQ, expected) {
+				t.Errorf("Expected query for table %q to contain %q, got %q", table, expected, gotQ)
+			}
+			if len(gotArgs) != 1 || gotArgs[0] != "tenant-123" {
+				t.Errorf("Expected args ['tenant-123'], got %v", gotArgs)
+			}
+		})
+	}
+}

@@ -1,11 +1,11 @@
-# Rancher — Research Summary
+﻿# Rancher — Research Summary
 
-## Rancher là gì?
-Open-source **multi-cluster Kubernetes management platform**. Quản lý deploy, lifecycle, security cho K8s clusters trên mọi infra (on-prem, cloud, bare metal, edge).
+## What is Rancher?
+Open-source **multi-cluster Kubernetes management platform**. Manages deployment, lifecycle, and security for K8s clusters across any infrastructure (on-prem, cloud, bare metal, edge).
 
 ---
 
-## Kiến trúc
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -36,14 +36,14 @@ Open-source **multi-cluster Kubernetes management platform**. Quản lý deploy,
 ```
 
 ### Key Components
-| Component | Vai trò |
+| Component | Role |
 |---|---|
 | **Rancher Server** | API server + custom controllers, extends K8s via CRDs |
-| **cattle-cluster-agent** | Agent trong mỗi downstream cluster, tunnel TLS về Rancher |
-| **Auth Proxy** | SSO central (Okta, AD, GitHub, SAML/OIDC) → map RBAC |
-| **Fleet** | GitOps engine, sync Helm charts/manifests từ Git |
+| **cattle-cluster-agent** | Agent inside each downstream cluster, tunnels TLS back to Rancher |
+| **Auth Proxy** | Centralized SSO (Okta, AD, GitHub, SAML/OIDC) mapped to RBAC |
+| **Fleet** | GitOps engine, syncs Helm charts and manifests from Git |
 | **Steve** | Modern K8s API translation layer |
-| **Norman** | Legacy v3 API (backward compat) |
+| **Norman** | Legacy v3 API (backward compatibility) |
 
 ---
 
@@ -84,7 +84,7 @@ rancher/rancher/
 └── .github/       # GitHub Actions CI/CD
 ```
 
-**Multi-repo architecture** — `rancher/rancher` là hub chính, các component tách riêng:
+**Multi-repo architecture** — `rancher/rancher` is the main hub, with separated components:
 - `rancher/dashboard` → Web UI
 - `rancher/steve` → API engine
 - `rancher/fleet` → GitOps
@@ -105,8 +105,8 @@ helm install rancher rancher-latest/rancher \
   --namespace cattle-system --create-namespace \
   --set hostname=rancher.example.com
 ```
-- L4 Load Balancer phía trước (port 80/443)
-- etcd multi-node cho fault tolerance
+- L4 Load Balancer in front (port 80/443)
+- Multi-node etcd for fault tolerance
 
 ### Dev / PoC (Single Docker)
 ```bash
@@ -114,5 +114,5 @@ docker run -d --restart=unless-stopped \
   -p 80:80 -p 443:443 \
   rancher/rancher:v2.10.x
 ```
-- Chạy K3s embedded bên trong container
-- ⚠️ Không dùng cho production
+- Runs embedded K3s inside the container
+- ⚠️ Non-production use only

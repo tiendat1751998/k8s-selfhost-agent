@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { K8sResource } from '../../api/k8s'
 
 defineProps<{
@@ -25,7 +26,7 @@ const emit = defineEmits<{
   >
     <div class="restart-modal-body">
       <div class="restart-warning-banner font-mono">
-        <span class="warning-icon">🔄</span>
+        <BaseIcon name="refresh" size="md" class="warning-icon" />
         <div>
           <strong class="text-white">{{ target?.kind }}/{{ target?.metadata?.name }}</strong>
           <div class="text-muted font-small">Namespace: {{ target?.metadata?.namespace || 'default' }}</div>

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { DetectedTool } from '../../api/ecosystem'
 
 interface Props {
@@ -22,23 +22,31 @@ const emit = defineEmits<{
 <template>
   <div class="ecosystem-table-container glass-panel">
     <table class="ecosystem-table">
+      <colgroup>
+        <col style="width: 22%;" />
+        <col style="width: 24%;" />
+        <col style="width: 16%;" />
+        <col style="width: 12%;" />
+        <col style="width: 10%;" />
+        <col style="width: 16%;" />
+      </colgroup>
       <thead>
         <tr>
-          <th>Integration Tool</th>
-          <th>Endpoint & Version</th>
-          <th>Health Status</th>
-          <th>Discovery</th>
-          <th>Last Checked</th>
-          <th style="text-align: right;">Actions</th>
+          <th style="width: 22%;">Integration Tool</th>
+          <th style="width: 24%;">Endpoint & Version</th>
+          <th style="width: 16%;">Health Status</th>
+          <th style="width: 12%;">Discovery</th>
+          <th style="width: 10%;">Last Checked</th>
+          <th style="width: 16%; text-align: right;">Actions</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="tool in tools" :key="tool.id || tool.name">
           <td>
             <div class="table-tool-cell">
-              <span class="table-tool-icon">{{ getToolIcon(tool) }}</span>
+              <span class="table-tool-icon"><BaseIcon :name="getToolIcon(tool)" size="sm" /></span>
               <div class="table-tool-meta">
-                <span class="table-tool-name">{{ tool.name }}</span>
+                <span class="table-tool-name" :title="tool.name">{{ tool.name }}</span>
                 <span class="category-badge">{{ tool.category.toUpperCase() }}</span>
               </div>
             </div>
@@ -66,30 +74,30 @@ const emit = defineEmits<{
               v-if="tool.status === 'not_configured'"
               class="status-pill pill-muted"
             >
-              ⚪ Not Configured
+              <BaseIcon name="clock" size="xs" /> Not Configured
             </span>
             <span
               v-else-if="tool.health === 'healthy'"
               class="status-pill pill-healthy"
             >
-              🟢 Healthy
+              <BaseIcon name="check-circle" size="xs" /> Healthy
             </span>
             <span
               v-else-if="tool.status === 'unreachable'"
               class="status-pill pill-degraded"
             >
-              🔴 Unreachable
+              <BaseIcon name="x-circle" size="xs" /> Unreachable
             </span>
             <span
               v-else
               class="status-pill pill-warning"
             >
-              🟡 Degraded
+              <BaseIcon name="alert-triangle" size="xs" /> Degraded
             </span>
           </td>
           <td>
             <span class="source-badge">
-              {{ tool.source === 'settings' ? '⚙️ Settings' : tool.source === 'manual' ? '✍️ Manual' : '☸️ K8s' }}
+              <template v-if="tool.source === 'settings'"><BaseIcon name="sliders" size="xs" /> Settings</template><template v-else-if="tool.source === 'manual'"><BaseIcon name="edit" size="xs" /> Manual</template><template v-else><BaseIcon name="anchor" size="xs" /> K8s</template>
             </span>
           </td>
           <td class="font-mono text-muted" style="font-size: 12px;">
@@ -98,38 +106,38 @@ const emit = defineEmits<{
           <td>
             <div class="table-actions-cell">
               <button
-                class="table-btn btn-sync"
+                class="table-btn btn-ping"
                 :disabled="syncingId === tool.id"
-                title="Sync Webhook Probe"
+                title="Ping"
+                aria-label="Ping"
                 @click="emit('sync', tool)"
               >
-                <span>{{ syncingId === tool.id ? '⏳' : '🔄' }}</span>
-                <span>Sync</span>
-              </button>
-              <button
-                class="table-btn btn-config"
-                title="Configure Integration"
-                @click="emit('configure', tool)"
-              >
-                <span>⚙️</span>
-                <span>Configure</span>
+                <BaseIcon :name="syncingId === tool.id ? 'refresh' : 'zap'" size="xs" :class="{ 'spin-anim': syncingId === tool.id }" />
               </button>
               <button
                 class="table-btn btn-health"
-                title="Inspect Health Latency & Logs"
+                title="Health"
+                aria-label="Health"
                 @click="emit('inspectHealth', tool)"
               >
-                <span>🔍</span>
-                <span>Health</span>
+                <BaseIcon name="activity" size="xs" />
+              </button>
+              <button
+                class="table-btn btn-config"
+                title="Config"
+                aria-label="Config"
+                @click="emit('configure', tool)"
+              >
+                <BaseIcon name="sliders" size="xs" />
               </button>
               <button
                 class="table-btn btn-disconnect"
                 :disabled="deletingId === tool.id"
-                title="Disconnect Integration"
+                title="Disconnect"
+                aria-label="Disconnect"
                 @click="emit('delete', tool)"
               >
-                <span>🗑</span>
-                <span>Disconnect</span>
+                <BaseIcon name="trash" size="xs" />
               </button>
             </div>
           </td>
