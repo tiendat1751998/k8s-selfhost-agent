@@ -27,6 +27,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
 	domainLB "github.com/datdt/k8sselfhost/internal/domain/loadbalancer"
 	domainDocker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	infraAgent "github.com/datdt/k8sselfhost/internal/infrastructure/agent"
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	infraHelm "github.com/datdt/k8sselfhost/internal/infrastructure/helm"
@@ -250,7 +251,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		Message: "K8SCONTROL Hybrid Control Plane online — real-time telemetry log aggregator initialized",
 	})
 	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator)
-	centralizedLogs, chCleanup := wireCentralizedLogging(ctx, log)
+	centralizedLogs, chCleanup := wireCentralizedLogging(ctx, log, computeHostRepo)
 
 	if dockerClient != nil {
 		startDockerLogStreamer(ctx, dockerClient, logAggregator, log)
@@ -421,7 +422,7 @@ func detectLogLevel(msg string, defaultLvl string) string {
 	}
 }
 
-func wireCentralizedLogging(ctx context.Context, log *zap.Logger) (*adapthttp.LogHandler, func()) {
+func wireCentralizedLogging(ctx context.Context, log *zap.Logger, computeHostRepo domainDocker.ComputeHostRepository) (*adapthttp.LogHandler, func()) {
 	chHost := os.Getenv("CLICKHOUSE_HOST")
 	if chHost == "" {
 		chHost = os.Getenv("K8S_CLICKHOUSE_HOST")
@@ -454,13 +455,13 @@ func wireCentralizedLogging(ctx context.Context, log *zap.Logger) (*adapthttp.Lo
 			service := usecaseLogging.NewService(infraClickhouse.NewLogRepository(client, nil))
 			return adapthttp.NewLogHandler(service, &chStatusProvider{client: client}), func() { _ = client.Close() }
 		}
-		log.Warn("ClickHouse connection failed, using in-memory ringbuffer fallback", zap.Error(err))
+		log.Warn("ClickHouse connection failed, falling back to distributed edge log engine", zap.Error(err))
 	} else {
-		log.Info("ClickHouse not configured, using resilient in-memory ringbuffer fallback")
+		log.Info("ClickHouse not configured, activating distributed edge log engine")
 	}
 
-	memRepo := logging.NewMemoryLogRepo(50000)
-	return adapthttp.NewLogHandler(usecaseLogging.NewService(memRepo), memRepo), nil
+	distRepo := infraAgent.NewDistributedAgentLogRepo(computeHostRepo, infraAgent.NewAgentLogClient())
+	return adapthttp.NewLogHandler(usecaseLogging.NewService(distRepo), distRepo), nil
 }
 
 type chStatusProvider struct {
