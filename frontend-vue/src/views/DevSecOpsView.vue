@@ -152,13 +152,11 @@
         :findings="filteredCveFindings"
         :severities="severities"
         :active-filter="activeFilter"
-        :search-query="searchQuery"
         :loading="securityStore.loading"
         :get-resource-icon="getResourceIcon"
         :get-severity-badge-class="getSeverityBadgeClass"
         :get-cvss-badge-class="getCvssBadgeClass"
         @update:active-filter="activeFilter = $event"
-        @update:search-query="searchQuery = $event"
         @view-details="selectedFinding = $event"
         @patch-vulnerability="patchVulnerability"
       />
