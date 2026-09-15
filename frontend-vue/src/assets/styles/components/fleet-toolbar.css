@@ -20,6 +20,7 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
   overflow: hidden;
   flex-wrap: nowrap;
   transition: all 0.2s ease;
@@ -44,12 +45,13 @@
 }
 .fleet-view .fleet-toolbar-sleek .toolbar-search-input {
   width: 100%;
-  height: 28px;
+  height: 28px !important;
+  line-height: 28px;
   padding: 0 24px 0 28px;
   font-size: 11.5px;
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 9999px;
+  border-radius: 9999px !important;
   color: #f8fafc;
   transition: all 0.15s ease;
   box-sizing: border-box;
@@ -140,8 +142,9 @@
   gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
+  flex: 1 1 auto;
+  min-width: 110px;
   flex-shrink: 1;
-  min-width: 0;
 }
 .fleet-view .fleet-toolbar-sleek .toolbar-status-pills::-webkit-scrollbar {
   display: none;
@@ -350,6 +353,125 @@
     width: 130px;
     min-width: 100px;
     flex: 0 1 130px;
+  }
+}
+@media (max-width: 900px) {
+  .fleet-view .fleet-toolbar-sleek {
+    gap: 6px;
+    padding: 0 8px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-spacer {
+    display: none;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-search-wrap {
+    width: 110px;
+    min-width: 80px;
+    flex: 0 1 110px;
+  }
+  /* Zone 2: Provider Select on <= 900px */
+  .fleet-view .fleet-toolbar-sleek .pill-select-wrap {
+    max-width: 90px;
+    flex: 0 1 90px;
+  }
+  .fleet-view .fleet-toolbar-sleek .pill-select {
+    width: 100%;
+    max-width: 90px;
+    padding: 0 20px 0 8px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+  .fleet-view .fleet-toolbar-sleek .pill-select-wrap .select-chevron {
+    right: 6px;
+  }
+  /* Zone 3: Status Filter Pills on <= 900px */
+  .fleet-view .fleet-toolbar-sleek .toolbar-status-pills {
+    flex: 1 1 auto;
+    min-width: 110px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 1;
+  }
+  .fleet-view .fleet-toolbar-sleek .capsule-pill {
+    padding: 0 6px;
+    font-size: 10px;
+  }
+  /* Zone 5: Segmented View Mode Toggle - Icon only (width: 56px total) */
+  .fleet-view .fleet-toolbar-sleek .segmented-control {
+    width: 56px;
+    min-width: 56px;
+    max-width: 56px;
+    padding: 2px;
+    gap: 2px;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .fleet-view .fleet-toolbar-sleek .segmented-btn {
+    width: 24px;
+    min-width: 24px;
+    height: 22px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+  .fleet-view .fleet-toolbar-sleek .segmented-btn span {
+    display: none;
+  }
+  /* Zone 6: Primary Action Button on <= 900px */
+  .fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary {
+    padding: 0 8px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary span {
+    display: none;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary::after {
+    content: '+ Connect';
+    white-space: nowrap;
+  }
+}
+@media (max-width: 800px) {
+  .fleet-view .fleet-toolbar-sleek {
+    gap: 5px;
+    padding: 0 6px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-search-wrap {
+    width: 90px;
+    min-width: 70px;
+    flex: 0 1 90px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-search-input {
+    padding: 0 8px 0 24px;
+    font-size: 10.5px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-search-icon {
+    left: 7px;
+  }
+  .fleet-view .fleet-toolbar-sleek .pill-select-wrap {
+    max-width: 85px;
+    flex: 0 1 85px;
+  }
+  .fleet-view .fleet-toolbar-sleek .pill-select {
+    max-width: 85px;
+    padding: 0 18px 0 6px;
+    font-size: 10.5px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-actions-group {
+    gap: 4px;
+  }
+  /* Zone 6: Primary Action Button on <= 800px (Icon-only 28x28px) */
+  .fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary::after {
+    content: '+';
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
   }
 }
 @media (max-width: 767.98px) {
