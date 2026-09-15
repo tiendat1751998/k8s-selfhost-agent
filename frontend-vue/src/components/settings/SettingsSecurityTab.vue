@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { TOTPStatusResponse } from '../../api/auth'
 
 const router = useRouter()
@@ -32,59 +33,73 @@ const emit = defineEmits<{
           Configure session lifetime thresholds, credential complexity minimums, and MFA mandates.
         </p>
       </div>
-      <button type="button" class="btn btn-secondary btn-sm" @click="emit('reset', 'security')">
-        <span>↺ Reset Defaults</span>
-      </button>
     </div>
 
     <form class="settings-form" @submit.prevent="emit('save', 'security')">
-      <div class="form-row">
-        <div class="form-group flex-1">
-          <label class="form-label" for="sec-timeout">
-            <span>Session Timeout (Minutes)</span>
+      <!-- Row 1: Session Timeout -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="sec-timeout">
+            <span>Session Timeout</span>
             <span class="required">*</span>
           </label>
-          <p class="field-desc">Inactivity duration before automatic token invalidation (5 to 1440 minutes).</p>
-          <input
-            id="sec-timeout"
-            v-model.number="form.session_timeout_minutes"
-            type="number"
-            min="5"
-            max="1440"
-            class="input-glass form-input"
-            required
-          />
+          <p class="setting-desc">Inactivity duration before automatic token invalidation (5 to 1440 minutes).</p>
         </div>
-
-        <div class="form-group flex-1">
-          <label class="form-label" for="sec-pass-len">
-            <span>Minimum Password Length</span>
-            <span class="required">*</span>
-          </label>
-          <p class="field-desc">Minimum character count required for tenant user credentials.</p>
-          <input
-            id="sec-pass-len"
-            v-model.number="form.password_min_length"
-            type="number"
-            min="6"
-            max="64"
-            class="input-glass form-input"
-            required
-          />
+        <div class="setting-control-col">
+          <div class="input-addon-wrap">
+            <input
+              id="sec-timeout"
+              v-model.number="form.session_timeout_minutes"
+              type="number"
+              min="5"
+              max="1440"
+              class="input-glass form-input input-compact-sm"
+              required
+            />
+            <span class="input-addon">min</span>
+          </div>
         </div>
       </div>
 
-      <div class="form-group toggle-group">
-        <div class="toggle-info">
-          <span id="lbl-require-2fa" class="toggle-label">Require Multi-Factor Authentication (2FA)</span>
-          <p class="field-desc">
+      <!-- Row 2: Minimum Password Length -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="sec-pass-len">
+            <span>Minimum Password Length</span>
+            <span class="required">*</span>
+          </label>
+          <p class="setting-desc">Minimum character count required for tenant user credentials (6 to 64 chars).</p>
+        </div>
+        <div class="setting-control-col">
+          <div class="input-addon-wrap">
+            <input
+              id="sec-pass-len"
+              v-model.number="form.password_min_length"
+              type="number"
+              min="6"
+              max="64"
+              class="input-glass form-input input-compact-sm"
+              required
+            />
+            <span class="input-addon">chars</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Require Multi-Factor Authentication -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="toggle-require-2fa">Require Multi-Factor Authentication (2FA)</label>
+          <p class="setting-desc">
             Mandate TOTP authenticator verification or WebAuthn hardware tokens for all cluster operators.
           </p>
         </div>
-        <label class="toggle-switch">
-          <input id="toggle-require-2fa" v-model="form.require_2fa" type="checkbox" aria-labelledby="lbl-require-2fa" />
-          <span class="toggle-slider"></span>
-        </label>
+        <div class="setting-control-col">
+          <label class="toggle-switch">
+            <input id="toggle-require-2fa" v-model="form.require_2fa" type="checkbox" aria-label="Require Multi-Factor Authentication" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
 
       <!-- Personal Operator 2FA Card -->
@@ -146,7 +161,7 @@ const emit = defineEmits<{
                 class="btn btn-primary btn-sm"
                 @click="router.push('/settings/2fa-setup')"
               >
-                <span>Enable 2FA Wizard →</span>
+                <span>Enable 2FA Wizard ?</span>
               </button>
             </div>
           </div>
@@ -163,8 +178,12 @@ const emit = defineEmits<{
         </p>
       </div>
 
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary" :disabled="saving">
+      <!-- Card Actions Bar -->
+      <div class="card-actions-bar">
+        <button type="button" class="btn btn-secondary btn-sm" @click="emit('reset', 'security')">
+          <BaseIcon name="rotate-ccw" size="xs" /> <span>Reset Defaults</span>
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm" :disabled="saving">
           <BaseIcon name="hard-drive" size="xs" /> <span>{{ saving ? 'Saving Changes...' : 'Save Security Settings' }}</span>
         </button>
       </div>
