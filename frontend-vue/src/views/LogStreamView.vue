@@ -13,7 +13,7 @@ const {
   logStore, searchKeyword, selectedLevel, autoScroll, isScrollLocked, linesStreamed,
   latency, errorRate, isConnected, isPaused,
   clearBuffer, scrollToBottom, handleScroll, setTerminalRef,
-} = useLogStreamer()
+} = useLogStreamer({ autoConnect: false })
 
 const route = useRoute()
 const selectedTarget = ref<LogTarget>({ type: 'service', id: 'postgres_db', name: 'postgres_db', icon: 'database' })
@@ -313,6 +313,15 @@ const targetFilteredLogs = computed(() => {
     return true
   })
 })
+
+watch(
+  [() => targetFilteredLogs.value.length, () => targetFilteredLogs.value[targetFilteredLogs.value.length - 1]],
+  async () => {
+    if (mode.value === 'live' && autoScroll.value && !isScrollLocked.value) {
+      await scrollToBottom()
+    }
+  }
+)
 
 function handleExport() {
   const logsToExport = targetFilteredLogs.value.length > 0 ? targetFilteredLogs.value : logStore.logs
