@@ -225,7 +225,7 @@ async function handleRemove(cluster: Cluster) {
 </script>
 
 <template>
-  <div class="view-container animate-fade-in">
+  <div class="view-container fleet-view animate-fade-in">
     <!-- Mobile PWA Ergonomics: 44px Command Bar (<640px) -->
     <div class="mobile-fleet-command-bar">
       <div class="mobile-command-title">

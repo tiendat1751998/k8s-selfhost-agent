@@ -118,7 +118,8 @@
   color: #fff;
 }
 
-.desktop-only {
+.explorer-sidebar .desktop-only,
+.sidebar-container .desktop-only {
   display: inline-flex;
 }
 
@@ -431,7 +432,8 @@
     display: inline-flex;
   }
 
-  .desktop-only {
+  .explorer-sidebar .desktop-only,
+  .sidebar-container .desktop-only {
     display: none;
   }
 }

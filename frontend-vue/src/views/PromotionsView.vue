@@ -50,7 +50,7 @@ const {
 </script>
 
 <template>
-  <div class="view-container animate-fade-in">
+  <div class="view-container promotions-view animate-fade-in">
     <!-- Desktop Header (>=768px) -->
     <div class="view-header desktop-header desktop-only">
       <div>
