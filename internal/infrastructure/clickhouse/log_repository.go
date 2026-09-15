@@ -181,6 +181,9 @@ func (r *LogRepository) QueryLogs(ctx context.Context, filter logging.LogFilter)
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating rows: %w", err)
 	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i].Timestamp.Before(entries[j].Timestamp)
+	})
 	return &logging.LogSearchResult{
 		Entries:    entries,
 		TotalCount: int64(len(entries)),

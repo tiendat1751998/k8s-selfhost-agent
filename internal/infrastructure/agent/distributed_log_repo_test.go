@@ -95,6 +95,10 @@ func (m *mockLogClient) GetNodeServices(ctx context.Context, hostEndpoint, authT
 	return m.ListNodeServices(ctx, hostEndpoint, authToken)
 }
 
+func (m *mockLogClient) StreamLogs(ctx context.Context, agentURL, service string, onLine func(line string)) error {
+	return nil
+}
+
 
 func TestDistributedAgentLogRepo_QueryLogs(t *testing.T) {
 	ctx := context.Background()

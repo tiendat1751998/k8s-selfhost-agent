@@ -122,6 +122,22 @@ func setupHandler(collector *SystemCollector, authToken string, logServers ...*L
 		ls.HandleGetLogs(w, r)
 	})
 
+	mux.HandleFunc("/logs/tail", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+			return
+		}
+		if !isAuthorized(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+		ls.HandleTailLogs(w, r)
+	})
+
 	return mux
 }
 
@@ -260,6 +276,7 @@ func main() {
 
 		// Continuous container log tailing
 		if dockerCli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation()); err == nil {
+			logServer.SetDockerClient(dockerCli)
 			containerTailer := NewContainerTailer(dockerCli, engineSrc.Writer(), logger)
 			go containerTailer.Start(ctx)
 		}

@@ -44,6 +44,7 @@ type LogClientInterface interface {
 	SearchClusterLogs(ctx context.Context, hosts []docker.ComputeHost, req SearchLogsRequest) ([]LogSearchResult, error)
 	ListNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error)
 	GetNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error)
+	StreamLogs(ctx context.Context, agentURL, service string, onLine func(line string)) error
 }
 
 // AgentLogClient implements communication with distributed k8s-agents (:9100).
