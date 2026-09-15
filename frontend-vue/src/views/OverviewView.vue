@@ -69,6 +69,7 @@ const {
   handleNodeCardClick,
   inspectNode,
   manageNode,
+  viewNodeLogs,
   pollClusterMetrics,
   loadNodeHistory,
   applyCustomHistoryPreset,
@@ -197,6 +198,7 @@ const {
           :trendHistory="trendHistory"
           :clusterAvgLatencyMs="clusterAvgLatencyMs"
           @inspect="inspectNode"
+          @logs="viewNodeLogs"
           @refresh="pollClusterMetrics"
           @deepDive="openDeepDiveModal"
         />
@@ -343,7 +345,7 @@ const {
             :busiestNodeId="busiestNodeId"
             @click="handleNodeCardClick"
             @details="inspectNode"
-            @logs="manageNode"
+            @logs="viewNodeLogs"
             @scale="manageNode"
             @restart="manageNode"
             @yaml="manageNode"
