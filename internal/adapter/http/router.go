@@ -366,7 +366,12 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/ecosystem", platform.Ecosystem.RegisterRoutes)
 			}
 			if platform.CentralizedLogs != nil {
-				r.With(mw.RequestBodyLimit(10 << 20)).With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator", "logs:write")).Route("/logs", platform.CentralizedLogs.RegisterRoutes)
+				r.With(mw.RequestBodyLimit(10 << 20)).With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator", "logs:write")).Route("/logs", func(sub chi.Router) {
+					platform.CentralizedLogs.RegisterRoutes(sub)
+					if platform.LogStream != nil {
+						sub.Get("/stream", platform.LogStream.ServeHTTP)
+					}
+				})
 			} else if platform.LogStream != nil {
 				r.Get("/logs/stream", platform.LogStream.ServeHTTP)
 			}
