@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '../stores/app'
@@ -6,15 +6,13 @@ import ClusterDetailsDrawer from '../components/fleet/ClusterDetailsDrawer.vue'
 import FleetClustersGrid from '../components/fleet/FleetClustersGrid.vue'
 import FleetClustersTable from '../components/fleet/FleetClustersTable.vue'
 import FleetMobileCards from '../components/fleet/FleetMobileCards.vue'
+import FleetToolbar from '../components/fleet/FleetToolbar.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import FleetImportModal from '../components/fleet/FleetImportModal.vue'
 import FleetDiscoveryDrawer from '../components/fleet/FleetDiscoveryDrawer.vue'
 import {
-  fleetApi,
-  type Cluster,
-  type ClusterDiscoveryData,
-  type SwarmClusterInfo,
-  mapSwarmToFleetCluster
+  fleetApi, type Cluster, type ClusterDiscoveryData,
+  type SwarmClusterInfo, mapSwarmToFleetCluster
 } from '../api/fleet'
 import '@/assets/styles/views/fleet.css'
 
@@ -30,8 +28,6 @@ const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(nul
 // Data state
 const clusters = ref<Cluster[]>([])
 const swarmInfo = ref<SwarmClusterInfo | null>(null)
-
-// View mode state (Segmented toggle: Table or Cards Grid)
 const viewMode = ref<'table' | 'grid'>('table')
 
 // Filter state
@@ -59,17 +55,14 @@ async function fetchFleet() {
     clusters.value = clusterList
     swarmInfo.value = swarm
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Failed to retrieve multi-cluster fleet'
-    error.value = msg
+    error.value = err instanceof Error ? err.message : 'Failed to retrieve multi-cluster fleet'
   } finally {
     loading.value = false
   }
 }
 
 onMounted(() => {
-  if (route.query.provider === 'swarm') {
-    providerFilter.value = 'swarm'
-  }
+  if (route.query.provider === 'swarm') providerFilter.value = 'swarm'
   fetchFleet()
 })
 
@@ -89,7 +82,6 @@ const unifiedClusters = computed<Cluster[]>(() => {
 })
 
 const totalClusters = computed(() => unifiedClusters.value.length)
-
 const HEALTHY_STATUSES = new Set(['healthy', 'active', 'ready', 'connected', 'online', 'live', 'ok'])
 const DEGRADED_STATUSES = new Set(['warning', 'pending', 'standby', 'degraded', 'in_progress', 'promoting'])
 const OFFLINE_STATUSES = new Set(['critical', 'danger', 'failed', 'error', 'offline', 'disconnected', 'down', 'unhealthy'])
@@ -98,23 +90,19 @@ const onlineCount = computed(() =>
   unifiedClusters.value.filter(c => HEALTHY_STATUSES.has((c.health_status || c.status || '').toLowerCase())).length
 )
 const healthyClusters = computed(() => onlineCount.value)
+const totalNodes = computed(() => unifiedClusters.value.reduce((acc, c) => acc + (c.nodes || 0), 0))
 
-const totalNodes = computed(() =>
-  unifiedClusters.value.reduce((acc, c) => acc + (c.nodes || 0), 0)
-)
-
-const totalCores = computed(() => {
-  return unifiedClusters.value.reduce((acc, c) => {
+const totalCores = computed(() =>
+  unifiedClusters.value.reduce((acc, c) => {
     const rawCores = (c as any).cores || (c as any).cpu_cores || (c.discovered_resources as any)?.total_cores || (c.discovered_resources as any)?.cpu_cores
     if (typeof rawCores === 'number') return acc + rawCores
-    const nodes = c.nodes && c.nodes > 0 ? c.nodes : 1
-    return acc + nodes * 4
+    return acc + (c.nodes && c.nodes > 0 ? c.nodes : 1) * 4
   }, 0)
-})
+)
 
-const totalPods = computed(() => {
-  return appStore.latestMetrics?.total_containers || clusters.value.reduce((acc, c) => acc + ((c as any).pods || 0), 0) || 0
-})
+const totalPods = computed(() =>
+  appStore.latestMetrics?.total_containers || clusters.value.reduce((acc, c) => acc + ((c as any).pods || 0), 0) || 0
+)
 
 function matchesProvider(cluster: Cluster, provider: string): boolean {
   if (provider === 'all') return true
@@ -123,9 +111,7 @@ function matchesProvider(cluster: Cluster, provider: string): boolean {
   const orch = (cluster.orchestrator || '').toLowerCase()
   if (provider === 'kubernetes') return orch === 'kubernetes' || p !== 'swarm'
   if (provider === 'swarm') return orch === 'swarm' || p === 'swarm'
-  if (provider === 'bare-metal') {
-    return p === 'bare-metal' || p === 'baremetal' || p === 'onprem' || p === 'metal' || p === 'generic' || p === 'local'
-  }
+  if (provider === 'bare-metal') return ['bare-metal', 'baremetal', 'onprem', 'metal', 'generic', 'local'].includes(p)
   if (provider === 'aws') return p === 'aws' || p === 'eks'
   if (provider === 'gcp') return p === 'gcp' || p === 'gke'
   if (provider === 'azure') return p === 'azure' || p === 'aks'
@@ -138,19 +124,13 @@ function matchesStatus(cluster: Cluster, status: 'all' | 'healthy' | 'degraded' 
   const s = (cluster.health_status || cluster.status || '').toLowerCase()
   if (status === 'healthy') return HEALTHY_STATUSES.has(s)
   if (status === 'degraded') return DEGRADED_STATUSES.has(s)
-  if (status === 'offline') return OFFLINE_STATUSES.has(s)
-  return false
+  return status === 'offline' && OFFLINE_STATUSES.has(s)
 }
 
 const filteredClusters = computed(() => {
   let result = unifiedClusters.value
-
-  if (providerFilter.value !== 'all') {
-    result = result.filter(c => matchesProvider(c, providerFilter.value))
-  }
-  if (statusFilter.value !== 'all') {
-    result = result.filter(c => matchesStatus(c, statusFilter.value))
-  }
+  if (providerFilter.value !== 'all') result = result.filter(c => matchesProvider(c, providerFilter.value))
+  if (statusFilter.value !== 'all') result = result.filter(c => matchesStatus(c, statusFilter.value))
   if (searchFilter.value.trim()) {
     const q = searchFilter.value.toLowerCase().trim()
     result = result.filter(c =>
@@ -173,9 +153,7 @@ function openClusterDetails(c: Cluster) {
 function showToast(text: string, type: 'success' | 'error' = 'success') {
   toastMessage.value = { text, type }
   setTimeout(() => {
-    if (toastMessage.value?.text === text) {
-      toastMessage.value = null
-    }
+    if (toastMessage.value?.text === text) toastMessage.value = null
   }, 4000)
 }
 
@@ -186,8 +164,7 @@ async function handleUpgrade(cluster: Cluster) {
     showToast(`Cluster upgrade sequence initiated for ${cluster.name}!`)
     await fetchFleet()
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Upgrade request failed'
-    showToast(msg, 'error')
+    showToast(err instanceof Error ? err.message : 'Upgrade request failed', 'error')
   } finally {
     actionLoading.value = null
   }
@@ -201,8 +178,7 @@ async function handleDiscover(cluster: Cluster) {
     discoveredData.value = res || (cluster.discovered_resources as ClusterDiscoveryData) || null
     showDiscoveryDrawer.value = true
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Resource discovery failed'
-    showToast(msg, 'error')
+    showToast(err instanceof Error ? err.message : 'Resource discovery failed', 'error')
   } finally {
     actionLoading.value = null
   }
@@ -216,8 +192,7 @@ async function handleRemove(cluster: Cluster) {
     showToast(`Cluster ${cluster.name} removed from fleet.`)
     await fetchFleet()
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Failed to remove cluster'
-    showToast(msg, 'error')
+    showToast(err instanceof Error ? err.message : 'Failed to remove cluster', 'error')
   } finally {
     actionLoading.value = null
   }
@@ -226,7 +201,7 @@ async function handleRemove(cluster: Cluster) {
 
 <template>
   <div class="view-container fleet-view animate-fade-in">
-    <!-- Mobile PWA Ergonomics: 44px Command Bar (<640px) -->
+    <!-- Mobile PWA Ergonomics: 44px Command Bar (<768px) -->
     <div class="mobile-fleet-command-bar">
       <div class="mobile-command-title">
         <span><BaseIcon name="anchor" size="xs" /> Clusters</span>
@@ -279,110 +254,31 @@ async function handleRemove(cluster: Cluster) {
       </div>
     </div>
 
-    <!-- Mobile PWA Ergonomics: 20px Micro-telemetry strip (<640px) -->
+    <!-- Mobile PWA Ergonomics: 20px Micro-telemetry strip (<768px) -->
     <div class="micro-telemetry-strip font-mono">
       <span><BaseIcon name="anchor" size="xs" /> {{ totalClusters }} clusters</span>
-      <span class="telemetry-sep">?</span>
+      <span class="telemetry-sep">·</span>
       <span><BaseIcon name="shield" size="xs" /> {{ healthyClusters }} healthy</span>
-      <span class="telemetry-sep">?</span>
+      <span class="telemetry-sep">·</span>
       <span><BaseIcon name="server" size="xs" /> {{ totalNodes }} nodes</span>
-      <span class="telemetry-sep">?</span>
+      <span class="telemetry-sep">·</span>
       <span><BaseIcon name="box" size="xs" /> {{ totalPods }} pods</span>
     </div>
 
     <!-- Sleek Unified 38px Enterprise Toolbar (Desktop & Tablet) -->
-    <div class="fleet-toolbar-sleek">
-      <!-- Search input with search icon and clear button -->
-      <div class="toolbar-search-wrap">
-        <BaseIcon name="search" size="xs" class="toolbar-search-icon" />
-        <input
-          v-model="searchFilter"
-          type="text"
-          placeholder="Search clusters..."
-          class="toolbar-search-input"
-        />
-        <button
-          v-if="searchFilter"
-          type="button"
-          class="toolbar-search-clear"
-          title="Clear search"
-          @click="searchFilter = ''"
-        >
-          <BaseIcon name="x" size="xs" />
-        </button>
-      </div>
-
-      <!-- Provider / Orchestrator filter dropdown -->
-      <select v-model="providerFilter" class="toolbar-select" title="Filter by provider / orchestrator">
-        <option value="all">All Providers</option>
-        <option value="kubernetes">Kubernetes</option>
-        <option value="swarm">Docker Swarm</option>
-        <option value="bare-metal">Bare-Metal</option>
-        <option value="aws">AWS</option>
-        <option value="gcp">GCP</option>
-        <option value="azure">Azure</option>
-        <option value="edge">Edge</option>
-      </select>
-
-      <!-- Status filter dropdown -->
-      <select v-model="statusFilter" class="toolbar-select" title="Filter by status">
-        <option value="all">All Statuses</option>
-        <option value="healthy">Healthy</option>
-        <option value="degraded">Degraded</option>
-        <option value="offline">Offline</option>
-      </select>
-
-      <!-- Inline compact KPI badge strip font-mono -->
-      <div class="toolbar-kpi-badge font-mono">
-        <span class="kpi-count">{{ totalClusters }} Clusters</span>
-        <span class="kpi-meta">({{ healthyClusters }} Online ? {{ totalNodes }} Nodes ? {{ totalCores }} Cores)</span>
-      </div>
-
-      <div class="toolbar-spacer"></div>
-
-      <!-- Segmented View Mode Toggle: [ Table ] [ Cards ] -->
-      <div class="segmented-control">
-        <button
-          type="button"
-          class="segmented-btn"
-          :class="{ active: viewMode === 'table' }"
-          @click="viewMode = 'table'"
-          title="Table View"
-        >
-          <BaseIcon name="file-text" size="xs" />
-          <span>Table</span>
-        </button>
-        <button
-          type="button"
-          class="segmented-btn"
-          :class="{ active: viewMode === 'grid' }"
-          @click="viewMode = 'grid'"
-          title="Card Grid View"
-        >
-          <BaseIcon name="box" size="xs" />
-          <span>Cards</span>
-        </button>
-      </div>
-
-      <!-- Action buttons: Sync and + Connect Cluster -->
-      <button
-        type="button"
-        class="btn btn-secondary toolbar-btn"
-        :disabled="loading"
-        @click="fetchFleet"
-        title="Sync Fleet"
-      >
-        <BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" />
-        <span>Sync</span>
-      </button>
-      <button
-        type="button"
-        class="btn btn-primary toolbar-btn"
-        @click="showImportModal = true"
-      >
-        <span>+ Connect Cluster</span>
-      </button>
-    </div>
+    <FleetToolbar
+      v-model:search-filter="searchFilter"
+      v-model:provider-filter="providerFilter"
+      v-model:status-filter="statusFilter"
+      v-model:view-mode="viewMode"
+      :total-clusters="totalClusters"
+      :healthy-clusters="healthyClusters"
+      :total-nodes="totalNodes"
+      :total-cores="totalCores"
+      :is-syncing="loading"
+      @sync="fetchFleet"
+      @connect="showImportModal = true"
+    />
 
     <!-- Notification Toast -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
@@ -412,7 +308,6 @@ async function handleRemove(cluster: Cluster) {
         @details="openClusterDetails"
         @import="showImportModal = true"
       />
-
       <FleetClustersGrid
         v-else-if="viewMode === 'grid'"
         :clusters="filteredClusters"
@@ -439,22 +334,9 @@ async function handleRemove(cluster: Cluster) {
       />
     </div>
 
-    <!-- Standalone Import Cluster Modal -->
+    <!-- Standalone Modals & Drawers -->
     <FleetImportModal v-model:show="showImportModal" @imported="fetchFleet" />
-
-    <!-- Standalone Resource Discovery Drawer -->
-    <FleetDiscoveryDrawer
-      v-model:show="showDiscoveryDrawer"
-      :cluster="selectedCluster"
-      :discovered-data="discoveredData"
-    />
-
-    <!-- Cluster Details Drawer -->
-    <ClusterDetailsDrawer
-      v-model:show="showClusterDetailsDrawer"
-      :cluster="selectedDrawerCluster"
-      :discovery-data="discoveredData"
-      @updated="fetchFleet"
-    />
+    <FleetDiscoveryDrawer v-model:show="showDiscoveryDrawer" :cluster="selectedCluster" :discovered-data="discoveredData" />
+    <ClusterDetailsDrawer v-model:show="showClusterDetailsDrawer" :cluster="selectedDrawerCluster" :discovery-data="discoveredData" @updated="fetchFleet" />
   </div>
 </template>
