@@ -55,6 +55,11 @@ export function matchesTarget(entry: LogEntry, opts: LogFilterOptions): boolean 
   return s.includes(q)
 }
 
+export function getLogFingerprint(entry: LogEntry): string {
+  const service = entry.service || entry.pod || ''
+  return `${entry.time}_${service}_${entry.msg}`
+}
+
 export const useLogStore = defineStore('log', () => {
   const logs = ref<LogEntry[]>([])
   const isConnected = ref(false)
@@ -167,8 +172,8 @@ export const useLogStore = defineStore('log', () => {
           const raw = JSON.parse(event.data)
           const msg = raw.message || raw.msg || raw.log || event.data
           if (msg === '-- No entries --' || (typeof msg === 'string' && msg.trim() === '-- No entries --')) return
-          appendLog({
-            time: raw.timestamp || raw.time || new Date().toISOString().split('T')[1].slice(0, 12),
+          addLogEntry({
+            time: raw.timestamp || raw.time || new Date().toISOString(),
             level: (raw.log_level || raw.level || raw.severity || 'INFO').toUpperCase(),
             namespace: raw.namespace || raw.ns || opts.namespace || 'default',
             pod: raw.pod_name || raw.pod || raw.container_name || raw.container || raw.service || 'system',
@@ -182,8 +187,8 @@ export const useLogStore = defineStore('log', () => {
           })
         } catch {
           if (event.data === '-- No entries --' || (typeof event.data === 'string' && event.data.trim() === '-- No entries --')) return
-          appendLog({
-            time: new Date().toISOString().split('T')[1].slice(0, 12),
+          addLogEntry({
+            time: new Date().toISOString(),
             level: 'INFO',
             namespace: opts.namespace || 'default',
             pod: opts.pod || 'system',
@@ -224,10 +229,24 @@ export const useLogStore = defineStore('log', () => {
     reconnectAttempts.value = 0
   }
 
-  function appendLog(entry: LogEntry) {
+  function addLogEntry(entry: LogEntry) {
+    if (logs.value.length > 0) {
+      const last = logs.value[logs.value.length - 1]
+      if (
+        last.time === entry.time &&
+        last.msg === entry.msg &&
+        (last.service || last.pod || '') === (entry.service || entry.pod || '')
+      ) {
+        return
+      }
+    }
     logs.value.push(entry)
-    if (logs.value.length > maxBufferSize.value) logs.value.splice(0, logs.value.length - maxBufferSize.value)
+    while (logs.value.length > maxBufferSize.value) {
+      logs.value.shift()
+    }
   }
+
+  const appendLog = addLogEntry
 
   function clear() { logs.value = [] }
   function togglePause() { isPaused.value = !isPaused.value }
@@ -261,10 +280,24 @@ export const useLogStore = defineStore('log', () => {
         stream: raw.stream || 'stdout',
         attributes: raw.attributes,
       }))
+      mapped.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+
       if (append) {
-        logs.value = [...logs.value, ...mapped].slice(-maxBufferSize.value)
+        const existingFingerprints = new Set(logs.value.map(getLogFingerprint))
+        const uniqueMapped = mapped.filter((entry) => !existingFingerprints.has(getLogFingerprint(entry)))
+        const combined = [...logs.value, ...uniqueMapped]
+        combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+        logs.value = combined.slice(-maxBufferSize.value)
       } else {
-        logs.value = mapped.slice(0, maxBufferSize.value)
+        if (logs.value.length === 0) {
+          logs.value = mapped.slice(-maxBufferSize.value)
+        } else {
+          const mappedFingerprints = new Set(mapped.map(getLogFingerprint))
+          const existingLiveLogs = logs.value.filter((entry) => !mappedFingerprints.has(getLogFingerprint(entry)))
+          const combined = [...mapped, ...existingLiveLogs]
+          combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+          logs.value = combined.slice(-maxBufferSize.value)
+        }
       }
       totalHistoricalCount.value = res.total_count || 0
       hasMoreHistorical.value = res.has_more || false
@@ -304,6 +337,7 @@ export const useLogStore = defineStore('log', () => {
     connect,
     setFilter,
     disconnect,
+    addLogEntry,
     appendLog,
     clear,
     togglePause,
