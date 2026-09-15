@@ -199,3 +199,10 @@
   .mobile-kind-scroller { display: flex !important; }
   .mobile-search-strip { display: block !important; }
 }
+
+@media (max-width: 767.98px) {
+  .explorer-toolbar-sleek,
+  .explorer-toolbar-sleek.desktop-only {
+    display: none !important;
+  }
+}
