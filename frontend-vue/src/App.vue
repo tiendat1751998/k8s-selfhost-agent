@@ -336,7 +336,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
             <span class="tenant-icon" aria-hidden="true">
               <BaseIcon name="layers" size="xs" />
             </span>
-            <select v-model="selectedTenant" @change="handleTenantChange" class="tenant-select font-mono" aria-label="Select active workspace tenant">
+            <select v-model="selectedTenant" @change="handleTenantChange" class="tenant-select" :title="'Active Tenant: ' + selectedTenant" aria-label="Select active workspace tenant">
               <option v-for="t in tenants" :key="t.id" :value="t.id">
                 {{ t.name }}
               </option>

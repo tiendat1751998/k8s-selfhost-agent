@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
-const props = defineProps<{
+defineProps<{
   saving: boolean
 }>()
 
@@ -43,100 +44,131 @@ function handleSave() {
           Configure default namespace isolation boundaries, tenant resource caps, and cross-boundary network security.
         </p>
       </div>
-      <button type="button" class="btn btn-secondary btn-sm" @click="handleReset">
-        <span>↺ Reset Defaults</span>
-      </button>
     </div>
 
     <form class="settings-form" @submit.prevent="handleSave">
-      <div class="form-group">
-        <label class="form-label" for="tenancy-mode">
-          <span>Isolation Architecture</span>
-          <span class="required">*</span>
-        </label>
-        <p class="field-desc">Determines how tenant boundaries are partitioned on physical infrastructure.</p>
-        <select id="tenancy-mode" v-model="tenancyConfig.isolation_mode" class="input-glass form-select">
-          <option value="namespace">Namespace Isolation (ResourceQuota + LimitRange + NetworkPolicy)</option>
-          <option value="vcluster">Virtual Cluster (vCluster Synced Control Plane)</option>
-          <option value="dedicated_nodes">Dedicated Worker Node Pools (Taints & Tolerations)</option>
-        </select>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group flex-1">
-          <label class="form-label" for="tenant-cpu">
-            <span>Default CPU Quota (Cores)</span>
+      <!-- Row 1: Isolation Architecture -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="tenancy-mode">
+            <span>Isolation Architecture</span>
+            <span class="required">*</span>
           </label>
-          <p class="field-desc">Default aggregate vCPU allocatable per tenant.</p>
-          <input
-            id="tenant-cpu"
-            v-model="tenancyConfig.default_cpu_limit"
-            type="number"
-            min="1"
-            max="256"
-            class="input-glass form-input"
-          />
+          <p class="setting-desc">Determines how tenant boundaries are partitioned on physical infrastructure.</p>
         </div>
-
-        <div class="form-group flex-1">
-          <label class="form-label" for="tenant-mem">
-            <span>Default RAM Quota (GiB)</span>
-          </label>
-          <p class="field-desc">Default memory reservation threshold per tenant.</p>
-          <input
-            id="tenant-mem"
-            v-model="tenancyConfig.default_memory_limit"
-            type="number"
-            min="1"
-            max="1024"
-            class="input-glass form-input"
-          />
-        </div>
-
-        <div class="form-group flex-1">
-          <label class="form-label" for="tenant-storage">
-            <span>Default Storage Quota (GiB)</span>
-          </label>
-          <p class="field-desc">Default persistent volume claim quota.</p>
-          <input
-            id="tenant-storage"
-            v-model="tenancyConfig.default_storage_limit"
-            type="number"
-            min="10"
-            max="10000"
-            class="input-glass form-input"
-          />
+        <div class="setting-control-col">
+          <select id="tenancy-mode" v-model="tenancyConfig.isolation_mode" class="input-glass form-select input-compact-md">
+            <option value="namespace">Namespace Isolation (ResourceQuota)</option>
+            <option value="vcluster">Virtual Cluster (vCluster Synced)</option>
+            <option value="dedicated_nodes">Dedicated Worker Pools (Taints)</option>
+          </select>
         </div>
       </div>
 
-      <div class="form-group toggle-group">
-        <div class="toggle-info">
-          <span id="lbl-strict-network" class="toggle-label">Strict Cross-Tenant Network Isolation (Default-Deny)</span>
-          <p class="field-desc">
+      <!-- Row 2: Default CPU Quota -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="tenant-cpu">Default CPU Quota</label>
+          <p class="setting-desc">Default aggregate vCPU allocatable per tenant.</p>
+        </div>
+        <div class="setting-control-col">
+          <div class="input-addon-wrap">
+            <input
+              id="tenant-cpu"
+              v-model="tenancyConfig.default_cpu_limit"
+              type="number"
+              min="1"
+              max="256"
+              class="input-glass form-input"
+              style="width: 120px;"
+            />
+            <span class="input-addon">Cores</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Default RAM Quota -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="tenant-mem">Default RAM Quota</label>
+          <p class="setting-desc">Default memory reservation threshold per tenant.</p>
+        </div>
+        <div class="setting-control-col">
+          <div class="input-addon-wrap">
+            <input
+              id="tenant-mem"
+              v-model="tenancyConfig.default_memory_limit"
+              type="number"
+              min="1"
+              max="1024"
+              class="input-glass form-input"
+              style="width: 120px;"
+            />
+            <span class="input-addon">GiB</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 4: Default Storage Quota -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="tenant-storage">Default Storage Quota</label>
+          <p class="setting-desc">Default persistent volume claim quota.</p>
+        </div>
+        <div class="setting-control-col">
+          <div class="input-addon-wrap">
+            <input
+              id="tenant-storage"
+              v-model="tenancyConfig.default_storage_limit"
+              type="number"
+              min="10"
+              max="10000"
+              class="input-glass form-input"
+              style="width: 120px;"
+            />
+            <span class="input-addon">GiB</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 5: Strict Network Isolation -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="toggle-strict-network">Strict Cross-Tenant Network Isolation</label>
+          <p class="setting-desc">
             Automatically inject Calico/Cilium NetworkPolicies blocking inter-namespace east-west traffic unless whitelisted.
           </p>
         </div>
-        <label class="toggle-switch">
-          <input id="toggle-strict-network" v-model="tenancyConfig.strict_network_isolation" type="checkbox" aria-labelledby="lbl-strict-network" />
-          <span class="toggle-slider"></span>
-        </label>
+        <div class="setting-control-col">
+          <label class="toggle-switch">
+            <input id="toggle-strict-network" v-model="tenancyConfig.strict_network_isolation" type="checkbox" aria-label="Strict Cross-Tenant Network Isolation" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
 
-      <div class="form-group toggle-group">
-        <div class="toggle-info">
-          <span id="lbl-auto-ingress" class="toggle-label">Auto-Provision Dedicated Ingress Subdomain</span>
-          <p class="field-desc">
+      <!-- Row 6: Auto-Provision Dedicated Ingress -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="toggle-auto-ingress">Auto-Provision Dedicated Ingress Subdomain</label>
+          <p class="setting-desc">
             Allocate an isolated Traefik/Ingress endpoint per newly registered tenant (e.g. tenant-name.cluster.local).
           </p>
         </div>
-        <label class="toggle-switch">
-          <input id="toggle-auto-ingress" v-model="tenancyConfig.auto_provision_ingress" type="checkbox" aria-labelledby="lbl-auto-ingress" />
-          <span class="toggle-slider"></span>
-        </label>
+        <div class="setting-control-col">
+          <label class="toggle-switch">
+            <input id="toggle-auto-ingress" v-model="tenancyConfig.auto_provision_ingress" type="checkbox" aria-label="Auto-Provision Dedicated Ingress Subdomain" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
 
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary" :disabled="saving">
+      <!-- Card Actions Bar -->
+      <div class="card-actions-bar">
+        <button type="button" class="btn btn-secondary btn-sm" @click="handleReset">
+          <BaseIcon name="rotate-ccw" size="xs" /> <span>Reset Defaults</span>
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm" :disabled="saving">
           <BaseIcon name="hard-drive" size="xs" /> <span>{{ saving ? 'Saving Changes...' : 'Save Tenancy Settings' }}</span>
         </button>
       </div>
