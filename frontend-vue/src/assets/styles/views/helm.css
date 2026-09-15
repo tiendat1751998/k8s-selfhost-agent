@@ -17,14 +17,15 @@
 /* ==========================================================================
    Sleek 42px Enterprise Toolbar (.helm-toolbar-sleek)
    ========================================================================== */
-.helm-toolbar-sleek {
+.helm-toolbar-sleek,
+.helm-toolbar-sleek.desktop-only {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   height: 42px;
   min-height: 42px;
   box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
   padding: 0 12px;
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.75);
@@ -32,13 +33,14 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
   flex-wrap: nowrap;
 }
 
 /* Segmented Capsule Tabs (Enterprise Slate & Cobalt) */
 .helm-toolbar-sleek .toolbar-capsule-pills {
   flex: 0 0 auto;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -78,7 +80,8 @@
   display: flex;
   align-items: center;
   height: 30px;
-  flex: 0 1 260px;
+  flex: 0 0 240px;
+  flex-shrink: 0;
   min-width: 160px;
 }
 
@@ -128,7 +131,7 @@
 
 .helm-toolbar-sleek .clear-input-btn:hover { color: #f8fafc; background: rgba(255, 255, 255, 0.08); }
 /* Contextual Filter Select */
-.helm-toolbar-sleek .toolbar-context-filter { display: flex; align-items: center; }
+.helm-toolbar-sleek .toolbar-context-filter { display: flex; align-items: center; flex-shrink: 0; }
 .helm-toolbar-sleek .toolbar-select {
   flex: 0 0 auto;
   min-width: 135px;
@@ -434,8 +437,21 @@
   .desktop-only { display: block; }
 }
 
+@media (max-width: 1024px) {
+  .helm-toolbar-sleek,
+  .helm-toolbar-sleek.desktop-only {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .helm-toolbar-sleek::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @media (max-width: 767.98px) {
-  .desktop-only { display: none !important; }
+  .desktop-only,
+  .helm-toolbar-sleek.desktop-only { display: none !important; }
   .mobile-only { display: block; }
   .helm-catalog-layout { padding: 12px; gap: 12px; }
   /* Mobile 40px Command Bar */
