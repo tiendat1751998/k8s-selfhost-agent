@@ -1,0 +1,481 @@
+/* ==========================================================================
+   Fleet Toolbar - Sleek Unified 38px Enterprise Toolbar
+   Dark OLED Slate styling with capsule pills, 28px controls, zero important
+   frontend-vue/src/assets/styles/components/fleet-toolbar.css
+   ========================================================================== */
+/* Sleek Unified 38px Enterprise Toolbar */
+.fleet-view .fleet-toolbar-sleek {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+  padding: 0 12px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  flex-wrap: nowrap;
+  transition: all 0.2s ease;
+}
+/* Zone 1: Search input (28px height, capsule pill, 160-180px) */
+.fleet-view .fleet-toolbar-sleek .toolbar-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 170px;
+  min-width: 140px;
+  max-width: 180px;
+  height: 28px;
+  flex: 0 1 170px;
+  flex-shrink: 0;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-search-icon {
+  position: absolute;
+  left: 9px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-search-input {
+  width: 100%;
+  height: 28px !important;
+  line-height: 28px;
+  padding: 0 24px 0 28px;
+  font-size: 11.5px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 9999px !important;
+  color: #f8fafc;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-search-input:focus {
+  outline: none;
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-search-input::placeholder {
+  color: #64748b;
+  font-family: inherit;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  max-height: 18px;
+  padding: 0;
+  border-radius: 4px;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-search-clear:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+}
+/* Zone 2: Provider / Orchestrator filter dropdown (28px capsule pill) */
+.fleet-view .fleet-toolbar-sleek .pill-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.fleet-view .fleet-toolbar-sleek .pill-select {
+  height: 28px;
+  line-height: 28px;
+  padding: 0 28px 0 12px;
+  border-radius: 9999px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+.fleet-view .fleet-toolbar-sleek .pill-select:hover {
+  background: rgba(51, 65, 85, 0.7);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+.fleet-view .fleet-toolbar-sleek .pill-select:focus {
+  border-color: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.15);
+  color: #fff;
+}
+.fleet-view .fleet-toolbar-sleek .pill-select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+.fleet-view .fleet-toolbar-sleek .pill-select-wrap .select-chevron {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+  color: #94a3b8;
+  font-size: 10px;
+}
+/* Zone 3: Status Filter 4 Capsule Pills (28px height, border-radius: 9999px) */
+.fleet-view .fleet-toolbar-sleek .toolbar-status-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1 1 auto;
+  min-width: 110px;
+  flex-shrink: 1;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-status-pills::-webkit-scrollbar {
+  display: none;
+}
+.fleet-view .fleet-toolbar-sleek .capsule-pill {
+  border-radius: 9999px;
+  height: 28px;
+  min-height: 28px;
+  line-height: 28px;
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+.fleet-view .fleet-toolbar-sleek .capsule-pill:hover {
+  background: rgba(51, 65, 85, 0.8);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.fleet-view .fleet-toolbar-sleek .capsule-pill.active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: rgba(6, 182, 212, 0.4);
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+}
+.fleet-view .fleet-toolbar-sleek .status-dot {
+  font-size: 8px;
+  line-height: 1;
+}
+.fleet-view .fleet-toolbar-sleek .dot-healthy {
+  color: #34d399;
+}
+.fleet-view .fleet-toolbar-sleek .dot-degraded {
+  color: #fbbf24;
+}
+.fleet-view .fleet-toolbar-sleek .dot-offline {
+  color: #f43f5e;
+  font-size: 9px;
+  font-weight: 700;
+}
+/* Zone 4: Inline compact KPI badge strip font-mono */
+.fleet-view .fleet-toolbar-sleek .toolbar-kpi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9999px;
+  font-size: 11px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-kpi-badge .kpi-count {
+  font-weight: 700;
+  color: #38bdf8;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-kpi-badge .kpi-meta {
+  color: #94a3b8;
+}
+/* Spacer */
+.fleet-view .fleet-toolbar-sleek .toolbar-spacer {
+  flex: 1;
+  min-width: 4px;
+}
+/* Zone 5: Segmented View Mode Toggle: [ Table ] [ Cards ] */
+.fleet-view .fleet-toolbar-sleek .segmented-control {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 9999px;
+  padding: 2px;
+  gap: 2px;
+  height: 28px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.fleet-view .fleet-toolbar-sleek .segmented-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  padding: 0 9px;
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.fleet-view .fleet-toolbar-sleek .segmented-btn:hover:not(.active) {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.06);
+}
+.fleet-view .fleet-toolbar-sleek .segmented-btn.active {
+  background: rgba(6, 182, 212, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  box-shadow: none;
+}
+/* Zone 6: Action Buttons Group */
+.fleet-view .fleet-toolbar-sleek .toolbar-actions-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-btn {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #f8fafc;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary {
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+}
+.fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.4);
+  transform: translateY(-1px);
+}
+/* Responsive Overrides (1480px, 1366px, 1200px, 1024px, 768px) */
+@media (max-width: 1480px) {
+  .fleet-view .fleet-toolbar-sleek .toolbar-kpi-badge .kpi-meta {
+    display: none;
+  }
+}
+@media (max-width: 1366px) {
+  .fleet-view .fleet-toolbar-sleek .toolbar-actions-group .btn-secondary span {
+    display: none;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-actions-group .btn-secondary {
+    padding: 0 7px;
+    width: 28px;
+    min-width: 28px;
+  }
+}
+@media (max-width: 1200px) {
+  .fleet-view .fleet-toolbar-sleek .toolbar-kpi-badge {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  .fleet-view .fleet-toolbar-sleek .toolbar-search-wrap {
+    width: 140px;
+    min-width: 120px;
+    flex: 0 1 140px;
+  }
+  .fleet-view .fleet-toolbar-sleek .capsule-pill {
+    padding: 0 7px;
+    font-size: 10.5px;
+  }
+}
+@media (max-width: 1024px) {
+  .fleet-view .fleet-toolbar-sleek .toolbar-kpi-badge {
+    display: none;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-search-wrap {
+    width: 130px;
+    min-width: 100px;
+    flex: 0 1 130px;
+  }
+}
+@media (max-width: 900px) {
+  .fleet-view .fleet-toolbar-sleek {
+    gap: 6px;
+    padding: 0 8px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-spacer {
+    display: none;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-search-wrap {
+    width: 110px;
+    min-width: 80px;
+    flex: 0 1 110px;
+  }
+  /* Zone 2: Provider Select on <= 900px */
+  .fleet-view .fleet-toolbar-sleek .pill-select-wrap {
+    max-width: 90px;
+    flex: 0 1 90px;
+  }
+  .fleet-view .fleet-toolbar-sleek .pill-select {
+    width: 100%;
+    max-width: 90px;
+    padding: 0 20px 0 8px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+  .fleet-view .fleet-toolbar-sleek .pill-select-wrap .select-chevron {
+    right: 6px;
+  }
+  /* Zone 3: Status Filter Pills on <= 900px */
+  .fleet-view .fleet-toolbar-sleek .toolbar-status-pills {
+    flex: 1 1 auto;
+    min-width: 110px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 1;
+  }
+  .fleet-view .fleet-toolbar-sleek .capsule-pill {
+    padding: 0 6px;
+    font-size: 10px;
+  }
+  /* Zone 5: Segmented View Mode Toggle - Icon only (width: 56px total) */
+  .fleet-view .fleet-toolbar-sleek .segmented-control {
+    width: 56px;
+    min-width: 56px;
+    max-width: 56px;
+    padding: 2px;
+    gap: 2px;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .fleet-view .fleet-toolbar-sleek .segmented-btn {
+    width: 24px;
+    min-width: 24px;
+    height: 22px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+  .fleet-view .fleet-toolbar-sleek .segmented-btn span {
+    display: none;
+  }
+  /* Zone 6: Primary Action Button on <= 900px */
+  .fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary {
+    padding: 0 8px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary span {
+    display: none;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary::after {
+    content: '+ Connect';
+    white-space: nowrap;
+  }
+}
+@media (max-width: 800px) {
+  .fleet-view .fleet-toolbar-sleek {
+    gap: 5px;
+    padding: 0 6px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-search-wrap {
+    width: 90px;
+    min-width: 70px;
+    flex: 0 1 90px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-search-input {
+    padding: 0 8px 0 24px;
+    font-size: 10.5px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-search-icon {
+    left: 7px;
+  }
+  .fleet-view .fleet-toolbar-sleek .pill-select-wrap {
+    max-width: 85px;
+    flex: 0 1 85px;
+  }
+  .fleet-view .fleet-toolbar-sleek .pill-select {
+    max-width: 85px;
+    padding: 0 18px 0 6px;
+    font-size: 10.5px;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-actions-group {
+    gap: 4px;
+  }
+  /* Zone 6: Primary Action Button on <= 800px (Icon-only 28x28px) */
+  .fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+  .fleet-view .fleet-toolbar-sleek .toolbar-btn.btn-primary::after {
+    content: '+';
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+  }
+}
+@media (max-width: 767.98px) {
+  .fleet-view .fleet-toolbar-sleek {
+    display: none !important;
+  }
+}
