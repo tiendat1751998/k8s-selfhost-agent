@@ -31,10 +31,11 @@
 .search-box-wrap,
 .toolbar-search-wrap {
   position: relative;
-  flex: 1 1 200px;
-  min-width: 150px;
-  max-width: 300px;
-  height: 28px;
+  flex: 0 1 200px;
+  width: 200px;
+  min-width: 160px;
+  max-width: 240px;
+  height: 30px;
   display: flex;
   align-items: center;
 }
@@ -54,10 +55,10 @@
 .search-box-wrap .search-input,
 .toolbar-search-input {
   width: 100% !important;
-  height: 28px !important;
+  height: 30px !important;
   padding: 2px 24px 2px 26px !important;
   font-size: 11.5px !important;
-  border-radius: 6px !important;
+  border-radius: 20px !important;
   background: rgba(0, 0, 0, 0.35) !important;
   border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1)) !important;
   color: #f1f5f9 !important;

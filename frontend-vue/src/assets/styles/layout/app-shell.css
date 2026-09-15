@@ -142,7 +142,7 @@
 .command-search-btn {
   display: inline-flex; align-items: center; gap: 6px; height: 30px;
   padding: 0 8px; background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle); border-radius: 6px;
+  border: 1px solid var(--border-subtle); border-radius: 16px;
   cursor: pointer; color: var(--text-muted); font-size: 11.5px; transition: all 0.15s ease;
   width: 125px; min-width: 125px; max-width: 130px; justify-content: space-between;
   flex-shrink: 0; position: static; box-sizing: border-box;
