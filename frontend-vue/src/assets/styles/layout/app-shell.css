@@ -56,22 +56,32 @@
 /* Nav Menu */
 .nav-menu { padding: 8px 12px 48px 12px; overscroll-behavior: contain; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .nav-group-wrapper { display: flex; flex-direction: column; gap: 2px; }
+/* Nav Section Header (Accordion Group) */
 .nav-section-header {
-  display: flex; align-items: center;
-  justify-content: space-between; padding: 6px 10px;
-  cursor: pointer; user-select: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 8px; cursor: pointer; user-select: none;
   border-radius: 6px; transition: background 0.15s ease;
 }
-.nav-section-header:hover { background: rgba(255, 255, 255, 0.03); }
-.section-title {
-  font-size: 10px; font-weight: 800;
-  letter-spacing: 0.06em; color: var(--text-muted);
-  display: flex; align-items: center;
-  gap: 6px;
+.nav-section-header:hover { background: rgba(255, 255, 255, 0.04); }
+.nav-section-header:hover .nav-section-title, .nav-section-header:hover .section-title { color: #cbd5e1; }
+.nav-section-header:hover .nav-section-caret, .nav-section-header:hover .section-caret { color: #cbd5e1; }
+
+/* Subdued Micro-Typography (Namespaced to prevent view leakage) */
+.sidebar .nav-section-title, .nav-section-header .nav-section-title, .nav-section-header .section-title {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted, #64748b); display: flex; align-items: center; gap: 6px;
+  margin: 0; line-height: 1.4; transition: color 0.15s ease;
 }
-.section-icon { font-size: 12px; }
-.section-caret { font-size: 11px; color: var(--text-muted); transition: transform 0.2s ease; }
-.caret-collapsed { transform: rotate(-90deg); }
+.sidebar .nav-section-icon, .nav-section-header .nav-section-icon, .nav-section-header .section-icon {
+  font-size: 12px; width: 14px; height: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: inherit; flex-shrink: 0;
+}
+.sidebar .nav-section-caret, .nav-section-header .nav-section-caret, .nav-section-header .section-caret {
+  font-size: 11px; width: 12px; height: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-muted, #64748b); transition: transform 0.2s ease, color 0.15s ease; flex-shrink: 0;
+}
 .nav-items-container { display: flex; flex-direction: column; gap: 2px; }
 .nav-item {
   display: flex; align-items: center;
