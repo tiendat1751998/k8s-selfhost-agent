@@ -355,7 +355,7 @@ func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Clie
 			if len(c.Names) > 0 { cName = strings.TrimPrefix(c.Names[0], "/") }
 			go func(id, name string) {
 				cleanName := strings.TrimPrefix(name, "/")
-				reader, logErr := dockerClient.ContainerLogs(ctx, id, container.LogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "25"})
+				reader, logErr := dockerClient.ContainerLogs(ctx, id, container.LogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "200", Timestamps: true})
 				if logErr != nil {
 					log.Debug("Failed to open Docker log stream", zap.String("container", cleanName), zap.Error(logErr))
 					return
@@ -368,17 +368,18 @@ func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Clie
 					for scanner.Scan() {
 						line := strings.TrimSpace(scanner.Text())
 						if line == "" || line == "-- No entries --" { continue }
-						lvl := detectLogLevel(line, defaultLvl)
-						now := time.Now().UTC()
+						entryTS, msg := parseDockerLogLine(line)
+						if msg == "" || msg == "-- No entries --" { continue }
+						lvl := detectLogLevel(msg, defaultLvl)
 						logAggregator.Ingest(logging.LogEntry{
-							Timestamp: now, Namespace: "docker", Pod: cleanName, Container: cleanName,
-							Service: cleanName, Node: "standalone-host", Stream: stream, Level: lvl, Message: line,
+							Timestamp: entryTS, Namespace: "docker", Pod: cleanName, Container: cleanName,
+							Service: cleanName, Node: "standalone-host", Stream: stream, Level: lvl, Message: msg,
 						})
 						if centralizedLogs != nil {
 							_ = centralizedLogs.Ingest(ctx, []domainLogging.LogEntry{{
-								Timestamp: now, TenantID: "default-tenant", ClusterID: "default", Namespace: "docker",
+								Timestamp: entryTS, TenantID: "default-tenant", ClusterID: "default", Namespace: "docker",
 								PodName: cleanName, ContainerName: cleanName, Stream: stream,
-								LogLevel: domainLogging.LogLevel(strings.ToLower(lvl)), Message: line,
+								LogLevel: domainLogging.LogLevel(strings.ToLower(lvl)), Message: msg,
 								Attributes: map[string]string{"service": cleanName},
 							}})
 						}
@@ -392,6 +393,19 @@ func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Clie
 			}(cID, cName)
 		}
 	}()
+}
+
+func parseDockerLogLine(line string) (time.Time, string) {
+	if idx := strings.IndexByte(line, ' '); idx >= 19 && idx <= 35 {
+		rawTS := line[:idx]
+		if t, err := time.Parse(time.RFC3339Nano, rawTS); err == nil {
+			return t.UTC(), strings.TrimSpace(line[idx+1:])
+		}
+		if t, err := time.Parse(time.RFC3339, rawTS); err == nil {
+			return t.UTC(), strings.TrimSpace(line[idx+1:])
+		}
+	}
+	return time.Now().UTC(), line
 }
 
 func detectLogLevel(msg string, defaultLvl string) string {

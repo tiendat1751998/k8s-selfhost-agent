@@ -151,18 +151,18 @@ func TestLogHandler_Search_ServiceParamAndContainerAliases(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	// 1. Should have merged postgres_db, db, and postgres entries (3 valid entries)
+	// 1. Should have merged postgres_db and postgres entries (2 valid entries, bare "db" excluded)
 	// 2. "-- No entries --" MUST be filtered out
-	// 3. "redis" must NOT be included
-	if len(res.Entries) != 3 {
-		t.Fatalf("expected 3 entries from database aliases, got %d: %+v", len(res.Entries), res.Entries)
+	// 3. "db" and "redis" must NOT be included
+	if len(res.Entries) != 2 {
+		t.Fatalf("expected 2 entries from database aliases (postgres_db, postgres), got %d: %+v", len(res.Entries), res.Entries)
 	}
 
 	for _, e := range res.Entries {
 		if e.Message == "-- No entries --" {
 			t.Fatalf("dummy message '-- No entries --' was not filtered out: %+v", e)
 		}
-		if e.ContainerName != "postgres_db" && e.ContainerName != "db" && e.ContainerName != "postgres" {
+		if e.ContainerName != "postgres_db" && e.ContainerName != "postgres" {
 			t.Fatalf("unexpected container %s in results: %+v", e.ContainerName, e)
 		}
 	}
@@ -218,8 +218,8 @@ func TestLogHandler_Stream_ServiceParamAndContainerAliases(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Push 1 entry to "db", 1 dummy to "postgres", 1 real entry to "postgres"
-	dbCh <- logging.LogEntry{ContainerName: "db", Message: "db started"}
+	// Push 1 entry to "postgres_db", 1 dummy to "postgres", 1 real entry to "postgres"
+	pgDbCh <- logging.LogEntry{ContainerName: "postgres_db", Message: "pg ready"}
 	pgCh <- logging.LogEntry{ContainerName: "postgres", Message: "-- No entries --"}
 	pgCh <- logging.LogEntry{ContainerName: "postgres", Message: "vacuum started"}
 
@@ -236,8 +236,8 @@ func TestLogHandler_Stream_ServiceParamAndContainerAliases(t *testing.T) {
 		received[msg.Message] = true
 	}
 
-	if !received["db started"] || !received["vacuum started"] {
-		t.Fatalf("expected messages 'db started' and 'vacuum started' from aliases, got %+v", received)
+	if !received["pg ready"] || !received["vacuum started"] {
+		t.Fatalf("expected messages 'pg ready' and 'vacuum started' from aliases, got %+v", received)
 	}
 }
 

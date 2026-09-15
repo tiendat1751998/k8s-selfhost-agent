@@ -1,7 +1,7 @@
 -- Migration: 058_enterprise_audit_trail_seed.up.sql
 -- Description: Seed production-grade baseline enterprise audit trail records.
 
-ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS tenant_id UUID;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(255) DEFAULT 'default-tenant';
 
 INSERT INTO audit_logs (
     id,
