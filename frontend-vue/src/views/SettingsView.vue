@@ -194,7 +194,8 @@ function handleResetSettings() {
 
     <!-- TAB CONTENTS -->
     <div v-else class="tab-content">
-      <SettingsGeneralTab
+      <div class="settings-content-wrapper">
+        <SettingsGeneralTab
         v-if="activeTab === 'general'"
         :form="form"
         :timezone-options="timezoneOptions"
@@ -240,6 +241,7 @@ function handleResetSettings() {
       <AboutSettingsTab
         v-if="activeTab === 'about'"
       />
+      </div>
     </div>
 
     <!-- Disable 2FA Modal -->

@@ -118,8 +118,8 @@ function handleRevokeKey(id: string) {
     >
       <h3 class="subsection-title" style="margin-bottom: 12px;">Generate New Machine-to-Machine Token</h3>
       <form class="settings-form" @submit.prevent="handleCreateKey">
-        <div class="form-row">
-          <div class="form-group flex-2">
+        <div class="form-row" style="align-items: flex-end; gap: 16px;">
+          <div class="form-group" style="max-width: 360px; flex: 1;">
             <label class="form-label" for="api-key-name">Key Name / Description</label>
             <input
               id="api-key-name"
@@ -127,22 +127,23 @@ function handleRevokeKey(id: string) {
               type="text"
               required
               class="input-glass form-input"
+              style="max-width: 360px;"
               placeholder="e.g. Jenkins Staging Runner"
             />
           </div>
-          <div class="form-group flex-1">
+          <div class="form-group" style="max-width: 200px; flex: 1;">
             <label class="form-label" for="api-key-role">Permission Scope</label>
-            <select id="api-key-role" v-model="newKeyRole" class="input-glass form-select">
-              <option value="developer">Cluster Operator (Read/Write)</option>
-              <option value="admin">Cluster Admin (Full Access)</option>
+            <select id="api-key-role" v-model="newKeyRole" class="input-glass form-select" style="max-width: 200px;">
+              <option value="developer">Operator (Read/Write)</option>
+              <option value="admin">Admin (Full Access)</option>
               <option value="readonly">Auditor (Read-Only)</option>
             </select>
           </div>
-        </div>
-        <div class="form-actions" style="margin-top: 8px;">
-          <button type="submit" class="btn btn-primary btn-sm" :disabled="saving">
-            <span>{{ saving ? 'Generating...' : 'Confirm Key Creation' }}</span>
-          </button>
+          <div class="form-group" style="flex: 0 0 auto;">
+            <button type="submit" class="btn btn-primary btn-sm" style="min-height: 40px;" :disabled="saving">
+              <span>{{ saving ? 'Generating...' : 'Confirm Key Creation' }}</span>
+            </button>
+          </div>
         </div>
       </form>
     </div>

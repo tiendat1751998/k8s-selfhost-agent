@@ -5,64 +5,117 @@
         <h2 class="card-title"><BaseIcon name="zap" size="sm" /> SRE Auto-Remediation & Fast-Failover Settings</h2>
         <p class="card-subtitle">Autonomous controller policies for rapid node failure detection and pod eviction.</p>
       </div>
-      <button type="button" class="btn btn-secondary btn-sm" @click="resetDefaults"><BaseIcon name="rotate-ccw" size="xs" /> <span>Reset Defaults</span></button>
     </div>
 
     <!-- Toast Notification -->
     <transition name="fade">
       <div v-if="toast" class="toast-banner" :class="'banner-' + toast.type">
         <BaseIcon :name="toast.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" /> <span>{{ toast.text }}</span>
-        <button class="toast-close" @click="toast = null"><BaseIcon name="x" size="xs" /></button>
+        <button class="toast-close" aria-label="Close notification" @click="toast = null"><BaseIcon name="x" size="xs" /></button>
       </div>
     </transition>
 
     <form class="sre-form" @submit.prevent="savePolicy">
-      <!-- 1. Automated Fast-Failover (< 30s) -->
-      <div class="toggle-group">
-        <label class="toggle-label" for="toggle-fast-failover">
-          <input id="toggle-fast-failover" v-model="policy.automatedFastFailover" type="checkbox" class="checkbox-custom" />
-          <div class="toggle-info">
-            <span class="toggle-title">Automated Fast-Failover (&lt; 30s)</span>
-            <span class="toggle-desc">Trigger autonomous failover workflows when a node ceases health telemetry.</span>
-          </div>
-        </label>
-      </div>
-
-      <!-- 2. Heartbeat Timeout Slider (5s - 30s, default 15s) -->
-      <div class="form-group">
-        <div class="slider-header">
-          <label class="form-label" for="slider-heartbeat"><span>Node Heartbeat Timeout</span></label>
-          <span class="slider-val font-mono">{{ policy.heartbeatTimeout }}s</span>
+      <!-- Row 1: Automated Fast-Failover (< 30s) -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="toggle-fast-failover">Automated Fast-Failover (&lt; 30s)</label>
+          <p class="setting-desc">Trigger autonomous failover workflows when a node ceases health telemetry.</p>
         </div>
-        <p class="field-desc">Maximum acceptable delay before marking a silent node as NotReady.</p>
-        <input id="slider-heartbeat" v-model.number="policy.heartbeatTimeout" type="range" min="5" max="30" step="1" class="slider-input" />
-        <div class="slider-labels font-mono"><span>5s (Aggressive)</span><span>15s (Recommended)</span><span>30s (Conservative)</span></div>
+        <div class="setting-control-col">
+          <label class="toggle-switch">
+            <input id="toggle-fast-failover" v-model="policy.automatedFastFailover" type="checkbox" aria-label="Automated Fast-Failover" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
 
-      <!-- 3. Auto-Cordon Unhealthy Nodes -->
-      <div class="toggle-group">
-        <label class="toggle-label" for="toggle-auto-cordon">
-          <input id="toggle-auto-cordon" v-model="policy.autoCordon" type="checkbox" class="checkbox-custom" />
-          <div class="toggle-info">
-            <span class="toggle-title">Auto-Cordon Unhealthy Nodes</span>
-            <span class="toggle-desc">Mark failing nodes as Unschedulable to immediately block new workloads.</span>
+      <!-- Row 2: Node Heartbeat Timeout -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="slider-heartbeat">Node Heartbeat Timeout</label>
+          <p class="setting-desc">Maximum acceptable delay before marking a silent node as NotReady.</p>
+        </div>
+        <div class="setting-control-col">
+          <div class="slider-control-cluster">
+            <button
+              type="button"
+              class="btn-stepper"
+              :disabled="policy.heartbeatTimeout <= 5"
+              aria-label="Decrease timeout"
+              @click="stepTimeout(-1)"
+            >?</button>
+            <div class="slider-track-wrap">
+              <input
+                id="slider-heartbeat"
+                v-model.number="policy.heartbeatTimeout"
+                type="range"
+                min="5"
+                max="30"
+                step="1"
+                class="slider-input-bounded"
+                aria-label="Node Heartbeat Timeout"
+              />
+              <div class="slider-ticks">
+                <span>5s</span>
+                <span>15s</span>
+                <span>30s</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="btn-stepper"
+              :disabled="policy.heartbeatTimeout >= 30"
+              aria-label="Increase timeout"
+              @click="stepTimeout(1)"
+            >+</button>
+            <span class="slider-value-pill font-mono">{{ policy.heartbeatTimeout }}s</span>
           </div>
-        </label>
+        </div>
       </div>
 
-      <!-- 4. Force-Delete Stuck Terminating Pods (GracePeriod=0) -->
-      <div class="toggle-group">
-        <label class="toggle-label" for="toggle-force-delete">
-          <input id="toggle-force-delete" v-model="policy.forceDeleteStuckPods" type="checkbox" class="checkbox-custom" />
-          <div class="toggle-info">
-            <span class="toggle-title">Force-Delete Stuck Terminating Pods (GracePeriod=0)</span>
-            <span class="toggle-desc">Aggressively purge dead pods on partitioned nodes so replicas can respawn.</span>
+      <!-- Row 3: Automatic Pod Eviction -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="toggle-pod-eviction">Automatic Pod Eviction</label>
+          <p class="setting-desc">Aggressively evict pods from partitioned or failing nodes so replicas can respawn elsewhere.</p>
+        </div>
+        <div class="setting-control-col">
+          <label class="toggle-switch">
+            <input id="toggle-pod-eviction" v-model="policy.automaticPodEviction" type="checkbox" aria-label="Automatic Pod Eviction" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Row 4: Max Concurrent Evictions -->
+      <div class="setting-row">
+        <div class="setting-meta">
+          <label class="setting-title" for="input-max-evictions">Max Concurrent Evictions</label>
+          <p class="setting-desc">Throttle parallel pod evictions to prevent cascading reschedule storms across healthy nodes.</p>
+        </div>
+        <div class="setting-control-col">
+          <div class="input-addon-wrap">
+            <input
+              id="input-max-evictions"
+              v-model.number="policy.maxConcurrentEvictions"
+              type="number"
+              min="1"
+              max="50"
+              class="input-glass form-input"
+              style="width: 80px;"
+            />
+            <span class="input-addon">pods</span>
           </div>
-        </label>
+        </div>
       </div>
 
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary" :disabled="saving">
+      <!-- Card Actions Bar -->
+      <div class="card-actions-bar">
+        <button type="button" class="btn btn-secondary btn-sm" @click="resetDefaults">
+          <BaseIcon name="rotate-ccw" size="xs" /> <span>Reset Defaults</span>
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm" :disabled="saving">
           <BaseIcon name="hard-drive" size="xs" /> <span>{{ saving ? 'Persisting SRE Policy...' : 'Save SRE Policy' }}</span>
         </button>
       </div>
@@ -72,11 +125,14 @@
 
 <script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { settingsApi } from '../../api/settings'
 
 interface SREPolicy {
   automatedFastFailover: boolean
   heartbeatTimeout: number
+  automaticPodEviction: boolean
+  maxConcurrentEvictions: number
   autoCordon: boolean
   forceDeleteStuckPods: boolean
 }
@@ -85,6 +141,8 @@ const STORAGE_KEY = 'k8s_sre_failover_policy'
 const defaultPolicy: SREPolicy = {
   automatedFastFailover: true,
   heartbeatTimeout: 15,
+  automaticPodEviction: true,
+  maxConcurrentEvictions: 5,
   autoCordon: true,
   forceDeleteStuckPods: true,
 }
@@ -100,6 +158,13 @@ function showToast(text: string, type: 'success' | 'error' = 'success') {
   toastTimer = setTimeout(() => { toast.value = null }, 3500)
 }
 
+function stepTimeout(delta: number) {
+  const next = policy.heartbeatTimeout + delta
+  if (next >= 5 && next <= 30) {
+    policy.heartbeatTimeout = next
+  }
+}
+
 onMounted(async () => {
   const cached = localStorage.getItem(STORAGE_KEY)
   if (cached) {
@@ -111,6 +176,8 @@ onMounted(async () => {
       for (const item of list) {
         if (item.key === 'fast_failover') policy.automatedFastFailover = item.value === 'true'
         if (item.key === 'heartbeat_timeout') policy.heartbeatTimeout = parseInt(item.value, 10) || 15
+        if (item.key === 'pod_eviction' || item.key === 'force_delete_stuck') policy.automaticPodEviction = item.value === 'true'
+        if (item.key === 'max_evictions') policy.maxConcurrentEvictions = parseInt(item.value, 10) || 5
         if (item.key === 'auto_cordon') policy.autoCordon = item.value === 'true'
         if (item.key === 'force_delete_stuck') policy.forceDeleteStuckPods = item.value === 'true'
       }
@@ -126,6 +193,8 @@ async function savePolicy() {
       await settingsApi.update([
         { category: 'sre', key: 'fast_failover', value: String(policy.automatedFastFailover) },
         { category: 'sre', key: 'heartbeat_timeout', value: String(policy.heartbeatTimeout) },
+        { category: 'sre', key: 'pod_eviction', value: String(policy.automaticPodEviction) },
+        { category: 'sre', key: 'max_evictions', value: String(policy.maxConcurrentEvictions) },
         { category: 'sre', key: 'auto_cordon', value: String(policy.autoCordon) },
         { category: 'sre', key: 'force_delete_stuck', value: String(policy.forceDeleteStuckPods) },
       ])
