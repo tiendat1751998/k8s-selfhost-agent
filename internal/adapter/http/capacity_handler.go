@@ -14,6 +14,7 @@ import (
 type CapacityForecaster interface {
 	List(ctx context.Context, cluster string) ([]capacity.Forecast, error)
 	Record(ctx context.Context, f *capacity.Forecast) error
+	ListNodeHeadroom(ctx context.Context, cluster string) ([]capacity.NodeHeadroom, error)
 }
 
 // CapacityHandler provides HTTP handlers for the capacity API.
@@ -30,6 +31,7 @@ func NewCapacityHandler(forecaster CapacityForecaster) *CapacityHandler {
 func (h *CapacityHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.ListForecasts)
 	r.Post("/", h.RecordForecast)
+	r.Get("/nodes", h.ListNodeHeadroom)
 }
 
 // ListForecasts handles GET /api/v1/capacity
@@ -44,6 +46,20 @@ func (h *CapacityHandler) ListForecasts(w http.ResponseWriter, r *http.Request) 
 		items = []capacity.Forecast{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items})
+}
+
+// ListNodeHeadroom handles GET /api/v1/capacity/nodes
+func (h *CapacityHandler) ListNodeHeadroom(w http.ResponseWriter, r *http.Request) {
+	cluster := r.URL.Query().Get("cluster")
+	items, err := h.forecaster.ListNodeHeadroom(r.Context(), cluster)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list node headroom", err)
+		return
+	}
+	if items == nil {
+		items = []capacity.NodeHeadroom{}
+	}
+	writeJSON(w, http.StatusOK, items)
 }
 
 type recordForecastRequest struct {
