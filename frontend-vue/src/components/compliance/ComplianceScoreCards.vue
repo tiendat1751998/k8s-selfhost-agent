@@ -36,7 +36,7 @@
       :trend="lastScanTime ? `Last: ${lastScanTime}` : 'Continuous validation'"
       trend-type="neutral"
       :badge="auditStatus === 'running' ? 'ACTIVE' : 'READY'"
-      badge-color="violet"
+      badge-color="cyan"
       subtitle="Regulatory posture engine"
       icon="zap"
     />

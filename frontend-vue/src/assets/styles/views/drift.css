@@ -212,7 +212,18 @@
 .resource-name { font-weight: 600; color: #fff; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .resource-sub { font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
-.drift-type-badge { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.25); color: #fde047; display: inline-block; white-space: nowrap; }
+.drift-type-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+  display: inline-block;
+  white-space: nowrap;
+}
 
 .diff-snippet-cell {
   width: 100%;
@@ -222,12 +233,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-mono, monospace);
   font-size: 11px;
-  color: #fbbf24;
-  background: rgba(245, 158, 11, 0.08);
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.03);
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .actions-cell { display: flex; justify-content: flex-end; gap: 4px; align-items: center; white-space: nowrap; }
@@ -275,7 +287,7 @@
 .mobile-card-meta { font-size: 10.5px; display: flex; align-items: center; gap: 5px; color: var(--text-muted); overflow: hidden; white-space: nowrap; }
 .mobile-meta-scope { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; }
 .mobile-meta-divider { opacity: 0.5; }
-.mobile-drift-type { color: #fbbf24; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-drift-type { color: #cbd5e1; font-family: var(--font-mono, monospace); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-meta-time { opacity: 0.75; }
 
 .mobile-card-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 8px; }

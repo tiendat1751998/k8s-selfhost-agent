@@ -86,16 +86,14 @@
       <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- 1. HUD Metric Cards -->
-    <AuditHudCards class="desktop-only" :metrics="kpiMetrics" :loading="isLoading" />
-
-    <!-- 2. Filter & Query Toolbar -->
+    <!-- 1. Filter & Query Toolbar -->
     <AuditFilterToolbar
       v-model:search-query="searchQuery"
       v-model:selected-action-type="selectedActionType"
       v-model:selected-severity="selectedSeverity"
       v-model:selected-actor="selectedActor"
       v-model:date-range="dateRange"
+      :metrics="kpiMetrics"
       :unique-actors="uniqueActors"
       :action-types="actionTypeFilters"
       :is-live-tailing="isLiveTailing"
@@ -137,7 +135,6 @@
 import '../assets/styles/views/audit.css'
 import { useAuditLogs } from '../composables/useAuditLogs'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import AuditHudCards from '../components/audit/AuditHudCards.vue'
 import AuditTrailTable from '../components/audit/AuditTrailTable.vue'
 import AuditFilterToolbar from '../components/audit/AuditFilterToolbar.vue'
 import AuditMobileCards from '../components/audit/AuditMobileCards.vue'

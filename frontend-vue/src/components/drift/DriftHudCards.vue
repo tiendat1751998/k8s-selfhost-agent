@@ -50,7 +50,7 @@ defineProps<Props>()
       title="Git Repos Tracked"
       :value="gitReposTracked"
       badge="GITOPS SOURCE"
-      badge-color="violet"
+      badge-color="cyan"
       subtitle="Flux / ArgoCD monitored sources"
       icon="git-branch"
     />
