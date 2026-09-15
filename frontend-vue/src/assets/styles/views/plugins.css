@@ -410,8 +410,10 @@ input:checked + .slider:before { transform: translateX(16px); }
 .plugins-page .badge-amber { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
 
 /* --- 4-Tier RWD Standardized Breakpoints --- */
-.desktop-only { display: block; }
-.mobile-only { display: none !important; }
+.plugins-view .desktop-only,
+.plugins-page .desktop-only { display: block; }
+.plugins-view .mobile-only,
+.plugins-page .mobile-only { display: none !important; }
 
 /* Desktop: >= 1024px */
 @media (min-width: 1024px) {
@@ -428,8 +430,10 @@ input:checked + .slider:before { transform: translateX(16px); }
 
 /* Mobile: < 768px */
 @media (max-width: 767px) {
-  .desktop-only { display: none !important; }
-  .mobile-only { display: flex !important; }
+  .plugins-view .desktop-only,
+  .plugins-page .desktop-only { display: none !important; }
+  .plugins-view .mobile-only,
+  .plugins-page .mobile-only { display: flex !important; }
   .plugins-page { padding: 12px; gap: 10px; }
   .plugins-toolbar-sleek {
     height: auto;

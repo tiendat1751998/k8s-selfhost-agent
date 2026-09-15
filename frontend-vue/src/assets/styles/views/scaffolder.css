@@ -7,21 +7,21 @@
 @import '../components/scaffolder-drawers.css';
 
 /* Visibility Utilities & Responsive Presentation (768px Standard) */
-.mobile-view { display: none; }
-.desktop-view { display: block; }
+.scaffolder-view .mobile-view { display: none; }
+.scaffolder-view .desktop-view { display: block; }
 
 @media (max-width: 767px) {
-  .mobile-only { display: flex !important; }
-  .desktop-only { display: none !important; }
-  .desktop-view { display: none !important; }
-  .mobile-view { display: block !important; }
+  .scaffolder-view .mobile-only { display: flex !important; }
+  .scaffolder-view .desktop-only { display: none !important; }
+  .scaffolder-view .desktop-view { display: none !important; }
+  .scaffolder-view .mobile-view { display: block !important; }
 }
 
 @media (min-width: 768px) {
-  .mobile-only { display: none !important; }
-  .desktop-only { display: block; }
-  .mobile-view { display: none !important; }
-  .desktop-view { display: block !important; }
+  .scaffolder-view .mobile-only { display: none !important; }
+  .scaffolder-view .desktop-only { display: block; }
+  .scaffolder-view .mobile-view { display: none !important; }
+  .scaffolder-view .desktop-view { display: block !important; }
 }
 
 /* Mobile Command Bar (40-44px) & Micro-Telemetry Strip (20px) */

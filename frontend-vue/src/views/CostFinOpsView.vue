@@ -98,7 +98,7 @@ const wasteColumns: Column<ResourceWaste>[] = [
 </script>
 
 <template>
-  <div class="view-container">
+  <div class="view-container cost-view finops-page">
     <!-- Sleek Unified 38px Enterprise Toolbar (>=768px) -->
     <div class="cost-toolbar-sleek desktop-only" role="toolbar" aria-label="FinOps Controls Toolbar">
       <!-- Search input with search icon and clear button -->

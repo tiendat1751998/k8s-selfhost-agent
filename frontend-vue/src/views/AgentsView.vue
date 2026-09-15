@@ -19,7 +19,7 @@ const {
 </script>
 
 <template>
-  <div class="agents-view-container animate-fade-in">
+  <div class="agents-view-container agents-view agents-page animate-fade-in">
     <!-- Desktop Header -->
     <div class="view-header desktop-only">
       <div>
