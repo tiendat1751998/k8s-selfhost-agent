@@ -45,13 +45,13 @@ function confirmDelete(org: Organization) {
     <div v-else class="table-scroll">
       <table class="tenant-table">
         <colgroup>
-          <col style="width: 22%;" />
-          <col style="width: 15%;" />
-          <col style="width: 9%;" />
+          <col style="width: 21%;" />
+          <col style="width: 14%;" />
+          <col style="width: 11%;" />
           <col style="width: 11%;" />
           <col style="width: 9%;" />
-          <col style="width: 12%;" />
-          <col style="width: 22%;" />
+          <col style="width: 14%;" />
+          <col style="width: 20%;" />
         </colgroup>
         <thead>
           <tr>
@@ -78,7 +78,7 @@ function confirmDelete(org: Organization) {
             <td>
               <span class="tier-pill font-mono" :title="org.tier">{{ org.tier }}</span>
             </td>
-            <td>
+            <td class="td-namespaces">
               <span class="stat-num font-mono text-cyan" :title="`${stats[org.id]?.projectCount ?? 0} namespaces`">
                 {{ stats[org.id]?.projectCount ?? 0 }}
               </span>
