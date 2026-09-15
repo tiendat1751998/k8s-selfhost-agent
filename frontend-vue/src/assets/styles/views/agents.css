@@ -321,37 +321,58 @@
    ========================================================================== */
 
 /* Defaults on Desktop (>=1024px) */
-.agents-mobile-command-bar, .agents-micro-telemetry, .mobile-only { display: none !important; }
-.desktop-only { display: block; }
-.view-header.desktop-only { display: flex; }
-.metrics-grid.desktop-only {
+.agents-mobile-command-bar, .agents-micro-telemetry,
+.agents-view .mobile-only, .agents-page .mobile-only, .agents-view-container .mobile-only { display: none !important; }
+.agents-view .desktop-only, .agents-page .desktop-only, .agents-view-container .desktop-only { display: block; }
+.agents-view .view-header.desktop-only,
+.agents-page .view-header.desktop-only,
+.agents-view-container .view-header.desktop-only { display: flex; }
+.agents-view .metrics-grid.desktop-only,
+.agents-page .metrics-grid.desktop-only,
+.agents-view-container .metrics-grid.desktop-only {
   display: grid !important;
   grid-template-columns: repeat(4, 1fr);
 }
 
 /* Tablet (768px - 1023.98px) */
 @media (min-width: 768px) and (max-width: 1023.98px) {
-  .metrics-grid,
-  .metrics-grid.desktop-only {
+  .agents-view .metrics-grid,
+  .agents-view .metrics-grid.desktop-only,
+  .agents-page .metrics-grid,
+  .agents-page .metrics-grid.desktop-only,
+  .agents-view-container .metrics-grid,
+  .agents-view-container .metrics-grid.desktop-only {
     display: grid !important;
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 14px;
   }
   .swarm-grid { grid-template-columns: repeat(2, 1fr); }
-  .agents-mobile-command-bar, .agents-micro-telemetry, .mobile-only { display: none !important; }
-  .desktop-only { display: block; }
-  .view-header.desktop-only { display: flex; }
+  .agents-mobile-command-bar, .agents-micro-telemetry,
+  .agents-view .mobile-only, .agents-page .mobile-only, .agents-view-container .mobile-only { display: none !important; }
+  .agents-view .desktop-only, .agents-page .desktop-only, .agents-view-container .desktop-only { display: block; }
+  .agents-view .view-header.desktop-only,
+  .agents-page .view-header.desktop-only,
+  .agents-view-container .view-header.desktop-only { display: flex; }
 }
 
 /* Mobile (<768px) */
 @media (max-width: 767.98px) {
-  .desktop-only,
-  .metrics-grid.desktop-only {
+  .agents-view .desktop-only,
+  .agents-page .desktop-only,
+  .agents-view-container .desktop-only,
+  .agents-view .view-header.desktop-only,
+  .agents-page .view-header.desktop-only,
+  .agents-view-container .view-header.desktop-only,
+  .agents-view .metrics-grid.desktop-only,
+  .agents-page .metrics-grid.desktop-only,
+  .agents-view-container .metrics-grid.desktop-only {
     display: none !important;
   }
   .agents-mobile-command-bar { display: flex !important; height: 44px; min-height: 44px; }
   .agents-micro-telemetry { display: flex !important; height: 20px; min-height: 20px; }
-  .mobile-only { display: flex !important; }
+  .agents-view .mobile-only,
+  .agents-page .mobile-only,
+  .agents-view-container .mobile-only { display: flex !important; }
   .agents-view-container { gap: 12px; overflow-x: hidden; width: 100%; max-width: 100%; }
   .swarm-grid { grid-template-columns: 1fr; gap: 12px; }
   .dag-section { padding: 12px; gap: 10px; width: 100%; max-width: 100%; overflow: hidden; }
