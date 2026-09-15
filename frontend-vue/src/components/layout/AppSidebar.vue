@@ -193,13 +193,13 @@ function handleItemClick() {
           @keydown.enter="toggleSection(group.key)"
           @keydown.space.prevent="toggleSection(group.key)"
         >
-          <span class="section-title">
-            <span class="section-icon">
-              <BaseIcon :name="group.icon" size="sm" />
+          <span class="nav-section-title">
+            <span class="nav-section-icon">
+              <BaseIcon :name="group.icon" size="xs" />
             </span>
             <span>{{ group.label }}</span>
           </span>
-          <span class="section-caret">
+          <span class="nav-section-caret">
             <BaseIcon :name="collapsedSections[group.key] ? 'chevron-right' : 'chevron-down'" size="xs" />
           </span>
         </div>
