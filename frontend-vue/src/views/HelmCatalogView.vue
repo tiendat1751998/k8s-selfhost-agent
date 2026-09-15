@@ -66,7 +66,7 @@ const filteredRepos = computed(() => {
 </script>
 
 <template>
-  <div class="helm-catalog-layout animate-fade-in">
+  <div class="helm-catalog-layout helm-view animate-fade-in">
     <!-- Toast Notification -->
     <Transition name="toast-slide">
       <div v-if="toastMessage" class="cyber-toast" :class="`toast-${toastMessage.type}`">

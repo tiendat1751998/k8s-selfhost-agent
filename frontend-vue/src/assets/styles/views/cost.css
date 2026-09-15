@@ -6,24 +6,30 @@
 @import '../components/cost-drawers.css';
 
 /* 1. 4-Tier RWD Visibility Controls */
-.mobile-only { display: none !important; }
-.desktop-only { display: block; }
+.cost-view .mobile-only,
+.finops-page .mobile-only { display: none !important; }
+.cost-view .desktop-only,
+.finops-page .desktop-only { display: block; }
 
 @media (min-width: 768px) {
-  .mobile-only { display: none !important; }
-  .desktop-only { display: block; }
+  .cost-view .mobile-only,
+  .finops-page .mobile-only { display: none !important; }
+  .cost-view .desktop-only,
+  .finops-page .desktop-only { display: block; }
   .cost-toolbar-sleek.desktop-only { display: flex !important; }
   .cost-hud-ribbon.desktop-only { display: grid !important; }
 }
 
 /* Mobile Viewport (<768px): Complete Suppression of Desktop Grid/Table & Zero Overflow */
 @media (max-width: 767.98px) {
-  .desktop-only,
+  .cost-view .desktop-only,
+  .finops-page .desktop-only,
   .cost-toolbar-sleek,
   .cost-hud-ribbon,
   .desktop-metrics,
   .desktop-only-table { display: none !important; }
-  .mobile-only { display: flex !important; }
+  .cost-view .mobile-only,
+  .finops-page .mobile-only { display: flex !important; }
   .view-container {
     gap: 8px !important; width: 100% !important; max-width: 100% !important;
     box-sizing: border-box !important; overflow-x: hidden !important; padding: 0 4px !important;

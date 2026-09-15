@@ -44,7 +44,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="reports-page">
+  <div class="reports-page reports-view">
     <!-- Slim Executive Header -->
     <div class="page-header desktop-header desktop-only">
       <div class="header-titles">
