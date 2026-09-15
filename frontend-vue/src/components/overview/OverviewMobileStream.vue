@@ -24,6 +24,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'inspect', node: NodeMetrics): void
   (e: 'manage', node: NodeMetrics): void
+  (e: 'logs', node: NodeMetrics): void
   (e: 'refresh'): void
   (e: 'deepDive'): void
 }>()
@@ -248,7 +249,7 @@ const mobileMemArea = computed(() => {
             :nodes="nodes"
             @click="node => emit('inspect', node)"
             @details="node => emit('inspect', node)"
-            @logs="node => emit('manage', node)"
+            @logs="node => emit('logs', node)"
             @scale="node => emit('manage', node)"
             @restart="node => emit('manage', node)"
             @yaml="node => emit('manage', node)"
