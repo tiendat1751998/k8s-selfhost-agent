@@ -174,13 +174,16 @@ export function getFrameworkIcon(framework: string): string {
   }
 }
 
-export function getCategoryBadgeClass(category: string): string {
-  switch (category.toLowerCase()) {
+export function getCategoryBadgeClass(category: TemplateCategory | string): string {
+  switch (category) {
+    case 'backend': return 'badge-indigo'
     case 'web': return 'badge-cyan'
-    case 'api': return 'badge-indigo'
     case 'database': return 'badge-amber'
     case 'worker': return 'badge-emerald'
     case 'fullstack': return 'badge-violet'
+    case 'ai': return 'badge-cyan'
+    case 'devops': return 'badge-indigo'
+    case 'api': return 'badge-indigo'
     default: return 'badge-slate'
   }
 }
