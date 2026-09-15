@@ -86,10 +86,9 @@ const HEALTHY_STATUSES = new Set(['healthy', 'active', 'ready', 'connected', 'on
 const DEGRADED_STATUSES = new Set(['warning', 'pending', 'standby', 'degraded', 'in_progress', 'promoting'])
 const OFFLINE_STATUSES = new Set(['critical', 'danger', 'failed', 'error', 'offline', 'disconnected', 'down', 'unhealthy'])
 
-const onlineCount = computed(() =>
+const healthyClusters = computed(() =>
   unifiedClusters.value.filter(c => HEALTHY_STATUSES.has((c.health_status || c.status || '').toLowerCase())).length
 )
-const healthyClusters = computed(() => onlineCount.value)
 const totalNodes = computed(() => unifiedClusters.value.reduce((acc, c) => acc + (c.nodes || 0), 0))
 
 const totalCores = computed(() =>
