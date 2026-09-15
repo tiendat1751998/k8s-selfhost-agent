@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import MetricCard from '../ui/MetricCard.vue'
 
 defineProps<{
@@ -25,7 +25,7 @@ defineProps<{
     <MetricCard
       title="Rollback Points"
       :value="totalRollbacks"
-      icon="↺"
+      icon="refresh"
       badge="Safety Checkpoints"
       badgeColor="amber"
       trend="Reversible Revisions"
