@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
 import type { Organization } from '../../api/management'
 import type { TenantStatSummary } from '../../composables/useTenancyRbac'
-import StatusBadge from '../ui/StatusBadge.vue'
-import BaseIcon from '../ui/BaseIcon.vue'
+import ActionDropdown from '../ui/ActionDropdown.vue'
 
 interface Props {
   organizations: Organization[]
@@ -24,16 +22,6 @@ const emit = defineEmits<{
   (e: 'createOrg'): void
 }>()
 
-const searchQuery = ref('')
-
-const filteredOrgs = computed(() => {
-  if (!searchQuery.value.trim()) return props.organizations
-  const q = searchQuery.value.toLowerCase().trim()
-  return props.organizations.filter(
-    org => org.name.toLowerCase().includes(q) || org.id.toLowerCase().includes(q) || org.tier.toLowerCase().includes(q)
-  )
-})
-
 function confirmDelete(org: Organization) {
   if (window.confirm(`Are you sure you want to purge organization container "${org.name}" (${org.id})?`)) {
     emit('deleteOrg', org.id)
@@ -43,32 +31,14 @@ function confirmDelete(org: Organization) {
 
 <template>
   <div class="tenant-table-wrapper glass-panel">
-    <div class="table-toolbar">
-      <div class="toolbar-search">
-        <BaseIcon name="search" size="xs" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Filter organizations by name, slug, or tier..."
-          class="input-glass search-input"
-        />
-        <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
-      </div>
-
-      <div class="toolbar-actions">
-        <span class="tenant-count-badge">{{ filteredOrgs.length }} Organizations</span>
-        <button class="btn btn-primary btn-sm" @click="emit('createOrg')">
-          <span>+ New Organization</span>
-        </button>
-      </div>
-    </div>
+    
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
       <span>Loading organization containers...</span>
     </div>
 
-    <div v-else-if="filteredOrgs.length === 0" class="empty-list">
+    <div v-else-if="organizations.length === 0" class="empty-list">
       <p>No tenant organizations found matching the criteria.</p>
     </div>
 
@@ -95,7 +65,7 @@ function confirmDelete(org: Organization) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="org in filteredOrgs" :key="org.id" class="tenant-row">
+          <tr v-for="org in organizations" :key="org.id" class="tenant-row">
             <td class="td-left">
               <div class="tenant-info-cell">
                 <div class="tenant-icon">{{ org.name.charAt(0).toUpperCase() }}</div>
@@ -106,7 +76,7 @@ function confirmDelete(org: Organization) {
               </div>
             </td>
             <td>
-              <span class="tenant-tier-chip font-mono" :title="org.tier">{{ org.tier }}</span>
+              <span class="tier-pill font-mono" :title="org.tier">{{ org.tier }}</span>
             </td>
             <td>
               <span class="stat-num font-mono text-cyan" :title="`${stats[org.id]?.projectCount ?? 0} namespaces`">
@@ -114,7 +84,7 @@ function confirmDelete(org: Organization) {
               </span>
             </td>
             <td>
-              <span class="stat-num font-mono text-emerald" :title="`${stats[org.id]?.workloadCount ?? 0} pods`">
+              <span class="stat-num font-mono muted-pill" :title="`${stats[org.id]?.workloadCount ?? 0} pods`">
                 {{ stats[org.id]?.workloadCount ?? 0 }} pods
               </span>
             </td>
@@ -124,42 +94,23 @@ function confirmDelete(org: Organization) {
               </span>
             </td>
             <td>
-              <StatusBadge status="healthy" label="ISOLATED" size="sm" />
+              <span class="status-dot-muted"><span class="dot"></span> ISOLATED</span>
             </td>
             <td class="td-right">
-              <div class="tenant-action-buttons">
-                <button
-                  class="action-btn action-btn-members"
-                  title="Manage Organization Members"
-                  aria-label="Manage Members"
-                  @click="emit('openMembers', org.id)"
-                >
-                  <BaseIcon name="users" size="xs" /> <span>Members</span>
-                </button>
-                <button
-                  class="action-btn action-btn-rbac"
-                  title="Configure RBAC Roles"
-                  aria-label="Configure RBAC"
-                  @click="emit('openRbac')"
-                >
-                  <BaseIcon name="shield" size="xs" /> <span>RBAC</span>
-                </button>
-                <button
-                  class="action-btn action-btn-quota"
-                  title="Configure Resource Quotas"
-                  aria-label="Configure Quota"
-                  @click="emit('openQuota', org)"
-                >
-                  <BaseIcon name="sliders" size="xs" /> <span>Quota</span>
-                </button>
-                <button
-                  class="action-btn action-btn-delete"
-                  title="Purge Organization Container"
-                  aria-label="Purge Organization"
-                  @click="confirmDelete(org)"
-                >
-                  <BaseIcon name="trash" size="xs" /> <span>Delete</span>
-                </button>
+              <div class="tenant-action-buttons" style="gap: 8px;">
+                <button class="btn btn-xs btn-secondary" @click="emit('openMembers', org.id)">Members</button>
+                <ActionDropdown
+                  :items="[
+                    { id: 'rbac', label: 'Manage RBAC' },
+                    { id: 'quota', label: 'Resource Quotas' },
+                    { id: 'delete', label: 'Delete Organization', variant: 'danger' }
+                  ]"
+                  @select="(id) => {
+                    if (id === 'rbac') emit('openRbac');
+                    if (id === 'quota') emit('openQuota', org);
+                    if (id === 'delete') confirmDelete(org);
+                  }"
+                />
               </div>
             </td>
           </tr>
