@@ -77,11 +77,29 @@ export const useLogStore = defineStore('log', () => {
     }
   }
 
+  function matchesTarget(entry: LogEntry, opts: LogFilterOptions): boolean {
+    if (opts.node) {
+      const q = opts.node.toLowerCase()
+      const n = (entry.node || entry.attributes?.node || entry.attributes?.node_name || entry.pod || '').toLowerCase()
+      return n.includes(q)
+    }
+    const q = (opts.service || opts.container || opts.pod || '').toLowerCase()
+    if (!q) return true
+    const s = (entry.service || entry.container || entry.attributes?.app || entry.attributes?.service || entry.attributes?.container_name || entry.pod || '').toLowerCase()
+    return s.includes(q) ||
+      (q === 'postgres_db' && (s.includes('db') || s.includes('postgres'))) ||
+      (q === 'db' && s.includes('postgres'))
+  }
+
   function connect(options?: LogFilterOptions | string, podArg?: string) {
     clearReconnectTimer()
     const opts = normalizeOptions(options, podArg)
     activeFilter.value = opts
-    logs.value = []
+
+    const hasMatchingLogs = logs.value.length > 0 && logs.value.some((l) => matchesTarget(l, opts))
+    if (!hasMatchingLogs) {
+      logs.value = []
+    }
 
     if (socket.value) {
       socket.value.onclose = null
@@ -117,6 +135,8 @@ export const useLogStore = defineStore('log', () => {
         if (isPaused.value) return
         try {
           const raw = JSON.parse(event.data)
+          const msg = raw.message || raw.msg || raw.log || event.data
+          if (msg === '-- No entries --' || (typeof msg === 'string' && msg.trim() === '-- No entries --')) return
           appendLog({
             time: raw.timestamp || raw.time || new Date().toISOString().split('T')[1].slice(0, 12),
             level: (raw.log_level || raw.level || raw.severity || 'INFO').toUpperCase(),
@@ -125,12 +145,13 @@ export const useLogStore = defineStore('log', () => {
             container: raw.container_name || raw.container || raw.pod,
             node: raw.node || raw.host || raw.attributes?.node || raw.attributes?.node_name,
             service: raw.service || raw.app || raw.attributes?.service || raw.attributes?.app || raw.container_name || raw.container,
-            msg: raw.message || raw.msg || raw.log || event.data,
+            msg,
             traceId: raw.traceId || raw.trace_id || raw.attributes?.trace_id || raw.attributes?.traceId,
             stream: raw.stream || 'stdout',
             attributes: raw.attributes,
           })
         } catch {
+          if (event.data === '-- No entries --' || (typeof event.data === 'string' && event.data.trim() === '-- No entries --')) return
           appendLog({
             time: new Date().toISOString().split('T')[1].slice(0, 12),
             level: 'INFO',
@@ -183,11 +204,23 @@ export const useLogStore = defineStore('log', () => {
   function clear() { logs.value = [] }
   function togglePause() { isPaused.value = !isPaused.value }
 
-  async function fetchHistoricalLogs(filter: LogFilterParams = {}, append: boolean = false): Promise<LogSearchResult> {
+  async function fetchHistoricalLogs(
+    filter: LogFilterParams & { service?: string; container?: string } = {},
+    append: boolean = false
+  ): Promise<LogSearchResult> {
     isHistoricalLoading.value = true
     try {
-      const res = await searchLogs(filter)
-      const mapped: LogEntry[] = (res.entries || []).map((raw) => ({
+      const queryParams: LogFilterParams = {
+        ...filter,
+        container_name: filter.container_name || filter.container || (filter.service && filter.service !== 'all' ? filter.service : undefined),
+      }
+      const res = await searchLogs(queryParams)
+      const rawEntries = res.entries || []
+      const filteredRaw = rawEntries.filter((raw) => {
+        if (!raw.message) return false
+        return raw.message !== '-- No entries --' && raw.message.trim() !== '-- No entries --'
+      })
+      const mapped: LogEntry[] = filteredRaw.map((raw) => ({
         time: raw.timestamp || new Date().toISOString(),
         level: (raw.log_level || 'INFO').toUpperCase(),
         namespace: raw.namespace || 'default',
@@ -207,7 +240,10 @@ export const useLogStore = defineStore('log', () => {
       }
       totalHistoricalCount.value = res.total_count || 0
       hasMoreHistorical.value = res.has_more || false
-      return res
+      return {
+        ...res,
+        entries: filteredRaw,
+      }
     } finally {
       isHistoricalLoading.value = false
     }

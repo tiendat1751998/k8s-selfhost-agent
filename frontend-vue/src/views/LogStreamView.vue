@@ -107,18 +107,24 @@ function loadMoreHistorical() {
   runHistoricalQuery(true)
 }
 
+let activeTargetId = ''
+
 async function preloadRecentLogs(target: LogTarget) {
+  if (!target || !target.id) return
   try {
     const kw = searchKeyword.value.trim()
-    const filter: LogFilterParams = {
+    const filter: LogFilterParams & { service?: string; container?: string } = {
       limit: 50,
       query: kw ? kw : undefined,
+      service: target.type === 'service' ? target.id : undefined,
+      container: target.type === 'service' ? target.id : undefined,
       container_name: target.type === 'service' ? target.id : undefined,
       node: target.type === 'node' ? target.id : undefined,
       attributes: target.type === 'node' ? { node: target.id } : undefined,
       log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
     }
     await logStore.fetchHistoricalLogs(filter, false)
+    logStore.logs = logStore.logs.filter((l) => l.msg !== '-- No entries --' && l.msg.trim() !== '-- No entries --')
   } catch {
     // Gracefully ignore if offline or no historical logs
   }
@@ -126,19 +132,47 @@ async function preloadRecentLogs(target: LogTarget) {
 
 function connectTarget(target: LogTarget) {
   if (!target || !target.id) return
-  if (target.type === 'node') logStore.connect({ node: target.id })
-  else if (target.type === 'service') logStore.connect({ service: target.id })
-  preloadRecentLogs(target)
+  if (target.type === 'node') {
+    logStore.connect({ node: target.id })
+  } else {
+    logStore.connect({ service: target.id, container: target.id })
+  }
+}
+
+async function handleSelectTarget(target: LogTarget) {
+  showMobileTree.value = false
+  selectedTarget.value = target
+  activeTargetId = target.id
+  if (mode.value === 'live') {
+    connectTarget(target)
+    await preloadRecentLogs(target)
+    fetchLiveHistogram()
+  } else {
+    runHistoricalQuery()
+  }
 }
 
 watch(selectedTarget, (t) => {
-  if (mode.value === 'live') { connectTarget(t); fetchLiveHistogram() }
-  else runHistoricalQuery()
+  if (t.id === activeTargetId) return
+  activeTargetId = t.id
+  if (mode.value === 'live') {
+    connectTarget(t)
+    preloadRecentLogs(t)
+    fetchLiveHistogram()
+  } else {
+    runHistoricalQuery()
+  }
 })
 
 watch(mode, (newMode) => {
-  if (newMode === 'historical') { logStore.disconnect(); runHistoricalQuery() }
-  else { connectTarget(selectedTarget.value); fetchLiveHistogram() }
+  if (newMode === 'historical') {
+    logStore.disconnect()
+    runHistoricalQuery()
+  } else {
+    connectTarget(selectedTarget.value)
+    preloadRecentLogs(selectedTarget.value)
+    fetchLiveHistogram()
+  }
 })
 
 async function fetchLiveHistogram() {
@@ -156,7 +190,9 @@ async function fetchLiveHistogram() {
 
 onMounted(() => {
   if (mode.value === 'live' && selectedTarget.value.id) {
+    activeTargetId = selectedTarget.value.id
     connectTarget(selectedTarget.value)
+    preloadRecentLogs(selectedTarget.value)
     fetchLiveHistogram()
   }
 })
@@ -214,6 +250,7 @@ const targetFilteredLogs = computed(() => {
   const kw = rawKw.toLowerCase()
 
   return logStore.logs.filter((log) => {
+    if (!log.msg || log.msg === '-- No entries --' || log.msg.trim() === '-- No entries --') return false
     if (level && level !== 'ALL') {
       const l = log.level.toUpperCase()
       const f = level.toUpperCase()
@@ -223,13 +260,16 @@ const targetFilteredLogs = computed(() => {
       if (!match) return false
     }
     if (mode.value === 'live') {
-      const q = target.id.toLowerCase()
+      const q = selectedTarget.value.id.toLowerCase()
       if (target.type === 'node') {
         const n = (log.node || log.attributes?.node || log.attributes?.node_name || log.pod || '').toLowerCase()
         if (!n.includes(q)) return false
       } else if (target.type === 'service') {
-        const s = (log.service || log.container || log.attributes?.app || log.attributes?.service || log.pod || '').toLowerCase()
-        if (!s.includes(q)) return false
+        const s = (log.service || log.container || log.attributes?.app || log.attributes?.service || log.attributes?.container_name || log.pod || '').toLowerCase()
+        const matches = s.includes(q) ||
+          (q === 'postgres_db' && (s.includes('db') || s.includes('postgres'))) ||
+          (q === 'db' && s.includes('postgres'))
+        if (!matches) return false
       }
     }
     if (rawKw) {
@@ -357,7 +397,7 @@ function handleExport() {
           <span class="drawer-title font-mono"><BaseIcon name="layers" size="xs" /> <span>Select Target</span></span>
           <button type="button" class="drawer-close-btn" aria-label="Close targets drawer" @click="showMobileTree = false">&times;</button>
         </div>
-        <LogTargetTree v-model="selectedTarget" :logs="logStore.logs" @select="showMobileTree = false" />
+        <LogTargetTree v-model="selectedTarget" :logs="logStore.logs" @select="handleSelectTarget" />
       </div>
 
       <div class="explorer-right-col">
