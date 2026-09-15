@@ -230,12 +230,16 @@
 }
 
 .slo-toolbar-sleek .toolbar-btn.btn-primary {
-  background: #22c55e;
-  color: #020617;
-  border: none;
-  font-weight: 700;
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 600;
 }
-.slo-toolbar-sleek .toolbar-btn.btn-primary:hover { background: #16a34a; color: #fff; }
+.slo-toolbar-sleek .toolbar-btn.btn-primary:hover {
+  background: #1d4ed8;
+  color: #fff;
+  box-shadow: none;
+}
 
 .slo-toolbar-sleek .toolbar-btn.btn-secondary {
   background: rgba(255, 255, 255, 0.06);

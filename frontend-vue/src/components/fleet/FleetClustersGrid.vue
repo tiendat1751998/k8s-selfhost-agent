@@ -27,7 +27,7 @@ const router = useRouter()
 
 
     <!-- Filtered Empty State -->
-    <div v-if="clusters.length === 0 && (totalClustersCount || 0) > 0" class="empty-state font-mono">
+    <div v-if="clusters.length === 0 && (totalClustersCount || 0) > 0" class="empty-state">
       <p>No clusters found matching current search/filter criteria.</p>
     </div>
 
@@ -105,13 +105,13 @@ const router = useRouter()
               <div class="cluster-title-wrap">
                 <h3 class="cluster-title">{{ cluster.name }}</h3>
                 <span
-                  class="orchestrator-pill font-mono"
+                  class="orchestrator-pill"
                   :class="cluster.orchestrator === 'swarm' ? 'pill-swarm' : 'pill-k8s'"
                 >
                   {{ cluster.orchestrator === 'swarm' ? 'Docker Swarm' : 'Kubernetes' }}
                 </span>
               </div>
-              <span class="cluster-group font-mono">{{ cluster.group || 'default' }} ? {{ (cluster.provider || 'generic').toUpperCase() }}</span>
+              <span class="cluster-group">{{ cluster.group || 'default' }} ? {{ (cluster.provider || 'generic').toUpperCase() }}</span>
             </div>
           </div>
           <StatusBadge :status="cluster.health_status || cluster.status || 'unknown'" size="sm" />
@@ -163,10 +163,10 @@ const router = useRouter()
           <button class="btn btn-primary btn-xs" @click="emit('details', cluster)">
             <span><BaseIcon name="zap" size="xs" /> Details</span>
           </button>
-          <button class="btn btn-secondary btn-xs font-mono" @click="router.push('/infra/hosts')">
+          <button class="btn btn-secondary btn-xs" @click="router.push('/infra/hosts')">
             <span><BaseIcon name="server" size="xs" /> Hosts</span>
           </button>
-          <button class="btn btn-secondary btn-xs font-mono" @click="router.push('/compute')">
+          <button class="btn btn-secondary btn-xs" @click="router.push('/compute')">
             <span><BaseIcon name="layers" size="xs" /> Services</span>
           </button>
         </div>
@@ -208,7 +208,18 @@ const router = useRouter()
   flex-wrap: wrap;
 }
 
+.cluster-title {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.cluster-group {
+  font-family: var(--font-sans);
+}
+
 .orchestrator-pill {
+  font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 600;
   padding: 1px 6px;
