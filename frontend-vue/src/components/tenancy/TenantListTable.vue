@@ -57,7 +57,7 @@ function confirmDelete(org: Organization) {
           <tr>
             <th class="th-left">ORGANIZATION</th>
             <th class="th-tier">TIER</th>
-            <th class="th-num">NAMESPACES</th>
+            <th class="th-namespaces">NAMESPACES</th>
             <th class="th-num">PODS</th>
             <th class="th-num">MEMBERS</th>
             <th class="th-status">STATUS</th>
