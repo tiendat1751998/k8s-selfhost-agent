@@ -1,20 +1,14 @@
 ﻿package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	dockerclient "github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
@@ -24,7 +18,6 @@ import (
 	infraClickhouse "github.com/datdt/k8sselfhost/internal/infrastructure/clickhouse"
 	usecaseLogging "github.com/datdt/k8sselfhost/internal/usecase/logging"
 	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
-	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
 	domainLB "github.com/datdt/k8sselfhost/internal/domain/loadbalancer"
 	domainDocker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
@@ -251,7 +244,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		Stream: "stdout", Level: "INFO",
 		Message: "K8SCONTROL Hybrid Control Plane online — real-time telemetry log aggregator initialized",
 	})
-	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator)
+	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator, computeHostRepo)
 	centralizedLogs, chCleanup := wireCentralizedLogging(ctx, log, computeHostRepo)
 
 	if dockerClient != nil {
@@ -341,88 +334,6 @@ func initLLMRegistry(cfg *config.Config, log *zap.Logger) *llm.ProviderRegistry 
 	return registry
 }
 
-func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Client, logAggregator *logging.LogAggregator, centralizedLogs *adapthttp.LogHandler, log *zap.Logger) {
-	go func() {
-		containers, err := dockerClient.ContainerList(ctx, container.ListOptions{All: true})
-		if err != nil {
-			log.Warn("Failed to list Docker containers for log streaming", zap.Error(err))
-			return
-		}
-		for _, c := range containers {
-			cID := c.ID
-			cName := cID
-			if len(cID) > 12 { cName = cID[:12] }
-			if len(c.Names) > 0 { cName = strings.TrimPrefix(c.Names[0], "/") }
-			go func(id, name string) {
-				cleanName := strings.TrimPrefix(name, "/")
-				reader, logErr := dockerClient.ContainerLogs(ctx, id, container.LogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "200", Timestamps: true})
-				if logErr != nil {
-					log.Debug("Failed to open Docker log stream", zap.String("container", cleanName), zap.Error(logErr))
-					return
-				}
-				defer reader.Close()
-				stdoutReader, stdoutWriter := io.Pipe()
-				stderrReader, stderrWriter := io.Pipe()
-				streamPipe := func(r io.Reader, stream, defaultLvl string) {
-					scanner := bufio.NewScanner(r)
-					for scanner.Scan() {
-						line := strings.TrimSpace(scanner.Text())
-						if line == "" || line == "-- No entries --" { continue }
-						entryTS, msg := parseDockerLogLine(line)
-						if msg == "" || msg == "-- No entries --" { continue }
-						lvl := detectLogLevel(msg, defaultLvl)
-						logAggregator.Ingest(logging.LogEntry{
-							Timestamp: entryTS, Namespace: "docker", Pod: cleanName, Container: cleanName,
-							Service: cleanName, Node: "standalone-host", Stream: stream, Level: lvl, Message: msg,
-						})
-						if centralizedLogs != nil {
-							_ = centralizedLogs.Ingest(ctx, []domainLogging.LogEntry{{
-								Timestamp: entryTS, TenantID: "default-tenant", ClusterID: "default", Namespace: "docker",
-								PodName: cleanName, ContainerName: cleanName, Stream: stream,
-								LogLevel: domainLogging.LogLevel(strings.ToLower(lvl)), Message: msg,
-								Attributes: map[string]string{"service": cleanName},
-							}})
-						}
-					}
-				}
-				go streamPipe(stdoutReader, "stdout", "INFO")
-				go streamPipe(stderrReader, "stderr", "WARN")
-				_, _ = stdcopy.StdCopy(stdoutWriter, stderrWriter, reader)
-				_ = stdoutWriter.Close()
-				_ = stderrWriter.Close()
-			}(cID, cName)
-		}
-	}()
-}
-
-func parseDockerLogLine(line string) (time.Time, string) {
-	if idx := strings.IndexByte(line, ' '); idx >= 19 && idx <= 35 {
-		rawTS := line[:idx]
-		if t, err := time.Parse(time.RFC3339Nano, rawTS); err == nil {
-			return t.UTC(), strings.TrimSpace(line[idx+1:])
-		}
-		if t, err := time.Parse(time.RFC3339, rawTS); err == nil {
-			return t.UTC(), strings.TrimSpace(line[idx+1:])
-		}
-	}
-	return time.Now().UTC(), line
-}
-
-func detectLogLevel(msg string, defaultLvl string) string {
-	u := strings.ToUpper(msg)
-	switch {
-	case strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC"):
-		return "ERROR"
-	case strings.Contains(u, "WARN"):
-		return "WARN"
-	case strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE"):
-		return "DEBUG"
-	case strings.Contains(u, "INFO"):
-		return "INFO"
-	default:
-		return defaultLvl
-	}
-}
 
 func wireCentralizedLogging(ctx context.Context, log *zap.Logger, computeHostRepo domainDocker.ComputeHostRepository) (*adapthttp.LogHandler, func()) {
 	chHost := os.Getenv("CLICKHOUSE_HOST")
