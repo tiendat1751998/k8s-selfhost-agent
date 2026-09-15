@@ -46,26 +46,7 @@ export function useChangesTimeline() {
   const driftRecords = ref<DriftRecord[]>([])
   const deployments = ref<DeploymentApp[]>([])
   const auditFindings = ref<AuditFinding[]>([])
-  const maintenanceWindows = ref<MaintenanceWindow[]>([
-    {
-      id: 'mw-101',
-      title: 'Kernel Security Patching & Node Rolling Restart',
-      cluster: 'prod-us-east-1',
-      start_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-      end_at: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
-      active: true,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 'mw-102',
-      title: 'Etcd Snapshot & TLS Certificate Rotation',
-      cluster: 'prod-eu-west-1',
-      start_at: new Date(Date.now() + 180 * 60 * 1000).toISOString(),
-      end_at: new Date(Date.now() + 300 * 60 * 1000).toISOString(),
-      active: false,
-      created_at: new Date().toISOString()
-    }
-  ])
+  const maintenanceWindows = ref<MaintenanceWindow[]>([])
 
   // Filters & Drawer State
   const searchQuery = ref<string>('')
@@ -82,7 +63,7 @@ export function useChangesTimeline() {
     title: '',
     description: '',
     type: 'standard' as 'standard' | 'emergency',
-    cluster: 'prod-us-east-1',
+    cluster: 'default',
     namespace: 'production-core',
     resource: 'deployment/payment-processor',
     requester: 'sre.lead@enterprise.io'
@@ -144,7 +125,7 @@ export function useChangesTimeline() {
         category: isEm ? 'Emergency Hotfix' : 'Standard RFC',
         severity: isEm ? 'high' : 'low',
         status: cr.status,
-        cluster: cr.cluster || 'prod-us-east-1',
+        cluster: cr.cluster || 'default',
         namespace: cr.namespace || 'production-core',
         resource: cr.resource || 'cluster-config',
         requester: cr.requester,
@@ -171,7 +152,7 @@ export function useChangesTimeline() {
         category: 'Config Drift',
         severity: drift.status === 'drifted' ? 'high' : 'low',
         status: drift.status,
-        cluster: drift.cluster || 'prod-us-east-1',
+        cluster: drift.cluster || 'default',
         namespace: drift.namespace || 'default',
         resource: `${drift.resource_kind || 'Resource'}/${drift.resource}`,
         timestamp: drift.detected_at || new Date().toISOString(),
@@ -196,7 +177,7 @@ export function useChangesTimeline() {
           category: 'Rollback Point',
           severity: dep.status === 'healthy' ? 'low' : 'medium',
           status: dep.status,
-          cluster: dep.target || 'prod-us-east-1',
+          cluster: dep.target || 'default',
           namespace: dep.namespace || 'default',
           resource: `deployment/${dep.name}`,
           timestamp: dep.created || new Date().toISOString(),
@@ -221,7 +202,7 @@ export function useChangesTimeline() {
           category: 'Audit Mutation',
           severity: audit.severity,
           status: audit.status,
-          cluster: 'prod-us-east-1',
+          cluster: 'default',
           namespace: 'kube-system',
           resource: 'security-policy/rbac',
           timestamp: audit.detected_at || new Date().toISOString(),
@@ -261,9 +242,10 @@ export function useChangesTimeline() {
   })
 
   const availableClusters = computed<string[]>(() => {
-    const set = new Set<string>(['prod-us-east-1', 'prod-eu-west-1', 'staging-us-east'])
-    for (const ev of allEvents.value) if (ev.cluster) set.add(ev.cluster)
-    return Array.from(set)
+    const list = Array.from(new Set(
+      allEvents.value.map(ev => ev.cluster).filter((c): c is string => Boolean(c && c.trim()))
+    )).sort()
+    return list.length > 0 ? list : ['default']
   })
 
   const totalChanges24h = computed(() => allEvents.value.filter(e => isWithinWindow(e.timestamp, '24h')).length)
