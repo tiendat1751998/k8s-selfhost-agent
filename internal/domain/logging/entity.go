@@ -106,6 +106,7 @@ type LogFilter struct {
 	Namespace     string            `json:"namespace,omitempty"`
 	PodName       string            `json:"pod_name,omitempty"`
 	ContainerName string            `json:"container_name,omitempty"`
+	ServiceName   string            `json:"service_name,omitempty"`
 	Stream        string            `json:"stream,omitempty"`
 	LogLevel      LogLevel          `json:"log_level,omitempty"`
 	SearchText    string            `json:"search_text,omitempty"`

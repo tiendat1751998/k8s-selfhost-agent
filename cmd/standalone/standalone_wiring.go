@@ -24,6 +24,7 @@ import (
 	infraClickhouse "github.com/datdt/k8sselfhost/internal/infrastructure/clickhouse"
 	usecaseLogging "github.com/datdt/k8sselfhost/internal/usecase/logging"
 	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
+	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
 	domainLB "github.com/datdt/k8sselfhost/internal/domain/loadbalancer"
 	domainDocker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
@@ -254,7 +255,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	centralizedLogs, chCleanup := wireCentralizedLogging(ctx, log, computeHostRepo)
 
 	if dockerClient != nil {
-		startDockerLogStreamer(ctx, dockerClient, logAggregator, log)
+		startDockerLogStreamer(ctx, dockerClient, logAggregator, centralizedLogs, log)
 	}
 
 	platformHandlers := &adapthttp.PlatformHandlers{
@@ -340,64 +341,51 @@ func initLLMRegistry(cfg *config.Config, log *zap.Logger) *llm.ProviderRegistry 
 	return registry
 }
 
-func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Client, logAggregator *logging.LogAggregator, log *zap.Logger) {
+func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Client, logAggregator *logging.LogAggregator, centralizedLogs *adapthttp.LogHandler, log *zap.Logger) {
 	go func() {
-		containers, err := dockerClient.ContainerList(ctx, container.ListOptions{})
+		containers, err := dockerClient.ContainerList(ctx, container.ListOptions{All: true})
 		if err != nil {
 			log.Warn("Failed to list Docker containers for log streaming", zap.Error(err))
 			return
 		}
-
 		for _, c := range containers {
 			cID := c.ID
 			cName := cID
-			if len(cID) > 12 {
-				cName = cID[:12]
-			}
-			if len(c.Names) > 0 {
-				cName = strings.TrimPrefix(c.Names[0], "/")
-			}
-
+			if len(cID) > 12 { cName = cID[:12] }
+			if len(c.Names) > 0 { cName = strings.TrimPrefix(c.Names[0], "/") }
 			go func(id, name string) {
-				reader, logErr := dockerClient.ContainerLogs(ctx, id, container.LogsOptions{
-					ShowStdout: true,
-					ShowStderr: true,
-					Follow:     true,
-					Tail:       "25",
-				})
+				cleanName := strings.TrimPrefix(name, "/")
+				reader, logErr := dockerClient.ContainerLogs(ctx, id, container.LogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "25"})
 				if logErr != nil {
-					log.Debug("Failed to open Docker log stream", zap.String("container", name), zap.Error(logErr))
+					log.Debug("Failed to open Docker log stream", zap.String("container", cleanName), zap.Error(logErr))
 					return
 				}
 				defer reader.Close()
-
 				stdoutReader, stdoutWriter := io.Pipe()
 				stderrReader, stderrWriter := io.Pipe()
-
 				streamPipe := func(r io.Reader, stream, defaultLvl string) {
 					scanner := bufio.NewScanner(r)
 					for scanner.Scan() {
 						line := strings.TrimSpace(scanner.Text())
-						if line == "" {
-							continue
-						}
+						if line == "" || line == "-- No entries --" { continue }
+						lvl := detectLogLevel(line, defaultLvl)
+						now := time.Now().UTC()
 						logAggregator.Ingest(logging.LogEntry{
-							Timestamp: time.Now().UTC(),
-							Namespace: "docker",
-							Pod:       name,
-							Container: name,
-							Service:   name,
-							Node:      "standalone-host",
-							Stream:    stream,
-							Level:     detectLogLevel(line, defaultLvl),
-							Message:   line,
+							Timestamp: now, Namespace: "docker", Pod: cleanName, Container: cleanName,
+							Service: cleanName, Node: "standalone-host", Stream: stream, Level: lvl, Message: line,
 						})
+						if centralizedLogs != nil {
+							_ = centralizedLogs.Ingest(ctx, []domainLogging.LogEntry{{
+								Timestamp: now, TenantID: "default-tenant", ClusterID: "default", Namespace: "docker",
+								PodName: cleanName, ContainerName: cleanName, Stream: stream,
+								LogLevel: domainLogging.LogLevel(strings.ToLower(lvl)), Message: line,
+								Attributes: map[string]string{"service": cleanName},
+							}})
+						}
 					}
 				}
-
 				go streamPipe(stdoutReader, "stdout", "INFO")
 				go streamPipe(stderrReader, "stderr", "WARN")
-
 				_, _ = stdcopy.StdCopy(stdoutWriter, stderrWriter, reader)
 				_ = stdoutWriter.Close()
 				_ = stderrWriter.Close()
@@ -460,7 +448,8 @@ func wireCentralizedLogging(ctx context.Context, log *zap.Logger, computeHostRep
 		log.Info("ClickHouse not configured, activating distributed edge log engine")
 	}
 
-	distRepo := infraAgent.NewDistributedAgentLogRepo(computeHostRepo, infraAgent.NewAgentLogClient())
+	memRepo := logging.NewMemoryLogRepo(50000)
+	distRepo := infraAgent.NewDistributedAgentLogRepo(computeHostRepo, infraAgent.NewAgentLogClient(), memRepo)
 	return adapthttp.NewLogHandler(usecaseLogging.NewService(distRepo), distRepo), nil
 }
 
