@@ -43,7 +43,7 @@
 
 /* 2. Toast Panels (Header Dropdown vs Floating Fixed) */
 .header-alert-toast {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 9999;
+  position: fixed; top: 66px; right: 20px; z-index: 9999;
   width: 380px; max-width: calc(100vw - 32px);
   background: rgba(15, 23, 42, 0.96); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border-radius: 12px; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px;
