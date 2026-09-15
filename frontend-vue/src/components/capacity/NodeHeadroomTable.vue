@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
 import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import PercentageBar from '../ui/PercentageBar.vue'
@@ -37,20 +37,10 @@ function getSparklineColor(pct: number): string {
 }
 
 function getNodeTrajectory(node: NodeHeadroom): number[] {
-  if ('trajectory' in node && Array.isArray((node as Record<string, unknown>).trajectory)) {
+  if ('trajectory' in node && Array.isArray((node as Record<string, unknown>).trajectory) && ((node as Record<string, unknown>).trajectory as number[]).length > 0) {
     return (node as Record<string, unknown>).trajectory as number[]
   }
-  const base = node.cpuUsagePercent
-  const mem = node.memUsagePercent
-  const diff = (base - mem) / 4
-  return [
-    Math.max(0, Math.round((base - diff * 2) * 10) / 10),
-    Math.max(0, Math.round((base - diff) * 10) / 10),
-    Math.max(0, Math.round(((base + mem) / 2) * 10) / 10),
-    Math.max(0, Math.round((base + diff * 0.5) * 10) / 10),
-    Math.max(0, Math.round((base - diff * 0.5) * 10) / 10),
-    base,
-  ]
+  return [node.cpuUsagePercent, node.cpuUsagePercent]
 }
 </script>
 
@@ -87,7 +77,12 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="node in nodes" :key="node.id">
+          <tr v-if="nodes.length === 0">
+            <td colspan="7" class="empty-state-cell font-mono text-center text-muted" style="padding: 32px 16px; text-align: center;">
+              No cluster nodes reporting headroom telemetry.
+            </td>
+          </tr>
+          <tr v-for="node in nodes" v-else :key="node.id">
             <td>
               <div class="node-name-cell">
                 <span class="node-name font-mono" :title="node.name">{{ node.name }}</span>
@@ -214,4 +209,3 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
   flex-wrap: wrap;
 }
 </style>
-

@@ -17,10 +17,10 @@ function getY(val: number): number {
 }
 
 const cpuPoints = computed(() => {
-  const current = cpuForecast.value?.current_usage ?? 64.2
-  const d7 = cpuForecast.value?.forecast_7d ?? 68.5
-  const d30 = cpuForecast.value?.forecast_30d ?? 76.1
-  const d90 = cpuForecast.value?.forecast_90d ?? 86.4
+  const current = cpuForecast.value?.current_usage ?? 0
+  const d7 = cpuForecast.value?.forecast_7d ?? current
+  const d30 = cpuForecast.value?.forecast_30d ?? d7
+  const d90 = cpuForecast.value?.forecast_90d ?? d30
   return [
     { x: 18, y: getY(current), val: current },
     { x: 110, y: getY(d7), val: d7 },
@@ -30,10 +30,10 @@ const cpuPoints = computed(() => {
 })
 
 const memPoints = computed(() => {
-  const current = memForecast.value?.current_usage ?? 58.7
-  const d7 = memForecast.value?.forecast_7d ?? 61.2
-  const d30 = memForecast.value?.forecast_30d ?? 67.9
-  const d90 = memForecast.value?.forecast_90d ?? 78.3
+  const current = memForecast.value?.current_usage ?? 0
+  const d7 = memForecast.value?.forecast_7d ?? current
+  const d30 = memForecast.value?.forecast_30d ?? d7
+  const d90 = memForecast.value?.forecast_90d ?? d30
   return [
     { x: 18, y: getY(current), val: current },
     { x: 110, y: getY(d7), val: d7 },
@@ -83,7 +83,7 @@ const isWarning = computed(() => {
         ></span>
         <span class="mobile-trend-title">Forecast Runways</span>
         <span class="mobile-trend-runway font-mono">
-          ⏳ {{ exhaustion?.value || '> 90d' }}
+          {{ exhaustion?.value || '> 90d' }}
         </span>
       </div>
       <div class="mobile-trend-badges font-mono">

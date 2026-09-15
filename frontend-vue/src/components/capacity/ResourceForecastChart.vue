@@ -20,22 +20,22 @@ function getY(val: number): number {
 }
 
 // Regression path points for CPU
-const cpuCurrent = computed(() => cpuForecast.value?.current_usage ?? 64.2)
-const cpu7d = computed(() => cpuForecast.value?.forecast_7d ?? 68.5)
-const cpu30d = computed(() => cpuForecast.value?.forecast_30d ?? 76.1)
-const cpu90d = computed(() => cpuForecast.value?.forecast_90d ?? 86.4)
+const cpuCurrent = computed(() => cpuForecast.value?.current_usage ?? 0)
+const cpu7d = computed(() => cpuForecast.value?.forecast_7d ?? cpuCurrent.value)
+const cpu30d = computed(() => cpuForecast.value?.forecast_30d ?? cpu7d.value)
+const cpu90d = computed(() => cpuForecast.value?.forecast_90d ?? cpu30d.value)
 
 // Regression path points for Memory
-const memCurrent = computed(() => memForecast.value?.current_usage ?? 58.7)
-const mem7d = computed(() => memForecast.value?.forecast_7d ?? 61.2)
-const mem30d = computed(() => memForecast.value?.forecast_30d ?? 67.9)
-const mem90d = computed(() => memForecast.value?.forecast_90d ?? 78.3)
+const memCurrent = computed(() => memForecast.value?.current_usage ?? 0)
+const mem7d = computed(() => memForecast.value?.forecast_7d ?? memCurrent.value)
+const mem30d = computed(() => memForecast.value?.forecast_30d ?? mem7d.value)
+const mem90d = computed(() => memForecast.value?.forecast_90d ?? mem30d.value)
 
 // Regression path points for Storage
-const storCurrent = computed(() => storForecast.value?.current_usage ?? 42.1)
-const stor7d = computed(() => storForecast.value?.forecast_7d ?? 44.0)
-const stor30d = computed(() => storForecast.value?.forecast_30d ?? 48.6)
-const stor90d = computed(() => storForecast.value?.forecast_90d ?? 57.2)
+const storCurrent = computed(() => storForecast.value?.current_usage ?? 0)
+const stor7d = computed(() => storForecast.value?.forecast_7d ?? storCurrent.value)
+const stor30d = computed(() => storForecast.value?.forecast_30d ?? stor7d.value)
+const stor90d = computed(() => storForecast.value?.forecast_90d ?? stor30d.value)
 </script>
 
 <template>
