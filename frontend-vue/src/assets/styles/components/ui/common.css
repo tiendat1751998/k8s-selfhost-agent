@@ -216,12 +216,10 @@
   0%, 100% {
     opacity: 1;
     transform: scale(1);
-    box-shadow: 0 0 6px #f59e0b;
   }
   50% {
     opacity: 0.45;
     transform: scale(0.85);
-    box-shadow: 0 0 2px #f59e0b;
   }
 }
 
@@ -237,7 +235,6 @@
 }
 .dot-emerald {
   background-color: #10b981;
-  box-shadow: 0 0 6px #10b981;
 }
 
 .badge-amber {
@@ -247,7 +244,6 @@
 }
 .dot-amber {
   background-color: #f59e0b;
-  box-shadow: 0 0 6px #f59e0b;
 }
 
 .badge-rose {
@@ -257,7 +253,6 @@
 }
 .dot-rose {
   background-color: #f43f5e;
-  box-shadow: 0 0 6px #f43f5e;
 }
 
 .badge-slate {
@@ -267,7 +262,6 @@
 }
 .dot-slate {
   background-color: #64748b;
-  box-shadow: 0 0 6px #64748b;
 }
 
 .badge-cyan {
@@ -277,7 +271,6 @@
 }
 .dot-cyan {
   background-color: #06b6d4;
-  box-shadow: 0 0 6px #06b6d4;
 }
 
 .badge-violet {
@@ -287,7 +280,6 @@
 }
 .dot-violet {
   background-color: #8b5cf6;
-  box-shadow: 0 0 6px #8b5cf6;
 }
 
 /* === ViewModeSwitcher.vue === */

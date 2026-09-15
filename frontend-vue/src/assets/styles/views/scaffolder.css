@@ -108,7 +108,7 @@
 .scaffolder-toolbar-sleek .toolbar-pill-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
 .scaffolder-toolbar-sleek .toolbar-pill-btn.active {
   background: rgba(6, 182, 212, 0.2); color: #38bdf8; border-color: rgba(6, 182, 212, 0.5);
-  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.2);
+  box-shadow: none;
 }
 
 /* Category Filter Dropdown (Tablet / Mobile compact fallback) */
@@ -139,8 +139,17 @@
   border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
   cursor: pointer; transition: all 0.15s ease;
 }
-.scaffolder-toolbar-sleek .toolbar-btn.btn-primary { background: #22c55e; color: #020617; border: none; font-weight: 700; }
-.scaffolder-toolbar-sleek .toolbar-btn.btn-primary:hover { background: #16a34a; color: #fff; }
+.scaffolder-toolbar-sleek .toolbar-btn.btn-primary {
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 600;
+}
+.scaffolder-toolbar-sleek .toolbar-btn.btn-primary:hover {
+  background: #1d4ed8;
+  color: #fff;
+  box-shadow: none;
+}
 .scaffolder-toolbar-sleek .toolbar-btn.btn-secondary {
   background: rgba(255, 255, 255, 0.06); border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2)); color: #e2e8f0;
 }
@@ -176,10 +185,10 @@
 
 .btn-deploy {
   height: 32px; min-height: 32px; padding: 0 12px; display: inline-flex; align-items: center;
-  justify-content: center; gap: 5px; background: #22c55e; color: #020617; font-size: 12px;
-  font-weight: 700; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: all 0.15s ease;
+  justify-content: center; gap: 5px; background: #2563eb; color: #ffffff; font-size: 12px;
+  font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; cursor: pointer; white-space: nowrap; transition: all 0.15s ease;
 }
-.btn-deploy:hover { background: #16a34a; color: #fff; }
+.btn-deploy:hover { background: #1d4ed8; color: #fff; }
 
 .btn-preview {
   height: 32px; min-height: 32px; padding: 0 10px; display: inline-flex; align-items: center;
@@ -218,10 +227,10 @@
 
 .btn-mobile-deploy {
   height: 32px; min-height: 32px; padding: 0 10px; display: inline-flex; align-items: center;
-  justify-content: center; gap: 4px; background: #22c55e; color: #020617; font-size: 11.5px;
-  font-weight: 700; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: all 0.15s ease;
+  justify-content: center; gap: 4px; background: #2563eb; color: #ffffff; font-size: 11.5px;
+  font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; cursor: pointer; white-space: nowrap; transition: all 0.15s ease;
 }
-.btn-mobile-deploy:hover { background: #16a34a; color: #fff; }
+.btn-mobile-deploy:hover { background: #1d4ed8; color: #fff; }
 
 /* Loading & Empty States */
 .loading-state, .empty-state, .mobile-empty-state {
