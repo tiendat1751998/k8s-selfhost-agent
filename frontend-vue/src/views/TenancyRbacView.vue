@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useTenancyRbac } from '../composables/useTenancyRbac'
-import MetricCard from '../components/ui/MetricCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
@@ -29,10 +28,12 @@ const {
   selectedOrgForQuota,
   newProj,
   isSubmitting,
-  feedbackMessage,
   filteredProjects,
+  filteredOrganizations,
+  tenancySearchQuery,
+  clearSearch,
+  loadData,
   filteredMembers,
-  totalWorkloads,
   organizationStats,
   rbacResources,
   rbacRoles,
@@ -52,100 +53,42 @@ const {
 
 <template>
   <div class="tenancy-page">
-    <!-- Header -->
-    <div class="page-header desktop-header desktop-only">
-      <div class="header-titles">
-        <div class="header-badge">
-          <span class="badge badge-cyan">Multi-Tenant Isolation</span>
-          <span class="badge badge-emerald">ZeroTrust RBAC Matrix</span>
+    <!-- Sleek 42px Toolbar -->
+    <div class="tenancy-toolbar-sleek glass-panel desktop-only">
+      <div class="toolbar-left">
+        <div class="tab-pills">
+          <button class="tab-btn" :class="{ active: activeTab === 'tenants' }" @click="activeTab = 'tenants'">
+            <span>Organizations</span> <span class="tab-count">{{ organizations.length }}</span>
+          </button>
+          <button class="tab-btn" :class="{ active: activeTab === 'members' }" @click="activeTab = 'members'">
+            <span>Members & Roles</span> <span class="tab-count">{{ filteredMembers.length }}</span>
+          </button>
+          <button class="tab-btn" :class="{ active: activeTab === 'projects' }" @click="activeTab = 'projects'">
+            <span>Project Namespaces</span> <span class="tab-count">{{ filteredProjects.length }}</span>
+          </button>
+          <button class="tab-btn" :class="{ active: activeTab === 'rbac' }" @click="activeTab = 'rbac'">
+            <span>RBAC Matrix</span>
+          </button>
         </div>
-        <h1 class="page-title">Enterprise Tenancy & RBAC Hub</h1>
-        <p class="page-desc">
-          Manage multi-organization workspace boundaries, project namespaces, member role bindings, and granular Kubernetes privilege matrices.
-        </p>
       </div>
-
-      <div class="header-actions">
-        <button class="btn btn-secondary" @click="showOrgModal = true"><span>+ New Organization</span></button>
-        <button class="btn btn-primary" @click="showProjectModal = true"><span>+ Create Project</span></button>
+      <div class="toolbar-center">
+        <div class="search-pill">
+          <BaseIcon name="search" size="xs" class="search-icon" />
+          <input type="text" v-model="tenancySearchQuery" placeholder="Search..." class="search-input-sleek" />
+          <button v-if="tenancySearchQuery" @click="clearSearch" class="clear-btn"><BaseIcon name="x" size="xs" /></button>
+        </div>
+        <div class="scope-select">
+          <span class="scope-label">Active Scope:</span>
+          <select v-model="selectedOrgId" class="select-scope-sleek">
+            <option value="all">All Organizations</option>
+            <option v-for="org in organizations" :key="org.id" :value="org.id">{{ org.name }}</option>
+          </select>
+        </div>
       </div>
-    </div>
-
-    <!-- Mobile 40px Command Bar (<640px) -->
-    <div class="tenancy-mobile-command-bar mobile-only">
-      <div class="command-bar-left">
-        <span class="command-bar-title font-bold"><BaseIcon name="building" size="xs" /> Tenancy ({{ organizations.length }})</span>
-      </div>
-      <div class="command-bar-actions">
-        <button
-          class="btn-icon-cmd"
-          title="Create Project"
-          aria-label="Create Project"
-          @click="showProjectModal = true"
-        >
-          <BaseIcon name="plus" size="xs" />
-        </button>
-        <button
-          class="btn-icon-cmd"
-          title="New Organization"
-          aria-label="New Organization"
-          @click="showOrgModal = true"
-        >
-          <BaseIcon name="building" size="xs" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
-    <div class="tenancy-micro-telemetry mobile-only font-mono" role="status" aria-label="Tenancy Micro Telemetry">
-      <span class="tel-item tel-orgs"><BaseIcon name="building" size="xs" /> {{ organizations.length }} orgs</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-projs"><BaseIcon name="folder" size="xs" /> {{ filteredProjects.length }} projs</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-wkls"><BaseIcon name="box" size="xs" /> {{ totalWorkloads }} wkls</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-mbrs"><BaseIcon name="users" size="xs" /> {{ filteredMembers.length }} mbrs</span>
-    </div>
-
-    <!-- Alert Banner -->
-    <div v-if="feedbackMessage" class="feedback-banner animate-fade-in">
-      <BaseIcon name="check-circle" size="xs" class="feedback-icon" />
-      <span>{{ feedbackMessage }}</span>
-    </div>
-
-    <!-- Key Metrics Grid -->
-    <div class="metrics-grid desktop-metrics desktop-only">
-      <MetricCard title="Organizations" :value="organizations.length" trend="Multi-Org Isolated" trendType="neutral" />
-      <MetricCard title="Active Projects" :value="filteredProjects.length" trend="+2 namespaces this week" trendType="positive" />
-      <MetricCard title="Live Workloads" :value="totalWorkloads" trend="Replicas across pods" trendType="positive" />
-      <MetricCard title="Active Members" :value="filteredMembers.length" trend="Mapped to RBAC Roles" trendType="neutral" />
-    </div>
-
-    <!-- Filter & Scope Bar -->
-    <div class="scope-bar glass-panel desktop-only">
-      <div class="scope-left">
-        <label class="scope-label">Active Organization Scope:</label>
-        <select v-model="selectedOrgId" class="input-glass select-scope">
-          <option value="all">All Organizations (Global Multi-Tenant)</option>
-          <option v-for="org in organizations" :key="org.id" :value="org.id">
-            {{ org.name }} ({{ org.tier }})
-          </option>
-        </select>
-      </div>
-
-      <div class="tab-pills">
-        <button class="tab-btn" :class="{ active: activeTab === 'tenants' }" @click="activeTab = 'tenants'">
-          <span><BaseIcon name="building" size="xs" /> Organizations</span> <span class="tab-count">{{ organizations.length }}</span>
-        </button>
-        <button class="tab-btn" :class="{ active: activeTab === 'members' }" @click="activeTab = 'members'">
-          <span><BaseIcon name="users" size="xs" /> Members & Roles</span> <span class="tab-count">{{ filteredMembers.length }}</span>
-        </button>
-        <button class="tab-btn" :class="{ active: activeTab === 'projects' }" @click="activeTab = 'projects'">
-          <span><BaseIcon name="folder" size="xs" /> Project Namespaces</span> <span class="tab-count">{{ filteredProjects.length }}</span>
-        </button>
-        <button class="tab-btn" :class="{ active: activeTab === 'rbac' }" @click="activeTab = 'rbac'">
-          <span><BaseIcon name="shield" size="xs" /> Granular RBAC Matrix</span>
-        </button>
+      <div class="toolbar-right">
+        <button class="btn btn-secondary btn-sm" @click="showOrgModal = true"><span>+ New Organization</span></button>
+        <button class="btn btn-primary btn-sm" @click="showProjectModal = true"><span>+ Create Project</span></button>
+        <button class="btn btn-secondary btn-sm btn-icon-only" title="Refresh" @click="loadData"><BaseIcon name="refresh-cw" size="xs" /></button>
       </div>
     </div>
 
@@ -153,7 +96,7 @@ const {
     <div v-if="activeTab === 'tenants'" class="tab-content animate-fade-in">
       <div class="desktop-only-table desktop-only">
         <TenantListTable
-          :organizations="organizations"
+          :organizations="filteredOrganizations"
           :stats="organizationStats"
           :loading="loading"
           @open-members="openMemberDrawer($event)"
@@ -165,7 +108,7 @@ const {
       </div>
       <div class="mobile-only-stream mobile-only">
         <TenancyMobileCards
-          :organizations="organizations"
+          :organizations="filteredOrganizations"
           :stats="organizationStats"
           @open-members="openMemberDrawer($event)"
           @open-rbac="openRbacModal($event)"
@@ -330,7 +273,7 @@ const {
 
     <TenantMemberDrawer
       v-model:show="showMemberDrawer"
-      :organizations="organizations"
+      :organizations="filteredOrganizations"
       :members="members"
       :selected-org-id="selectedOrgForDrawer"
       @invite="handleInviteMember($event)"

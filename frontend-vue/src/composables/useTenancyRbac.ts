@@ -51,6 +51,22 @@ export function useTenancyRbac() {
   const isSubmitting = ref(false)
   const feedbackMessage = ref<string | null>(null)
 
+  // Search State
+  const tenancySearchQuery = ref('')
+
+  const filteredOrganizations = computed(() => {
+    if (!tenancySearchQuery.value.trim()) return organizations.value
+    const q = tenancySearchQuery.value.toLowerCase().trim()
+    return organizations.value.filter(
+      org => org.name.toLowerCase().includes(q) || org.id.toLowerCase().includes(q) || org.tier.toLowerCase().includes(q)
+    )
+  })
+
+  function clearSearch() {
+    tenancySearchQuery.value = ''
+  }
+
+
   // Feedback Notification Utility
   let feedbackTimer: ReturnType<typeof setTimeout> | null = null
   function showFeedback(msg: string) {
@@ -294,6 +310,9 @@ export function useTenancyRbac() {
     newMember,
     isSubmitting,
     feedbackMessage,
+    tenancySearchQuery,
+    filteredOrganizations,
+    clearSearch,
 
     // Computed
     filteredProjects,
