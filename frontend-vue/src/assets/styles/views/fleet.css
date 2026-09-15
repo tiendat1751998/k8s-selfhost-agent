@@ -1,8 +1,9 @@
-/* ==========================================================================
-   Fleet View Page Shell & Sleek Enterprise Toolbar
+﻿/* ==========================================================================
+   Fleet View Page Shell & Layout
    frontend-vue/src/assets/styles/views/fleet.css
    ========================================================================== */
 
+@import '../components/fleet-toolbar.css';
 @import '../components/fleet-hud.css';
 @import '../components/fleet-table.css';
 @import '../components/fleet-drawers.css';
@@ -11,226 +12,6 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-/* Sleek Unified 38px Enterprise Toolbar */
-.fleet-toolbar-sleek {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 38px;
-  min-height: 38px;
-  padding: 0 12px;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  box-sizing: border-box;
-}
-
-/* Search input in toolbar */
-.toolbar-search-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 200px;
-  min-width: 160px;
-  max-width: 240px;
-  height: 30px;
-  flex: 0 1 200px;
-  flex-shrink: 0;
-}
-
-.toolbar-search-icon {
-  position: absolute;
-  left: 9px;
-  color: var(--text-muted);
-  pointer-events: none;
-}
-
-.toolbar-search-input {
-  width: 100%;
-  height: 30px;
-  padding: 0 26px 0 28px;
-  font-size: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle);
-  border-radius: 20px;
-  color: #fff;
-  transition: all 0.15s ease;
-  box-sizing: border-box;
-}
-
-.toolbar-search-input:focus {
-  outline: none;
-  background: rgba(255, 255, 255, 0.07);
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 1px var(--accent-cyan);
-}
-
-.toolbar-search-input::placeholder {
-  color: var(--text-muted);
-  font-family: inherit;
-}
-
-.toolbar-search-clear {
-  position: absolute;
-  right: 6px;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  border-radius: 4px;
-}
-
-.toolbar-search-clear:hover {
-  color: #fff;
-}
-
-/* Dropdowns in toolbar */
-.toolbar-select {
-  height: 28px;
-  padding: 0 8px;
-  font-size: 11.5px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  outline: none;
-  transition: all 0.15s ease;
-  box-sizing: border-box;
-}
-
-.toolbar-select:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  border-color: var(--border-medium, rgba(255, 255, 255, 0.15));
-}
-
-.toolbar-select:focus {
-  border-color: var(--accent-cyan);
-  color: #fff;
-}
-
-.toolbar-select option {
-  background: #0f172a;
-  color: #f8fafc;
-}
-
-/* Inline KPI Badge in toolbar */
-.toolbar-kpi-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 6px;
-  font-size: 11.5px;
-  white-space: nowrap;
-  box-sizing: border-box;
-}
-
-.toolbar-kpi-badge .kpi-count {
-  font-weight: 700;
-  color: var(--accent-cyan);
-}
-
-.toolbar-kpi-badge .kpi-meta {
-  color: var(--text-muted);
-}
-
-/* Spacer */
-.toolbar-spacer {
-  flex: 1;
-}
-
-/* Segmented View Mode Toggle */
-.segmented-control {
-  display: inline-flex;
-  align-items: center;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  padding: 2px;
-  gap: 2px;
-  height: 28px;
-  box-sizing: border-box;
-}
-
-.segmented-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  padding: 0 8px;
-  height: 22px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.segmented-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.segmented-btn.active {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.35);
-  box-shadow: none;
-}
-
-/* Toolbar Action Buttons */
-.toolbar-btn {
-  height: 28px !important;
-  padding: 0 10px !important;
-  font-size: 11.5px !important;
-  font-weight: 600 !important;
-  border-radius: 6px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 6px !important;
-  white-space: nowrap !important;
-  cursor: pointer !important;
-  transition: all 0.15s ease !important;
-}
-
-.toolbar-btn.btn-primary {
-  background: #2563eb;
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.toolbar-btn.btn-primary:hover {
-  background: #1d4ed8;
-  box-shadow: none;
-}
-
-.toolbar-btn.btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-}
-
-.toolbar-btn.btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.09);
-  color: #fff;
-  border-color: var(--border-medium, rgba(255, 255, 255, 0.15));
 }
 
 /* Visibility Controls */
@@ -253,33 +34,11 @@
 /* Mobile Command Bar & Telemetry Strip (Desktop: Hidden) */
 .mobile-fleet-command-bar, .micro-telemetry-strip, .mobile-search-strip { display: none; }
 
-/* Responsive adjustments */
-@media (max-width: 1024px) {
-  .toolbar-kpi-badge { display: none; }
-}
-
+/* Responsive adjustments (< 768px) */
 @media (max-width: 767.98px) {
   .fleet-view .desktop-only { display: none !important; }
   .fleet-view .mobile-only { display: flex !important; }
 
-  .fleet-toolbar-sleek {
-    height: auto;
-    min-height: 38px;
-    flex-wrap: wrap;
-    padding: 8px 10px;
-    gap: 8px;
-  }
-  .toolbar-search-wrap {
-    width: 100%;
-    order: 1;
-  }
-  .toolbar-spacer {
-    display: none;
-  }
-}
-
-@media (max-width: 640px) {
-  .fleet-toolbar-sleek { display: none !important; }
   .mobile-fleet-command-bar {
     display: flex !important;
     align-items: center;
@@ -374,9 +133,6 @@
 }
 
 /* Unification Utility Styles */
-.fleet-toolbar-sleek {
-  transition: all 0.2s ease;
-}
 .text-blue {
   color: #60a5fa;
 }
