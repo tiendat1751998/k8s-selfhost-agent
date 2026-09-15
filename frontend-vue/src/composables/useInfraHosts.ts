@@ -169,9 +169,17 @@ export function useInfraHosts() {
   })
 
   const filteredHosts = computed(() => {
-    return hosts.value.filter(host =>
+    const list = hosts.value.filter(host =>
       matchesHostFilters(host, searchQuery.value, selectedTypeFilter.value, selectedStatusFilter.value, selectedLabelFilter.value)
     )
+    return [...list].sort((a, b) => {
+      const isOnlineA = (a.status === 'connected' || a.status === 'ok') ? 0 : 1
+      const isOnlineB = (b.status === 'connected' || b.status === 'ok') ? 0 : 1
+      if (isOnlineA !== isOnlineB) return isOnlineA - isOnlineB
+      const nameCmp = (a.name || '').localeCompare(b.name || '')
+      if (nameCmp !== 0) return nameCmp
+      return (a.id || '').localeCompare(b.id || '')
+    })
   })
 
   function copyToClipboard(text: string) {
