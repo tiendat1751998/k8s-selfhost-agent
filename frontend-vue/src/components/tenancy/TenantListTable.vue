@@ -23,7 +23,7 @@ const emit = defineEmits<{
 }>()
 
 function confirmDelete(org: Organization) {
-  if (window.confirm(`Are you sure you want to purge organization container "${org.name}" (${org.id})?`)) {
+  if (window.confirm(`Are you sure you want to purge ORGANIZATION "${org.name}" (${org.id})?`)) {
     emit('deleteOrg', org.id)
   }
 }
@@ -35,7 +35,7 @@ function confirmDelete(org: Organization) {
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <span>Loading organization containers...</span>
+      <span>Loading ORGANIZATIONs...</span>
     </div>
 
     <div v-else-if="organizations.length === 0" class="empty-list">
@@ -55,13 +55,13 @@ function confirmDelete(org: Organization) {
         </colgroup>
         <thead>
           <tr>
-            <th class="th-left">Organization Container</th>
-            <th>Service Tier</th>
-            <th>Namespaces</th>
-            <th>Workload Pods</th>
-            <th>SSO Members</th>
-            <th>Boundary Status</th>
-            <th class="th-right">Cluster Actions</th>
+            <th class="th-left">ORGANIZATION</th>
+            <th class="th-tier">TIER</th>
+            <th class="th-num">NAMESPACES</th>
+            <th class="th-num">PODS</th>
+            <th class="th-num">MEMBERS</th>
+            <th class="th-status">STATUS</th>
+            <th class="th-actions">ACTIONS</th>
           </tr>
         </thead>
         <tbody>
@@ -119,3 +119,4 @@ function confirmDelete(org: Organization) {
     </div>
   </div>
 </template>
+
