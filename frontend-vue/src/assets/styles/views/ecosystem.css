@@ -171,8 +171,17 @@
 
 /* --- High-Density Integration Tiles Grid --- */
 .tools-grid {
-  display: grid !important; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)) !important;
-  gap: 16px; width: 100%; box-sizing: border-box;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+  gap: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 1200px) {
+  .tools-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
 }
 .tool-card {
   display: flex; flex-direction: column; justify-content: space-between;
@@ -370,5 +379,11 @@
 }
 
 @media (min-width: 1024px) {
-  .tools-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)) !important; gap: 16px; }
+  .tools-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important; gap: 16px; }
+}
+
+@media (min-width: 1200px) {
+  .tools-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
 }
