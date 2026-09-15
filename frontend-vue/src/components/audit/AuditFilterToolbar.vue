@@ -72,6 +72,18 @@ function onEndDateChange(e: Event, currentStart: string) {
   const target = e.target as HTMLInputElement
   emit('update:dateRange', { start: currentStart, end: target.value })
 }
+
+function formatActorLabel(actor: string): string {
+  if (!actor || actor === 'all') return actor
+  if (actor.includes('@')) {
+    const [user] = actor.split('@')
+    return user.length > 16 ? user.slice(0, 14) + '...' : user
+  }
+  if (actor.length > 16) {
+    return actor.slice(0, 14) + '...'
+  }
+  return actor
+}
 </script>
 
 <template>
@@ -86,6 +98,7 @@ function onEndDateChange(e: Event, currentStart: string) {
         :value="searchQuery"
         placeholder="Search trail..."
         aria-label="Search audit trail"
+        title="Search audit trail"
         @input="$emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
       />
       <button
@@ -108,8 +121,9 @@ function onEndDateChange(e: Event, currentStart: string) {
         type="button"
         role="tab"
         :aria-selected="selectedActionType === pill.key"
-        class="sleek-pill-btn"
+        class="sleek-pill-btn sleek-pill"
         :class="{ active: selectedActionType === pill.key }"
+        :title="'Filter by ' + pill.label + ' (' + pill.count + ')'"
         @click="$emit('update:selectedActionType', pill.key)"
       >
         <span>{{ pill.label }}</span>
@@ -120,21 +134,23 @@ function onEndDateChange(e: Event, currentStart: string) {
     <!-- Center-Right: Compact 28px select dropdowns for Actor and Severity -->
     <div class="sleek-select-group font-mono">
       <select
-        class="sleek-select"
+        class="sleek-select sleek-select-actor"
         :value="selectedActor"
         aria-label="Filter by Actor"
+        title="Filter by Actor"
         @change="$emit('update:selectedActor', ($event.target as HTMLSelectElement).value)"
       >
         <option value="all">All Actors ({{ uniqueActors.length }})</option>
-        <option v-for="actor in uniqueActors" :key="actor" :value="actor">
-          {{ actor }}
+        <option v-for="actor in uniqueActors" :key="actor" :value="actor" :title="actor">
+          {{ formatActorLabel(actor) }}
         </option>
       </select>
 
       <select
-        class="sleek-select"
+        class="sleek-select sleek-select-severity"
         :value="selectedSeverity"
         aria-label="Filter by Severity"
+        title="Filter by Severity"
         @change="$emit('update:selectedSeverity', ($event.target as HTMLSelectElement).value as 'ALL' | AuditSeverity)"
       >
         <option value="ALL">All Severities</option>
@@ -153,6 +169,7 @@ function onEndDateChange(e: Event, currentStart: string) {
         :class="{ 'live-active': isLiveTailing }"
         type="button"
         :title="isLiveTailing ? 'Live Tail Active (Click to Pause)' : 'Start Live Stream'"
+        :aria-label="isLiveTailing ? 'Live Tail Active (Click to Pause)' : 'Start Live Stream'"
         @click="$emit('toggle-live-tail')"
       >
         <span class="sleek-live-dot" :class="{ active: isLiveTailing }"></span>
@@ -160,27 +177,29 @@ function onEndDateChange(e: Event, currentStart: string) {
       </button>
 
       <button
-        class="sleek-btn"
+        class="sleek-btn sleek-btn-csv"
         type="button"
         title="Export audit events as CSV"
+        aria-label="Export audit events as CSV"
         @click="$emit('export-csv')"
       >
         <BaseIcon name="file-text" size="xs" />
-        <span>CSV</span>
+        <span class="sleek-btn-text">CSV</span>
       </button>
 
       <button
-        class="sleek-btn"
+        class="sleek-btn sleek-btn-json"
         type="button"
         title="Export audit events as JSON"
+        aria-label="Export audit events as JSON"
         @click="$emit('export-json')"
       >
         <BaseIcon name="box" size="xs" />
-        <span>JSON</span>
+        <span class="sleek-btn-text">JSON</span>
       </button>
 
       <button
-        class="sleek-btn sleek-btn-icon"
+        class="sleek-btn sleek-btn-icon sleek-btn-reset"
         type="button"
         title="Reset all filters"
         aria-label="Reset all filters"
@@ -241,11 +260,12 @@ function onEndDateChange(e: Event, currentStart: string) {
             class="input-glass filter-select font-mono"
             :value="selectedActor"
             aria-label="Filter by actor"
+            title="Filter by actor"
             @change="$emit('update:selectedActor', ($event.target as HTMLSelectElement).value)"
           >
             <option value="all">All Actors ({{ uniqueActors.length }})</option>
-            <option v-for="actor in uniqueActors" :key="actor" :value="actor">
-              {{ actor }}
+            <option v-for="actor in uniqueActors" :key="actor" :value="actor" :title="actor">
+              {{ formatActorLabel(actor) }}
             </option>
           </select>
         </div>
@@ -256,6 +276,7 @@ function onEndDateChange(e: Event, currentStart: string) {
             class="input-glass filter-select font-mono"
             :value="selectedSeverity"
             aria-label="Filter by severity"
+            title="Filter by severity"
             @change="$emit('update:selectedSeverity', ($event.target as HTMLSelectElement).value as 'ALL' | AuditSeverity)"
           >
             <option value="ALL">All Severities</option>
@@ -292,20 +313,35 @@ function onEndDateChange(e: Event, currentStart: string) {
           class="btn btn-secondary btn-sm"
           :class="{ 'btn-primary': isLiveTailing }"
           type="button"
+          :title="isLiveTailing ? 'Live Tail Active (Click to Pause)' : 'Start Live Stream'"
+          :aria-label="isLiveTailing ? 'Live Tail Active (Click to Pause)' : 'Start Live Stream'"
           @click="$emit('toggle-live-tail')"
         >
           <BaseIcon :name="isLiveTailing ? 'pause' : 'zap'" size="xs" /> <span>{{ isLiveTailing ? 'Tail Active' : 'Live Tail' }}</span>
         </button>
-        <button class="btn btn-secondary btn-sm" type="button" @click="$emit('export-csv')">
+        <button
+          class="btn btn-secondary btn-sm"
+          type="button"
+          title="Export audit events as CSV"
+          aria-label="Export audit events as CSV"
+          @click="$emit('export-csv')"
+        >
           <BaseIcon name="file-text" size="xs" /> <span>CSV</span>
         </button>
-        <button class="btn btn-secondary btn-sm" type="button" @click="$emit('export-json')">
+        <button
+          class="btn btn-secondary btn-sm"
+          type="button"
+          title="Export audit events as JSON"
+          aria-label="Export audit events as JSON"
+          @click="$emit('export-json')"
+        >
           <BaseIcon name="box" size="xs" /> <span>JSON</span>
         </button>
         <button
           class="btn btn-secondary btn-sm"
           type="button"
           title="Reset all filters"
+          aria-label="Reset all filters"
           @click="$emit('reset-filters')"
         >
           <BaseIcon name="refresh" size="xs" /> <span>Reset</span>
