@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useReports } from '../composables/useReports'
-import MetricCard from '../components/ui/MetricCard.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import ReportsCatalogGrid from '../components/reports/ReportsCatalogGrid.vue'
+import ReportsFilterToolbar from '../components/reports/ReportsFilterToolbar.vue'
 import GeneratedReportsTable from '../components/reports/GeneratedReportsTable.vue'
 import ReportsMobileCards from '../components/reports/ReportsMobileCards.vue'
 import ScheduleReportModal from '../components/reports/ScheduleReportModal.vue'
@@ -14,8 +15,9 @@ const {
   loading,
   reports,
   schedules,
-  frameworks,
   selectedType,
+  searchQuery,
+  categoryCounts,
   feedbackMessage,
   showGenerateModal,
   showScheduleModal,
@@ -25,9 +27,6 @@ const {
   newReport,
   reportColumns,
   filteredReports,
-  completedCount,
-  complianceScore,
-  storageFootprint,
   loadReports,
   openPreview,
   downloadReport,
@@ -46,20 +45,17 @@ onMounted(() => {
 
 <template>
   <div class="reports-page">
+    <!-- Slim Executive Header -->
     <div class="page-header desktop-header desktop-only">
       <div class="header-titles">
-        <div class="header-badge">
-          <span class="badge badge-emerald">SOC2 / CIS Compliant</span>
-          <span class="badge badge-cyan">Automated Executive Digest</span>
+        <div class="enterprise-tag font-mono">
+          <span class="pulse-dot"></span>
+          <span>SOC2 / CIS Compliance Engine</span>
         </div>
         <h1 class="page-title">Compliance & Platform Reports Center</h1>
         <p class="page-desc">
-          Generate, schedule, and download executive audits, FinOps cloud cost optimizations, Disaster Recovery drill verifications, and DevSecOps compliance reports.
+          Automated executive audits, FinOps cloud cost optimizations, Disaster Recovery drill verifications, and DevSecOps compliance reports.
         </p>
-      </div>
-      <div class="header-actions">
-        <button class="btn btn-secondary" @click="showScheduleModal = true"><BaseIcon name="clock" size="xs" /> <span>Schedule Cadence</span></button>
-        <button class="btn btn-primary" @click="showGenerateModal = true"><span>+ Generate New Report</span></button>
       </div>
     </div>
 
@@ -105,32 +101,43 @@ onMounted(() => {
       <span>{{ feedbackMessage }}</span>
     </div>
 
-    <div class="metrics-grid desktop-metrics desktop-only">
-      <MetricCard title="Compiled Reports" :value="completedCount" :trend="completedCount > 0 ? 'Archived on NVMe + S3' : 'No reports compiled'" :trendType="completedCount > 0 ? 'positive' : 'neutral'" />
-      <MetricCard title="Compliance Score" :value="complianceScore || '—'" :trend="complianceScore ? `${frameworks.filter(f => (f.score || 0) >= 80).length}/${frameworks.length} Frameworks Passing` : 'No compliance data'" :trendType="complianceScore ? 'positive' : 'neutral'" />
-      <MetricCard title="Storage Footprint" :value="storageFootprint || '—'" :trend="storageFootprint ? 'Encrypted AES-256' : 'No storage footprint'" trendType="neutral" />
-      <MetricCard title="Scheduled Cadence" :value="filteredReports.length > 0 ? 'Daily / Weekly' : '—'" :trend="filteredReports.length > 0 ? 'Automated Dispatch' : 'No active cadence'" trendType="neutral" />
-    </div>
-
+    <!-- Sleek 36px Quick-Launch Strip -->
     <ReportsCatalogGrid @quickGenerate="quickGenerate" />
 
-    <div class="filter-bar glass-panel">
-      <div class="filter-left">
-        <span class="filter-label">Filter Category:</span>
-        <div class="type-pills">
-          <button v-for="t in ['all', 'compliance', 'security', 'cost', 'operational', 'incident']" :key="t" class="tpill" :class="{ active: selectedType === t }" @click="selectedType = t">
-            {{ t.toUpperCase() }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Unified 42px Sleek Toolbar -->
+    <ReportsFilterToolbar
+      v-model:searchQuery="searchQuery"
+      v-model:selectedType="selectedType"
+      :categoryCounts="categoryCounts"
+      :loading="loading"
+      @schedule="showScheduleModal = true"
+      @refresh="loadReports"
+      @generate="showGenerateModal = true"
+    />
 
+    <!-- Desktop Reports Table -->
     <div class="desktop-only">
-      <GeneratedReportsTable :reports="filteredReports" :columns="reportColumns" :loading="loading" @preview="openPreview" @downloadPdf="exportAsPdf" @viewCsv="exportAsCsv" @delete="handleDeleteReport" />
+      <GeneratedReportsTable
+        :reports="filteredReports"
+        :columns="reportColumns"
+        :loading="loading"
+        @preview="openPreview"
+        @downloadPdf="exportAsPdf"
+        @viewCsv="exportAsCsv"
+        @delete="handleDeleteReport"
+      />
     </div>
 
+    <!-- Mobile Cards View -->
     <div class="mobile-only">
-      <ReportsMobileCards :reports="filteredReports" :loading="loading" @preview="openPreview" @downloadPdf="exportAsPdf" @viewCsv="exportAsCsv" @delete="handleDeleteReport" />
+      <ReportsMobileCards
+        :reports="filteredReports"
+        :loading="loading"
+        @preview="openPreview"
+        @downloadPdf="exportAsPdf"
+        @viewCsv="exportAsCsv"
+        @delete="handleDeleteReport"
+      />
     </div>
 
     <!-- Compile Modal -->
@@ -213,7 +220,7 @@ onMounted(() => {
       <template #footer="{ close }">
         <button class="btn btn-secondary" type="button" @click="close">Close</button>
         <button class="btn btn-primary" @click="downloadReport(activePreviewReport!)">
-          <span>⬇ Download {{ activePreviewReport?.format.toUpperCase() }}</span>
+          <span>Download {{ activePreviewReport?.format.toUpperCase() }}</span>
         </button>
       </template>
     </ModalDrawer>
@@ -221,20 +228,3 @@ onMounted(() => {
     <ScheduleReportModal v-model:show="showScheduleModal" @save="saveSchedule" />
   </div>
 </template>
-
-<style>
-.metrics-grid.desktop-only {
-  display: grid !important;
-  grid-template-columns: repeat(4, 1fr) !important;
-}
-@media (min-width: 768px) and (max-width: 1023.98px) {
-  .metrics-grid.desktop-only {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-}
-@media (max-width: 767.98px) {
-  .metrics-grid.desktop-only {
-    display: none !important;
-  }
-}
-</style>
