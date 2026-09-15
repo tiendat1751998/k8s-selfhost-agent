@@ -11,7 +11,8 @@
 }
 @media (max-width: 767.98px) {
   .desktop-only,
-  .alerts-toolbar-sleek.desktop-only { display: none !important; }
+  .alerts-toolbar-sleek.desktop-only,
+  .alerts-toolbar-sleek { display: none !important; }
 }
 
 /* 2. Mobile 40-44px Command Bar (<768px) */
@@ -84,9 +85,8 @@
 .feedback-icon { font-size: 14px; font-weight: 800; }
 
 /* 4. Sleek Unified 42px Enterprise Toolbar */
-.alerts-toolbar-sleek,
-.alerts-toolbar-sleek.desktop-only {
-  display: flex !important;
+.alerts-toolbar-sleek {
+  display: flex;
   height: 42px;
   min-height: 42px;
   max-height: 42px;
@@ -318,6 +318,9 @@
 /* 10. Responsive Breakpoint Overhaul */
 /* Mobile Breakpoint (<768px) */
 @media (max-width: 767.98px) {
+  .desktop-only,
+  .alerts-toolbar-sleek.desktop-only,
+  .alerts-toolbar-sleek { display: none !important; }
   .alerts-page { gap: 10px; }
   .channels-grid { grid-template-columns: 1fr; gap: 12px; }
   .desktop-table-view { display: none !important; }
