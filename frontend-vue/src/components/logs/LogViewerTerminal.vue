@@ -31,12 +31,15 @@ const terminalBody = ref<HTMLElement | null>(null)
 
 onMounted(() => emit('registerTerminal', terminalBody.value))
 
-watch(() => props.logs.length, async () => {
-  if (props.autoScroll && !props.isScrollLocked && terminalBody.value) {
-    await nextTick()
-    terminalBody.value.scrollTop = terminalBody.value.scrollHeight
+watch(
+  [() => props.logs.length, () => props.logs[props.logs.length - 1], () => props.autoScroll],
+  async () => {
+    if (props.autoScroll && !props.isScrollLocked && terminalBody.value) {
+      await nextTick()
+      terminalBody.value.scrollTop = terminalBody.value.scrollHeight
+    }
   }
-})
+)
 
 function formatTime(t: string): string {
   if (!t) return ''
