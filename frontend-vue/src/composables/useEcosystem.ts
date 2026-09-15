@@ -1,4 +1,4 @@
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   ecosystemApi,
   type DetectedTool,
@@ -81,7 +81,28 @@ export function useEcosystem() {
   const syncing = ref<string | null>(null)
   const error = ref<string | null>(null)
   const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
-  const viewMode = ref<'grid' | 'table'>('grid')
+  const VIEW_MODE_STORAGE_KEY = 'ecosystem_view_mode'
+  const getInitialViewMode = (): 'grid' | 'table' => {
+    if (typeof window === 'undefined') return 'table'
+    try {
+      const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
+      if (stored === 'grid' || stored === 'table') return stored
+    } catch {
+      // Storage access blocked or unavailable
+    }
+    return 'table'
+  }
+  const viewMode = ref<'grid' | 'table'>(getInitialViewMode())
+
+  watch(viewMode, (newMode) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(VIEW_MODE_STORAGE_KEY, newMode)
+      } catch {
+        // Storage access blocked or unavailable
+      }
+    }
+  })
 
   let toastTimer: ReturnType<typeof setTimeout> | null = null
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
@@ -90,7 +111,8 @@ export function useEcosystem() {
   const summary = ref<EcosystemSummary>({ total: 0, healthy: 0, degraded: 0, by_category: {} })
   const activeCategory = ref('all')
   const searchQuery = ref('')
-  const selectedStatus = ref('all')
+  const activeStatus = ref('all')
+  const selectedStatus = activeStatus
 
   const showConnectModal = ref(false)
   const connectForm = reactive<ConnectFormData>({
@@ -306,9 +328,9 @@ export function useEcosystem() {
   const filteredTools = computed(() => {
     return tools.value.filter(tool => {
       if (activeCategory.value !== 'all' && tool.category.toLowerCase() !== activeCategory.value) return false
-      if (selectedStatus.value === 'healthy' && tool.health !== 'healthy') return false
-      if (selectedStatus.value === 'degraded' && tool.health !== 'degraded' && tool.status !== 'unreachable') return false
-      if (selectedStatus.value === 'not_configured' && tool.status !== 'not_configured') return false
+      if (activeStatus.value === 'healthy' && tool.health !== 'healthy') return false
+      if (activeStatus.value === 'degraded' && tool.health !== 'degraded' && tool.status !== 'unreachable') return false
+      if (activeStatus.value === 'not_configured' && tool.status !== 'not_configured') return false
       if (searchQuery.value.trim()) {
         const q = searchQuery.value.toLowerCase()
         return tool.name.toLowerCase().includes(q) || tool.category.toLowerCase().includes(q) ||
@@ -330,7 +352,7 @@ export function useEcosystem() {
 
   return {
     loading, scanning, saving, deleting, syncing, error, toastMessage, viewMode,
-    tools, summary, activeCategory, searchQuery, selectedStatus,
+    tools, summary, activeCategory, searchQuery, activeStatus, selectedStatus,
     categories: ECOSYSTEM_CATEGORIES, presets: PRESET_CONNECTORS,
     showConnectModal, connectForm, showHealthDrawer, selectedToolForHealth,
     healthProbeResult, isProbing, webhookHistory, errorLogs, filteredTools,

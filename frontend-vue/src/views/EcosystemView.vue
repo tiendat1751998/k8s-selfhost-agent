@@ -8,7 +8,7 @@ import { useEcosystem } from '../composables/useEcosystem'
 
 const {
   loading, scanning, saving, deleting, syncing, error, toastMessage, viewMode,
-  tools, summary, activeCategory, searchQuery, selectedStatus, categories, presets,
+  tools, summary, activeCategory, searchQuery, activeStatus, categories, presets,
   showConnectModal, connectForm, showHealthDrawer, selectedToolForHealth,
   healthProbeResult, isProbing, webhookHistory, errorLogs, filteredTools,
   getToolIcon, formatRelativeTime, loadData, handleScan, openConnectModal,
@@ -64,16 +64,16 @@ const {
       <span class="tel-item tel-issues"><BaseIcon name="alert-triangle" size="xs" /> {{ summary.degraded }} Issues</span>
     </div>
 
-    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <!-- Sleek Unified 42px Enterprise Toolbar -->
     <div class="ecosystem-toolbar-sleek glass-panel">
-      <!-- Search input with search icon and clear button -->
+      <!-- Left: 30px capsule search input with prefix icon and clear button -->
       <div class="toolbar-search-wrap">
         <BaseIcon name="search" size="xs" class="search-icon" />
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Search tools, endpoints, versions..."
-          class="toolbar-search-input"
+          class="toolbar-search-input sleek-input"
           aria-label="Search tools, endpoints, versions"
         />
         <button
@@ -87,10 +87,26 @@ const {
         </button>
       </div>
 
-      <!-- Status select dropdown (All Statuses, Healthy, Degraded, Unknown) -->
+      <!-- Center-Left: Compact Category dropdown with dynamic tool counts per category -->
       <select
-        v-model="selectedStatus"
-        class="toolbar-select"
+        v-model="activeCategory"
+        class="sleek-select toolbar-select"
+        aria-label="Filter by category"
+      >
+        <option value="all">All Categories ({{ tools.length }})</option>
+        <option
+          v-for="cat in categories.filter(c => c.key !== 'all')"
+          :key="cat.key"
+          :value="cat.key"
+        >
+          {{ cat.label }} ({{ (summary.by_category && summary.by_category[cat.key]) || 0 }})
+        </option>
+      </select>
+
+      <!-- Center: Compact Status dropdown -->
+      <select
+        v-model="activeStatus"
+        class="sleek-select toolbar-select"
         aria-label="Filter by health status"
       >
         <option value="all">All Statuses</option>
@@ -99,14 +115,14 @@ const {
         <option value="not_configured">Unknown</option>
       </select>
 
-      <!-- Inline compact KPI badge strip font-mono -->
+      <!-- Center-Right: KPI badge -->
       <div class="toolbar-kpi-strip font-mono desktop-only" role="status" aria-label="Ecosystem summary metrics">
         <span class="kpi-badge font-mono">{{ summary.total }} Tools ({{ summary.healthy }} Healthy · {{ summary.degraded }} Issues)</span>
       </div>
 
-      <!-- Right: View Mode Toggle & Action Buttons -->
+      <!-- Right: View mode segmented toggle, Scan Now, and + Register Tool -->
       <div class="toolbar-actions-group">
-        <!-- View mode toggle (Table / Grid) -->
+        <!-- View mode segmented toggle (Table / Grid) -->
         <div class="view-mode-toggle desktop-only" title="Switch layout display">
           <button
             type="button"
@@ -132,18 +148,20 @@ const {
           </button>
         </div>
 
-        <!-- Action buttons: Scan Now and + Register Tool -->
+        <!-- Scan Now icon button -->
         <button
           type="button"
-          class="btn-toolbar btn-secondary desktop-only"
+          class="btn-toolbar btn-secondary scan-btn desktop-only"
           :disabled="scanning || loading"
-          title="Run discovery scan"
+          title="Scan Now"
+          aria-label="Scan Now"
           @click="handleScan"
         >
           <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': scanning }" />
-          <span>{{ scanning ? 'Scanning...' : 'Scan Now' }}</span>
+          <span class="btn-text">{{ scanning ? 'Scanning...' : 'Scan Now' }}</span>
         </button>
 
+        <!-- + Register Tool primary button -->
         <button
           type="button"
           class="btn-toolbar btn-primary desktop-only"
@@ -155,27 +173,6 @@ const {
         </button>
       </div>
     </div>
-
-    <!-- Category Filter Pills Navigation Bar -->
-    <section class="category-pills-bar category-tabs-container">
-      <div class="category-pills category-tabs">
-        <button
-          v-for="cat in categories"
-          :key="cat.key"
-          type="button"
-          class="category-pill-btn category-tab-btn"
-          :class="{ active: activeCategory === cat.key }"
-          @click="activeCategory = cat.key"
-        >
-          <BaseIcon :name="cat.icon" size="xs" class="pill-icon" />
-          <span class="pill-label tab-label">{{ cat.label }}</span>
-          <span v-if="cat.key === 'all'" class="pill-count tab-count">{{ tools.length }}</span>
-          <span v-else-if="summary.by_category && summary.by_category[cat.key]" class="pill-count tab-count">
-            {{ summary.by_category[cat.key] }}
-          </span>
-        </button>
-      </div>
-    </section>
 
     <!-- Loading State -->
     <div v-if="loading && tools.length === 0" class="loading-state glass-panel">
@@ -200,33 +197,33 @@ const {
 
     <!-- Data Presentation -->
     <template v-else>
-      <EcosystemTable
-        v-if="viewMode === 'table'"
-        class="desktop-only"
-        :tools="filteredTools"
-        :deleting-id="deleting"
-        :syncing-id="syncing"
-        :get-tool-icon="getToolIcon"
-        :format-relative-time="formatRelativeTime"
-        @inspect-health="openHealthDrawer"
-        @configure="openConnectModal"
-        @sync="handleSyncWebhook"
-        @delete="handleDeleteTool"
-      />
+      <div v-if="viewMode === 'table'" class="ecosystem-table-wrapper desktop-only">
+        <EcosystemTable
+          :tools="filteredTools"
+          :deleting-id="deleting"
+          :syncing-id="syncing"
+          :get-tool-icon="getToolIcon"
+          :format-relative-time="formatRelativeTime"
+          @inspect-health="openHealthDrawer"
+          @configure="openConnectModal"
+          @sync="handleSyncWebhook"
+          @delete="handleDeleteTool"
+        />
+      </div>
 
-      <EcosystemGrid
-        v-else
-        class="desktop-only"
-        :tools="filteredTools"
-        :deleting-id="deleting"
-        :syncing-id="syncing"
-        :get-tool-icon="getToolIcon"
-        :format-relative-time="formatRelativeTime"
-        @inspect-health="openHealthDrawer"
-        @configure="openConnectModal"
-        @sync="handleSyncWebhook"
-        @delete="handleDeleteTool"
-      />
+      <div v-else class="ecosystem-grid-wrapper desktop-only">
+        <EcosystemGrid
+          :tools="filteredTools"
+          :deleting-id="deleting"
+          :syncing-id="syncing"
+          :get-tool-icon="getToolIcon"
+          :format-relative-time="formatRelativeTime"
+          @inspect-health="openHealthDrawer"
+          @configure="openConnectModal"
+          @sync="handleSyncWebhook"
+          @delete="handleDeleteTool"
+        />
+      </div>
 
       <EcosystemMobileCards
         class="mobile-only"
