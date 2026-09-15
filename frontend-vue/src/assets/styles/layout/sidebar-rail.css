@@ -69,6 +69,20 @@
   min-width: 64px !important;
 }
 
+.sidebar.is-collapsed .sidebar-brand-text,
+.sidebar.is-collapsed .sidebar-meta,
+.sidebar.is-collapsed .nav-item span,
+.sidebar.is-collapsed .nav-section-title {
+  display: none !important;
+}
+
+.sidebar.is-collapsed ~ .main-wrapper,
+.main-wrapper.sidebar-collapsed {
+  margin-left: 64px !important;
+  width: calc(100% - 64px) !important;
+  max-width: calc(100vw - 64px) !important;
+}
+
 .sidebar.is-collapsed .sidebar-brand-header {
   flex-direction: column;
   align-items: center;
