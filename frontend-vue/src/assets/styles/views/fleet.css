@@ -185,10 +185,10 @@
 }
 
 .segmented-btn.active {
-  background: rgba(6, 182, 212, 0.2);
-  color: var(--accent-cyan);
-  border: 1px solid rgba(6, 182, 212, 0.4);
-  box-shadow: 0 0 8px rgba(6, 182, 212, 0.15);
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  box-shadow: none;
 }
 
 /* Toolbar Action Buttons */
@@ -207,14 +207,14 @@
 }
 
 .toolbar-btn.btn-primary {
-  background: var(--accent-emerald, #10b981);
-  color: #0f172a;
-  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .toolbar-btn.btn-primary:hover {
-  background: #34d399;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  background: #1d4ed8;
+  box-shadow: none;
 }
 
 .toolbar-btn.btn-secondary {

@@ -73,8 +73,7 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
       <template #cell-name="{ row }">
         <div class="cluster-name-cell">
           <span
-            class="font-mono cluster-name-link"
-            :class="row.orchestrator === 'swarm' ? 'text-blue' : 'text-cyan'"
+            class="cluster-name-link"
             title="View Cluster Details"
             @click="emit('details', row)"
           >
@@ -82,7 +81,7 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
           </span>
           <span
             v-if="row.orchestrator === 'swarm'"
-            class="orchestrator-badge badge-swarm font-mono"
+            class="orchestrator-badge badge-swarm"
             title="Docker Swarm Cluster"
           >
             <BaseIcon name="layers" size="xs" />
@@ -90,7 +89,7 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
           </span>
           <span
             v-else
-            class="orchestrator-badge badge-k8s font-mono"
+            class="orchestrator-badge badge-k8s"
             title="Kubernetes Cluster"
           >
             <BaseIcon name="anchor" size="xs" />
@@ -108,10 +107,10 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
       </template>
 
       <template #cell-version="{ row }">
-        <span v-if="row.orchestrator === 'swarm'" class="font-mono text-cyan">
+        <span v-if="row.orchestrator === 'swarm'" class="version-text">
           SwarmKit <span v-if="row.swarm_meta" class="text-muted">({{ row.swarm_meta.manager_count }}M / {{ row.swarm_meta.worker_count }}W)</span>
         </span>
-        <span v-else class="font-mono text-emerald">{{ row.version || '?' }}</span>
+        <span v-else class="version-text">{{ row.version || '?' }}</span>
       </template>
 
       <template #cell-nodes="{ row }">
@@ -159,12 +158,20 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
 }
 
 .cluster-name-link {
-  font-weight: 700;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: #f8fafc;
   cursor: pointer;
 }
 
 .cluster-name-link:hover {
   text-decoration: underline;
+}
+
+.version-text {
+  font-family: var(--font-mono);
+  color: #94a3b8;
+  font-size: 11.5px;
 }
 
 .orchestrator-badge {
@@ -175,6 +182,7 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
   border-radius: 4px;
   font-size: 10px;
   font-weight: 600;
+  font-family: var(--font-sans);
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
