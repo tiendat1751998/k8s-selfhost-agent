@@ -15,14 +15,6 @@ const emit = defineEmits<{
 
 <template>
   <div class="active-alerts-stream">
-    <div class="stream-banner-header">
-      <div class="stream-pulse-title">
-        <span class="pulse-dot"></span>
-        <span>Active Firing Alerts Stream ({{ alerts.length }})</span>
-      </div>
-      <span class="text-xs text-muted font-mono">Real-time SRE Telemetry</span>
-    </div>
-
     <div v-if="alerts.length === 0" class="empty-list glass-panel">
       <BaseIcon name="check-circle" size="md" /> All metric thresholds nominal. No active anomalies currently firing.
     </div>

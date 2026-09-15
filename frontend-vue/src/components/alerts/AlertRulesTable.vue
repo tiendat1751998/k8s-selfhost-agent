@@ -34,15 +34,8 @@ const ruleColumns: Column<AlertRuleRow>[] = [
     :columns="ruleColumns"
     :data="tableRows"
     :loading="loading"
-    searchable
-    searchPlaceholder="Search PromQL rules by name, description, or metric..."
+    :searchable="false"
   >
-    <template #toolbar>
-      <button class="btn btn-primary btn-sm" @click="emit('create')">
-        <span>+ Create Rule</span>
-      </button>
-    </template>
-
     <template #cell-Name="{ row }">
       <div class="rule-name-cell">
         <span class="rule-title" :title="row.Name">{{ row.Name }}</span>
