@@ -403,6 +403,7 @@ func (s *LogServer) HandleTailLogs(w http.ResponseWriter, r *http.Request) {
 	var scanner *bufio.Scanner
 	if isStdCopy {
 		pr, pw := io.Pipe()
+		defer pr.Close()
 		go func() {
 			_, _ = stdcopy.StdCopy(pw, pw, bufReader)
 			_ = pw.Close()
@@ -414,11 +415,16 @@ func (s *LogServer) HandleTailLogs(w http.ResponseWriter, r *http.Request) {
 
 	scanner.Buffer(make([]byte, 4096), 64*1024)
 	for scanner.Scan() {
+		if r.Context().Err() != nil {
+			return
+		}
 		line := scanner.Text()
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		_, _ = fmt.Fprintf(w, "data: %s\n\n", line)
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", line); err != nil {
+			return
+		}
 		if hasFlusher {
 			flusher.Flush()
 		}
