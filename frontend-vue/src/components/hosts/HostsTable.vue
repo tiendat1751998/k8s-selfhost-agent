@@ -8,6 +8,7 @@ import type { HostTestResult, HostTypeDefinition } from '../../types/hosts'
 
 const props = defineProps<{
   hosts: ComputeHost[]
+  totalCount?: number
   hostTestResults: Record<string, HostTestResult>
   testingHostId: string | null
   getHostTypeMeta: (type?: string) => HostTypeDefinition
@@ -21,6 +22,7 @@ const emit = defineEmits<{
   (e: 'delete', host: ComputeHost): void
   (e: 'select', host: ComputeHost): void
   (e: 'copy', text: string): void
+  (e: 'add-host'): void
 }>()
 
 type HostSortField = 'name' | 'status' | 'latency'
@@ -100,7 +102,22 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
 
 <template>
   <div class="hosts-table-container glass-panel animate-fade-in">
-    <table class="hosts-table">
+    <div class="hosts-table-topbar">
+      <div class="topbar-left">
+        <BaseIcon name="server" size="sm" class="topbar-icon" />
+        <span class="topbar-title">Compute Fleet Registry</span>
+        <span class="topbar-badge">{{ sortedHosts.length }} of {{ totalCount ?? hosts.length }} hosts</span>
+      </div>
+      <div class="topbar-right">
+        <button type="button" class="btn btn-primary btn-sm add-host-btn" @click="emit('add-host')">
+          <BaseIcon name="plus" size="xs" />
+          <span>Add Host</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="hosts-table">
       <thead>
         <tr>
           <th class="th-name sortable-th" @click="handleSort('name')">
@@ -129,7 +146,16 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="host in sortedHosts" :key="host.id" class="host-row">
+        <tr v-if="sortedHosts.length === 0">
+          <td colspan="8" class="table-empty-cell">
+            <div class="table-empty-state">
+              <BaseIcon name="search" size="md" class="empty-icon" />
+              <p class="empty-title">No compute hosts found</p>
+              <p class="empty-subtitle">No hosts match the selected search and filter criteria.</p>
+            </div>
+          </td>
+        </tr>
+        <tr v-for="host in sortedHosts" v-else :key="host.id" class="host-row">
           <td class="col-name" @click="emit('select', host)">
             <div class="row-name-group">
               <span class="row-type-icon"><BaseIcon :name="getHostTypeMeta(host.host_type).icon" size="sm" /></span>
@@ -217,7 +243,8 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
           </td>
         </tr>
       </tbody>
-    </table>
+      </table>
+    </div>
   </div>
 </template>
 

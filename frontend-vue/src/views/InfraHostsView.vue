@@ -124,6 +124,9 @@ const availabilityThresholds = [
         v-model:view-mode="viewMode"
         v-model:show-telemetry="showTelemetry"
         :total-hosts="totalHosts"
+        :connected-hosts="connectedHosts"
+        :disconnected-hosts="disconnectedHosts"
+        :error-hosts="errorHosts"
         :type-counts="typeCounts"
         :available-labels="availableLabels"
         :host-type-definitions="hostTypeDefinitions"
@@ -203,13 +206,13 @@ const availabilityThresholds = [
       <span>Querying infrastructure fleet registry...</span>
     </div>
 
-    <!-- Empty State -->
-    <div v-else-if="filteredHosts.length === 0" class="empty-state glass-panel">
+    <!-- Empty State (No hosts registered in fleet) -->
+    <div v-else-if="hosts.length === 0" class="empty-state glass-panel">
       <div class="empty-icon-wrap">
         <BaseIcon name="server" size="xl" />
       </div>
-      <h3 class="empty-title">No infrastructure hosts matched</h3>
-      <p class="empty-desc text-muted">Try adjusting your search criteria or register a new host target.</p>
+      <h3 class="empty-title">No infrastructure hosts registered</h3>
+      <p class="empty-desc text-muted">Register your first compute node to begin monitoring fleet health and telemetry.</p>
       <button class="btn btn-primary" style="margin-top: 12px;" @click="openAddHostModal">
         <span class="font-bold">+</span>
         <span>Register First Host</span>
@@ -231,6 +234,15 @@ const availabilityThresholds = [
       />
     </div>
 
+    <!-- Mobile Empty Filter State (< 640px) -->
+    <div v-else-if="filteredHosts.length === 0" class="empty-state glass-panel mobile-only">
+      <div class="empty-icon-wrap">
+        <BaseIcon name="search" size="xl" />
+      </div>
+      <h3 class="empty-title">No compute hosts found</h3>
+      <p class="empty-desc text-muted">No hosts match the selected search and filter criteria.</p>
+    </div>
+
     <!-- Desktop Grid View -->
     <div v-if="viewMode === 'grid' && filteredHosts.length > 0" class="hosts-grid desktop-only animate-fade-in">
       <HostCard
@@ -247,10 +259,20 @@ const availabilityThresholds = [
       />
     </div>
 
+    <!-- Desktop Grid Empty Filter State -->
+    <div v-else-if="viewMode === 'grid' && filteredHosts.length === 0" class="empty-state glass-panel desktop-only">
+      <div class="empty-icon-wrap">
+        <BaseIcon name="search" size="xl" />
+      </div>
+      <h3 class="empty-title">No compute hosts found</h3>
+      <p class="empty-desc text-muted">No hosts match the selected search and filter criteria.</p>
+    </div>
+
     <!-- Desktop Table View -->
-    <div v-else-if="viewMode === 'table' && filteredHosts.length > 0" class="desktop-only animate-fade-in">
+    <div v-else-if="viewMode === 'table'" class="desktop-only animate-fade-in">
       <HostsTable
         :hosts="filteredHosts"
+        :total-count="hosts.length"
         :host-test-results="hostTestResults"
         :testing-host-id="testingHostId"
         :get-host-type-meta="getHostTypeMeta"
@@ -261,6 +283,7 @@ const availabilityThresholds = [
         @edit="openEditHostModal"
         @delete="promptDeleteHost"
         @copy="copyToClipboard"
+        @add-host="openAddHostModal"
       />
     </div>
 
