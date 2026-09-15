@@ -38,22 +38,44 @@ export interface TenancySummary {
 
 export const tenancyApi = {
   async getOrganizations(): Promise<Organization[]> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || localStorage.getItem('k8s_token')
+      if (token) api.setToken(token)
+    }
     return api.get<Organization[]>('/tenancy/organizations')
   },
 
   async getProjects(): Promise<Project[]> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || localStorage.getItem('k8s_token')
+      if (token) api.setToken(token)
+    }
     return api.get<Project[]>('/tenancy/projects')
   },
 
   async getMembers(): Promise<Member[]> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || localStorage.getItem('k8s_token')
+      if (token) api.setToken(token)
+    }
     return api.get<Member[]>('/tenancy/members')
   },
 
   async getRBAC(): Promise<RBACMatrix> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || localStorage.getItem('k8s_token')
+      if (token) api.setToken(token)
+    }
     return api.get<RBACMatrix>('/tenancy/rbac')
   },
 
   async getSummary(): Promise<TenancySummary> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || localStorage.getItem('k8s_token')
+      if (token) {
+        api.setToken(token)
+      }
+    }
     return api.get<TenancySummary>('/tenancy/summary')
   },
 
