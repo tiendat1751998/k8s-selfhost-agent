@@ -16,7 +16,6 @@ const {
   organizations,
   members,
   rbacMatrix,
-  selectedOrgId,
   activeTab,
   showOrgModal,
   showProjectModal,
@@ -58,16 +57,16 @@ const {
       <div class="toolbar-left">
         <div class="tab-pills">
           <button class="tab-btn" :class="{ active: activeTab === 'tenants' }" @click="activeTab = 'tenants'">
-            <span>Organizations</span> <span class="tab-count">{{ organizations.length }}</span>
+            <span>Orgs</span> <span class="tab-count">{{ organizations.length }}</span>
           </button>
           <button class="tab-btn" :class="{ active: activeTab === 'members' }" @click="activeTab = 'members'">
-            <span>Members & Roles</span> <span class="tab-count">{{ filteredMembers.length }}</span>
+            <span>Members</span> <span class="tab-count">{{ filteredMembers.length }}</span>
           </button>
           <button class="tab-btn" :class="{ active: activeTab === 'projects' }" @click="activeTab = 'projects'">
-            <span>Project Namespaces</span> <span class="tab-count">{{ filteredProjects.length }}</span>
+            <span>Namespaces</span> <span class="tab-count">{{ filteredProjects.length }}</span>
           </button>
           <button class="tab-btn" :class="{ active: activeTab === 'rbac' }" @click="activeTab = 'rbac'">
-            <span>RBAC Matrix</span>
+            <span>RBAC</span>
           </button>
         </div>
       </div>
@@ -77,18 +76,12 @@ const {
           <input type="text" v-model="tenancySearchQuery" placeholder="Search..." class="search-input-sleek" />
           <button v-if="tenancySearchQuery" @click="clearSearch" class="clear-btn"><BaseIcon name="x" size="xs" /></button>
         </div>
-        <div class="scope-select">
-          <span class="scope-label">Active Scope:</span>
-          <select v-model="selectedOrgId" class="select-scope-sleek">
-            <option value="all">All Organizations</option>
-            <option v-for="org in organizations" :key="org.id" :value="org.id">{{ org.name }}</option>
-          </select>
-        </div>
       </div>
       <div class="toolbar-right">
-        <button class="btn btn-secondary btn-sm" @click="showOrgModal = true"><span>+ New Organization</span></button>
-        <button class="btn btn-primary btn-sm" @click="showProjectModal = true"><span>+ Create Project</span></button>
-        <button class="btn btn-secondary btn-sm btn-icon-only" title="Refresh" @click="loadData"><BaseIcon name="refresh-cw" size="xs" /></button>
+        <button v-if="activeTab === 'tenants'" class="btn btn-primary btn-sm" @click="showOrgModal = true">+ New Org</button>
+        <button v-if="activeTab === 'projects'" class="btn btn-primary btn-sm" @click="showProjectModal = true">+ Create Project</button>
+        <button v-if="activeTab === 'members'" class="btn btn-primary btn-sm" @click="openMemberDrawer()">+ Invite Member</button>
+        <button class="btn btn-secondary btn-sm" @click="loadData" title="Refresh"><BaseIcon name="refresh-cw" size="xs" /></button>
       </div>
     </div>
 
@@ -348,3 +341,4 @@ const {
     </ModalDrawer>
   </div>
 </template>
+
