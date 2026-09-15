@@ -197,7 +197,7 @@ const historyColumns: Column<AlertHistory>[] = [
       <span>{{ feedbackMessage }}</span>
     </div>
 
-    <!-- Sleek Unified 38px Enterprise Toolbar (.alerts-toolbar-sleek) -->
+    <!-- Sleek Unified 42px Enterprise Toolbar (.alerts-toolbar-sleek) -->
     <div class="alerts-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Alerts Management Toolbar">
       <!-- Search input with search icon and clear button (filters alert message, rule ID, channel name) -->
       <div class="toolbar-search-wrap">
@@ -279,21 +279,23 @@ const historyColumns: Column<AlertHistory>[] = [
         </span>
       </div>
 
-      <!-- Action buttons: + New Alert Rule, + Add Channel, and Refresh with spinner -->
+      <!-- Context-Aware Action Buttons: only context CTA + Refresh across all tabs -->
       <div class="toolbar-actions-group">
         <button
+          v-if="activeTab === 'rules'"
           type="button"
-          class="toolbar-btn btn-primary"
+          class="btn btn-primary toolbar-btn"
           title="Create New Alert Rule"
           aria-label="New Alert Rule"
           @click="openCreateRule"
         >
           <BaseIcon name="plus" size="xs" />
-          <span>+ New Alert Rule</span>
+          <span>+ New Rule</span>
         </button>
         <button
+          v-else-if="activeTab === 'channels'"
           type="button"
-          class="toolbar-btn btn-secondary"
+          class="btn btn-primary toolbar-btn"
           title="Add Notification Channel"
           aria-label="Add Channel"
           @click="showChannelModal = true"
@@ -303,7 +305,7 @@ const historyColumns: Column<AlertHistory>[] = [
         </button>
         <button
           type="button"
-          class="toolbar-btn btn-secondary"
+          class="btn btn-secondary toolbar-btn"
           :disabled="loading"
           title="Refresh Alerts & Telemetry"
           aria-label="Refresh"
@@ -369,8 +371,7 @@ const historyColumns: Column<AlertHistory>[] = [
           :columns="historyColumns"
           :data="filteredHistory"
           :loading="loading"
-          searchable
-          searchPlaceholder="Filter alert history by ID, message, or rule..."
+          :searchable="false"
         >
           <template #cell-ID="{ value }">
             <span class="font-mono text-cyan font-bold truncate block">{{ value }}</span>
