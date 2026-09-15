@@ -315,7 +315,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
           @click="showCreateModal = true"
         >
           <BaseIcon name="plus" size="xs" />
-          <span>+ Add Target</span>
+          <span>Add Target</span>
         </button>
 
         <button
@@ -400,7 +400,6 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       :snapshots="filteredSnapshots"
       :loading="loading"
       :error="error"
-      @create="showCreateModal = true"
       @inspect="openInspectFromTable"
       @trigger-alert="handleTriggerAlert"
       @delete-slo="handleDeleteSLO"
