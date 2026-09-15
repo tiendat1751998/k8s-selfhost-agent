@@ -321,8 +321,9 @@
    ========================================================================== */
 
 /* Defaults on Desktop (>=1024px) */
-.agents-mobile-command-bar, .agents-micro-telemetry, .mobile-only { display: none !important; }
-.desktop-only { display: block; }
+.agents-mobile-command-bar, .agents-micro-telemetry,
+.agents-view .mobile-only, .agents-page .mobile-only, .agents-view-container .mobile-only { display: none !important; }
+.agents-view .desktop-only, .agents-page .desktop-only, .agents-view-container .desktop-only { display: block; }
 .view-header.desktop-only { display: flex; }
 .metrics-grid.desktop-only {
   display: grid !important;
@@ -338,14 +339,17 @@
     gap: 14px;
   }
   .swarm-grid { grid-template-columns: repeat(2, 1fr); }
-  .agents-mobile-command-bar, .agents-micro-telemetry, .mobile-only { display: none !important; }
-  .desktop-only { display: block; }
+  .agents-mobile-command-bar, .agents-micro-telemetry,
+  .agents-view .mobile-only, .agents-page .mobile-only, .agents-view-container .mobile-only { display: none !important; }
+  .agents-view .desktop-only, .agents-page .desktop-only, .agents-view-container .desktop-only { display: block; }
   .view-header.desktop-only { display: flex; }
 }
 
 /* Mobile (<768px) */
 @media (max-width: 767.98px) {
-  .desktop-only,
+  .agents-view .desktop-only,
+  .agents-page .desktop-only,
+  .agents-view-container .desktop-only,
   .metrics-grid.desktop-only {
     display: none !important;
   }

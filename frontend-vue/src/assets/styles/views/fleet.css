@@ -234,8 +234,8 @@
 }
 
 /* Visibility Controls */
-.desktop-only { display: block; }
-.mobile-only { display: none !important; }
+.fleet-view .desktop-only { display: block; }
+.fleet-view .mobile-only { display: none !important; }
 
 /* Toasts */
 .toast-banner {
@@ -259,8 +259,8 @@
 }
 
 @media (max-width: 767.98px) {
-  .desktop-only { display: none !important; }
-  .mobile-only { display: flex !important; }
+  .fleet-view .desktop-only { display: none !important; }
+  .fleet-view .mobile-only { display: flex !important; }
 
   .fleet-toolbar-sleek {
     height: auto;

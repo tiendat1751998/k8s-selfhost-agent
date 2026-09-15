@@ -4,8 +4,10 @@
 @import '../components/reports-drawers.css';
 
 /* Visibility Utilities */
-.desktop-only { display: block; }
-.mobile-only { display: none !important; }
+.reports-page .desktop-only,
+.reports-view .desktop-only { display: block; }
+.reports-page .mobile-only,
+.reports-view .mobile-only { display: none !important; }
 
 /* Mobile 40-44px Command Bar (<768px) */
 .reports-mobile-command-bar {
@@ -243,8 +245,10 @@
 
 /* Tablet Breakpoint (768px - 1023.98px) */
 @media (min-width: 768px) and (max-width: 1023.98px) {
-  .mobile-only { display: none !important; }
-  .desktop-only { display: block !important; }
+  .reports-page .mobile-only,
+  .reports-view .mobile-only { display: none !important; }
+  .reports-page .desktop-only,
+  .reports-view .desktop-only { display: block !important; }
   .reports-toolbar-sleek { gap: 8px; }
   .search-input-wrapper { width: 180px; }
   .btn-cadence-text { display: none; }
@@ -252,14 +256,18 @@
 
 /* Mobile Breakpoint (<768px) */
 @media (max-width: 767.98px) {
-  .desktop-only { display: none !important; }
-  .mobile-only { display: flex !important; }
+  .reports-page .desktop-only,
+  .reports-view .desktop-only { display: none !important; }
+  .reports-page .mobile-only,
+  .reports-view .mobile-only { display: flex !important; }
   .reports-page { gap: 10px; }
   .reports-toolbar-sleek { display: none !important; }
 }
 
 /* Desktop Breakpoint (>= 1024px) */
 @media (min-width: 1024px) {
-  .mobile-only { display: none !important; }
-  .desktop-only { display: block !important; }
+  .reports-page .mobile-only,
+  .reports-view .mobile-only { display: none !important; }
+  .reports-page .desktop-only,
+  .reports-view .desktop-only { display: block !important; }
 }
