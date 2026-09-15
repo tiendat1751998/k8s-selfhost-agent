@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useLogStreamer } from '../composables/useLogStreamer'
 import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
 import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
@@ -14,6 +15,7 @@ const {
   clearBuffer, scrollToBottom, handleScroll, setTerminalRef,
 } = useLogStreamer()
 
+const route = useRoute()
 const selectedTarget = ref<LogTarget>({ type: 'service', id: 'postgres_db', name: 'postgres_db', icon: 'database' })
 const showMobileTree = ref(false)
 const isSidebarCollapsed = ref(false)
@@ -175,6 +177,23 @@ watch(mode, (newMode) => {
   }
 })
 
+watch(
+  () => route.query.node,
+  (newNode) => {
+    if (newNode) {
+      selectedTarget.value = {
+        type: 'node',
+        id: String(newNode),
+        name: String(newNode),
+        icon: 'server',
+      }
+      if (route.query.search) {
+        searchKeyword.value = String(route.query.search)
+      }
+    }
+  }
+)
+
 async function fetchLiveHistogram() {
   const now = new Date()
   const target = selectedTarget.value
@@ -189,6 +208,18 @@ async function fetchLiveHistogram() {
 }
 
 onMounted(() => {
+  if (route.query.node) {
+    selectedTarget.value = {
+      type: 'node',
+      id: String(route.query.node),
+      name: String(route.query.node),
+      icon: 'server',
+    }
+    if (route.query.search) {
+      searchKeyword.value = String(route.query.search)
+    }
+  }
+
   if (mode.value === 'live' && selectedTarget.value.id) {
     activeTargetId = selectedTarget.value.id
     connectTarget(selectedTarget.value)
