@@ -246,6 +246,9 @@ func (h *LogHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			if end > len(allEntries) { end = len(allEntries) }
 			paged = allEntries[offset:end]
 		}
+		sort.SliceStable(paged, func(i, j int) bool {
+			return paged[i].Timestamp.Before(paged[j].Timestamp)
+		})
 		writeJSON(w, http.StatusOK, &logging.LogSearchResult{
 			Entries: paged, TotalCount: totalCount, HasMore: offset+len(paged) < len(allEntries),
 		})
@@ -263,6 +266,9 @@ func (h *LogHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			filtered = append(filtered, e)
 		}
 	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return filtered[i].Timestamp.Before(filtered[j].Timestamp)
+	})
 	res.Entries = filtered
 	res.TotalCount = int64(len(filtered))
 	writeJSON(w, http.StatusOK, res)
