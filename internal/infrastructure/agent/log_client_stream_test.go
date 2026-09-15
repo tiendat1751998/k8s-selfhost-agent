@@ -86,4 +86,51 @@ func TestAgentLogClient_StreamLogs(t *testing.T) {
 		err := client.StreamLogs(context.Background(), "", "svc", nil)
 		require.Error(t, err)
 	})
+
+	t.Run("sends Authorization header when AGENT_AUTH_TOKEN is set", func(t *testing.T) {
+		t.Setenv("AGENT_AUTH_TOKEN", "env-secret-token")
+		var receivedAuth string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			receivedAuth = r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "text/event-stream")
+			if f, ok := w.(http.Flusher); ok {
+				fmt.Fprintf(w, "data: ready\n\n")
+				f.Flush()
+			}
+		}))
+		defer server.Close()
+
+		client := NewAgentLogClient()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		_ = client.StreamLogs(ctx, server.URL, "redis-svc", func(line string) {
+			cancel()
+		})
+
+		assert.Equal(t, "Bearer env-secret-token", receivedAuth)
+	})
+
+	t.Run("sends Authorization header when configured via WithAuthToken", func(t *testing.T) {
+		var receivedAuth string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			receivedAuth = r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "text/event-stream")
+			if f, ok := w.(http.Flusher); ok {
+				fmt.Fprintf(w, "data: ready\n\n")
+				f.Flush()
+			}
+		}))
+		defer server.Close()
+
+		client := NewAgentLogClient(WithAuthToken("client-token-456"))
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		_ = client.StreamLogs(ctx, server.URL, "redis-svc", func(line string) {
+			cancel()
+		})
+
+		assert.Equal(t, "Bearer client-token-456", receivedAuth)
+	})
 }

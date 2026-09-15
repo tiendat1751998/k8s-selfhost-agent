@@ -34,6 +34,9 @@ func (c *AgentLogClient) StreamLogs(ctx context.Context, agentURL, service strin
 		return fmt.Errorf("creating http request: %w", err)
 	}
 	httpReq.Header.Set("Accept", "text/event-stream")
+	if token := c.getAuthToken(); token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	// Ensure streaming client has no timeout
 	var transport http.RoundTripper
