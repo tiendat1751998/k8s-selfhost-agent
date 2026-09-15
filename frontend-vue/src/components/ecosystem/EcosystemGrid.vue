@@ -17,6 +17,20 @@ const emit = defineEmits<{
   (e: 'sync', tool: DetectedTool): void
   (e: 'delete', tool: DetectedTool): void
 }>()
+
+function formatEndpoint(endpoint?: string): { display: string; href?: string; isInternal: boolean } {
+  if (!endpoint || !endpoint.trim()) {
+    return { display: 'Internal Cluster SVC', isInternal: true }
+  }
+  const clean = endpoint.trim()
+  try {
+    const url = new URL(clean)
+    return { display: url.host || url.hostname, href: clean, isInternal: false }
+  } catch {
+    const stripped = clean.replace(/^[a-zA-Z]+:\/\//, '')
+    return { display: stripped, href: clean.startsWith('http') ? clean : `http://${clean}`, isInternal: false }
+  }
+}
 </script>
 
 <template>
@@ -31,15 +45,17 @@ const emit = defineEmits<{
         'border-unconfigured': tool.status === 'not_configured'
       }"
     >
-      <!-- Card Top Header -->
+      <!-- Card Top Header (36px Icon, 15px Tool Name, Category Pill, Status Badge) -->
       <div class="card-header">
         <div class="tool-main-info">
           <div class="tool-icon-wrap">
             <BaseIcon :name="getToolIcon(tool)" size="md" />
           </div>
-          <div style="min-width: 0;">
-            <h3 class="tool-name" :title="tool.name">{{ tool.name }}</h3>
-            <span class="category-badge">{{ tool.category.toUpperCase() }}</span>
+          <div class="tool-title-group">
+            <div class="tool-name-line">
+              <h3 class="tool-name" :title="tool.name">{{ tool.name }}</h3>
+              <span class="category-pill">{{ tool.category.toUpperCase() }}</span>
+            </div>
           </div>
         </div>
 
@@ -71,37 +87,48 @@ const emit = defineEmits<{
         </div>
       </div>
 
-      <!-- Card Body Details -->
+      <!-- Card Body Details (Compact .card-meta-grid) -->
       <div class="card-body">
-        <div v-if="tool.version" class="detail-row">
-          <span class="detail-label">Version:</span>
-          <span class="version-badge font-mono">{{ tool.version }}</span>
-        </div>
+        <div class="card-meta-grid">
+          <div class="meta-item">
+            <span class="meta-label">Version</span>
+            <span v-if="tool.version" class="meta-val font-mono version-pill">{{ tool.version }}</span>
+            <span v-else class="meta-val font-mono text-muted">—</span>
+          </div>
 
-        <div class="detail-row">
-          <span class="detail-label">Endpoint:</span>
-          <div class="endpoint-val font-mono">
-            <a
-              v-if="tool.endpoint"
-              :href="tool.endpoint"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="endpoint-link"
-              :title="tool.endpoint"
-            >
-              {{ tool.endpoint }} ↗
-            </a>
-            <span v-else class="endpoint-empty">
-              Not configured in Settings
+          <div class="meta-item">
+            <span class="meta-label">Discovery Source</span>
+            <span class="source-badge" :class="`source-${tool.source}`">
+              <template v-if="tool.source === 'settings'">
+                <BaseIcon name="sliders" size="xs" /> Settings
+              </template>
+              <template v-else-if="tool.source === 'manual'">
+                <BaseIcon name="edit" size="xs" /> Manual
+              </template>
+              <template v-else>
+                <BaseIcon name="anchor" size="xs" /> K8s Discovery
+              </template>
             </span>
           </div>
-        </div>
 
-        <div class="detail-row">
-          <span class="detail-label">Discovery Source:</span>
-          <span class="source-badge" :class="`source-${tool.source}`">
-            <template v-if="tool.source === 'settings'"><BaseIcon name="sliders" size="xs" /> Settings</template><template v-else-if="tool.source === 'manual'"><BaseIcon name="edit" size="xs" /> Manual</template><template v-else><BaseIcon name="anchor" size="xs" /> K8s</template>
-          </span>
+          <div class="meta-item meta-item-full">
+            <span class="meta-label">Endpoint</span>
+            <div class="endpoint-val font-mono">
+              <a
+                v-if="!formatEndpoint(tool.endpoint).isInternal"
+                :href="formatEndpoint(tool.endpoint).href"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="endpoint-link"
+                :title="tool.endpoint"
+              >
+                {{ formatEndpoint(tool.endpoint).display }} ↗
+              </a>
+              <span v-else class="endpoint-internal font-mono">
+                Internal Cluster SVC
+              </span>
+            </div>
+          </div>
         </div>
 
         <!-- Metadata Tag Pills -->
@@ -116,9 +143,9 @@ const emit = defineEmits<{
         </div>
       </div>
 
-      <!-- Card Footer -->
+      <!-- Card Footer (Relative time on left, Action cluster on right) -->
       <div class="card-footer">
-        <span class="last-checked">
+        <span class="last-checked font-mono" :title="`Last checked: ${tool.last_checked || 'Never'}`">
           <BaseIcon name="clock" size="xs" /> {{ formatRelativeTime(tool.last_checked) }}
         </span>
 
@@ -144,18 +171,19 @@ const emit = defineEmits<{
           </button>
           <button
             class="btn-card-action btn-config"
-            title="Config"
-            aria-label="Config"
+            title="Settings"
+            aria-label="Settings"
             @click="emit('configure', tool)"
           >
             <BaseIcon name="sliders" size="xs" />
+            <span>Settings</span>
           </button>
           <button
             v-if="tool.source === 'manual' || tool.id"
             class="btn-card-action btn-card-delete"
             :disabled="deletingId === tool.id"
-            title="Disconnect"
-            aria-label="Disconnect"
+            title="Delete"
+            aria-label="Delete"
             @click="emit('delete', tool)"
           >
             <BaseIcon name="trash" size="xs" />
