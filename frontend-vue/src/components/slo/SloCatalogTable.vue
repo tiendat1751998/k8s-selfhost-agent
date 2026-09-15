@@ -13,7 +13,6 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'create'): void
   (e: 'inspect', row: SLODefinition): void
   (e: 'triggerAlert', id: string, service: string): void
   (e: 'deleteSlo', id: string, service: string): void
@@ -55,9 +54,9 @@ function formatDate(d?: unknown): string {
         <h2 class="box-title">SLO Target Definitions Catalog</h2>
         <p class="box-subtitle">Configured Service Level Objectives with sliding compliance windows and alert thresholds</p>
       </div>
-      <button class="btn btn-sm btn-primary" @click="emit('create')">
-        <BaseIcon name="plus" size="xs" /> <span>Add Target</span>
-      </button>
+      <div v-if="definitions.length > 0" class="header-badges">
+        <span class="badge badge-cyan">{{ definitions.length }} Targets</span>
+      </div>
     </div>
 
     <DataTable
