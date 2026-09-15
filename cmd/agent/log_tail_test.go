@@ -93,4 +93,33 @@ func TestLogServer_HandleTailLogs(t *testing.T) {
 		authedHandler.ServeHTTP(recAuth, reqAuth)
 		assert.Equal(t, http.StatusOK, recAuth.Code)
 	})
+
+	t.Run("GET /logs/tail with multiplexed Docker logs handles client disconnect without leaking", func(t *testing.T) {
+		msg := "2026-09-16T05:00:02Z multiplexed log line\n"
+		var buf bytes.Buffer
+		buf.Write([]byte{1, 0, 0, 0, 0, 0, 0, byte(len(msg))})
+		buf.WriteString(msg)
+
+		mockCliMultiplex := &mockTailDockerClient{
+			containers: []types.Container{
+				{
+					ID:    "c123456789012",
+					Names: []string{"/web-api"},
+				},
+			},
+			logOutput: buf.String(),
+		}
+
+		server := NewLogServer(WithDockerClient(mockCliMultiplex))
+		h := setupHandler(collector, "", server)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		req := httptest.NewRequest(http.MethodGet, "/logs/tail?service=web-api", nil).WithContext(ctx)
+		rec := httptest.NewRecorder()
+
+		cancel()
+		h.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
 }
