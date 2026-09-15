@@ -1,5 +1,5 @@
 <template>
-  <div class="plugins-page">
+  <div class="plugins-page plugins-view">
     <!-- Sleek Unified 38px Enterprise Toolbar -->
     <div class="plugins-toolbar-sleek glass-panel">
       <!-- Search input with search icon and clear button (filters by name, id, author, description) -->
