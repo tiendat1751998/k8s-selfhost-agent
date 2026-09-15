@@ -64,7 +64,16 @@ export function useOverviewDashboard() {
       ...n,
       node_name: n.node_name === 'k8smater' ? 'k8smaster' : n.node_name
     }))
-    if (!customNodeOrder.value.length) return incoming
+    if (!customNodeOrder.value.length) {
+      return [...incoming].sort((a, b) => {
+        const isReadyA = (a.status || '').toLowerCase() === 'ready' ? 0 : 1
+        const isReadyB = (b.status || '').toLowerCase() === 'ready' ? 0 : 1
+        if (isReadyA !== isReadyB) return isReadyA - isReadyB
+        const nameCmp = (a.node_name || '').localeCompare(b.node_name || '')
+        if (nameCmp !== 0) return nameCmp
+        return (a.node_id || '').localeCompare(b.node_id || '')
+      })
+    }
 
     const orderMap = new Map<string, number>()
     customNodeOrder.value.forEach((id, idx) => orderMap.set(id, idx))
@@ -72,7 +81,10 @@ export function useOverviewDashboard() {
     return [...incoming].sort((a, b) => {
       const idxA = orderMap.has(a.node_id) ? orderMap.get(a.node_id)! : 9999
       const idxB = orderMap.has(b.node_id) ? orderMap.get(b.node_id)! : 9999
-      return idxA - idxB
+      if (idxA !== idxB) return idxA - idxB
+      const nameCmp = (a.node_name || '').localeCompare(b.node_name || '')
+      if (nameCmp !== 0) return nameCmp
+      return (a.node_id || '').localeCompare(b.node_id || '')
     })
   })
 
