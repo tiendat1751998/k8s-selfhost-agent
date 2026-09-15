@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import MetricCard from '../components/ui/MetricCard.vue'
 import { usePromotions } from '../composables/usePromotions'
 import PromotionPipelinesGrid from '../components/promotions/PromotionPipelinesGrid.vue'
 import PromotionsTable from '../components/promotions/PromotionsTable.vue'
@@ -17,6 +16,9 @@ const {
   actionLoading,
   toastMessage,
   promotions,
+  statusFilter,
+  promotionSearchQuery,
+  filteredPromotions,
   runningServices,
   environments,
   serviceSearchQuery,
@@ -61,11 +63,84 @@ const {
           Automated gate approvals and progressive environment promotion pipeline across Dev &rarr; QA &rarr; Staging &rarr; Production.
         </p>
       </div>
+    </div>
 
-      <div class="header-actions">
-        <!-- Segmented View Mode Toggle: [ Table ] [ Pipeline ] -->
+    <!-- Unified 38px Sleek Desktop Toolbar (>=768px) -->
+    <div class="promotions-toolbar-sleek glass-panel desktop-only">
+      <!-- Left: Standardized 30px Capsule Pill search input -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="promotionSearchQuery"
+          type="text"
+          class="toolbar-search-input"
+          placeholder="Search promotions..."
+        />
+        <button
+          v-if="promotionSearchQuery"
+          type="button"
+          class="clear-input-btn"
+          title="Clear search"
+          aria-label="Clear search"
+          @click="promotionSearchQuery = ''"
+        >
+          &times;
+        </button>
+      </div>
+
+      <!-- Center: 1-Click status filter pills with live counts -->
+      <div class="toolbar-status-pills">
+        <button
+          type="button"
+          class="status-pill"
+          :class="{ active: statusFilter === 'all' }"
+          @click="statusFilter = 'all'"
+        >
+          All <span class="pill-count">{{ promotions.length }}</span>
+        </button>
+        <button
+          type="button"
+          class="status-pill status-pill-pending"
+          :class="{ active: statusFilter === 'pending' }"
+          @click="statusFilter = 'pending'"
+        >
+          <span class="pill-dot amber"></span>
+          Pending <span class="pill-count">{{ pendingCount }}</span>
+        </button>
+        <button
+          type="button"
+          class="status-pill status-pill-active"
+          :class="{ active: statusFilter === 'active' }"
+          @click="statusFilter = 'active'"
+        >
+          <span class="pill-dot cyan"></span>
+          Active <span class="pill-count">{{ approvedCount }}</span>
+        </button>
+        <button
+          type="button"
+          class="status-pill status-pill-completed"
+          :class="{ active: statusFilter === 'completed' }"
+          @click="statusFilter = 'completed'"
+        >
+          <span class="pill-dot emerald"></span>
+          Completed <span class="pill-count">{{ completedCount }}</span>
+        </button>
+        <button
+          type="button"
+          class="status-pill status-pill-rejected"
+          :class="{ active: statusFilter === 'rejected' }"
+          @click="statusFilter = 'rejected'"
+        >
+          <span class="pill-dot rose"></span>
+          Rejected <span class="pill-count">{{ rejectedCount }}</span>
+        </button>
+      </div>
+
+      <!-- Right: View Mode Toggle, Refresh, + Request Promotion CTA -->
+      <div class="toolbar-actions-group">
         <div class="segmented-control font-mono">
           <button
+            type="button"
             class="segmented-btn"
             :class="{ active: viewMode === 'table' }"
             @click="viewMode = 'table'"
@@ -74,6 +149,7 @@ const {
             <BaseIcon name="file-text" size="xs" /> <span>Table</span>
           </button>
           <button
+            type="button"
             class="segmented-btn"
             :class="{ active: viewMode === 'pipeline' }"
             @click="viewMode = 'pipeline'"
@@ -83,10 +159,21 @@ const {
           </button>
         </div>
 
-        <button class="btn btn-secondary" :disabled="loading || loadingServices" @click="refreshAll">
-          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading || loadingServices }" /> <span>{{ loading || loadingServices ? 'Querying...' : 'Refresh' }}</span>
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm"
+          :disabled="loading || loadingServices"
+          @click="refreshAll"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading || loadingServices }" />
+          <span>{{ loading || loadingServices ? 'Querying...' : 'Refresh' }}</span>
         </button>
-        <button class="btn btn-primary" @click="openCreateModal">
+
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          @click="openCreateModal"
+        >
           <span>+ Request Promotion</span>
         </button>
       </div>
@@ -125,53 +212,11 @@ const {
       <button class="toast-close" @click="toastMessage = null" aria-label="Close"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Metric HUD (Desktop only >=768px) -->
-    <div class="metrics-grid desktop-metrics desktop-only">
-      <MetricCard
-        title="Pending Approvals"
-        :value="pendingCount"
-        subtitle="Promotion requests awaiting review"
-        icon="clock"
-        badge="GATE"
-        :badge-color="pendingCount > 0 ? 'amber' : 'emerald'"
-        :trend="pendingCount > 0 ? 'Review Required' : 'All Clear'"
-        :trend-type="pendingCount > 0 ? 'neutral' : 'positive'"
-      />
-      <MetricCard
-        title="Active Promoting"
-        :value="approvedCount"
-        subtitle="Canary rollout & staging verification"
-        icon="play"
-        badge="ROLLOUT"
-        badge-color="cyan"
-        trend="In-Flight Verification"
-        trend-type="positive"
-      />
-      <MetricCard
-        title="Completed Releases"
-        :value="completedCount"
-        subtitle="Successfully promoted to destination"
-        icon="check-circle"
-        badge="SHIPPED"
-        badge-color="emerald"
-        trend="Continuous Delivery"
-        trend-type="positive"
-      />
-      <MetricCard
-        title="Rejected / Aborted"
-        :value="rejectedCount"
-        subtitle="Failed quality gates or security review"
-        icon="x-circle"
-        badge="REJECTED"
-        :badge-color="rejectedCount > 0 ? 'rose' : 'emerald'"
-      />
-    </div>
-
     <!-- Desktop Pipeline Board OR Table (Mutually exclusive on desktop, suppressed on mobile) -->
     <div v-if="viewMode === 'pipeline'" class="desktop-only pipeline-grid-container animate-fade-in">
       <PromotionPipelinesGrid
         :environments="environments"
-        :promotions="promotions"
+        :promotions="filteredPromotions"
         :action-loading="actionLoading"
         @approve="handleApprove"
         @reject="handleReject"
@@ -184,7 +229,7 @@ const {
 
     <div v-else-if="viewMode === 'table'" class="desktop-only desktop-only-table animate-fade-in">
       <PromotionsTable
-        :promotions="promotions"
+        :promotions="filteredPromotions"
         :loading="loading"
         :error="error"
         :action-loading="actionLoading"
@@ -249,19 +294,4 @@ const {
 
 <style>
 @import '../assets/styles/views/promotions.css';
-
-.metrics-grid.desktop-only {
-  display: grid !important;
-  grid-template-columns: repeat(4, 1fr) !important;
-}
-@media (min-width: 768px) and (max-width: 1023.98px) {
-  .metrics-grid.desktop-only {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-}
-@media (max-width: 767.98px) {
-  .metrics-grid.desktop-only {
-    display: none !important;
-  }
-}
 </style>

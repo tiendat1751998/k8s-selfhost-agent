@@ -55,8 +55,6 @@ function formatDate(d?: string) {
       :loading="loading"
       :error="error"
       empty-message="No promotion requests found. Click '+ Request Promotion' to submit a new release for environment gating."
-      searchable
-      search-placeholder="Search promotions by service, requester, or version..."
     >
       <template #cell-service="{ row }">
         <span class="font-mono text-cyan font-bold">{{ row.service }}</span>
