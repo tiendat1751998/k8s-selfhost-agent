@@ -44,7 +44,7 @@
               :disabled="policy.heartbeatTimeout <= 5"
               aria-label="Decrease timeout"
               @click="stepTimeout(-1)"
-            >?</button>
+            >&minus;</button>
             <div class="slider-track-wrap">
               <input
                 id="slider-heartbeat"
