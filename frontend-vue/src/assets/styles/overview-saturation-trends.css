@@ -319,6 +319,13 @@
   user-select: none;
 }
 
+@media (max-width: 1200px) {
+  .trend-chart-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
+
 @media (max-width: 768px) {
   .trend-chart-card {
     padding: 12px 10px;
