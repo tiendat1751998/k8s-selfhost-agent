@@ -184,6 +184,49 @@ func TestDistributedAgentLogRepo_QueryLogs(t *testing.T) {
 	}
 }
 
+
+func TestDistributedAgentLogRepo_Pagination_NewestFirstReSortedAscending(t *testing.T) {
+	ctx := context.Background()
+	t0 := time.Date(2026, 9, 16, 4, 19, 0, 0, time.UTC)
+	t1 := time.Date(2026, 9, 16, 5, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 9, 16, 6, 18, 0, 0, time.UTC)
+
+	clusterResults := []agent.LogSearchResult{
+		{Timestamp: t0, NodeID: "n1", Service: "app", Message: "oldest log 04:19", Level: "info"},
+		{Timestamp: t1, NodeID: "n1", Service: "app", Message: "middle log 05:00", Level: "info"},
+		{Timestamp: t2, NodeID: "n1", Service: "app", Message: "newest log 06:18", Level: "info"},
+	}
+	hostRepo := &mockComputeHostRepo{hosts: []docker.ComputeHost{{ID: "n1", Endpoint: "http://10.0.0.1:9100"}}}
+	logClient := &mockLogClient{clusterResults: clusterResults}
+	memRepo := infraLogging.NewMemoryLogRepo(100)
+	repo := agent.NewDistributedAgentLogRepo(hostRepo, logClient, memRepo)
+
+	// With limit 1, offset 0: should return the NEWEST log (t2 06:18), NOT the oldest log (t0 04:19)
+	resLimit1, err := repo.QueryLogs(ctx, domainLogging.LogFilter{Limit: 1, Offset: 0})
+	if err != nil {
+		t.Fatalf("QueryLogs failed: %v", err)
+	}
+	if len(resLimit1.Entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(resLimit1.Entries))
+	}
+	if resLimit1.Entries[0].Message != "newest log 06:18" {
+		t.Fatalf("expected newest log 'newest log 06:18', got '%s'", resLimit1.Entries[0].Message)
+	}
+
+	// With limit 2, offset 0: should return the 2 newest logs (t1 05:00, t2 06:18) sorted ascending
+	resLimit2, err := repo.QueryLogs(ctx, domainLogging.LogFilter{Limit: 2, Offset: 0})
+	if err != nil {
+		t.Fatalf("QueryLogs failed: %v", err)
+	}
+	if len(resLimit2.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(resLimit2.Entries))
+	}
+	if resLimit2.Entries[0].Message != "middle log 05:00" || resLimit2.Entries[1].Message != "newest log 06:18" {
+		t.Fatalf("expected [middle log 05:00, newest log 06:18], got [%s, %s]",
+			resLimit2.Entries[0].Message, resLimit2.Entries[1].Message)
+	}
+}
+
 func TestDistributedAgentLogRepo_GetHistogram(t *testing.T) {
 	ctx := context.Background()
 	baseTime := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
