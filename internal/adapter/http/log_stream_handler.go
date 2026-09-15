@@ -67,18 +67,9 @@ func (h *LogStreamHandler) resolveAgentURL(ctx context.Context, node, service st
 				}
 			}
 		}
-	} else if service != "" && h.hostRepo != nil {
-		hosts, err := h.hostRepo.ListAll(ctx)
-		if err == nil {
-			for _, host := range hosts {
-				if host.Endpoint != "" && !isLocalNode(host.Endpoint) {
-					return host.Endpoint
-				}
-			}
+		if envAgent := os.Getenv("AGENT_URL"); envAgent != "" {
+			return envAgent
 		}
-	}
-	if envAgent := os.Getenv("AGENT_URL"); envAgent != "" && !isLocalNode(node) {
-		return envAgent
 	}
 	return ""
 }
@@ -171,7 +162,7 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer cancelStream()
 
 		go func() {
-			_ = h.streamer.StreamLogs(streamCtx, agentURL, targetService, func(line string) {
+			if err := h.streamer.StreamLogs(streamCtx, agentURL, targetService, func(line string) {
 				entryTS, msg := parseStreamLogLine(line)
 				h.aggregator.Ingest(logging.LogEntry{
 					Timestamp: entryTS,
@@ -184,7 +175,13 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Level:     detectStreamLogLevel(msg),
 					Message:   msg,
 				})
-			})
+			}); err != nil && streamCtx.Err() == nil {
+				logger.Get().Warn("remote agent log stream failed",
+					zap.String("agent_url", agentURL),
+					zap.String("service", targetService),
+					zap.Error(err),
+				)
+			}
 		}()
 	}
 

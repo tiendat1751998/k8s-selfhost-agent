@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -52,6 +53,7 @@ type AgentLogClient struct {
 	httpClient     *http.Client
 	clusterTimeout time.Duration
 	nodeTimeout    time.Duration
+	authToken      string
 }
 
 // AgentLogClientOption configures AgentLogClient.
@@ -82,6 +84,20 @@ func WithNodeTimeout(d time.Duration) AgentLogClientOption {
 			c.nodeTimeout = d
 		}
 	}
+}
+
+// WithAuthToken sets default authentication token for agent requests.
+func WithAuthToken(token string) AgentLogClientOption {
+	return func(c *AgentLogClient) {
+		c.authToken = token
+	}
+}
+
+func (c *AgentLogClient) getAuthToken() string {
+	if c != nil && c.authToken != "" {
+		return c.authToken
+	}
+	return os.Getenv("AGENT_AUTH_TOKEN")
 }
 
 // NewAgentLogClient creates a new AgentLogClient.
