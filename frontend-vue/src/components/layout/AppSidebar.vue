@@ -32,13 +32,22 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-function getInitialCollapseState(): boolean {
+function getSavedCollapseState(): boolean {
   if (typeof window === 'undefined') return false
   const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved !== null) {
-    return saved === 'true'
+  return saved !== null ? saved === 'true' : false
+}
+
+function getInitialCollapseState(): boolean {
+  if (typeof window === 'undefined') return false
+  const width = window.innerWidth
+  if (width >= 641 && width <= 1200) {
+    return true
   }
-  return false
+  if (width <= 640) {
+    return false
+  }
+  return getSavedCollapseState()
 }
 
 const isCollapsed = ref<boolean>(getInitialCollapseState())
@@ -61,12 +70,31 @@ function toggleCollapse() {
 
 function handleResize() {
   if (typeof window === 'undefined') return
-  if (window.innerWidth > 1024 && props.mobileOpen) {
+  const width = window.innerWidth
+  if (width > 640 && props.mobileOpen) {
     emit('closeMobile')
+  }
+  if (width >= 641 && width <= 1200) {
+    if (!isCollapsed.value) {
+      isCollapsed.value = true
+      emit('update:collapsed', true)
+    }
+  } else if (width > 1200) {
+    const saved = getSavedCollapseState()
+    if (isCollapsed.value !== saved) {
+      isCollapsed.value = saved
+      emit('update:collapsed', saved)
+    }
+  } else if (width <= 640) {
+    if (isCollapsed.value) {
+      isCollapsed.value = false
+      emit('update:collapsed', false)
+    }
   }
 }
 
 onMounted(() => {
+  handleResize()
   emit('update:collapsed', isCollapsed.value)
   window.addEventListener('resize', handleResize)
 })
