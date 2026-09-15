@@ -147,8 +147,6 @@ function handleRowAction(actionId: string, res: K8sResource) {
       :loading="loading"
       :error="error"
       empty-message="No Kubernetes resources discovered matching current filters."
-      searchable
-      search-placeholder="Filter by name, namespace, or status..."
     >
       <template #cell-name="{ row }">
         <div class="resource-name-cell">

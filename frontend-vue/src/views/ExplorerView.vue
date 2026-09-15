@@ -18,7 +18,7 @@ import ExplorerImportModal from '../components/explorer/ExplorerImportModal.vue'
 import ExplorerCreateNsModal from '../components/explorer/ExplorerCreateNsModal.vue'
 import PodLogsDrawer from '../components/explorer/PodLogsDrawer.vue'
 import PodTerminalDrawer from '../components/explorer/PodTerminalDrawer.vue'
-import { useK8sExplorer } from '../composables/useK8sExplorer'
+import { useK8sExplorer, getResourceStatus } from '../composables/useK8sExplorer'
 import { useGlobalContext } from '../composables/useGlobalContext'
 import type { ResourceKind } from '../api/k8s'
 import '../assets/styles/views/explorer.css'
@@ -148,7 +148,8 @@ const filteredResources = computed(() => {
   return resources.value.filter((r) => {
     const name = r.metadata?.name?.toLowerCase() || ''
     const ns = r.metadata?.namespace?.toLowerCase() || ''
-    return name.includes(q) || ns.includes(q)
+    const status = getResourceStatus(r).toLowerCase()
+    return name.includes(q) || ns.includes(q) || status.includes(q)
   })
 })
 
@@ -198,7 +199,7 @@ onMounted(async () => {
       <!-- Mobile Search Strip (toggled by search) -->
       <div v-if="showMobileSearch" class="mobile-search-strip">
         <BaseIcon name="search" size="xs" class="search-icon" />
-        <input v-model="searchQuery" type="text" placeholder="Filter resources..." class="input-glass mobile-search-input font-mono" />
+        <input v-model="searchQuery" type="text" placeholder="Filter by name, namespace, status..." class="input-glass mobile-search-input font-mono" />
       </div>
 
       <!-- Mobile Micro-Telemetry (20px) -->
@@ -228,9 +229,9 @@ onMounted(async () => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Filter resources..."
+            placeholder="Filter by name, namespace, status..."
             class="toolbar-search-input font-mono"
-            aria-label="Filter resources by name, namespace"
+            aria-label="Filter resources by name, namespace, status"
           />
           <button
             v-if="searchQuery"
