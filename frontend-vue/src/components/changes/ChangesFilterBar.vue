@@ -1,4 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
+
 defineProps<{
   searchQuery: string
   selectedCluster: string
@@ -33,7 +35,7 @@ const statuses = [
 
 <template>
   <div class="changes-filter-bar glass-panel">
-    <div class="filter-top-row">
+    <div class="filter-bar-row">
       <!-- Search Input -->
       <div class="search-input-wrap">
         <BaseIcon name="search" size="xs" class="search-icon" />
@@ -65,6 +67,22 @@ const statuses = [
         </select>
       </div>
 
+      <!-- Status Filters -->
+      <div class="status-filters-group">
+        <span class="filter-label">Status:</span>
+        <div class="status-pills">
+          <button
+            v-for="s in statuses"
+            :key="s.id"
+            class="spill"
+            :class="{ active: selectedStatus === s.id }"
+            @click="$emit('update:selectedStatus', s.id)"
+          >
+            {{ s.label }}
+          </button>
+        </div>
+      </div>
+
       <!-- Time Window Selector -->
       <div class="time-window-group">
         <span class="filter-label">Window:</span>
@@ -79,22 +97,6 @@ const statuses = [
             {{ w.label }}
           </button>
         </div>
-      </div>
-    </div>
-
-    <!-- Status Filters -->
-    <div class="status-filters-row">
-      <span class="filter-label">Status:</span>
-      <div class="status-pills">
-        <button
-          v-for="s in statuses"
-          :key="s.id"
-          class="spill"
-          :class="{ active: selectedStatus === s.id }"
-          @click="$emit('update:selectedStatus', s.id)"
-        >
-          {{ s.label }}
-        </button>
       </div>
     </div>
   </div>
