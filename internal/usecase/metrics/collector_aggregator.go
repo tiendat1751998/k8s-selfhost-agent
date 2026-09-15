@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -132,6 +134,20 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 		})
 	}
 	c.agentMu.RUnlock()
+
+	sort.SliceStable(nodeMetricsList, func(i, j int) bool {
+		isReadyI := nodeMetricsList[i].Status == "ready"
+		isReadyJ := nodeMetricsList[j].Status == "ready"
+		if isReadyI != isReadyJ {
+			return isReadyI // ready comes first
+		}
+		nameI := strings.ToLower(nodeMetricsList[i].NodeName)
+		nameJ := strings.ToLower(nodeMetricsList[j].NodeName)
+		if nameI != nameJ {
+			return nameI < nameJ
+		}
+		return nodeMetricsList[i].NodeID < nodeMetricsList[j].NodeID
+	})
 
 	// 4. Aggregate System Overview
 	healthyNodesCount := 0
