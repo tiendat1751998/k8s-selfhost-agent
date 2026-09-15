@@ -1,5 +1,7 @@
 import { ref, computed, onMounted } from 'vue'
-import { capacityApi, type CapacityForecast } from '../api/governance'
+import { capacityApi, type CapacityForecast, type NodeHeadroom as BackendNodeHeadroom } from '../api/governance'
+import { overviewApi, type NodeMetrics } from '../api/overview'
+import { useGlobalContext } from './useGlobalContext'
 
 export interface CapacityRecommendation {
   icon: string
@@ -12,7 +14,7 @@ export interface CapacityRecommendation {
 export interface NodeHeadroom {
   id: string
   name: string
-  role: 'worker' | 'control-plane'
+  role: 'worker' | 'control-plane' | string
   cpuTotalCores: number
   cpuAllocatedCores: number
   cpuUsagePercent: number
@@ -22,7 +24,7 @@ export interface NodeHeadroom {
   podCount: number
   podCapacity: number
   binPackingScore: number
-  status: 'healthy' | 'warning' | 'critical'
+  status: 'healthy' | 'warning' | 'critical' | string
   headroomPercent: number
 }
 
@@ -49,30 +51,21 @@ export interface HudMetricItem {
 }
 
 export function useCapacityForecast() {
+  const { activeClusterId } = useGlobalContext()
   const forecasts = ref<CapacityForecast[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
   const statusMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  const nodesHeadroom = ref<NodeHeadroom[]>([
-    { id: 'node-wrk-01', name: 'k8s-worker-prod-01', role: 'worker', cpuTotalCores: 32, cpuAllocatedCores: 22.4, cpuUsagePercent: 70.0, memTotalGiB: 128, memAllocatedGiB: 88.3, memUsagePercent: 69.0, podCount: 42, podCapacity: 60, binPackingScore: 81.2, status: 'healthy', headroomPercent: 30.0 },
-    { id: 'node-wrk-02', name: 'k8s-worker-prod-02', role: 'worker', cpuTotalCores: 32, cpuAllocatedCores: 26.8, cpuUsagePercent: 83.8, memTotalGiB: 128, memAllocatedGiB: 104.2, memUsagePercent: 81.4, podCount: 54, podCapacity: 60, binPackingScore: 88.5, status: 'warning', headroomPercent: 16.2 },
-    { id: 'node-wrk-03', name: 'k8s-worker-prod-03', role: 'worker', cpuTotalCores: 32, cpuAllocatedCores: 18.2, cpuUsagePercent: 56.9, memTotalGiB: 128, memAllocatedGiB: 67.5, memUsagePercent: 52.7, podCount: 36, podCapacity: 60, binPackingScore: 68.4, status: 'healthy', headroomPercent: 43.1 },
-    { id: 'node-edge-04', name: 'k8s-worker-edge-04', role: 'worker', cpuTotalCores: 16, cpuAllocatedCores: 14.1, cpuUsagePercent: 88.1, memTotalGiB: 64, memAllocatedGiB: 56.8, memUsagePercent: 88.8, podCount: 28, podCapacity: 30, binPackingScore: 92.0, status: 'critical', headroomPercent: 11.2 },
-    { id: 'node-cp-01', name: 'k8s-control-plane-01', role: 'control-plane', cpuTotalCores: 16, cpuAllocatedCores: 7.2, cpuUsagePercent: 45.0, memTotalGiB: 64, memAllocatedGiB: 24.5, memUsagePercent: 38.3, podCount: 19, podCapacity: 40, binPackingScore: 54.2, status: 'healthy', headroomPercent: 55.0 }
-  ])
-
-  const policies = ref<CapacityPolicy[]>([
-    { id: 'pol-01', name: 'Cluster Saturation Guard', cluster: 'k8s-prod-primary', cpuThresholdPercent: 80, ramThresholdPercent: 85, headroomBufferPercent: 20, targetBinPackingPercent: 75, actionType: 'scale_up', enabled: true, createdAt: '2026-08-15T08:00:00Z' },
-    { id: 'pol-02', name: 'Edge Node Headroom SLA', cluster: 'k8s-edge-mesh', cpuThresholdPercent: 85, ramThresholdPercent: 90, headroomBufferPercent: 15, targetBinPackingPercent: 85, actionType: 'pod_rebalance', enabled: true, createdAt: '2026-08-20T10:30:00Z' }
-  ])
+  const nodesHeadroom = ref<NodeHeadroom[]>([])
+  const policies = ref<CapacityPolicy[]>([])
 
   const cpuForecast = computed(() => forecasts.value.find(f => f.resource_type.toLowerCase() === 'cpu'))
   const memForecast = computed(() => forecasts.value.find(f => f.resource_type.toLowerCase() === 'memory' || f.resource_type.toLowerCase() === 'ram'))
   const storageForecast = computed(() => forecasts.value.find(f => ['storage', 'disk', 'nvme'].includes(f.resource_type.toLowerCase())))
 
   const cpuRunway = computed<HudMetricItem>(() => {
-    if (!cpuForecast.value) return { value: '—', trend: 'No CPU data', trendType: 'neutral', badge: 'NO DATA', badgeColor: 'muted', subtitle: 'No CPU forecast recorded' }
+    if (!cpuForecast.value) return { value: '--', trend: 'No CPU data', trendType: 'neutral', badge: 'NO DATA', badgeColor: 'muted', subtitle: 'No CPU forecast recorded' }
     const fc = cpuForecast.value
     const value = fc.exhaustion_at ? formatDate(fc.exhaustion_at) : (fc.forecast_90d < 80 ? '> 180 Days' : fc.forecast_90d < 90 ? '90-180 Days' : '< 90 Days')
     const headroom = Math.max(0, Math.round(100 - fc.current_usage))
@@ -80,7 +73,7 @@ export function useCapacityForecast() {
   })
 
   const memSaturation = computed<HudMetricItem>(() => {
-    if (!memForecast.value) return { value: '—', trend: 'No RAM data', trendType: 'neutral', badge: 'NO DATA', badgeColor: 'muted', subtitle: 'No memory forecast recorded' }
+    if (!memForecast.value) return { value: '--', trend: 'No RAM data', trendType: 'neutral', badge: 'NO DATA', badgeColor: 'muted', subtitle: 'No memory forecast recorded' }
     const fc = memForecast.value
     const value = fc.exhaustion_at ? formatDate(fc.exhaustion_at) : (fc.forecast_90d < 80 ? '> 180 Days' : fc.forecast_90d < 90 ? '90-180 Days' : '< 90 Days')
     const diff = fc.forecast_30d - fc.current_usage
@@ -88,14 +81,14 @@ export function useCapacityForecast() {
   })
 
   const storageHeadroom = computed<HudMetricItem>(() => {
-    if (!storageForecast.value) return { value: '—', trend: 'No storage data', trendType: 'neutral', badge: 'NO DATA', badgeColor: 'muted', subtitle: 'No storage forecast recorded' }
+    if (!storageForecast.value) return { value: '--', trend: 'No storage data', trendType: 'neutral', badge: 'NO DATA', badgeColor: 'muted', subtitle: 'No storage forecast recorded' }
     const fc = storageForecast.value
     const avail = Math.max(0, Math.round(100 - fc.current_usage))
     return { value: `${avail}% Free`, trend: `${avail}% Available`, trendType: fc.current_usage < 85 ? 'positive' : 'negative', badge: fc.status.toUpperCase(), badgeColor: fc.status === 'healthy' ? 'cyan' : fc.status === 'warning' ? 'amber' : 'rose', subtitle: `Current storage utilization: ${fc.current_usage.toFixed(1)}%` }
   })
 
   const scalingAction = computed<HudMetricItem>(() => {
-    if (forecasts.value.length === 0) return { value: '—', trend: 'Standby', trendType: 'neutral', badge: 'NO DATA', badgeColor: 'muted', subtitle: 'No predictive forecast models' }
+    if (forecasts.value.length === 0) return { value: '--', trend: 'Standby', trendType: 'neutral', badge: 'NO DATA', badgeColor: 'muted', subtitle: 'No predictive forecast models' }
     const hasCrit = forecasts.value.some(f => f.status === 'critical' || f.forecast_30d >= 85)
     const hasWarn = forecasts.value.some(f => f.status === 'warning' || f.forecast_30d >= 70)
     if (hasCrit) return { value: '+1 Node Req', trend: 'Scale Up', trendType: 'negative', badge: 'ACTION REQUIRED', badgeColor: 'rose', subtitle: 'Pre-scale worker pool for forecast load' }
@@ -105,7 +98,23 @@ export function useCapacityForecast() {
 
   // Top 4 HUD Metrics for CapacityHudCards.vue
   const clusterSaturation = computed<HudMetricItem>(() => {
-    if (!cpuForecast.value && !memForecast.value) {
+    if (nodesHeadroom.value.length === 0) {
+      if (cpuForecast.value || memForecast.value) {
+        const cpuVal = cpuForecast.value?.current_usage
+        const memVal = memForecast.value?.current_usage
+        const avg = (cpuVal !== undefined && memVal !== undefined)
+          ? (cpuVal + memVal) / 2
+          : (cpuVal ?? memVal ?? 0)
+        const num = Number(avg.toFixed(1))
+        return {
+          value: `${num}%`,
+          trend: num < 70 ? 'Within Safe Limits' : num < 85 ? 'Elevated Load' : 'Critical Saturation',
+          trendType: num < 70 ? 'positive' : num < 85 ? 'neutral' : 'negative',
+          badge: num < 70 ? 'NOMINAL' : num < 85 ? 'ELEVATED' : 'SATURATED',
+          badgeColor: num < 70 ? 'emerald' : num < 85 ? 'amber' : 'rose',
+          subtitle: 'Cluster-wide aggregate compute & memory consumption',
+        }
+      }
       return {
         value: '--',
         trend: 'No capacity data',
@@ -115,21 +124,17 @@ export function useCapacityForecast() {
         subtitle: 'Cluster-wide aggregate compute & memory consumption',
       }
     }
-    const cpuVal = cpuForecast.value?.current_usage
-    const memVal = memForecast.value?.current_usage
-    let avg = 0
-    if (cpuVal !== undefined && memVal !== undefined) {
-      avg = (cpuVal + memVal) / 2
-    } else {
-      avg = cpuVal ?? memVal ?? 0
-    }
-    const num = Number(avg.toFixed(1))
+    const sum = nodesHeadroom.value.reduce(
+      (acc, n) => acc + (n.cpuUsagePercent + n.memUsagePercent) / 2,
+      0
+    )
+    const avg = Number((sum / nodesHeadroom.value.length).toFixed(1))
     return {
-      value: `${num}%`,
-      trend: num < 70 ? 'Within Safe Limits' : num < 85 ? 'Elevated Load' : 'Critical Saturation',
-      trendType: num < 70 ? 'positive' : num < 85 ? 'neutral' : 'negative',
-      badge: num < 70 ? 'NOMINAL' : num < 85 ? 'ELEVATED' : 'SATURATED',
-      badgeColor: num < 70 ? 'emerald' : num < 85 ? 'amber' : 'rose',
+      value: `${avg}%`,
+      trend: avg < 70 ? 'Within Safe Limits' : avg < 85 ? 'Elevated Load' : 'Critical Saturation',
+      trendType: avg < 70 ? 'positive' : avg < 85 ? 'neutral' : 'negative',
+      badge: avg < 70 ? 'NOMINAL' : avg < 85 ? 'ELEVATED' : 'SATURATED',
+      badgeColor: avg < 70 ? 'emerald' : avg < 85 ? 'amber' : 'rose',
       subtitle: 'Cluster-wide aggregate compute & memory consumption',
     }
   })
@@ -170,27 +175,48 @@ export function useCapacityForecast() {
   })
 
   const binPackingEfficiency = computed<HudMetricItem>(() => {
+    if (nodesHeadroom.value.length === 0) {
+      return {
+        value: '--',
+        trend: 'No node telemetry',
+        trendType: 'neutral',
+        badge: 'NO DATA',
+        badgeColor: 'muted',
+        subtitle: 'Weighted pod-to-allocatable bin-packing ratio',
+      }
+    }
     const scores = nodesHeadroom.value.map(n => n.binPackingScore)
-    const avg = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '78.5'
+    const avg = Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1))
+    const diff = Number((avg - 75).toFixed(1))
     return {
       value: `${avg}%`,
-      trend: '+3.4% vs SLA Target (75%)',
-      trendType: 'positive',
-      badge: 'HIGH DENSITY',
-      badgeColor: 'cyan',
+      trend: `${diff >= 0 ? '+' : ''}${diff}% vs SLA Target (75%)`,
+      trendType: avg >= 75 ? 'positive' : 'negative',
+      badge: avg >= 80 ? 'HIGH DENSITY' : avg >= 60 ? 'BALANCED' : 'LOW DENSITY',
+      badgeColor: avg >= 80 ? 'cyan' : avg >= 60 ? 'emerald' : 'amber',
       subtitle: 'Weighted pod-to-allocatable bin-packing ratio',
     }
   })
 
   const safeHeadroom = computed<HudMetricItem>(() => {
+    if (nodesHeadroom.value.length === 0) {
+      return {
+        value: '--',
+        trend: 'No node telemetry',
+        trendType: 'neutral',
+        badge: 'NO DATA',
+        badgeColor: 'muted',
+        subtitle: 'Guaranteed burst headroom before eviction triggers',
+      }
+    }
     const minH = Math.min(...nodesHeadroom.value.map(n => n.headroomPercent))
-    const avgH = (nodesHeadroom.value.reduce((a, n) => a + n.headroomPercent, 0) / (nodesHeadroom.value.length || 1)).toFixed(1)
+    const minHNum = Number(minH.toFixed(1))
     return {
-      value: `${avgH}%`,
-      trend: `Min Node: ${minH.toFixed(1)}% Headroom`,
-      trendType: Number(avgH) >= 20 ? 'positive' : 'negative',
-      badge: Number(avgH) >= 20 ? 'SAFE BUFFER' : 'LOW BUFFER',
-      badgeColor: Number(avgH) >= 20 ? 'emerald' : 'amber',
+      value: `${minHNum}%`,
+      trend: `Min Node: ${minHNum}% Headroom`,
+      trendType: minHNum >= 20 ? 'positive' : 'negative',
+      badge: minHNum >= 20 ? 'SAFE BUFFER' : 'LOW BUFFER',
+      badgeColor: minHNum >= 20 ? 'emerald' : 'amber',
       subtitle: 'Guaranteed burst headroom before eviction triggers',
     }
   })
@@ -202,15 +228,15 @@ export function useCapacityForecast() {
     for (const fc of forecasts.value) {
       const type = fc.resource_type.toLowerCase()
       if (type === 'cpu' && (fc.forecast_30d > 70 || fc.status !== 'healthy')) {
-        recs.push({ icon: '⚙️', title: 'Horizontal Node Pool Auto-Scaling', desc: `Adjust worker node pool capacity for "${fc.cluster}" to absorb 30d forecast of ${fc.forecast_30d.toFixed(1)}%.`, impact: 'Prevents CPU throttling during peak traffic', impactClass: 'text-cyan' })
+        recs.push({ icon: 'sliders', title: 'Horizontal Node Pool Auto-Scaling', desc: `Adjust worker node pool capacity for "${fc.cluster}" to absorb 30d forecast of ${fc.forecast_30d.toFixed(1)}%.`, impact: 'Prevents CPU throttling during peak traffic', impactClass: 'text-cyan' })
       } else if (['memory', 'ram'].includes(type) && (fc.forecast_30d > 70 || fc.status !== 'healthy')) {
-        recs.push({ icon: '🧠', title: 'Pod Memory Request Right-Sizing', desc: `Review memory limits in cluster "${fc.cluster}" where forecast reaches ${fc.forecast_30d.toFixed(1)}% to prevent OOM-Kills.`, impact: 'Optimizes memory bin-packing and prevents container evictions', impactClass: 'text-emerald' })
+        recs.push({ icon: 'cpu', title: 'Pod Memory Request Right-Sizing', desc: `Review memory limits in cluster "${fc.cluster}" where forecast reaches ${fc.forecast_30d.toFixed(1)}% to prevent OOM-Kills.`, impact: 'Optimizes memory bin-packing and prevents container evictions', impactClass: 'text-emerald' })
       } else if (['storage', 'disk'].includes(type) && (fc.forecast_30d > 70 || fc.status !== 'healthy')) {
-        recs.push({ icon: '🗄️', title: 'Storage Volume Compaction & PVC Pruning', desc: `Enable volume snapshot deduplication and purge unreferenced PVCs on cluster "${fc.cluster}".`, impact: 'Recovers disk headroom and defers storage volume expansion', impactClass: 'text-violet' })
+        recs.push({ icon: 'hard-drive', title: 'Storage Volume Compaction & PVC Pruning', desc: `Enable volume snapshot deduplication and purge unreferenced PVCs on cluster "${fc.cluster}".`, impact: 'Recovers disk headroom and defers storage volume expansion', impactClass: 'text-violet' })
       }
     }
     if (recs.length === 0 && forecasts.value.length > 0) {
-      recs.push({ icon: '✅', title: 'Resource Allocation Sizing Optimal', desc: `All ${forecasts.value.length} tracked capacity checkpoints are operating within healthy operating thresholds.`, impact: 'Zero scaling actions required at this time', impactClass: 'text-emerald' })
+      recs.push({ icon: 'check-circle', title: 'Resource Allocation Sizing Optimal', desc: `All ${forecasts.value.length} tracked capacity checkpoints are operating within healthy operating thresholds.`, impact: 'Zero scaling actions required at this time', impactClass: 'text-emerald' })
     }
     return recs
   })
@@ -218,12 +244,75 @@ export function useCapacityForecast() {
   async function fetchCapacityData(cluster?: string) {
     loading.value = true
     error.value = null
+    const targetCluster = cluster || activeClusterId.value || undefined
     try {
-      const data = await capacityApi.getForecasts(cluster)
+      const [data, rawNodes] = await Promise.all([
+        capacityApi.getForecasts(targetCluster).catch(() => []),
+        capacityApi.getNodeHeadroom(targetCluster).catch(() => []),
+      ])
       forecasts.value = data || []
+
+      if (rawNodes && rawNodes.length > 0) {
+        nodesHeadroom.value = rawNodes.map((n: BackendNodeHeadroom) => ({
+          id: n.id,
+          name: n.name,
+          role: n.role,
+          cpuTotalCores: n.cpu_total_cores,
+          cpuAllocatedCores: n.cpu_allocated_cores,
+          cpuUsagePercent: n.cpu_usage_percent,
+          memTotalGiB: n.mem_total_gib,
+          memAllocatedGiB: n.mem_allocated_gib,
+          memUsagePercent: n.mem_usage_percent,
+          podCount: n.pod_count,
+          podCapacity: n.pod_capacity,
+          binPackingScore: n.bin_packing_score,
+          status: n.status,
+          headroomPercent: n.headroom_percent,
+        }))
+      } else {
+        const metrics = await overviewApi.getNodeMetrics().catch(() => [])
+        if (metrics && metrics.length > 0) {
+          nodesHeadroom.value = metrics.map((m: NodeMetrics) => {
+            const cpuUsagePercent = Number(m.cpu_percent.toFixed(1))
+            const cpuTotalCores = 16
+            const cpuAllocatedCores = Number(((cpuTotalCores * cpuUsagePercent) / 100).toFixed(1))
+            const memTotalGiB = m.memory_total > 0 ? Number((m.memory_total / (1024 * 1024 * 1024)).toFixed(1)) : 32
+            const memAllocatedGiB = Number((m.memory_used / (1024 * 1024 * 1024)).toFixed(1))
+            const memUsagePercent = Number(m.memory_percent.toFixed(1))
+            const podCount = 0
+            const podCapacity = 110
+            const binPackingScore = Number(((cpuUsagePercent + memUsagePercent) / 2).toFixed(1))
+            const headroomPercent = Math.max(0, Number((100 - Math.max(cpuUsagePercent, memUsagePercent)).toFixed(1)))
+            const status = m.status === 'ready'
+              ? (headroomPercent < 15 ? 'critical' : headroomPercent < 30 ? 'warning' : 'healthy')
+              : 'critical'
+            const role = (m.role.includes('control') || m.role.includes('manager') || m.role.includes('master')) ? 'control-plane' : 'worker'
+
+            return {
+              id: m.node_id || m.node_name,
+              name: m.node_name,
+              role,
+              cpuTotalCores,
+              cpuAllocatedCores,
+              cpuUsagePercent,
+              memTotalGiB,
+              memAllocatedGiB,
+              memUsagePercent,
+              podCount,
+              podCapacity,
+              binPackingScore,
+              status,
+              headroomPercent,
+            }
+          })
+        } else {
+          nodesHeadroom.value = []
+        }
+      }
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to load capacity forecasts'
       forecasts.value = []
+      nodesHeadroom.value = []
     } finally {
       loading.value = false
     }
@@ -263,7 +352,7 @@ export function useCapacityForecast() {
   async function rebalanceNode(nodeId: string) {
     const target = nodesHeadroom.value.find(n => n.id === nodeId)
     if (!target) return
-    statusMessage.value = { type: 'success', text: `⚡ Pod rebalance triggered for node ${target.name}. Rescheduling non-critical pods.` }
+    statusMessage.value = { type: 'success', text: `Pod rebalance triggered for node ${target.name}. Rescheduling non-critical pods.` }
     if (target.cpuUsagePercent > 65) {
       target.cpuUsagePercent = Math.max(50, target.cpuUsagePercent - 12)
       target.cpuAllocatedCores = Number((target.cpuTotalCores * (target.cpuUsagePercent / 100)).toFixed(1))
@@ -312,10 +401,10 @@ export function useCapacityForecast() {
 
 export function getResourceIcon(type: string): string {
   const t = (type || '').toLowerCase()
-  if (t.includes('cpu')) return '⚡'
-  if (t.includes('mem')) return '🧠'
-  if (t.includes('stor')) return '💾'
-  return '📦'
+  if (t.includes('cpu')) return 'cpu'
+  if (t.includes('mem')) return 'activity'
+  if (t.includes('stor')) return 'hard-drive'
+  return 'box'
 }
 
 export function getUsageColorText(val: number): string {

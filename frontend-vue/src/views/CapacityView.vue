@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import '../assets/styles/views/capacity.css'
 import '../assets/styles/components/capacity-drawers.css'
 import { useCapacityForecast } from '../composables/useCapacityForecast'
+import { useGlobalContext } from '../composables/useGlobalContext'
 import CapacityHudCards from '../components/capacity/CapacityHudCards.vue'
 import ResourceForecastChart from '../components/capacity/ResourceForecastChart.vue'
 import CapacityMobileTrendCard from '../components/capacity/CapacityMobileTrendCard.vue'
@@ -12,6 +13,8 @@ import CapacityInspectionDrawer from '../components/capacity/CapacityInspectionD
 import AddCapacityPolicyModal from '../components/capacity/AddCapacityPolicyModal.vue'
 import CanvasTimeSeries, { type TimeSeriesItem } from '../components/telemetry/CanvasTimeSeries.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
+
+const { activeClusterId } = useGlobalContext()
 
 const {
   forecasts, loading, statusMessage, nodesHeadroom,
@@ -31,13 +34,18 @@ const selectedNode = computed(() => {
 })
 
 const newForecast = reactive({
-  cluster: 'k8s-prod-primary',
+  cluster: activeClusterId.value || 'default',
   resource_type: 'cpu',
-  current_usage: 62.4,
-  forecast_7d: 65.1,
-  forecast_30d: 72.8,
-  forecast_90d: 84.5,
+  current_usage: 0,
+  forecast_7d: 0,
+  forecast_30d: 0,
+  forecast_90d: 0,
   status: 'healthy',
+})
+
+watch(activeClusterId, (newCluster) => {
+  newForecast.cluster = newCluster || 'default'
+  fetchCapacityData(newCluster)
 })
 
 async function submitRecordCheckpoint() {
@@ -51,10 +59,10 @@ function handleInspectNode(nodeId: string) {
 }
 
 function getRecIcon(icon: string): string {
-  if (icon === 'sliders' || icon.includes('\u2699')) return 'sliders'
-  if (icon === 'cpu' || icon.includes('\u{1F9E0}')) return 'cpu'
-  if (icon === 'hard-drive' || icon.includes('\u{1F5C4}')) return 'hard-drive'
-  if (icon === 'check-circle' || icon.includes('\u2705')) return 'check-circle'
+  if (icon === 'sliders' || icon.includes('sliders')) return 'sliders'
+  if (icon === 'cpu' || icon.includes('cpu')) return 'cpu'
+  if (icon === 'hard-drive' || icon.includes('hard-drive')) return 'hard-drive'
+  if (icon === 'check-circle' || icon.includes('check-circle')) return 'check-circle'
   return 'activity'
 }
 
@@ -65,25 +73,20 @@ const telemetryWindow = computed(() => {
   const timestamps: number[] = []
   for (let i = count - 1; i >= 0; i--) timestamps.push(baseTime - i * stepMs)
 
-  const cpuTarget = forecasts.value.find(f => f.resource_type.toLowerCase() === 'cpu')?.current_usage ?? 62.4
-  const memTarget = forecasts.value.find(f => ['memory', 'ram'].includes(f.resource_type.toLowerCase()))?.current_usage ?? 69.0
-  const storageTarget = forecasts.value.find(f => ['storage', 'disk', 'nvme'].includes(f.resource_type.toLowerCase()))?.current_usage ?? 54.2
+  const avgCpu = nodesHeadroom.value.length > 0
+    ? nodesHeadroom.value.reduce((acc, n) => acc + n.cpuUsagePercent, 0) / nodesHeadroom.value.length
+    : 0
+  const avgMem = nodesHeadroom.value.length > 0
+    ? nodesHeadroom.value.reduce((acc, n) => acc + n.memUsagePercent, 0) / nodesHeadroom.value.length
+    : 0
 
-  const cpuData: [number, number][] = timestamps.map((t, idx) => {
-    const offset = count - 1 - idx
-    const val = Number((cpuTarget - offset * 0.35 + Math.sin(idx * 0.9) * 2.2).toFixed(1))
-    return [t, Math.max(0, Math.min(100, val))]
-  })
-  const memData: [number, number][] = timestamps.map((t, idx) => {
-    const offset = count - 1 - idx
-    const val = Number((memTarget - offset * 0.25 + Math.cos(idx * 0.7) * 1.6).toFixed(1))
-    return [t, Math.max(0, Math.min(100, val))]
-  })
-  const storageData: [number, number][] = timestamps.map((t, idx) => {
-    const offset = count - 1 - idx
-    const val = Number((storageTarget - offset * 0.15 + Math.sin(idx * 0.5) * 0.8).toFixed(1))
-    return [t, Math.max(0, Math.min(100, val))]
-  })
+  const cpuTarget = forecasts.value.find(f => f.resource_type.toLowerCase() === 'cpu')?.current_usage ?? avgCpu
+  const memTarget = forecasts.value.find(f => ['memory', 'ram'].includes(f.resource_type.toLowerCase()))?.current_usage ?? avgMem
+  const storageTarget = forecasts.value.find(f => ['storage', 'disk', 'nvme'].includes(f.resource_type.toLowerCase()))?.current_usage ?? 0
+
+  const cpuData: [number, number][] = timestamps.map(t => [t, Number(cpuTarget.toFixed(1))])
+  const memData: [number, number][] = timestamps.map(t => [t, Number(memTarget.toFixed(1))])
+  const storageData: [number, number][] = timestamps.map(t => [t, Number(storageTarget.toFixed(1))])
 
   return {
     cpu: [{ name: 'Cluster CPU Usage', data: cpuData, color: '#06b6d4' }] as TimeSeriesItem[],
@@ -202,7 +205,7 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
     <!-- Collapsible Live Telemetry Scrubbers (Desktop Only, Default Collapsed) -->
     <Transition name="fade">
       <div v-if="showTelemetry" class="collapsible-telemetry-wrapper desktop-only animate-fade-in">
-        <!-- Live Cluster Saturation Telemetry (De-neonized: clean telemetry-live-badge) -->
+        <!-- Live Cluster Saturation Telemetry -->
         <div class="section-card glass-panel live-telemetry-panel">
           <div class="section-top">
             <div>
@@ -225,7 +228,7 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
             <div class="telemetry-chart-card">
               <div class="chart-card-header">
                 <span class="chart-card-title font-mono text-cyan font-semibold">Cluster CPU Allocation</span>
-                <span class="chart-card-val font-mono">{{ (forecasts.find(f => f.resource_type.toLowerCase() === 'cpu')?.current_usage ?? 62.4).toFixed(1) }}%</span>
+                <span class="chart-card-val font-mono">{{ (forecasts.find(f => f.resource_type.toLowerCase() === 'cpu')?.current_usage ?? (nodesHeadroom.length > 0 ? nodesHeadroom.reduce((a, n) => a + n.cpuUsagePercent, 0) / nodesHeadroom.length : 0)).toFixed(1) }}%</span>
               </div>
               <CanvasTimeSeries
                 :series="telemetryWindow.cpu"
@@ -241,7 +244,7 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
             <div class="telemetry-chart-card">
               <div class="chart-card-header">
                 <span class="chart-card-title font-mono text-amber font-semibold">Memory Saturation</span>
-                <span class="chart-card-val font-mono">{{ (forecasts.find(f => ['memory', 'ram'].includes(f.resource_type.toLowerCase()))?.current_usage ?? 69.0).toFixed(1) }}%</span>
+                <span class="chart-card-val font-mono">{{ (forecasts.find(f => ['memory', 'ram'].includes(f.resource_type.toLowerCase()))?.current_usage ?? (nodesHeadroom.length > 0 ? nodesHeadroom.reduce((a, n) => a + n.memUsagePercent, 0) / nodesHeadroom.length : 0)).toFixed(1) }}%</span>
               </div>
               <CanvasTimeSeries
                 :series="telemetryWindow.memory"
@@ -257,7 +260,7 @@ const storageThresholds = [{ value: 75, color: '#f59e0b', label: 'Warn 75%' }]
             <div class="telemetry-chart-card">
               <div class="chart-card-header">
                 <span class="chart-card-title font-mono text-emerald font-semibold">Storage / Disk I/O</span>
-                <span class="chart-card-val font-mono">{{ (forecasts.find(f => ['storage', 'disk', 'nvme'].includes(f.resource_type.toLowerCase()))?.current_usage ?? 54.2).toFixed(1) }}%</span>
+                <span class="chart-card-val font-mono">{{ (forecasts.find(f => ['storage', 'disk', 'nvme'].includes(f.resource_type.toLowerCase()))?.current_usage ?? 0).toFixed(1) }}%</span>
               </div>
               <CanvasTimeSeries
                 :series="telemetryWindow.storage"
