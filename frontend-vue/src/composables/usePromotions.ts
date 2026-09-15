@@ -21,6 +21,42 @@ export interface RunningServiceOption {
   ports?: string[]
 }
 
+export type PromotionStatusFilter = 'all' | 'pending' | 'active' | 'completed' | 'rejected'
+
+export const promotions = ref<Promotion[]>([])
+export const statusFilter = ref<PromotionStatusFilter>('all')
+export const promotionSearchQuery = ref('')
+
+export const filteredPromotions = computed(() => {
+  let list = promotions.value
+  if (statusFilter.value === 'pending') {
+    list = list.filter(p => p.status === 'pending')
+  } else if (statusFilter.value === 'active') {
+    list = list.filter(p => p.status === 'approved' || p.status === 'promoting')
+  } else if (statusFilter.value === 'completed') {
+    list = list.filter(p => p.status === 'completed')
+  } else if (statusFilter.value === 'rejected') {
+    list = list.filter(p => p.status === 'rejected' || p.status === 'failed')
+  }
+
+  const q = promotionSearchQuery.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter(p =>
+      (p.service || '').toLowerCase().includes(q) ||
+      (p.version || '').toLowerCase().includes(q) ||
+      (p.requester || '').toLowerCase().includes(q) ||
+      (p.from_env || '').toLowerCase().includes(q) ||
+      (p.to_env || '').toLowerCase().includes(q)
+    )
+  }
+  return list
+})
+
+export const resetPromotionSearch = () => {
+  promotionSearchQuery.value = ''
+  statusFilter.value = 'all'
+}
+
 export function usePromotions() {
   const authStore = useAuthStore()
   const loading = ref(false)
@@ -29,7 +65,6 @@ export function usePromotions() {
   const actionLoading = ref<string | null>(null)
   const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 
-  const promotions = ref<Promotion[]>([])
   const runningServices = ref<RunningServiceOption[]>([])
   const environments: Environment[] = ['dev', 'qa', 'staging', 'production']
 
@@ -223,7 +258,8 @@ export function usePromotions() {
 
   return {
     loading, loadingServices, error, actionLoading, toastMessage,
-    promotions, runningServices, environments, serviceSearchQuery,
+    promotions, statusFilter, promotionSearchQuery, filteredPromotions, resetPromotionSearch,
+    runningServices, environments, serviceSearchQuery,
     isServiceDropdownOpen, comboboxRef, showCreateModal, isDiffDrawerOpen,
     selectedPromotionForDiff, newPromotion, selectedService, filteredServices,
     pendingCount, approvedCount, completedCount, rejectedCount,
