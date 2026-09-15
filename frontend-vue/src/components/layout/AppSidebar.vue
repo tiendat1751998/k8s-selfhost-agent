@@ -38,8 +38,7 @@ function getInitialCollapseState(): boolean {
   if (saved !== null) {
     return saved === 'true'
   }
-  const width = window.innerWidth
-  return width >= 768 && width <= 1024
+  return false
 }
 
 const isCollapsed = ref<boolean>(getInitialCollapseState())
@@ -62,15 +61,8 @@ function toggleCollapse() {
 
 function handleResize() {
   if (typeof window === 'undefined') return
-  const saved = localStorage.getItem(STORAGE_KEY)
-  // Only auto-collapse on tablet if user hasn't explicitly set a preference
-  if (saved === null) {
-    const width = window.innerWidth
-    const shouldCollapse = width >= 768 && width <= 1024
-    if (isCollapsed.value !== shouldCollapse) {
-      isCollapsed.value = shouldCollapse
-      emit('update:collapsed', isCollapsed.value)
-    }
+  if (window.innerWidth > 1024 && props.mobileOpen) {
+    emit('closeMobile')
   }
 }
 
@@ -155,6 +147,16 @@ function handleItemClick() {
           <div class="brand-subtitle">Enterprise Hybrid Platform</div>
         </div>
       </div>
+
+      <!-- Close button for mobile/tablet drawer -->
+      <button
+        v-if="mobileOpen"
+        class="sidebar-close-btn"
+        @click="emit('closeMobile')"
+        aria-label="Close navigation menu"
+      >
+        <BaseIcon name="x" size="sm" />
+      </button>
 
       <!-- Sleek Collapse Toggle Button -->
       <button
