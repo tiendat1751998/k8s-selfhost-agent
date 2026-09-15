@@ -245,7 +245,29 @@ func (r *Reader) BlockCount() int {
 func (r *Reader) Close() error { return nil }
 
 func matchFilter(actual, pattern string) bool {
-	return strings.EqualFold(actual, pattern) || strings.Contains(strings.ToLower(actual), strings.ToLower(pattern))
+	if strings.EqualFold(actual, pattern) {
+		return true
+	}
+	if len(pattern) <= 3 {
+		return false
+	}
+	actLower := strings.ToLower(actual)
+	patLower := strings.ToLower(pattern)
+	if strings.HasPrefix(actLower, patLower) {
+		if len(actLower) > len(patLower) && isBoundary(actLower[len(patLower)]) {
+			return true
+		}
+	}
+	if strings.HasSuffix(actLower, patLower) {
+		if len(actLower) > len(patLower) && isBoundary(actLower[len(actLower)-len(patLower)-1]) {
+			return true
+		}
+	}
+	return false
+}
+
+func isBoundary(b byte) bool {
+	return b == '-' || b == '_' || b == '.' || b == '/' || b == ':' || (b < 'a' || b > 'z') && (b < '0' || b > '9')
 }
 
 func matchLevel(actual, filter string) bool {

@@ -177,9 +177,9 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 		}
 	}
 
-	// Sort chronologically ascending
+	// Sort descending (newest first) before applying pagination
 	sort.SliceStable(deduped, func(i, j int) bool {
-		return deduped[i].Timestamp.Before(deduped[j].Timestamp)
+		return deduped[i].Timestamp.After(deduped[j].Timestamp)
 	})
 
 	totalCount := int64(len(deduped))
@@ -202,6 +202,11 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 		}
 		paged = deduped[offset:end]
 	}
+
+	// Re-sort the extracted page ascending so terminal displays in chronological order
+	sort.SliceStable(paged, func(i, j int) bool {
+		return paged[i].Timestamp.Before(paged[j].Timestamp)
+	})
 
 	hasMore := (offset + len(paged)) < len(deduped)
 	return &domainLogging.LogSearchResult{
