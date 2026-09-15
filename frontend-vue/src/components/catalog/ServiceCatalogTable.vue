@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DataTable, { type Column } from '../ui/DataTable.vue'
+import ActionDropdown from '../ui/ActionDropdown.vue'
 import type { ServiceEntry } from '../../api/catalog'
 
 defineProps<{
@@ -27,6 +28,16 @@ const emit = defineEmits<{
   (e: 'config', service: ServiceEntry): void
   (e: 'delete', service: ServiceEntry): void
 }>()
+
+function handleActionSelect(actionId: string, service: ServiceEntry) {
+  if (actionId === 'apis') {
+    handleApiClick(service)
+  } else if (actionId === 'edit') {
+    emit('config', service)
+  } else if (actionId === 'delete') {
+    emit('delete', service)
+  }
+}
 </script>
 
 <template>
@@ -135,30 +146,17 @@ const emit = defineEmits<{
       <!-- Cell: Actions with labeled buttons -->
       <template #cell-actions="{ row }">
         <div class="table-actions-row">
-          <button
-            type="button"
-            class="btn btn-secondary btn-xs btn-action-labeled"
-            title="View full service details"
-            @click="emit('open-detail', row)"
-          >
-            <BaseIcon name="eye" size="xs" /> <span>Details</span>
-          </button>
-          <button
-            type="button"
-            class="btn btn-secondary btn-xs btn-action-labeled"
-            title="API specifications & documentation"
-            @click="handleApiClick(row)"
-          >
-            <BaseIcon name="zap" size="xs" /> <span>APIs</span>
-          </button>
-          <button
-            type="button"
-            class="btn btn-secondary btn-xs btn-action-labeled"
-            title="Configure service registration"
-            @click="emit('config', row)"
-          >
-            <BaseIcon name="edit" size="xs" /> <span>Edit</span>
-          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-action-labeled" @click="emit('open-detail', row)"><BaseIcon name="eye" size="xs" /><span>Details</span></button>
+          <ActionDropdown
+            :items="[
+              { id: 'apis', label: 'View APIs', icon: 'zap' },
+              { id: 'edit', label: 'Edit Service', icon: 'edit' },
+              { id: 'delete', label: 'Unregister Service', icon: 'trash', variant: 'danger' }
+            ]"
+            size="xs"
+            trigger-title="Service Actions"
+            @select="(id) => handleActionSelect(id, row)"
+          />
         </div>
       </template>
     </DataTable>
