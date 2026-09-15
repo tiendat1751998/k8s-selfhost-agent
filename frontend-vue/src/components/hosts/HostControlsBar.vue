@@ -1,14 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import type { HostTypeDefinition } from '../../types/hosts'
+import type { ComputeHost } from '../../api/compute'
 
-defineProps<{
+const props = defineProps<{
   searchQuery: string
   selectedTypeFilter: string
   selectedStatusFilter: string
   selectedLabelFilter: string
   viewMode: 'grid' | 'table'
   totalHosts: number
+  connectedHosts?: number
+  disconnectedHosts?: number
+  errorHosts?: number
+  hosts?: ComputeHost[]
   typeCounts: Record<string, number>
   availableLabels: string[]
   hostTypeDefinitions: HostTypeDefinition[]
@@ -26,39 +32,89 @@ const emit = defineEmits<{
   (e: 'refresh'): void
   (e: 'add-host'): void
 }>()
+
+const searchQuery = computed({
+  get: () => props.searchQuery,
+  set: (val: string) => emit('update:searchQuery', val),
+})
+
+const statusFilter = computed({
+  get: () => props.selectedStatusFilter,
+  set: (val: string) => emit('update:selectedStatusFilter', val),
+})
+
+const hosts = computed(() => props.hosts || { length: props.totalHosts ?? 0 })
 </script>
 
 <template>
   <div class="host-controls-toolbar glass-panel" role="toolbar" aria-label="Host Fleet Controls">
-    <!-- Search Input (filter by hostname, IP, tag) -->
-    <div class="toolbar-search-wrap">
-      <span class="search-icon"><BaseIcon name="search" size="xs" /></span>
+    <!-- Modern 28px Search Input -->
+    <div class="search-box-wrap">
+      <BaseIcon name="search" size="xs" class="search-icon" />
       <input
-        :value="searchQuery"
+        v-model="searchQuery"
         type="text"
-        placeholder="Filter by hostname, IP, tag..."
-        class="toolbar-search-input input-glass font-mono"
-        aria-label="Search hosts"
-        @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
+        placeholder="Filter hosts by name, IP, OS, or tags..."
+        class="search-input font-mono"
+        aria-label="Filter hosts by name, IP, OS, or tags"
       />
       <button
         v-if="searchQuery"
         type="button"
-        class="toolbar-clear-btn"
+        class="search-clear-btn"
         title="Clear search"
-        aria-label="Clear search query"
-        @click="emit('update:searchQuery', '')"
+        aria-label="Clear search"
+        @click="searchQuery = ''"
       >
         <BaseIcon name="x" size="xs" />
       </button>
     </div>
 
-    <!-- Type Filter Dropdown -->
+    <!-- 1-Click Status Segmented Pills -->
+    <div class="status-pills-wrap" role="group" aria-label="Filter by host status">
+      <button
+        type="button"
+        class="status-pill"
+        :class="{ active: statusFilter === 'all' }"
+        @click="statusFilter = 'all'"
+      >
+        All <span class="pill-count">{{ hosts.length }}</span>
+      </button>
+      <button
+        type="button"
+        class="status-pill status-pill-connected"
+        :class="{ active: statusFilter === 'connected' }"
+        @click="statusFilter = 'connected'"
+      >
+        <span class="pill-dot emerald"></span>
+        Connected <span class="pill-count">{{ connectedHosts ?? 0 }}</span>
+      </button>
+      <button
+        type="button"
+        class="status-pill status-pill-disconnected"
+        :class="{ active: statusFilter === 'disconnected' }"
+        @click="statusFilter = 'disconnected'"
+      >
+        <span class="pill-dot rose"></span>
+        Disconnected <span class="pill-count">{{ disconnectedHosts ?? 0 }}</span>
+      </button>
+      <button
+        v-if="(errorHosts ?? 0) > 0"
+        type="button"
+        class="status-pill status-pill-error"
+        :class="{ active: statusFilter === 'error' }"
+        @click="statusFilter = 'error'"
+      >
+        <span class="pill-dot amber"></span>
+        Error <span class="pill-count">{{ errorHosts ?? 0 }}</span>
+      </button>
+    </div>
+
+    <!-- Refined Type Micro-Select -->
     <div class="toolbar-select-wrap">
-      <label class="toolbar-lbl font-mono">TYPE:</label>
       <select
         :value="selectedTypeFilter"
-        class="toolbar-select input-glass font-mono"
+        class="toolbar-select micro-select font-mono"
         aria-label="Filter by host type"
         @change="emit('update:selectedTypeFilter', ($event.target as HTMLSelectElement).value)"
       >
@@ -69,28 +125,11 @@ const emit = defineEmits<{
       </select>
     </div>
 
-    <!-- Status Filter Dropdown -->
-    <div class="toolbar-select-wrap">
-      <label class="toolbar-lbl font-mono">STATUS:</label>
-      <select
-        :value="selectedStatusFilter"
-        class="toolbar-select input-glass font-mono"
-        aria-label="Filter by host status"
-        @change="emit('update:selectedStatusFilter', ($event.target as HTMLSelectElement).value)"
-      >
-        <option value="all">All Statuses</option>
-        <option value="connected">Connected</option>
-        <option value="disconnected">Disconnected</option>
-        <option value="error">Error / Alert</option>
-      </select>
-    </div>
-
-    <!-- Label/Tag Filter Dropdown -->
+    <!-- Refined Label/Tag Micro-Select -->
     <div v-if="availableLabels && availableLabels.length > 0" class="toolbar-select-wrap">
-      <label class="toolbar-lbl font-mono">TAG:</label>
       <select
         :value="selectedLabelFilter"
-        class="toolbar-select input-glass font-mono"
+        class="toolbar-select micro-select font-mono"
         aria-label="Filter by host tag"
         @change="emit('update:selectedLabelFilter', ($event.target as HTMLSelectElement).value)"
       >
@@ -150,10 +189,10 @@ const emit = defineEmits<{
       <span>{{ loading ? 'Refreshing...' : 'Refresh' }}</span>
     </button>
 
-    <!-- + Add Host Primary Button -->
+    <!-- Primary Enterprise Cobalt Blue + Add Host Button -->
     <button
       type="button"
-      class="toolbar-btn toolbar-btn-primary"
+      class="btn btn-primary btn-sm toolbar-add-btn"
       title="Register New Host"
       @click="emit('add-host')"
     >
