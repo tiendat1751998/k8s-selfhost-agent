@@ -260,7 +260,7 @@ async function handleRemove(cluster: Cluster) {
         </button>
       </div>
       <div class="mobile-filter-selects">
-        <select v-model="providerFilter" class="toolbar-select mobile-select font-mono">
+        <select v-model="providerFilter" class="toolbar-select mobile-select">
           <option value="all">All Providers</option>
           <option value="kubernetes">Kubernetes</option>
           <option value="swarm">Docker Swarm</option>
@@ -270,7 +270,7 @@ async function handleRemove(cluster: Cluster) {
           <option value="azure">Azure</option>
           <option value="edge">Edge</option>
         </select>
-        <select v-model="statusFilter" class="toolbar-select mobile-select font-mono">
+        <select v-model="statusFilter" class="toolbar-select mobile-select">
           <option value="all">All Statuses</option>
           <option value="healthy">Healthy</option>
           <option value="degraded">Degraded</option>
@@ -299,7 +299,7 @@ async function handleRemove(cluster: Cluster) {
           v-model="searchFilter"
           type="text"
           placeholder="Search clusters..."
-          class="toolbar-search-input font-mono"
+          class="toolbar-search-input"
         />
         <button
           v-if="searchFilter"
@@ -313,7 +313,7 @@ async function handleRemove(cluster: Cluster) {
       </div>
 
       <!-- Provider / Orchestrator filter dropdown -->
-      <select v-model="providerFilter" class="toolbar-select font-mono" title="Filter by provider / orchestrator">
+      <select v-model="providerFilter" class="toolbar-select" title="Filter by provider / orchestrator">
         <option value="all">All Providers</option>
         <option value="kubernetes">Kubernetes</option>
         <option value="swarm">Docker Swarm</option>
@@ -325,7 +325,7 @@ async function handleRemove(cluster: Cluster) {
       </select>
 
       <!-- Status filter dropdown -->
-      <select v-model="statusFilter" class="toolbar-select font-mono" title="Filter by status">
+      <select v-model="statusFilter" class="toolbar-select" title="Filter by status">
         <option value="all">All Statuses</option>
         <option value="healthy">Healthy</option>
         <option value="degraded">Degraded</option>
@@ -341,7 +341,7 @@ async function handleRemove(cluster: Cluster) {
       <div class="toolbar-spacer"></div>
 
       <!-- Segmented View Mode Toggle: [ Table ] [ Cards ] -->
-      <div class="segmented-control font-mono">
+      <div class="segmented-control">
         <button
           type="button"
           class="segmented-btn"
