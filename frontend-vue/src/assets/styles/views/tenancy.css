@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Enterprise Tenancy & RBAC Hub Stylesheet (< 350 lines)
    ========================================================================== */
 @import '../components/tenancy-drawers.css';
@@ -443,5 +443,6 @@
 /* Custom Table Column Widths to prevent truncation */
 .tenant-table th.th-tier { width: 90px; }
 .tenant-table th.th-num { width: 90px; text-align: center; }
+.tenant-table th.th-namespaces { width: 120px !important; min-width: 120px !important; text-align: center; white-space: nowrap; }
 .tenant-table th.th-status { width: 110px; }
 .tenant-table th.th-actions { width: 120px; text-align: right; }
