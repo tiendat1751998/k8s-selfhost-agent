@@ -312,6 +312,16 @@ export function useOverviewDashboard() {
     router.push({ path: '/hosts', query: { search: node.node_name } })
   }
 
+  function viewNodeLogs(node: NodeMetrics) {
+    router.push({
+      path: '/logs',
+      query: {
+        node: node.node_name,
+        search: node.node_name
+      }
+    })
+  }
+
   function navigateTo(path: string) {
     router.push(path)
   }
@@ -463,6 +473,7 @@ export function useOverviewDashboard() {
     onDragEnd,
     handleNodeCardClick,
     manageNode,
+    viewNodeLogs,
     navigateTo,
     fetchOverview,
     fetchTps,
