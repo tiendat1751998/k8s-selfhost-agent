@@ -276,7 +276,7 @@ export function useServiceCatalog() {
     { key: 'endpoint', label: 'API Endpoint', width: '14%' },
     { key: 'repo_url', label: 'Repository', width: '9%' },
     { key: 'tags', label: 'Tags', width: '11%' },
-    { key: 'actions', label: 'Actions', width: '13%', align: 'right' },
+    { key: 'actions', label: 'Actions', width: '110px', align: 'right' },
   ]
 
   function getTypeBadgeClass(type: string): string {
