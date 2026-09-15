@@ -40,8 +40,7 @@ function onDelete(row: Record<string, unknown>) {
     :columns="columns"
     :data="reports"
     :loading="loading"
-    searchable
-    searchPlaceholder="Filter reports by title, ID, or category..."
+    :searchable="false"
   >
     <template #cell-id="{ value }">
       <span class="font-mono text-cyan font-bold">{{ value }}</span>
