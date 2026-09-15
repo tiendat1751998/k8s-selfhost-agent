@@ -66,8 +66,8 @@ func (h *LogHandler) Ingest(ctx context.Context, entries []logging.LogEntry) err
 }
 
 func getContainerAliases(t string) []string {
-	if s := strings.ToLower(strings.TrimSpace(t)); s == "postgres_db" || s == "db" || s == "postgres" {
-		return []string{"postgres_db", "db", "postgres"}
+	if s := strings.ToLower(strings.TrimSpace(t)); s == "postgres_db" || s == "postgres" {
+		return []string{"postgres_db", "postgres"}
 	}
 	if t != "" {
 		return []string{t}
