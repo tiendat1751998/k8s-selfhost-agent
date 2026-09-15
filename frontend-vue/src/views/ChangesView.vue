@@ -54,11 +54,13 @@ const rolloutsCount = computed(() => {
     <!-- Desktop Header -->
     <div class="page-header desktop-header desktop-only">
       <div class="header-titles">
-        <div class="header-badge">
-          <span class="badge badge-cyan">ITIL Change Governance</span>
-          <span class="badge badge-emerald">Audit Trail Enforced</span>
+        <div class="header-title-row">
+          <h1 class="page-title">Enterprise Change Management (RFC)</h1>
+          <div class="header-badge">
+            <span class="badge badge-cyan">ITIL Change Governance</span>
+            <span class="badge badge-emerald">Audit Trail Enforced</span>
+          </div>
         </div>
-        <h1 class="page-title">Enterprise Change Management (RFC)</h1>
         <p class="page-desc">
           Review, approve, and execute production cluster configuration modifications, emergency hotfixes, and maintenance windows with four-eyes verification.
         </p>
@@ -125,16 +127,17 @@ const rolloutsCount = computed(() => {
     </div>
 
     <!-- HUD KPI Cards (Desktop & Tablet 2x2, suppressed on <768px) -->
-    <ChangesHudCards
-      class="desktop-only"
-      :totalChanges="totalChanges24h"
-      :totalRollbacks="totalRollbacks"
-      :configDrifts="configDrifts"
-      :highRiskMutations="highRiskMutations"
-    />
+    <div class="changes-hud-wrapper desktop-only">
+      <ChangesHudCards
+        :totalChanges="totalChanges24h"
+        :totalRollbacks="totalRollbacks"
+        :configDrifts="configDrifts"
+        :highRiskMutations="highRiskMutations"
+      />
+    </div>
 
     <!-- Active Maintenance Windows Banner -->
-    <div class="maintenance-bar glass-panel">
+    <div v-if="maintenanceWindows.length > 0" class="maintenance-bar glass-panel">
       <div class="mw-header">
         <div class="mw-title-wrap">
           <span class="pulse-dot pulse-dot-emerald"></span>
@@ -143,10 +146,7 @@ const rolloutsCount = computed(() => {
         <span class="mw-badge">Air-Gapped Sync</span>
       </div>
 
-      <div v-if="maintenanceWindows.length === 0" class="empty-list">
-        No active maintenance windows scheduled
-      </div>
-      <div v-else class="mw-items">
+      <div class="mw-items">
         <div 
           v-for="mw in maintenanceWindows" 
           :key="mw.id" 
@@ -247,9 +247,7 @@ const rolloutsCount = computed(() => {
           <div class="form-group">
             <label>Target Cluster</label>
             <select v-model="newChange.cluster" class="input-glass">
-              <option value="prod-us-east-1">prod-us-east-1 (Primary)</option>
-              <option value="prod-eu-west-1">prod-eu-west-1 (Secondary)</option>
-              <option value="staging-us-east">staging-us-east</option>
+              <option v-for="c in availableClusters" :key="c" :value="c">{{ c }}</option>
             </select>
           </div>
         </div>
