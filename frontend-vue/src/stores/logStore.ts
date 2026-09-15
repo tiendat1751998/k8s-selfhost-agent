@@ -34,6 +34,27 @@ export interface LogFilterOptions {
   query?: string
 }
 
+export function matchesTarget(entry: LogEntry, opts: LogFilterOptions): boolean {
+  if (opts.node) {
+    const q = opts.node.toLowerCase()
+    const n = (entry.node || entry.attributes?.node || entry.attributes?.node_name || entry.pod || '').toLowerCase()
+    return n.includes(q)
+  }
+  const q = (opts.service || opts.container || opts.pod || '').toLowerCase()
+  if (!q) return true
+  const s = (entry.service || entry.container || '').toLowerCase()
+  if (q === 'postgres_db' || q === 'postgres') {
+    return s === 'postgres_db' || s === 'postgres' || s.startsWith('postgres')
+  }
+  if (q === 'dbus' || q === 'dbus.service') {
+    return s === 'dbus' || s === 'dbus.service'
+  }
+  if (q === 'db' && (s === 'dbus' || s === 'dbus.service' || s.startsWith('dbus'))) {
+    return false
+  }
+  return s.includes(q)
+}
+
 export const useLogStore = defineStore('log', () => {
   const logs = ref<LogEntry[]>([])
   const isConnected = ref(false)
@@ -77,22 +98,30 @@ export const useLogStore = defineStore('log', () => {
     }
   }
 
-  function matchesTarget(entry: LogEntry, opts: LogFilterOptions): boolean {
-    if (opts.node) {
-      const q = opts.node.toLowerCase()
-      const n = (entry.node || entry.attributes?.node || entry.attributes?.node_name || entry.pod || '').toLowerCase()
-      return n.includes(q)
+  // matchesTarget is exported at module level for testability and reuse
+
+  function scheduleReconnect() {
+    clearReconnectTimer()
+    if (reconnectAttempts.value < 10) {
+      reconnectAttempts.value++
+      reconnectTimer = setTimeout(() => {
+        connect(activeFilter.value, undefined, true)
+      }, 2500)
+    } else {
+      if (socket.value) {
+        socket.value.onclose = null
+        socket.value.onerror = null
+        socket.value.close()
+        socket.value = null
+      }
     }
-    const q = (opts.service || opts.container || opts.pod || '').toLowerCase()
-    if (!q) return true
-    const s = (entry.service || entry.container || entry.attributes?.app || entry.attributes?.service || entry.attributes?.container_name || entry.pod || '').toLowerCase()
-    return s.includes(q) ||
-      (q === 'postgres_db' && (s.includes('db') || s.includes('postgres'))) ||
-      (q === 'db' && s.includes('postgres'))
   }
 
-  function connect(options?: LogFilterOptions | string, podArg?: string) {
+  function connect(options?: LogFilterOptions | string, podArg?: string, isReconnect = false) {
     clearReconnectTimer()
+    if (!isReconnect) {
+      reconnectAttempts.value = 0
+    }
     const opts = normalizeOptions(options, podArg)
     activeFilter.value = opts
 
@@ -130,6 +159,7 @@ export const useLogStore = defineStore('log', () => {
       socket.value.onopen = () => {
         isConnected.value = true
         reconnectAttempts.value = 0
+        clearReconnectTimer()
       }
       socket.value.onmessage = (event) => {
         if (isPaused.value) return
@@ -166,15 +196,12 @@ export const useLogStore = defineStore('log', () => {
       }
       socket.value.onclose = () => {
         isConnected.value = false
-        if (reconnectAttempts.value < 5) {
-          reconnectAttempts.value++
-          clearReconnectTimer()
-          reconnectTimer = setTimeout(() => connect(activeFilter.value), 2000 * reconnectAttempts.value)
-        }
+        scheduleReconnect()
       }
       socket.value.onerror = () => { isConnected.value = false }
     } catch {
       isConnected.value = false
+      scheduleReconnect()
     }
   }
 
@@ -189,6 +216,7 @@ export const useLogStore = defineStore('log', () => {
     clearReconnectTimer()
     if (socket.value) {
       socket.value.onclose = null
+      socket.value.onerror = null
       socket.value.close()
       socket.value = null
     }
@@ -264,6 +292,7 @@ export const useLogStore = defineStore('log', () => {
     logs,
     isConnected,
     isPaused,
+    reconnectAttempts,
     activeFilter,
     maxBufferSize,
     setMaxBufferSize,
