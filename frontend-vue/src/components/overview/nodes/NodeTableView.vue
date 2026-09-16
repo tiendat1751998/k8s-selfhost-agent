@@ -316,4 +316,11 @@ function getNodePing(node: NodeMetrics): number {
   color: var(--color-cyan, #06b6d4);
   font-weight: bold;
 }
+
+@media (max-width: 1100px) {
+  .col-ip,
+  .col-probe {
+    display: none !important;
+  }
+}
 </style>

@@ -5,9 +5,15 @@
 
 .summary-hud-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 12px;
   width: 100%;
+}
+
+@media (min-width: 1201px) {
+  .summary-hud-row {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
 }
 
 .summary-hud-row .hud-card {
@@ -178,10 +184,10 @@
 .badge-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
 .badge-violet { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
 
-/* Tablet (768px - 1023px): 2 columns (2+2 + 1 full width) */
-@media (min-width: 768px) and (max-width: 1023px) {
+/* Tablet (641px - 1024px): 2 columns (2+2 + 1 full width) */
+@media (min-width: 641px) and (max-width: 1024px) {
   .summary-hud-row {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
   .summary-hud-row .hud-card:nth-child(5) {
@@ -189,8 +195,8 @@
   }
 }
 
-/* Mobile (< 768px): Compact clean cards with 0 overflow */
-@media (max-width: 767px) {
+/* Mobile (<= 640px): Compact clean cards with 0 overflow */
+@media (max-width: 640px) {
   .summary-hud-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
