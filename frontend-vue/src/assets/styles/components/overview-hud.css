@@ -5,9 +5,15 @@
 
 .summary-hud-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 12px;
   width: 100%;
+}
+
+@media (min-width: 1201px) {
+  .summary-hud-row {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
 }
 
 .summary-hud-row .hud-card {

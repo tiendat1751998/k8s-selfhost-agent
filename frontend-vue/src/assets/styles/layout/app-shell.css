@@ -348,6 +348,12 @@
   .tenant-select { max-width: 110px; font-size: 11px; }
 }
 @media (max-width: 800px) {
+  .top-hud { max-width: 100%; overflow-x: hidden; }
+  .hud-left {
+    min-width: 0 !important;
+    width: 0 !important;
+    display: none !important;
+  }
   .hud-breadcrumb { display: none !important; }
 }
 
@@ -417,7 +423,7 @@
   }
   .sidebar.sidebar-open .nav-menu { padding: 8px 12px !important; }
   .top-hud { padding: 0 12px; gap: 8px; height: var(--mobile-hud-height, 48px); min-height: var(--mobile-hud-height, 48px); max-height: var(--mobile-hud-height, 48px); }
-  .hud-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+  .hud-left { display: flex !important; align-items: center; gap: 10px; flex: 1; min-width: 0 !important; width: auto !important; }
   .hud-center { display: none !important; }
   .hud-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .tenant-selector-wrap { display: none !important; }
