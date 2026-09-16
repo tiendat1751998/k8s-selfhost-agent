@@ -3,6 +3,7 @@
    Modular Decomposition - Strictly < 400 lines
    ========================================================================== */
 
+@import '../components/slo-kpi.css';
 @import '../components/slo-cards.css';
 @import '../components/slo-table.css';
 @import '../components/slo-drawers.css';
@@ -356,102 +357,3 @@
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .spin-icon { animation: spin 1s linear infinite; }
 .font-mono { font-family: var(--font-mono, monospace); }
-
-/* ==========================================================================
-   Table Section Header & High-Density Styling
-   - Compact 14.5px Header, Deleted Marketing Subtitle, High-Density 40px Rows
-   ========================================================================== */
-.section-box.table-box {
-  margin: 0 !important;
-  border-radius: 8px !important;
-  background: var(--bg-card, #0f172a) !important;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
-  overflow: hidden;
-}
-
-.table-box .box-header {
-  padding: 10px 14px !important;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.table-box .box-title {
-  font-size: 14.5px !important;
-  font-weight: 600 !important;
-  color: #cbd5e1 !important;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
-}
-
-/* Redundant marketing subtitle deleted from presentation */
-.table-box .box-subtitle {
-  display: none !important;
-}
-
-/* High-Density Data Table Cells: padding 8px 12px, ~40px row height */
-.table-box .data-table th {
-  padding: 8px 12px !important;
-  font-size: 11px !important;
-  background: rgba(15, 23, 42, 0.85) !important;
-  height: 34px !important;
-}
-
-.table-box .data-table td {
-  padding: 8px 12px !important;
-  height: 40px !important;
-  box-sizing: border-box;
-}
-
-.table-box .data-table tr {
-  height: 40px !important;
-}
-
-.table-box .service-name-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.table-box .service-icon {
-  font-size: 12px !important;
-  color: var(--accent-cyan, #06b6d4) !important;
-  flex-shrink: 0;
-}
-
-.table-box .service-text {
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  color: #f1f5f9 !important;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.table-box .target-val {
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  font-family: var(--font-mono, monospace) !important;
-  white-space: nowrap;
-}
-
-.table-box .indicator-pill {
-  font-size: 10px !important;
-  padding: 2px 6px !important;
-  border-radius: 4px !important;
-}
-
-.table-box .window-badge,
-.table-box .threshold-badge {
-  font-size: 11px !important;
-  padding: 2px 6px !important;
-  border-radius: 4px !important;
-}
-
-.table-box .table-footer {
-  padding: 6px 12px !important;
-  font-size: 11px !important;
-}

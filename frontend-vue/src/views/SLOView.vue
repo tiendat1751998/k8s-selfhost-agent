@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed } from 'vue'
 import '../assets/styles/views/slo.css'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import SloCardsGrid from '../components/slo/SloCardsGrid.vue'
@@ -7,25 +7,47 @@ import SloCatalogTable from '../components/slo/SloCatalogTable.vue'
 import SloMobileCards from '../components/slo/SloMobileCards.vue'
 import SloCreateModal from '../components/slo/SloCreateModal.vue'
 import SloInspectModal from '../components/slo/SloInspectModal.vue'
-import {
-  sloApi, dockerApi, type SLODefinition, type SLOSnapshot, type CreateSLOPayload
-} from '../api/compute'
+import { useSLOMonitor } from '../composables/useSLOMonitor'
+import type { SLODefinition, SLOSnapshot } from '../api/compute'
 
-const loading = ref(false)
-const actionInProgress = ref(false)
-const error = ref<string | null>(null)
-const bannerMessage = ref<{ type: 'success' | 'warning' | 'error'; text: string } | null>(null)
+const {
+  loading,
+  actionInProgress,
+  error,
+  bannerMessage,
+  definitions,
+  snapshots,
+  selectedWindowFilter,
+  showCreateModal,
+  showInspectModal,
+  selectedInspectSLO,
+  realServices,
+  totalSLOs,
+  healthySLOs,
+  warningSLOs,
+  criticalSLOs,
+  activeBurnAlerts,
+  avgBurnRate,
+  avgBurnRateNum,
+  fetchSLOData,
+  setWindowFilter,
+  formatPercent,
+  getEffectiveBurnRate,
+  getBurnRateColor,
+  getBudgetBarWidth,
+  getSnapshotForDef,
+  openCreateModal,
+  openInspect,
+  handleCreateSLO,
+  handleTriggerAlert,
+  handleDeleteSLO,
+} = useSLOMonitor()
 
-const definitions = ref<SLODefinition[]>([])
-const snapshots = ref<SLOSnapshot[]>([])
-
-type TimeWindowFilter = '1h' | '6h' | '24h' | '30d'
-const selectedWindowFilter = ref<TimeWindowFilter>('30d')
 const windowPills = [
   { key: '1h' as const, label: '1h (Fast)', title: '1h Fast Burn (14.4x rate)', icon: 'flame', short: 'Fast' },
   { key: '6h' as const, label: '6h (Slow)', title: '6h Slow Burn (6.0x rate)', icon: 'alert-triangle', short: 'Slow' },
   { key: '24h' as const, label: '24h (Composite)', title: '24h Composite (2.0x rate)', icon: 'activity', short: 'Comp' },
-  { key: '30d' as const, label: '30d (Baseline)', title: '30d Baseline (1.0x rate)', icon: 'calendar', short: 'Base' }
+  { key: '30d' as const, label: '30d (Baseline)', title: '30d Baseline (1.0x rate)', icon: 'calendar', short: 'Base' },
 ]
 
 // View Mode and Search State
@@ -33,81 +55,7 @@ const viewMode = ref<'table' | 'grid'>('table')
 const searchQuery = ref('')
 const showMobileSearch = ref(false)
 
-const showCreateModal = ref(false)
-const showInspectModal = ref(false)
-const selectedInspectSLO = ref<{ def?: SLODefinition; snap?: SLOSnapshot } | null>(null)
-
-interface ServiceOption { id: string; name: string; desc: string }
-const realServices = ref<ServiceOption[]>([
-  { id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' }
-])
-const loadingServices = ref(false)
-
-async function fetchRealServices() {
-  loadingServices.value = true
-  try {
-    const [servicesRes, containersRes] = await Promise.allSettled([
-      dockerApi.listServices(),
-      dockerApi.listContainers(),
-    ])
-    const found = new Map<string, ServiceOption>()
-    if (servicesRes.status === 'fulfilled' && Array.isArray(servicesRes.value)) {
-      for (const s of servicesRes.value) {
-        if (s.name) found.set(s.name, { id: s.name, name: s.name, desc: s.image ? `Docker Service (${s.image})` : 'Docker Swarm Service' })
-      }
-    }
-    if (containersRes.status === 'fulfilled' && Array.isArray(containersRes.value)) {
-      for (const c of containersRes.value) {
-        const name = c.name?.replace(/^\//, '')
-        if (name && !found.has(name)) found.set(name, { id: name, name, desc: c.image ? `Container (${c.image})` : `Container (${c.status || 'running'})` })
-      }
-    }
-    realServices.value = [...Array.from(found.values()), { id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' }]
-  } catch {
-    realServices.value = [{ id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' }]
-  } finally {
-    loadingServices.value = false
-  }
-}
-
-async function fetchSLOData() {
-  loading.value = true
-  error.value = null
-  try {
-    const [defsRes, snapRes] = await Promise.allSettled([
-      sloApi.listDefinitions(),
-      sloApi.listSnapshots(selectedWindowFilter.value)
-    ])
-    if (defsRes.status === 'fulfilled') definitions.value = defsRes.value
-    if (snapRes.status === 'fulfilled') snapshots.value = snapRes.value
-  } catch (err: unknown) {
-    error.value = err instanceof Error ? err.message : 'Failed to retrieve SLO telemetry'
-  } finally {
-    loading.value = false
-  }
-}
-
-function setWindowFilter(filter: TimeWindowFilter) {
-  selectedWindowFilter.value = filter
-  fetchSLOData()
-}
-
-onMounted(() => {
-  fetchSLOData()
-  fetchRealServices()
-})
-
-// Computed Metrics
-const totalSLOs = computed(() => definitions.value.length)
-const healthySLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'healthy').length)
-const warningSLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'warning').length)
-const criticalSLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'critical').length)
-const avgBurnRate = computed(() => {
-  if (!snapshots.value.length) return '—'
-  return `${(snapshots.value.reduce((acc, s) => acc + (s.burn_rate || 0), 0) / snapshots.value.length).toFixed(2)}x`
-})
-
-// Filtered data based on unified search input (filters SLOs by service name or indicator)
+// Filtered definitions based on search query
 const filteredDefinitions = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return definitions.value
@@ -117,6 +65,7 @@ const filteredDefinitions = computed(() => {
   )
 })
 
+// Filtered snapshots based on search query
 const filteredSnapshots = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return snapshots.value
@@ -131,94 +80,16 @@ const filteredSnapshots = computed(() => {
   )
 })
 
-// Helper Functions for Mobile Card Stream and Telemetry
-function formatPercent(val?: number): string {
-  if (val === undefined || val === null || isNaN(val)) return '0.00%'
-  const pct = val > 1 ? val : val * 100
-  return `${pct.toFixed(2)}%`
-}
-
-function getEffectiveBurnRate(rawRate?: number): number {
-  if (rawRate === undefined || rawRate === null || isNaN(rawRate)) return 0
-  return rawRate
-}
-
-function getBurnRateColor(rate: number): string {
-  if (rate <= 1.0) return 'text-emerald'
-  if (rate <= 2.5) return 'text-amber'
-  return 'text-rose'
-}
-
-function getBudgetBarWidth(budget?: number): number {
-  if (budget === undefined || budget === null || isNaN(budget)) return 0
-  return Math.max(0, Math.min(100, budget))
-}
-
-function getSnapshotForDef(defId: string, serviceName: string): SLOSnapshot | undefined {
-  return snapshots.value.find(s => s.slo_id === defId || s.service === serviceName)
+function openInspectFromTable(row: SLODefinition) {
+  openInspect(row, snapshots.value.find(s => s.slo_id === row.id || s.service === row.service))
 }
 
 function handleMobileInspect(def: SLODefinition, snap?: SLOSnapshot) {
-  openInspect({ def, snap })
+  openInspect(def, snap)
 }
 
 function handleEditSLO(def: SLODefinition) {
-  const snap = getSnapshotForDef(def.id, def.service)
-  openInspect({ def, snap })
-}
-
-function showBanner(type: 'success' | 'warning' | 'error', text: string) {
-  bannerMessage.value = { type, text }
-  setTimeout(() => { if (bannerMessage.value?.text === text) bannerMessage.value = null }, 5000)
-}
-
-function openInspect(payload: { def?: SLODefinition; snap?: SLOSnapshot }) {
-  selectedInspectSLO.value = payload
-  showInspectModal.value = true
-}
-
-function openInspectFromTable(row: SLODefinition) {
-  openInspect({ def: row, snap: snapshots.value.find(s => s.slo_id === row.id || s.service === row.service) })
-}
-
-async function handleCreateSLO(payload: CreateSLOPayload) {
-  actionInProgress.value = true
-  try {
-    await sloApi.createDefinition(payload)
-    showCreateModal.value = false
-    showBanner('success', `SLO target objective successfully armed for service ${payload.service}!`)
-    await fetchSLOData()
-  } catch (err: unknown) {
-    showBanner('error', err instanceof Error ? err.message : 'Failed to create SLO definition')
-  } finally {
-    actionInProgress.value = false
-  }
-}
-
-async function handleDeleteSLO(id: string, serviceName: string) {
-  if (!confirm(`Are you sure you want to delete SLO definition for '${serviceName}'?`)) return
-  actionInProgress.value = true
-  try {
-    await sloApi.deleteDefinition(id)
-    showBanner('success', `SLO definition for '${serviceName}' removed.`)
-    await fetchSLOData()
-  } catch (err: unknown) {
-    showBanner('error', err instanceof Error ? err.message : 'Failed to delete SLO')
-  } finally {
-    actionInProgress.value = false
-  }
-}
-
-async function handleTriggerAlert(id: string, serviceName: string) {
-  actionInProgress.value = true
-  try {
-    await sloApi.triggerBurnAlert(id)
-    showBanner('warning', `Fast burn-rate alert simulated for '${serviceName}'. Check alerts view.`)
-  } catch (err: unknown) {
-    showBanner('error', err instanceof Error ? err.message : 'Failed to simulate alert')
-  } finally {
-    actionInProgress.value = false
-  }
+  openCreateModal(def)
 }
 </script>
 
@@ -229,6 +100,116 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       <BaseIcon :name="bannerMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" />
       <span class="banner-text">{{ bannerMessage.text }}</span>
       <button class="banner-close" @click="bannerMessage = null"><BaseIcon name="x" size="xs" /></button>
+    </div>
+
+    <!-- Standard 4-Card KPI Strip (Desktop & Tablet) -->
+    <div class="slo-kpi-grid desktop-only" role="region" aria-label="SLO Summary Metrics">
+      <!-- Card 1: Total Objectives -->
+      <div class="slo-kpi-card glass-panel" title="Total active SLO target definitions">
+        <div class="kpi-card-header">
+          <div class="kpi-card-title-group">
+            <BaseIcon name="target" size="xs" class="kpi-card-icon text-cyan" />
+            <span class="kpi-card-title">Total Objectives</span>
+          </div>
+          <span class="badge kpi-badge badge-cyan">{{ totalSLOs }} TARGETS</span>
+        </div>
+        <div class="kpi-card-body">
+          <span class="kpi-card-value font-mono">{{ totalSLOs }}</span>
+          <span class="kpi-card-trend font-mono">Configured Objectives</span>
+        </div>
+        <div class="kpi-card-gauge">
+          <div class="kpi-gauge-track">
+            <div class="kpi-gauge-fill gauge-cyan" :style="{ width: totalSLOs > 0 ? '100%' : '0%' }"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Healthy Objectives -->
+      <div class="slo-kpi-card glass-panel" title="SLO targets meeting compliance within error budget">
+        <div class="kpi-card-header">
+          <div class="kpi-card-title-group">
+            <BaseIcon name="shield" size="xs" class="kpi-card-icon text-emerald" />
+            <span class="kpi-card-title">Healthy Objectives</span>
+          </div>
+          <span class="badge kpi-badge badge-emerald">
+            {{ totalSLOs > 0 ? Math.round((healthySLOs / totalSLOs) * 100) + '%' : '100%' }}
+          </span>
+        </div>
+        <div class="kpi-card-body">
+          <span class="kpi-card-value font-mono">{{ healthySLOs }} / {{ totalSLOs }}</span>
+          <span class="kpi-card-trend font-mono">
+            {{ totalSLOs > 0 && healthySLOs === totalSLOs ? '100% Compliant' : `${healthySLOs} within budget` }}
+          </span>
+        </div>
+        <div class="kpi-card-gauge">
+          <div class="kpi-gauge-track">
+            <div
+              class="kpi-gauge-fill gauge-emerald"
+              :style="{ width: totalSLOs > 0 ? `${(healthySLOs / totalSLOs) * 100}%` : '100%' }"
+            ></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Active Burn Alerts -->
+      <div class="slo-kpi-card glass-panel" title="SLO targets actively depleting error budgets at elevated rates">
+        <div class="kpi-card-header">
+          <div class="kpi-card-title-group">
+            <BaseIcon name="flame" size="xs" class="kpi-card-icon" :class="activeBurnAlerts === 0 ? 'text-emerald' : 'text-rose'" />
+            <span class="kpi-card-title">Active Burn Alerts</span>
+          </div>
+          <span class="badge kpi-badge" :class="activeBurnAlerts === 0 ? 'badge-emerald' : 'badge-rose'">
+            {{ activeBurnAlerts === 0 ? 'NOMINAL' : 'ALERT' }}
+          </span>
+        </div>
+        <div class="kpi-card-body">
+          <span class="kpi-card-value font-mono" :class="activeBurnAlerts === 0 ? 'text-emerald' : 'text-rose'">
+            {{ activeBurnAlerts }} Active
+          </span>
+          <span class="kpi-card-trend font-mono">
+            {{ activeBurnAlerts === 0 ? 'Zero fast depletions' : `${activeBurnAlerts} targets alerting` }}
+          </span>
+        </div>
+        <div class="kpi-card-gauge">
+          <div class="kpi-gauge-track">
+            <div
+              class="kpi-gauge-fill"
+              :class="activeBurnAlerts === 0 ? 'gauge-emerald' : 'gauge-rose'"
+              :style="{ width: activeBurnAlerts === 0 ? '100%' : `${Math.min(100, activeBurnAlerts * 33)}%` }"
+            ></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4: Avg Burn Velocity -->
+      <div class="slo-kpi-card glass-panel" title="Average error budget consumption rate across all active services">
+        <div class="kpi-card-header">
+          <div class="kpi-card-title-group">
+            <BaseIcon name="activity" size="xs" class="kpi-card-icon" :class="avgBurnRateNum <= 1.0 ? 'text-emerald' : avgBurnRateNum <= 2.0 ? 'text-amber' : 'text-rose'" />
+            <span class="kpi-card-title">Avg Burn Velocity</span>
+          </div>
+          <span class="badge kpi-badge" :class="avgBurnRateNum <= 1.0 ? 'badge-emerald' : avgBurnRateNum <= 2.0 ? 'badge-amber' : 'badge-rose'">
+            {{ avgBurnRateNum <= 1.0 ? 'NOMINAL' : avgBurnRateNum <= 2.0 ? 'ELEVATED' : 'FAST BURN' }}
+          </span>
+        </div>
+        <div class="kpi-card-body">
+          <span class="kpi-card-value font-mono" :class="avgBurnRateNum <= 1.0 ? 'text-emerald' : avgBurnRateNum <= 2.0 ? 'text-amber' : 'text-rose'">
+            {{ avgBurnRate }}
+          </span>
+          <span class="kpi-card-trend font-mono">
+            {{ avgBurnRateNum <= 1.0 ? 'Budget Positive' : avgBurnRateNum <= 2.0 ? 'Slow Depletion' : 'Fast Exhaustion' }}
+          </span>
+        </div>
+        <div class="kpi-card-gauge">
+          <div class="kpi-gauge-track">
+            <div
+              class="kpi-gauge-fill"
+              :class="avgBurnRateNum <= 1.0 ? 'gauge-emerald' : avgBurnRateNum <= 2.0 ? 'gauge-amber' : 'gauge-rose'"
+              :style="{ width: `${Math.min(100, avgBurnRateNum * 50)}%` }"
+            ></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Sleek Unified 38px Enterprise Toolbar -->
@@ -312,7 +293,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
           class="toolbar-btn btn-primary"
           title="Add Target"
           aria-label="Add Target"
-          @click="showCreateModal = true"
+          @click="openCreateModal()"
         >
           <BaseIcon name="plus" size="xs" />
           <span>Add Target</span>
@@ -338,7 +319,7 @@ async function handleTriggerAlert(id: string, serviceName: string) {
         <span class="command-bar-title font-bold"><BaseIcon name="target" size="xs" /> SLOs ({{ totalSLOs }})</span>
       </div>
       <div class="command-bar-actions">
-        <button class="btn-icon-cmd" title="Create SLO definition" aria-label="Create SLO definition" @click="showCreateModal = true">
+        <button class="btn-icon-cmd" title="Create SLO definition" aria-label="Create SLO definition" @click="openCreateModal()">
           <BaseIcon name="plus" size="xs" />
         </button>
         <button class="btn-icon-cmd" :disabled="loading" title="Refresh telemetry" aria-label="Refresh telemetry" @click="fetchSLOData">
@@ -412,8 +393,8 @@ async function handleTriggerAlert(id: string, serviceName: string) {
       :snapshots="filteredSnapshots"
       :selected-window-filter="selectedWindowFilter"
       :action-in-progress="actionInProgress"
-      @create-slo="showCreateModal = true"
-      @inspect="openInspect"
+      @create-slo="openCreateModal()"
+      @inspect="(p) => openInspect(p.def, p.snap)"
       @trigger-alert="handleTriggerAlert"
       @delete-slo="handleDeleteSLO"
     />
@@ -435,12 +416,16 @@ async function handleTriggerAlert(id: string, serviceName: string) {
 
     <!-- Modals -->
     <SloCreateModal
-      v-model:show="showCreateModal" :real-services="realServices"
-      :action-in-progress="actionInProgress" @create="handleCreateSLO"
+      v-model:show="showCreateModal"
+      :real-services="realServices"
+      :action-in-progress="actionInProgress"
+      @create="handleCreateSLO"
     />
     <SloInspectModal
-      v-model:show="showInspectModal" :inspect-s-l-o="selectedInspectSLO"
-      :action-in-progress="actionInProgress" @trigger-alert="handleTriggerAlert"
+      v-model:show="showInspectModal"
+      :inspect-s-l-o="selectedInspectSLO"
+      :action-in-progress="actionInProgress"
+      @trigger-alert="handleTriggerAlert"
     />
   </div>
 </template>
