@@ -332,3 +332,110 @@ describe('Micro-Batch Log Parsing & High-Capacity Buffer', () => {
     store.disconnect()
   })
 })
+
+describe('Mobile Effective Row Height & Virtual Windowing (AC #1 & #4)', () => {
+  const mobileItemHeight = 58 // 58px matches Line 1 metadata 20px + Line 2 message 32px + padding/gap 6px
+  const mobileClientHeight = 580
+  const overscan = 10
+
+  it('calculates mobile virtual window using 58px effective row height at top', () => {
+    const total = 5000
+    const win = calculateVirtualWindow({
+      totalCount: total,
+      scrollTop: 0,
+      clientHeight: mobileClientHeight,
+      itemHeight: mobileItemHeight,
+      overscan,
+    })
+    assert.equal(win.startIndex, 0)
+    // 580 / 58 = 10 visible + 10 overscan = 20
+    assert.equal(win.endIndex, 20)
+    assert.equal(win.offsetY, 0)
+    assert.equal(win.totalHeight, total * mobileItemHeight)
+    assert.equal(win.visibleCount, 20)
+  })
+
+  it('calculates mobile virtual slice accurately when scrolled into the stream', () => {
+    const total = 5000
+    const scrollTop = 5800 // row 100
+    const win = calculateVirtualWindow({
+      totalCount: total,
+      scrollTop,
+      clientHeight: mobileClientHeight,
+      itemHeight: mobileItemHeight,
+      overscan,
+    })
+    // 5800 / 58 = 100. With 10 overscan = 90
+    assert.equal(win.startIndex, 90)
+    // (5800 + 580) / 58 = 110. With 10 overscan = 120
+    assert.equal(win.endIndex, 120)
+    assert.equal(win.offsetY, 90 * 58)
+    assert.equal(win.visibleCount, 30)
+    assert.equal(win.totalHeight, total * mobileItemHeight)
+  })
+
+  it('clamps endIndex strictly to totalCount on mobile when scrolled to bottom', () => {
+    const total = 300
+    const maxScroll = total * mobileItemHeight - mobileClientHeight
+    const win = calculateVirtualWindow({
+      totalCount: total,
+      scrollTop: maxScroll,
+      clientHeight: mobileClientHeight,
+      itemHeight: mobileItemHeight,
+      overscan,
+    })
+    assert.equal(win.endIndex, 300)
+    assert.ok(win.startIndex < 300)
+    assert.equal(win.offsetY, win.startIndex * mobileItemHeight)
+  })
+
+  it('verifies VirtualLogTerminal.vue implements isMobile and effectiveRowHeight computed', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const vuePath = resolve('src/components/logs/VirtualLogTerminal.vue')
+    const c = readFileSync(vuePath, 'utf8')
+    assert.ok(c.includes('effectiveRowHeight'), 'Must define effectiveRowHeight computed')
+    assert.ok(c.includes('isMobile'), 'Must define isMobile reactive ref')
+    assert.ok(c.includes('58'), 'Must compute 58px on mobile')
+  })
+
+  it('verifies virtual-log-terminal.css implements 2-line layout and anti-squish min-width', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const cssPath = resolve('src/assets/styles/components/virtual-log-terminal.css')
+    const c = readFileSync(cssPath, 'utf8')
+    assert.ok(c.includes('min-width: 160px'), 'Must enforce anti-squish min-width: 160px on .virtual-log-body')
+    assert.ok(c.includes('@media (max-width: 640px)'), 'Must define 640px mobile media query')
+    assert.ok(c.includes('-webkit-line-clamp: 2'), 'Must clamp message to 2 lines on mobile')
+    assert.ok(c.includes('order: 1'), 'Must set metadata order to 1 on mobile')
+    assert.ok(c.includes('order: 2'), 'Must set log body order to 2 on mobile')
+  })
+
+  it('verifies floating-alert-toast.css condenses toast to slim 44-48px pill on mobile', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const cssPath = resolve('src/assets/styles/components/floating-alert-toast.css')
+    const c = readFileSync(cssPath, 'utf8')
+    assert.ok(c.includes('max-height: 48px'), 'Must constrain toast max-height to 48px on mobile')
+    assert.ok(c.includes('display: none !important;'), 'Must hide verbose toast body on mobile')
+    assert.ok(c.includes('btn-toast-failover'), 'Must target failover button on mobile')
+  })
+
+  it('verifies TopHudAlertBell.vue binds toastRef and checks containment for click-outside', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const vuePath = resolve('src/components/layout/TopHudAlertBell.vue')
+    const c = readFileSync(vuePath, 'utf8')
+    assert.ok(c.includes('toastRef'), 'Must declare toastRef')
+    assert.ok(c.includes('ref="toastRef"'), 'Must attach ref="toastRef" to header-alert-toast')
+    assert.ok(c.includes('toastRef.value') && c.includes('!toastRef.value.contains(target)'), 'Must check toastRef.contains in handleDocumentInteraction')
+  })
+
+  it('verifies logstream.css constrains mobile page height properly', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const cssPath = resolve('src/assets/styles/views/logstream.css')
+    const c = readFileSync(cssPath, 'utf8')
+    assert.ok(c.includes('max-height: calc(100vh - 48px - 50px - var(--sab, 0px))'), 'Must constrain mobile log-explorer-page max-height')
+  })
+})

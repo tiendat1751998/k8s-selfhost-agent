@@ -43,6 +43,8 @@ const scrollTop = ref(0)
 const clientHeight = ref(600)
 const unpinnedNewLogsCount = ref(0)
 const isPinnedToBottom = ref(true)
+const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 640 : false)
+const effectiveRowHeight = computed(() => isMobile.value ? 58 : props.rowHeight)
 
 // Expanded stack traces map: index -> boolean
 const expandedStackTraces = ref<Record<number, boolean>>({})
@@ -70,6 +72,9 @@ function handleResize() {
   if (viewportRef.value) {
     clientHeight.value = viewportRef.value.clientHeight || 600
   }
+  if (typeof window !== 'undefined') {
+    isMobile.value = window.innerWidth < 640
+  }
 }
 
 const windowResult = computed(() => {
@@ -77,7 +82,7 @@ const windowResult = computed(() => {
     totalCount: props.logs.length,
     scrollTop: scrollTop.value,
     clientHeight: clientHeight.value,
-    itemHeight: props.rowHeight,
+    itemHeight: effectiveRowHeight.value,
     overscan: 10,
   })
 })
@@ -108,7 +113,7 @@ function handleViewportScroll(e: Event) {
   if (!el) return
 
   scrollTop.value = el.scrollTop
-  const threshold = props.rowHeight * 2
+  const threshold = effectiveRowHeight.value * 2
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= threshold
 
   if (atBottom) {
