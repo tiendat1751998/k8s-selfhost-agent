@@ -86,6 +86,10 @@ onUnmounted(() => {
           type="text"
           placeholder="Type a route, view, or category..."
           class="input-glass palette-search-input"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
           autofocus
         />
         <span v-if="searchQuery" class="palette-clear" role="button" tabindex="0" aria-label="Clear search" @click="searchQuery = ''" @keydown.enter="searchQuery = ''">✕</span>
