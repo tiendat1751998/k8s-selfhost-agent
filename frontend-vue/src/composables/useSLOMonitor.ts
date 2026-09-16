@@ -232,7 +232,8 @@ export function useSLOMonitor() {
     return 'text-rose'
   }
 
-  function getBudgetBarWidth(budget: number): number {
+  function getBudgetBarWidth(budget?: number): number {
+    if (budget === undefined || budget === null || isNaN(budget)) return 0
     return Math.min(Math.max(budget, 0), 100)
   }
 
@@ -354,13 +355,32 @@ export function useSLOMonitor() {
     }
   }
 
+  async function handleCreateSLO(payload: CreateSLOPayload) {
+    actionInProgress.value = true
+    bannerMessage.value = null
+    try {
+      await sloApi.createDefinition(payload)
+      showCreateModal.value = false
+      bannerMessage.value = {
+        type: 'success',
+        text: `SLO target objective successfully armed for service "${payload.service}". Telemetry initialized.`
+      }
+      await fetchSLOData()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create SLO definition'
+      bannerMessage.value = { type: 'error', text: msg }
+    } finally {
+      actionInProgress.value = false
+    }
+  }
+
   async function handleTriggerAlert(defId: string, serviceName: string) {
     actionInProgress.value = true
     try {
       const res = await sloApi.triggerBurnAlert(defId)
       bannerMessage.value = {
         type: 'warning',
-        text: res.message || `🚨 Fast burn rate alert triggered for ${serviceName}: elevated error rate detected!`,
+        text: res.message || `Fast burn rate alert triggered for ${serviceName}: elevated error rate detected.`,
       }
       await fetchSLOData()
     } catch (err: unknown) {
@@ -401,10 +421,19 @@ export function useSLOMonitor() {
   const warningSLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'warning').length)
   const criticalSLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'critical').length)
 
+  const activeBurnAlerts = computed(() => {
+    return snapshots.value.filter(s => s.budget_status === 'critical' || (s.burn_rate && s.burn_rate >= 14.4)).length
+  })
+
+  const avgBurnRateNum = computed(() => {
+    if (snapshots.value.length === 0) return 1.0
+    const total = snapshots.value.reduce((acc, s) => acc + (s.burn_rate || 0), 0)
+    return Number((total / snapshots.value.length).toFixed(2))
+  })
+
   const avgBurnRate = computed(() => {
     if (snapshots.value.length === 0) return '—'
-    const total = snapshots.value.reduce((acc, s) => acc + (s.burn_rate || 0), 0)
-    return `${(total / snapshots.value.length).toFixed(2)}x`
+    return `${avgBurnRateNum.value.toFixed(2)}x`
   })
 
   onMounted(() => {
@@ -431,7 +460,9 @@ export function useSLOMonitor() {
     healthySLOs,
     warningSLOs,
     criticalSLOs,
+    activeBurnAlerts,
     avgBurnRate,
+    avgBurnRateNum,
     fetchSLOData,
     fetchRealServices,
     setWindowFilter,
@@ -450,6 +481,7 @@ export function useSLOMonitor() {
     openInspect,
     closeInspect,
     handleSaveSLO,
+    handleCreateSLO,
     handleTriggerAlert,
     handleDeleteSLO,
   }

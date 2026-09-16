@@ -1,0 +1,159 @@
+/* ==========================================================================
+   SLO 4-Card KPI Strip Stylesheet (Desktop & Tablet)
+   Eliminates empty void with high-density live telemetry metrics
+   Strict Modular Design System - Target < 120 lines
+   ========================================================================== */
+
+.slo-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .slo-kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .slo-kpi-grid {
+    display: none !important;
+  }
+}
+
+.slo-kpi-card {
+  padding: 10px 14px;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.slo-kpi-card:hover {
+  border-color: rgba(6, 182, 212, 0.35);
+  transform: translateY(-1px);
+}
+
+.slo-kpi-card .kpi-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  line-height: 1;
+}
+
+.slo-kpi-card .kpi-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.slo-kpi-card .kpi-card-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.slo-kpi-card .kpi-card-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slo-kpi-card .kpi-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1.5px 7px;
+  border-radius: 9999px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: var(--font-mono, monospace);
+}
+
+.slo-kpi-card .badge-emerald {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.slo-kpi-card .badge-cyan {
+  background: rgba(6, 182, 212, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.slo-kpi-card .badge-amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.slo-kpi-card .badge-rose {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.slo-kpi-card .kpi-card-body {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  line-height: 1.1;
+  margin-top: 6px;
+}
+
+.slo-kpi-card .kpi-card-value {
+  font-size: 19px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.slo-kpi-card .kpi-card-trend {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #94a3b8;
+}
+
+.slo-kpi-card .kpi-card-gauge {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.slo-kpi-card .kpi-gauge-track {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.slo-kpi-card .kpi-gauge-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.slo-kpi-card .gauge-emerald { background: #10b981; }
+.slo-kpi-card .gauge-cyan { background: #06b6d4; }
+.slo-kpi-card .gauge-amber { background: #f59e0b; }
+.slo-kpi-card .gauge-rose { background: #f43f5e; }

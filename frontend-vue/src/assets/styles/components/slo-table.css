@@ -1,37 +1,65 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    SLO Catalog Table Stylesheet (SloCatalogTable)
    Strict Enterprise Modularity - Target < 300 lines
+   100% Full-Width, 0px Horizontal Scroll, Inline Gauges & Velocity Multipliers
    ========================================================================== */
 
+/* Full Width Table Container */
 .section-box.table-box {
-  border-radius: 12px;
-  background: var(--bg-card, #0f172a);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  margin: 0 !important;
+  border-radius: 8px !important;
+  background: var(--bg-card, #0f172a) !important;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-.table-box .box-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+.table-box .data-table-container {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
 }
 
-.table-box .box-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: -0.01em;
+.table-box .table-scroll-wrapper {
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.table-box .box-subtitle {
-  font-size: 12px;
-  color: var(--text-secondary, #94a3b8);
-  margin-top: 2px;
+.table-box .data-table {
+  width: 100%;
+  table-layout: auto;
 }
 
+@media (min-width: 1024px) {
+  .table-box .table-scroll-wrapper {
+    overflow-x: hidden;
+  }
+}
+
+/* High-Density Data Table Cells */
+.table-box .data-table th {
+  padding: 8px 12px !important;
+  font-size: 11px !important;
+  background: rgba(15, 23, 42, 0.85) !important;
+  height: 34px !important;
+}
+
+.table-box .data-table td {
+  padding: 8px 12px !important;
+  height: 40px !important;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.table-box .data-table tr {
+  height: 40px !important;
+}
+
+/* Service Name Cell */
 .service-name-cell {
   display: flex;
   align-items: center;
@@ -40,19 +68,21 @@
 }
 
 .service-icon {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--accent-cyan, #06b6d4);
   flex-shrink: 0;
 }
 
 .service-text {
   font-size: 13px;
+  font-weight: 600;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Indicator & Target Badges */
 .indicator-pill {
   font-size: 10px;
   padding: 2px 6px;
@@ -82,67 +112,148 @@
   display: inline-block;
 }
 
-/* PromQL Query Monospace Truncation with Ellipsis */
-.query-code,
-.query-snippet {
-  font-size: 11px;
-  font-family: var(--font-mono, monospace);
-  color: var(--text-muted, #64748b);
-  max-width: 150px;
-  display: inline-block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: middle;
+/* Inline Error Budget Gauge */
+.budget-gauge-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
 }
 
-.table-actions-cell {
+.budget-gauge-track {
+  flex: 1;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.budget-gauge-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.budget-gauge-fill.gauge-emerald { background: #10b981; }
+.budget-gauge-fill.gauge-amber { background: #f59e0b; }
+.budget-gauge-fill.gauge-rose { background: #f43f5e; }
+
+.budget-percent {
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 48px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Burn Velocity Multiplier Column */
+.burn-rate-cell {
+  display: flex;
+  align-items: center;
+}
+
+.burn-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.burn-badge.burn-emerald {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.burn-badge.burn-amber {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+.burn-badge.burn-rose {
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: #f43f5e;
+}
+
+/* SLI Query Monospace Column (No max-width 150px truncation) */
+.query-cell {
   display: flex;
   align-items: center;
   gap: 6px;
-  justify-content: flex-end;
-  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
-/* De-neonized Table Action Icon Buttons */
-.btn-icon-action {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: #0b0f19;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+.query-code {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: #93c5fd;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-copy-query {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 4px;
   color: var(--text-secondary, #94a3b8);
-  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
   transition: all 0.15s ease;
 }
 
-.btn-icon-action:hover {
+.btn-copy-query:hover {
+  background: rgba(59, 130, 246, 0.15);
   border-color: #3b82f6;
   color: #fff;
-  background: rgba(59, 130, 246, 0.15);
 }
 
-.btn-icon-action.btn-icon-warn:hover {
-  border-color: #f59e0b;
-  color: #fbbf24;
-  background: rgba(245, 158, 11, 0.15);
+/* Row Actions (Enterprise Standard: 1 Primary + ActionDropdown) */
+.table-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
 }
 
-.btn-icon-action.btn-icon-del {
+.table-actions-row .btn-xs {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 5px;
+  font-weight: 600;
+  cursor: pointer;
   transition: all 0.15s ease;
-}
-
-.btn-icon-action.btn-icon-del:hover {
-  border-color: #f43f5e;
-  color: #f43f5e;
-  background: rgba(244, 63, 94, 0.15);
 }
 
 .text-emerald { color: #10b981; }
+.text-amber { color: #f59e0b; }
+.text-rose { color: #f43f5e; }
 .text-muted { color: var(--text-muted, #64748b); }
 .font-mono { font-family: var(--font-mono, monospace); }
 .font-bold { font-weight: 700; }
