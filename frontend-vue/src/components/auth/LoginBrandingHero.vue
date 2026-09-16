@@ -12,26 +12,26 @@
 
       <div class="hero-feature-list">
         <div class="hero-feature-item">
+          <div class="feature-icon-badge"><BaseIcon name="layers" size="md" /></div>
+          <div class="feature-content">
+            <span class="feature-title">Multi-Cluster Mesh</span>
+            <span class="feature-desc">Centralized orchestration & distributed edge node telemetry.</span>
+          </div>
+        </div>
+
+        <div class="hero-feature-item">
+          <div class="feature-icon-badge"><BaseIcon name="activity" size="md" /></div>
+          <div class="feature-content">
+            <span class="feature-title">Unified Observability</span>
+            <span class="feature-desc">High-throughput distributed logs & automated RCA diagnostics.</span>
+          </div>
+        </div>
+
+        <div class="hero-feature-item">
           <div class="feature-icon-badge"><BaseIcon name="shield" size="md" /></div>
           <div class="feature-content">
-            <span class="feature-title">Air-Gapped ZeroTrust</span>
-            <span class="feature-desc">FIPS 140-3 cryptographic boundaries & TLS v1.3 mandatory channels.</span>
-          </div>
-        </div>
-
-        <div class="hero-feature-item">
-          <div class="feature-icon-badge"><BaseIcon name="zap" size="md" /></div>
-          <div class="feature-content">
-            <span class="feature-title">Dual-Sync DR Gateway</span>
-            <span class="feature-desc">Active-active multi-region synchronization with sub-second RPO.</span>
-          </div>
-        </div>
-
-        <div class="hero-feature-item">
-          <div class="feature-icon-badge"><BaseIcon name="search" size="md" /></div>
-          <div class="feature-content">
-            <span class="feature-title">Trivy Supply Chain Gate</span>
-            <span class="feature-desc">Pre-admission image attestation & runtime CVE quarantine enforcement.</span>
+            <span class="feature-title">Enterprise Governance</span>
+            <span class="feature-desc">Strict multi-tenancy isolation & RBAC security controls.</span>
           </div>
         </div>
       </div>
@@ -50,7 +50,7 @@
           <span class="mesh-node-label">Cluster Mesh</span>
           <span class="mesh-node-val">
             <span class="pulse-dot pulse-dot-cyan"></span>
-            ONLINE (DR-READY)
+            ONLINE
           </span>
         </div>
       </div>
