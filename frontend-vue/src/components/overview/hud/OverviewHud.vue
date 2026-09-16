@@ -273,8 +273,8 @@ function getRiskStroke(pct: number): string {
 }
 
 .status-rose {
-  background: #f43f5e;
-  box-shadow: 0 0 6px #f43f5e;
+  background: #ef4444;
+  box-shadow: none;
 }
 
 .hud-value-row {
@@ -313,7 +313,7 @@ function getRiskStroke(pct: number): string {
 
 .badge-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
 .badge-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-.badge-rose { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+.badge-rose { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); }
 .badge-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
 
 .hud-card-bottom {

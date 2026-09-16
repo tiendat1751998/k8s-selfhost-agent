@@ -31,7 +31,7 @@
   --accent-indigo: #4f46e5;
   --accent-violet: #6366f1;
   --accent-emerald: #10b981;
-  --accent-rose: #f43f5e;
+  --accent-rose: #ef4444;
   --accent-amber: #f59e0b;
 
   /* Typography Colors */
@@ -220,9 +220,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .badge-rose {
-  background: rgba(244, 63, 94, 0.12);
-  color: #fb7185;
-  border: 1px solid rgba(244, 63, 94, 0.25);
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 .badge-amber {
@@ -260,7 +260,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .pulse-dot-rose {
-  background-color: #f43f5e;
+  background-color: #ef4444;
   /* clean status dot */
 }
 

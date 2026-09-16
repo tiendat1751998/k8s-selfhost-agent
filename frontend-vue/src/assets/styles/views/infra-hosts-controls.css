@@ -166,8 +166,8 @@
 }
 
 .pill-dot.rose {
-  background: #f43f5e;
-  box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
+  background: #ef4444;
+  box-shadow: none;
 }
 
 .pill-dot.amber {

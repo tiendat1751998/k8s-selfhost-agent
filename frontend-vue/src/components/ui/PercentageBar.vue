@@ -27,14 +27,14 @@ const barHeight = computed(() => {
 // Semantic fill spectrum:
 // < 70%: Muted Cyan / Emerald (#06b6d4 / #10b981)
 // 70% – 84.9%: Warm Amber (#f59e0b)
-// >= 85%: Rose Coral (#f43f5e)
+// >= 85%: Rose Coral (#ef4444)
 const fillColor = computed(() => {
   if (props.variant && props.variant !== 'spectrum') {
     switch (props.variant) {
       case 'cyan': return '#06b6d4'
       case 'emerald': return '#10b981'
       case 'amber': return '#f59e0b'
-      case 'rose': return '#f43f5e'
+      case 'rose': return '#ef4444'
       case 'violet': return '#8b5cf6'
       default: return props.variant
     }
@@ -44,12 +44,12 @@ const fillColor = computed(() => {
   const thresh = props.threshold
 
   if (thresh !== undefined) {
-    if (pct >= thresh) return '#f43f5e'
+    if (pct >= thresh) return '#ef4444'
     if (pct >= thresh * 0.85) return '#f59e0b'
     return '#06b6d4'
   }
 
-  if (pct >= 85) return '#f43f5e'
+  if (pct >= 85) return '#ef4444'
   if (pct >= 70) return '#f59e0b'
   return '#06b6d4'
 })

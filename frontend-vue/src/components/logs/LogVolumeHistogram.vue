@@ -150,7 +150,7 @@ function onBucketClick(bucket: ParsedBucket) {
               :y="52 - (((b.debug + b.info + b.warn + b.error) / maxVolume) * 50)"
               :width="Math.max(1, (1000 / parsedBuckets.length) - 2)"
               :height="(b.error / maxVolume) * 50"
-              fill="#f43f5e"
+              fill="#ef4444"
             />
           </template>
         </g>
@@ -185,11 +185,11 @@ function onBucketClick(bucket: ParsedBucket) {
 .legend-title { font-weight: 700; color: #cbd5e1; letter-spacing: 0.05em; }
 .legend-item { display: inline-flex; align-items: center; gap: 3px; font-size: 9px; color: #94a3b8; }
 .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
-.bg-rose { background-color: #f43f5e; }
+.bg-rose { background-color: #ef4444; }
 .bg-amber { background-color: #f59e0b; }
 .bg-cyan { background-color: #06b6d4; }
 .bg-slate { background-color: #64748b; }
-.text-rose { color: #f43f5e; }
+.text-rose { color: #f87171; }
 .text-amber { color: #f59e0b; }
 .text-cyan { color: #06b6d4; }
 .text-slate { color: #94a3b8; }

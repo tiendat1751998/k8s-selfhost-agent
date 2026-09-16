@@ -83,7 +83,7 @@
 .severity-pill-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
 .severity-pill-btn.active { color: #fff; }
 .severity-pill-btn.pill-all.active { background: rgba(148, 163, 184, 0.25); color: #f1f5f9; }
-.severity-pill-btn.pill-err.active { background: rgba(244, 63, 94, 0.25); color: #fb7185; }
+.severity-pill-btn.pill-err.active { background: rgba(239, 68, 68, 0.2); color: #f87171; }
 .severity-pill-btn.pill-warn.active { background: rgba(245, 158, 11, 0.25); color: #fbbf24; }
 .severity-pill-btn.pill-info.active { background: rgba(16, 185, 129, 0.25); color: #34d399; }
 .severity-pill-btn.pill-debug.active { background: rgba(100, 116, 139, 0.3); color: #94a3b8; }
@@ -192,25 +192,25 @@
 /* Query Error Banner */
 .query-error-banner {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 6px 12px; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3);
-  color: #fb7185; border-radius: 6px; font-size: 11px; margin-bottom: 8px; flex-shrink: 0;
+  padding: 6px 12px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171; border-radius: 6px; font-size: 11px; margin-bottom: 8px; flex-shrink: 0;
 }
 .query-error-dismiss {
-  background: transparent; border: none; color: #fb7185; cursor: pointer;
+  background: transparent; border: none; color: #f87171; cursor: pointer;
   padding: 2px 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center;
 }
-.query-error-dismiss:hover { background: rgba(244, 63, 94, 0.2); color: #fff; }
+.query-error-dismiss:hover { background: rgba(239, 68, 68, 0.2); color: #fff; }
 
 /* Pulse Dots & Utilities */
 .pulse-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 .pulse-dot-cyan { background-color: #38bdf8; box-shadow: 0 0 6px rgba(56, 189, 248, 0.6); }
 .pulse-dot-emerald { background-color: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); }
 .pulse-dot-amber { background-color: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
-.pulse-dot-rose { background-color: #f43f5e; box-shadow: 0 0 6px rgba(244, 63, 94, 0.6); }
+.pulse-dot-rose { background-color: #ef4444; }
 
 .text-emerald { color: #34d399; }
 .text-amber { color: #fbbf24; }
-.text-rose { color: #fb7185; }
+.text-rose { color: #f87171; }
 .text-cyan { color: #38bdf8; }
 .text-slate { color: #94a3b8; }
 .font-mono { font-family: var(--font-mono, monospace); }

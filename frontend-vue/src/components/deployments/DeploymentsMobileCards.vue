@@ -108,6 +108,6 @@ const emit = defineEmits<{
 }
 .status-dot.dot-crimson {
   background-color: #ef4444;
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+  box-shadow: none;
 }
 </style>

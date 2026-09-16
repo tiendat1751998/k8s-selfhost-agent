@@ -462,13 +462,13 @@
   .tab-icon-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; }
   .mobile-badge-count {
     position: absolute; top: -4px;
-    right: -10px; background: #f43f5e;
+    right: -10px; background: #ef4444;
     color: #fff; font-size: 9px;
     font-weight: 700; padding: 0 4px;
     border-radius: 8px; min-width: 14px;
     height: 14px; display: flex;
     align-items: center; justify-content: center;
-    box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
+    box-shadow: none;
   }
 }
 .mobile-menu-btn::after,
