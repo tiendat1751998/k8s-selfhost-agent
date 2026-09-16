@@ -8,7 +8,11 @@ const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/favicon.svg',
-  '/icons.svg'
+  '/icons.svg',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/apple-touch-icon.png',
+  '/manifest.webmanifest'
 ]
 
 // 1. Install Phase: Skip waiting and cache core SPA shell
