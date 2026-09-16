@@ -29,6 +29,7 @@ import (
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	infraClickhouse "github.com/datdt/k8sselfhost/internal/infrastructure/clickhouse"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	infraLB "github.com/datdt/k8sselfhost/internal/infrastructure/loadbalancer"
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
@@ -366,7 +367,10 @@ func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Clie
 						lvl := detectLogLevel(line, defaultLvl)
 						logAggregator.Ingest(logging.LogEntry{Timestamp: time.Now().UTC(), Namespace: namespace, Pod: name, Container: name, Stream: stream, Level: lvl, Message: line})
 						if centralizedLogs != nil {
-							_ = centralizedLogs.Ingest(ctx, []domainLogging.LogEntry{{Timestamp: time.Now().UTC(), TenantID: "default-tenant", ClusterID: "default", Namespace: namespace, PodName: name, ContainerName: name, Stream: stream, LogLevel: domainLogging.LogLevel(strings.ToLower(lvl)), Message: line, TraceID: extractTraceID(line), Attributes: map[string]string{"service": name}}})
+							entries := []domainLogging.LogEntry{{Timestamp: time.Now().UTC(), TenantID: "default-tenant", ClusterID: "default", Namespace: namespace, PodName: name, ContainerName: name, Stream: stream, LogLevel: domainLogging.LogLevel(strings.ToLower(lvl)), Message: line, TraceID: extractTraceID(line), Attributes: map[string]string{"service": name}}}
+							if err := centralizedLogs.Ingest(ctx, entries); err != nil {
+								logger.Get().Debug("log ingestion warning", zap.Error(err))
+							}
 						}
 					}
 				}
@@ -472,11 +476,6 @@ func wireCentralizedLogging(ctx context.Context, log *zap.Logger) (*adapthttp.Lo
 type chStatusProvider struct {
 	client *infraClickhouse.Client
 	repo   *infraClickhouse.LogRepository
-}
-
-func (p *chStatusProvider) QuerySurroundingContext(ctx context.Context, service string, timestamp time.Time, window int) ([]domainLogging.LogEntry, error) {
-	if p.repo != nil { return p.repo.QuerySurroundingContext(ctx, service, timestamp, window) }
-	return nil, fmt.Errorf("clickhouse repository unavailable")
 }
 
 func (p *chStatusProvider) GetStatus(ctx context.Context) (*adapthttp.LogEngineStatus, error) {

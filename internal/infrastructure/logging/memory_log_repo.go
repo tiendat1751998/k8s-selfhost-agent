@@ -291,3 +291,37 @@ func matchesFilter(entry domainLogging.LogEntry, f domainLogging.LogFilter) bool
 	}
 	return true
 }
+// QuerySurroundingContext queries window logs around a timestamp filtered by tenant and service.
+func (r *MemoryLogRepo) QuerySurroundingContext(
+	ctx context.Context,
+	tenantID, service string,
+	timestamp time.Time,
+	window int,
+) ([]domainLogging.LogEntry, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		tenantID = "default-tenant"
+	}
+	if window <= 0 {
+		window = 50
+	}
+	if window > 500 {
+		window = 500
+	}
+
+	filter := domainLogging.LogFilter{
+		TenantID:    tenantID,
+		ServiceName: service,
+		StartTime:   timestamp.Add(-5 * time.Minute),
+		EndTime:     timestamp.Add(5 * time.Minute),
+		Limit:       window * 2,
+	}
+	filter.Sanitize()
+	res, err := r.QueryLogs(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if res == nil || len(res.Entries) == 0 {
+		return []domainLogging.LogEntry{}, nil
+	}
+	return res.Entries, nil
+}

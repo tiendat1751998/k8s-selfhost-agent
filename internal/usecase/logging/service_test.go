@@ -13,12 +13,15 @@ import (
 )
 
 type memoryLogRepo struct {
-	lastFilter    domainLog.LogFilter
-	lastEntries   []domainLog.LogEntry
-	intervalSecs  int
-	searchResult  *domainLog.LogSearchResult
-	histogramRes  []domainLog.LogAggregationBucket
-	tailCh        chan domainLog.LogEntry
+	lastFilter             domainLog.LogFilter
+	lastEntries            []domainLog.LogEntry
+	intervalSecs           int
+	searchResult           *domainLog.LogSearchResult
+	histogramRes           []domainLog.LogAggregationBucket
+	tailCh                 chan domainLog.LogEntry
+	surroundingRes         []domainLog.LogEntry
+	lastSurroundingTenant  string
+	lastSurroundingService string
 }
 
 func (m *memoryLogRepo) IngestBatch(ctx context.Context, entries []domainLog.LogEntry) error {
@@ -48,6 +51,12 @@ func (m *memoryLogRepo) TailLogs(ctx context.Context, filter domainLog.LogFilter
 	return m.tailCh, nil
 }
 
+func (m *memoryLogRepo) QuerySurroundingContext(ctx context.Context, tenantID, service string, timestamp time.Time, window int) ([]domainLog.LogEntry, error) {
+	m.lastSurroundingTenant = tenantID
+	m.lastSurroundingService = service
+	return m.surroundingRes, nil
+}
+
 func TestService_TenantContextMissing(t *testing.T) {
 	repo := &memoryLogRepo{}
 	svc := usecaseLog.NewService(repo)
@@ -63,6 +72,9 @@ func TestService_TenantContextMissing(t *testing.T) {
 	require.ErrorIs(t, err, domainLog.ErrInvalidLogQuery)
 
 	err = svc.Ingest(ctx, []domainLog.LogEntry{{ClusterID: "c1", Message: "test"}})
+	require.ErrorIs(t, err, domainLog.ErrInvalidLogQuery)
+
+	_, err = svc.QuerySurroundingContext(ctx, "svc", time.Now(), 50)
 	require.ErrorIs(t, err, domainLog.ErrInvalidLogQuery)
 }
 
@@ -139,4 +151,19 @@ func TestService_HistogramAndTail(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tailCh)
 	require.Equal(t, "tenant-prod", repo.lastFilter.TenantID)
+}
+func TestService_QuerySurroundingContext(t *testing.T) {
+	repo := &memoryLogRepo{
+		surroundingRes: []domainLog.LogEntry{
+			{ClusterID: "c1", Message: "context log"},
+		},
+	}
+	svc := usecaseLog.NewService(repo)
+	ctx := tenancy.WithTenantID(context.Background(), "tenant-omega")
+
+	res, err := svc.QuerySurroundingContext(ctx, "billing-svc", time.Now(), 20)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	require.Equal(t, "tenant-omega", repo.lastSurroundingTenant)
+	require.Equal(t, "billing-svc", repo.lastSurroundingService)
 }

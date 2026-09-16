@@ -180,11 +180,12 @@ type LogRepository interface {
 	QueryLogs(ctx context.Context, filter LogFilter) (*LogSearchResult, error)
 	GetHistogram(ctx context.Context, filter LogFilter, intervalSeconds int) ([]LogAggregationBucket, error)
 	TailLogs(ctx context.Context, filter LogFilter) (<-chan LogEntry, error)
+	QuerySurroundingContext(ctx context.Context, tenantID, service string, timestamp time.Time, window int) ([]LogEntry, error)
 }
 
 // SurroundingContextQuerier defines the contract for querying logs surrounding a specific timestamp.
 type SurroundingContextQuerier interface {
-	QuerySurroundingContext(ctx context.Context, service string, timestamp time.Time, window int) ([]LogEntry, error)
+	QuerySurroundingContext(ctx context.Context, tenantID, service string, timestamp time.Time, window int) ([]LogEntry, error)
 }
 
 // LogEngineStatus summarizes status and health metrics for the log engine.

@@ -158,7 +158,10 @@ func BuildLogQuery(f logging.LogFilter, table string) (string, []any) {
 }
 
 // BuildSurroundingContextQueries returns SQL statements to query logs surrounding a target timestamp.
-func BuildSurroundingContextQueries(table, service string, timestamp time.Time, window int) (string, []any, string, []any) {
+func BuildSurroundingContextQueries(tenantID, service string, timestamp time.Time, window int) (string, []any, string, []any) {
+	if strings.TrimSpace(tenantID) == "" {
+		tenantID = "default-tenant"
+	}
 	if window <= 0 {
 		window = 50
 	}
@@ -168,8 +171,11 @@ func BuildSurroundingContextQueries(table, service string, timestamp time.Time, 
 
 	cols := "timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes, trace_id, span_id, error_fingerprint"
 
-	var beforeClauses, afterClauses []string
-	var beforeArgs, afterArgs []any
+	beforeClauses := []string{"tenant_id = ?"}
+	beforeArgs := []any{tenantID}
+
+	afterClauses := []string{"tenant_id = ?"}
+	afterArgs := []any{tenantID}
 
 	if strings.TrimSpace(service) != "" {
 		svcFilter := "(container_name = ? OR attributes['service'] = ? OR pod_name = ?)"
@@ -186,12 +192,12 @@ func BuildSurroundingContextQueries(table, service string, timestamp time.Time, 
 	afterArgs = append(afterArgs, timestamp, window)
 
 	beforeQuery := fmt.Sprintf(
-		"SELECT %s FROM %s WHERE %s ORDER BY timestamp DESC LIMIT ?",
-		cols, table, strings.Join(beforeClauses, " AND "),
+		"SELECT %s FROM cluster_logs WHERE %s ORDER BY timestamp DESC LIMIT ?",
+		cols, strings.Join(beforeClauses, " AND "),
 	)
 	afterQuery := fmt.Sprintf(
-		"SELECT %s FROM %s WHERE %s ORDER BY timestamp ASC LIMIT ?",
-		cols, table, strings.Join(afterClauses, " AND "),
+		"SELECT %s FROM cluster_logs WHERE %s ORDER BY timestamp ASC LIMIT ?",
+		cols, strings.Join(afterClauses, " AND "),
 	)
 
 	return beforeQuery, beforeArgs, afterQuery, afterArgs
@@ -200,10 +206,14 @@ func BuildSurroundingContextQueries(table, service string, timestamp time.Time, 
 // QuerySurroundingContext queries window logs before and after timestamp and merges them sorted ascending.
 func (r *LogRepository) QuerySurroundingContext(
 	ctx context.Context,
+	tenantID string,
 	service string,
 	timestamp time.Time,
 	window int,
 ) ([]logging.LogEntry, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		tenantID = "default-tenant"
+	}
 	if r.client == nil {
 		return nil, errors.New("clickhouse client is nil in log repository")
 	}
@@ -212,7 +222,7 @@ func (r *LogRepository) QuerySurroundingContext(
 		return nil, fmt.Errorf("acquiring connection for surrounding context: %w", err)
 	}
 
-	beforeQuery, beforeArgs, afterQuery, afterArgs := BuildSurroundingContextQueries(r.tableName, service, timestamp, window)
+	beforeQuery, beforeArgs, afterQuery, afterArgs := BuildSurroundingContextQueries(tenantID, service, timestamp, window)
 
 	scanEntries := func(query string, args []any) ([]logging.LogEntry, error) {
 		rows, err := conn.Query(ctx, query, args...)

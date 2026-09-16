@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/logging"
@@ -46,6 +47,7 @@ type BatchWriter struct {
 	doneCh       chan struct{}
 	startOnce    sync.Once
 	closeOnce    sync.Once
+	started      atomic.Bool
 	mu           sync.RWMutex
 	closed       bool
 	flushFn      func(ctx context.Context, batch []logging.LogEntry) error
@@ -99,6 +101,7 @@ func NewBatchWriterWithFn(
 // Start launches the background flusher loop if not already started.
 func (w *BatchWriter) Start(ctx context.Context) {
 	w.startOnce.Do(func() {
+		w.started.Store(true)
 		go w.flusherLoop(ctx)
 	})
 }
@@ -181,6 +184,10 @@ func (w *BatchWriter) Close() error {
 		close(w.logCh)
 		w.mu.Unlock()
 	})
+
+	if !w.started.Load() {
+		return nil
+	}
 
 	<-w.doneCh
 

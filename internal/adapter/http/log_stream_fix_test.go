@@ -120,6 +120,10 @@ func (s *aliasTrackingFakeService) TailLogs(ctx context.Context, filter logging.
 	return ch, nil
 }
 
+func (s *aliasTrackingFakeService) QuerySurroundingContext(ctx context.Context, service string, timestamp time.Time, window int) ([]logging.LogEntry, error) {
+	return nil, nil
+}
+
 // TestLogHandler_Search_ServiceParamAndContainerAliases verifies Acceptance Criterion 2:
 // - q.Get("service") is parsed into filter.ContainerName and filter.ServiceName.
 // - When searching for postgres_db, aliases "db" and "postgres" are also queried and merged.
@@ -263,4 +267,8 @@ func (m *multiChanFakeService) TailLogs(ctx context.Context, filter logging.LogF
 	}
 	ch := make(chan logging.LogEntry, 10)
 	return ch, nil
+}
+
+func (m *multiChanFakeService) QuerySurroundingContext(ctx context.Context, service string, timestamp time.Time, window int) ([]logging.LogEntry, error) {
+	return nil, nil
 }

@@ -311,12 +311,7 @@ func (h *LogStreamHandler) streamBatched(conn *websocket.Conn, sub *logging.Subs
 				return
 			}
 		case <-telemetryTicker.C:
-			if d := sub.Dropped.Load(); d > droppedCount {
-				droppedCount = d
-			}
-			if len(sub.Ch) >= cap(sub.Ch) {
-				droppedCount++
-			}
+			droppedCount = sub.Dropped.Load()
 			currentRate := float64(entriesThisWindow)
 			entriesThisWindow = 0
 			if droppedCount > 0 {
@@ -338,9 +333,6 @@ func (h *LogStreamHandler) streamBatched(conn *websocket.Conn, sub *logging.Subs
 			if !ok {
 				_ = flushBatch()
 				return
-			}
-			if len(sub.Ch) >= cap(sub.Ch) {
-				droppedCount++
 			}
 			entriesThisWindow++
 			batch = append(batch, entry)

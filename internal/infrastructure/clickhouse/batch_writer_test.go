@@ -248,3 +248,28 @@ func TestBatchWriter_StartStopAndBufferCap(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(1), atomic.LoadInt64(&flushed))
 }
+
+func TestBatchWriter_CloseUnstarted(t *testing.T) {
+	cfg := clickhouse.BatchWriterConfig{
+		BatchSize:       10,
+		FlushInterval:   10 * time.Second,
+		ChannelCapacity: 100,
+	}
+
+	// Create writer without starting it (nil ctx)
+	writer := clickhouse.NewBatchWriterWithFn(nil, nil, cfg, nil)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		err := writer.Close()
+		require.NoError(t, err)
+	}()
+
+	select {
+	case <-done:
+		// Succeeded
+	case <-time.After(1 * time.Second):
+		t.Fatal("BatchWriter.Close() deadlocked on unstarted writer")
+	}
+}

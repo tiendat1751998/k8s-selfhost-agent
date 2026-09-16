@@ -25,6 +25,7 @@ type LoggingService interface {
 	QueryLogs(ctx context.Context, filter logging.LogFilter) (*logging.LogSearchResult, error)
 	GetHistogram(ctx context.Context, filter logging.LogFilter, intervalSeconds int) ([]logging.LogAggregationBucket, error)
 	TailLogs(ctx context.Context, filter logging.LogFilter) (<-chan logging.LogEntry, error)
+	QuerySurroundingContext(ctx context.Context, service string, timestamp time.Time, window int) ([]logging.LogEntry, error)
 }
 
 // LogEngineStatus represents the engine status metadata.
@@ -387,34 +388,18 @@ func (h *LogHandler) HandleSurroundingContext(w http.ResponseWriter, r *http.Req
 	if window <= 0 { window = 50 }
 	if window > 500 { window = 500 }
 
-	var (
-		entries []logging.LogEntry
-		qErr    error
-	)
-	if scq, ok := h.service.(logging.SurroundingContextQuerier); ok {
-		entries, qErr = scq.QuerySurroundingContext(r.Context(), service, ts, window)
-	} else if scq, ok := h.statusProvider.(logging.SurroundingContextQuerier); ok {
-		entries, qErr = scq.QuerySurroundingContext(r.Context(), service, ts, window)
-	} else {
-		filter := logging.LogFilter{
-			TenantID:      resolveTenant(r.Context(), r),
-			ServiceName:   service,
-			ContainerName: service,
-			StartTime:     ts.Add(-5 * time.Minute),
-			EndTime:       ts.Add(5 * time.Minute),
-			Limit:         window * 2,
-		}
-		filter.Sanitize()
-		res, err := h.service.QueryLogs(r.Context(), filter)
-		if err != nil { qErr = err } else if res != nil { entries = res.Entries }
-	}
+	entries, qErr := h.service.QuerySurroundingContext(r.Context(), service, ts, window)
 	if qErr != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query surrounding context", qErr)
 		return
 	}
-	if entries == nil { entries = []logging.LogEntry{} }
+	if entries == nil {
+		entries = []logging.LogEntry{}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"entries": entries, "total_count": len(entries), "window": window,
+		"entries":     entries,
+		"total_count": len(entries),
+		"window":      window,
 	})
 }
 

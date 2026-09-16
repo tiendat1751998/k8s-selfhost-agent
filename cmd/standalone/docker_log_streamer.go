@@ -18,6 +18,7 @@ import (
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
 type dockerTailerManager struct {
@@ -107,13 +108,16 @@ func (m *dockerTailerManager) attach(
 				})
 				if centralizedLogs != nil {
 					traceID := extractTraceID(msg)
-					_ = centralizedLogs.Ingest(ctx, []domainLogging.LogEntry{{
+					entries := []domainLogging.LogEntry{{
 						Timestamp: entryTS, TenantID: "default-tenant", ClusterID: "default", Namespace: "docker",
 						PodName: cleanName, ContainerName: cleanName, Stream: stream,
 						LogLevel: domainLogging.LogLevel(strings.ToLower(lvl)), Message: msg,
 						TraceID:  traceID,
 						Attributes: map[string]string{"service": cleanName},
-					}})
+					}}
+					if err := centralizedLogs.Ingest(ctx, entries); err != nil {
+						logger.Get().Debug("log ingestion warning", zap.Error(err))
+					}
 				}
 			}
 		}

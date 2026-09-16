@@ -108,15 +108,27 @@ func TestBuildSurroundingContextQueries(t *testing.T) {
 	service := "order-svc"
 	window := 25
 
-	beforeQuery, beforeArgs, afterQuery, afterArgs := clickhouse.BuildSurroundingContextQueries("cluster_logs", service, targetTime, window)
+	// Test with explicit tenant ID
+	beforeQuery, beforeArgs, afterQuery, afterArgs := clickhouse.BuildSurroundingContextQueries("tenant-alpha", service, targetTime, window)
 
+	require.Contains(t, beforeQuery, "tenant_id = ?")
 	require.Contains(t, beforeQuery, "<= ?")
 	require.Contains(t, beforeQuery, "ORDER BY timestamp DESC LIMIT ?")
+	require.Contains(t, afterQuery, "tenant_id = ?")
 	require.Contains(t, afterQuery, "> ?")
 	require.Contains(t, afterQuery, "ORDER BY timestamp ASC LIMIT ?")
 
+	require.Equal(t, "tenant-alpha", beforeArgs[0], "tenant_id must be first argument in before query")
+	require.Equal(t, "tenant-alpha", afterArgs[0], "tenant_id must be first argument in after query")
 	require.Equal(t, 25, beforeArgs[len(beforeArgs)-1])
 	require.Equal(t, 25, afterArgs[len(afterArgs)-1])
+
+	// Test default tenant fallback when tenantID is empty
+	bQuery, bArgs, aQuery, aArgs := clickhouse.BuildSurroundingContextQueries("", service, targetTime, window)
+	require.Contains(t, bQuery, "tenant_id = ?")
+	require.Contains(t, aQuery, "tenant_id = ?")
+	require.Equal(t, "default-tenant", bArgs[0], "empty tenant must default to default-tenant in before query")
+	require.Equal(t, "default-tenant", aArgs[0], "empty tenant must default to default-tenant in after query")
 }
 
 func TestBuildHistogramQuery(t *testing.T) {
