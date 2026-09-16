@@ -109,7 +109,7 @@
 }
 
 .virtual-log-row.log-error {
-  background: rgba(244, 63, 94, 0.07);
+  background: rgba(239, 68, 68, 0.06);
 }
 
 .virtual-log-row.log-warn {
@@ -157,9 +157,9 @@
 }
 
 .virtual-badge-error {
-  background: rgba(244, 63, 94, 0.15);
-  color: #fb7185;
-  border: 1px solid rgba(244, 63, 94, 0.25);
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 .virtual-badge-debug {
@@ -198,7 +198,7 @@
 }
 
 .virtual-log-row.log-error .virtual-msg-line {
-  color: #fda4af;
+  color: #fca5a5;
   font-weight: 600;
 }
 
@@ -263,9 +263,9 @@
 .virtual-btn-context {
   font-size: 9.5px;
   font-weight: 700;
-  color: #fb7185;
-  background: rgba(244, 63, 94, 0.12);
-  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
   padding: 1px 6px;
   border-radius: 3px;
   flex-shrink: 0;
@@ -277,9 +277,9 @@
 }
 
 .virtual-btn-context:hover {
-  background: rgba(244, 63, 94, 0.25);
-  color: #ffe4e6;
-  border-color: #fb7185;
+  background: rgba(239, 68, 68, 0.22);
+  color: #fecdd3;
+  border-color: rgba(239, 68, 68, 0.5);
 }
 
 /* Floating Jump to Bottom Pill */
@@ -311,7 +311,7 @@
 }
 
 .jump-new-count {
-  background: #f43f5e;
+  background: #dc2626;
   color: #ffffff;
   padding: 1px 6px;
   border-radius: 10px;

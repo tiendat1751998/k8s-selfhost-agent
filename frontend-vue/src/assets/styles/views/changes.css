@@ -222,7 +222,7 @@
 .node-rfc { border-color: #06b6d4; box-shadow: 0 0 10px rgba(6, 182, 212, 0.3); }
 .node-gitops { border-color: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); }
 .node-rollback { border-color: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.3); }
-.node-audit { border-color: #f43f5e; box-shadow: 0 0 10px rgba(244, 63, 94, 0.3); }
+.node-audit { border-color: #ef4444; box-shadow: none; }
 .timeline-line { flex: 1; width: 2px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.04) 100%); margin-top: 4px; }
 
 .timeline-card {
@@ -295,7 +295,7 @@
 .pulse-rfc { background: #06b6d4; box-shadow: 0 0 6px #06b6d4; }
 .pulse-gitops { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
 .pulse-rollback { background: #10b981; box-shadow: 0 0 6px #10b981; }
-.pulse-audit { background: #f43f5e; box-shadow: 0 0 6px #f43f5e; }
+.pulse-audit { background: #ef4444; box-shadow: none; }
 .mc-title { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mc-meta-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .mc-time { font-size: 10.5px; color: var(--text-muted); }

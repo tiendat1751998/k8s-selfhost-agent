@@ -72,11 +72,9 @@
 @keyframes gauge-pulse {
   0%, 100% {
     opacity: 1;
-    filter: drop-shadow(0 0 6px rgba(244, 63, 94, 0.6));
   }
   50% {
     opacity: 0.65;
-    filter: drop-shadow(0 0 2px rgba(244, 63, 94, 0.2));
   }
 }
 
@@ -247,12 +245,12 @@
 }
 
 .badge-rose {
-  background: rgba(244, 63, 94, 0.12);
-  color: #fb7185;
-  border: 1px solid rgba(244, 63, 94, 0.3);
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 .dot-rose {
-  background-color: #f43f5e;
+  background-color: #ef4444;
 }
 
 .badge-slate {

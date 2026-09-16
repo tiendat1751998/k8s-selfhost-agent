@@ -112,14 +112,14 @@ a.btn-cyber {
 /* Destructive / Danger */
 .btn-danger,
 .btn-remove {
-  color: var(--accent-rose, #f43f5e);
-  border-color: rgba(244, 63, 94, 0.3);
+  color: var(--accent-rose, #ef4444);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .btn-danger:hover,
 .btn-remove:hover {
-  background: rgba(244, 63, 94, 0.12);
-  border-color: rgba(244, 63, 94, 0.5);
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.5);
 }
 
 /* Close, Copy, & Icon Button Normalization */

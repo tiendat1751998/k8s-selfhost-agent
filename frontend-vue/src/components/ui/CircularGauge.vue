@@ -37,13 +37,13 @@ const strokeColor = computed(() => {
     switch (props.color) {
       case 'emerald': return '#10b981'
       case 'amber': return '#f59e0b'
-      case 'rose': return '#f43f5e'
+      case 'rose': return '#ef4444'
       case 'cyan': return '#06b6d4'
       case 'violet': return '#8b5cf6'
     }
   }
   const val = clampedPercent.value
-  if (val >= 80) return '#f43f5e' // Overload Red
+  if (val >= 80) return '#ef4444' // Overload Red
   if (val >= 60) return '#f59e0b' // Warning Amber
   return '#10b981' // Healthy Green
 })
@@ -51,7 +51,7 @@ const strokeColor = computed(() => {
 const glowColor = computed(() => {
   if (props.disabled) return 'transparent'
   const val = clampedPercent.value
-  if (val >= 80) return 'rgba(244, 63, 94, 0.4)'
+  if (val >= 80) return 'rgba(239, 68, 68, 0.35)'
   if (val >= 60) return 'rgba(245, 158, 11, 0.3)'
   return 'rgba(16, 185, 129, 0.25)'
 })

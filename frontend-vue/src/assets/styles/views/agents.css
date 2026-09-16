@@ -184,7 +184,7 @@
 .state-ring { position: absolute; inset: -3px; border-radius: 12px; border: 2px solid transparent; pointer-events: none; }
 .ring-running { border-color: #38bdf8; box-shadow: 0 0 10px rgba(56, 189, 248, 0.5); animation: pulse-ring 2s infinite; }
 .ring-completed { border-color: #10b981; }
-.ring-failed { border-color: #f43f5e; box-shadow: 0 0 8px rgba(244, 63, 94, 0.4); }
+.ring-failed { border-color: #ef4444; box-shadow: none; }
 .ring-idle { border-color: rgba(100, 116, 139, 0.4); }
 
 @keyframes pulse-ring {
@@ -264,8 +264,8 @@
 .btn-logs-act:hover { background: rgba(129, 140, 248, 0.25); }
 .btn-pause-act { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
 .btn-pause-act:hover { background: rgba(245, 158, 11, 0.25); }
-.btn-terminate { background: rgba(244, 63, 94, 0.15) !important; color: #f43f5e !important; border: 1px solid rgba(244, 63, 94, 0.4) !important; }
-.btn-terminate:hover { background: rgba(244, 63, 94, 0.3) !important; box-shadow: 0 0 10px rgba(244, 63, 94, 0.4); }
+.btn-terminate { background: rgba(239, 68, 68, 0.12) !important; color: #f87171 !important; border: 1px solid rgba(239, 68, 68, 0.25) !important; }
+.btn-terminate:hover { background: rgba(239, 68, 68, 0.2) !important; box-shadow: none; }
 .btn-dispatch-act { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
 .btn-dispatch-act:hover { background: rgba(56, 189, 248, 0.25); }
 
