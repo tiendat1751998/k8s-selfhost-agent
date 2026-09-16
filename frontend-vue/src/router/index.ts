@@ -1,4 +1,4 @@
-﻿import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -70,12 +70,6 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Workloads' }
     },
     {
-      path: '/promotions',
-      name: 'promotions',
-      component: () => import('../views/PromotionsView.vue'),
-      meta: { requiresAuth: true, title: 'Promotions Pipeline' }
-    },
-    {
       path: '/swarm',
       alias: ['/docker-swarm', '/docker', '/compute'],
       name: 'swarm',
@@ -108,25 +102,6 @@ const router = createRouter({
       name: 'security',
       component: () => import('../views/DevSecOpsView.vue'),
       meta: { requiresAuth: true, title: 'DevSecOps & Security' }
-    },
-    {
-      path: '/compliance',
-      alias: ['/security/compliance', '/compliance-center'],
-      name: 'compliance',
-      component: () => import('../views/ComplianceView.vue'),
-      meta: { requiresAuth: true, title: 'Compliance & CIS' }
-    },
-    {
-      path: '/drift',
-      name: 'drift',
-      component: () => import('../views/DriftView.vue'),
-      meta: { requiresAuth: true, title: 'Config Drift & GitOps' }
-    },
-    {
-      path: '/backup',
-      name: 'backup',
-      component: () => import('../views/BackupRestoreView.vue'),
-      meta: { requiresAuth: true, title: 'Disaster Recovery & Backup' }
     },
 
     // 4. Automation & FinOps
@@ -165,54 +140,10 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Tenancy & RBAC' }
     },
     {
-      path: '/ai-hub',
-      alias: ['/ai/providers', '/ai-providers'],
-      name: 'ai-hub',
-      component: () => import('../views/AIProviderHubView.vue'),
-      meta: { requiresAuth: true, title: 'AI Provider Hub' }
-    },
-    {
-      path: '/changes',
-      name: 'changes',
-      component: () => import('../views/ChangesView.vue'),
-      meta: { requiresAuth: true, title: 'Change Requests' }
-    },
-    {
       path: '/alerts',
       name: 'alerts',
       component: () => import('../views/AlertsView.vue'),
       meta: { requiresAuth: true, title: 'Alerts & Channels' }
-    },
-    {
-      path: '/reports',
-      name: 'reports',
-      component: () => import('../views/ReportsView.vue'),
-      meta: { requiresAuth: true, title: 'Reports Center' }
-    },
-    {
-      path: '/catalog',
-      name: 'ServiceCatalog',
-      component: () => import('../views/ServiceCatalogView.vue'),
-      alias: ['/services'],
-      meta: { requiresAuth: true, title: 'Service Catalog' }
-    },
-    {
-      path: '/scaffolder',
-      name: 'ScaffolderTemplates',
-      component: () => import('../views/ScaffolderView.vue'),
-      meta: { requiresAuth: true, title: 'Scaffolder Templates' }
-    },
-    {
-      path: '/ecosystem',
-      name: 'ecosystem',
-      component: () => import('../views/EcosystemView.vue'),
-      meta: { requiresAuth: true, title: 'Ecosystem Tools' }
-    },
-    {
-      path: '/plugins',
-      name: 'plugins',
-      component: () => import('../views/PluginsView.vue'),
-      meta: { requiresAuth: true, title: 'Plugin Hub' }
     },
     {
       path: '/settings',
@@ -236,6 +167,19 @@ const router = createRouter({
       component: () => import('../views/GenericPlatformView.vue'),
       meta: { requiresAuth: true, title: 'Platform Telemetry' }
     },
+
+    // 7. Deprecated / Purged Bloat Routes (Strict Redirect to /)
+    { path: '/promotions', redirect: '/' },
+    { path: '/drift', redirect: '/' },
+    { path: '/compliance', alias: ['/security/compliance', '/compliance-center'], redirect: '/' },
+    { path: '/backup', redirect: '/' },
+    { path: '/ai-hub', alias: ['/ai/providers', '/ai-providers'], redirect: '/' },
+    { path: '/changes', redirect: '/' },
+    { path: '/reports', redirect: '/' },
+    { path: '/scaffolder', redirect: '/' },
+    { path: '/plugins', redirect: '/' },
+    { path: '/catalog', alias: ['/services'], redirect: '/' },
+    { path: '/ecosystem', redirect: '/' },
 
     // Catch-All
     {

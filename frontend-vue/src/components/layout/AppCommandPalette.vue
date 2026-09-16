@@ -74,7 +74,7 @@ onUnmounted(() => {
   <ModalDrawer
     :show="show"
     title="Enterprise Command Palette"
-    subtitle="Quick search across all 20+ platform routes, AI models, and resources."
+    subtitle="Quick search across all enterprise platform routes and resources."
     max-width="640px"
     @update:show="emit('update:show', $event)"
   >

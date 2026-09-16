@@ -29,29 +29,18 @@ const routeBreadcrumbs: Record<string, { category: string; title: string }> = {
   '/logs': { category: 'Observability', title: 'Real-Time Logs' },
   '/fleet': { category: 'Compute & Fleet', title: 'Fleet Clusters' },
   '/hosts': { category: 'Infrastructure', title: 'Hosts' },
-  '/deployments': { category: 'Compute', title: 'Deployments & Apps' },
-  '/promotions': { category: 'Delivery', title: 'Promotions' },
+  '/deployments': { category: 'Compute', title: 'Deployments & Workloads' },
   '/explorer': { category: 'Cluster', title: 'Cluster Explorer' },
   '/helm': { category: 'Compute', title: 'Helm Catalog' },
   '/audit': { category: 'Governance', title: 'Audit & CVEs' },
-  '/compliance': { category: 'Governance', title: 'Compliance & CIS' },
   '/security': { category: 'Governance', title: 'Security Gates' },
   '/devsecops': { category: 'Governance', title: 'Security Gates' },
-  '/drift': { category: 'Governance', title: 'Config Drift' },
-  '/backup': { category: 'Governance', title: 'Disaster Recovery' },
   '/automation': { category: 'Automation', title: 'Automation Rules' },
   '/runbooks': { category: 'Automation', title: 'SRE Runbooks' },
   '/cost': { category: 'FinOps', title: 'Cost Optimization' },
   '/capacity': { category: 'Compute', title: 'Capacity Planning' },
   '/tenancy': { category: 'Management', title: 'Tenancy & RBAC' },
-  '/ai-hub': { category: 'Management', title: 'AI Provider Hub' },
-  '/changes': { category: 'Management', title: 'Change Requests' },
   '/alerts': { category: 'Management', title: 'Alerts & Channels' },
-  '/reports': { category: 'Management', title: 'Reports Center' },
-  '/catalog': { category: 'Developer Portal', title: 'Service Catalog' },
-  '/scaffolder': { category: 'Developer Portal', title: 'Scaffolder Templates' },
-  '/ecosystem': { category: 'Management', title: 'Ecosystem Tools' },
-  '/plugins': { category: 'Management', title: 'Plugin Hub' },
   '/settings': { category: 'Management', title: 'System Settings' },
 }
 
@@ -193,17 +182,17 @@ const clusterMeshStatus = computed(() => {
 const meshTooltip = computed(() => {
   if (downNodeCount.value > 0) {
     const names = downNodes.value.map(n => n.node_name || n.node_id).join(', ')
-    return `Mesh Status: DEGRADED — ${downNodeCount.value} node(s) offline (${names}). Cluster cross-node communication impaired.`
+    return `Mesh Status: DEGRADED â€” ${downNodeCount.value} node(s) offline (${names}). Cluster cross-node communication impaired.`
   }
   if (securityStore.error || backupStore.error) {
-    return `Mesh Status: DEGRADED — Security audit or backup synchronization encountered error.`
+    return `Mesh Status: DEGRADED â€” Security audit or backup synchronization encountered error.`
   }
   if (alertStore.hasCriticalAlerts) {
-    return `Mesh Status: DEGRADED — Critical resource alerts active in cluster.`
+    return `Mesh Status: DEGRADED â€” Critical resource alerts active in cluster.`
   }
   const total = appStore.latestMetrics?.total_nodes || appStore.latestMetrics?.nodes?.length || 0
   const healthy = appStore.latestMetrics?.healthy_nodes || total
-  return `Mesh Status: HEALTHY — WireGuard/eBPF encrypted mesh operational across ${healthy}/${total || 'all'} connected nodes.`
+  return `Mesh Status: HEALTHY â€” WireGuard/eBPF encrypted mesh operational across ${healthy}/${total || 'all'} connected nodes.`
 })
 
 const streamStatusText = computed(() => {
@@ -368,7 +357,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
           <!-- Consolidated System Telemetry Pill (Clickable) -->
           <div
             class="hud-status-pill"
-            :title="`${systemStatusTooltip} — Click to inspect down nodes`"
+            :title="`${systemStatusTooltip} â€” Click to inspect down nodes`"
             role="button"
             tabindex="0"
             aria-label="Inspect down nodes in Hosts view"
