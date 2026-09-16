@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -151,9 +152,24 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Keyword:   keyword,
 	}
 
+	replayLines := 1000
+	if s := query.Get("replay_lines"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			replayLines = n
+			if replayLines > 10000 {
+				replayLines = 10000
+			}
+		}
+	}
+
 	subID := fmt.Sprintf("ws-%s", uuid.New().String()[:8])
-	sub, history := h.aggregator.Subscribe(subID, filter, 1000)
+	sub, history := h.aggregator.Subscribe(subID, filter, replayLines)
 	defer h.aggregator.Unsubscribe(subID)
+
+	batchMode := query.Get("batch") == "true" || query.Get("microbatch") == "true" || query.Get("replay_lines") != "" || query.Get("format") == "batch"
+	if query.Get("batch") == "false" {
+		batchMode = false
+	}
 
 	// If the target container is on a remote agent, spawn a goroutine using StreamLogs
 	agentURL := h.resolveAgentURL(r.Context(), node, targetService)
@@ -186,10 +202,26 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send historical logs first
-	for _, entry := range history {
-		data, _ := json.Marshal(entry)
-		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			return
+	if batchMode {
+		for i := 0; i < len(history); i += 50 {
+			end := i + 50
+			if end > len(history) {
+				end = len(history)
+			}
+			chunk := history[i:end]
+			data, _ := json.Marshal(chunk)
+			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+				return
+			}
+		}
+	} else {
+		for _, entry := range history {
+			data, _ := json.Marshal(entry)
+			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+				return
+			}
 		}
 	}
 
@@ -206,7 +238,13 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Level:     "INFO",
 			Message:   fmt.Sprintf("[INFO] Real-time log stream opened for target (node: %s, service: %s). Waiting for live log events...", node, service),
 		}
-		data, _ := json.Marshal(handshakeEntry)
+		var data []byte
+		if batchMode {
+			data, _ = json.Marshal([]logging.LogEntry{handshakeEntry})
+		} else {
+			data, _ = json.Marshal(handshakeEntry)
+		}
+		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			return
 		}
@@ -223,6 +261,99 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	if batchMode {
+		h.streamBatched(conn, sub, done)
+	} else {
+		h.streamLegacy(conn, sub, done)
+	}
+}
+
+func (h *LogStreamHandler) streamBatched(conn *websocket.Conn, sub *logging.Subscriber, done <-chan struct{}) {
+	batch := make([]logging.LogEntry, 0, 50)
+	flushTicker := time.NewTicker(50 * time.Millisecond)
+	defer flushTicker.Stop()
+
+	telemetryTicker := time.NewTicker(1 * time.Second)
+	defer telemetryTicker.Stop()
+
+	pingTicker := time.NewTicker(30 * time.Second)
+	defer pingTicker.Stop()
+
+	var (
+		droppedCount      int64
+		entriesThisWindow int64
+	)
+
+	flushBatch := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		data, err := json.Marshal(batch)
+		batch = batch[:0]
+		if err != nil {
+			return nil
+		}
+		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		return conn.WriteMessage(websocket.TextMessage, data)
+	}
+
+	for {
+		select {
+		case <-done:
+			return
+		case <-pingTicker.C:
+			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		case <-flushTicker.C:
+			if err := flushBatch(); err != nil {
+				return
+			}
+		case <-telemetryTicker.C:
+			if d := sub.Dropped.Load(); d > droppedCount {
+				droppedCount = d
+			}
+			if len(sub.Ch) >= cap(sub.Ch) {
+				droppedCount++
+			}
+			currentRate := float64(entriesThisWindow)
+			entriesThisWindow = 0
+			if droppedCount > 0 {
+				telemetry := map[string]any{
+					"type":          "stream_telemetry",
+					"dropped":       droppedCount,
+					"dropped_count": droppedCount,
+					"rate":          currentRate,
+				}
+				tBytes, err := json.Marshal(telemetry)
+				if err == nil {
+					_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+					if err := conn.WriteMessage(websocket.TextMessage, tBytes); err != nil {
+						return
+					}
+				}
+			}
+		case entry, ok := <-sub.Ch:
+			if !ok {
+				_ = flushBatch()
+				return
+			}
+			if len(sub.Ch) >= cap(sub.Ch) {
+				droppedCount++
+			}
+			entriesThisWindow++
+			batch = append(batch, entry)
+			if len(batch) >= 50 {
+				if err := flushBatch(); err != nil {
+					return
+				}
+			}
+		}
+	}
+}
+
+func (h *LogStreamHandler) streamLegacy(conn *websocket.Conn, sub *logging.Subscriber, done <-chan struct{}) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 

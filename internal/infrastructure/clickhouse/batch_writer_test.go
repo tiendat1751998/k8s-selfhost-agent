@@ -1,4 +1,4 @@
-package clickhouse_test
+﻿package clickhouse_test
 
 import (
 	"context"
@@ -214,4 +214,37 @@ func TestBatchWriter_ContextCancelGracefulFlush(t *testing.T) {
 
 	err := writer.Close()
 	require.NoError(t, err)
+}
+
+func TestBatchWriter_StartStopAndBufferCap(t *testing.T) {
+	cfg := clickhouse.BatchConfig{
+		BatchSize:     5000,
+		FlushInterval: 2 * time.Second,
+		BufferCap:     50000,
+	}
+
+	writer := clickhouse.NewBatchWriter(nil, cfg)
+	require.NotNil(t, writer)
+
+	var flushed int64
+	writer.SetFlushFn(func(ctx context.Context, batch []logging.LogEntry) error {
+		atomic.AddInt64(&flushed, int64(len(batch)))
+		return nil
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	writer.Start(ctx)
+
+	err := writer.Write(logging.LogEntry{
+		TenantID:  "tenant-1",
+		ClusterID: "cluster-1",
+		Message:   "batch writer test",
+	})
+	require.NoError(t, err)
+
+	err = writer.Stop()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), atomic.LoadInt64(&flushed))
 }

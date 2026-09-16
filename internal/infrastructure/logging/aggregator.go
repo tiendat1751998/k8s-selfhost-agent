@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -207,9 +208,10 @@ func (f *LogFilter) Matches(entry LogEntry) bool {
 }
 
 type Subscriber struct {
-	ID     string
-	Filter LogFilter
-	Ch     chan LogEntry
+	ID      string
+	Filter  LogFilter
+	Ch      chan LogEntry
+	Dropped atomic.Int64
 }
 
 type LogAggregator struct {
@@ -317,6 +319,7 @@ func (a *LogAggregator) Ingest(entry LogEntry) {
 			case sub.Ch <- entry:
 			default:
 				// Skip if client buffer is congested to avoid blocking ingestion
+				sub.Dropped.Add(1)
 			}
 		}
 	}

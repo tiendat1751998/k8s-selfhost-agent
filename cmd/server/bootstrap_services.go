@@ -31,6 +31,7 @@ import (
 	infraClickhouse "github.com/datdt/k8sselfhost/internal/infrastructure/clickhouse"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	infraLB "github.com/datdt/k8sselfhost/internal/infrastructure/loadbalancer"
+	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	usecaseLogging "github.com/datdt/k8sselfhost/internal/usecase/logging"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
@@ -211,11 +212,7 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	cloudAccountRepo := postgres.NewCloudAccountRepo(infra.pgClient.Pool())
 	cloudHandler := adapthttp.NewCloudHandler(cloudAccountRepo, nil, log)
 
-	alertNotifiers := map[string]alert.Notifier{
-		"slack":   notifier.NewSlackNotifier(),
-		"email":   notifier.NewEmailNotifier(),
-		"webhook": notifier.NewWebhookNotifier(),
-	}
+	alertNotifiers := map[string]alert.Notifier{"slack": notifier.NewSlackNotifier(), "email": notifier.NewEmailNotifier(), "webhook": notifier.NewWebhookNotifier()}
 	ruleEngine, err := usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers, usecaseAlert.WithLogger(log))
 	if err != nil {
 		for i := len(stopFns) - 1; i >= 0; i-- {
@@ -268,7 +265,7 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	}
 
 	if infra.dockerClient != nil {
-		startDockerLogStreamer(ctx, infra.dockerClient, logAggregator, log)
+		startDockerLogStreamer(ctx, infra.dockerClient, logAggregator, centralizedLogs, log)
 	}
 
 	platformHandlers := &adapthttp.PlatformHandlers{
@@ -321,12 +318,9 @@ func initLLMRegistry(cfg *config.Config, log *zap.Logger) *llm.ProviderRegistry 
 	for _, p := range cfg.LLM.Providers {
 		var c llm.Client
 		switch p.Type {
-		case "ollama":
-			c = llm.NewOllamaClientDynamic(llm.OllamaClientConfig{Endpoint: p.Endpoint, Model: p.Model})
-		case "openai":
-			c = llm.NewOpenAIClient(p.Endpoint, p.Model, p.APIKey)
-		case "vllm":
-			c = llm.NewVLLMClient(p.Endpoint, p.Model, p.APIKey)
+		case "ollama": c = llm.NewOllamaClientDynamic(llm.OllamaClientConfig{Endpoint: p.Endpoint, Model: p.Model})
+		case "openai": c = llm.NewOpenAIClient(p.Endpoint, p.Model, p.APIKey)
+		case "vllm":   c = llm.NewVLLMClient(p.Endpoint, p.Model, p.APIKey)
 		default:
 			log.Warn("unknown LLM provider type, skipping", zap.String("type", p.Type))
 			continue
@@ -342,7 +336,7 @@ func initLLMRegistry(cfg *config.Config, log *zap.Logger) *llm.ProviderRegistry 
 	return registry
 }
 
-func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Client, logAggregator *logging.LogAggregator, log *zap.Logger) {
+func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Client, logAggregator *logging.LogAggregator, centralizedLogs *adapthttp.LogHandler, log *zap.Logger) {
 	go func() {
 		containers, err := dockerClient.ContainerList(ctx, container.ListOptions{All: true})
 		if err != nil {
@@ -369,10 +363,11 @@ func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Clie
 					for scanner.Scan() {
 						line := strings.TrimSpace(scanner.Text())
 						if line == "" { continue }
-						logAggregator.Ingest(logging.LogEntry{
-							Timestamp: time.Now().UTC(), Namespace: namespace, Pod: name, Container: name,
-							Stream: stream, Level: detectLogLevel(line, defaultLvl), Message: line,
-						})
+						lvl := detectLogLevel(line, defaultLvl)
+						logAggregator.Ingest(logging.LogEntry{Timestamp: time.Now().UTC(), Namespace: namespace, Pod: name, Container: name, Stream: stream, Level: lvl, Message: line})
+						if centralizedLogs != nil {
+							_ = centralizedLogs.Ingest(ctx, []domainLogging.LogEntry{{Timestamp: time.Now().UTC(), TenantID: "default-tenant", ClusterID: "default", Namespace: namespace, PodName: name, ContainerName: name, Stream: stream, LogLevel: domainLogging.LogLevel(strings.ToLower(lvl)), Message: line, TraceID: extractTraceID(line), Attributes: map[string]string{"service": name}}})
+						}
 					}
 				}
 				go pipeStream(stdoutReader, "stdout", "INFO")
@@ -385,34 +380,40 @@ func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Clie
 	}()
 }
 
-func detectLogLevel(msg string, defaultLvl string) string {
+func detectLogLevel(msg, defaultLvl string) string {
 	u := strings.ToUpper(msg)
 	switch {
-	case strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC") || strings.Contains(u, "ERR"):
-		return "ERROR"
-	case strings.Contains(u, "WARN"):
-		return "WARN"
-	case strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE"):
-		return "DEBUG"
-	case strings.Contains(u, "INFO"):
-		return "INFO"
-	default:
-		return defaultLvl
+	case strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC") || strings.Contains(u, "ERR"): return "ERROR"
+	case strings.Contains(u, "WARN"): return "WARN"
+	case strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE"): return "DEBUG"
+	case strings.Contains(u, "INFO"): return "INFO"
+	default: return defaultLvl
 	}
 }
 
 func getContainerNamespace(name string) string {
 	l := strings.ToLower(name)
 	switch {
-	case strings.Contains(l, "log") || strings.Contains(l, "nats"):
-		return "logging"
-	case strings.Contains(l, "vault"):
-		return "vault"
-	case strings.Contains(l, "stage") || strings.Contains(l, "staging"):
-		return "staging"
-	default:
-		return "production"
+	case strings.Contains(l, "log") || strings.Contains(l, "nats"): return "logging"
+	case strings.Contains(l, "vault"): return "vault"
+	case strings.Contains(l, "stage") || strings.Contains(l, "staging"): return "staging"
+	default: return "production"
 	}
+}
+
+func extractTraceID(msg string) string {
+	for _, p := range []string{`"trace_id":`, `"traceId":`, `trace_id=`, `traceId=`, `trace-id=`} {
+		if idx := strings.Index(msg, p); idx != -1 {
+			rest := strings.TrimSpace(msg[idx+len(p):])
+			if len(rest) > 0 {
+				if rest[0] == '"' || rest[0] == 0x27 {
+					if end := strings.IndexByte(rest[1:], rest[0]); end != -1 { return strings.TrimSpace(rest[1 : end+1]) }
+				} else if end := strings.IndexAny(rest, " \t\r\n,;{}]"); end != -1 { return strings.TrimSpace(rest[:end])
+				} else { return rest }
+			}
+		}
+	}
+	return ""
 }
 
 func wireCentralizedLogging(ctx context.Context, log *zap.Logger) (*adapthttp.LogHandler, func()) {
@@ -445,8 +446,19 @@ func wireCentralizedLogging(ctx context.Context, log *zap.Logger) (*adapthttp.Lo
 		cancel()
 		if err == nil {
 			log.Info("ClickHouse centralized logging connected", zap.String("host", cfg.Host))
-			service := usecaseLogging.NewService(infraClickhouse.NewLogRepository(client, nil))
-			return adapthttp.NewLogHandler(service, &chStatusProvider{client: client}), func() { _ = client.Close() }
+			if conn, cErr := client.Conn(ctx); cErr == nil {
+				if mErr := infraClickhouse.RunMigrations(ctx, conn); mErr != nil {
+					log.Warn("ClickHouse migration failed", zap.Error(mErr))
+				}
+			}
+			bw := infraClickhouse.NewBatchWriter(client, infraClickhouse.BatchConfig{BatchSize: 5000, FlushInterval: 2 * time.Second, BufferCap: 50000})
+			bw.Start(ctx)
+			repo := infraClickhouse.NewLogRepository(client, bw)
+			service := usecaseLogging.NewService(repo)
+			return adapthttp.NewLogHandler(service, &chStatusProvider{client: client, repo: repo}), func() {
+				_ = bw.Stop()
+				_ = client.Close()
+			}
 		}
 		log.Warn("ClickHouse connection failed, using in-memory ringbuffer fallback", zap.Error(err))
 	} else {
@@ -459,6 +471,12 @@ func wireCentralizedLogging(ctx context.Context, log *zap.Logger) (*adapthttp.Lo
 
 type chStatusProvider struct {
 	client *infraClickhouse.Client
+	repo   *infraClickhouse.LogRepository
+}
+
+func (p *chStatusProvider) QuerySurroundingContext(ctx context.Context, service string, timestamp time.Time, window int) ([]domainLogging.LogEntry, error) {
+	if p.repo != nil { return p.repo.QuerySurroundingContext(ctx, service, timestamp, window) }
+	return nil, fmt.Errorf("clickhouse repository unavailable")
 }
 
 func (p *chStatusProvider) GetStatus(ctx context.Context) (*adapthttp.LogEngineStatus, error) {
@@ -466,21 +484,11 @@ func (p *chStatusProvider) GetStatus(ctx context.Context) (*adapthttp.LogEngineS
 	err := p.client.Ping(ctx)
 	latency := float64(time.Since(start).Microseconds()) / 1000.0
 	status := "connected"
-	if err != nil {
-		status = "fallback"
-	}
+	if err != nil { status = "fallback" }
 	var total int64
 	if conn, cErr := p.client.Conn(ctx); cErr == nil {
 		var cnt uint64
-		if scanErr := conn.QueryRow(ctx, "SELECT count() FROM cluster_logs").Scan(&cnt); scanErr == nil {
-			total = int64(cnt)
-		}
+		if scanErr := conn.QueryRow(ctx, "SELECT count() FROM cluster_logs").Scan(&cnt); scanErr == nil { total = int64(cnt) }
 	}
-	return &adapthttp.LogEngineStatus{
-		Engine:        "ClickHouse MergeTree",
-		Status:        status,
-		LatencyMS:     latency,
-		TotalRecords:  total,
-		RetentionDays: 30,
-	}, nil
+	return &adapthttp.LogEngineStatus{Engine: "ClickHouse MergeTree", Status: status, LatencyMS: latency, TotalRecords: total, RetentionDays: 30}, nil
 }
