@@ -45,20 +45,6 @@ onMounted(() => {
 
 <template>
   <div class="reports-page reports-view">
-    <!-- Slim Executive Header -->
-    <div class="page-header desktop-header desktop-only">
-      <div class="header-titles">
-        <div class="enterprise-tag font-mono">
-          <span class="pulse-dot"></span>
-          <span>SOC2 / CIS Compliance Engine</span>
-        </div>
-        <h1 class="page-title">Compliance & Platform Reports Center</h1>
-        <p class="page-desc">
-          Automated executive audits, FinOps cloud cost optimizations, Disaster Recovery drill verifications, and DevSecOps compliance reports.
-        </p>
-      </div>
-    </div>
-
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="reports-mobile-command-bar mobile-only">
       <div class="command-bar-left">

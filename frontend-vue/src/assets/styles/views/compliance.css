@@ -159,7 +159,58 @@
   box-sizing: border-box;
 }
 
-/* 5. Regulatory Frameworks Section & Gauges */
+/* 5. Regulatory Frameworks Section & Sleek Filter Strip */
+.compliance-frameworks-strip {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-radius: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  gap: 12px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.framework-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+}
+.fw-pill {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary, #94a3b8);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.fw-pill:hover, .fw-pill.active {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: var(--accent-cyan, #06b6d4);
+  color: #fff;
+}
+.pill-metric {
+  font-size: 10.5px;
+  opacity: 0.9;
+}
+.fw-actions-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
 .frameworks-section { display: flex; flex-direction: column; gap: 14px; width: 100%; }
 .framework-filters-bar { padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .standard-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

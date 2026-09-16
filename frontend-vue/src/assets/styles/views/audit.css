@@ -187,6 +187,15 @@
 .sleek-btn-reset {
   width: 26px; min-width: 26px; height: 26px; min-height: 26px; padding: 0; justify-content: center;
 }
+.sleek-btn-scan {
+  background: rgba(14, 165, 233, 0.18);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+.sleek-btn-scan:hover:not(:disabled) {
+  background: rgba(14, 165, 233, 0.3);
+  color: #fff;
+}
 .sleek-live-btn.live-active {
   background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.3); color: #34d399;
 }
@@ -213,11 +222,15 @@
     max-width: 100px;
   }
   .sleek-btn-csv .sleek-btn-text,
-  .sleek-btn-json .sleek-btn-text {
+  .sleek-btn-json .sleek-btn-text,
+  .sleek-btn-refresh .sleek-btn-text,
+  .sleek-btn-scan .sleek-btn-text {
     display: none;
   }
   .sleek-btn-csv,
-  .sleek-btn-json {
+  .sleek-btn-json,
+  .sleek-btn-refresh,
+  .sleek-btn-scan {
     width: 26px;
     min-width: 26px;
     padding: 0;

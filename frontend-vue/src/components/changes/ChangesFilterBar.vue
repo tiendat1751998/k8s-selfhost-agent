@@ -14,6 +14,7 @@ defineEmits<{
   'update:selectedCluster': [val: string]
   'update:selectedTimeWindow': [val: string]
   'update:selectedStatus': [val: string]
+  'create': []
 }>()
 
 const timeWindows = [
@@ -97,6 +98,13 @@ const statuses = [
             {{ w.label }}
           </button>
         </div>
+      </div>
+
+      <!-- Action: Submit RFC Button -->
+      <div class="filter-actions-wrap desktop-only">
+        <button type="button" class="btn btn-primary btn-sm" @click="$emit('create')">
+          <span>+ Submit Change Request</span>
+        </button>
       </div>
     </div>
   </div>

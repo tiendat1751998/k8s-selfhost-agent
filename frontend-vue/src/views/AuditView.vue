@@ -1,33 +1,5 @@
 <template>
   <div class="view-container audit-view">
-    <!-- Desktop View Header -->
-    <div class="audit-header desktop-header desktop-only">
-      <div>
-        <div class="audit-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>CONTINUOUS SECURITY & CLUSTER AUDIT</span>
-        </div>
-        <h1 class="audit-title">Enterprise Audit Trail & Governance</h1>
-        <p class="audit-desc">
-          Cryptographically signed mutation logs: tracking <span class="highlight">who</span>,
-          <span class="highlight">what</span>, <span class="highlight">when</span>, client origin IP,
-          and zero-trust policy enforcement across all cluster tenants.
-        </p>
-      </div>
-
-      <div class="audit-header-actions">
-        <span class="audit-live-badge" :class="{ 'live-active': isLiveTailing }">
-          <BaseIcon :name="isLiveTailing ? 'radio' : 'pause'" size="xs" /> <span>{{ isLiveTailing ? 'STREAMING' : 'STANDBY' }}</span>
-        </span>
-        <button class="btn btn-secondary" :disabled="isLoading" @click="fetchLogs">
-          <BaseIcon :name="isLoading ? 'clock' : 'refresh'" size="xs" /> <span>{{ isLoading ? 'Syncing...' : 'Refresh Trail' }}</span>
-        </button>
-        <button class="btn btn-primary" :disabled="isTriggeringScan" @click="triggerAuditScan">
-          <BaseIcon name="zap" size="xs" /> <span>{{ isTriggeringScan ? 'Scanning...' : 'Trigger Audit Scan' }}</span>
-        </button>
-      </div>
-    </div>
-
     <!-- Mobile 40px Command Bar (<640px) -->
     <div class="audit-mobile-command-bar mobile-only">
       <div class="command-bar-left">
@@ -97,10 +69,14 @@
       :unique-actors="uniqueActors"
       :action-types="actionTypeFilters"
       :is-live-tailing="isLiveTailing"
+      :loading="isLoading"
+      :triggering-scan="isTriggeringScan"
       @toggle-live-tail="toggleLiveTail"
       @export-json="exportToJson"
       @export-csv="exportToCsv"
       @reset-filters="resetFilters"
+      @refresh="fetchLogs"
+      @trigger-scan="triggerAuditScan"
     />
 
     <!-- 3. Desktop Audit Trail Table -->

@@ -53,14 +53,26 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
 }
+.agents-toolbar-sleek {
+  height: 38px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-radius: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  gap: 12px;
+}
 .agents-kpi-strip {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  padding: 0;
+  background: transparent;
+  border: none;
   border-radius: 8px;
   width: fit-content;
 }

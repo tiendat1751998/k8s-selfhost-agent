@@ -102,9 +102,11 @@
 
 /* 8. Tabs Bar (Zero Overflow Responsive Pill Strip) */
 .tabs-bar {
-  padding: 6px 10px; display: flex; gap: 8px; overflow-x: auto; white-space: nowrap;
+  padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; overflow-x: auto; white-space: nowrap;
   width: 100%; max-width: 100%; box-sizing: border-box; scrollbar-width: thin; -webkit-overflow-scrolling: touch;
 }
+.tabs-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.tabs-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
 .tab-btn {
   padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 600;
   color: var(--text-secondary, #94a3b8); background: transparent; border: 1px solid transparent;

@@ -51,20 +51,6 @@ const {
 
 <template>
   <div class="view-container promotions-view animate-fade-in">
-    <!-- Desktop Header (>=768px) -->
-    <div class="view-header desktop-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>PROGRESSIVE DELIVERY & GOVERNANCE PIPELINE</span>
-        </div>
-        <h1 class="view-title">Multi-Stage Release Promotions</h1>
-        <p class="view-desc">
-          Automated gate approvals and progressive environment promotion pipeline across Dev &rarr; QA &rarr; Staging &rarr; Production.
-        </p>
-      </div>
-    </div>
-
     <!-- Unified 38px Sleek Desktop Toolbar (>=768px) -->
     <div class="promotions-toolbar-sleek glass-panel desktop-only">
       <!-- Left: Standardized 30px Capsule Pill search input -->
