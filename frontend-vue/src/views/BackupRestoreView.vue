@@ -4,7 +4,6 @@ import '../assets/styles/views/backup.css'
 import '../assets/styles/components/backup-drawers.css'
 import { fleetApi } from '../api/fleet'
 import { useBackupRestore } from '../composables/useBackupRestore'
-import MetricCard from '../components/ui/MetricCard.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import BackupSchedulesTable from '../components/backup/BackupSchedulesTable.vue'
 import BackupStoragesGrid from '../components/backup/BackupStoragesGrid.vue'
@@ -34,10 +33,8 @@ const {
   showRestoreModal,
   newStorage,
   restoreParams,
-  activePoliciesCount,
   completedJobs,
   completedJobsCount,
-  failedJobsCount,
   fetchAllBackupData,
   handleCreatePolicy,
   handleCreateStorage,
@@ -64,35 +61,6 @@ onMounted(async () => {
 
 <template>
   <div class="view-container">
-    <!-- Desktop View Header -->
-    <div class="view-header desktop-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>ENTERPRISE DISASTER RECOVERY & PITR</span>
-        </div>
-        <h1 class="view-title">Dual-Target Database Backup & Instant Restore</h1>
-        <p class="view-desc">
-          Automated multi-engine database streaming (<span class="highlight">PostgreSQL, MySQL, MongoDB, Redis</span>) with <span class="highlight">zstd streaming compression</span> and cryptographic verification.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn btn-secondary" :disabled="loading" @click="fetchAllBackupData">
-          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
-        </button>
-        <button v-if="activeTab === 'policies'" class="btn btn-primary" @click="showPolicyModal = true">
-          <span>+ Create Backup Policy</span>
-        </button>
-        <button v-else-if="activeTab === 'storages'" class="btn btn-primary" @click="showStorageModal = true">
-          <span>+ Add Storage Target</span>
-        </button>
-        <button v-else-if="activeTab === 'restores'" class="btn btn-primary" @click="showRestoreModal = true">
-          <span>+ Trigger Restore</span>
-        </button>
-      </div>
-    </div>
-
     <!-- Mobile 40px Command Bar (<640px) -->
     <div class="backup-mobile-command-bar mobile-only">
       <div class="command-bar-left">
@@ -137,81 +105,70 @@ onMounted(async () => {
       <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Metric HUD Cards -->
-    <div class="metrics-grid desktop-metrics desktop-only">
-      <MetricCard
-        title="Active Backup Policies"
-        :value="policies.length"
-        badge="CONFIGURED"
-        badge-color="cyan"
-        :subtitle="`${activePoliciesCount} automated schedules enabled`"
-        icon="file-text"
-      />
-      <MetricCard
-        title="Storage Repositories"
-        :value="storages.length"
-        badge="ATTACHED"
-        badge-color="emerald"
-        subtitle="Local NVMe & S3/MinIO Targets"
-        icon="hard-drive"
-      />
-      <MetricCard
-        title="Completed Snapshots"
-        :value="completedJobsCount"
-        :trend="failedJobsCount === 0 ? 'Zero Errors' : `${failedJobsCount} Failed`"
-        :trend-type="failedJobsCount === 0 ? 'positive' : 'negative'"
-        badge="VERIFIED"
-        badge-color="emerald"
-        subtitle="Cryptographically hashed (SHA-256)"
-        icon="shield"
-      />
-      <MetricCard
-        title="Executed Restores"
-        :value="restores.length"
-        badge="PITR ENGINE"
-        badge-color="violet"
-        subtitle="Instant failover testable"
-        icon="refresh"
-      />
-    </div>
-
-    <!-- View Tabs Switcher -->
+    <!-- View Tabs Switcher & Actions Toolbar -->
     <div class="tabs-bar glass-panel">
-      <button
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'policies' }"
-        @click="activeTab = 'policies'"
-      >
-        <BaseIcon name="file-text" size="xs" /> <span>Backup Policies ({{ policies.length }})</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'storages' }"
-        @click="activeTab = 'storages'"
-      >
-        <BaseIcon name="hard-drive" size="xs" /> <span>Storage Targets ({{ storages.length }})</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'jobs' }"
-        @click="activeTab = 'jobs'"
-      >
-        <BaseIcon name="zap" size="xs" /> <span>Backup History ({{ jobs.length }})</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'restores' }"
-        @click="activeTab = 'restores'"
-      >
-        <BaseIcon name="refresh" size="xs" /> <span>Restore Actions ({{ restores.length }})</span>
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === 'cluster-dr' }"
-        @click="activeTab = 'cluster-dr'"
-      >
-        <BaseIcon name="anchor" size="xs" /> <span>Cluster DR & etcd</span>
-      </button>
+      <div class="tabs-group" role="tablist" aria-label="Backup and DR Navigation">
+        <button
+          class="tab-btn"
+          :class="{ 'tab-btn-active': activeTab === 'policies' }"
+          role="tab"
+          :aria-selected="activeTab === 'policies'"
+          @click="activeTab = 'policies'"
+        >
+          <BaseIcon name="file-text" size="xs" /> <span>Backup Policies ({{ policies.length }})</span>
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ 'tab-btn-active': activeTab === 'storages' }"
+          role="tab"
+          :aria-selected="activeTab === 'storages'"
+          @click="activeTab = 'storages'"
+        >
+          <BaseIcon name="hard-drive" size="xs" /> <span>Storage Targets ({{ storages.length }})</span>
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ 'tab-btn-active': activeTab === 'jobs' }"
+          role="tab"
+          :aria-selected="activeTab === 'jobs'"
+          @click="activeTab = 'jobs'"
+        >
+          <BaseIcon name="zap" size="xs" /> <span>Backup History ({{ jobs.length }})</span>
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ 'tab-btn-active': activeTab === 'restores' }"
+          role="tab"
+          :aria-selected="activeTab === 'restores'"
+          @click="activeTab = 'restores'"
+        >
+          <BaseIcon name="refresh" size="xs" /> <span>Restore Actions ({{ restores.length }})</span>
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ 'tab-btn-active': activeTab === 'cluster-dr' }"
+          role="tab"
+          :aria-selected="activeTab === 'cluster-dr'"
+          @click="activeTab = 'cluster-dr'"
+        >
+          <BaseIcon name="anchor" size="xs" /> <span>Cluster DR & etcd</span>
+        </button>
+      </div>
+
+      <div class="tabs-actions desktop-only">
+        <button class="btn btn-secondary btn-sm" :disabled="loading" @click="fetchAllBackupData">
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
+        </button>
+        <button v-if="activeTab === 'policies'" class="btn btn-primary btn-sm" @click="showPolicyModal = true">
+          <span>+ Create Backup Policy</span>
+        </button>
+        <button v-else-if="activeTab === 'storages'" class="btn btn-primary btn-sm" @click="showStorageModal = true">
+          <span>+ Add Storage Target</span>
+        </button>
+        <button v-else-if="activeTab === 'restores'" class="btn btn-primary btn-sm" @click="showRestoreModal = true">
+          <span>+ Trigger Restore</span>
+        </button>
+      </div>
     </div>
 
     <!-- TAB 1: POLICIES -->

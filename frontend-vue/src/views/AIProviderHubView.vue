@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import MetricCard from '../components/ui/MetricCard.vue'
 import AIProvidersGrid from '../components/aihub/AIProvidersGrid.vue'
 import AIProvidersTable from '../components/aihub/AIProvidersTable.vue'
 import AIProvidersMobileCards from '../components/aihub/AIProvidersMobileCards.vue'
@@ -19,7 +18,6 @@ const {
   quotas,
   telemetries,
   fallbackRoutes,
-  healthyProvidersCount,
   distinctModelsCount,
   avgLatency,
   failoverResilience,
@@ -46,30 +44,6 @@ const {
 
 <template>
   <div class="ai-hub-page">
-    <!-- Header -->
-    <div class="page-header desktop-header desktop-only">
-      <div class="header-titles">
-        <div class="header-badge">
-          <span class="badge badge-cyan">{{ providers.length }} LLM {{ providers.length === 1 ? 'Gateway' : 'Gateways' }}</span>
-          <span class="badge badge-emerald">Circuit Breaker Active</span>
-          <span class="badge badge-violet">Air-Gapped + Cloud Failover</span>
-        </div>
-        <h1 class="page-title">AI Provider Hub & Multi-Model Matrix</h1>
-        <p class="page-desc">
-          High-performance LLM gateway managing enterprise models across OpenAI, Anthropic, Gemini, DeepSeek, and Ollama with autonomous circuit breakers and live latency probing.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn btn-secondary" @click="activeSection = 'console'">
-          <BaseIcon name="sparkles" size="xs" /> <span>Prompt Console</span>
-        </button>
-        <button class="btn btn-primary" @click="showAddModal = true">
-          <span>+ Add Custom Provider</span>
-        </button>
-      </div>
-    </div>
-
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="aihub-mobile-command-bar mobile-only">
       <div class="command-bar-left">
@@ -113,40 +87,14 @@ const {
       <button class="banner-close" @click="error = null" aria-label="Close"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Summary Metrics -->
-    <div class="metrics-grid desktop-metrics desktop-only">
-      <MetricCard 
-        title="Active Gateways" 
-        :value="providers.length" 
-        :trend="providers.length > 0 ? 'Circuit Breakers Armed' : 'No active gateways'" 
-        :trendType="providers.length > 0 ? 'positive' : 'neutral'" 
-      />
-      <MetricCard 
-        title="Configured Models" 
-        :value="distinctModelsCount" 
-        :trend="distinctModelsCount > 0 ? `${providers.length} Endpoints Active` : 'No models registered'" 
-        trendType="neutral" 
-      />
-      <MetricCard 
-        title="Avg Gateway Latency" 
-        :value="avgLatency" 
-        :trend="avgLatency !== '—' ? 'Live Telemetry Probe' : 'No latency probes yet'" 
-        :trendType="avgLatency !== '—' ? 'positive' : 'neutral'" 
-      />
-      <MetricCard 
-        title="Failover Resilience" 
-        :value="failoverResilience" 
-        :trend="failoverResilience !== '—' ? `${healthyProvidersCount}/${providers.length} Endpoints Healthy` : 'No active gateways'" 
-        :trendType="failoverResilience !== '—' ? 'positive' : 'neutral'" 
-      />
-    </div>
-
-    <!-- Navigation Tabs -->
+    <!-- Navigation Tabs & Toolbar Actions -->
     <div class="view-tabs-bar glass-panel">
-      <div class="view-tabs">
+      <div class="view-tabs" role="tablist" aria-label="AI Hub Views">
         <button 
           class="vtab-btn" 
           :class="{ active: activeSection === 'providers' || activeSection === 'matrix' }" 
+          role="tab"
+          :aria-selected="activeSection === 'providers' || activeSection === 'matrix'"
           @click="activeSection = 'providers'"
         >
           <BaseIcon name="grid" size="xs" /> <span>Grid Matrix</span>
@@ -155,6 +103,8 @@ const {
         <button 
           class="vtab-btn" 
           :class="{ active: activeSection === 'table' }" 
+          role="tab"
+          :aria-selected="activeSection === 'table'"
           @click="activeSection = 'table'"
         >
           <BaseIcon name="file-text" size="xs" /> <span>Routes Table</span>
@@ -162,6 +112,8 @@ const {
         <button 
           class="vtab-btn" 
           :class="{ active: activeSection === 'mobile' }" 
+          role="tab"
+          :aria-selected="activeSection === 'mobile'"
           @click="activeSection = 'mobile'"
         >
           <BaseIcon name="box" size="xs" /> <span>Mobile Stream</span>
@@ -169,9 +121,20 @@ const {
         <button 
           class="vtab-btn" 
           :class="{ active: activeSection === 'console' }" 
+          role="tab"
+          :aria-selected="activeSection === 'console'"
           @click="activeSection = 'console'"
         >
           <BaseIcon name="sparkles" size="xs" /> <span>Interactive Prompt Console</span>
+        </button>
+      </div>
+
+      <div class="view-tabs-actions desktop-only">
+        <button class="btn btn-secondary btn-sm" @click="activeSection = 'console'">
+          <BaseIcon name="sparkles" size="xs" /> <span>Prompt Console</span>
+        </button>
+        <button class="btn btn-primary btn-sm" @click="showAddModal = true">
+          <span>+ Add Custom Provider</span>
         </button>
       </div>
     </div>

@@ -3,7 +3,6 @@ import { ref, computed } from 'vue'
 import '../assets/styles/views/changes.css'
 import '../assets/styles/components/changes-drawers.css'
 import { useChangesTimeline } from '../composables/useChangesTimeline'
-import ChangesHudCards from '../components/changes/ChangesHudCards.vue'
 import ChangesFilterBar from '../components/changes/ChangesFilterBar.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import ChangesTimelineStream from '../components/changes/ChangesTimelineStream.vue'
@@ -29,7 +28,6 @@ const {
   totalChanges24h,
   totalRollbacks,
   configDrifts,
-  highRiskMutations,
   loadTimelineData,
   handleApprove,
   handleReject,
@@ -51,28 +49,6 @@ const rolloutsCount = computed(() => {
 
 <template>
   <div class="changes-page">
-    <!-- Desktop Header -->
-    <div class="page-header desktop-header desktop-only">
-      <div class="header-titles">
-        <div class="header-title-row">
-          <h1 class="page-title">Enterprise Change Management (RFC)</h1>
-          <div class="header-badge">
-            <span class="badge badge-cyan">ITIL Change Governance</span>
-            <span class="badge badge-emerald">Audit Trail Enforced</span>
-          </div>
-        </div>
-        <p class="page-desc">
-          Review, approve, and execute production cluster configuration modifications, emergency hotfixes, and maintenance windows with four-eyes verification.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn btn-primary" @click="showCreateModal = true">
-          <span>+ Submit Change Request</span>
-        </button>
-      </div>
-    </div>
-
     <!-- Mobile 40-44px Command Bar (<768px) -->
     <div class="changes-mobile-command-bar mobile-only">
       <div class="command-bar-left">
@@ -126,16 +102,6 @@ const rolloutsCount = computed(() => {
       <span>{{ feedbackMessage }}</span>
     </div>
 
-    <!-- HUD KPI Cards (Desktop & Tablet 2x2, suppressed on <768px) -->
-    <div class="changes-hud-wrapper desktop-only">
-      <ChangesHudCards
-        :totalChanges="totalChanges24h"
-        :totalRollbacks="totalRollbacks"
-        :configDrifts="configDrifts"
-        :highRiskMutations="highRiskMutations"
-      />
-    </div>
-
     <!-- Active Maintenance Windows Banner -->
     <div v-if="maintenanceWindows.length > 0" class="maintenance-bar glass-panel">
       <div class="mw-header">
@@ -177,6 +143,7 @@ const rolloutsCount = computed(() => {
       v-model:selectedTimeWindow="selectedTimeWindow"
       v-model:selectedStatus="selectedStatus"
       :clusters="availableClusters"
+      @create="showCreateModal = true"
     />
 
     <!-- Desktop: Interactive Timeline Stream (Zero horizontal overflow) -->

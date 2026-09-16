@@ -91,8 +91,20 @@
   gap: 16px;
 }
 
-/* View Tabs Bar */
-.view-tabs-bar { padding: 10px 16px; }
+/* View Tabs Bar & Toolbar */
+.view-tabs-bar {
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.view-tabs-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
 .view-tabs {
   display: flex;
   gap: 8px;

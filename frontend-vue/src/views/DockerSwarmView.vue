@@ -99,29 +99,6 @@ const searchPlaceholder = computed(() => {
 
 <template>
   <div class="view-container animate-fade-in">
-    <!-- Desktop Header (>=768px) -->
-    <div class="view-header desktop-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>STANDALONE DOCKER & SWARM COMPUTE ENGINE</span>
-        </div>
-        <h1 class="view-title">Docker Swarm & Container Racks</h1>
-        <p class="view-desc">
-          Compute node rack telemetry, active swarm services, standalone containers, and streaming log consoles.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn btn-primary" @click="showDeployModal = true">
-          <span><BaseIcon name="play" size="xs" /> Deploy Stack</span>
-        </button>
-        <button class="btn btn-secondary" :disabled="loading" @click="fetchDockerData">
-          <span><BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Querying...' : 'Refresh Daemon' }}</span>
-        </button>
-      </div>
-    </div>
-
     <!-- Mobile 44px Command Bar (<768px) -->
     <div class="swarm-mobile-command-bar mobile-only">
       <div class="command-bar-left">
@@ -279,6 +256,16 @@ const searchPlaceholder = computed(() => {
           @click="searchQuery = ''"
         >
           <BaseIcon name="x" size="xs" />
+        </button>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="swarm-toolbar-actions desktop-only">
+        <button class="btn btn-primary btn-sm" @click="showDeployModal = true">
+          <span><BaseIcon name="play" size="xs" /> Deploy Stack</span>
+        </button>
+        <button class="btn btn-secondary btn-sm" :disabled="loading" @click="fetchDockerData">
+          <span><BaseIcon :name="loading ? 'activity' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Querying...' : 'Refresh' }}</span>
         </button>
       </div>
     </div>

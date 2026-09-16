@@ -20,32 +20,19 @@ const {
 
 <template>
   <div class="agents-view-container agents-view agents-page animate-fade-in">
-    <!-- Desktop Header -->
-    <div class="view-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>SPECIALIZED MULTI-AGENT SWARM ORCHESTRATION</span>
-        </div>
-        <h1 class="view-title">Multi-Agent Pipeline & Task DAG</h1>
-        <p class="view-desc">
-          DAG task execution graph, specialized role delegators (Architect, GitOps, Kubernetes, QA), and live terminal step telemetry.
-        </p>
+    <!-- Sleek 38px Enterprise Desktop Toolbar (>=768px) -->
+    <div class="agents-toolbar-sleek glass-panel desktop-only">
+      <div class="agents-kpi-strip font-mono text-muted">
+        <span>Arch Score: {{ Math.round((projectState?.architecture_score || 1) * 100) }}%</span> · <span>Repo Health: {{ Math.round((projectState?.repository_health || 1) * 100) }}%</span> · <span>Backlog: {{ completedTasksCount }}/{{ tasks.length }}</span> · <span>Executions: {{ executions.length }}</span>
       </div>
-
-      <div class="header-actions">
-        <button class="btn btn-secondary" :disabled="loading" @click="fetchAgentData">
+      <div class="toolbar-actions-group">
+        <button class="btn btn-secondary btn-sm" :disabled="loading" @click="fetchAgentData">
           <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" /> <span>{{ loading ? 'Syncing...' : 'Refresh Swarm' }}</span>
         </button>
-        <button class="btn btn-primary" @click="showDispatchModal = true">
+        <button class="btn btn-primary btn-sm" @click="showDispatchModal = true">
           <span>+ Dispatch Task</span>
         </button>
       </div>
-    </div>
-
-    <!-- Single-Line KPI Strip (Desktop) -->
-    <div class="agents-kpi-strip font-mono text-muted desktop-only">
-      <span>Arch Score: {{ Math.round((projectState?.architecture_score || 1) * 100) }}%</span> · <span>Repo Health: {{ Math.round((projectState?.repository_health || 1) * 100) }}%</span> · <span>Backlog: {{ completedTasksCount }}/{{ tasks.length }}</span> · <span>Executions: {{ executions.length }}</span>
     </div>
 
     <!-- Mobile 44px Command Bar (<768px) -->

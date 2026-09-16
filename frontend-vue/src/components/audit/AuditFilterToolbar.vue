@@ -12,6 +12,8 @@ const props = defineProps<{
   uniqueActors: string[]
   actionTypes: { key: 'all' | AuditActionType; label: string; count: number }[]
   isLiveTailing: boolean
+  loading?: boolean
+  triggeringScan?: boolean
   metrics?: {
     totalEvents: number
     securityMutations: number
@@ -32,6 +34,8 @@ const emit = defineEmits<{
   (e: 'export-json'): void
   (e: 'export-csv'): void
   (e: 'reset-filters'): void
+  (e: 'refresh'): void
+  (e: 'trigger-scan'): void
 }>()
 
 const isMobileExpanded = ref(false)
@@ -162,8 +166,32 @@ function formatActorLabel(actor: string): string {
       </select>
     </div>
 
-    <!-- Right: Action buttons (Live streaming toggle, CSV, JSON, and Reset icon button) -->
+    <!-- Right: Action buttons (Refresh, Scan, Live streaming toggle, CSV, JSON, and Reset icon button) -->
     <div class="sleek-actions-group">
+      <button
+        class="sleek-btn sleek-btn-refresh"
+        type="button"
+        :disabled="loading"
+        title="Refresh Trail"
+        aria-label="Refresh Trail"
+        @click="$emit('refresh')"
+      >
+        <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" />
+        <span class="sleek-btn-text">{{ loading ? 'Syncing...' : 'Refresh' }}</span>
+      </button>
+
+      <button
+        class="sleek-btn sleek-btn-scan"
+        type="button"
+        :disabled="triggeringScan"
+        title="Trigger Audit Scan"
+        aria-label="Trigger Audit Scan"
+        @click="$emit('trigger-scan')"
+      >
+        <BaseIcon name="zap" size="xs" />
+        <span class="sleek-btn-text">{{ triggeringScan ? 'Scanning...' : 'Scan' }}</span>
+      </button>
+
       <button
         class="sleek-btn sleek-live-btn"
         :class="{ 'live-active': isLiveTailing }"
@@ -309,6 +337,26 @@ function formatActorLabel(actor: string): string {
       </div>
 
       <div class="toolbar-mobile-actions mobile-only">
+        <button
+          class="btn btn-secondary btn-sm"
+          :disabled="loading"
+          type="button"
+          title="Refresh Trail"
+          aria-label="Refresh Trail"
+          @click="$emit('refresh')"
+        >
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>Refresh</span>
+        </button>
+        <button
+          class="btn btn-primary btn-sm"
+          :disabled="triggeringScan"
+          type="button"
+          title="Trigger Audit Scan"
+          aria-label="Trigger Audit Scan"
+          @click="$emit('trigger-scan')"
+        >
+          <BaseIcon name="zap" size="xs" /> <span>Scan</span>
+        </button>
         <button
           class="btn btn-secondary btn-sm"
           :class="{ 'btn-primary': isLiveTailing }"

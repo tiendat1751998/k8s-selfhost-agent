@@ -5,7 +5,6 @@ import '../assets/styles/components/compliance-drawers.css'
 import { useCompliance } from '../composables/useCompliance'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import ComplianceScoreCards from '../components/compliance/ComplianceScoreCards.vue'
 import ComplianceFrameworksGrid from '../components/compliance/ComplianceFrameworksGrid.vue'
 import ComplianceControlsTable from '../components/compliance/ComplianceControlsTable.vue'
 import ComplianceMobileCards from '../components/compliance/ComplianceMobileCards.vue'
@@ -19,8 +18,6 @@ const {
   selectedFrameworkId,
   selectedStandard,
   activeSeverity,
-  auditStatus,
-  latestRun,
   selectedViolation,
   modalMode,
   overallScore,
@@ -47,29 +44,6 @@ const {
 
 <template>
   <div class="view-container">
-    <!-- Desktop View Header (>=768px) -->
-    <div class="view-header desktop-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-emerald"></span>
-          <span>REGULATORY & POSTURE GOVERNANCE</span>
-        </div>
-        <h1 class="view-title">Compliance Frameworks & Policy Violations</h1>
-        <p class="view-desc">
-          Continuous validation against industry standards (<span class="highlight">CIS Benchmark</span>, <span class="highlight">NIST SP 800-53</span>, <span class="highlight">PCI-DSS</span>, <span class="highlight">SOC 2</span>, <span class="highlight">ISO 27001</span>, <span class="highlight">HIPAA</span>) with automated remediation guidance.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn btn-secondary" :disabled="loading || isScanning" @click="fetchComplianceData">
-          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Syncing...' : 'Refresh Posture' }}</span>
-        </button>
-        <button class="btn btn-primary" :disabled="loading || isScanning" @click="triggerScan">
-          <BaseIcon :name="isScanning ? 'clock' : 'play'" size="xs" /> <span>{{ isScanning ? 'Scanning...' : 'Run Audit Scan' }}</span>
-        </button>
-      </div>
-    </div>
-
     <!-- Mobile 44px Command Bar (<768px) -->
     <div class="compliance-mobile-command-bar mobile-only">
       <div class="command-bar-left">
@@ -137,30 +111,20 @@ const {
       <button class="banner-close" @click="error = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Top HUD Cards (Desktop Only, Overall Score, Passing Controls, Critical Failures, Automated Audit Status) -->
-    <div class="desktop-only">
-      <ComplianceScoreCards
-        :overall-score="overallScore"
-        :passing-controls="passingControlsCount"
-        :total-controls="totalControlsCount"
-        :critical-failures="criticalViolationsCount"
-        :audit-status="auditStatus"
-        :last-scan-time="latestRun?.start_time ? formatDate(latestRun.start_time) : undefined"
-      />
-    </div>
-
-    <!-- Frameworks Grid with Gauges and Quick Filters (Shown on Desktop, toggled on Mobile) -->
+    <!-- Frameworks Sleek Filter Strip -->
     <div class="frameworks-container" :class="{ 'mobile-hidden': mobileTab !== 'frameworks' }">
       <ComplianceFrameworksGrid
         :frameworks="filteredFrameworks"
         :selected-framework-id="selectedFrameworkId"
         :selected-standard="selectedStandard"
-        :loading="loading"
+        :total-controls-count="totalControlsCount"
+        :loading="loading || isScanning"
         :get-progress-color-class="getProgressColorClass"
         :format-date="formatDate"
         @select-framework="selectFramework"
         @select-standard="selectStandard"
         @run-scan="triggerScan"
+        @refresh="fetchComplianceData"
       />
     </div>
 

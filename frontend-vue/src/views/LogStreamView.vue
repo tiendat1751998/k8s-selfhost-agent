@@ -6,15 +6,14 @@ import { useHistoricalLogSearch } from '../composables/useHistoricalLogSearch'
 import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
 import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
-import ClickHouseEngineBadge from '../components/logs/ClickHouseEngineBadge.vue'
 import LogTraceDrawer from '../components/logs/LogTraceDrawer.vue'
 import LogContextModal from '../components/logs/LogContextModal.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { LogFilterParams } from '../api/logging'
 
 const {
-  logStore, searchKeyword, selectedLevel, autoScroll, isScrollLocked, linesStreamed,
-  latency, errorRate, isConnected, isPaused,
+  logStore, searchKeyword, selectedLevel, autoScroll, isScrollLocked,
+  latency, isConnected, isPaused,
   clearBuffer, scrollToBottom, handleScroll, setTerminalRef,
 } = useLogStreamer({ autoConnect: false })
 
@@ -262,12 +261,6 @@ function handleExport() {
           <button type="button" class="toolbar-btn btn-secondary" :disabled="logStore.isHistoricalLoading" title="Query ClickHouse" @click="runHistoricalQuery()"><BaseIcon name="search" size="xs" /> <span>{{ logStore.isHistoricalLoading ? 'Searching...' : 'Query ClickHouse' }}</span></button>
           <button v-if="logStore.hasMoreHistorical || logStore.totalHistoricalCount > logStore.logs.length" type="button" class="toolbar-btn btn-secondary load-more-compact" :disabled="logStore.isHistoricalLoading" title="Load more historical logs" @click="loadMoreHistorical"><span>+More ({{ logStore.logs.length }}/{{ logStore.totalHistoricalCount }})</span></button>
         </div>
-      </div>
-
-      <!-- Zone 3 (Center-Right - Telemetry & Engine Badge) -->
-      <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Live Stream Telemetry">
-        <ClickHouseEngineBadge />
-        <span class="kpi-badge font-mono"><span class="kpi-tag">[LIVE STREAM] </span><span class="kpi-metrics">{{ linesStreamed }} ev · {{ errorRate }}% err</span><span class="kpi-latency"> · {{ latency > 0 ? latency + 'ms' : '<50ms' }}</span></span>
       </div>
 
       <!-- Zone 4 (Right - Stream Actions Group) -->

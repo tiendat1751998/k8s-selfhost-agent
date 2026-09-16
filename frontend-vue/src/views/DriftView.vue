@@ -4,7 +4,6 @@ import '../assets/styles/views/drift.css'
 import '../assets/styles/components/drift-drawers.css'
 import { useDriftDetection } from '../composables/useDriftDetection'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import DriftHudCards from '../components/drift/DriftHudCards.vue'
 import DriftResourcesTable from '../components/drift/DriftResourcesTable.vue'
 import DriftMobileCards from '../components/drift/DriftMobileCards.vue'
 import DriftDiffDrawer from '../components/drift/DriftDiffDrawer.vue'
@@ -38,39 +37,6 @@ const {
 
 <template>
   <div class="view-container">
-    <!-- Desktop View Header -->
-    <header class="view-header desktop-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>GITOPS CONTINUOUS RECONCILIATION</span>
-        </div>
-        <h1 class="view-title">Configuration Drift Detection & Auto-Reconcile</h1>
-        <p class="view-desc">
-          Continuous cryptographic state comparison between Git repository manifests (<span class="highlight">Desired State</span>) and Kubernetes live etcd runtime (<span class="highlight">Actual State</span>).
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button 
-          v-if="criticalCount > 0"
-          class="btn btn-warning" 
-          :disabled="loading" 
-          title="Auto-reconcile all critical drifted workloads"
-          @click="handleBatchReconcile(true)"
-        >
-          <BaseIcon name="zap" size="xs" /> <span>Sync Critical ({{ criticalCount }})</span>
-        </button>
-        <button 
-          class="btn btn-secondary" 
-          :disabled="loading" 
-          @click="fetchDriftData"
-        >
-          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Scanning...' : 'Scan Cluster Drift' }}</span>
-        </button>
-      </div>
-    </header>
-
     <!-- Mobile 44px Command Bar (<768px) -->
     <div class="drift-mobile-command-bar mobile-only">
       <div class="command-bar-left">
@@ -164,16 +130,7 @@ const {
       <button class="banner-close" aria-label="Dismiss alert" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Metric HUD Cards -->
-    <DriftHudCards
-      class="desktop-only"
-      :drifted-count="driftedCount"
-      :critical-count="criticalCount"
-      :remediated-today-count="remediatedTodayCount"
-      :git-repos-tracked="gitReposTracked"
-    />
-
-    <!-- Desktop Filter Bar -->
+    <!-- Desktop Filter & Action Bar -->
     <div class="filter-bar glass-panel desktop-only">
       <div class="filter-group">
         <span class="filter-label">Filter Status:</span>
@@ -195,6 +152,31 @@ const {
           <option value="primary">primary</option>
           <option value="edge-node-01">edge-node-01</option>
         </select>
+      </div>
+
+      <div class="filter-telemetry font-mono">
+        <span class="kpi-pill">{{ driftedCount }} Drifted</span>
+        <span class="kpi-pill" :class="{ 'kpi-pill-critical': criticalCount > 0 }">{{ criticalCount }} Critical</span>
+        <span class="kpi-pill">{{ remediatedTodayCount }} Reconciled</span>
+      </div>
+
+      <div class="filter-actions-group">
+        <button 
+          v-if="criticalCount > 0"
+          class="btn btn-warning btn-sm" 
+          :disabled="loading" 
+          title="Auto-reconcile all critical drifted workloads"
+          @click="handleBatchReconcile(true)"
+        >
+          <BaseIcon name="zap" size="xs" /> <span>Sync Critical ({{ criticalCount }})</span>
+        </button>
+        <button 
+          class="btn btn-secondary btn-sm" 
+          :disabled="loading" 
+          @click="fetchDriftData"
+        >
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Scanning...' : 'Scan Cluster Drift' }}</span>
+        </button>
       </div>
     </div>
 
