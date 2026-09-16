@@ -39,7 +39,28 @@ if (typeof globalThis.window === 'undefined') {
 
 const { calculateVirtualWindow } = await import('../src/utils/virtualWindow.ts')
 const { detectStackTrace } = await import('../src/utils/stackTraceParser.ts')
-const { LogCircularBuffer } = await import('../src/utils/logBuffer.ts')
+let latestSocket: MockWebSocket | null = null
+class MockWebSocket {
+  onopen: ((event: any) => void) | null = null
+  onmessage: ((event: any) => void) | null = null
+  onclose: ((event: any) => void) | null = null
+  onerror: ((event: any) => void) | null = null
+  readyState = 1
+  constructor() {
+    latestSocket = this
+  }
+  send() {}
+  close() {}
+}
+// @ts-expect-error Mock global WebSocket
+globalThis.WebSocket = MockWebSocket
+if (typeof globalThis.localStorage === 'undefined') {
+  // @ts-expect-error Mock localStorage
+  globalThis.localStorage = { getItem: () => '', setItem: () => {}, removeItem: () => {} }
+}
+
+const { createPinia, setActivePinia } = await import('pinia')
+const { useLogStore } = await import('../src/stores/logStore.ts')
 const { parseWebSocketFrame } = await import('../src/utils/logBatchParser.ts')
 
 describe('Virtual Windowing Slice Math', () => {
@@ -227,44 +248,87 @@ describe('Micro-Batch Log Parsing & High-Capacity Buffer', () => {
     }
   })
 
-  it('LogCircularBuffer maintains strict capacity up to 100,000 items with O(1) appends', () => {
-    const buffer = new LogCircularBuffer(1000)
-    assert.equal(buffer.length, 0)
+  it('logStore maintains strict capacity via native array slice when appending batches', () => {
+    setActivePinia(createPinia())
+    const store = useLogStore()
+    store.clear()
+    store.setMaxBufferSize(1000)
 
-    for (let i = 0; i < 1500; i++) {
-      buffer.push({
-        time: new Date(i * 1000).toISOString(),
-        level: 'INFO',
-        namespace: 'default',
-        pod: 'pod-0',
-        msg: `log ${i}`
-      })
-    }
-
-    assert.equal(buffer.length, 1000)
-    const array = buffer.toArray()
-    assert.equal(array.length, 1000)
-    // Oldest 500 shifted out, array starts at 500 and ends at 1499
-    assert.equal(array[0].msg, 'log 500')
-    assert.equal(array[array.length - 1].msg, 'log 1499')
-  })
-
-  it('LogCircularBuffer supports pushBatch efficiently', () => {
-    const buffer = new LogCircularBuffer(500)
-    const batch = Array.from({ length: 300 }, (_, i) => ({
+    const batch = Array.from({ length: 1500 }, (_, i) => ({
       time: new Date(i * 1000).toISOString(),
       level: 'INFO',
       namespace: 'default',
       pod: 'pod-0',
-      msg: `batch-item-${i}`
+      msg: `log ${i}`
     }))
 
-    buffer.pushBatch(batch)
-    assert.equal(buffer.length, 300)
+    store.appendLogBatch(batch)
 
-    buffer.pushBatch(batch)
-    assert.equal(buffer.length, 500)
-    const array = buffer.toArray()
-    assert.equal(array[array.length - 1].msg, 'batch-item-299')
+    assert.equal(store.logs.length, 1000)
+    // Oldest 500 shifted out, array starts at 500 and ends at 1499
+    assert.equal(store.logs[0].msg, 'log 500')
+    assert.equal(store.logs[store.logs.length - 1].msg, 'log 1499')
+  })
+
+  it('logStore supports successive appendLogBatch chunking efficiently', () => {
+    setActivePinia(createPinia())
+    const store = useLogStore()
+    store.clear()
+    store.setMaxBufferSize(1000)
+
+    const batch1 = Array.from({ length: 600 }, (_, i) => ({
+      time: new Date(i * 1000).toISOString(),
+      level: 'INFO',
+      namespace: 'default',
+      pod: 'pod-0',
+      msg: `batch-1-${i}`
+    }))
+    store.appendLogBatch(batch1)
+    assert.equal(store.logs.length, 600)
+
+    const batch2 = Array.from({ length: 600 }, (_, i) => ({
+      time: new Date(600000 + i * 1000).toISOString(),
+      level: 'INFO',
+      namespace: 'default',
+      pod: 'pod-0',
+      msg: `batch-2-${i}`
+    }))
+    store.appendLogBatch(batch2)
+    assert.equal(store.logs.length, 1000)
+    assert.equal(store.logs[store.logs.length - 1].msg, 'batch-2-599')
+    assert.equal(store.logs[0].msg, 'batch-1-200')
+  })
+
+  it('logStore sets cumulative droppedLogsCount directly without compounding inflation', () => {
+    setActivePinia(createPinia())
+    const store = useLogStore()
+    store.clear()
+    store.resetDroppedLogsCount()
+
+    store.connect({ service: 'auth' })
+    assert.ok(latestSocket, 'WebSocket instance must be instantiated')
+
+    // First telemetry frame reports cumulative 50 dropped logs
+    latestSocket.onmessage!({
+      data: JSON.stringify({
+        type: 'stream_telemetry',
+        dropped_count: 50,
+        stream_rate: 12000
+      })
+    })
+    assert.equal(store.droppedLogsCount, 50)
+
+    // Second telemetry frame 1 second later reports cumulative 55 dropped logs
+    latestSocket.onmessage!({
+      data: JSON.stringify({
+        type: 'stream_telemetry',
+        dropped_count: 55,
+        stream_rate: 12500
+      })
+    })
+    // Before bugfix (+=), this would be 105. With fix (=), it is 55.
+    assert.equal(store.droppedLogsCount, 55)
+
+    store.disconnect()
   })
 })

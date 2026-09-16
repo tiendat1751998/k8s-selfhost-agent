@@ -180,7 +180,7 @@ export const useLogStore = defineStore('log', () => {
         if (isPaused.value) return
         const parsed = parseWebSocketFrame(event.data, opts.namespace || 'default', opts.service)
         if (parsed.type === 'telemetry') {
-          droppedLogsCount.value += parsed.droppedCount
+          droppedLogsCount.value = parsed.droppedCount
           streamRate.value = parsed.streamRate
         } else if (parsed.type === 'logs') {
           appendLogBatch(parsed.entries)
