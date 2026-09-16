@@ -5,13 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,7 +17,6 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // LoggingService defines the operations needed for log ingestion, querying, and streaming.
@@ -65,20 +61,12 @@ func (h *LogHandler) Ingest(ctx context.Context, entries []logging.LogEntry) err
 	return h.service.Ingest(ctx, entries)
 }
 
-func getContainerAliases(t string) []string {
-	if s := strings.ToLower(strings.TrimSpace(t)); s == "postgres_db" || s == "postgres" {
-		return []string{"postgres_db", "postgres"}
-	}
-	if t != "" {
-		return []string{t}
-	}
-	return nil
-}
-
 // RegisterRoutes mounts the centralized log routes.
 func (h *LogHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/ingest", h.HandleIngest)
 	r.Get("/search", h.HandleSearch)
+	r.Get("/context", h.HandleSurroundingContext)
+	r.Get("/trace/{traceId}", h.HandleTraceQuery)
 	r.Get("/histogram", h.HandleHistogram)
 	r.Get("/stream", h.HandleStream)
 	r.Get("/status", h.HandleStatus)
@@ -203,7 +191,7 @@ func (h *LogHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		SearchText:    firstNonEmpty(q.Get("query"), q.Get("search_text"), q.Get("q")),
 		StartTime:     startTime,
 		EndTime:       endTime,
-		Limit:         parseIntParam(r, "limit", 50),
+		Limit:         parseIntParam(r, "limit", 500),
 		Offset:        parseIntParam(r, "offset", 0),
 	}
 	filter.Sanitize()
@@ -214,44 +202,8 @@ func (h *LogHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		filter.Attributes["node"] = nodeParam
 	}
 
-	aliases := getContainerAliases(filter.ContainerName)
-	if len(aliases) > 1 {
-		var allEntries []logging.LogEntry
-		seen := make(map[string]bool)
-		for _, alias := range aliases {
-			af := filter
-			af.ContainerName, af.ServiceName = alias, alias
-			subRes, subErr := h.service.QueryLogs(r.Context(), af)
-			if subErr != nil || subRes == nil {
-				continue
-			}
-			for _, e := range subRes.Entries {
-				if strings.TrimSpace(e.Message) == "-- No entries --" {
-					continue
-				}
-				key := fmt.Sprintf("%d|%s|%s", e.Timestamp.UnixNano(), e.ContainerName, e.Message)
-				if !seen[key] {
-					seen[key] = true
-					allEntries = append(allEntries, e)
-				}
-			}
-		}
-		sort.SliceStable(allEntries, func(i, j int) bool { return allEntries[i].Timestamp.After(allEntries[j].Timestamp) })
-		totalCount := int64(len(allEntries))
-		offset, limit := filter.Offset, filter.Limit
-		if limit <= 0 { limit = 50 }
-		paged := []logging.LogEntry{}
-		if offset < len(allEntries) {
-			end := offset + limit
-			if end > len(allEntries) { end = len(allEntries) }
-			paged = allEntries[offset:end]
-		}
-		sort.SliceStable(paged, func(i, j int) bool {
-			return paged[i].Timestamp.Before(paged[j].Timestamp)
-		})
-		writeJSON(w, http.StatusOK, &logging.LogSearchResult{
-			Entries: paged, TotalCount: totalCount, HasMore: offset+len(paged) < len(allEntries),
-		})
+	if aliases := getContainerAliases(filter.ContainerName); len(aliases) > 1 {
+		writeJSON(w, http.StatusOK, queryAliases(r.Context(), h.service, filter, aliases))
 		return
 	}
 
@@ -347,34 +299,9 @@ func (h *LogHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 		SearchText:    firstNonEmpty(q.Get("query"), q.Get("search_text")),
 	}
 
-	aliases := getContainerAliases(filter.ContainerName)
 	var ch <-chan logging.LogEntry
-	if len(aliases) > 1 {
-		mergedCh := make(chan logging.LogEntry, 100)
-		var tailWg sync.WaitGroup
-		for _, alias := range aliases {
-			af := filter
-			af.ContainerName, af.ServiceName = alias, alias
-			ach, tErr := h.service.TailLogs(ctx, af)
-			if tErr != nil { continue }
-			tailWg.Add(1)
-			go func(c <-chan logging.LogEntry) {
-				defer tailWg.Done()
-				for {
-					select {
-					case <-ctx.Done(): return
-					case e, ok := <-c:
-						if !ok { return }
-						select {
-						case <-ctx.Done(): return
-						case mergedCh <- e:
-						}
-					}
-				}
-			}(ach)
-		}
-		go func() { tailWg.Wait(); close(mergedCh) }()
-		ch = mergedCh
+	if aliases := getContainerAliases(filter.ContainerName); len(aliases) > 1 {
+		ch = tailAliases(ctx, h.service, filter, aliases)
 	} else {
 		var tErr error
 		ch, tErr = h.service.TailLogs(ctx, filter)
@@ -414,54 +341,6 @@ func (h *LogHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func resolveTenant(ctx context.Context, r *http.Request) string {
-	if tenantID := tenancy.TenantIDFromContext(ctx); strings.TrimSpace(tenantID) != "" {
-		return strings.TrimSpace(tenantID)
-	}
-	if r != nil {
-		if hTenant := strings.TrimSpace(r.Header.Get("X-Tenant-ID")); hTenant != "" {
-			return hTenant
-		}
-	}
-	return ""
-}
-
-func firstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
-}
-
-func parseLogLevelParam(q url.Values, key string) (logging.LogLevel, error) {
-	s := firstNonEmpty(q.Get(key), q.Get("level"))
-	if s != "" {
-		return logging.ParseLogLevel(s)
-	}
-	return "", nil
-}
-
-func parseTimeRangeParams(q url.Values) (time.Time, time.Time, error) {
-	var startTime, endTime time.Time
-	if s := q.Get("start_time"); s != "" {
-		t, err := time.Parse(time.RFC3339, s)
-		if err != nil {
-			return time.Time{}, time.Time{}, errors.New("invalid start_time format (RFC3339 required)")
-		}
-		startTime = t
-	}
-	if s := q.Get("end_time"); s != "" {
-		t, err := time.Parse(time.RFC3339, s)
-		if err != nil {
-			return time.Time{}, time.Time{}, errors.New("invalid end_time format (RFC3339 required)")
-		}
-		endTime = t
-	}
-	return startTime, endTime, nil
-}
-
 // HandleGetServices returns a deduplicated list of discovered services across compute hosts.
 func (h *LogHandler) HandleGetServices(w http.ResponseWriter, r *http.Request) {
 	type serviceLister interface {
@@ -484,4 +363,93 @@ func (h *LogHandler) HandleGetServices(w http.ResponseWriter, r *http.Request) {
 		services = []string{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"services": services})
+}
+
+// HandleSurroundingContext retrieves log context around an event for a service.
+func (h *LogHandler) HandleSurroundingContext(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeError(w, http.StatusServiceUnavailable, "logging service unavailable", nil)
+		return
+	}
+	q := r.URL.Query()
+	service := firstNonEmpty(q.Get("service"), q.Get("container"), q.Get("pod"))
+	tsStr := q.Get("timestamp")
+	if tsStr == "" {
+		writeError(w, http.StatusBadRequest, "timestamp parameter is required", nil)
+		return
+	}
+	ts, err := time.Parse(time.RFC3339, tsStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid timestamp format (RFC3339 required)", err)
+		return
+	}
+	window := parseIntParam(r, "window", 50)
+	if window <= 0 { window = 50 }
+	if window > 500 { window = 500 }
+
+	var (
+		entries []logging.LogEntry
+		qErr    error
+	)
+	if scq, ok := h.service.(logging.SurroundingContextQuerier); ok {
+		entries, qErr = scq.QuerySurroundingContext(r.Context(), service, ts, window)
+	} else if scq, ok := h.statusProvider.(logging.SurroundingContextQuerier); ok {
+		entries, qErr = scq.QuerySurroundingContext(r.Context(), service, ts, window)
+	} else {
+		filter := logging.LogFilter{
+			TenantID:      resolveTenant(r.Context(), r),
+			ServiceName:   service,
+			ContainerName: service,
+			StartTime:     ts.Add(-5 * time.Minute),
+			EndTime:       ts.Add(5 * time.Minute),
+			Limit:         window * 2,
+		}
+		filter.Sanitize()
+		res, err := h.service.QueryLogs(r.Context(), filter)
+		if err != nil { qErr = err } else if res != nil { entries = res.Entries }
+	}
+	if qErr != nil {
+		writeError(w, http.StatusInternalServerError, "failed to query surrounding context", qErr)
+		return
+	}
+	if entries == nil { entries = []logging.LogEntry{} }
+	writeJSON(w, http.StatusOK, map[string]any{
+		"entries": entries, "total_count": len(entries), "window": window,
+	})
+}
+
+// HandleTraceQuery retrieves all logs correlating to a distributed trace across all services.
+func (h *LogHandler) HandleTraceQuery(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeError(w, http.StatusServiceUnavailable, "logging service unavailable", nil)
+		return
+	}
+	traceID := chi.URLParam(r, "traceId")
+	if strings.TrimSpace(traceID) == "" {
+		traceID = r.URL.Query().Get("trace_id")
+	}
+	if strings.TrimSpace(traceID) == "" {
+		writeError(w, http.StatusBadRequest, "traceId parameter is required", nil)
+		return
+	}
+	filter := logging.LogFilter{
+		TenantID: resolveTenant(r.Context(), r),
+		TraceID:  traceID,
+		Limit:    parseIntParam(r, "limit", 1000),
+	}
+	filter.Sanitize()
+	res, err := h.service.QueryLogs(r.Context(), filter)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to query logs by trace", err)
+		return
+	}
+	var entries []logging.LogEntry
+	if res != nil { entries = res.Entries }
+	if entries == nil { entries = []logging.LogEntry{} }
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i].Timestamp.Before(entries[j].Timestamp)
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"trace_id": traceID, "entries": entries, "total_count": len(entries),
+	})
 }

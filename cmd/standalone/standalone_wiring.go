@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/adapter/event"
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	infraClickhouse "github.com/datdt/k8sselfhost/internal/infrastructure/clickhouse"
+	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	usecaseLogging "github.com/datdt/k8sselfhost/internal/usecase/logging"
 	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
@@ -365,8 +366,19 @@ func wireCentralizedLogging(ctx context.Context, log *zap.Logger, computeHostRep
 		cancel()
 		if err == nil {
 			log.Info("ClickHouse centralized logging connected", zap.String("host", cfg.Host))
-			service := usecaseLogging.NewService(infraClickhouse.NewLogRepository(client, nil))
-			return adapthttp.NewLogHandler(service, &chStatusProvider{client: client}), func() { _ = client.Close() }
+			if conn, cErr := client.Conn(ctx); cErr == nil {
+				if mErr := infraClickhouse.RunMigrations(ctx, conn); mErr != nil {
+					log.Warn("ClickHouse migration failed", zap.Error(mErr))
+				}
+			}
+			batchWriter := infraClickhouse.NewBatchWriter(client, infraClickhouse.BatchConfig{BatchSize: 5000, FlushInterval: 2 * time.Second, BufferCap: 50000})
+			batchWriter.Start(ctx)
+			repo := infraClickhouse.NewLogRepository(client, batchWriter)
+			service := usecaseLogging.NewService(repo)
+			return adapthttp.NewLogHandler(service, &chStatusProvider{client: client, repo: repo}), func() {
+				_ = batchWriter.Stop()
+				_ = client.Close()
+			}
 		}
 		log.Warn("ClickHouse connection failed, falling back to distributed edge log engine", zap.Error(err))
 	} else {
@@ -380,6 +392,14 @@ func wireCentralizedLogging(ctx context.Context, log *zap.Logger, computeHostRep
 
 type chStatusProvider struct {
 	client *infraClickhouse.Client
+	repo   *infraClickhouse.LogRepository
+}
+
+func (p *chStatusProvider) QuerySurroundingContext(ctx context.Context, service string, timestamp time.Time, window int) ([]domainLogging.LogEntry, error) {
+	if p.repo != nil {
+		return p.repo.QuerySurroundingContext(ctx, service, timestamp, window)
+	}
+	return nil, fmt.Errorf("clickhouse repository unavailable")
 }
 
 func (p *chStatusProvider) GetStatus(ctx context.Context) (*adapthttp.LogEngineStatus, error) {

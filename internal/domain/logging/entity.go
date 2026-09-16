@@ -1,4 +1,4 @@
-package logging
+﻿package logging
 
 import (
 	"context"
@@ -64,16 +64,19 @@ func ParseLogLevel(s string) (LogLevel, error) {
 
 // LogEntry represents an immutable streaming log event.
 type LogEntry struct {
-	Timestamp     time.Time         `json:"timestamp"`
-	TenantID      string            `json:"tenant_id"`
-	ClusterID     string            `json:"cluster_id"`
-	Namespace     string            `json:"namespace"`
-	PodName       string            `json:"pod_name"`
-	ContainerName string            `json:"container_name"`
-	Stream        string            `json:"stream"`
-	LogLevel      LogLevel          `json:"log_level"`
-	Message       string            `json:"message"`
-	Attributes    map[string]string `json:"attributes,omitempty"`
+	Timestamp        time.Time         `json:"timestamp"`
+	TenantID         string            `json:"tenant_id"`
+	ClusterID        string            `json:"cluster_id"`
+	Namespace        string            `json:"namespace"`
+	PodName          string            `json:"pod_name"`
+	ContainerName    string            `json:"container_name"`
+	Stream           string            `json:"stream"`
+	LogLevel         LogLevel          `json:"log_level"`
+	Message          string            `json:"message"`
+	Attributes       map[string]string `json:"attributes,omitempty"`
+	TraceID          string            `json:"trace_id,omitempty"`
+	SpanID           string            `json:"span_id,omitempty"`
+	ErrorFingerprint string            `json:"error_fingerprint,omitempty"`
 }
 
 // Validate ensures all mandatory fields in LogEntry are populated with sensible defaults.
@@ -101,20 +104,22 @@ func (e *LogEntry) Validate() error {
 
 // LogFilter defines query parameters for log searches with sparse index support.
 type LogFilter struct {
-	TenantID      string            `json:"tenant_id"`
-	ClusterID     string            `json:"cluster_id"`
-	Namespace     string            `json:"namespace,omitempty"`
-	PodName       string            `json:"pod_name,omitempty"`
-	ContainerName string            `json:"container_name,omitempty"`
-	ServiceName   string            `json:"service_name,omitempty"`
-	Stream        string            `json:"stream,omitempty"`
-	LogLevel      LogLevel          `json:"log_level,omitempty"`
-	SearchText    string            `json:"search_text,omitempty"`
-	StartTime     time.Time         `json:"start_time"`
-	EndTime       time.Time         `json:"end_time"`
-	Limit         int               `json:"limit"`
-	Offset        int               `json:"offset"`
-	Attributes    map[string]string `json:"attributes,omitempty"`
+	TenantID        string            `json:"tenant_id"`
+	ClusterID       string            `json:"cluster_id"`
+	Namespace       string            `json:"namespace,omitempty"`
+	PodName         string            `json:"pod_name,omitempty"`
+	ContainerName   string            `json:"container_name,omitempty"`
+	ServiceName     string            `json:"service_name,omitempty"`
+	Stream          string            `json:"stream,omitempty"`
+	LogLevel        LogLevel          `json:"log_level,omitempty"`
+	SearchText      string            `json:"search_text,omitempty"`
+	TraceID         string            `json:"trace_id,omitempty"`
+	CursorTimestamp time.Time         `json:"cursor_timestamp,omitempty"`
+	StartTime       time.Time         `json:"start_time"`
+	EndTime         time.Time         `json:"end_time"`
+	Limit           int               `json:"limit"`
+	Offset          int               `json:"offset"`
+	Attributes      map[string]string `json:"attributes,omitempty"`
 }
 
 // Validate checks filter constraints.
@@ -140,7 +145,7 @@ func (f *LogFilter) Validate() error {
 // Sanitize applies standard bounds: limit clamped between 1 and 10000, default time range.
 func (f *LogFilter) Sanitize() {
 	if f.Limit <= 0 {
-		f.Limit = 100
+		f.Limit = 500
 	} else if f.Limit > 10000 {
 		f.Limit = 10000
 	}
@@ -175,6 +180,11 @@ type LogRepository interface {
 	QueryLogs(ctx context.Context, filter LogFilter) (*LogSearchResult, error)
 	GetHistogram(ctx context.Context, filter LogFilter, intervalSeconds int) ([]LogAggregationBucket, error)
 	TailLogs(ctx context.Context, filter LogFilter) (<-chan LogEntry, error)
+}
+
+// SurroundingContextQuerier defines the contract for querying logs surrounding a specific timestamp.
+type SurroundingContextQuerier interface {
+	QuerySurroundingContext(ctx context.Context, service string, timestamp time.Time, window int) ([]LogEntry, error)
 }
 
 // LogEngineStatus summarizes status and health metrics for the log engine.

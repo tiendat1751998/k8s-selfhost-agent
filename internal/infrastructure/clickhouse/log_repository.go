@@ -1,4 +1,4 @@
-package clickhouse
+﻿package clickhouse
 
 import (
 	"context"
@@ -51,7 +51,7 @@ func (r *LogRepository) insertBatchDirect(ctx context.Context, entries []logging
 		return fmt.Errorf("acquiring connection for direct ingest: %w", err)
 	}
 	query := fmt.Sprintf(
-		"INSERT INTO %s (timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes)",
+		"INSERT INTO %s (timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes, trace_id, span_id, error_fingerprint)",
 		r.tableName,
 	)
 	batch, err := conn.PrepareBatch(ctx, query)
@@ -63,6 +63,7 @@ func (r *LogRepository) insertBatchDirect(ctx context.Context, entries []logging
 		if err := batch.Append(
 			e.Timestamp, e.TenantID, e.ClusterID, e.Namespace, e.PodName,
 			e.ContainerName, e.Stream, string(e.LogLevel), e.Message, e.Attributes,
+			e.TraceID, e.SpanID, e.ErrorFingerprint,
 		); err != nil {
 			return fmt.Errorf("appending to batch: %w", err)
 		}
@@ -73,9 +74,8 @@ func (r *LogRepository) insertBatchDirect(ctx context.Context, entries []logging
 	return nil
 }
 
-// BuildLogQuery constructs a parameterized SQL query utilizing ClickHouse sparse index pruning.
-// Order: tenant_id -> cluster_id -> namespace -> timestamp -> log_level -> tokenbf_v1 -> attributes.
-func BuildLogQuery(f logging.LogFilter, table string) (string, []any) {
+// buildWhereClauses constructs clauses and args utilizing ClickHouse sparse index and bloom filters.
+func buildWhereClauses(f logging.LogFilter) ([]string, []any) {
 	clauses := []string{"tenant_id = ?"}
 	args := []any{f.TenantID}
 
@@ -98,6 +98,12 @@ func BuildLogQuery(f logging.LogFilter, table string) (string, []any) {
 		args = append(args, f.EndTime)
 	}
 
+	// Keyset cursor pagination
+	if !f.CursorTimestamp.IsZero() {
+		clauses = append(clauses, "timestamp < ?")
+		args = append(args, f.CursorTimestamp)
+	}
+
 	// Primary index column 5: log_level
 	add("log_level", string(f.LogLevel))
 
@@ -106,9 +112,12 @@ func BuildLogQuery(f logging.LogFilter, table string) (string, []any) {
 	add("container_name", f.ContainerName)
 	add("stream", f.Stream)
 
-	// Token Bloom Filter index idx_msg on message
+	// Bloom filter idx_trace on trace_id
+	add("trace_id", f.TraceID)
+
+	// Ngram bloom filter idx_ngram on message substring search
 	if strings.TrimSpace(f.SearchText) != "" {
-		clauses = append(clauses, "hasToken(message, ?)")
+		clauses = append(clauses, "positionCaseInsensitive(message, ?) > 0")
 		args = append(args, f.SearchText)
 	}
 
@@ -125,23 +134,132 @@ func BuildLogQuery(f logging.LogFilter, table string) (string, []any) {
 		}
 	}
 
+	return clauses, args
+}
+
+// BuildLogQuery constructs a parameterized SQL query utilizing ClickHouse sparse index pruning.
+func BuildLogQuery(f logging.LogFilter, table string) (string, []any) {
+	clauses, args := buildWhereClauses(f)
+
 	limit := f.Limit
 	if limit <= 0 {
-		limit = 50
+		limit = 500
 	}
 	offset := f.Offset
 	if offset < 0 {
 		offset = 0
 	}
 	query := fmt.Sprintf(
-		"SELECT timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes FROM %s WHERE %s ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+		"SELECT timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes, trace_id, span_id, error_fingerprint FROM %s WHERE %s ORDER BY timestamp DESC LIMIT ? OFFSET ?",
 		table, strings.Join(clauses, " AND "),
 	)
 	args = append(args, limit, offset)
 	return query, args
 }
 
-// QueryLogs executes a filtered search with sparse index pruning and returns paginated results.
+// BuildSurroundingContextQueries returns SQL statements to query logs surrounding a target timestamp.
+func BuildSurroundingContextQueries(table, service string, timestamp time.Time, window int) (string, []any, string, []any) {
+	if window <= 0 {
+		window = 50
+	}
+	if window > 500 {
+		window = 500
+	}
+
+	cols := "timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes, trace_id, span_id, error_fingerprint"
+
+	var beforeClauses, afterClauses []string
+	var beforeArgs, afterArgs []any
+
+	if strings.TrimSpace(service) != "" {
+		svcFilter := "(container_name = ? OR attributes['service'] = ? OR pod_name = ?)"
+		beforeClauses = append(beforeClauses, svcFilter)
+		beforeArgs = append(beforeArgs, service, service, service)
+		afterClauses = append(afterClauses, svcFilter)
+		afterArgs = append(afterArgs, service, service, service)
+	}
+
+	beforeClauses = append(beforeClauses, "timestamp <= ?")
+	beforeArgs = append(beforeArgs, timestamp, window)
+
+	afterClauses = append(afterClauses, "timestamp > ?")
+	afterArgs = append(afterArgs, timestamp, window)
+
+	beforeQuery := fmt.Sprintf(
+		"SELECT %s FROM %s WHERE %s ORDER BY timestamp DESC LIMIT ?",
+		cols, table, strings.Join(beforeClauses, " AND "),
+	)
+	afterQuery := fmt.Sprintf(
+		"SELECT %s FROM %s WHERE %s ORDER BY timestamp ASC LIMIT ?",
+		cols, table, strings.Join(afterClauses, " AND "),
+	)
+
+	return beforeQuery, beforeArgs, afterQuery, afterArgs
+}
+
+// QuerySurroundingContext queries window logs before and after timestamp and merges them sorted ascending.
+func (r *LogRepository) QuerySurroundingContext(
+	ctx context.Context,
+	service string,
+	timestamp time.Time,
+	window int,
+) ([]logging.LogEntry, error) {
+	if r.client == nil {
+		return nil, errors.New("clickhouse client is nil in log repository")
+	}
+	conn, err := r.client.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("acquiring connection for surrounding context: %w", err)
+	}
+
+	beforeQuery, beforeArgs, afterQuery, afterArgs := BuildSurroundingContextQueries(r.tableName, service, timestamp, window)
+
+	scanEntries := func(query string, args []any) ([]logging.LogEntry, error) {
+		rows, err := conn.Query(ctx, query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = rows.Close() }()
+
+		var res []logging.LogEntry
+		for rows.Next() {
+			var e logging.LogEntry
+			var lvl string
+			if err := rows.Scan(
+				&e.Timestamp, &e.TenantID, &e.ClusterID, &e.Namespace, &e.PodName,
+				&e.ContainerName, &e.Stream, &lvl, &e.Message, &e.Attributes,
+				&e.TraceID, &e.SpanID, &e.ErrorFingerprint,
+			); err != nil {
+				return nil, err
+			}
+			e.LogLevel = logging.LogLevel(lvl)
+			res = append(res, e)
+		}
+		return res, rows.Err()
+	}
+
+	beforeLogs, err := scanEntries(beforeQuery, beforeArgs)
+	if err != nil {
+		return nil, fmt.Errorf("querying before logs: %w", err)
+	}
+
+	afterLogs, err := scanEntries(afterQuery, afterArgs)
+	if err != nil {
+		return nil, fmt.Errorf("querying after logs: %w", err)
+	}
+
+	merged := make([]logging.LogEntry, 0, len(beforeLogs)+len(afterLogs))
+	merged = append(merged, beforeLogs...)
+	merged = append(merged, afterLogs...)
+
+	sort.SliceStable(merged, func(i, j int) bool {
+		return merged[i].Timestamp.Before(merged[j].Timestamp)
+	})
+
+	return merged, nil
+}
+
+// QueryLogs executes a filtered search with sparse index pruning and returns paginated results with accurate count.
 func (r *LogRepository) QueryLogs(ctx context.Context, filter logging.LogFilter) (*logging.LogSearchResult, error) {
 	if err := filter.Validate(); err != nil {
 		return nil, err
@@ -154,6 +272,16 @@ func (r *LogRepository) QueryLogs(ctx context.Context, filter logging.LogFilter)
 	if err != nil {
 		return nil, fmt.Errorf("acquiring connection for query: %w", err)
 	}
+
+	clauses, countArgs := buildWhereClauses(filter)
+
+	// Accurate fast count query
+	var totalCount uint64
+	countQuery := fmt.Sprintf("SELECT count() FROM %s WHERE %s", r.tableName, strings.Join(clauses, " AND "))
+	if err := conn.QueryRow(ctx, countQuery, countArgs...).Scan(&totalCount); err != nil {
+		logger.WithContext(ctx).Warn("clickhouse count query error, falling back to len", zap.Error(err))
+	}
+
 	query, args := BuildLogQuery(filter, r.tableName)
 	rows, err := conn.Query(ctx, query, args...)
 	if err != nil {
@@ -172,6 +300,7 @@ func (r *LogRepository) QueryLogs(ctx context.Context, filter logging.LogFilter)
 		if err := rows.Scan(
 			&e.Timestamp, &e.TenantID, &e.ClusterID, &e.Namespace, &e.PodName,
 			&e.ContainerName, &e.Stream, &lvl, &e.Message, &e.Attributes,
+			&e.TraceID, &e.SpanID, &e.ErrorFingerprint,
 		); err != nil {
 			return nil, fmt.Errorf("scanning row: %w", err)
 		}
@@ -184,10 +313,16 @@ func (r *LogRepository) QueryLogs(ctx context.Context, filter logging.LogFilter)
 	sort.SliceStable(entries, func(i, j int) bool {
 		return entries[i].Timestamp.Before(entries[j].Timestamp)
 	})
+
+	calculatedTotal := int64(totalCount)
+	if calculatedTotal == 0 && len(entries) > 0 {
+		calculatedTotal = int64(len(entries))
+	}
+
 	return &logging.LogSearchResult{
 		Entries:    entries,
-		TotalCount: int64(len(entries)),
-		HasMore:    len(entries) >= filter.Limit,
+		TotalCount: calculatedTotal,
+		HasMore:    int64(filter.Offset+len(entries)) < calculatedTotal,
 	}, nil
 }
 
@@ -314,7 +449,6 @@ func (r *LogRepository) TailLogs(ctx context.Context, filter logging.LogFilter) 
 				}
 				for i := len(res.Entries) - 1; i >= 0; i-- {
 					entry := res.Entries[i]
-					// Strict greater-than check prevents repeating identical timestamp entries on every tick
 					if !entry.Timestamp.After(lastSeen) {
 						continue
 					}

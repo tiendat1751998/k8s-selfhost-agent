@@ -106,10 +106,12 @@ func (m *dockerTailerManager) attach(
 					Service: cleanName, Node: "standalone-host", Stream: stream, Level: lvl, Message: msg,
 				})
 				if centralizedLogs != nil {
+					traceID := extractTraceID(msg)
 					_ = centralizedLogs.Ingest(ctx, []domainLogging.LogEntry{{
 						Timestamp: entryTS, TenantID: "default-tenant", ClusterID: "default", Namespace: "docker",
 						PodName: cleanName, ContainerName: cleanName, Stream: stream,
 						LogLevel: domainLogging.LogLevel(strings.ToLower(lvl)), Message: msg,
+						TraceID:  traceID,
 						Attributes: map[string]string{"service": cleanName},
 					}})
 				}
@@ -223,4 +225,62 @@ func detectLogLevel(msg string, defaultLvl string) string {
 	default:
 		return defaultLvl
 	}
+}
+
+// extractTraceID extracts distributed trace IDs from logfmt, json, or standard logs.
+func extractTraceID(msg string) string {
+	patterns := []string{
+		`"trace_id":`,
+		`"traceId":`,
+		`"traceID":`,
+		`trace_id=`,
+		`traceId=`,
+		`traceID=`,
+		`trace-id=`,
+		`trace_id:`,
+		`traceId:`,
+	}
+
+	for _, p := range patterns {
+		idx := strings.Index(msg, p)
+		if idx == -1 {
+			lowerP := strings.ToLower(p)
+			if lowerP != p {
+				idx = strings.Index(strings.ToLower(msg), lowerP)
+			}
+		}
+		if idx == -1 {
+			continue
+		}
+
+		rest := strings.TrimSpace(msg[idx+len(p):])
+		if len(rest) == 0 {
+			continue
+		}
+
+		if rest[0] == '"' || rest[0] == '\'' {
+			quote := rest[0]
+			rest = rest[1:]
+			end := strings.IndexByte(rest, quote)
+			if end != -1 {
+				val := strings.TrimSpace(rest[:end])
+				if val != "" {
+					return val
+				}
+			}
+			continue
+		}
+
+		end := strings.IndexAny(rest, " \t\r\n,;{}]")
+		var val string
+		if end != -1 {
+			val = strings.TrimSpace(rest[:end])
+		} else {
+			val = strings.TrimSpace(rest)
+		}
+		if val != "" {
+			return val
+		}
+	}
+	return ""
 }

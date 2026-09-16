@@ -1,4 +1,4 @@
-package clickhouse_test
+﻿package clickhouse_test
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 
 // Interface conformance compile-time check
 var _ logging.LogRepository = (*clickhouse.LogRepository)(nil)
+var _ logging.SurroundingContextQuerier = (*clickhouse.LogRepository)(nil)
 
 func TestBuildLogQuery_SparseIndexPruning(t *testing.T) {
 	now := time.Now().UTC()
@@ -27,6 +28,7 @@ func TestBuildLogQuery_SparseIndexPruning(t *testing.T) {
 		StartTime:     oneHourAgo,
 		EndTime:       now,
 		SearchText:    "oom-killed",
+		TraceID:       "trace-abc-123",
 		PodName:       "api-worker-abc",
 		ContainerName: "app",
 		Stream:        "stderr",
@@ -59,8 +61,11 @@ func TestBuildLogQuery_SparseIndexPruning(t *testing.T) {
 	require.True(t, namespaceIdx < timeIdx, "namespace must precede timestamp")
 	require.True(t, timeIdx < levelIdx, "timestamp must precede log_level")
 
-	// Token bloom filter index: hasToken
-	require.Contains(t, query, "hasToken(message, ?)")
+	// Ngram bloom filter substring search: positionCaseInsensitive
+	require.Contains(t, query, "positionCaseInsensitive(message, ?) > 0")
+
+	// Trace ID bloom filter
+	require.Contains(t, query, "trace_id = ?")
 
 	// Attribute filtering with sorted keys
 	require.Contains(t, query, "attributes[?] = ?")
@@ -75,6 +80,43 @@ func TestBuildLogQuery_SparseIndexPruning(t *testing.T) {
 	require.Equal(t, oneHourAgo, args[3])
 	require.Equal(t, now, args[4])
 	require.Equal(t, "error", args[5])
+}
+
+func TestBuildLogQuery_CursorPagination(t *testing.T) {
+	cursor := time.Date(2026, 9, 16, 8, 0, 0, 0, time.UTC)
+	filter := logging.LogFilter{
+		TenantID:        "tenant-cursor",
+		CursorTimestamp: cursor,
+		Limit:           100,
+	}
+
+	query, args := clickhouse.BuildLogQuery(filter, "cluster_logs")
+	require.Contains(t, query, "timestamp < ?")
+
+	foundCursor := false
+	for _, a := range args {
+		if ts, ok := a.(time.Time); ok && ts.Equal(cursor) {
+			foundCursor = true
+			break
+		}
+	}
+	require.True(t, foundCursor, "cursor timestamp must be in query arguments")
+}
+
+func TestBuildSurroundingContextQueries(t *testing.T) {
+	targetTime := time.Date(2026, 9, 16, 8, 30, 0, 0, time.UTC)
+	service := "order-svc"
+	window := 25
+
+	beforeQuery, beforeArgs, afterQuery, afterArgs := clickhouse.BuildSurroundingContextQueries("cluster_logs", service, targetTime, window)
+
+	require.Contains(t, beforeQuery, "<= ?")
+	require.Contains(t, beforeQuery, "ORDER BY timestamp DESC LIMIT ?")
+	require.Contains(t, afterQuery, "> ?")
+	require.Contains(t, afterQuery, "ORDER BY timestamp ASC LIMIT ?")
+
+	require.Equal(t, 25, beforeArgs[len(beforeArgs)-1])
+	require.Equal(t, 25, afterArgs[len(afterArgs)-1])
 }
 
 func TestBuildHistogramQuery(t *testing.T) {
