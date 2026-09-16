@@ -15,6 +15,7 @@ const progressPercent = ref(100)
 const elapsedMs = ref(0)
 
 const containerRef = ref<HTMLElement | null>(null)
+const toastRef = ref<HTMLElement | null>(null)
 
 function startTimer() {
   stopTimer()
@@ -122,7 +123,7 @@ function handleMouseLeave() {
 function handleDocumentInteraction(e: MouseEvent | TouchEvent) {
   if (!alertStore.isToastDropped) return
   const target = e.target as Node | null
-  if (containerRef.value && target && !containerRef.value.contains(target)) {
+  if (toastRef.value && !toastRef.value.contains(target) && !containerRef.value?.contains(target)) {
     dismissToast()
   }
 }
@@ -211,6 +212,7 @@ onUnmounted(() => {
       <transition name="dropdown-toast">
         <div
           v-if="alertStore.isToastDropped && alertStore.activeAlerts.length > 0"
+          ref="toastRef"
           class="header-alert-toast glass-panel"
           :class="alertStore.hasCriticalAlerts ? 'toast-critical' : 'toast-warning'"
           role="alert"

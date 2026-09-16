@@ -303,6 +303,12 @@
 }
 
 @media (max-width: 768px) {
+  .log-explorer-page {
+    height: 100%;
+    min-height: 0 !important;
+    max-height: calc(100vh - 48px - 50px - var(--sab, 0px));
+    overflow: hidden;
+  }
   .desktop-only { display: none !important; }
   .mobile-only { display: flex !important; }
   .mobile-tree-toggle-btn {
