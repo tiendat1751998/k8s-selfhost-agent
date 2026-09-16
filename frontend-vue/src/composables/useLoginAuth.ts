@@ -199,15 +199,6 @@ export function useLoginAuth(options: UseLoginAuthOptions = {}) {
     authStore.cancelMFA()
   }
 
-  function handleSsoLogin(provider: string): void {
-    clearError()
-    if (typeof window !== 'undefined') {
-      const redirect = getRedirectPath()
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
-      const target = baseUrl + "/auth/sso/" + provider + "?redirect=" + encodeURIComponent(redirect) + "&tenant=" + encodeURIComponent(tenantId.value)
-      window.location.href = target
-    }
-  }
 
   // 7. Computed helpers
   const isLoading = computed(() => authStore.loading)
@@ -241,7 +232,6 @@ export function useLoginAuth(options: UseLoginAuthOptions = {}) {
     clearError,
     handleCredentialsSubmit,
     handleTotpSubmit,
-    handleSsoLogin,
     onTotpInput,
     handleRecoverySubmit,
     switchToRecovery,

@@ -29,11 +29,10 @@
           <p class="brand-subtitle">Enterprise Hybrid Control Plane</p>
         </div>
 
-        <!-- Environment Badge -->
+        <!-- Status Pill -->
         <div class="env-pill">
           <span class="pulse-dot pulse-dot-emerald"></span>
-          <span class="env-text">Air-Gapped ZeroTrust Enforced</span>
-          <span class="env-chip">TLS v1.3</span>
+          <span class="env-text">System Online • TLS v1.3</span>
         </div>
 
         <!-- Error Box -->
@@ -44,7 +43,7 @@
 
         <!-- Steps Transition -->
         <Transition name="step-fade" mode="out-in">
-          <!-- STEP 1: Email & Password + Enterprise SSO Gateway -->
+          <!-- STEP 1: Email & Password -->
           <LoginFormCard
             v-if="step === 'credentials'"
             key="step-creds"
@@ -53,7 +52,6 @@
             v-model:remember-me="rememberMe"
             :loading="isLoading"
             @submit="handleCredentialsSubmit"
-            @sso-login="handleSsoLogin"
           />
 
           <!-- STEP 2: TOTP / Recovery MFA -->
@@ -73,26 +71,8 @@
           />
         </Transition>
 
-        <!-- Security Disclaimer Badges -->
-        <div class="security-disclaimer-badges" role="complementary" aria-label="Security Disclaimers">
-          <div class="sec-badge" title="FIPS 140-3 Cryptographic Boundary">
-            <BaseIcon name="shield" size="xs" class="sec-badge-icon" />
-            <span class="sec-badge-text">FIPS 140-3 Enforced</span>
-          </div>
-          <div class="sec-badge" title="ZeroTrust Multi-Factor Identity Gate">
-            <BaseIcon name="lock" size="xs" class="sec-badge-icon" />
-            <span class="sec-badge-text">ZeroTrust MFA Gate</span>
-          </div>
-          <div class="sec-badge" title="Immutable SOC2 Audit Stream">
-            <BaseIcon name="file-text" size="xs" class="sec-badge-icon" />
-            <span class="sec-badge-text">SOC2 Audit Stream</span>
-          </div>
-        </div>
-
         <!-- Footer Info -->
-        <footer class="login-footer">
-          <span>Dual-Sync DR • Trivy Gate • Real-Time Stream</span>
-        </footer>
+        <div class="login-footer">© 2026 K8sControl • Enterprise Hybrid Control Plane</div>
       </div>
     </main>
   </div>
@@ -100,7 +80,6 @@
 
 <script setup lang="ts">
 import '../assets/styles/views/login.css'
-import '../assets/styles/components/login-sso.css'
 import { useLoginAuth } from '../composables/useLoginAuth'
 import LoginBrandingHero from '../components/auth/LoginBrandingHero.vue'
 import LoginFormCard from '../components/auth/LoginFormCard.vue'
@@ -118,7 +97,6 @@ const {
   handleCredentialsSubmit,
   handleTotpSubmit,
   handleRecoverySubmit,
-  handleSsoLogin,
   switchToRecovery,
   switchToTotp,
   backToCredentials,
