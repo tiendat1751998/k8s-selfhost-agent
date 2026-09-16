@@ -1,10 +1,11 @@
-import { api } from './client'
+﻿import { api } from './client'
 
 export interface LogFilterParams {
   query?: string
   namespace?: string
   pod_name?: string
   container_name?: string
+  container?: string
   node?: string
   stream?: string
   log_level?: string
@@ -59,12 +60,21 @@ export interface LogAggregationBucket {
   level_count?: Record<string, number>
 }
 
+export interface LogContextParams {
+  service?: string
+  container?: string
+  container_name?: string
+  timestamp: string
+  window?: number
+}
+
 export async function searchLogs(filter: LogFilterParams = {}): Promise<LogSearchResult> {
   const params: Record<string, string | number> = {}
   if (filter.query) params.query = filter.query
   if (filter.namespace) params.namespace = filter.namespace
   if (filter.pod_name) params.pod_name = filter.pod_name
   if (filter.container_name) params.container_name = filter.container_name
+  else if (filter.container) params.container_name = filter.container
   if (filter.node) params.node = filter.node
   if (filter.attributes?.node) params.node = filter.attributes.node
   if (filter.stream) params.stream = filter.stream
@@ -92,4 +102,19 @@ export async function getLogHistogram(params: HistogramParams = {}): Promise<Log
   if (params.end_time) queryParams.end_time = params.end_time
 
   return api.get<LogAggregationBucket[]>('/logs/histogram', queryParams)
+}
+
+export async function getTraceLogs(traceId: string): Promise<LogSearchResult> {
+  return api.get<LogSearchResult>(`/logs/trace/${encodeURIComponent(traceId)}`)
+}
+
+export async function getContextLogs(params: LogContextParams): Promise<LogSearchResult> {
+  const queryParams: Record<string, string | number> = {
+    timestamp: params.timestamp,
+    window: params.window ?? 50,
+  }
+  const s = params.service || params.container_name || params.container
+  if (s) queryParams.service = s
+
+  return api.get<LogSearchResult>('/logs/context', queryParams)
 }

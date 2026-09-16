@@ -1,11 +1,14 @@
-<script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+﻿<script setup lang="ts">
+import { ref, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLogStreamer } from '../composables/useLogStreamer'
+import { useHistoricalLogSearch } from '../composables/useHistoricalLogSearch'
 import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
 import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
 import ClickHouseEngineBadge from '../components/logs/ClickHouseEngineBadge.vue'
+import LogTraceDrawer from '../components/logs/LogTraceDrawer.vue'
+import LogContextModal from '../components/logs/LogContextModal.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { LogFilterParams } from '../api/logging'
 
@@ -21,13 +24,13 @@ const showMobileTree = ref(false)
 const isSidebarCollapsed = ref(false)
 const showHistogram = ref(false)
 const wrapLines = ref(true)
+const showDroppedAlert = ref(true)
 
-const mode = ref<'live' | 'historical'>('live')
-const selectedTimeRange = ref('1h')
-const queryError = ref<string | null>(null)
-const isSearching = ref(false)
-const currentOffset = ref(0)
-const selectedHistoricalLimit = ref(1000)
+const {
+  mode, selectedTimeRange, queryError, selectedHistoricalLimit, timeRanges,
+  runHistoricalQuery, loadMoreHistorical, handleHistogramFilterRange, handleClearHistogramFilter,
+  targetFilteredLogs,
+} = useHistoricalLogSearch(logStore, selectedTarget, searchKeyword, selectedLevel)
 
 const severityFilters = [
   { label: 'ALL', value: '' },
@@ -45,68 +48,9 @@ function isCurrentLevel(val: string): boolean {
 
 function setLevel(val: string) {
   selectedLevel.value = val
-}
-
-const timeRanges = [
-  { label: '15m', ms: 900000, interval: 15 },
-  { label: '1h', ms: 3600000, interval: 60 },
-  { label: '6h', ms: 21600000, interval: 300 },
-  { label: '24h', ms: 86400000, interval: 1800 },
-]
-
-async function runHistoricalQuery(isLoadMore = false) {
-  if (mode.value !== 'historical') return
-  queryError.value = null
-  if (!isLoadMore) currentOffset.value = 0
-  const cfg = timeRanges.find((r) => r.label === selectedTimeRange.value) || timeRanges[1]
-  const now = new Date()
-  const kw = searchKeyword.value.trim()
-  const target = selectedTarget.value
-
-  const filter: LogFilterParams = {
-    start_time: new Date(now.getTime() - cfg.ms).toISOString(),
-    end_time: now.toISOString(),
-    query: kw ? kw : undefined,
-    log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
-    limit: selectedHistoricalLimit.value,
-    offset: currentOffset.value,
-    container_name: target.type === 'service' ? target.id : undefined,
-    node: target.type === 'node' ? target.id : undefined,
-    attributes: target.type === 'node' ? { node: target.id } : undefined,
+  if (mode.value === 'historical') {
+    runHistoricalQuery()
   }
-
-  try {
-    isSearching.value = true
-    const promises: [Promise<unknown>, Promise<unknown>?] = [
-      logStore.fetchHistoricalLogs(filter, isLoadMore),
-    ]
-    if (!isLoadMore) {
-      promises.push(logStore.fetchHistogram({
-        start_time: filter.start_time,
-        end_time: filter.end_time,
-        query: filter.query,
-        log_level: filter.log_level,
-        interval_seconds: cfg.interval,
-        container_name: filter.container_name,
-        node: target.type === 'node' ? target.id : undefined,
-        attributes: target.type === 'node' ? { node: target.id } : undefined,
-      }))
-    }
-    await Promise.all(promises)
-    if (mode.value !== 'historical') return
-    if (isLoadMore) currentOffset.value += selectedHistoricalLimit.value
-  } catch (err: unknown) {
-    if (mode.value === 'historical') {
-      queryError.value = err instanceof Error ? err.message : 'ClickHouse search failed'
-    }
-  } finally {
-    isSearching.value = false
-  }
-}
-
-function loadMoreHistorical() {
-  currentOffset.value += selectedHistoricalLimit.value
-  runHistoricalQuery(true)
 }
 
 let activeTargetId = ''
@@ -239,81 +183,6 @@ function toggleLiveTail() {
   }
 }
 
-async function handleHistogramFilterRange(range: { start: string; end: string }) {
-  if (mode.value === 'live') mode.value = 'historical'
-  const kw = searchKeyword.value.trim()
-  const target = selectedTarget.value
-  currentOffset.value = 0
-  const filter: LogFilterParams = {
-    start_time: range.start,
-    end_time: range.end,
-    query: kw ? kw : undefined,
-    log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
-    limit: selectedHistoricalLimit.value,
-    offset: 0,
-    container_name: target.type === 'service' ? target.id : undefined,
-    node: target.type === 'node' ? target.id : undefined,
-    attributes: target.type === 'node' ? { node: target.id } : undefined,
-  }
-  try {
-    isSearching.value = true
-    queryError.value = null
-    await logStore.fetchHistoricalLogs(filter)
-  } catch (err: unknown) {
-    queryError.value = err instanceof Error ? err.message : 'Historical search failed'
-  } finally {
-    isSearching.value = false
-  }
-}
-
-function handleClearHistogramFilter() {
-  runHistoricalQuery()
-}
-
-const targetFilteredLogs = computed(() => {
-  const target = selectedTarget.value
-  const level = selectedLevel.value
-  const rawKw = searchKeyword.value.trim()
-  let reg: RegExp | null = null
-  if (rawKw) {
-    try { reg = new RegExp(rawKw, 'i') } catch { reg = null }
-  }
-  const kw = rawKw.toLowerCase()
-
-  return logStore.logs.filter((log) => {
-    if (!log.msg || log.msg === '-- No entries --' || log.msg.trim() === '-- No entries --') return false
-    if (level && level !== 'ALL') {
-      const l = log.level.toUpperCase()
-      const f = level.toUpperCase()
-      const match = (f === 'ERR' || f === 'ERROR') ? (l === 'ERROR' || l === 'ERR')
-        : (f === 'WARN' || f === 'WARNING') ? (l === 'WARN' || l === 'WARNING')
-        : l === f
-      if (!match) return false
-    }
-    if (mode.value === 'live') {
-      const q = selectedTarget.value.id.toLowerCase()
-      if (target.type === 'node') {
-        const n = (log.node || log.attributes?.node || log.attributes?.node_name || log.pod || '').toLowerCase()
-        if (!n.includes(q)) return false
-      } else if (target.type === 'service') {
-        const s = (log.service || log.container || log.attributes?.app || log.attributes?.service || log.attributes?.container_name || log.pod || '').toLowerCase()
-        const matches = s.includes(q) ||
-          (q === 'postgres_db' && (s.includes('db') || s.includes('postgres'))) ||
-          (q === 'db' && s.includes('postgres'))
-        if (!matches) return false
-      }
-    }
-    if (rawKw) {
-      if (reg) {
-        if (!reg.test(log.msg) && !reg.test(log.pod) && !(log.traceId && reg.test(log.traceId))) return false
-      } else {
-        if (!log.msg.toLowerCase().includes(kw) && !log.pod.toLowerCase().includes(kw) && !log.traceId?.toLowerCase().includes(kw)) return false
-      }
-    }
-    return true
-  })
-})
-
 watch(
   [() => targetFilteredLogs.value.length, () => targetFilteredLogs.value[targetFilteredLogs.value.length - 1]],
   async () => {
@@ -353,7 +222,14 @@ function handleExport() {
         <span class="toolbar-target-badge font-mono" :title="selectedTarget.name"><BaseIcon :name="selectedTarget.type === 'node' ? 'server' : (selectedTarget.icon || 'box')" size="xs" /> <span>{{ selectedTarget.name }}</span></span>
         <div class="toolbar-search-wrap">
           <BaseIcon name="search" size="xs" class="search-icon" />
-          <input v-model="searchKeyword" type="text" placeholder="Filter logs (regex)..." class="toolbar-search-input font-mono" aria-label="Filter logs" />
+          <input
+            v-model="searchKeyword"
+            type="text"
+            :placeholder="mode === 'historical' ? 'ClickHouse search (query=...)' : 'Filter logs (regex)...'"
+            class="toolbar-search-input font-mono"
+            aria-label="Filter logs"
+            @keyup.enter="mode === 'historical' ? runHistoricalQuery() : null"
+          />
           <button v-if="searchKeyword" type="button" class="clear-input-btn" aria-label="Clear filter" @click="searchKeyword = ''"><BaseIcon name="x" size="xs" /></button>
         </div>
       </div>
@@ -381,6 +257,7 @@ function handleExport() {
             <option :value="1000">1k</option>
             <option :value="5000">5k</option>
             <option :value="10000">10k</option>
+            <option :value="50000">All (Keyset)</option>
           </select>
           <button type="button" class="toolbar-btn btn-secondary" :disabled="logStore.isHistoricalLoading" title="Query ClickHouse" @click="runHistoricalQuery()"><BaseIcon name="search" size="xs" /> <span>{{ logStore.isHistoricalLoading ? 'Searching...' : 'Query ClickHouse' }}</span></button>
           <button v-if="logStore.hasMoreHistorical || logStore.totalHistoricalCount > logStore.logs.length" type="button" class="toolbar-btn btn-secondary load-more-compact" :disabled="logStore.isHistoricalLoading" title="Load more historical logs" @click="loadMoreHistorical"><span>+More ({{ logStore.logs.length }}/{{ logStore.totalHistoricalCount }})</span></button>
@@ -401,6 +278,33 @@ function handleExport() {
         <button type="button" class="toolbar-btn btn-secondary" title="Clear Buffer" aria-label="Clear Buffer" @click="clearBuffer"><BaseIcon name="trash" size="xs" /></button>
         <button type="button" class="toolbar-btn btn-secondary" title="Export Logs" aria-label="Export Logs" @click="handleExport"><BaseIcon name="download" size="xs" /></button>
       </div>
+    </div>
+
+    <!-- Congested Buffer Warning Alert -->
+    <div
+      v-if="logStore.droppedLogsCount > 0 && showDroppedAlert"
+      class="dropped-alert-banner font-mono"
+      role="alert"
+    >
+      <BaseIcon name="alert-triangle" size="xs" class="text-amber" />
+      <span>
+        Stream buffer congested: {{ logStore.droppedLogsCount.toLocaleString() }} logs dropped by edge network. Switch to Historical Search for full ClickHouse archive.
+      </span>
+      <button
+        type="button"
+        class="dropped-alert-action font-mono"
+        @click="mode = 'historical'; logStore.resetDroppedLogsCount()"
+      >
+        Switch to Historical
+      </button>
+      <button
+        type="button"
+        class="query-error-dismiss"
+        aria-label="Dismiss dropped alert"
+        @click="showDroppedAlert = false"
+      >
+        <BaseIcon name="x" size="xs" />
+      </button>
     </div>
 
     <!-- Mobile Command Bar (<768px) -->
@@ -453,9 +357,17 @@ function handleExport() {
           @scroll="handleScroll"
           @scroll-to-bottom="scrollToBottom"
           @register-terminal="setTerminalRef"
+          @open-trace="logStore.openTraceDrawer"
+          @open-context="logStore.openContextModal"
         />
       </div>
     </div>
+
+    <!-- Transaction Trace Waterfall Drawer -->
+    <LogTraceDrawer />
+
+    <!-- Surrounding Context Modal -->
+    <LogContextModal />
   </div>
 </template>
 
