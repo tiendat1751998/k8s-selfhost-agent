@@ -81,6 +81,14 @@ func (f *fakeLoggingService) TailLogs(ctx context.Context, filter logging.LogFil
 	return f.tailChan, nil
 }
 
+func (f *fakeLoggingService) QuerySurroundingContext(ctx context.Context, service string, timestamp time.Time, window int) ([]logging.LogEntry, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.queryErr != nil { return nil, f.queryErr }
+	if f.searchResult != nil { return f.searchResult.Entries, nil }
+	return []logging.LogEntry{}, nil
+}
+
 func withTenantContext(ctx context.Context, tenantID, role string) context.Context {
 	ctx = context.WithValue(ctx, tenancy.TenantIDKey, tenantID)
 	ctx = context.WithValue(ctx, tenancy.UserRoleKey, role)

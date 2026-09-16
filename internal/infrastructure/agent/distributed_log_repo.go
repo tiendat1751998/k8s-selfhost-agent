@@ -379,3 +379,12 @@ func (r *DistributedAgentLogRepo) ListServices(ctx context.Context) ([]string, e
 
 	return result, nil
 }
+// QuerySurroundingContext delegates surrounding context queries to the underlying in-memory fallback.
+func (r *DistributedAgentLogRepo) QuerySurroundingContext(
+	ctx context.Context,
+	tenantID, service string,
+	timestamp time.Time,
+	window int,
+) ([]domainLogging.LogEntry, error) {
+	return r.memRepo.QuerySurroundingContext(ctx, tenantID, service, timestamp, window)
+}
