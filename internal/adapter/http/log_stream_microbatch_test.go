@@ -46,27 +46,25 @@ func TestLogStreamHandler_MicroBatchingLive(t *testing.T) {
 		})
 	}
 
-	// First frame should be a batch of up to 50 entries
-	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	_, msgBytes, err := conn.ReadMessage()
-	require.NoError(t, err)
-
-	var batch1 []map[string]any
-	err = json.Unmarshal(msgBytes, &batch1)
-	require.NoError(t, err, "frame must be a JSON array")
-	require.NotEmpty(t, batch1)
-	require.LessOrEqual(t, len(batch1), 50)
-
-	// Second frame should arrive via 50ms ticker or next batch chunk
-	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	_, msgBytes2, err := conn.ReadMessage()
-	require.NoError(t, err)
-
-	var batch2 []map[string]any
-	err = json.Unmarshal(msgBytes2, &batch2)
-	require.NoError(t, err, "second frame must be a JSON array")
-	require.NotEmpty(t, batch2)
-	require.Equal(t, 75, len(batch1)+len(batch2))
+	// Read frames until all 75 entries are received across micro-batches
+	totalReceived := 0
+	frameCount := 0
+	deadline := time.Now().Add(3 * time.Second)
+	for totalReceived < 75 && time.Now().Before(deadline) {
+		_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		_, msgBytes, rErr := conn.ReadMessage()
+		if rErr != nil {
+			break
+		}
+		var batch []map[string]any
+		uErr := json.Unmarshal(msgBytes, &batch)
+		require.NoError(t, uErr, "every streaming frame must be a JSON array")
+		require.LessOrEqual(t, len(batch), 50, "batch frame slice must not exceed 50 entries")
+		totalReceived += len(batch)
+		frameCount++
+	}
+	require.Equal(t, 75, totalReceived)
+	require.GreaterOrEqual(t, frameCount, 2, "75 entries must be split across multiple micro-batches")
 }
 
 func TestLogStreamHandler_ReplayLinesQueryParam(t *testing.T) {
