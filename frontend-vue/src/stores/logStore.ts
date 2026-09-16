@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
   searchLogs,
@@ -8,6 +8,7 @@ import {
   type LogAggregationBucket,
   type LogSearchResult,
 } from '../api/logging'
+import { parseWebSocketFrame, mapRawToLogEntry } from '../utils/logBatchParser'
 
 export interface LogEntry {
   time: string
@@ -67,12 +68,22 @@ export const useLogStore = defineStore('log', () => {
   const socket = ref<WebSocket | null>(null)
   const maxBufferSize = ref(10000)
 
+  // Drawer & Modal Reactive State
+  const traceDrawerOpen = ref(false)
+  const selectedTraceId = ref<string | null>(null)
+  const contextModalOpen = ref(false)
+  const contextTargetEntry = ref<LogEntry | null>(null)
+
+  // Big Data Telemetry
+  const droppedLogsCount = ref(0)
+  const streamRate = ref(0)
+
   function setMaxBufferSize(size: number) {
     const parsed = Number(size)
     if (isNaN(parsed) || parsed < 1000) {
       maxBufferSize.value = 1000
-    } else if (parsed > 50000) {
-      maxBufferSize.value = 50000
+    } else if (parsed > 100000) {
+      maxBufferSize.value = 100000
     } else {
       maxBufferSize.value = parsed
     }
@@ -80,6 +91,7 @@ export const useLogStore = defineStore('log', () => {
       logs.value = logs.value.slice(-maxBufferSize.value)
     }
   }
+
   const reconnectAttempts = ref(0)
   const activeFilter = ref<LogFilterOptions>({})
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -102,8 +114,6 @@ export const useLogStore = defineStore('log', () => {
       reconnectTimer = null
     }
   }
-
-  // matchesTarget is exported at module level for testability and reuse
 
   function scheduleReconnect() {
     clearReconnectTimer()
@@ -168,35 +178,12 @@ export const useLogStore = defineStore('log', () => {
       }
       socket.value.onmessage = (event) => {
         if (isPaused.value) return
-        try {
-          const raw = JSON.parse(event.data)
-          const msg = raw.message || raw.msg || raw.log || event.data
-          if (msg === '-- No entries --' || (typeof msg === 'string' && msg.trim() === '-- No entries --')) return
-          addLogEntry({
-            time: raw.timestamp || raw.time || new Date().toISOString(),
-            level: (raw.log_level || raw.level || raw.severity || 'INFO').toUpperCase(),
-            namespace: raw.namespace || raw.ns || opts.namespace || 'default',
-            pod: raw.pod_name || raw.pod || raw.container_name || raw.container || raw.service || 'system',
-            container: raw.container_name || raw.container || raw.pod,
-            node: raw.node || raw.host || raw.attributes?.node || raw.attributes?.node_name,
-            service: raw.service || raw.app || raw.attributes?.service || raw.attributes?.app || raw.container_name || raw.container,
-            msg,
-            traceId: raw.traceId || raw.trace_id || raw.attributes?.trace_id || raw.attributes?.traceId,
-            stream: raw.stream || 'stdout',
-            attributes: raw.attributes,
-          })
-        } catch {
-          if (event.data === '-- No entries --' || (typeof event.data === 'string' && event.data.trim() === '-- No entries --')) return
-          addLogEntry({
-            time: new Date().toISOString(),
-            level: 'INFO',
-            namespace: opts.namespace || 'default',
-            pod: opts.pod || 'system',
-            node: opts.node,
-            service: opts.service,
-            msg: event.data,
-            stream: 'stdout',
-          })
+        const parsed = parseWebSocketFrame(event.data, opts.namespace || 'default', opts.service)
+        if (parsed.type === 'telemetry') {
+          droppedLogsCount.value += parsed.droppedCount
+          streamRate.value = parsed.streamRate
+        } else if (parsed.type === 'logs') {
+          appendLogBatch(parsed.entries)
         }
       }
       socket.value.onclose = () => {
@@ -241,15 +228,70 @@ export const useLogStore = defineStore('log', () => {
       }
     }
     logs.value.push(entry)
-    while (logs.value.length > maxBufferSize.value) {
-      logs.value.shift()
+    if (logs.value.length > maxBufferSize.value) {
+      logs.value = logs.value.slice(-maxBufferSize.value)
+    }
+  }
+
+  function appendLogBatch(entries: LogEntry[]) {
+    if (!entries || entries.length === 0) return
+    const valid: LogEntry[] = []
+    let last = logs.value.length > 0 ? logs.value[logs.value.length - 1] : null
+
+    for (let i = 0; i < entries.length; i++) {
+      const cur = entries[i]
+      if (
+        last &&
+        last.time === cur.time &&
+        last.msg === cur.msg &&
+        (last.service || last.pod || '') === (cur.service || cur.pod || '')
+      ) {
+        continue
+      }
+      valid.push(cur)
+      last = cur
+    }
+
+    if (valid.length === 0) return
+    logs.value.push(...valid)
+    if (logs.value.length > maxBufferSize.value) {
+      logs.value = logs.value.slice(-maxBufferSize.value)
     }
   }
 
   const appendLog = addLogEntry
 
-  function clear() { logs.value = [] }
-  function togglePause() { isPaused.value = !isPaused.value }
+  function clear() {
+    logs.value = []
+  }
+
+  function togglePause() {
+    isPaused.value = !isPaused.value
+  }
+
+  function openTraceDrawer(traceId: string) {
+    selectedTraceId.value = traceId
+    traceDrawerOpen.value = true
+  }
+
+  function closeTraceDrawer() {
+    traceDrawerOpen.value = false
+    selectedTraceId.value = null
+  }
+
+  function openContextModal(entry: LogEntry) {
+    contextTargetEntry.value = entry
+    contextModalOpen.value = true
+  }
+
+  function closeContextModal() {
+    contextModalOpen.value = false
+    contextTargetEntry.value = null
+  }
+
+  function resetDroppedLogsCount() {
+    droppedLogsCount.value = 0
+  }
 
   async function fetchHistoricalLogs(
     filter: LogFilterParams & { service?: string; container?: string } = {},
@@ -263,23 +305,13 @@ export const useLogStore = defineStore('log', () => {
       }
       const res = await searchLogs(queryParams)
       const rawEntries = res.entries || []
-      const filteredRaw = rawEntries.filter((raw) => {
-        if (!raw.message) return false
-        return raw.message !== '-- No entries --' && raw.message.trim() !== '-- No entries --'
-      })
-      const mapped: LogEntry[] = filteredRaw.map((raw) => ({
-        time: raw.timestamp || new Date().toISOString(),
-        level: (raw.log_level || 'INFO').toUpperCase(),
-        namespace: raw.namespace || 'default',
-        pod: raw.pod_name || 'system',
-        container: raw.container_name,
-        node: raw.node || raw.host || raw.attributes?.node || raw.attributes?.node_name,
-        service: raw.service || raw.app || raw.attributes?.service || raw.attributes?.app || raw.container_name || raw.container,
-        msg: raw.message || '',
-        traceId: raw.attributes?.trace_id || raw.attributes?.traceId,
-        stream: raw.stream || 'stdout',
-        attributes: raw.attributes,
-      }))
+      const mapped: LogEntry[] = []
+
+      for (let i = 0; i < rawEntries.length; i++) {
+        const item = mapRawToLogEntry(rawEntries[i], filter.namespace || 'default', filter.service)
+        if (item) mapped.push(item)
+      }
+
       mapped.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
 
       if (append) {
@@ -303,7 +335,7 @@ export const useLogStore = defineStore('log', () => {
       hasMoreHistorical.value = res.has_more || false
       return {
         ...res,
-        entries: filteredRaw,
+        entries: rawEntries.filter((r) => r.message && r.message.trim() !== '-- No entries --'),
       }
     } finally {
       isHistoricalLoading.value = false
@@ -329,6 +361,12 @@ export const useLogStore = defineStore('log', () => {
     activeFilter,
     maxBufferSize,
     setMaxBufferSize,
+    traceDrawerOpen,
+    selectedTraceId,
+    contextModalOpen,
+    contextTargetEntry,
+    droppedLogsCount,
+    streamRate,
     histogram,
     isHistoricalLoading,
     isHistogramLoading,
@@ -339,8 +377,14 @@ export const useLogStore = defineStore('log', () => {
     disconnect,
     addLogEntry,
     appendLog,
+    appendLogBatch,
     clear,
     togglePause,
+    openTraceDrawer,
+    closeTraceDrawer,
+    openContextModal,
+    closeContextModal,
+    resetDroppedLogsCount,
     fetchHistoricalLogs,
     fetchHistogram,
   }
