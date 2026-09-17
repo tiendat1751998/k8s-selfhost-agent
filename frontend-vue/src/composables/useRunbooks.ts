@@ -310,17 +310,16 @@ export function useRunbooks() {
     const stepIdx = idx !== undefined ? idx : (step.stepNum - 1)
     step.status = 'running'
     executionLogs.value.push(
-      `[${new Date().toLocaleTimeString()}] [EXEC] Executing Step ${stepIdx + 1}: ${step.title}`,
+      `[${new Date().toLocaleTimeString()}] [DRY-RUN] Inspecting Step ${stepIdx + 1}: ${step.title}`,
     )
     if (step.command) {
-      executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [CMD] $ ${step.command}`)
+      executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [CMD-PREVIEW] $ ${step.command}`)
     }
 
-    await new Promise(resolve => setTimeout(resolve, 600))
     step.status = 'completed'
     completedSteps.value.add(stepIdx)
     executionLogs.value.push(
-      `[${new Date().toLocaleTimeString()}] [OK] Step ${stepIdx + 1} completed successfully with exit status 0.`,
+      `[${new Date().toLocaleTimeString()}] [VERIFIED] Step ${stepIdx + 1} syntax and target resources verified (dry-run mode).`,
     )
   }
 

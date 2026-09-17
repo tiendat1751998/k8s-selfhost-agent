@@ -1,4 +1,4 @@
-﻿import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import {
   sloApi,
   dockerApi,
@@ -201,16 +201,15 @@ export function useSLOMonitor() {
     return { hoursToExhaustion: Number(hoursRemaining.toFixed(1)), statusText }
   }
 
-  function getTargetLatencyPercentiles(targetObjective = 99.9): LatencyPercentiles {
-    const baseP50 = 18
-    const baseP90 = 42
-    const baseP99 = 85
-    const multiplier = targetObjective >= 99.99 ? 0.7 : targetObjective >= 99.9 ? 1.0 : 1.3
+  function getTargetLatencyPercentiles(targetLatencyP99?: number): LatencyPercentiles {
+    if (!targetLatencyP99 || targetLatencyP99 <= 0) {
+      return { p50: 0, p90: 0, p99: 0, p999: 0 }
+    }
     return {
-      p50: Math.round(baseP50 * multiplier),
-      p90: Math.round(baseP90 * multiplier),
-      p99: Math.round(baseP99 * multiplier),
-      p999: Math.round(baseP99 * 1.8 * multiplier)
+      p50: Math.round(targetLatencyP99 * 0.25),
+      p90: Math.round(targetLatencyP99 * 0.6),
+      p99: Math.round(targetLatencyP99),
+      p999: Math.round(targetLatencyP99 * 1.5)
     }
   }
 

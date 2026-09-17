@@ -289,7 +289,7 @@ function handleChartLeave() {
             <span class="pill-icon">
               <BaseIcon name="activity" size="xs" />
             </span>
-            <span class="pill-val">{{ clusterAvgLatencyMs > 0 ? clusterAvgLatencyMs.toFixed(1) : '2.4' }}ms</span>
+            <span class="pill-val">{{ clusterAvgLatencyMs > 0 ? clusterAvgLatencyMs.toFixed(1) + 'ms' : '--' }}</span>
             <span class="pill-lbl">latency</span>
           </span>
 

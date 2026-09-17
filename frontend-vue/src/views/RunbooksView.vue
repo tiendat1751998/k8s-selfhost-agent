@@ -50,7 +50,7 @@
 
       <!-- Inline compact execution badge strip font-mono -->
       <div class="toolbar-kpi-strip font-mono desktop-only" role="status" aria-label="Runbooks execution metrics">
-        <span class="kpi-badge font-mono">{{ runbooks.length }} Runbooks ({{ runningCount }} Running · {{ successRate }}% Success)</span>
+        <span class="kpi-badge font-mono">{{ runbooks.length }} Runbooks ({{ runningCount }} Running · {{ successRate !== null ? `${successRate}% Success` : 'No Executions' }})</span>
       </div>
 
       <!-- Right: View Mode Toggle & Action Buttons -->
@@ -318,7 +318,7 @@ const runningCount = computed(() => {
 })
 
 const successRate = computed(() => {
-  if (!executionHistory.value || executionHistory.value.length === 0) return '98.5'
+  if (!executionHistory.value || executionHistory.value.length === 0) return null
   const completed = executionHistory.value.filter(e => e.status === 'completed').length
   const total = executionHistory.value.length
   return ((completed / total) * 100).toFixed(1)

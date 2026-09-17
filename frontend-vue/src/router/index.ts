@@ -153,9 +153,7 @@ const router = createRouter({
     {
       path: '/platform/:feature?',
       alias: ['/platform'],
-      name: 'platform',
-      component: () => import('../views/GenericPlatformView.vue'),
-      meta: { requiresAuth: true, title: 'Platform Telemetry' }
+      redirect: '/'
     },
 
     // 7. Deprecated / Purged Bloat Routes (Strict Redirect to /)
