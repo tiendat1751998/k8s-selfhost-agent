@@ -470,7 +470,7 @@ const filteredRepos = computed(() => {
   </div>
 </template>
 
-<style>
+<style scoped>
 @import '../assets/styles/views/helm.css';
 @import '../assets/styles/views/helm-catalog-grid.css';
 @import '../assets/styles/components/helm-drawers.css';

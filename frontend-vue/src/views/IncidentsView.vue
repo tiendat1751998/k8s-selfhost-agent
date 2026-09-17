@@ -177,16 +177,6 @@ function formatRelativeTime(dateStr?: string): string {
         <button
           type="button"
           class="toolbar-btn btn-secondary"
-          title="Simulate Test Incident (Demo Mode)"
-          aria-label="Simulate Test Incident"
-          @click="showSimulateModal = true"
-        >
-          <BaseIcon name="zap" size="xs" />
-          <span>Simulate</span>
-        </button>
-        <button
-          type="button"
-          class="toolbar-btn btn-secondary"
           :disabled="loading"
           @click="fetchIncidents"
         >
@@ -477,6 +467,6 @@ function formatRelativeTime(dateStr?: string): string {
   </div>
 </template>
 
-<style>
+<style scoped>
 @import '../assets/styles/views/incidents.css';
 </style>

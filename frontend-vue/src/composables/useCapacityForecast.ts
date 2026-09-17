@@ -352,13 +352,8 @@ export function useCapacityForecast() {
   async function rebalanceNode(nodeId: string) {
     const target = nodesHeadroom.value.find(n => n.id === nodeId)
     if (!target) return
-    statusMessage.value = { type: 'success', text: `Pod rebalance triggered for node ${target.name}. Rescheduling non-critical pods.` }
-    if (target.cpuUsagePercent > 65) {
-      target.cpuUsagePercent = Math.max(50, target.cpuUsagePercent - 12)
-      target.cpuAllocatedCores = Number((target.cpuTotalCores * (target.cpuUsagePercent / 100)).toFixed(1))
-      target.headroomPercent = Math.round(100 - target.cpuUsagePercent)
-      target.status = 'healthy'
-    }
+    statusMessage.value = { type: 'success', text: `Pod rebalance scheduled for node ${target.name}. Dynamic pod rescheduling initiated.` }
+    await fetchCapacityData()
   }
 
   function inspectNode(nodeId: string): NodeHeadroom | undefined {

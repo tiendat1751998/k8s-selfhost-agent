@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '../stores/app'
@@ -91,13 +91,18 @@ const healthyClusters = computed(() =>
 )
 const totalNodes = computed(() => unifiedClusters.value.reduce((acc, c) => acc + (c.nodes || 0), 0))
 
-const totalCores = computed(() =>
-  unifiedClusters.value.reduce((acc, c) => {
+const totalCores = computed<number | string>(() => {
+  let sum = 0
+  let hasKnown = false
+  for (const c of unifiedClusters.value) {
     const rawCores = (c as any).cores || (c as any).cpu_cores || (c.discovered_resources as any)?.total_cores || (c.discovered_resources as any)?.cpu_cores
-    if (typeof rawCores === 'number') return acc + rawCores
-    return acc + (c.nodes && c.nodes > 0 ? c.nodes : 1) * 4
-  }, 0)
-)
+    if (typeof rawCores === 'number' && rawCores > 0) {
+      sum += rawCores
+      hasKnown = true
+    }
+  }
+  return hasKnown ? sum : '--'
+})
 
 const totalPods = computed(() =>
   appStore.latestMetrics?.total_containers || clusters.value.reduce((acc, c) => acc + ((c as any).pods || 0), 0) || 0
@@ -273,7 +278,7 @@ async function handleRemove(cluster: Cluster) {
       :total-clusters="totalClusters"
       :healthy-clusters="healthyClusters"
       :total-nodes="totalNodes"
-      :total-cores="totalCores"
+      :total-cores="(totalCores as any)"
       :is-syncing="loading"
       @sync="fetchFleet"
       @connect="showImportModal = true"

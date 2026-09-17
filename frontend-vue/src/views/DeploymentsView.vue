@@ -83,11 +83,13 @@ onUnmounted(() => {
 
 function matchWorkloadKind(app: DeploymentApp, kind: WorkloadSegmentTab): boolean {
   if (kind === 'All') return true
-  const n = (app.name || '').toLowerCase(), t = (app.type || '').toLowerCase()
-  if (kind === 'Deployments') return !n.includes('stateful') && !n.includes('daemon') && !n.includes('cron') && !n.includes('job')
-  if (kind === 'StatefulSets') return n.includes('stateful') || n.includes('db') || n.includes('postgres') || n.includes('redis') || n.includes('sql') || t === 'statefulset'
-  if (kind === 'DaemonSets') return n.includes('daemon') || n.includes('agent') || n.includes('traefik') || n.includes('node') || t === 'daemonset'
-  if (kind === 'CronJobs') return n.includes('cron') || n.includes('job') || n.includes('sync') || n.includes('backup') || t === 'cronjob'
+  const rawKind = ((app as { kind?: string }).kind || app.type || '').toLowerCase()
+  if (kind === 'Deployments') {
+    return rawKind.includes('deployment') || rawKind === 'kubernetes' || rawKind === 'swarm' || rawKind === 'docker' || rawKind === 'container' || (!rawKind.includes('stateful') && !rawKind.includes('daemon') && !rawKind.includes('cron') && !rawKind.includes('job'))
+  }
+  if (kind === 'StatefulSets') return rawKind.includes('stateful')
+  if (kind === 'DaemonSets') return rawKind.includes('daemon')
+  if (kind === 'CronJobs') return rawKind.includes('cron') || rawKind.includes('job')
   return true
 }
 

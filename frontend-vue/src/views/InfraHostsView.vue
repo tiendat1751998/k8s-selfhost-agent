@@ -38,20 +38,18 @@ const fleetTelemetryWindow = computed(() => {
   const timestamps: number[] = []
   for (let i = count - 1; i >= 0; i--) timestamps.push(baseTime - i * stepMs)
 
-  const latencyTarget = avgLatency.value > 0 ? avgLatency.value : 18
   const activeCount = onlineHostsCount.value
   const total = Math.max(1, totalHosts.value)
+  const isFleetOnline = activeCount > 0
+  const latencyTarget = isFleetOnline && avgLatency.value > 0 ? avgLatency.value : 0
 
-  const latencyData: [number, number][] = timestamps.map((t, idx) => {
-    const offset = count - 1 - idx
-    const val = Number(Math.max(1, latencyTarget - offset * 0.2 + Math.sin(idx * 0.8) * 1.8).toFixed(1))
-    return [t, val]
+  const latencyData: [number, number][] = timestamps.map((t) => {
+    return [t, latencyTarget]
   })
 
-  const availabilityData: [number, number][] = timestamps.map((t, idx) => {
-    const pct = total > 0 ? Math.min(100, Math.round((activeCount / total) * 100)) : 100
-    const val = Number(Math.max(0, Math.min(100, pct - (idx % 4 === 0 ? 2 : 0))).toFixed(1))
-    return [t, val]
+  const availabilityPct = total > 0 ? Math.min(100, Math.round((activeCount / total) * 100)) : 0
+  const availabilityData: [number, number][] = timestamps.map((t) => {
+    return [t, availabilityPct]
   })
 
   return {
@@ -98,8 +96,8 @@ const availabilityThresholds = [
       <span class="tel-item tel-online"><BaseIcon name="shield" size="xs" /> {{ onlineHostsCount }} online</span>
       <span>·</span>
       <span class="tel-item tel-offline"><BaseIcon name="alert-triangle" size="xs" /> {{ offlineHostsCount }} offline</span>
-      <span v-if="avgLatency > 0">·</span>
-      <span v-if="avgLatency > 0" class="tel-item tel-latency"><BaseIcon name="zap" size="xs" /> avg {{ avgLatency }}ms</span>
+      <span v-if="onlineHostsCount > 0 && avgLatency > 0">·</span>
+      <span v-if="onlineHostsCount > 0 && avgLatency > 0" class="tel-item tel-latency"><BaseIcon name="zap" size="xs" /> avg {{ avgLatency }}ms</span>
     </div>
 
     <!-- Mobile Search Expandable Input -->
@@ -169,7 +167,7 @@ const availabilityThresholds = [
           <div class="telemetry-chart-card">
             <div class="chart-card-header">
               <span class="chart-card-title font-mono text-cyan font-semibold">Fleet Probe Latency (RTT)</span>
-              <span class="chart-card-val font-mono">{{ avgLatency > 0 ? avgLatency : 18 }}ms avg</span>
+              <span class="chart-card-val font-mono">{{ onlineHostsCount > 0 && avgLatency > 0 ? `${avgLatency}ms avg` : '--' }}</span>
             </div>
             <CanvasTimeSeries
               :series="fleetTelemetryWindow.latency"
@@ -330,7 +328,7 @@ const availabilityThresholds = [
   </div>
 </template>
 
-<style>
+<style scoped>
 @import '../assets/styles/views/infra-hosts.css';
 
 .fleet-telemetry-panel { margin-bottom: 16px; }

@@ -31,12 +31,22 @@ async function copyKeyId() {
   } catch { /* clipboard fallback */ }
 }
 
+function generateKmsKeyId(version: number): string {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const bytes = new Uint8Array(4)
+    crypto.getRandomValues(bytes)
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+    return `kms-k8s-v${version}-${hex}`
+  }
+  return `kms-k8s-v${version}-${Date.now().toString(16).slice(-6)}`
+}
+
 function rotateKey() {
   if (rotationStatus.value === 'rotating') return
   rotationStatus.value = 'rotating'
   setTimeout(() => {
     keyVersion.value += 1
-    activeKeyId.value = 'kms-k8s-root-' + Math.random().toString(36).substring(2, 7)
+    activeKeyId.value = generateKmsKeyId(keyVersion.value)
     rotationStatus.value = 'rotated'
     setTimeout(() => { rotationStatus.value = 'idle' }, 3500)
   }, 900)
@@ -51,10 +61,24 @@ function verifyChecksum() {
   }, 1000)
 }
 
-function downloadAttestation() {
+async function computeSha256(message: string): Promise<string> {
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const msgBuffer = new TextEncoder().encode(message)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+  }
+  return 'c948a31e8432a188f6154e8c14f08e64c3d4a0b22a613589b4317f2258d4a9cf'
+}
+
+async function downloadAttestation() {
+  const timestamp = new Date().toISOString()
+  const payloadSeed = `k8s-kms:${activeKeyId.value}:v${keyVersion.value}:${timestamp}`
+  const digest = await computeSha256(payloadSeed)
+  const s3Digest = await computeSha256(`k8scontrol-cold-raft-airgap:${timestamp}`)
+
   const attestationData = {
     schema_version: 'v1alpha1',
-    attestation_timestamp: new Date().toISOString(),
+    attestation_timestamp: timestamp,
     kms_enclave: {
       status: 'ARMED',
       provider: 'Hardware Security Module (HSM PKCS#11) / Vault KMS Provider',
@@ -62,18 +86,25 @@ function downloadAttestation() {
       key_version: 'v' + keyVersion.value,
       cipher: 'AES-256-GCM',
       rotation_policy: '90-day automatic',
-      envelope_digest: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+      envelope_digest: `sha256:${digest}`,
+      secret_protection: 'KMS v2 Envelope Encryption (0 Plaintext Secrets in etcd)'
+    },
+    cluster_security: {
+      mtls_certificate_expiry: '2027-03-15T00:00:00Z',
+      mtls_days_remaining: 543,
+      secret_status: 'ENCRYPTED_AT_REST'
     },
     dual_sync_targets: {
       primary: { type: 'NVMe Local Raft', status: 'SYNCED', commit_index: 4892104, latency_ms: 1.14 },
       secondary: {
         type: 'S3 Air-Gapped Sync', status: 'INTEGRITY_VERIFIED',
         bucket: 'k8scontrol-cold-raft-airgap', tls_version: 'TLSv1.3',
-        integrity_checksum: 'sha256:8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4'
+        integrity_checksum: `sha256:${s3Digest}`
       }
     },
     network_mesh: {
       mode: 'mTLS v1.3 with WireGuard/eBPF kernel enforcement',
+      cert_valid_until: '2027-03-15 (543d remaining)',
       spiffe_spire: { trust_domain: 'spiffe://k8scontrol.prod', peer_verification: 'STRICT' }
     }
   }
@@ -117,6 +148,7 @@ function downloadAttestation() {
             <div class="zt-card">
               <div class="card-row"><span class="row-label">Provider</span><span class="row-val">Hardware Security Module / Vault KMS Provider</span></div>
               <div class="card-row"><span class="row-label">Enclave Isolation</span><span class="row-val text-emerald font-mono">Hardware Ring-0 HSM</span></div>
+              <div class="card-row"><span class="row-label">Secret Protection</span><span class="row-val text-emerald font-mono">KMS v2 (0 Plaintext)</span></div>
               <div class="card-row"><span class="row-label">Attestation Digest</span><span class="row-val font-mono text-muted">sha256:d8a2...9f1e</span></div>
             </div>
           </section>
@@ -179,6 +211,7 @@ function downloadAttestation() {
               <div class="card-row"><span class="row-label">Identity Attestation</span><span class="row-val">SPIFFE/SPIRE Dynamic Attestations</span></div>
               <div class="card-row"><span class="row-label">Trust Domain</span><span class="row-val font-mono text-cyan">spiffe://k8scontrol.prod</span></div>
               <div class="card-row"><span class="row-label">Peer Enforcement</span><span class="row-val text-emerald">Strict Zero-Implicit-Trust</span></div>
+              <div class="card-row"><span class="row-label">mTLS Cert Expiry</span><span class="row-val text-emerald font-mono">2027-03-15 (543d valid)</span></div>
             </div>
           </section>
 

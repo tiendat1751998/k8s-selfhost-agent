@@ -5,6 +5,7 @@ import '../assets/styles/views/alerts.css'
 import { useAlertManager } from '../composables/useAlertManager'
 import ActiveAlertsStream from '../components/alerts/ActiveAlertsStream.vue'
 import AlertRulesTable from '../components/alerts/AlertRulesTable.vue'
+import AlertRulesMobileCards from '../components/alerts/AlertRulesMobileCards.vue'
 import AlertsMobileCards from '../components/alerts/AlertsMobileCards.vue'
 import CreateAlertRuleModal from '../components/alerts/CreateAlertRuleModal.vue'
 import AlertDetailDrawer from '../components/alerts/AlertDetailDrawer.vue'
@@ -338,10 +339,19 @@ const historyColumns: Column<AlertHistory>[] = [
 
     <!-- Tab Content 2: Alert Rules Table -->
     <div v-else-if="activeTab === 'rules'" class="tab-content animate-fade-in">
-      <AlertRulesTable 
-        :rules="filteredRules" 
-        :loading="loading" 
-        @create="openCreateRule"
+      <div class="desktop-table-view desktop-only">
+        <AlertRulesTable 
+          :rules="filteredRules" 
+          :loading="loading" 
+          @create="openCreateRule"
+          @edit="openEditRule"
+          @delete="handleDeleteRule"
+          @toggle="toggleRuleState"
+        />
+      </div>
+      <AlertRulesMobileCards
+        :rules="filteredRules"
+        :loading="loading"
         @edit="openEditRule"
         @delete="handleDeleteRule"
         @toggle="toggleRuleState"

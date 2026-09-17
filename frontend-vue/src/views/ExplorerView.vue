@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import BaseIcon from '../components/ui/BaseIcon.vue'
@@ -21,7 +21,6 @@ import PodTerminalDrawer from '../components/explorer/PodTerminalDrawer.vue'
 import { useK8sExplorer, getResourceStatus } from '../composables/useK8sExplorer'
 import { useGlobalContext } from '../composables/useGlobalContext'
 import type { ResourceKind } from '../api/k8s'
-import '../assets/styles/views/explorer.css'
 
 const route = useRoute()
 const {
@@ -412,3 +411,7 @@ onMounted(async () => {
     <PodTerminalDrawer :show="showTerminalDrawer" :pod="terminalPod" :cluster="selectedCluster" @close="showTerminalDrawer = false" />
   </div>
 </template>
+
+<style scoped>
+@import '../assets/styles/views/explorer.css';
+</style>

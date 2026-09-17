@@ -74,11 +74,11 @@
           <span>© 2026 K8s Self-Host Platform. Built for autonomous cloud-native operations.</span>
         </div>
         <div class="about-links">
-          <span class="about-link">Documentation</span>
+          <a class="about-link" href="https://kubernetes.io/docs/" target="_blank" rel="noopener noreferrer">Documentation</a>
           <span class="dot-sep">•</span>
-          <span class="about-link">REST API Docs</span>
+          <a class="about-link" href="/api/v1/healthz" target="_blank" rel="noopener noreferrer">REST API Docs</a>
           <span class="dot-sep">•</span>
-          <span class="about-link">GitHub Repository</span>
+          <a class="about-link" href="https://github.com/tiendat1751998/k8s-selfhost-agent" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
         </div>
       </div>
     </div>

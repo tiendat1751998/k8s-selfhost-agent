@@ -400,10 +400,13 @@
 /* --- Sleek Toolbar --- */
 .tenancy-toolbar-sleek {
   height: 42px; min-height: 42px;
-  display: flex !important; align-items: center; justify-content: space-between; gap: 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
   border-radius: 10px; background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(12px); border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   padding: 0 12px; margin-bottom: 16px;
+}
+@media (max-width: 640px) {
+  .tenancy-toolbar-sleek.desktop-only { display: none !important; }
 }
 .tenancy-toolbar-sleek .toolbar-left,
 .tenancy-toolbar-sleek .toolbar-center,

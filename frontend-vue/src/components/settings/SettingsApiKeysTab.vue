@@ -50,6 +50,16 @@ const newKeyRole = ref('developer')
 const showCreateForm = ref(false)
 const copiedId = ref<string | null>(null)
 
+function generateSecureTokenPrefix(): string {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const bytes = new Uint8Array(4)
+    crypto.getRandomValues(bytes)
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+    return `k8s_sa_${hex}...`
+  }
+  return `k8s_sa_${Date.now().toString(16).slice(-8)}...`
+}
+
 function handleCreateKey() {
   if (!newKeyName.value.trim()) return
   const id = `key-${Date.now()}`
@@ -61,7 +71,7 @@ function handleCreateKey() {
   keys.value.push({
     id,
     name: newKeyName.value.trim(),
-    prefix: `k8s_live_${Math.random().toString(36).substring(2, 6)}...`,
+    prefix: generateSecureTokenPrefix(),
     role: roleMap[newKeyRole.value] || 'Cluster Operator (Read/Write)',
     created_at: new Date().toISOString().split('T')[0],
     last_used: 'Just now',
