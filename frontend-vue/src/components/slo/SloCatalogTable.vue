@@ -87,7 +87,7 @@ const sloColumns: Column<EnrichedSLORow>[] = [
   { key: 'error_budget', label: 'Error Budget', width: '160px', sortable: true },
   { key: 'burn_rate', label: 'Burn Velocity', width: '115px', sortable: true },
   { key: 'window', label: 'Window', width: '80px', sortable: true },
-  { key: 'query', label: 'SLI Query (PromQL)' },
+  { key: 'query', label: 'SLI Query (PromQL)', width: '380px' },
   { key: 'alert_threshold', label: 'Threshold', width: '90px', sortable: true },
   { key: 'actions', label: 'Actions', width: '135px', align: 'right' },
 ]
@@ -114,14 +114,13 @@ function getBudgetTextClass(budget: number): string {
 
 function getBurnBadgeClass(rate: number): string {
   if (rate > 14.4) return 'burn-rose'
-  if (rate > 2.0) return 'burn-amber'
+  if (rate > 2.0) return 'burn-emerald'
   return 'burn-emerald'
 }
 
 function getRowActions(_row?: EnrichedSLORow): ActionItem[] {
   return [
     { id: 'inspect', label: 'Inspect SLI & Budget', icon: 'search' },
-    { id: 'test-alert', label: 'Test Burn Alert', icon: 'zap', variant: 'warning' },
     { id: 'sep', label: '', separator: true },
     { id: 'delete', label: 'Delete SLO', icon: 'trash', variant: 'danger' },
   ]
@@ -130,8 +129,6 @@ function getRowActions(_row?: EnrichedSLORow): ActionItem[] {
 function handleRowAction(actionId: string, row: EnrichedSLORow) {
   if (actionId === 'inspect') {
     emit('inspect', row)
-  } else if (actionId === 'test-alert') {
-    emit('triggerAlert', String(row.id || ''), String(row.service || ''))
   } else if (actionId === 'delete') {
     emit('deleteSlo', String(row.id || ''), String(row.service || ''))
   }

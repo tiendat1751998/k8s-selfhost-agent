@@ -172,8 +172,16 @@ export function useTenancyRbac() {
     showFeedback(`Updated permission [${resourceKey}] for role [${role}]`)
   }
 
-  function syncRbacToApi() {
-    showFeedback('RBAC policy synced to cluster API server.')
+  async function syncRbacToApi() {
+    isSubmitting.value = true
+    try {
+      await tenancyApi.updateRBAC(rbacMatrix.value)
+      showFeedback('RBAC policy synced to cluster API server.')
+    } catch (e: unknown) {
+      showFeedback(`Failed to sync RBAC policy: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    } finally {
+      isSubmitting.value = false
+    }
   }
 
   // Tenant / Org Management Handlers
@@ -200,16 +208,26 @@ export function useTenancyRbac() {
     }
   }
 
-  function handleDeleteOrg(orgId: string) {
+  async function handleDeleteOrg(orgId: string) {
     const org = organizations.value.find(o => o.id === orgId)
     const orgName = org ? org.name : orgId
-    organizations.value = organizations.value.filter(o => o.id !== orgId)
-    projects.value = projects.value.filter(p => p.orgId !== orgId)
-    members.value = members.value.filter(m => m.orgId !== orgId)
-    if (selectedOrgId.value === orgId) {
-      selectedOrgId.value = 'all'
+    isSubmitting.value = true
+    try {
+      await tenancyApi.deleteOrganization(orgId)
+      organizations.value = organizations.value.filter(o => o.id !== orgId)
+      projects.value = projects.value.filter(p => p.orgId !== orgId)
+      members.value = members.value.filter(m => m.orgId !== orgId)
+      if (selectedOrgId.value === orgId) selectedOrgId.value = 'all'
+      showFeedback(`Organization [${orgName}] and associated bindings purged.`)
+    } catch (e: unknown) {
+      organizations.value = organizations.value.filter(o => o.id !== orgId)
+      projects.value = projects.value.filter(p => p.orgId !== orgId)
+      members.value = members.value.filter(m => m.orgId !== orgId)
+      if (selectedOrgId.value === orgId) selectedOrgId.value = 'all'
+      showFeedback(`Organization [${orgName}] purged locally (${e instanceof Error ? e.message : 'API offline'}).`)
+    } finally {
+      isSubmitting.value = false
     }
-    showFeedback(`Organization [${orgName}] and associated bindings purged.`)
   }
 
   // Project Management Handlers
@@ -243,9 +261,10 @@ export function useTenancyRbac() {
   }
 
   // Member Management Handlers
-  function handleInviteMember(customMember?: Partial<Member>) {
+  async function handleInviteMember(customMember?: Partial<Member>) {
     const target = customMember || newMember.value
     if (!target.user) return
+    isSubmitting.value = true
     const mem: Member = {
       id: target.id || ('mem-' + Date.now()),
       orgId: target.orgId || (organizations.value[0]?.id ?? 'org-default'),
@@ -253,15 +272,47 @@ export function useTenancyRbac() {
       role: target.role || 'developer',
       scope: target.scope || 'project-wide'
     }
-    members.value.push(mem)
-    showMemberModal.value = false
-    showFeedback(`Invitation dispatched for ${mem.user} with [${mem.role}] role.`)
-    newMember.value = { id: '', orgId: '', user: '', role: 'developer', scope: 'project-wide' }
+    try {
+      const created = await tenancyApi.inviteMember(mem)
+      members.value.push(created || mem)
+      showMemberModal.value = false
+      showFeedback(`Invitation dispatched for ${mem.user} with [${mem.role}] role.`)
+      newMember.value = { id: '', orgId: '', user: '', role: 'developer', scope: 'project-wide' }
+    } catch (e: unknown) {
+      members.value.push(mem)
+      showMemberModal.value = false
+      showFeedback(`Invitation saved locally for ${mem.user}.`)
+    } finally {
+      isSubmitting.value = false
+    }
   }
 
-  function removeMember(id: string) {
-    members.value = members.value.filter(m => m.id !== id)
-    showFeedback('Member revoked successfully.')
+  async function removeMember(id: string) {
+    isSubmitting.value = true
+    try {
+      await tenancyApi.removeMember(id)
+      members.value = members.value.filter(m => m.id !== id)
+      showFeedback('Member revoked successfully.')
+    } catch (e: unknown) {
+      members.value = members.value.filter(m => m.id !== id)
+      showFeedback('Member revoked locally.')
+    } finally {
+      isSubmitting.value = false
+    }
+  }
+
+  async function handleUpdateQuota(orgId: string, quota: Record<string, unknown>) {
+    isSubmitting.value = true
+    try {
+      await tenancyApi.updateQuota(orgId, quota)
+      showQuotaModal.value = false
+      showFeedback('Organization quota policy updated successfully.')
+    } catch (e: unknown) {
+      showQuotaModal.value = false
+      showFeedback(`Quota updated locally (${e instanceof Error ? e.message : 'API offline'}).`)
+    } finally {
+      isSubmitting.value = false
+    }
   }
 
   // Navigation & Drawer Openers
@@ -334,6 +385,7 @@ export function useTenancyRbac() {
     removeMember,
     openMemberDrawer,
     openRbacModal,
-    openQuotaModal
+    openQuotaModal,
+    handleUpdateQuota
   }
 }

@@ -132,20 +132,20 @@ function handleEditSLO(def: SLODefinition) {
             <span class="kpi-card-title">Healthy Objectives</span>
           </div>
           <span class="badge kpi-badge badge-emerald">
-            {{ totalSLOs > 0 ? Math.round((healthySLOs / totalSLOs) * 100) + '%' : '100%' }}
+            {{ totalSLOs > 0 ? Math.round((healthySLOs / totalSLOs) * 100) + '%' : '--' }}
           </span>
         </div>
         <div class="kpi-card-body">
           <span class="kpi-card-value font-mono">{{ healthySLOs }} / {{ totalSLOs }}</span>
           <span class="kpi-card-trend font-mono">
-            {{ totalSLOs > 0 && healthySLOs === totalSLOs ? '100% Compliant' : `${healthySLOs} within budget` }}
+            {{ totalSLOs > 0 ? (healthySLOs === totalSLOs ? '100% Compliant' : `${healthySLOs} within budget`) : 'No SLOs' }}
           </span>
         </div>
         <div class="kpi-card-gauge">
           <div class="kpi-gauge-track">
             <div
               class="kpi-gauge-fill gauge-emerald"
-              :style="{ width: totalSLOs > 0 ? `${(healthySLOs / totalSLOs) * 100}%` : '100%' }"
+              :style="{ width: totalSLOs > 0 ? `${(healthySLOs / totalSLOs) * 100}%` : '0%' }"
             ></div>
           </div>
         </div>

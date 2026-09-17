@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
 import type { SystemOverview, NodeMetrics } from '../../../api/overview'
 import BaseIcon from '../../ui/BaseIcon.vue'
@@ -38,6 +38,21 @@ function getRiskStroke(pct: number): string {
   if (pct >= 70) return '#f59e0b'
   return '#10b981'
 }
+
+function computeSparkline(pct: number): string {
+  const clamped = Math.max(0, Math.min(100, pct || 0))
+  const endY = (7 - (clamped / 100) * 5.5).toFixed(1)
+  const p1 = (7 - ((clamped * 0.7) / 100) * 5.5).toFixed(1)
+  const p2 = (7 - ((clamped * 0.9) / 100) * 5.5).toFixed(1)
+  const p3 = (7 - ((clamped * 0.8) / 100) * 5.5).toFixed(1)
+  return `M 1 ${p1} L 7 ${p2} L 14 ${p3} L 21 ${p2} L 29 ${endY}`
+}
+
+const nodesSparkline = computed(() => computeSparkline(nodesPct.value))
+const containersSparkline = computed(() => computeSparkline(containersPct.value))
+const cpuSparkline = computed(() => computeSparkline(props.overview.total_cpu_percent))
+const memSparkline = computed(() => computeSparkline(props.overview.total_mem_percent))
+const diskSparkline = computed(() => computeSparkline(props.overview.total_disk_percent))
 </script>
 
 <template>
@@ -71,7 +86,7 @@ function getRiskStroke(pct: number): string {
       <div class="hud-card-bottom">
         <PercentageBar :percentage="nodesPct" :height="3" variant="emerald" class="hud-bar" />
         <svg class="micro-sparkline" width="30" height="8" viewBox="0 0 30 8" fill="none" aria-hidden="true">
-          <path d="M 1 6 L 7 5 L 14 6 L 21 4 L 29 2" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path :d="nodesSparkline" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </div>
     </div>
@@ -99,7 +114,7 @@ function getRiskStroke(pct: number): string {
       <div class="hud-card-bottom">
         <PercentageBar :percentage="containersPct" :height="3" variant="cyan" class="hud-bar" />
         <svg class="micro-sparkline" width="30" height="8" viewBox="0 0 30 8" fill="none" aria-hidden="true">
-          <path d="M 1 7 L 7 5 L 14 6 L 21 3 L 29 2" stroke="#06b6d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path :d="containersSparkline" stroke="#06b6d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </div>
     </div>
@@ -127,7 +142,7 @@ function getRiskStroke(pct: number): string {
       <div class="hud-card-bottom">
         <PercentageBar :percentage="overview.total_cpu_percent" :height="3" class="hud-bar" />
         <svg class="micro-sparkline" width="30" height="8" viewBox="0 0 30 8" fill="none" aria-hidden="true">
-          <path d="M 1 6 L 7 3 L 14 5 L 21 2 L 29 3" :stroke="getRiskStroke(overview.total_cpu_percent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path :d="cpuSparkline" :stroke="getRiskStroke(overview.total_cpu_percent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </div>
     </div>
@@ -155,7 +170,7 @@ function getRiskStroke(pct: number): string {
       <div class="hud-card-bottom">
         <PercentageBar :percentage="overview.total_mem_percent" :height="3" class="hud-bar" />
         <svg class="micro-sparkline" width="30" height="8" viewBox="0 0 30 8" fill="none" aria-hidden="true">
-          <path d="M 1 5 L 7 4 L 14 4 L 21 2 L 29 2" :stroke="getRiskStroke(overview.total_mem_percent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path :d="memSparkline" :stroke="getRiskStroke(overview.total_mem_percent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </div>
     </div>
@@ -183,7 +198,7 @@ function getRiskStroke(pct: number): string {
       <div class="hud-card-bottom">
         <PercentageBar :percentage="overview.total_disk_percent" :height="3" class="hud-bar" />
         <svg class="micro-sparkline" width="30" height="8" viewBox="0 0 30 8" fill="none" aria-hidden="true">
-          <path d="M 1 4 L 7 4 L 14 3 L 21 3 L 29 2" :stroke="getRiskStroke(overview.total_disk_percent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path :d="diskSparkline" :stroke="getRiskStroke(overview.total_disk_percent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </div>
     </div>

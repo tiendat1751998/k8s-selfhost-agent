@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
@@ -158,14 +158,6 @@ function getBudgetBarWidth(budget?: number): number {
             @click="$emit('inspect', { snap })"
           >
             <BaseIcon name="search" size="xs" /> <span>Inspect</span>
-          </button>
-          <button 
-            class="btn btn-secondary btn-card-action" 
-            title="Simulate Burn Rate Alert"
-            :disabled="actionInProgress"
-            @click="$emit('triggerAlert', snap.slo_id, snap.service)"
-          >
-            <BaseIcon name="zap" size="xs" /> <span>Simulate Burn</span>
           </button>
           <button 
             class="btn btn-danger btn-card-action" 

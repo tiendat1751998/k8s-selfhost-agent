@@ -83,14 +83,15 @@ export function useAutomationEngine() {
   })
 
   const healingSuccessRate = computed(() => {
-    if (executions.value.length === 0) return 100
+    if (executions.value.length === 0) return 0
     const successes = executions.value.filter(e => e.result === 'success').length
     return Math.round((successes / executions.value.length) * 100)
   })
 
   const savedEngineeringHours = computed(() => {
-    const count = totalExecutionsCount.value || executions.value.length
-    return (count * 0.75).toFixed(1)
+    const successes = executions.value.filter(e => e.result === 'success').length
+    if (successes === 0) return '0.0'
+    return (successes * 0.25).toFixed(1)
   })
 
   // Data Fetching
@@ -272,9 +273,8 @@ export function useAutomationEngine() {
   }
 
   function getExecutionDuration(exec: AutomationExecution): string {
-    const charCodeSum = exec.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
-    const durationMs = 150 + (charCodeSum % 750)
-    return durationMs >= 1000 ? `${(durationMs / 1000).toFixed(2)}s` : `${durationMs}ms`
+    if (!exec.created_at) return '--'
+    return exec.result === 'success' ? '< 1s' : '--'
   }
 
   onMounted(() => {

@@ -83,8 +83,28 @@ export const tenancyApi = {
     return api.post<Organization>('/tenancy/organizations', org)
   },
 
+  async deleteOrganization(id: string): Promise<void> {
+    return api.delete<void>(`/tenancy/organizations/${id}`)
+  },
+
   async createProject(project: Project): Promise<Project> {
     return api.post<Project>('/tenancy/projects', project)
+  },
+
+  async inviteMember(member: Member): Promise<Member> {
+    return api.post<Member>('/tenancy/members', member)
+  },
+
+  async removeMember(id: string): Promise<void> {
+    return api.delete<void>(`/tenancy/members/${id}`)
+  },
+
+  async updateRBAC(matrix: RBACMatrix): Promise<RBACMatrix> {
+    return api.put<RBACMatrix>('/tenancy/rbac', matrix)
+  },
+
+  async updateQuota(orgId: string, quota: Record<string, unknown>): Promise<void> {
+    return api.put<void>(`/tenancy/organizations/${orgId}/quota`, quota)
   },
 }
 

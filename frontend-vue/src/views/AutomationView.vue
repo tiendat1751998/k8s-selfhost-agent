@@ -22,6 +22,7 @@ const {
   showCreateModal,
   editingRule,
   enabledRulesCount,
+  healingSuccessRate,
   savedEngineeringHours,
   fetchAutomationData,
   handleToggleRule,
@@ -151,7 +152,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
       <span class="tel-sep">·</span>
       <span class="tel-item tel-active"><BaseIcon name="check-circle" size="xs" /> {{ activeCount }} act</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-healed"><BaseIcon name="shield" size="xs" /> 100%</span>
+      <span class="tel-item tel-healed"><BaseIcon name="shield" size="xs" /> {{ executions.length > 0 ? `${healingSuccessRate}%` : '--' }}</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-saved"><BaseIcon name="clock" size="xs" /> {{ savedHours }}h saved</span>
     </div>
@@ -223,7 +224,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
 
       <!-- Inline compact execution badge strip font-mono -->
       <div class="toolbar-kpi-strip font-mono desktop-only" role="status" aria-label="Automation execution metrics">
-        <span class="kpi-badge font-mono">{{ rules.length }} Rules ({{ enabledRulesCount }} Active · 100% Healed · {{ savedEngineeringHours }}h Saved)</span>
+        <span class="kpi-badge font-mono">{{ rules.length }} Rules ({{ enabledRulesCount }} Active · {{ executions.length > 0 ? `${healingSuccessRate}% Healed` : '0 Healed' }} · {{ savedEngineeringHours }}h Saved)</span>
       </div>
 
       <!-- Action buttons: + Create Automation Rule (primary) and Refresh -->

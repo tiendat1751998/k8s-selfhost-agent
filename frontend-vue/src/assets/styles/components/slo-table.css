@@ -182,13 +182,14 @@
   color: #f43f5e;
 }
 
-/* SLI Query Monospace Column (No max-width 150px truncation) */
+/* SLI Query Monospace Column (Constrained to 380px to prevent table blowout) */
 .query-cell {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  max-width: 100%;
+  max-width: 380px;
+  overflow: hidden;
 }
 
 .query-code {
@@ -204,6 +205,12 @@
   text-overflow: ellipsis;
   flex: 1;
   min-width: 0;
+  max-width: 340px;
+}
+
+.table-box .data-table td:nth-child(7) {
+  max-width: 380px;
+  overflow: hidden;
 }
 
 .btn-copy-query {

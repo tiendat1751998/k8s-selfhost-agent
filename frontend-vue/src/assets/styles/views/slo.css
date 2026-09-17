@@ -253,8 +253,8 @@
 .slo-toolbar-sleek .toolbar-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Responsive Breakpoints */
-@media (max-width: 1200px) {
-  .slo-toolbar-sleek .toolbar-kpi-status { display: none; }
+@media (max-width: 1450px) {
+  .slo-toolbar-sleek .toolbar-kpi-status { display: none !important; }
 }
 
 @media (max-width: 960px) {

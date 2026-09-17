@@ -60,10 +60,7 @@ export function useOverviewDashboard() {
   const orderedNodes = computed<NodeMetrics[]>(() => {
     const raw = overview.value?.nodes || []
     if (!raw.length) return []
-    const incoming = raw.map(n => ({
-      ...n,
-      node_name: n.node_name === 'k8smater' ? 'k8smaster' : n.node_name
-    }))
+    const incoming = raw
     if (!customNodeOrder.value.length) {
       return [...incoming].sort((a, b) => {
         const isReadyA = (a.status || '').toLowerCase() === 'ready' ? 0 : 1
