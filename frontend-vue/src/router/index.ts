@@ -26,9 +26,7 @@ const router = createRouter({
     },
     {
       path: '/agents',
-      name: 'agents',
-      component: () => import('../views/AgentsView.vue'),
-      meta: { requiresAuth: true, title: 'Autonomous AI SRE Agents' }
+      redirect: '/'
     },
     {
       path: '/slo',
@@ -72,9 +70,7 @@ const router = createRouter({
     {
       path: '/swarm',
       alias: ['/docker-swarm', '/docker', '/compute'],
-      name: 'swarm',
-      component: () => import('../views/DockerSwarmView.vue'),
-      meta: { requiresAuth: true, title: 'Docker Swarm' }
+      redirect: '/'
     },
     {
       path: '/explorer',
@@ -99,9 +95,7 @@ const router = createRouter({
     {
       path: '/security',
       alias: ['/security/devsecops', '/devsecops'],
-      name: 'security',
-      component: () => import('../views/DevSecOpsView.vue'),
-      meta: { requiresAuth: true, title: 'DevSecOps & Security' }
+      redirect: '/'
     },
 
     // 4. Automation & FinOps
@@ -120,15 +114,11 @@ const router = createRouter({
     {
       path: '/cost',
       alias: ['/finops/cost', '/finops'],
-      name: 'cost',
-      component: () => import('../views/CostFinOpsView.vue'),
-      meta: { requiresAuth: true, title: 'Cost Optimization & FinOps' }
+      redirect: '/'
     },
     {
       path: '/capacity',
-      name: 'capacity',
-      component: () => import('../views/CapacityView.vue'),
-      meta: { requiresAuth: true, title: 'Capacity Forecast' }
+      redirect: '/'
     },
 
     // 5. Enterprise Management

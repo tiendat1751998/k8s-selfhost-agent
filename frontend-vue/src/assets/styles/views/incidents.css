@@ -11,7 +11,7 @@
 }
 .incidents-toolbar-sleek .toolbar-search-wrap {
   position: relative; display: flex; align-items: center;
-  flex: 0 1 210px; min-width: 140px; height: 28px;
+  flex: 0 1 170px; min-width: 120px; height: 28px;
 }
 .incidents-toolbar-sleek .search-icon {
   position: absolute; left: 8px; font-size: 11px;
@@ -35,11 +35,11 @@
 .incidents-toolbar-sleek .clear-input-btn:hover { color: #fff; }
 
 .incidents-toolbar-sleek .toolbar-status-pills {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 5px;
   background: transparent; border: none; padding: 0; flex-shrink: 0;
 }
 .incidents-toolbar-sleek .toolbar-pill-btn {
-  border-radius: 9999px; height: 28px; padding: 0 12px; font-size: 11.5px; font-weight: 600;
+  border-radius: 9999px; height: 28px; padding: 0 10px; font-size: 11px; font-weight: 600;
   cursor: pointer; border: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(30, 41, 59, 0.6); color: #94a3b8;
   display: inline-flex; align-items: center; justify-content: center;
@@ -69,6 +69,12 @@
 }
 .incidents-toolbar-sleek .kpi-live-text {
   font-size: 11px; font-weight: 500; color: #94a3b8; white-space: nowrap;
+}
+
+@media (max-width: 1300px) {
+  .incidents-toolbar-sleek .toolbar-kpi-strip {
+    display: none;
+  }
 }
 
 .incidents-toolbar-sleek .toolbar-actions-group {
