@@ -163,7 +163,7 @@ onUnmounted(() => {
   }
 })
 
-const isLoginPage = computed(() => route.path === '/login')
+const isStandalonePage = computed(() => route.path === '/login' || route.meta?.layout === 'blank')
 
 // Mesh & Node Health Real-time Calculations
 const downNodes = computed(() => {
@@ -253,7 +253,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
 </script>
 
 <template>
-  <div v-if="isLoginPage" class="login-container">
+  <div v-if="isStandalonePage" :class="route.path === '/login' ? 'login-container' : 'standalone-layout'">
     <RouterView />
   </div>
 

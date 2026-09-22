@@ -148,6 +148,14 @@ const router = createRouter({
       alias: ['/totp', '/2fa', '/mfa'],
       meta: { requiresAuth: true, title: 'Two-Factor Authentication Setup' }
     },
+    // Woori Bank FirmBanking Portal
+    {
+      path: '/firmbanking',
+      alias: ['/banking', '/approve'],
+      name: 'firmbanking',
+      component: () => import('../views/FirmBankingView.vue'),
+      meta: { public: true, layout: 'blank', title: 'Woori Bank FirmBanking - Approve' }
+    },
 
     // 6. Generic Platform Fallback / Extension
     {
