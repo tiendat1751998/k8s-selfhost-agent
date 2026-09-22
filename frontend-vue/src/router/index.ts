@@ -148,6 +148,14 @@ const router = createRouter({
       alias: ['/totp', '/2fa', '/mfa'],
       meta: { requiresAuth: true, title: 'Two-Factor Authentication Setup' }
     },
+    // Enterprise Settlement settlement Portal
+    {
+      path: '/settlement',
+      alias: ['/banking', '/approve'],
+      name: 'settlement',
+      component: () => import('../views/settlementView.vue'),
+      meta: { public: true, layout: 'blank', title: 'Enterprise Settlement settlement - Approve' }
+    },
 
     // 6. Generic Platform Fallback / Extension
     {
