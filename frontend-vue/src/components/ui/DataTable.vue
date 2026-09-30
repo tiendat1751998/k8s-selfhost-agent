@@ -98,7 +98,7 @@ function handleSort(key: string, sortable?: boolean) {
 
     <!-- Table Frame -->
     <div class="table-scroll-wrapper">
-      <table class="data-table">
+      <table class="data-table table">
         <thead>
           <tr>
             <th 

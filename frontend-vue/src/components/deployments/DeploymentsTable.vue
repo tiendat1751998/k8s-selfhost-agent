@@ -28,11 +28,11 @@ const emit = defineEmits<{
 
 const columns: Column<Record<string, unknown>>[] = [
   { key: 'name', label: 'Workload & Namespace', width: '200px', sortable: true },
-  { key: 'strategy', label: 'Strategy', width: '110px', sortable: true },
-  { key: 'image', label: 'Container Image', width: '160px', sortable: true },
-  { key: 'replicas', label: 'Pods / Scale', width: '120px', sortable: true, align: 'center' },
+  { key: 'strategy', label: 'Strategy', width: '90px', sortable: true },
+  { key: 'image', label: 'Container Image', width: '130px', sortable: true },
+  { key: 'replicas', label: 'Pods / Scale', width: '105px', sortable: true, align: 'center' },
   { key: 'status', label: 'Status', width: '100px', sortable: true },
-  { key: 'actions', label: 'ACTIONS', width: '125px', align: 'right' },
+  { key: 'actions', label: 'ACTIONS', width: '115px', align: 'right' },
 ]
 
 function asDeployment(row: unknown): DeploymentApp {
@@ -116,7 +116,7 @@ function handleActionSelect(actionId: string, app: DeploymentApp) {
           </div>
 
           <div v-else class="rolling-chip">
-            <span class="strategy-label font-mono">RollingUpdate</span>
+            <span class="strategy-label font-mono">Rolling</span>
           </div>
         </div>
       </template>
@@ -211,4 +211,16 @@ function handleActionSelect(actionId: string, app: DeploymentApp) {
 
 <style scoped>
 @import '../../assets/styles/views/deployments.css';
+
+:deep(.data-table),
+:deep(table) {
+  table-layout: fixed !important;
+  width: 100% !important;
+  max-width: 1070px !important;
+}
+
+:deep(th),
+:deep(td) {
+  padding: 8px 10px !important;
+}
 </style>
