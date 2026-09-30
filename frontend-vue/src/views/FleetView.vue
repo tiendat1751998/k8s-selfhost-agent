@@ -278,7 +278,7 @@ async function handleRemove(cluster: Cluster) {
       :total-clusters="totalClusters"
       :healthy-clusters="healthyClusters"
       :total-nodes="totalNodes"
-      :total-cores="(totalCores as any)"
+      :total-cores="totalCores"
       :is-syncing="loading"
       @sync="fetchFleet"
       @connect="showImportModal = true"
