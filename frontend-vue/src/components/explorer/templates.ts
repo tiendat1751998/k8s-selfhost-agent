@@ -11,7 +11,7 @@ export const manifestTemplates: TemplateOption[] = [
   {
     key: 'deployment',
     label: 'Deployment',
-    icon: '🚀',
+    icon: 'play',
     yaml: (ns) => `apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -36,7 +36,7 @@ spec:
   {
     key: 'service',
     label: 'Service',
-    icon: '🔌',
+    icon: 'plug',
     yaml: (ns) => `apiVersion: v1
 kind: Service
 metadata:
@@ -54,7 +54,7 @@ spec:
   {
     key: 'configmap',
     label: 'ConfigMap',
-    icon: '🗺️',
+    icon: 'file-text',
     yaml: (ns) => `apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -66,7 +66,7 @@ data:
   {
     key: 'secret',
     label: 'Secret',
-    icon: '🔒',
+    icon: 'lock',
     yaml: (ns) => `apiVersion: v1
 kind: Secret
 metadata:
@@ -79,7 +79,7 @@ stringData:
   {
     key: 'ingress',
     label: 'Ingress',
-    icon: '🌐',
+    icon: 'globe',
     yaml: (ns) => `apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -100,7 +100,7 @@ spec:
   {
     key: 'pvc',
     label: 'PVC',
-    icon: '💾',
+    icon: 'hard-drive',
     yaml: (ns) => `apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -116,7 +116,7 @@ spec:
   {
     key: 'job',
     label: 'Job',
-    icon: '⚡',
+    icon: 'zap',
     yaml: (ns) => `apiVersion: batch/v1
 kind: Job
 metadata:

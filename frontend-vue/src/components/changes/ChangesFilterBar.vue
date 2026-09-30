@@ -1,4 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
+
 defineProps<{
   searchQuery: string
   selectedCluster: string
@@ -12,6 +14,7 @@ defineEmits<{
   'update:selectedCluster': [val: string]
   'update:selectedTimeWindow': [val: string]
   'update:selectedStatus': [val: string]
+  'create': []
 }>()
 
 const timeWindows = [
@@ -33,10 +36,10 @@ const statuses = [
 
 <template>
   <div class="changes-filter-bar glass-panel">
-    <div class="filter-top-row">
+    <div class="filter-bar-row">
       <!-- Search Input -->
       <div class="search-input-wrap">
-        <span class="search-icon">🔍</span>
+        <BaseIcon name="search" size="xs" class="search-icon" />
         <input
           :value="searchQuery"
           type="text"
@@ -49,9 +52,7 @@ const statuses = [
           class="clear-search-btn"
           title="Clear search"
           @click="$emit('update:searchQuery', '')"
-        >
-          ✕
-        </button>
+        ><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <!-- Cluster Selector -->
@@ -65,6 +66,22 @@ const statuses = [
           <option value="all">All Clusters</option>
           <option v-for="c in clusters" :key="c" :value="c">{{ c }}</option>
         </select>
+      </div>
+
+      <!-- Status Filters -->
+      <div class="status-filters-group">
+        <span class="filter-label">Status:</span>
+        <div class="status-pills">
+          <button
+            v-for="s in statuses"
+            :key="s.id"
+            class="spill"
+            :class="{ active: selectedStatus === s.id }"
+            @click="$emit('update:selectedStatus', s.id)"
+          >
+            {{ s.label }}
+          </button>
+        </div>
       </div>
 
       <!-- Time Window Selector -->
@@ -82,20 +99,11 @@ const statuses = [
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- Status Filters -->
-    <div class="status-filters-row">
-      <span class="filter-label">Status:</span>
-      <div class="status-pills">
-        <button
-          v-for="s in statuses"
-          :key="s.id"
-          class="spill"
-          :class="{ active: selectedStatus === s.id }"
-          @click="$emit('update:selectedStatus', s.id)"
-        >
-          {{ s.label }}
+      <!-- Action: Submit RFC Button -->
+      <div class="filter-actions-wrap desktop-only">
+        <button type="button" class="btn btn-primary btn-sm" @click="$emit('create')">
+          <span>+ Submit Change Request</span>
         </button>
       </div>
     </div>

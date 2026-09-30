@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BackupJob } from '../../api/governance'
+import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 
 defineProps<{
@@ -62,7 +63,7 @@ function formatDateShort(d?: string): string {
           aria-label="Restore Snapshot"
           @click="emit('restore', job)"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" />
         </button>
         <button 
           class="btn-action-icon"
@@ -71,7 +72,7 @@ function formatDateShort(d?: string): string {
           aria-label="Download Snapshot"
           @click="emit('download', job)"
         >
-          <span>{{ downloadingJobId === job.id ? '⏳' : '📥' }}</span>
+          <BaseIcon :name="downloadingJobId === job.id ? 'clock' : 'download'" size="xs" />
         </button>
         <button 
           class="btn-action-icon btn-action-delete"
@@ -80,13 +81,13 @@ function formatDateShort(d?: string): string {
           aria-label="Delete Snapshot"
           @click="emit('delete', job.id)"
         >
-          <span>{{ deletingJobId === job.id ? '⏳' : '🗑' }}</span>
+          <BaseIcon :name="deletingJobId === job.id ? 'clock' : 'trash'" size="xs" />
         </button>
       </div>
     </div>
 
     <div v-if="jobs.length === 0" class="empty-state-box glass-panel">
-      <span class="empty-icon">📦</span>
+      <span class="empty-icon"><BaseIcon name="box" size="lg" /></span>
       <h3 class="empty-title">No Backup Snapshots</h3>
       <p class="empty-desc">No backup snapshots found in repository.</p>
     </div>

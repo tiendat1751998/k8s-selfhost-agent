@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import type { MetricAlert } from '../../../api/overview'
 import type { MutedAlertConfig } from '../../../stores/alertStore'
 import type { AlertTabType } from './AlertFilterBar.vue'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 interface Props {
   activeTab: AlertTabType
@@ -75,7 +76,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocumentClick))
       class="alert-empty-state"
     >
       <div class="empty-icon-shield">
-        <span class="empty-emoji">{{ activeTab === 'muted' ? '🔔' : '🟢' }}</span>
+        <span class="empty-emoji"><BaseIcon :name="activeTab === 'muted' ? 'bell' : 'shield'" size="lg" /></span>
       </div>
       <h4 class="empty-title">
         {{ activeTab === 'muted' ? 'No Silenced Alert Rules' : 'Cluster Telemetry All Green' }}
@@ -88,7 +89,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocumentClick))
     <!-- ACTIVE ALERTS LIST -->
     <div v-if="(activeTab === 'active' || activeTab === 'all') && activeAlerts.length > 0" class="alert-group-section">
       <div v-if="activeTab === 'all'" class="group-section-title text-rose">
-        <span>🚨 ACTIVE TELEMETRY ALERTS ({{ activeAlerts.length }})</span>
+        <span class="flex items-center gap-1.5"><BaseIcon name="alert-triangle" size="xs" /> ACTIVE TELEMETRY ALERTS ({{ activeAlerts.length }})</span>
       </div>
 
       <div class="alert-cards-grid">
@@ -100,7 +101,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocumentClick))
         >
           <div class="card-header-row">
             <div class="card-node-info">
-              <span class="card-icon">{{ alert.value >= 90 || alert.type === 'node_down' ? '🚨' : '⚠️' }}</span>
+              <span class="card-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
               <span class="card-node-name">{{ alert.node_name || alert.node_id }}</span>
               <span class="card-type-tag">{{ alert.type.toUpperCase() }}</span>
             </div>
@@ -114,42 +115,43 @@ onUnmounted(() => document.removeEventListener('click', handleDocumentClick))
           </div>
 
           <div class="card-actions-row">
-            <button v-if="alert.type === 'node_down' || alert.type === 'NodeNotReady'" type="button" class="btn-card-action btn-action-failover" @click="emit('remediate-node', alert.node_name || alert.node_id)" title="Trigger 1-Click Fast Failover SRE Remediation"><span class="btn-text-full">⚡ 1-Click Failover</span><span class="btn-text-mobile">⚡ Failover</span></button>
+            <button v-if="alert.type === 'node_down' || alert.type === 'NodeNotReady'" type="button" class="btn-card-action btn-action-failover" @click="emit('remediate-node', alert.node_name || alert.node_id)" title="Trigger 1-Click Fast Failover SRE Remediation"><BaseIcon name="zap" size="xs" /><span class="btn-text-full">1-Click Failover</span><span class="btn-text-mobile">Failover</span></button>
             <button type="button" class="btn-card-action btn-card-registry" @click="emit('navigate-to-host', alert.node_name || alert.node_id)" title="Open host in Infrastructure Registry">
-              <span class="btn-text-full">⚙️ Open in Registry</span><span class="btn-text-mobile">⚙️ Host</span>
+              <BaseIcon name="box" size="xs" /><span class="btn-text-full">Open in Registry</span><span class="btn-text-mobile">Host</span>
             </button>
 
             <!-- Snooze Dropdown -->
             <div class="snooze-dropdown-wrapper">
               <button type="button" class="btn-card-mute-pill" @click="handleMuteAlert(alert, 'restart')" title="Silence this alert until server restart">
-                <span class="mute-icon">🔕</span>
+                <span class="mute-icon"><BaseIcon name="bell-off" size="xs" /></span>
                 <span class="btn-text-full">Mute (Until Restart)</span><span class="btn-text-mobile">Mute</span>
               </button>
-              <button type="button" class="btn-card-snooze-caret" @click.stop="toggleSnoozeDropdown(getAlertKey(alert))" title="More snooze options">▾</button>
+              <button type="button" class="btn-card-snooze-caret" @click.stop="toggleSnoozeDropdown(getAlertKey(alert))" title="More snooze options"><BaseIcon name="chevron-down" size="xs" /></button>
 
               <div v-if="openSnoozeDropdownKey === getAlertKey(alert)" class="snooze-menu glass-panel animate-scale-in" @click.stop>
                 <div class="snooze-menu-header">Snooze Duration</div>
                 <button type="button" class="snooze-menu-item" @click="handleMuteAlert(alert, 'restart')">
-                  <span class="snooze-item-icon">🔄</span>
+                  <span class="snooze-item-icon"><BaseIcon name="refresh" size="xs" /></span>
                   <div class="snooze-item-text"><span class="snooze-item-title">Until Server Restart</span><span class="snooze-item-desc">Muted across page refreshes</span></div>
                 </button>
                 <button type="button" class="snooze-menu-item" @click="handleMuteAlert(alert, '1h')">
-                  <span class="snooze-item-icon">⏱️</span>
+                  <span class="snooze-item-icon"><BaseIcon name="clock" size="xs" /></span>
                   <div class="snooze-item-text"><span class="snooze-item-title">Snooze 1 Hour</span><span class="snooze-item-desc">Re-evaluate after 60 mins</span></div>
                 </button>
                 <button type="button" class="snooze-menu-item" @click="handleMuteAlert(alert, '24h')">
-                  <span class="snooze-item-icon">📅</span>
+                  <span class="snooze-item-icon"><BaseIcon name="calendar" size="xs" /></span>
                   <div class="snooze-item-text"><span class="snooze-item-title">Snooze 24 Hours</span><span class="snooze-item-desc">Re-evaluate after 1 day</span></div>
                 </button>
                 <button type="button" class="snooze-menu-item" @click="handleMuteAlert(alert, 'session')">
-                  <span class="snooze-item-icon">🪟</span>
+                  <span class="snooze-item-icon"><BaseIcon name="pause" size="xs" /></span>
                   <div class="snooze-item-text"><span class="snooze-item-title">Dismiss for Session</span><span class="snooze-item-desc">Muted until browser tab closes</span></div>
                 </button>
               </div>
             </div>
 
             <button type="button" class="btn-card-dismiss" @click="emit('dismiss-alert', alert)" title="Dismiss alert from active view">
-              <span class="btn-text-full">✕ Dismiss</span><span class="btn-text-mobile">✕</span>
+              <BaseIcon name="x" size="xs" />
+              <span class="btn-text-full">Dismiss</span>
             </button>
           </div>
         </div>
@@ -159,14 +161,14 @@ onUnmounted(() => document.removeEventListener('click', handleDocumentClick))
     <!-- MUTED ALERTS LIST -->
     <div v-if="(activeTab === 'muted' || activeTab === 'all') && mutedAlertsList.length > 0" class="alert-group-section">
       <div v-if="activeTab === 'all'" class="group-section-title text-muted">
-        <span>🔕 SILENCED &amp; MUTED RULES ({{ mutedAlertsList.length }})</span>
+        <span class="flex items-center gap-1.5"><BaseIcon name="bell-off" size="xs" /> SILENCED &amp; MUTED RULES ({{ mutedAlertsList.length }})</span>
       </div>
 
       <div class="muted-cards-grid">
         <div v-for="item in mutedAlertsList" :key="item.key" class="muted-card glass-panel">
           <div class="muted-card-left">
             <div class="muted-card-header">
-              <span class="muted-card-icon">🔕</span>
+              <span class="muted-card-icon"><BaseIcon name="bell-off" size="xs" /></span>
               <span class="muted-card-node">{{ item.nodeName || item.nodeId || item.key }}</span>
               <span class="card-type-tag">{{ item.type.toUpperCase() }}</span>
               <span class="muted-badge-mode">{{ formatSnoozeLabel(item) }}</span>
@@ -178,7 +180,8 @@ onUnmounted(() => document.removeEventListener('click', handleDocumentClick))
           </div>
           <div class="muted-card-actions">
             <button type="button" class="btn-unmute-single" @click="emit('unmute-alert', item.key)" title="Unmute and restore live alerting for this node">
-              <span>🔔 Unmute</span>
+              <BaseIcon name="bell" size="xs" />
+              <span>Unmute</span>
             </button>
           </div>
         </div>

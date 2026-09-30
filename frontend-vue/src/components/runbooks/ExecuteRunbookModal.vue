@@ -17,11 +17,11 @@
         <div class="radio-group">
           <label class="radio-label">
             <input v-model="isDryRun" type="radio" :value="false" />
-            <span>⚡ Live Execution (Run diagnostic commands)</span>
+            <BaseIcon name="zap" size="xs" /> <span>Live Execution (Run diagnostic commands)</span>
           </label>
           <label class="radio-label">
             <input v-model="isDryRun" type="radio" :value="true" />
-            <span>🧪 Dry Run Simulation (Validate syntax only)</span>
+            <BaseIcon name="flask" size="xs" /> <span>Dry Run Simulation (Validate syntax only)</span>
           </label>
         </div>
       </div>
@@ -46,7 +46,7 @@
       <div class="modal-actions">
         <button class="btn btn-secondary" @click="$emit('close')">Cancel</button>
         <button class="btn btn-primary" @click="handleRun">
-          <span>{{ isDryRun ? '🧪 Run Simulation' : '⚡ Start Procedure' }}</span>
+          <BaseIcon :name="isDryRun ? 'flask' : 'zap'" size="xs" /> <span>{{ isDryRun ? 'Run Simulation' : 'Start Procedure' }}</span>
         </button>
       </div>
     </div>
@@ -56,6 +56,7 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { Runbook } from '../../api/governance'
 import type { RunbookParam } from '../../composables/useRunbooks'
 

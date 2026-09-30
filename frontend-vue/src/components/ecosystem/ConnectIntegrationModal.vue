@@ -22,7 +22,7 @@ const emit = defineEmits<{
     <div class="modal-dialog glass-panel">
       <div class="modal-header">
         <h2>Connect Ecosystem Integration</h2>
-        <button class="modal-close-btn" @click="emit('close')">✕</button>
+        <button class="modal-close-btn" @click="emit('close')" aria-label="Close"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <!-- Quick Preset Selectors -->
@@ -36,7 +36,7 @@ const emit = defineEmits<{
             class="preset-chip"
             @click="emit('selectPreset', p)"
           >
-            <span>{{ p.icon }}</span>
+            <BaseIcon :name="p.icon" size="xs" />
             <span>{{ p.name }}</span>
           </button>
         </div>

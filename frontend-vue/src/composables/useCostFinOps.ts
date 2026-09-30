@@ -1,4 +1,4 @@
-﻿import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { costApi, type ClusterCost, type NamespaceCost, type ResourceWaste } from '../api/governance'
 
 export interface TeamNamespaceCost extends NamespaceCost {
@@ -91,7 +91,7 @@ export function useCostFinOps() {
     return Math.round((totalWastedCost.value / totalMonthlyCost.value) * 100)
   })
 
-  const wasteSaved = computed(() => wasteSavedRemediated.value + Math.round(totalMonthlyCost.value * 0.14))
+  const wasteSaved = computed(() => wasteSavedRemediated.value + totalWastedCost.value)
 
   const averageEfficiency = computed(() => {
     const ns = rawNamespaces.value
@@ -99,26 +99,54 @@ export function useCostFinOps() {
     return Math.round(ns.reduce((acc, n) => acc + (n.utilization || 0), 0) / ns.length)
   })
 
-  // 3. Spot Instance Savings
+  // 3. Spot Instance Allocation derived from fault-tolerant namespace requests
   const spotRatio = computed(() => {
-    if (clusters.value.length === 0) return 38
-    const computeWeight = clusters.value.reduce((acc, c) => acc + (c.cpu_cost || 0), 0)
-    return computeWeight > 0 ? Math.min(65, Math.max(25, Math.round((computeWeight % 40) + 25))) : 38
+    if (rawNamespaces.value.length === 0) {
+      if (clusters.value.length === 0) return 0
+      const computeCost = clusters.value.reduce((acc, c) => acc + (c.cpu_cost || 0), 0)
+      const totalCost = totalMonthlyCost.value
+      return totalCost > 0 ? Math.min(100, Math.round((computeCost / totalCost) * 100)) : 0
+    }
+    const spotEligible = rawNamespaces.value.filter(ns => {
+      const name = (ns.namespace || '').toLowerCase()
+      return !name.startsWith('prod') && !name.includes('production') && !name.includes('kube-system')
+    })
+    const spotCost = spotEligible.reduce((acc, ns) => acc + (ns.monthly_cost || 0), 0)
+    const total = rawNamespaces.value.reduce((acc, ns) => acc + (ns.monthly_cost || 0), 0)
+    if (total === 0) return 0
+    return Math.min(100, Math.round((spotCost / total) * 100))
   })
 
   const spotSavings = computed(() => {
-    const estimatedSpotSpend = totalMonthlyCost.value * (spotRatio.value / 100)
-    return Math.round(estimatedSpotSpend * 1.5)
+    const spotSpend = totalMonthlyCost.value * (spotRatio.value / 100)
+    return Math.round(spotSpend * 0.6)
   })
 
-  // 4. Monthly Spend Forecast
-  const projectedCost = computed(() => Math.round(totalMonthlyCost.value * 1.042))
+  // 4. Monthly Spend Forecast derived from workload trends and headroom
+  const effectiveGrowthRate = computed(() => {
+    if (clusters.value.length > 0) {
+      const validClusters = clusters.value.filter(c => typeof c.trend === 'number')
+      if (validClusters.length > 0) {
+        const sumTrend = validClusters.reduce((acc, c) => acc + c.trend, 0)
+        return Number((sumTrend / validClusters.length).toFixed(1))
+      }
+    }
+    if (rawNamespaces.value.length > 0) {
+      const avgUtil = rawNamespaces.value.reduce((acc, n) => acc + (n.utilization || 0), 0) / rawNamespaces.value.length
+      return Number(Math.max(0, (100 - avgUtil) * 0.05).toFixed(1))
+    }
+    return 0
+  })
+
+  const projectedCost = computed(() => {
+    return Math.round(totalMonthlyCost.value * (1 + (effectiveGrowthRate.value / 100)))
+  })
 
   const forecast = computed<CostForecast>(() => ({
     currentRunRate: totalMonthlyCost.value,
     projectedCost: projectedCost.value,
-    growthRate: 4.2,
-    confidenceScore: 94,
+    growthRate: effectiveGrowthRate.value,
+    confidenceScore: rawNamespaces.value.length > 0 ? 95 : 80,
     spotSavingsMonth: spotSavings.value,
     spotRatio: spotRatio.value,
     wasteSaved: wasteSaved.value,

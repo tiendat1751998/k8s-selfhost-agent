@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TimelineEvent } from '../../composables/useChangesTimeline'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   events: TimelineEvent[]
@@ -36,10 +37,10 @@ function formatMobileTime(isoStr: string): string {
 
     <!-- Dedicated Empty State -->
     <div v-else-if="events.length === 0" class="mobile-empty-card">
-      <span class="empty-icon">📜</span>
+      <span class="empty-icon"><BaseIcon name="file-text" size="lg" /></span>
       <p class="empty-text">No change audit records matching filters.</p>
       <button class="btn-m-refresh" @click="$emit('refresh')" title="Refresh stream">
-        <span>Tap 🔄 to refresh stream</span>
+        <span>Tap refresh to update stream</span>
       </button>
     </div>
 
@@ -76,7 +77,7 @@ function formatMobileTime(isoStr: string): string {
               aria-label="Inspect Diff"
               @click="$emit('diff', event)"
             >
-              <span>🔍</span>
+              <BaseIcon name="search" size="xs" />
             </button>
             <button
               v-if="event.canRollback"
@@ -85,7 +86,7 @@ function formatMobileTime(isoStr: string): string {
               aria-label="Rollback"
               @click="$emit('rollback', event)"
             >
-              <span>⏪</span>
+              <BaseIcon name="refresh" size="xs" />
             </button>
             <button
               v-if="event.canApprove"
@@ -94,7 +95,7 @@ function formatMobileTime(isoStr: string): string {
               aria-label="Approve"
               @click="$emit('approve', event)"
             >
-              <span>✓</span>
+              <BaseIcon name="check" size="xs" />
             </button>
             <button
               v-if="event.canReject"
@@ -103,7 +104,7 @@ function formatMobileTime(isoStr: string): string {
               aria-label="Reject"
               @click="$emit('reject', event)"
             >
-              <span>✕</span>
+              <BaseIcon name="x" size="xs" />
             </button>
           </div>
         </div>

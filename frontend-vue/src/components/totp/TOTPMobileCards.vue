@@ -13,7 +13,7 @@
       @keydown.enter="$emit('select-step', 'scan')"
     >
       <div class="mobile-card-left">
-        <div class="mobile-card-icon" aria-hidden="true">📱</div>
+        <div class="mobile-card-icon" aria-hidden="true"><BaseIcon name="lock" size="md" /></div>
         <div class="mobile-card-content">
           <span class="mobile-card-title">1. QR & Secret Key</span>
           <span class="mobile-card-desc">Scan authenticator or copy Base32</span>
@@ -23,7 +23,7 @@
         class="mobile-card-badge"
         :class="isStepDone('scan') ? 'badge-emerald' : currentStep === 'scan' ? 'badge-cyan' : 'badge'"
       >
-        {{ isStepDone('scan') ? 'Done ✓' : currentStep === 'scan' ? 'Active' : 'Step 1' }}
+        {{ isStepDone('scan') ? 'Done' : currentStep === 'scan' ? 'Active' : 'Step 1' }}
       </span>
     </div>
 
@@ -40,7 +40,7 @@
       @keydown.enter="$emit('select-step', 'verify')"
     >
       <div class="mobile-card-left">
-        <div class="mobile-card-icon" aria-hidden="true">🔢</div>
+        <div class="mobile-card-icon" aria-hidden="true"><BaseIcon name="key" size="md" /></div>
         <div class="mobile-card-content">
           <span class="mobile-card-title">2. Verify 6-Digit Code</span>
           <span class="mobile-card-desc">Time-based HMAC-SHA1 sync</span>
@@ -50,7 +50,7 @@
         class="mobile-card-badge"
         :class="isStepDone('verify') ? 'badge-emerald' : currentStep === 'verify' ? 'badge-cyan' : 'badge'"
       >
-        {{ isStepDone('verify') ? 'Done ✓' : currentStep === 'verify' ? 'Active' : 'Step 2' }}
+        {{ isStepDone('verify') ? 'Done' : currentStep === 'verify' ? 'Active' : 'Step 2' }}
       </span>
     </div>
 
@@ -67,7 +67,7 @@
       @keydown.enter="$emit('select-step', 'recovery')"
     >
       <div class="mobile-card-left">
-        <div class="mobile-card-icon" aria-hidden="true">📦</div>
+        <div class="mobile-card-icon" aria-hidden="true"><BaseIcon name="package" size="md" /></div>
         <div class="mobile-card-content">
           <span class="mobile-card-title">3. Backup Scratch Tokens</span>
           <span class="mobile-card-desc">Emergency recovery backup codes</span>
@@ -77,7 +77,7 @@
         class="mobile-card-badge"
         :class="isStepDone('recovery') ? 'badge-emerald' : currentStep === 'recovery' ? 'badge-cyan' : 'badge'"
       >
-        {{ isStepDone('recovery') ? 'Done ✓' : currentStep === 'recovery' ? 'Active' : 'Step 3' }}
+        {{ isStepDone('recovery') ? 'Done' : currentStep === 'recovery' ? 'Active' : 'Step 3' }}
       </span>
     </div>
 
@@ -88,7 +88,7 @@
       role="status"
     >
       <div class="mobile-card-left">
-        <div class="mobile-card-icon" aria-hidden="true">🛡️</div>
+        <div class="mobile-card-icon" aria-hidden="true"><BaseIcon name="shield" size="md" /></div>
         <div class="mobile-card-content">
           <span class="mobile-card-title">MFA Enforcement</span>
           <span class="mobile-card-desc">{{ isEnforced ? 'Cluster perimeter enforced' : 'Setup in progress' }}</span>

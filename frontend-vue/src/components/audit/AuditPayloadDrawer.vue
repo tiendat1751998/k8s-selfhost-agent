@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import type { AuditLogEntry } from '../../api/governance'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = defineProps<{
   event: AuditLogEntry | null
@@ -102,7 +103,12 @@ function formatDate(d?: string): string {
 
         <div class="drawer-header-actions">
           <button class="btn btn-secondary btn-sm" type="button" @click="copyJson">
-            <span>{{ copied ? '✅ Copied!' : '📋 Copy JSON' }}</span>
+            <template v-if="copied">
+            <BaseIcon name="check" size="xs" /> Copied
+          </template>
+          <template v-else>
+            <BaseIcon name="copy" size="xs" /> Copy JSON
+          </template>
           </button>
           <button class="drawer-close-btn" type="button" aria-label="Close Inspector" @click="emit('close')">
             ✕
@@ -116,7 +122,7 @@ function formatDate(d?: string): string {
         <div class="drawer-meta-grid">
           <div class="meta-item">
             <span class="meta-label">Actor</span>
-            <span class="meta-val font-mono">👤 {{ event.actor }}</span>
+            <span class="meta-val font-mono"><BaseIcon name="user" size="xs" /> {{ event.actor }}</span>
           </div>
 
           <div class="meta-item">

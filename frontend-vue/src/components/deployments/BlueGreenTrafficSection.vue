@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DeploymentApp } from '../../api/compute'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   app: DeploymentApp
@@ -45,7 +46,8 @@ const emit = defineEmits<{
             :disabled="(app.blueGreenActive || 'blue') === 'blue' || actionLoading === 'cutover'"
             @click="emit('cutoverBlueGreen', app, 'blue')"
           >
-            <span>{{ (app.blueGreenActive || 'blue') === 'blue' ? '✓ Currently Live' : '⚡ Cutover to Blue' }}</span>
+            <BaseIcon v-if="(app.blueGreenActive || 'blue') === 'blue'" name="check" size="xs" />
+            <span>{{ (app.blueGreenActive || 'blue') === 'blue' ? 'Currently Live' : 'Cutover to Blue' }}</span>
           </button>
         </div>
       </div>
@@ -69,7 +71,8 @@ const emit = defineEmits<{
             :disabled="app.blueGreenActive === 'green' || actionLoading === 'cutover'"
             @click="emit('cutoverBlueGreen', app, 'green')"
           >
-            <span>{{ app.blueGreenActive === 'green' ? '✓ Currently Live' : '⚡ Cutover to Green' }}</span>
+            <BaseIcon v-if="app.blueGreenActive === 'green'" name="check" size="xs" />
+            <span>{{ app.blueGreenActive === 'green' ? 'Currently Live' : 'Cutover to Green' }}</span>
           </button>
         </div>
       </div>

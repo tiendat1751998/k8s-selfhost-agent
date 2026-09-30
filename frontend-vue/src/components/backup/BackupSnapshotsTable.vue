@@ -22,13 +22,13 @@ const emit = defineEmits<{
 const inspectedJob = ref<BackupJob | null>(null)
 
 const columns: Column<BackupJob>[] = [
-  { key: 'status', label: 'Status', width: '100px', sortable: true },
-  { key: 'id', label: 'Job & Policy', width: '150px', sortable: true },
-  { key: 'size', label: 'Size', width: '120px' },
-  { key: 'checksum', label: 'Security', width: '120px' },
-  { key: 'progress', label: 'Volume Stream', width: '110px' },
-  { key: 'timing', label: 'Started & Duration', width: '160px' },
-  { key: 'actions', label: 'Actions', width: '180px', align: 'right' },
+  { key: 'status', label: 'Status', width: '90px', sortable: true },
+  { key: 'id', label: 'Job & Policy', width: '15%', sortable: true },
+  { key: 'size', label: 'Size', width: '13%' },
+  { key: 'checksum', label: 'Security', width: '14%' },
+  { key: 'progress', label: 'Volume Stream', width: '14%' },
+  { key: 'timing', label: 'Started & Duration', width: '16%' },
+  { key: 'actions', label: 'Actions', width: '145px', align: 'right' },
 ]
 
 function formatBytes(bytes?: number): string {
@@ -119,7 +119,7 @@ function formatDate(d?: string): string {
             aria-label="Restore snapshot to database"
             @click="emit('restore', row)"
           >
-            <span>🔄</span>
+            <BaseIcon name="refresh" size="xs" />
           </button>
           <button 
             class="btn-action-icon"
@@ -128,7 +128,7 @@ function formatDate(d?: string): string {
             aria-label="Download snapshot metadata"
             @click="emit('download', row)"
           >
-            <span>{{ downloadingJobId === row.id ? '⏳' : '📥' }}</span>
+            <BaseIcon :name="downloadingJobId === row.id ? 'clock' : 'download'" size="xs" />
           </button>
           <button 
             class="btn-action-icon"
@@ -136,7 +136,7 @@ function formatDate(d?: string): string {
             aria-label="Inspect snapshot metadata"
             @click="inspectedJob = row"
           >
-            <span>🔍</span>
+            <BaseIcon name="eye" size="xs" />
           </button>
           <button 
             class="btn-action-icon btn-action-delete"
@@ -145,7 +145,7 @@ function formatDate(d?: string): string {
             aria-label="Delete snapshot permanently"
             @click="emit('delete', row.id)"
           >
-            <span>{{ deletingJobId === row.id ? '⏳' : '🗑' }}</span>
+            <BaseIcon :name="deletingJobId === row.id ? 'clock' : 'trash'" size="xs" />
           </button>
         </div>
       </template>
@@ -159,7 +159,7 @@ function formatDate(d?: string): string {
             <span class="badge badge-cyan">SNAPSHOT METADATA & INTEGRITY</span>
             <h3 class="modal-title font-mono">Snapshot #{{ inspectedJob.id }}</h3>
           </div>
-          <button class="modal-close" @click="inspectedJob = null">✕</button>
+          <button class="modal-close" @click="inspectedJob = null"><BaseIcon name="x" size="xs" /></button>
         </div>
         <div class="modal-body font-mono">
           <div class="inspect-key-val">
@@ -194,7 +194,7 @@ function formatDate(d?: string): string {
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="inspectedJob = null">Close</button>
           <button class="btn btn-primary" @click="emit('restore', inspectedJob); inspectedJob = null">
-            <span>🔄 Restore this Snapshot</span>
+            <BaseIcon name="refresh" size="xs" /> <span>Restore this Snapshot</span>
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import type { GenericPlatformItem, DynamicColumn } from '../../composables/useGenericPlatform'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -68,7 +69,7 @@ function handleSort(col: DynamicColumn) {
           <tr v-else-if="items.length === 0" class="empty-row">
             <td :colspan="columns.length + 1" class="empty-cell">
               <div class="empty-state-box">
-                <span class="empty-icon">📂</span>
+                <BaseIcon name="folder" size="lg" class="empty-icon" />
                 <p>No platform resources match current query filters.</p>
               </div>
             </td>
@@ -117,7 +118,7 @@ function handleSort(col: DynamicColumn) {
                 title="Inspect manifest & telemetry"
                 @click="emit('inspect', item)"
               >
-                <span>🔍 Inspect</span>
+                <BaseIcon name="search" size="xs" /> <span>Inspect</span>
               </button>
             </td>
           </tr>

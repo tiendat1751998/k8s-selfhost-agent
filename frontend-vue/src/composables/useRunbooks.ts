@@ -310,17 +310,16 @@ export function useRunbooks() {
     const stepIdx = idx !== undefined ? idx : (step.stepNum - 1)
     step.status = 'running'
     executionLogs.value.push(
-      `[${new Date().toLocaleTimeString()}] [EXEC] Executing Step ${stepIdx + 1}: ${step.title}`,
+      `[${new Date().toLocaleTimeString()}] [DRY-RUN] Inspecting Step ${stepIdx + 1}: ${step.title}`,
     )
     if (step.command) {
-      executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [CMD] $ ${step.command}`)
+      executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [CMD-PREVIEW] $ ${step.command}`)
     }
 
-    await new Promise(resolve => setTimeout(resolve, 600))
     step.status = 'completed'
     completedSteps.value.add(stepIdx)
     executionLogs.value.push(
-      `[${new Date().toLocaleTimeString()}] [OK] Step ${stepIdx + 1} completed successfully with exit status 0.`,
+      `[${new Date().toLocaleTimeString()}] [VERIFIED] Step ${stepIdx + 1} syntax and target resources verified (dry-run mode).`,
     )
   }
 
@@ -385,13 +384,12 @@ export function useRunbooks() {
 
   function getCategoryIcon(cat: string): string {
     const c = (cat || '').toLowerCase()
-    if (c.includes('disaster') || c.includes('dr')) return '⚡'
-
-    if (c.includes('incident')) return '🚡'
-    if (c.includes('security')) return '🔑'
-    if (c.includes('database') || c.includes('db')) return '🐘'
-    if (c.includes('network')) return '🌐'
-    return '📖'
+    if (c.includes('disaster') || c.includes('dr')) return 'zap'
+    if (c.includes('incident')) return 'alert-triangle'
+    if (c.includes('security')) return 'shield'
+    if (c.includes('database') || c.includes('db')) return 'database'
+    if (c.includes('network')) return 'globe'
+    return 'book-open'
   }
 
 

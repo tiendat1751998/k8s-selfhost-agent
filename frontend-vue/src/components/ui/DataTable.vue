@@ -82,14 +82,14 @@ function handleSort(key: string, sortable?: boolean) {
     <!-- Optional Toolbar -->
     <div v-if="searchable || $slots.toolbar" class="table-toolbar">
       <div v-if="searchable" class="table-search">
-        <span class="search-icon">🔍</span>
+        <span class="search-icon"><BaseIcon name="search" size="xs" /></span>
         <input 
           v-model="search"
           type="text" 
           :placeholder="searchPlaceholder || 'Filter table records...'"
           class="input-glass search-input"
         />
-        <span v-if="search" class="clear-search" @click="search = ''">✕</span>
+        <span v-if="search" class="clear-search" @click="search = ''"><BaseIcon name="x" size="xs" /></span>
       </div>
       <div class="table-actions">
         <slot name="toolbar"></slot>
@@ -130,7 +130,7 @@ function handleSort(key: string, sortable?: boolean) {
           <!-- Error State -->
           <tr v-else-if="error" class="row-state">
             <td :colspan="columns.length" class="cell-error">
-              <span class="error-icon">⚠️</span>
+              <span class="error-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
               <span>{{ error }}</span>
             </td>
           </tr>
@@ -138,7 +138,7 @@ function handleSort(key: string, sortable?: boolean) {
           <!-- Empty State -->
           <tr v-else-if="filteredData.length === 0" class="row-state">
             <td :colspan="columns.length" class="cell-empty">
-              <div class="empty-icon">📦</div>
+              <div class="empty-icon"><BaseIcon name="package" size="lg" /></div>
               <div class="empty-text">{{ emptyMessage || 'No matching records discovered.' }}</div>
             </td>
           </tr>

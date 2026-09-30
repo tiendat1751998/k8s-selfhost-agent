@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { navGroups } from '../../config/navigation'
 
 const props = defineProps<{
@@ -73,18 +74,22 @@ onUnmounted(() => {
   <ModalDrawer
     :show="show"
     title="Enterprise Command Palette"
-    subtitle="Quick search across all 20+ platform routes, AI models, and resources."
+    subtitle="Quick search across all enterprise platform routes and resources."
     max-width="640px"
     @update:show="emit('update:show', $event)"
   >
     <div class="command-palette-content">
       <div class="palette-input-wrap">
-        <span class="palette-search-icon">🔍</span>
+        <span class="palette-search-icon"><BaseIcon name="search" size="sm" /></span>
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Type a route, view, or category..."
           class="input-glass palette-search-input"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
           autofocus
         />
         <span v-if="searchQuery" class="palette-clear" role="button" tabindex="0" aria-label="Clear search" @click="searchQuery = ''" @keydown.enter="searchQuery = ''">✕</span>
@@ -101,7 +106,7 @@ onUnmounted(() => {
           @click="navigateTo(item.path)"
           @keydown.enter="navigateTo(item.path)"
         >
-          <div class="p-item-icon">{{ item.icon }}</div>
+          <div class="p-item-icon"><BaseIcon :name="item.icon" size="sm" /></div>
           <div class="p-item-info">
             <div class="p-item-title-row">
               <span class="p-item-name">{{ item.name }}</span>

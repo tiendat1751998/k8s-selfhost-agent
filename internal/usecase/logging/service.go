@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
@@ -97,4 +98,17 @@ func (s *Service) Ingest(ctx context.Context, entries []logging.LogEntry) error 
 	}
 
 	return s.repo.IngestBatch(ctx, entries)
+}
+// QuerySurroundingContext queries logs surrounding a timestamp for the authenticated tenant.
+func (s *Service) QuerySurroundingContext(
+	ctx context.Context,
+	service string,
+	timestamp time.Time,
+	window int,
+) ([]logging.LogEntry, error) {
+	tenantID, err := s.resolveTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.QuerySurroundingContext(ctx, tenantID, service, timestamp, window)
 }

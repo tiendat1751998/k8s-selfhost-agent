@@ -38,22 +38,44 @@ export interface TenancySummary {
 
 export const tenancyApi = {
   async getOrganizations(): Promise<Organization[]> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || localStorage.getItem('k8s_token')
+      if (token) api.setToken(token)
+    }
     return api.get<Organization[]>('/tenancy/organizations')
   },
 
   async getProjects(): Promise<Project[]> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || localStorage.getItem('k8s_token')
+      if (token) api.setToken(token)
+    }
     return api.get<Project[]>('/tenancy/projects')
   },
 
   async getMembers(): Promise<Member[]> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || localStorage.getItem('k8s_token')
+      if (token) api.setToken(token)
+    }
     return api.get<Member[]>('/tenancy/members')
   },
 
   async getRBAC(): Promise<RBACMatrix> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || localStorage.getItem('k8s_token')
+      if (token) api.setToken(token)
+    }
     return api.get<RBACMatrix>('/tenancy/rbac')
   },
 
   async getSummary(): Promise<TenancySummary> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || localStorage.getItem('k8s_token')
+      if (token) {
+        api.setToken(token)
+      }
+    }
     return api.get<TenancySummary>('/tenancy/summary')
   },
 
@@ -61,8 +83,28 @@ export const tenancyApi = {
     return api.post<Organization>('/tenancy/organizations', org)
   },
 
+  async deleteOrganization(id: string): Promise<void> {
+    return api.delete<void>(`/tenancy/organizations/${id}`)
+  },
+
   async createProject(project: Project): Promise<Project> {
     return api.post<Project>('/tenancy/projects', project)
+  },
+
+  async inviteMember(member: Member): Promise<Member> {
+    return api.post<Member>('/tenancy/members', member)
+  },
+
+  async removeMember(id: string): Promise<void> {
+    return api.delete<void>(`/tenancy/members/${id}`)
+  },
+
+  async updateRBAC(matrix: RBACMatrix): Promise<RBACMatrix> {
+    return api.put<RBACMatrix>('/tenancy/rbac', matrix)
+  },
+
+  async updateQuota(orgId: string, quota: Record<string, unknown>): Promise<void> {
+    return api.put<void>(`/tenancy/organizations/${orgId}/quota`, quota)
   },
 }
 

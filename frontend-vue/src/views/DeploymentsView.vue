@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import MetricCard from '../components/ui/MetricCard.vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useGlobalContext } from '../composables/useGlobalContext'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import DeploymentsTable from '../components/deployments/DeploymentsTable.vue'
 import DeploymentsMobileCards from '../components/deployments/DeploymentsMobileCards.vue'
 import CanaryStrategyModal from '../components/deployments/CanaryStrategyModal.vue'
@@ -27,8 +28,6 @@ const {
   readyReplicas,
   healthyCount,
   degradedCount,
-  canaryCount,
-  blueGreenCount,
   k8sCount,
   swarmCount,
   namespaces,
@@ -48,7 +47,55 @@ const {
   handleCreateApp,
 } = useDeployments()
 
-// Mobile PWA Ergonomics (<768px)
+const { activeNamespace } = useGlobalContext()
+watch(activeNamespace, (newNs) => {
+  selectedNamespaceFilter.value = newNs || 'all'
+}, { immediate: true })
+
+// Segmented Tab Bar State: 'All' (first), 'Deployments', 'StatefulSets', 'DaemonSets', 'CronJobs'
+export type WorkloadSegmentTab = 'All' | 'Deployments' | 'StatefulSets' | 'DaemonSets' | 'CronJobs'
+const selectedSegmentTab = ref<WorkloadSegmentTab>('All')
+
+const segmentTabs: { id: WorkloadSegmentTab; label: string; icon: string }[] = [
+  { id: 'All', label: 'All', icon: 'globe' },
+  { id: 'Deployments', label: 'Deployments', icon: 'play' },
+  { id: 'StatefulSets', label: 'Stateful', icon: 'database' },
+  { id: 'DaemonSets', label: 'Daemon', icon: 'shield' },
+  { id: 'CronJobs', label: 'Cron', icon: 'clock' },
+]
+
+const showMoreActions = ref(false)
+const moreMenuRef = ref<HTMLElement | null>(null)
+
+function onMoreDocClick(e: MouseEvent) {
+  if (showMoreActions.value && moreMenuRef.value && !moreMenuRef.value.contains(e.target as Node)) {
+    showMoreActions.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', onMoreDocClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onMoreDocClick)
+})
+
+function matchWorkloadKind(app: DeploymentApp, kind: WorkloadSegmentTab): boolean {
+  if (kind === 'All') return true
+  const rawKind = ((app as { kind?: string }).kind || app.type || '').toLowerCase()
+  if (kind === 'Deployments') {
+    return rawKind.includes('deployment') || rawKind === 'kubernetes' || rawKind === 'swarm' || rawKind === 'docker' || rawKind === 'container' || (!rawKind.includes('stateful') && !rawKind.includes('daemon') && !rawKind.includes('cron') && !rawKind.includes('job'))
+  }
+  if (kind === 'StatefulSets') return rawKind.includes('stateful')
+  if (kind === 'DaemonSets') return rawKind.includes('daemon')
+  if (kind === 'CronJobs') return rawKind.includes('cron') || rawKind.includes('job')
+  return true
+}
+
+const displayDeployments = computed(() => filteredDeployments.value.filter(app => matchWorkloadKind(app, selectedSegmentTab.value)))
+const getSegmentCount = (tabId: WorkloadSegmentTab): number => filteredDeployments.value.filter(app => matchWorkloadKind(app, tabId)).length
+
 const showMobileFilters = ref(false)
 
 // Drawers & Modals State
@@ -117,14 +164,14 @@ async function onCreateApp(payload: DeploymentApp) {
     <!-- Compact 44px Mobile Command Bar (<768px) -->
     <div class="mobile-command-bar">
       <div class="mobile-search-compact-wrap">
-        <span class="mobile-search-ico">🔍</span>
+        <span class="mobile-search-ico"><BaseIcon name="search" size="xs" /></span>
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Filter workloads..."
           class="input-glass mobile-search-compact"
         />
-        <button v-if="searchQuery" type="button" class="mobile-search-clear" @click="searchQuery = ''">✕</button>
+        <button v-if="searchQuery" type="button" class="mobile-search-clear" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="mobile-compact-badge font-mono" title="Total workloads and ready pods">
@@ -138,7 +185,7 @@ async function onCreateApp(payload: DeploymentApp) {
         @click="showMobileFilters = !showMobileFilters"
         title="Toggle Filter Options"
       >
-        ⚙️ Filters
+        <BaseIcon name="sliders" size="xs" /> Filters
       </button>
 
       <button
@@ -146,18 +193,17 @@ async function onCreateApp(payload: DeploymentApp) {
         class="btn-mobile-deploy"
         title="Deploy Workload"
         @click="showCreateModal = true; selectedTemplate = null"
-      >
-        ➕
+      >+
       </button>
     </div>
 
     <!-- Mobile Micro-Telemetry Strip (<640px) -->
     <div class="micro-telemetry-strip font-mono">
-      <span>🚀 {{ totalWorkloads }} workloads</span>
+      <span><BaseIcon name="play" size="xs" /> {{ totalWorkloads }} workloads</span>
       <span class="telemetry-sep">·</span>
       <span>{{ readyReplicas }}/{{ totalReplicas }} pods</span>
       <span class="telemetry-sep">·</span>
-      <span>🛡️ {{ healthyCount }} healthy</span>
+      <span><BaseIcon name="shield" size="xs" /> {{ healthyCount }} healthy</span>
     </div>
 
     <!-- Mobile Expandable Filter Strip Accordion (<768px) -->
@@ -188,7 +234,7 @@ async function onCreateApp(payload: DeploymentApp) {
               :class="{ 'pill-active': statusFilter === 'healthy' }"
               @click="statusFilter = 'healthy'"
             >
-              🛡️ Healthy ({{ healthyCount }})
+              <BaseIcon name="shield" size="xs" /> Healthy ({{ healthyCount }})
             </button>
             <button
               type="button"
@@ -196,7 +242,7 @@ async function onCreateApp(payload: DeploymentApp) {
               :class="{ 'pill-active': statusFilter === 'degraded' }"
               @click="statusFilter = 'degraded'"
             >
-              ⚠️ Degraded ({{ degradedCount }})
+              <BaseIcon name="alert-triangle" size="xs" /> Degraded ({{ degradedCount }})
             </button>
           </div>
         </div>
@@ -218,7 +264,7 @@ async function onCreateApp(payload: DeploymentApp) {
               :class="{ 'pill-active': activeFilterTab === 'k8s' }"
               @click="activeFilterTab = 'k8s'"
             >
-              ☸️ K8s ({{ k8sCount }})
+              <BaseIcon name="anchor" size="xs" /> K8s ({{ k8sCount }})
             </button>
             <button
               type="button"
@@ -226,150 +272,137 @@ async function onCreateApp(payload: DeploymentApp) {
               :class="{ 'pill-active': activeFilterTab === 'swarm' }"
               @click="activeFilterTab = 'swarm'"
             >
-              🐳 Docker ({{ swarmCount }})
+              <BaseIcon name="box" size="xs" /> Docker ({{ swarmCount }})
             </button>
           </div>
         </div>
       </div>
     </Transition>
 
-    <!-- View Header (Desktop & Tablet >=768px) -->
-    <div class="view-header">
-      <div class="header-info">
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>COMPUTE & FLEET ORCHESTRATION</span>
-        </div>
-        <h1 class="view-title">
-          <span class="title-full">Deployments & App Workload Catalog</span>
-          <span class="title-compact">🚀 Deployments</span>
-        </h1>
-        <p class="view-desc">
-          Unified production orchestrator for Kubernetes Deployments & Docker Swarm services with full Canary traffic splits, Blue-Green zero-downtime cutovers, dynamic replica autoscaling, and rolling restarts.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button type="button" class="btn btn-secondary" :disabled="loading" @click="fetchDeployments">
-          <span class="btn-text-full"><span :class="{ 'spin-icon': loading }">🔄</span> {{ loading ? 'Syncing...' : 'Refresh' }}</span>
-          <span class="btn-text-mobile">{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
-        </button>
-        <button type="button" class="btn btn-primary" @click="showCreateModal = true; selectedTemplate = null">
-          <span class="btn-text-full">+ Deploy Workload</span>
-          <span class="btn-text-mobile">+ Deploy</span>
-        </button>
-        <button type="button" class="btn btn-secondary" @click="openYamlViewer">
-          <span class="btn-text-full">📝 YAML Manifest</span>
-          <span class="btn-text-mobile">📝 YAML</span>
-        </button>
-        <button type="button" class="btn btn-secondary" @click="showTemplatesDrawer = true">
-          <span class="btn-text-full">📦 Blueprint Catalog</span>
-          <span class="btn-text-mobile">📦 Template</span>
-        </button>
-      </div>
-    </div>
-
     <!-- Notification Toast Banner -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <span class="toast-icon">{{ toastMessage.type === 'success' ? '✅' : toastMessage.type === 'error' ? '⚠️' : 'ℹ️' }}</span>
+      <span class="toast-icon"><BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : toastMessage.type === 'error' ? 'alert-triangle' : 'help-circle'" size="sm" /></span>
       <span class="toast-text">{{ toastMessage.text }}</span>
-      <button type="button" class="toast-close" @click="toastMessage = null">✕</button>
+      <button type="button" class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Metric HUD Grid (Desktop & Tablet >=768px) -->
-    <div class="metrics-grid">
-      <MetricCard title="Total Workloads" :value="totalWorkloads" subtitle="Active microservice deployments" icon="📦" badge="SERVICES" badge-color="cyan" />
-      <MetricCard title="Running Pods" :value="`${readyReplicas} / ${totalReplicas}`" :subtitle="`${healthyCount} of ${totalWorkloads} healthy workloads`" icon="🚀" badge="REPLICAS" badge-color="emerald" trend="Auto-Scaled via KEDA" trend-type="positive" />
-      <MetricCard title="Canary & Blue-Green" :value="`${canaryCount + blueGreenCount}`" :subtitle="`${canaryCount} Canary · ${blueGreenCount} Blue-Green`" icon="🎯" badge="STRATEGY" badge-color="violet" trend="Zero Downtime" trend-type="positive" />
-      <MetricCard title="Runtime Fleet" :value="`${k8sCount} K8s / ${swarmCount} Swarm`" subtitle="Kubernetes clusters & Swarm hosts" icon="⚡" badge="RUNTIME" badge-color="cyan" />
+    <!-- Sleek Unified Enterprise Toolbar -->
+    <div class="deployments-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Deployments Fleet Toolbar">
+      <!-- Search input with search icon and clear button (filters workloads by name, image, namespace) -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Filter workloads..."
+          class="toolbar-search-input"
+          aria-label="Filter workloads by name, image, namespace"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
+      </div>
+
+      <!-- Segmented kind capsule pills: All (32), Deployments (32), StatefulSets (3), DaemonSets (1), CronJobs (0) -->
+      <div class="toolbar-capsule-pills" role="tablist" aria-label="Workload Kind">
+        <button
+          v-for="tab in segmentTabs"
+          :key="tab.id"
+          type="button"
+          role="tab"
+          :aria-selected="selectedSegmentTab === tab.id"
+          class="capsule-pill font-mono"
+          :class="{ active: selectedSegmentTab === tab.id }"
+          @click="selectedSegmentTab = tab.id"
+        >
+          <span>{{ tab.label }}</span>
+          <span class="capsule-count">({{ getSegmentCount(tab.id) }})</span>
+        </button>
+      </div>
+
+      <!-- Status filter dropdown -->
+      <select
+        v-model="statusFilter"
+        class="toolbar-select font-mono"
+        aria-label="Filter by Status"
+      >
+        <option value="all">All Status ({{ totalWorkloads }})</option>
+        <option value="healthy">Healthy ({{ healthyCount }})</option>
+        <option value="degraded">Degraded ({{ degradedCount }})</option>
+      </select>
+
+      <!-- Action buttons -->
+      <div class="toolbar-actions-group">
+        <button
+          type="button"
+          class="toolbar-btn btn-primary toolbar-btn-deploy"
+          title="Deploy Workload"
+          @click="showCreateModal = true; selectedTemplate = null"
+        >
+          <span>+ Deploy</span>
+        </button>
+
+        <!-- Sleek Secondary Actions Dropdown [More] -->
+        <div ref="moreMenuRef" class="toolbar-more-wrap">
+          <button
+            type="button"
+            class="toolbar-btn btn-secondary toolbar-btn-more"
+            :class="{ active: showMoreActions }"
+            title="More Actions"
+            aria-haspopup="true"
+            :aria-expanded="showMoreActions"
+            @click="showMoreActions = !showMoreActions"
+          >
+            <span>More</span>
+            <BaseIcon name="chevron-down" size="xs" class="more-chevron" />
+          </button>
+          <div v-if="showMoreActions" class="toolbar-more-menu glass-panel" role="menu">
+            <button
+              type="button"
+              class="more-menu-item"
+              role="menuitem"
+              @click="openYamlViewer(); showMoreActions = false"
+            >
+              <BaseIcon name="file-text" size="xs" />
+              <span>YAML Manifest</span>
+            </button>
+            <button
+              type="button"
+              class="more-menu-item"
+              role="menuitem"
+              @click="showTemplatesDrawer = true; showMoreActions = false"
+            >
+              <BaseIcon name="box" size="xs" />
+              <span>Blueprint Catalog</span>
+            </button>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="toolbar-btn btn-secondary toolbar-btn-refresh"
+          :disabled="loading"
+          title="Refresh Workloads"
+          aria-label="Refresh Workloads"
+          @click="fetchDeployments"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
+        </button>
+      </div>
     </div>
 
     <!-- Main Workload Section -->
     <div class="section-box glass-panel table-box">
-      <!-- Filter Controls Bar (Desktop & Tablet >=768px) -->
-      <div class="table-controls-bar">
-        <div class="filter-pills-row">
-          <!-- Status Filter Pill Group -->
-          <div class="status-filter-group">
-            <button
-              type="button"
-              class="pill-btn"
-              :class="{ 'pill-active': statusFilter === 'all' }"
-              title="All Workload Statuses"
-              @click="statusFilter = 'all'"
-            >
-              <span>All</span>
-              <span class="pill-badge">{{ totalWorkloads }}</span>
-            </button>
-            <button
-              type="button"
-              class="pill-btn pill-healthy"
-              :class="{ 'pill-active': statusFilter === 'healthy' }"
-              title="Healthy Workloads"
-              @click="statusFilter = 'healthy'"
-            >
-              <span>🛡️ Healthy</span>
-              <span class="pill-badge">{{ healthyCount }}</span>
-            </button>
-            <button
-              type="button"
-              class="pill-btn pill-degraded"
-              :class="{ 'pill-active': statusFilter === 'degraded' }"
-              title="Degraded Workloads"
-              @click="statusFilter = 'degraded'"
-            >
-              <span>⚠️ Degraded</span>
-              <span class="pill-badge">{{ degradedCount }}</span>
-            </button>
-          </div>
-
-          <div class="pills-divider" aria-hidden="true"></div>
-
-          <!-- Type & Strategy Filter Pills -->
-          <button type="button" class="pill-btn" :class="{ 'pill-active': activeFilterTab === 'all' }" @click="activeFilterTab = 'all'">
-            <span class="btn-text-full">🌐 All Workloads</span>
-            <span class="btn-text-mobile">All</span>
-            <span class="pill-badge">{{ totalWorkloads }}</span>
-          </button>
-          <button type="button" class="pill-btn pill-canary" :class="{ 'pill-active': activeFilterTab === 'canary' }" @click="activeFilterTab = 'canary'">
-            <span class="btn-text-full">🐥 Canary Rollouts</span>
-            <span class="btn-text-mobile">Canary</span>
-            <span class="pill-badge">{{ canaryCount }}</span>
-          </button>
-          <button type="button" class="pill-btn pill-bluegreen" :class="{ 'pill-active': activeFilterTab === 'bluegreen' }" @click="activeFilterTab = 'bluegreen'">
-            <span class="btn-text-full">🔄 Blue-Green</span>
-            <span class="btn-text-mobile">B/G</span>
-            <span class="pill-badge">{{ blueGreenCount }}</span>
-          </button>
-          <button type="button" class="pill-btn" :class="{ 'pill-active': activeFilterTab === 'k8s' }" @click="activeFilterTab = 'k8s'">
-            <span class="btn-text-full">☸️ Kubernetes</span>
-            <span class="btn-text-mobile">K8s</span>
-            <span class="pill-badge">{{ k8sCount }}</span>
-          </button>
-          <button type="button" class="pill-btn" :class="{ 'pill-active': activeFilterTab === 'swarm' }" @click="activeFilterTab = 'swarm'">
-            <span class="btn-text-full">🐳 Docker / Swarm</span>
-            <span class="btn-text-mobile">Swarm</span>
-            <span class="pill-badge">{{ swarmCount }}</span>
-          </button>
-        </div>
-
-        <div class="table-search-row">
-          <div class="search-input-wrap">
-            <span class="search-ico">🔍</span>
-            <input v-model="searchQuery" type="text" placeholder="Filter workloads by name, image, team..." class="input-glass search-input" />
-            <button v-if="searchQuery" type="button" class="clear-search-btn" @click="searchQuery = ''">✕</button>
-          </div>
-          <select v-model="selectedNamespaceFilter" class="input-glass select-ns font-mono">
-            <option value="all">All Namespaces ({{ namespaces.length }})</option>
-            <option v-for="ns in namespaces" :key="ns" :value="ns">{{ ns }}</option>
-          </select>
-        </div>
-      </div>
-
       <!-- Desktop Data Table View (Completely suppressed on mobile <768px) -->
       <div class="desktop-table-container desktop-table-view">
         <DeploymentsTable
-          :deployments="filteredDeployments"
+          :deployments="displayDeployments"
           :loading="loading"
           :error="error"
           :action-loading="actionLoading"
@@ -386,7 +419,7 @@ async function onCreateApp(payload: DeploymentApp) {
       <!-- Mobile Touch-Friendly Card View (Visible only on mobile <768px) -->
       <div class="mobile-cards-view">
         <DeploymentsMobileCards
-          :deployments="filteredDeployments"
+          :deployments="displayDeployments"
           :loading="loading"
           @inspect="openInspector($event)"
           @logs="openLogsInspector($event)"

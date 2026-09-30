@@ -29,13 +29,13 @@ const emit = defineEmits<{
 }>()
 
 const filterChips: { kind: ResourceKind; label: string; icon: string }[] = [
-  { kind: 'pods', label: 'Pods', icon: '🚀' },
-  { kind: 'deployments', label: 'Deployments', icon: '📦' },
-  { kind: 'services', label: 'Services', icon: '🔌' },
-  { kind: 'configmaps', label: 'ConfigMaps', icon: '🗺️' },
-  { kind: 'ingresses', label: 'Ingresses', icon: '🌐' },
-  { kind: 'nodes', label: 'Nodes', icon: '🖥️' },
-  { kind: 'persistentvolumeclaims', label: 'PV/PVC', icon: '💾' },
+  { kind: 'pods', label: 'Pods', icon: 'box' },
+  { kind: 'deployments', label: 'Deployments', icon: 'layers' },
+  { kind: 'services', label: 'Services', icon: 'plug' },
+  { kind: 'configmaps', label: 'ConfigMaps', icon: 'file-text' },
+  { kind: 'ingresses', label: 'Ingresses', icon: 'globe' },
+  { kind: 'nodes', label: 'Nodes', icon: 'server' },
+  { kind: 'persistentvolumeclaims', label: 'PV/PVC', icon: 'hard-drive' },
 ]
 </script>
 
@@ -46,15 +46,15 @@ const filterChips: { kind: ResourceKind; label: string; icon: string }[] = [
         <div class="selector-group">
           <label class="hud-label">Cluster</label>
           <select :value="selectedCluster" class="input-glass font-mono hud-select" @change="emit('update:selectedCluster', ($event.target as HTMLSelectElement).value)">
-            <option v-for="c in clusters" :key="c.id || c.name" :value="c.name || c.id">🌐 {{ c.name || c.id }}</option>
-            <option v-if="clusters.length === 0" :value="selectedCluster">🌐 {{ selectedCluster || 'primary-cluster' }}</option>
+            <option v-for="c in clusters" :key="c.id || c.name" :value="c.name || c.id">{{ c.name || c.id }}</option>
+            <option v-if="clusters.length === 0" :value="selectedCluster">{{ selectedCluster || 'primary-cluster' }}</option>
           </select>
         </div>
         <div class="selector-group">
           <label class="hud-label">Namespace</label>
           <select :value="selectedNamespace" class="input-glass font-mono hud-select" @change="emit('update:selectedNamespace', ($event.target as HTMLSelectElement).value)">
-            <option value="all">🌐 All Namespaces</option>
-            <option v-for="ns in namespaces" :key="ns.name" :value="ns.name">📁 {{ ns.name }}</option>
+            <option value="all">All Namespaces</option>
+            <option v-for="ns in namespaces" :key="ns.name" :value="ns.name">{{ ns.name }}</option>
           </select>
         </div>
       </div>
@@ -67,8 +67,8 @@ const filterChips: { kind: ResourceKind; label: string; icon: string }[] = [
       </div>
 
       <div class="hud-actions">
-        <button type="button" class="btn btn-secondary btn-xs font-mono" :disabled="loading" @click="emit('refresh')">{{ loading ? '⏳' : '🔄' }} Refresh</button>
-        <button type="button" class="btn btn-primary btn-xs font-mono" @click="emit('create')">➕ New</button>
+        <button type="button" class="btn btn-secondary btn-xs font-mono" :disabled="loading" @click="emit('refresh')"><BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> Refresh</button>
+        <button type="button" class="btn btn-primary btn-xs font-mono" @click="emit('create')"><BaseIcon name="plus" size="xs" /> New</button>
       </div>
     </div>
 
@@ -82,12 +82,12 @@ const filterChips: { kind: ResourceKind; label: string; icon: string }[] = [
           :class="{ 'is-active': selectedKind === chip.kind }"
           @click="emit('update:selectedKind', chip.kind)"
         >
-          <span>{{ chip.icon }}</span><span>{{ chip.label }}</span>
+          <BaseIcon :name="chip.icon" size="xs" /><span>{{ chip.label }}</span>
         </button>
       </div>
       <div class="hud-search-box">
         <input :value="searchQuery" type="text" placeholder="Filter resources..." class="input-glass font-mono hud-search-input" @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)" />
-        <button v-if="searchQuery" type="button" class="search-clear-btn" @click="emit('update:searchQuery', '')">✕</button>
+        <button v-if="searchQuery" type="button" class="search-clear-btn" @click="emit('update:searchQuery', '')"><BaseIcon name="x" size="xs" /></button>
       </div>
     </div>
   </div>

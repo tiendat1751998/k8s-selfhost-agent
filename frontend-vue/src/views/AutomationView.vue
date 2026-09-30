@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useAutomationEngine } from '../composables/useAutomationEngine'
-import AutomationHudCards from '../components/automation/AutomationHudCards.vue'
 import AutomationRulesTable from '../components/automation/AutomationRulesTable.vue'
 import AutomationMobileCards from '../components/automation/AutomationMobileCards.vue'
 import AutomationExecutionHistory from '../components/automation/AutomationExecutionHistory.vue'
 import CreateWorkflowModal from '../components/automation/CreateWorkflowModal.vue'
+import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { AutomationRule } from '../api/governance'
 import '../assets/styles/views/automation.css'
 import '../assets/styles/components/automation-drawers.css'
@@ -22,7 +22,6 @@ const {
   showCreateModal,
   editingRule,
   enabledRulesCount,
-  executions24hCount,
   healingSuccessRate,
   savedEngineeringHours,
   fetchAutomationData,
@@ -47,6 +46,53 @@ const savedHours = savedEngineeringHours
 
 // Mobile Tab Switcher (Rules vs History)
 const mobileTab = ref<'rules' | 'history'>('rules')
+
+// Toolbar search & trigger filter
+const searchQuery = ref('')
+const selectedTrigger = ref<'all' | 'crashloop' | 'nodepressure' | 'deploymentfailed'>('all')
+
+const triggerFilterPills = [
+  { key: 'all', label: 'All', icon: 'zap' },
+  { key: 'crashloop', label: 'CrashLoop', icon: 'refresh' },
+  { key: 'nodepressure', label: 'NodePressure', icon: 'shield' },
+  { key: 'deploymentfailed', label: 'DeploymentFailed', icon: 'flame' },
+] as const
+
+const filteredRules = computed(() => {
+  let list = rules.value
+
+  // 1. Trigger Filter
+  if (selectedTrigger.value !== 'all') {
+    list = list.filter(rule => {
+      const t = (rule.trigger_type || '').toLowerCase()
+      const n = (rule.name || '').toLowerCase()
+      if (selectedTrigger.value === 'crashloop') {
+        return t === 'pod_restart' || t.includes('crash') || t.includes('restart') || n.includes('crash')
+      }
+      if (selectedTrigger.value === 'nodepressure') {
+        return t === 'node_pressure' || t.includes('pressure') || n.includes('pressure') || n.includes('node')
+      }
+      if (selectedTrigger.value === 'deploymentfailed') {
+        return t === 'deployment_failure' || t.includes('deploy') || n.includes('deploy')
+      }
+      return true
+    })
+  }
+
+  // 2. Search Query Filter (name, condition, action, trigger)
+  const q = searchQuery.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter(rule => {
+      const nameMatch = (rule.name || '').toLowerCase().includes(q)
+      const triggerMatch = (rule.trigger_type || '').toLowerCase().includes(q) || formatType(rule.trigger_type).toLowerCase().includes(q)
+      const actionMatch = (rule.action_type || '').toLowerCase().includes(q) || formatType(rule.action_type).toLowerCase().includes(q)
+      const conditionMatch = formatScheduleOrCondition(rule).toLowerCase().includes(q)
+      return nameMatch || triggerMatch || actionMatch || conditionMatch
+    })
+  }
+
+  return list
+})
 
 function onEditRule(rule: AutomationRule) {
   openEditRule(rule)
@@ -74,33 +120,10 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
 
 <template>
   <div class="view-container">
-    <!-- Desktop View Header -->
-    <header class="view-header desktop-header-wrap desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>EVENT-DRIVEN SELF-HEALING & AUTOMATION</span>
-        </div>
-        <h1 class="view-title">Automated Remediation & Workflow Rules</h1>
-        <p class="view-desc">
-          Automate incident response pipelines: <span class="highlight">Auto-Rollback</span> on deployment errors, <span class="highlight">RCA Generation</span> on crashloops, and <span class="highlight">Node Cordoning</span> on pressure.
-        </p>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn btn-secondary" :disabled="loading" @click="fetchAutomationData">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh' }}</span>
-        </button>
-        <button class="btn btn-primary" @click="onCreateRule">
-          <span>+ Create Automation Rule</span>
-        </button>
-      </div>
-    </header>
-
     <!-- 44px Mobile Command Bar (<768px) -->
     <div class="mobile-command-bar automation-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">⚡ Automation ({{ rules.length }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="zap" size="xs" /> Automation ({{ rules.length }})</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -110,7 +133,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
           aria-label="Refresh"
           @click="fetchAutomationData"
         >
-          <span>{{ loading ? '⏳' : '🔄' }}</span>
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" />
         </button>
         <button
           class="btn-icon-cmd"
@@ -118,20 +141,20 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
           aria-label="Create Rule"
           @click="onCreateRule"
         >
-          <span>➕</span>
+          <BaseIcon name="plus" size="xs" />
         </button>
       </div>
     </div>
 
     <!-- 20px Mobile Micro-Telemetry Strip (<768px) -->
     <div class="mobile-micro-telemetry automation-micro-telemetry mobile-only font-mono" role="status" aria-label="Automation Micro Telemetry">
-      <span class="tel-item tel-rules">⚡ {{ rules.length }} rules</span>
+      <span class="tel-item tel-rules"><BaseIcon name="zap" size="xs" /> {{ rules.length }} rules</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-active">🟢 {{ activeCount }} act</span>
+      <span class="tel-item tel-active"><BaseIcon name="check-circle" size="xs" /> {{ activeCount }} act</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-healed">🛡️ 100%</span>
+      <span class="tel-item tel-healed"><BaseIcon name="shield" size="xs" /> {{ executions.length > 0 ? `${healingSuccessRate}%` : '--' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-saved">⏱️ {{ savedHours }}h saved</span>
+      <span class="tel-item tel-saved"><BaseIcon name="clock" size="xs" /> {{ savedHours }}h saved</span>
     </div>
 
     <!-- Mobile Segmented Tab Switcher (<768px) -->
@@ -141,33 +164,94 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
         :class="{ active: mobileTab === 'rules' }"
         @click="mobileTab = 'rules'"
       >
-        ⚡ Rules ({{ rules.length }})
+        <BaseIcon name="zap" size="xs" /> Rules ({{ rules.length }})
       </button>
       <button
         class="segmented-btn"
         :class="{ active: mobileTab === 'history' }"
         @click="mobileTab = 'history'"
       >
-        📜 History ({{ executions.length }})
+        <BaseIcon name="history" size="xs" /> History ({{ executions.length }})
       </button>
     </div>
 
     <!-- Notification Banner -->
     <div v-if="statusMessage" class="status-banner animate-fade-in" :class="'banner-' + statusMessage.type">
-      <span class="banner-icon">{{ statusMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="statusMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="xs" class="banner-icon" />
       <span class="banner-text">{{ statusMessage.text }}</span>
-      <button class="banner-close" @click="statusMessage = null">✕</button>
+      <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Desktop Metrics HUD Grid -->
-    <AutomationHudCards
-      class="desktop-only"
-      :rules-count="rules.length"
-      :active-rules-count="enabledRulesCount"
-      :executions24h-count="executions24hCount"
-      :healing-success-rate="healingSuccessRate"
-      :saved-engineering-hours="savedEngineeringHours"
-    />
+    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <div class="automation-toolbar-sleek glass-panel desktop-only">
+      <!-- Search input with search icon and clear button -->
+      <div class="toolbar-search-wrap">
+        <BaseIcon name="search" size="xs" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search rule, trigger, action..."
+          class="toolbar-search-input"
+          aria-label="Search rules by name, condition, action, or trigger"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-input-btn"
+          aria-label="Clear search"
+          @click="searchQuery = ''"
+        >
+          <BaseIcon name="x" size="xs" />
+        </button>
+      </div>
+
+      <!-- Trigger filter pills / tabs (All, CrashLoop, NodePressure, DeploymentFailed) -->
+      <div class="toolbar-trigger-pills" role="tablist" aria-label="Trigger filters">
+        <button
+          v-for="pill in triggerFilterPills"
+          :key="pill.key"
+          type="button"
+          role="tab"
+          :aria-selected="selectedTrigger === pill.key"
+          class="toolbar-pill-btn"
+          :class="{ active: selectedTrigger === pill.key }"
+          @click="selectedTrigger = pill.key"
+        >
+          <BaseIcon v-if="pill.icon" :name="pill.icon" size="xs" />
+          <span>{{ pill.label }}</span>
+        </button>
+      </div>
+
+      <!-- Inline compact execution badge strip font-mono -->
+      <div class="toolbar-kpi-strip font-mono desktop-only" role="status" aria-label="Automation execution metrics">
+        <span class="kpi-badge font-mono">{{ rules.length }} Rules ({{ enabledRulesCount }} Active · {{ executions.length > 0 ? `${healingSuccessRate}% Healed` : '0 Healed' }} · {{ savedEngineeringHours }}h Saved)</span>
+      </div>
+
+      <!-- Action buttons: + Create Automation Rule (primary) and Refresh -->
+      <div class="toolbar-actions-group">
+        <button
+          type="button"
+          class="btn btn-primary toolbar-btn"
+          title="Create Automation Rule"
+          aria-label="Create Automation Rule"
+          @click="onCreateRule"
+        >
+          <BaseIcon name="plus" size="xs" />
+          <span>+ Create Automation Rule</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary toolbar-btn"
+          title="Refresh automation workflows"
+          aria-label="Refresh automation workflows"
+          :disabled="loading"
+          @click="fetchAutomationData"
+        >
+          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" />
+          <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
+        </button>
+      </div>
+    </div>
 
     <!-- Section 1: Automation Rules Management Table -->
     <div class="section-card glass-panel desktop-only">
@@ -180,7 +264,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
       </div>
 
       <AutomationRulesTable
-        :rules="rules"
+        :rules="filteredRules"
         :loading="loading"
         :error="error"
         :toggling-id="togglingId"
@@ -212,15 +296,15 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
       <!-- Rules Stream Tab -->
       <div v-if="mobileTab === 'rules'" class="mobile-rules-stream">
         <div v-if="loading && rules.length === 0" class="stream-status font-mono">
-          <span class="spin-icon">⏳</span> Loading rules...
+          <BaseIcon name="clock" size="xs" class="spin-icon" /> Loading rules...
         </div>
         <div v-else-if="rules.length === 0" class="stream-empty glass-panel font-mono">
-          <span class="empty-icon">⚡</span>
+          <span class="empty-icon"><BaseIcon name="zap" size="lg" /></span>
           <p class="empty-text">No automation rules configured yet.</p>
         </div>
         <div v-else class="mobile-rules-cards">
           <div
-            v-for="rule in rules"
+            v-for="rule in filteredRules"
             :key="rule.id"
             class="mobile-rule-card glass-panel"
           >
@@ -239,7 +323,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
             <div class="mobile-rule-center" @click="onEditRule(rule)">
               <span class="mobile-rule-name" :title="rule.name">{{ rule.name }}</span>
               <div class="mobile-rule-sub font-mono">
-                <span>{{ getTriggerIcon(rule.trigger_type) }} {{ formatType(rule.trigger_type) }}</span>
+                <span><BaseIcon :name="getTriggerIcon(rule.trigger_type)" size="xs" /> {{ formatType(rule.trigger_type) }}</span>
                 <span>·</span>
                 <span class="text-cyan">{{ formatType(rule.action_type) }}</span>
               </div>
@@ -253,7 +337,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
                 aria-label="Trigger Rule"
                 @click="handleTriggerRule(rule)"
               >
-                <span>{{ triggeringId === rule.id ? '⏳' : '⚡' }}</span>
+                <BaseIcon :name="triggeringId === rule.id ? 'clock' : 'zap'" size="xs" />
               </button>
             </div>
           </div>

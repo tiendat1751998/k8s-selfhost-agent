@@ -1,10 +1,5 @@
 import { ref, reactive, computed, onMounted } from 'vue'
-import {
-  settingsApi,
-  type Setting,
-  type SettingUpdate,
-  type IntegrationTestResult,
-} from '../api/settings'
+import { settingsApi, type Setting, type SettingUpdate, type IntegrationTestResult } from '../api/settings'
 import { authApi, type TOTPStatusResponse } from '../api/auth'
 
 export type TabKey = 'general' | 'security' | 'tenancy' | 'notifications' | 'apikeys' | 'telemetry' | 'backup' | 'integrations' | 'about'
@@ -58,24 +53,32 @@ export interface SettingsFormState {
   trivy_url: string
   vault_url: string
   grafana_url: string
+  // Tenancy & API Keys
+  isolation_mode: string
+  default_cpu_limit: string
+  default_memory_limit: string
+  default_storage_limit: string
+  strict_network_isolation: boolean
+  auto_provision_ingress: boolean
+  apikeys_rotation_days: number
+  apikeys_require_expiry: boolean
 }
 
 export const timezoneOptions = [
-  { value: 'UTC', label: '🌐 UTC — Coordinated Universal Time' },
-  { value: 'Asia/Ho_Chi_Minh', label: '🇻🇳 Asia/Ho_Chi_Minh — Indochina Time (UTC+7)' },
-  { value: 'Asia/Singapore', label: '🇸🇬 Asia/Singapore — Singapore Time (UTC+8)' },
-  { value: 'Asia/Tokyo', label: '🇯🇵 Asia/Tokyo — Japan Standard Time (UTC+9)' },
-  { value: 'Europe/London', label: '🇬🇧 Europe/London — Greenwich Mean Time (UTC+0/+1)' },
-  { value: 'Europe/Berlin', label: '🇩🇪 Europe/Berlin — Central European Time (UTC+1/+2)' },
-  { value: 'America/New_York', label: '🇺🇸 America/New_York — Eastern Time (UTC-5/-4)' },
-  { value: 'America/Chicago', label: '🇺🇸 America/Chicago — Central Time (UTC-6/-5)' },
-  { value: 'America/Los_Angeles', label: '🇺🇸 America/Los_Angeles — Pacific Time (UTC-8/-7)' },
-  { value: 'Australia/Sydney', label: '🇦🇺 Australia/Sydney — Eastern Australia (UTC+10/+11)' },
+  { value: 'UTC', label: 'UTC — Coordinated Universal Time' },
+  { value: 'Asia/Ho_Chi_Minh', label: 'Asia/Ho_Chi_Minh — Indochina Time (UTC+7)' },
+  { value: 'Asia/Singapore', label: 'Asia/Singapore — Singapore Time (UTC+8)' },
+  { value: 'Asia/Tokyo', label: 'Asia/Tokyo — Japan Standard Time (UTC+9)' },
+  { value: 'Europe/London', label: 'Europe/London — Greenwich Mean Time (UTC+0/+1)' },
+  { value: 'Europe/Berlin', label: 'Europe/Berlin — Central European Time (UTC+1/+2)' },
+  { value: 'America/New_York', label: 'America/New_York — Eastern Time (UTC-5/-4)' },
+  { value: 'America/Chicago', label: 'America/Chicago — Central Time (UTC-6/-5)' },
+  { value: 'America/Los_Angeles', label: 'America/Los_Angeles — Pacific Time (UTC-8/-7)' },
+  { value: 'Australia/Sydney', label: 'Australia/Sydney — Eastern Australia (UTC+10/+11)' },
 ]
 
 export const languageOptions = [
-  { value: 'en', label: '🇺🇸 English (United States)' },
-  { value: 'vi', label: '🇻🇳 Vietnamese (Vietnam)' },
+  { value: 'en', label: 'English (United States)' }, { value: 'vi', label: 'Vietnamese (Vietnam)' },
 ]
 
 export const environmentOptions = [
@@ -86,10 +89,10 @@ export const environmentOptions = [
 ]
 
 export const backupProviderOptions = [
-  { id: 'minio', name: 'MinIO Self-Host', icon: '🗄️', desc: 'On-premise S3-compatible high-speed blob storage' },
-  { id: 's3', name: 'AWS S3 Glacier', icon: '☁️', desc: 'Cloud multi-AZ replicated object vault' },
-  { id: 'local_nvme', name: 'Local NVMe Direct', icon: '⚡', desc: 'Zero-latency local cluster volume backup' },
-  { id: 'gcs', name: 'Google Cloud Storage', icon: '🌐', desc: 'Enterprise GCS Nearline/Coldline bucket' },
+  { id: 'minio', name: 'MinIO Self-Host', icon: 'database', desc: 'On-premise S3-compatible high-speed blob storage' },
+  { id: 's3', name: 'AWS S3 Glacier', icon: 'cloud', desc: 'Cloud multi-AZ replicated object vault' },
+  { id: 'local_nvme', name: 'Local NVMe Direct', icon: 'hard-drive', desc: 'Zero-latency local cluster volume backup' },
+  { id: 'gcs', name: 'Google Cloud Storage', icon: 'globe', desc: 'Enterprise GCS Nearline/Coldline bucket' },
 ]
 
 const initialDefaults: SettingsFormState = {
@@ -129,6 +132,14 @@ const initialDefaults: SettingsFormState = {
   trivy_url: '',
   vault_url: '',
   grafana_url: '',
+  isolation_mode: 'namespace',
+  default_cpu_limit: '16',
+  default_memory_limit: '32',
+  default_storage_limit: '200',
+  strict_network_isolation: true,
+  auto_provision_ingress: false,
+  apikeys_rotation_days: 90,
+  apikeys_require_expiry: true,
 }
 
 export function useSettings() {
@@ -183,8 +194,8 @@ export function useSettings() {
     security: ['require_2fa', 'session_timeout_minutes', 'jwt_session_duration_hours', 'password_min_length', 'rate_limit_enabled', 'rate_limit_requests_per_min', 'rate_limit_burst', 'ip_allowlist'],
     telemetry: ['prometheus_endpoint', 'prometheus_scrape_interval_sec', 'loki_endpoint', 'loki_retention_days', 'alertmanager_endpoint', 'alertmanager_webhook_url'],
     notifications: ['smtp_enabled', 'smtp_host', 'smtp_port', 'webhook_url'],
-    tenancy: [],
-    apikeys: [],
+    tenancy: ['isolation_mode', 'default_cpu_limit', 'default_memory_limit', 'default_storage_limit', 'strict_network_isolation', 'auto_provision_ingress'],
+    apikeys: ['apikeys_rotation_days', 'apikeys_require_expiry'],
     backup: ['backup_provider', 'backup_s3_endpoint', 'backup_s3_bucket', 'backup_s3_region', 'backup_schedule_cron', 'backup_retention_days', 'backup_encryption_enabled', 'backup_compression_level', 'backup_auto_verify'],
     integrations: ['argocd_url', 'trivy_url', 'vault_url', 'grafana_url'],
   }
@@ -355,9 +366,14 @@ export function useSettings() {
   }
 
   // Save Category
-  async function saveCategory(category: CategoryKey) {
+  async function saveCategory(category: CategoryKey, extraConfig?: Record<string, unknown>) {
     saving.value = true
     try {
+      if (extraConfig && typeof extraConfig === 'object') {
+        for (const [k, v] of Object.entries(extraConfig)) {
+          if (k in form) (form as any)[k] = v
+        }
+      }
       const updates: SettingUpdate[] = []
       const fields = categoryFieldMap[category] || []
       for (const field of fields) {
@@ -459,38 +475,14 @@ export function useSettings() {
   })
 
   return {
-    activeTab,
-    form,
-    initialForm,
-    defaultSettings,
-    loading,
-    saving,
-    statusMessage,
-    showMessage,
-    clearMessage,
-    isDirty,
-    dirtyFields,
-    dirtyCount,
-    isDirtyCategory,
-    saveCategory,
-    saveAllSettings,
-    resetCategoryToDefaults,
-    loadSettings,
-    totpStatus,
-    loadingTotpStatus,
-    showDisable2FAModal,
-    disablePassword,
-    disableTotpCode,
-    disabling2FA,
-    disableError,
-    fetchTOTPStatus,
-    handleDisable2FA,
-    integrationTests,
-    testService,
-    configuredIntegrationsCount,
-    activeSecurityPolicyCount,
-    telemetryHealthStatus,
-    backupStatusSummary,
+    activeTab, form, initialForm, defaultSettings,
+    loading, saving, statusMessage, showMessage, clearMessage,
+    isDirty, dirtyFields, dirtyCount, isDirtyCategory,
+    saveCategory, saveAllSettings, resetCategoryToDefaults, loadSettings,
+    totpStatus, loadingTotpStatus, showDisable2FAModal, disablePassword,
+    disableTotpCode, disabling2FA, disableError, fetchTOTPStatus, handleDisable2FA,
+    integrationTests, testService, configuredIntegrationsCount,
+    activeSecurityPolicyCount, telemetryHealthStatus, backupStatusSummary,
   }
 }
 

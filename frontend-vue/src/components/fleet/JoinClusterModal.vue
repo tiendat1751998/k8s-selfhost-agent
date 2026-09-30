@@ -1,7 +1,8 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
 import type { ImportClusterForm } from '../../composables/useFleetManagement'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = defineProps<{
   show: boolean
@@ -90,7 +91,7 @@ const joinCommand = computed(() => {
             :class="{ active: importMode === 'file' }"
             @click="emit('update:importMode', 'file')"
           >
-            📁 File Upload
+            <BaseIcon name="box" size="xs" /> File Upload
           </button>
           <button
             type="button"
@@ -98,7 +99,7 @@ const joinCommand = computed(() => {
             :class="{ active: importMode === 'text' }"
             @click="emit('update:importMode', 'text')"
           >
-            📝 Paste YAML
+            <BaseIcon name="file-text" size="xs" /> Paste YAML
           </button>
           <button
             type="button"
@@ -106,7 +107,7 @@ const joinCommand = computed(() => {
             :class="{ active: importMode === 'token' }"
             @click="emit('update:importMode', 'token')"
           >
-            ⚡ Join Token
+            <BaseIcon name="zap" size="xs" /> Join Token
           </button>
         </div>
 
@@ -137,7 +138,7 @@ const joinCommand = computed(() => {
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label class="form-label" style="margin: 0;">Self-Hosted Agent Join Command</label>
             <button class="btn btn-secondary btn-xs" type="button" @click="emit('generateToken')">
-              <span>⚡ Generate Token</span>
+              <span><BaseIcon name="zap" size="xs" /> Generate Token</span>
             </button>
           </div>
           <p class="form-hint" style="margin: 0;">
@@ -147,7 +148,7 @@ const joinCommand = computed(() => {
         </div>
 
         <span class="form-hint">
-          🔒 Manifests are encrypted with AES-256 GCM in local vault before persistence. Sensitive tokens are never returned in cleartext.
+          <BaseIcon name="lock" size="xs" /> Manifests are encrypted with AES-256 GCM in local vault before persistence. Sensitive tokens are never returned in cleartext.
         </span>
       </div>
     </div>
@@ -159,7 +160,7 @@ const joinCommand = computed(() => {
         :disabled="actionLoading === 'import'"
         @click="emit('submit')"
       >
-        <span>{{ actionLoading === 'import' ? '⏳ Registering Cluster...' : (importMode === 'token' ? 'Confirm Join ➔' : 'Import Cluster ➔') }}</span>
+        <span><BaseIcon :name="actionLoading === 'import' ? 'activity' : 'play'" size="xs" :class="{ 'spin-icon': actionLoading === 'import' }" /> {{ actionLoading === 'import' ? 'Registering Cluster...' : (importMode === 'token' ? 'Confirm Join' : 'Import Cluster') }}</span>
       </button>
     </template>
   </ModalDrawer>

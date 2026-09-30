@@ -1,5 +1,6 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import DataTable, { type Column } from '../ui/DataTable.vue'
+import ActionDropdown from '../ui/ActionDropdown.vue'
 import type { ServiceEntry } from '../../api/catalog'
 
 defineProps<{
@@ -27,35 +28,31 @@ const emit = defineEmits<{
   (e: 'config', service: ServiceEntry): void
   (e: 'delete', service: ServiceEntry): void
 }>()
+
+function handleActionSelect(actionId: string, service: ServiceEntry) {
+  if (actionId === 'apis') {
+    handleApiClick(service)
+  } else if (actionId === 'edit') {
+    emit('config', service)
+  } else if (actionId === 'delete') {
+    emit('delete', service)
+  }
+}
 </script>
 
 <template>
   <div class="section-box glass-panel table-box">
-    <div class="box-header">
-      <div class="box-header-title">
-        <h2 class="box-title">Registered Services & Component Directory</h2>
-        <p class="box-subtitle">
-          Backstage-compliant software inventory with metadata links and live Kubernetes annotations.
-        </p>
-      </div>
-      <div class="box-header-meta">
-        <span class="badge badge-cyan font-mono">{{ services.length }} Services</span>
-      </div>
-    </div>
-
     <DataTable
       :columns="columns"
       :data="services"
       :loading="loading"
       :error="error"
       empty-message="No services registered matching current filter criteria."
-      searchable
-      search-placeholder="Filter loaded rows by name, owner, repo..."
     >
       <!-- Cell: Name -->
       <template #cell-name="{ row }">
         <div class="service-name-cell">
-          <div class="type-mini-icon">{{ getTypeIcon(row.type) }}</div>
+          <div class="type-mini-icon"><BaseIcon :name="getTypeIcon(row.type)" size="xs" /></div>
           <div class="name-meta">
             <a
               href="javascript:void(0)"
@@ -74,7 +71,7 @@ const emit = defineEmits<{
       <!-- Cell: Type -->
       <template #cell-type="{ row }">
         <span class="type-badge" :class="getTypeBadgeClass(row.type)">
-          <span class="type-icon-dot">{{ getTypeIcon(row.type) }}</span>
+          <span class="type-icon-dot"><BaseIcon :name="getTypeIcon(row.type)" size="xs" /></span>
           <span>{{ row.type }}</span>
         </span>
       </template>
@@ -101,12 +98,12 @@ const emit = defineEmits<{
       <template #cell-endpoint="{ row }">
         <div v-if="row.annotations && row.annotations['api.endpoint']" class="endpoint-cell font-mono">
           <span class="endpoint-badge" :title="row.annotations['api.endpoint']">
-            ⚡ {{ row.annotations['api.endpoint'] }}
+            <BaseIcon name="zap" size="xs" /> {{ row.annotations['api.endpoint'] }}
           </span>
         </div>
         <div v-else-if="row.docs_url" class="endpoint-cell font-mono">
           <a :href="row.docs_url" target="_blank" rel="noopener noreferrer" class="endpoint-link">
-            📖 Docs Spec ↗
+            <BaseIcon name="book-open" size="xs" /> Docs Spec
           </a>
         </div>
         <span v-else class="text-muted font-mono">-</span>
@@ -122,7 +119,7 @@ const emit = defineEmits<{
             class="repo-link font-mono"
             title="Open Git Repository"
           >
-            <span>🔗 Repo</span>
+            <BaseIcon name="git-branch" size="xs" /> <span>Repo</span>
             <span class="external-icon">↗</span>
           </a>
         </div>
@@ -149,30 +146,17 @@ const emit = defineEmits<{
       <!-- Cell: Actions with labeled buttons -->
       <template #cell-actions="{ row }">
         <div class="table-actions-row">
-          <button
-            type="button"
-            class="btn btn-secondary btn-xs btn-action-labeled"
-            title="View full service details"
-            @click="emit('open-detail', row)"
-          >
-            <span>🔍 Details</span>
-          </button>
-          <button
-            type="button"
-            class="btn btn-secondary btn-xs btn-action-labeled"
-            title="API specifications & documentation"
-            @click="handleApiClick(row)"
-          >
-            <span>⚡ APIs</span>
-          </button>
-          <button
-            type="button"
-            class="btn btn-secondary btn-xs btn-action-labeled"
-            title="Configure service registration"
-            @click="emit('config', row)"
-          >
-            <span>✏️ Edit</span>
-          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-action-labeled" @click="emit('open-detail', row)"><BaseIcon name="eye" size="xs" /><span>Details</span></button>
+          <ActionDropdown
+            :items="[
+              { id: 'apis', label: 'View APIs', icon: 'zap' },
+              { id: 'edit', label: 'Edit Service', icon: 'edit' },
+              { id: 'delete', label: 'Unregister Service', icon: 'trash', variant: 'danger' }
+            ]"
+            size="xs"
+            trigger-title="Service Actions"
+            @select="(id) => handleActionSelect(id, row)"
+          />
         </div>
       </template>
     </DataTable>
