@@ -1,8 +1,9 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { navGroups, type NavItem } from '../../config/navigation'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const STORAGE_KEY = 'k8s_sidebar_collapsed'
 
@@ -20,20 +21,33 @@ const emit = defineEmits<{
   (e: 'tenantChange'): void
   (e: 'logout'): void
   (e: 'closeMobile'): void
+  (e: 'open-zerotrust'): void
 }>()
+
+function handleOpenZeroTrust() {
+  emit('open-zerotrust')
+}
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-function getInitialCollapseState(): boolean {
+function getSavedCollapseState(): boolean {
   if (typeof window === 'undefined') return false
   const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved !== null) {
-    return saved === 'true'
-  }
+  return saved !== null ? saved === 'true' : false
+}
+
+function getInitialCollapseState(): boolean {
+  if (typeof window === 'undefined') return false
   const width = window.innerWidth
-  return width >= 768 && width <= 1024
+  if (width >= 641 && width <= 1200) {
+    return true
+  }
+  if (width <= 640) {
+    return false
+  }
+  return getSavedCollapseState()
 }
 
 const isCollapsed = ref<boolean>(getInitialCollapseState())
@@ -56,19 +70,31 @@ function toggleCollapse() {
 
 function handleResize() {
   if (typeof window === 'undefined') return
-  const saved = localStorage.getItem(STORAGE_KEY)
-  // Only auto-collapse on tablet if user hasn't explicitly set a preference
-  if (saved === null) {
-    const width = window.innerWidth
-    const shouldCollapse = width >= 768 && width <= 1024
-    if (isCollapsed.value !== shouldCollapse) {
-      isCollapsed.value = shouldCollapse
-      emit('update:collapsed', isCollapsed.value)
+  const width = window.innerWidth
+  if (width > 640 && props.mobileOpen) {
+    emit('closeMobile')
+  }
+  if (width >= 641 && width <= 1200) {
+    if (!isCollapsed.value) {
+      isCollapsed.value = true
+      emit('update:collapsed', true)
+    }
+  } else if (width > 1200) {
+    const saved = getSavedCollapseState()
+    if (isCollapsed.value !== saved) {
+      isCollapsed.value = saved
+      emit('update:collapsed', saved)
+    }
+  } else if (width <= 640) {
+    if (isCollapsed.value) {
+      isCollapsed.value = false
+      emit('update:collapsed', false)
     }
   }
 }
 
 onMounted(() => {
+  handleResize()
   emit('update:collapsed', isCollapsed.value)
   window.addEventListener('resize', handleResize)
 })
@@ -139,7 +165,9 @@ function handleItemClick() {
         @keydown.space.prevent="navigateHome"
       >
         <div class="brand-icon-wrapper">
-          <div class="brand-icon">⎈</div>
+          <div class="brand-icon">
+            <BaseIcon name="anchor" size="lg" />
+          </div>
           <div class="brand-glow"></div>
         </div>
         <div class="brand-info">
@@ -148,14 +176,26 @@ function handleItemClick() {
         </div>
       </div>
 
+      <!-- Close button for mobile/tablet drawer -->
+      <button
+        v-if="mobileOpen"
+        class="sidebar-close-btn"
+        @click="emit('closeMobile')"
+        aria-label="Close navigation menu"
+      >
+        <BaseIcon name="x" size="sm" />
+      </button>
+
       <!-- Sleek Collapse Toggle Button -->
       <button
         class="sidebar-toggle-btn"
         @click="toggleCollapse"
         aria-label="Toggle sidebar collapse"
-        :title="isCollapsed ? 'Expand sidebar (»)' : 'Collapse sidebar («)'"
+        :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
       >
-        <span class="toggle-icon">{{ isCollapsed ? '»' : '«' }}</span>
+        <span class="toggle-icon">
+          <BaseIcon :name="isCollapsed ? 'chevron-right' : 'chevron-left'" size="xs" />
+        </span>
       </button>
     </div>
 
@@ -183,12 +223,14 @@ function handleItemClick() {
           @keydown.enter="toggleSection(group.key)"
           @keydown.space.prevent="toggleSection(group.key)"
         >
-          <span class="section-title">
-            <span class="section-icon">{{ group.icon }}</span>
+          <span class="nav-section-title">
+            <span class="nav-section-icon">
+              <BaseIcon :name="group.icon" size="xs" />
+            </span>
             <span>{{ group.label }}</span>
           </span>
-          <span class="section-caret" :class="{ 'caret-collapsed': collapsedSections[group.key] }">
-            ▾
+          <span class="nav-section-caret">
+            <BaseIcon :name="collapsedSections[group.key] ? 'chevron-right' : 'chevron-down'" size="xs" />
           </span>
         </div>
 
@@ -205,7 +247,9 @@ function handleItemClick() {
             @mouseleave="handleItemMouseLeave"
             @click="handleItemClick"
           >
-            <div class="nav-icon" aria-hidden="true">{{ item.icon }}</div>
+            <div class="nav-icon" aria-hidden="true">
+              <BaseIcon :name="item.icon" size="sm" />
+            </div>
             <div class="nav-label">
               <span>{{ item.name }}</span>
               <small>{{ item.sub }}</small>
@@ -221,7 +265,9 @@ function handleItemClick() {
       <!-- Mobile Drawer Tenant Switcher & User Profile -->
       <div class="drawer-mobile-meta">
         <div class="drawer-tenant-row">
-          <span class="drawer-tenant-icon" aria-hidden="true">🏢</span>
+          <span class="drawer-tenant-icon" aria-hidden="true">
+            <BaseIcon name="layers" size="sm" />
+          </span>
           <select
             :value="selectedTenant"
             @change="onTenantChange"
@@ -239,13 +285,24 @@ function handleItemClick() {
             <span class="user-role font-mono">{{ authStore.user.role || 'ADMIN' }}</span>
           </div>
           <button class="drawer-logout-btn" title="Sign Out" aria-label="Sign Out" @click="emit('logout')">
-            <span class="logout-icon" aria-hidden="true">🚪</span>
+            <span class="logout-icon" aria-hidden="true">
+              <BaseIcon name="lock" size="sm" />
+            </span>
             <span>Sign Out</span>
           </button>
         </div>
       </div>
 
-      <div class="telemetry-card">
+      <div
+        class="telemetry-card"
+        role="button"
+        tabindex="0"
+        aria-label="Open ZeroTrust KMS & Dual-Sync Attestation"
+        title="ZeroTrust KMS & Dual-Sync Attestation — Click to inspect"
+        @click="handleOpenZeroTrust"
+        @keydown.enter="handleOpenZeroTrust"
+        @keydown.space.prevent="handleOpenZeroTrust"
+      >
         <div class="telemetry-row">
           <span class="telemetry-key">ZeroTrust KMS</span>
           <span class="telemetry-val text-emerald">ARMED</span>

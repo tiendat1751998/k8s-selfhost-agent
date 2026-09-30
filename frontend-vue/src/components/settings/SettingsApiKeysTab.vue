@@ -50,6 +50,16 @@ const newKeyRole = ref('developer')
 const showCreateForm = ref(false)
 const copiedId = ref<string | null>(null)
 
+function generateSecureTokenPrefix(): string {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const bytes = new Uint8Array(4)
+    crypto.getRandomValues(bytes)
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+    return `k8s_sa_${hex}...`
+  }
+  return `k8s_sa_${Date.now().toString(16).slice(-8)}...`
+}
+
 function handleCreateKey() {
   if (!newKeyName.value.trim()) return
   const id = `key-${Date.now()}`
@@ -61,7 +71,7 @@ function handleCreateKey() {
   keys.value.push({
     id,
     name: newKeyName.value.trim(),
-    prefix: `k8s_live_${Math.random().toString(36).substring(2, 6)}...`,
+    prefix: generateSecureTokenPrefix(),
     role: roleMap[newKeyRole.value] || 'Cluster Operator (Read/Write)',
     created_at: new Date().toISOString().split('T')[0],
     last_used: 'Just now',
@@ -106,7 +116,7 @@ function handleRevokeKey(id: string) {
         class="btn btn-secondary btn-sm"
         @click="showCreateForm = !showCreateForm"
       >
-        <span>{{ showCreateForm ? '✕ Cancel' : '+ Generate API Key' }}</span>
+        <span>{{ showCreateForm ? 'Cancel' : '+ Generate API Key' }}</span>
       </button>
     </div>
 
@@ -118,8 +128,8 @@ function handleRevokeKey(id: string) {
     >
       <h3 class="subsection-title" style="margin-bottom: 12px;">Generate New Machine-to-Machine Token</h3>
       <form class="settings-form" @submit.prevent="handleCreateKey">
-        <div class="form-row">
-          <div class="form-group flex-2">
+        <div class="form-row" style="align-items: flex-end; gap: 16px;">
+          <div class="form-group" style="max-width: 360px; flex: 1;">
             <label class="form-label" for="api-key-name">Key Name / Description</label>
             <input
               id="api-key-name"
@@ -127,22 +137,23 @@ function handleRevokeKey(id: string) {
               type="text"
               required
               class="input-glass form-input"
+              style="max-width: 360px;"
               placeholder="e.g. Jenkins Staging Runner"
             />
           </div>
-          <div class="form-group flex-1">
+          <div class="form-group" style="max-width: 200px; flex: 1;">
             <label class="form-label" for="api-key-role">Permission Scope</label>
-            <select id="api-key-role" v-model="newKeyRole" class="input-glass form-select">
-              <option value="developer">Cluster Operator (Read/Write)</option>
-              <option value="admin">Cluster Admin (Full Access)</option>
+            <select id="api-key-role" v-model="newKeyRole" class="input-glass form-select" style="max-width: 200px;">
+              <option value="developer">Operator (Read/Write)</option>
+              <option value="admin">Admin (Full Access)</option>
               <option value="readonly">Auditor (Read-Only)</option>
             </select>
           </div>
-        </div>
-        <div class="form-actions" style="margin-top: 8px;">
-          <button type="submit" class="btn btn-primary btn-sm" :disabled="saving">
-            <span>{{ saving ? 'Generating...' : 'Confirm Key Creation' }}</span>
-          </button>
+          <div class="form-group" style="flex: 0 0 auto;">
+            <button type="submit" class="btn btn-primary btn-sm" style="min-height: 40px;" :disabled="saving">
+              <span>{{ saving ? 'Generating...' : 'Confirm Key Creation' }}</span>
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -191,7 +202,7 @@ function handleRevokeKey(id: string) {
                     :aria-label="'Copy ' + k.name"
                     @click="handleCopyKey(k.prefix, k.id)"
                   >
-                    <span>{{ copiedId === k.id ? '✅ Copied' : '📋 Copy' }}</span>
+                    <BaseIcon :name="copiedId === k.id ? 'check' : 'copy'" size="xs" /> <span>{{ copiedId === k.id ? 'Copied' : 'Copy' }}</span>
                   </button>
                   <button
                     type="button"
@@ -200,7 +211,7 @@ function handleRevokeKey(id: string) {
                     :aria-label="'Revoke ' + k.name"
                     @click="handleRevokeKey(k.id)"
                   >
-                    <span>🗑️ Revoke</span>
+                    <BaseIcon name="trash" size="xs" /> <span>Revoke</span>
                   </button>
                 </div>
               </td>

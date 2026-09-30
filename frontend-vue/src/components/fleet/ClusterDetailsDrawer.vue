@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import ClusterEssentialsMatrix from './ClusterEssentialsMatrix.vue'
 import BootstrapClusterModal from './BootstrapClusterModal.vue'
 import type { Cluster, ClusterDiscoveryData } from '../../api/fleet'
@@ -48,7 +49,7 @@ function handleBootstrapped() {
         <div class="overview-meta-card glass-panel">
           <div class="card-title-row">
             <div class="cluster-brand">
-              <span class="cluster-icon">⧈</span>
+              <span class="cluster-icon"><BaseIcon name="anchor" size="md" /></span>
               <div>
                 <h4 class="cluster-name font-mono">{{ cluster.name }}</h4>
                 <span class="cluster-id font-mono text-muted text-xs">{{ cluster.id }}</span>
@@ -81,7 +82,7 @@ function handleBootstrapped() {
 
         <div class="drawer-action-bar">
           <button class="btn btn-primary" @click="handleTriggerBootstrap()">
-            <span>⚡ Bootstrap Essentials Wizard</span>
+            <span><BaseIcon name="zap" size="xs" /> Bootstrap Essentials Wizard</span>
           </button>
         </div>
 
@@ -93,10 +94,10 @@ function handleBootstrapped() {
         />
 
         <div v-if="discoveryData?.namespaces?.length" class="discovery-section glass-panel">
-          <h5 class="sec-title font-mono">💘 Discovered Namespaces ({{ discoveryData.namespaces.length }})</h5>
+          <h5 class="sec-title font-mono"><BaseIcon name="globe" size="xs" /> Discovered Namespaces ({{ discoveryData.namespaces.length }})</h5>
           <div class="chips-wrap">
             <span v-for="ns in discoveryData.namespaces" :key="ns" class="ns-chip font-mono">
-              👀 {{ ns }}
+              <BaseIcon name="search" size="xs" /> {{ ns }}
             </span>
           </div>
         </div>

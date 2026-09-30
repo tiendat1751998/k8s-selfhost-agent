@@ -1,4 +1,4 @@
-﻿import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { pluginsApi, type Plugin, type PluginStats, type CreatePluginDTO } from '../api/plugins'
 import { pluginLoader } from '../services/pluginLoader'
 
@@ -84,22 +84,42 @@ export function usePlugins() {
     return Array.from(scopeSet).sort()
   })
 
+  const activeCount = computed(() => plugins.value.filter((p) => p.enabled).length)
+  const installedCount = computed(() => plugins.value.length)
+
   const filteredPlugins = computed(() => {
     return plugins.value.filter((p) => {
       if (selectedCategory.value !== 'all' && p.category !== selectedCategory.value) return false
-      if (selectedStatus.value === 'enabled' && !p.enabled) return false
+      if ((selectedStatus.value === 'enabled' || selectedStatus.value === 'active') && !p.enabled) return false
       if (selectedStatus.value === 'disabled' && p.enabled) return false
       if (selectedScope.value !== 'all') {
-        const hasScope = (p.permissions || []).some((perm) => perm.startsWith(selectedScope.value + ':') || perm === selectedScope.value)
-        if (!hasScope) return false
+        const target = selectedScope.value.toLowerCase()
+        const hasPermScope = (p.permissions || []).some((perm) => {
+          const l = perm.toLowerCase()
+          return l.startsWith(target + ':') || l === target || l.includes(target)
+        })
+        const hasCategoryScope = (p.category || '').toLowerCase().includes(target)
+        const isCustom = target === 'custom' && (
+          (p.author || '').toLowerCase().includes('custom') ||
+          (p.id || '').toLowerCase().includes('custom') ||
+          !['security', 'monitoring', 'devtools', 'integration'].includes((p.category || '').toLowerCase())
+        )
+        const isCore = target === 'core' && (
+          ['security', 'monitoring', 'devtools'].includes((p.category || '').toLowerCase()) ||
+          (p.author || '').toLowerCase().includes('platform') ||
+          (p.author || '').toLowerCase().includes('aqua') ||
+          (p.author || '').toLowerCase().includes('grafana')
+        )
+        if (!hasPermScope && !hasCategoryScope && !isCustom && !isCore) return false
       }
       if (searchQuery.value.trim()) {
         const q = searchQuery.value.toLowerCase().trim()
-        const matchName = p.name.toLowerCase().includes(q)
+        const matchName = (p.name || '').toLowerCase().includes(q)
+        const matchId = (p.id || '').toLowerCase().includes(q)
         const matchDesc = (p.description || '').toLowerCase().includes(q)
         const matchAuthor = (p.author || '').toLowerCase().includes(q)
         const matchPerms = (p.permissions || []).some((perm) => perm.toLowerCase().includes(q))
-        if (!matchName && !matchDesc && !matchAuthor && !matchPerms) return false
+        if (!matchName && !matchId && !matchDesc && !matchAuthor && !matchPerms) return false
       }
       return true
     })
@@ -368,6 +388,7 @@ export function usePlugins() {
     plugins, stats, loading, error, toastMessage, showToast, viewMode, categoryCount, starterPresets, categories,
     availablePermissionScopes, wasmSandboxStatus, searchQuery, selectedCategory,
     selectedStatus, selectedScope, filteredPlugins, togglingId, installingPreset,
+    activeCount, installedCount,
     testResult, testBundleLoad, hotReloadPlugin, getRuntimeStatusLabel, getRuntimeStatusClass,
     loadData, refreshPlugins, resetFilters, categoryBadgeClass, togglePlugin, installPreset, confirmDelete,
     showFormModal, isEditing, editingId, form, formPermissionsRaw, formSubmitting, formError,

@@ -35,9 +35,9 @@ const emit = defineEmits<{
         <h1 class="view-title font-sans">{{ currentKindLabel }}</h1>
       </div>
       <div class="breadcrumbs font-mono">
-        <span class="crumb-pill crumb-cluster">🌐 {{ selectedCluster }}</span>
+        <span class="crumb-pill crumb-cluster"><BaseIcon name="globe" size="xs" /> {{ selectedCluster }}</span>
         <span class="crumb-sep">›</span>
-        <span class="crumb-pill crumb-ns">📁 {{ selectedNamespace === 'all' ? 'All Namespaces' : selectedNamespace }}</span>
+        <span class="crumb-pill crumb-ns"><BaseIcon name="folder" size="xs" /> {{ selectedNamespace === 'all' ? 'All Namespaces' : selectedNamespace }}</span>
         <span class="crumb-sep">›</span>
         <span class="crumb-pill crumb-kind active-kind">{{ currentKindLabel }} ({{ totalInKind }})</span>
       </div>
@@ -51,7 +51,7 @@ const emit = defineEmits<{
         title="Refresh resource telemetry"
         @click="emit('refresh')"
       >
-        <span class="btn-emoji">{{ loading ? '⏳' : '🔄' }}</span>
+        <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" />
         <span class="btn-label">{{ loading ? 'Syncing...' : 'Refresh' }}</span>
       </button>
       <button 
@@ -60,7 +60,7 @@ const emit = defineEmits<{
         title="Apply raw Kubernetes manifest"
         @click="emit('apply-yaml')"
       >
-        <span class="btn-emoji">📄</span>
+        <BaseIcon name="file-text" size="xs" />
         <span class="btn-label">Apply YAML</span>
       </button>
       <button 
@@ -69,7 +69,7 @@ const emit = defineEmits<{
         title="Create a new Kubernetes resource"
         @click="emit('create-resource')"
       >
-        <span class="btn-emoji">✨</span>
+        <BaseIcon name="sparkles" size="xs" />
         <span class="btn-label">+ Create {{ currentKindLabel.slice(0, -1) || 'Resource' }}</span>
       </button>
     </div>

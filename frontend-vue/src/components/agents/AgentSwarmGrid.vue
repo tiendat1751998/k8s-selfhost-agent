@@ -44,7 +44,7 @@ function calculatePercentage(used: number, total: number) {
         <div class="agent-card-header">
           <div class="agent-identity">
             <div class="agent-avatar-wrap">
-              <span class="agent-icon-glyph">{{ agent.icon }}</span>
+              <span class="agent-icon-glyph"><BaseIcon :name="agent.icon" size="md" /></span>
               <div 
                 class="state-ring" 
                 :class="`ring-${agent.status}`"
@@ -74,9 +74,9 @@ function calculatePercentage(used: number, total: number) {
 
         <!-- Footprint & Capabilities -->
         <div class="agent-meta-row font-mono">
-          <span>🧠 {{ agent.memoryUsageMb }} MB Mem</span>
-          <span>⚡ {{ agent.latencyMs }}ms RT</span>
-          <span class="text-emerald">🛡️ {{ agent.healthScore }}% Health</span>
+          <span><BaseIcon name="cpu" size="xs" /> {{ agent.memoryUsageMb }} MB Mem</span>
+          <span><BaseIcon name="zap" size="xs" /> {{ agent.latencyMs }}ms RT</span>
+          <span class="text-emerald"><BaseIcon name="shield" size="xs" /> {{ agent.healthScore }}% Health</span>
         </div>
 
         <!-- Capabilities List -->
@@ -96,7 +96,7 @@ function calculatePercentage(used: number, total: number) {
             class="btn btn-secondary btn-xs font-mono flex-1"
             @click="emit('viewTranscript', agent)"
           >
-            📜 View Transcript & Traces
+            <BaseIcon name="file-text" size="xs" /> View Transcript & Traces
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import type { BackupStorage } from '../../api/governance'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   storages: BackupStorage[]
@@ -11,10 +12,10 @@ const emit = defineEmits<{
 
 function getStorageIcon(type: string): string {
   const t = (type || '').toLowerCase()
-  if (t.includes('s3') || t.includes('minio')) return '☁️'
-  if (t.includes('local')) return '💾'
-  if (t.includes('nfs')) return '🌐'
-  return '📁'
+  if (t.includes('s3') || t.includes('minio')) return 'cloud'
+  if (t.includes('local')) return 'hard-drive'
+  if (t.includes('nfs')) return 'server'
+  return 'folder'
 }
 
 function formatDate(d?: string): string {
@@ -58,7 +59,7 @@ function formatDate(d?: string): string {
     </div>
 
     <div v-else class="empty-state-box glass-panel">
-      <span class="empty-icon">💾</span>
+      <span class="empty-icon"><BaseIcon name="hard-drive" size="lg" /></span>
       <h3 class="empty-title">No Storage Targets Attached</h3>
       <p class="empty-desc">Configure S3, MinIO, or local NVMe storage targets to store compressed snapshots.</p>
       <button class="btn btn-primary" @click="emit('create')">

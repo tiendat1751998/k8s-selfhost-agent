@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
   searchLogs,
@@ -8,6 +8,7 @@ import {
   type LogAggregationBucket,
   type LogSearchResult,
 } from '../api/logging'
+import { parseWebSocketFrame, mapRawToLogEntry } from '../utils/logBatchParser'
 
 export interface LogEntry {
   time: string
@@ -34,12 +35,63 @@ export interface LogFilterOptions {
   query?: string
 }
 
+export function matchesTarget(entry: LogEntry, opts: LogFilterOptions): boolean {
+  if (opts.node) {
+    const q = opts.node.toLowerCase()
+    const n = (entry.node || entry.attributes?.node || entry.attributes?.node_name || entry.pod || '').toLowerCase()
+    return n.includes(q)
+  }
+  const q = (opts.service || opts.container || opts.pod || '').toLowerCase()
+  if (!q) return true
+  const s = (entry.service || entry.container || '').toLowerCase()
+  if (q === 'postgres_db' || q === 'postgres') {
+    return s === 'postgres_db' || s === 'postgres' || s.startsWith('postgres')
+  }
+  if (q === 'dbus' || q === 'dbus.service') {
+    return s === 'dbus' || s === 'dbus.service'
+  }
+  if (q === 'db' && (s === 'dbus' || s === 'dbus.service' || s.startsWith('dbus'))) {
+    return false
+  }
+  return s.includes(q)
+}
+
+export function getLogFingerprint(entry: LogEntry): string {
+  const service = entry.service || entry.pod || ''
+  return `${entry.time}_${service}_${entry.msg}`
+}
+
 export const useLogStore = defineStore('log', () => {
   const logs = ref<LogEntry[]>([])
   const isConnected = ref(false)
   const isPaused = ref(false)
   const socket = ref<WebSocket | null>(null)
-  const maxBufferSize = 1000
+  const maxBufferSize = ref(10000)
+
+  // Drawer & Modal Reactive State
+  const traceDrawerOpen = ref(false)
+  const selectedTraceId = ref<string | null>(null)
+  const contextModalOpen = ref(false)
+  const contextTargetEntry = ref<LogEntry | null>(null)
+
+  // Big Data Telemetry
+  const droppedLogsCount = ref(0)
+  const streamRate = ref(0)
+
+  function setMaxBufferSize(size: number) {
+    const parsed = Number(size)
+    if (isNaN(parsed) || parsed < 1000) {
+      maxBufferSize.value = 1000
+    } else if (parsed > 100000) {
+      maxBufferSize.value = 100000
+    } else {
+      maxBufferSize.value = parsed
+    }
+    if (logs.value.length > maxBufferSize.value) {
+      logs.value = logs.value.slice(-maxBufferSize.value)
+    }
+  }
+
   const reconnectAttempts = ref(0)
   const activeFilter = ref<LogFilterOptions>({})
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -63,11 +115,35 @@ export const useLogStore = defineStore('log', () => {
     }
   }
 
-  function connect(options?: LogFilterOptions | string, podArg?: string) {
+  function scheduleReconnect() {
     clearReconnectTimer()
+    if (reconnectAttempts.value < 10) {
+      reconnectAttempts.value++
+      reconnectTimer = setTimeout(() => {
+        connect(activeFilter.value, undefined, true)
+      }, 2500)
+    } else {
+      if (socket.value) {
+        socket.value.onclose = null
+        socket.value.onerror = null
+        socket.value.close()
+        socket.value = null
+      }
+    }
+  }
+
+  function connect(options?: LogFilterOptions | string, podArg?: string, isReconnect = false) {
+    clearReconnectTimer()
+    if (!isReconnect) {
+      reconnectAttempts.value = 0
+    }
     const opts = normalizeOptions(options, podArg)
     activeFilter.value = opts
-    logs.value = []
+
+    const hasMatchingLogs = logs.value.length > 0 && logs.value.some((l) => matchesTarget(l, opts))
+    if (!hasMatchingLogs) {
+      logs.value = []
+    }
 
     if (socket.value) {
       socket.value.onclose = null
@@ -98,48 +174,26 @@ export const useLogStore = defineStore('log', () => {
       socket.value.onopen = () => {
         isConnected.value = true
         reconnectAttempts.value = 0
+        clearReconnectTimer()
       }
       socket.value.onmessage = (event) => {
         if (isPaused.value) return
-        try {
-          const raw = JSON.parse(event.data)
-          appendLog({
-            time: raw.timestamp || raw.time || new Date().toISOString().split('T')[1].slice(0, 12),
-            level: (raw.log_level || raw.level || raw.severity || 'INFO').toUpperCase(),
-            namespace: raw.namespace || raw.ns || opts.namespace || 'default',
-            pod: raw.pod_name || raw.pod || raw.container_name || raw.container || raw.service || 'system',
-            container: raw.container_name || raw.container || raw.pod,
-            node: raw.node || raw.host || raw.attributes?.node,
-            service: raw.service || raw.app || raw.container_name || raw.container,
-            msg: raw.message || raw.msg || raw.log || event.data,
-            traceId: raw.traceId || raw.trace_id || raw.attributes?.trace_id || raw.attributes?.traceId,
-            stream: raw.stream || 'stdout',
-            attributes: raw.attributes,
-          })
-        } catch {
-          appendLog({
-            time: new Date().toISOString().split('T')[1].slice(0, 12),
-            level: 'INFO',
-            namespace: opts.namespace || 'default',
-            pod: opts.pod || 'system',
-            node: opts.node,
-            service: opts.service,
-            msg: event.data,
-            stream: 'stdout',
-          })
+        const parsed = parseWebSocketFrame(event.data, opts.namespace || 'default', opts.service)
+        if (parsed.type === 'telemetry') {
+          droppedLogsCount.value = parsed.droppedCount
+          streamRate.value = parsed.streamRate
+        } else if (parsed.type === 'logs') {
+          appendLogBatch(parsed.entries)
         }
       }
       socket.value.onclose = () => {
         isConnected.value = false
-        if (reconnectAttempts.value < 5) {
-          reconnectAttempts.value++
-          clearReconnectTimer()
-          reconnectTimer = setTimeout(() => connect(activeFilter.value), 2000 * reconnectAttempts.value)
-        }
+        scheduleReconnect()
       }
       socket.value.onerror = () => { isConnected.value = false }
     } catch {
       isConnected.value = false
+      scheduleReconnect()
     }
   }
 
@@ -154,6 +208,7 @@ export const useLogStore = defineStore('log', () => {
     clearReconnectTimer()
     if (socket.value) {
       socket.value.onclose = null
+      socket.value.onerror = null
       socket.value.close()
       socket.value = null
     }
@@ -161,39 +216,127 @@ export const useLogStore = defineStore('log', () => {
     reconnectAttempts.value = 0
   }
 
-  function appendLog(entry: LogEntry) {
+  function addLogEntry(entry: LogEntry) {
+    if (logs.value.length > 0) {
+      const last = logs.value[logs.value.length - 1]
+      if (
+        last.time === entry.time &&
+        last.msg === entry.msg &&
+        (last.service || last.pod || '') === (entry.service || entry.pod || '')
+      ) {
+        return
+      }
+    }
     logs.value.push(entry)
-    if (logs.value.length > maxBufferSize) logs.value.splice(0, logs.value.length - maxBufferSize)
+    if (logs.value.length > maxBufferSize.value) {
+      logs.value = logs.value.slice(-maxBufferSize.value)
+    }
   }
 
-  function clear() { logs.value = [] }
-  function togglePause() { isPaused.value = !isPaused.value }
+  function appendLogBatch(entries: LogEntry[]) {
+    if (!entries || entries.length === 0) return
+    const valid: LogEntry[] = []
+    let last = logs.value.length > 0 ? logs.value[logs.value.length - 1] : null
 
-  async function fetchHistoricalLogs(filter: LogFilterParams = {}, append: boolean = false): Promise<LogSearchResult> {
+    for (let i = 0; i < entries.length; i++) {
+      const cur = entries[i]
+      if (
+        last &&
+        last.time === cur.time &&
+        last.msg === cur.msg &&
+        (last.service || last.pod || '') === (cur.service || cur.pod || '')
+      ) {
+        continue
+      }
+      valid.push(cur)
+      last = cur
+    }
+
+    if (valid.length === 0) return
+    logs.value.push(...valid)
+    if (logs.value.length > maxBufferSize.value) {
+      logs.value = logs.value.slice(-maxBufferSize.value)
+    }
+  }
+
+  const appendLog = addLogEntry
+
+  function clear() {
+    logs.value = []
+  }
+
+  function togglePause() {
+    isPaused.value = !isPaused.value
+  }
+
+  function openTraceDrawer(traceId: string) {
+    selectedTraceId.value = traceId
+    traceDrawerOpen.value = true
+  }
+
+  function closeTraceDrawer() {
+    traceDrawerOpen.value = false
+    selectedTraceId.value = null
+  }
+
+  function openContextModal(entry: LogEntry) {
+    contextTargetEntry.value = entry
+    contextModalOpen.value = true
+  }
+
+  function closeContextModal() {
+    contextModalOpen.value = false
+    contextTargetEntry.value = null
+  }
+
+  function resetDroppedLogsCount() {
+    droppedLogsCount.value = 0
+  }
+
+  async function fetchHistoricalLogs(
+    filter: LogFilterParams & { service?: string; container?: string } = {},
+    append: boolean = false
+  ): Promise<LogSearchResult> {
     isHistoricalLoading.value = true
     try {
-      const res = await searchLogs(filter)
-      const mapped: LogEntry[] = (res.entries || []).map((raw) => ({
-        time: raw.timestamp || new Date().toISOString(),
-        level: (raw.log_level || 'INFO').toUpperCase(),
-        namespace: raw.namespace || 'default',
-        pod: raw.pod_name || 'system',
-        container: raw.container_name,
-        node: raw.attributes?.node,
-        service: raw.attributes?.service || raw.attributes?.app || raw.container_name,
-        msg: raw.message || '',
-        traceId: raw.attributes?.trace_id || raw.attributes?.traceId,
-        stream: raw.stream || 'stdout',
-        attributes: raw.attributes,
-      }))
+      const queryParams: LogFilterParams = {
+        ...filter,
+        container_name: filter.container_name || filter.container || (filter.service && filter.service !== 'all' ? filter.service : undefined),
+      }
+      const res = await searchLogs(queryParams)
+      const rawEntries = res.entries || []
+      const mapped: LogEntry[] = []
+
+      for (let i = 0; i < rawEntries.length; i++) {
+        const item = mapRawToLogEntry(rawEntries[i], filter.namespace || 'default', filter.service)
+        if (item) mapped.push(item)
+      }
+
+      mapped.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+
       if (append) {
-        logs.value = [...logs.value, ...mapped].slice(-maxBufferSize)
+        const existingFingerprints = new Set(logs.value.map(getLogFingerprint))
+        const uniqueMapped = mapped.filter((entry) => !existingFingerprints.has(getLogFingerprint(entry)))
+        const combined = [...logs.value, ...uniqueMapped]
+        combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+        logs.value = combined.slice(-maxBufferSize.value)
       } else {
-        logs.value = mapped.slice(0, maxBufferSize)
+        if (logs.value.length === 0) {
+          logs.value = mapped.slice(-maxBufferSize.value)
+        } else {
+          const mappedFingerprints = new Set(mapped.map(getLogFingerprint))
+          const existingLiveLogs = logs.value.filter((entry) => !mappedFingerprints.has(getLogFingerprint(entry)))
+          const combined = [...mapped, ...existingLiveLogs]
+          combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+          logs.value = combined.slice(-maxBufferSize.value)
+        }
       }
       totalHistoricalCount.value = res.total_count || 0
       hasMoreHistorical.value = res.has_more || false
-      return res
+      return {
+        ...res,
+        entries: rawEntries.filter((r) => r.message && r.message.trim() !== '-- No entries --'),
+      }
     } finally {
       isHistoricalLoading.value = false
     }
@@ -214,8 +357,16 @@ export const useLogStore = defineStore('log', () => {
     logs,
     isConnected,
     isPaused,
+    reconnectAttempts,
     activeFilter,
     maxBufferSize,
+    setMaxBufferSize,
+    traceDrawerOpen,
+    selectedTraceId,
+    contextModalOpen,
+    contextTargetEntry,
+    droppedLogsCount,
+    streamRate,
     histogram,
     isHistoricalLoading,
     isHistogramLoading,
@@ -224,9 +375,16 @@ export const useLogStore = defineStore('log', () => {
     connect,
     setFilter,
     disconnect,
+    addLogEntry,
     appendLog,
+    appendLogBatch,
     clear,
     togglePause,
+    openTraceDrawer,
+    closeTraceDrawer,
+    openContextModal,
+    closeContextModal,
+    resetDroppedLogsCount,
     fetchHistoricalLogs,
     fetchHistogram,
   }

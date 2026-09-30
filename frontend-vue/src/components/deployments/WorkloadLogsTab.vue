@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import type { DeploymentApp } from '../../api/compute'
 import { dockerApi } from '../../api/compute'
 import { k8sApi, type K8sResource } from '../../api/k8s'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   app: DeploymentApp | null
@@ -217,14 +218,14 @@ defineExpose({
   <div v-if="app" class="insp-panel animate-fade-in logs-insp-panel">
     <div class="logs-control-deck glass-panel">
       <div class="logs-search-wrapper">
-        <span class="logs-search-ico">🔍</span>
+        <BaseIcon name="search" size="xs" class="logs-search-ico" />
         <input
           v-model="logsSearchQuery"
           type="text"
           placeholder="Filter logs by keyword, error, timestamp..."
           class="input-glass logs-search-input font-mono"
         />
-        <button v-if="logsSearchQuery" type="button" class="logs-search-clear" @click="logsSearchQuery = ''">✕</button>
+        <button v-if="logsSearchQuery" type="button" class="logs-search-clear" aria-label="Clear search" @click="logsSearchQuery = ''"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="logs-deck-actions">
@@ -240,7 +241,7 @@ defineExpose({
           title="Refresh logs from container daemon"
           @click="fetchLogs(app)"
         >
-          <span :class="{ 'spin-icon': logsLoading }">🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': logsLoading }" />
           <span>{{ logsLoading ? 'Fetching...' : 'Refresh' }}</span>
         </button>
 
@@ -250,7 +251,7 @@ defineExpose({
           title="Copy log buffer to clipboard"
           @click="copyLogsToClipboard"
         >
-          <span>📋 Copy</span>
+          <BaseIcon name="copy" size="xs" /> <span>Copy</span>
         </button>
 
         <button
@@ -259,7 +260,7 @@ defineExpose({
           title="Open full interactive live tail in Log Stream View"
           @click="openFullLogs(app)"
         >
-          <span>↗️ Full Stream</span>
+          <BaseIcon name="external-link" size="xs" /> <span>Full Stream</span>
         </button>
       </div>
     </div>
@@ -283,7 +284,7 @@ defineExpose({
 
       <div ref="logsTerminalRef" class="logs-terminal-body font-mono">
         <div v-if="logsLoading && filteredLogLines.length === 0" class="logs-loading-state">
-          <span class="spin-icon">🔄</span>
+          <BaseIcon name="refresh" size="xs" class="spin-icon" />
           <span>Connecting to container log stream...</span>
         </div>
 
@@ -300,7 +301,7 @@ defineExpose({
         </template>
 
         <div v-else class="logs-empty-state">
-          <span>⚡</span>
+          <BaseIcon name="file-text" size="md" />
           <p>No log entries match the search filter "{{ logsSearchQuery }}".</p>
         </div>
       </div>

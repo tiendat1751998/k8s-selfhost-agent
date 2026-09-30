@@ -56,7 +56,7 @@ const emit = defineEmits<{
 
       <div class="runbook-box">
         <div>
-          <div class="runbook-title">📖 SOP-RUNBOOK: {{ alert.RuleID || 'K8S-ANOMALY-TRIAGE' }}</div>
+          <div class="runbook-title"><BaseIcon name="book-open" size="xs" /> SOP-RUNBOOK: {{ alert.RuleID || 'K8S-ANOMALY-TRIAGE' }}</div>
           <p class="runbook-desc">
             Standard Operating Procedure for handling anomaly breaches on cluster workloads.
           </p>
@@ -105,21 +105,21 @@ const emit = defineEmits<{
             class="btn btn-secondary btn-sm" 
             @click="emit('silence', alert, 60)"
           >
-            <span>🔕 Silence 1h</span>
+            <BaseIcon name="bell-off" size="xs" /> <span>Silence 1h</span>
           </button>
           <button 
             v-if="alert.Status === 'firing'" 
             class="btn btn-cyan btn-sm" 
             @click="emit('acknowledge', alert)"
           >
-            <span>✓ Acknowledge</span>
+            <BaseIcon name="check" size="xs" /> <span>Acknowledge</span>
           </button>
           <button 
             v-if="alert.Status !== 'resolved'" 
             class="btn btn-primary btn-sm" 
             @click="emit('resolve', alert)"
           >
-            <span>⚡ Resolve</span>
+            <BaseIcon name="check-circle" size="xs" /> <span>Resolve</span>
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NewAppForm } from './DeployWorkloadModal.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   form: NewAppForm
@@ -40,7 +41,7 @@ function removeEnvRow(idx: number) {
       <div v-for="(envItem, idx) in form.envList" :key="idx" class="env-row">
         <input v-model="envItem.key" type="text" placeholder="KEY" class="input-glass font-mono flex-1" />
         <input v-model="envItem.value" type="text" placeholder="VALUE" class="input-glass font-mono flex-1" />
-        <button type="button" class="btn btn-secondary btn-xs btn-remove" @click="removeEnvRow(idx)">✕</button>
+        <button type="button" class="btn btn-secondary btn-xs btn-remove" aria-label="Remove variable" @click="removeEnvRow(idx)"><BaseIcon name="x" size="xs" /></button>
       </div>
     </div>
   </div>

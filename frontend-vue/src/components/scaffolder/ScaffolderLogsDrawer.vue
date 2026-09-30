@@ -36,25 +36,25 @@ const emit = defineEmits<{
             :class="['drawer-tab-btn', { active: activeOutputTab === 'yaml' }]"
             @click="emit('update:activeOutputTab', 'yaml')"
           >
-            ☸️ K8s Manifest
+            <BaseIcon name="anchor" size="xs" /> K8s Manifest
           </button>
           <button
             :class="['drawer-tab-btn', { active: activeOutputTab === 'compose' }]"
             @click="emit('update:activeOutputTab', 'compose')"
           >
-            🐳 Docker Compose
+            <BaseIcon name="box" size="xs" /> Docker Compose
           </button>
           <button
             :class="['drawer-tab-btn', { active: activeOutputTab === 'helm' }]"
             @click="emit('update:activeOutputTab', 'helm')"
           >
-            ⛵ Helm Values
+            <BaseIcon name="globe" size="xs" /> Helm Values
           </button>
           <button
             :class="['drawer-tab-btn', { active: activeOutputTab === 'logs' }]"
             @click="emit('update:activeOutputTab', 'logs')"
           >
-            📜 Stream Logs ({{ logs.length }})
+            <BaseIcon name="file-text" size="xs" /> Stream Logs ({{ logs.length }})
           </button>
         </div>
 
@@ -65,23 +65,21 @@ const emit = defineEmits<{
             :disabled="!renderResult && logs.length === 0"
             @click="emit('copy')"
           >
-            {{ copySuccess ? '✅' : '📋' }}
+            <BaseIcon :name="copySuccess ? 'check-circle' : 'copy'" size="xs" />
           </button>
           <button
             class="btn-icon-action"
             title="Download File"
             :disabled="!renderResult && logs.length === 0"
             @click="emit('download')"
-          >
-            💾
-          </button>
+          ><BaseIcon name="save" size="xs" /></button>
         </div>
       </div>
 
       <!-- Real-Time Log Terminal Window -->
       <div v-if="activeOutputTab === 'logs'" class="terminal-logs-window">
         <div v-if="logs.length === 0" class="code-placeholder">
-          <span class="placeholder-icon">📜</span>
+          <span class="placeholder-icon"><BaseIcon name="file-text" size="lg" /></span>
           <p>No execution logs yet.</p>
         </div>
         <div
@@ -103,14 +101,14 @@ const emit = defineEmits<{
           <pre v-else-if="activeOutputTab === 'helm'" class="code-content"><code>{{ renderResult.rendered_helm }}</code></pre>
         </template>
         <div v-else class="code-placeholder">
-          <span class="placeholder-icon">📄</span>
+          <span class="placeholder-icon"><BaseIcon name="file-code" size="lg" /></span>
           <p>Click <strong>"Generate Manifests"</strong> in the wizard to render template files.</p>
         </div>
       </div>
 
       <!-- Service Catalog Success Alert -->
       <div v-if="renderResult?.catalog_entry_id" class="catalog-success-alert glass-panel">
-        <span>📚 Registered in Service Catalog (Catalog UUID: <code>{{ renderResult.catalog_entry_id }}</code>)</span>
+        <span><BaseIcon name="book-open" size="xs" /> Registered in Service Catalog (Catalog UUID: <code>{{ renderResult.catalog_entry_id }}</code>)</span>
       </div>
     </div>
   </ModalDrawer>

@@ -2,7 +2,7 @@
 
 > **Location**: .agents/tasks/enterprise-ui-redesign/019-netdata-style-uplot-telemetry-and-synchronized-scrubbing.md  
 > **Benchmark Source**: Netdata (uPlot Canvas Engine), Grafana TimeSync, Datadog DRUIDS  
-> **Status**: READY_FOR_DISPATCH  
+> **Status**: COMPLETED_AND_MERGED ✅ (Commits f4ac4b0, 9c8505e, 6418708, 0d501fd, 1c16ffd)  
 
 ## 1. Problem Statement
 The current telemetry charts across `/capacity`, `/hosts`, and `/slo` either rely on heavy SVG elements or basic DOM updates. When streaming realtime metrics (1s–5s resolution) or monitoring clusters with dozens of nodes, DOM churn can cause:

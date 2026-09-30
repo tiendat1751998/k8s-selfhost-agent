@@ -105,10 +105,10 @@ function getLatencyColor(name: string, p: AIProvider) {
             :disabled="probingName === p.name"
             @click="emit('probe', p.name)"
           >
-            <span>{{ probingName === p.name ? 'Probing...' : '⚡ Probe Health' }}</span>
+            <BaseIcon :name="probingName === p.name ? 'refresh' : 'zap'" size="xs" :class="{ 'animate-spin': probingName === p.name }" /> <span>{{ probingName === p.name ? 'Probing...' : 'Probe Health' }}</span>
           </button>
           <button class="btn btn-secondary btn-sm" @click="emit('openMetrics', p)">
-            <span>📊 Metrics</span>
+            <BaseIcon name="activity" size="xs" /> <span>Metrics</span>
           </button>
           <button class="btn btn-secondary btn-sm" @click="emit('testInConsole', p.name)">
             <span>Test</span>
@@ -121,7 +121,7 @@ function getLatencyColor(name: string, p: AIProvider) {
     </div>
 
     <div v-else class="empty-state-box glass-panel">
-      <span class="empty-icon">🔌</span>
+      <BaseIcon name="plug" size="lg" class="empty-icon" />
       <h3 class="empty-title">No Active AI Providers Registered</h3>
       <p class="empty-desc">Connect a local Ollama instance or external model endpoint to activate the AI SRE mesh.</p>
       <button class="btn btn-primary btn-sm" @click="emit('register')">

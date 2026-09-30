@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { DockerService, DockerNode, DockerContainer } from '../../api/compute'
 
 const props = defineProps<{
@@ -33,7 +34,7 @@ const emit = defineEmits<{
         @click="emit('inspect-service', svc)"
       >
         <div class="mobile-card-left">
-          <span class="mobile-card-icon" aria-hidden="true">🐳</span>
+          <span class="mobile-card-icon" aria-hidden="true"><BaseIcon name="box" size="sm" /></span>
           <div class="mobile-card-text">
             <span class="mobile-card-title">{{ svc.name }}</span>
             <span class="mobile-card-sub font-mono text-muted">{{ svc.image }} • {{ svc.replicas }} tasks</span>
@@ -49,7 +50,7 @@ const emit = defineEmits<{
               aria-label="Decrease replicas"
               @click="emit('scale-service', svc, -1)"
             >
-              <span>−</span>
+              <span>-</span>
             </button>
             <span class="stepper-value font-mono">
               {{ svc.replicas }}
@@ -70,7 +71,7 @@ const emit = defineEmits<{
             aria-label="Inspect logs"
             @click="emit('view-logs', svc.id, svc.name, 'service')"
           >
-            <span>📜</span>
+            <BaseIcon name="file-text" size="xs" />
           </button>
         </div>
       </div>
@@ -88,7 +89,7 @@ const emit = defineEmits<{
         @click="emit('inspect-node', node)"
       >
         <div class="mobile-card-left">
-          <span class="mobile-card-icon" aria-hidden="true">🖳</span>
+          <span class="mobile-card-icon" aria-hidden="true"><BaseIcon name="server" size="sm" /></span>
           <div class="mobile-card-text">
             <span class="mobile-card-title font-mono">{{ node.name }}</span>
             <span class="mobile-card-sub font-mono" :class="node.role === 'manager' ? 'text-violet' : 'text-muted'">
@@ -105,7 +106,7 @@ const emit = defineEmits<{
             aria-label="Inspect node details"
             @click="emit('inspect-node', node)"
           >
-            <span>🔍</span>
+            <BaseIcon name="search" size="xs" />
           </button>
         </div>
       </div>
@@ -123,7 +124,7 @@ const emit = defineEmits<{
         @click="emit('view-logs', cont.id, cont.name, 'container')"
       >
         <div class="mobile-card-left">
-          <span class="mobile-card-icon" aria-hidden="true">📦</span>
+          <span class="mobile-card-icon" aria-hidden="true"><BaseIcon name="box" size="sm" /></span>
           <div class="mobile-card-text">
             <span class="mobile-card-title">{{ cont.name }}</span>
             <span class="mobile-card-sub font-mono text-muted">{{ cont.image }}</span>
@@ -139,7 +140,7 @@ const emit = defineEmits<{
             aria-label="Toggle Container Power"
             @click="emit('toggle-container', cont)"
           >
-            <span class="power-icon">⏻</span>
+            <span class="power-icon"><BaseIcon name="zap" size="xs" /></span>
             <span class="power-state-text font-mono">{{ cont.state === 'running' ? 'ON' : 'OFF' }}</span>
           </button>
           <button
@@ -148,7 +149,7 @@ const emit = defineEmits<{
             aria-label="Live logs"
             @click="emit('view-logs', cont.id, cont.name, 'container')"
           >
-            <span>📜</span>
+            <BaseIcon name="file-text" size="xs" />
           </button>
         </div>
       </div>

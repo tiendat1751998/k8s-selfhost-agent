@@ -32,14 +32,14 @@ function getStatusType(status: string): string {
 
 function getChartIcon(chart: HelmChart): string {
   const name = (chart.name || '').toLowerCase()
-  if (name.includes('nginx') || name.includes('ingress') || name.includes('traefik')) return '🌐'
-  if (name.includes('postgres') || name.includes('mysql') || name.includes('mariadb') || name.includes('redis') || name.includes('mongo')) return '🗄️'
-  if (name.includes('prom') || name.includes('grafana') || name.includes('loki') || name.includes('metric')) return '📊'
-  if (name.includes('cert') || name.includes('vault') || name.includes('auth') || name.includes('keycloak')) return '🛡️'
-  if (name.includes('kafka') || name.includes('rabbit') || name.includes('queue') || name.includes('nats')) return '⚡'
-  if (name.includes('elastic') || name.includes('search') || name.includes('opensearch')) return '🔍'
-  if (name.includes('ai') || name.includes('ollama') || name.includes('vllm') || name.includes('llm')) return '🤖'
-  return '📦'
+  if (name.includes('nginx') || name.includes('ingress') || name.includes('traefik')) return 'globe'
+  if (name.includes('postgres') || name.includes('mysql') || name.includes('mariadb') || name.includes('redis') || name.includes('mongo')) return 'database'
+  if (name.includes('prom') || name.includes('grafana') || name.includes('loki') || name.includes('metric')) return 'activity'
+  if (name.includes('cert') || name.includes('vault') || name.includes('auth') || name.includes('keycloak')) return 'shield'
+  if (name.includes('kafka') || name.includes('rabbit') || name.includes('queue') || name.includes('nats')) return 'zap'
+  if (name.includes('elastic') || name.includes('search') || name.includes('opensearch')) return 'search'
+  if (name.includes('ai') || name.includes('ollama') || name.includes('vllm') || name.includes('llm')) return 'bot'
+  return 'package'
 }
 </script>
 
@@ -59,7 +59,7 @@ function getChartIcon(chart: HelmChart): string {
         <!-- Row 1: Helm icon + Release name + Status badge -->
         <div class="card-row-1">
           <div class="card-name-group">
-            <span class="card-helm-icon">⛵</span>
+            <BaseIcon name="anchor" size="xs" class="card-helm-icon" />
             <span class="card-release-name font-semibold">{{ rel.name }}</span>
           </div>
           <StatusBadge :status="getStatusType(rel.status)" :label="rel.status" size="sm" />
@@ -80,7 +80,7 @@ function getChartIcon(chart: HelmChart): string {
               aria-label="Inspect Values"
               @click.stop="emit('openDetail', rel)"
             >
-              <span>⚙️ Values</span>
+              <BaseIcon name="sliders" size="xs" /> <span>Values</span>
             </button>
             <button
               type="button"
@@ -105,10 +105,10 @@ function getChartIcon(chart: HelmChart): string {
       >
         <div class="card-top-row">
           <div class="card-identity">
-            <span class="card-icon">{{ getChartIcon(chart) }}</span>
+            <BaseIcon :name="getChartIcon(chart)" size="sm" class="card-icon" />
             <div>
               <strong class="card-title">{{ chart.name }}</strong>
-              <span class="card-subtitle font-mono text-muted">🗄️ {{ chart.repo }} • v{{ chart.version }}</span>
+              <span class="card-subtitle font-mono text-muted"><BaseIcon name="database" size="xs" /> {{ chart.repo }} • v{{ chart.version }}</span>
             </div>
           </div>
         </div>
@@ -118,7 +118,7 @@ function getChartIcon(chart: HelmChart): string {
           class="btn-cyber btn-primary btn-sm w-full"
           @click="emit('installChart', chart)"
         >
-          <span>🚀 Install Chart</span>
+          <BaseIcon name="play" size="xs" /> <span>Install Chart</span>
         </button>
       </div>
     </div>
@@ -132,7 +132,7 @@ function getChartIcon(chart: HelmChart): string {
       >
         <div class="card-top-row">
           <div class="card-identity">
-            <span class="card-icon">🗄️</span>
+            <BaseIcon name="database" size="xs" class="card-icon" />
             <div>
               <strong class="card-title font-mono">{{ repo.name }}</strong>
               <span class="card-subtitle font-mono text-cyan">{{ repo.url }}</span>
@@ -145,14 +145,14 @@ function getChartIcon(chart: HelmChart): string {
             class="btn-cyber btn-secondary btn-xs"
             @click="emit('copyUrl', repo.url)"
           >
-            📋 Copy URL
+            <BaseIcon name="copy" size="xs" /> Copy URL
           </button>
           <button
             type="button"
             class="btn-cyber btn-danger btn-xs"
             @click="emit('removeRepo', repo)"
           >
-            🗑️ Remove
+            <BaseIcon name="trash" size="xs" /> Remove
           </button>
         </div>
       </div>

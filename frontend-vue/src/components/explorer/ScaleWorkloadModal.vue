@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { k8sApi, type K8sResource, type ResourceKind } from '../../api/k8s'
 
 const props = defineProps<{
@@ -115,7 +116,7 @@ async function handleScaleConfirm() {
         :disabled="scalingResource"
         @click="handleScaleConfirm"
       >
-        <span>{{ scalingResource ? '⏳ Scaling...' : '⚡ Apply Scale' }}</span>
+        <BaseIcon :name="scalingResource ? 'clock' : 'zap'" size="xs" /> <span>{{ scalingResource ? 'Scaling...' : 'Apply Scale' }}</span>
       </button>
     </template>
   </ModalDrawer>

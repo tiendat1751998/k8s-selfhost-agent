@@ -12,6 +12,7 @@ import (
 // QueryLogs queries logs across sources matching the given filters.
 func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceStr, untilStr, query, level string) ([]LogEntry, error) {
 	s.mu.RLock()
+	eng := s.engineSrc
 	sources := s.sources
 	s.mu.RUnlock()
 
@@ -23,6 +24,20 @@ func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceSt
 	untilTime, err := parseTimeParam(untilStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid until parameter: %w", err)
+	}
+
+	// Instant retrieval via embedded columnar engine using Bloom filter & sparse primary index
+	if eng != nil {
+		entries, err := eng.GetLogs(ctx, app, tail, sinceTime, untilTime, query, level)
+		if err == nil && len(entries) > 0 {
+			sort.SliceStable(entries, func(i, j int) bool {
+				return entries[i].Timestamp.Before(entries[j].Timestamp)
+			})
+			if tail > 0 && len(entries) > tail {
+				entries = entries[len(entries)-tail:]
+			}
+			return entries, nil
+		}
 	}
 
 	var allEntries []LogEntry
@@ -54,8 +69,8 @@ func (s *LogServer) SearchLogs(ctx context.Context, req LogSearchRequest) ([]Log
 		limit = 100
 	}
 
-	// Query with all lines and then limit
-	entries, err := s.QueryLogs(ctx, req.App, 0, req.Since, req.Until, req.Query, req.Level)
+	// Query with limit and then ensure capped
+	entries, err := s.QueryLogs(ctx, req.App, limit, req.Since, req.Until, req.Query, req.Level)
 	if err != nil {
 		return nil, err
 	}

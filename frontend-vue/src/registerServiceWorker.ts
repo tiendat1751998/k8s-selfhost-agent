@@ -10,10 +10,15 @@ export interface BeforeInstallPromptEvent extends Event {
 }
 
 // Global reactive states shared across all components
-const isInstallable = ref<boolean>(false)
-const isInstalled = ref<boolean>(false)
-const deferredPrompt = ref<BeforeInstallPromptEvent | null>(null)
-const hasUpdate = ref<boolean>(false)
+export const isInstallable = ref<boolean>(false)
+export const isInstalled = ref<boolean>(false)
+export const deferredPrompt = ref<BeforeInstallPromptEvent | null>(null)
+export const hasUpdate = ref<boolean>(false)
+
+export function setDeferredPrompt(event: BeforeInstallPromptEvent | null): void {
+  deferredPrompt.value = event
+  isInstallable.value = event !== null
+}
 
 if (typeof window !== 'undefined') {
   // Detect if app is running in standalone mode (desktop or mobile)
@@ -24,11 +29,10 @@ if (typeof window !== 'undefined') {
     isInstalled.value = true
   }
 
-  // Intercept Chrome/Edge/Android PWA install prompt
+  // Intercept Chrome/Edge/Android PWA install prompt across all environments
   window.addEventListener('beforeinstallprompt', (e: Event) => {
     e.preventDefault()
-    deferredPrompt.value = e as BeforeInstallPromptEvent
-    isInstallable.value = true
+    setDeferredPrompt(e as BeforeInstallPromptEvent)
   })
 
   // Listen for successful PWA installation
@@ -37,6 +41,16 @@ if (typeof window !== 'undefined') {
     isInstallable.value = false
     deferredPrompt.value = null
   })
+
+  // Expose inspection & debug helpers on window for development and automated testing
+  ;(window as unknown as { __k8s_pwa?: unknown }).__k8s_pwa = {
+    isInstallable,
+    isInstalled,
+    deferredPrompt,
+    hasUpdate,
+    setDeferredPrompt,
+    promptInstall: () => usePwaInstall().promptInstall()
+  }
 }
 
 export function usePwaInstall() {
@@ -65,6 +79,7 @@ export function usePwaInstall() {
     isInstalled,
     deferredPrompt,
     hasUpdate,
+    setDeferredPrompt,
     promptInstall
   }
 }
@@ -74,8 +89,12 @@ export function registerSW(): void {
     return
   }
 
-  if (import.meta.env.DEV) {
-    // In development mode, purge any active service worker and cache to ensure clean Vite HMR
+  // Allow service worker registration in development mode when enable_pwa_dev is set to true
+  const enableDevSw = typeof localStorage !== 'undefined' && localStorage.getItem('enable_pwa_dev') === 'true'
+
+  if (import.meta.env.DEV && !enableDevSw) {
+    // In development mode (unless enable_pwa_dev is explicitly enabled),
+    // purge any active service worker and cache to ensure clean Vite HMR
     navigator.serviceWorker.getRegistrations().then((registrations) => {
       for (const registration of registrations) {
         registration.unregister()
@@ -91,8 +110,8 @@ export function registerSW(): void {
     return
   }
 
-  // Production registration
-  window.addEventListener('load', () => {
+  // Production or Dev with enable_pwa_dev: register service worker
+  const performRegistration = () => {
     navigator.serviceWorker
       .register('/sw.js')
       .then((reg) => {
@@ -110,5 +129,11 @@ export function registerSW(): void {
       .catch((err) => {
         console.warn('[SW] Service worker registration failed:', err)
       })
-  })
+  }
+
+  if (document.readyState === 'complete') {
+    performRegistration()
+  } else {
+    window.addEventListener('load', performRegistration)
+  }
 }

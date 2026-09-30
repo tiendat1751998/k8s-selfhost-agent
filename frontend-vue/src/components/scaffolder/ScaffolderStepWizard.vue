@@ -42,7 +42,7 @@ const emit = defineEmits<{
     <div class="wizard-modal-container">
       <!-- Template Summary Banner -->
       <div class="wizard-summary glass-panel">
-        <div class="summary-avatar">{{ getFrameworkIcon(activeTemplate.framework) }}</div>
+        <div class="summary-avatar"><BaseIcon :name="getFrameworkIcon(activeTemplate.framework)" size="md" /></div>
         <div class="summary-info">
           <h4>{{ activeTemplate.name }}</h4>
           <p>{{ activeTemplate.description }}</p>
@@ -59,7 +59,7 @@ const emit = defineEmits<{
           :class="['step-indicator', { active: currentStep === 1, completed: currentStep > 1 }]"
           @click="emit('update:currentStep', 1)"
         >
-          <div class="step-circle">{{ currentStep > 1 ? '✅' : '1' }}</div>
+          <div class="step-circle"><BaseIcon v-if="currentStep > 1" name="check" size="xs" /><span v-else>1</span></div>
           <span class="step-label">Parameters</span>
         </div>
         <div class="step-line"></div>
@@ -67,7 +67,7 @@ const emit = defineEmits<{
           :class="['step-indicator', { active: currentStep === 2, completed: currentStep > 2 }]"
           @click="emit('update:currentStep', 2)"
         >
-          <div class="step-circle">{{ currentStep > 2 ? '✅' : '2' }}</div>
+          <div class="step-circle"><BaseIcon v-if="currentStep > 2" name="check" size="xs" /><span v-else>2</span></div>
           <span class="step-label">Repo Config</span>
         </div>
         <div class="step-line"></div>
@@ -82,7 +82,7 @@ const emit = defineEmits<{
 
       <!-- Step 1: Parameters -->
       <div v-if="currentStep === 1" class="step-content-panel">
-        <h4 class="section-title">⚙️ Step 1: Template Parameters</h4>
+        <h4 class="section-title"><BaseIcon name="sliders" size="xs" /> Step 1: Template Parameters</h4>
         <p class="section-sub">Configure dynamic parameters for Kubernetes and runtime templates.</p>
 
         <div class="variables-form-list">
@@ -125,7 +125,7 @@ const emit = defineEmits<{
 
       <!-- Step 2: Repository Config -->
       <div v-else-if="currentStep === 2" class="step-content-panel">
-        <h4 class="section-title">📦 Step 2: Git Repository Configuration</h4>
+        <h4 class="section-title"><BaseIcon name="git-branch" size="xs" /> Step 2: Git Repository Configuration</h4>
         <p class="section-sub">Specify where the scaffolded source and infrastructure code will be created.</p>
 
         <div class="form-row">
@@ -180,7 +180,7 @@ const emit = defineEmits<{
 
       <!-- Step 3: CI/CD & Service Catalog -->
       <div v-else class="step-content-panel">
-        <h4 class="section-title">🚀 Step 3: CI/CD Pipeline & Catalog Registry</h4>
+        <h4 class="section-title"><BaseIcon name="play" size="xs" /> Step 3: CI/CD Pipeline & Catalog Registry</h4>
         <p class="section-sub">Configure automatic deployment pipelines and catalog ownership metadata.</p>
 
         <div class="form-row">
@@ -250,7 +250,7 @@ const emit = defineEmits<{
             :disabled="rendering"
             @click="emit('prev-step')"
           >
-            ◀️ Previous
+            Previous
           </button>
         </div>
 
@@ -260,7 +260,7 @@ const emit = defineEmits<{
             class="btn-primary"
             @click="emit('next-step')"
           >
-            Next Step ▶️
+            Next Step
           </button>
 
           <template v-else>
@@ -269,8 +269,8 @@ const emit = defineEmits<{
               :disabled="rendering"
               @click="emit('submit', true)"
             >
-              <span v-if="rendering" class="btn-icon spin-anim">🔄</span>
-              <span v-else class="btn-icon">🧪</span>
+              <span v-if="rendering" class="btn-icon spin-anim"><BaseIcon name="refresh" size="xs" /></span>
+          <span v-else class="btn-icon"><BaseIcon name="flask" size="xs" /></span>
               Dry-Run Validation
             </button>
 
@@ -279,8 +279,8 @@ const emit = defineEmits<{
               :disabled="rendering"
               @click="emit('submit', false)"
             >
-              <span v-if="rendering" class="btn-icon spin-anim">🔄</span>
-              <span v-else class="btn-icon">🚀</span>
+              <span v-if="rendering" class="btn-icon spin-anim"><BaseIcon name="refresh" size="xs" /></span>
+          <span v-else class="btn-icon"><BaseIcon name="play" size="xs" /></span>
               {{ rendering ? 'Generating Manifests...' : 'Generate & Deploy' }}
             </button>
           </template>

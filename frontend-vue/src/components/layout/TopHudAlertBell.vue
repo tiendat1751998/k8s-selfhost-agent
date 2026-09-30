@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAlertStore } from '../../stores/alertStore'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const alertStore = useAlertStore()
 
@@ -14,6 +15,7 @@ const progressPercent = ref(100)
 const elapsedMs = ref(0)
 
 const containerRef = ref<HTMLElement | null>(null)
+const toastRef = ref<HTMLElement | null>(null)
 
 function startTimer() {
   stopTimer()
@@ -121,7 +123,7 @@ function handleMouseLeave() {
 function handleDocumentInteraction(e: MouseEvent | TouchEvent) {
   if (!alertStore.isToastDropped) return
   const target = e.target as Node | null
-  if (containerRef.value && target && !containerRef.value.contains(target)) {
+  if (toastRef.value && !toastRef.value.contains(target) && !containerRef.value?.contains(target)) {
     dismissToast()
   }
 }
@@ -167,7 +169,9 @@ onUnmounted(() => {
       <template v-if="alertStore.activeAlerts.length > 0">
         <span class="bell-icon-wrap">
           <span class="pulse-dot" :class="alertStore.hasCriticalAlerts ? 'pulse-dot-rose' : 'pulse-dot-amber'"></span>
-          <span class="bell-emoji">{{ alertStore.hasCriticalAlerts ? '🚨' : '⚠️' }}</span>
+          <span class="bell-emoji">
+            <BaseIcon name="alert-triangle" size="xs" />
+          </span>
           <span class="bell-mobile-badge" :class="alertStore.hasCriticalAlerts ? 'badge-rose-bg' : 'badge-amber-bg'">
             {{ alertStore.activeAlerts.length }}
           </span>
@@ -180,7 +184,9 @@ onUnmounted(() => {
       <!-- Muted Only Mode -->
       <template v-else-if="alertStore.mutedAlertsCount > 0">
         <span class="bell-icon-wrap">
-          <span class="bell-emoji">🔕</span>
+          <span class="bell-emoji">
+            <BaseIcon name="bell-off" size="sm" />
+          </span>
           <span class="bell-mobile-badge badge-muted-bg">
             {{ alertStore.mutedAlertsCount }}
           </span>
@@ -193,104 +199,115 @@ onUnmounted(() => {
       <!-- Clean Zero Alerts Mode -->
       <template v-else>
         <span class="bell-icon-wrap">
-          <span class="bell-emoji">🔔</span>
+          <span class="bell-emoji">
+            <BaseIcon name="bell" size="sm" />
+          </span>
         </span>
         <span class="bell-count-text">0</span>
       </template>
     </button>
 
     <!-- 2. HEADER-ANCHORED DROPDOWN ALERT TOAST -->
-    <transition name="dropdown-toast">
-      <div
-        v-if="alertStore.isToastDropped && alertStore.activeAlerts.length > 0"
-        class="header-alert-toast glass-panel"
-        :class="alertStore.hasCriticalAlerts ? 'toast-critical' : 'toast-warning'"
-        role="alert"
-        aria-live="assertive"
-        @mouseenter="handleMouseEnter"
-        @mouseleave="handleMouseLeave"
-      >
-        <!-- Top Row: Icon, Title, Badge, Close -->
-        <div class="toast-header">
-          <div class="toast-title-group" @click="handleOpenDetails">
-            <span class="toast-beacon" :class="alertStore.hasCriticalAlerts ? 'beacon-rose' : 'beacon-amber'">
-              <span class="beacon-pulse"></span>
-              {{ alertStore.hasCriticalAlerts ? '🚨' : '⚠️' }}
-            </span>
-            <div class="toast-title-text">
-              <span class="toast-title">Cluster Health Warning</span>
-              <span class="badge" :class="alertStore.hasCriticalAlerts ? 'badge-rose' : 'badge-amber'">
-                {{ toastBadgeText }}
+    <Teleport to="body">
+      <transition name="dropdown-toast">
+        <div
+          v-if="alertStore.isToastDropped && alertStore.activeAlerts.length > 0"
+          ref="toastRef"
+          class="header-alert-toast glass-panel"
+          :class="alertStore.hasCriticalAlerts ? 'toast-critical' : 'toast-warning'"
+          role="alert"
+          aria-live="assertive"
+          @mouseenter="handleMouseEnter"
+          @mouseleave="handleMouseLeave"
+        >
+          <!-- Top Row: Icon, Title, Badge, Close -->
+          <div class="toast-header">
+            <div class="toast-title-group" @click="handleOpenDetails">
+              <span class="toast-beacon" :class="alertStore.hasCriticalAlerts ? 'beacon-rose' : 'beacon-amber'">
+                <span class="beacon-pulse"></span>
+                <BaseIcon name="alert-triangle" size="xs" />
               </span>
+              <div class="toast-title-text">
+                <span class="toast-title">Cluster Health Warning</span>
+                <span class="badge" :class="alertStore.hasCriticalAlerts ? 'badge-rose' : 'badge-amber'">
+                  {{ toastBadgeText }}
+                </span>
+              </div>
             </div>
+
+            <button
+              type="button"
+              class="btn-toast-close"
+              title="Dismiss notification (Docks into bell icon)"
+              aria-label="Close notification"
+              @click.stop.prevent="dismissToast"
+            >
+              <BaseIcon name="x" size="xs" />
+            </button>
           </div>
 
-          <button
-            type="button"
-            class="btn-toast-close"
-            title="Dismiss notification (Docks into bell icon)"
-            aria-label="Close notification"
-            @click.stop.prevent="dismissToast"
-          >
-            ✕
-          </button>
-        </div>
+          <!-- Message Preview -->
+          <div class="toast-body" @click="handleOpenDetails">
+            <p class="toast-preview-msg font-mono">
+              {{ previewMessage }}
+            </p>
+            <span v-if="isPaused" class="toast-paused-badge">
+              <BaseIcon name="activity" size="xs" /> Timer Paused
+            </span>
+          </div>
 
-        <!-- Message Preview -->
-        <div class="toast-body" @click="handleOpenDetails">
-          <p class="toast-preview-msg font-mono">
-            {{ previewMessage }}
-          </p>
-          <span v-if="isPaused" class="toast-paused-badge">⏱️ Timer Paused</span>
-        </div>
+          <!-- Action Buttons -->
+          <div class="toast-actions">
+            <button
+              v-if="hasNodeDown"
+              type="button"
+              class="btn-toast-action btn-toast-failover"
+              title="1-Click SRE Fast Failover for offline node"
+              @click="handleQuickFailover"
+            >
+              <BaseIcon name="zap" size="xs" />
+              <span>Quick Failover</span>
+            </button>
+            <button
+              type="button"
+              class="btn-toast-action btn-toast-details"
+              title="Open interactive Alert Center"
+              @click="handleOpenDetails"
+            >
+              <BaseIcon name="search" size="xs" />
+              <span>View Details</span>
+            </button>
+            <button
+              type="button"
+              class="btn-toast-action btn-toast-mute"
+              title="Silence all active node alerts until server restart"
+              @click="handleMuteAll"
+            >
+              <BaseIcon name="bell-off" size="xs" />
+              <span>Mute All</span>
+            </button>
+            <button
+              type="button"
+              class="btn-toast-action btn-toast-dismiss"
+              title="Dismiss toast and dock into bell icon"
+              @click.stop.prevent="dismissToast"
+            >
+              <BaseIcon name="x" size="xs" />
+              <span>Dismiss</span>
+            </button>
+          </div>
 
-        <!-- Action Buttons -->
-        <div class="toast-actions">
-          <button
-            v-if="hasNodeDown"
-            type="button"
-            class="btn-toast-action btn-toast-failover"
-            title="1-Click SRE Fast Failover for offline node"
-            @click="handleQuickFailover"
-          >
-            <span>⚡ Quick Failover</span>
-          </button>
-          <button
-            type="button"
-            class="btn-toast-action btn-toast-details"
-            title="Open interactive Alert Center"
-            @click="handleOpenDetails"
-          >
-            <span>🔍 View Details</span>
-          </button>
-          <button
-            type="button"
-            class="btn-toast-action btn-toast-mute"
-            title="Silence all active node alerts until server restart"
-            @click="handleMuteAll"
-          >
-            <span>🔕 Mute All</span>
-          </button>
-          <button
-            type="button"
-            class="btn-toast-action btn-toast-dismiss"
-            title="Dismiss toast and dock into bell icon"
-            @click.stop.prevent="dismissToast"
-          >
-            <span>✕ Dismiss</span>
-          </button>
+          <!-- Auto-Dismiss Animated Progress Bar -->
+          <div class="toast-progress-track">
+            <div
+              class="toast-progress-fill"
+              :class="alertStore.hasCriticalAlerts ? 'progress-rose' : 'progress-amber'"
+              :style="{ width: `${progressPercent}%` }"
+            ></div>
+          </div>
         </div>
-
-        <!-- Auto-Dismiss Animated Progress Bar -->
-        <div class="toast-progress-track">
-          <div
-            class="toast-progress-fill"
-            :class="alertStore.hasCriticalAlerts ? 'progress-rose' : 'progress-amber'"
-            :style="{ width: `${progressPercent}%` }"
-          ></div>
-        </div>
-      </div>
-    </transition>
+      </transition>
+    </Teleport>
   </div>
 </template>
 

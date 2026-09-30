@@ -9,6 +9,7 @@ export interface LogStreamerOptions {
   maxBufferSize?: number
   defaultNamespace?: string
   defaultPod?: string
+  autoConnect?: boolean
 }
 
 export function useLogStreamer(options: LogStreamerOptions = {}) {
@@ -68,10 +69,12 @@ export function useLogStreamer(options: LogStreamerOptions = {}) {
     }
   }
 
-  function appendLog(entry: LogEntry) {
+  function addLogEntry(entry: LogEntry) {
     linesStreamed.value++
-    logStore.appendLog(entry)
+    logStore.addLogEntry(entry)
   }
+
+  const appendLog = addLogEntry
 
   function clearBuffer() {
     logStore.clear()
@@ -127,7 +130,7 @@ export function useLogStreamer(options: LogStreamerOptions = {}) {
     const total = logStore.logs.length
     return total === 0 ? 0 : parseFloat(((errorCount.value / total) * 100).toFixed(1))
   })
-  const bufferSaturation = computed(() => Math.min(100, Math.round((logStore.logs.length / maxBufferSize) * 100)))
+  const bufferSaturation = computed(() => Math.min(100, Math.round((logStore.logs.length / (logStore.maxBufferSize || 10000)) * 100)))
 
   function setTerminalRef(el: HTMLElement | null) {
     terminalElement.value = el
@@ -200,7 +203,11 @@ export function useLogStreamer(options: LogStreamerOptions = {}) {
 
   onMounted(() => {
     initFromRoute()
-    connect(selectedNamespace.value, selectedPod.value)
+    if (options.autoConnect !== false) {
+      if (selectedNamespace.value || selectedPod.value || options.autoConnect === true) {
+        connect(selectedNamespace.value, selectedPod.value)
+      }
+    }
   })
 
   onUnmounted(() => disconnect())
@@ -227,6 +234,7 @@ export function useLogStreamer(options: LogStreamerOptions = {}) {
     totalBufferCount: computed(() => logStore.logs.length),
     connect,
     disconnect,
+    addLogEntry,
     appendLog,
     clearBuffer,
     togglePause,

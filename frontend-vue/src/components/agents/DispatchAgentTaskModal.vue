@@ -129,7 +129,7 @@ function toggleCapability(capId: string) {
         :disabled="actionLoading || !newTask.title.trim()" 
         @click="emit('submit')"
       >
-        <span>{{ actionLoading ? 'Scheduling...' : 'Dispatch Task ➔' }}</span>
+        <span>{{ actionLoading ? 'Scheduling...' : 'Dispatch Task' }}</span> <BaseIcon v-if="!actionLoading" name="send" size="xs" />
       </button>
     </template>
   </ModalDrawer>

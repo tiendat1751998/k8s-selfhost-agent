@@ -1,5 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
+import ClickHouseEngineBadge from './ClickHouseEngineBadge.vue'
 
 interface Props {
   searchQuery: string
@@ -59,9 +61,16 @@ function selectLevel(levelValue: string) {
 <template>
   <div class="control-deck glass-panel" role="toolbar" aria-label="Log Stream Filtering and Controls">
     <div class="deck-row">
+      <!-- ClickHouse Engine Connectivity Badge -->
+      <div class="deck-engine-slot">
+        <ClickHouseEngineBadge />
+      </div>
+
       <!-- Search Input with Regex indicator -->
       <div class="search-input-wrapper">
-        <span class="search-icon" aria-hidden="true">🔍</span>
+        <span class="search-icon" aria-hidden="true">
+          <BaseIcon name="search" size="xs" />
+        </span>
         <input
           :value="searchQuery"
           type="text"
@@ -85,7 +94,7 @@ function selectLevel(levelValue: string) {
           aria-label="Clear search"
           @click="emit('update:searchQuery', '')"
         >
-          ✕
+          <BaseIcon name="x" size="xs" />
         </button>
       </div>
 
@@ -154,7 +163,8 @@ function selectLevel(levelValue: string) {
           :class="isPaused ? 'btn-primary' : 'btn-secondary'"
           @click="emit('togglePause')"
         >
-          <span>{{ isPaused ? '▶ Resume Live Tail' : '⏸ Pause Live Stream' }}</span>
+          <BaseIcon :name="isPaused ? 'play' : 'pause'" size="xs" />
+          <span>{{ isPaused ? 'Resume Live Tail' : 'Pause Live Stream' }}</span>
         </button>
         <button
           type="button"
@@ -162,7 +172,8 @@ function selectLevel(levelValue: string) {
           title="Clear current log buffer"
           @click="emit('clearBuffer')"
         >
-          <span>🧹 Clear</span>
+          <BaseIcon name="trash" size="xs" />
+          <span>Clear</span>
         </button>
         <button
           type="button"
@@ -170,9 +181,29 @@ function selectLevel(levelValue: string) {
           title="Export current logs as raw text file"
           @click="emit('exportLogs')"
         >
-          <span>📥 Export</span>
+          <BaseIcon name="download" size="xs" />
+          <span>Export</span>
         </button>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.deck-engine-slot {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.search-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+</style>

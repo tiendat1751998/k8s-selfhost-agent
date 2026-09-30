@@ -23,6 +23,7 @@ export interface Cluster {
   group: string
   region: string
   provider: string
+  orchestrator?: 'kubernetes' | 'swarm'
   status: 'active' | 'offline' | 'upgrading' | 'maintenance' | string
   version?: string
   nodes?: number
@@ -35,6 +36,7 @@ export interface Cluster {
   tenant_id?: string
   created_at?: string
   updated_at?: string
+  swarm_meta?: { manager_count: number; worker_count: number; is_manager: boolean }
 }
 
 export interface ClusterHealthResponse {
@@ -49,6 +51,30 @@ export interface SwarmClusterInfo {
   worker_count: number
   created_at: string
   is_manager: boolean
+}
+
+/**
+ * Convert Docker Swarm cluster info into unified Cluster model for first-class fleet display.
+ */
+export function mapSwarmToFleetCluster(swarm: SwarmClusterInfo): Cluster {
+  return {
+    id: swarm.id || 'swarm-local',
+    name: 'Docker Swarm (Local)',
+    group: 'local',
+    region: 'local',
+    provider: 'swarm',
+    orchestrator: 'swarm',
+    status: 'active',
+    health_status: swarm.node_count > 0 ? 'healthy' : 'degraded',
+    version: 'SwarmKit',
+    nodes: swarm.node_count,
+    swarm_meta: {
+      manager_count: swarm.manager_count,
+      worker_count: swarm.worker_count,
+      is_manager: swarm.is_manager,
+    },
+    created_at: swarm.created_at,
+  }
 }
 
 export interface ImportClusterPayload {

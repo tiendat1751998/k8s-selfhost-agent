@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { k8sApi, type K8sResource } from '../../api/k8s'
 
 const props = defineProps<{
@@ -107,7 +108,7 @@ async function handleDrainNodeConfirm() {
         :disabled="drainingNode"
         @click="handleDrainNodeConfirm"
       >
-        <span>{{ drainingNode ? '⏳ Draining...' : '🧹 Confirm Drain' }}</span>
+        <BaseIcon :name="drainingNode ? 'clock' : 'trash'" size="xs" /> <span>{{ drainingNode ? 'Draining...' : 'Confirm Drain' }}</span>
       </button>
     </template>
   </ModalDrawer>

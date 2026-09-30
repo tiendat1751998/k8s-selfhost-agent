@@ -60,11 +60,17 @@ export function useOverviewDashboard() {
   const orderedNodes = computed<NodeMetrics[]>(() => {
     const raw = overview.value?.nodes || []
     if (!raw.length) return []
-    const incoming = raw.map(n => ({
-      ...n,
-      node_name: n.node_name === 'k8smater' ? 'k8smaster' : n.node_name
-    }))
-    if (!customNodeOrder.value.length) return incoming
+    const incoming = raw
+    if (!customNodeOrder.value.length) {
+      return [...incoming].sort((a, b) => {
+        const isReadyA = (a.status || '').toLowerCase() === 'ready' ? 0 : 1
+        const isReadyB = (b.status || '').toLowerCase() === 'ready' ? 0 : 1
+        if (isReadyA !== isReadyB) return isReadyA - isReadyB
+        const nameCmp = (a.node_name || '').localeCompare(b.node_name || '')
+        if (nameCmp !== 0) return nameCmp
+        return (a.node_id || '').localeCompare(b.node_id || '')
+      })
+    }
 
     const orderMap = new Map<string, number>()
     customNodeOrder.value.forEach((id, idx) => orderMap.set(id, idx))
@@ -72,7 +78,10 @@ export function useOverviewDashboard() {
     return [...incoming].sort((a, b) => {
       const idxA = orderMap.has(a.node_id) ? orderMap.get(a.node_id)! : 9999
       const idxB = orderMap.has(b.node_id) ? orderMap.get(b.node_id)! : 9999
-      return idxA - idxB
+      if (idxA !== idxB) return idxA - idxB
+      const nameCmp = (a.node_name || '').localeCompare(b.node_name || '')
+      if (nameCmp !== 0) return nameCmp
+      return (a.node_id || '').localeCompare(b.node_id || '')
     })
   })
 
@@ -300,6 +309,16 @@ export function useOverviewDashboard() {
     router.push({ path: '/hosts', query: { search: node.node_name } })
   }
 
+  function viewNodeLogs(node: NodeMetrics) {
+    router.push({
+      path: '/logs',
+      query: {
+        node: node.node_name,
+        search: node.node_name
+      }
+    })
+  }
+
   function navigateTo(path: string) {
     router.push(path)
   }
@@ -451,6 +470,7 @@ export function useOverviewDashboard() {
     onDragEnd,
     handleNodeCardClick,
     manageNode,
+    viewNodeLogs,
     navigateTo,
     fetchOverview,
     fetchTps,

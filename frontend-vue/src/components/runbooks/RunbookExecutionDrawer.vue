@@ -6,7 +6,7 @@
           <span class="drawer-tag font-mono">PROCEDURE RUNBOOK INSPECTION</span>
           <h3 class="drawer-title">{{ runbook?.title || 'Execution Steps' }}</h3>
         </div>
-        <button class="drawer-close" @click="$emit('close')">✕</button>
+        <button class="drawer-close" @click="$emit('close')"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="drawer-content">
@@ -31,7 +31,7 @@
           >
             <div class="step-header" @click="$emit('toggleStep', idx)">
               <div class="step-checkbox" :class="{ 'step-checkbox-active': completedSteps.has(idx) }">
-                <span v-if="completedSteps.has(idx)">✓</span>
+                <BaseIcon v-if="completedSteps.has(idx)" name="check" size="xs" />
                 <span v-else>{{ idx + 1 }}</span>
               </div>
               <span class="step-title" :class="{ 'text-strikethrough': completedSteps.has(idx) }">
@@ -43,7 +43,7 @@
                 title="Execute single command"
                 @click.stop="$emit('executeStep', step)"
               >
-                <span>⚡ Run Step</span>
+                <BaseIcon name="zap" size="xs" /> <span>Run Step</span>
               </button>
             </div>
 
@@ -51,7 +51,7 @@
               <p v-if="step.content" class="step-desc">{{ step.content }}</p>
               <div v-if="step.command" class="command-box font-mono">
                 <pre class="command-pre">{{ step.command }}</pre>
-                <button class="copy-btn" @click.stop="$emit('copyCommand', step.command)">📋 Copy</button>
+                <button class="copy-btn" @click.stop="$emit('copyCommand', step.command)"><BaseIcon name="copy" size="xs" /> Copy</button>
               </div>
             </div>
           </div>
@@ -81,7 +81,7 @@
           :disabled="completedSteps.size === steps.length"
           @click="$emit('markAllComplete')"
         >
-          <span>✓ Complete All Steps</span>
+          <BaseIcon name="check-circle" size="xs" /> <span>Complete All Steps</span>
         </button>
       </div>
     </div>
@@ -92,6 +92,7 @@
 import { computed } from 'vue'
 import type { Runbook } from '../../api/governance'
 import type { RunbookStep, RunbookExecutionRecord } from '../../composables/useRunbooks'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = defineProps<{
   show: boolean

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { SimulationScenario, CreateIncidentPayload } from '../../composables/useIncidents'
 
@@ -27,6 +28,13 @@ const form = ref<CreateIncidentPayload>({
   message: ''
 })
 
+function getScenarioIcon(key?: string, icon?: string): string {
+  if (key === 'oom' || icon === 'flame') return 'flame'
+  if (key === 'node_down' || icon === 'server') return 'server'
+  if (key === 'crashloop' || icon === 'alert-triangle') return 'alert-triangle'
+  return 'zap'
+}
+
 function handleFormSubmit() {
   if (!form.value.pod_name.trim()) return
   emit('create', { ...form.value })
@@ -37,7 +45,7 @@ function handleFormSubmit() {
   <ModalDrawer
     :show="show"
     mode="modal"
-    title="⚡ Incident Center: Simulation & Manual Incident Reporting"
+    title="Incident Center: Simulation & Manual Incident Reporting"
     subtitle="Inject synthetic Kubernetes cluster anomalies or log an ad-hoc operational incident"
     max-width="680px"
     @update:show="emit('update:show', $event)"
@@ -51,7 +59,7 @@ function handleFormSubmit() {
           :class="{ 'tab-btn-active': activeTab === 'simulate' }"
           @click="activeTab = 'simulate'"
         >
-          <span>⚡ Simulation Scenarios (Debug / Demo)</span>
+          <BaseIcon name="zap" size="xs" /> <span>Simulation Scenarios (Debug / Demo)</span>
         </button>
         <button
           type="button"
@@ -59,7 +67,7 @@ function handleFormSubmit() {
           :class="{ 'tab-btn-active': activeTab === 'report' }"
           @click="activeTab = 'report'"
         >
-          <span>📝 Log Incident Manually</span>
+          <BaseIcon name="edit" size="xs" /> <span>Log Incident Manually</span>
         </button>
       </div>
 
@@ -67,7 +75,7 @@ function handleFormSubmit() {
       <!-- Tab 1: Simulation Scenarios -->
       <div v-if="activeTab === 'simulate'" class="tab-content-pane animate-fade-in">
         <div class="debug-demo-banner">
-          <span class="badge badge-amber font-mono">⚠️ DEBUG / DEMO MODE</span>
+          <span class="badge badge-amber font-mono"><BaseIcon name="alert-triangle" size="xs" /> DEBUG / DEMO MODE</span>
           <span class="debug-banner-text">Synthetic cluster failure scenarios for demonstration and autonomous diagnostics</span>
         </div>
         <p class="simulation-guide-text">
@@ -84,7 +92,7 @@ function handleFormSubmit() {
           >
             <div class="sim-card-header">
               <div class="sim-card-icon-wrap">
-                <span class="sim-card-icon">{{ scenario.icon }}</span>
+                <span class="sim-card-icon"><BaseIcon :name="getScenarioIcon(scenario.key, scenario.icon)" size="md" /></span>
                 <div class="sim-card-titles">
                   <h4 class="sim-card-title">{{ scenario.title }}</h4>
                   <span class="sim-card-subtitle font-mono">{{ scenario.subtitle }}</span>
@@ -111,7 +119,7 @@ function handleFormSubmit() {
                 :disabled="actionLoading === `sim-${scenario.key}`"
                 @click.stop="emit('simulate', scenario)"
               >
-                <span>{{ actionLoading === `sim-${scenario.key}` ? '⏳ Injecting...' : '⚡ Inject Scenario' }}</span>
+                <BaseIcon :name="actionLoading === `sim-${scenario.key}` ? 'clock' : 'zap'" size="xs" /> <span>{{ actionLoading === `sim-${scenario.key}` ? 'Injecting...' : 'Inject Scenario' }}</span>
               </button>
             </div>
           </div>
@@ -204,7 +212,7 @@ function handleFormSubmit() {
         :disabled="actionLoading === 'create-incident' || !form.pod_name.trim()"
         @click="handleFormSubmit"
       >
-        <span>{{ actionLoading === 'create-incident' ? '⏳ Submitting...' : '📄 File Incident Report' }}</span>
+        <BaseIcon :name="actionLoading === 'create-incident' ? 'clock' : 'file-text'" size="xs" /> <span>{{ actionLoading === 'create-incident' ? 'Submitting...' : 'File Incident Report' }}</span>
       </button>
     </template>
   </ModalDrawer>

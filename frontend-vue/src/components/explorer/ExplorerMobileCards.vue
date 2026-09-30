@@ -1,10 +1,10 @@
 ﻿<template>
   <div class="mobile-cards-stream">
     <div v-if="loading" class="stream-status font-mono">
-      <span class="spin-icon">⏳</span> Loading resources...
+      <BaseIcon name="clock" size="xs" class="spin-icon" /> Loading resources...
     </div>
     <div v-else-if="resources.length === 0" class="stream-empty glass-panel font-mono">
-      <span class="empty-icon">📦</span>
+      <span class="empty-icon"><BaseIcon name="box" size="lg" /></span>
       <p class="empty-text">{{ emptyMessage || 'No Kubernetes resources found' }}</p>
     </div>
     <div v-else class="cards-list">
@@ -19,7 +19,7 @@
           <span v-if="res.metadata?.namespace" class="ns-pill font-mono">{{ res.metadata.namespace }}</span>
           <span class="res-name font-mono" :title="res.metadata?.name">{{ res.metadata?.name || 'unnamed' }}</span>
           <button type="button" class="copy-btn" title="Copy name" @click.stop="copyResourceName(res.metadata?.name)">
-            <span v-if="copiedName === res.metadata?.name" class="copy-ok">✓</span>
+            <span v-if="copiedName === res.metadata?.name" class="copy-ok"><BaseIcon name="check" size="xs" /></span>
             <svg v-else viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           </button>
         </div>
@@ -29,15 +29,15 @@
             <span class="status-text">{{ getStatusText(res) }}</span>
           </div>
           <div class="metrics-meta">
-            <span v-if="getReplicas(res)" class="meta-item text-cyan">⚡ {{ getReplicas(res) }}</span>
-            <span class="meta-item text-muted">🕒 {{ getAge(res) }}</span>
+            <span v-if="getReplicas(res)" class="meta-item text-cyan"><BaseIcon name="zap" size="xs" /> {{ getReplicas(res) }}</span>
+            <span class="meta-item text-muted"><BaseIcon name="clock" size="xs" /> {{ getAge(res) }}</span>
           </div>
         </div>
         <div class="card-actions-row" @click.stop>
-          <button v-if="canLog(res)" type="button" class="btn-card-action btn-logs" title="Logs" @click="$emit('logs', res)"><span>📄 Logs</span></button>
-          <button v-if="canScale(res)" type="button" class="btn-card-action btn-scale" title="Scale" @click="$emit('scale', res)"><span>⚡ Scale</span></button>
-          <button v-if="canRestart(res)" type="button" class="btn-card-action btn-restart" title="Restart" @click="$emit('restart', res)"><span>🔄 Restart</span></button>
-          <button v-if="canDelete(res)" type="button" class="btn-card-action btn-del" title="Delete" @click="$emit('delete', res)"><span>🗑 Delete</span></button>
+          <button v-if="canLog(res)" type="button" class="btn-card-action btn-logs" title="Logs" @click="$emit('logs', res)"><BaseIcon name="file-text" size="xs" /> <span>Logs</span></button>
+          <button v-if="canScale(res)" type="button" class="btn-card-action btn-scale" title="Scale" @click="$emit('scale', res)"><BaseIcon name="sliders" size="xs" /> <span>Scale</span></button>
+          <button v-if="canRestart(res)" type="button" class="btn-card-action btn-restart" title="Restart" @click="$emit('restart', res)"><BaseIcon name="refresh" size="xs" /> <span>Restart</span></button>
+          <button v-if="canDelete(res)" type="button" class="btn-card-action btn-del" title="Delete" @click="$emit('delete', res)"><BaseIcon name="trash" size="xs" /> <span>Delete</span></button>
         </div>
       </div>
     </div>

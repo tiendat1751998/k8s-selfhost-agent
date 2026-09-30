@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { ComputeHost } from '../../api/compute'
 import type { HostTestResult, HostTypeDefinition } from '../../types/hosts'
 
@@ -28,7 +29,7 @@ const emit = defineEmits<{
     >
       <!-- Left: Host Icon & Status -->
       <div class="m-card-icon-wrap">
-        <span class="m-card-icon">{{ getHostTypeMeta(host.host_type).icon }}</span>
+        <span class="m-card-icon"><BaseIcon :name="getHostTypeMeta(host.host_type).icon" size="sm" /></span>
         <span
           class="m-status-dot"
           :class="`dot-${host.status === 'connected' || host.status === 'ok' ? 'ok' : host.status === 'error' || host.status === 'unhealthy' ? 'err' : 'down'}`"
@@ -44,7 +45,7 @@ const emit = defineEmits<{
             class="m-latency font-mono"
             :class="getLatencyBadgeClass(hostTestResults[host.id].latency_ms)"
           >
-            {{ hostTestResults[host.id].latency_ms > 0 ? `⚡ ${hostTestResults[host.id].latency_ms}ms` : '--' }}
+            <template v-if="hostTestResults[host.id].latency_ms > 0"><BaseIcon name="zap" size="xs" /> {{ hostTestResults[host.id].latency_ms }}ms</template><template v-else>--</template>
           </span>
           <span v-else class="m-type-tag font-mono">
             {{ getHostTypeMeta(host.host_type).label }}
@@ -63,21 +64,21 @@ const emit = defineEmits<{
           title="Test Connection"
           @click.stop="emit('test', host)"
         >
-          <span>{{ testingHostId === host.id ? '⏳' : '⚡' }}</span>
+          <BaseIcon :name="testingHostId === host.id ? 'refresh' : 'zap'" size="xs" :class="{ 'animate-spin': testingHostId === host.id }" />
         </button>
         <button
           class="btn-m-action btn-m-edit"
           title="Edit Host"
           @click.stop="emit('edit', host)"
         >
-          <span>✏️</span>
+          <BaseIcon name="edit" size="xs" />
         </button>
         <button
           class="btn-m-action btn-m-delete"
           title="Delete Host"
           @click.stop="emit('delete', host)"
         >
-          <span>🗑️</span>
+          <BaseIcon name="trash" size="xs" />
         </button>
       </div>
     </div>

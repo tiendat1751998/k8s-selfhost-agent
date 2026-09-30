@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { DockerNode, NodeDetails } from '../../api/compute'
 
 const props = defineProps<{
@@ -56,7 +57,7 @@ function formatMemory(mem?: number): string {
       <div class="node-detail-header-card glass-panel">
         <div class="detail-hero-top">
           <div class="detail-id-wrap">
-            <span class="detail-icon" aria-hidden="true">🖥️</span>
+            <span class="detail-icon" aria-hidden="true"><BaseIcon name="server" size="md" /></span>
             <div>
               <h3 class="detail-hostname font-mono">{{ props.details.hostname }}</h3>
               <span class="detail-node-id font-mono text-muted">ID: {{ props.details.id }}</span>
@@ -94,7 +95,7 @@ function formatMemory(mem?: number): string {
         <h4 class="detail-section-title">Hardware & Compute Architecture</h4>
         <div class="specs-grid">
           <div class="spec-card glass-panel">
-            <div class="spec-icon" aria-hidden="true">⚡</div>
+            <div class="spec-icon" aria-hidden="true"><BaseIcon name="zap" size="sm" /></div>
             <div class="spec-info">
               <span class="spec-label">CPU CORES</span>
               <span class="spec-value font-mono">{{ props.details.cpus ? `${props.details.cpus} vCPU Cores` : '--' }}</span>
@@ -102,7 +103,7 @@ function formatMemory(mem?: number): string {
           </div>
 
           <div class="spec-card glass-panel">
-            <div class="spec-icon" aria-hidden="true">🧠</div>
+            <div class="spec-icon" aria-hidden="true"><BaseIcon name="cpu" size="sm" /></div>
             <div class="spec-info">
               <span class="spec-label">SYSTEM MEMORY</span>
               <span class="spec-value font-mono">{{ formatMemory(props.details.memory) }}</span>
@@ -110,7 +111,7 @@ function formatMemory(mem?: number): string {
           </div>
 
           <div class="spec-card glass-panel">
-            <div class="spec-icon" aria-hidden="true">🐧</div>
+            <div class="spec-icon" aria-hidden="true"><BaseIcon name="terminal" size="sm" /></div>
             <div class="spec-info">
               <span class="spec-label">OPERATING SYSTEM</span>
               <span class="spec-value font-mono">{{ props.details.os && props.details.os !== '--' ? `${props.details.os} (${props.details.architecture || '--'})` : '--' }}</span>
@@ -118,7 +119,7 @@ function formatMemory(mem?: number): string {
           </div>
 
           <div class="spec-card glass-panel">
-            <div class="spec-icon" aria-hidden="true">🐳</div>
+            <div class="spec-icon" aria-hidden="true"><BaseIcon name="box" size="sm" /></div>
             <div class="spec-info">
               <span class="spec-label">DOCKER ENGINE</span>
               <span class="spec-value font-mono">{{ props.details.engine_version && props.details.engine_version !== '--' ? `v${props.details.engine_version}` : '--' }}</span>

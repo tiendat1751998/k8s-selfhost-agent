@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { ComputeHost } from '../../api/compute'
 
 defineProps<{
@@ -25,7 +26,7 @@ const emit = defineEmits<{
   >
     <div v-if="host" class="confirm-dialog-content">
       <div class="confirm-alert alert-danger">
-        <span class="alert-icon">🚨</span>
+        <span class="alert-icon"><BaseIcon name="alert-triangle" size="lg" class="text-rose" /></span>
         <div>
           <strong>Are you sure you want to remove this host?</strong>
           <p class="alert-desc" style="margin-top: 6px;">
@@ -37,7 +38,7 @@ const emit = defineEmits<{
       <div class="modal-actions" style="margin-top: 20px;">
         <button type="button" class="btn btn-secondary" @click="emit('update:show', false)">Cancel</button>
         <button type="button" class="btn btn-danger" :disabled="deleting" @click="emit('confirm')">
-          <span>{{ deleting ? '⏳ Removing...' : '🗑️ Confirm Decommission' }}</span>
+          <BaseIcon :name="deleting ? 'refresh' : 'trash'" size="xs" :class="{ 'animate-spin': deleting }" /> <span>{{ deleting ? 'Removing...' : 'Confirm Decommission' }}</span>
         </button>
       </div>
     </div>

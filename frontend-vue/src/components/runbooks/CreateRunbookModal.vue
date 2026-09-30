@@ -71,7 +71,7 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" @click="$emit('close')">Cancel</button>
         <button type="submit" class="btn btn-primary">
-          <span>{{ isEdit ? '💾 Save Changes' : '+ Publish Runbook' }}</span>
+          <BaseIcon :name="isEdit ? 'save' : 'plus'" size="xs" /> <span>{{ isEdit ? 'Save Changes' : 'Publish Runbook' }}</span>
         </button>
       </div>
     </form>
@@ -80,6 +80,7 @@
 
 <script setup lang="ts">
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   show: boolean

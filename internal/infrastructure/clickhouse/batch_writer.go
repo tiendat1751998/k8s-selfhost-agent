@@ -1,20 +1,25 @@
-package clickhouse
+﻿package clickhouse
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/logging"
 )
+
+// BatchConfig is an alias for BatchWriterConfig.
+type BatchConfig = BatchWriterConfig
 
 // BatchWriterConfig holds buffer and flush interval settings.
 type BatchWriterConfig struct {
 	BatchSize       int           `json:"batch_size"`
 	FlushInterval   time.Duration `json:"flush_interval"`
 	ChannelCapacity int           `json:"channel_capacity"`
+	BufferCap       int           `json:"buffer_cap,omitempty"`
 	TableName       string        `json:"table_name"`
 }
 
@@ -40,7 +45,9 @@ type BatchWriter struct {
 	logCh        chan logging.LogEntry
 	flushReqCh   chan flushRequest
 	doneCh       chan struct{}
+	startOnce    sync.Once
 	closeOnce    sync.Once
+	started      atomic.Bool
 	mu           sync.RWMutex
 	closed       bool
 	flushFn      func(ctx context.Context, batch []logging.LogEntry) error
@@ -48,8 +55,8 @@ type BatchWriter struct {
 }
 
 // NewBatchWriter constructs a new background BatchWriter attached to a ClickHouse Client.
-func NewBatchWriter(ctx context.Context, client *Client, cfg BatchWriterConfig) *BatchWriter {
-	return NewBatchWriterWithFn(ctx, client, cfg, nil)
+func NewBatchWriter(client *Client, cfg BatchConfig) *BatchWriter {
+	return NewBatchWriterWithFn(nil, client, cfg, nil)
 }
 
 // NewBatchWriterWithFn allows injecting a custom flush function for zero-mock unit testing.
@@ -64,6 +71,9 @@ func NewBatchWriterWithFn(
 	}
 	if cfg.FlushInterval <= 0 {
 		cfg.FlushInterval = 5 * time.Second
+	}
+	if cfg.BufferCap > 0 && cfg.ChannelCapacity <= 0 {
+		cfg.ChannelCapacity = cfg.BufferCap
 	}
 	if cfg.ChannelCapacity <= 0 {
 		cfg.ChannelCapacity = 10000
@@ -81,9 +91,31 @@ func NewBatchWriterWithFn(
 		flushFn:    flushFn,
 	}
 
-	go w.flusherLoop(ctx)
+	if ctx != nil {
+		w.Start(ctx)
+	}
 
 	return w
+}
+
+// Start launches the background flusher loop if not already started.
+func (w *BatchWriter) Start(ctx context.Context) {
+	w.startOnce.Do(func() {
+		w.started.Store(true)
+		go w.flusherLoop(ctx)
+	})
+}
+
+// Stop gracefully shuts down the BatchWriter, flushing any pending logs.
+func (w *BatchWriter) Stop() error {
+	return w.Close()
+}
+
+// SetFlushFn overrides the flush execution function (useful for testing without real ClickHouse).
+func (w *BatchWriter) SetFlushFn(fn func(ctx context.Context, batch []logging.LogEntry) error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.flushFn = fn
 }
 
 // Write enqueues a log entry into the channel buffer.
@@ -153,6 +185,10 @@ func (w *BatchWriter) Close() error {
 		w.mu.Unlock()
 	})
 
+	if !w.started.Load() {
+		return nil
+	}
+
 	<-w.doneCh
 
 	w.mu.RLock()
@@ -167,7 +203,6 @@ func (w *BatchWriter) flusherLoop(ctx context.Context) {
 	ticker := time.NewTicker(w.cfg.FlushInterval)
 	defer ticker.Stop()
 
-	// Pre-allocate buffer covering BatchSize + ChannelCapacity to guarantee zero dynamic reallocations
 	buf := make([]logging.LogEntry, 0, w.cfg.BatchSize+w.cfg.ChannelCapacity)
 
 	for {
@@ -187,7 +222,7 @@ func (w *BatchWriter) flusherLoop(ctx context.Context) {
 			var err error
 			if len(buf) > 0 {
 				err = w.executeFlush(req.ctx, buf)
-				buf = buf[:0] // Zero-allocation reset
+				buf = buf[:0]
 				w.recordFlushError(err)
 			}
 			req.errCh <- err
@@ -208,14 +243,14 @@ func (w *BatchWriter) flusherLoop(ctx context.Context) {
 			if len(buf) >= w.cfg.BatchSize {
 				err := w.executeFlush(ctx, buf)
 				w.recordFlushError(err)
-				buf = buf[:0] // Zero-allocation reset
+				buf = buf[:0]
 			}
 
 		case <-ticker.C:
 			if len(buf) > 0 {
 				err := w.executeFlush(ctx, buf)
 				w.recordFlushError(err)
-				buf = buf[:0] // Zero-allocation reset
+				buf = buf[:0]
 			}
 		}
 	}
@@ -248,8 +283,12 @@ func (w *BatchWriter) executeFlush(ctx context.Context, entries []logging.LogEnt
 		return nil
 	}
 
-	if w.flushFn != nil {
-		return w.flushFn(ctx, entries)
+	w.mu.RLock()
+	fn := w.flushFn
+	w.mu.RUnlock()
+
+	if fn != nil {
+		return fn(ctx, entries)
 	}
 
 	if w.client == nil {
@@ -262,7 +301,7 @@ func (w *BatchWriter) executeFlush(ctx context.Context, entries []logging.LogEnt
 	}
 
 	query := fmt.Sprintf(
-		"INSERT INTO %s (timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes)",
+		"INSERT INTO %s (timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes, trace_id, span_id, error_fingerprint)",
 		w.cfg.TableName,
 	)
 
@@ -284,6 +323,9 @@ func (w *BatchWriter) executeFlush(ctx context.Context, entries []logging.LogEnt
 			string(entry.LogLevel),
 			entry.Message,
 			entry.Attributes,
+			entry.TraceID,
+			entry.SpanID,
+			entry.ErrorFingerprint,
 		); appendErr != nil {
 			return fmt.Errorf("appending entry to batch: %w", appendErr)
 		}

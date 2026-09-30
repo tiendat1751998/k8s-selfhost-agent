@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { Incident } from '../../api/compute'
 
@@ -30,11 +31,11 @@ function formatTime(d?: string) {
 <template>
   <div class="incidents-table-container">
     <div v-if="loading" class="table-loading-state font-mono">
-      <span>⏳ Querying live incident telemetry...</span>
+      <BaseIcon name="clock" size="xs" /> <span>Querying live incident telemetry...</span>
     </div>
 
     <div v-else-if="incidents.length === 0" class="empty-list">
-      <div class="empty-icon">🛡</div>
+      <div class="empty-icon"><BaseIcon name="shield" size="lg" /></div>
       <div class="empty-title">No Incidents Detected</div>
       <p class="empty-desc">
         Cluster telemetry is nominal. Inject a test anomaly scenario to evaluate autonomous AI diagnostics and GitOps remediation.
@@ -90,7 +91,7 @@ function formatTime(d?: string) {
                   title="Open incident triage inspector"
                   @click="emit('triage', inc)"
                 >
-                  <span>🔍 Triage</span>
+                  <BaseIcon name="search" size="xs" /> <span>Triage</span>
                 </button>
                 <button
                   type="button"
@@ -98,7 +99,7 @@ function formatTime(d?: string) {
                   title="View chronological RCA reasoning timeline"
                   @click="emit('rca', inc)"
                 >
-                  <span>🔬 RCA Timeline</span>
+                  <BaseIcon name="activity" size="xs" /> <span>RCA Timeline</span>
                 </button>
                 <button
                   type="button"
@@ -107,7 +108,7 @@ function formatTime(d?: string) {
                   title="Initiate autonomous mitigation pipeline"
                   @click="emit('mitigate', inc)"
                 >
-                  <span>{{ actionLoading === 'mitigate-' + inc.id ? '⏳ Mitigating' : '🎯 Mitigate' }}</span>
+                  <BaseIcon :name="actionLoading === 'mitigate-' + inc.id ? 'clock' : 'target'" size="xs" /> <span>{{ actionLoading === 'mitigate-' + inc.id ? 'Mitigating' : 'Mitigate' }}</span>
                 </button>
                 <button
                   type="button"
@@ -116,7 +117,7 @@ function formatTime(d?: string) {
                   title="Immediately resolve and clear anomaly"
                   @click="emit('resolve', inc)"
                 >
-                  <span>{{ actionLoading === 'resolve-' + inc.id ? '⏳' : '🕑 Resolve' }}</span>
+                  <BaseIcon :name="actionLoading === 'resolve-' + inc.id ? 'clock' : 'check-circle'" size="xs" /> <span>Resolve</span>
                 </button>
               </div>
             </td>

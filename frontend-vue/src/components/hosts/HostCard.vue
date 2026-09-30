@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { ComputeHost } from '../../api/compute'
 
@@ -62,7 +63,7 @@ function formatUptime(seconds?: number): string {
   <div class="host-card glass-panel" :class="`host-card-${host.host_type || 'agent'}`">
     <div class="card-top">
       <div class="card-title-group" @click="emit('select', host)">
-        <span class="card-type-icon">💹</span>
+        <span class="card-type-icon"><BaseIcon name="trending-up" size="md" /></span>
         <div class="card-name-wrap">
           <h3 class="card-host-name">{{ host.name }}</h3>
           <span class="card-host-id font-mono text-muted">{{ host.id }}</span>
@@ -82,7 +83,7 @@ function formatUptime(seconds?: number): string {
 
     <div class="card-endpoint-box">
       <span class="endpoint-text font-mono text-cyan" :title="host.endpoint">{{ host.endpoint }}</span>
-      <button class="btn-copy-sm" title="Copy endpoint URL" @click.stop="emit('copy', host.endpoint)">📋</button>
+      <button class="btn-copy-sm" title="Copy endpoint URL" @click.stop="emit('copy', host.endpoint)"><BaseIcon name="copy" size="xs" /></button>
     </div>
 
     <div class="card-meta-grid font-mono">
@@ -100,16 +101,16 @@ function formatUptime(seconds?: number): string {
 
       <div v-if="testResult" class="meta-item-full test-result-bar animate-fade-in" :class="testResult.status === 'ok' ? 'test-pass' : 'test-fail'">
         <div class="test-top">
-          <span>⚡ Latency: <strong>{{ testResult.latency_ms }}ms</strong></span>
+          <span><BaseIcon name="zap" size="xs" /> Latency: <strong>{{ testResult.latency_ms }}ms</strong></span>
           <span class="test-status-tag">{{ (testResult.status || '').toUpperCase() }}</span>
         </div>
         <div v-if="testResult.agent_info" class="agent-telemetry-mini">
-          <span v-if="testResult.agent_info?.hostname">💻 {{ testResult.agent_info?.hostname }}</span>
+          <span v-if="testResult.agent_info?.hostname"><BaseIcon name="server" size="xs" /> {{ testResult.agent_info?.hostname }}</span>
           <span v-if="testResult.agent_info?.os_distro || testResult.agent_info?.os">
-            🐧 {{ testResult.agent_info?.os_distro || testResult.agent_info?.os }} ({{ testResult.agent_info?.arch }})
+            <BaseIcon name="terminal" size="xs" /> {{ testResult.agent_info?.os_distro || testResult.agent_info?.os }} ({{ testResult.agent_info?.arch }})
           </span>
           <span v-if="testResult.agent_info?.uptime || testResult.agent_info?.uptime_seconds">
-            ⏱ {{ formatUptime(testResult.agent_info?.uptime || testResult.agent_info?.uptime_seconds) }}
+            <BaseIcon name="clock" size="xs" /> {{ formatUptime(testResult.agent_info?.uptime || testResult.agent_info?.uptime_seconds) }}
           </span>
         </div>
       </div>
@@ -123,15 +124,15 @@ function formatUptime(seconds?: number): string {
 
     <div class="card-footer">
       <button class="btn btn-secondary btn-xs" :disabled="isTesting" @click="emit('test', host)">
-        <span>{{ isTesting ? '⃳ Testing...' : '⚡ Test Connection' }}</span>
+        <BaseIcon :name="isTesting ? 'refresh' : 'zap'" size="xs" :class="{ 'animate-spin': isTesting }" /> <span>{{ isTesting ? 'Testing...' : 'Test Connection' }}</span>
       </button>
 
       <div class="footer-btn-group">
         <button class="btn btn-secondary btn-xs" title="Edit Host" @click="emit('edit', host)">
-          <span>✏️ Edit</span>
+          <BaseIcon name="edit" size="xs" /> <span>Edit</span>
         </button>
         <button class="btn btn-danger-outline btn-xs" title="Delete Host" @click="emit('delete', host)">
-          <span>🗑 Delete</span>
+          <BaseIcon name="trash" size="xs" /> <span>Delete</span>
         </button>
       </div>
     </div>

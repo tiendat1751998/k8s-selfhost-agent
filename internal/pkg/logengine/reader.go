@@ -221,10 +221,53 @@ func loadPrimaryIndex(path string) (*PrimaryIndex, error) {
 	return pidx, nil
 }
 
+// BlockCount returns total indexed blocks across all parts.
+func (r *Reader) BlockCount() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	partEntries, err := os.ReadDir(r.partsDir)
+	if err != nil {
+		return 0
+	}
+	total := 0
+	for _, e := range partEntries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), "part_") {
+			pidx, err := loadPrimaryIndex(filepath.Join(r.partsDir, e.Name(), "primary.idx"))
+			if err == nil {
+				total += pidx.Len()
+			}
+		}
+	}
+	return total
+}
+
 func (r *Reader) Close() error { return nil }
 
 func matchFilter(actual, pattern string) bool {
-	return strings.EqualFold(actual, pattern) || strings.Contains(strings.ToLower(actual), strings.ToLower(pattern))
+	if strings.EqualFold(actual, pattern) {
+		return true
+	}
+	if len(pattern) <= 3 {
+		return false
+	}
+	actLower := strings.ToLower(actual)
+	patLower := strings.ToLower(pattern)
+	if strings.HasPrefix(actLower, patLower) {
+		if len(actLower) > len(patLower) && isBoundary(actLower[len(patLower)]) {
+			return true
+		}
+	}
+	if strings.HasSuffix(actLower, patLower) {
+		if len(actLower) > len(patLower) && isBoundary(actLower[len(actLower)-len(patLower)-1]) {
+			return true
+		}
+	}
+	return false
+}
+
+func isBoundary(b byte) bool {
+	return b == '-' || b == '_' || b == '.' || b == '/' || b == ':' || (b < 'a' || b > 'z') && (b < '0' || b > '9')
 }
 
 func matchLevel(actual, filter string) bool {

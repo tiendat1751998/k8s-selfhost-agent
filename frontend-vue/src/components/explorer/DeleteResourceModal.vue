@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { k8sApi, type K8sResource, type ResourceKind } from '../../api/k8s'
 
 const props = defineProps<{
@@ -47,7 +48,7 @@ async function handleDeleteConfirmed() {
     @close="emit('close')"
   >
     <div class="delete-modal-content">
-      <div class="delete-warning-icon">⚠️</div>
+      <div class="delete-warning-icon"><BaseIcon name="alert-triangle" size="lg" /></div>
       <p class="delete-msg">
         Are you sure you want to permanently delete
         <strong class="text-white font-mono">{{ resource?.kind }}/{{ resource?.metadata?.name }}</strong>
@@ -70,7 +71,7 @@ async function handleDeleteConfirmed() {
         :disabled="deletingResource"
         @click="handleDeleteConfirmed"
       >
-        <span>{{ deletingResource ? '⏳ Deleting...' : '🗑️ Delete Permanently' }}</span>
+        <BaseIcon :name="deletingResource ? 'clock' : 'trash'" size="xs" /> <span>{{ deletingResource ? 'Deleting...' : 'Delete Permanently' }}</span>
       </button>
     </template>
   </ModalDrawer>
