@@ -27,12 +27,12 @@ const emit = defineEmits<{
 }>()
 
 const columns: Column<Record<string, unknown>>[] = [
-  { key: 'name', label: 'Workload & Namespace', width: '220px', sortable: true },
-  { key: 'strategy', label: 'Strategy', width: '130px', sortable: true },
-  { key: 'image', label: 'Container Image', width: '180px', sortable: true },
-  { key: 'replicas', label: 'Pods / Scale', width: '130px', sortable: true, align: 'center' },
-  { key: 'status', label: 'Status', width: '110px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '130px', align: 'right' },
+  { key: 'name', label: 'Workload & Namespace', width: '200px', sortable: true },
+  { key: 'strategy', label: 'Strategy', width: '110px', sortable: true },
+  { key: 'image', label: 'Container Image', width: '160px', sortable: true },
+  { key: 'replicas', label: 'Pods / Scale', width: '120px', sortable: true, align: 'center' },
+  { key: 'status', label: 'Status', width: '100px', sortable: true },
+  { key: 'actions', label: 'ACTIONS', width: '125px', align: 'right' },
 ]
 
 function asDeployment(row: unknown): DeploymentApp {

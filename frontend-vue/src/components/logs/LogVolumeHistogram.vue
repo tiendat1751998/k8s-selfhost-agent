@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { LogAggregationBucket } from '../../api/logging'
 import BaseIcon from '../ui/BaseIcon.vue'
@@ -85,6 +85,33 @@ function onBucketClick(bucket: ParsedBucket) {
     emit('filterRange', { start: bucket.start, end: bucket.end })
   }
 }
+
+const barWidth = computed(() => {
+  const count = parsedBuckets.value.length
+  if (count === 0) return 8
+  const calculatedWidth = (1000 / count) - 4
+  return Math.min(Math.max(calculatedWidth, 8), 24)
+})
+
+function getBarX(idx: number): number {
+  const count = parsedBuckets.value.length
+  if (count <= 1) {
+    const b = parsedBuckets.value[0]
+    if (b && props.selectedRange?.start && props.selectedRange?.end) {
+      const rangeStart = new Date(props.selectedRange.start).getTime()
+      const rangeEnd = new Date(props.selectedRange.end).getTime()
+      const bucketTime = new Date(b.start).getTime()
+      if (rangeEnd > rangeStart && bucketTime >= rangeStart && bucketTime <= rangeEnd) {
+        const ratio = (bucketTime - rangeStart) / (rangeEnd - rangeStart)
+        return Math.max(0, Math.min(1000 - barWidth.value, ratio * 1000 - barWidth.value / 2))
+      }
+    }
+    return (1000 - barWidth.value) / 2
+  }
+
+  const slotWidth = 1000 / count
+  return idx * slotWidth + (slotWidth - barWidth.value) / 2
+}
 </script>
 
 <template>
@@ -115,41 +142,45 @@ function onBucketClick(bucket: ParsedBucket) {
       <svg class="histogram-svg" viewBox="0 0 1000 52" preserveAspectRatio="none">
         <g v-for="(b, idx) in parsedBuckets" :key="b.key" class="bucket-group" @click="onBucketClick(b)" @mouseenter="hoveredBucket = b" @mouseleave="hoveredBucket = null">
           <!-- Bucket click background hit area -->
-          <rect :x="idx * (1000 / parsedBuckets.length)" y="0" :width="1000 / parsedBuckets.length" height="52" fill="transparent" class="bucket-hit-area" />
+          <rect :x="parsedBuckets.length <= 1 ? (getBarX(idx) - 8) : idx * (1000 / parsedBuckets.length)" y="0" :width="parsedBuckets.length <= 1 ? (barWidth + 16) : (1000 / parsedBuckets.length)" height="52" fill="transparent" class="bucket-hit-area" />
           <!-- Active highlight border -->
-          <rect v-if="activeBucketKey === b.key" :x="idx * (1000 / parsedBuckets.length)" y="0" :width="1000 / parsedBuckets.length" height="52" fill="rgba(56, 189, 248, 0.15)" stroke="#38bdf8" stroke-width="1" />
+          <rect v-if="activeBucketKey === b.key" :x="getBarX(idx) - 2" y="0" :width="barWidth + 4" height="52" rx="2" fill="rgba(56, 189, 248, 0.15)" stroke="#38bdf8" stroke-width="1" />
           <!-- Stacked segments (Debug -> Info -> Warn -> Error from bottom to top) -->
           <template v-if="b.total > 0">
             <!-- Debug (Slate) -->
             <rect
-              :x="idx * (1000 / parsedBuckets.length) + 1"
+              :x="getBarX(idx)"
               :y="52 - ((b.debug / maxVolume) * 50)"
-              :width="Math.max(1, (1000 / parsedBuckets.length) - 2)"
+              :width="barWidth"
               :height="(b.debug / maxVolume) * 50"
+              rx="2"
               fill="#64748b"
             />
-            <!-- Info (Cyan) -->
+            <!-- Info (Cyan - Refined #38bdf8 with 0.8 opacity) -->
             <rect
-              :x="idx * (1000 / parsedBuckets.length) + 1"
+              :x="getBarX(idx)"
               :y="52 - (((b.debug + b.info) / maxVolume) * 50)"
-              :width="Math.max(1, (1000 / parsedBuckets.length) - 2)"
+              :width="barWidth"
               :height="(b.info / maxVolume) * 50"
-              fill="#06b6d4"
+              rx="2"
+              fill="rgba(56, 189, 248, 0.8)"
             />
             <!-- Warn (Warm Amber) -->
             <rect
-              :x="idx * (1000 / parsedBuckets.length) + 1"
+              :x="getBarX(idx)"
               :y="52 - (((b.debug + b.info + b.warn) / maxVolume) * 50)"
-              :width="Math.max(1, (1000 / parsedBuckets.length) - 2)"
+              :width="barWidth"
               :height="(b.warn / maxVolume) * 50"
+              rx="2"
               fill="#f59e0b"
             />
             <!-- Error (Rose) -->
             <rect
-              :x="idx * (1000 / parsedBuckets.length) + 1"
+              :x="getBarX(idx)"
               :y="52 - (((b.debug + b.info + b.warn + b.error) / maxVolume) * 50)"
-              :width="Math.max(1, (1000 / parsedBuckets.length) - 2)"
+              :width="barWidth"
               :height="(b.error / maxVolume) * 50"
+              rx="2"
               fill="#ef4444"
             />
           </template>
@@ -187,11 +218,11 @@ function onBucketClick(bucket: ParsedBucket) {
 .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
 .bg-rose { background-color: #ef4444; }
 .bg-amber { background-color: #f59e0b; }
-.bg-cyan { background-color: #06b6d4; }
+.bg-cyan { background-color: rgba(56, 189, 248, 0.8); }
 .bg-slate { background-color: #64748b; }
 .text-rose { color: #f87171; }
 .text-amber { color: #f59e0b; }
-.text-cyan { color: #06b6d4; }
+.text-cyan { color: #38bdf8; }
 .text-slate { color: #94a3b8; }
 .histogram-meta { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #64748b; }
 .peak-label { font-size: 9px; }

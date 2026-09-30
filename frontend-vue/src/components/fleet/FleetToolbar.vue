@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
 
 const searchFilter = defineModel<string>('searchFilter', { default: '' })
@@ -6,13 +6,18 @@ const providerFilter = defineModel<string>('providerFilter', { default: 'all' })
 const statusFilter = defineModel<'all' | 'healthy' | 'degraded' | 'offline'>('statusFilter', { default: 'all' })
 const viewMode = defineModel<'table' | 'grid'>('viewMode', { default: 'table' })
 
-defineProps<{
+interface Props {
   totalClusters: number
   healthyClusters: number
   totalNodes: number
-  totalCores: number
+  totalCores?: number | string
   isSyncing?: boolean
-}>()
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  totalCores: 0,
+  isSyncing: false,
+})
 
 const emit = defineEmits<{
   (e: 'sync'): void
