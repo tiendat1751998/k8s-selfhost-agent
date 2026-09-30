@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import '../assets/styles/views/settings.css'
 import '../assets/styles/components/settings-tabs.css'
-import MetricCard from '../components/ui/MetricCard.vue'
 import SettingsGeneralTab from '../components/settings/SettingsGeneralTab.vue'
 import SettingsSecurityTab from '../components/settings/SettingsSecurityTab.vue'
 import SettingsTenancyTab from '../components/settings/SettingsTenancyTab.vue'
@@ -41,12 +40,12 @@ const {
 } = useSettings()
 
 const tabsList: { id: TabKey; label: string; icon: string; category?: CategoryKey; count?: number }[] = [
-  { id: 'general', label: 'General', icon: '⚙️', category: 'platform' },
-  { id: 'security', label: 'Security', icon: '🛡️', category: 'security' },
-  { id: 'tenancy', label: 'Tenancy', icon: '🏢', category: 'tenancy' },
-  { id: 'notifications', label: 'Notifications', icon: '🔔', category: 'notifications' },
-  { id: 'apikeys', label: 'API Keys', icon: '🔑', category: 'apikeys', count: 3 },
-  { id: 'about', label: 'About', icon: 'ℹ️' },
+  { id: 'general', label: 'General', icon: 'sliders', category: 'platform' },
+  { id: 'security', label: 'Security', icon: 'shield', category: 'security' },
+  { id: 'tenancy', label: 'Tenancy', icon: 'server', category: 'tenancy' },
+  { id: 'notifications', label: 'Notifications', icon: 'bell', category: 'notifications' },
+  { id: 'apikeys', label: 'API Keys', icon: 'key', category: 'apikeys', count: 3 },
+  { id: 'about', label: 'About', icon: 'help-circle' },
 ]
 
 const activeTabLabel = computed(() => {
@@ -54,7 +53,7 @@ const activeTabLabel = computed(() => {
   return found ? found.label : 'General'
 })
 
-function handleMobileSave() {
+function handleSaveSettings() {
   if (activeTab.value === 'general') {
     saveCategory('platform')
   } else if (activeTab.value === 'security') {
@@ -68,7 +67,7 @@ function handleMobileSave() {
   }
 }
 
-function handleMobileReset() {
+function handleResetSettings() {
   if (activeTab.value === 'general') {
     resetCategoryToDefaults('platform')
   } else if (activeTab.value === 'security') {
@@ -84,31 +83,54 @@ function handleMobileReset() {
 </script>
 
 <template>
-  <div class="view-container animate-fade-in">
-    <!-- View Header (Desktop/Tablet >=768px) -->
-    <div class="view-header desktop-header desktop-only">
-      <div>
-        <div class="view-tag">
-          <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>GLOBAL PLATFORM CONFIGURATION</span>
-        </div>
-        <h1 class="view-title">Settings & System Preferences</h1>
-        <p class="view-desc">
-          Manage tenant-level policies, authentication parameters, outbound alert routing, and security policies.
-        </p>
-      </div>
+  <div class="view-container settings-view-container animate-fade-in">
+    <!-- Elevated Desktop Settings Tabs Header & Compact 38px Toolbar (>=768px, ~65px from Top HUD) -->
+    <header class="settings-tabs-header tabs-bar desktop-only" role="region" aria-label="Settings Toolbar">
+      <nav class="settings-tabs-nav" aria-label="Settings categories">
+        <button
+          v-for="tab in tabsList"
+          :key="tab.id"
+          type="button"
+          class="settings-tab-btn tab-btn"
+          :class="{ 'active': activeTab === tab.id, 'tab-btn-active': activeTab === tab.id }"
+          @click="activeTab = tab.id"
+        >
+          <BaseIcon :name="tab.icon" size="xs" />
+          <span>{{ tab.label }}</span>
+          <span v-if="tab.category && isDirtyCategory(tab.category)" class="dirty-dot" title="Unsaved changes"></span>
+          <span v-if="tab.count !== undefined" class="tab-badge">{{ tab.count }}</span>
+        </button>
+      </nav>
 
-      <div class="header-actions">
-        <button class="btn btn-secondary" :disabled="loading" @click="loadSettings">
-          <span>{{ loading ? '⏳ Syncing...' : '🔄 Refresh Settings' }}</span>
+      <div class="settings-toolbar-actions">
+        <button
+          type="button"
+          class="btn-settings-sync"
+          :disabled="loading || saving"
+          @click="loadSettings"
+          title="Reload configuration from cluster"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
+          <span>{{ loading ? 'Syncing...' : 'Sync / Refresh' }}</span>
+        </button>
+        <button
+          type="button"
+          class="btn-settings-save"
+          :disabled="saving || loading"
+          @click="handleSaveSettings"
+          title="Save active configuration"
+        >
+          <span v-if="saving" class="spinner spinner-sm" aria-hidden="true"></span>
+          <BaseIcon v-else name="save" size="xs" />
+          <span>{{ saving ? 'Saving...' : 'Save Settings' }}</span>
         </button>
       </div>
-    </div>
+    </header>
 
     <!-- Mobile 40-44px Command Bar (<768px) with 32x32px Action Buttons -->
     <div class="settings-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold">⚙️ Settings</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="sliders" size="sm" /> Settings</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -117,10 +139,10 @@ function handleMobileReset() {
           title="Save Active Tab Settings"
           aria-label="Save Settings"
           :disabled="saving"
-          @click="handleMobileSave"
+          @click="handleSaveSettings"
         >
-          <span v-if="!saving">💾</span>
-          <span v-else class="spinner spinner-sm"></span>
+          <span v-if="saving" class="spinner spinner-sm"></span>
+          <BaseIcon v-else name="save" size="xs" />
         </button>
         <button
           type="button"
@@ -128,22 +150,22 @@ function handleMobileReset() {
           title="Reset Active Tab to Defaults"
           aria-label="Reset Defaults"
           :disabled="loading || saving"
-          @click="handleMobileReset"
+          @click="handleResetSettings"
         >
-          <span>🔄</span>
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
         </button>
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px): ⚙️ Active Tab · 🛡️ 2FA · 🔑 API Keys · 🏢 Org -->
+    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px): Active Tab · 2FA · API Keys · Org -->
     <div class="settings-micro-telemetry mobile-only font-mono" role="status" aria-label="Settings Micro Telemetry">
-      <span class="tel-item tel-name">⚙️ {{ activeTabLabel }}</span>
+      <span class="tel-item tel-name"><BaseIcon name="sliders" size="xs" /> {{ activeTabLabel }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-sec">🛡️ {{ totpStatus?.enabled ? '2FA' : 'No 2FA' }}</span>
+      <span class="tel-item tel-sec"><BaseIcon name="shield" size="xs" /> {{ totpStatus?.enabled ? '2FA' : 'No 2FA' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-alert">🔑 3 Keys</span>
+      <span class="tel-item tel-alert"><BaseIcon name="key" size="xs" /> 3 Keys</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-tenancy">🏢 {{ form.name ? 'Active' : 'Default' }}</span>
+      <span class="tel-item tel-tenancy"><BaseIcon name="server" size="xs" /> {{ form.name ? 'Active' : 'Default' }}</span>
     </div>
 
     <!-- Mobile Tabs Navigation (Pills with snap, <768px) -->
@@ -159,60 +181,9 @@ function handleMobileReset() {
       class="status-banner animate-fade-in"
       :class="'banner-' + statusMessage.type"
     >
-      <span class="banner-icon">{{ statusMessage.type === 'success' ? '✅' : '⚠️' }}</span>
+      <BaseIcon :name="statusMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" class="banner-icon" />
       <span class="banner-text">{{ statusMessage.text }}</span>
-      <button class="banner-close" aria-label="Close Banner" @click="statusMessage = null">✕</button>
-    </div>
-
-    <!-- Key Metrics Summary HUD (Desktop/Tablet >=768px) -->
-    <div class="metrics-grid desktop-metrics desktop-only">
-      <MetricCard
-        title="Platform Console"
-        :value="form.name || 'Self-Host K8s'"
-        badge="ONLINE"
-        badge-color="cyan"
-        :subtitle="`Zone: ${form.timezone} | Lang: ${form.language.toUpperCase()}`"
-        icon="🌐"
-      />
-      <MetricCard
-        title="Security Policy"
-        :value="form.require_2fa ? '2FA Enforced' : 'Standard 2FA'"
-        :badge="form.require_2fa ? 'STRICT' : 'FLEXIBLE'"
-        badge-color="emerald"
-        :subtitle="`Timeout: ${form.session_timeout_minutes}m | Min Pass: ${form.password_min_length}`"
-        icon="🛡️"
-      />
-      <MetricCard
-        title="Alert Transports"
-        :value="form.smtp_enabled ? 'SMTP Enabled' : 'Webhook Only'"
-        :badge="form.smtp_enabled || form.webhook_url ? 'ACTIVE' : 'IDLE'"
-        :badge-color="form.smtp_enabled || form.webhook_url ? 'emerald' : 'muted'"
-        :subtitle="form.webhook_url ? 'Webhook URL Configured' : 'No Webhook Set'"
-        icon="🔔"
-      />
-      <MetricCard
-        title="Multi-Tenancy"
-        value="Isolation Active"
-        badge="SECURE"
-        badge-color="emerald"
-        subtitle="Network Policies & RBAC Enforced"
-        icon="🏢"
-      />
-    </div>
-
-    <!-- Desktop Tabs Navigation Bar (>=768px) -->
-    <div class="tabs-bar glass-panel desktop-only">
-      <button
-        v-for="tab in tabsList"
-        :key="tab.id"
-        class="tab-btn"
-        :class="{ 'tab-btn-active': activeTab === tab.id }"
-        @click="activeTab = tab.id"
-      >
-        <span>{{ tab.icon }} {{ tab.label }}</span>
-        <span v-if="tab.category && isDirtyCategory(tab.category)" class="dirty-dot"></span>
-        <span v-if="tab.count !== undefined" class="tab-badge">{{ tab.count }}</span>
-      </button>
+      <button class="banner-close" aria-label="Close Banner" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
     <!-- Loading State -->
@@ -223,7 +194,8 @@ function handleMobileReset() {
 
     <!-- TAB CONTENTS -->
     <div v-else class="tab-content">
-      <SettingsGeneralTab
+      <div class="settings-content-wrapper">
+        <SettingsGeneralTab
         v-if="activeTab === 'general'"
         :form="form"
         :timezone-options="timezoneOptions"
@@ -269,6 +241,7 @@ function handleMobileReset() {
       <AboutSettingsTab
         v-if="activeTab === 'about'"
       />
+      </div>
     </div>
 
     <!-- Disable 2FA Modal -->

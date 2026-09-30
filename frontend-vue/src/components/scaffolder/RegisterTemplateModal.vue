@@ -81,7 +81,7 @@ const emit = defineEmits<{
         <div class="builder-header">
           <h4>Variables (User Fillable)</h4>
           <button class="btn-secondary btn-sm" @click="emit('add-variable')">
-            ➕ Add Variable
+            <BaseIcon name="plus" size="xs" /> Add Variable
           </button>
         </div>
 
@@ -126,9 +126,7 @@ const emit = defineEmits<{
             class="btn-icon-action btn-icon-danger"
             title="Remove Variable"
             @click="emit('remove-variable', idx)"
-          >
-            🗑️
-          </button>
+          ><BaseIcon name="trash" size="xs" /></button>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { clusterApi, type EssentialItem } from '../../api/cluster'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = withDefaults(defineProps<{ clusterId: string; clusterName?: string; compact?: boolean }>(), { compact: false })
 const emit = defineEmits<{ (e: 'bootstrap', itemId?: string): void }>()
@@ -43,9 +44,9 @@ onMounted(() => { loadEssentials() })
 
 function getBadge(status: string) {
   const s = (status || '').toLowerCase()
-  if (['installed', 'running', 'ready', 'active', 'ok'].includes(s)) return { label: '🟢 Installed / Running', class: 'badge-emerald', ready: true }
-  if (['pending', 'in_progress', 'configuring'].includes(s)) return { label: '🟡 Pending', class: 'badge-amber', ready: false }
-  return { label: '🔴 Not Found', class: 'badge-rose', ready: false }
+  if (['installed', 'running', 'ready', 'active', 'ok'].includes(s)) return { label: 'Installed / Running', class: 'badge-emerald', ready: true }
+  if (['pending', 'in_progress', 'configuring'].includes(s)) return { label: 'Pending', class: 'badge-amber', ready: false }
+  return { label: 'Not Found', class: 'badge-rose', ready: false }
 }
 
 const readyCount = computed(() => essentials.value.filter(i => getBadge(i.status).ready).length)
@@ -57,18 +58,18 @@ defineExpose({ refresh: loadEssentials })
     <div class="matrix-header">
       <div>
         <div class="matrix-title-row">
-          <span class="matrix-icon">⚡</span>
+          <BaseIcon name="zap" size="sm" class="matrix-icon" />
           <h4 class="matrix-title">Cluster Essentials Readiness Matrix</h4>
-          <span class="matrix-counter font-mono">⚡ {{ readyCount }} / {{ essentials.length }} READY</span>
+          <span class="matrix-counter font-mono">{{ readyCount }} / {{ essentials.length }} READY</span>
         </div>
         <p class="matrix-subtitle">Core Kubernetes cluster primitives required for telemetry, storage, and workloads.</p>
       </div>
       <button class="btn btn-secondary btn-xs" :disabled="loading" @click="loadEssentials">
-        <span>{{ loading ? '⏳ Probing...' : '🔄 Re-check' }}</span>
+        <BaseIcon v-if="!loading" name="refresh" size="xs" /> <span>{{ loading ? 'Probing...' : 'Re-check' }}</span>
       </button>
     </div>
 
-    <div v-if="error" class="matrix-error font-mono">⚠️ {{ error }}</div>
+    <div v-if="error" class="matrix-error font-mono"><BaseIcon name="alert-triangle" size="xs" /> {{ error }}</div>
 
     <div class="matrix-list">
       <div v-for="item in essentials" :key="item.id" class="matrix-row" :class="{ 'is-ready': getBadge(item.status).ready }">
@@ -81,9 +82,9 @@ defineExpose({ refresh: loadEssentials })
         </div>
         <div class="matrix-action">
           <button v-if="!getBadge(item.status).ready" class="btn btn-primary btn-xs" @click="emit('bootstrap', item.id)">
-            <span>⚡ Install</span>
+            <BaseIcon name="download" size="xs" /> <span>Install</span>
           </button>
-          <span v-else class="ready-text font-mono text-emerald">✓ Active</span>
+          <span v-else class="ready-text font-mono text-emerald"><BaseIcon name="check" size="xs" /> Active</span>
         </div>
       </div>
     </div>

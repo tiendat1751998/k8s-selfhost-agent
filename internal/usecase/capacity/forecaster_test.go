@@ -144,5 +144,179 @@ func TestForecaster_Record(t *testing.T) {
 	}
 }
 
+
+func TestForecaster_ListNodeHeadroom_EmptyFallback(t *testing.T) {
+	mp := &mockMetricsProvider{}
+	forecaster := NewForecaster(mp)
+
+	headrooms, err := forecaster.ListNodeHeadroom(context.Background(), "fleet-primary")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(headrooms) != 0 {
+		t.Fatalf("expected empty slice when no snapshot nodes, got %d", len(headrooms))
+	}
+}
+
+func TestForecaster_ListNodeHeadroom_FactualMetrics(t *testing.T) {
+	mp := &mockMetricsProvider{
+		snapshot: &usecaseMetrics.SystemOverview{
+			Nodes: []usecaseMetrics.NodeMetrics{
+				{
+					NodeID:         "node-wrk-02",
+					NodeName:       "k8sworker-down",
+					Role:           "worker",
+					Status:         "down",
+					CPUPercent:     0.0,
+					MemoryTotal:    0,
+					MemoryUsed:     0,
+					MemoryPercent:  0.0,
+					ContainerCount: 0,
+					RunningCount:   0,
+				},
+				{
+					NodeID:         "node-wrk-01",
+					NodeName:       "k8sworker-01",
+					Role:           "worker",
+					Status:         "ready",
+					CPUPercent:     72.0,
+					MemoryTotal:    32 * 1024 * 1024 * 1024,
+					MemoryUsed:     24 * 1024 * 1024 * 1024,
+					MemoryPercent:  75.0,
+					ContainerCount: 35,
+					RunningCount:   35,
+				},
+				{
+					NodeID:         "node-master-01",
+					NodeName:       "k8smaster",
+					Role:           "manager",
+					Status:         "ready",
+					CPUPercent:     25.0,
+					MemoryTotal:    16 * 1024 * 1024 * 1024,
+					MemoryUsed:     4 * 1024 * 1024 * 1024,
+					MemoryPercent:  25.0,
+					ContainerCount: 15,
+					RunningCount:   15,
+				},
+			},
+		},
+		agentMetrics: map[string]*usecaseMetrics.AgentMetrics{
+			"node-wrk-01": {
+				Hostname: "k8sworker-01",
+				CPUCount: 8,
+			},
+			"node-master-01": {
+				Hostname: "k8smaster",
+				CPUCount: 4,
+			},
+		},
+	}
+
+	forecaster := NewForecaster(mp)
+	items, err := forecaster.ListNodeHeadroom(context.Background(), "fleet-primary")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(items) != 3 {
+		t.Fatalf("expected 3 nodes, got %d", len(items))
+	}
+
+	// Ready nodes first, alphabetical: k8smaster, k8sworker-01, then down: k8sworker-down
+	if items[0].Name != "k8smaster" {
+		t.Errorf("expected 1st node to be k8smaster, got %s", items[0].Name)
+	}
+	if items[1].Name != "k8sworker-01" {
+		t.Errorf("expected 2nd node to be k8sworker-01, got %s", items[1].Name)
+	}
+	if items[2].Name != "k8sworker-down" {
+		t.Errorf("expected 3rd node to be k8sworker-down, got %s", items[2].Name)
+	}
+
+	// 1. Control plane node checks
+	cp := items[0]
+	if cp.Role != "control-plane" {
+		t.Errorf("expected k8smaster role control-plane, got %s", cp.Role)
+	}
+	if cp.CPUTotalCores != 4.0 {
+		t.Errorf("expected k8smaster CPUTotalCores 4.0, got %v", cp.CPUTotalCores)
+	}
+	if cp.CPUAllocatedCores != 1.0 {
+		t.Errorf("expected k8smaster CPUAllocatedCores 1.0, got %v", cp.CPUAllocatedCores)
+	}
+	if cp.CPUUsagePercent != 25.0 {
+		t.Errorf("expected k8smaster CPUUsagePercent 25.0, got %v", cp.CPUUsagePercent)
+	}
+	if cp.MemTotalGiB != 16.0 {
+		t.Errorf("expected k8smaster MemTotalGiB 16.0, got %v", cp.MemTotalGiB)
+	}
+	if cp.MemAllocatedGiB != 4.0 {
+		t.Errorf("expected k8smaster MemAllocatedGiB 4.0, got %v", cp.MemAllocatedGiB)
+	}
+	if cp.MemUsagePercent != 25.0 {
+		t.Errorf("expected k8smaster MemUsagePercent 25.0, got %v", cp.MemUsagePercent)
+	}
+	if cp.PodCount != 15 {
+		t.Errorf("expected k8smaster PodCount 15, got %d", cp.PodCount)
+	}
+	if cp.PodCapacity != 60 {
+		t.Errorf("expected k8smaster PodCapacity 60, got %d", cp.PodCapacity)
+	}
+	if cp.BinPackingScore != 25.0 {
+		t.Errorf("expected k8smaster BinPackingScore 25.0, got %v", cp.BinPackingScore)
+	}
+	if cp.HeadroomPercent != 75.0 {
+		t.Errorf("expected k8smaster HeadroomPercent 75.0, got %v", cp.HeadroomPercent)
+	}
+	if cp.Status != "healthy" {
+		t.Errorf("expected k8smaster Status healthy, got %s", cp.Status)
+	}
+
+	// 2. Worker node checks
+	wrk := items[1]
+	if wrk.Role != "worker" {
+		t.Errorf("expected k8sworker-01 role worker, got %s", wrk.Role)
+	}
+	if wrk.CPUTotalCores != 8.0 {
+		t.Errorf("expected k8sworker-01 CPUTotalCores 8.0, got %v", wrk.CPUTotalCores)
+	}
+	if wrk.CPUAllocatedCores != 5.8 {
+		t.Errorf("expected k8sworker-01 CPUAllocatedCores 5.8, got %v", wrk.CPUAllocatedCores)
+	}
+	if wrk.MemTotalGiB != 32.0 {
+		t.Errorf("expected k8sworker-01 MemTotalGiB 32.0, got %v", wrk.MemTotalGiB)
+	}
+	if wrk.MemAllocatedGiB != 24.0 {
+		t.Errorf("expected k8sworker-01 MemAllocatedGiB 24.0, got %v", wrk.MemAllocatedGiB)
+	}
+	if wrk.PodCount != 35 {
+		t.Errorf("expected k8sworker-01 PodCount 35, got %d", wrk.PodCount)
+	}
+	if wrk.PodCapacity != 70 {
+		t.Errorf("expected k8sworker-01 PodCapacity 70, got %d", wrk.PodCapacity)
+	}
+	if wrk.BinPackingScore != 73.5 {
+		t.Errorf("expected k8sworker-01 BinPackingScore 73.5, got %v", wrk.BinPackingScore)
+	}
+	if wrk.HeadroomPercent != 25.0 {
+		t.Errorf("expected k8sworker-01 HeadroomPercent 25.0, got %v", wrk.HeadroomPercent)
+	}
+	if wrk.Status != "warning" {
+		t.Errorf("expected k8sworker-01 Status warning, got %s", wrk.Status)
+	}
+
+	// 3. Down node checks
+	down := items[2]
+	if down.CPUTotalCores != 4.0 {
+		t.Errorf("expected k8sworker-down default CPUTotalCores 4.0, got %v", down.CPUTotalCores)
+	}
+	if down.MemTotalGiB != 8.0 {
+		t.Errorf("expected k8sworker-down default MemTotalGiB 8.0, got %v", down.MemTotalGiB)
+	}
+	if down.Status != "critical" {
+		t.Errorf("expected k8sworker-down Status critical, got %s", down.Status)
+	}
+}
+
 var _ domainCapacity.Repository = (*Forecaster)(nil)
 var _ = domainDocker.ComputeHost{}

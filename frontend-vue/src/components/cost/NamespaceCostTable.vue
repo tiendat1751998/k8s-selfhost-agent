@@ -128,14 +128,14 @@ function handleSaveBudget() {
             title="Right-size and optimize resource quotas"
             @click="openBudgetModal(row)"
           >
-            <span>🔍 Optimize</span>
+            <BaseIcon name="sliders" size="xs" /> <span>Optimize</span>
           </button>
           <button
             class="btn-compact-32 btn-action-breakdown"
             title="Inspect detailed cost breakdown"
             @click="openBreakdown(row)"
           >
-            <span>📊 Breakdown</span>
+            <BaseIcon name="pie-chart" size="xs" /> <span>Breakdown</span>
           </button>
         </div>
       </template>
@@ -190,7 +190,7 @@ function handleSaveBudget() {
         </div>
 
         <div class="recommendations-box glass-panel">
-          <h4 class="rec-title">⚡ FinOps Right-Sizing Insights</h4>
+          <h4 class="rec-title"><BaseIcon name="zap" size="xs" /> FinOps Right-Sizing Insights</h4>
           <p class="rec-desc">
             Historical CPU utilization sits at <strong>{{ breakdownTarget.utilization }}%</strong>.
             Downscaling requests by 20% recovers approx.
@@ -234,7 +234,7 @@ function handleSaveBudget() {
       <template #footer>
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="budgetTarget = null">Cancel</button>
-          <button class="btn btn-primary" :disabled="newBudgetLimit <= 0" @click="handleSaveBudget">Save Budget Cap 💾</button>
+          <button class="btn btn-primary" :disabled="newBudgetLimit <= 0" @click="handleSaveBudget">Save Budget Cap</button>
         </div>
       </template>
     </ModalDrawer>

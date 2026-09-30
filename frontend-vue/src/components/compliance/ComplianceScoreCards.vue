@@ -8,7 +8,7 @@
       badge="HUD AGGREGATE"
       badge-color="emerald"
       subtitle="Across all regulatory standards"
-      icon="📊"
+      icon="pie-chart"
     />
     <MetricCard
       title="Passing Controls"
@@ -18,7 +18,7 @@
       badge="COMPLIANT"
       badge-color="cyan"
       subtitle="Automated checks validated"
-      icon="✅"
+      icon="check-circle"
     />
     <MetricCard
       title="Critical Failures"
@@ -28,7 +28,7 @@
       :badge="criticalFailures === 0 ? 'CLEAN' : `${criticalFailures} CRITICAL`"
       :badge-color="criticalFailures === 0 ? 'emerald' : 'rose'"
       subtitle="Policy rules failing audit gate"
-      icon="🚨"
+      icon="alert-triangle"
     />
     <MetricCard
       title="Automated Audit Status"
@@ -36,9 +36,9 @@
       :trend="lastScanTime ? `Last: ${lastScanTime}` : 'Continuous validation'"
       trend-type="neutral"
       :badge="auditStatus === 'running' ? 'ACTIVE' : 'READY'"
-      badge-color="violet"
+      badge-color="cyan"
       subtitle="Regulatory posture engine"
-      icon="⚡"
+      icon="zap"
     />
   </div>
 </template>

@@ -1,26 +1,35 @@
 {
-  "name": "K8sControl Enterprise Console",
-  "short_name": "K8sControl",
+  "name": "K8S Control Platform",
+  "short_name": "K8SControl",
   "description": "Autonomous Kubernetes Infrastructure, Mesh & Agent Management Platform",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#07090e",
-  "theme_color": "#07090e",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
   "orientation": "any",
-  "categories": ["productivity", "utilities", "developer"],
+  "categories": [
+    "productivity",
+    "utilities",
+    "developer"
+  ],
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icons.svg",
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
       "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
+      "type": "image/svg+xml"
     }
   ],
   "shortcuts": [

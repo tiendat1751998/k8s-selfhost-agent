@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { TimelineEvent } from '../../composables/useChangesTimeline'
 
 const props = defineProps<{
@@ -63,7 +64,7 @@ function handleCopy() {
           <p class="dd-subtitle font-mono">{{ event?.resource }} &bull; {{ event?.namespace }}</p>
         </div>
 
-        <button class="dd-close-btn" @click="close">✕</button>
+        <button class="dd-close-btn" @click="close"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <!-- Drawer Toolbar -->
@@ -87,7 +88,7 @@ function handleCopy() {
 
         <div class="toolbar-actions">
           <button class="btn btn-secondary btn-sm" @click="handleCopy">
-            <span>{{ copied ? '✅ Copied' : '📋 Copy Diff' }}</span>
+            <BaseIcon :name="copied ? 'check-circle' : 'copy'" size="xs" /> <span>{{ copied ? 'Copied' : 'Copy Diff' }}</span>
           </button>
           <button
             v-if="event?.canRollback"

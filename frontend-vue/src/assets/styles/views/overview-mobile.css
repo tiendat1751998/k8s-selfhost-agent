@@ -238,8 +238,8 @@
 }
 
 .dot-red {
-  background: #f43f5e;
-  box-shadow: 0 0 6px #f43f5e;
+  background: #ef4444;
+  box-shadow: none;
 }
 
 .node-chip-name {

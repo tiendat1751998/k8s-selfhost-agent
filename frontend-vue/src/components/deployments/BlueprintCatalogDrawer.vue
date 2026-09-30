@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import type { DeploymentTemplate } from '../../api/compute'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   show: boolean
@@ -36,7 +37,7 @@ const emit = defineEmits<{
             <span class="tmpl-category font-mono">{{ tmpl.category }} · {{ tmpl.version }} · {{ tmpl.strategy || 'RollingUpdate' }}</span>
           </div>
           <button type="button" class="btn btn-primary btn-xs" @click="emit('select', tmpl)">
-            <span>Use Blueprint ➔</span>
+            <span>Use Blueprint</span> <BaseIcon name="chevron-right" size="xs" />
           </button>
         </div>
         <p class="tmpl-desc">{{ tmpl.desc }}</p>

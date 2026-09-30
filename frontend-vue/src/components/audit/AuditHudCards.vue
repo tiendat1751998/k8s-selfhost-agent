@@ -22,7 +22,7 @@ defineProps<{
       badge="TRAIL LOGS"
       badge-color="cyan"
       subtitle="Audit events in current window"
-      icon="📋"
+      icon="file-text"
     />
     <MetricCard
       title="Security Mutations"
@@ -30,15 +30,15 @@ defineProps<{
       badge="MUTATIONS"
       badge-color="amber"
       subtitle="Cluster & workload state changes"
-      icon="⚡"
+      icon="zap"
     />
     <MetricCard
       title="Administrative Actions"
       :value="loading ? '...' : metrics.administrativeActions"
       badge="ELEVATED"
-      badge-color="violet"
+      badge-color="cyan"
       subtitle="RBAC grants & privilege bindings"
-      icon="🛡️"
+      icon="shield"
     />
     <MetricCard
       title="Policy Denials"
@@ -48,7 +48,7 @@ defineProps<{
       :badge="metrics.policyDenials === 0 ? 'SECURE' : 'ACTION REQ'"
       :badge-color="metrics.policyDenials === 0 ? 'emerald' : 'rose'"
       subtitle="Policy enforcement blocked actions"
-      icon="🚫"
+      icon="alert-triangle"
     />
   </div>
 </template>
