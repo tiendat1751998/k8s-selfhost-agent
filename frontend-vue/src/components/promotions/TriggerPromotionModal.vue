@@ -52,7 +52,7 @@ const emit = defineEmits<{
         </div>
 
         <div v-if="loadingServices" class="input-loading-hint font-mono">
-          <span>⏳ Fetching running services & host placement topology...</span>
+          <BaseIcon name="clock" size="xs" /> <span>Fetching running services & host placement topology...</span>
         </div>
 
         <div v-else ref="comboboxRef" class="combobox-wrapper">
@@ -61,7 +61,7 @@ const emit = defineEmits<{
               :value="serviceSearchQuery"
               type="text"
               class="input-glass combobox-input font-mono"
-              placeholder="🔍 Type to search service name, image, or host server..."
+              placeholder="Type to search service name, image, or host server..."
               autocomplete="off"
               @focus="emit('search-focus')"
               @input="(e: Event) => {
@@ -77,7 +77,7 @@ const emit = defineEmits<{
               title="Clear selection"
               @click.stop="emit('clear-service-search')"
             >
-              ✕
+              <BaseIcon name="x" size="xs" />
             </button>
             <button
               type="button"
@@ -85,13 +85,13 @@ const emit = defineEmits<{
               title="Toggle service list"
               @click.stop="emit('update:isServiceDropdownOpen', !isServiceDropdownOpen)"
             >
-              <span class="dropdown-chevron" :class="{ 'chevron-open': isServiceDropdownOpen }">▾</span>
+              <BaseIcon name="chevron-down" size="xs" class="dropdown-chevron" :class="{ 'chevron-open': isServiceDropdownOpen }" />
             </button>
           </div>
 
           <div v-if="isServiceDropdownOpen" class="combobox-dropdown glass-panel">
             <div v-if="filteredServices.length === 0" class="combobox-empty font-mono">
-              <span>⚠️ No workloads matching "{{ serviceSearchQuery }}" found</span>
+              <BaseIcon name="alert-triangle" size="xs" /> <span>No workloads matching "{{ serviceSearchQuery }}" found</span>
             </div>
 
             <div
@@ -122,17 +122,17 @@ const emit = defineEmits<{
 
               <div class="option-line-2 font-mono">
                 <span class="option-meta-part">
-                  <span class="meta-label">🖥️ Server:</span>
+                  <span class="meta-label"><BaseIcon name="server" size="xs" /> Server:</span>
                   <span class="meta-val text-host">{{ svc.host }}</span>
                 </span>
                 <span class="meta-bar">|</span>
                 <span class="option-meta-part">
-                  <span class="meta-label">📦 Image:</span>
+                  <span class="meta-label"><BaseIcon name="package" size="xs" /> Image:</span>
                   <span class="meta-val text-cyan">{{ svc.image }}</span>
                 </span>
                 <span class="meta-bar">|</span>
                 <span class="option-meta-part">
-                  <span class="meta-label">🔌 Ports:</span>
+                  <span class="meta-label"><BaseIcon name="plug" size="xs" /> Ports:</span>
                   <span class="meta-val text-amber">{{ svc.ports && svc.ports.length > 0 ? svc.ports.join(', ') : 'None' }}</span>
                 </span>
               </div>
@@ -144,7 +144,7 @@ const emit = defineEmits<{
       <div v-if="selectedService" class="placement-preview-card glass-panel">
         <div class="placement-header">
           <div class="placement-title font-mono">
-            <span class="placement-icon">🌐</span>
+            <BaseIcon name="globe" size="sm" class="placement-icon" />
             <span>WORKLOAD TOPOLOGY & PLACEMENT</span>
           </div>
           <span class="active-badge font-mono" :class="selectedService.type === 'swarm' ? 'badge-swarm' : (selectedService.type === 'k8s' ? 'badge-k8s' : 'badge-docker')">
@@ -154,17 +154,17 @@ const emit = defineEmits<{
 
         <div class="placement-details-grid font-mono">
           <div class="placement-grid-row">
-            <span class="placement-row-key">🖥️ Host Server:</span>
+            <span class="placement-row-key"><BaseIcon name="server" size="xs" /> Host Server:</span>
             <span class="placement-row-val text-host font-bold">{{ selectedService.host }}</span>
           </div>
 
           <div class="placement-grid-row">
-            <span class="placement-row-key">📦 Active Running Image:</span>
+            <span class="placement-row-key"><BaseIcon name="package" size="xs" /> Active Running Image:</span>
             <span class="placement-row-val text-cyan font-bold">{{ selectedService.image }}</span>
           </div>
 
           <div class="placement-grid-row">
-            <span class="placement-row-key">⚙️ Replicas & Ports:</span>
+            <span class="placement-row-key"><BaseIcon name="sliders" size="xs" /> Replicas & Ports:</span>
             <span class="placement-row-val">
               <span class="text-emerald font-bold">{{ selectedService.replicas ?? 1 }} Replica(s)</span>
               <span class="placement-sep">•</span>
@@ -219,7 +219,7 @@ const emit = defineEmits<{
         :disabled="actionLoading === 'create' || !newPromotion.service || !newPromotion.version"
         @click="emit('submit')"
       >
-        <span>{{ actionLoading === 'create' ? 'Submitting...' : 'Submit Promotion Request ➔' }}</span>
+        <span>{{ actionLoading === 'create' ? 'Submitting...' : 'Submit Promotion Request' }}</span> <BaseIcon v-if="actionLoading !== 'create'" name="chevron-right" size="xs" />
       </button>
     </template>
   </ModalDrawer>

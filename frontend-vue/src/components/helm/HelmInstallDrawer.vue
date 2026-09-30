@@ -85,10 +85,10 @@ const emit = defineEmits<{
             <label class="form-label">Target Namespace <span class="text-rose">*</span></label>
             <select v-model="installForm.namespace" class="input-glass">
               <option v-for="ns in namespaces" :key="ns.name" :value="ns.name">
-                🏷️ {{ ns.name }}
+                {{ ns.name }}
               </option>
               <option v-if="!namespaces.some(n => n.name === 'default')" value="default">
-                🏷️ default
+                default
               </option>
             </select>
           </div>
@@ -191,7 +191,7 @@ const emit = defineEmits<{
             :disabled="installing"
             @click="emit('install')"
           >
-            <span :class="{ 'spin-anim': installing }">🚀</span>
+            <BaseIcon name="play" size="xs" :class="{ 'spin-anim': installing }" />
             <span>{{ installing ? 'Deploying Chart...' : 'Confirm & Deploy Release' }}</span>
           </button>
         </div>

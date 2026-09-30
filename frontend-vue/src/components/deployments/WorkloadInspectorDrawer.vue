@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import type { DeploymentApp } from '../../api/compute'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import WorkloadLogsTab from './WorkloadLogsTab.vue'
 import { formatContainerName, formatImageName } from '../../utils/dockerFormat'
 
@@ -165,7 +166,7 @@ function copyToClipboard(text: string) {
           :class="{ 'insp-tab-active': activeTab === 'logs' }"
           @click="switchTab('logs')"
         >
-          📜 Container Logs
+          <BaseIcon name="file-text" size="xs" /> Container Logs
         </button>
         <button
           type="button"
@@ -244,16 +245,16 @@ function copyToClipboard(text: string) {
 
         <div class="inspector-quick-actions">
           <button type="button" class="btn btn-secondary btn-sm btn-logs" @click="switchTab('logs')">
-            <span>📜 Inspect Logs</span>
+            <span><BaseIcon name="file-text" size="xs" /> Inspect Logs</span>
           </button>
           <button type="button" class="btn btn-secondary btn-sm" @click="emit('openScale', app)">
-            <span>⚡ Scale Replicas</span>
+            <span><BaseIcon name="zap" size="xs" /> Scale Replicas</span>
           </button>
           <button type="button" class="btn btn-secondary btn-sm" @click="emit('restart', app)">
-            <span>🔄 Rolling Restart</span>
+            <span><BaseIcon name="refresh" size="xs" /> Rolling Restart</span>
           </button>
           <button type="button" class="btn btn-secondary btn-sm btn-remove" @click="emit('delete', app)">
-            <span>🗑️ Delete Workload</span>
+            <span><BaseIcon name="trash" size="xs" /> Delete Workload</span>
           </button>
         </div>
       </div>
@@ -273,7 +274,7 @@ function copyToClipboard(text: string) {
           <p class="strat-desc">Revision #{{ app.revision || 1 }} deployed on cluster {{ app.target }}.</p>
         </div>
         <button type="button" class="btn btn-primary btn-sm w-full" @click="emit('openStrategy', app)">
-          <span>Configure Canary & Blue-Green Traffic Controls ➔</span>
+          <span>Configure Canary & Blue-Green Traffic Controls <BaseIcon name="play" size="xs" /></span>
         </button>
       </div>
 
@@ -304,7 +305,7 @@ function copyToClipboard(text: string) {
         <div class="yaml-actions-bar">
           <span class="yaml-title font-mono">Live Kubernetes Spec</span>
           <button type="button" class="btn btn-secondary btn-xs" @click="copyToClipboard(generateYamlManifest(app))">
-            <span>📋 Copy Manifest</span>
+            <span><BaseIcon name="file-text" size="xs" /> Copy Manifest</span>
           </button>
         </div>
         <pre class="yaml-viewer font-mono">{{ generateYamlManifest(app) }}</pre>

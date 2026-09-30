@@ -1,8 +1,16 @@
 import { api, type ApiResponse } from './client'
 
-// ==========================================
+const client = {
+  async get<T>(endpoint: string, options?: { params?: Record<string, string> }): Promise<{ data: T }> {
+    const raw = await api.get<T | { data: T }>(endpoint, options?.params)
+    const data = (raw && typeof raw === 'object' && 'data' in raw && Array.isArray((raw as { data: unknown }).data))
+      ? (raw as { data: T }).data
+      : (raw as T)
+    return { data }
+  },
+}
+
 // 1. AUDIT & VULNERABILITY MANAGEMENT
-// ==========================================
 export interface AuditFinding {
   id: string
   category: 'missing_integration' | 'missing_dashboard' | 'broken_route' | 'stale_provider' | 'disconnected_cluster' | 'cve_vulnerability' | 'iac_misconfiguration' | string
@@ -71,9 +79,7 @@ export const auditLogApi = {
   }
 }
 
-// ==========================================
 // 2. COMPLIANCE & GOVERNANCE
-// ==========================================
 export interface ComplianceFramework {
   id: string
   name: string
@@ -121,9 +127,7 @@ export const complianceApi = {
   },
 }
 
-// ==========================================
 // 3. GITOPS DRIFT DETECTION & RECONCILIATION
-// ==========================================
 export interface DriftRecord {
   id: string
   cluster: string
@@ -158,9 +162,7 @@ export const driftApi = {
   },
 }
 
-// ==========================================
 // 4. BACKUP & DISASTER RECOVERY
-// ==========================================
 export interface BackupStorage {
   id: string
   tenant_id?: string
@@ -275,9 +277,7 @@ export const backupApi = {
   },
 }
 
-// ==========================================
 // 5. WORKFLOW AUTOMATION & SELF-HEALING
-// ==========================================
 export interface AutomationRule {
   id: string
   name: string
@@ -337,9 +337,7 @@ export const automationApi = {
   },
 }
 
-// ==========================================
 // 6. OPERATIONAL RUNBOOKS CATALOG
-// ==========================================
 export interface Runbook {
   id: string
   title: string
@@ -386,9 +384,7 @@ export const runbookApi = {
   },
 }
 
-// ==========================================
 // 7. FINOPS & COST OPTIMIZATION
-// ==========================================
 export interface ClusterCost {
   id: string
   name: string
@@ -442,9 +438,24 @@ export const costApi = {
   },
 }
 
-// ==========================================
 // 8. CAPACITY PLANNING & WORKLOAD FORECASTING
-// ==========================================
+export interface NodeHeadroom {
+  id: string
+  name: string
+  role: 'worker' | 'control-plane' | string
+  cpu_total_cores: number
+  cpu_allocated_cores: number
+  cpu_usage_percent: number
+  mem_total_gib: number
+  mem_allocated_gib: number
+  mem_usage_percent: number
+  pod_count: number
+  pod_capacity: number
+  bin_packing_score: number
+  status: 'healthy' | 'warning' | 'critical' | string
+  headroom_percent: number
+}
+
 export interface CapacityForecast {
   id: string
   cluster: string
@@ -464,6 +475,9 @@ export const capacityApi = {
     if (cluster) params.cluster = cluster
     const res = await api.get<ApiResponse<CapacityForecast[]>>('/capacity', params)
     return res.data || []
+  },
+  getNodeHeadroom(cluster?: string): Promise<NodeHeadroom[]> {
+    return client.get<NodeHeadroom[]>('/capacity/nodes', { params: cluster ? { cluster } : undefined }).then(res => res.data)
   },
   async recordForecast(forecast: Partial<CapacityForecast>): Promise<CapacityForecast> {
     return api.post<CapacityForecast>('/capacity', forecast)

@@ -15,11 +15,13 @@
   --color-text-secondary: var(--color-muted);
   --color-hairline: rgba(255, 255, 255, 0.08);
   --color-trading-up: #10b981;
-  --color-trading-down: #f43f5e;
+  --color-trading-down: #ef4444;
   --color-info: #3b82f6;
   --color-warning: #f59e0b;
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-number: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', 'Cascadia Code', 'Segoe UI Mono', 'Consolas', 'Menlo', monospace;
+  --font-number: var(--font-mono);
+  --font-display: var(--font-sans);
   --text-hero: 48px;
   --text-display-lg: 36px;
   --text-display-sm: 28px;

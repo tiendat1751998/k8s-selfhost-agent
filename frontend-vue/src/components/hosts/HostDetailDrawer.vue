@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { ComputeHost } from '../../api/compute'
@@ -28,7 +29,7 @@ const emit = defineEmits<{
   <ModalDrawer
     :show="show"
     mode="drawer"
-    :title="host ? `${getHostTypeMeta(host.host_type).icon} ${host.name}` : 'Host Details'"
+    :title="host ? host.name : 'Host Details'"
     subtitle="Complete host specifications, connectivity history, and operational telemetry"
     max-width="640px"
     @update:show="emit('update:show', $event)"
@@ -51,7 +52,7 @@ const emit = defineEmits<{
 
         <div class="hero-endpoint-row">
           <span class="text-cyan">{{ host.endpoint }}</span>
-          <button class="btn-copy-mini" title="Copy endpoint" @click="emit('copy', host.endpoint)">📋</button>
+          <button class="btn-copy-mini" title="Copy endpoint" @click="emit('copy', host.endpoint)"><BaseIcon name="copy" size="xs" /></button>
         </div>
       </div>
 
@@ -135,7 +136,7 @@ const emit = defineEmits<{
             :disabled="testingHostId === host.id"
             @click="emit('test', host)"
           >
-            <span>{{ testingHostId === host.id ? '⏳ Testing...' : '⚡ Test Now' }}</span>
+            <BaseIcon :name="testingHostId === host.id ? 'refresh' : 'zap'" size="xs" :class="{ 'animate-spin': testingHostId === host.id }" /> <span>{{ testingHostId === host.id ? 'Testing...' : 'Test Now' }}</span>
           </button>
         </div>
 
@@ -149,7 +150,7 @@ const emit = defineEmits<{
             <div class="hist-left">
               <span class="hist-dot"></span>
               <span>{{ hist.status === 'ok' ? 'CONNECTED' : 'ERROR' }}</span>
-              <span class="hist-lat font-bold">⚡ {{ hist.latency_ms }}ms</span>
+              <span class="hist-lat font-bold"><BaseIcon name="zap" size="xs" /> {{ hist.latency_ms }}ms</span>
             </div>
             <span class="hist-time text-muted">{{ formatDate(hist.timestamp.toISOString()) }}</span>
           </div>
@@ -162,10 +163,10 @@ const emit = defineEmits<{
       <!-- Drawer Footer Actions -->
       <div class="drawer-footer-actions">
         <button class="btn btn-secondary" @click="emit('edit', host)">
-          <span>✏️ Edit Host</span>
+          <BaseIcon name="edit" size="xs" /> <span>Edit Host</span>
         </button>
         <button class="btn btn-danger-outline" @click="emit('delete', host)">
-          <span>🗑️ Delete Host</span>
+          <BaseIcon name="trash" size="xs" /> <span>Delete Host</span>
         </button>
       </div>
     </div>

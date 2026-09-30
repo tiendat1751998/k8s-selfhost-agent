@@ -20,7 +20,7 @@
           :aria-label="secretCopied ? 'Security key copied to clipboard' : 'Copy security key'"
           @click="$emit('copy-secret')"
         >
-          <span>{{ secretCopied ? '✓ Copied' : '📋 Copy Key' }}</span>
+          <BaseIcon :name="secretCopied ? 'check' : 'copy'" size="xs" /> <span>{{ secretCopied ? 'Copied' : 'Copy Key' }}</span>
         </button>
       </div>
       <p class="secret-hint">

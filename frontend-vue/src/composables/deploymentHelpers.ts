@@ -54,18 +54,18 @@ export function getRolloutState(row: DeploymentApp): RolloutState {
 
   let statusText = `${ready}/${desired} Ready`
   let badgeClass = 'chip-ready'
-  let label = '✓ Ready'
+  let label = 'Ready'
 
   if (isPaused) {
-    label = '⏸ Paused'
+    label = 'Paused'
     badgeClass = 'chip-paused'
     statusText = `${ready}/${desired} Ready (Paused)`
   } else if (isUpdating) {
-    label = `⟳ Updating (${pending} pending)`
+    label = `Updating (${pending} pending)`
     badgeClass = 'chip-updating'
     statusText = `${ready}/${desired} Ready • ${updated}/${desired} Updated (${pending} pending)`
   } else if (ready === desired && desired > 0) {
-    label = '✓ Ready'
+    label = 'Ready'
     badgeClass = 'chip-ready'
     statusText = `${desired}/${desired} Ready (Rollout complete)`
   } else if (desired === 0) {

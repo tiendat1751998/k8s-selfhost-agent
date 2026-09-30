@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import type { DeploymentApp, DeploymentTemplate } from '../../api/compute'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import DeployWorkloadIdentityStep from './DeployWorkloadIdentityStep.vue'
 import DeployWorkloadStrategyStep from './DeployWorkloadStrategyStep.vue'
 import DeployWorkloadNetworkStep from './DeployWorkloadNetworkStep.vue'
@@ -208,7 +209,7 @@ function submitCreate() {
       <!-- AI Assisted Prompt Bar -->
       <div class="ai-prompt-bar glass-panel">
         <div class="ai-prompt-input-wrap">
-          <span class="ai-icon">🪄</span>
+          <span class="ai-icon"><BaseIcon name="zap" size="xs" /></span>
           <input
             v-model="aiPrompt"
             type="text"
@@ -222,7 +223,7 @@ function submitCreate() {
             :disabled="aiGenerating || !aiPrompt.trim()"
             @click="generateWithAI"
           >
-            <span>{{ aiGenerating ? 'Thinking...' : '▶ Synthesize' }}</span>
+            <span><BaseIcon :name="aiGenerating ? 'activity' : 'play'" size="xs" :class="{ 'spin-icon': aiGenerating }" /> {{ aiGenerating ? 'Thinking...' : 'Synthesize' }}</span>
           </button>
         </div>
       </div>
@@ -296,7 +297,7 @@ function submitCreate() {
         :disabled="actionLoading === 'create'"
         @click="submitCreate"
       >
-        <span>{{ actionLoading === 'create' ? 'Deploying Fleet...' : 'Deploy Workload ➔' }}</span>
+        <span>{{ actionLoading === 'create' ? 'Deploying Fleet...' : 'Deploy Workload' }} <BaseIcon v-if="actionLoading !== 'create'" name="play" size="xs" /></span>
       </button>
     </template>
   </ModalDrawer>

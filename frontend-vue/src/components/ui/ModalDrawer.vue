@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { watch, onMounted, onUnmounted } from 'vue'
+import BaseIcon from './BaseIcon.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -106,7 +107,7 @@ onUnmounted(() => {
                   @click="handleClose"
                   type="button"
                 >
-                  <span class="close-icon">✕</span>
+                  <BaseIcon name="x" size="sm" class="close-icon" />
                 </button>
               </div>
             </div>
@@ -145,7 +146,7 @@ onUnmounted(() => {
                   @click="handleClose"
                   type="button"
                 >
-                  <span class="close-icon">✕</span>
+                  <BaseIcon name="x" size="sm" class="close-icon" />
                 </button>
               </div>
             </div>

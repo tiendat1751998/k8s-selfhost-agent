@@ -1,35 +1,51 @@
-<script setup lang="ts">
-defineProps<{
+﻿<script setup lang="ts">
+import { computed } from 'vue'
+
+export type StatusVariant = 'emerald' | 'amber' | 'rose' | 'slate' | 'cyan'
+
+const props = defineProps<{
   status: string
   label?: string
   size?: 'sm' | 'md'
 }>()
 
-function normalizeStatus(s: string) {
-  if (!s) return 'unknown'
-  const lower = s.toLowerCase()
-  if (['healthy', 'active', 'connected', 'online', 'ready', 'live', 'ok', 'pass', 'success', 'resolved', 'deployed', 'completed', 'verified', 'running', 'armed'].includes(lower)) {
-    return 'emerald'
-  }
-  if (['warning', 'pending', 'standby', 'polling', 'inprogress', 'in_progress', 'promoting', 'open', 'degraded'].includes(lower)) {
-    return 'amber'
-  }
-  if (['critical', 'danger', 'failed', 'error', 'offline', 'disconnected', 'rejected', 'blocked', 'mismatch', 'down', 'unhealthy'].includes(lower)) {
-    return 'rose'
-  }
-  if (['info', 'analyzing', 'remediating', 'generating', 'idle', 'draft'].includes(lower)) {
-    return 'cyan'
-  }
-  return 'violet'
-}
+const EMERALD_STATUSES = new Set([
+  'ready', 'healthy', 'active', 'online', 'connected', 'ok', 'live', 'running', 'deployed', 'success',
+  'pass', 'resolved', 'completed', 'verified', 'armed'
+])
+const AMBER_STATUSES = new Set([
+  'warning', 'pending', 'degraded', 'in_progress', 'inprogress', 'standby', 'polling', 'open', 'promoting'
+])
+const ROSE_STATUSES = new Set([
+  'failed', 'critical', 'error', 'offline', 'unhealthy', 'disconnected', 'down', 'danger', 'rejected', 'blocked', 'mismatch'
+])
+const SLATE_STATUSES = new Set([
+  'cordoned', 'draining', 'terminating', 'disabled', 'unknown'
+])
+const CYAN_STATUSES = new Set([
+  'info', 'analyzing', 'remediating', 'idle', 'draft', 'generating'
+])
+
+const normalizedStatus = computed<StatusVariant>(() => {
+  if (!props.status) return 'slate'
+  const lower = props.status.toLowerCase().trim()
+  if (EMERALD_STATUSES.has(lower)) return 'emerald'
+  if (AMBER_STATUSES.has(lower)) return 'amber'
+  if (ROSE_STATUSES.has(lower)) return 'rose'
+  if (SLATE_STATUSES.has(lower)) return 'slate'
+  if (CYAN_STATUSES.has(lower)) return 'cyan'
+  return 'slate'
+})
+
+const isPulsing = computed(() => normalizedStatus.value === 'amber')
 </script>
 
 <template>
   <span 
     class="status-badge" 
-    :class="[`badge-${normalizeStatus(status)}`, size === 'sm' ? 'badge-sm' : 'badge-md']"
+    :class="[`badge-${normalizedStatus}`, size === 'sm' ? 'badge-sm' : 'badge-md']"
   >
-    <span class="status-dot" :class="`dot-${normalizeStatus(status)}`"></span>
+    <span class="status-dot" :class="[`dot-${normalizedStatus}`, { 'dot-pulse': isPulsing }]"></span>
     <span class="status-text">{{ label || status }}</span>
   </span>
 </template>

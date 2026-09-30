@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import type { TimelineEvent } from '../../composables/useChangesTimeline'
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   events: TimelineEvent[]
@@ -58,7 +59,7 @@ function formatTime(isoStr: string): string {
 
     <!-- Empty State -->
     <div v-else-if="events.length === 0" class="stream-empty">
-      <span class="empty-icon">📭</span>
+      <span class="empty-icon"><BaseIcon name="box" size="lg" /></span>
       <p class="empty-text">No change events match the specified filter criteria.</p>
       <small class="empty-subtext">Adjust the cluster picker, time window, or clear search queries.</small>
     </div>
@@ -74,10 +75,10 @@ function formatTime(isoStr: string): string {
         <!-- Timeline Marker & Rail -->
         <div class="timeline-rail">
           <div class="timeline-node" :class="`node-${event.eventType}`">
-            <span v-if="event.eventType === 'rfc'">📋</span>
-            <span v-else-if="event.eventType === 'gitops'">🔄</span>
+            <BaseIcon v-if="event.eventType === 'rfc'" name="file-text" size="xs" />
+            <BaseIcon v-else-if="event.eventType === 'gitops'" name="refresh" size="xs" />
             <span v-else-if="event.eventType === 'rollback'">↺</span>
-            <span v-else>🛡️</span>
+            <BaseIcon v-else name="shield" size="xs" />
           </div>
           <div class="timeline-line"></div>
         </div>
@@ -102,10 +103,10 @@ function formatTime(isoStr: string): string {
             <p class="card-description" :title="event.description">{{ event.description }}</p>
 
             <div class="card-resource-meta font-mono">
-              <span class="tc-resource text-cyan" :title="event.resource">📦 {{ event.resource }}</span>
-              <span class="tc-cluster text-muted" :title="`${event.cluster} / ${event.namespace}`">🖥️ {{ event.cluster }} / {{ event.namespace }}</span>
-              <span v-if="event.requester" class="tc-user text-muted" :title="`Requester: ${event.requester}`">👤 {{ event.requester }}</span>
-              <span v-if="event.approver" class="tc-approver text-emerald" :title="`Approver: ${event.approver}`">✓ Approved by {{ event.approver }}</span>
+              <span class="tc-resource text-cyan" :title="event.resource"><BaseIcon name="box" size="xs" /> {{ event.resource }}</span>
+              <span class="tc-cluster text-muted" :title="`${event.cluster} / ${event.namespace}`"><BaseIcon name="server" size="xs" /> {{ event.cluster }} / {{ event.namespace }}</span>
+              <span v-if="event.requester" class="tc-user text-muted" :title="`Requester: ${event.requester}`"><BaseIcon name="user" size="xs" /> {{ event.requester }}</span>
+              <span v-if="event.approver" class="tc-approver text-emerald" :title="`Approver: ${event.approver}`"><BaseIcon name="check-circle" size="xs" /> Approved by {{ event.approver }}</span>
             </div>
 
             <!-- Expandable Details Drawer/Block -->
@@ -133,7 +134,7 @@ function formatTime(isoStr: string): string {
                 title="Inspect Visual Unified Diff"
                 @click="$emit('diff', event)"
               >
-                <span>🔍 Inspect Diff</span>
+                <BaseIcon name="eye" size="xs" /> <span>Inspect Diff</span>
               </button>
 
               <button
@@ -142,14 +143,14 @@ function formatTime(isoStr: string): string {
                 :title="event.canRollback ? 'Rollback to this state' : 'Rollback unavailable for this record'"
                 @click="$emit('rollback', event)"
               >
-                <span>⏪ Rollback</span>
+                <BaseIcon name="refresh" size="xs" /> <span>Rollback</span>
               </button>
 
               <button
                 class="btn-stream-action btn-details"
                 @click="toggleDetails(event.id)"
               >
-                <span>👁️ {{ expandedEvents[event.id] ? 'Hide Info' : 'Details' }}</span>
+                <BaseIcon name="eye" size="xs" /> <span>{{ expandedEvents[event.id] ? 'Hide Info' : 'Details' }}</span>
               </button>
             </div>
 
@@ -160,14 +161,14 @@ function formatTime(isoStr: string): string {
                 class="btn-stream-action btn-approve"
                 @click="$emit('approve', event)"
               >
-                <span>✓ Approve</span>
+                <BaseIcon name="check" size="xs" /> <span>Approve</span>
               </button>
               <button
                 v-if="event.canReject"
                 class="btn-stream-action btn-reject"
                 @click="$emit('reject', event)"
               >
-                <span>✕ Reject</span>
+                <BaseIcon name="x" size="xs" /> <span>Reject</span>
               </button>
             </div>
           </div>

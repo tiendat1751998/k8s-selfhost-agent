@@ -22,6 +22,7 @@ scp k8s-agent $REMOTE:$TMP_BIN
 echo "🚀 Installing and restarting on $REMOTE..."
 ssh -t $REMOTE "chmod +x $TMP_BIN && \
   mkdir -p ~/.config/systemd/user && \
+  mkdir -p ~/.k8s-agent/logengine && \
   (systemctl --user stop k8s-agent 2>/dev/null || true) && \
   mv -f $TMP_BIN ~/k8s-agent && \
   cat > ~/.config/systemd/user/k8s-agent.service << 'UNIT'
@@ -31,7 +32,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=%h/k8s-agent --port 9100
+ExecStart=%h/k8s-agent --port 9100 --engine-dir %h/.k8s-agent/logengine
 Restart=always
 RestartSec=5
 

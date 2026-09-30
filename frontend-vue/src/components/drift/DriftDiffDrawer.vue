@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { EnrichedDriftRecord } from '../../composables/useDriftDetection'
 
 interface Props {
@@ -71,17 +72,17 @@ function getDiffLineClass(line: string): string {
               :class="{ active: diffMode === 'split' }"
               @click="emit('update:diffMode', 'split')"
             >
-              ◫ Split
+              Split
             </button>
             <button
               class="diff-mode-btn"
               :class="{ active: diffMode === 'unified' }"
               @click="emit('update:diffMode', 'unified')"
             >
-              ☰ Unified
+              <BaseIcon name="list" size="xs" /> Unified
             </button>
           </div>
-          <button class="modal-close" aria-label="Close drawer" @click="emit('close')">✕</button>
+          <button class="modal-close" aria-label="Close drawer" @click="emit('close')"><BaseIcon name="x" size="xs" /></button>
         </div>
       </div>
 
@@ -122,14 +123,14 @@ function getDiffLineClass(line: string): string {
         <div v-else class="diff-split-grid">
           <div class="diff-pane">
             <div class="diff-pane-header text-emerald">
-              <span>📄 Expected State (Git Repository Manifest)</span>
+              <BaseIcon name="file-text" size="xs" /> <span>Expected State (Git Repository Manifest)</span>
             </div>
             <pre class="code-pre font-mono">{{ drift.expected_state || '# No Git Manifest Available' }}</pre>
           </div>
 
           <div class="diff-pane">
             <div class="diff-pane-header text-amber">
-              <span>⚡ Actual State (Live Cluster Runtime)</span>
+              <BaseIcon name="zap" size="xs" /> <span>Actual State (Live Cluster Runtime)</span>
             </div>
             <pre class="code-pre font-mono">{{ drift.actual_state || '# No Live State Available' }}</pre>
           </div>
@@ -143,7 +144,7 @@ function getDiffLineClass(line: string): string {
             class="btn btn-secondary btn-sm"
             @click="emit('suppress', drift.id)"
           >
-            <span>{{ drift.isSuppressed ? '🛡️ Remove Suppression' : '👁️ Suppress Alert' }}</span>
+            <BaseIcon :name="drift.isSuppressed ? 'shield' : 'eye'" size="xs" /> <span>{{ drift.isSuppressed ? 'Remove Suppression' : 'Suppress Alert' }}</span>
           </button>
         </div>
         <div class="drawer-footer-primary">
@@ -153,7 +154,7 @@ function getDiffLineClass(line: string): string {
             :disabled="resolving"
             @click="emit('reconcile', drift.id)"
           >
-            <span>{{ resolving ? 'Reconciling...' : '⚡ Apply Git Manifest & Sync to Git' }}</span>
+            <BaseIcon v-if="!resolving" name="refresh" size="xs" /> <span>{{ resolving ? 'Reconciling...' : 'Apply Git Manifest & Sync to Git' }}</span>
           </button>
           <button class="btn btn-secondary" @click="emit('close')">Close</button>
         </div>

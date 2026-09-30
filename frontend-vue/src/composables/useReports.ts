@@ -33,6 +33,7 @@ export function useReports() {
   const reports = ref<PlatformReport[]>([])
   const frameworks = ref<ComplianceFramework[]>([])
   const selectedType = ref<string>('all')
+  const searchQuery = ref<string>('')
   const feedbackMessage = ref<string | null>(null)
 
   const showGenerateModal = ref(false)
@@ -114,9 +115,41 @@ export function useReports() {
     }
   }
 
+  const categoryCounts = computed(() => {
+    const counts: Record<string, number> = {
+      all: reports.value.length,
+      compliance: 0,
+      security: 0,
+      cost: 0,
+      operational: 0,
+      incident: 0
+    }
+    for (const r of reports.value) {
+      if (r.type && r.type in counts) {
+        counts[r.type]++
+      }
+    }
+    return counts
+  })
+
   const filteredReports = computed(() => {
-    if (selectedType.value === 'all') return reports.value
-    return reports.value.filter(r => r.type === selectedType.value)
+    let result = reports.value
+    if (selectedType.value !== 'all') {
+      result = result.filter(r => r.type === selectedType.value)
+    }
+    if (searchQuery.value.trim()) {
+      const q = searchQuery.value.toLowerCase().trim()
+      result = result.filter(r => {
+        const titleMatch = r.title ? r.title.toLowerCase().includes(q) : false
+        const idMatch = r.id ? r.id.toLowerCase().includes(q) : false
+        const authorMatch = r.created_by ? r.created_by.toLowerCase().includes(q) : false
+        const typeMatch = r.type ? r.type.toLowerCase().includes(q) : false
+        const formatMatch = r.format ? r.format.toLowerCase().includes(q) : false
+        const statusMatch = r.status ? r.status.toLowerCase().includes(q) : false
+        return titleMatch || idMatch || authorMatch || typeMatch || formatMatch || statusMatch
+      })
+    }
+    return result
   })
 
   const completedCount = computed(() => reports.value.filter(r => r.status === 'completed').length)
@@ -285,7 +318,7 @@ export function useReports() {
   }
 
   return {
-    loading, error, reports, frameworks, selectedType, feedbackMessage, schedules,
+    loading, error, reports, frameworks, selectedType, searchQuery, categoryCounts, feedbackMessage, schedules,
     showGenerateModal, showScheduleModal, showPreviewDrawer, activePreviewReport, isSubmitting, newReport,
     reportColumns, filteredReports, completedCount, complianceScore, storageFootprint,
     loadReports, showFeedback, openPreview, downloadReport, exportAsCsv, exportAsPdf,

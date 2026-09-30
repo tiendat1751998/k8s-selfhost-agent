@@ -124,7 +124,7 @@ function getLatencyColor(name: string, p: AIProvider) {
             <td>
               <div class="table-routing-route font-mono truncate-text" :title="fallbackRoutes?.[p.name]?.fallbackProviderName || 'Ollama Local'">
                 <span class="text-secondary" style="flex-shrink: 0;">Pri</span>
-                <span class="text-cyan" style="flex-shrink: 0;">➔</span>
+                <BaseIcon name="chevron-right" size="xs" class="text-cyan" style="flex-shrink: 0;" />
                 <span class="text-muted truncate-text">{{ fallbackRoutes?.[p.name]?.fallbackProviderName || 'Ollama Local' }}</span>
               </div>
             </td>
@@ -143,28 +143,28 @@ function getLatencyColor(name: string, p: AIProvider) {
                   title="Probe Health"
                   @click="emit('probe', p.name)"
                 >
-                  <span>{{ probingName === p.name ? '⏳...' : '⚡ Probe' }}</span>
+                  <BaseIcon :name="probingName === p.name ? 'refresh' : 'zap'" size="xs" :class="{ 'animate-spin': probingName === p.name }" /> <span>{{ probingName === p.name ? 'Probing...' : 'Probe' }}</span>
                 </button>
                 <button 
                   class="btn-table-action" 
                   title="View Metrics & Quota"
                   @click="emit('openMetrics', p)"
                 >
-                  <span>📊 Metrics</span>
+                  <BaseIcon name="activity" size="xs" /> <span>Metrics</span>
                 </button>
                 <button 
                   class="btn-table-action" 
                   title="Routing Configuration"
                   @click="emit('openRouting', p)"
                 >
-                  <span>⚙️ Route</span>
+                  <BaseIcon name="sliders" size="xs" /> <span>Route</span>
                 </button>
                 <button 
                   class="btn-table-action btn-danger-crimson" 
                   title="Remove Provider"
                   @click="emit('remove', p.name)"
                 >
-                  <span>🗑️ Delete</span>
+                  <BaseIcon name="trash" size="xs" /> <span>Delete</span>
                 </button>
               </div>
             </td>
@@ -174,7 +174,7 @@ function getLatencyColor(name: string, p: AIProvider) {
     </div>
 
     <div v-else class="empty-state-box glass-panel">
-      <span class="empty-icon">🔌</span>
+      <BaseIcon name="plug" size="lg" class="empty-icon" />
       <h3 class="empty-title">No Active AI Providers</h3>
       <p class="empty-desc">Register provider endpoints to build your resilient LLM gateway mesh.</p>
       <button class="btn btn-primary btn-sm" @click="emit('register')">

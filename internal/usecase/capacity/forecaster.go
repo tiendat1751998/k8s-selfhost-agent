@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
+	"strings"
 	"time"
 
 	domainCapacity "github.com/datdt/k8sselfhost/internal/domain/capacity"
@@ -178,6 +180,129 @@ func (f *Forecaster) Record(ctx context.Context, item *domainCapacity.Forecast) 
 		return f.repo.Record(ctx, item)
 	}
 	return nil
+}
+
+
+// ListNodeHeadroom calculates factual node-level capacity headroom from live telemetry.
+func (f *Forecaster) ListNodeHeadroom(ctx context.Context, cluster string) ([]domainCapacity.NodeHeadroom, error) {
+	if f.metricsProvider == nil {
+		return []domainCapacity.NodeHeadroom{}, nil
+	}
+
+	snapshot := f.metricsProvider.GetLastSnapshot()
+	if snapshot == nil || len(snapshot.Nodes) == 0 {
+		return []domainCapacity.NodeHeadroom{}, nil
+	}
+
+	agentMetrics := f.metricsProvider.GetAgentMetrics()
+
+	// Sort nodes deterministically: ready nodes first, then alphabetical by name
+	nodes := append([]usecaseMetrics.NodeMetrics(nil), snapshot.Nodes...)
+	sort.SliceStable(nodes, func(i, j int) bool {
+		iReady := strings.ToLower(nodes[i].Status) == "ready"
+		jReady := strings.ToLower(nodes[j].Status) == "ready"
+		if iReady != jReady {
+			return iReady
+		}
+		nameI := nodes[i].NodeName
+		if nameI == "" {
+			nameI = nodes[i].NodeID
+		}
+		nameJ := nodes[j].NodeName
+		if nameJ == "" {
+			nameJ = nodes[j].NodeID
+		}
+		return nameI < nameJ
+	})
+
+	headrooms := make([]domainCapacity.NodeHeadroom, 0, len(nodes))
+	for _, node := range nodes {
+		nodeID := node.NodeID
+		if nodeID == "" {
+			nodeID = node.NodeName
+		}
+		nodeName := node.NodeName
+		if nodeName == "" {
+			nodeName = node.NodeID
+		}
+
+		// Role determination: control-plane vs worker
+		roleLower := strings.ToLower(node.Role)
+		role := "worker"
+		if strings.Contains(roleLower, "master") || strings.Contains(roleLower, "manager") || strings.Contains(roleLower, "control") {
+			role = "control-plane"
+		}
+
+		// Lookup agent metrics for CPU core count
+		var cpuCount int
+		if agentMetrics != nil {
+			if am, ok := agentMetrics[node.NodeID]; ok && am != nil && am.CPUCount > 0 {
+				cpuCount = am.CPUCount
+			} else if am, ok := agentMetrics[node.NodeName]; ok && am != nil && am.CPUCount > 0 {
+				cpuCount = am.CPUCount
+			} else {
+				for _, am := range agentMetrics {
+					if am != nil && (am.Hostname == node.NodeName || am.Hostname == node.NodeID) && am.CPUCount > 0 {
+						cpuCount = am.CPUCount
+						break
+					}
+				}
+			}
+		}
+
+		cpuTotalCores := 4.0
+		if cpuCount > 0 {
+			cpuTotalCores = float64(cpuCount)
+		}
+
+		cpuUsagePercent := math.Round(node.CPUPercent*10) / 10
+		cpuAllocatedCores := math.Round(cpuTotalCores*(node.CPUPercent/100.0)*10) / 10
+
+		memTotalGiB := math.Round(float64(node.MemoryTotal)/(1024*1024*1024)*10) / 10
+		if memTotalGiB == 0 {
+			memTotalGiB = 8.0
+		}
+		memAllocatedGiB := math.Round(float64(node.MemoryUsed)/(1024*1024*1024)*10) / 10
+		memUsagePercent := math.Round(node.MemoryPercent*10) / 10
+
+		podCount := node.ContainerCount
+		if podCount == 0 && node.RunningCount > 0 {
+			podCount = node.RunningCount
+		}
+		podCapacity := max(60, podCount*2)
+
+		binPackingScore := math.Round(((node.CPUPercent+node.MemoryPercent)/2.0)*10) / 10
+		headroomPercent := math.Max(0, math.Round((100.0-math.Max(node.CPUPercent, node.MemoryPercent))*10)/10)
+
+		nodeStatus := strings.ToLower(node.Status)
+		isDown := nodeStatus == "down" || nodeStatus == "disconnected" || nodeStatus == "offline" || nodeStatus == "error"
+
+		status := "healthy"
+		if isDown || headroomPercent < 15.0 {
+			status = "critical"
+		} else if headroomPercent < 30.0 {
+			status = "warning"
+		}
+
+		headrooms = append(headrooms, domainCapacity.NodeHeadroom{
+			ID:                nodeID,
+			Name:              nodeName,
+			Role:              role,
+			CPUTotalCores:     cpuTotalCores,
+			CPUAllocatedCores: cpuAllocatedCores,
+			CPUUsagePercent:   cpuUsagePercent,
+			MemTotalGiB:       memTotalGiB,
+			MemAllocatedGiB:   memAllocatedGiB,
+			MemUsagePercent:   memUsagePercent,
+			PodCount:          podCount,
+			PodCapacity:       podCapacity,
+			BinPackingScore:   binPackingScore,
+			Status:            status,
+			HeadroomPercent:   headroomPercent,
+		})
+	}
+
+	return headrooms, nil
 }
 
 // ComputeProjection calculates future resource utilization checkpoints and determines threshold status.

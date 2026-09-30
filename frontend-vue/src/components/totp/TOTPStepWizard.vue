@@ -12,7 +12,7 @@
         }"
       >
         <div class="step-circle" :aria-current="isStepActive(s.id) ? 'step' : undefined">
-          <span v-if="isStepCompleted(index)">✓</span>
+          <BaseIcon v-if="isStepCompleted(index)" name="check" size="xs" />
           <span v-else>{{ index + 1 }}</span>
         </div>
         <div class="step-label-group">

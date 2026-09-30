@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Organization } from '../../api/management'
 import type { TenantStatSummary } from '../../composables/useTenancyRbac'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   organizations: Organization[]
@@ -37,7 +38,7 @@ function confirmDelete(org: Organization) {
       @click="emit('createOrg')"
       @keydown.enter="emit('createOrg')"
     >
-      <p class="empty-mobile-text">🏢 No organizations configured yet. Tap + to onboard a new tenant workspace.</p>
+      <p class="empty-mobile-text"><BaseIcon name="building" size="sm" /> No organizations configured yet. Tap + to onboard a new tenant workspace.</p>
     </div>
 
     <!-- High-density Tenant Cards (68-75px height) -->
@@ -71,7 +72,7 @@ function confirmDelete(org: Organization) {
           aria-label="Manage Members"
           @click="emit('openMembers', org.id)"
         >
-          👥
+          <BaseIcon name="users" size="xs" />
         </button>
         <button
           class="btn-icon-mobile rbac"
@@ -79,7 +80,7 @@ function confirmDelete(org: Organization) {
           aria-label="Configure RBAC"
           @click="emit('openRbac')"
         >
-          🛡️
+          <BaseIcon name="shield" size="xs" />
         </button>
         <button
           class="btn-icon-mobile quota"
@@ -87,7 +88,7 @@ function confirmDelete(org: Organization) {
           aria-label="Configure Quota"
           @click="emit('openQuota', org)"
         >
-          ⚙️
+          <BaseIcon name="sliders" size="xs" />
         </button>
         <button
           class="btn-icon-mobile delete"
@@ -95,7 +96,7 @@ function confirmDelete(org: Organization) {
           aria-label="Purge Organization"
           @click="confirmDelete(org)"
         >
-          🗑️
+          <BaseIcon name="trash" size="xs" />
         </button>
       </div>
     </div>

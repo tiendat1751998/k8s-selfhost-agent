@@ -1,0 +1,97 @@
+/* Node Log Terminal Lines, Stream Badges & Highlighting */
+.log-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: logPulse 2s infinite ease-in-out;
+  display: inline-block;
+}
+
+@keyframes logPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.log-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  border-radius: 3px;
+  transition: background 0.1s ease;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.log-line:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.log-line-error {
+  background: rgba(244, 63, 94, 0.08);
+  border-left: 2px solid #f43f5e;
+}
+
+.log-line-warn {
+  background: rgba(245, 158, 11, 0.06);
+  border-left: 2px solid #f59e0b;
+}
+
+.log-line-num {
+  width: 32px;
+  color: rgba(255, 255, 255, 0.25);
+  text-align: right;
+  flex-shrink: 0;
+  user-select: none;
+  font-size: 10px;
+  line-height: 22px;
+}
+
+.log-line-level {
+  width: 55px;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  line-height: 22px;
+}
+
+.log-line-content {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #e2e8f0;
+  line-height: 22px;
+}
+
+.log-line-error .log-line-content { color: #fda4af; }
+.log-line-warn .log-line-content { color: #fde68a; }
+
+.text-rose { color: #f43f5e; }
+.text-amber { color: #f59e0b; }
+.text-cyan { color: #38bdf8; }
+.text-slate { color: #94a3b8; }
+.text-emerald { color: #34d399; }
+
+.log-search-match {
+  background: rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.log-timestamp {
+  color: var(--text-muted, #64748b);
+  font-size: 10px;
+  margin-right: 4px;
+}
+
+.log-app-tag {
+  font-size: 9.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
+import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { HelmRelease } from '../../api/helm'
 import { parseHelmChart, getFormattedReleaseChart, getFormattedReleaseDescription } from '../../composables/useHelm'
 
@@ -7,15 +9,16 @@ defineProps<{
   releases: HelmRelease[]
   loading: boolean
   error: string | null
-  search: string
-  statusFilter: string
-  selectedCluster: string
+  search?: string
+  statusFilter?: string
+  selectedCluster?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:search', val: string): void
   (e: 'update:statusFilter', val: string): void
   (e: 'openDetail', rel: HelmRelease): void
+  (e: 'inspect', rel: HelmRelease): void
   (e: 'upgrade', rel: HelmRelease): void
   (e: 'rollback', rel: HelmRelease): void
   (e: 'uninstall', rel: HelmRelease): void
@@ -33,7 +36,7 @@ function getStatusType(status: string): string {
 }
 
 function formatReleaseDate(dateStr?: string): string {
-  if (!dateStr) return '—'
+  if (!dateStr) return '-'
   try {
     const d = new Date(dateStr)
     if (isNaN(d.getTime())) return dateStr
@@ -49,58 +52,40 @@ function formatReleaseDate(dateStr?: string): string {
     return dateStr
   }
 }
+
+function handleInspect(rel: HelmRelease) {
+  emit('inspect', rel)
+  emit('openDetail', rel)
+}
+
+function getActionItems(rel: HelmRelease): ActionItem[] {
+  const isPending = (rel.status || '').toLowerCase().includes('pending')
+  return [
+    { id: 'upgrade', label: 'Upgrade Release', icon: 'refresh', disabled: isPending },
+    { id: 'rollback', label: 'Rollback Revision', icon: 'rotate-ccw', disabled: isPending },
+    { id: 'sep', label: '', separator: true },
+    { id: 'uninstall', label: 'Uninstall Release', icon: 'trash', variant: 'danger', disabled: isPending },
+  ]
+}
+
+function handleRowAction(actionId: string, rel: HelmRelease) {
+  if (actionId === 'upgrade') emit('upgrade', rel)
+  else if (actionId === 'rollback') emit('rollback', rel)
+  else if (actionId === 'uninstall') emit('uninstall', rel)
+}
 </script>
 
 <template>
   <div class="helm-releases-table-container">
-    <!-- Table Filter Bar -->
-    <div class="table-toolbar glass-panel">
-      <div class="toolbar-search">
-        <span class="search-icon">🔍</span>
-        <input
-          :value="search"
-          type="text"
-          placeholder="Filter releases by name, chart or namespace..."
-          class="input-glass search-input"
-          @input="emit('update:search', ($event.target as HTMLInputElement).value)"
-        />
-        <button
-          v-if="search"
-          type="button"
-          class="btn-clear"
-          @click="emit('update:search', '')"
-        >
-          ✕
-        </button>
-      </div>
-
-      <div class="toolbar-filters">
-        <div class="filter-group">
-          <span class="filter-label">Status:</span>
-          <select
-            :value="statusFilter"
-            class="input-glass select-sm"
-            @change="emit('update:statusFilter', ($event.target as HTMLSelectElement).value)"
-          >
-            <option value="all">All Statuses</option>
-            <option value="deployed">Deployed</option>
-            <option value="failed">Failed</option>
-            <option value="pending">Pending</option>
-            <option value="superseded">Superseded</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <!-- Data Table Container -->
+    <!-- Data Table Container (Clean Enterprise Card, mounts directly below unified toolbar) -->
     <div class="data-table-container glass-panel">
       <div v-if="loading" class="loading-state">
         <div class="cyber-spinner"></div>
-        <p class="font-mono text-muted">Retrieving Helm releases from {{ selectedCluster }}...</p>
+        <p class="font-mono text-muted">Retrieving Helm releases from {{ selectedCluster || 'cluster' }}...</p>
       </div>
 
       <div v-else-if="error" class="error-state">
-        <span class="error-icon">⚠️</span>
+        <BaseIcon name="alert-triangle" size="xs" class="error-icon" />
         <h4 class="error-title">Failed to load releases</h4>
         <p class="error-desc">{{ error }}</p>
         <button type="button" class="btn-cyber btn-primary btn-sm" @click="emit('retry')">
@@ -109,10 +94,10 @@ function formatReleaseDate(dateStr?: string): string {
       </div>
 
       <div v-else-if="releases.length === 0" class="empty-state">
-        <span class="empty-icon">⛵</span>
+        <BaseIcon name="anchor" size="xl" class="empty-icon" />
         <h4 class="empty-title">No Helm Releases Found</h4>
         <p class="empty-desc">
-          No releases match your current filters on cluster <code class="text-gold">{{ selectedCluster }}</code>.
+          No releases match your current filters on cluster <code class="text-primary">{{ selectedCluster || 'current' }}</code>.
         </p>
         <button
           type="button"
@@ -145,8 +130,8 @@ function formatReleaseDate(dateStr?: string): string {
             >
               <!-- Release Name -->
               <td>
-                <div class="release-name-cell" @click="emit('openDetail', rel)">
-                  <span class="release-icon">⛵</span>
+                <div class="release-name-cell" @click="handleInspect(rel)">
+                  <BaseIcon name="anchor" size="xs" class="release-icon" />
                   <div class="release-info-col">
                     <span class="release-name-text release-title-strong">{{ rel.name }}</span>
                     <span v-if="getFormattedReleaseDescription(rel) || rel.description" class="release-desc-sub">
@@ -164,7 +149,7 @@ function formatReleaseDate(dateStr?: string): string {
               <!-- Version & App Version -->
               <td>
                 <div class="version-cell">
-                  <span class="badge-tag badge-cyan">{{ parseHelmChart(rel.chart, rel.description, rel.version).version || rel.version || rel.appVersion || 'v1.0.0' }}</span>
+                  <span class="version-pill font-mono">{{ parseHelmChart(rel.chart, rel.description, rel.version).version || rel.version || rel.appVersion || 'v1.0.0' }}</span>
                   <span v-if="rel.app_version || rel.appVersion" class="app-version-sub font-mono">
                     app: {{ rel.app_version || rel.appVersion }}
                   </span>
@@ -173,7 +158,7 @@ function formatReleaseDate(dateStr?: string): string {
 
               <!-- Namespace -->
               <td>
-                <span class="ns-badge font-mono">🏷️ {{ rel.namespace }}</span>
+                <span class="ns-badge font-mono"><BaseIcon name="grid" size="xs" /> {{ rel.namespace }}</span>
               </td>
 
               <!-- Status Badge -->
@@ -191,41 +176,25 @@ function formatReleaseDate(dateStr?: string): string {
                 <span class="text-muted font-mono font-xs">{{ formatReleaseDate(rel.updated) }}</span>
               </td>
 
-              <!-- Row Actions with Labeled Buttons -->
+              <!-- Standardized Row Actions: 1 Inline Button + ActionDropdown [ â‹¯ ] -->
               <td class="text-right actions-cell">
                 <div class="action-btn-group">
                   <button
                     type="button"
-                    class="btn-row-action btn-action-detail"
-                    title="Inspect Release Values & Details"
-                    @click="emit('openDetail', rel)"
+                    class="btn btn-xs btn-secondary"
+                    title="Inspect Release Values"
+                    @click="handleInspect(rel)"
                   >
-                    <span>🔍 Values</span>
+                    <BaseIcon name="search" size="xs" />
+                    <span>Values</span>
                   </button>
-                  <button
-                    type="button"
-                    class="btn-row-action btn-action-upgrade"
-                    title="Upgrade Release"
-                    @click="emit('upgrade', rel)"
-                  >
-                    <span>🔄 Upgrade</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-row-action btn-action-rollback"
-                    title="Rollback Release Revision"
-                    @click="emit('rollback', rel)"
-                  >
-                    <span>⏪ Rollback</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-row-action btn-action-delete"
-                    title="Uninstall Release"
-                    @click="emit('uninstall', rel)"
-                  >
-                    <span>🗑 Uninstall</span>
-                  </button>
+                  <ActionDropdown
+                    :items="getActionItems(rel)"
+                    size="xs"
+                    trigger-title="Release Actions"
+                    @select="handleRowAction($event, rel)"
+                    @action="handleRowAction($event, rel)"
+                  />
                 </div>
               </td>
             </tr>
@@ -245,7 +214,7 @@ table.cyber-table {
 }
 
 .release-desc-sub {
-  max-width: 200px;
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -254,7 +223,7 @@ table.cyber-table {
 
 .release-title-strong,
 .release-name-text {
-  max-width: 200px;
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

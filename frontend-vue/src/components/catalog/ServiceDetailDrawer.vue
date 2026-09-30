@@ -38,7 +38,7 @@ const emit = defineEmits<{
       <div class="service-hero glass-panel">
         <div class="hero-top">
           <div class="hero-brand">
-            <span class="hero-icon">{{ getTypeIcon(service.type) }}</span>
+            <span class="hero-icon"><BaseIcon :name="getTypeIcon(service.type)" size="md" /></span>
             <div>
               <h3 class="hero-title">{{ service.name }}</h3>
               <span class="hero-id font-mono text-muted">ID: {{ service.id }}</span>
@@ -93,7 +93,7 @@ const emit = defineEmits<{
         <div class="links-list">
           <div class="link-item">
             <div class="link-left">
-              <span class="link-icon">🐙</span>
+              <span class="link-icon"><BaseIcon name="git-branch" size="sm" /></span>
               <div class="link-text">
                 <span class="link-title">Source Repository</span>
                 <a v-if="service.repo_url" :href="service.repo_url" target="_blank" rel="noopener noreferrer" class="link-url font-mono">{{ service.repo_url }} ↗</a>
@@ -101,12 +101,12 @@ const emit = defineEmits<{
               </div>
             </div>
             <button v-if="service.repo_url" type="button" class="btn btn-secondary btn-xs" @click="emit('copy', service.repo_url, 'repo')">
-              <span>{{ copiedKey === 'repo' ? '✓ Copied' : 'Copy' }}</span>
+              <BaseIcon :name="copiedKey === 'repo' ? 'check-circle' : 'copy'" size="xs" /> <span>{{ copiedKey === 'repo' ? 'Copied' : 'Copy' }}</span>
             </button>
           </div>
           <div class="link-item">
             <div class="link-left">
-              <span class="link-icon">📖</span>
+              <span class="link-icon"><BaseIcon name="book-open" size="sm" /></span>
               <div class="link-text">
                 <span class="link-title">Documentation & API Spec</span>
                 <a v-if="service.docs_url" :href="service.docs_url" target="_blank" rel="noopener noreferrer" class="link-url font-mono">{{ service.docs_url }} ↗</a>
@@ -114,7 +114,7 @@ const emit = defineEmits<{
               </div>
             </div>
             <button v-if="service.docs_url" type="button" class="btn btn-secondary btn-xs" @click="emit('copy', service.docs_url, 'docs')">
-              <span>{{ copiedKey === 'docs' ? '✓ Copied' : 'Copy' }}</span>
+              <BaseIcon :name="copiedKey === 'docs' ? 'check-circle' : 'copy'" size="xs" /> <span>{{ copiedKey === 'docs' ? 'Copied' : 'Copy' }}</span>
             </button>
           </div>
         </div>
@@ -152,9 +152,9 @@ const emit = defineEmits<{
 
     <template #footer="{ close }">
       <button type="button" class="btn btn-secondary" @click="close">Close</button>
-      <button v-if="service" type="button" class="btn btn-secondary btn-action-labeled" @click="emit('deploy', service)"><span>📦 Deploy Service</span></button>
-      <button v-if="service" type="button" class="btn btn-danger-crimson btn-action-labeled" @click="emit('delete', service)"><span>🗑 Delete Service</span></button>
-      <button v-if="service" type="button" class="btn btn-primary btn-action-labeled" @click="emit('edit', service)"><span>✏️ Edit Service</span></button>
+      <button v-if="service" type="button" class="btn btn-secondary btn-action-labeled" @click="emit('deploy', service)"><BaseIcon name="box" size="xs" /> <span>Deploy Service</span></button>
+      <button v-if="service" type="button" class="btn btn-danger-crimson btn-action-labeled" @click="emit('delete', service)"><BaseIcon name="trash" size="xs" /> <span>Delete Service</span></button>
+      <button v-if="service" type="button" class="btn btn-primary btn-action-labeled" @click="emit('edit', service)"><BaseIcon name="edit" size="xs" /> <span>Edit Service</span></button>
     </template>
   </ModalDrawer>
 </template>

@@ -2,6 +2,7 @@
 import type { RBACMatrix } from '../../api/management'
 import type { RbacResourceItem } from '../../composables/useTenancyRbac'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   show: boolean
@@ -35,7 +36,7 @@ const emit = defineEmits<{
           Click individual cells to toggle runtime access policies.
         </span>
         <button class="btn btn-secondary btn-sm" @click="emit('sync')">
-          <span>💾 Sync to APIServer</span>
+          <BaseIcon name="save" size="xs" /> <span>Sync to APIServer</span>
         </button>
       </div>
 
@@ -70,8 +71,8 @@ const emit = defineEmits<{
                   class="perm-badge"
                   :class="matrix[role]?.[res.key] ? 'perm-allowed' : 'perm-denied'"
                 >
-                  <span v-if="matrix[role]?.[res.key]">✓ ALLOWED</span>
-                  <span v-else>✕ DENIED</span>
+                  <span v-if="matrix[role]?.[res.key]"><BaseIcon name="check" size="xs" /> ALLOWED</span>
+                  <span v-else><BaseIcon name="x" size="xs" /> DENIED</span>
                 </div>
               </td>
             </tr>

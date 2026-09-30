@@ -1,0 +1,77 @@
+/* ==========================================================================
+   Enterprise LogViewerTerminal Stylesheet
+   ========================================================================== */
+.terminal-window {
+  flex: 1; display: flex; flex-direction: column; background: #080c16;
+  border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px;
+  overflow: hidden; position: relative; min-height: 0; height: 100%;
+}
+
+.terminal-titlebar {
+  height: 26px; min-height: 26px; max-height: 26px; background: rgba(15, 23, 42, 0.85);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12); display: flex; align-items: center;
+  justify-content: space-between; padding: 0 10px; user-select: none; flex-shrink: 0;
+}
+
+.terminal-stream-status { display: inline-flex; align-items: center; gap: 8px; font-size: 10.5px; font-weight: 700; flex-shrink: 0; }
+.terminal-target-badge {
+  color: #38bdf8; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 1px 6px; border-radius: 4px; font-size: 10px;
+}
+.buffer-count { color: #64748b; font-size: 10px; }
+
+.terminal-body {
+  flex: 1; padding: 8px 12px; overflow-y: auto; overflow-x: auto;
+  font-size: 11.5px; line-height: 1.5; background: #080c16; min-height: 0;
+}
+
+/* Clean Typography */
+.log-line {
+  font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word;
+  display: flex; align-items: baseline; gap: 8px; padding: 1px 4px; border-radius: 3px; transition: background 0.1s ease;
+}
+.log-line:hover { background: rgba(255, 255, 255, 0.04); }
+.log-line.log-nowrap { white-space: pre; word-break: normal; overflow-wrap: normal; flex-wrap: nowrap !important; }
+.log-line.log-nowrap .log-msg { white-space: pre; word-break: normal; overflow-wrap: normal; flex: none; }
+
+.log-idx { color: #475569; font-size: 10px; width: 32px; text-align: right; flex-shrink: 0; user-select: none; }
+.badge-time { color: #64748b; font-size: 10.5px; flex-shrink: 0; user-select: none; }
+.badge-level { font-size: 9.5px; font-weight: 700; flex-shrink: 0; padding: 0 4px; border-radius: 3px; user-select: none; }
+.badge-info { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+.badge-warn { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+.badge-error { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.25); }
+.badge-debug { background: rgba(100, 116, 139, 0.18); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.25); }
+
+.badge-target {
+  color: #38bdf8; font-size: 10.5px; font-weight: 600; flex-shrink: 0;
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.log-msg {
+  color: #f8fafc; flex: 1; font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word;
+}
+.log-error { background: rgba(244, 63, 94, 0.06); }
+.log-error .log-msg { color: #fda4af; font-weight: 600; }
+
+.badge-trace {
+  font-size: 10px; color: #64748b; background: #131b2e; border: 1px solid rgba(148, 163, 184, 0.15);
+  padding: 0 5px; border-radius: 3px; flex-shrink: 0;
+}
+
+.empty-terminal {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 80px 20px; text-align: center; color: #64748b;
+}
+.empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.7; }
+.empty-title { font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+.empty-sub { font-size: 11px; color: #475569; }
+
+.btn-scroll-bottom {
+  position: absolute; bottom: 16px; right: 20px; background: #1e293b;
+  border: 1px solid #38bdf8; color: #38bdf8; padding: 5px 12px; border-radius: 6px;
+  font-size: 10.5px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 5px; z-index: 10;
+}
+.btn-scroll-bottom:hover { background: #38bdf8; color: #0b0f19; transform: translateY(-1px); }

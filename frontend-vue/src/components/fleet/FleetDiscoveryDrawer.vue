@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { Cluster, ClusterDiscoveryData } from '../../api/fleet'
 
 defineProps<{
@@ -42,10 +43,10 @@ const emit = defineEmits<{
       </div>
 
       <div class="discovery-section">
-        <h4 class="section-subheading">📦 Discovered Namespaces</h4>
+        <h4 class="section-subheading"><BaseIcon name="box" size="xs" /> Discovered Namespaces</h4>
         <div v-if="discoveredData.namespaces && discoveredData.namespaces.length > 0" class="chips-wrap">
           <span v-for="ns in discoveredData.namespaces" :key="ns" class="ns-chip font-mono">
-            📁 {{ ns }}
+            <BaseIcon name="folder" size="xs" /> {{ ns }}
           </span>
         </div>
         <div v-else class="empty-subtext">
@@ -54,7 +55,7 @@ const emit = defineEmits<{
       </div>
 
       <div class="discovery-section">
-        <h4 class="section-subheading">🖥️ Discovered Node Pools</h4>
+        <h4 class="section-subheading"><BaseIcon name="server" size="xs" /> Discovered Node Pools</h4>
         <div v-if="discoveredData.node_pools && discoveredData.node_pools.length > 0" class="pools-list">
           <div v-for="(pool, idx) in discoveredData.node_pools" :key="idx" class="pool-item">
             <div class="pool-left">
@@ -70,7 +71,7 @@ const emit = defineEmits<{
       </div>
 
       <div class="discovery-section">
-        <h4 class="section-subheading">📋 Topology Metadata Payload</h4>
+        <h4 class="section-subheading"><BaseIcon name="file-text" size="xs" /> Topology Metadata Payload</h4>
         <pre class="json-preview font-mono">{{ JSON.stringify(discoveredData, null, 2) }}</pre>
       </div>
     </div>

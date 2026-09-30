@@ -7,11 +7,11 @@
         class="runbook-card glass-panel glass-panel-glow"
       >
         <div class="rb-header">
-          <div class="rb-icon-box">{{ getCategoryIcon(rb.category) }}</div>
+          <div class="rb-icon-box"><BaseIcon :name="getCategoryIcon(rb.category)" size="sm" /></div>
           <div class="rb-title-group">
             <div class="rb-badge-row">
               <span class="rb-category font-mono">{{ rb.category.toUpperCase() }}</span>
-              <span class="badge badge-cyan font-mono" style="font-size: 9.5px;">⚡ Auto-Remediation</span>
+              <span class="badge badge-cyan font-mono" style="font-size: 9.5px;"><BaseIcon name="zap" size="xs" /> Auto-Remediation</span>
             </div>
             <h3 class="rb-title">{{ rb.title }}</h3>
           </div>
@@ -38,23 +38,23 @@
             title="Open parameter & target execution modal"
             @click="$emit('execute', rb)"
           >
-            <span>{{ executingId === rb.id ? '⚡ Running...' : '⚡ Run' }}</span>
+            <BaseIcon :name="executingId === rb.id ? 'clock' : 'zap'" size="xs" /> <span>{{ executingId === rb.id ? 'Running...' : 'Run' }}</span>
           </button>
           <button class="btn btn-secondary" style="flex: 1;" title="Inspect DAG Steps" @click="$emit('inspect', rb)">
-            <span>🔍 Inspect</span>
+            <BaseIcon name="eye" size="xs" /> <span>Inspect</span>
           </button>
           <button class="btn btn-secondary btn-sm" title="Edit Runbook" @click="$emit('edit', rb)">
-            <span>⚙️ Edit</span>
+            <BaseIcon name="sliders" size="xs" /> <span>Edit</span>
           </button>
           <button class="btn btn-danger btn-sm btn-delete-crimson" title="Delete Runbook" @click="$emit('delete', rb.id)">
-            <span>🗑 Delete</span>
+            <BaseIcon name="trash" size="xs" /> <span>Delete</span>
           </button>
         </div>
       </div>
     </div>
 
     <div v-else class="empty-state-box desktop-only-grid glass-panel">
-      <span class="empty-icon">📖</span>
+      <span class="empty-icon"><BaseIcon name="book-open" size="lg" /></span>
       <h3 class="empty-title">No Runbooks Discovered</h3>
       <p class="empty-desc">Create your first operational runbook with step-by-step diagnostic and remediation commands.</p>
       <button class="btn btn-primary" @click="$emit('create')">
@@ -66,6 +66,7 @@
 
 <script setup lang="ts">
 import type { Runbook } from '../../api/governance'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   runbooks: Runbook[]

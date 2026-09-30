@@ -7,7 +7,7 @@
         class="rb-mobile-card mobile-rb-card glass-panel"
       >
         <div class="rb-mobile-icon mobile-rb-icon">
-          <span>{{ getCategoryIcon(rb.category) }}</span>
+          <BaseIcon :name="getCategoryIcon(rb.category)" size="xs" />
         </div>
 
         <div class="rb-mobile-info mobile-rb-info">
@@ -30,7 +30,7 @@
             aria-label="Execute Runbook"
             @click="$emit('execute', rb)"
           >
-            <span>{{ executingId === rb.id ? '⏳' : '⚡' }}</span>
+            <BaseIcon :name="executingId === rb.id ? 'clock' : 'zap'" size="xs" />
           </button>
           <button 
             class="rb-action-btn btn-steps-action"
@@ -38,7 +38,7 @@
             aria-label="Inspect Procedure Steps"
             @click="$emit('inspect', rb)"
           >
-            <span>🔍</span>
+            <BaseIcon name="eye" size="xs" />
           </button>
           <button 
             class="rb-action-btn btn-edit-action"
@@ -46,7 +46,7 @@
             aria-label="Edit Runbook"
             @click="$emit('edit', rb)"
           >
-            <span>⚙️</span>
+            <BaseIcon name="sliders" size="xs" />
           </button>
           <button 
             class="rb-action-btn btn-delete-action btn-delete-crimson"
@@ -54,14 +54,14 @@
             aria-label="Delete Runbook"
             @click="$emit('delete', rb.id)"
           >
-            <span>🗑</span>
+            <BaseIcon name="trash" size="xs" />
           </button>
         </div>
       </div>
     </div>
 
     <div v-else class="runbooks-mobile-empty glass-panel font-mono">
-      <span class="mobile-empty-icon">📖</span>
+      <span class="mobile-empty-icon"><BaseIcon name="book-open" size="lg" /></span>
       <p class="mobile-empty-text">No runbooks cataloged yet. Tap + to author your first operational runbook.</p>
     </div>
   </div>
@@ -69,6 +69,7 @@
 
 <script setup lang="ts">
 import type { Runbook } from '../../api/governance'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 defineProps<{
   runbooks: Runbook[]

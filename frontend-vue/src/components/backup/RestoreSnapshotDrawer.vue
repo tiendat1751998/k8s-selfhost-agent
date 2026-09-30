@@ -32,18 +32,18 @@ function formatDate(d?: string): string {
           <span class="badge badge-rose">POINT-IN-TIME RECOVERY & REMAP WIZARD</span>
           <h3 class="modal-title font-mono">Disaster Recovery Execution</h3>
         </div>
-        <button class="modal-close" @click="emit('update:modelValue', false)">✕</button>
+        <button class="modal-close" @click="emit('update:modelValue', false)"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <form class="drawer-body" @submit.prevent="emit('submit')">
         <!-- Safety Alert -->
         <div class="alert-box alert-warning">
-          <strong>⚠️ High Impact Action:</strong> Restore will replay transaction WAL records and overwrite contents of the target database instance.
+          <strong><BaseIcon name="alert-triangle" size="xs" /> High Impact Action:</strong> Restore will replay transaction WAL records and overwrite contents of the target database instance.
         </div>
 
         <!-- Section 1: Source Snapshot Selection -->
         <div class="drawer-section">
-          <span class="drawer-section-title">📦 Source Snapshot Selection</span>
+          <span class="drawer-section-title"><BaseIcon name="box" size="xs" /> Source Snapshot Selection</span>
           <div class="form-group">
             <label class="form-label">Verified Backup Snapshot:</label>
             <select v-model="form.backup_job_id" required class="input-glass font-mono">
@@ -57,7 +57,7 @@ function formatDate(d?: string): string {
 
         <!-- Section 2: Point-in-Time Recovery Timestamp -->
         <div class="drawer-section">
-          <span class="drawer-section-title">⏱️ Point-in-Time (PITR) Recovery Boundary</span>
+          <span class="drawer-section-title"><BaseIcon name="clock" size="xs" /> Point-in-Time (PITR) Recovery Boundary</span>
           <div class="form-group">
             <label class="form-label">Recovery Timestamp (ISO 8601):</label>
             <input 
@@ -71,7 +71,7 @@ function formatDate(d?: string): string {
 
         <!-- Section 3: Target Database & Host Remap -->
         <div class="drawer-section">
-          <span class="drawer-section-title">🎯 Target Destination & Namespace Remapping</span>
+          <span class="drawer-section-title"><BaseIcon name="target" size="xs" /> Target Destination & Namespace Remapping</span>
           
           <div class="form-group">
             <label class="form-label">Target DB Host:</label>
@@ -127,7 +127,7 @@ function formatDate(d?: string): string {
             class="btn btn-danger" 
             :disabled="loading || !form.backup_job_id"
           >
-            <span>{{ loading ? 'Executing PITR Restore...' : '⚡ Execute Instant Restore' }}</span>
+            <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>{{ loading ? 'Executing PITR Restore...' : 'Execute Instant Restore' }}</span>
           </button>
         </div>
       </form>

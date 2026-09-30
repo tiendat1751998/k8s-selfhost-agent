@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { HostFormData, HostTypeDefinition, ModalTestResult } from '../../types/hosts'
 
 defineProps<{
@@ -172,7 +173,7 @@ const emit = defineEmits<{
             <input v-model="lbl.key" type="text" placeholder="key (e.g. region)" class="input-glass font-mono" />
             <span class="label-eq">=</span>
             <input v-model="lbl.value" type="text" placeholder="value (e.g. ap-southeast)" class="input-glass font-mono" />
-            <button type="button" class="btn-remove-lbl" title="Remove label" @click="emit('remove-label', idx)">✕</button>
+            <button type="button" class="btn-remove-lbl" title="Remove label" @click="emit('remove-label', idx)"><BaseIcon name="x" size="xs" /></button>
           </div>
         </div>
       </div>
@@ -180,29 +181,29 @@ const emit = defineEmits<{
       <!-- In-Modal Test Connection Results -->
       <div v-if="modalTestResult" class="modal-test-banner font-mono animate-fade-in" :class="modalTestResult.success ? 'test-pass' : 'test-fail'">
         <div class="modal-test-header">
-          <span>{{ modalTestResult.success ? '✅ CONNECTION SUCCESSFUL' : '❌ CONNECTION FAILED' }}</span>
-          <span v-if="modalTestResult.latency_ms > 0">⚡ {{ modalTestResult.latency_ms }}ms</span>
+          <span><BaseIcon :name="modalTestResult.success ? 'check-circle' : 'alert-triangle'" size="xs" /> <span>{{ modalTestResult.success ? 'CONNECTION SUCCESSFUL' : 'CONNECTION FAILED' }}</span></span>
+          <span v-if="modalTestResult.latency_ms > 0"><BaseIcon name="zap" size="xs" /> <span>{{ modalTestResult.latency_ms }}ms</span></span>
         </div>
         <div class="modal-test-msg">{{ modalTestResult.message }}</div>
         <div v-if="modalTestResult.agent_info" class="agent-telemetry-mini" style="margin-top: 6px;">
-          <span v-if="modalTestResult.agent_info.hostname">🖥️ {{ modalTestResult.agent_info.hostname }}</span>
+          <span v-if="modalTestResult.agent_info.hostname"><BaseIcon name="server" size="xs" /> {{ modalTestResult.agent_info.hostname }}</span>
           <span v-if="modalTestResult.agent_info.os_distro || modalTestResult.agent_info.os">
-            🐧 {{ modalTestResult.agent_info.os_distro || modalTestResult.agent_info.os }} ({{ modalTestResult.agent_info.arch }})
+            <BaseIcon name="terminal" size="xs" /> {{ modalTestResult.agent_info.os_distro || modalTestResult.agent_info.os }} ({{ modalTestResult.agent_info.arch }})
           </span>
-          <span v-if="modalTestResult.agent_info.uptime || modalTestResult.agent_info.uptime_seconds">⏱️ {{ formatUptime(modalTestResult.agent_info.uptime || modalTestResult.agent_info.uptime_seconds) }}</span>
+          <span v-if="modalTestResult.agent_info.uptime || modalTestResult.agent_info.uptime_seconds"><BaseIcon name="clock" size="xs" /> {{ formatUptime(modalTestResult.agent_info.uptime || modalTestResult.agent_info.uptime_seconds) }}</span>
         </div>
       </div>
 
       <!-- Modal Actions -->
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" :disabled="modalTesting" @click="emit('test-connection')">
-          <span>{{ modalTesting ? '⏳ Testing...' : '⚡ Test Connection' }}</span>
+          <BaseIcon :name="modalTesting ? 'refresh' : 'zap'" size="xs" :class="{ 'animate-spin': modalTesting }" /> <span>{{ modalTesting ? 'Testing...' : 'Test Connection' }}</span>
         </button>
 
         <div class="modal-action-right">
           <button type="button" class="btn btn-secondary" @click="emit('update:show', false)">Cancel</button>
           <button type="submit" class="btn btn-primary" :disabled="submitting">
-            <span>{{ submitting ? '⏳ Saving...' : (isEditing ? '💾 Update Host' : '💾 Register Host') }}</span>
+            <BaseIcon :name="submitting ? 'refresh' : 'hard-drive'" size="xs" :class="{ 'animate-spin': submitting }" /> <span>{{ submitting ? 'Saving...' : (isEditing ? 'Update Host' : 'Register Host') }}</span>
           </button>
         </div>
       </div>

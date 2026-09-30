@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import StatusBadge from '../ui/StatusBadge.vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { DockerService } from '../../api/compute'
 import type { SwarmServiceTask } from '../../composables/useDockerSwarm'
 
@@ -50,7 +51,7 @@ function formatDate(d?: string): string {
       <div class="service-detail-header-card glass-panel">
         <div class="detail-hero-top">
           <div class="detail-id-wrap">
-            <span class="detail-icon" aria-hidden="true">🐳</span>
+            <span class="detail-icon" aria-hidden="true"><BaseIcon name="box" size="md" /></span>
             <div>
               <h3 class="detail-hostname font-mono">{{ props.service.name }}</h3>
               <span class="detail-node-id font-mono text-muted">ID: {{ props.service.id }}</span>
@@ -86,7 +87,7 @@ function formatDate(d?: string): string {
         <h4 class="detail-section-title">VIP Endpoints & Ingress Mesh Telemetry</h4>
         <div class="specs-grid">
           <div class="spec-card glass-panel">
-            <div class="spec-icon" aria-hidden="true">⚡</div>
+            <div class="spec-icon" aria-hidden="true"><BaseIcon name="zap" size="sm" /></div>
             <div class="spec-info">
               <span class="spec-label">VIRTUAL IP (VIP)</span>
               <span class="spec-value font-mono text-cyan">{{ (props.service as any).vip || '--' }}</span>
@@ -94,7 +95,7 @@ function formatDate(d?: string): string {
           </div>
 
           <div class="spec-card glass-panel">
-            <div class="spec-icon" aria-hidden="true">🌐</div>
+            <div class="spec-icon" aria-hidden="true"><BaseIcon name="globe" size="sm" /></div>
             <div class="spec-info">
               <span class="spec-label">PUBLISHED PORTS</span>
               <span class="spec-value font-mono">{{ (props.service.ports && props.service.ports.length > 0) ? props.service.ports.join(', ') : '--' }}</span>
@@ -102,7 +103,7 @@ function formatDate(d?: string): string {
           </div>
 
           <div class="spec-card glass-panel">
-            <div class="spec-icon" aria-hidden="true">🔀</div>
+            <div class="spec-icon" aria-hidden="true"><BaseIcon name="git-branch" size="sm" /></div>
             <div class="spec-info">
               <span class="spec-label">ROUTING MODE</span>
               <span class="spec-value font-mono">{{ (props.service as any).mode || 'VIP Round-Robin' }}</span>
@@ -110,7 +111,7 @@ function formatDate(d?: string): string {
           </div>
 
           <div class="spec-card glass-panel">
-            <div class="spec-icon" aria-hidden="true">🛡️</div>
+            <div class="spec-icon" aria-hidden="true"><BaseIcon name="shield" size="sm" /></div>
             <div class="spec-info">
               <span class="spec-label">OVERLAY NETWORK</span>
               <span class="spec-value font-mono">{{ (props.service as any).network || '--' }}</span>
@@ -164,7 +165,7 @@ function formatDate(d?: string): string {
           class="btn btn-secondary"
           @click="emit('logs', props.service.id, props.service.name)"
         >
-          <span>📜 Service Logs</span>
+          <span><BaseIcon name="file-text" size="xs" /> Service Logs</span>
         </button>
         <button
           v-if="props.service"
@@ -172,7 +173,7 @@ function formatDate(d?: string): string {
           :disabled="props.actionLoading === `update-${props.service.id}`"
           @click="emit('update', props.service)"
         >
-          <span>🔄 Rolling Update</span>
+          <span><BaseIcon name="refresh" size="xs" /> Rolling Update</span>
         </button>
         <button class="btn btn-secondary" @click="close">Close</button>
       </div>

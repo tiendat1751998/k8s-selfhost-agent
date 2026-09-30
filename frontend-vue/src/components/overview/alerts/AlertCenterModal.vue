@@ -7,6 +7,7 @@ import AlertBatchActionsBar from './AlertBatchActionsBar.vue'
 import AlertListTable from './AlertListTable.vue'
 import NodeRemediationModal from '../drawer/NodeRemediationModal.vue'
 import { useAlertStore } from '../../../stores/alertStore'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 interface Props {
   show: boolean
@@ -96,7 +97,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeyDown))
               class="alert-modal-icon-badge"
               :class="activeAlerts.length > 0 ? (hasCriticalAlerts ? 'badge-icon-rose' : 'badge-icon-amber') : 'badge-icon-cyan'"
             >
-              {{ activeAlerts.length > 0 ? (hasCriticalAlerts ? '🚨' : '⚠️') : '🛡️' }}
+              <BaseIcon :name="activeAlerts.length > 0 ? (hasCriticalAlerts ? 'alert-triangle' : 'alert-circle') : 'shield'" size="sm" />
             </div>
             <div>
               <div class="title-with-badge">
@@ -134,7 +135,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeyDown))
               title="Close Alert Center"
               aria-label="Close"
             >
-              ✕
+              <BaseIcon name="x" size="xs" />
             </button>
           </div>
         </div>
