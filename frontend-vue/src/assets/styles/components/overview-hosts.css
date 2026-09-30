@@ -144,23 +144,26 @@
 /* === NodeTableView.vue === */
 .node-table-container { border-radius: 12px; overflow: hidden; border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)); }
 .table-responsive { width: 100%; max-width: 100%; overflow-x: auto !important; }
-.node-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11.5px; }
-.node-table th { padding: 6px 10px; background: rgba(15, 23, 42, 0.75); color: var(--text-muted, #94a3b8); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)); white-space: nowrap; }
+.node-table,
+.hosts-table { width: 100%; max-width: 1030px; border-collapse: collapse; text-align: left; font-size: 11.5px; table-layout: fixed; }
+.node-table th,
+.hosts-table th { padding: 6px 8px; background: rgba(15, 23, 42, 0.75); color: var(--text-muted, #94a3b8); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)); white-space: nowrap; }
 
-/* Column Width Calibration (<=1030px total in 1140px view) */
+/* Column Width Calibration (<=975px total in 1068px/1140px view) */
 .col-status { width: 75px; min-width: 75px; }
-.col-name { width: 170px; min-width: 150px; max-width: 180px; }
-.col-ip { width: 130px; min-width: 120px; }
+.col-name { width: 150px; min-width: 130px; max-width: 160px; }
+.col-ip { width: 115px; min-width: 105px; }
 .col-cpu { width: 85px; min-width: 80px; }
 .col-ram { width: 125px; min-width: 115px; }
 .col-disk { width: 125px; min-width: 115px; }
 .col-workloads { width: 80px; min-width: 75px; }
 .col-probe { width: 90px; min-width: 80px; }
-.col-actions { width: 150px; min-width: 140px; max-width: 150px; text-align: right; white-space: nowrap; }
+.col-actions { width: 130px; min-width: 120px; max-width: 130px; text-align: right; white-space: nowrap; }
 
 .node-row { height: 38px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); transition: background 0.15s ease; cursor: pointer; }
 .node-row:hover { background: rgba(56, 189, 248, 0.05); }
-.node-table td { padding: 2px 10px; height: 38px; vertical-align: middle; white-space: nowrap; }
+.node-table td,
+.hosts-table td { padding: 2px 8px; height: 38px; vertical-align: middle; white-space: nowrap; }
 .status-wrap { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; }
 .dot-ready { background: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); }
 .dot-offline { background: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.4); }
@@ -169,7 +172,7 @@
 .status-offline { color: #fb7185; }
 .status-degraded { color: #fcd34d; }
 .name-role-cell { display: flex; align-items: center; gap: 6px; }
-.node-name-text { color: var(--text-primary, #f8fafc); max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.node-name-text { color: var(--text-primary, #f8fafc); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .role-badge { font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 3px; }
 .badge-control { color: #c084fc; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.25); }
 .badge-worker { color: #38bdf8; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); }
@@ -178,7 +181,7 @@
 .os-distro-pill { font-size: 9px; padding: 1px 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.05); color: var(--text-muted, #94a3b8); }
 .progress-cell { display: flex; align-items: center; gap: 6px; }
 .pct-num { width: 28px; text-align: right; font-size: 11px; color: var(--text-primary, #f8fafc); }
-.bar-track { width: 48px; height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 999px; overflow: hidden; }
+.bar-track { width: 36px; height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 999px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 999px; }
 .fill-cyan { background: #06b6d4; }
 .fill-amber { background: #f59e0b; }
@@ -197,9 +200,9 @@
 
 .sre-suite { display: inline-flex; align-items: center; gap: 3px; justify-content: flex-end; position: relative; }
 .sre-btn {
-  padding: 3px 6px;
-  height: 24px;
-  font-size: 10px;
+  padding: 2px 5px;
+  height: 22px;
+  font-size: 9.5px;
   font-weight: 600;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.04);

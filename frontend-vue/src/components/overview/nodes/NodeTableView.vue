@@ -290,6 +290,20 @@ function getNodePing(node: NodeMetrics): number {
 <style scoped>
 @import '../../../assets/styles/views/overview.css';
 
+.node-table {
+  table-layout: fixed !important;
+  width: 100% !important;
+  max-width: 1030px !important;
+}
+
+.node-table th {
+  padding: 6px 8px !important;
+}
+
+.node-table td {
+  padding: 2px 8px !important;
+}
+
 .sortable-th {
   cursor: pointer;
   user-select: none;
