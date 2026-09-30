@@ -27,7 +27,7 @@ describe('Table Overflow Remediation Specifications', () => {
     const content = fs.readFileSync(filePath, 'utf-8')
 
     assert.match(content, /max-width:\s*1070px/i, 'deployments.css must contain max-width: 1070px constraint')
-    assert.match(content, /\.table\s+th,\s*\.table\s+td/i, 'deployments.css must specify .table th, .table td')
+    assert.match(content, /\.deployments-table-wrap\s+th,\s*\.deployments-table-wrap\s+td/i, 'deployments.css must scope padding to .deployments-table-wrap')
     assert.match(content, /padding:\s*8px\s+10px/i, 'Must set table padding to 8px 10px')
   })
 

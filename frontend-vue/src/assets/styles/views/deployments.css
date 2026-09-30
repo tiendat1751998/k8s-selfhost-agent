@@ -412,8 +412,17 @@
 .progress-animated-stripes { background-size: 1rem 1rem; animation: progress-stripes 1s linear infinite; }
 .table-scroll-wrapper { overflow-x: auto !important; max-width: 100% !important; }
 .deployments-table-wrap { width: 100%; max-width: 100%; overflow-x: auto; }
-.table, .data-table, .deployments-table-wrap table, .deployments-table-wrap .data-table, .deployments-table-wrap .table { table-layout: fixed !important; width: 100% !important; max-width: 1070px !important; }
-.table th, .table td, .data-table th, .data-table td, .deployments-table-wrap th, .deployments-table-wrap td { padding: 8px 10px !important; }
+.deployments-table-wrap table,
+.deployments-table-wrap .data-table,
+.deployments-table-wrap .table {
+  table-layout: fixed !important;
+  width: 100% !important;
+  max-width: 1070px !important;
+}
+.deployments-table-wrap th,
+.deployments-table-wrap td {
+  padding: 8px 10px !important;
+}
 .action-buttons { display: flex; align-items: center; justify-content: flex-end; gap: 3px; white-space: nowrap; }
 .action-buttons .btn { padding: 2px 5px !important; font-size: 10px !important; height: 22px !important; min-height: 22px !important; white-space: nowrap; gap: 2px !important; }
 .btn-remove { color: #f87171; }
