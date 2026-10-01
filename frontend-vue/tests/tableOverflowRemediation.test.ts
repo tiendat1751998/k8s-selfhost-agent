@@ -78,6 +78,12 @@ describe('Table Overflow Remediation Specifications', () => {
     assert.match(cssContent, /table-layout:\s*fixed/i, 'slo-table.css must enforce table-layout: fixed')
     assert.match(cssContent, /max-width:\s*1080px/i, 'slo-table.css must enforce max-width: 1080px')
     assert.match(cssContent, /max-width:\s*240px/i, 'slo-table.css must clamp query-cell to 240px')
+    assert.strictEqual(cssContent.includes('.table-box .data-table'), false, 'slo-table.css must purge bare generic selector')
+
+    // Verify Vue 3 scoped :deep penetration for DataTable child component
+    assert.match(tableContent, /:deep\([^)]*\.slo-table-container/i, 'SloCatalogTable must use :deep() penetration for child DataTable')
+    assert.match(tableContent, /:deep\(\.data-table\)/i, 'SloCatalogTable must include :deep(.data-table)')
+    assert.match(tableContent, /table-layout:\s*fixed/i, 'SloCatalogTable must enforce table-layout: fixed inside :deep')
   })
 
   test('FirmBankingView.vue & firmbanking.css: fixed layout, max-width <= 1120px, and cell ellipsis', () => {
@@ -115,6 +121,12 @@ describe('Table Overflow Remediation Specifications', () => {
     assert.match(cssContent, /max-width:\s*1040px/i, 'explorer.css must enforce max-width: 1040px')
     assert.match(cssContent, /\.cell-image-text\s*\{[^}]*max-width:\s*145px/i, 'explorer.css must constrain cell-image-text to 145px')
     assert.match(cssContent, /\.cell-selector-text\s*\{[^}]*max-width:\s*135px/i, 'explorer.css must constrain cell-selector-text to 135px')
+    assert.strictEqual(cssContent.includes('.table-box table'), false, 'explorer.css must purge bare generic selector')
+
+    // Verify Vue 3 scoped :deep penetration for DataTable child component
+    assert.match(tableContent, /:deep\([^)]*\.explorer-table-wrap/i, 'ExplorerResourceTable must use :deep() penetration for child DataTable')
+    assert.match(tableContent, /:deep\(\.data-table\)/i, 'ExplorerResourceTable must include :deep(.data-table)')
+    assert.match(tableContent, /table-layout:\s*fixed/i, 'ExplorerResourceTable must enforce table-layout: fixed inside :deep')
   })
 
   test('Line Count Constraints: All modified files must be strictly under 500 lines', () => {

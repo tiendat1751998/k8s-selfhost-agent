@@ -234,4 +234,12 @@ function handleRowAction(actionId: string, row: EnrichedSLORow) {
 
 <style scoped>
 @import '../../assets/styles/components/slo-table.css';
+
+:deep(.slo-table-container table),
+:deep(.slo-table-container .data-table),
+:deep(.data-table) {
+  table-layout: fixed !important;
+  width: 100% !important;
+  max-width: 1080px !important;
+}
 </style>

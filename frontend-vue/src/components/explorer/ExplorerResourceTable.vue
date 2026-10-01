@@ -278,4 +278,12 @@ function handleRowAction(actionId: string, res: K8sResource) {
 
 <style scoped>
 @import '../../assets/styles/views/explorer.css';
+
+:deep(.explorer-table-wrap table),
+:deep(.explorer-table-wrap .data-table),
+:deep(.data-table) {
+  table-layout: fixed !important;
+  width: 100% !important;
+  max-width: 1040px !important;
+}
 </style>

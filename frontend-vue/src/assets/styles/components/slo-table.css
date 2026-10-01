@@ -16,7 +16,7 @@
   box-sizing: border-box;
 }
 
-.table-box .data-table-container {
+.slo-table-container .data-table-container {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -24,41 +24,40 @@
   border: none;
 }
 
-.table-box .table-scroll-wrapper {
+.slo-table-container .table-scroll-wrapper {
   width: 100%;
   box-sizing: border-box;
 }
 
 .slo-table-container table,
-.slo-table-container .data-table,
-.table-box .data-table {
+.slo-table-container .data-table {
   table-layout: fixed !important;
   width: 100% !important;
   max-width: 1080px !important;
 }
 
 @media (min-width: 1024px) {
-  .table-box .table-scroll-wrapper {
+  .slo-table-container .table-scroll-wrapper {
     overflow-x: hidden;
   }
 }
 
 /* High-Density Data Table Cells */
-.table-box .data-table th {
+.slo-table-container .data-table th {
   padding: 8px 10px !important;
   font-size: 11px !important;
   background: rgba(15, 23, 42, 0.85) !important;
   height: 34px !important;
 }
 
-.table-box .data-table td {
+.slo-table-container .data-table td {
   padding: 8px 10px !important;
   height: 40px !important;
   box-sizing: border-box;
   vertical-align: middle;
 }
 
-.table-box .data-table tr {
+.slo-table-container .data-table tr {
   height: 40px !important;
 }
 
@@ -212,7 +211,7 @@
   max-width: 200px;
 }
 
-.table-box .data-table td:nth-child(7) {
+.slo-table-container .data-table td:nth-child(7) {
   max-width: 240px;
   overflow: hidden;
 }
