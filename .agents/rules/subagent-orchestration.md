@@ -20,3 +20,14 @@ activation: always_on
 3. **Reactive Communication**:
    - Communicate via `send_message`.
    - Never loop with `manage_subagents` status checks; allow the reactive wakeup mechanism to resume the turn.
+
+4. **Mandatory Skill Allocation Matrix (Strict Role Separation)**:
+   - When dispatching, mandate ONLY the skills mapped to the agent's tier. Never cross-assign or dump irrelevant skills:
+     - **Discovery & Spec** (`business-analyst`, `product-owner`): `speckit-specify`, `speckit-clarify`, `speckit-checklist`, `brainstorming`.
+     - **Architecture & Planning** (`architect`, `planner`): `speckit-plan`, `speckit-tasks`, `speckit-analyze`, `writing-plans`, `schema-mapping`.
+     - **Coders** (`backend-coder`, `frontend-coder`): CORE: `test-driven-development`, `verification-before-completion`, `ponytail`. (Load `receiving-code-review` ONLY when fixing review feedback).
+     - **Database** (`database-engineer`): CORE: `verification-before-completion`, `schema-mapping`, `ponytail`.
+     - **Infra/DevOps** (`devops`, `sre`): CORE: `verification-before-completion`, `ponytail`. (Load `systematic-debugging` ONLY during incident/troubleshooting).
+     - **QA & Testing** (`qa-test-engineer`): `systematic-debugging`, `speckit-checklist` + Chrome DevTools MCP. (READ/TEST ONLY - NEVER edit code).
+     - **Reviewer** (`reviewer`): `ponytail-review`, `requesting-code-review`, `verification-before-completion`. (READ-ONLY - NEVER edit code).
+     - **Release** (`release-manager`): `finishing-a-development-branch`, `verification-before-completion`.

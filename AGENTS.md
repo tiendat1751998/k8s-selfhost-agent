@@ -8,8 +8,8 @@
   - Absolute prohibition on "make it run temporarily" mentality. Every piece of code must meet Production Enterprise standards: strict typing, comprehensive error handling, concurrency safety, clean architecture, and scalability.
   - No monkey-patching, no temporary stubs/mocks, no sloppy leftovers. Every touched module must be strictly clean, under 500 lines, and defect-free.
 - **EMPOWERED SKILL UTILIZATION & MANDATORY ORCHESTRATOR DUTY**:
-  - Subagents and orchestrator are fully empowered to leverage any and all relevant skills needed (e.g., `verification-before-completion`, `systematic-debugging`, `test-driven-development`, `chrome-devtools-mcp`, `receiving-code-review`) without artificial caps, as long as it avoids over-engineering and bloated context.
-  - **Orchestrator Duty**: The Orchestrator MUST proactively mandate and remind subagents to load and apply their relevant `SKILL.md` instructions in every dispatch prompt. Never allow subagents to forget or skip skill directives.
+  - Subagents and orchestrator are fully empowered to leverage their role-specific skills per the **Skill Allocation Matrix** (e.g., Coder: `verification-before-completion`, `test-driven-development`, `ponytail`; QA: `systematic-debugging`, `speckit-checklist`, `chrome-devtools-mcp`; Reviewer: `ponytail-review`, `requesting-code-review`; BA/Architect: `speckit-*` suite) without artificial caps, while strictly avoiding over-engineering and bloated context.
+  - **Orchestrator Duty**: The Orchestrator MUST proactively mandate and remind subagents to load and apply ONLY their role-appropriate `SKILL.md` instructions in every dispatch prompt. Never allow subagents to forget or cross-assign inappropriate skill directives.
 - **ZERO DEFENSIVENESS & ZERO EMPTY THEORIZING**:
   - When a defect or oversight is discovered, no defensive justifications, no theoretical diagrams, no empty promises.
   - Acknowledge reality, slow down, verify factual evidence, and solve the root cause.
