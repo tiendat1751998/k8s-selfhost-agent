@@ -81,15 +81,15 @@ const enrichedRows = computed<EnrichedSLORow[]>(() => {
 })
 
 const sloColumns: Column<EnrichedSLORow>[] = [
-  { key: 'service', label: 'Service / Workload', sortable: true },
-  { key: 'indicator_type', label: 'SLI Type', width: '100px', sortable: true },
-  { key: 'targetNum', label: 'Target', width: '85px', sortable: true },
-  { key: 'error_budget', label: 'Error Budget', width: '160px', sortable: true },
-  { key: 'burn_rate', label: 'Burn Velocity', width: '115px', sortable: true },
-  { key: 'window', label: 'Window', width: '80px', sortable: true },
-  { key: 'query', label: 'SLI Query (PromQL)', width: '380px' },
-  { key: 'alert_threshold', label: 'Threshold', width: '90px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '135px', align: 'right' },
+  { key: 'service', label: 'Service / Workload', width: '140px', sortable: true },
+  { key: 'indicator_type', label: 'SLI Type', width: '85px', sortable: true },
+  { key: 'targetNum', label: 'Target', width: '75px', sortable: true },
+  { key: 'error_budget', label: 'Error Budget', width: '110px', sortable: true },
+  { key: 'burn_rate', label: 'Burn Velocity', width: '95px', sortable: true },
+  { key: 'window', label: 'Window', width: '65px', sortable: true },
+  { key: 'query', label: 'SLI Query (PromQL)', width: '240px' },
+  { key: 'alert_threshold', label: 'Threshold', width: '95px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '115px', align: 'right' },
 ]
 
 function formatPercent(val?: unknown): string {
@@ -136,7 +136,7 @@ function handleRowAction(actionId: string, row: EnrichedSLORow) {
 </script>
 
 <template>
-  <div class="section-box glass-panel table-box">
+  <div class="section-box glass-panel table-box slo-table-container">
     <DataTable
       :columns="sloColumns"
       :data="enrichedRows"
