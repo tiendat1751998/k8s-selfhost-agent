@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Explorer View - Shell & Main Layout Stylesheet
    Decomposed main entry - Target < 200 lines
    De-neonized: clean 1px borders, zero glowing drop-shadows
@@ -34,19 +34,31 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
 }
-.table-box td { padding: 7px 12px; vertical-align: middle; height: 40px; }
-.table-box th { padding: 8px 12px; font-size: 11px; }
+.explorer-table-wrap {
+  width: 100%;
+  max-width: 1040px !important;
+  box-sizing: border-box;
+}
+.explorer-table-wrap table,
+.explorer-desktop-table table,
+.table-box table {
+  table-layout: fixed !important;
+  width: 100% !important;
+  max-width: 1040px !important;
+}
+.table-box td { padding: 6px 10px; vertical-align: middle; height: 40px; box-sizing: border-box; }
+.table-box th { padding: 8px 10px; font-size: 11px; box-sizing: border-box; }
 .explorer-desktop-table { overflow-x: auto; max-width: 100%; }
-.explorer-desktop-table table { width: 100%; table-layout: auto; }
-.resource-name-cell { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
-.res-link { color: #38bdf8; text-decoration: none; font-weight: 600; white-space: nowrap; }
+.resource-name-cell { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; overflow: hidden; }
+.res-link { color: #38bdf8; text-decoration: none; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .res-link:hover { color: #00e5ff; text-decoration: underline; }
 .app-tag { font-size: 0.68rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); padding: 1px 6px; border-radius: 4px; color: #94a3b8; white-space: nowrap; }
 .ns-badge { background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.25); color: #c084fc; padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap; }
 .badge-replicas { color: #38bdf8; font-weight: 700; }
 .badge-keys { color: #fbbf24; }
 .schedule-badge { background: rgba(56, 189, 248, 0.12); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
-.cell-image-text { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+.cell-image-text { max-width: 145px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
+.cell-selector-text { max-width: 135px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
 .roles-wrap { display: flex; gap: 4px; flex-wrap: wrap; }
 .role-badge { background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.25); color: #38bdf8; padding: 1px 6px; border-radius: 4px; font-size: 0.7rem; }
 .ready-cell { font-weight: 600; color: #34d399; }

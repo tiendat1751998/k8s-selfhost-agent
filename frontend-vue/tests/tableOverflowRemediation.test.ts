@@ -57,6 +57,66 @@ describe('Table Overflow Remediation Specifications', () => {
     assert.match(content, /max-width:\s*1030px/i, 'NodeTableView scoped CSS must enforce max-width: 1030px')
   })
 
+  test('SloCatalogTable.vue & slo-table.css: calibrated columns, fixed layout & max-width <= 1080px', () => {
+    const tablePath = path.join(rootDir, 'src/components/slo/SloCatalogTable.vue')
+    const cssPath = path.join(rootDir, 'src/assets/styles/components/slo-table.css')
+    const tableContent = fs.readFileSync(tablePath, 'utf-8')
+    const cssContent = fs.readFileSync(cssPath, 'utf-8')
+
+    // Verify column definitions in SloCatalogTable
+    assert.match(tableContent, /key:\s*'service'[^}]+width:\s*'140px'/, 'Service column must be 140px')
+    assert.match(tableContent, /key:\s*'indicator_type'[^}]+width:\s*'85px'/, 'Indicator type column must be 85px')
+    assert.match(tableContent, /key:\s*'targetNum'[^}]+width:\s*'75px'/, 'Target column must be 75px')
+    assert.match(tableContent, /key:\s*'error_budget'[^}]+width:\s*'110px'/, 'Error budget column must be 110px')
+    assert.match(tableContent, /key:\s*'burn_rate'[^}]+width:\s*'95px'/, 'Burn rate column must be 95px')
+    assert.match(tableContent, /key:\s*'window'[^}]+width:\s*'65px'/, 'Window column must be 65px')
+    assert.match(tableContent, /key:\s*'query'[^}]+width:\s*'240px'/, 'Query column must be 240px')
+    assert.match(tableContent, /key:\s*'alert_threshold'[^}]+width:\s*'95px'/, 'Threshold column must be 95px')
+    assert.match(tableContent, /key:\s*'actions'[^}]+width:\s*'115px'/, 'Actions column must be 115px')
+
+    // Verify table-layout fixed and max-width in slo-table.css
+    assert.match(cssContent, /table-layout:\s*fixed/i, 'slo-table.css must enforce table-layout: fixed')
+    assert.match(cssContent, /max-width:\s*1080px/i, 'slo-table.css must enforce max-width: 1080px')
+    assert.match(cssContent, /max-width:\s*240px/i, 'slo-table.css must clamp query-cell to 240px')
+  })
+
+  test('FirmBankingView.vue & firmbanking.css: fixed layout, max-width <= 1120px, and cell ellipsis', () => {
+    const viewPath = path.join(rootDir, 'src/views/FirmBankingView.vue')
+    const cssPath = path.join(rootDir, 'src/assets/styles/views/firmbanking.css')
+    const viewContent = fs.readFileSync(viewPath, 'utf-8')
+    const cssContent = fs.readFileSync(cssPath, 'utf-8')
+
+    // Verify firmbanking-table-wrap and column calibrations
+    assert.match(viewContent, /firmbanking-table-wrap/, 'FirmBankingView must use firmbanking-table-wrap class')
+    assert.match(viewContent, /cell-ellipsis/, 'FirmBankingView must use cell-ellipsis on long text cells')
+    assert.match(viewContent, /width:\s*60px;[^>]*>Action</i, 'Action column header width must be 60px')
+
+    // Verify CSS rules
+    assert.match(cssContent, /table-layout:\s*fixed/i, 'firmbanking.css must enforce table-layout: fixed')
+    assert.match(cssContent, /max-width:\s*1120px/i, 'firmbanking.css must enforce max-width: 1120px')
+    assert.match(cssContent, /\.cell-ellipsis\s*\{[^}]*text-overflow:\s*ellipsis/i, 'firmbanking.css must define .cell-ellipsis')
+  })
+
+  test('ExplorerResourceTable.vue & explorer.css: fixed layout, max-width <= 1040px, and column shaving', () => {
+    const tablePath = path.join(rootDir, 'src/components/explorer/ExplorerResourceTable.vue')
+    const columnsPath = path.join(rootDir, 'src/composables/explorerColumns.ts')
+    const cssPath = path.join(rootDir, 'src/assets/styles/views/explorer.css')
+    const tableContent = fs.readFileSync(tablePath, 'utf-8')
+    const columnsContent = fs.readFileSync(columnsPath, 'utf-8')
+    const cssContent = fs.readFileSync(cssPath, 'utf-8')
+
+    // Verify explorer-table-wrap and cell-selector-text
+    assert.match(tableContent, /explorer-table-wrap/, 'ExplorerResourceTable must use explorer-table-wrap class')
+    assert.match(tableContent, /cell-selector-text/, 'ExplorerResourceTable must clamp selector text')
+    assert.match(columnsContent, /key:\s*'actions'[^}]+width:\s*'130px'/, 'Actions column must be 130px in explorerColumns')
+
+    // Verify CSS rules
+    assert.match(cssContent, /table-layout:\s*fixed/i, 'explorer.css must enforce table-layout: fixed')
+    assert.match(cssContent, /max-width:\s*1040px/i, 'explorer.css must enforce max-width: 1040px')
+    assert.match(cssContent, /\.cell-image-text\s*\{[^}]*max-width:\s*145px/i, 'explorer.css must constrain cell-image-text to 145px')
+    assert.match(cssContent, /\.cell-selector-text\s*\{[^}]*max-width:\s*135px/i, 'explorer.css must constrain cell-selector-text to 135px')
+  })
+
   test('Line Count Constraints: All modified files must be strictly under 500 lines', () => {
     const files = [
       'src/components/deployments/DeploymentsTable.vue',
@@ -64,6 +124,14 @@ describe('Table Overflow Remediation Specifications', () => {
       'src/assets/styles/components/overview-hosts.css',
       'src/components/overview/nodes/NodeTableView.vue',
       'src/components/ui/DataTable.vue',
+      'src/components/slo/SloCatalogTable.vue',
+      'src/assets/styles/components/slo-table.css',
+      'src/views/FirmBankingView.vue',
+      'src/assets/styles/views/firmbanking.css',
+      'src/components/explorer/ExplorerResourceTable.vue',
+      'src/composables/explorerColumns.ts',
+      'src/views/ExplorerView.vue',
+      'src/assets/styles/views/explorer.css',
     ]
 
     for (const file of files) {

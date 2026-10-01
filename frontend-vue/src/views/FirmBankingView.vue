@@ -287,23 +287,23 @@ function handleLogout() {
         </div>
 
         <!-- Modern Data Table -->
-        <div class="fb-table-card">
+        <div class="fb-table-card firmbanking-table-wrap">
           <div class="fb-table-scroll-wrap">
             <table class="fb-table" aria-label="FirmBanking Transactions Table">
               <thead>
                 <tr>
-                  <th class="text-center" style="width: 45px;">No</th>
-                  <th style="width: 80px;">Type</th>
-                  <th style="width: 95px;">Transfer Date</th>
-                  <th style="width: 130px;">Withdrawal Acc</th>
-                  <th class="text-center" style="width: 55px;">Curr</th>
-                  <th class="text-right" style="width: 120px;">Amount</th>
-                  <th style="min-width: 190px;">Beneficiary Name</th>
-                  <th style="width: 130px;">Beneficiary Acc</th>
-                  <th style="min-width: 180px;">Beneficiary Bank</th>
-                  <th class="text-center" style="width: 110px;">Status</th>
-                  <th style="width: 100px;">Requester</th>
-                  <th class="text-center" style="width: 75px;">Action</th>
+                  <th class="text-center" style="width: 40px;">No</th>
+                  <th style="width: 70px;">Type</th>
+                  <th style="width: 85px;">Transfer Date</th>
+                  <th style="width: 110px;">Withdrawal Acc</th>
+                  <th class="text-center" style="width: 45px;">Curr</th>
+                  <th class="text-right" style="width: 105px;">Amount</th>
+                  <th style="width: 130px;">Beneficiary Name</th>
+                  <th style="width: 115px;">Beneficiary Acc</th>
+                  <th style="width: 125px;">Beneficiary Bank</th>
+                  <th class="text-center" style="width: 95px;">Status</th>
+                  <th style="width: 85px;">Requester</th>
+                  <th class="text-center" style="width: 60px;">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -314,16 +314,16 @@ function handleLogout() {
                   @click="handleRowClick(tx)"
                 >
                   <td class="text-center font-mono">{{ tx.id }}</td>
-                  <td>{{ tx.type }}</td>
-                  <td class="font-mono">{{ tx.date }}</td>
-                  <td class="font-mono">{{ tx.accountNo }}</td>
+                  <td class="cell-ellipsis" :title="tx.type">{{ tx.type }}</td>
+                  <td class="font-mono cell-ellipsis" :title="tx.date">{{ tx.date }}</td>
+                  <td class="font-mono cell-ellipsis" :title="tx.accountNo">{{ tx.accountNo }}</td>
                   <td class="text-center font-mono font-bold">{{ tx.currency }}</td>
                   <td class="text-right font-mono font-bold">
                     {{ formatAmount(tx.amount, tx.currency) }}
                   </td>
-                  <td>{{ tx.beneficiaryName }}</td>
-                  <td class="font-mono">{{ tx.beneficiaryAccount }}</td>
-                  <td>{{ tx.beneficiaryBank }}</td>
+                  <td class="cell-ellipsis font-bold" :title="tx.beneficiaryName">{{ tx.beneficiaryName }}</td>
+                  <td class="font-mono cell-ellipsis" :title="tx.beneficiaryAccount">{{ tx.beneficiaryAccount }}</td>
+                  <td class="cell-ellipsis" :title="tx.beneficiaryBank">{{ tx.beneficiaryBank }}</td>
                   <td class="text-center">
                     <span
                       class="fb-status-pill"
@@ -336,7 +336,7 @@ function handleLogout() {
                       {{ tx.status }}
                     </span>
                   </td>
-                  <td>{{ tx.requester }}</td>
+                  <td class="cell-ellipsis" :title="tx.requester">{{ tx.requester }}</td>
                   <td class="text-center">
                     <button
                       type="button"

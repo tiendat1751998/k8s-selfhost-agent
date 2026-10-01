@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
@@ -140,7 +140,7 @@ function handleRowAction(actionId: string, res: K8sResource) {
 </script>
 
 <template>
-  <div class="section-box glass-panel table-box">
+  <div class="section-box glass-panel table-box explorer-table-wrap">
     <DataTable
       :columns="columns"
       :data="resources"
@@ -150,7 +150,7 @@ function handleRowAction(actionId: string, res: K8sResource) {
     >
       <template #cell-name="{ row }">
         <div class="resource-name-cell">
-          <a href="javascript:void(0)" class="res-link font-mono" @click="emit('detail', toResource(row))">{{ toResource(row).metadata?.name || 'unnamed' }}</a>
+          <a href="javascript:void(0)" class="res-link font-mono" :title="toResource(row).metadata?.name || 'unnamed'" @click="emit('detail', toResource(row))">{{ toResource(row).metadata?.name || 'unnamed' }}</a>
         </div>
       </template>
       <template #cell-namespace="{ row }"><span class="ns-badge font-mono">{{ toResource(row).metadata?.namespace || 'cluster-scoped' }}</span></template>
@@ -162,8 +162,8 @@ function handleRowAction(actionId: string, res: K8sResource) {
       <template #cell-node="{ row }"><span class="font-mono text-muted font-small">{{ getPodNode(toResource(row)) }}</span></template>
       <template #cell-age="{ row }"><span class="font-mono text-muted font-small">{{ getResourceAge(toResource(row)) }}</span></template>
       <template #cell-replicas="{ row }"><span class="font-mono badge-replicas">{{ selectedKind === 'statefulsets' ? getStatefulSetReplicas(toResource(row)) : selectedKind === 'horizontalpodautoscalers' ? getHpaReplicas(toResource(row)) : getDeploymentReplicas(toResource(row)) }}</span></template>
-      <template #cell-image="{ row }"><span class="font-mono text-cyan font-small cell-image-text">{{ selectedKind === 'statefulsets' ? getStatefulSetImage(toResource(row)) : getDeploymentImage(toResource(row)) }}</span></template>
-      <template #cell-selector="{ row }"><span class="font-mono text-muted font-small">{{ getDeploymentSelector(toResource(row)) }}</span></template>
+      <template #cell-image="{ row }"><span class="font-mono text-cyan font-small cell-image-text" :title="selectedKind === 'statefulsets' ? getStatefulSetImage(toResource(row)) : getDeploymentImage(toResource(row))">{{ selectedKind === 'statefulsets' ? getStatefulSetImage(toResource(row)) : getDeploymentImage(toResource(row)) }}</span></template>
+      <template #cell-selector="{ row }"><span class="font-mono text-muted font-small cell-selector-text" :title="getDeploymentSelector(toResource(row))">{{ getDeploymentSelector(toResource(row)) }}</span></template>
       <template #cell-desired="{ row }"><span class="font-mono">{{ getDaemonSetDesired(toResource(row)) }}</span></template>
       <template #cell-current="{ row }"><span class="font-mono">{{ getDaemonSetCurrent(toResource(row)) }}</span></template>
       <template #cell-completions="{ row }"><span class="font-mono">{{ getJobCompletions(toResource(row)) }}</span></template>

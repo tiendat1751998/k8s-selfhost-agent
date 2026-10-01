@@ -350,7 +350,7 @@ onMounted(async () => {
       </div>
 
       <div v-else class="explorer-resources-wrapper">
-        <div class="explorer-desktop-table">
+        <div class="explorer-desktop-table explorer-table-wrap">
           <ExplorerResourceTable
             :columns="columns"
             :resources="filteredResources"
