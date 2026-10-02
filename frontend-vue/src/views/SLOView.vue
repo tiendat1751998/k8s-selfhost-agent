@@ -102,13 +102,13 @@ function handleEditSLO(def: SLODefinition) {
     <!-- Sleek Unified 38px Enterprise Toolbar -->
     <div class="slo-toolbar-sleek glass-panel desktop-only">
       <!-- Search input with search icon and clear button -->
-      <div class="toolbar-search-wrap">
+      <div class="toolbar-search-wrap slo-search-wrap">
         <BaseIcon name="search" size="xs" class="search-icon" />
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Filter SLOs..."
-          class="toolbar-search-input"
+          class="toolbar-search-input slo-search-input"
           aria-label="Filter SLOs by service name or indicator"
         />
         <button
@@ -123,7 +123,7 @@ function handleEditSLO(def: SLODefinition) {
       </div>
 
       <!-- Time Window multi-window analysis pills -->
-      <div class="toolbar-window-pills font-mono" role="tablist" aria-label="Multi-window analysis">
+      <div class="toolbar-window-pills filter-group font-mono" role="tablist" aria-label="Multi-window analysis">
         <button
           v-for="w in windowPills"
           :key="w.key"
@@ -143,11 +143,11 @@ function handleEditSLO(def: SLODefinition) {
       <!-- Inline Micro-Telemetry Pill -->
       <div class="slo-micro-telemetry font-mono" role="status" aria-label="SLO micro-telemetry">
         <span class="badge-dot-emerald"></span>
-        <span>[LIVE] {{ totalSLOs }} Targets · {{ totalSLOs > 0 ? Math.round((healthySLOs / totalSLOs) * 100) : 100 }}% Compliant · {{ activeBurnAlerts }} Active Alerts</span>
+        <span>{{ totalSLOs }} Targets · {{ totalSLOs > 0 ? Math.round((healthySLOs / totalSLOs) * 100) : 100 }}% · {{ activeBurnAlerts }} Alerts</span>
       </div>
 
       <!-- Right: Action buttons -->
-      <div class="toolbar-actions-group">
+      <div class="toolbar-actions-group slo-toolbar-actions">
 
         <!-- Action buttons: + Add Target (primary) and Refresh (secondary with spinner) -->
         <button
