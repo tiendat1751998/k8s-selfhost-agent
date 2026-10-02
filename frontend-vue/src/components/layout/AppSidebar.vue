@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
@@ -24,9 +24,6 @@ const emit = defineEmits<{
   (e: 'open-zerotrust'): void
 }>()
 
-function handleOpenZeroTrust() {
-  emit('open-zerotrust')
-}
 
 const route = useRoute()
 const router = useRouter()
@@ -200,7 +197,7 @@ function handleItemClick() {
     </div>
 
     <!-- Live Environment & Tenant Scope Pill -->
-    <div class="env-pill">
+    <div class="env-pill sidebar-brand-pill">
       <span class="pulse-dot pulse-dot-emerald"></span>
       <div class="env-pill-text">
         <span class="env-mesh">Air-Gapped Mesh</span>
@@ -290,29 +287,6 @@ function handleItemClick() {
             </span>
             <span>Sign Out</span>
           </button>
-        </div>
-      </div>
-
-      <div
-        class="telemetry-card"
-        role="button"
-        tabindex="0"
-        aria-label="Open ZeroTrust KMS & Dual-Sync Attestation"
-        title="ZeroTrust KMS & Dual-Sync Attestation — Click to inspect"
-        @click="handleOpenZeroTrust"
-        @keydown.enter="handleOpenZeroTrust"
-        @keydown.space.prevent="handleOpenZeroTrust"
-      >
-        <div class="telemetry-row">
-          <span class="telemetry-key">ZeroTrust KMS</span>
-          <span class="telemetry-val text-emerald">ARMED</span>
-        </div>
-        <div class="telemetry-row">
-          <span class="telemetry-key">Dual-Sync Target</span>
-          <span class="telemetry-val text-cyan font-mono">NVMe + S3</span>
-        </div>
-        <div class="telemetry-progress">
-          <div class="progress-bar" style="width: 100%;"></div>
         </div>
       </div>
     </div>

@@ -49,14 +49,14 @@
 .table-box th { padding: 8px 10px; font-size: 11px; box-sizing: border-box; }
 .explorer-desktop-table { overflow-x: auto; max-width: 100%; }
 .resource-name-cell { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; overflow: hidden; }
-.res-link { color: #38bdf8; text-decoration: none; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.res-link:hover { color: #00e5ff; text-decoration: underline; }
+.res-link { color: #f1f5f9 !important; text-decoration: none; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.res-link:hover { color: #38bdf8 !important; text-decoration: underline; }
 .app-tag { font-size: 0.68rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); padding: 1px 6px; border-radius: 4px; color: #94a3b8; white-space: nowrap; }
-.ns-badge { background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.25); color: #c084fc; padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap; }
-.badge-replicas { color: #38bdf8; font-weight: 700; }
+.ns-badge { background: rgba(148, 163, 184, 0.1) !important; border: 1px solid rgba(148, 163, 184, 0.2) !important; color: #cbd5e1 !important; padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap; }
+.badge-replicas { color: #e2e8f0 !important; font-weight: 700; font-variant-numeric: tabular-nums; }
 .badge-keys { color: #fbbf24; }
-.schedule-badge { background: rgba(56, 189, 248, 0.12); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
-.cell-image-text { max-width: 145px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
+.schedule-badge { background: rgba(148, 163, 184, 0.1); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.2); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
+.cell-image-text { color: #94a3b8 !important; max-width: 145px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
 .cell-selector-text { max-width: 135px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
 .roles-wrap { display: flex; gap: 4px; flex-wrap: wrap; }
 .role-badge { background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.25); color: #38bdf8; padding: 1px 6px; border-radius: 4px; font-size: 0.7rem; }

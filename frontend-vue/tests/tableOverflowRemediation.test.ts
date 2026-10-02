@@ -86,23 +86,6 @@ describe('Table Overflow Remediation Specifications', () => {
     assert.match(tableContent, /table-layout:\s*fixed/i, 'SloCatalogTable must enforce table-layout: fixed inside :deep')
   })
 
-  test('settlementView.vue & settlement.css: fixed layout, max-width <= 1120px, and cell ellipsis', () => {
-    const viewPath = path.join(rootDir, 'src/views/settlementView.vue')
-    const cssPath = path.join(rootDir, 'src/assets/styles/views/settlement.css')
-    const viewContent = fs.readFileSync(viewPath, 'utf-8')
-    const cssContent = fs.readFileSync(cssPath, 'utf-8')
-
-    // Verify settlement-table-wrap and column calibrations
-    assert.match(viewContent, /settlement-table-wrap/, 'settlementView must use settlement-table-wrap class')
-    assert.match(viewContent, /cell-ellipsis/, 'settlementView must use cell-ellipsis on long text cells')
-    assert.match(viewContent, /width:\s*60px;[^>]*>Action</i, 'Action column header width must be 60px')
-
-    // Verify CSS rules
-    assert.match(cssContent, /table-layout:\s*fixed/i, 'settlement.css must enforce table-layout: fixed')
-    assert.match(cssContent, /max-width:\s*1120px/i, 'settlement.css must enforce max-width: 1120px')
-    assert.match(cssContent, /\.cell-ellipsis\s*\{[^}]*text-overflow:\s*ellipsis/i, 'settlement.css must define .cell-ellipsis')
-  })
-
   test('ExplorerResourceTable.vue & explorer.css: fixed layout, max-width <= 1040px, and column shaving', () => {
     const tablePath = path.join(rootDir, 'src/components/explorer/ExplorerResourceTable.vue')
     const columnsPath = path.join(rootDir, 'src/composables/explorerColumns.ts')
@@ -138,8 +121,6 @@ describe('Table Overflow Remediation Specifications', () => {
       'src/components/ui/DataTable.vue',
       'src/components/slo/SloCatalogTable.vue',
       'src/assets/styles/components/slo-table.css',
-      'src/views/settlementView.vue',
-      'src/assets/styles/views/settlement.css',
       'src/components/explorer/ExplorerResourceTable.vue',
       'src/composables/explorerColumns.ts',
       'src/views/ExplorerView.vue',

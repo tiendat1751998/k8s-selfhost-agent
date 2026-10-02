@@ -4,7 +4,6 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/authStore'
 import { useBackupStore } from './stores/backupStore'
 import { useSecurityStore } from './stores/securityStore'
-import { useLogStore } from './stores/logStore'
 import { useAppStore } from './stores/app'
 import { useAlertStore } from './stores/alertStore'
 import { api } from './api/client'
@@ -63,7 +62,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 const backupStore = useBackupStore()
 const securityStore = useSecurityStore()
-const logStore = useLogStore()
 const appStore = useAppStore()
 const alertStore = useAlertStore()
 
@@ -165,81 +163,6 @@ onUnmounted(() => {
 
 const isStandalonePage = computed(() => route.path === '/login' || route.meta?.layout === 'blank')
 
-// Mesh & Node Health Real-time Calculations
-const downNodes = computed(() => {
-  const nodes = appStore.latestMetrics?.nodes || []
-  return nodes.filter(n => n.status?.toLowerCase() === 'down' || n.status?.toLowerCase() === 'offline')
-})
-
-const downNodeCount = computed(() => downNodes.value.length)
-
-const clusterMeshStatus = computed(() => {
-  if (downNodeCount.value > 0) return 'DEGRADED'
-  if (securityStore.error || backupStore.error || alertStore.hasCriticalAlerts) return 'DEGRADED'
-  return 'HEALTHY'
-})
-
-const meshTooltip = computed(() => {
-  if (downNodeCount.value > 0) {
-    const names = downNodes.value.map(n => n.node_name || n.node_id).join(', ')
-    return `Mesh Status: DEGRADED â€” ${downNodeCount.value} node(s) offline (${names}). Cluster cross-node communication impaired.`
-  }
-  if (securityStore.error || backupStore.error) {
-    return `Mesh Status: DEGRADED â€” Security audit or backup synchronization encountered error.`
-  }
-  if (alertStore.hasCriticalAlerts) {
-    return `Mesh Status: DEGRADED â€” Critical resource alerts active in cluster.`
-  }
-  const total = appStore.latestMetrics?.total_nodes || appStore.latestMetrics?.nodes?.length || 0
-  const healthy = appStore.latestMetrics?.healthy_nodes || total
-  return `Mesh Status: HEALTHY â€” WireGuard/eBPF encrypted mesh operational across ${healthy}/${total || 'all'} connected nodes.`
-})
-
-const streamStatusText = computed(() => {
-  return logStore.isConnected ? '<50ms' : 'POLLING'
-})
-
-const latencyTooltip = computed(() => {
-  if (logStore.isConnected) {
-    return 'Telemetry Stream: Live WebSocket connection active (<50ms real-time stream latency). Continuous bidirectional events.'
-  }
-  return 'Telemetry Stream: HTTP 5s Polling Fallback active. WebSocket stream reconnecting in background.'
-})
-
-const systemStatus = computed(() => {
-  if (downNodeCount.value > 0) {
-    return {
-      label: `${downNodeCount.value} Down`,
-      compactLabel: `${downNodeCount.value}`,
-      word: ' Down',
-      fullLabel: `${downNodeCount.value} Nodes Down`,
-      dotClass: 'pulse-dot-rose',
-      textClass: 'text-rose font-bold'
-    }
-  }
-  if (clusterMeshStatus.value === 'DEGRADED') {
-    return {
-      label: 'Degraded',
-      compactLabel: 'Degraded',
-      word: '',
-      fullLabel: 'Degraded',
-      dotClass: 'pulse-dot-amber',
-      textClass: 'text-amber'
-    }
-  }
-  return {
-    label: 'Operational',
-    compactLabel: 'Operational',
-    word: '',
-    fullLabel: 'Operational',
-    dotClass: 'pulse-dot-emerald',
-    textClass: 'text-emerald'
-  }
-})
-
-const systemStatusTooltip = computed(() => {
-  return `${meshTooltip.value} | Telemetry: ${streamStatusText.value} (${latencyTooltip.value})`
-})
 
 function handleLogout() {
   authStore.logout()
@@ -315,25 +238,10 @@ function handleNavigateToHost(nodeNameOrId: string) {
           </nav>
         </div>
 
-        <!-- Center: Cluster / Namespace Scope Dropdowns & Tenant -->
+        <!-- Center: Cluster / Namespace Scope Dropdowns -->
         <div class="hud-center">
           <!-- Global Context Selector: Cluster & Namespace (Tasks 021 & 015) -->
           <GlobalContextSelector />
-
-          <!-- Sleek Workspace / Tenant Selector -->
-          <div class="tenant-selector-wrap" title="Workspace / Multi-Tenant Organization">
-            <span class="tenant-icon" aria-hidden="true">
-              <BaseIcon name="layers" size="xs" />
-            </span>
-            <select v-model="selectedTenant" @change="handleTenantChange" class="tenant-select" :title="'Active Tenant: ' + selectedTenant" aria-label="Select active workspace tenant">
-              <option v-for="t in tenants" :key="t.id" :value="t.id">
-                {{ t.name }}
-              </option>
-            </select>
-            <span class="tenant-chevron" aria-hidden="true">
-              <BaseIcon name="chevron-down" size="xs" />
-            </span>
-          </div>
         </div>
 
         <!-- Right: Search, Cluster health, Alerts, User Profile -->
@@ -354,25 +262,6 @@ function handleNavigateToHost(nodeNameOrId: string) {
             </span>
           </button>
 
-          <!-- Consolidated System Telemetry Pill (Clickable) -->
-          <div
-            class="hud-status-pill"
-            :title="`${systemStatusTooltip} â€” Click to inspect down nodes`"
-            role="button"
-            tabindex="0"
-            aria-label="Inspect down nodes in Hosts view"
-            aria-live="polite"
-            @click="router.push('/hosts?status=offline')"
-            @keydown.enter="router.push('/hosts?status=offline')"
-            @keydown.space.prevent="router.push('/hosts?status=offline')"
-          >
-            <span class="pulse-dot" :class="systemStatus.dotClass"></span>
-            <span class="status-label" :class="systemStatus.textClass">
-              <span class="status-num">{{ systemStatus.compactLabel }}</span>
-              <span v-if="systemStatus.word" class="status-word">{{ systemStatus.word }}</span>
-            </span>
-          </div>
-
           <!-- Top HUD Global Alert Bell & Dropdown Toast -->
           <TopHudAlertBell />
 
@@ -380,7 +269,7 @@ function handleNavigateToHost(nodeNameOrId: string) {
           <div v-if="authStore.user" class="hud-user">
             <div class="user-profile-badge" :title="`User: ${authStore.user.email || authStore.user.role || 'Admin'} (${authStore.user.role || 'ADMIN'})`">
               <span class="user-avatar">{{ userInitials }}</span>
-              <span class="user-role font-mono">{{ authStore.user.role || 'ADMIN' }}</span>
+              <span class="user-role">{{ authStore.user.role || 'ADMIN' }}</span>
             </div>
             <button class="hud-logout-btn" title="Sign Out" aria-label="Sign Out" @click="handleLogout">
               <span class="logout-icon" aria-hidden="true">

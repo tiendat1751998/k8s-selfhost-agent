@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Explorer - Sleek Unified 38px Enterprise Toolbar & Kind Sub-strip
    Dark OLED Slate tokens (rgba(15, 23, 42, 0.75), borders rgba(148, 163, 184, 0.15))
    Target < 250 lines
@@ -50,17 +50,17 @@
 }
 .explorer-toolbar-sleek .capsule-pill {
   border-radius: 9999px; height: 28px; min-height: 28px; line-height: 28px;
-  padding: 0 8px; font-size: 11px; font-weight: 600;
+  padding: 0 8px; font-size: 11px; font-weight: 500;
   display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   cursor: pointer; white-space: nowrap; user-select: none; flex-shrink: 0;
-  background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent; border: 1px solid transparent;
   color: #94a3b8; transition: all 0.15s ease; box-sizing: border-box;
 }
 .explorer-toolbar-sleek .capsule-pill:hover {
-  background: rgba(51, 65, 85, 0.8); color: #f8fafc; border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05); color: #f8fafc; border-color: rgba(255, 255, 255, 0.1);
 }
 .explorer-toolbar-sleek .capsule-pill.active {
-  background: rgba(6, 182, 212, 0.15); border: 1px solid #0284c7; color: #ffffff;
+  background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-weight: 600;
 }
 
 /* Zone 3 (Center-Right - Telemetry Badge) */
@@ -115,14 +115,14 @@
   padding: 0 9px; font-size: 11px; font-weight: 500;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; white-space: nowrap; user-select: none;
-  background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(148, 163, 184, 0.12);
+  background: transparent; border: 1px solid transparent;
   color: #94a3b8; transition: all 0.15s ease; box-sizing: border-box;
 }
 .explorer-kind-substrip .substrip-pill:hover {
-  background: rgba(30, 41, 59, 0.8); color: #f8fafc; border-color: rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.05); color: #f8fafc; border-color: rgba(255, 255, 255, 0.1);
 }
 .explorer-kind-substrip .substrip-pill.active {
-  background: rgba(6, 182, 212, 0.15); border: 1px solid #0284c7; color: #38bdf8; font-weight: 600;
+  background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-weight: 600;
 }
 
 /* Standardized Table Row Action Cell */
@@ -183,12 +183,12 @@
 .mobile-kind-scroller::-webkit-scrollbar { display: none; }
 .mobile-kind-scroller .mobile-kind-pill {
   display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent; border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9999px; color: #94a3b8; font-size: 0.75rem; white-space: nowrap;
   flex-shrink: 0; cursor: pointer; scroll-snap-align: start; min-height: 30px; transition: all 0.15s ease;
 }
 .mobile-kind-scroller .mobile-kind-pill.is-active {
-  background: rgba(6, 182, 212, 0.2); border-color: #06b6d4; color: #fff; font-weight: 600;
+  background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.4); color: #38bdf8; font-weight: 600;
 }
 .mobile-search-strip { display: none; padding: 4px 0 8px 0; }
 .mobile-search-input { width: 100%; padding: 6px 10px; font-size: 0.8rem; }
