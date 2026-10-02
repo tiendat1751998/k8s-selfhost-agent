@@ -48,6 +48,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: nowrap;
   gap: 8px;
   padding: 0 10px;
   border-radius: 8px;
@@ -55,18 +56,19 @@
   border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
   backdrop-filter: blur(12px);
   width: 100%;
-  overflow: hidden;
+  max-width: 1080px;
 }
 
-.slo-toolbar-sleek .toolbar-search-wrap {
+.slo-toolbar-sleek .toolbar-search-wrap,
+.slo-toolbar-sleek .slo-search-wrap {
   position: relative;
   display: flex;
   align-items: center;
-  width: 200px;
-  min-width: 160px;
-  max-width: 240px;
+  width: 160px;
+  min-width: 140px;
+  max-width: 180px;
   height: 30px;
-  flex: 0 1 200px;
+  flex: 0 1 160px;
   flex-shrink: 0;
 }
 
@@ -78,8 +80,10 @@
   pointer-events: none;
 }
 
+.slo-search-input,
 .slo-toolbar-sleek .toolbar-search-input {
-  width: 100%;
+  width: 160px;
+  max-width: 180px;
   height: 30px;
   padding: 0 24px 0 26px;
   font-size: 12px;
@@ -91,6 +95,7 @@
   transition: border-color 0.15s ease;
 }
 
+.slo-search-input:focus,
 .slo-toolbar-sleek .toolbar-search-input:focus {
   border-color: var(--accent-cyan, #06b6d4);
   outline: none;
@@ -115,11 +120,14 @@
 .slo-toolbar-sleek .clear-input-btn:hover { color: #fff; }
 
 /* Time Window Filter Pills - Full Capsule Radius */
-.slo-toolbar-sleek .toolbar-window-pills {
+.slo-toolbar-sleek .filter-group,
+.slo-toolbar-sleek .toolbar-window-pills,
+.filter-group {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .slo-toolbar-sleek .toolbar-pill-btn {
@@ -181,8 +189,10 @@
 }
 
 /* Right Actions Group - Clean Margin Left Auto Alignment */
+.slo-toolbar-actions,
+.slo-toolbar-sleek .slo-toolbar-actions,
 .slo-toolbar-sleek .toolbar-actions-group {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-left: auto;

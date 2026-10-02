@@ -14,8 +14,8 @@ export const podColumns: Column<K8sResource>[] = [
 export const deploymentColumns: Column<K8sResource>[] = [
   { key: 'name', label: 'Name', width: '170px', sortable: true },
   { key: 'namespace', label: 'Namespace', width: '120px', sortable: true },
-  { key: 'replicas', label: 'Replicas (Ready/Desired)', width: '130px', sortable: true },
-  { key: 'image', label: 'Image', width: '150px', sortable: true },
+  { key: 'replicas', label: 'Replicas', width: '120px', sortable: true },
+  { key: 'image', label: 'Image', width: '160px', sortable: true },
   { key: 'selector', label: 'Selector', width: '140px', sortable: false },
   { key: 'age', label: 'Age', width: '80px', sortable: true },
   { key: 'actions', label: 'Actions', width: '130px', align: 'right' },
@@ -24,8 +24,8 @@ export const deploymentColumns: Column<K8sResource>[] = [
 export const statefulSetColumns: Column<K8sResource>[] = [
   { key: 'name', label: 'Name', width: '180px', sortable: true },
   { key: 'namespace', label: 'Namespace', width: '120px', sortable: true },
-  { key: 'replicas', label: 'Replicas (Ready/Desired)', width: '130px', sortable: true },
-  { key: 'image', label: 'Image', width: '150px', sortable: true },
+  { key: 'replicas', label: 'Replicas', width: '120px', sortable: true },
+  { key: 'image', label: 'Image', width: '160px', sortable: true },
   { key: 'age', label: 'Age', width: '80px', sortable: true },
   { key: 'actions', label: 'Actions', width: '130px', align: 'right' },
 ]

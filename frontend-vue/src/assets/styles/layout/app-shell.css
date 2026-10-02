@@ -3,7 +3,7 @@
 :root { --mobile-hud-height: 48px; }
 .app-layout {
   display: flex; width: 100vw; max-width: 100vw; min-height: 100vh;
-  background-color: var(--bg-app); overflow-x: hidden;
+  background-color: var(--bg-app); overflow-x: clip;
 }
 
 /* Sidebar */
