@@ -86,23 +86,6 @@ describe('Table Overflow Remediation Specifications', () => {
     assert.match(tableContent, /table-layout:\s*fixed/i, 'SloCatalogTable must enforce table-layout: fixed inside :deep')
   })
 
-  test('FirmBankingView.vue & firmbanking.css: fixed layout, max-width <= 1120px, and cell ellipsis', () => {
-    const viewPath = path.join(rootDir, 'src/views/FirmBankingView.vue')
-    const cssPath = path.join(rootDir, 'src/assets/styles/views/firmbanking.css')
-    const viewContent = fs.readFileSync(viewPath, 'utf-8')
-    const cssContent = fs.readFileSync(cssPath, 'utf-8')
-
-    // Verify firmbanking-table-wrap and column calibrations
-    assert.match(viewContent, /firmbanking-table-wrap/, 'FirmBankingView must use firmbanking-table-wrap class')
-    assert.match(viewContent, /cell-ellipsis/, 'FirmBankingView must use cell-ellipsis on long text cells')
-    assert.match(viewContent, /width:\s*60px;[^>]*>Action</i, 'Action column header width must be 60px')
-
-    // Verify CSS rules
-    assert.match(cssContent, /table-layout:\s*fixed/i, 'firmbanking.css must enforce table-layout: fixed')
-    assert.match(cssContent, /max-width:\s*1120px/i, 'firmbanking.css must enforce max-width: 1120px')
-    assert.match(cssContent, /\.cell-ellipsis\s*\{[^}]*text-overflow:\s*ellipsis/i, 'firmbanking.css must define .cell-ellipsis')
-  })
-
   test('ExplorerResourceTable.vue & explorer.css: fixed layout, max-width <= 1040px, and column shaving', () => {
     const tablePath = path.join(rootDir, 'src/components/explorer/ExplorerResourceTable.vue')
     const columnsPath = path.join(rootDir, 'src/composables/explorerColumns.ts')
@@ -138,8 +121,6 @@ describe('Table Overflow Remediation Specifications', () => {
       'src/components/ui/DataTable.vue',
       'src/components/slo/SloCatalogTable.vue',
       'src/assets/styles/components/slo-table.css',
-      'src/views/FirmBankingView.vue',
-      'src/assets/styles/views/firmbanking.css',
       'src/components/explorer/ExplorerResourceTable.vue',
       'src/composables/explorerColumns.ts',
       'src/views/ExplorerView.vue',

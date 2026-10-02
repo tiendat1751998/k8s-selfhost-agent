@@ -59,20 +59,16 @@ describe('SLO View Enterprise Redesign Specifications', () => {
     assert.strictEqual(content.includes('btn-icon-del'), false, 'Must eradicate raw 3 square icon buttons')
   })
 
-  it('SLOView.vue: wired to useSLOMonitor and renders 4-Card KPI Strip', () => {
+  it('SLOView.vue: wired to useSLOMonitor, renders micro-telemetry and eradicates legacy KPI cards', () => {
     const content = fs.readFileSync(sloViewPath, 'utf-8')
     assert.ok(content.includes("useSLOMonitor()"), 'Must consume useSLOMonitor composable')
-    assert.ok(content.includes('slo-kpi-grid'), 'Must render slo-kpi-grid container')
-    assert.ok(content.includes('Total Objectives'), 'Must render Card 1: Total Objectives')
-    assert.ok(content.includes('Healthy Objectives'), 'Must render Card 2: Healthy Objectives')
-    assert.ok(content.includes('Active Burn Alerts'), 'Must render Card 3: Active Burn Alerts')
-    assert.ok(content.includes('Avg Burn Velocity'), 'Must render Card 4: Avg Burn Velocity')
+    assert.ok(content.includes('slo-micro-telemetry'), 'Must render slo-micro-telemetry pill')
+    assert.strictEqual(content.includes('slo-kpi-grid'), false, 'Must eradicate legacy slo-kpi-grid container')
   })
 
-  it('SLOView.vue: supports both Table view and Card Grid view with RWD', () => {
+  it('SLOView.vue: standardizes on high-density SloCatalogTable and SloMobileCards with RWD', () => {
     const content = fs.readFileSync(sloViewPath, 'utf-8')
-    assert.ok(content.includes("viewMode === 'table'"), 'Must support table view')
-    assert.ok(content.includes("viewMode === 'grid'"), 'Must support cards grid view')
+    assert.ok(content.includes('<SloCatalogTable'), 'Must render high-density SloCatalogTable on desktop')
     assert.ok(content.includes('SloMobileCards'), 'Must render first-class mobile cards stream')
     assert.ok(content.includes('slo-mobile-command-bar'), 'Must render 44px mobile command bar')
   })
