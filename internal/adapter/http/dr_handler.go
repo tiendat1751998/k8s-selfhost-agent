@@ -1,4 +1,4 @@
-﻿package http
+package http
 
 import (
 	"encoding/json"
@@ -136,34 +136,13 @@ type createBackupRequest struct {
 }
 
 // CreateBackup triggers a cluster-level backup (Velero-compatible).
+// Per CON-23 / Section 00: Return 501 Not Implemented since Velero backup controller is not installed in this edition.
 // POST /api/v1/k8s/{cluster}/dr/backups
 func (h *DRHandler) CreateBackup(w http.ResponseWriter, r *http.Request) {
-	if h.drUsecase == nil {
-		writeError(w, http.StatusServiceUnavailable, "DR usecase is not configured", nil)
-		return
-	}
-
-	clusterID := chi.URLParam(r, "cluster")
-	if clusterID == "" {
-		writeError(w, http.StatusBadRequest, "cluster parameter is required", nil)
-		return
-	}
-
-	var backupName string
-	if r.Body != nil && r.ContentLength > 0 {
-		var req createBackupRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
-			backupName = strings.TrimSpace(req.BackupName)
-		}
-	}
-
-	result, err := h.drUsecase.TriggerClusterBackup(r.Context(), clusterID, backupName)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to trigger cluster backup", err)
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, result)
+	writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
+		"error": "Velero backup controller not installed",
+		"code":  http.StatusNotImplemented,
+	})
 }
 
 // TriggerRemediation triggers automated fast-failover remediation on an offline/crashing node.
