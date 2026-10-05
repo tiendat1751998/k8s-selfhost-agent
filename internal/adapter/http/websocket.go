@@ -3,8 +3,10 @@ package http
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +16,21 @@ import (
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
+
+func isSameHost(uHost, rHost string) bool {
+	if uHost == rHost {
+		return true
+	}
+	uName := uHost
+	if h, _, err := net.SplitHostPort(uHost); err == nil {
+		uName = h
+	}
+	rName := rHost
+	if h, _, err := net.SplitHostPort(rHost); err == nil {
+		rName = h
+	}
+	return strings.EqualFold(uName, rName)
+}
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -27,7 +44,7 @@ var upgrader = websocket.Upgrader{
 		if err != nil {
 			return false
 		}
-		if u.Host == r.Host {
+		if isSameHost(u.Host, r.Host) {
 			return true
 		}
 		return middleware.IsOriginAllowed(origin)
