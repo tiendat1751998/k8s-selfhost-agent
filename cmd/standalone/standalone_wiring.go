@@ -300,6 +300,10 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		LogStream:       logStreamHandler,
 		CentralizedLogs: centralizedLogs,
 		Helm:            helmHandler,
+		Security:        adapthttp.NewSecurityHandler(),
+		Chaos:           adapthttp.NewChaosHandler(),
+		Mesh:            adapthttp.NewMeshHandler(),
+		Network:         adapthttp.NewNetworkHandler(),
 	}
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)
