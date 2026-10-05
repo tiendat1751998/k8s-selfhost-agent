@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../../../ui/BaseIcon.vue'
 import { computed } from 'vue'
 import type { NodeMetrics, TpsSnapshot } from '../../../../api/overview'
 
@@ -67,7 +68,7 @@ const avgRam = computed(() => {
           <span class="stat-title-full">Peak Gateway Throughput</span>
           <span class="stat-title-mobile">Peak Gateway</span>
         </span>
-        <span class="hud-icon">⚡</span>
+        <span class="hud-icon"><BaseIcon name="activity" size="xs" /></span>
       </div>
       <div class="deep-stat-body">
         <span class="deep-stat-value text-cyan font-mono font-bold">
@@ -87,7 +88,7 @@ const avgRam = computed(() => {
           <span class="stat-title-full">Average Gateway Throughput</span>
           <span class="stat-title-mobile">Avg Gateway</span>
         </span>
-        <span class="hud-icon">🌐</span>
+        <span class="hud-icon"><BaseIcon name="globe" size="xs" /></span>
       </div>
       <div class="deep-stat-body">
         <span class="deep-stat-value text-emerald font-mono font-bold">
@@ -107,7 +108,7 @@ const avgRam = computed(() => {
           <span class="stat-title-full">Peak CPU Saturation</span>
           <span class="stat-title-mobile">Peak CPU</span>
         </span>
-        <span class="hud-icon">🔥</span>
+        <span class="hud-icon"><BaseIcon name="cpu" size="xs" /></span>
       </div>
       <div class="deep-stat-body">
         <span

@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAlertStore } from '../../stores/alertStore'
@@ -99,7 +100,7 @@ function navigateTo(link?: string) {
     <div class="feed-header">
       <div class="feed-title-wrap">
         <h3 class="feed-title">
-          <span class="feed-icon">⚡</span>
+          <BaseIcon name="activity" size="sm" class="feed-icon" />
           <span>Live Cluster Activity Feed</span>
         </h3>
         <span class="feed-subtitle">Real-time alerts, incidents, and node status events</span>
@@ -114,7 +115,7 @@ function navigateTo(link?: string) {
     </div>
 
     <div v-if="activities.length === 0" class="empty-feed">
-      <span class="empty-feed-icon">🛡️</span>
+      <BaseIcon name="shield" size="md" class="empty-feed-icon" />
       <span class="empty-feed-text">All cluster systems nominal. No active incidents or threshold breaches.</span>
     </div>
 

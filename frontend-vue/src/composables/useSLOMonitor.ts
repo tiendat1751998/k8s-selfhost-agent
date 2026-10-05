@@ -8,7 +8,7 @@ import {
   type UpdateSLOPayload
 } from '../api/compute'
 
-export type TimeWindowFilter = '1h' | '6h' | '24h' | '30d'
+export type TimeWindowFilter = '1h' | '6h' | '24h' | '7d' | '30d'
 
 export interface ServiceOption {
   id: string

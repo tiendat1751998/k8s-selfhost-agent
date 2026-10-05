@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../../../ui/BaseIcon.vue'
 import { ref, computed } from 'vue'
 import type { NodeMetrics, TpsSnapshot } from '../../../../api/overview'
 
@@ -167,17 +168,17 @@ function formatIoRate(rate?: number): string { return `${formatBytes(rate)}/s` }
         </div>
         <div class="m-traffic-track"><div class="m-traffic-fill" :style="{ width: `${Math.max(4, Math.min(100, svc.traffic_percent))}%` }"></div></div>
         <div class="m-metric-chips font-mono">
-          <span class="m-chip m-chip-rps" :class="svc.requests_per_sec > 0 ? 'text-emerald font-bold' : 'text-muted'">⚡ {{ svc.requests_per_sec > 0 ? svc.requests_per_sec.toFixed(1) : '0.0' }} rps</span>
+          <span class="m-chip m-chip-rps" :class="svc.requests_per_sec > 0 ? 'text-emerald font-bold' : 'text-muted'"><BaseIcon name="activity" size="xs" /> {{ svc.requests_per_sec > 0 ? svc.requests_per_sec.toFixed(1) : '0.0' }} rps</span>
           <span class="m-chip m-chip-bw text-cyan">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }} <span class="text-violet">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span></span>
           <span class="m-chip m-chip-res" :class="svc.cpu_percent > 80 ? 'text-rose font-bold' : svc.cpu_percent > 50 ? 'text-amber' : 'text-violet'">{{ svc.cpu_percent.toFixed(1) }}% CPU · <span class="text-cyan">{{ svc.memory_used_mb >= 1024 ? (svc.memory_used_mb / 1024).toFixed(1) + ' GB' : svc.memory_used_mb.toFixed(0) + ' MB' }}</span></span>
-          <span class="m-chip m-chip-node text-muted">🖥️ {{ svc.node_name }}</span>
+          <span class="m-chip m-chip-node text-muted"><BaseIcon name="server" size="xs" /> {{ svc.node_name }}</span>
         </div>
       </div>
     </div>
 
     <!-- Empty State -->
     <div v-else class="breakdown-empty-state">
-      <span class="empty-icon">🔍</span>
+      <span class="empty-icon"><BaseIcon name="search" size="md" /></span>
       <p class="empty-text">No services found matching "{{ modalServiceSearch }}"</p>
       <button class="btn btn-secondary btn-sm" type="button" @click="modalServiceSearch = ''">Clear Search Filter</button>
     </div>

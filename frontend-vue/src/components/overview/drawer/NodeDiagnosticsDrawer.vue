@@ -5,6 +5,7 @@ import type { NodeMetrics, SystemOverview, TpsSnapshot } from '../../../api/over
 import type { NodeHistoryResponse, NodeMetricRollup } from '../../../api/compute'
 import { k8sApi } from '../../../api/k8s'
 import type { RemediationResult } from '../../../api/dr'
+import BaseIcon from '../../ui/BaseIcon.vue'
 import NodeDrawerHeader from './NodeDrawerHeader.vue'
 import NodeLiveDiagnostics from './NodeLiveDiagnostics.vue'
 import NodeHistoricalChart from './NodeHistoricalChart.vue'
@@ -278,7 +279,8 @@ function openAiIncidents() {
                 @click="showRemediationModal = true"
                 title="Trigger 1-Click Fast Failover SRE Remediation"
               >
-                <span>⚡ 1-Click Failover</span>
+                <BaseIcon name="activity" size="xs" />
+                <span>1-Click Failover</span>
               </button>
               <button
                 type="button"
@@ -287,16 +289,20 @@ function openAiIncidents() {
                 @click="toggleCordon"
                 :title="isNodeUnschedulable ? 'Mark node schedulable' : 'Mark node unschedulable'"
               >
-                <span>{{ isNodeUnschedulable ? '🔵 Uncordon' : '🛡️ Cordon' }}</span>
+                <BaseIcon :name="isNodeUnschedulable ? 'shield' : 'lock'" size="xs" />
+                <span>{{ isNodeUnschedulable ? 'Uncordon' : 'Cordon' }}</span>
               </button>
               <button type="button" class="btn btn-secondary" @click="manageHost">
-                <span>⚙️ Manage Host</span>
+                <BaseIcon name="sliders" size="xs" />
+                <span>Manage Host</span>
               </button>
               <button type="button" class="btn btn-primary" @click="openAiIncidents">
-                <span>🤖 AI RCA</span>
+                <BaseIcon name="bot" size="xs" />
+                <span>AI RCA</span>
               </button>
               <button type="button" class="btn btn-secondary btn-close-footer" @click="handleClose" title="Close drawer (Esc)">
-                <span>✕ Close</span>
+                <BaseIcon name="x" size="xs" />
+                <span>Close</span>
               </button>
             </div>
           </aside>

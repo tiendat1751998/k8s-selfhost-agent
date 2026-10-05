@@ -118,24 +118,31 @@ onUnmounted(() => {
 <template>
   <div class="global-context-selector">
     <button
-      ref="clusterBtnRef" type="button" class="context-pill"
-      :class="{ 'is-active': activeDropdown === 'cluster' }" aria-haspopup="listbox"
-      :aria-expanded="activeDropdown === 'cluster'" title="Cluster Context: Click to switch" @click="openDropdown('cluster')"
+      ref="clusterBtnRef"
+      type="button"
+      class="context-pill cluster-pill"
+      :class="{ 'is-active': activeDropdown === 'cluster' }"
+      aria-haspopup="listbox"
+      :aria-expanded="activeDropdown === 'cluster'"
+      title="Cluster Context: Click to switch"
+      @click="openDropdown('cluster')"
     >
-      <BaseIcon name="anchor" size="xs" class="pill-icon text-cyan" />
-      <span class="pill-text font-mono">{{ currentCluster.name || currentCluster.id }}</span>
       <span class="status-dot" :class="clusterStatusDotClass" />
-      <svg class="pill-caret" width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 1.5L4 4.5L7 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <span class="pill-text font-mono">{{ currentCluster.name || currentCluster.id }}</span>
     </button>
-    <div class="pill-divider" />
+    <span class="pill-slash font-mono">/</span>
     <button
-      ref="namespaceBtnRef" type="button" class="context-pill"
-      :class="{ 'is-active': activeDropdown === 'namespace' }" aria-haspopup="listbox"
-      :aria-expanded="activeDropdown === 'namespace'" title="Namespace Context: Click to switch" @click="openDropdown('namespace')"
+      ref="namespaceBtnRef"
+      type="button"
+      class="context-pill namespace-pill"
+      :class="{ 'is-active': activeDropdown === 'namespace' }"
+      aria-haspopup="listbox"
+      :aria-expanded="activeDropdown === 'namespace'"
+      title="Namespace Context: Click to switch"
+      @click="openDropdown('namespace')"
     >
-      <BaseIcon name="layers" size="xs" class="pill-icon text-muted" />
       <span class="pill-text font-mono">{{ activeNamespaceDisplay }}</span>
-      <svg class="pill-caret" width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 1.5L4 4.5L7 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <BaseIcon name="chevron-down" size="xs" class="pill-caret" />
     </button>
     <Teleport to="body">
       <div
@@ -183,21 +190,60 @@ onUnmounted(() => {
 
 <style scoped>
 .global-context-selector {
-  display: inline-flex; align-items: center; height: 32px;
-  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  border-radius: 6px; padding: 2px; gap: 2px;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 6px;
+  padding: 0 4px;
+  gap: 2px;
+  transition: all 0.15s ease;
+}
+.global-context-selector:hover {
+  border-color: rgba(148, 163, 184, 0.35);
 }
 .context-pill {
-  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px;
-  background: transparent; border: 1px solid transparent; border-radius: 4px;
-  color: var(--text-primary, #f1f5f9); cursor: pointer; font-size: 11px; transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #f1f5f9;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 500;
+  transition: all 0.15s ease;
 }
-.context-pill:hover, .context-pill.is-active { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.1); }
-.pill-text { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pill-divider { width: 1px; height: 16px; background: var(--border-subtle, rgba(255, 255, 255, 0.1)); }
-.pill-caret { opacity: 0.5; transition: transform 0.15s ease; }
-.context-pill.is-active .pill-caret { transform: rotate(180deg); }
-@media (max-width: 1366px) { .pill-text { max-width: 80px; } }
+.context-pill:hover,
+.context-pill.is-active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.pill-slash {
+  color: #64748b;
+  font-size: 12px;
+  user-select: none;
+  padding: 0 1px;
+}
+.pill-text {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pill-caret {
+  color: #94a3b8;
+  opacity: 0.7;
+  transition: transform 0.15s ease;
+}
+.context-pill.is-active .pill-caret {
+  transform: rotate(180deg);
+}
+@media (max-width: 1366px) { .pill-text { max-width: 85px; } }
 @media (max-width: 768px) { .pill-text { max-width: 75px; } }
 </style>
 

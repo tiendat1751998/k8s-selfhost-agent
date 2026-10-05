@@ -87,7 +87,7 @@ const sortedNodes = computed<NodeMetrics[]>(() => {
 })
 
 const nodeActions: ActionItem[] = [
-  { id: 'scale', label: 'Scale Workloads', icon: 'zap' },
+  { id: 'scale', label: 'Scale Workloads', icon: 'sliders' },
   { id: 'restart', label: 'Restart Agent', icon: 'refresh' },
   { id: 'yaml', label: 'View YAML', icon: 'file-text' },
   { id: 'sep-1', label: '', separator: true },
@@ -229,7 +229,7 @@ function getNodePing(node: NodeMetrics): number {
               <div class="name-role-cell">
                 <span class="node-name-text font-bold" :title="node.node_name">{{ node.node_name }}</span>
                 <span class="role-badge font-mono" :class="getRoleBadge(node.role).cls">[{{ getRoleBadge(node.role).label }}]</span>
-                <BaseIcon v-if="node.node_id === busiestNodeId" name="flame" size="xs" class="badge-hot" title="Highest traffic" />
+                <BaseIcon v-if="node.node_id === busiestNodeId" name="activity" size="xs" class="badge-hot" title="Highest traffic" />
               </div>
             </td>
             <td class="col-ip font-mono">
@@ -260,7 +260,7 @@ function getNodePing(node: NodeMetrics): number {
             <td class="col-probe font-mono">
               <span v-if="isOffline(node) || getNodePing(node) <= 0" class="text-muted">--</span>
               <span v-else class="probe-val">
-                <BaseIcon name="zap" size="xs" /> {{ getNodePing(node) }}ms
+                <BaseIcon name="activity" size="xs" /> {{ getNodePing(node) }}ms
               </span>
             </td>
             <td class="col-actions text-right" @click.stop>

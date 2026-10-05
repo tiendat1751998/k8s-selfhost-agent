@@ -217,7 +217,7 @@ function handleRowAction(actionId: string, row: EnrichedSLORow) {
             title="Inspect SLO & Telemetry"
             @click="emit('inspect', row)"
           >
-            <BaseIcon name="zap" size="xs" />
+            <BaseIcon name="eye" size="xs" />
             <span>Inspect</span>
           </button>
           <ActionDropdown

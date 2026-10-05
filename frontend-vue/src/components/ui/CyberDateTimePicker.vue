@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from './BaseIcon.vue'
 import {
   MONTH_NAMES,
   DAY_NAMES,
@@ -70,7 +71,7 @@ void pickerContainerRef
       aria-label="Select Date and Time"
     >
       <div class="trigger-left">
-        <span class="cyber-cal-icon">📅</span>
+        <BaseIcon name="calendar" size="xs" class="cyber-cal-icon" />
         <span v-if="displayValue" class="trigger-value font-mono">{{ displayValue }}</span>
         <span v-else class="trigger-placeholder font-mono">{{ placeholder }}</span>
       </div>
@@ -195,7 +196,7 @@ void pickerContainerRef
         <div class="popup-footer-bar">
           <div class="footer-left">
             <button type="button" class="btn-picker-quicknow font-mono" @click.stop="setNowFull" title="Set to current date and time">
-              ⚡ Set Now
+              <BaseIcon name="clock" size="xs" /> Set Now
             </button>
             <div class="preview-tag font-mono">
               {{ tempYear }}-{{ pad(tempMonth + 1) }}-{{ pad(tempDay) }} {{ pad(tempHour) }}:{{ pad(tempMinute) }}
