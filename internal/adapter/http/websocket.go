@@ -3,9 +3,9 @@ package http
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -13,8 +13,24 @@ import (
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
+
+func isSameHost(uHost, rHost string) bool {
+	if uHost == rHost {
+		return true
+	}
+	uName := uHost
+	if h, _, err := net.SplitHostPort(uHost); err == nil {
+		uName = h
+	}
+	rName := rHost
+	if h, _, err := net.SplitHostPort(rHost); err == nil {
+		rName = h
+	}
+	return strings.EqualFold(uName, rName)
+}
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -28,23 +44,10 @@ var upgrader = websocket.Upgrader{
 		if err != nil {
 			return false
 		}
-		if u.Host == r.Host {
+		if isSameHost(u.Host, r.Host) {
 			return true
 		}
-		if u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" {
-			return true
-		}
-		allowedOriginsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
-		if allowedOriginsEnv == "" {
-			allowedOriginsEnv = "http://127.0.0.1:5173,http://127.0.0.1:3000,http://localhost:5173,http://localhost:3000"
-		}
-		for _, o := range strings.Split(allowedOriginsEnv, ",") {
-			o = strings.TrimSpace(o)
-			if o == "*" || o == origin {
-				return true
-			}
-		}
-		return false
+		return middleware.IsOriginAllowed(origin)
 	},
 }
 
