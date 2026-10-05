@@ -67,11 +67,12 @@ func TestSearchQueryBuilder_BuildQueries_TenantIsolation(t *testing.T) {
 	if !ok {
 		t.Fatal("expected audit log query compiled")
 	}
-	if auditQuery.SQL == "" || len(auditQuery.Args) < 2 || !strings.Contains(auditQuery.SQL, "tenant_id") {
-		t.Errorf("audit query missing tenant predicate or args: %+v", auditQuery)
+	expectedAuditPredicate := "WHERE (action ILIKE '%' || $1 || '%' OR target_name ILIKE '%' || $1 || '%' OR actor ILIKE '%' || $1 || '%') AND tenant_id = $2"
+	if !strings.Contains(auditQuery.SQL, expectedAuditPredicate) {
+		t.Errorf("audit query missing parenthesized tenant predicate:\n got:  %s\n want predicate: %s", auditQuery.SQL, expectedAuditPredicate)
 	}
-	if len(auditQuery.Args) >= 2 && auditQuery.Args[1] != "tenant-alpha" {
-		t.Errorf("expected tenant arg 'tenant-alpha', got %v", auditQuery.Args[1])
+	if len(auditQuery.Args) != 2 || auditQuery.Args[1] != "tenant-alpha" {
+		t.Errorf("expected tenant arg 'tenant-alpha', got %v", auditQuery.Args)
 	}
 
 	// Verify GitOps PR query contains tenant filter

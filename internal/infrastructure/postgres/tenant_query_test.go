@@ -104,3 +104,62 @@ func TestBuildTenantQuery_TenantScopedTables(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildTenantQuery_OrPrecedenceIsolation(t *testing.T) {
+	ctx := context.WithValue(context.Background(), middleware.TenantIDKey, "tenant-sec")
+	ctx = context.WithValue(ctx, middleware.UserRoleKey, "operator")
+
+	tests := []struct {
+		name     string
+		query    string
+		args     []interface{}
+		wantSQL  string
+		wantArgs []interface{}
+	}{
+		{
+			name:     "SELECT with OR and LIMIT",
+			query:    "SELECT * FROM incidents WHERE x = $1 OR y = $1 LIMIT 10",
+			args:     []interface{}{"val"},
+			wantSQL:  "SELECT * FROM incidents WHERE (x = $1 OR y = $1) AND tenant_id = $2 LIMIT 10",
+			wantArgs: []interface{}{"val", "tenant-sec"},
+		},
+		{
+			name:     "SELECT with OR and ORDER BY",
+			query:    "SELECT * FROM incidents WHERE a OR b ORDER BY c",
+			args:     nil,
+			wantSQL:  "SELECT * FROM incidents WHERE (a OR b) AND tenant_id = $1 ORDER BY c",
+			wantArgs: []interface{}{"tenant-sec"},
+		},
+		{
+			name:     "UPDATE with OR",
+			query:    "UPDATE audit_findings SET status = 'resolved' WHERE id = $1 OR name = $2",
+			args:     []interface{}{"id-1", "name-1"},
+			wantSQL:  "UPDATE audit_findings SET status = 'resolved' WHERE (id = $1 OR name = $2) AND tenant_id = $3",
+			wantArgs: []interface{}{"id-1", "name-1", "tenant-sec"},
+		},
+		{
+			name:     "no-OR case: SELECT with simple WHERE and LIMIT",
+			query:    "SELECT * FROM incidents WHERE status = $1 LIMIT 10",
+			args:     []interface{}{"OPEN"},
+			wantSQL:  "SELECT * FROM incidents WHERE (status = $1) AND tenant_id = $2 LIMIT 10",
+			wantArgs: []interface{}{"OPEN", "tenant-sec"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotSQL, gotArgs := BuildTenantQuery(ctx, tc.query, tc.args...)
+			if gotSQL != tc.wantSQL {
+				t.Errorf("SQL mismatch:\n got:  %s\n want: %s", gotSQL, tc.wantSQL)
+			}
+			if len(gotArgs) != len(tc.wantArgs) {
+				t.Fatalf("Args len mismatch: got %d, want %d", len(gotArgs), len(tc.wantArgs))
+			}
+			for i := range gotArgs {
+				if gotArgs[i] != tc.wantArgs[i] {
+					t.Errorf("Arg[%d] mismatch: got %v, want %v", i, gotArgs[i], tc.wantArgs[i])
+				}
+			}
+		})
+	}
+}
