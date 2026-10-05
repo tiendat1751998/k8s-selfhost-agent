@@ -38,7 +38,7 @@ func TestBuildTenantQuery_EdgeCases(t *testing.T) {
 			name:        "SELECT with existing WHERE",
 			inputQuery:  "SELECT * FROM incidents WHERE status = $1",
 			inputArgs:   []interface{}{"OPEN"},
-			wantQuery:   "SELECT * FROM incidents WHERE status = $1 AND tenant_id = $2",
+			wantQuery:   "SELECT * FROM incidents WHERE (status = $1) AND tenant_id = $2",
 			wantArgsLen: 2,
 			wantLastArg: "org-test",
 		},
@@ -54,7 +54,7 @@ func TestBuildTenantQuery_EdgeCases(t *testing.T) {
 			name:        "SELECT with WHERE and ORDER BY LIMIT",
 			inputQuery:  "SELECT * FROM incidents WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
 			inputArgs:   []interface{}{"OPEN", 10, 0},
-			wantQuery:   "SELECT * FROM incidents WHERE status = $1 AND tenant_id = $4 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+			wantQuery:   "SELECT * FROM incidents WHERE (status = $1) AND tenant_id = $4 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
 			wantArgsLen: 4,
 			wantLastArg: "org-test",
 		},
@@ -111,7 +111,7 @@ func TestAllPostgresRepos_QueryCallsUseBuildTenantQuery(t *testing.T) {
 		"observability_repo.go": {"*"},                             // Non-tenant tables (slo_definitions, slo_snapshots)
 		"promotion_repo.go":     {"*"},                             // Non-tenant tables (promotions)
 		"reporting_repo.go":     {"*"},                             // Non-tenant tables (reports)
-		"search_repo.go":        {"Search"},                        // audit_logs step in Search has no tenant_id
+		"search_repo.go":        {"Search"},                        // Search dynamically compiles domain queries with BuildTenantQuery enforcing tenant isolation across all domains including audit_logs
 		"tagging_repo.go":       {"*"},                             // Non-tenant tables (tags, resource_tags)
 		"tenancy_repo.go":       {"*"},                             // Non-tenant tables (organizations, projects, tenant_members, rbac_matrix)
 		"timeline_repo.go":      {"*"},                             // Non-tenant tables (timeline_events)
