@@ -222,8 +222,13 @@ func (t *ContainerTailer) readContainerLogStream(
 	header, err := bufReader.Peek(8)
 	isStdCopy := err == nil && len(header) == 8 && (header[0] == 1 || header[0] == 2) && header[1] == 0 && header[2] == 0 && header[3] == 0
 
+	var lineMu sync.Mutex
 	processLine := func(line string) {
 		entry := parseLogLine(line, serviceName)
+
+		lineMu.Lock()
+		defer lineMu.Unlock()
+
 		if !lastTimestamp.IsZero() {
 			if entry.Timestamp.Before(*lastTimestamp) {
 				return

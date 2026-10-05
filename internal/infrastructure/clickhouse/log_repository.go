@@ -252,20 +252,14 @@ func (r *LogRepository) QuerySurroundingContext(
 	if err != nil {
 		return nil, fmt.Errorf("querying before logs: %w", err)
 	}
-
 	afterLogs, err := scanEntries(afterQuery, afterArgs)
 	if err != nil {
 		return nil, fmt.Errorf("querying after logs: %w", err)
 	}
-
-	merged := make([]logging.LogEntry, 0, len(beforeLogs)+len(afterLogs))
-	merged = append(merged, beforeLogs...)
-	merged = append(merged, afterLogs...)
-
+	merged := append(beforeLogs, afterLogs...)
 	sort.SliceStable(merged, func(i, j int) bool {
 		return merged[i].Timestamp.Before(merged[j].Timestamp)
 	})
-
 	return merged, nil
 }
 
@@ -459,6 +453,10 @@ func TailLogsStream(ctx context.Context, querier LogEntriesQuerier, filter loggi
 					logger.WithContext(ctx).Warn("clickhouse tail logs query error", zap.Error(err))
 					continue
 				}
+
+				sort.SliceStable(res.Entries, func(i, j int) bool {
+					return res.Entries[i].Timestamp.Before(res.Entries[j].Timestamp)
+				})
 
 				seenCountAtLastTS := 0
 				for _, entry := range res.Entries {

@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -22,6 +25,7 @@ type mockDockerClientForTailer struct {
 	callCounts      map[string]int
 	lastLogsOptions map[string]container.LogsOptions
 	streamGenerators map[string]func(call int, opts container.LogsOptions) string
+	binaryLogStreams map[string][]byte
 }
 
 func (m *mockDockerClientForTailer) ContainerList(ctx context.Context, options container.ListOptions) ([]types.Container, error) {
@@ -45,6 +49,9 @@ func (m *mockDockerClientForTailer) ContainerLogs(ctx context.Context, container
 	if m.streamGenerators != nil && m.streamGenerators[containerID] != nil {
 		content := m.streamGenerators[containerID](m.callCounts[containerID], options)
 		return io.NopCloser(strings.NewReader(content)), nil
+	}
+	if m.binaryLogStreams != nil && m.binaryLogStreams[containerID] != nil {
+		return io.NopCloser(bytes.NewReader(m.binaryLogStreams[containerID])), nil
 	}
 
 	content := m.logStreams[containerID]
@@ -247,3 +254,56 @@ func TestContainerTailer_RecoversOnEOFWhenContainerRotates(t *testing.T) {
 		t.Fatalf("expected at least 2 entries ingested across rotations, got %d", len(results))
 	}
 }
+
+func createStdCopyFrame(stream byte, payload string) []byte {
+	b := []byte(payload)
+	hdr := make([]byte, 8+len(b))
+	hdr[0] = stream
+	binary.BigEndian.PutUint32(hdr[4:8], uint32(len(b)))
+	copy(hdr[8:], b)
+	return hdr
+}
+
+func TestContainerTailer_MultiplexedStdCopy_ConcurrentNoDataRace(t *testing.T) {
+	tempDir := t.TempDir()
+	dict := logengine.NewLabelDictionary()
+	writer, err := logengine.NewWriter(tempDir, dict)
+	if err != nil {
+		t.Fatalf("failed to create log writer: %v", err)
+	}
+	defer writer.Close()
+
+	const containerID = "c_stdcopy_race"
+	var buf bytes.Buffer
+	for i := 0; i < 50; i++ {
+		stdoutLine := fmt.Sprintf("2026-09-14T12:00:%02d.000Z [INFO] stdout line %d\n", i%60, i)
+		stderrLine := fmt.Sprintf("2026-09-14T12:00:%02d.000Z [WARN] stderr line %d\n", i%60, i)
+		buf.Write(createStdCopyFrame(1, stdoutLine))
+		buf.Write(createStdCopyFrame(2, stderrLine))
+	}
+
+	mockCli := &mockDockerClientForTailer{
+		containers: []types.Container{
+			{
+				ID:     containerID,
+				Names:  []string{"/race-svc"},
+				Labels: map[string]string{"com.docker.compose.service": "race-svc"},
+			},
+		},
+		binaryLogStreams: map[string][]byte{
+			containerID: buf.Bytes(),
+		},
+	}
+
+	tailer := NewContainerTailer(mockCli, writer, slog.Default())
+	tailer.pollInterval = 50 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go tailer.Start(ctx)
+
+	time.Sleep(200 * time.Millisecond)
+	tailer.Stop()
+}
+
