@@ -194,10 +194,18 @@ func (r *queryRewriter) findTopLevelWhere(tokens []Token) (bool, int) {
 	return false, -1
 }
 
+func isClauseBoundaryKeyword(val string) bool {
+	u := strings.ToUpper(val)
+	return u == "ORDER" || u == "GROUP" || u == "LIMIT" || u == "OFFSET" ||
+		u == "FOR" || u == "HAVING" || u == "UNION" || u == "RETURNING" ||
+		u == "WINDOW" || u == "FETCH"
+}
+
 func (r *queryRewriter) findFilterInsertionPoint(tokens []Token, hasWhere bool, whereIdx int) int {
 	depth := 0
 
 	if hasWhere {
+		boundaryIdx := len(tokens)
 		for i := whereIdx + 1; i < len(tokens); i++ {
 			tok := tokens[i]
 			if tok.Value == "(" {
@@ -207,18 +215,23 @@ func (r *queryRewriter) findFilterInsertionPoint(tokens []Token, hasWhere bool, 
 					depth--
 				}
 			} else if depth == 0 {
-				if tok.Type == TokenComment {
-					return i
-				}
-				if tok.Type == TokenKeyword {
-					u := strings.ToUpper(tok.Value)
-					if u == "ORDER" || u == "GROUP" || u == "LIMIT" || u == "OFFSET" || u == "FOR" || u == "HAVING" || u == "UNION" || u == "RETURNING" {
-						return i
-					}
+				if tok.Type == TokenKeyword && isClauseBoundaryKeyword(tok.Value) {
+					boundaryIdx = i
+					break
 				}
 			}
 		}
-		return len(tokens)
+
+		for k := boundaryIdx - 1; k > whereIdx; k-- {
+			if tokens[k].Type == TokenWhitespace {
+				continue
+			}
+			if tokens[k].Type == TokenComment && strings.HasPrefix(tokens[k].Value, "--") {
+				boundaryIdx = k
+			}
+			break
+		}
+		return boundaryIdx
 	}
 
 	fromIdx := -1
@@ -244,6 +257,7 @@ func (r *queryRewriter) findFilterInsertionPoint(tokens []Token, hasWhere bool, 
 	}
 
 	depth = 0
+	boundaryIdx := len(tokens)
 	for i := startSearch; i < len(tokens); i++ {
 		tok := tokens[i]
 		if tok.Value == "(" {
@@ -253,17 +267,23 @@ func (r *queryRewriter) findFilterInsertionPoint(tokens []Token, hasWhere bool, 
 				depth--
 			}
 		} else if depth == 0 {
-			if tok.Type == TokenComment {
-				return i
-			}
-			if tok.Type == TokenKeyword {
-				u := strings.ToUpper(tok.Value)
-				if u == "ORDER" || u == "GROUP" || u == "LIMIT" || u == "OFFSET" || u == "FOR" || u == "HAVING" || u == "UNION" || u == "RETURNING" {
-					return i
-				}
+			if tok.Type == TokenKeyword && isClauseBoundaryKeyword(tok.Value) {
+				boundaryIdx = i
+				break
 			}
 		}
 	}
 
-	return len(tokens)
+	for k := boundaryIdx - 1; k >= startSearch; k-- {
+		if tokens[k].Type == TokenWhitespace {
+			continue
+		}
+		if tokens[k].Type == TokenComment && strings.HasPrefix(tokens[k].Value, "--") {
+			boundaryIdx = k
+		}
+		break
+	}
+
+	return boundaryIdx
 }
+
