@@ -12,6 +12,8 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/repo"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
 )
 
 // ListRepos returns all configured Helm repositories.
@@ -46,6 +48,11 @@ func (m *ReleaseManager) AddRepo(name, url string) error {
 		return fmt.Errorf("repo url cannot be empty")
 	}
 
+	// SEC-15: Scheme check (http/https only)
+	if _, err := netguard.ValidateURL(url, "http", "https"); err != nil {
+		return fmt.Errorf("invalid helm repository url scheme: %w", err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -65,7 +72,11 @@ func (m *ReleaseManager) AddRepo(name, url string) error {
 		URL:  url,
 	}
 
-	chartRepo, err := repo.NewChartRepository(entry, getter.All(m.settings))
+	// SEC-15: Guarded transport (public by default, allowlist for private via EGRESS_ALLOW_PRIVATE_CIDRS)
+	guard := netguard.New(netguard.WithFromEnv())
+	guardedGetters := getter.All(m.settings, getter.WithTransport(guard.NewTransport()))
+
+	chartRepo, err := repo.NewChartRepository(entry, guardedGetters)
 	if err != nil {
 		return fmt.Errorf("initializing chart repository %s: %w", name, err)
 	}
@@ -107,9 +118,16 @@ func (m *ReleaseManager) UpdateRepos() error {
 		return fmt.Errorf("loading repo file: %w", err)
 	}
 
+	guard := netguard.New(netguard.WithFromEnv())
+	guardedGetters := getter.All(m.settings, getter.WithTransport(guard.NewTransport()))
+
 	var updateErrors []string
 	for _, entry := range repoFile.Repositories {
-		chartRepo, err := repo.NewChartRepository(entry, getter.All(m.settings))
+		if _, err := netguard.ValidateURL(entry.URL, "http", "https"); err != nil {
+			updateErrors = append(updateErrors, fmt.Sprintf("%s: invalid repo url: %v", entry.Name, err))
+			continue
+		}
+		chartRepo, err := repo.NewChartRepository(entry, guardedGetters)
 		if err != nil {
 			updateErrors = append(updateErrors, fmt.Sprintf("%s: %v", entry.Name, err))
 			continue
