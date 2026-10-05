@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"bufio"
@@ -259,7 +259,7 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	k8sLogsHandler := adapthttp.NewK8sLogsHandler(infra.k8sClient, clientManager)
 
 	logAggregator := logging.NewLogAggregator(2000)
-	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator)
+	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator, computeHostRepo)
 	centralizedLogs, chCleanup := wireCentralizedLogging(ctx, log)
 	if chCleanup != nil {
 		stopFns = append(stopFns, chCleanup)
