@@ -49,7 +49,8 @@ func (d *mockDiscovery) ValidateConnectivity(ctx context.Context, kubeconfig []b
 	return nil
 }
 
-func TestImportCluster_PassesRawKubeconfig(t *testing.T) {
+func TestImportCluster_EncryptsKubeconfig(t *testing.T) {
+	t.Setenv("ENCRYPTION_KEY", "12345678901234567890123456789012")
 	repo := &mockFleetRepo{}
 	discovery := &mockDiscovery{}
 	logger := zap.NewNop()
@@ -70,8 +71,13 @@ func TestImportCluster_PassesRawKubeconfig(t *testing.T) {
 		t.Fatal("expected cluster to be registered in repo, but got nil")
 	}
 
-	// Verify that EncryptedToken contains the raw kubeconfig string, not an encrypted string
-	if repo.registeredCluster.EncryptedToken != string(rawKubeconfig) {
-		t.Errorf("expected raw kubeconfig %q in EncryptedToken, got %q", string(rawKubeconfig), repo.registeredCluster.EncryptedToken)
+	// Verify that EncryptedToken is encrypted and NOT equal to raw kubeconfig
+	if repo.registeredCluster.EncryptedToken == string(rawKubeconfig) {
+		t.Errorf("expected EncryptedToken to be encrypted, but found raw plaintext %q", repo.registeredCluster.EncryptedToken)
+	}
+
+	// Verify version prefix
+	if len(repo.registeredCluster.EncryptedToken) < 7 || repo.registeredCluster.EncryptedToken[:7] != "enc:v1:" {
+		t.Errorf("expected EncryptedToken to start with 'enc:v1:', got %q", repo.registeredCluster.EncryptedToken)
 	}
 }

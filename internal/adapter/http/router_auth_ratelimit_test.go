@@ -47,6 +47,11 @@ func TestRouter_AuthRateLimiting(t *testing.T) {
 			path: "/api/v1/auth/refresh",
 			body: map[string]string{},
 		},
+		{
+			name: "Logout Endpoint",
+			path: "/api/v1/auth/logout",
+			body: map[string]string{},
+		},
 	}
 
 	for idx, ep := range endpoints {

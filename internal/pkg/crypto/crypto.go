@@ -4,25 +4,50 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
-// ValidateKey checks if the ENCRYPTION_KEY is present and valid.
+// VersionPrefix is the prefix used to identify encrypted secrets.
+const VersionPrefix = "enc:v1:"
+
+// Encryptor defines the interface for encrypting and decrypting sensitive values.
+type Encryptor interface {
+	Encrypt(plaintext string) (string, error)
+	Decrypt(ciphertext string) (string, error)
+}
+
+// DefaultEncryptor implements Encryptor using package-level AES-256-GCM.
+type DefaultEncryptor struct{}
+
+func (DefaultEncryptor) Encrypt(plaintext string) (string, error) {
+	return Encrypt(plaintext)
+}
+
+func (DefaultEncryptor) Decrypt(ciphertext string) (string, error) {
+	return Decrypt(ciphertext)
+}
+
+// ValidateKey checks if the encryption key is present and valid.
 func ValidateKey() error {
 	_, err := getEncryptionKey()
 	return err
 }
 
 func getEncryptionKey() ([]byte, error) {
-	key := os.Getenv("ENCRYPTION_KEY")
+	key := os.Getenv("MASTER_ENCRYPTION_KEY")
+	if key == "" {
+		key = os.Getenv("ENCRYPTION_KEY")
+	}
 	if key == "" {
 		key = os.Getenv("K8S_ENCRYPTION_KEY")
 	}
 	if key == "" {
-		return nil, fmt.Errorf("ENCRYPTION_KEY is required and must be set in environment")
+		return nil, fmt.Errorf("MASTER_ENCRYPTION_KEY or ENCRYPTION_KEY is required and must be set in environment")
 	}
 	// Try hex decode first (64-char hex = 256-bit key)
 	if len(key) == 64 {
@@ -31,19 +56,23 @@ func getEncryptionKey() ([]byte, error) {
 			return decoded, nil
 		}
 	}
+	// Try base64 decode (32-byte key is 44 chars in base64)
+	if decoded, err := base64.StdEncoding.DecodeString(key); err == nil && len(decoded) == 32 {
+		return decoded, nil
+	}
 	// Fallback: raw bytes (32-char string = 256-bit key)
 	if len(key) >= 32 {
 		return []byte(key[:32]), nil
 	}
-	return nil, fmt.Errorf("ENCRYPTION_KEY must be at least 32 characters or 64 hex characters")
+	return nil, fmt.Errorf("encryption key must be at least 32 characters, 64 hex characters, or 32-byte base64")
 }
 
-// Encrypt encrypts plain text using AES-GCM
+// Encrypt encrypts plain text using AES-GCM and prepends VersionPrefix
 func Encrypt(plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", nil
 	}
-	
+
 	key, err := getEncryptionKey()
 	if err != nil {
 		return "", err
@@ -64,15 +93,43 @@ func Encrypt(plaintext string) (string, error) {
 	}
 
 	ciphertext := aesgcm.Seal(nonce, nonce, []byte(plaintext), nil)
-	return hex.EncodeToString(ciphertext), nil
+	return VersionPrefix + hex.EncodeToString(ciphertext), nil
 }
 
-// Decrypt decrypts AES-GCM encrypted hex string
-func Decrypt(hexString string) (string, error) {
-	if hexString == "" {
+// Decrypt decrypts AES-GCM encrypted hex string with optional enc:v1: prefix.
+// If the ciphertext has the enc:v1: prefix, it strips it and decrypts.
+// If it does not have the prefix and is legacy plaintext, it is returned as-is
+// for backward compatibility.
+func Decrypt(ciphertextStr string) (string, error) {
+	if ciphertextStr == "" {
 		return "", nil
 	}
-	
+
+	if strings.HasPrefix(ciphertextStr, VersionPrefix) {
+		rawHex := strings.TrimPrefix(ciphertextStr, VersionPrefix)
+		return decryptAESGCM(rawHex)
+	}
+
+	// Legacy row backward compatibility:
+	// If it contains YAML/JSON indicators or newlines, it's plaintext.
+	if strings.Contains(ciphertextStr, "apiVersion:") ||
+		strings.Contains(ciphertextStr, "\"apiVersion\"") ||
+		strings.Contains(ciphertextStr, "\n") ||
+		strings.HasPrefix(ciphertextStr, "---") ||
+		strings.HasPrefix(ciphertextStr, "{") {
+		return ciphertextStr, nil
+	}
+
+	// Try legacy hex decrypt (encrypted before version prefix was added)
+	decrypted, err := decryptAESGCM(ciphertextStr)
+	if err == nil {
+		return decrypted, nil
+	}
+
+	return "", err
+}
+
+func decryptAESGCM(hexString string) (string, error) {
 	ciphertext, err := hex.DecodeString(hexString)
 	if err != nil {
 		return "", err
