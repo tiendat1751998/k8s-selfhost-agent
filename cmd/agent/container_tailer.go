@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"bufio"
@@ -22,10 +22,10 @@ type ContainerTailer struct {
 	writer           *logengine.Writer
 	logger           *slog.Logger
 	pollInterval     time.Duration
+	eofRetryInterval time.Duration
 	tailLines        string
 	mu               sync.Mutex
 	activeStreams    map[string]context.CancelFunc
-	completedStreams map[string]bool
 	wg               sync.WaitGroup
 	stopped          bool
 }
@@ -40,9 +40,9 @@ func NewContainerTailer(cli DockerClientInterface, writer *logengine.Writer, log
 		writer:           writer,
 		logger:           logger,
 		pollInterval:     5 * time.Second,
-		tailLines:        "100",
+		eofRetryInterval: 200 * time.Millisecond,
+		tailLines:        "all",
 		activeStreams:    make(map[string]context.CancelFunc),
-		completedStreams: make(map[string]bool),
 	}
 }
 
@@ -115,7 +115,7 @@ func (t *ContainerTailer) pollOnce(ctx context.Context) {
 			t.mu.Unlock()
 			return
 		}
-		if _, exists := t.activeStreams[cID]; !exists && !t.completedStreams[cID] {
+		if _, exists := t.activeStreams[cID]; !exists {
 			streamCtx, cancel := context.WithCancel(ctx)
 			t.activeStreams[cID] = cancel
 			t.wg.Add(1)
@@ -130,11 +130,6 @@ func (t *ContainerTailer) pollOnce(ctx context.Context) {
 		if !activeNow[id] {
 			cancel()
 			delete(t.activeStreams, id)
-		}
-	}
-	for id := range t.completedStreams {
-		if !activeNow[id] {
-			delete(t.completedStreams, id)
 		}
 	}
 	t.mu.Unlock()
@@ -164,22 +159,55 @@ func (t *ContainerTailer) streamContainerLogs(ctx context.Context, containerID, 
 	defer func() {
 		t.mu.Lock()
 		delete(t.activeStreams, containerID)
-		t.completedStreams[containerID] = true
 		t.mu.Unlock()
 	}()
 
-	reader, err := t.cli.ContainerLogs(ctx, containerID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Follow:     true,
-		Timestamps: true,
-		Tail:       t.tailLines,
-	})
-	if err != nil {
-		return
-	}
-	defer reader.Close()
+	var lastTimestamp time.Time
+	seenAtLastTS := make(map[string]bool)
 
+	for ctx.Err() == nil {
+		opts := container.LogsOptions{
+			ShowStdout: true,
+			ShowStderr: true,
+			Follow:     true,
+			Timestamps: true,
+		}
+		if lastTimestamp.IsZero() {
+			opts.Tail = t.tailLines
+		} else {
+			opts.Since = lastTimestamp.Format(time.RFC3339Nano)
+		}
+
+		reader, err := t.cli.ContainerLogs(ctx, containerID, opts)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(t.eofRetryInterval):
+				continue
+			}
+		}
+
+		t.readContainerLogStream(ctx, reader, serviceName, &lastTimestamp, seenAtLastTS)
+		_ = reader.Close()
+
+		// Robust EOF recovery with non-busy polling: when log stream reaches EOF (e.g. rotation),
+		// sleep briefly before reconnecting with Since: lastTimestamp.
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(t.eofRetryInterval):
+		}
+	}
+}
+
+func (t *ContainerTailer) readContainerLogStream(
+	ctx context.Context,
+	reader io.ReadCloser,
+	serviceName string,
+	lastTimestamp *time.Time,
+	seenAtLastTS map[string]bool,
+) {
 	done := make(chan struct{})
 	go func() {
 		select {
@@ -194,6 +222,35 @@ func (t *ContainerTailer) streamContainerLogs(ctx context.Context, containerID, 
 	header, err := bufReader.Peek(8)
 	isStdCopy := err == nil && len(header) == 8 && (header[0] == 1 || header[0] == 2) && header[1] == 0 && header[2] == 0 && header[3] == 0
 
+	processLine := func(line string) {
+		entry := parseLogLine(line, serviceName)
+		if !lastTimestamp.IsZero() {
+			if entry.Timestamp.Before(*lastTimestamp) {
+				return
+			}
+			if entry.Timestamp.Equal(*lastTimestamp) && seenAtLastTS[entry.Raw] {
+				return
+			}
+		}
+		if entry.Timestamp.After(*lastTimestamp) {
+			*lastTimestamp = entry.Timestamp
+			for k := range seenAtLastTS {
+				delete(seenAtLastTS, k)
+			}
+		}
+		seenAtLastTS[entry.Raw] = true
+
+		if t.writer != nil {
+			_ = t.writer.Write(logengine.Entry{
+				Timestamp: entry.Timestamp,
+				Service:   entry.Service,
+				Level:     entry.Level,
+				Message:   entry.Message,
+				Raw:       entry.Raw,
+			})
+		}
+	}
+
 	if isStdCopy {
 		stdoutReader, stdoutWriter := io.Pipe()
 		stderrReader, stderrWriter := io.Pipe()
@@ -202,23 +259,13 @@ func (t *ContainerTailer) streamContainerLogs(ctx context.Context, containerID, 
 		scanStream := func(r io.Reader) {
 			defer scanWg.Done()
 			scanner := bufio.NewScanner(r)
-			// Strictly bound line buffer < 64KB
 			scanner.Buffer(make([]byte, 4096), 64*1024)
 			for scanner.Scan() {
 				line := scanner.Text()
 				if line == "" {
 					continue
 				}
-				entry := parseLogLine(line, serviceName)
-				if t.writer != nil {
-					_ = t.writer.Write(logengine.Entry{
-						Timestamp: entry.Timestamp,
-						Service:   entry.Service,
-						Level:     entry.Level,
-						Message:   entry.Message,
-						Raw:       entry.Raw,
-					})
-				}
+				processLine(line)
 			}
 		}
 
@@ -238,16 +285,7 @@ func (t *ContainerTailer) streamContainerLogs(ctx context.Context, containerID, 
 			if line == "" {
 				continue
 			}
-			entry := parseLogLine(line, serviceName)
-			if t.writer != nil {
-				_ = t.writer.Write(logengine.Entry{
-					Timestamp: entry.Timestamp,
-					Service:   entry.Service,
-					Level:     entry.Level,
-					Message:   entry.Message,
-					Raw:       entry.Raw,
-				})
-			}
+			processLine(line)
 		}
 	}
 }

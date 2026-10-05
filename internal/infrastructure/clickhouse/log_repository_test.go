@@ -1,4 +1,4 @@
-﻿package clickhouse_test
+package clickhouse_test
 
 import (
 	"context"
@@ -153,4 +153,61 @@ func TestLogRepository_IngestBatch_Empty(t *testing.T) {
 	// Empty entries is a no-op
 	err := repo.IngestBatch(ctx, nil)
 	require.NoError(t, err)
+}
+
+type mockEntriesQuerier struct {
+	called  int
+	entries []logging.LogEntry
+}
+
+func (m *mockEntriesQuerier) QueryLogs(ctx context.Context, filter logging.LogFilter) (*logging.LogSearchResult, error) {
+	m.called++
+	return &logging.LogSearchResult{
+		Entries:    m.entries,
+		TotalCount: int64(len(m.entries)),
+	}, nil
+}
+
+func TestTailLogs_IdenticalTimestampMillisecondCollisionPreserved(t *testing.T) {
+	t0 := time.Date(2026, 9, 16, 10, 0, 0, 123000000, time.UTC) // 123ms
+
+	// 3 entries with the exact same millisecond timestamp
+	querier := &mockEntriesQuerier{
+		entries: []logging.LogEntry{
+			{Timestamp: t0, PodName: "p1", ContainerName: "c1", Stream: "stdout", Message: "first log line"},
+			{Timestamp: t0, PodName: "p1", ContainerName: "c1", Stream: "stdout", Message: "second log line"},
+			{Timestamp: t0, PodName: "p1", ContainerName: "c1", Stream: "stdout", Message: "third log line"},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	filter := logging.LogFilter{
+		TenantID:  "tenant-tail",
+		StartTime: t0.Add(-1 * time.Second),
+	}
+
+	ch := clickhouse.TailLogsStream(ctx, querier, filter, 50*time.Millisecond)
+
+	var received []logging.LogEntry
+	timeout := time.After(300 * time.Millisecond)
+
+loop:
+	for len(received) < 3 {
+		select {
+		case e, ok := <-ch:
+			if !ok {
+				break loop
+			}
+			received = append(received, e)
+		case <-timeout:
+			break loop
+		}
+	}
+
+	require.Equal(t, 3, len(received), "expected all 3 logs sharing millisecond timestamp to be received, got %d", len(received))
+	require.Equal(t, "first log line", received[0].Message)
+	require.Equal(t, "second log line", received[1].Message)
+	require.Equal(t, "third log line", received[2].Message)
 }

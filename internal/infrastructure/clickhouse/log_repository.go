@@ -1,4 +1,4 @@
-﻿package clickhouse
+package clickhouse
 
 import (
 	"context"
@@ -395,11 +395,9 @@ func (r *LogRepository) GetHistogram(
 	bucketMap := make(map[time.Time]*logging.LogAggregationBucket)
 	var orderedBuckets []time.Time
 	for rows.Next() {
-		var (
-			bucketTime time.Time
-			level      string
-			count      uint64
-		)
+		var bucketTime time.Time
+		var level string
+		var count uint64
 		if err := rows.Scan(&bucketTime, &level, &count); err != nil {
 			return nil, fmt.Errorf("scanning histogram row: %w", err)
 		}
@@ -425,13 +423,16 @@ func (r *LogRepository) GetHistogram(
 	return result, nil
 }
 
-// TailLogs establishes an active polling stream that channels newly arriving logs without duplicates.
-func (r *LogRepository) TailLogs(ctx context.Context, filter logging.LogFilter) (<-chan logging.LogEntry, error) {
-	if err := filter.Validate(); err != nil {
-		return nil, err
-	}
-	filter.Sanitize()
+// LogEntriesQuerier abstracts QueryLogs for live streaming and testing.
+type LogEntriesQuerier interface {
+	QueryLogs(ctx context.Context, filter logging.LogFilter) (*logging.LogSearchResult, error)
+}
 
+// TailLogsStream creates a streaming channel that polls the querier.
+func TailLogsStream(ctx context.Context, querier LogEntriesQuerier, filter logging.LogFilter, pollInterval time.Duration) <-chan logging.LogEntry {
+	if pollInterval <= 0 {
+		pollInterval = time.Second
+	}
 	outCh := make(chan logging.LogEntry, 100)
 	go func() {
 		defer close(outCh)
@@ -439,7 +440,8 @@ func (r *LogRepository) TailLogs(ctx context.Context, filter logging.LogFilter) 
 		if lastSeen.IsZero() {
 			lastSeen = time.Now().UTC()
 		}
-		pollTicker := time.NewTicker(time.Second)
+		deliveredAtLastTS := 0
+		pollTicker := time.NewTicker(pollInterval)
 		defer pollTicker.Stop()
 
 		for {
@@ -450,19 +452,30 @@ func (r *LogRepository) TailLogs(ctx context.Context, filter logging.LogFilter) 
 				currentFilter := filter
 				currentFilter.StartTime = lastSeen
 				currentFilter.EndTime = time.Now().UTC()
-				currentFilter.Limit = 100
+				currentFilter.Limit = 1000
 
-				res, err := r.QueryLogs(ctx, currentFilter)
+				res, err := querier.QueryLogs(ctx, currentFilter)
 				if err != nil {
 					logger.WithContext(ctx).Warn("clickhouse tail logs query error", zap.Error(err))
 					continue
 				}
-				for i := len(res.Entries) - 1; i >= 0; i-- {
-					entry := res.Entries[i]
-					if !entry.Timestamp.After(lastSeen) {
+
+				seenCountAtLastTS := 0
+				for _, entry := range res.Entries {
+					if entry.Timestamp.Before(lastSeen) {
 						continue
 					}
-					lastSeen = entry.Timestamp
+					if entry.Timestamp.Equal(lastSeen) {
+						seenCountAtLastTS++
+						if seenCountAtLastTS <= deliveredAtLastTS {
+							continue
+						}
+						deliveredAtLastTS++
+					} else {
+						lastSeen = entry.Timestamp
+						deliveredAtLastTS = 1
+						seenCountAtLastTS = 1
+					}
 					select {
 					case outCh <- entry:
 					case <-ctx.Done():
@@ -472,5 +485,13 @@ func (r *LogRepository) TailLogs(ctx context.Context, filter logging.LogFilter) 
 			}
 		}
 	}()
-	return outCh, nil
+	return outCh
+}
+
+func (r *LogRepository) TailLogs(ctx context.Context, filter logging.LogFilter) (<-chan logging.LogEntry, error) {
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+	filter.Sanitize()
+	return TailLogsStream(ctx, r, filter, time.Second), nil
 }
