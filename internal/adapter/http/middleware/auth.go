@@ -45,17 +45,10 @@ const (
 
 var jwtSecret []byte
 
+var isTesting = testing.Testing
+
 func isRunningInTest() bool {
-	if testing.Testing() {
-		return true
-	}
-	if len(os.Args) > 0 {
-		base := strings.ToLower(os.Args[0])
-		if strings.Contains(base, "test") {
-			return true
-		}
-	}
-	return false
+	return isTesting()
 }
 
 func init() {

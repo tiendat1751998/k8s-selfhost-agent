@@ -68,20 +68,49 @@ func (h *K8sExecHandler) getK8sClientAndConfig(ctx context.Context, clusterID st
 
 type terminalSizeQueue struct {
 	resizeChan chan remotecommand.TerminalSize
+	doneChan   chan struct{}
+	stopOnce   sync.Once
 }
 
 func newTerminalSizeQueue() *terminalSizeQueue {
 	return &terminalSizeQueue{
 		resizeChan: make(chan remotecommand.TerminalSize, 16),
+		doneChan:   make(chan struct{}),
+	}
+}
+
+func (q *terminalSizeQueue) Push(size remotecommand.TerminalSize) bool {
+	select {
+	case <-q.doneChan:
+		return false
+	default:
+	}
+	select {
+	case <-q.doneChan:
+		return false
+	case q.resizeChan <- size:
+		return true
+	default:
+		return false
 	}
 }
 
 func (q *terminalSizeQueue) Next() *remotecommand.TerminalSize {
-	size, ok := <-q.resizeChan
-	if !ok {
+	select {
+	case <-q.doneChan:
 		return nil
+	case size, ok := <-q.resizeChan:
+		if !ok {
+			return nil
+		}
+		return &size
 	}
-	return &size
+}
+
+func (q *terminalSizeQueue) Stop() {
+	q.stopOnce.Do(func() {
+		close(q.doneChan)
+	})
 }
 
 type wsConnWriter struct {
@@ -105,6 +134,17 @@ type wsExecMessage struct {
 	Rows   uint16 `json:"rows"`
 	Width  uint16 `json:"width"`
 	Height uint16 `json:"height"`
+}
+
+// resolveExecTenant derives the tenant ID strictly from authenticated claims in context,
+// honoring the client X-Tenant-ID header only if the caller's verified role is platform_admin.
+func resolveExecTenant(r *http.Request) string {
+	if tenancy.UserRoleFromContext(r.Context()) == "platform_admin" {
+		if h := strings.TrimSpace(r.Header.Get("X-Tenant-ID")); h != "" {
+			return h
+		}
+	}
+	return tenancy.TenantIDFromContext(r.Context())
 }
 
 // HandleExec upgrades an HTTP request to a WebSocket and bridges interactive terminal exec to a Pod.
@@ -131,10 +171,7 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 	// Enforce tenant boundary check if not platform_admin
 	userRole := tenancy.UserRoleFromContext(r.Context())
 	if userRole != "platform_admin" && (userRole != "" || tenancy.TenantIDFromContext(r.Context()) != "" || namespace != "default") {
-		tenantID := tenancy.TenantIDFromContext(r.Context())
-		if tenantID == "" {
-			tenantID = strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
-		}
+		tenantID := resolveExecTenant(r)
 		if !isTenantNamespaceAllowed(tenantID, namespace) {
 			writeError(w, http.StatusForbidden, "forbidden: access to namespace not allowed for tenant", nil)
 			return
@@ -179,10 +216,7 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if userRole != "platform_admin" && (userRole != "" || tenancy.TenantIDFromContext(r.Context()) != "" || namespace != "default") {
-		tenantID := tenancy.TenantIDFromContext(r.Context())
-		if tenantID == "" {
-			tenantID = strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
-		}
+		tenantID := resolveExecTenant(r)
 		if !isTenantNamespaceAllowed(tenantID, namespace) {
 			writeError(w, http.StatusForbidden, "forbidden: access to namespace not allowed for tenant", nil)
 			return
@@ -225,6 +259,7 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 	defer stdinWriter.Close()
 
 	sizeQueue := newTerminalSizeQueue()
+	defer sizeQueue.Stop()
 	var writeMu sync.Mutex
 	outWriter := &wsConnWriter{conn: conn, mu: &writeMu}
 
@@ -255,10 +290,7 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 							rows = ctrlMsg.Height
 						}
 						if cols > 0 && rows > 0 {
-							select {
-							case sizeQueue.resizeChan <- remotecommand.TerminalSize{Width: cols, Height: rows}:
-							default:
-							}
+							sizeQueue.Push(remotecommand.TerminalSize{Width: cols, Height: rows})
 						}
 						continue
 					} else if ctrlMsg.Type == "stdin" {
@@ -288,7 +320,7 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 		TerminalSizeQueue: sizeQueue,
 	})
 
-	close(sizeQueue.resizeChan)
+	sizeQueue.Stop()
 	if err != nil {
 		logger.Get().Debug("k8s exec session closed", zap.Error(err))
 		writeMu.Lock()
