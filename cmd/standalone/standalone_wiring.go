@@ -277,7 +277,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		Automation:    adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(pgClient)),
 		Timeline:      adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(pgClient)),
 		AI:            adapthttp.NewAIHandler(registry),
-		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo),
+		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo, adapthttp.WithCookieSecure(cfg.Server.CookieSecure)),
 		Search:        adapthttp.NewSearchHandler(searchUsecase),
 		Cost:          adapthttp.NewCostHandler(usecaseCost.NewCalculator(computeHostRepo, metricsCollector)),
 		Backup:        adapthttp.NewBackupHandler(usecaseBackup.NewUsecase(backupRepo)),
