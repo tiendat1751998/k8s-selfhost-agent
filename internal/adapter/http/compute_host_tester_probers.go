@@ -15,7 +15,14 @@ import (
 	"github.com/docker/docker/client"
 
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
 )
+
+// hostTesterGuard returns a netguard Guard with private CIDRs allowed for registered hosts.
+// Cloud metadata, loopback, multicast, and unspecified addresses remain blocked unless allowlisted.
+func hostTesterGuard() *netguard.Guard {
+	return netguard.New(netguard.WithFromEnv(), netguard.WithAllowPrivate(true))
+}
 
 func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, map[string]interface{}, error) {
 	endpoint := strings.TrimSpace(host.Endpoint)
@@ -33,6 +40,7 @@ func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int
 		endpoint = u.String()
 	}
 
+	guard := hostTesterGuard()
 	var transport *http.Transport
 	if host.TLSEnabled && host.TLSCA != "" && host.TLSCert != "" && host.TLSKey != "" {
 		tlsConfig, err := configureDockerTLS(host.TLSCA, host.TLSCert, host.TLSKey)
@@ -41,14 +49,15 @@ func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int
 		}
 		transport = &http.Transport{
 			TLSClientConfig: tlsConfig,
+			DialContext:     guard.DialContext,
 		}
+	} else {
+		transport = guard.NewTransport()
 	}
 
 	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-	if transport != nil {
-		client.Transport = transport
+		Timeout:   5 * time.Second,
+		Transport: transport,
 	}
 
 	start := time.Now()
@@ -188,8 +197,12 @@ func testK8sHostConnection(ctx context.Context, host *docker.ComputeHost) (int64
 		endpoint = "https://" + endpoint
 	}
 
+	guard := hostTesterGuard()
+	// SEC-09: InsecureSkipVerify is retained strictly for raw TLS reachability probes to unverified
+	// self-hosted cluster endpoints without installed CAs; dial-time enforcement protects against SSRF.
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DialContext:     guard.DialContext,
 	}
 
 	if host.TLSEnabled && host.TLSCA != "" {
@@ -242,8 +255,10 @@ func testPrometheusHostConnection(ctx context.Context, host *docker.ComputeHost)
 		endpoint = "http://" + endpoint
 	}
 
+	guard := hostTesterGuard()
 	client := &http.Client{
-		Timeout: 5 * time.Second,
+		Timeout:   5 * time.Second,
+		Transport: guard.NewTransport(),
 	}
 
 	start := time.Now()
@@ -283,8 +298,10 @@ func testGitHostConnection(ctx context.Context, host *docker.ComputeHost) (int64
 		endpoint = "https://" + endpoint
 	}
 
+	guard := hostTesterGuard()
 	client := &http.Client{
-		Timeout: 5 * time.Second,
+		Timeout:   5 * time.Second,
+		Transport: guard.NewTransport(),
 	}
 
 	start := time.Now()
@@ -339,11 +356,11 @@ func testDatabaseHostConnection(ctx context.Context, host *docker.ComputeHost) (
 	}
 
 	start := time.Now()
-	var d net.Dialer
 	dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	conn, err := d.DialContext(dialCtx, "tcp", hostPort)
+	guard := hostTesterGuard()
+	conn, err := guard.DialContext(dialCtx, "tcp", hostPort)
 	if err != nil {
 		return 0, fmt.Errorf("tcp connection to database at %s failed: %w", hostPort, err)
 	}
@@ -356,9 +373,12 @@ func testDatabaseHostConnection(ctx context.Context, host *docker.ComputeHost) (
 
 func testCustomHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, error) {
 	endpoint := strings.TrimSpace(host.Endpoint)
+	guard := hostTesterGuard()
+
 	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
 		client := &http.Client{
-			Timeout: 5 * time.Second,
+			Timeout:   5 * time.Second,
+			Transport: guard.NewTransport(),
 		}
 		start := time.Now()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -383,11 +403,10 @@ func testCustomHostConnection(ctx context.Context, host *docker.ComputeHost) (in
 		hostPort = strings.TrimPrefix(hostPort, "tcp://")
 	}
 	start := time.Now()
-	var d net.Dialer
 	dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	conn, err := d.DialContext(dialCtx, "tcp", hostPort)
+	conn, err := guard.DialContext(dialCtx, "tcp", hostPort)
 	if err != nil {
 		return 0, fmt.Errorf("tcp connection to %s failed: %w", hostPort, err)
 	}
