@@ -374,3 +374,29 @@ func TestSearchCharts_ResultLimiting(t *testing.T) {
 		t.Fatalf("expected exactly 120 results on keyword matching 150 charts, got %d", len(resultsMatch))
 	}
 }
+
+func TestAddRepo_SSRFProtection(t *testing.T) {
+	tempDir := t.TempDir()
+	rm := NewReleaseManager(nil, nil, tempDir)
+
+	t.Run("rejects unsupported scheme", func(t *testing.T) {
+		err := rm.AddRepo("bad-scheme", "ftp://example.com/charts")
+		if err == nil || !strings.Contains(err.Error(), "scheme") {
+			t.Fatalf("expected scheme error, got: %v", err)
+		}
+	})
+
+	t.Run("blocks cloud metadata address", func(t *testing.T) {
+		err := rm.AddRepo("cloud-meta", "http://169.254.169.254/index.yaml")
+		if err == nil || !strings.Contains(err.Error(), "blocked") {
+			t.Fatalf("expected blocked error, got: %v", err)
+		}
+	})
+
+	t.Run("blocks private IP by default", func(t *testing.T) {
+		err := rm.AddRepo("private-ip", "http://10.254.0.1/index.yaml")
+		if err == nil || !strings.Contains(err.Error(), "blocked") {
+			t.Fatalf("expected blocked error, got: %v", err)
+		}
+	})
+}
