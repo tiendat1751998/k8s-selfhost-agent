@@ -107,7 +107,10 @@ export function useIncidents() {
         selectedReport.value = await incidentsApi.getReport(inc.id)
       } catch (err: unknown) {
         selectedReport.value = null
-        reportError.value = err instanceof Error ? err.message : 'No RCA report generated yet'
+        const msg = err instanceof Error ? err.message : String(err)
+        if (!msg.includes('not found') && !msg.includes('404')) {
+          reportError.value = msg
+        }
       }
 
       try {
@@ -126,16 +129,15 @@ export function useIncidents() {
       await incidentsApi.analyze(inc.id)
       inc.status = 'analyzing'
       showToast('AI Root Cause Analysis initiated for ' + inc.pod_name + '!')
-      await new Promise(resolve => setTimeout(resolve, 1200))
       await selectIncident(inc)
-      if (!selectedReport.value) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        await selectIncident(inc)
-      }
       if (selectedReport.value) {
         inc.status = 'remediating'
-        showToast('AI Root Cause Analysis completed with ' + Math.round((selectedReport.value.confidence || 0.94) * 100) + '% confidence!', 'success')
+        const confText = typeof selectedReport.value.confidence === 'number'
+          ? `${Math.round(selectedReport.value.confidence <= 1 ? selectedReport.value.confidence * 100 : selectedReport.value.confidence)}%`
+          : 'N/A'
+        showToast('AI Root Cause Analysis completed with ' + confText + ' confidence!', 'success')
       }
+      await fetchIncidents()
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'AI Analysis failed — check LLM provider connectivity', 'error')
     } finally {
@@ -194,12 +196,24 @@ export function useIncidents() {
     }
   }
 
-  async function handleMitigateIncident(inc: Incident) {
+  async function handleMitigateIncident(inc: Incident, notes?: string) {
+    if (!inc || !inc.id) return
     actionLoading.value = 'mitigate-' + inc.id
     try {
-      await incidentsApi.mitigate(inc.id)
-      inc.status = 'remediating'
+      const updated = await incidentsApi.mitigate(inc.id, {
+        notes: notes || `Autonomous mitigation initiated for ${inc.pod_name}`
+      })
+      if (updated && updated.status) {
+        inc.status = updated.status
+        inc.updated_at = updated.updated_at
+      } else {
+        inc.status = 'mitigating'
+      }
+      if (selectedIncident.value?.id === inc.id) {
+        selectedIncident.value = { ...inc }
+      }
       showToast('Autonomous mitigation pipeline initiated for ' + inc.pod_name + '!', 'success')
+      await fetchIncidents()
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Mitigation command failed', 'error')
     } finally {
@@ -207,12 +221,24 @@ export function useIncidents() {
     }
   }
 
-  async function handleResolveIncident(inc: Incident) {
+  async function handleResolveIncident(inc: Incident, notes?: string) {
+    if (!inc || !inc.id) return
     actionLoading.value = 'resolve-' + inc.id
     try {
-      await incidentsApi.resolve(inc.id)
-      inc.status = 'resolved'
-      inc.resolved_at = new Date().toISOString()
+      const updated = await incidentsApi.resolve(inc.id, {
+        notes: notes || `Resolution verified for ${inc.pod_name}`
+      })
+      if (updated && updated.status) {
+        inc.status = updated.status
+        inc.resolved_at = updated.resolved_at || new Date().toISOString()
+        inc.updated_at = updated.updated_at
+      } else {
+        inc.status = 'resolved'
+        inc.resolved_at = new Date().toISOString()
+      }
+      if (selectedIncident.value?.id === inc.id) {
+        selectedIncident.value = { ...inc }
+      }
       showToast('Incident for ' + inc.pod_name + ' marked as resolved & verified!', 'success')
       await fetchIncidents()
     } catch (err: unknown) {
@@ -251,7 +277,8 @@ export function useIncidents() {
       })
       activePR.value = pr
       selectedIncident.value.status = 'remediating'
-      showToast('GitOps PR #' + (pr.pr_number || 104) + ' created on branch ' + pr.branch + '!')
+      const prNumLabel = pr.pr_number ? ` #${pr.pr_number}` : ''
+      showToast(`GitOps PR${prNumLabel} created on branch ${pr.branch}!`, 'success')
       showPRModal.value = false
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'PR creation failed', 'error')
@@ -299,10 +326,10 @@ export function useIncidents() {
           return s === 'open' || s === 'detected'
         }
         if (fs === 'in_progress') {
-          return s === 'in_progress' || s === 'analyzing' || s === 'remediating'
+          return s === 'in_progress' || s === 'analyzing' || s === 'remediating' || s === 'mitigating'
         }
         if (fs === 'resolved') {
-          return s === 'resolved'
+          return s === 'resolved' || s === 'mitigated'
         }
         return s === fs
       })
@@ -321,8 +348,8 @@ export function useIncidents() {
 
   const totalIncidents = computed(() => incidents.value.length)
   const criticalCount = computed(() => incidents.value.filter(i => i.severity === 'critical').length)
-  const analyzingCount = computed(() => incidents.value.filter(i => i.status === 'analyzing' || i.status === 'remediating').length)
-  const resolvedCount = computed(() => incidents.value.filter(i => i.status === 'resolved').length)
+  const analyzingCount = computed(() => incidents.value.filter(i => i.status === 'analyzing' || i.status === 'remediating' || i.status === 'mitigating').length)
+  const resolvedCount = computed(() => incidents.value.filter(i => i.status === 'resolved' || i.status === 'mitigated').length)
 
   // Status Tab Counts for UI tabs: All, Open, In Progress, Resolved
   const countAll = computed(() => incidents.value.length)
@@ -332,11 +359,11 @@ export function useIncidents() {
   }).length)
   const countInProgress = computed(() => incidents.value.filter(i => {
     const s = (i.status || '').toLowerCase()
-    return s === 'in_progress' || s === 'analyzing' || s === 'remediating'
+    return s === 'in_progress' || s === 'analyzing' || s === 'remediating' || s === 'mitigating'
   }).length)
   const countResolved = computed(() => incidents.value.filter(i => {
     const s = (i.status || '').toLowerCase()
-    return s === 'resolved'
+    return s === 'resolved' || s === 'mitigated'
   }).length)
 
   const selectedBlastRadius = computed<BlastRadiusInfo | null>(() =>

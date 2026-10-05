@@ -15,6 +15,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'analyze', incident: Incident): void
+  (e: 'mitigate', incident: Incident): void
+  (e: 'resolve', incident: Incident): void
   (e: 'open-pr-modal'): void
   (e: 'merge-pr'): void
 }>()
@@ -81,6 +83,22 @@ const hasDiffContent = computed(() => {
           >
             <BaseIcon v-if="actionLoading !== 'analyze'" name="bot" size="xs" /> <span>{{ actionLoading === 'analyze' ? 'Reasoning...' : 'Re-run AI RCA' }}</span>
           </button>
+          <button
+            class="btn-slate"
+            :disabled="actionLoading === 'mitigate-' + selectedIncident.id || selectedIncident.status === 'resolved' || selectedIncident.status === 'mitigated'"
+            @click="emit('mitigate', selectedIncident)"
+          >
+            <BaseIcon :name="actionLoading === 'mitigate-' + selectedIncident.id ? 'clock' : 'target'" size="xs" />
+            <span>{{ actionLoading === 'mitigate-' + selectedIncident.id ? 'Mitigating...' : 'Mitigate' }}</span>
+          </button>
+          <button
+            class="btn-slate-primary"
+            :disabled="actionLoading === 'resolve-' + selectedIncident.id || selectedIncident.status === 'resolved'"
+            @click="emit('resolve', selectedIncident)"
+          >
+            <BaseIcon :name="actionLoading === 'resolve-' + selectedIncident.id ? 'clock' : 'check-circle'" size="xs" />
+            <span>{{ actionLoading === 'resolve-' + selectedIncident.id ? 'Resolving...' : (selectedIncident.status === 'resolved' ? 'Resolved' : 'Resolve') }}</span>
+          </button>
         </div>
       </div>
 
@@ -97,7 +115,7 @@ const hasDiffContent = computed(() => {
 
           <!-- Confidence Badge -->
           <div v-if="selectedReport" class="confidence-badge font-mono">
-            <span>Confidence: {{ Math.round((selectedReport?.confidence || 0.94) * 100) }}%</span>
+            <span>Confidence: {{ typeof selectedReport.confidence === 'number' ? `${Math.round(selectedReport.confidence <= 1 ? selectedReport.confidence * 100 : selectedReport.confidence)}%` : 'N/A' }}</span>
           </div>
         </div>
 
@@ -138,10 +156,10 @@ const hasDiffContent = computed(() => {
           </button>
         </div>
 
-        <!-- Enterprise AI RCA Empty State: Anomaly not analyzed yet -->
+        <!-- Enterprise AI RCA Empty State: No RCA report available -->
         <div v-else class="rca-empty-state">
           <BaseIcon name="sparkles" size="lg" class="rca-empty-icon" />
-          <h4 class="rca-empty-title">AI Root Cause Analysis Ready</h4>
+          <h4 class="rca-empty-title">No RCA report available</h4>
           <span class="rca-empty-subtitle font-mono">Claude 3.5 Sonnet / Multi-Agent correlation ready for this incident.</span>
           <p class="rca-empty-desc">
             This anomaly has not been analyzed yet. Run automated diagnostics to inspect container logs, k8s events, and metric anomalies.
@@ -169,7 +187,7 @@ const hasDiffContent = computed(() => {
 
           <div class="diff-actions">
             <div v-if="activePR" class="pr-status-pill">
-              <span class="font-mono text-cyan">PR #{{ activePR.pr_number || 104 }} ({{ activePR.status }})</span>
+              <span class="font-mono text-cyan">{{ activePR.pr_number ? `PR #${activePR.pr_number}` : 'PR' }} ({{ activePR.status }})</span>
             </div>
           </div>
         </div>
@@ -187,10 +205,10 @@ const hasDiffContent = computed(() => {
           </template>
         </div>
 
-        <!-- Sleek Compact Notice when no diff exists or is empty -->
+        <!-- Sleek Compact Notice when no PR generated or diff is empty -->
         <div v-else class="diff-compact-notice">
           <BaseIcon name="help-circle" size="xs" class="compact-notice-icon" />
-          <span class="compact-notice-text">No GitOps remediation manifest generated yet. Run AI RCA or inject scenario to synthesize corrective YAML.</span>
+          <span class="compact-notice-text">No PR generated. Run AI RCA or create remediation PR to synthesize corrective YAML.</span>
         </div>
 
         <!-- Bottom Action Controls: Consolidated single PR action button -->
