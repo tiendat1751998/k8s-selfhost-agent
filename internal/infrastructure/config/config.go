@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -121,6 +122,9 @@ type LogConfig struct {
 // Environment variables use the prefix "K8S_" and underscore-separated paths
 // (e.g., K8S_POSTGRES_HOST, K8S_SERVER_PORT).
 func Load() (*Config, error) {
+	// Attempt to load .env file if present in working directory
+	loadDotEnv(".env")
+
 	v := viper.New()
 
 	// Defaults
@@ -133,7 +137,7 @@ func Load() (*Config, error) {
 	v.SetDefault("postgres.host", "localhost")
 	v.SetDefault("postgres.port", 5432)
 	v.SetDefault("postgres.user", "postgres")
-	v.SetDefault("postgres.password", "postgres")
+	v.SetDefault("postgres.password", "")
 	v.SetDefault("postgres.dbname", "k8sselfhost")
 	v.SetDefault("postgres.sslmode", "disable")
 	v.SetDefault("postgres.max_conns", 25)
@@ -189,6 +193,75 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("unmarshaling config: %w", err)
 	}
 
+	// Resolve environment variable overrides and placeholders
+	resolveEnvOverrides(&cfg)
+
+	// Fail-fast validation: Postgres password is required if host is configured
+	if cfg.Postgres.Host != "" && cfg.Postgres.Password == "" {
+		return nil, fmt.Errorf("postgres password is required: please set POSTGRES_PASSWORD, K8S_POSTGRES_PASSWORD, or DB_PASSWORD")
+	}
+
 	return &cfg, nil
+}
+
+// resolveEnvOverrides resolves sensitive values from environment variables or expands ${VAR} placeholders.
+func resolveEnvOverrides(cfg *Config) {
+	// PostgreSQL password: check direct env vars first, then expand placeholder
+	if envVal := getFirstEnv("POSTGRES_PASSWORD", "K8S_POSTGRES_PASSWORD", "DB_PASSWORD"); envVal != "" {
+		cfg.Postgres.Password = envVal
+	} else if cfg.Postgres.Password != "" {
+		cfg.Postgres.Password = os.ExpandEnv(cfg.Postgres.Password)
+	}
+
+	// Redis password: check direct env vars first, then expand placeholder
+	if envVal := getFirstEnv("REDIS_PASSWORD", "K8S_REDIS_PASSWORD"); envVal != "" {
+		cfg.Redis.Password = envVal
+	} else if cfg.Redis.Password != "" {
+		cfg.Redis.Password = os.ExpandEnv(cfg.Redis.Password)
+	}
+
+	// Docker host: check direct env vars first, then expand placeholder, fallback to default socket
+	if envVal := getFirstEnv("DOCKER_HOST", "K8S_DOCKER_HOST"); envVal != "" {
+		cfg.Docker.Host = envVal
+	} else if cfg.Docker.Host != "" {
+		cfg.Docker.Host = os.ExpandEnv(cfg.Docker.Host)
+	}
+	if cfg.Docker.Host == "" {
+		cfg.Docker.Host = "unix:///var/run/docker.sock"
+	}
+}
+
+func getFirstEnv(keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// loadDotEnv reads key=value pairs from .env files and sets them in process environment if not already set.
+func loadDotEnv(filenames ...string) {
+	for _, filename := range filenames {
+		data, err := os.ReadFile(filename)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				k := strings.TrimSpace(parts[0])
+				v := strings.TrimSpace(parts[1])
+				v = strings.Trim(v, `"'`)
+				if os.Getenv(k) == "" {
+					_ = os.Setenv(k, v)
+				}
+			}
+		}
+	}
 }
 
