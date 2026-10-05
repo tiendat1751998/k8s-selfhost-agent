@@ -100,6 +100,13 @@ func (c *AgentLogClient) getAuthToken() string {
 	return os.Getenv("AGENT_AUTH_TOKEN")
 }
 
+func (c *AgentLogClient) resolveAuthToken(authToken string) string {
+	if strings.TrimSpace(authToken) != "" {
+		return strings.TrimSpace(authToken)
+	}
+	return c.getAuthToken()
+}
+
 // NewAgentLogClient creates a new AgentLogClient.
 func NewAgentLogClient(opts ...AgentLogClientOption) *AgentLogClient {
 	c := &AgentLogClient{
@@ -177,8 +184,8 @@ func (c *AgentLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToke
 		return "", fmt.Errorf("creating http request: %w", err)
 	}
 
-	if authToken != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+authToken)
+	if token := c.resolveAuthToken(authToken); token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	resp, err := c.httpClient.Do(httpReq)
@@ -238,8 +245,8 @@ func (c *AgentLogClient) SearchNodeLogs(ctx context.Context, hostEndpoint, authT
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	if authToken != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+authToken)
+	if token := c.resolveAuthToken(authToken); token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	resp, err := c.httpClient.Do(httpReq)
@@ -388,8 +395,8 @@ func (c *AgentLogClient) ListNodeServices(ctx context.Context, hostEndpoint, aut
 		return nil, fmt.Errorf("creating http request: %w", err)
 	}
 
-	if authToken != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+authToken)
+	if token := c.resolveAuthToken(authToken); token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	resp, err := c.httpClient.Do(httpReq)
