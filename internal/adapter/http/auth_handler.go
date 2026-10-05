@@ -12,11 +12,22 @@ import (
 	authUsecase "github.com/datdt/k8sselfhost/internal/usecase/auth"
 )
 
+// AuthHandlerOption configures AuthHandler.
+type AuthHandlerOption func(*AuthHandler)
+
+// WithCookieSecure sets whether cookies should have the Secure flag enabled.
+func WithCookieSecure(secure bool) AuthHandlerOption {
+	return func(h *AuthHandler) {
+		h.cookieSecure = secure
+	}
+}
+
 // AuthHandler handles authentication-related HTTP requests.
 type AuthHandler struct {
 	usecase          *authUsecase.Usecase
 	userRepo         user.Repository
 	refreshTokenRepo user.RefreshTokenRepository
+	cookieSecure     bool
 }
 
 // NewAuthHandler creates a new AuthHandler.
@@ -24,12 +35,24 @@ func NewAuthHandler(
 	usecase *authUsecase.Usecase,
 	userRepo user.Repository,
 	refreshTokenRepo user.RefreshTokenRepository,
+	opts ...AuthHandlerOption,
 ) *AuthHandler {
-	return &AuthHandler{
+	cookieSecure := true
+	if val := os.Getenv("COOKIE_SECURE"); strings.EqualFold(val, "false") {
+		cookieSecure = false
+	} else if val := os.Getenv("K8S_COOKIE_SECURE"); strings.EqualFold(val, "false") {
+		cookieSecure = false
+	}
+	h := &AuthHandler{
 		usecase:          usecase,
 		userRepo:         userRepo,
 		refreshTokenRepo: refreshTokenRepo,
+		cookieSecure:     cookieSecure,
 	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 type loginRequest struct {
@@ -64,36 +87,65 @@ type loginUser struct {
 	TenantID string `json:"tenant_id"`
 }
 
+func getFirstEnv(keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 func isCookieSecure() bool {
-	if val := os.Getenv("COOKIE_SECURE"); strings.EqualFold(val, "false") {
+	if val := getFirstEnv("COOKIE_SECURE", "K8S_COOKIE_SECURE"); strings.EqualFold(val, "false") {
 		return false
 	}
 	return true
 }
 
-func setRefreshTokenCookie(w http.ResponseWriter, token string) {
+func (h *AuthHandler) isCookieSecure() bool {
+	return h.cookieSecure
+}
+
+func setRefreshTokenCookie(w http.ResponseWriter, token string, secure ...bool) {
+	isSecure := isCookieSecure()
+	if len(secure) > 0 {
+		isSecure = secure[0]
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    token,
 		Path:     "/api/v1/auth",
 		HttpOnly: true,
-		Secure:   isCookieSecure(),
+		Secure:   isSecure,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int(middleware.RefreshTokenDuration.Seconds()),
 	})
 }
 
-func clearRefreshTokenCookie(w http.ResponseWriter) {
+func clearRefreshTokenCookie(w http.ResponseWriter, secure ...bool) {
+	isSecure := isCookieSecure()
+	if len(secure) > 0 {
+		isSecure = secure[0]
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
 		Path:     "/api/v1/auth",
 		HttpOnly: true,
-		Secure:   isCookieSecure(),
+		Secure:   isSecure,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	})
+}
+
+func (h *AuthHandler) setRefreshTokenCookie(w http.ResponseWriter, token string) {
+	setRefreshTokenCookie(w, token, h.isCookieSecure())
+}
+
+func (h *AuthHandler) clearRefreshTokenCookie(w http.ResponseWriter) {
+	clearRefreshTokenCookie(w, h.isCookieSecure())
 }
 
 // Login handles POST /api/v1/auth/login — Step 1
@@ -148,7 +200,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	setRefreshTokenCookie(w, rawRefreshToken)
+	h.setRefreshTokenCookie(w, rawRefreshToken)
 
 	resp := loginResponse{
 		Token: accessToken,
@@ -232,7 +284,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, newRawRefreshToken)
+	h.setRefreshTokenCookie(w, newRawRefreshToken)
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"token": accessToken,
@@ -251,7 +303,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	clearRefreshTokenCookie(w)
+	h.clearRefreshTokenCookie(w)
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "logged out successfully",
