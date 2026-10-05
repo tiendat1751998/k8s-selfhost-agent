@@ -31,14 +31,14 @@ ssh -t $REMOTE "chmod +x $TMP_BIN && \
   mkdir -p ~/.k8s-agent/logengine && \
   (systemctl --user stop k8s-agent 2>/dev/null || true) && \
   mv -f $TMP_BIN ~/k8s-agent && \
-  cat > ~/.config/systemd/user/k8s-agent.service << EOF
+  (umask 077 && printf 'AGENT_AUTH_TOKEN=%s\n' \"$AGENT_AUTH_TOKEN\" > ~/.k8s-agent/agent.env && chmod 600 ~/.k8s-agent/agent.env) && \
+  cat > ~/.config/systemd/user/k8s-agent.service << 'UNIT'
 [Unit]
 Description=K8sControl Monitoring Agent
 After=network.target
 
 [Service]
 Type=simple
-Environment=\"AGENT_AUTH_TOKEN=$AGENT_AUTH_TOKEN\"
 EnvironmentFile=-%h/.k8s-agent/agent.env
 ExecStart=%h/k8s-agent --port 9100 --engine-dir %h/.k8s-agent/logengine
 Restart=always
@@ -46,7 +46,7 @@ RestartSec=5
 
 [Install]
 WantedBy=default.target
-EOF
+UNIT
   systemctl --user daemon-reload && \
   systemctl --user enable k8s-agent && \
   systemctl --user restart k8s-agent && \

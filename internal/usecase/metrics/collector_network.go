@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -43,6 +44,20 @@ func formatAgentURL(endpoint string, tlsEnabled bool) string {
 	return u
 }
 
+// resolveHostAgentAuthToken resolves the Bearer token for agent scraping.
+// Precedence: host.Labels["auth_token"] > host.Labels["token"] > AGENT_AUTH_TOKEN env.
+func resolveHostAgentAuthToken(host docker.ComputeHost) string {
+	if host.Labels != nil {
+		if token, ok := host.Labels["auth_token"]; ok && strings.TrimSpace(token) != "" {
+			return strings.TrimSpace(token)
+		}
+		if token, ok := host.Labels["token"]; ok && strings.TrimSpace(token) != "" {
+			return strings.TrimSpace(token)
+		}
+	}
+	return os.Getenv("AGENT_AUTH_TOKEN")
+}
+
 // ScrapeAgent scrapes a single registered compute host agent.
 func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 	url := formatAgentURL(host.Endpoint, host.TLSEnabled)
@@ -59,12 +74,8 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		return
 	}
 
-	if host.Labels != nil {
-		if token, ok := host.Labels["auth_token"]; ok && token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
-		} else if token, ok := host.Labels["token"]; ok && token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
+	if token := resolveHostAgentAuthToken(host); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	client := c.httpClient
