@@ -211,3 +211,50 @@ loop:
 	require.Equal(t, "second log line", received[1].Message)
 	require.Equal(t, "third log line", received[2].Message)
 }
+
+func TestTailLogs_DescendingTimestampsBatchPreserved(t *testing.T) {
+	t0 := time.Date(2026, 9, 16, 10, 0, 0, 0, time.UTC)
+	t1 := t0.Add(1 * time.Second)
+	t2 := t0.Add(2 * time.Second)
+
+	// Querier returns entries ordered DESC (newest first, standard ClickHouse query behavior)
+	querier := &mockEntriesQuerier{
+		entries: []logging.LogEntry{
+			{Timestamp: t2, Message: "newest log"},
+			{Timestamp: t1, Message: "middle log"},
+			{Timestamp: t0, Message: "oldest log"},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	filter := logging.LogFilter{
+		TenantID:  "tenant-tail",
+		StartTime: t0.Add(-1 * time.Second),
+	}
+
+	ch := clickhouse.TailLogsStream(ctx, querier, filter, 50*time.Millisecond)
+
+	var received []logging.LogEntry
+	timeout := time.After(300 * time.Millisecond)
+
+loop:
+	for len(received) < 3 {
+		select {
+		case e, ok := <-ch:
+			if !ok {
+				break loop
+			}
+			received = append(received, e)
+		case <-timeout:
+			break loop
+		}
+	}
+
+	require.Equal(t, 3, len(received), "expected all 3 logs to be received when querier returns DESC timestamps, got %d", len(received))
+	require.Equal(t, "oldest log", received[0].Message)
+	require.Equal(t, "middle log", received[1].Message)
+	require.Equal(t, "newest log", received[2].Message)
+}
+

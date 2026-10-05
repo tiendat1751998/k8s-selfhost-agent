@@ -364,18 +364,13 @@ func (c *AgentLogClient) SearchClusterLogs(ctx context.Context, hosts []docker.C
 		limit = 100
 	}
 
-	// Sort descending (newest first) to cap to the latest N entries
-	sort.SliceStable(allResults, func(i, j int) bool {
-		return allResults[i].Timestamp.After(allResults[j].Timestamp)
-	})
-	if len(allResults) > limit {
-		allResults = allResults[:limit]
-	}
-
-	// Reverse to chronological order (ascending) for client display
+	// Sort ascending (chronological order) and keep the latest N entries (tail slice)
 	sort.SliceStable(allResults, func(i, j int) bool {
 		return allResults[i].Timestamp.Before(allResults[j].Timestamp)
 	})
+	if len(allResults) > limit {
+		allResults = allResults[len(allResults)-limit:]
+	}
 
 	return allResults, nil
 }
