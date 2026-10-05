@@ -76,7 +76,7 @@
         <div class="about-links">
           <a class="about-link" href="https://kubernetes.io/docs/" target="_blank" rel="noopener noreferrer">Documentation</a>
           <span class="dot-sep">•</span>
-          <a class="about-link" href="/api/v1/healthz" target="_blank" rel="noopener noreferrer">REST API Docs</a>
+          <a class="about-link" href="/healthz" target="_blank" rel="noopener noreferrer">System Health (/healthz)</a>
           <span class="dot-sep">•</span>
           <a class="about-link" href="https://github.com/tiendat1751998/k8s-selfhost-agent" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
         </div>

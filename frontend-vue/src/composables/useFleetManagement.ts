@@ -133,6 +133,9 @@ export function useFleetManagement() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to retrieve multi-cluster fleet'
       error.value = msg
+      if (!silent) {
+        showToast(msg, 'error')
+      }
     } finally {
       if (!silent) loading.value = false
     }
@@ -248,7 +251,7 @@ export function useFleetManagement() {
   async function handleSync(cluster: Cluster) {
     actionLoading.value = cluster.id
     try {
-      await fleetApi.getHealth(cluster.id).catch(() => null)
+      await fleetApi.getHealth(cluster.id)
       showToast(`Cluster federation state synchronized for ${cluster.name}!`)
       await fetchFleet(true)
     } catch (err: unknown) {
