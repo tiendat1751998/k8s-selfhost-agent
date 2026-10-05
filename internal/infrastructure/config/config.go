@@ -21,6 +21,12 @@ type Config struct {
 	Log          LogConfig          `mapstructure:"log"`
 	Docker       DockerConfig       `mapstructure:"docker"`
 	LoadBalancer LoadBalancerConfig `mapstructure:"load_balancer"`
+	Security     SecurityConfig     `mapstructure:"security"`
+}
+
+// SecurityConfig holds network egress and SSRF guard settings.
+type SecurityConfig struct {
+	EgressAllowPrivateCIDRs string `mapstructure:"egress_allow_private_cidrs"`
 }
 
 // LoadBalancerConfig holds load balancer integration settings.
@@ -170,6 +176,7 @@ func Load() (*Config, error) {
 	v.SetDefault("log.level", "info")
 	v.SetDefault("load_balancer.provider", "traefik")
 	v.SetDefault("load_balancer.url", "")
+	v.SetDefault("security.egress_allow_private_cidrs", "")
 
 	// Environment variables
 	v.SetEnvPrefix("K8S")
@@ -228,6 +235,11 @@ func resolveEnvOverrides(cfg *Config) {
 	}
 	if cfg.Docker.Host == "" {
 		cfg.Docker.Host = "unix:///var/run/docker.sock"
+	}
+
+	// Egress SSRF Guard allowlisted CIDRs/hosts
+	if envVal := getFirstEnv("EGRESS_ALLOW_PRIVATE_CIDRS", "K8S_SECURITY_EGRESS_ALLOW_PRIVATE_CIDRS"); envVal != "" {
+		cfg.Security.EgressAllowPrivateCIDRs = envVal
 	}
 }
 
