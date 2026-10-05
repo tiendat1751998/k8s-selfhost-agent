@@ -312,14 +312,30 @@ func TestMetricsAuthMiddleware(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	t.Run("No METRICS_TOKEN set allows request", func(t *testing.T) {
+	t.Run("No token provided returns 401 when METRICS_TOKEN unset", func(t *testing.T) {
 		t.Setenv("METRICS_TOKEN", "")
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("Valid JWT allows request when METRICS_TOKEN unset", func(t *testing.T) {
+		t.Setenv("METRICS_TOKEN", "")
+		token, err := GenerateAccessToken("user-1", "platform_admin", "default-tenant")
+		if err != nil {
+			t.Fatalf("failed to generate access token: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
 		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
+			t.Errorf("expected status 200 for valid JWT, got %d", rec.Code)
 		}
 	})
 
