@@ -14,6 +14,7 @@ import {
   fleetApi, type Cluster, type ClusterDiscoveryData,
   type SwarmClusterInfo, mapSwarmToFleetCluster
 } from '../api/fleet'
+import { isNotImplementedError } from '../api/client'
 import '@/assets/styles/views/fleet.css'
 
 const appStore = useAppStore()
@@ -23,7 +24,7 @@ const route = useRoute()
 const loading = ref(false)
 const error = ref<string | null>(null)
 const actionLoading = ref<string | null>(null)
-const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
+const toastMessage = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
 
 // Data state
 const clusters = ref<Cluster[]>([])
@@ -154,7 +155,7 @@ function openClusterDetails(c: Cluster) {
   showClusterDetailsDrawer.value = true
 }
 
-function showToast(text: string, type: 'success' | 'error' = 'success') {
+function showToast(text: string, type: 'success' | 'error' | 'info' = 'success') {
   toastMessage.value = { text, type }
   setTimeout(() => {
     if (toastMessage.value?.text === text) toastMessage.value = null
@@ -168,7 +169,11 @@ async function handleUpgrade(cluster: Cluster) {
     showToast(`Cluster upgrade sequence initiated for ${cluster.name}!`)
     await fetchFleet()
   } catch (err: unknown) {
-    showToast(err instanceof Error ? err.message : 'Upgrade request failed', 'error')
+    if (isNotImplementedError(err)) {
+      showToast('Cluster Upgrade requires external Lifecycle Controller (HTTP 501)', 'info')
+    } else {
+      showToast(err instanceof Error ? err.message : 'Upgrade request failed', 'error')
+    }
   } finally {
     actionLoading.value = null
   }
@@ -286,7 +291,7 @@ async function handleRemove(cluster: Cluster) {
 
     <!-- Notification Toast -->
     <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" />
+      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : toastMessage.type === 'info' ? 'info' : 'alert-triangle'" size="sm" />
       <span>{{ toastMessage.text }}</span>
       <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>

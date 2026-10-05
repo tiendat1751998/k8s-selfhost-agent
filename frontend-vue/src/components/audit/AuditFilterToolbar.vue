@@ -14,6 +14,7 @@ const props = defineProps<{
   isLiveTailing: boolean
   loading?: boolean
   triggeringScan?: boolean
+  scannerAvailable?: boolean
   metrics?: {
     totalEvents: number
     securityMutations: number
@@ -183,8 +184,8 @@ function formatActorLabel(actor: string): string {
       <button
         class="sleek-btn sleek-btn-scan"
         type="button"
-        :disabled="triggeringScan"
-        title="Trigger Audit Scan"
+        :disabled="triggeringScan || scannerAvailable === false"
+        :title="scannerAvailable === false ? 'Requires External Controller (Trivy Security Scanner)' : 'Trigger Audit Scan'"
         aria-label="Trigger Audit Scan"
         @click="$emit('trigger-scan')"
       >
