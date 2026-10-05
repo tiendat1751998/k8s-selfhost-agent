@@ -3,6 +3,7 @@ package http
 import (
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -63,13 +64,20 @@ type loginUser struct {
 	TenantID string `json:"tenant_id"`
 }
 
+func isCookieSecure() bool {
+	if val := os.Getenv("COOKIE_SECURE"); strings.EqualFold(val, "false") {
+		return false
+	}
+	return true
+}
+
 func setRefreshTokenCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    token,
 		Path:     "/api/v1/auth",
 		HttpOnly: true,
-		Secure:   false, // true in production with HTTPS
+		Secure:   isCookieSecure(),
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int(middleware.RefreshTokenDuration.Seconds()),
 	})
@@ -81,6 +89,7 @@ func clearRefreshTokenCookie(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/api/v1/auth",
 		HttpOnly: true,
+		Secure:   isCookieSecure(),
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
