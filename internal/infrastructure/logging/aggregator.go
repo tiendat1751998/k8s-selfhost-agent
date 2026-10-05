@@ -12,6 +12,7 @@ import (
 
 type LogEntry struct {
 	Timestamp time.Time `json:"timestamp"`
+	TenantID  string    `json:"tenant_id,omitempty"`
 	Namespace string    `json:"namespace"`
 	Pod       string    `json:"pod"`
 	Container string    `json:"container"`
@@ -164,6 +165,7 @@ func (rb *RingBuffer) Prune(ttl time.Duration) {
 }
 
 type LogFilter struct {
+	TenantID  string
 	Namespace string
 	Pod       string
 	Container string
@@ -174,6 +176,9 @@ type LogFilter struct {
 }
 
 func (f *LogFilter) Matches(entry LogEntry) bool {
+	if f.TenantID != "" && entry.TenantID != "" && entry.TenantID != f.TenantID {
+		return false
+	}
 	if f.Namespace != "" && entry.Namespace != f.Namespace {
 		return false
 	}
