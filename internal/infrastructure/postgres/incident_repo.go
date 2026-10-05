@@ -30,14 +30,35 @@ func (r *IncidentRepo) getDB(ctx context.Context) DBTX {
 
 // Create persists a new incident and assigns a generated UUID.
 func (r *IncidentRepo) Create(ctx context.Context, inc *incident.Incident) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = inc.TenantID
+	}
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+	inc.TenantID = tenantID
+
+	if inc.RawData == nil {
+		inc.RawData = make(map[string]string)
+	}
+	if inc.Title != "" {
+		inc.RawData["title"] = inc.Title
+	}
+	if inc.Description != "" {
+		inc.RawData["description"] = inc.Description
+	}
+	if inc.ClusterID != "" {
+		inc.RawData["cluster_id"] = inc.ClusterID
+	}
+	if inc.ServiceName != "" {
+		inc.RawData["service_name"] = inc.ServiceName
+	}
+	inc.RawData["tenant_id"] = tenantID
+
 	rawData, err := json.Marshal(inc.RawData)
 	if err != nil {
 		return errors.Wrap(err, "marshaling raw data")
-	}
-
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
 	}
 
 	query := `
@@ -262,6 +283,7 @@ func (r *IncidentRepo) scanIncident(row pgx.Row) (*incident.Incident, error) {
 		}
 	}
 
+	populateIncidentFields(&inc)
 	return &inc, nil
 }
 
@@ -298,5 +320,28 @@ func (r *IncidentRepo) scanIncidentFromRows(rows pgx.Rows) (*incident.Incident, 
 		}
 	}
 
+	populateIncidentFields(&inc)
 	return &inc, nil
+}
+
+func populateIncidentFields(inc *incident.Incident) {
+	if inc.RawData != nil {
+		inc.Title = inc.RawData["title"]
+		inc.Description = inc.RawData["description"]
+		inc.ClusterID = inc.RawData["cluster_id"]
+		inc.ServiceName = inc.RawData["service_name"]
+		inc.TenantID = inc.RawData["tenant_id"]
+	}
+	if inc.ClusterID == "" {
+		inc.ClusterID = inc.ClusterName
+	}
+	if inc.ServiceName == "" {
+		inc.ServiceName = inc.PodName
+	}
+	if inc.Title == "" {
+		inc.Title = inc.Message
+	}
+	if inc.Description == "" {
+		inc.Description = inc.Message
+	}
 }

@@ -51,9 +51,26 @@ const (
 	StatusDetected    Status = "detected"
 	StatusAnalyzing   Status = "analyzing"
 	StatusRemediating Status = "remediating"
+	StatusMitigating  Status = "mitigating"
+	StatusMitigated   Status = "mitigated"
 	StatusResolved    Status = "resolved"
 	StatusFailed      Status = "failed"
 )
+
+var validStatuses = map[Status]bool{
+	StatusDetected:    true,
+	StatusAnalyzing:   true,
+	StatusRemediating: true,
+	StatusMitigating:  true,
+	StatusMitigated:   true,
+	StatusResolved:    true,
+	StatusFailed:      true,
+}
+
+// IsValid returns true if the Status is a recognized status.
+func (s Status) IsValid() bool {
+	return validStatuses[s]
+}
 
 // String returns the string representation of the Status.
 func (s Status) String() string {
