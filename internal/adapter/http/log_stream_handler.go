@@ -17,6 +17,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/infrastructure/agent"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // RemoteLogStreamer defines an interface for streaming remote container logs.
@@ -48,7 +49,7 @@ func NewLogStreamHandler(aggregator *logging.LogAggregator, args ...any) *LogStr
 
 // resolveRegisteredNode validates that node resolves to a registered compute host or local node.
 // It returns the remote agent URL (if remote and registered) and whether the node is authorized.
-func (h *LogStreamHandler) resolveRegisteredNode(ctx context.Context, node string) (string, bool) {
+func (h *LogStreamHandler) resolveRegisteredNode(ctx context.Context, node, tenantID string) (string, bool) {
 	node = strings.TrimSpace(node)
 	if node == "" || isLocalNode(node) {
 		return "", true
@@ -58,7 +59,13 @@ func (h *LogStreamHandler) resolveRegisteredNode(ctx context.Context, node strin
 	isEndpoint := strings.Contains(node, "://") || strings.Contains(node, ":")
 
 	if h.hostRepo != nil {
-		hosts, err := h.hostRepo.ListAll(ctx)
+		var hosts []docker.ComputeHost
+		var err error
+		if tenantID != "" && tenancy.UserRoleFromContext(ctx) != "platform_admin" {
+			hosts, err = h.hostRepo.List(ctx, tenantID)
+		} else {
+			hosts, err = h.hostRepo.ListAll(ctx)
+		}
 		if err == nil {
 			for _, host := range hosts {
 				if strings.EqualFold(host.ID, node) || strings.EqualFold(host.Name, node) || strings.EqualFold(host.Endpoint, node) {
@@ -83,7 +90,7 @@ func (h *LogStreamHandler) resolveRegisteredNode(ctx context.Context, node strin
 }
 
 func (h *LogStreamHandler) resolveAgentURL(ctx context.Context, node, service string) string {
-	endpoint, _ := h.resolveRegisteredNode(ctx, node)
+	endpoint, _ := h.resolveRegisteredNode(ctx, node, "")
 	return endpoint
 }
 
@@ -135,13 +142,15 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	namespace := query.Get("namespace")
 	pod := query.Get("pod")
 	level := query.Get("level")
-	keyword := query.Get("keyword")
+	keyword := firstNonEmpty(query.Get("keyword"), query.Get("query"), query.Get("search_text"), query.Get("q"))
+
+	tenantID := resolveTenant(r.Context(), r)
 
 	// SEC-07: Validate node against registered compute hosts before dialing or upgrading
 	var agentURL string
 	if node != "" && !isLocalNode(node) {
 		if h.streamer != nil || strings.Contains(node, "://") || strings.Contains(node, ":") {
-			targetURL, ok := h.resolveRegisteredNode(r.Context(), node)
+			targetURL, ok := h.resolveRegisteredNode(r.Context(), node, tenantID)
 			if !ok {
 				http.Error(w, "unknown node: not a registered compute host", http.StatusBadRequest)
 				return
@@ -166,6 +175,7 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := logging.LogFilter{
+		TenantID:  tenantID,
 		Namespace: namespace,
 		Pod:       pod,
 		Container: container,
@@ -204,6 +214,7 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				entryTS, msg := parseStreamLogLine(line)
 				h.aggregator.Ingest(logging.LogEntry{
 					Timestamp: entryTS,
+					TenantID:  tenantID,
 					Namespace: namespace,
 					Pod:       targetService,
 					Container: targetService,
@@ -251,6 +262,7 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(history) == 0 && (node != "" || service != "") {
 		handshakeEntry := logging.LogEntry{
 			Timestamp: time.Now().UTC(),
+			TenantID:  tenantID,
 			Namespace: namespace,
 			Pod:       pod,
 			Container: container,

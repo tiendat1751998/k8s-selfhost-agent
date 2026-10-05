@@ -247,7 +247,40 @@ func TenantIDFromContext(ctx context.Context) string { return tenancy.TenantIDFr
 func UserIDFromContext(ctx context.Context) string   { return tenancy.UserIDFromContext(ctx) }
 func UserRoleFromContext(ctx context.Context) string { return tenancy.UserRoleFromContext(ctx) }
 
-// JWTAuthMiddleware validates the JWT token in the Authorization header or query parameters (for websockets only).
+// IsStreamingRequest determines if an incoming HTTP request is a streaming connection
+// (WebSocket, SSE / EventSource, log tail, or interactive exec).
+func IsStreamingRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	// 1. WebSocket upgrade headers
+	if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" ||
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") {
+		return true
+	}
+	// 2. Server-Sent Events (SSE) Accept header
+	if strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/event-stream") {
+		return true
+	}
+	// 3. Known streaming routes
+	path := r.URL.Path
+	if path == "/ws" || strings.HasPrefix(path, "/ws/") {
+		return true
+	}
+	if path == "/stream" || strings.HasSuffix(path, "/stream") || strings.Contains(path, "/stream/") || strings.Contains(path, "/stream") {
+		return true
+	}
+	if strings.Contains(path, "/exec") {
+		return true
+	}
+	if (strings.Contains(path, "/logs") || strings.Contains(path, "/pods/")) &&
+		(r.URL.Query().Get("follow") == "true" || r.URL.Query().Get("follow") == "1") {
+		return true
+	}
+	return false
+}
+
+// JWTAuthMiddleware validates the JWT token in the Authorization header or query parameters (for websockets and streaming).
 func JWTAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var token string
@@ -259,14 +292,9 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// Fallback to query parameter "token" ONLY for WebSocket upgrade connections or specific stream paths
+		// Fallback to query parameter "token" for WebSocket upgrade connections and streaming/SSE routes
 		if token == "" {
-			isWSUpgrade := strings.ToLower(r.Header.Get("Upgrade")) == "websocket" ||
-				strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
-			isStreamPath := r.URL.Path == "/ws" || strings.HasPrefix(r.URL.Path, "/ws/") ||
-				r.URL.Path == "/api/v1/logs/stream" || strings.HasPrefix(r.URL.Path, "/api/v1/logs/stream")
-
-			if isWSUpgrade || isStreamPath {
+			if IsStreamingRequest(r) {
 				token = r.URL.Query().Get("token")
 			}
 		}
