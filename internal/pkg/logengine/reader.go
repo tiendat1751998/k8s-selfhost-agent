@@ -1,9 +1,10 @@
-﻿package logengine
+package logengine
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -78,36 +79,52 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 		return nil, err
 	}
 
-	var partDirs []string
+	type partInfo struct {
+		id      uint64
+		name    string
+		dir     string
+		minTime int64
+		maxTime int64
+		pidx    *PrimaryIndex
+	}
+
+	var parts []partInfo
 	for _, e := range partEntries {
 		if e.IsDir() && strings.HasPrefix(e.Name(), "part_") {
-			partDirs = append(partDirs, e.Name())
+			var id uint64
+			_, _ = fmt.Sscanf(e.Name(), "part_%d", &id)
+			pDir := filepath.Join(r.partsDir, e.Name())
+			pidx, err := loadPrimaryIndex(filepath.Join(pDir, "primary.idx"))
+			if err != nil || pidx.Len() == 0 {
+				continue
+			}
+			parts = append(parts, partInfo{
+				id:      id,
+				name:    e.Name(),
+				dir:     pDir,
+				minTime: pidx.entries[0].MinTime,
+				maxTime: pidx.entries[pidx.Len()-1].MaxTime,
+				pidx:    pidx,
+			})
 		}
 	}
-	sort.Strings(partDirs)
+
+	// Sort parts chronologically by numeric part ID and min timestamp
+	sort.Slice(parts, func(i, j int) bool {
+		if parts[i].id != parts[j].id {
+			return parts[i].id < parts[j].id
+		}
+		return parts[i].minTime < parts[j].minTime
+	})
+
+	if len(parts) == 0 {
+		return nil, nil
+	}
 
 	view := NewBlockView()
 	var results []Entry
 
-	for _, pName := range partDirs {
-		if ctx.Err() != nil || len(results) >= limit {
-			break
-		}
-		pDir := filepath.Join(r.partsDir, pName)
-
-		// 1. Stage 1: Time-range pruning on primary.idx (with deferred file close)
-		pidx, err := loadPrimaryIndex(filepath.Join(pDir, "primary.idx"))
-		if err != nil || pidx.Len() == 0 {
-			continue
-		}
-
-		candidateBlocks := pidx.Search(sinceUnix, untilUnix)
-		if len(candidateBlocks) == 0 {
-			continue
-		}
-
-		// 2. Stage 2: Bloom filter pruning on bloom.bin.
-		// Only prune when ExactMatch is enabled to prevent false negatives on substring searches.
+	filterBlocksByBloom := func(pDir string, candidateBlocks []int) []int {
 		if params.ExactMatch && len(queryTokens) > 0 {
 			if bloomData, err := os.ReadFile(filepath.Join(pDir, "bloom.bin")); err == nil {
 				var surviving []int
@@ -128,20 +145,57 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 						}
 					}
 				}
-				candidateBlocks = surviving
+				return surviving
 			}
 		}
-		if len(candidateBlocks) == 0 {
-			continue
-		}
-
-		// 3. Stage 3: Scan candidate blocks with deferred dataFile close
-		results = r.scanPartBlocks(pDir, candidateBlocks, view, results, limit, sinceUnix, untilUnix, queryLower, params)
+		return candidateBlocks
 	}
+
+	if sinceUnix > 0 {
+		// Forward search starting at targeted chunk index matching the requested time window
+		startIdx := sort.Search(len(parts), func(i int) bool {
+			return parts[i].maxTime >= sinceUnix
+		})
+		for i := startIdx; i < len(parts); i++ {
+			if ctx.Err() != nil || len(results) >= limit {
+				break
+			}
+			if untilUnix > 0 && parts[i].minTime > untilUnix {
+				break
+			}
+			candidates := parts[i].pidx.Search(sinceUnix, untilUnix)
+			candidates = filterBlocksByBloom(parts[i].dir, candidates)
+			if len(candidates) == 0 {
+				continue
+			}
+			results = r.scanPartBlocks(parts[i].dir, candidates, view, results, limit, sinceUnix, untilUnix, queryLower, params, false)
+		}
+	} else {
+		// No since filter: retrieve the latest entries up to limit starting from newest chunk parts
+		for i := len(parts) - 1; i >= 0; i-- {
+			if ctx.Err() != nil || len(results) >= limit {
+				break
+			}
+			if untilUnix > 0 && parts[i].minTime > untilUnix {
+				continue
+			}
+			candidates := parts[i].pidx.Search(sinceUnix, untilUnix)
+			candidates = filterBlocksByBloom(parts[i].dir, candidates)
+			if len(candidates) == 0 {
+				continue
+			}
+			results = r.scanPartBlocks(parts[i].dir, candidates, view, results, limit, sinceUnix, untilUnix, queryLower, params, true)
+		}
+		// Sort the latest extracted entries chronologically ascending
+		sort.SliceStable(results, func(i, j int) bool {
+			return results[i].Timestamp.Before(results[j].Timestamp)
+		})
+	}
+
 	return results, nil
 }
 
-func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockView, results []Entry, limit int, sinceUnix, untilUnix int64, queryLower string, params QueryParams) []Entry {
+func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockView, results []Entry, limit int, sinceUnix, untilUnix int64, queryLower string, params QueryParams, reverse bool) []Entry {
 	marksData, err := os.ReadFile(filepath.Join(pDir, "marks.bin"))
 	if err != nil {
 		return results
@@ -152,7 +206,15 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 	}
 	defer dataFile.Close()
 
-	for _, bIdx := range candidateBlocks {
+	blocks := candidateBlocks
+	if reverse {
+		blocks = make([]int, len(candidateBlocks))
+		for i, b := range candidateBlocks {
+			blocks[len(candidateBlocks)-1-i] = b
+		}
+	}
+
+	for _, bIdx := range blocks {
 		if len(results) >= limit {
 			break
 		}
@@ -179,7 +241,12 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 			continue
 		}
 
-		for i := 0; i < view.RowCount && len(results) < limit; i++ {
+		start, end, step := 0, view.RowCount, 1
+		if reverse {
+			start, end, step = view.RowCount-1, -1, -1
+		}
+
+		for i := start; i != end && len(results) < limit; i += step {
 			ts := view.Timestamps[i]
 			if (sinceUnix > 0 && ts < sinceUnix) || (untilUnix > 0 && ts > untilUnix) {
 				continue

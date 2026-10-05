@@ -242,6 +242,11 @@ func TestAgentLogClient_SearchClusterLogs_ScatterGather(t *testing.T) {
 		if len(results) != 2 {
 			t.Fatalf("expected 2 capped results, got %d", len(results))
 		}
+		// Must return the latest 2 entries chronologically (t1: 10:05 and t3: 10:10), NOT the oldest (t2: 10:01)
+		if results[0].Timestamp != t1 || results[1].Timestamp != t3 {
+			t.Fatalf("expected latest 2 entries chronologically [t1=%v, t3=%v], got [%v, %v]",
+				t1, t3, results[0].Timestamp, results[1].Timestamp)
+		}
 	})
 }
 
