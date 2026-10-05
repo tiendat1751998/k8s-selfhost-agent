@@ -183,8 +183,9 @@ func TestLogHandler_Ingest_NoTenant_Rejected(t *testing.T) {
 		t.Fatalf("expected 401 when tenant context is missing, got %d", w.Code)
 	}
 
-	// But works if X-Tenant-ID header is provided
+	// But works if X-Tenant-ID header is provided by platform_admin
 	reqWithHeader := httptest.NewRequest(http.MethodPost, "/api/v1/logs/ingest", bytes.NewReader(body))
+	reqWithHeader = reqWithHeader.WithContext(withTenantContext(reqWithHeader.Context(), "", "platform_admin"))
 	reqWithHeader.Header.Set("X-Tenant-ID", "tenant-header")
 	w2 := httptest.NewRecorder()
 

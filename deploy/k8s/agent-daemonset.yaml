@@ -65,8 +65,13 @@ spec:
         - operator: Exists
       containers:
         - name: agent
-          image: k8sselfhost/k8s-agent:latest
+          image: k8sselfhost/k8s-agent:0.1.0
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            # runAsNonRoot and readOnlyRootFilesystem are omitted because the agent daemonset
+            # requires host root access to read host socket (/var/run/docker.sock), systemd
+            # logs (/var/log), /proc host process tables, and write to hostPath /var/lib/k8s-agent.
           command: ["/app/k8s-agent", "--port", "9100", "--log-dir", "/var/log"]
           env:
             - name: NODE_NAME

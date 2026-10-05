@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -130,9 +131,13 @@ func (r *fleetRepo) GetCluster(ctx context.Context, id string) (*fleet.Cluster, 
 
 func (r *fleetRepo) RegisterCluster(ctx context.Context, c *fleet.Cluster) error {
 	now := time.Now().UTC()
-	encToken, err := crypto.Encrypt(c.EncryptedToken)
-	if err != nil {
-		return fmt.Errorf("encrypting token: %w", err)
+	encToken := c.EncryptedToken
+	if !strings.HasPrefix(encToken, crypto.VersionPrefix) && encToken != "" {
+		var err error
+		encToken, err = crypto.Encrypt(c.EncryptedToken)
+		if err != nil {
+			return fmt.Errorf("encrypting token: %w", err)
+		}
 	}
 
 	tenantID := tenancy.TenantIDFromContext(ctx)

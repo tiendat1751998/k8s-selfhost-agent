@@ -13,6 +13,7 @@ import (
 // Config holds the complete application configuration.
 type Config struct {
 	Server       ServerConfig       `mapstructure:"server"`
+	Security     SecurityConfig     `mapstructure:"security"`
 	Postgres     PostgresConfig     `mapstructure:"postgres"`
 	Redis        RedisConfig        `mapstructure:"redis"`
 	NATS         NATSConfig         `mapstructure:"nats"`
@@ -21,11 +22,12 @@ type Config struct {
 	Log          LogConfig          `mapstructure:"log"`
 	Docker       DockerConfig       `mapstructure:"docker"`
 	LoadBalancer LoadBalancerConfig `mapstructure:"load_balancer"`
-	Security     SecurityConfig     `mapstructure:"security"`
 }
 
-// SecurityConfig holds network egress and SSRF guard settings.
+// SecurityConfig holds encryption, token, and network egress security settings.
 type SecurityConfig struct {
+	MasterEncryptionKey     string `mapstructure:"master_encryption_key"`
+	MetricsToken            string `mapstructure:"metrics_token"`
 	EgressAllowPrivateCIDRs string `mapstructure:"egress_allow_private_cidrs"`
 }
 
@@ -37,11 +39,13 @@ type LoadBalancerConfig struct {
 
 // ServerConfig holds HTTP server settings.
 type ServerConfig struct {
-	Host         string        `mapstructure:"host"`
-	Port         int           `mapstructure:"port"`
-	ReadTimeout  time.Duration `mapstructure:"read_timeout"`
-	WriteTimeout time.Duration `mapstructure:"write_timeout"`
-	IdleTimeout  time.Duration `mapstructure:"idle_timeout"`
+	Host               string        `mapstructure:"host"`
+	Port               int           `mapstructure:"port"`
+	ReadTimeout        time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout       time.Duration `mapstructure:"write_timeout"`
+	IdleTimeout        time.Duration `mapstructure:"idle_timeout"`
+	CORSAllowedOrigins string        `mapstructure:"cors_allowed_origins"`
+	CookieSecure       bool          `mapstructure:"cookie_secure"`
 }
 
 // PostgresConfig holds PostgreSQL connection settings.
@@ -176,6 +180,10 @@ func Load() (*Config, error) {
 	v.SetDefault("log.level", "info")
 	v.SetDefault("load_balancer.provider", "traefik")
 	v.SetDefault("load_balancer.url", "")
+	v.SetDefault("server.cors_allowed_origins", "")
+	v.SetDefault("server.cookie_secure", true)
+	v.SetDefault("security.master_encryption_key", "")
+	v.SetDefault("security.metrics_token", "")
 	v.SetDefault("security.egress_allow_private_cidrs", "")
 
 	// Environment variables
@@ -213,6 +221,26 @@ func Load() (*Config, error) {
 
 // resolveEnvOverrides resolves sensitive values from environment variables or expands ${VAR} placeholders.
 func resolveEnvOverrides(cfg *Config) {
+	// Security encryption key: check MASTER_ENCRYPTION_KEY, then ENCRYPTION_KEY
+	if envVal := getFirstEnv("MASTER_ENCRYPTION_KEY", "ENCRYPTION_KEY", "K8S_ENCRYPTION_KEY"); envVal != "" {
+		cfg.Security.MasterEncryptionKey = envVal
+	}
+
+	// Metrics token
+	if envVal := getFirstEnv("METRICS_TOKEN", "K8S_METRICS_TOKEN"); envVal != "" {
+		cfg.Security.MetricsToken = envVal
+	}
+
+	// CORS allowed origins
+	if envVal := getFirstEnv("CORS_ALLOWED_ORIGINS", "K8S_CORS_ALLOWED_ORIGINS"); envVal != "" {
+		cfg.Server.CORSAllowedOrigins = envVal
+	}
+
+	// Cookie secure flag
+	if envVal := getFirstEnv("COOKIE_SECURE", "K8S_COOKIE_SECURE"); envVal != "" {
+		cfg.Server.CookieSecure = !strings.EqualFold(envVal, "false")
+	}
+
 	// PostgreSQL password: check direct env vars first, then expand placeholder
 	if envVal := getFirstEnv("POSTGRES_PASSWORD", "K8S_POSTGRES_PASSWORD", "DB_PASSWORD"); envVal != "" {
 		cfg.Postgres.Password = envVal

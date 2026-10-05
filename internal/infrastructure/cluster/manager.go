@@ -90,15 +90,9 @@ func (m *ClientManager) GetK8sRestConfig(ctx context.Context, clusterID string) 
 		return nil, fmt.Errorf("cluster %s has no token or kubeconfig data", clusterID)
 	}
 
-	kubeconfigData := cluster.EncryptedToken
-	if strings.Contains(cluster.EncryptedToken, "apiVersion:") || strings.Contains(cluster.EncryptedToken, "\"apiVersion\"") {
-		kubeconfigData = cluster.EncryptedToken
-	} else {
-		decrypted, err := crypto.Decrypt(cluster.EncryptedToken)
-		if err != nil {
-			return nil, fmt.Errorf("decrypting cluster %s credentials: %w", clusterID, err)
-		}
-		kubeconfigData = decrypted
+	kubeconfigData, err := crypto.Decrypt(cluster.EncryptedToken)
+	if err != nil {
+		return nil, fmt.Errorf("decrypting cluster %s credentials: %w", clusterID, err)
 	}
 
 	trimmed := strings.TrimSpace(kubeconfigData)

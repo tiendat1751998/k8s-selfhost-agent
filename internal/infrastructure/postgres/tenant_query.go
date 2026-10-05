@@ -245,7 +245,7 @@ func isSQLKeyword(val string) bool {
 	case "SELECT", "FROM", "WHERE", "UNION", "ALL", "JOIN", "INNER", "LEFT", "RIGHT",
 		"FULL", "OUTER", "CROSS", "ON", "WITH", "AS", "ORDER", "BY", "GROUP", "LIMIT",
 		"OFFSET", "FOR", "UPDATE", "AND", "OR", "INSERT", "INTO", "VALUES", "SET",
-		"DELETE", "HAVING", "USING", "LATERAL", "RETURNING":
+		"DELETE", "HAVING", "USING", "LATERAL", "RETURNING", "WINDOW", "FETCH":
 		return true
 	default:
 		return false

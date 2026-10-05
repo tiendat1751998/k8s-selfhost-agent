@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -28,12 +26,11 @@ import (
 	"github.com/datdt/k8sselfhost/internal/infrastructure/backup/storage"
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
-	infraClickhouse "github.com/datdt/k8sselfhost/internal/infrastructure/clickhouse"
+	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	infraLB "github.com/datdt/k8sselfhost/internal/infrastructure/loadbalancer"
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
-	usecaseLogging "github.com/datdt/k8sselfhost/internal/usecase/logging"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
@@ -214,18 +211,19 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	cloudHandler := adapthttp.NewCloudHandler(cloudAccountRepo, nil, log)
 
 	alertNotifiers := map[string]alert.Notifier{"slack": notifier.NewSlackNotifier(), "email": notifier.NewEmailNotifier(), "webhook": notifier.NewWebhookNotifier()}
-	ruleEngine, err := usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers, usecaseAlert.WithLogger(log))
+	_, err = usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers, usecaseAlert.WithLogger(log))
 	if err != nil {
-		for i := len(stopFns) - 1; i >= 0; i-- {
-			stopFns[i]()
-		}
+		for i := len(stopFns) - 1; i >= 0; i-- { stopFns[i]() }
 		return nil, fmt.Errorf("initializing alert rule engine: %w", err)
 	}
-	_ = ruleEngine
 	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
 
 	clientManager := infraCluster.NewClientManager(fleetRepo)
 	discoveryAdapter := infraK8s.NewDiscoveryAdapter()
+	if err := crypto.ValidateKey(); err != nil {
+		for i := len(stopFns) - 1; i >= 0; i-- { stopFns[i]() }
+		return nil, fmt.Errorf("cluster encryption key validation failed: %w", err)
+	}
 	importUsecase := usecaseCluster.NewImportUsecase(fleetRepo, discoveryAdapter, log)
 	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, log)
 	eg.Go(func() error {
@@ -291,7 +289,7 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		Notification:  adapthttp.NewNotificationHandler(postgres.NewNotificationRepo(infra.pgClient.Pool())),
 		Automation:    adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(infra.pgClient.Pool())),
 		Timeline:      adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(infra.pgClient.Pool())),
-		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo),
+		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo, adapthttp.WithCookieSecure(cfg.Server.CookieSecure)),
 		Search:        adapthttp.NewSearchHandler(searchUsecase),
 		Cost:          adapthttp.NewCostHandler(usecaseCost.NewCalculator(computeHostRepo, metricsCollector)),
 		Backup:        adapthttp.NewBackupHandler(backupUsecase),
@@ -420,74 +418,3 @@ func extractTraceID(msg string) string {
 	return ""
 }
 
-func wireCentralizedLogging(ctx context.Context, log *zap.Logger) (*adapthttp.LogHandler, func()) {
-	chHost := os.Getenv("CLICKHOUSE_HOST")
-	if chHost == "" {
-		chHost = os.Getenv("K8S_CLICKHOUSE_HOST")
-	}
-	chDSN := os.Getenv("CLICKHOUSE_DSN")
-	if chDSN == "" {
-		chDSN = os.Getenv("K8S_CLICKHOUSE_DSN")
-	}
-
-	if chHost != "" || chDSN != "" {
-		cfg := infraClickhouse.DefaultConfig()
-		cfg.Host = chHost
-		if p, err := strconv.Atoi(os.Getenv("CLICKHOUSE_PORT")); err == nil {
-			cfg.Port = p
-		}
-		if db := os.Getenv("CLICKHOUSE_DB"); db != "" {
-			cfg.Database = db
-		}
-		if u := os.Getenv("CLICKHOUSE_USER"); u != "" {
-			cfg.Username = u
-		}
-		cfg.Password = os.Getenv("CLICKHOUSE_PASSWORD")
-		cfg.DialTimeout = 3 * time.Second
-
-		cCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		client, err := infraClickhouse.NewClient(cCtx, cfg)
-		cancel()
-		if err == nil {
-			log.Info("ClickHouse centralized logging connected", zap.String("host", cfg.Host))
-			if conn, cErr := client.Conn(ctx); cErr == nil {
-				if mErr := infraClickhouse.RunMigrations(ctx, conn); mErr != nil {
-					log.Warn("ClickHouse migration failed", zap.Error(mErr))
-				}
-			}
-			bw := infraClickhouse.NewBatchWriter(client, infraClickhouse.BatchConfig{BatchSize: 5000, FlushInterval: 2 * time.Second, BufferCap: 50000})
-			bw.Start(ctx)
-			repo := infraClickhouse.NewLogRepository(client, bw)
-			service := usecaseLogging.NewService(repo)
-			return adapthttp.NewLogHandler(service, &chStatusProvider{client: client, repo: repo}), func() {
-				_ = bw.Stop()
-				_ = client.Close()
-			}
-		}
-		log.Warn("ClickHouse connection failed, using in-memory ringbuffer fallback", zap.Error(err))
-	} else {
-		log.Info("ClickHouse not configured, using resilient in-memory ringbuffer fallback")
-	}
-
-	memRepo := logging.NewMemoryLogRepo(50000)
-	return adapthttp.NewLogHandler(usecaseLogging.NewService(memRepo), memRepo), nil
-}
-
-type chStatusProvider struct {
-	client *infraClickhouse.Client
-	repo   *infraClickhouse.LogRepository
-}
-
-func (p *chStatusProvider) GetStatus(ctx context.Context) (*adapthttp.LogEngineStatus, error) {
-	start := time.Now()
-	err := p.client.Ping(ctx)
-	latency := float64(time.Since(start).Microseconds()) / 1000.0
-	status := "connected"
-	if err != nil { status = "fallback" }
-	var total int64
-	if conn, cErr := p.client.Conn(ctx); cErr == nil {
-		var cnt uint64
-		if scanErr := conn.QueryRow(ctx, "SELECT count() FROM cluster_logs").Scan(&cnt); scanErr == nil { total = int64(cnt) }
-	}
-	return &adapthttp.LogEngineStatus{Engine: "ClickHouse MergeTree", Status: status, LatencyMS: latency, TotalRecords: total, RetentionDays: 30}, nil
-}
