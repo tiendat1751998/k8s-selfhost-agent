@@ -81,6 +81,8 @@ spec:
               value: "9100"
             - name: AGENT_ENGINE_DIR
               value: "/var/lib/k8s-agent/logengine"
+            # Secret creation:
+            # kubectl -n kube-system create secret generic k8s-control-agent-auth --from-literal=token=$(openssl rand -hex 32)
             - name: AGENT_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
