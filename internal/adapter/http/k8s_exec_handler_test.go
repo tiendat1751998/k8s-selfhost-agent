@@ -51,6 +51,7 @@ func TestK8sExecHandler_K8sUnavailable(t *testing.T) {
 	r.HandleFunc("/k8s/{cluster}/exec", handler.HandleExec)
 
 	req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod", nil)
+	req = req.WithContext(tenancy.WithUserRole(req.Context(), "platform_admin"))
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -159,6 +160,7 @@ func TestK8sExecHandler_WithClientManager(t *testing.T) {
 	r.HandleFunc("/k8s/{cluster}/exec", handler.HandleExec)
 
 	req := httptest.NewRequest(http.MethodGet, "/k8s/non-existent-cluster/exec?pod=my-pod", nil)
+	req = req.WithContext(tenancy.WithUserRole(req.Context(), "platform_admin"))
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -305,4 +307,16 @@ func TestK8sExecHandler_TenantIsolation(t *testing.T) {
 			t.Fatalf("expected status 503 Service Unavailable after platform admin bypass, got %d", rec.Code)
 		}
 	})
+
+	t.Run("empty role on namespace default returns 403", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod&ns=default", nil)
+		// context has no role and no tenant
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected status 403 Forbidden for empty role on namespace default, got %d", rec.Code)
+		}
+	})
 }
+
