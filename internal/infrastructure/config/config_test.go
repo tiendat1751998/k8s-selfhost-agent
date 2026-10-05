@@ -104,3 +104,20 @@ func TestLoad_DotEnvFileLoading(t *testing.T) {
 	require.NotNil(t, cfg)
 	assert.Equal(t, "from-dotenv-secret", cfg.Postgres.Password)
 }
+
+func TestLoad_SecurityAndServerHardenedSettings(t *testing.T) {
+	t.Setenv("POSTGRES_PASSWORD", "mock-pass")
+	t.Setenv("MASTER_ENCRYPTION_KEY", "masterkey12345678901234567890123")
+	t.Setenv("METRICS_TOKEN", "test-metrics-token")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+	t.Setenv("COOKIE_SECURE", "false")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	assert.Equal(t, "masterkey12345678901234567890123", cfg.Security.MasterEncryptionKey)
+	assert.Equal(t, "test-metrics-token", cfg.Security.MetricsToken)
+	assert.Equal(t, "http://localhost:5173,http://localhost:3000", cfg.Server.CORSAllowedOrigins)
+	assert.False(t, cfg.Server.CookieSecure)
+}
