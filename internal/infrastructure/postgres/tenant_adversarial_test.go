@@ -19,7 +19,7 @@ func TestAdversarial_BuildTenantQuery_StringLiterals(t *testing.T) {
 	if strings.Contains(gotQ, "'foo AND tenant_id =") || strings.Contains(gotQ, "UNION bar' WHERE") {
 		t.Fatalf("FAIL: String literal containing UNION corrupted query: %s", gotQ)
 	}
-	if !strings.Contains(gotQ, "WHERE title = 'foo UNION bar' AND") && !strings.Contains(gotQ, "WHERE title = 'foo UNION bar' AND incidents.tenant_id") {
+	if !strings.Contains(gotQ, "WHERE (title = 'foo UNION bar') AND") && !strings.Contains(gotQ, "WHERE (title = 'foo UNION bar') AND incidents.tenant_id") {
 		t.Errorf("Unexpected rewritten query for string literal with UNION:\n got: %s", gotQ)
 	}
 	if len(gotArgs) != 1 || gotArgs[0] != "org-acme" {
@@ -113,7 +113,7 @@ func TestAdversarial_BuildTenantQuery_DollarQuotes(t *testing.T) {
 		if strings.Contains(gotQ, "'1'='1 AND tenant_id") || strings.Contains(gotQ, "users AND tenant_id") {
 			t.Fatalf("FAIL: Rewriter injected tenant filter inside dollar-quoted string: %s", gotQ)
 		}
-		if !strings.Contains(gotQ, "WHERE body = $$SELECT * FROM users WHERE '1'='1$$ AND") {
+		if !strings.Contains(gotQ, "WHERE (body = $$SELECT * FROM users WHERE '1'='1$$) AND") {
 			t.Errorf("Expected rewritten query to preserve dollar quote intact, got: %s", gotQ)
 		}
 		if len(gotArgs) != 1 || gotArgs[0] != "org-acme" {
@@ -125,7 +125,7 @@ func TestAdversarial_BuildTenantQuery_DollarQuotes(t *testing.T) {
 		q := "SELECT * FROM incidents WHERE body = $sql$UNION SELECT * FROM users$sql$"
 		gotQ, gotArgs := postgres.BuildTenantQuery(ctx, q)
 
-		if !strings.Contains(gotQ, "WHERE body = $sql$UNION SELECT * FROM users$sql$ AND") {
+		if !strings.Contains(gotQ, "WHERE (body = $sql$UNION SELECT * FROM users$sql$) AND") {
 			t.Errorf("Expected tagged dollar quote intact, got: %s", gotQ)
 		}
 		if len(gotArgs) != 1 || gotArgs[0] != "org-acme" {
@@ -141,7 +141,7 @@ func TestAdversarial_BuildTenantQuery_MultiLineComments(t *testing.T) {
 	q := "SELECT * FROM incidents /* \n UNION SELECT * FROM users \n ORDER BY id \n */ WHERE status = $1"
 	gotQ, gotArgs := postgres.BuildTenantQuery(ctx, q, "OPEN")
 
-	if !strings.Contains(gotQ, "WHERE status = $1 AND") {
+	if !strings.Contains(gotQ, "WHERE (status = $1) AND") {
 		t.Errorf("Expected filter after status = $1, got: %s", gotQ)
 	}
 	if len(gotArgs) != 2 || gotArgs[1] != "org-acme" {
@@ -156,10 +156,10 @@ func TestAdversarial_BuildTenantQuery_NestedCTEs(t *testing.T) {
 	q := "WITH cte1 AS (SELECT id FROM incidents WHERE severity = $1), cte2 AS (SELECT id, incident_id FROM rca_reports WHERE incident_id IN (SELECT id FROM cte1)) SELECT * FROM cte2"
 	gotQ, gotArgs := postgres.BuildTenantQuery(ctx, q, "HIGH")
 
-	if !strings.Contains(gotQ, "incidents WHERE severity = $1 AND incidents.tenant_id = $2") && !strings.Contains(gotQ, "incidents WHERE severity = $1 AND tenant_id = $2") {
+	if !strings.Contains(gotQ, "incidents WHERE (severity = $1) AND incidents.tenant_id = $2") && !strings.Contains(gotQ, "incidents WHERE (severity = $1) AND tenant_id = $2") {
 		t.Errorf("Expected tenant filter inside cte1, got: %s", gotQ)
 	}
-	if !strings.Contains(gotQ, "rca_reports WHERE incident_id IN (SELECT id FROM cte1) AND rca_reports.tenant_id = $3") && !strings.Contains(gotQ, "rca_reports WHERE incident_id IN (SELECT id FROM cte1) AND tenant_id = $3") {
+	if !strings.Contains(gotQ, "rca_reports WHERE (incident_id IN (SELECT id FROM cte1)) AND rca_reports.tenant_id = $3") && !strings.Contains(gotQ, "rca_reports WHERE (incident_id IN (SELECT id FROM cte1)) AND tenant_id = $3") {
 		t.Errorf("Expected tenant filter inside cte2, got: %s", gotQ)
 	}
 	if strings.Contains(gotQ, "FROM cte2 WHERE") {
@@ -221,10 +221,10 @@ func TestAdversarial_BuildTenantQuery_SubqueryInSelectAndWhere(t *testing.T) {
 	q := "SELECT id, (SELECT count(*) FROM rca_reports WHERE incident_id = incidents.id) FROM incidents WHERE status = $1"
 	gotQ, gotArgs := postgres.BuildTenantQuery(ctx, q, "OPEN")
 
-	if !strings.Contains(gotQ, "rca_reports WHERE incident_id = incidents.id AND rca_reports.tenant_id = $2") && !strings.Contains(gotQ, "rca_reports WHERE incident_id = incidents.id AND tenant_id = $2") {
+	if !strings.Contains(gotQ, "rca_reports WHERE (incident_id = incidents.id) AND rca_reports.tenant_id = $2") && !strings.Contains(gotQ, "rca_reports WHERE (incident_id = incidents.id) AND tenant_id = $2") {
 		t.Errorf("Expected subquery in SELECT to be rewritten with tenant filter, got: %s", gotQ)
 	}
-	if !strings.Contains(gotQ, "incidents WHERE status = $1 AND incidents.tenant_id = $3") && !strings.Contains(gotQ, "incidents WHERE status = $1 AND tenant_id = $3") {
+	if !strings.Contains(gotQ, "incidents WHERE (status = $1) AND incidents.tenant_id = $3") && !strings.Contains(gotQ, "incidents WHERE (status = $1) AND tenant_id = $3") {
 		t.Errorf("Expected outer query to be rewritten with tenant filter $3, got: %s", gotQ)
 	}
 	if len(gotArgs) != 3 || gotArgs[1] != "org-acme" || gotArgs[2] != "org-acme" {
@@ -289,7 +289,7 @@ func TestAdversarial_BuildTenantQuery_WhereExistsSubquery(t *testing.T) {
 	q := "SELECT * FROM incidents i WHERE EXISTS (SELECT 1 FROM rca_reports r WHERE r.incident_id = i.id AND r.status = $1)"
 	gotQ, gotArgs := postgres.BuildTenantQuery(ctx, q, "RESOLVED")
 
-	if !strings.Contains(gotQ, "r.status = $1 AND r.tenant_id = $2") && !strings.Contains(gotQ, "r.status = $1 AND tenant_id = $2") {
+	if !strings.Contains(gotQ, "(r.incident_id = i.id AND r.status = $1) AND r.tenant_id = $2") && !strings.Contains(gotQ, "(r.incident_id = i.id AND r.status = $1) AND tenant_id = $2") {
 		t.Errorf("Expected subquery inside EXISTS to be filtered with $2, got: %s", gotQ)
 	}
 	if !strings.Contains(gotQ, "i.tenant_id = $3") {
@@ -320,7 +320,7 @@ func TestAdversarial_BuildTenantQuery_UPDATE(t *testing.T) {
 		q := "UPDATE incidents SET status = $1 WHERE id = $2"
 		gotQ, gotArgs := postgres.BuildTenantQuery(ctx, q, "CLOSED", "inc-100")
 
-		if !strings.Contains(gotQ, "WHERE id = $2 AND tenant_id = $3") {
+		if !strings.Contains(gotQ, "WHERE (id = $2) AND tenant_id = $3") {
 			t.Errorf("Expected UPDATE with WHERE to append AND tenant_id = $3, got: %s", gotQ)
 		}
 		if len(gotArgs) != 3 || gotArgs[2] != "org-acme" {
