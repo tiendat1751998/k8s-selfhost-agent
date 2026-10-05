@@ -259,3 +259,41 @@ users:
 		t.Fatal("expected cached config pointer to match")
 	}
 }
+
+func TestGetDockerClient_EnvFallback(t *testing.T) {
+	repo := &mockFleetRepo{
+		cluster: &fleet.Cluster{
+			ID:             "docker-cluster-1",
+			Provider:       "docker",
+			EncryptedToken: "",
+		},
+	}
+
+	t.Run("defaults to unix socket when env unset", func(t *testing.T) {
+		t.Setenv("DOCKER_HOST", "")
+		t.Setenv("K8S_DOCKER_HOST", "")
+
+		mgr := NewClientManager(repo)
+		cli, err := mgr.GetDockerClient(context.Background(), "docker-cluster-1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cli == nil {
+			t.Fatal("expected non-nil docker client")
+		}
+	})
+
+	t.Run("uses DOCKER_HOST when set", func(t *testing.T) {
+		t.Setenv("DOCKER_HOST", "tcp://custom-docker.internal:2376")
+
+		mgr := NewClientManager(repo)
+		cli, err := mgr.GetDockerClient(context.Background(), "docker-cluster-1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cli == nil {
+			t.Fatal("expected non-nil docker client")
+		}
+	})
+}
+

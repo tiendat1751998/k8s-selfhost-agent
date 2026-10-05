@@ -31,9 +31,12 @@ func getTestPool(t *testing.T) *pgxpool.Pool {
 	if user == "" {
 		user = "myuser"
 	}
-	pass := os.Getenv("K8S_POSTGRES_PASSWORD")
+	pass := os.Getenv("POSTGRES_PASSWORD")
 	if pass == "" {
-		pass = "mysecretpassword"
+		pass = os.Getenv("K8S_POSTGRES_PASSWORD")
+	}
+	if pass == "" {
+		t.Skip("Skipping live database test: POSTGRES_PASSWORD not set")
 	}
 	dbname := os.Getenv("K8S_POSTGRES_DBNAME")
 	if dbname == "" {
