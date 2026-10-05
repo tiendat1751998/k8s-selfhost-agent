@@ -7,9 +7,11 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	usecaseIncident "github.com/datdt/k8sselfhost/internal/usecase/incident"
 )
@@ -38,10 +40,13 @@ type resolveIncidentRequest struct {
 }
 
 func (h *Handler) getIncidentUsecase() *usecaseIncident.Usecase {
-	if h.incidentUsecase == nil && h.incidentRepo != nil {
-		h.incidentUsecase = usecaseIncident.NewUsecase(h.incidentRepo)
+	if h.incidentUsecase != nil {
+		return h.incidentUsecase
 	}
-	return h.incidentUsecase
+	if h.incidentRepo != nil {
+		return usecaseIncident.NewUsecase(h.incidentRepo)
+	}
+	return nil
 }
 
 // CreateIncident handles POST /api/v1/incidents
@@ -128,6 +133,20 @@ func (h *Handler) CreateIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actor := tenancy.UserIDFromContext(r.Context())
+	if actor == "" {
+		actor = "operator"
+	}
+
+	logger.Get().Info("audit: incident created",
+		zap.String("action", "incident.create"),
+		zap.String("incident_id", inc.ID),
+		zap.String("tenant_id", tenantID),
+		zap.String("actor", actor),
+		zap.String("severity", string(inc.Severity)),
+		zap.String("title", inc.Title),
+	)
+
 	writeJSON(w, http.StatusCreated, inc)
 }
 
@@ -141,7 +160,10 @@ func (h *Handler) MitigateIncident(w http.ResponseWriter, r *http.Request) {
 
 	var req mitigateIncidentRequest
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+			writeError(w, http.StatusBadRequest, "invalid request body", err)
+			return
+		}
 	}
 
 	tenantID := resolveTenant(r.Context(), r)
@@ -182,6 +204,14 @@ func (h *Handler) MitigateIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logger.Get().Info("audit: incident mitigated",
+		zap.String("action", "incident.mitigate"),
+		zap.String("incident_id", inc.ID),
+		zap.String("tenant_id", tenantID),
+		zap.String("actor", operator),
+		zap.String("status", string(inc.Status)),
+	)
+
 	writeJSON(w, http.StatusOK, inc)
 }
 
@@ -195,7 +225,10 @@ func (h *Handler) ResolveIncident(w http.ResponseWriter, r *http.Request) {
 
 	var req resolveIncidentRequest
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+			writeError(w, http.StatusBadRequest, "invalid request body", err)
+			return
+		}
 	}
 
 	tenantID := resolveTenant(r.Context(), r)
@@ -230,6 +263,14 @@ func (h *Handler) ResolveIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logger.Get().Info("audit: incident resolved",
+		zap.String("action", "incident.resolve"),
+		zap.String("incident_id", inc.ID),
+		zap.String("tenant_id", tenantID),
+		zap.String("actor", operator),
+		zap.String("status", string(inc.Status)),
+	)
+
 	writeJSON(w, http.StatusOK, inc)
 }
 
@@ -244,6 +285,12 @@ func (h *Handler) ListIncidents(w http.ResponseWriter, r *http.Request) {
 	filter := incident.Filter{
 		Limit:  parseIntParam(r, "limit", 50),
 		Offset: parseIntParam(r, "offset", 0),
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Limit > 200 {
+		filter.Limit = 200
 	}
 
 	if ns := r.URL.Query().Get("namespace"); ns != "" {

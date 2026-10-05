@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -353,3 +354,89 @@ func TestIncidentLifecycle_TenantIsolation(t *testing.T) {
 		t.Errorf("expected 404 Not Found for cross-tenant mitigate attempt, got %d: %s", wMitigate.Code, wMitigate.Body.String())
 	}
 }
+
+func TestMitigateIncident_MalformedJSON(t *testing.T) {
+	incRepo := newMockIncidentRepo()
+	r, _ := setupIncidentTestRouter(incRepo, nil, nil)
+
+	testInc := &incident.Incident{
+		Title:    "Test incident",
+		Severity: incident.SeverityMedium,
+		Status:   incident.StatusDetected,
+		TenantID: "default-tenant",
+		RawData:  map[string]string{},
+	}
+	_ = incRepo.Create(context.Background(), testInc)
+
+	req := httptest.NewRequest(http.MethodPost, "/incidents/"+testInc.ID+"/mitigate", bytes.NewReader([]byte("{invalid-json")))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for malformed JSON, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestResolveIncident_MalformedJSON(t *testing.T) {
+	incRepo := newMockIncidentRepo()
+	r, _ := setupIncidentTestRouter(incRepo, nil, nil)
+
+	testInc := &incident.Incident{
+		Title:    "Test incident",
+		Severity: incident.SeverityMedium,
+		Status:   incident.StatusDetected,
+		TenantID: "default-tenant",
+		RawData:  map[string]string{},
+	}
+	_ = incRepo.Create(context.Background(), testInc)
+
+	req := httptest.NewRequest(http.MethodPost, "/incidents/"+testInc.ID+"/resolve", bytes.NewReader([]byte("{invalid-json")))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for malformed JSON, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestListIncidents_LimitClamping(t *testing.T) {
+	incRepo := newMockIncidentRepo()
+	r, _ := setupIncidentTestRouter(incRepo, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/incidents?limit=500", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if limit, ok := resp["limit"].(float64); !ok || int(limit) != 200 {
+		t.Errorf("expected limit clamped to 200, got %v", resp["limit"])
+	}
+
+	reqZero := httptest.NewRequest(http.MethodGet, "/incidents?limit=0", nil)
+	wZero := httptest.NewRecorder()
+	r.ServeHTTP(wZero, reqZero)
+
+	if wZero.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", wZero.Code, wZero.Body.String())
+	}
+
+	var respZero map[string]interface{}
+	if err := json.NewDecoder(wZero.Body).Decode(&respZero); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if limit, ok := respZero["limit"].(float64); !ok || int(limit) != 50 {
+		t.Errorf("expected limit default to 50, got %v", respZero["limit"])
+	}
+}
+
