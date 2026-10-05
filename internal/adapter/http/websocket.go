@@ -5,14 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
-	"os"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
 
@@ -31,20 +30,7 @@ var upgrader = websocket.Upgrader{
 		if u.Host == r.Host {
 			return true
 		}
-		if u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" {
-			return true
-		}
-		allowedOriginsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
-		if allowedOriginsEnv == "" {
-			allowedOriginsEnv = "http://127.0.0.1:5173,http://127.0.0.1:3000,http://localhost:5173,http://localhost:3000"
-		}
-		for _, o := range strings.Split(allowedOriginsEnv, ",") {
-			o = strings.TrimSpace(o)
-			if o == "*" || o == origin {
-				return true
-			}
-		}
-		return false
+		return middleware.IsOriginAllowed(origin)
 	},
 }
 

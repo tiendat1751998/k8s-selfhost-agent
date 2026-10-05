@@ -43,40 +43,71 @@ func TestRequestBodyLimit(t *testing.T) {
 }
 
 func TestCORS_DefaultOrigins(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGINS", "")
 	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// Case 1: Allowed origin localhost:5173
+	// Case 1: Unconfigured localhost gets NO ACAO header by default
 	r1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	r1.Header.Set("Origin", "http://localhost:5173")
 	w1 := httptest.NewRecorder()
 	handler.ServeHTTP(w1, r1)
 
-	if w1.Header().Get("Access-Control-Allow-Origin") != "http://localhost:5173" {
-		t.Errorf("expected CORS Allow-Origin http://localhost:5173, got %s", w1.Header().Get("Access-Control-Allow-Origin"))
-	}
-	if w1.Header().Get("Vary") != "Origin" {
-		t.Errorf("expected Vary: Origin, got %s", w1.Header().Get("Vary"))
+	if got := w1.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("expected no CORS Allow-Origin for unconfigured localhost by default, got %s", got)
 	}
 
-	// Case 2: Disallowed origin evil.com
+	// Case 2: Disallowed origin evil.com gets NO ACAO header
 	r2 := httptest.NewRequest(http.MethodGet, "/", nil)
 	r2.Header.Set("Origin", "http://evil.com")
 	w2 := httptest.NewRecorder()
 	handler.ServeHTTP(w2, r2)
 
-	if w2.Header().Get("Access-Control-Allow-Origin") != "" {
-		t.Errorf("expected no CORS Allow-Origin for disallowed origin, got %s", w2.Header().Get("Access-Control-Allow-Origin"))
+	if got := w2.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("expected no CORS Allow-Origin for disallowed origin, got %s", got)
 	}
 
-	// Case 3: Empty origin receives default first origin
+	// Case 3: Empty origin (same-origin) receives NO ACAO header
 	r3 := httptest.NewRequest(http.MethodGet, "/", nil)
 	w3 := httptest.NewRecorder()
 	handler.ServeHTTP(w3, r3)
 
-	if w3.Header().Get("Access-Control-Allow-Origin") != "http://localhost:3000" {
-		t.Errorf("expected default origin http://localhost:3000, got %s", w3.Header().Get("Access-Control-Allow-Origin"))
+	if got := w3.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("expected no CORS Allow-Origin for empty origin, got %s", got)
+	}
+}
+
+func TestCORS_ConfiguredOrigins(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,https://app.k8sselfhost.io")
+	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Allowed origin reflected
+	r1 := httptest.NewRequest(http.MethodGet, "/", nil)
+	r1.Header.Set("Origin", "http://localhost:5173")
+	w1 := httptest.NewRecorder()
+	handler.ServeHTTP(w1, r1)
+
+	if got := w1.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+		t.Errorf("expected reflected origin http://localhost:5173, got %s", got)
+	}
+	if got := w1.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Errorf("expected Access-Control-Allow-Credentials true, got %s", got)
+	}
+	if got := w1.Header().Get("Vary"); got != "Origin" {
+		t.Errorf("expected Vary: Origin, got %s", got)
+	}
+
+	// Disallowed origin gets no ACAO
+	r2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	r2.Header.Set("Origin", "http://evil.com")
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, r2)
+
+	if got := w2.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("expected no ACAO for evil.com, got %s", got)
 	}
 }
 
@@ -98,6 +129,7 @@ func TestCORS_CustomEnvOrigins(t *testing.T) {
 }
 
 func TestCORS_Preflight(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
 	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -116,6 +148,16 @@ func TestCORS_Preflight(t *testing.T) {
 	}
 	if w.Header().Get("Access-Control-Allow-Headers") == "" {
 		t.Error("expected CORS Allow-Headers header")
+	}
+
+	// Disallowed origin preflight receives 403
+	rDisallowed := httptest.NewRequest(http.MethodOptions, "/", nil)
+	rDisallowed.Header.Set("Origin", "http://evil.com")
+	wDisallowed := httptest.NewRecorder()
+	handler.ServeHTTP(wDisallowed, rDisallowed)
+
+	if wDisallowed.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for disallowed origin OPTIONS, got %d", wDisallowed.Code)
 	}
 }
 
