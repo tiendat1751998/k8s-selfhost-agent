@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -81,9 +80,7 @@ func (h *CostHandler) GetWaste(w http.ResponseWriter, r *http.Request) {
 // OptimizationNotConfigured returns 501 Not Implemented because cost optimization controller is not configured in this edition.
 // Per CON-26..30 / Section 00.
 func (h *CostHandler) OptimizationNotConfigured(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
 		"error": "Cost optimization controller not configured in this edition",
 		"code":  http.StatusNotImplemented,
 	})

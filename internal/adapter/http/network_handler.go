@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -26,9 +25,7 @@ func (h *NetworkHandler) RegisterRoutes(r chi.Router) {
 
 // NotConfigured returns 501 Not Implemented for unconfigured network policy controller.
 func (h *NetworkHandler) NotConfigured(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
 		"error": "Network policy controller not configured in this edition",
 		"code":  http.StatusNotImplemented,
 	})

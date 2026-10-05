@@ -223,9 +223,7 @@ func (h *BackupHandler) TriggerBackup(w http.ResponseWriter, r *http.Request) {
 // CreateClusterBackup handles POST /cluster (Velero-compatible backup).
 // Per CON-23 / Section 00: Return 501 Not Implemented since Velero backup controller is not installed in this edition.
 func (h *BackupHandler) CreateClusterBackup(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
 		"error": "Velero backup controller not installed",
 		"code":  http.StatusNotImplemented,
 	})
