@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
 )
 
 type DiscoveryAdapter struct {}
@@ -20,6 +22,16 @@ func getClientFromKubeconfig(kubeconfig []byte) (*kubernetes.Clientset, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parsing kubeconfig: %w", err)
 	}
+
+	// SEC-10: Require HTTPS scheme for Kubernetes API server
+	if _, err := netguard.ValidateURL(cfg.Host, "https"); err != nil {
+		return nil, fmt.Errorf("kubernetes api server url must use https: %w", err)
+	}
+
+	// SEC-10: In-cluster or private-network API servers are permitted only when explicitly allowlisted
+	// via EGRESS_ALLOW_PRIVATE_CIDRS; loopback and cloud metadata (169.254.169.254) are strictly blocked.
+	guard := netguard.New(netguard.WithFromEnv())
+	cfg.Dial = guard.DialContext
 
 	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
