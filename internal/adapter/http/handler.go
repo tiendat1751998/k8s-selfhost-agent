@@ -18,6 +18,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/report"
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
 	"github.com/datdt/k8sselfhost/internal/usecase/gitops"
+	usecaseIncident "github.com/datdt/k8sselfhost/internal/usecase/incident"
 	"github.com/datdt/k8sselfhost/internal/usecase/rca"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
@@ -26,6 +27,7 @@ import (
 // Handler provides HTTP handlers for the dashboard API.
 type Handler struct {
 	incidentRepo     incident.Repository
+	incidentUsecase  *usecaseIncident.Usecase
 	reportRepo       report.Repository
 	prRepo           domainGitops.Repository
 	publisher        *infraNats.Publisher
@@ -35,13 +37,23 @@ type Handler struct {
 
 // NewHandler creates a new dashboard HTTP handler.
 func NewHandler(incidentRepo incident.Repository, reportRepo report.Repository, prRepo domainGitops.Repository, publisher *infraNats.Publisher, gitopsController *gitops.Controller) *Handler {
+	var incUc *usecaseIncident.Usecase
+	if incidentRepo != nil {
+		incUc = usecaseIncident.NewUsecase(incidentRepo)
+	}
 	return &Handler{
 		incidentRepo:     incidentRepo,
+		incidentUsecase:  incUc,
 		reportRepo:       reportRepo,
 		prRepo:           prRepo,
 		publisher:        publisher,
 		gitopsController: gitopsController,
 	}
+}
+
+// SetIncidentUsecase overrides the default incident usecase.
+func (h *Handler) SetIncidentUsecase(uc *usecaseIncident.Usecase) {
+	h.incidentUsecase = uc
 }
 
 // SetRCAPipeline sets the in-process RCA pipeline for standalone mode.
@@ -54,11 +66,14 @@ func (h *Handler) SetRCAPipeline(p *rca.Pipeline) {
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/incidents", func(r chi.Router) {
 		r.Get("/", h.ListIncidents)
+		r.Post("/", h.CreateIncident)
 		r.Post("/simulate", h.SimulateIncident)
 		r.Get("/{id}", h.GetIncident)
 		r.Get("/{id}/report", h.GetIncidentReport)
 		r.Get("/{id}/pr", h.GetIncidentPR)
 		r.Post("/{id}/analyze", h.AnalyzeIncident)
+		r.Post("/{id}/mitigate", h.MitigateIncident)
+		r.Post("/{id}/resolve", h.ResolveIncident)
 	})
 
 	r.Route("/reports", func(r chi.Router) {
@@ -75,69 +90,13 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	})
 }
 
-// ListIncidents handles GET /api/v1/incidents
-func (h *Handler) ListIncidents(w http.ResponseWriter, r *http.Request) {
-	filter := incident.Filter{
-		Limit:  parseIntParam(r, "limit", 50),
-		Offset: parseIntParam(r, "offset", 0),
-	}
-
-	if ns := r.URL.Query().Get("namespace"); ns != "" {
-		filter.Namespace = ns
-	}
-	if cluster := r.URL.Query().Get("cluster"); cluster != "" {
-		filter.ClusterName = cluster
-	}
-	if status := r.URL.Query().Get("status"); status != "" {
-		s := incident.Status(status)
-		filter.Status = &s
-	}
-	if typ := r.URL.Query().Get("type"); typ != "" {
-		t := incident.Type(typ)
-		filter.Type = &t
-	}
-	if sev := r.URL.Query().Get("severity"); sev != "" {
-		s := incident.Severity(sev)
-		filter.Severity = &s
-	}
-
-	incidents, total, err := h.incidentRepo.List(r.Context(), filter)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to list incidents", err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data":   incidents,
-		"total":  total,
-		"limit":  filter.Limit,
-		"offset": filter.Offset,
-	})
-}
-
-// GetIncident handles GET /api/v1/incidents/{id}
-func (h *Handler) GetIncident(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	inc, err := h.incidentRepo.GetByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, errors.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "incident not found", err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to get incident", err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, inc)
-}
-
 // GetIncidentReport handles GET /api/v1/incidents/{id}/report
 func (h *Handler) GetIncidentReport(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	rpt, err := h.reportRepo.GetByIncidentID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, errors.ErrNotFound) {
-			writeJSON(w, http.StatusOK, map[string]interface{}{"data": nil})
+			writeError(w, http.StatusNotFound, "RCA report not found", err)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to get report", err)
@@ -153,7 +112,7 @@ func (h *Handler) GetIncidentPR(w http.ResponseWriter, r *http.Request) {
 	pr, err := h.prRepo.GetByIncidentID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, errors.ErrNotFound) {
-			writeJSON(w, http.StatusOK, map[string]interface{}{"data": nil})
+			writeError(w, http.StatusNotFound, "PR not found", err)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to get PR", err)
