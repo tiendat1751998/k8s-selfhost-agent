@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -356,4 +357,24 @@ func TestMetricsAuthMiddleware(t *testing.T) {
 			t.Errorf("expected status 200, got %d", rec.Code)
 		}
 	})
+}
+
+func TestIsRunningInTest_NoArgsHeuristic(t *testing.T) {
+	origTesting := isTesting
+	defer func() { isTesting = origTesting }()
+	isTesting = func() bool { return false }
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	// Even if os.Args contains "latest" (contains "test") or "test", isRunningInTest must not return true when not in test
+	os.Args = []string{"/usr/local/bin/latest-service"}
+	if isRunningInTest() {
+		t.Fatalf("isRunningInTest() returned true for non-test process because os.Args contains 'latest' (contains 'test')")
+	}
+
+	os.Args = []string{"/usr/local/bin/my-test-app"}
+	if isRunningInTest() {
+		t.Fatalf("isRunningInTest() returned true for non-test process because os.Args contains 'test'")
+	}
 }

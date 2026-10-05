@@ -90,6 +90,47 @@ func TestTerminalSizeQueue(t *testing.T) {
 	}
 }
 
+func TestTerminalSizeQueue_PanicOnSendToClosedChannel(t *testing.T) {
+	queue := newTerminalSizeQueue()
+	// Line 291 in HandleExec: close(sizeQueue.resizeChan)
+	close(queue.resizeChan)
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic on send to closed channel, but did not panic")
+		}
+	}()
+
+	// Line 259 in HandleExec: select send in WS reader goroutine
+	select {
+	case queue.resizeChan <- remotecommand.TerminalSize{Width: 80, Height: 24}:
+	default:
+	}
+}
+
+func TestTerminalSizeQueue_ResizeAfterStreamEndDoesNotPanic(t *testing.T) {
+	queue := newTerminalSizeQueue()
+
+	// Push normal resize event
+	queue.Push(remotecommand.TerminalSize{Width: 120, Height: 40})
+	size := queue.Next()
+	if size == nil || size.Width != 120 || size.Height != 40 {
+		t.Fatalf("expected 120x40, got %v", size)
+	}
+
+	// Stream ends -> queue is stopped
+	queue.Stop()
+
+	// Calling Push after stream termination must not panic
+	queue.Push(remotecommand.TerminalSize{Width: 100, Height: 40})
+
+	// Next() must terminate with nil (no goroutine leak)
+	if sizeAfterStop := queue.Next(); sizeAfterStop != nil {
+		t.Fatalf("expected nil after stop, got %v", sizeAfterStop)
+	}
+}
+
 func TestWsExecMessageParsing(t *testing.T) {
 	rawResize := []byte(`{"type":"resize","cols":100,"rows":30}`)
 	var msg wsExecMessage
@@ -215,6 +256,51 @@ func TestK8sExecHandler_TenantIsolation(t *testing.T) {
 		r.ServeHTTP(rec, req)
 
 		// Bypasses tenant check, fails on k8s unavailable (503)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status 503 Service Unavailable after platform admin bypass, got %d", rec.Code)
+		}
+	})
+
+	t.Run("non-admin X-Tenant-ID header is ignored and returns 403 when claims tenant differs", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod&ns=tenant-b", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		ctx = tenancy.WithTenantID(ctx, "tenant-a")
+		req = req.WithContext(ctx)
+		req.Header.Set("X-Tenant-ID", "tenant-b") // Attacker attempts to spoof tenant-b via header
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected status 403 Forbidden, got %d", rec.Code)
+		}
+	})
+
+	t.Run("non-admin cannot spoof tenant via X-Tenant-ID when claims tenant is empty", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod&ns=tenant-a", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		// claims has no tenant ID
+		req = req.WithContext(ctx)
+		req.Header.Set("X-Tenant-ID", "tenant-a") // Attacker attempts to provide tenant-a via header
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected status 403 Forbidden for non-admin with X-Tenant-ID, got %d", rec.Code)
+		}
+	})
+
+	t.Run("platform_admin honors X-Tenant-ID header", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/test-cluster/exec?pod=test-pod&ns=tenant-b", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "platform_admin")
+		req = req.WithContext(ctx)
+		req.Header.Set("X-Tenant-ID", "tenant-b")
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		// Passes tenant check, fails on k8s unavailable (503)
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("expected status 503 Service Unavailable after platform admin bypass, got %d", rec.Code)
 		}
