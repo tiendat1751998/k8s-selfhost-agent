@@ -138,7 +138,7 @@ func (h *LogHandler) HandleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 	tenantID := resolveTenant(r.Context(), r)
 	if tenantID == "" {
-		writeError(w, http.StatusUnauthorized, "tenant context or X-Tenant-ID header required", nil)
+		writeError(w, http.StatusUnauthorized, "tenant context required", nil)
 		return
 	}
 	for i := range entries {
