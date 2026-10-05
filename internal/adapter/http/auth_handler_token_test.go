@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -155,5 +156,74 @@ func TestLogout_RevokesRefreshToken(t *testing.T) {
 	}
 	if refreshCookie == nil || refreshCookie.MaxAge != -1 {
 		t.Fatal("expected refresh_token cookie to be expired/cleared")
+	}
+}
+
+func TestRefreshToken_ConcurrentRaceCondition_OnlyOneSucceeds(t *testing.T) {
+	handler, userRepo, tokenRepo, _ := setupAuthTest(t)
+	userRepo.users["u1"] = &user.User{
+		ID:           "u1",
+		Email:        "refresh-concurrent@example.com",
+		PlatformRole: "viewer",
+		TenantID:     "tenant-1",
+		TenantRole:   "viewer",
+	}
+
+	rawToken, _ := middleware.GenerateRefreshToken()
+	tokenRepo.tokens[middleware.HashToken(rawToken)] = &user.RefreshToken{
+		ID:        "rt-concurrent-1",
+		UserID:    "u1",
+		TokenHash: middleware.HashToken(rawToken),
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+	}
+
+	const concurrency = 10
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var statusCodes []int
+
+	startGate := make(chan struct{})
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-startGate
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+			req.AddCookie(&http.Cookie{
+				Name:  "refresh_token",
+				Value: rawToken,
+			})
+			w := httptest.NewRecorder()
+
+			handler.RefreshToken(w, req)
+
+			mu.Lock()
+			statusCodes = append(statusCodes, w.Code)
+			mu.Unlock()
+		}()
+	}
+
+	close(startGate)
+	wg.Wait()
+
+	var okCount, unauthorizedCount int
+	for _, code := range statusCodes {
+		switch code {
+		case http.StatusOK:
+			okCount++
+		case http.StatusUnauthorized:
+			unauthorizedCount++
+		default:
+			t.Errorf("unexpected status code: %d", code)
+		}
+	}
+
+	if okCount != 1 {
+		t.Fatalf("expected exactly 1 HTTP 200 OK under concurrency, got %d", okCount)
+	}
+	if unauthorizedCount != concurrency-1 {
+		t.Fatalf("expected %d HTTP 401 Unauthorized, got %d", concurrency-1, unauthorizedCount)
 	}
 }

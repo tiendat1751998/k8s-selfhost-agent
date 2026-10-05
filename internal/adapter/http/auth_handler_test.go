@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -94,7 +95,18 @@ func (m *mockUserRepo) GetMFASecret(ctx context.Context, userID string) (string,
 	return u.MFASecret, nil
 }
 
+type mockTxManager struct {
+	mu sync.Mutex
+}
+
+func (m *mockTxManager) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return fn(ctx)
+}
+
 type mockRefreshTokenRepo struct {
+	mu     sync.Mutex
 	tokens map[string]*user.RefreshToken
 }
 
@@ -105,6 +117,8 @@ func newMockRefreshTokenRepo() *mockRefreshTokenRepo {
 }
 
 func (m *mockRefreshTokenRepo) Create(ctx context.Context, rt *user.RefreshToken) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if rt.ID == "" {
 		rt.ID = "rt-" + rt.TokenHash[:8]
 	}
@@ -115,6 +129,8 @@ func (m *mockRefreshTokenRepo) Create(ctx context.Context, rt *user.RefreshToken
 }
 
 func (m *mockRefreshTokenRepo) GetByHash(ctx context.Context, hash string) (*user.RefreshToken, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	rt, ok := m.tokens[hash]
 	if !ok {
 		return nil, errors.New("refresh token not found")
@@ -123,7 +139,13 @@ func (m *mockRefreshTokenRepo) GetByHash(ctx context.Context, hash string) (*use
 	return &copied, nil
 }
 
+func (m *mockRefreshTokenRepo) GetByHashForUpdate(ctx context.Context, hash string) (*user.RefreshToken, error) {
+	return m.GetByHash(ctx, hash)
+}
+
 func (m *mockRefreshTokenRepo) Revoke(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, rt := range m.tokens {
 		if rt.ID == id {
 			now := time.Now()
@@ -135,6 +157,8 @@ func (m *mockRefreshTokenRepo) Revoke(ctx context.Context, id string) error {
 }
 
 func (m *mockRefreshTokenRepo) RevokeAllForUser(ctx context.Context, userID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, rt := range m.tokens {
 		if rt.UserID == userID {
 			now := time.Now()
@@ -145,6 +169,8 @@ func (m *mockRefreshTokenRepo) RevokeAllForUser(ctx context.Context, userID stri
 }
 
 func (m *mockRefreshTokenRepo) DeleteExpired(ctx context.Context) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	var count int64
 	for k, rt := range m.tokens {
 		if time.Now().After(rt.ExpiresAt) {
@@ -161,7 +187,8 @@ func setupAuthTest(t *testing.T) (*adapthttp.AuthHandler, *mockUserRepo, *mockRe
 
 	userRepo := newMockUserRepo()
 	tokenRepo := newMockRefreshTokenRepo()
-	uc := usecaseAuth.NewUsecase(userRepo)
+	txMgr := &mockTxManager{}
+	uc := usecaseAuth.NewUsecase(userRepo, usecaseAuth.WithRefreshTokenRepo(tokenRepo), usecaseAuth.WithTxManager(txMgr))
 	handler := adapthttp.NewAuthHandler(uc, userRepo, tokenRepo)
 
 	return handler, userRepo, tokenRepo, uc
