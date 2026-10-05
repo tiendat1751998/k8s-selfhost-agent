@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -214,7 +215,13 @@ func (m *ClientManager) GetDockerClient(ctx context.Context, clusterID string) (
 		host = decrypted
 	}
 	if host == "" {
-		host = "tcp://10.10.10.133:2375"
+		if envHost := os.Getenv("DOCKER_HOST"); envHost != "" {
+			host = envHost
+		} else if envHost := os.Getenv("K8S_DOCKER_HOST"); envHost != "" {
+			host = envHost
+		} else {
+			host = "unix:///var/run/docker.sock"
+		}
 	}
 
 	cli, err := client.NewClientWithOpts(

@@ -6,27 +6,27 @@ server:
   idle_timeout: 120s
 
 postgres:
-  host: "10.10.10.133"
+  host: "localhost"
   port: 5432
   user: "myuser"
-  password: "mysecretpassword"
+  password: "${POSTGRES_PASSWORD}"
   dbname: "mydatabase"
   sslmode: "disable"
   max_conns: 25
   min_conns: 5
 
 redis:
-  host: "10.10.10.133"
+  host: "localhost"
   port: 6379
-  password: ""
+  password: "${REDIS_PASSWORD}"
   db: 0
 
 docker:
-  host: "tcp://10.10.10.133:2375"
+  host: "${DOCKER_HOST}"
   version: "1.41"
 
 nats:
-  url: "nats://10.10.10.133:4222"
+  url: "nats://localhost:4222"
   max_reconnects: 60
   reconnect_wait: 2s
   stream_name: "INCIDENTS"
@@ -50,4 +50,4 @@ log:
 
 load_balancer:
   provider: "traefik"
-  url: "http://10.10.10.133:8080"
+  url: "http://localhost:8080"

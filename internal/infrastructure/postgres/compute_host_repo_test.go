@@ -24,16 +24,20 @@ func getComputeHostTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	host := os.Getenv("K8S_POSTGRES_HOST")
 	if host == "" {
-		host = "10.10.10.133"
+		host = "localhost"
 	}
 
 	user := os.Getenv("K8S_POSTGRES_USER")
 	if user == "" {
 		user = "myuser"
 	}
-	pass := os.Getenv("K8S_POSTGRES_PASSWORD")
+	pass := os.Getenv("POSTGRES_PASSWORD")
 	if pass == "" {
-		pass = "mysecretpassword"
+		pass = os.Getenv("K8S_POSTGRES_PASSWORD")
+	}
+	if pass == "" {
+		t.Skip("Skipping live database test: POSTGRES_PASSWORD not set")
+		return nil
 	}
 	dbname := os.Getenv("K8S_POSTGRES_DBNAME")
 	if dbname == "" {
@@ -106,7 +110,7 @@ func TestComputeHostRepo_CreateAndGetRoundtrip(t *testing.T) {
 	host := &docker.ComputeHost{
 		Name:       "docker-swarm-node-1",
 		HostType:   "docker",
-		Endpoint:   "tcp://10.10.10.133:2375",
+		Endpoint:   "tcp://127.0.0.1:2376",
 		TLSEnabled: true,
 		TLSCA:      "-----BEGIN CERTIFICATE-----\nCA...\n-----END CERTIFICATE-----",
 		TLSCert:    "-----BEGIN CERTIFICATE-----\nCERT...\n-----END CERTIFICATE-----",

@@ -256,7 +256,7 @@ K8sControl reads settings from environment variables (prefixed with `K8S_`) and 
 | `K8S_POSTGRES_HOST` / `DB_HOST` | No | `localhost` | PostgreSQL hostname or IP address. |
 | `K8S_POSTGRES_PORT` / `DB_PORT` | No | `5432` | PostgreSQL port. |
 | `K8S_POSTGRES_USER` / `DB_USER` | No | `myuser` | PostgreSQL username. |
-| `K8S_POSTGRES_PASSWORD` / `DB_PASSWORD` | No | `mysecretpassword` | PostgreSQL password. |
+| `K8S_POSTGRES_PASSWORD` / `DB_PASSWORD` / `POSTGRES_PASSWORD` | Yes | `<your-postgres-password>` | PostgreSQL password (required; set via environment or .env). |
 | `K8S_POSTGRES_DBNAME` / `DB_NAME` | No | `mydatabase` | PostgreSQL database name. |
 | `K8S_POSTGRES_SSLMODE` / `DB_SSLMODE` | No | `disable` | SSL mode: `disable`, `require`, `verify-full`. |
 | `K8S_POSTGRES_MAX_CONNS` | No | `25` | Maximum number of open connections in pool. |
