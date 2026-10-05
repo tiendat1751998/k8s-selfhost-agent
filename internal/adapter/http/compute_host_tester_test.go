@@ -134,4 +134,20 @@ func TestComputeHostTester_SSRFBlocked(t *testing.T) {
 			t.Fatalf("expected error containing 'blocked', got: %v", err)
 		}
 	})
+
+	t.Run("agent host probe blocks loopback in production", func(t *testing.T) {
+		oldTesting := isTesting
+		defer func() { isTesting = oldTesting }()
+		isTesting = func() bool { return false }
+
+		host := &docker.ComputeHost{
+			ID:       "agent-loopback",
+			HostType: "agent",
+			Endpoint: "http://127.0.0.1:9100",
+		}
+		_, _, err := testAgentHostConnection(ctx, host)
+		if err == nil || !strings.Contains(err.Error(), "blocked") {
+			t.Fatalf("expected error containing 'blocked', got: %v", err)
+		}
+	})
 }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/docker/docker/client"
@@ -18,10 +19,17 @@ import (
 	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
 )
 
+var isTesting = testing.Testing
+
 // hostTesterGuard returns a netguard Guard with private CIDRs allowed for registered hosts.
 // Cloud metadata, loopback, multicast, and unspecified addresses remain blocked unless allowlisted.
+// In test mode, 127.0.0.0/8 is allowed to enable httptest.Server endpoints.
 func hostTesterGuard() *netguard.Guard {
-	return netguard.New(netguard.WithFromEnv(), netguard.WithAllowPrivate(true))
+	opts := []netguard.Option{netguard.WithFromEnv(), netguard.WithAllowPrivate(true)}
+	if isTesting() {
+		opts = append(opts, netguard.WithAllowedCIDRStrings("127.0.0.0/8"))
+	}
+	return netguard.New(opts...)
 }
 
 func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, map[string]interface{}, error) {
