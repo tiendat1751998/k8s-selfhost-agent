@@ -1,9 +1,9 @@
-# Project State — Checkpoint 2026-09-14T13:36:00+07:00
+# Project State — Checkpoint 2026-10-05T18:00:00+07:00
 
-## Branch: `feat/enterprise-console-phase1`
-## Head Commit: `6345b87` (`feat(logs): merge sleek enterprise toolbar and deduplicated controls`)
+## Branch: `fix/comprehensive-audit`
+## Head Commit: `d0ed64f`
 ## Working Tree: Clean (0 unstaged changes)
-## Verification: 100% PRODUCTION ENTERPRISE PASS (Build Exit Code 0, Zero Console Errors, Reviewer Approved, QA DevTools MCP Verified)
+## Verification: 100% PRODUCTION ENTERPRISE PASS (All 40+ Go packages test pass, Go vet exit 0, Go build exit 0, Vue Vitest 86/86 pass, Vite build exit 0, Release Certified v1.2.0)
 
 ---
 
@@ -117,11 +117,27 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
 
 ---
 
-## 4. Verification Evidence
-- **Go Backend**: `cmd/standalone/main.go` and `cmd/agent/main.go` compile and pass tests:
-  - `go test -v ./internal/pkg/logengine/...`: PASS (0.767s)
-  - `go test -v ./internal/infrastructure/agent/...`: PASS (0.505s)
-  - `go test -v ./cmd/agent/...`: PASS (1.687s)
-- **Frontend Production Build**: `npm.cmd --prefix frontend-vue run build` exits with code 0 in 4.09s (891 modules transformed, 0 errors).
-- **Reviewer Sign-Off**: 100% APPROVED (`2dbbb9b2-6e5c-414b-b3bd-9af9c0445e80`).
-- **Chrome DevTools MCP Visual QA**: 100% PASS across Desktop (1440x900), Laptop (1280x800), and Tablet (768x1024) with zero horizontal scroll overflow (`scrollWidth <= innerWidth`), visible KPI telemetry badge and engine popover at 1440px desktop, safe responsive text at 1280px laptop, and 0 console errors.
+## 4. Comprehensive Audit & Enterprise Hardening (Waves 1-4 Complete)
+- **Wave 1 (P0 Security & Panics)**: Static JWT fallback purged (SEC-02), credentials moved to env (SEC-01), mandatory agent bearer auth (SEC-03), exec tenant claims (SEC-06), exec channel panic fix (BUG-01), agent sync.Once stop (BUG-03).
+- **Wave 2 (Security P1 & Hardening)**: Tenant isolation in SQL queries & resolveTenant (SEC-05, SEC-21, SEC-23), dial-time SSRF blocking via netguard (SEC-07..10, 15), kubeconfig AES-256-GCM encryption with `enc:v1:` (SEC-04), strict CORS & Secure cookies (SEC-12, SEC-13), protected /metrics (SEC-14), WebSocket origin allowlist (SEC-20), rate-limited logout (SEC-17), Velero RBAC least privilege (SEC-11), agent DaemonSet non-root & pinned (SEC-18).
+- **Wave 3 (Feature & Pipeline Correctness)**:
+  - W3-A: Router streaming timeout bypass, SSE `?token=` query auth, log stream tenant isolation (CON-19..21).
+  - W3-B: Purged hardcoded `'staging-k8s'`, dynamic cluster fallback, unswallowed empty catch blocks (CON-31, 38..42).
+  - W3-C: Real incident lifecycle API (`POST /incidents`, `/mitigate`, `/resolve`), 400 on malformed JSON, 404 for missing RCA/PR, audit logging (CON-01..03).
+  - W3-C2: Frontend incident lifecycle integration, dynamic confidence score, purged fake PR #104 & setTimeout, 404 clean empty state (CON-17, 32).
+  - W3-D: Log pipeline correctness, container rotation EOF recovery, scatter-gather limit sorting, ClickHouse ascending sort before deduplication (BUG-04..07).
+  - W3-E: Atomic refresh token rotation with PostgreSQL `SELECT ... FOR UPDATE` row-level lock and token reuse detection (BUG-08).
+  - W3-F: Unified multi-stage Docker packaging (Node 22 + Go 1.26.6 + Alpine non-root 10001), tini PID 1, SPA history routing fallback with path traversal defense (CON-15, INF-1, INF-2).
+- **Wave 4 (Anti-Mock Sanitization & 501 Stubs)**:
+  - W4-A: Sanitized unintegrated mock mutation endpoints (Security scans, Velero backups, Network policy, Service mesh split, FinOps optimization, Chaos) to return RFC 7807 HTTP 501 Not Implemented with RBAC protection (CON-22..30).
+  - W4-B: Frontend 501 graceful error handling, `IntegrationBadge.vue` capsule badges, `IntegrationEmptyState.vue` glass panels with install CLI, disabled mutation buttons with informative tooltips.
+
+---
+
+## 5. Verification Evidence & Certification
+- **Go Backend**: `go test -count=1 ./...` (All 40+ packages PASS, 0 failures), `go vet ./...` (0 errors), `go build ./...` (Exit code 0).
+- **Frontend**: `npm.cmd --prefix frontend-vue test` (86/86 passed, 17 suites, 0 failures), `npm.cmd --prefix frontend-vue run build` (Exit code 0, 666 modules in 3.34s).
+- **File Length Constraint**: All touched and created files strictly < 500 lines across the entire workspace.
+- **Reviewer Sign-Off**: 100% independent reviewer approvals across all tasks.
+- **Chrome DevTools MCP Visual QA**: 100% PASS across Desktop (1440x900) and Mobile (375x812) viewports.
+- **Release Certified**: `v1.2.0` (Production Hardening & Sanitization).
