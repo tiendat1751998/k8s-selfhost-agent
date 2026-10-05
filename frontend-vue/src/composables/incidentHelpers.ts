@@ -155,6 +155,9 @@ export function buildRcaTimelineEvents(
   })
 
   if (report) {
+    const confStr = typeof report.confidence === 'number' && !isNaN(report.confidence)
+      ? `${Math.round(report.confidence <= 1 ? report.confidence * 100 : report.confidence)}%`
+      : 'N/A'
     events.push({
       id: 'evt-rca',
       title: 'Multi-Agent AI Diagnostic Synthesis',
@@ -163,7 +166,7 @@ export function buildRcaTimelineEvents(
       description: report.root_cause || inc.message,
       meta: {
         model: report.llm_model || 'Claude 3.5 Sonnet / Multi-Agent',
-        confidence: `${Math.round((report.confidence || 0.94) * 100)}%`,
+        confidence: confStr,
         riskLevel: report.risk_level
       }
     })
@@ -172,7 +175,9 @@ export function buildRcaTimelineEvents(
   if (activePR) {
     events.push({
       id: 'evt-pr',
-      title: `GitOps Remediation PR #${activePR.pr_number || 104} Generated`,
+      title: activePR.pr_number
+        ? `GitOps Remediation PR #${activePR.pr_number} Generated`
+        : 'GitOps Remediation PR Generated',
       timestamp: activePR.created_at,
       type: 'pr',
       description: activePR.title || 'Remediation manifest synthesized with resource limit patches.',

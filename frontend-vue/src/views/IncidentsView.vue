@@ -42,6 +42,8 @@ const {
   selectIncident,
   triggerAIAnalysis,
   handleSimulateIncident,
+  handleMitigateIncident,
+  handleResolveIncident,
   openCreatePRModal,
   handleCreatePR,
   handleMergePR
@@ -354,6 +356,8 @@ function formatRelativeTime(dateStr?: string): string {
           :report-error="reportError"
           :action-loading="actionLoading"
           @analyze="triggerAIAnalysis"
+          @mitigate="handleMitigateIncident"
+          @resolve="handleResolveIncident"
           @open-pr-modal="openCreatePRModal"
           @merge-pr="handleMergePR"
         />

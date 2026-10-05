@@ -62,6 +62,22 @@ const emit = defineEmits<{
           <button
             type="button"
             class="btn btn-secondary btn-sm"
+            :disabled="actionLoading === 'mitigate-' + incident.id || incident.status === 'resolved' || incident.status === 'mitigated'"
+            @click="emit('mitigate', incident)"
+          >
+            <BaseIcon :name="actionLoading === 'mitigate-' + incident.id ? 'clock' : 'target'" size="xs" /> <span>Mitigate</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            :disabled="actionLoading === 'resolve-' + incident.id || incident.status === 'resolved'"
+            @click="emit('resolve', incident)"
+          >
+            <BaseIcon :name="actionLoading === 'resolve-' + incident.id ? 'clock' : 'check-circle'" size="xs" /> <span>Resolve</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
             @click="emit('openRcaModal', incident)"
           >
             <BaseIcon name="clock" size="xs" /> <span>Chronology</span>
@@ -93,7 +109,7 @@ const emit = defineEmits<{
           <!-- Confidence Gauge -->
           <div v-if="report" class="confidence-gauge">
             <div class="gauge-dial font-mono">
-              <span class="gauge-pct">{{ Math.round((report?.confidence || 0.94) * 100) }}%</span>
+              <span class="gauge-pct">{{ typeof report?.confidence === 'number' ? `${Math.round(report.confidence <= 1 ? report.confidence * 100 : report.confidence)}%` : 'N/A' }}</span>
               <span class="gauge-label">Confidence</span>
             </div>
           </div>
@@ -121,7 +137,7 @@ const emit = defineEmits<{
           </div>
         </div>
         <div v-else class="empty-rca-box text-muted font-mono" style="padding: 16px; font-size: 13px;">
-          <span>{{ reportError || 'No RCA report generated yet. Click "AI Root Cause" above to run diagnostics.' }}</span>
+          <span>{{ reportError || 'No RCA report available. Click "AI Root Cause" above to run diagnostics.' }}</span>
         </div>
       </div>
 
@@ -177,7 +193,7 @@ const emit = defineEmits<{
 
           <div class="diff-actions">
             <div v-if="activePr" class="pr-status-pill">
-              <span class="font-mono text-cyan">PR #{{ activePr.pr_number || 104 }} ({{ activePr.status }})</span>
+              <span class="font-mono text-cyan">{{ activePr.pr_number ? `PR #${activePr.pr_number}` : 'PR' }} ({{ activePr.status }})</span>
             </div>
           </div>
         </div>
@@ -192,7 +208,7 @@ const emit = defineEmits<{
             </div>
           </template>
           <div v-else class="no-diff-box text-muted">
-            No diff available
+            No PR generated
           </div>
         </div>
 
