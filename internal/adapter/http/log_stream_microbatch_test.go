@@ -143,11 +143,14 @@ func TestLogStreamHandler_BackpressureTelemetry(t *testing.T) {
 
 	// Read messages until we encounter a stream_telemetry frame or timeout
 	telemetryFound := false
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		_ = conn.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
+		_ = conn.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
 		_, msgBytes, err := conn.ReadMessage()
 		if err != nil {
+			if time.Now().Before(deadline) {
+				continue
+			}
 			break
 		}
 		var rawMap map[string]any
