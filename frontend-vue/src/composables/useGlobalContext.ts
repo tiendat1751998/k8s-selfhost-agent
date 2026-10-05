@@ -1,5 +1,6 @@
 import { ref } from 'vue'
-import { fleetApi } from '../api/fleet'
+import { api, type ApiResponse } from '../api/client'
+import { fleetApi, type Cluster } from '../api/fleet'
 import { k8sApi } from '../api/k8s'
 
 export interface ClusterContextItem {
@@ -31,10 +32,12 @@ function setStored(key: string, value: string): void {
 }
 
 // Module-level reactive singleton store
-const activeClusterId = ref<string>(getStored('k8s_active_cluster', 'staging-k8s'))
+const storedCluster = getStored('k8s_active_cluster', 'local')
+const activeClusterId = ref<string>(storedCluster || 'local')
 const activeNamespace = ref<string>(getStored('k8s_active_namespace', 'all'))
 const availableClusters = ref<ClusterContextItem[]>([])
 const availableNamespaces = ref<string[]>(['all'])
+const error = ref<string | null>(null)
 
 async function loadNamespacesForCluster(clusterId: string): Promise<void> {
   if (!clusterId) {
@@ -52,8 +55,9 @@ async function loadNamespacesForCluster(clusterId: string): Promise<void> {
     } else {
       availableNamespaces.value = ['all']
     }
-  } catch {
+  } catch (err: unknown) {
     availableNamespaces.value = ['all']
+    error.value = err instanceof Error ? err.message : `Failed to load namespaces for ${clusterId}`
   }
 
   // Fix state desync on cluster switch
@@ -63,8 +67,19 @@ async function loadNamespacesForCluster(clusterId: string): Promise<void> {
 }
 
 async function loadClusters(): Promise<void> {
+  error.value = null
   try {
-    const list = await fleetApi.list()
+    let list: Cluster[] = []
+    try {
+      const res = await api.get<ApiResponse<Cluster[]> | Cluster[]>('/clusters')
+      if (Array.isArray(res)) {
+        list = res
+      } else if (res && Array.isArray((res as ApiResponse<Cluster[]>).data)) {
+        list = (res as ApiResponse<Cluster[]>).data
+      }
+    } catch {
+      list = await fleetApi.list()
+    }
     if (list && list.length > 0) {
       availableClusters.value = list.map(c => ({
         id: c.id,
@@ -72,16 +87,26 @@ async function loadClusters(): Promise<void> {
         status: (c.health_status || c.status || 'healthy').toLowerCase(),
         region: c.region
       }))
+      const activeCluster = availableClusters.value.find(c => ['active', 'healthy', 'ready'].includes(c.status)) || availableClusters.value[0]
       const exists = availableClusters.value.some(c => c.id === activeClusterId.value)
-      if (!exists && availableClusters.value.length > 0) {
-        activeClusterId.value = availableClusters.value[0].id
+      if ((!exists || activeClusterId.value === 'local') && activeCluster) {
+        activeClusterId.value = activeCluster.id
         setStored('k8s_active_cluster', activeClusterId.value)
       }
     } else {
       availableClusters.value = []
+      if (!activeClusterId.value) {
+        activeClusterId.value = 'local'
+        setStored('k8s_active_cluster', 'local')
+      }
     }
-  } catch {
+  } catch (err: unknown) {
     availableClusters.value = []
+    error.value = err instanceof Error ? err.message : 'Failed to retrieve cluster list'
+    if (!activeClusterId.value) {
+      activeClusterId.value = 'local'
+      setStored('k8s_active_cluster', 'local')
+    }
   }
   await loadNamespacesForCluster(activeClusterId.value)
 }
@@ -103,6 +128,7 @@ export function useGlobalContext() {
     activeNamespace,
     availableClusters,
     availableNamespaces,
+    error,
     setCluster,
     setNamespace,
     loadClusters

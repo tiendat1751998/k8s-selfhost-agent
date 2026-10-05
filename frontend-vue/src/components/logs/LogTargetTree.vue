@@ -4,6 +4,7 @@ import type { LogEntry } from '../../stores/logStore'
 import { useInfraHosts } from '../../composables/useInfraHosts'
 import { api } from '../../api/client'
 import { dockerApi } from '../../api/docker'
+import { k8sApi } from '../../api/k8s'
 import BaseIcon from '../ui/BaseIcon.vue'
 import {
   isNoiseLog,
@@ -123,10 +124,15 @@ async function fetchDynamicServices() {
   // 3. Fallback cluster resources if cluster specified
   if (props.cluster) {
     try {
-      const res = await api.get<any>(`/k8s/${encodeURIComponent(props.cluster)}/resources`, { kind: 'Service' })
-      const k8sItems = Array.isArray(res) ? res : (res?.data || res?.items || [])
-      if (Array.isArray(k8sItems)) {
-        for (const s of k8sItems) addService(s.metadata?.name || s.name, s.spec?.type || 'Pod')
+      const [svcRes, podRes] = await Promise.allSettled([
+        k8sApi.listResources(props.cluster, 'services'),
+        k8sApi.listResources(props.cluster, 'pods'),
+      ])
+      if (svcRes.status === 'fulfilled' && Array.isArray(svcRes.value)) {
+        for (const s of svcRes.value) addService(s.metadata?.name || (s as { name?: string }).name, 'Service')
+      }
+      if (podRes.status === 'fulfilled' && Array.isArray(podRes.value)) {
+        for (const p of podRes.value) addService(p.metadata?.name || (p as { name?: string }).name, 'Pod')
       }
     } catch {
       // Graceful fallback

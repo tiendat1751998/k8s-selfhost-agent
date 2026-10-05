@@ -1,8 +1,9 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLogStreamer } from '../composables/useLogStreamer'
 import { useHistoricalLogSearch } from '../composables/useHistoricalLogSearch'
+import { useGlobalContext } from '../composables/useGlobalContext'
 import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
 import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
@@ -10,6 +11,8 @@ import LogTraceDrawer from '../components/logs/LogTraceDrawer.vue'
 import LogContextModal from '../components/logs/LogContextModal.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { LogFilterParams } from '../api/logging'
+
+const { activeClusterId } = useGlobalContext()
 
 const {
   logStore, searchKeyword, selectedLevel, autoScroll, isScrollLocked,
@@ -66,6 +69,7 @@ async function preloadRecentLogs(target: LogTarget) {
       container_name: target.type === 'service' ? target.id : undefined,
       node: target.type === 'node' ? target.id : undefined,
       attributes: target.type === 'node' ? { node: target.id } : undefined,
+      cluster_id: activeClusterId.value || undefined,
       log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
     }
     await logStore.fetchHistoricalLogs(filter, false)
@@ -334,7 +338,7 @@ function handleExport() {
           <span class="drawer-title font-mono"><BaseIcon name="layers" size="xs" /> <span>Select Target</span></span>
           <button type="button" class="drawer-close-btn" aria-label="Close targets drawer" @click="showMobileTree = false">&times;</button>
         </div>
-        <LogTargetTree v-model="selectedTarget" :logs="logStore.logs" @select="handleSelectTarget" />
+        <LogTargetTree v-model="selectedTarget" :logs="logStore.logs" :cluster="activeClusterId" @select="handleSelectTarget" />
       </div>
 
       <div class="explorer-right-col">

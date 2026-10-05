@@ -5,7 +5,8 @@ import type { Column } from '../components/ui/DataTable.vue'
 import { jsonToYaml } from '../utils/yaml'
 export * from './explorerHelpers'
 export * from './explorerColumns'
-export type { DrainOptions } from '../domain/explorer/types'
+import type { DrainOptions } from '../domain/explorer/types'
+export type { DrainOptions }
 import { kindCategories, type KindCategory } from './explorerHelpers'
 import {
   podColumns, deploymentColumns, statefulSetColumns, daemonSetColumns,
@@ -14,7 +15,6 @@ import {
   storageClassColumns, networkPolicyColumns, serviceAccountColumns,
   hpaColumns, nodeColumns, eventColumns, standardColumns
 } from './explorerColumns'
-import type { DrainOptions } from '../domain/explorer/types'
 
 export function useK8sExplorer() {
   // Async loading & error states
@@ -121,13 +121,16 @@ export function useK8sExplorer() {
       } else {
         clusters.value = []
         if (!selectedCluster.value || selectedCluster.value === 'default') {
-          selectedCluster.value = 'primary-cluster'
+          selectedCluster.value = 'local'
         }
       }
-    } catch {
+    } catch (err: unknown) {
       clusters.value = []
+      const msg = err instanceof Error ? err.message : 'Failed to retrieve cluster list'
+      error.value = msg
+      showToast(msg, 'error')
       if (!selectedCluster.value || selectedCluster.value === 'default') {
-        selectedCluster.value = 'primary-cluster'
+        selectedCluster.value = 'local'
       }
     }
   }
@@ -141,8 +144,11 @@ export function useK8sExplorer() {
     try {
       const nsList = await k8sApi.listNamespaces(selectedCluster.value)
       namespaces.value = Array.isArray(nsList) ? nsList : []
-    } catch {
+    } catch (err: unknown) {
       namespaces.value = []
+      const msg = err instanceof Error ? err.message : `Failed to load namespaces for ${selectedCluster.value}`
+      error.value = msg
+      showToast(msg, 'error')
     }
   }
 
@@ -170,6 +176,8 @@ export function useK8sExplorer() {
       clusterOffline.value = true
       const msg = err instanceof Error ? err.message : 'Failed to query Kubernetes cluster'
       offlineErrorMessage.value = msg
+      error.value = msg
+      showToast(msg, 'error')
     } finally {
       loading.value = false
     }
@@ -206,34 +214,13 @@ export function useK8sExplorer() {
   const showTerminalDrawer = ref(false)
   const terminalPod = ref<K8sResource | null>(null)
 
-  function openDetailDrawer(res: K8sResource) {
-    selectedResource.value = res
-    showDetailDrawer.value = true
-  }
-  function openLogsDrawer(res: K8sResource) {
-    logsPod.value = res
-    showLogsDrawer.value = true
-  }
-  function openTerminalDrawer(res: K8sResource) {
-    terminalPod.value = res
-    showTerminalDrawer.value = true
-  }
-  function openScaleModal(res: K8sResource) {
-    scaleTarget.value = res
-    showScaleModal.value = true
-  }
-  function openRestartModal(res: K8sResource) {
-    restartTarget.value = res
-    showRestartModal.value = true
-  }
-  function openDeleteModal(res: K8sResource) {
-    resourceToDelete.value = res
-    showDeleteModal.value = true
-  }
-  function openDrainModal(res: K8sResource) {
-    drainTargetNode.value = res
-    showDrainModal.value = true
-  }
+  function openDetailDrawer(res: K8sResource) { selectedResource.value = res; showDetailDrawer.value = true }
+  function openLogsDrawer(res: K8sResource) { logsPod.value = res; showLogsDrawer.value = true }
+  function openTerminalDrawer(res: K8sResource) { terminalPod.value = res; showTerminalDrawer.value = true }
+  function openScaleModal(res: K8sResource) { scaleTarget.value = res; showScaleModal.value = true }
+  function openRestartModal(res: K8sResource) { restartTarget.value = res; showRestartModal.value = true }
+  function openDeleteModal(res: K8sResource) { resourceToDelete.value = res; showDeleteModal.value = true }
+  function openDrainModal(res: K8sResource) { drainTargetNode.value = res; showDrainModal.value = true }
   function openApplyYamlModal() {
     yamlEditorMode.value = 'create'
     yamlEditorInitialContent.value = ''

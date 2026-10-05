@@ -21,7 +21,7 @@ const menuPos = ref({ top: 0, left: 0, width: 230 })
 
 const currentCluster = computed(() => {
   return availableClusters.value.find(c => c.id === activeClusterId.value) || {
-    id: activeClusterId.value || 'staging-k8s', name: activeClusterId.value || 'staging-k8s', status: 'healthy'
+    id: activeClusterId.value || 'local', name: activeClusterId.value || 'local', status: 'healthy'
   }
 })
 
