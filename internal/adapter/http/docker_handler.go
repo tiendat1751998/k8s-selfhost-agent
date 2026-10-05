@@ -93,7 +93,7 @@ func (h *DockerHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/hosts/{id}", h.GetHost)
 	r.Put("/hosts/{id}", h.UpdateHost)
 	r.Delete("/hosts/{id}", h.DeleteHost)
-	r.Post("/hosts/{id}/test", h.TestHost)
+	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Post("/hosts/{id}/test", h.TestHost)
 }
 
 // ListContainers handles GET /api/v1/docker/containers

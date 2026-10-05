@@ -1,4 +1,4 @@
-﻿package agent
+package agent
 
 import (
 	"bufio"
@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
 )
 
 // StreamLogs connects to GET /logs/tail on the remote agent and invokes onLine for each streamed line.
@@ -15,6 +17,10 @@ func (c *AgentLogClient) StreamLogs(ctx context.Context, agentURL, service strin
 	baseURL := NormalizeHostEndpoint(agentURL)
 	if baseURL == "" {
 		return fmt.Errorf("invalid or empty agent url: %q", agentURL)
+	}
+
+	if _, err := netguard.ValidateURL(baseURL, "http", "https"); err != nil {
+		return fmt.Errorf("validating agent url %q: %w", baseURL, err)
 	}
 
 	reqURL, err := url.Parse(baseURL + "/logs/tail")

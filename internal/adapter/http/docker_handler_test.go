@@ -630,6 +630,7 @@ func TestDockerHandler_ComputeHostsCRUD(t *testing.T) {
 
 	// 5. Test Host Not Found after deletion
 	req = httptest.NewRequest(http.MethodPost, "/docker/hosts/"+created.ID+"/test", nil)
+	req = req.WithContext(context.WithValue(req.Context(), tenancy.UserRoleKey, "platform_admin"))
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -656,6 +657,8 @@ func TestDockerHandler_AgentHostConnectivity(t *testing.T) {
 	})
 	agentServer := httptest.NewServer(agentMux)
 	defer agentServer.Close()
+
+	t.Setenv("EGRESS_ALLOW_PRIVATE_CIDRS", "127.0.0.0/8")
 
 	repo := &testDockerRepo{}
 	hostRepo := newMockComputeHostRepo()
@@ -688,8 +691,18 @@ func TestDockerHandler_AgentHostConnectivity(t *testing.T) {
 		t.Errorf("expected host_type agent, got %s", created.HostType)
 	}
 
-	// 2. Test Agent Connectivity
+	// 1b. Test RBAC: Operator role receives HTTP 403 Forbidden
+	opReq := httptest.NewRequest(http.MethodPost, "/docker/hosts/"+created.ID+"/test", nil)
+	opReq = opReq.WithContext(context.WithValue(opReq.Context(), tenancy.UserRoleKey, "operator"))
+	opW := httptest.NewRecorder()
+	r.ServeHTTP(opW, opReq)
+	if opW.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403 Forbidden for operator on /hosts/{id}/test, got %d", opW.Code)
+	}
+
+	// 2. Test Agent Connectivity (as platform_admin)
 	req = httptest.NewRequest(http.MethodPost, "/docker/hosts/"+created.ID+"/test", nil)
+	req = req.WithContext(context.WithValue(req.Context(), tenancy.UserRoleKey, "platform_admin"))
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -730,6 +743,7 @@ func TestDockerHandler_AgentHostConnectivity(t *testing.T) {
 	_ = hostRepo.Create(context.Background(), deadHost)
 
 	req = httptest.NewRequest(http.MethodPost, "/docker/hosts/"+deadHost.ID+"/test", nil)
+	req = req.WithContext(context.WithValue(req.Context(), tenancy.UserRoleKey, "platform_admin"))
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -793,6 +807,8 @@ func TestDockerHandler_MultiTypeComputeHosts(t *testing.T) {
 	}
 
 	// 3. Test multi-type connectivity with mock servers
+	t.Setenv("EGRESS_ALLOW_PRIVATE_CIDRS", "127.0.0.0/8")
+
 	// Mock Prometheus server
 	promMux := http.NewServeMux()
 	promMux.HandleFunc("/-/healthy", func(w http.ResponseWriter, r *http.Request) {
@@ -815,6 +831,7 @@ func TestDockerHandler_MultiTypeComputeHosts(t *testing.T) {
 	_ = hostRepo.Create(context.Background(), promHost)
 
 	testReq := httptest.NewRequest(http.MethodPost, "/docker/hosts/"+promHost.ID+"/test", nil)
+	testReq = testReq.WithContext(context.WithValue(testReq.Context(), tenancy.UserRoleKey, "platform_admin"))
 	testW := httptest.NewRecorder()
 	r.ServeHTTP(testW, testReq)
 
@@ -1212,6 +1229,8 @@ func TestDockerHandler_StandaloneHostRoutes_And_AgentProbe(t *testing.T) {
 	agentServer := httptest.NewServer(agentMux)
 	defer agentServer.Close()
 
+	t.Setenv("EGRESS_ALLOW_PRIVATE_CIDRS", "127.0.0.0/8")
+
 	repo := &testDockerRepo{}
 	hostRepo := newMockComputeHostRepo()
 	handler := NewDockerHandler(repo, hostRepo)
@@ -1249,6 +1268,7 @@ func TestDockerHandler_StandaloneHostRoutes_And_AgentProbe(t *testing.T) {
 
 	// POST /hosts/{id}/test (Healthy Agent)
 	testReq := httptest.NewRequest(http.MethodPost, "/hosts/"+created.ID+"/test", nil)
+	testReq = testReq.WithContext(context.WithValue(testReq.Context(), tenancy.UserRoleKey, "platform_admin"))
 	testW := httptest.NewRecorder()
 	r.ServeHTTP(testW, testReq)
 	if testW.Code != http.StatusOK {
@@ -1291,6 +1311,7 @@ func TestDockerHandler_StandaloneHostRoutes_And_AgentProbe(t *testing.T) {
 	_ = hostRepo.Create(context.Background(), unreachableHost)
 
 	failReq := httptest.NewRequest(http.MethodPost, "/hosts/"+unreachableHost.ID+"/test", nil)
+	failReq = failReq.WithContext(context.WithValue(failReq.Context(), tenancy.UserRoleKey, "platform_admin"))
 	failW := httptest.NewRecorder()
 	r.ServeHTTP(failW, failReq)
 	if failW.Code != http.StatusOK {

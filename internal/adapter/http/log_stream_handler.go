@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -47,40 +46,51 @@ func NewLogStreamHandler(aggregator *logging.LogAggregator, args ...any) *LogStr
 	return h
 }
 
-func (h *LogStreamHandler) resolveAgentURL(ctx context.Context, node, service string) string {
+// resolveRegisteredNode validates that node resolves to a registered compute host or local node.
+// It returns the remote agent URL (if remote and registered) and whether the node is authorized.
+func (h *LogStreamHandler) resolveRegisteredNode(ctx context.Context, node string) (string, bool) {
 	node = strings.TrimSpace(node)
-	if node != "" {
-		if isLocalNode(node) {
-			return ""
-		}
-		if strings.HasPrefix(node, "http://") || strings.HasPrefix(node, "https://") || strings.Contains(node, ":9100") {
-			return node
-		}
-		if h.hostRepo != nil {
-			hosts, err := h.hostRepo.ListAll(ctx)
-			if err == nil {
-				for _, host := range hosts {
-					if strings.EqualFold(host.ID, node) || strings.EqualFold(host.Name, node) || strings.EqualFold(host.Endpoint, node) {
-						if host.Endpoint != "" && !isLocalNode(host.Endpoint) {
-							return host.Endpoint
-						}
+	if node == "" || isLocalNode(node) {
+		return "", true
+	}
+
+	// If node contains a URL scheme or host:port, it is an endpoint.
+	isEndpoint := strings.Contains(node, "://") || strings.Contains(node, ":")
+
+	if h.hostRepo != nil {
+		hosts, err := h.hostRepo.ListAll(ctx)
+		if err == nil {
+			for _, host := range hosts {
+				if strings.EqualFold(host.ID, node) || strings.EqualFold(host.Name, node) || strings.EqualFold(host.Endpoint, node) {
+					if host.Endpoint != "" && !isLocalNode(host.Endpoint) {
+						return host.Endpoint, true
 					}
+					return "", true
 				}
 			}
 		}
-		if envAgent := os.Getenv("AGENT_URL"); envAgent != "" {
-			return envAgent
-		}
+		// hostRepo is present, but node was not found among registered compute hosts
+		return "", false
 	}
-	return ""
+
+	// hostRepo is nil: endpoints cannot be dialed without verification
+	if isEndpoint {
+		return "", false
+	}
+
+	// Plain node label when hostRepo is nil (e.g., local aggregator unit testing)
+	return "", true
+}
+
+func (h *LogStreamHandler) resolveAgentURL(ctx context.Context, node, service string) string {
+	endpoint, _ := h.resolveRegisteredNode(ctx, node)
+	return endpoint
 }
 
 func isLocalNode(target string) bool {
 	t := strings.ToLower(strings.TrimSpace(target))
-	t = strings.TrimPrefix(t, "http://")
-	t = strings.TrimPrefix(t, "https://")
-	if idx := strings.IndexByte(t, ':'); idx != -1 {
-		t = t[:idx]
+	if strings.Contains(t, "://") || strings.Contains(t, ":") {
+		return false
 	}
 	return t == "standalone-host" || t == "local" || t == "localhost" || t == "127.0.0.1" || t == ""
 }
@@ -118,13 +128,6 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		logger.Get().Error("failed to upgrade websocket for log streaming", zap.Error(err))
-		return
-	}
-	defer conn.Close()
-
 	query := r.URL.Query()
 	node := query.Get("node")
 	service := query.Get("service")
@@ -133,6 +136,26 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	pod := query.Get("pod")
 	level := query.Get("level")
 	keyword := query.Get("keyword")
+
+	// SEC-07: Validate node against registered compute hosts before dialing or upgrading
+	var agentURL string
+	if node != "" && !isLocalNode(node) {
+		if h.streamer != nil || strings.Contains(node, "://") || strings.Contains(node, ":") {
+			targetURL, ok := h.resolveRegisteredNode(r.Context(), node)
+			if !ok {
+				http.Error(w, "unknown node: not a registered compute host", http.StatusBadRequest)
+				return
+			}
+			agentURL = targetURL
+		}
+	}
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		logger.Get().Error("failed to upgrade websocket for log streaming", zap.Error(err))
+		return
+	}
+	defer conn.Close()
 
 	targetService := service
 	if targetService == "" {
@@ -172,7 +195,6 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If the target container is on a remote agent, spawn a goroutine using StreamLogs
-	agentURL := h.resolveAgentURL(r.Context(), node, targetService)
 	if agentURL != "" && h.streamer != nil {
 		streamCtx, cancelStream := context.WithCancel(r.Context())
 		defer cancelStream()
