@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { k8sApi, type K8sResource, type K8sNamespace, type ResourceKind } from '../api/k8s'
 import { fleetApi, type Cluster } from '../api/compute'
+import { isNotImplementedError } from '../api/client'
 import type { Column } from '../components/ui/DataTable.vue'
 import { jsonToYaml } from '../utils/yaml'
 export * from './explorerHelpers'
@@ -8,13 +9,16 @@ export * from './explorerColumns'
 import type { DrainOptions } from '../domain/explorer/types'
 export type { DrainOptions }
 import { kindCategories, type KindCategory } from './explorerHelpers'
-import {
-  podColumns, deploymentColumns, statefulSetColumns, daemonSetColumns,
-  jobColumns, cronJobColumns, serviceColumns, ingressColumns,
-  configMapColumns, secretColumns, pvcColumns, pvColumns,
-  storageClassColumns, networkPolicyColumns, serviceAccountColumns,
-  hpaColumns, nodeColumns, eventColumns, standardColumns
-} from './explorerColumns'
+import { getColumnsForKind } from './explorerColumns'
+
+function getControllerNameForKind(kind: string): string {
+  switch (kind) {
+    case 'networkpolicies': return 'CNI NetworkPolicy Controller (Calico / Cilium)'
+    case 'horizontalpodautoscalers': return 'Kubernetes Metrics Server'
+    case 'ingresses': return 'Ingress Controller (Ingress-NGINX / Traefik)'
+    default: return `${kind} Controller`
+  }
+}
 
 export function useK8sExplorer() {
   // Async loading & error states
@@ -23,6 +27,8 @@ export function useK8sExplorer() {
   const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
   const clusterOffline = ref(false)
   const offlineErrorMessage = ref<string | null>(null)
+  const isControllerUnavailable = ref(false)
+  const unavailableControllerName = ref<string | null>(null)
 
   // Core State
   const clusters = ref<Cluster[]>([])
@@ -72,27 +78,7 @@ export function useK8sExplorer() {
   })
 
   const columns = computed<Column<K8sResource>[]>(() => {
-    switch (selectedKind.value) {
-      case 'pods': return podColumns
-      case 'deployments': return deploymentColumns
-      case 'statefulsets': return statefulSetColumns
-      case 'daemonsets': return daemonSetColumns
-      case 'jobs': return jobColumns
-      case 'cronjobs': return cronJobColumns
-      case 'services': return serviceColumns
-      case 'ingresses': return ingressColumns
-      case 'configmaps': return configMapColumns
-      case 'secrets': return secretColumns
-      case 'persistentvolumeclaims': return pvcColumns
-      case 'persistentvolumes': return pvColumns
-      case 'storageclasses': return storageClassColumns
-      case 'networkpolicies': return networkPolicyColumns
-      case 'serviceaccounts': return serviceAccountColumns
-      case 'horizontalpodautoscalers': return hpaColumns
-      case 'nodes': return nodeColumns
-      case 'events': return eventColumns
-      default: return standardColumns
-    }
+    return getColumnsForKind(selectedKind.value)
   })
 
   function showToast(text: string, type: 'success' | 'error' = 'success') {
@@ -162,6 +148,8 @@ export function useK8sExplorer() {
     error.value = null
     clusterOffline.value = false
     offlineErrorMessage.value = null
+    isControllerUnavailable.value = false
+    unavailableControllerName.value = null
 
     try {
       const ns = selectedNamespace.value !== 'all' ? selectedNamespace.value : undefined
@@ -173,11 +161,17 @@ export function useK8sExplorer() {
       }
     } catch (err: unknown) {
       resources.value = []
-      clusterOffline.value = true
-      const msg = err instanceof Error ? err.message : 'Failed to query Kubernetes cluster'
-      offlineErrorMessage.value = msg
-      error.value = msg
-      showToast(msg, 'error')
+      if (isNotImplementedError(err)) {
+        isControllerUnavailable.value = true
+        clusterOffline.value = false
+        unavailableControllerName.value = getControllerNameForKind(selectedKind.value)
+      } else {
+        clusterOffline.value = true
+        const msg = err instanceof Error ? err.message : 'Failed to query Kubernetes cluster'
+        offlineErrorMessage.value = msg
+        error.value = msg
+        showToast(msg, 'error')
+      }
     } finally {
       loading.value = false
     }
@@ -403,6 +397,8 @@ export function useK8sExplorer() {
     toastMessage,
     clusterOffline,
     offlineErrorMessage,
+    isControllerUnavailable,
+    unavailableControllerName,
     clusters,
     selectedCluster,
     namespaces,

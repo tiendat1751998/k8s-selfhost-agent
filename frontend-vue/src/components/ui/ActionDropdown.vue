@@ -8,6 +8,7 @@ export interface ActionItem {
   icon?: string
   variant?: 'default' | 'danger' | 'warning'
   disabled?: boolean
+  tooltip?: string
   separator?: boolean
 }
 
@@ -188,6 +189,7 @@ onUnmounted(() => toggleListeners(false))
               class="action-dropdown-item"
               :class="[item.variant ? `variant-${item.variant}` : 'variant-default', { 'is-focused': activeIndex === idx }]"
               :disabled="item.disabled"
+              :title="item.tooltip || item.label"
               role="menuitem"
               @mouseenter="!item.disabled && (activeIndex = idx)"
               @click="selectItem(item)"
