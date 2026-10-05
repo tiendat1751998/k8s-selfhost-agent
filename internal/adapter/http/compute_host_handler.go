@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
@@ -22,7 +23,7 @@ func (h *DockerHandler) RegisterHostRoutes(r chi.Router) {
 	r.Get("/{id}", h.GetHost)
 	r.Put("/{id}", h.UpdateHost)
 	r.Delete("/{id}", h.DeleteHost)
-	r.Post("/{id}/test", h.TestHost)
+	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Post("/{id}/test", h.TestHost)
 }
 
 // Compute Host Request DTOs
