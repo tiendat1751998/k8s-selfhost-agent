@@ -9,7 +9,7 @@ postgres:
   host: "10.10.10.133"
   port: 5432
   user: "myuser"
-  password: "mysecretpassword"
+  password: "${POSTGRES_PASSWORD}"
   dbname: "mydatabase"
   sslmode: "disable"
   max_conns: 25
@@ -18,11 +18,11 @@ postgres:
 redis:
   host: "10.10.10.133"
   port: 6379
-  password: ""
+  password: "${REDIS_PASSWORD}"
   db: 0
 
 docker:
-  host: "tcp://10.10.10.133:2375"
+  host: "${DOCKER_HOST}"
   version: "1.41"
 
 nats:
