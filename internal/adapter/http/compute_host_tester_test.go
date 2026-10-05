@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
@@ -13,6 +14,7 @@ import (
 func TestTestAgentHostConnection_AuthHeader(t *testing.T) {
 	t.Run("sends Authorization header to metrics endpoint from env fallback", func(t *testing.T) {
 		t.Setenv("AGENT_AUTH_TOKEN", "agent-env-token-xyz")
+		t.Setenv("EGRESS_ALLOW_PRIVATE_CIDRS", "127.0.0.0/8")
 
 		var metricsAuth string
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +56,7 @@ func TestTestAgentHostConnection_AuthHeader(t *testing.T) {
 
 	t.Run("per-host label auth_token wins over env in testAgentHostConnection", func(t *testing.T) {
 		t.Setenv("AGENT_AUTH_TOKEN", "agent-env-token-xyz")
+		t.Setenv("EGRESS_ALLOW_PRIVATE_CIDRS", "127.0.0.0/8")
 
 		var metricsAuth string
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +92,46 @@ func TestTestAgentHostConnection_AuthHeader(t *testing.T) {
 		}
 		if metricsAuth != "Bearer label-token-priority" {
 			t.Fatalf("expected Authorization 'Bearer label-token-priority', got %q", metricsAuth)
+		}
+	})
+}
+
+func TestComputeHostTester_SSRFBlocked(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("k8s host probe blocks metadata endpoint", func(t *testing.T) {
+		host := &docker.ComputeHost{
+			ID:       "k8s-meta",
+			HostType: "k8s",
+			Endpoint: "https://169.254.169.254:443",
+		}
+		_, err := testK8sHostConnection(ctx, host)
+		if err == nil || !strings.Contains(err.Error(), "blocked") {
+			t.Fatalf("expected error containing 'blocked', got: %v", err)
+		}
+	})
+
+	t.Run("database host probe blocks metadata endpoint", func(t *testing.T) {
+		host := &docker.ComputeHost{
+			ID:       "db-meta",
+			HostType: "database",
+			Endpoint: "169.254.169.254:5432",
+		}
+		_, err := testDatabaseHostConnection(ctx, host)
+		if err == nil || !strings.Contains(err.Error(), "blocked") {
+			t.Fatalf("expected error containing 'blocked', got: %v", err)
+		}
+	})
+
+	t.Run("custom host probe blocks metadata endpoint", func(t *testing.T) {
+		host := &docker.ComputeHost{
+			ID:       "custom-meta",
+			HostType: "custom",
+			Endpoint: "http://169.254.169.254/status",
+		}
+		_, err := testCustomHostConnection(ctx, host)
+		if err == nil || !strings.Contains(err.Error(), "blocked") {
+			t.Fatalf("expected error containing 'blocked', got: %v", err)
 		}
 	})
 }
