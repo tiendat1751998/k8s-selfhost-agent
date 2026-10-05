@@ -189,19 +189,17 @@ async function savePolicy() {
   saving.value = true
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(policy))
-    try {
-      await settingsApi.update([
-        { category: 'sre', key: 'fast_failover', value: String(policy.automatedFastFailover) },
-        { category: 'sre', key: 'heartbeat_timeout', value: String(policy.heartbeatTimeout) },
-        { category: 'sre', key: 'pod_eviction', value: String(policy.automaticPodEviction) },
-        { category: 'sre', key: 'max_evictions', value: String(policy.maxConcurrentEvictions) },
-        { category: 'sre', key: 'auto_cordon', value: String(policy.autoCordon) },
-        { category: 'sre', key: 'force_delete_stuck', value: String(policy.forceDeleteStuckPods) },
-      ])
-    } catch { /* local storage persisted */ }
+    await settingsApi.update([
+      { category: 'sre', key: 'fast_failover', value: String(policy.automatedFastFailover) },
+      { category: 'sre', key: 'heartbeat_timeout', value: String(policy.heartbeatTimeout) },
+      { category: 'sre', key: 'pod_eviction', value: String(policy.automaticPodEviction) },
+      { category: 'sre', key: 'max_evictions', value: String(policy.maxConcurrentEvictions) },
+      { category: 'sre', key: 'auto_cordon', value: String(policy.autoCordon) },
+      { category: 'sre', key: 'force_delete_stuck', value: String(policy.forceDeleteStuckPods) },
+    ])
     showToast('SRE auto-remediation policy saved successfully.')
   } catch (err: unknown) {
-    showToast(err instanceof Error ? err.message : 'Failed to save policy', 'error')
+    showToast(err instanceof Error ? err.message : 'Failed to save SRE policy to backend', 'error')
   } finally {
     saving.value = false
   }
