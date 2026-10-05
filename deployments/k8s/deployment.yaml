@@ -23,9 +23,9 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 65534
-        runAsGroup: 65534
-        fsGroup: 65534
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -36,8 +36,8 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             runAsNonRoot: true
-            runAsUser: 65534
-            runAsGroup: 65534
+            runAsUser: 10001
+            runAsGroup: 10001
             capabilities:
               drop:
                 - ALL
@@ -75,6 +75,8 @@ spec:
               value: "0.0.0.0"
             - name: K8S_SERVER_PORT
               value: "8080"
+            - name: FRONTEND_DIR
+              value: "/app/frontend"
             - name: K8S_POSTGRES_HOST
               value: "postgresql"
             - name: K8S_POSTGRES_PORT
