@@ -1,9 +1,10 @@
-﻿package http
+package http
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -59,7 +60,13 @@ func TestLogStreamHandler_RemoteAgentRelay(t *testing.T) {
 		},
 	}
 
-	handler := NewLogStreamHandler(aggregator, streamer)
+	hostRepo := newMockComputeHostRepo()
+	_ = hostRepo.Create(context.Background(), &docker.ComputeHost{
+		ID:       "remote-agent",
+		Endpoint: "http://remote-agent:9100",
+		Status:   "connected",
+	})
+	handler := NewLogStreamHandler(aggregator, streamer, hostRepo)
 
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -125,7 +132,13 @@ func TestLogStreamHandler_RemoteAgentStreamErrorHandled(t *testing.T) {
 		errToReturn: fmt.Errorf("remote connection refused"),
 	}
 
-	handler := NewLogStreamHandler(aggregator, streamer)
+	hostRepo := newMockComputeHostRepo()
+	_ = hostRepo.Create(context.Background(), &docker.ComputeHost{
+		ID:       "remote-agent",
+		Endpoint: "http://remote-agent:9100",
+		Status:   "connected",
+	})
+	handler := NewLogStreamHandler(aggregator, streamer, hostRepo)
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -139,4 +152,39 @@ func TestLogStreamHandler_RemoteAgentStreamErrorHandled(t *testing.T) {
 	streamer.mu.Lock()
 	defer streamer.mu.Unlock()
 	assert.True(t, streamer.called)
+}
+
+func TestLogStreamHandler_UnregisteredNode_RejectedWithoutDial(t *testing.T) {
+	var dialed int
+	fakeAgent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		dialed++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer fakeAgent.Close()
+
+	aggregator := logging.NewLogAggregator(100)
+	hostRepo := newMockComputeHostRepo()
+	// Register only host-1, not fakeAgent
+	_ = hostRepo.Create(context.Background(), &docker.ComputeHost{
+		ID:       "host-1",
+		Name:     "worker-1",
+		Endpoint: "http://192.168.1.50:9100",
+		Status:   "connected",
+	})
+
+	streamer := &mockRemoteStreamer{}
+	handler := NewLogStreamHandler(aggregator, streamer, hostRepo)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// Try to stream logs with an unregistered node
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?service=payment-svc&node=" + fakeAgent.URL
+	_, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.Error(t, err, "expected dialing unregistered node to fail")
+	require.NotNil(t, resp, "expected HTTP response")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "expected 400 Bad Request for unregistered node")
+
+	// Ensure fakeAgent was never dialed
+	assert.Equal(t, 0, dialed, "expected zero dials to unregistered node")
+	assert.False(t, streamer.called, "expected streamer never to be called for unregistered node")
 }

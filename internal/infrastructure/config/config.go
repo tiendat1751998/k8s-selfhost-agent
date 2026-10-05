@@ -24,10 +24,11 @@ type Config struct {
 	LoadBalancer LoadBalancerConfig `mapstructure:"load_balancer"`
 }
 
-// SecurityConfig holds encryption and token security settings.
+// SecurityConfig holds encryption, token, and network egress security settings.
 type SecurityConfig struct {
-	MasterEncryptionKey string `mapstructure:"master_encryption_key"`
-	MetricsToken        string `mapstructure:"metrics_token"`
+	MasterEncryptionKey     string `mapstructure:"master_encryption_key"`
+	MetricsToken            string `mapstructure:"metrics_token"`
+	EgressAllowPrivateCIDRs string `mapstructure:"egress_allow_private_cidrs"`
 }
 
 // LoadBalancerConfig holds load balancer integration settings.
@@ -183,6 +184,7 @@ func Load() (*Config, error) {
 	v.SetDefault("server.cookie_secure", true)
 	v.SetDefault("security.master_encryption_key", "")
 	v.SetDefault("security.metrics_token", "")
+	v.SetDefault("security.egress_allow_private_cidrs", "")
 
 	// Environment variables
 	v.SetEnvPrefix("K8S")
@@ -261,6 +263,11 @@ func resolveEnvOverrides(cfg *Config) {
 	}
 	if cfg.Docker.Host == "" {
 		cfg.Docker.Host = "unix:///var/run/docker.sock"
+	}
+
+	// Egress SSRF Guard allowlisted CIDRs/hosts
+	if envVal := getFirstEnv("EGRESS_ALLOW_PRIVATE_CIDRS", "K8S_SECURITY_EGRESS_ALLOW_PRIVATE_CIDRS"); envVal != "" {
+		cfg.Security.EgressAllowPrivateCIDRs = envVal
 	}
 }
 
