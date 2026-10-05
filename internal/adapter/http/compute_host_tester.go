@@ -2,14 +2,15 @@ package http
 
 import (
 	"context"
-	"log"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -81,8 +82,6 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 	case "database":
 		latencyMs, testErr = testDatabaseHostConnection(r.Context(), host)
 		msg = "successfully connected to database endpoint"
-	case "custom":
-		fallthrough
 	default:
 		latencyMs, testErr = testCustomHostConnection(r.Context(), host)
 		msg = "successfully connected to endpoint"
@@ -92,26 +91,32 @@ func (h *DockerHandler) TestHostConnectivity(w http.ResponseWriter, r *http.Requ
 		if err := h.hostRepo.UpdateStatus(r.Context(), host.ID, "error", now); err != nil {
 			log.Printf("failed to update host status to error: %v", err)
 		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"status":     "error",
-			"message":    testErr.Error(),
-			"latency_ms": 0,
-		})
+		writeJSON(w, http.StatusOK, map[string]interface{}{"status": "error", "message": testErr.Error(), "latency_ms": 0})
 		return
 	}
 
 	if err := h.hostRepo.UpdateStatus(r.Context(), host.ID, "connected", now); err != nil {
 		log.Printf("failed to update host status to connected: %v", err)
 	}
-	resp := map[string]interface{}{
-		"status":     "connected",
-		"message":    msg,
-		"latency_ms": latencyMs,
-	}
+	resp := map[string]interface{}{"status": "connected", "message": msg, "latency_ms": latencyMs}
 	if len(agentInfo) > 0 {
 		resp["agent_info"] = agentInfo
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// resolveHostAgentToken resolves the Bearer token for agent connection testing.
+// Precedence: host.Labels["auth_token"] > host.Labels["token"] > AGENT_AUTH_TOKEN env.
+func resolveHostAgentToken(host *docker.ComputeHost) string {
+	if host != nil && host.Labels != nil {
+		if token, ok := host.Labels["auth_token"]; ok && strings.TrimSpace(token) != "" {
+			return strings.TrimSpace(token)
+		}
+		if token, ok := host.Labels["token"]; ok && strings.TrimSpace(token) != "" {
+			return strings.TrimSpace(token)
+		}
+	}
+	return os.Getenv("AGENT_AUTH_TOKEN")
 }
 
 func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, map[string]interface{}, error) {
@@ -181,6 +186,9 @@ func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int
 	agentInfo := make(map[string]interface{})
 	metricsReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/metrics", nil)
 	if err == nil {
+		if token := resolveHostAgentToken(host); token != "" {
+			metricsReq.Header.Set("Authorization", "Bearer "+token)
+		}
 		metricsResp, err := client.Do(metricsReq)
 		if err == nil {
 			defer metricsResp.Body.Close()
@@ -200,13 +208,10 @@ func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int
 						if osDistro == "" { osDistro = titleOS }
 						if kernelVer == "" { kernelVer = titleOS }
 					}
-					if metricsData.Hostname != "" { agentInfo["hostname"] = metricsData.Hostname }
-					if metricsData.OS != "" { agentInfo["os"] = metricsData.OS }
-					if metricsData.Arch != "" { agentInfo["arch"] = metricsData.Arch }
-					if osDistro != "" { agentInfo["os_distro"] = osDistro }
-					if kernelVer != "" { agentInfo["kernel_version"] = kernelVer }
-					agentInfo["uptime"] = metricsData.UptimeSeconds
-					agentInfo["uptime_seconds"] = metricsData.UptimeSeconds
+					for k, v := range map[string]any{"hostname": metricsData.Hostname, "os": metricsData.OS, "arch": metricsData.Arch, "os_distro": osDistro, "kernel_version": kernelVer} {
+						if v != "" { agentInfo[k] = v }
+					}
+					agentInfo["uptime"], agentInfo["uptime_seconds"] = metricsData.UptimeSeconds, metricsData.UptimeSeconds
 				}
 			}
 		}
@@ -217,9 +222,7 @@ func testAgentHostConnection(ctx context.Context, host *docker.ComputeHost) (int
 
 func testDockerHostConnection(ctx context.Context, host *docker.ComputeHost) (int64, error) {
 	start := time.Now()
-	err := testComputeHostConnection(ctx, host)
-	latencyMs := measureLatency(start)
-	return latencyMs, err
+	return measureLatency(start), testComputeHostConnection(ctx, host)
 }
 
 func testComputeHostConnection(ctx context.Context, host *docker.ComputeHost) error {
@@ -252,8 +255,7 @@ func testComputeHostConnection(ctx context.Context, host *docker.ComputeHost) er
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	_, err = cli.Ping(pingCtx)
-	if err != nil {
+	if _, err = cli.Ping(pingCtx); err != nil {
 		return fmt.Errorf("pinging docker daemon: %w", err)
 	}
 	return nil

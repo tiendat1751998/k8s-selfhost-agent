@@ -397,9 +397,11 @@ func TestReadTopProcesses_Fallback(t *testing.T) {
 
 func TestMetricsEndpoint_ReturnsJSON(t *testing.T) {
 	collector := NewSystemCollector("", "", nil)
-	handler := setupHandler(collector, "")
+	const testToken = "test-token"
+	handler := setupHandler(collector, testToken)
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer "+testToken)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -429,7 +431,7 @@ func TestMetricsEndpoint_ReturnsJSON(t *testing.T) {
 
 func TestHealthEndpoint(t *testing.T) {
 	collector := NewSystemCollector("", "", nil)
-	handler := setupHandler(collector, "")
+	handler := setupHandler(collector, "test-token")
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()

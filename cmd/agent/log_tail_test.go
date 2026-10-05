@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"bytes"
@@ -53,7 +53,12 @@ func TestLogServer_HandleTailLogs(t *testing.T) {
 
 	logServer := NewLogServer(WithDockerClient(mockCli))
 	collector := NewSystemCollector("", "", nil)
-	handler := setupHandler(collector, "", logServer)
+	const testToken = "test-tail-token"
+	rawHandler := setupHandler(collector, testToken, logServer)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		rawHandler.ServeHTTP(w, r)
+	})
 
 	t.Run("GET /logs/tail streams SSE for service", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/logs/tail?service=web-api&tail=50", nil)
@@ -111,7 +116,11 @@ func TestLogServer_HandleTailLogs(t *testing.T) {
 		}
 
 		server := NewLogServer(WithDockerClient(mockCliMultiplex))
-		h := setupHandler(collector, "", server)
+		rawH := setupHandler(collector, testToken, server)
+		h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Header.Set("Authorization", "Bearer "+testToken)
+			rawH.ServeHTTP(w, r)
+		})
 
 		ctx, cancel := context.WithCancel(context.Background())
 		req := httptest.NewRequest(http.MethodGet, "/logs/tail?service=web-api", nil).WithContext(ctx)

@@ -303,3 +303,71 @@ func TestAgentLogClient_ListNodeServices(t *testing.T) {
 		}
 	})
 }
+
+func TestAgentLogClient_AuthTokenFallback(t *testing.T) {
+	envToken := "env-secret-token-42"
+	t.Setenv("AGENT_AUTH_TOKEN", envToken)
+
+	var lastAuth string
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/logs":
+			_, _ = w.Write([]byte(`{"logs":"test log line"}`))
+		case "/logs/search":
+			_ = json.NewEncoder(w).Encode(map[string]any{"results": []LogSearchResult{}})
+		case "/logs/services":
+			_ = json.NewEncoder(w).Encode(map[string]any{"services": []string{"svc-1"}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer mockServer.Close()
+
+	client := NewAgentLogClient()
+
+	t.Run("GetNodeLogs falls back to env token when authToken is empty", func(t *testing.T) {
+		lastAuth = ""
+		_, err := client.GetNodeLogs(context.Background(), mockServer.URL, "", "app", "10", "", "", "", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if lastAuth != "Bearer "+envToken {
+			t.Errorf("expected Authorization Bearer %s, got %q", envToken, lastAuth)
+		}
+	})
+
+	t.Run("SearchNodeLogs falls back to env token when authToken is empty", func(t *testing.T) {
+		lastAuth = ""
+		_, err := client.SearchNodeLogs(context.Background(), mockServer.URL, "", SearchLogsRequest{Query: "test"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if lastAuth != "Bearer "+envToken {
+			t.Errorf("expected Authorization Bearer %s, got %q", envToken, lastAuth)
+		}
+	})
+
+	t.Run("ListNodeServices falls back to env token when authToken is empty", func(t *testing.T) {
+		lastAuth = ""
+		_, err := client.ListNodeServices(context.Background(), mockServer.URL, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if lastAuth != "Bearer "+envToken {
+			t.Errorf("expected Authorization Bearer %s, got %q", envToken, lastAuth)
+		}
+	})
+
+	t.Run("GetNodeServices falls back to env token when authToken is empty", func(t *testing.T) {
+		lastAuth = ""
+		_, err := client.GetNodeServices(context.Background(), mockServer.URL, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if lastAuth != "Bearer "+envToken {
+			t.Errorf("expected Authorization Bearer %s, got %q", envToken, lastAuth)
+		}
+	})
+}

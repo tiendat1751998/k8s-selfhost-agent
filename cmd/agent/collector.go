@@ -33,6 +33,7 @@ type SystemCollector struct {
 	lastMetrics   *MetricsResponse
 	mu            sync.RWMutex
 	stopCh        chan struct{}
+	stopOnce      sync.Once
 }
 
 // CollectorOption configures SystemCollector.
@@ -220,11 +221,9 @@ func (c *SystemCollector) Start(ctx context.Context) {
 	}
 }
 
-// Stop stops the background polling loop.
+// Stop stops the background polling loop safely using sync.Once to prevent double-close panics.
 func (c *SystemCollector) Stop() {
-	select {
-	case <-c.stopCh:
-	default:
+	c.stopOnce.Do(func() {
 		close(c.stopCh)
-	}
+	})
 }
