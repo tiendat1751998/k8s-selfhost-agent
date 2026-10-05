@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
 import type { Cluster } from '../../api/fleet'
 import StatusBadge from '../ui/StatusBadge.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
@@ -18,8 +17,6 @@ const emit = defineEmits<{
   (e: 'details', cluster: Cluster): void
   (e: 'import'): void
 }>()
-
-const router = useRouter()
 </script>
 
 <template>
@@ -162,12 +159,6 @@ const router = useRouter()
         <div v-if="cluster.orchestrator === 'swarm'" class="card-actions">
           <button class="btn btn-primary btn-xs" @click="emit('details', cluster)">
             <span><BaseIcon name="zap" size="xs" /> Details</span>
-          </button>
-          <button class="btn btn-secondary btn-xs" @click="router.push('/infra/hosts')">
-            <span><BaseIcon name="server" size="xs" /> Hosts</span>
-          </button>
-          <button class="btn btn-secondary btn-xs" @click="router.push('/compute')">
-            <span><BaseIcon name="layers" size="xs" /> Services</span>
           </button>
         </div>
 

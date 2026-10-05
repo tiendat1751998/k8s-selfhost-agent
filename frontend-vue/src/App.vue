@@ -92,6 +92,16 @@ const tenants = ref<TenantOption[]>([
 ])
 
 async function loadTenants() {
+  const role = (authStore.user?.role || '').toLowerCase()
+  // Guard /tenancy call so non-admin users don't trigger unhandled 403 errors
+  if (role && role !== 'platform_admin' && role !== 'admin') {
+    const fallbackTenant = authStore.user?.tenant_id || 'default-tenant'
+    tenants.value = [{ id: fallbackTenant, name: fallbackTenant }]
+    selectedTenant.value = fallbackTenant
+    api.setTenantId(fallbackTenant)
+    return
+  }
+
   try {
     const orgs = await tenancyApi.getOrganizations()
     if (orgs && orgs.length > 0) {
@@ -102,12 +112,14 @@ async function loadTenants() {
         selectedTenant.value = tenants.value[0].id
       }
     } else {
-      tenants.value = [{ id: 'default-tenant', name: 'default-tenant' }]
-      selectedTenant.value = 'default-tenant'
+      const fallback = authStore.user?.tenant_id || 'default-tenant'
+      tenants.value = [{ id: fallback, name: fallback }]
+      selectedTenant.value = fallback
     }
   } catch {
-    tenants.value = [{ id: 'default-tenant', name: 'default-tenant' }]
-    selectedTenant.value = 'default-tenant'
+    const fallback = authStore.user?.tenant_id || 'default-tenant'
+    tenants.value = [{ id: fallback, name: fallback }]
+    selectedTenant.value = fallback
   }
   api.setTenantId(selectedTenant.value)
 }

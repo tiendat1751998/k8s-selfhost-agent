@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
 import type { Cluster } from '../../api/fleet'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
@@ -21,8 +20,6 @@ const emit = defineEmits<{
   (e: 'import'): void
 }>()
 
-const router = useRouter()
-
 const K8S_ACTIONS: ActionItem[] = [
   { id: 'details', label: 'Cluster Details', icon: 'zap' },
   { id: 'discover', label: 'Discover Resources', icon: 'search' },
@@ -33,8 +30,6 @@ const K8S_ACTIONS: ActionItem[] = [
 
 const SWARM_ACTIONS: ActionItem[] = [
   { id: 'details', label: 'Cluster Details', icon: 'zap' },
-  { id: 'swarm-hosts', label: 'View Compute Hosts', icon: 'server' },
-  { id: 'swarm-services', label: 'View Services', icon: 'layers' },
 ]
 
 function getClusterActions(cluster: Cluster): ActionItem[] {
@@ -56,8 +51,6 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
   else if (actionId === 'discover') emit('discover', cluster)
   else if (actionId === 'upgrade') emit('upgrade', cluster)
   else if (actionId === 'remove') emit('remove', cluster)
-  else if (actionId === 'swarm-hosts') router.push('/infra/hosts')
-  else if (actionId === 'swarm-services') router.push('/compute')
 }
 </script>
 
