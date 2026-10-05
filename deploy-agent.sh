@@ -9,6 +9,12 @@ if [ -z "$REMOTE" ]; then
     exit 1
 fi
 
+if [ -z "$AGENT_AUTH_TOKEN" ]; then
+    echo "❌ Error: AGENT_AUTH_TOKEN environment variable is required to deploy the agent."
+    echo "   Example: export AGENT_AUTH_TOKEN=\$(openssl rand -hex 32) && $0 $REMOTE"
+    exit 1
+fi
+
 # Build agent for Linux
 echo "🔨 Building agent for linux/amd64..."
 GOOS=linux GOARCH=amd64 go build -o k8s-agent ./cmd/agent
@@ -25,6 +31,7 @@ ssh -t $REMOTE "chmod +x $TMP_BIN && \
   mkdir -p ~/.k8s-agent/logengine && \
   (systemctl --user stop k8s-agent 2>/dev/null || true) && \
   mv -f $TMP_BIN ~/k8s-agent && \
+  (umask 077 && printf 'AGENT_AUTH_TOKEN=%s\n' \"$AGENT_AUTH_TOKEN\" > ~/.k8s-agent/agent.env && chmod 600 ~/.k8s-agent/agent.env) && \
   cat > ~/.config/systemd/user/k8s-agent.service << 'UNIT'
 [Unit]
 Description=K8sControl Monitoring Agent
@@ -32,6 +39,7 @@ After=network.target
 
 [Service]
 Type=simple
+EnvironmentFile=-%h/.k8s-agent/agent.env
 ExecStart=%h/k8s-agent --port 9100 --engine-dir %h/.k8s-agent/logengine
 Restart=always
 RestartSec=5

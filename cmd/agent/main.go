@@ -1,16 +1,19 @@
-﻿package main
+package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,6 +21,43 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
+
+// AgentConfig holds the configuration settings for the agent.
+type AgentConfig struct {
+	Port      int
+	BindAddr  string
+	Interval  time.Duration
+	AuthToken string
+	LogDir    string
+	EngineDir string
+}
+
+// validateConfig validates that required configuration options are present.
+// The agent refuses to start if no authentication token is provided or if port is invalid.
+func validateConfig(cfg AgentConfig) error {
+	if strings.TrimSpace(cfg.AuthToken) == "" {
+		return fmt.Errorf("agent authentication token is required: provide via --auth-token flag or AGENT_AUTH_TOKEN environment variable")
+	}
+	if cfg.Port <= 0 || cfg.Port > 65535 {
+		return fmt.Errorf("invalid port %d: must be between 1 and 65535", cfg.Port)
+	}
+	return nil
+}
+
+// resolveListenAddr formats the server bind address based on bindAddr and port.
+// Defaults to ":<port>" when bindAddr is empty, preserving existing behavior.
+func resolveListenAddr(bindAddr string, port int) string {
+	bindAddr = strings.TrimSpace(bindAddr)
+	if bindAddr == "" {
+		return fmt.Sprintf(":%d", port)
+	}
+	if strings.Contains(bindAddr, ":") {
+		if _, _, err := net.SplitHostPort(bindAddr); err == nil {
+			return bindAddr
+		}
+	}
+	return net.JoinHostPort(bindAddr, strconv.Itoa(port))
+}
 
 func setupHandler(collector *SystemCollector, authToken string, logServers ...*LogServer) http.Handler {
 	var ls *LogServer
@@ -31,11 +71,11 @@ func setupHandler(collector *SystemCollector, authToken string, logServers ...*L
 
 	isAuthorized := func(r *http.Request) bool {
 		if authToken == "" {
-			return true
+			return false
 		}
 		authHeader := r.Header.Get("Authorization")
 		expected := "Bearer " + authToken
-		return authHeader == expected
+		return subtle.ConstantTimeCompare([]byte(authHeader), []byte(expected)) == 1
 	}
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -143,12 +183,17 @@ func setupHandler(collector *SystemCollector, authToken string, logServers ...*L
 
 // applyEnvOverrides updates configuration parameters from environment variables
 // when their respective flags remain at default or empty values.
-func applyEnvOverrides(port int, logDir, engineDir, authToken string) (int, string, string, string) {
+func applyEnvOverrides(port int, bindAddr, logDir, engineDir, authToken string) (int, string, string, string, string) {
 	if port == 9100 {
 		if p := os.Getenv("AGENT_PORT"); p != "" {
 			if parsedPort, err := strconv.Atoi(p); err == nil && parsedPort > 0 {
 				port = parsedPort
 			}
+		}
+	}
+	if bindAddr == "" {
+		if envBind := os.Getenv("AGENT_BIND_ADDR"); envBind != "" {
+			bindAddr = envBind
 		}
 	}
 	if logDir == "/var/log" {
@@ -166,7 +211,7 @@ func applyEnvOverrides(port int, logDir, engineDir, authToken string) (int, stri
 			authToken = envToken
 		}
 	}
-	return port, logDir, engineDir, authToken
+	return port, bindAddr, logDir, engineDir, authToken
 }
 
 // isDirWritable checks if the specified directory can be created and written to.
@@ -224,6 +269,7 @@ func resolveEngineDir(logDir, requestedEngineDir string, logger *slog.Logger) st
 func main() {
 	var (
 		port      int
+		bindAddr  string
 		interval  time.Duration
 		authToken string
 		logDir    string
@@ -231,21 +277,40 @@ func main() {
 	)
 
 	flag.IntVar(&port, "port", 9100, "Port for metrics and logs HTTP server")
+	flag.StringVar(&bindAddr, "bind", "", "Optional bind address or host:port for HTTP server (default \":<port>\")")
 	flag.DurationVar(&interval, "interval", 5*time.Second, "Metrics collection interval")
-	flag.StringVar(&authToken, "auth-token", "", "Optional Bearer token for authentication")
+	flag.StringVar(&authToken, "auth-token", "", "Required Bearer token for authentication")
 	flag.StringVar(&logDir, "log-dir", "/var/log", "Directory for local log file scanning")
 	flag.StringVar(&engineDir, "engine-dir", "", "Directory for columnar log engine data")
 	flag.Parse()
 
-	port, logDir, engineDir, authToken = applyEnvOverrides(port, logDir, engineDir, authToken)
-
-	logengine.InitEngineRuntime()
+	port, bindAddr, logDir, engineDir, authToken = applyEnvOverrides(port, bindAddr, logDir, engineDir, authToken)
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
+	cfg := AgentConfig{
+		Port:      port,
+		BindAddr:  bindAddr,
+		Interval:  interval,
+		AuthToken: authToken,
+		LogDir:    logDir,
+		EngineDir: engineDir,
+	}
+
+	if err := validateConfig(cfg); err != nil {
+		logger.Error("Agent startup failed: invalid configuration", slog.String("error", err.Error()))
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	logengine.InitEngineRuntime()
+
+	listenAddr := resolveListenAddr(bindAddr, port)
+
 	logger.Info("Starting k8s monitoring agent",
 		slog.Int("port", port),
+		slog.String("bind", listenAddr),
 		slog.Duration("interval", interval),
 		slog.Bool("auth_enabled", authToken != ""),
 		slog.String("log_dir", logDir),
@@ -290,7 +355,7 @@ func main() {
 
 	handler := setupHandler(collector, authToken, logServer)
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", port),
+		Addr:         listenAddr,
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,

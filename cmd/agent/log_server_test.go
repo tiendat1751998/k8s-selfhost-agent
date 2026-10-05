@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"bytes"
@@ -26,7 +26,12 @@ func TestLogServer_GetLogs_PlainTextAndJSON(t *testing.T) {
 
 	logServer := NewLogServer(WithLogSource(memSource))
 	collector := NewSystemCollector("", "", nil)
-	handler := setupHandler(collector, "", logServer)
+	const testToken = "test-log-token"
+	rawHandler := setupHandler(collector, testToken, logServer)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		rawHandler.ServeHTTP(w, r)
+	})
 
 	t.Run("GET /logs default plain text", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/logs?app=tiki_traefik", nil)
@@ -148,7 +153,12 @@ func TestLogServer_GetServices(t *testing.T) {
 
 	logServer := NewLogServer(WithLogSource(memSource))
 	collector := NewSystemCollector("", "", nil)
-	handler := setupHandler(collector, "", logServer)
+	const testToken = "test-log-token"
+	rawHandler := setupHandler(collector, testToken, logServer)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		rawHandler.ServeHTTP(w, r)
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/logs/services", nil)
 	rec := httptest.NewRecorder()
@@ -184,7 +194,12 @@ func TestLogServer_SearchLogs_POST(t *testing.T) {
 
 	logServer := NewLogServer(WithLogSource(memSource))
 	collector := NewSystemCollector("", "", nil)
-	handler := setupHandler(collector, "", logServer)
+	const testToken = "test-log-token"
+	rawHandler := setupHandler(collector, testToken, logServer)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		rawHandler.ServeHTTP(w, r)
+	})
 
 	t.Run("Search all error logs across services", func(t *testing.T) {
 		body := LogSearchRequest{
@@ -363,7 +378,12 @@ func TestEngineLogSource_Integration(t *testing.T) {
 	logServer := NewLogServer(WithLogDir(tempDir))
 	logServer.AddSource(engineSrc)
 	collector := NewSystemCollector("", "", nil)
-	handler := setupHandler(collector, "", logServer)
+	const testToken = "test-log-token"
+	rawHandler := setupHandler(collector, testToken, logServer)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		rawHandler.ServeHTTP(w, r)
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/logs?app=myservice&q=columnar&format=json", nil)
 	rec := httptest.NewRecorder()
@@ -399,12 +419,17 @@ func TestLogServer_HandleEngineStatus(t *testing.T) {
 
 	logServer := NewLogServer(WithLogSource(engineSrc))
 	collector := NewSystemCollector("", "", nil)
-	handler := setupHandler(collector, "", logServer)
+	const testToken = "test-log-token"
+	rawStatusHandler := setupHandler(collector, testToken, logServer)
+	statusHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		rawStatusHandler.ServeHTTP(w, r)
+	})
 
 	// Test GET /logs/status
 	req := httptest.NewRequest(http.MethodGet, "/logs/status", nil)
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	statusHandler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK for /logs/status, got %d: %s", rec.Code, rec.Body.String())
