@@ -4,7 +4,7 @@ import { api } from './client'
 // 1. Incidents, Reports, PRs Interfaces
 // ==========================================
 
-export type IncidentStatus = 'detected' | 'analyzing' | 'remediating' | 'resolved' | 'failed'
+export type IncidentStatus = 'detected' | 'analyzing' | 'remediating' | 'mitigating' | 'mitigated' | 'resolved' | 'failed'
 export type IncidentSeverity = 'critical' | 'high' | 'medium' | 'low'
 export type IncidentType =
   | 'CrashLoopBackOff'
@@ -47,7 +47,7 @@ export interface RCAReport {
   incident_id: string
   root_cause: string
   evidence: string[]
-  confidence: number
+  confidence?: number
   risk_level: 'critical' | 'high' | 'medium' | 'low'
   remediation: string
   rollback_plan: string
@@ -133,12 +133,15 @@ export function normalizeIncident(raw: any): Incident {
 
 export function normalizeReport(raw: any): RCAReport {
   if (!raw) return raw
+  const conf = typeof raw.confidence === 'number'
+    ? raw.confidence
+    : (typeof raw.Confidence === 'number' ? raw.Confidence : undefined)
   return {
     id: raw.id || raw.ID || '',
     incident_id: raw.incident_id || raw.IncidentID || '',
     root_cause: raw.root_cause || raw.RootCause || '',
     evidence: raw.evidence || raw.Evidence || [],
-    confidence: typeof raw.confidence === 'number' ? raw.confidence : (typeof raw.Confidence === 'number' ? raw.Confidence : 0.95),
+    confidence: conf,
     risk_level: ((raw.risk_level || raw.RiskLevel || 'medium').toLowerCase()) as RCAReport['risk_level'],
     remediation: raw.remediation || raw.Remediation || '',
     rollback_plan: raw.rollback_plan || raw.RollbackPlan || '',
@@ -161,7 +164,7 @@ export function normalizePR(raw: any): PullRequest {
     title: raw.title || raw.Title || '',
     description: raw.description || raw.Description || '',
     pr_url: raw.pr_url || raw.PRURL || '',
-    pr_number: raw.pr_number || raw.PRNumber || 104,
+    pr_number: raw.pr_number ?? raw.PRNumber ?? 0,
     status: ((raw.status || raw.Status || 'open').toLowerCase()) as PRStatus,
     files_changed: raw.files_changed || raw.FilesChanged,
     created_at: raw.created_at || raw.CreatedAt || new Date().toISOString(),
@@ -197,26 +200,49 @@ export const incidentsApi = {
     return normalizeIncident(raw)
   },
 
-  async getReport(id: string): Promise<RCAReport> {
-    const raw = await api.get<any>(`/incidents/${id}/report`)
-    return normalizeReport(raw)
+  async getReport(id: string): Promise<RCAReport | null> {
+    try {
+      const raw = await api.get<any>(`/incidents/${id}/report`)
+      return normalizeReport(raw)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not found') || msg.includes('404') || msg.includes('RCA report not found')) {
+        return null
+      }
+      throw err
+    }
   },
 
-  async getPR(id: string): Promise<PullRequest> {
-    const raw = await api.get<any>(`/incidents/${id}/pr`)
-    return normalizePR(raw)
+  async getPR(id: string): Promise<PullRequest | null> {
+    try {
+      const raw = await api.get<any>(`/incidents/${id}/pr`)
+      return normalizePR(raw)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not found') || msg.includes('404') || msg.includes('PR not found')) {
+        return null
+      }
+      throw err
+    }
   },
 
   async analyze(id: string): Promise<{ status: string }> {
     return api.post<{ status: string }>(`/incidents/${id}/analyze`)
   },
 
-  async mitigate(id: string): Promise<{ status: string }> {
-    return api.post<{ status: string }>(`/incidents/${id}/mitigate`)
+  async mitigate(id: string, payload?: { notes?: string; status?: string }): Promise<Incident> {
+    const raw = await api.post<any>(`/incidents/${id}/mitigate`, {
+      notes: payload?.notes ?? 'Autonomous mitigation initiated from incident console',
+      status: payload?.status,
+    })
+    return normalizeIncident(raw)
   },
 
-  async resolve(id: string): Promise<{ status: string }> {
-    return api.post<{ status: string }>(`/incidents/${id}/resolve`)
+  async resolve(id: string, payload?: { notes?: string }): Promise<Incident> {
+    const raw = await api.post<any>(`/incidents/${id}/resolve`, {
+      notes: payload?.notes ?? 'Resolved and verified from incident command console',
+    })
+    return normalizeIncident(raw)
   },
 
   async simulate(body?: { scenario?: string; pod_name?: string; namespace?: string }): Promise<Incident> {

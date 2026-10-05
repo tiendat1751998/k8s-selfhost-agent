@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
 
 export type StatusVariant = 'emerald' | 'amber' | 'rose' | 'slate' | 'cyan'
@@ -11,10 +11,10 @@ const props = defineProps<{
 
 const EMERALD_STATUSES = new Set([
   'ready', 'healthy', 'active', 'online', 'connected', 'ok', 'live', 'running', 'deployed', 'success',
-  'pass', 'resolved', 'completed', 'verified', 'armed'
+  'pass', 'resolved', 'mitigated', 'completed', 'verified', 'armed'
 ])
 const AMBER_STATUSES = new Set([
-  'warning', 'pending', 'degraded', 'in_progress', 'inprogress', 'standby', 'polling', 'open', 'promoting'
+  'warning', 'pending', 'degraded', 'in_progress', 'inprogress', 'standby', 'polling', 'open', 'promoting', 'mitigating'
 ])
 const ROSE_STATUSES = new Set([
   'failed', 'critical', 'error', 'offline', 'unhealthy', 'disconnected', 'down', 'danger', 'rejected', 'blocked', 'mismatch'
