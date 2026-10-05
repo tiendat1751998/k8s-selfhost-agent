@@ -10,6 +10,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type mockIncidentRepo struct {
@@ -29,8 +30,13 @@ func (m *mockIncidentRepo) Create(ctx context.Context, inc *incident.Incident) e
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if inc.ID == "" {
-		inc.ID = "inc-sim-123"
+		inc.ID = fmt.Sprintf("inc-%d", len(m.created)+1)
 	}
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+	inc.TenantID = tenantID
 	m.incidents[inc.ID] = inc
 	m.created = append(m.created, inc)
 	return nil
@@ -43,12 +49,30 @@ func (m *mockIncidentRepo) GetByID(ctx context.Context, id string) (*incident.In
 	if !ok {
 		return nil, errors.NewNotFound("incident", id)
 	}
+	userRole := tenancy.UserRoleFromContext(ctx)
+	if userRole != "platform_admin" {
+		callerTenant := tenancy.TenantIDFromContext(ctx)
+		if callerTenant != "" && inc.TenantID != "" && inc.TenantID != callerTenant {
+			return nil, errors.NewNotFound("incident", id)
+		}
+	}
 	return inc, nil
 }
 
 func (m *mockIncidentRepo) Update(ctx context.Context, inc *incident.Incident) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	existing, ok := m.incidents[inc.ID]
+	if !ok {
+		return errors.NewNotFound("incident", inc.ID)
+	}
+	userRole := tenancy.UserRoleFromContext(ctx)
+	if userRole != "platform_admin" {
+		callerTenant := tenancy.TenantIDFromContext(ctx)
+		if callerTenant != "" && existing.TenantID != "" && existing.TenantID != callerTenant {
+			return errors.NewNotFound("incident", inc.ID)
+		}
+	}
 	m.incidents[inc.ID] = inc
 	m.updated = append(m.updated, inc)
 	return nil
