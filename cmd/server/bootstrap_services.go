@@ -215,7 +215,7 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	cloudHandler := adapthttp.NewCloudHandler(cloudAccountRepo, nil, log)
 
 	alertNotifiers := map[string]alert.Notifier{"slack": notifier.NewSlackNotifier(), "email": notifier.NewEmailNotifier(), "webhook": notifier.NewWebhookNotifier()}
-	ruleEngine, err := usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers, usecaseAlert.WithLogger(log))
+	_, err = usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers, usecaseAlert.WithLogger(log))
 	if err != nil {
 		for i := len(stopFns) - 1; i >= 0; i-- { stopFns[i]() }
 		return nil, fmt.Errorf("initializing alert rule engine: %w", err)
