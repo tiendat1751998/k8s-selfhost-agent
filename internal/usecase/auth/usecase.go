@@ -7,21 +7,81 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
 	"github.com/datdt/k8sselfhost/internal/domain/user"
 )
 
 // Usecase coordinates authentication logic.
 type Usecase struct {
-	repo        user.Repository
-	rateLimiter *totpRateLimiter
+	repo                 user.Repository
+	rateLimiter          *totpRateLimiter
+	tokenRepo            user.RefreshTokenRepository
+	txManager            ports.TransactionManager
+	tokenIssuer          TokenIssuer
+	refreshTokenDuration time.Duration
+}
+
+// Option configures Usecase.
+type Option func(*Usecase)
+
+// WithRefreshTokenRepo sets the token repository on Usecase.
+func WithRefreshTokenRepo(repo user.RefreshTokenRepository) Option {
+	return func(u *Usecase) {
+		u.tokenRepo = repo
+	}
+}
+
+// WithTxManager sets the transaction manager on Usecase.
+func WithTxManager(tx ports.TransactionManager) Option {
+	return func(u *Usecase) {
+		u.txManager = tx
+	}
+}
+
+// WithTokenIssuer sets the token issuer on Usecase.
+func WithTokenIssuer(issuer TokenIssuer) Option {
+	return func(u *Usecase) {
+		u.tokenIssuer = issuer
+	}
+}
+
+// WithRefreshTokenDuration sets the refresh token validity duration.
+func WithRefreshTokenDuration(d time.Duration) Option {
+	return func(u *Usecase) {
+		u.refreshTokenDuration = d
+	}
+}
+
+// SetRefreshTokenRepo configures the token repository.
+func (u *Usecase) SetRefreshTokenRepo(repo user.RefreshTokenRepository) {
+	u.tokenRepo = repo
+}
+
+// SetTokenIssuer configures the token issuer.
+func (u *Usecase) SetTokenIssuer(issuer TokenIssuer) {
+	u.tokenIssuer = issuer
+}
+
+// SetTxManager configures the transaction manager.
+func (u *Usecase) SetTxManager(tx ports.TransactionManager) {
+	u.txManager = tx
 }
 
 // NewUsecase creates a new Auth Usecase.
-func NewUsecase(repo user.Repository) *Usecase {
-	return &Usecase{
-		repo:        repo,
-		rateLimiter: newTOTPRateLimiter(5, 15*time.Minute),
+func NewUsecase(repo user.Repository, opts ...Option) *Usecase {
+	u := &Usecase{
+		repo:                 repo,
+		rateLimiter:          newTOTPRateLimiter(5, 15*time.Minute),
+		txManager:            noopTxManager{},
+		refreshTokenDuration: 7 * 24 * time.Hour,
 	}
+	for _, opt := range opts {
+		opt(u)
+	}
+	if u.tokenIssuer == nil {
+		u.tokenIssuer = &defaultTokenIssuer{}
+	}
+	return u
 }
 
 // AuthResult holds details for a successfully authenticated user.

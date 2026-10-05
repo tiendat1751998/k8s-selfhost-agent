@@ -1,13 +1,13 @@
 package http
 
 import (
-	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
+	"github.com/datdt/k8sselfhost/internal/domain/ports"
 	"github.com/datdt/k8sselfhost/internal/domain/user"
 	authUsecase "github.com/datdt/k8sselfhost/internal/usecase/auth"
 )
@@ -49,10 +49,35 @@ func NewAuthHandler(
 		refreshTokenRepo: refreshTokenRepo,
 		cookieSecure:     cookieSecure,
 	}
+	if h.usecase != nil {
+		if h.refreshTokenRepo != nil {
+			h.usecase.SetRefreshTokenRepo(h.refreshTokenRepo)
+			if provider, ok := h.refreshTokenRepo.(interface{ TxManager() ports.TransactionManager }); ok {
+				if txMgr := provider.TxManager(); txMgr != nil {
+					h.usecase.SetTxManager(txMgr)
+				}
+			}
+		}
+		h.usecase.SetTokenIssuer(&httpTokenIssuer{})
+	}
 	for _, opt := range opts {
 		opt(h)
 	}
 	return h
+}
+
+type httpTokenIssuer struct{}
+
+func (httpTokenIssuer) GenerateAccessToken(userID, role, tenantID string) (string, error) {
+	return middleware.GenerateAccessToken(userID, role, tenantID)
+}
+
+func (httpTokenIssuer) GenerateRefreshToken() (string, error) {
+	return middleware.GenerateRefreshToken()
+}
+
+func (httpTokenIssuer) HashToken(token string) string {
+	return middleware.HashToken(token)
 }
 
 type loginRequest struct {
@@ -222,85 +247,33 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.refreshTokenRepo == nil || h.userRepo == nil {
-		writeError(w, http.StatusInternalServerError, "auth repositories not configured", nil)
+	if h.usecase == nil {
+		writeError(w, http.StatusInternalServerError, "auth usecase not configured", nil)
 		return
 	}
 
-	tokenHash := middleware.HashToken(cookie.Value)
-	rt, err := h.refreshTokenRepo.GetByHash(r.Context(), tokenHash)
-	if err != nil || rt == nil {
-		writeError(w, http.StatusUnauthorized, "invalid refresh token", nil)
-		return
-	}
-
-	if rt.RevokedAt != nil {
-		writeError(w, http.StatusUnauthorized, "refresh token has been revoked", nil)
-		return
-	}
-
-	if time.Now().After(rt.ExpiresAt) {
-		writeError(w, http.StatusUnauthorized, "refresh token has expired", nil)
-		return
-	}
-
-	// Revoke the old token (rotation)
-	if err := h.refreshTokenRepo.Revoke(r.Context(), rt.ID); err != nil {
-		log.Printf("failed to revoke old refresh token during rotation: %v", err)
-	}
-
-	usr, err := h.userRepo.GetByID(r.Context(), rt.UserID)
-	if err != nil || usr == nil {
-		writeError(w, http.StatusUnauthorized, "user not found", nil)
-		return
-	}
-
-	role := usr.TenantRole
-	if usr.PlatformRole == "platform_admin" {
-		role = "platform_admin"
-	}
-
-	accessToken, err := middleware.GenerateAccessToken(usr.ID, role, usr.TenantID)
+	result, err := h.usecase.RotateRefreshToken(r.Context(), authUsecase.RotateTokenInput{
+		RefreshToken: cookie.Value,
+		UserAgent:    r.UserAgent(),
+		IPAddress:    r.RemoteAddr,
+	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to generate access token", err)
+		writeError(w, http.StatusUnauthorized, err.Error(), nil)
 		return
 	}
 
-	newRawRefreshToken, err := middleware.GenerateRefreshToken()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to generate refresh token", err)
-		return
-	}
-
-	newRT := &user.RefreshToken{
-		UserID:    usr.ID,
-		TokenHash: middleware.HashToken(newRawRefreshToken),
-		ExpiresAt: time.Now().Add(middleware.RefreshTokenDuration),
-		UserAgent: r.UserAgent(),
-		IPAddress: r.RemoteAddr,
-	}
-	if err := h.refreshTokenRepo.Create(r.Context(), newRT); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to persist new refresh token", err)
-		return
-	}
-
-	h.setRefreshTokenCookie(w, newRawRefreshToken)
+	h.setRefreshTokenCookie(w, result.RawRefreshToken)
 
 	writeJSON(w, http.StatusOK, map[string]string{
-		"token": accessToken,
+		"token": result.AccessToken,
 	})
 }
 
 // Logout handles POST /api/v1/auth/logout
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("refresh_token")
-	if err == nil && cookie.Value != "" && h.refreshTokenRepo != nil {
-		tokenHash := middleware.HashToken(cookie.Value)
-		if rt, err := h.refreshTokenRepo.GetByHash(r.Context(), tokenHash); err == nil && rt != nil {
-			if err := h.refreshTokenRepo.Revoke(r.Context(), rt.ID); err != nil {
-				log.Printf("failed to revoke refresh token during logout: %v", err)
-			}
-		}
+	if err == nil && cookie.Value != "" && h.usecase != nil {
+		_ = h.usecase.RevokeRefreshToken(r.Context(), cookie.Value)
 	}
 
 	h.clearRefreshTokenCookie(w)

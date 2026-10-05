@@ -171,6 +171,70 @@ func TestRefreshTokenRepo_CRUD(t *testing.T) {
 	}
 }
 
+func TestRefreshTokenRepo_GetByHashForUpdate(t *testing.T) {
+	pool := getAuthTestPool(t)
+	defer pool.Close()
+
+	userID := createTestUser(t, pool)
+	defer deleteTestUser(pool, userID)
+
+	repo := postgres.NewRefreshTokenRepo(pool)
+	tokenRepo, ok := repo.(interface {
+		GetByHashForUpdate(ctx context.Context, hash string) (*user.RefreshToken, error)
+	})
+	if !ok {
+		t.Fatal("expected repo to implement GetByHashForUpdate")
+	}
+
+	ctx := context.Background()
+	tokenHash := fmt.Sprintf("forupdate-hash-%s", uuid.New().String())
+	rt := &user.RefreshToken{
+		UserID:    userID,
+		TokenHash: tokenHash,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		UserAgent: "Mozilla/5.0 RowLockTest",
+		IPAddress: "127.0.0.1",
+	}
+
+	if err := repo.Create(ctx, rt); err != nil {
+		t.Fatalf("failed to create refresh token: %v", err)
+	}
+
+	// Test GetByHashForUpdate within a transaction
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	txCtx := postgres.InjectTx(ctx, tx)
+	fetched, err := tokenRepo.GetByHashForUpdate(txCtx, tokenHash)
+	if err != nil {
+		t.Fatalf("GetByHashForUpdate failed: %v", err)
+	}
+	if fetched.ID != rt.ID || fetched.TokenHash != tokenHash {
+		t.Fatalf("unexpected fetched token: %+v", fetched)
+	}
+
+	// Revoke within the transaction
+	if err := repo.Revoke(txCtx, rt.ID); err != nil {
+		t.Fatalf("failed to revoke token in tx: %v", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("failed to commit transaction: %v", err)
+	}
+
+	// Verify post-commit state
+	postCommit, err := repo.GetByHash(ctx, tokenHash)
+	if err != nil {
+		t.Fatalf("failed to get post-commit token: %v", err)
+	}
+	if postCommit.RevokedAt == nil {
+		t.Fatal("expected token to be marked revoked post-commit")
+	}
+}
+
 func TestUserRepo_MFA_Fields(t *testing.T) {
 	pool := getAuthTestPool(t)
 	defer pool.Close()
