@@ -49,20 +49,43 @@
     <div class="dr-card glass-panel">
       <div class="card-header">
         <div>
-          <h3 class="card-title"><BaseIcon name="shield" size="sm" /> Velero Full-Cluster DR Backups</h3>
+          <div class="card-title-group">
+            <h3 class="card-title"><BaseIcon name="shield" size="sm" /> Velero Full-Cluster DR Backups</h3>
+            <IntegrationBadge
+              name="Velero"
+              :status="veleroConnected ? 'connected' : 'not_connected'"
+              required-controller="Velero Backup Controller"
+              install-hint="velero install --provider aws --bucket my-backups"
+            />
+          </div>
           <p class="card-desc">Full cluster state recovery including custom resources, workloads, volumes, and secrets.</p>
         </div>
         <div class="header-btns">
           <button class="btn btn-secondary btn-sm" :disabled="loading" @click="loadData">
             <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /> <span>Refresh</span>
           </button>
-          <button class="btn btn-primary btn-sm" :disabled="backingUp || !clusterId" @click="handleClusterDR">
+          <button
+            class="btn btn-primary btn-sm"
+            :disabled="backingUp || !clusterId || !veleroConnected"
+            :title="!veleroConnected ? 'Requires External Controller (Velero): Controller not connected' : '1-Click Cluster DR'"
+            @click="handleClusterDR"
+          >
             <BaseIcon :name="backingUp ? 'clock' : 'play'" size="xs" /> <span>{{ backingUp ? 'Dispatching...' : '1-Click Cluster DR' }}</span>
           </button>
         </div>
       </div>
 
-      <div v-if="backups.length > 0" class="table-wrap">
+      <div v-if="!veleroConnected" class="dr-integration-empty">
+        <IntegrationEmptyState
+          controller-name="Velero DR Controller"
+          title="Controller Not Connected: Requires Velero"
+          description="Velero full-cluster backup controller is not installed or returned HTTP 501 (Not Implemented). External Velero components must be deployed to capture cluster DR archives."
+          command="velero install --provider aws --bucket cluster-backups --backup-location-config region=us-east-1"
+          @retry="loadData"
+        />
+      </div>
+
+      <div v-else-if="backups.length > 0" class="table-wrap">
         <table class="dr-table">
           <thead>
             <tr>
@@ -94,6 +117,9 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { drApi, type EtcdSnapshotResult, type ClusterBackupResult } from '../../api/dr'
+import { isNotImplementedError } from '../../api/client'
+import IntegrationBadge from '../common/IntegrationBadge.vue'
+import IntegrationEmptyState from '../common/IntegrationEmptyState.vue'
 
 const props = defineProps<{ clusterId: string }>()
 const backups = ref<ClusterBackupResult[]>([])
@@ -102,6 +128,7 @@ const loading = ref(false)
 const snapshotting = ref(false)
 const restoring = ref(false)
 const backingUp = ref(false)
+const veleroConnected = ref(true)
 const feedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 function showFeedback(type: 'success' | 'error', message: string) {
@@ -114,8 +141,14 @@ async function loadData() {
   loading.value = true
   try {
     backups.value = await drApi.listClusterBackups(props.clusterId)
+    veleroConnected.value = true
   } catch (err: unknown) {
-    showFeedback('error', err instanceof Error ? err.message : 'Failed to load DR backups')
+    if (isNotImplementedError(err)) {
+      veleroConnected.value = false
+      backups.value = []
+    } else {
+      showFeedback('error', err instanceof Error ? err.message : 'Failed to load DR backups')
+    }
   } finally {
     loading.value = false
   }
@@ -129,7 +162,11 @@ async function handleSnapshot() {
     latestSnapshot.value = res
     showFeedback('success', `etcd snapshot "${res.snapshot_name || res.id}" captured successfully.`)
   } catch (err: unknown) {
-    showFeedback('error', err instanceof Error ? err.message : 'Failed to trigger etcd snapshot')
+    if (isNotImplementedError(err)) {
+      showFeedback('error', 'etcd snapshot controller is not implemented on this cluster.')
+    } else {
+      showFeedback('error', err instanceof Error ? err.message : 'Failed to trigger etcd snapshot')
+    }
   } finally {
     snapshotting.value = false
   }
@@ -151,14 +188,19 @@ async function handleRestore() {
 }
 
 async function handleClusterDR() {
-  if (!props.clusterId) return
+  if (!props.clusterId || !veleroConnected.value) return
   backingUp.value = true
   try {
     const res = await drApi.createClusterBackup(props.clusterId)
     showFeedback('success', `Velero cluster backup "${res.name}" initiated.`)
     await loadData()
   } catch (err: unknown) {
-    showFeedback('error', err instanceof Error ? err.message : 'Failed to create cluster DR backup')
+    if (isNotImplementedError(err)) {
+      veleroConnected.value = false
+      showFeedback('error', 'Requires External Controller: Velero controller is not installed.')
+    } else {
+      showFeedback('error', err instanceof Error ? err.message : 'Failed to create cluster DR backup')
+    }
   } finally {
     backingUp.value = false
   }

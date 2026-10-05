@@ -1,6 +1,7 @@
-﻿import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useSecurityStore } from '../stores/securityStore'
 import type { SecurityViolation } from '../api/security'
+import { isNotImplementedError } from '../api/client'
 
 export interface CveFinding {
   id: string
@@ -52,21 +53,13 @@ export interface SeverityFilter {
 }
 
 export interface StatusNotice {
-  type: 'success' | 'error'
+  type: 'success' | 'error' | 'info'
   text: string
 }
 
-const DEFAULT_SECRETS: SecretAuditItem[] = [
-  { id: 'sec-tls-001', name: 'ingress-wildcard-tls', namespace: 'ingress-nginx', secret_type: 'TLS Certificate', source_resource: 'cert-manager.io/Certificate', status: 'EXPIRING_SOON', exposure_detail: 'Production TLS Certificate expires in 4 days. ACME challenge auto-renewal failing.', expires_at: '2026-09-07T00:00:00Z', days_until_expiry: 4, masked_value: 'MIIDrjCCApagAwIBAgIQ...==', detected_at: 'Continuous Vault Monitor' },
-  { id: 'sec-vlt-002', name: 'payment-gateway-stripe-token', namespace: 'finance-prod', secret_type: 'API Key', source_resource: 'deployment/payment-processor', status: 'EXPOSED', exposure_detail: 'Live Stripe API secret key logged in stdout pod crash logs and plaintext env var.', masked_value: 'sk_live_51M7...98xQ', detected_at: 'Trivy Secret Scanner (12m ago)' },
-  { id: 'sec-eso-003', name: 'postgres-cluster-superuser', namespace: 'database', secret_type: 'Vault Secret', source_resource: 'ExternalSecret/postgres-auth', status: 'COMPLIANT', exposure_detail: 'HashiCorp Vault dynamic leasing synced via ESO. Automatic 24h lease renewal active.', expires_at: '2026-09-04T12:00:00Z', days_until_expiry: 1, masked_value: 'v.hvo.r1...02xP', detected_at: 'Vault ESO Synced (1m ago)' },
-  { id: 'sec-jwt-004', name: 'internal-auth-jwt-secret', namespace: 'auth-gateway', secret_type: 'JWT Token', source_resource: 'configmap/auth-config', status: 'EXPOSED', exposure_detail: 'Weak symmetric HS256 JWT key stored unencrypted in ConfigMap rather than Secret.', masked_value: 'dHJpdnlfc2VjcmV0...==', detected_at: 'Checkov IaC Audit (35m ago)' },
-]
+const DEFAULT_SECRETS: SecretAuditItem[] = []
 
-const DEFAULT_RBAC_FINDINGS: RbacAuditFinding[] = [
-  { id: 'rbac-001', subject: 'gitlab-runner-sa', subject_kind: 'ServiceAccount', role_binding: 'ci-cluster-admin-binding', namespace: 'ci-cd', risk_level: 'CRITICAL', escalation_vector: 'Bound to cluster-admin ClusterRole. Allows arbitrary pod exec, node drain, and secret exfiltration.', remediation: 'Scope permissions using namespace-restricted RoleBinding with least-privilege verbs.' },
-  { id: 'rbac-002', subject: 'dev-contractors', subject_kind: 'Group', role_binding: 'debug-pods-exec-binding', namespace: 'production', risk_level: 'HIGH', escalation_vector: 'Wildcard authorization on pods/exec with capability to inject root privileged containers.', remediation: 'Remove wildcards, enable ephemeral debug containers with audit logging and session recording.' },
-]
+const DEFAULT_RBAC_FINDINGS: RbacAuditFinding[] = []
 
 export function useDevSecOps() {
   const securityStore = useSecurityStore()
@@ -194,14 +187,28 @@ export function useDevSecOps() {
     isScanning.value = true
     try {
       await securityStore.fetchAll()
-      statusMessage.value = {
-        type: 'success',
-        text: 'Dispatched Trivy Container Scanner, Clair CVE DB & Checkov IaC Security Gate. All compliance matrices synchronized.',
+      if (securityStore.isControllerUnavailable) {
+        statusMessage.value = {
+          type: 'info',
+          text: 'Requires external Trivy / Security Scanner controller (HTTP 501).',
+        }
+      } else {
+        statusMessage.value = {
+          type: 'success',
+          text: 'Security scan completed successfully across clusters.',
+        }
       }
     } catch (err: unknown) {
-      statusMessage.value = {
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to refresh security scan compliance.',
+      if (isNotImplementedError(err)) {
+        statusMessage.value = {
+          type: 'info',
+          text: 'Requires external Trivy / Security Scanner controller (HTTP 501).',
+        }
+      } else {
+        statusMessage.value = {
+          type: 'error',
+          text: err instanceof Error ? err.message : 'Failed to refresh security scan compliance.',
+        }
       }
     } finally {
       isScanning.value = false
@@ -212,8 +219,8 @@ export function useDevSecOps() {
     isPatching.value = true
     try {
       statusMessage.value = {
-        type: 'success',
-        text: `Remediation initiated: Automated PR opened to update package ${finding.package_name} to ${finding.fixed_version} on ${finding.resource_name}.`,
+        type: 'info',
+        text: `Automated PR remediation requires GitOps / GitHub App integration (Controller Not Connected). Package: ${finding.package_name}.`,
       }
     } finally {
       isPatching.value = false
@@ -221,18 +228,9 @@ export function useDevSecOps() {
   }
 
   function rotateSecret(secret: SecretAuditItem) {
-    const idx = secretsAuditList.value.findIndex((s) => s.id === secret.id)
-    if (idx !== -1) {
-      secretsAuditList.value[idx] = {
-        ...secretsAuditList.value[idx],
-        status: 'COMPLIANT',
-        exposure_detail: 'Secret rotated via HashiCorp Vault dynamic engine. New token injected via ESO.',
-        days_until_expiry: 90,
-      }
-    }
     statusMessage.value = {
-      type: 'success',
-      text: `Successfully rotated secret ${secret.name} in namespace ${secret.namespace} via HashiCorp Vault.`,
+      type: 'info',
+      text: `Secret rotation requires HashiCorp Vault dynamic engine connection (Controller Not Connected). Secret: ${secret.name}.`,
     }
   }
 

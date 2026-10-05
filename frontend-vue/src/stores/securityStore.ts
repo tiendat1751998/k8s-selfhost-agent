@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { securityApi, type ComplianceFramework, type SecurityViolation } from '../api/security'
+import { isNotImplementedError } from '../api/client'
 
 export const useSecurityStore = defineStore('security', () => {
   const frameworks = ref<ComplianceFramework[]>([])
@@ -8,6 +9,7 @@ export const useSecurityStore = defineStore('security', () => {
   const totalViolations = ref(0)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const isControllerUnavailable = ref(false)
 
   async function fetchAll(severity?: string) {
     loading.value = true
@@ -20,8 +22,17 @@ export const useSecurityStore = defineStore('security', () => {
       frameworks.value = f
       violations.value = v.items
       totalViolations.value = v.total
+      isControllerUnavailable.value = false
     } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch security data'
+      if (isNotImplementedError(err)) {
+        isControllerUnavailable.value = true
+        frameworks.value = []
+        violations.value = []
+        totalViolations.value = 0
+        error.value = null
+      } else {
+        error.value = err instanceof Error ? err.message : 'Failed to fetch security data'
+      }
     } finally {
       loading.value = false
     }
@@ -33,6 +44,7 @@ export const useSecurityStore = defineStore('security', () => {
     totalViolations,
     loading,
     error,
+    isControllerUnavailable,
     fetchAll,
   }
 })
