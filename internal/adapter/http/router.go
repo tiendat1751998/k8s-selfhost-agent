@@ -79,7 +79,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Recoverer)
-	r.Use(chimw.Timeout(60 * time.Second))
+	r.Use(conditionalTimeout(60 * time.Second))
 	r.Use(chimw.Heartbeat("/ping"))
 	r.Use(mw.RequestBodyLimit(1 << 20))
 	r.Use(mw.StructuredLogger)
@@ -367,9 +367,11 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.CentralizedLogs != nil {
 				r.With(mw.RequestBodyLimit(10 << 20)).With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator", "logs:write")).Route("/logs", func(sub chi.Router) {
-					platform.CentralizedLogs.RegisterRoutes(sub)
 					if platform.LogStream != nil {
+						platform.CentralizedLogs.RegisterRoutes(skipStreamRouter{Router: sub})
 						sub.Get("/stream", platform.LogStream.ServeHTTP)
+					} else {
+						platform.CentralizedLogs.RegisterRoutes(sub)
 					}
 				})
 			} else if platform.LogStream != nil {
@@ -405,4 +407,47 @@ func findFrontendDir() string {
 	}
 	return ""
 }
+
+// conditionalTimeout applies Chi's Timeout middleware to standard HTTP requests,
+// but skips the timeout for streaming connections (WebSockets, SSE, log tailing, exec).
+func conditionalTimeout(timeout time.Duration) func(http.Handler) http.Handler {
+	timeoutMw := chimw.Timeout(timeout)
+	return func(next http.Handler) http.Handler {
+		timedHandler := timeoutMw(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if mw.IsStreamingRequest(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			timedHandler.ServeHTTP(w, r)
+		})
+	}
+}
+
+// skipStreamRouter wraps a chi.Router and suppresses duplicate GET /stream registrations.
+type skipStreamRouter struct {
+	chi.Router
+}
+
+func (s skipStreamRouter) Get(pattern string, h http.HandlerFunc) {
+	if pattern == "/stream" {
+		return
+	}
+	s.Router.Get(pattern, h)
+}
+
+func (s skipStreamRouter) HandleFunc(pattern string, h http.HandlerFunc) {
+	if pattern == "/stream" {
+		return
+	}
+	s.Router.HandleFunc(pattern, h)
+}
+
+func (s skipStreamRouter) MethodFunc(method, pattern string, h http.HandlerFunc) {
+	if method == http.MethodGet && pattern == "/stream" {
+		return
+	}
+	s.Router.MethodFunc(method, pattern, h)
+}
+
 
