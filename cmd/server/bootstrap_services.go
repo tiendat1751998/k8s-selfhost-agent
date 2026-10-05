@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"bufio"
@@ -29,6 +29,7 @@ import (
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	infraClickhouse "github.com/datdt/k8sselfhost/internal/infrastructure/clickhouse"
+	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	infraLB "github.com/datdt/k8sselfhost/internal/infrastructure/loadbalancer"
@@ -216,16 +217,17 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	alertNotifiers := map[string]alert.Notifier{"slack": notifier.NewSlackNotifier(), "email": notifier.NewEmailNotifier(), "webhook": notifier.NewWebhookNotifier()}
 	ruleEngine, err := usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers, usecaseAlert.WithLogger(log))
 	if err != nil {
-		for i := len(stopFns) - 1; i >= 0; i-- {
-			stopFns[i]()
-		}
+		for i := len(stopFns) - 1; i >= 0; i-- { stopFns[i]() }
 		return nil, fmt.Errorf("initializing alert rule engine: %w", err)
 	}
-	_ = ruleEngine
 	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
 
 	clientManager := infraCluster.NewClientManager(fleetRepo)
 	discoveryAdapter := infraK8s.NewDiscoveryAdapter()
+	if err := crypto.ValidateKey(); err != nil {
+		for i := len(stopFns) - 1; i >= 0; i-- { stopFns[i]() }
+		return nil, fmt.Errorf("cluster encryption key validation failed: %w", err)
+	}
 	importUsecase := usecaseCluster.NewImportUsecase(fleetRepo, discoveryAdapter, log)
 	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, log)
 	eg.Go(func() error {

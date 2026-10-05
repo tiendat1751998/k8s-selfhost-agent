@@ -32,6 +32,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/infrastructure/notifier"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	infraDocker "github.com/datdt/k8sselfhost/internal/infrastructure/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
 	"github.com/datdt/k8sselfhost/internal/pkg/httputil"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
@@ -210,6 +211,9 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	remediationCtrl := usecaseSRE.NewRemediationController(k8sIface, clientManager, log)
 
 	discoveryAdapter := infraK8s.NewDiscoveryAdapter()
+	if err := crypto.ValidateKey(); err != nil {
+		return nil, nil, fmt.Errorf("cluster encryption key validation failed: %w", err)
+	}
 	importUsecase := usecaseCluster.NewImportUsecase(fleetRepo, discoveryAdapter, logger.Get())
 	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, logger.Get())
 	go healthChecker.Start(ctx, 1*time.Minute)

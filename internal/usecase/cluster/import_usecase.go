@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 
 	"github.com/datdt/k8sselfhost/internal/domain/fleet"
+	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 	"go.uber.org/zap"
 )
 
@@ -16,18 +17,41 @@ type DiscoveryPort interface {
 	ValidateConnectivity(ctx context.Context, kubeconfig []byte) error
 }
 
+// TokenEncryptor abstracts credential encryption and decryption for cluster tokens.
+type TokenEncryptor interface {
+	Encrypt(plaintext string) (string, error)
+	Decrypt(ciphertext string) (string, error)
+}
+
 type ImportUsecase struct {
 	fleetRepo fleet.Repository
 	discovery DiscoveryPort
+	encryptor TokenEncryptor
 	logger    *zap.Logger
 }
 
-func NewImportUsecase(fleetRepo fleet.Repository, discovery DiscoveryPort, logger *zap.Logger) *ImportUsecase {
-	return &ImportUsecase{
+type ImportOption func(*ImportUsecase)
+
+// WithEncryptor configures a custom TokenEncryptor.
+func WithEncryptor(encryptor TokenEncryptor) ImportOption {
+	return func(u *ImportUsecase) {
+		if encryptor != nil {
+			u.encryptor = encryptor
+		}
+	}
+}
+
+func NewImportUsecase(fleetRepo fleet.Repository, discovery DiscoveryPort, logger *zap.Logger, opts ...ImportOption) *ImportUsecase {
+	u := &ImportUsecase{
 		fleetRepo: fleetRepo,
 		discovery: discovery,
+		encryptor: crypto.DefaultEncryptor{},
 		logger:    logger,
 	}
+	for _, opt := range opts {
+		opt(u)
+	}
+	return u
 }
 
 func (u *ImportUsecase) ImportCluster(ctx context.Context, id, name, group, region, provider string, kubeconfig []byte) (*fleet.Cluster, error) {
@@ -45,6 +69,11 @@ func (u *ImportUsecase) ImportCluster(ctx context.Context, id, name, group, regi
 	hashStr := hex.EncodeToString(hash[:])
 	now := time.Now().UTC()
 
+	encryptedToken, err := u.encryptor.Encrypt(string(kubeconfig))
+	if err != nil {
+		return nil, fmt.Errorf("encrypting cluster kubeconfig: %w", err)
+	}
+
 	cluster := &fleet.Cluster{
 		ID:                  id,
 		Name:                name,
@@ -56,7 +85,7 @@ func (u *ImportUsecase) ImportCluster(ctx context.Context, id, name, group, regi
 		Nodes:               0,
 		ImportMethod:        "kubeconfig",
 		KubeconfigHash:      hashStr,
-		EncryptedToken:      string(kubeconfig),
+		EncryptedToken:      encryptedToken,
 		HealthStatus:        "healthy",
 		LastHealthCheck:     &now,
 		DiscoveredResources: resources,
