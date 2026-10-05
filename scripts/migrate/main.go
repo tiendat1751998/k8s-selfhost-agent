@@ -14,12 +14,12 @@ import (
 )
 
 // Environment variables supported (with fallback):
-//   DB_HOST / K8S_POSTGRES_HOST         - PostgreSQL host (default: "localhost")
-//   DB_PORT / K8S_POSTGRES_PORT         - PostgreSQL port (default: "5432")
-//   DB_USER / K8S_POSTGRES_USER         - PostgreSQL user (default: "myuser")
-//   DB_PASSWORD / K8S_POSTGRES_PASSWORD - PostgreSQL password (default: "mysecretpassword")
-//   DB_NAME / K8S_POSTGRES_DBNAME       - PostgreSQL database name (default: "mydatabase")
-//   DB_SSLMODE / K8S_POSTGRES_SSLMODE   - SSL mode (default: "disable")
+//   DB_HOST / K8S_POSTGRES_HOST                             - PostgreSQL host (default: "localhost")
+//   DB_PORT / K8S_POSTGRES_PORT                             - PostgreSQL port (default: "5432")
+//   DB_USER / K8S_POSTGRES_USER                             - PostgreSQL user (default: "myuser")
+//   POSTGRES_PASSWORD / DB_PASSWORD / K8S_POSTGRES_PASSWORD - PostgreSQL password (REQUIRED)
+//   DB_NAME / K8S_POSTGRES_DBNAME                           - PostgreSQL database name (default: "mydatabase")
+//   DB_SSLMODE / K8S_POSTGRES_SSLMODE                       - SSL mode (default: "disable")
 
 func getEnv(primary, secondary, fallback string) string {
 	if v := os.Getenv(primary); v != "" {
@@ -38,7 +38,11 @@ func main() {
 	host := getEnv("DB_HOST", "K8S_POSTGRES_HOST", "localhost")
 	port := getEnv("DB_PORT", "K8S_POSTGRES_PORT", "5432")
 	user := getEnv("DB_USER", "K8S_POSTGRES_USER", "myuser")
-	password := getEnv("DB_PASSWORD", "K8S_POSTGRES_PASSWORD", "mysecretpassword")
+	password := getEnv("POSTGRES_PASSWORD", "DB_PASSWORD", os.Getenv("K8S_POSTGRES_PASSWORD"))
+	if password == "" {
+		fmt.Fprintln(os.Stderr, "error: postgres password is required: please set POSTGRES_PASSWORD, DB_PASSWORD, or K8S_POSTGRES_PASSWORD")
+		os.Exit(1)
+	}
 	dbName := getEnv("DB_NAME", "K8S_POSTGRES_DBNAME", "mydatabase")
 	sslMode := getEnv("DB_SSLMODE", "K8S_POSTGRES_SSLMODE", "disable")
 

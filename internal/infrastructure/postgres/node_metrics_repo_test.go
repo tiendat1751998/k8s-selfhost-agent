@@ -18,15 +18,19 @@ func getNodeMetricsTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	host := os.Getenv("K8S_POSTGRES_HOST")
 	if host == "" {
-		host = "10.10.10.133"
+		host = "localhost"
 	}
 	user := os.Getenv("K8S_POSTGRES_USER")
 	if user == "" {
 		user = "myuser"
 	}
-	pass := os.Getenv("K8S_POSTGRES_PASSWORD")
+	pass := os.Getenv("POSTGRES_PASSWORD")
 	if pass == "" {
-		pass = "mysecretpassword"
+		pass = os.Getenv("K8S_POSTGRES_PASSWORD")
+	}
+	if pass == "" {
+		t.Skip("Skipping live database test: POSTGRES_PASSWORD not set")
+		return nil
 	}
 	dbname := os.Getenv("K8S_POSTGRES_DBNAME")
 	if dbname == "" {

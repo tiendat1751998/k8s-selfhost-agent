@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -33,8 +34,16 @@ func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
 	swarmCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
+	dockerHost := os.Getenv("DOCKER_HOST")
+	if dockerHost == "" {
+		dockerHost = os.Getenv("K8S_DOCKER_HOST")
+	}
+	if dockerHost == "" {
+		dockerHost = "unix:///var/run/docker.sock"
+	}
+
 	cli, err := client.NewClientWithOpts(
-		client.WithHost("tcp://10.10.10.133:2375"),
+		client.WithHost(dockerHost),
 		client.WithVersion("1.41"),
 	)
 	if err != nil {
