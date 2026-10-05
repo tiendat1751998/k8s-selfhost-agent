@@ -8,7 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 func TestTestAgentHostConnection_AuthHeader(t *testing.T) {
@@ -135,11 +139,7 @@ func TestComputeHostTester_SSRFBlocked(t *testing.T) {
 		}
 	})
 
-	t.Run("agent host probe blocks loopback in production", func(t *testing.T) {
-		oldTesting := isTesting
-		defer func() { isTesting = oldTesting }()
-		isTesting = func() bool { return false }
-
+	t.Run("agent host probe blocks loopback by default", func(t *testing.T) {
 		host := &docker.ComputeHost{
 			ID:       "agent-loopback",
 			HostType: "agent",
@@ -149,5 +149,61 @@ func TestComputeHostTester_SSRFBlocked(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "blocked") {
 			t.Fatalf("expected error containing 'blocked', got: %v", err)
 		}
+	})
+}
+
+func TestComputeHostTest_RBAC_Enforcement(t *testing.T) {
+	hostRepo := newMockComputeHostRepo()
+	handler := NewDockerHandler(nil, hostRepo)
+
+	r := chi.NewRouter()
+	r.Route("/docker", handler.RegisterRoutes)
+	r.Route("/hosts", handler.RegisterHostRoutes)
+
+	host := &docker.ComputeHost{
+		ID:       "host-rbac-test",
+		Name:     "rbac-node",
+		HostType: "agent",
+		Endpoint: "http://192.168.1.10:9100",
+		TenantID: "default-tenant",
+	}
+	_ = hostRepo.Create(context.Background(), host)
+
+	t.Run("operator role receives 403 Forbidden on /docker/hosts/{id}/test", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/docker/hosts/"+host.ID+"/test", nil)
+		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "operator")
+		req = req.WithContext(ctx)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+	})
+
+	t.Run("operator role receives 403 Forbidden on standalone /hosts/{id}/test", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/hosts/"+host.ID+"/test", nil)
+		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "operator")
+		req = req.WithContext(ctx)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+	})
+
+	t.Run("viewer role receives 403 Forbidden on /hosts/{id}/test", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/hosts/"+host.ID+"/test", nil)
+		ctx := context.WithValue(req.Context(), tenancy.UserRoleKey, "viewer")
+		req = req.WithContext(ctx)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+	})
+
+	t.Run("unauthenticated request receives 401 Unauthorized on /hosts/{id}/test", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/hosts/"+host.ID+"/test", nil)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	})
 }
