@@ -383,22 +383,32 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 		}
 	})
 
-	// Serve frontend static files
+	// Serve frontend static files with SPA history routing fallback
 	frontendDir := findFrontendDir()
 	if frontendDir != "" {
-		fileServer := http.FileServer(http.Dir(frontendDir))
-		r.Handle("/*", fileServer)
+		r.Handle("/*", NewSPAHandler(frontendDir))
 	}
 
 	return r
 }
 
-// findFrontendDir locates the frontend directory relative to the binary.
+// findFrontendDir locates the frontend directory relative to the binary or from FRONTEND_DIR env var.
 func findFrontendDir() string {
+	if envDir := os.Getenv("FRONTEND_DIR"); envDir != "" {
+		if info, err := os.Stat(envDir); err == nil && info.IsDir() {
+			return envDir
+		}
+	}
 	candidates := []string{
 		"frontend",
+		"/frontend",
+		"/app/frontend",
+		"frontend-vue/dist",
+		"../frontend-vue/dist",
+		"../../frontend-vue/dist",
 		"../frontend",
 		"../../frontend",
+		"dist",
 	}
 	for _, dir := range candidates {
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
