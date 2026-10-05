@@ -136,17 +136,6 @@ type wsExecMessage struct {
 	Height uint16 `json:"height"`
 }
 
-// resolveExecTenant derives the tenant ID strictly from authenticated claims in context,
-// honoring the client X-Tenant-ID header only if the caller's verified role is platform_admin.
-func resolveExecTenant(r *http.Request) string {
-	if tenancy.UserRoleFromContext(r.Context()) == "platform_admin" {
-		if h := strings.TrimSpace(r.Header.Get("X-Tenant-ID")); h != "" {
-			return h
-		}
-	}
-	return tenancy.TenantIDFromContext(r.Context())
-}
-
 // HandleExec upgrades an HTTP request to a WebSocket and bridges interactive terminal exec to a Pod.
 func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 	cluster := chi.URLParam(r, "cluster")
@@ -168,10 +157,14 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 		namespace = "default"
 	}
 
-	// Enforce tenant boundary check if not platform_admin
+	// Enforce authentication & tenant boundary check
 	userRole := tenancy.UserRoleFromContext(r.Context())
-	if userRole != "platform_admin" && (userRole != "" || tenancy.TenantIDFromContext(r.Context()) != "" || namespace != "default") {
-		tenantID := resolveExecTenant(r)
+	if userRole == "" {
+		writeError(w, http.StatusForbidden, "forbidden: missing role", nil)
+		return
+	}
+	if userRole != "platform_admin" {
+		tenantID := resolveTenant(r.Context(), r)
 		if !isTenantNamespaceAllowed(tenantID, namespace) {
 			writeError(w, http.StatusForbidden, "forbidden: access to namespace not allowed for tenant", nil)
 			return
@@ -215,8 +208,8 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if userRole != "platform_admin" && (userRole != "" || tenancy.TenantIDFromContext(r.Context()) != "" || namespace != "default") {
-		tenantID := resolveExecTenant(r)
+	if userRole != "platform_admin" {
+		tenantID := resolveTenant(r.Context(), r)
 		if !isTenantNamespaceAllowed(tenantID, namespace) {
 			writeError(w, http.StatusForbidden, "forbidden: access to namespace not allowed for tenant", nil)
 			return
