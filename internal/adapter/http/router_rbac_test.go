@@ -191,14 +191,14 @@ func TestRouter_RBACEnforcement(t *testing.T) {
 	})
 
 	t.Run("Metrics endpoint respects METRICS_TOKEN", func(t *testing.T) {
-		// 1. Default (no token configured): open access
+		// 1. Unauthenticated request without token returns 401 Unauthorized (SEC-14)
 		t.Setenv("METRICS_TOKEN", "")
 		metricsRouter := NewRouterWithWS(healthHandler, nil, platform)
-		reqOpen := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-		recOpen := httptest.NewRecorder()
-		metricsRouter.ServeHTTP(recOpen, reqOpen)
-		if recOpen.Code != http.StatusOK {
-			t.Errorf("expected 200 OK for open /metrics, got %d", recOpen.Code)
+		reqNoToken := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		recNoToken := httptest.NewRecorder()
+		metricsRouter.ServeHTTP(recNoToken, reqNoToken)
+		if recNoToken.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401 Unauthorized for unauthenticated /metrics, got %d", recNoToken.Code)
 		}
 
 		// 2. METRICS_TOKEN set: unauthenticated request is 401
@@ -217,6 +217,15 @@ func TestRouter_RBACEnforcement(t *testing.T) {
 		metricsRouter.ServeHTTP(recAuthed, reqAuthed)
 		if recAuthed.Code != http.StatusOK {
 			t.Errorf("expected 200 OK for /metrics with valid bearer token, got %d", recAuthed.Code)
+		}
+
+		// 4. Valid JWT allows access to /metrics (SEC-14)
+		reqJWT := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		reqJWT.Header.Set("Authorization", "Bearer "+operatorToken)
+		recJWT := httptest.NewRecorder()
+		metricsRouter.ServeHTTP(recJWT, reqJWT)
+		if recJWT.Code != http.StatusOK {
+			t.Errorf("expected 200 OK for /metrics with valid JWT, got %d", recJWT.Code)
 		}
 	})
 }

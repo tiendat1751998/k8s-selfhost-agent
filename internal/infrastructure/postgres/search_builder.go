@@ -89,10 +89,11 @@ func (b *SearchQueryBuilder) BuildAuditLogQuery(ctx context.Context, q string) C
 		WHERE action ILIKE '%' || $1 || '%' OR target_name ILIKE '%' || $1 || '%' OR actor ILIKE '%' || $1 || '%'
 		LIMIT 10
 	`
+	query, args := BuildTenantQuery(ctx, rawQuery, q)
 	return CompiledSearchQuery{
 		Domain: SearchDomainLog,
-		SQL:    rawQuery,
-		Args:   []interface{}{q},
+		SQL:    query,
+		Args:   args,
 	}
 }
 

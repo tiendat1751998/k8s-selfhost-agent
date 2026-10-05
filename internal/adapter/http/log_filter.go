@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"sort"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/logging"
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 const (
@@ -167,18 +165,6 @@ func getContainerAliases(t string) []string {
 		return []string{t}
 	}
 	return nil
-}
-
-func resolveTenant(ctx context.Context, r *http.Request) string {
-	if tenantID := tenancy.TenantIDFromContext(ctx); strings.TrimSpace(tenantID) != "" {
-		return strings.TrimSpace(tenantID)
-	}
-	if r != nil {
-		if hTenant := strings.TrimSpace(r.Header.Get("X-Tenant-ID")); hTenant != "" {
-			return hTenant
-		}
-	}
-	return ""
 }
 
 func firstNonEmpty(vals ...string) string {

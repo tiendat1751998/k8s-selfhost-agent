@@ -175,3 +175,78 @@ func TestGetEncryptionKey_TooShort_Error(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEncryptionKey_MasterEncryptionKey(t *testing.T) {
+	origMaster := os.Getenv("MASTER_ENCRYPTION_KEY")
+	origEnc := os.Getenv("ENCRYPTION_KEY")
+	defer func() {
+		os.Setenv("MASTER_ENCRYPTION_KEY", origMaster)
+		os.Setenv("ENCRYPTION_KEY", origEnc)
+	}()
+
+	os.Setenv("MASTER_ENCRYPTION_KEY", "masterkey12345678901234567890123")
+	os.Setenv("ENCRYPTION_KEY", "fallbackkey1234567890123456789012")
+
+	key, err := getEncryptionKey()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(key) != "masterkey12345678901234567890123" {
+		t.Fatalf("expected MASTER_ENCRYPTION_KEY to take precedence, got %q", string(key))
+	}
+}
+
+func TestGetEncryptionKey_Base64(t *testing.T) {
+	origMaster := os.Getenv("MASTER_ENCRYPTION_KEY")
+	defer os.Setenv("MASTER_ENCRYPTION_KEY", origMaster)
+
+	// Base64 encoding of 32 bytes "12345678901234567890123456789012"
+	b64Key := "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI="
+	os.Setenv("MASTER_ENCRYPTION_KEY", b64Key)
+
+	key, err := getEncryptionKey()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(key) != "12345678901234567890123456789012" {
+		t.Fatalf("expected decoded base64 key, got %q", string(key))
+	}
+}
+
+func TestEncrypt_HasVersionPrefix(t *testing.T) {
+	origKey := os.Getenv("ENCRYPTION_KEY")
+	defer os.Setenv("ENCRYPTION_KEY", origKey)
+	os.Setenv("ENCRYPTION_KEY", "12345678901234567890123456789012")
+
+	ciphertext, err := Encrypt("test-plaintext")
+	if err != nil {
+		t.Fatalf("failed to encrypt: %v", err)
+	}
+	if len(ciphertext) < 7 || ciphertext[:7] != "enc:v1:" {
+		t.Fatalf("expected ciphertext to start with 'enc:v1:', got %q", ciphertext)
+	}
+
+	decrypted, err := Decrypt(ciphertext)
+	if err != nil {
+		t.Fatalf("failed to decrypt: %v", err)
+	}
+	if decrypted != "test-plaintext" {
+		t.Fatalf("expected 'test-plaintext', got %q", decrypted)
+	}
+}
+
+func TestDecrypt_BackwardCompatibility_Plaintext(t *testing.T) {
+	origKey := os.Getenv("ENCRYPTION_KEY")
+	defer os.Setenv("ENCRYPTION_KEY", origKey)
+	os.Setenv("ENCRYPTION_KEY", "12345678901234567890123456789012")
+
+	legacyPlaintext := "apiVersion: v1\nkind: Config\nclusters: []"
+	decrypted, err := Decrypt(legacyPlaintext)
+	if err != nil {
+		t.Fatalf("expected no error loading legacy plaintext row, got %v", err)
+	}
+	if decrypted != legacyPlaintext {
+		t.Fatalf("expected decrypted text to equal legacy plaintext, got %q", decrypted)
+	}
+}
+

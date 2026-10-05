@@ -28,60 +28,101 @@ func (r *queryRewriter) rewriteSingleSelect(tokens []Token) []Token {
 	hasWhere, whereIdx := r.findTopLevelWhere(tokens)
 	insertIdx := r.findFilterInsertionPoint(tokens, hasWhere, whereIdx)
 
-	var filterTokens []Token
-	needLeadingSpace := true
-	if insertIdx > 0 && tokens[insertIdx-1].Type == TokenWhitespace {
-		needLeadingSpace = false
-	}
-
-	needTrailingSpace := false
-	if insertIdx < len(tokens) && tokens[insertIdx].Type != TokenWhitespace {
-		needTrailingSpace = true
-	}
-
-	if needLeadingSpace {
-		filterTokens = append(filterTokens, Token{Type: TokenWhitespace, Value: " "})
-	}
-
-	for i, qualifier := range qualifiers {
-		r.args = append(r.args, r.tenantID)
-		paramIdx := len(r.args)
-
-		if i == 0 && !hasWhere {
-			filterTokens = append(filterTokens,
-				Token{Type: TokenKeyword, Value: "WHERE"},
-				Token{Type: TokenWhitespace, Value: " "},
-				Token{Type: TokenIdentifier, Value: qualifier},
-				Token{Type: TokenWhitespace, Value: " "},
-				Token{Type: TokenOperator, Value: "="},
-				Token{Type: TokenWhitespace, Value: " "},
-				Token{Type: TokenPlaceholder, Value: fmt.Sprintf("$%d", paramIdx)},
-			)
-		} else {
-			filterTokens = append(filterTokens,
-				Token{Type: TokenKeyword, Value: "AND"},
-				Token{Type: TokenWhitespace, Value: " "},
-				Token{Type: TokenIdentifier, Value: qualifier},
-				Token{Type: TokenWhitespace, Value: " "},
-				Token{Type: TokenOperator, Value: "="},
-				Token{Type: TokenWhitespace, Value: " "},
-				Token{Type: TokenPlaceholder, Value: fmt.Sprintf("$%d", paramIdx)},
-			)
+	if !hasWhere {
+		var filterTokens []Token
+		needLeadingSpace := true
+		if insertIdx > 0 && tokens[insertIdx-1].Type == TokenWhitespace {
+			needLeadingSpace = false
 		}
-
-		if i < len(qualifiers)-1 {
+		if needLeadingSpace {
 			filterTokens = append(filterTokens, Token{Type: TokenWhitespace, Value: " "})
 		}
+
+		for i, qualifier := range qualifiers {
+			r.args = append(r.args, r.tenantID)
+			paramIdx := len(r.args)
+
+			if i == 0 {
+				filterTokens = append(filterTokens,
+					Token{Type: TokenKeyword, Value: "WHERE"},
+					Token{Type: TokenWhitespace, Value: " "},
+					Token{Type: TokenIdentifier, Value: qualifier},
+					Token{Type: TokenWhitespace, Value: " "},
+					Token{Type: TokenOperator, Value: "="},
+					Token{Type: TokenWhitespace, Value: " "},
+					Token{Type: TokenPlaceholder, Value: fmt.Sprintf("$%d", paramIdx)},
+				)
+			} else {
+				filterTokens = append(filterTokens,
+					Token{Type: TokenWhitespace, Value: " "},
+					Token{Type: TokenKeyword, Value: "AND"},
+					Token{Type: TokenWhitespace, Value: " "},
+					Token{Type: TokenIdentifier, Value: qualifier},
+					Token{Type: TokenWhitespace, Value: " "},
+					Token{Type: TokenOperator, Value: "="},
+					Token{Type: TokenWhitespace, Value: " "},
+					Token{Type: TokenPlaceholder, Value: fmt.Sprintf("$%d", paramIdx)},
+				)
+			}
+		}
+
+		if insertIdx < len(tokens) && tokens[insertIdx].Type != TokenWhitespace {
+			filterTokens = append(filterTokens, Token{Type: TokenWhitespace, Value: " "})
+		}
+
+		var out []Token
+		out = append(out, tokens[:insertIdx]...)
+		out = append(out, filterTokens...)
+		out = append(out, tokens[insertIdx:]...)
+		return out
 	}
 
-	if needTrailingSpace {
-		filterTokens = append(filterTokens, Token{Type: TokenWhitespace, Value: " "})
+	condStart := whereIdx + 1
+	for condStart < insertIdx && tokens[condStart].Type == TokenWhitespace {
+		condStart++
+	}
+	condEnd := insertIdx - 1
+	for condEnd >= condStart && tokens[condEnd].Type == TokenWhitespace {
+		condEnd--
 	}
 
 	var out []Token
-	out = append(out, tokens[:insertIdx]...)
-	out = append(out, filterTokens...)
-	out = append(out, tokens[insertIdx:]...)
+	out = append(out, tokens[:whereIdx+1]...)
+
+	if condStart <= condEnd {
+		origCondTokens := tokens[condStart : condEnd+1]
+		out = append(out,
+			Token{Type: TokenWhitespace, Value: " "},
+			Token{Type: TokenPunctuation, Value: "("},
+		)
+		out = append(out, origCondTokens...)
+		out = append(out,
+			Token{Type: TokenPunctuation, Value: ")"},
+		)
+	}
+
+	for _, qualifier := range qualifiers {
+		r.args = append(r.args, r.tenantID)
+		paramIdx := len(r.args)
+
+		out = append(out,
+			Token{Type: TokenWhitespace, Value: " "},
+			Token{Type: TokenKeyword, Value: "AND"},
+			Token{Type: TokenWhitespace, Value: " "},
+			Token{Type: TokenIdentifier, Value: qualifier},
+			Token{Type: TokenWhitespace, Value: " "},
+			Token{Type: TokenOperator, Value: "="},
+			Token{Type: TokenWhitespace, Value: " "},
+			Token{Type: TokenPlaceholder, Value: fmt.Sprintf("$%d", paramIdx)},
+		)
+	}
+
+	if insertIdx < len(tokens) {
+		if tokens[insertIdx].Type != TokenWhitespace {
+			out = append(out, Token{Type: TokenWhitespace, Value: " "})
+		}
+		out = append(out, tokens[insertIdx:]...)
+	}
 	return out
 }
 
@@ -153,10 +194,18 @@ func (r *queryRewriter) findTopLevelWhere(tokens []Token) (bool, int) {
 	return false, -1
 }
 
+func isClauseBoundaryKeyword(val string) bool {
+	u := strings.ToUpper(val)
+	return u == "ORDER" || u == "GROUP" || u == "LIMIT" || u == "OFFSET" ||
+		u == "FOR" || u == "HAVING" || u == "UNION" || u == "RETURNING" ||
+		u == "WINDOW" || u == "FETCH"
+}
+
 func (r *queryRewriter) findFilterInsertionPoint(tokens []Token, hasWhere bool, whereIdx int) int {
 	depth := 0
 
 	if hasWhere {
+		boundaryIdx := len(tokens)
 		for i := whereIdx + 1; i < len(tokens); i++ {
 			tok := tokens[i]
 			if tok.Value == "(" {
@@ -166,18 +215,23 @@ func (r *queryRewriter) findFilterInsertionPoint(tokens []Token, hasWhere bool, 
 					depth--
 				}
 			} else if depth == 0 {
-				if tok.Type == TokenComment {
-					return i
-				}
-				if tok.Type == TokenKeyword {
-					u := strings.ToUpper(tok.Value)
-					if u == "ORDER" || u == "GROUP" || u == "LIMIT" || u == "OFFSET" || u == "FOR" || u == "HAVING" || u == "UNION" || u == "RETURNING" {
-						return i
-					}
+				if tok.Type == TokenKeyword && isClauseBoundaryKeyword(tok.Value) {
+					boundaryIdx = i
+					break
 				}
 			}
 		}
-		return len(tokens)
+
+		for k := boundaryIdx - 1; k > whereIdx; k-- {
+			if tokens[k].Type == TokenWhitespace {
+				continue
+			}
+			if tokens[k].Type == TokenComment && strings.HasPrefix(tokens[k].Value, "--") {
+				boundaryIdx = k
+			}
+			break
+		}
+		return boundaryIdx
 	}
 
 	fromIdx := -1
@@ -203,6 +257,7 @@ func (r *queryRewriter) findFilterInsertionPoint(tokens []Token, hasWhere bool, 
 	}
 
 	depth = 0
+	boundaryIdx := len(tokens)
 	for i := startSearch; i < len(tokens); i++ {
 		tok := tokens[i]
 		if tok.Value == "(" {
@@ -212,17 +267,23 @@ func (r *queryRewriter) findFilterInsertionPoint(tokens []Token, hasWhere bool, 
 				depth--
 			}
 		} else if depth == 0 {
-			if tok.Type == TokenComment {
-				return i
-			}
-			if tok.Type == TokenKeyword {
-				u := strings.ToUpper(tok.Value)
-				if u == "ORDER" || u == "GROUP" || u == "LIMIT" || u == "OFFSET" || u == "FOR" || u == "HAVING" || u == "UNION" || u == "RETURNING" {
-					return i
-				}
+			if tok.Type == TokenKeyword && isClauseBoundaryKeyword(tok.Value) {
+				boundaryIdx = i
+				break
 			}
 		}
 	}
 
-	return len(tokens)
+	for k := boundaryIdx - 1; k >= startSearch; k-- {
+		if tokens[k].Type == TokenWhitespace {
+			continue
+		}
+		if tokens[k].Type == TokenComment && strings.HasPrefix(tokens[k].Value, "--") {
+			boundaryIdx = k
+		}
+		break
+	}
+
+	return boundaryIdx
 }
+

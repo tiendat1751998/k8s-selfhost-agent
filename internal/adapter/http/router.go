@@ -131,7 +131,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			r.With(authRateLimit).Post("/verify-mfa", platform.Auth.VerifyMFA)
 			r.With(authRateLimit).Post("/refresh", platform.Auth.RefreshToken)
 			r.With(authRateLimit).Post("/recovery/verify", platform.Auth.VerifyRecoveryCode)
-			r.Post("/logout", platform.Auth.Logout)
+			r.With(authRateLimit).Post("/logout", platform.Auth.Logout)
 
 			// Authenticated TOTP routes
 			r.Group(func(r chi.Router) {
