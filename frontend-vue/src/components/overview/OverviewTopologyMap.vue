@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { NodeMetrics } from '../../api/overview'
 import NodeCard from './nodes/NodeCard.vue'
 
@@ -46,8 +47,8 @@ const emit = defineEmits<{
         <div class="topology-title-with-pulse">
           <span class="pulse-beacon"></span>
           <h2 class="section-title">
-            <span class="title-full">🖥️ Infrastructure Hosts &amp; Node Mesh</span>
-            <span class="title-mobile">🖥️ Hosts &amp; Mesh</span>
+            <span class="title-full"><BaseIcon name="server" size="sm" /> Infrastructure Hosts &amp; Node Mesh</span>
+            <span class="title-mobile"><BaseIcon name="server" size="sm" /> Hosts &amp; Mesh</span>
           </h2>
         </div>
         <p class="section-subtitle">
@@ -81,7 +82,7 @@ const emit = defineEmits<{
           :class="{ active: selectedFilter === 'control_plane' }"
           @click="emit('update:selectedFilter', 'control_plane')"
         >
-          <span>👑 Control-Plane</span>
+          <span><BaseIcon name="anchor" size="xs" /> Control-Plane</span>
           <span class="pill-count font-mono">{{ filterCounts.control }}</span>
         </button>
 
@@ -91,7 +92,7 @@ const emit = defineEmits<{
           :class="{ active: selectedFilter === 'worker' }"
           @click="emit('update:selectedFilter', 'worker')"
         >
-          <span>📡 Workers</span>
+          <span><BaseIcon name="cpu" size="xs" /> Workers</span>
           <span class="pill-count font-mono">{{ filterCounts.worker }}</span>
         </button>
 
@@ -101,7 +102,7 @@ const emit = defineEmits<{
           :class="{ active: selectedFilter === 'hot' }"
           @click="emit('update:selectedFilter', 'hot')"
         >
-          <span>🔥 Hot Nodes</span>
+          <span><BaseIcon name="activity" size="xs" /> Hot Nodes</span>
           <span class="pill-count font-mono">{{ filterCounts.hot }}</span>
         </button>
 
@@ -111,7 +112,7 @@ const emit = defineEmits<{
           :class="{ active: selectedFilter === 'overloaded' }"
           @click="emit('update:selectedFilter', 'overloaded')"
         >
-          <span>⚠️ Overloaded</span>
+          <span><BaseIcon name="alert-triangle" size="xs" /> Overloaded</span>
           <span class="pill-count font-mono">{{ filterCounts.overloaded }}</span>
         </button>
       </div>
@@ -126,7 +127,7 @@ const emit = defineEmits<{
     <!-- Grid -->
     <div class="node-cards-grid">
       <div v-if="filteredNodes.length === 0" class="empty-topology-state glass-panel">
-        <span class="empty-topology-icon">🔍</span>
+        <span class="empty-topology-icon"><BaseIcon name="search" size="md" /></span>
         <span class="empty-topology-text">No servers match the selected filter "{{ selectedFilter }}".</span>
         <button class="btn-reset-filters" @click="emit('update:selectedFilter', 'all')">Show All Servers</button>
       </div>

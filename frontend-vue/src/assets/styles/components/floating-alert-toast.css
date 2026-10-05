@@ -6,34 +6,35 @@
 /* 1. Header Alert Container & Bell Capsule (Top HUD) */
 .top-hud-alert-container { position: relative; display: inline-flex; align-items: center; z-index: 9999; }
 .hud-bell-pill {
-  display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px;
-  border-radius: 9999px; font-size: 12px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; min-width: 30px; min-height: 30px; padding: 0;
+  border-radius: 6px; cursor: pointer;
   background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  color: var(--text-secondary, #94a3b8); transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  user-select: none; line-height: 1;
+  color: var(--text-secondary, #94a3b8); transition: all 0.15s ease;
+  user-select: none; line-height: 1; position: relative;
 }
-.hud-bell-pill:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.08); color: #fff; }
+.hud-bell-pill:hover { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.2); }
 .hud-bell-pill:active { transform: translateY(0); }
-.bell-icon-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
-.bell-emoji { display: inline-block; line-height: 1; }
-.bell-count-text { letter-spacing: 0.02em; font-family: var(--font-sans, inherit); }
-.bell-mobile-badge { display: none; }
+.bell-icon-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+.bell-svg { display: inline-block; line-height: 1; color: inherit; }
+.bell-badge-count {
+  position: absolute; top: -6px; right: -8px; min-width: 15px; height: 15px; line-height: 15px;
+  padding: 0 3px; border-radius: 9999px; font-size: 9.5px; font-weight: 700; text-align: center;
+  color: #fff; display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 1.5px rgba(11, 15, 25, 0.95);
+}
+.badge-rose-bg { background: #ef4444; }
+.badge-amber-bg { background: #f59e0b; }
+.badge-muted-bg { background: #64748b; }
 
 .pill-critical {
-  background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35);
-  color: #f87171; box-shadow: none;
-  animation: critical-pill-pulse 2.2s infinite;
+  border-color: rgba(239, 68, 68, 0.35); color: #f87171;
 }
-.pill-critical:hover { background: rgba(239, 68, 68, 0.22); border-color: rgba(239, 68, 68, 0.5); color: #fca5a5; }
 .pill-warning {
-  background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.55);
-  color: #fbbf24; box-shadow: 0 0 14px rgba(245, 158, 11, 0.3), inset 0 0 8px rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4); color: #fbbf24;
 }
-.pill-warning:hover { background: rgba(245, 158, 11, 0.25); border-color: rgba(245, 158, 11, 0.75); color: #fff; }
-.pill-muted { background: rgba(15, 23, 42, 0.75); border: 1px dashed rgba(148, 163, 184, 0.45); color: #cbd5e1; }
-.pill-muted:hover { border-color: rgba(148, 163, 184, 0.75); color: #fff; }
-.pill-clean { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.08); color: #64748b; }
-.pill-clean:hover { border-color: rgba(6, 182, 212, 0.4); color: #38bdf8; background: rgba(6, 182, 212, 0.06); }
+.pill-muted { border: 1px dashed rgba(148, 163, 184, 0.45); color: #94a3b8; }
+.pill-clean { color: #94a3b8; }
 
 @keyframes critical-pill-pulse {
   0%, 100% { opacity: 1; }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../../ui/BaseIcon.vue'
 import NodeHistoricalKpis from './NodeHistoricalKpis.vue'
 import NodeHistoricalCustomToolbar from './NodeHistoricalCustomToolbar.vue'
 import { formatPercent, formatBytes, formatIoRate } from './nodeChartMath'
@@ -86,7 +87,7 @@ const {
             title="Toggle Peak Spike Envelope layer"
           >
             <span class="toggle-dot bg-rose"></span>
-            <span>🔥 Peak Envelope: <strong>{{ showHistPeakEnvelope ? 'ON' : 'OFF' }}</strong></span>
+            <span>Peak Envelope: <strong>{{ showHistPeakEnvelope ? 'ON' : 'OFF' }}</strong></span>
           </button>
 
           <button
@@ -268,7 +269,7 @@ const {
         <!-- Floating Tooltip Box -->
         <div v-if="isNodeHistHovered && hoveredNodeHistPoint" class="hist-rich-tooltip" :style="nodeHistTooltipStyle">
           <div class="tooltip-time-header">
-            🕒 {{ new Date(hoveredNodeHistPoint.recorded_at).toLocaleString() }}
+            <BaseIcon name="clock" size="xs" /> {{ new Date(hoveredNodeHistPoint.recorded_at).toLocaleString() }}
           </div>
           <div class="tooltip-series-row" v-if="showHistCpu">
             <span class="tooltip-dot dot-violet"></span>
@@ -276,16 +277,16 @@ const {
             <strong class="tooltip-val text-violet">
               {{ formatPercent(hoveredNodeHistPoint.cpu_percent) }}
               <span v-if="(hoveredNodeHistPoint.cpu_peak || 0) > hoveredNodeHistPoint.cpu_percent" class="tooltip-peak-highlight">
-                (🔥 Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})
+                (Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})
               </span>
             </strong>
           </div>
           <div v-if="showHistCpu && (hoveredNodeHistPoint.cpu_peak || 0) >= 85" class="tooltip-spike-alert">
-            <span class="spike-alert-tag">⚠️ Critical Spike: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }}</span>
+            <span class="spike-alert-tag"><BaseIcon name="alert-triangle" size="xs" /> Critical Spike: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }}</span>
           </div>
           <div v-if="hoveredPointSuspect" class="tooltip-suspect-row">
             <span class="tooltip-suspect-tag">
-              🔥 Top Offender: <strong class="text-rose">{{ hoveredPointSuspect.name }}</strong> ({{ hoveredPointSuspect.reason }})
+              Top Offender: <strong class="text-rose">{{ hoveredPointSuspect.name }}</strong> ({{ hoveredPointSuspect.reason }})
             </span>
           </div>
           <div class="tooltip-series-row" v-if="showHistMem">

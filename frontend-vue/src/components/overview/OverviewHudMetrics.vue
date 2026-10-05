@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { SystemOverview, NodeMetrics } from '../../api/overview'
 
 interface Props {
@@ -63,7 +64,7 @@ function formatBytes(bytes: number): string {
       </div>
       <div class="hud-card-footer font-mono">
         <span :class="overview.healthy_nodes === overview.total_nodes ? 'text-emerald' : 'text-amber'">
-          🖥️ {{ overview.healthy_nodes }} Online · {{ (overview.total_nodes || 0) - (overview.healthy_nodes || 0) }} Offline
+          <BaseIcon name="server" size="xs" /> {{ overview.healthy_nodes }} Online · {{ (overview.total_nodes || 0) - (overview.healthy_nodes || 0) }} Offline
         </span>
       </div>
     </div>
@@ -72,7 +73,7 @@ function formatBytes(bytes: number): string {
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
         <span class="hud-label">Containers</span>
-        <span class="hud-icon">📦</span>
+        <span class="hud-icon"><BaseIcon name="box" size="sm" /></span>
       </div>
       <div class="hud-value-row">
         <span
@@ -92,7 +93,7 @@ function formatBytes(bytes: number): string {
         ></div>
       </div>
       <div class="hud-card-footer font-mono">
-        <span class="text-cyan">🚀 Active App Workloads</span>
+        <span class="text-cyan"><BaseIcon name="play" size="xs" /> Active App Workloads</span>
       </div>
     </div>
 
@@ -100,7 +101,7 @@ function formatBytes(bytes: number): string {
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
         <span class="hud-label">CPU Saturation</span>
-        <span class="hud-icon">⚡</span>
+        <span class="hud-icon"><BaseIcon name="activity" size="sm" /></span>
       </div>
       <div class="hud-value-row">
         <span class="hud-value" :class="`text-${getUtilizationColor(overview.total_cpu_percent || 0)}`">
@@ -129,7 +130,7 @@ function formatBytes(bytes: number): string {
     <div class="hud-card glass-panel">
       <div class="hud-card-top">
         <span class="hud-label">Memory &amp; Storage</span>
-        <span class="hud-icon">🧠</span>
+        <span class="hud-icon"><BaseIcon name="cpu" size="sm" /></span>
       </div>
       <div class="hud-value-row">
         <span class="hud-value" :class="`text-${getUtilizationColor(overview.total_mem_percent || 0)}`">

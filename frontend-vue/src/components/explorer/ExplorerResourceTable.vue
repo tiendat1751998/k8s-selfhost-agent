@@ -225,7 +225,7 @@ function handleRowAction(actionId: string, res: K8sResource) {
             title="Scale Replicas"
             @click="emit('scale', toResource(row))"
           >
-            <BaseIcon name="zap" size="xs" />
+            <BaseIcon name="sliders" size="xs" />
             <span>Scale</span>
           </button>
 

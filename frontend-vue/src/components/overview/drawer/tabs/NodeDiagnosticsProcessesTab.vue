@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../../../ui/BaseIcon.vue'
 import { formatPercent, formatBytes, formatIoRate } from './nodeDiagnosticsUtils'
 import { useNodeProcesses, type NodeProcessesProps } from './useNodeProcesses'
 
@@ -25,7 +26,7 @@ const {
   <div class="node-processes-section mt-4">
     <div class="proc-header-row">
       <div class="proc-title-group">
-        <h4 class="proc-section-heading">🔥 Top Resource-Consuming Apps & Processes</h4>
+        <h4 class="proc-section-heading">Top Resource-Consuming Apps &amp; Processes</h4>
         <span class="badge badge-indigo font-mono" v-if="filteredNodeProcesses.length > 0">
           {{ filteredNodeProcesses.length }} active
         </span>
@@ -45,28 +46,28 @@ const {
           :class="{ active: processCategoryFilter === 'container' }"
           @click="processCategoryFilter = 'container'; processCurrentPage = 1"
         >
-          📦 Workloads ({{ processCategoryCounts.container }})
+          <BaseIcon name="box" size="xs" /> Workloads ({{ processCategoryCounts.container }})
         </button>
         <button
           class="chip-btn chip-traffic"
           :class="{ active: processCategoryFilter === 'host_daemon' }"
           @click="processCategoryFilter = 'host_daemon'; processCurrentPage = 1"
         >
-          ⚡ Host Daemons ({{ processCategoryCounts.hostDaemon }})
+          <BaseIcon name="server" size="xs" /> Host Daemons ({{ processCategoryCounts.hostDaemon }})
         </button>
         <button
           class="chip-btn chip-degraded"
           :class="{ active: processCategoryFilter === 'kernel' }"
           @click="processCategoryFilter = 'kernel'; processCurrentPage = 1"
         >
-          ⚙️ OS Kernel ({{ processCategoryCounts.kernel }})
+          <BaseIcon name="cpu" size="xs" /> OS Kernel ({{ processCategoryCounts.kernel }})
         </button>
       </div>
     </div>
 
     <div class="proc-controls">
       <div class="proc-search-box wide-search">
-        <span class="search-icon">🔍</span>
+        <span class="search-icon"><BaseIcon name="search" size="xs" /></span>
         <input
           v-model="processSearch"
           type="text"
@@ -163,13 +164,13 @@ const {
             </td>
             <td class="col-proc-disk font-mono text-slate">
               <span class="bw-split">
-                <span class="bw-rx text-cyan" :title="'Process Disk Read: ' + formatIoRate(proc.disk_read_bytes_per_sec || 0)">📖 {{ formatIoRate(proc.disk_read_bytes_per_sec || 0) }}</span>
-                <span class="bw-tx text-purple" :title="'Process Disk Write: ' + formatIoRate(proc.disk_write_bytes_per_sec || 0)">✍️ {{ formatIoRate(proc.disk_write_bytes_per_sec || 0) }}</span>
+                <span class="bw-rx text-cyan" :title="'Process Disk Read: ' + formatIoRate(proc.disk_read_bytes_per_sec || 0)">R: {{ formatIoRate(proc.disk_read_bytes_per_sec || 0) }}</span>
+                <span class="bw-tx text-purple" :title="'Process Disk Write: ' + formatIoRate(proc.disk_write_bytes_per_sec || 0)">W: {{ formatIoRate(proc.disk_write_bytes_per_sec || 0) }}</span>
               </span>
             </td>
             <td class="col-proc-rps font-mono text-emerald">
               <span v-if="proc.requests_per_sec > 0">
-                ⚡ {{ proc.requests_per_sec.toLocaleString() }}
+                {{ proc.requests_per_sec.toLocaleString() }}
               </span>
               <span v-else class="text-slate opacity-40">0</span>
             </td>

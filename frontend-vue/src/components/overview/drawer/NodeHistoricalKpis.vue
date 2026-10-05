@@ -18,7 +18,7 @@ defineProps<Props>()
       <span class="kpi-label">REALTIME CPU / PEAK</span>
       <span class="kpi-val text-violet">{{ formatPercent(node?.cpu_percent) }}</span>
       <span class="kpi-sub font-mono">
-        🔥 Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_cpu_percent || node?.cpu_percent) }} <span class="text-slate">| Avg: {{ formatPercent(nodeHistoryData?.summary?.avg_cpu_percent || node?.cpu_percent) }}</span>
+        Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_cpu_percent || node?.cpu_percent) }} <span class="text-slate">| Avg: {{ formatPercent(nodeHistoryData?.summary?.avg_cpu_percent || node?.cpu_percent) }}</span>
       </span>
     </div>
 
@@ -27,7 +27,7 @@ defineProps<Props>()
       <span class="kpi-label">REALTIME RAM / PEAK</span>
       <span class="kpi-val text-cyan">{{ formatPercent(node?.memory_percent) }}</span>
       <span class="kpi-sub font-mono">
-        🧠 {{ formatBytes(node?.memory_used) }} / {{ formatBytes(node?.memory_total) }} <span class="text-slate">(Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_mem_percent || node?.memory_percent) }})</span>
+        {{ formatBytes(node?.memory_used) }} / {{ formatBytes(node?.memory_total) }} <span class="text-slate">(Peak: {{ formatPercent(nodeHistoryData?.summary?.peak_mem_percent || node?.memory_percent) }})</span>
       </span>
     </div>
 
@@ -45,7 +45,7 @@ defineProps<Props>()
         </div>
       </div>
       <span class="kpi-sub font-mono">
-        ⚡ Peak: <span class="text-emerald">↓ {{ formatIoRate(nodeHistoryData?.summary?.peak_rx_bytes_sec || node?.network_rx_bytes) }}</span> <span class="text-slate">·</span> <span class="text-cyan">↑ {{ formatIoRate(nodeHistoryData?.summary?.peak_tx_bytes_sec || node?.network_tx_bytes) }}</span>
+        Peak: <span class="text-emerald">↓ {{ formatIoRate(nodeHistoryData?.summary?.peak_rx_bytes_sec || node?.network_rx_bytes) }}</span> <span class="text-slate">·</span> <span class="text-cyan">↑ {{ formatIoRate(nodeHistoryData?.summary?.peak_tx_bytes_sec || node?.network_tx_bytes) }}</span>
       </span>
     </div>
 

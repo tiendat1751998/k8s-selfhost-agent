@@ -37,7 +37,7 @@ function handleClose() {
     :show="show"
     mode="modal"
     maxWidth="1140px"
-    title="⚡ Traffic & Telemetry Deep-Dive"
+    title="Traffic & Telemetry Deep-Dive"
     subtitle="High-resolution time-series saturation curves and multi-service traffic contributor breakdown"
     @close="handleClose"
   >

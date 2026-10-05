@@ -1,129 +1,114 @@
 /* ==========================================================================
-   Explorer - Sleek Unified 38px Enterprise Toolbar & Kind Sub-strip
-   Dark OLED Slate tokens (rgba(15, 23, 42, 0.75), borders rgba(148, 163, 184, 0.15))
-   Target < 250 lines
+   Explorer - Sleek 1-line Enterprise Command Bar (~42px)
+   Linear / Datadog dark slate tokens (rgba(15, 23, 42, 0.75), borders rgba(148, 163, 184, 0.15))
+   Target < 220 lines
    ========================================================================== */
 
-/* Sleek Unified 38px Enterprise Toolbar */
+/* Sleek Unified 42px Enterprise Command Bar */
+.explorer-command-bar,
 .explorer-toolbar-sleek,
+.explorer-command-bar.desktop-only,
 .explorer-toolbar-sleek.desktop-only {
-  height: 38px; min-height: 38px; max-height: 38px;
+  height: 42px; min-height: 42px; max-height: 42px;
   display: flex !important; align-items: center; justify-content: space-between;
   padding: 0 12px; border-radius: 8px; margin-bottom: 8px; box-sizing: border-box;
   background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(148, 163, 184, 0.15);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  width: 100%; overflow: hidden; flex-wrap: nowrap; gap: 8px;
+  width: 100%; overflow: hidden; flex-wrap: nowrap; gap: 10px;
 }
 
-/* Zone 1 (Left - Search): 130px-180px, height: 28-30px */
+/* Zone 1 (Left - Search): 180px-240px, height: 30px */
+.explorer-command-bar .toolbar-search-wrap,
 .explorer-toolbar-sleek .toolbar-search-wrap {
   position: relative; display: flex; align-items: center;
-  width: 160px; min-width: 130px; max-width: 180px; height: 30px;
-  flex: 0 1 160px; flex-shrink: 0;
+  width: 220px; min-width: 160px; max-width: 240px; height: 30px;
+  flex: 0 1 220px; flex-shrink: 0;
 }
+.explorer-command-bar .search-icon,
 .explorer-toolbar-sleek .search-icon {
   position: absolute; left: 8px; font-size: 11.5px; color: #94a3b8; pointer-events: none;
 }
+.explorer-command-bar .toolbar-search-input,
 .explorer-toolbar-sleek .toolbar-search-input {
-  width: 100%; height: 30px; padding: 0 22px 0 26px; font-size: 11.5px;
-  border-radius: 20px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.15);
+  width: 100%; height: 30px; padding: 0 24px 0 26px; font-size: 11.5px;
+  border-radius: 6px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(148, 163, 184, 0.15);
   color: #f8fafc; box-sizing: border-box; transition: all 0.15s ease;
 }
+.explorer-command-bar .toolbar-search-input::placeholder,
 .explorer-toolbar-sleek .toolbar-search-input::placeholder { color: #64748b; }
+.explorer-command-bar .toolbar-search-input:focus,
 .explorer-toolbar-sleek .toolbar-search-input:focus {
   border-color: rgba(56, 189, 248, 0.5); outline: none; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
 }
+.explorer-command-bar .clear-input-btn,
 .explorer-toolbar-sleek .clear-input-btn {
   position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
   width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;
   background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0; border-radius: 4px;
 }
+.explorer-command-bar .clear-input-btn:hover,
 .explorer-toolbar-sleek .clear-input-btn:hover { color: #f8fafc; background: rgba(255, 255, 255, 0.08); }
 
-/* Zone 2 (Center-Left - Category Capsule Pills): 28px Capsule Pill Tabs */
-.explorer-toolbar-sleek .toolbar-nav-pills {
-  display: inline-flex; align-items: center; gap: 4px; user-select: none;
-  overflow-x: auto; scrollbar-width: none; flex-shrink: 1; min-width: 0;
+/* Zone 2 (Center - Linear-style Segmented Control) */
+.linear-segmented-group {
+  display: inline-flex; align-items: center; gap: 2px; user-select: none;
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 6px; padding: 2px; flex-shrink: 1; min-width: 0;
+  overflow-x: auto; scrollbar-width: none;
 }
-.explorer-toolbar-sleek .toolbar-nav-pills::-webkit-scrollbar {
-  display: none;
-}
-.explorer-toolbar-sleek .capsule-pill {
-  border-radius: 9999px; height: 28px; min-height: 28px; line-height: 28px;
-  padding: 0 8px; font-size: 11px; font-weight: 500;
-  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+.linear-segmented-group::-webkit-scrollbar { display: none; }
+.linear-segment-btn {
+  height: 28px; min-height: 28px; line-height: 28px;
+  padding: 0 10px; font-size: 11.5px; font-weight: 500;
+  display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; white-space: nowrap; user-select: none; flex-shrink: 0;
-  background: transparent; border: 1px solid transparent;
+  background: transparent; border: 1px solid transparent; border-radius: 4px;
   color: #94a3b8; transition: all 0.15s ease; box-sizing: border-box;
 }
-.explorer-toolbar-sleek .capsule-pill:hover {
-  background: rgba(255, 255, 255, 0.05); color: #f8fafc; border-color: rgba(255, 255, 255, 0.1);
+.linear-segment-btn:hover {
+  background: rgba(255, 255, 255, 0.05); color: #f8fafc;
 }
-.explorer-toolbar-sleek .capsule-pill.active {
-  background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-weight: 600;
+.linear-segment-btn.active {
+  background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8; font-weight: 600;
 }
-
-/* Zone 3 (Center-Right - Telemetry Badge) */
-.explorer-toolbar-sleek .toolbar-kpi-strip {
-  display: inline-flex; align-items: center; margin-left: auto; margin-right: 4px; flex-shrink: 0;
-}
-.explorer-toolbar-sleek .kpi-badge {
-  font-size: 11px; padding: 2px 8px; border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(148, 163, 184, 0.15);
-  color: #38bdf8; white-space: nowrap;
-}
-@media (max-width: 1440px) {
-  .explorer-toolbar-sleek .toolbar-kpi-strip { display: none !important; }
+.secondary-active-segment {
+  border-style: dashed;
 }
 
-/* Zone 4 (Right - Actions Group) */
+/* Zone 3 (Right - Actions Group) */
+.explorer-command-bar .toolbar-actions-group,
 .explorer-toolbar-sleek .toolbar-actions-group {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
 }
+.explorer-command-bar .toolbar-btn,
 .explorer-toolbar-sleek .toolbar-btn {
-  height: 28px; min-height: 28px; padding: 0 9px; font-size: 11.5px; font-weight: 500;
+  height: 28px; min-height: 28px; padding: 0 10px; font-size: 11.5px; font-weight: 500;
   border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
   gap: 5px; white-space: nowrap; cursor: pointer; box-sizing: border-box; transition: all 0.15s ease;
 }
+.explorer-command-bar .toolbar-btn.btn-secondary,
 .explorer-toolbar-sleek .toolbar-btn.btn-secondary {
   background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(148, 163, 184, 0.15); color: #cbd5e1;
 }
+.explorer-command-bar .toolbar-btn.btn-secondary:hover:not(:disabled),
 .explorer-toolbar-sleek .toolbar-btn.btn-secondary:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.09); border-color: rgba(148, 163, 184, 0.3); color: #f8fafc;
 }
+.explorer-command-bar .toolbar-btn.btn-secondary:disabled,
 .explorer-toolbar-sleek .toolbar-btn.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+.explorer-command-bar .toolbar-btn.btn-primary,
 .explorer-toolbar-sleek .toolbar-btn.btn-primary {
   background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
   border: 1px solid rgba(6, 182, 212, 0.4); color: #ffffff; font-weight: 600;
   flex-shrink: 0; white-space: nowrap;
 }
+.explorer-command-bar .toolbar-btn.btn-primary:hover:not(:disabled),
 .explorer-toolbar-sleek .toolbar-btn.btn-primary:hover:not(:disabled) {
   filter: brightness(1.1); transform: translateY(-1px);
 }
 .spin-icon { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-/* Kind Sub-Strip (compact 28px row) */
-.explorer-kind-substrip {
-  height: 28px; min-height: 28px; max-height: 28px;
-  display: flex; align-items: center; gap: 6px; padding: 0 2px;
-  margin-bottom: 8px; overflow-x: auto; scrollbar-width: none; box-sizing: border-box;
-}
-.explorer-kind-substrip::-webkit-scrollbar { display: none; }
-.explorer-kind-substrip .substrip-pill {
-  border-radius: 9999px; height: 24px; min-height: 24px; line-height: 24px;
-  padding: 0 9px; font-size: 11px; font-weight: 500;
-  display: inline-flex; align-items: center; justify-content: center;
-  cursor: pointer; white-space: nowrap; user-select: none;
-  background: transparent; border: 1px solid transparent;
-  color: #94a3b8; transition: all 0.15s ease; box-sizing: border-box;
-}
-.explorer-kind-substrip .substrip-pill:hover {
-  background: rgba(255, 255, 255, 0.05); color: #f8fafc; border-color: rgba(255, 255, 255, 0.1);
-}
-.explorer-kind-substrip .substrip-pill.active {
-  background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-weight: 600;
-}
 
 /* Standardized Table Row Action Cell */
 .row-actions-wrap {

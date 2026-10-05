@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseIcon from '../../ui/BaseIcon.vue'
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { drApi, type RemediationResult } from '../../../api/dr'
 interface Props {
@@ -77,19 +78,19 @@ onUnmounted(() => {
           <!-- Header -->
           <div class="modal-header">
             <div class="header-left">
-              <span class="header-icon">⚡</span>
+              <span class="header-icon"><BaseIcon name="activity" size="sm" /></span>
               <div>
-                <h3 class="modal-title">⚡ 1-Click SRE Node Remediation &amp; Fast Failover</h3>
+                <h3 class="modal-title">1-Click SRE Node Remediation &amp; Fast Failover</h3>
                 <div class="target-banner font-mono">
                   Target Node: <span class="highlight">{{ nodeName }}</span> &middot; Cluster: <span class="highlight">{{ clusterId || 'primary-cluster' }}</span>
                 </div>
               </div>
             </div>
-            <button type="button" class="btn-close" @click="handleClose" title="Close (Esc)">✕</button>
+            <button type="button" class="btn-close" @click="handleClose" title="Close (Esc)"><BaseIcon name="x" size="xs" /></button>
           </div>
           <!-- SLA & Safety explanation -->
           <div class="safety-banner">
-            <span class="safety-icon">🛡️</span>
+            <span class="safety-icon"><BaseIcon name="shield" size="xs" /></span>
             <p class="safety-text">
               <span class="safety-full">Automated &lt;30s fast-failover cordons the failed node (spec.unschedulable=true) and force-evicts stuck pods with zero grace period, immediately triggering replica controllers to reschedule workloads onto surviving nodes (worker1, worker2, k8smaster).</span>
               <span class="safety-mobile">Automated &lt;30s failover cordons node and force-evicts stuck pods to surviving nodes.</span>
@@ -102,7 +103,7 @@ onUnmounted(() => {
             </p>
             <div class="actions-row">
               <button type="button" class="btn btn-action-execute" @click="executeFailover">
-                <span class="btn-text-full">⚡ Confirm &amp; Execute Fast Failover</span><span class="btn-text-mobile">⚡ Confirm Failover</span>
+                <span class="btn-text-full"><BaseIcon name="activity" size="xs" /> Confirm &amp; Execute Fast Failover</span><span class="btn-text-mobile"><BaseIcon name="activity" size="xs" /> Confirm Failover</span>
               </button>
               <button type="button" class="btn btn-secondary" @click="handleClose">
                 <span>Cancel</span>
@@ -117,15 +118,15 @@ onUnmounted(() => {
             </div>
             <div class="steps-list font-mono">
               <div class="step-row" :class="{ active: currentStep === 1, done: currentStep > 1 }">
-                <span>🛡️ Step 1: Cordoning node...</span>
+                <span><BaseIcon name="shield" size="xs" /> Step 1: Cordoning node...</span>
                 <span v-if="currentStep > 1" class="step-check">DONE</span>
               </div>
               <div class="step-row" :class="{ active: currentStep === 2, done: currentStep > 2 }">
-                <span>⚡ Step 2: Force-evicting unready pods...</span>
+                <span><BaseIcon name="activity" size="xs" /> Step 2: Force-evicting unready pods...</span>
                 <span v-if="currentStep > 2" class="step-check">DONE</span>
               </div>
               <div class="step-row" :class="{ active: currentStep === 3 }">
-                <span>🚀 Step 3: Triggering controller failover...</span>
+                <span><BaseIcon name="play" size="xs" /> Step 3: Triggering controller failover...</span>
                 <span v-if="currentStep === 3" class="step-pulse">RUNNING</span>
               </div>
             </div>
@@ -134,7 +135,7 @@ onUnmounted(() => {
           <div v-else-if="status === 'completed'" class="modal-body">
             <div class="success-banner">
               <div class="success-top">
-                <span class="success-heading">⚡ Completed in {{ result?.duration_ms ?? 910 }}ms</span>
+                <span class="success-heading"><BaseIcon name="check-circle" size="xs" /> Completed in {{ result?.duration_ms ?? 910 }}ms</span>
               </div>
               <div class="evicted-wrap font-mono">
                 <div class="evicted-title">Evicted Pods:</div>

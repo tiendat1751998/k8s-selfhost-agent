@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import '../assets/styles/views/slo.css'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import SloCatalogTable from '../components/slo/SloCatalogTable.vue'
 import SloMobileCards from '../components/slo/SloMobileCards.vue'
 import SloCreateModal from '../components/slo/SloCreateModal.vue'
 import SloInspectModal from '../components/slo/SloInspectModal.vue'
-import { useSLOMonitor } from '../composables/useSLOMonitor'
+import { useSLOMonitor, type TimeWindowFilter } from '../composables/useSLOMonitor'
 import type { SLODefinition, SLOSnapshot } from '../api/compute'
 
 const {
@@ -41,11 +41,54 @@ const {
   handleDeleteSLO,
 } = useSLOMonitor()
 
-const windowPills = [
-  { key: '1h' as const, label: '1h (Fast)', title: '1h Fast Burn (14.4x rate)', icon: 'flame', short: 'Fast' },
-  { key: '6h' as const, label: '6h (Slow)', title: '6h Slow Burn (6.0x rate)', icon: 'alert-triangle', short: 'Slow' },
-  { key: '24h' as const, label: '24h (Composite)', title: '24h Composite (2.0x rate)', icon: 'activity', short: 'Comp' },
-  { key: '30d' as const, label: '30d (Baseline)', title: '30d Baseline (1.0x rate)', icon: 'calendar', short: 'Base' },
+// Datadog/Grafana-style Time Range Dropdown State & Options
+const isTimeRangeOpen = ref(false)
+const timeDropdownRef = ref<HTMLElement | null>(null)
+
+interface TimeRangeOption {
+  key: TimeWindowFilter
+  label: string
+  icon: string
+}
+
+const timeRangeOptions: TimeRangeOption[] = [
+  { key: '1h', label: 'Last 1 Hour', icon: 'flame' },
+  { key: '6h', label: 'Last 6 Hours', icon: 'clock' },
+  { key: '24h', label: 'Last 24 Hours', icon: 'activity' },
+  { key: '7d', label: 'Last 7 Days', icon: 'calendar' },
+  { key: '30d', label: 'Last 30 Days', icon: 'calendar' },
+]
+
+const activeTimeRangeLabel = computed(() => {
+  const found = timeRangeOptions.find(o => o.key === selectedWindowFilter.value)
+  return found ? found.label : 'Last 30 Days'
+})
+
+function selectTimeRange(key: TimeWindowFilter) {
+  setWindowFilter(key)
+  isTimeRangeOpen.value = false
+}
+
+function handleTimeDropdownClickOutside(e: MouseEvent) {
+  if (timeDropdownRef.value && !timeDropdownRef.value.contains(e.target as Node)) {
+    isTimeRangeOpen.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleTimeDropdownClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleTimeDropdownClickOutside)
+})
+
+const mobileWindowPills = [
+  { key: '1h' as const, short: '1h' },
+  { key: '6h' as const, short: '6h' },
+  { key: '24h' as const, short: '24h' },
+  { key: '7d' as const, short: '7d' },
+  { key: '30d' as const, short: '30d' },
 ]
 
 // Search and Filter State
@@ -122,22 +165,37 @@ function handleEditSLO(def: SLODefinition) {
         </button>
       </div>
 
-      <!-- Time Window multi-window analysis pills -->
-      <div class="toolbar-window-pills filter-group font-mono" role="tablist" aria-label="Multi-window analysis">
+      <!-- Datadog/Grafana-style Time Range Dropdown -->
+      <div ref="timeDropdownRef" class="time-range-dropdown-wrap">
         <button
-          v-for="w in windowPills"
-          :key="w.key"
           type="button"
-          role="tab"
-          :aria-selected="selectedWindowFilter === w.key"
-          class="toolbar-pill-btn"
-          :class="{ active: selectedWindowFilter === w.key }"
-          :title="w.title"
-          @click="setWindowFilter(w.key)"
+          class="time-range-btn font-mono"
+          :class="{ 'is-active': isTimeRangeOpen }"
+          aria-haspopup="true"
+          :aria-expanded="isTimeRangeOpen"
+          aria-label="Select Time Range"
+          @click.stop="isTimeRangeOpen = !isTimeRangeOpen"
         >
-          <BaseIcon :name="w.icon" size="xs" />
-          <span>{{ w.label }}</span>
+          <BaseIcon name="clock" size="xs" class="time-btn-icon" />
+          <span>{{ activeTimeRangeLabel }}</span>
+          <BaseIcon name="chevron-down" size="xs" class="time-btn-chevron" />
         </button>
+
+        <div v-if="isTimeRangeOpen" class="time-range-menu glass-panel animate-fade-in" role="menu">
+          <button
+            v-for="opt in timeRangeOptions"
+            :key="opt.key"
+            type="button"
+            role="menuitem"
+            class="time-range-item font-mono"
+            :class="{ active: selectedWindowFilter === opt.key }"
+            @click="selectTimeRange(opt.key)"
+          >
+            <BaseIcon :name="opt.icon" size="xs" class="item-icon" />
+            <span class="item-label">{{ opt.label }}</span>
+            <BaseIcon v-if="selectedWindowFilter === opt.key" name="check" size="xs" class="check-icon" />
+          </button>
+        </div>
       </div>
 
       <!-- Inline Micro-Telemetry Pill -->
@@ -158,7 +216,7 @@ function handleEditSLO(def: SLODefinition) {
           @click="openCreateModal()"
         >
           <BaseIcon name="plus" size="xs" />
-          <span>Add Target</span>
+          <span>+ Add Target</span>
         </button>
 
         <button
@@ -223,7 +281,7 @@ function handleEditSLO(def: SLODefinition) {
     <div class="slo-mobile-window-strip mobile-only">
       <div class="mobile-window-pills font-mono">
         <button
-          v-for="w in windowPills"
+          v-for="w in mobileWindowPills"
           :key="w.key"
           type="button"
           class="mobile-window-btn"
@@ -235,18 +293,18 @@ function handleEditSLO(def: SLODefinition) {
       </div>
     </div>
 
-    <!-- Desktop View Mode: Table OR Grid (NEVER both at the same time on desktop!) -->
-    <!-- Desktop View Mode: Standardized High-Density Catalog Table -->
-    <SloCatalogTable
-      class="desktop-only"
-      :definitions="filteredDefinitions"
-      :snapshots="filteredSnapshots"
-      :loading="loading"
-      :error="error"
-      @inspect="openInspectFromTable"
-      @trigger-alert="handleTriggerAlert"
-      @delete-slo="handleDeleteSLO"
-    />
+    <!-- Desktop View Mode: Standardized High-Density Catalog Table wrapped in elevated dark card -->
+    <div class="slo-table-card desktop-only">
+      <SloCatalogTable
+        :definitions="filteredDefinitions"
+        :snapshots="filteredSnapshots"
+        :loading="loading"
+        :error="error"
+        @inspect="openInspectFromTable"
+        @trigger-alert="handleTriggerAlert"
+        @delete-slo="handleDeleteSLO"
+      />
+    </div>
 
     <!-- First-Class Mobile Card Stream (<768px) -->
     <SloMobileCards

@@ -165,46 +165,26 @@ onUnmounted(() => {
       aria-label="Cluster Alert Center"
       @click="alertStore.openAlertCenter"
     >
-      <!-- Active Alerts Mode -->
-      <template v-if="alertStore.activeAlerts.length > 0">
-        <span class="bell-icon-wrap">
-          <span class="pulse-dot" :class="alertStore.hasCriticalAlerts ? 'pulse-dot-rose' : 'pulse-dot-amber'"></span>
-          <span class="bell-emoji">
-            <BaseIcon name="alert-triangle" size="xs" />
-          </span>
-          <span class="bell-mobile-badge" :class="alertStore.hasCriticalAlerts ? 'badge-rose-bg' : 'badge-amber-bg'">
-            {{ alertStore.activeAlerts.length }}
-          </span>
+      <span class="bell-icon-wrap">
+        <BaseIcon
+          :name="alertStore.mutedAlertsCount > 0 && alertStore.activeAlerts.length === 0 ? 'bell-off' : 'bell'"
+          size="sm"
+          class="bell-svg"
+        />
+        <span
+          v-if="alertStore.activeAlerts.length > 0"
+          class="bell-badge-count font-mono"
+          :class="alertStore.hasCriticalAlerts ? 'badge-rose-bg' : 'badge-amber-bg'"
+        >
+          {{ alertStore.activeAlerts.length }}
         </span>
-        <span class="bell-count-text">
-          {{ alertStore.activeAlerts.length }} Alert{{ alertStore.activeAlerts.length > 1 ? 's' : '' }}
+        <span
+          v-else-if="alertStore.mutedAlertsCount > 0"
+          class="bell-badge-count badge-muted-bg font-mono"
+        >
+          {{ alertStore.mutedAlertsCount }}
         </span>
-      </template>
-
-      <!-- Muted Only Mode -->
-      <template v-else-if="alertStore.mutedAlertsCount > 0">
-        <span class="bell-icon-wrap">
-          <span class="bell-emoji">
-            <BaseIcon name="bell-off" size="sm" />
-          </span>
-          <span class="bell-mobile-badge badge-muted-bg">
-            {{ alertStore.mutedAlertsCount }}
-          </span>
-        </span>
-        <span class="bell-count-text">
-          {{ alertStore.mutedAlertsCount }} Muted
-        </span>
-      </template>
-
-      <!-- Clean Zero Alerts Mode -->
-      <template v-else>
-        <span class="bell-icon-wrap">
-          <span class="bell-emoji">
-            <BaseIcon name="bell" size="sm" />
-          </span>
-        </span>
-        <span class="bell-count-text">0</span>
-      </template>
+      </span>
     </button>
 
     <!-- 2. HEADER-ANCHORED DROPDOWN ALERT TOAST -->

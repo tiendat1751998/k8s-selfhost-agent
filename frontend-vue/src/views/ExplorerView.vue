@@ -55,83 +55,48 @@ watch(activeNamespace, (newNs) => {
   }
 })
 
-// Sleek Category Pills Configuration
-interface CategoryConfig {
-  id: string
-  label: string
-  icon: string
-  defaultKind: ResourceKind
-  items: { label: string; kind: ResourceKind }[]
-}
-
-const explorerCategories: CategoryConfig[] = [
-  {
-    id: 'workloads', label: 'Workloads', icon: 'layers', defaultKind: 'deployments',
-    items: [
-      { label: 'Pods', kind: 'pods' }, { label: 'Deployments', kind: 'deployments' },
-      { label: 'StatefulSets', kind: 'statefulsets' }, { label: 'DaemonSets', kind: 'daemonsets' },
-      { label: 'Jobs', kind: 'jobs' }, { label: 'CronJobs', kind: 'cronjobs' },
-    ],
-  },
-  {
-    id: 'config-storage', label: 'Config & Storage', icon: 'database', defaultKind: 'configmaps',
-    items: [
-      { label: 'ConfigMaps', kind: 'configmaps' }, { label: 'Secrets', kind: 'secrets' },
-      { label: 'PersistentVolumeClaims', kind: 'persistentvolumeclaims' },
-      { label: 'HorizontalPodAutoscalers', kind: 'horizontalpodautoscalers' },
-    ],
-  },
-  {
-    id: 'networking-security', label: 'Networking & Security', icon: 'globe', defaultKind: 'services',
-    items: [
-      { label: 'Services', kind: 'services' }, { label: 'Ingresses', kind: 'ingresses' },
-      { label: 'NetworkPolicies', kind: 'networkpolicies' }, { label: 'ServiceAccounts', kind: 'serviceaccounts' },
-    ],
-  },
-  {
-    id: 'cluster', label: 'Cluster', icon: 'server', defaultKind: 'nodes',
-    items: [
-      { label: 'Nodes', kind: 'nodes' }, { label: 'PersistentVolumes', kind: 'persistentvolumes' },
-      { label: 'StorageClasses', kind: 'storageclasses' },
-    ],
-  },
-  {
-    id: 'events', label: 'Events', icon: 'clock', defaultKind: 'events',
-    items: [{ label: 'Events', kind: 'events' }],
-  },
+// Primary Kinds for Linear Segmented Control
+const primaryKinds: { label: string; kind: ResourceKind }[] = [
+  { label: 'Pods', kind: 'pods' },
+  { label: 'Deployments', kind: 'deployments' },
+  { label: 'StatefulSets', kind: 'statefulsets' },
+  { label: 'DaemonSets', kind: 'daemonsets' },
+  { label: 'ConfigMaps', kind: 'configmaps' },
+  { label: 'Services', kind: 'services' },
 ]
 
-const activeCategory = ref<string>('workloads')
+// Secondary Kinds in Dropdown
+const secondaryKinds: { label: string; kind: ResourceKind; icon: string }[] = [
+  { label: 'Jobs', kind: 'jobs', icon: 'clock' },
+  { label: 'CronJobs', kind: 'cronjobs', icon: 'clock' },
+  { label: 'Secrets', kind: 'secrets', icon: 'shield' },
+  { label: 'Ingresses', kind: 'ingresses', icon: 'globe' },
+  { label: 'Nodes', kind: 'nodes', icon: 'server' },
+  { label: 'Events', kind: 'events', icon: 'activity' },
+  { label: 'PersistentVolumeClaims', kind: 'persistentvolumeclaims', icon: 'database' },
+  { label: 'HorizontalPodAutoscalers', kind: 'horizontalpodautoscalers', icon: 'layers' },
+  { label: 'NetworkPolicies', kind: 'networkpolicies', icon: 'shield' },
+]
 
-// Automatically track active category when selectedKind updates
-watch(selectedKind, (newKind) => {
-  const matching = explorerCategories.find((cat) =>
-    cat.items.some((item) => item.kind === newKind)
-  )
-  if (matching && activeCategory.value !== matching.id) {
-    activeCategory.value = matching.id
-  }
-}, { immediate: true })
-
-function handleCategorySelect(cat: CategoryConfig) {
-  activeCategory.value = cat.id
-  if (!cat.items.some((item) => item.kind === selectedKind.value)) {
-    selectKind(cat.defaultKind)
-  }
-}
-
-const currentCategoryKinds = computed(() => {
-  const cat = explorerCategories.find((c) => c.id === activeCategory.value)
-  return cat ? cat.items : []
-})
-
-const moreActions: ActionItem[] = [
+const moreActions = computed<ActionItem[]>(() => [
+  ...secondaryKinds.map((k) => ({
+    id: `kind:${k.kind}`,
+    label: k.label,
+    icon: k.icon,
+  })),
+  { id: 'sep-actions', label: '', separator: true },
+  { id: 'refresh', label: 'Refresh', icon: 'refresh' },
   { id: 'import-cluster', label: 'Import Cluster', icon: 'cloud' },
   { id: 'new-namespace', label: 'New Namespace', icon: 'plus' },
-]
+])
 
 function handleMoreActionSelect(actionId: string) {
-  if (actionId === 'import-cluster') {
+  if (actionId.startsWith('kind:')) {
+    const kind = actionId.replace('kind:', '') as ResourceKind
+    selectKind(kind)
+  } else if (actionId === 'refresh') {
+    fetchResources()
+  } else if (actionId === 'import-cluster') {
     showImportModal.value = true
   } else if (actionId === 'new-namespace') {
     showNewNsModal.value = true
@@ -220,17 +185,17 @@ onMounted(async () => {
         </button>
       </div>
 
-      <!-- Sleek Unified 38px Enterprise Toolbar -->
-      <div class="explorer-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Kubernetes Explorer Toolbar">
-        <!-- Zone 1 (Left - Search): 140px-180px, height: 28px -->
+      <!-- Sleek 1-line Enterprise Command Bar (~42px) -->
+      <div class="explorer-command-bar glass-panel desktop-only" role="toolbar" aria-label="Kubernetes Explorer Command Bar">
+        <!-- Left: Search input -->
         <div class="toolbar-search-wrap">
           <BaseIcon name="search" size="xs" class="search-icon" />
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Filter by name, namespace, status..."
+            placeholder="Search resources in namespace..."
             class="toolbar-search-input font-mono"
-            aria-label="Filter resources by name, namespace, status"
+            aria-label="Search resources in namespace"
           />
           <button
             v-if="searchQuery"
@@ -243,41 +208,31 @@ onMounted(async () => {
           </button>
         </div>
 
-        <!-- Zone 2 (Center-Left - Category Capsule Pills): 28px Capsule Pill Tabs -->
-        <div class="toolbar-nav-pills" role="tablist" aria-label="Resource Categories">
+        <!-- Center: Linear-style segmented control -->
+        <div class="linear-segmented-group" role="tablist" aria-label="Resource Types">
           <button
-            v-for="cat in explorerCategories"
-            :key="cat.id"
+            v-for="item in primaryKinds"
+            :key="item.kind"
             type="button"
             role="tab"
-            :aria-selected="activeCategory === cat.id"
-            class="capsule-pill"
-            :class="{ active: activeCategory === cat.id }"
-            @click="handleCategorySelect(cat)"
+            :aria-selected="selectedKind === item.kind"
+            class="linear-segment-btn font-mono"
+            :class="{ active: selectedKind === item.kind }"
+            @click="selectKind(item.kind)"
           >
-            <BaseIcon :name="cat.icon" size="xs" />
-            <span>{{ cat.label }}</span>
+            <span>{{ item.label }}</span>
           </button>
+          <!-- Secondary Active Kind Indicator -->
+          <div
+            v-if="!primaryKinds.some(k => k.kind === selectedKind)"
+            class="linear-segment-btn active font-mono secondary-active-segment"
+          >
+            <span>{{ currentKindLabel }}</span>
+          </div>
         </div>
 
-        <!-- Zone 3 (Center-Right - Telemetry Badge): Monospace status badge -->
-        <div class="toolbar-kpi-strip font-mono">
-          <span class="kpi-badge font-mono">[LIVE] {{ totalInKind }} {{ currentKindLabel }}</span>
-        </div>
-
-        <!-- Zone 4 (Right - Actions Group) -->
+        <!-- Right: Actions group -->
         <div class="toolbar-actions-group">
-          <button
-            type="button"
-            class="toolbar-btn btn-secondary"
-            :disabled="loading"
-            title="Refresh Resources"
-            @click="fetchResources"
-          >
-            <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" :class="{ 'spin-icon': loading }" />
-            <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
-          </button>
-
           <button
             type="button"
             class="toolbar-btn btn-secondary"
@@ -295,32 +250,16 @@ onMounted(async () => {
             @click="showCreateModal = true"
           >
             <BaseIcon name="plus" size="xs" />
-            <span>+ Create</span>
+            <span>+ Create Resource</span>
           </button>
 
           <ActionDropdown
             :items="moreActions"
             size="sm"
-            trigger-title="More"
+            trigger-title="More actions"
             @select="handleMoreActionSelect"
           />
         </div>
-      </div>
-
-      <!-- Kind Sub-Strip (Directly beneath toolbar, compact 28px row) -->
-      <div class="explorer-kind-substrip desktop-only" role="tablist" aria-label="Resource Sub-kinds">
-        <button
-          v-for="item in currentCategoryKinds"
-          :key="item.kind"
-          type="button"
-          role="tab"
-          :aria-selected="selectedKind === item.kind"
-          class="substrip-pill font-mono"
-          :class="{ active: selectedKind === item.kind }"
-          @click="selectKind(item.kind)"
-        >
-          <span>{{ item.label }}</span>
-        </button>
       </div>
 
       <!-- Toast & Offline Notifications -->
