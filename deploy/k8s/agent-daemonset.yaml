@@ -81,6 +81,11 @@ spec:
               value: "9100"
             - name: AGENT_ENGINE_DIR
               value: "/var/lib/k8s-agent/logengine"
+            - name: AGENT_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-control-agent-auth
+                  key: token
           ports:
             - name: metrics
               containerPort: 9100
