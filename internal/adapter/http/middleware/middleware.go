@@ -207,41 +207,49 @@ func StructuredLogger(next http.Handler) http.Handler {
 	})
 }
 
+// IsOriginAllowed checks whether the specified origin is permitted by CORS_ALLOWED_ORIGINS.
+// By default, no cross-origin requests are allowed unless explicitly configured in CORS_ALLOWED_ORIGINS.
+// Wildcards ('*') are rejected to prevent unauthenticated/credentialed reflection attacks.
+func IsOriginAllowed(origin string) bool {
+	if origin == "" {
+		return false
+	}
+	allowedOriginsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if strings.TrimSpace(allowedOriginsEnv) == "" {
+		return false
+	}
+
+	normOrigin := strings.ToLower(strings.TrimRight(strings.TrimSpace(origin), "/"))
+	for _, o := range strings.Split(allowedOriginsEnv, ",") {
+		o = strings.ToLower(strings.TrimRight(strings.TrimSpace(o), "/"))
+		if o == "" || o == "*" {
+			continue
+		}
+		if o == normOrigin {
+			return true
+		}
+	}
+	return false
+}
+
 // CORS adds Cross-Origin Resource Sharing headers.
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		allowedOriginsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
-		if allowedOriginsEnv == "" {
-			allowedOriginsEnv = "http://localhost:3000,http://localhost:5173"
-		}
-
 		origin := r.Header.Get("Origin")
-		origins := strings.Split(allowedOriginsEnv, ",")
 
-		matched := false
-		if origin != "" {
-			for _, o := range origins {
-				o = strings.TrimSpace(o)
-				if o == "*" || o == origin {
-					w.Header().Set("Access-Control-Allow-Origin", origin)
-					w.Header().Add("Vary", "Origin")
-					matched = true
-					break
-				}
-			}
+		if origin != "" && IsOriginAllowed(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept")
 		}
-		if !matched && len(origins) > 0 {
-			if origin == "" {
-				first := strings.TrimSpace(origins[0])
-				w.Header().Set("Access-Control-Allow-Origin", first)
-			}
-		}
-
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == http.MethodOptions {
+			if origin != "" && !IsOriginAllowed(origin) {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
