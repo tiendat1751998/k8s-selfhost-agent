@@ -1,11 +1,17 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 )
+
+func TestMain(m *testing.M) {
+	_ = SetJWTSecret("unit-test-secret-key-must-be-at-least-32-chars-long!")
+	os.Exit(m.Run())
+}
 
 func TestJWTAuth_MissingHeader(t *testing.T) {
 	handler := JWTAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -291,7 +297,9 @@ func TestRequireRolesForMutations_MutationAllowedForOperator(t *testing.T) {
 
 func TestSetJWTSecret_ValidAndSign(t *testing.T) {
 	newSecret := "a-very-long-custom-jwt-secret-key-32chars!"
-	SetJWTSecret(newSecret)
+	if err := SetJWTSecret(newSecret); err != nil {
+		t.Fatalf("unexpected error setting valid secret: %v", err)
+	}
 
 	token, err := GenerateJWT("user-custom", "platform_admin", "tenant-custom")
 	if err != nil {
@@ -375,22 +383,75 @@ func TestMetricsAuthMiddleware(t *testing.T) {
 	})
 }
 
-func TestIsRunningInTest_NoArgsHeuristic(t *testing.T) {
-	origTesting := isTesting
-	defer func() { isTesting = origTesting }()
-	isTesting = func() bool { return false }
+func TestValidateJWTSecret(t *testing.T) {
+	origSecret := jwtSecret
+	defer func() {
+		jwtSecret = origSecret
+	}()
 
-	origArgs := os.Args
-	defer func() { os.Args = origArgs }()
-
-	// Even if os.Args contains "latest" (contains "test") or "test", isRunningInTest must not return true when not in test
-	os.Args = []string{"/usr/local/bin/latest-service"}
-	if isRunningInTest() {
-		t.Fatalf("isRunningInTest() returned true for non-test process because os.Args contains 'latest' (contains 'test')")
+	jwtSecret = nil
+	if err := ValidateJWTSecret(); !errors.Is(err, ErrJWTSecretMissing) {
+		t.Fatalf("expected ErrJWTSecretMissing when unset, got: %v", err)
 	}
 
-	os.Args = []string{"/usr/local/bin/my-test-app"}
-	if isRunningInTest() {
-		t.Fatalf("isRunningInTest() returned true for non-test process because os.Args contains 'test'")
+	jwtSecret = []byte("too-short")
+	if err := ValidateJWTSecret(); !errors.Is(err, ErrJWTSecretMissing) {
+		t.Fatalf("expected ErrJWTSecretMissing when < 32 chars, got: %v", err)
+	}
+
+	jwtSecret = []byte("a-sufficiently-long-secret-key-at-least-32-bytes")
+	if err := ValidateJWTSecret(); err != nil {
+		t.Fatalf("expected nil error for valid secret, got: %v", err)
 	}
 }
+
+func TestSetJWTSecret_ErrorWhenShort(t *testing.T) {
+	err := SetJWTSecret("short")
+	if !errors.Is(err, ErrJWTSecretMissing) {
+		t.Fatalf("expected ErrJWTSecretMissing, got: %v", err)
+	}
+}
+
+func TestJWTAuth_UnconfiguredSecret(t *testing.T) {
+	origSecret := jwtSecret
+	defer func() {
+		jwtSecret = origSecret
+	}()
+
+	jwtSecret = nil
+	handler := JWTAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Authorization", "Bearer valid-format-token")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", w.Code)
+	}
+	expectedBody := `{"error":"JWT authentication not configured"}`
+	if w.Body.String() != expectedBody {
+		t.Errorf("expected body %s, got %s", expectedBody, w.Body.String())
+	}
+}
+
+func TestTokenFunctions_UnconfiguredSecret(t *testing.T) {
+	origSecret := jwtSecret
+	defer func() {
+		jwtSecret = origSecret
+	}()
+
+	jwtSecret = nil
+	if _, err := GenerateToken("user", "admin", "tenant"); !errors.Is(err, ErrJWTSecretMissing) {
+		t.Errorf("expected ErrJWTSecretMissing from GenerateToken, got: %v", err)
+	}
+	if _, err := ValidateToken("some.fake.token"); !errors.Is(err, ErrJWTSecretMissing) {
+		t.Errorf("expected ErrJWTSecretMissing from ValidateToken, got: %v", err)
+	}
+	if _, err := ValidateTokenClaims("some.fake.token"); !errors.Is(err, ErrJWTSecretMissing) {
+		t.Errorf("expected ErrJWTSecretMissing from ValidateTokenClaims, got: %v", err)
+	}
+}
+

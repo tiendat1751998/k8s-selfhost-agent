@@ -1,4 +1,4 @@
-﻿// Package main is the entrypoint for the K8S Self-Healing server.
+// Package main is the entrypoint for the K8S Self-Healing server.
 package main
 
 import (
@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
@@ -38,6 +39,10 @@ func run() error {
 
 	if err := crypto.ValidateKey(); err != nil {
 		return fmt.Errorf("cryptography validation: %w", err)
+	}
+
+	if err := middleware.ValidateJWTSecret(); err != nil {
+		return fmt.Errorf("jwt validation: %w", err)
 	}
 
 	logger.Init(cfg.Log.Level)
