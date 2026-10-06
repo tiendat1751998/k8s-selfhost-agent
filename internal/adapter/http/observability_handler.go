@@ -282,7 +282,10 @@ func (h *ObservabilityHandler) TriggerBurnAlert(w http.ResponseWriter, r *http.R
 			BudgetStatus: budgetStatus,
 			RecordedAt:   now,
 		}
-		_ = h.repo.CreateSLOSnapshot(r.Context(), snap)
+		if err := h.repo.CreateSLOSnapshot(r.Context(), snap); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to create SLO snapshot", err)
+			return
+		}
 	} else {
 		snap.Service = def.Service
 		snap.Target = def.Target
@@ -291,7 +294,10 @@ func (h *ObservabilityHandler) TriggerBurnAlert(w http.ResponseWriter, r *http.R
 		snap.ErrorBudget = math.Round(errorBudget*10) / 10
 		snap.BudgetStatus = budgetStatus
 		snap.RecordedAt = now
-		_ = h.repo.UpdateSLOSnapshot(r.Context(), snap)
+		if err := h.repo.UpdateSLOSnapshot(r.Context(), snap); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to update SLO snapshot", err)
+			return
+		}
 	}
 
 	message := fmt.Sprintf("SLO Burn Alert evaluated for service %s: burn rate %.2fx (actual SLI: %.2f%%, budget: %.1f%%, status: %s)", snap.Service, snap.BurnRate, snap.Actual, snap.ErrorBudget, snap.BudgetStatus)

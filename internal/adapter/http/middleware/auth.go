@@ -172,69 +172,79 @@ func HashToken(token string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// ValidateJWT verifies signature and standard claims (exp, iat, iss), returning the payload JSON string.
-func ValidateJWT(token string) (string, error) {
+// parseAndValidateToken performs signature verification and standard claim checks,
+// deserializing the claims JSON payload exactly once.
+func parseAndValidateToken(token string) (*JWTClaims, []byte, error) {
 	if len(jwtSecret) < 32 {
-		return "", ErrJWTSecretMissing
+		return nil, nil, ErrJWTSecretMissing
 	}
 
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return "", errors.New("invalid token format")
+		return nil, nil, errors.New("invalid token format")
 	}
 
 	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return "", errors.New("failed to decode header")
+		return nil, nil, errors.New("failed to decode header")
 	}
 	var header struct {
 		Alg string `json:"alg"`
 		Typ string `json:"typ"`
 	}
 	if err := json.Unmarshal(headerBytes, &header); err != nil {
-		return "", errors.New("failed to decode header JSON")
+		return nil, nil, errors.New("failed to decode header JSON")
 	}
 	if header.Alg != "HS256" {
-		return "", errors.New("unsupported signing algorithm")
+		return nil, nil, errors.New("unsupported signing algorithm")
 	}
 
 	signingString := parts[0] + "." + parts[1]
 	expectedSigBytes, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
-		return "", errors.New("failed to decode signature")
+		return nil, nil, errors.New("failed to decode signature")
 	}
 
 	h := hmac.New(sha256.New, jwtSecret)
 	if _, err := h.Write([]byte(signingString)); err != nil {
-		return "", err
+		return nil, nil, err
 	}
 	actualSigBytes := h.Sum(nil)
 
 	if !hmac.Equal(expectedSigBytes, actualSigBytes) {
-		return "", errors.New("invalid signature")
+		return nil, nil, errors.New("invalid signature")
 	}
 
 	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return "", errors.New("failed to decode payload")
+		return nil, nil, errors.New("failed to decode payload")
 	}
 
 	var claims JWTClaims
 	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
-		return "", errors.New("failed to decode payload claims")
+		return nil, nil, errors.New("failed to decode payload claims")
 	}
 
 	now := time.Now().Unix()
 	if claims.Exp == 0 || now > claims.Exp {
-		return "", errors.New("token has expired")
+		return nil, nil, errors.New("token has expired")
 	}
 	if claims.Iat == 0 || claims.Iat > now+60 {
-		return "", errors.New("invalid or future iat claim")
+		return nil, nil, errors.New("invalid or future iat claim")
 	}
 	if claims.Iss != JWTIssuer {
-		return "", errors.New("invalid token issuer")
+		return nil, nil, errors.New("invalid token issuer")
 	}
 
+	return &claims, payloadBytes, nil
+}
+
+// ValidateJWT verifies signature and standard claims (exp, iat, iss), returning the payload JSON string.
+func ValidateJWT(token string) (string, error) {
+	_, payloadBytes, err := parseAndValidateToken(token)
+	if err != nil {
+		return "", err
+	}
 	return string(payloadBytes), nil
 }
 
@@ -245,37 +255,20 @@ func ValidateToken(token string) (string, error) {
 
 // ValidateTokenClaims verifies the token and parses its claims into JWTClaims.
 func ValidateTokenClaims(token string) (*JWTClaims, error) {
-	if len(jwtSecret) < 32 {
-		return nil, ErrJWTSecretMissing
-	}
-	payloadStr, err := ValidateJWT(token)
-	if err != nil {
-		return nil, err
-	}
-	var claims JWTClaims
-	if err := json.Unmarshal([]byte(payloadStr), &claims); err != nil {
-		return nil, errors.New("failed to decode payload claims")
-	}
-	return &claims, nil
+	claims, _, err := parseAndValidateToken(token)
+	return claims, err
 }
 
 // ValidatePartialToken checks that a token is a valid unexpired partial token.
 func ValidatePartialToken(token string) (*JWTClaims, error) {
-	if len(jwtSecret) < 32 {
-		return nil, ErrJWTSecretMissing
-	}
-	payloadStr, err := ValidateJWT(token)
+	claims, _, err := parseAndValidateToken(token)
 	if err != nil {
 		return nil, err
-	}
-	var claims JWTClaims
-	if err := json.Unmarshal([]byte(payloadStr), &claims); err != nil {
-		return nil, errors.New("invalid token claims")
 	}
 	if claims.Type != TokenTypePartial {
 		return nil, errors.New("invalid token type: expected partial token")
 	}
-	return &claims, nil
+	return claims, nil
 }
 
 // Backward compatibility - delegate to pkg/tenancy
@@ -349,16 +342,9 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		var claims JWTClaims
-
-		payloadStr, err := ValidateJWT(token)
+		claims, err := ValidateTokenClaims(token)
 		if err != nil {
 			http.Error(w, "invalid token: signature verification failed", http.StatusUnauthorized)
-			return
-		}
-
-		if err := json.Unmarshal([]byte(payloadStr), &claims); err != nil {
-			http.Error(w, "invalid token claims", http.StatusUnauthorized)
 			return
 		}
 
