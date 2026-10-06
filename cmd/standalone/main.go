@@ -1,4 +1,4 @@
-﻿// Package main is a standalone development server for the K8S Self-Healing dashboard.
+// Package main is a standalone development server for the K8S Self-Healing dashboard.
 // It runs with PostgreSQL but WITHOUT Redis or NATS — perfect for frontend development.
 // Usage: go run ./cmd/standalone
 package main
@@ -39,7 +39,7 @@ func run() error {
 	defer logger.Sync()
 	log := logger.Get()
 
-	log.Info("🚀 Starting K8S Control Plane (standalone mode)",
+	log.Info("Starting K8S Control Plane (standalone mode)",
 		zap.String("version", "0.1.0"),
 		zap.String("mode", "standalone-enterprise"),
 	)
@@ -55,19 +55,22 @@ func run() error {
 	}
 	defer cleanup()
 
-	addr := ":8080"
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	if cfg.Server.Port == 0 {
+		addr = ":8080"
+	}
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+		IdleTimeout:  cfg.Server.IdleTimeout,
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("✅ Dashboard available at http://localhost" + addr)
-		log.Info("📡 WebSocket endpoint: ws://localhost" + addr + "/ws")
+		log.Info("Dashboard server started", zap.String("addr", addr))
+		log.Info("WebSocket endpoint registered", zap.String("endpoint", "/ws"))
 		if listenErr := srv.ListenAndServe(); listenErr != nil && listenErr != http.ErrServerClosed {
 			errCh <- fmt.Errorf("HTTP server error: %w", listenErr)
 		}
