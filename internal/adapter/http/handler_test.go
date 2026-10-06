@@ -14,6 +14,7 @@ import (
 	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	"github.com/datdt/k8sselfhost/internal/usecase/rca"
 )
 
@@ -27,7 +28,8 @@ func TestSimulateIncident_Default_OOMKilled(t *testing.T) {
 	r := chi.NewRouter()
 	h.RegisterRoutes(r)
 
-	req := httptest.NewRequest(http.MethodPost, "/incidents/simulate", bytes.NewReader([]byte("{}")))
+	adminCtx := tenancy.WithUserRole(context.Background(), "platform_admin")
+	req := httptest.NewRequest(http.MethodPost, "/incidents/simulate", bytes.NewReader([]byte("{}"))).WithContext(adminCtx)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -95,8 +97,9 @@ func TestSimulateIncident_NodeDown(t *testing.T) {
 	r := chi.NewRouter()
 	h.RegisterRoutes(r)
 
+	adminCtx := tenancy.WithUserRole(context.Background(), "platform_admin")
 	payload := `{"scenario": "node_down", "pod_name": "worker-srv-99", "namespace": "infrastructure"}`
-	req := httptest.NewRequest(http.MethodPost, "/incidents/simulate", bytes.NewReader([]byte(payload)))
+	req := httptest.NewRequest(http.MethodPost, "/incidents/simulate", bytes.NewReader([]byte(payload))).WithContext(adminCtx)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -130,8 +133,9 @@ func TestSimulateIncident_CrashLoop(t *testing.T) {
 	r := chi.NewRouter()
 	h.RegisterRoutes(r)
 
+	adminCtx := tenancy.WithUserRole(context.Background(), "platform_admin")
 	payload := `{"scenario": "crash_loop", "pod_name": "backend-auth-77", "namespace": "staging"}`
-	req := httptest.NewRequest(http.MethodPost, "/incidents/simulate", bytes.NewReader([]byte(payload)))
+	req := httptest.NewRequest(http.MethodPost, "/incidents/simulate", bytes.NewReader([]byte(payload))).WithContext(adminCtx)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -159,8 +163,9 @@ func TestSimulateIncident_ResourceExhaustion(t *testing.T) {
 	r := chi.NewRouter()
 	h.RegisterRoutes(r)
 
+	adminCtx := tenancy.WithUserRole(context.Background(), "platform_admin")
 	payload := `{"scenario": "resource_exhaustion"}`
-	req := httptest.NewRequest(http.MethodPost, "/incidents/simulate", bytes.NewReader([]byte(payload)))
+	req := httptest.NewRequest(http.MethodPost, "/incidents/simulate", bytes.NewReader([]byte(payload))).WithContext(adminCtx)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -182,7 +187,8 @@ func TestSimulateIncident_InvalidJSON(t *testing.T) {
 	r := chi.NewRouter()
 	h.RegisterRoutes(r)
 
-	req := httptest.NewRequest(http.MethodPost, "/incidents/simulate", bytes.NewReader([]byte("{invalid-json")))
+	adminCtx := tenancy.WithUserRole(context.Background(), "platform_admin")
+	req := httptest.NewRequest(http.MethodPost, "/incidents/simulate", bytes.NewReader([]byte("{invalid-json"))).WithContext(adminCtx)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

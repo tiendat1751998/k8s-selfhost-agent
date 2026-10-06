@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 func TestNewK8sLogsHandler(t *testing.T) {
@@ -82,3 +84,47 @@ func TestK8sLogsHandler_WithClientManager(t *testing.T) {
 		t.Fatalf("expected error status, got %d", rec.Code)
 	}
 }
+
+func TestK8sLogsHandler_NamespaceAuthorization(t *testing.T) {
+	handler := NewK8sLogsHandler(nil, nil)
+
+	r := chi.NewRouter()
+	r.Get("/k8s/{cluster}/pods/{pod}/logs", handler.HandlePodLogs)
+
+	tenantCtx := tenancy.WithUserRole(context.Background(), "tenant_admin")
+	tenantCtx = tenancy.WithTenantID(tenantCtx, "tenant-a")
+
+	adminCtx := tenancy.WithUserRole(context.Background(), "platform_admin")
+	adminCtx = tenancy.WithTenantID(adminCtx, "platform")
+
+	t.Run("tenant-a rejected with 403 on kube-system logs", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/local/pods/my-pod/logs?ns=kube-system", nil).WithContext(tenantCtx)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden on kube-system logs, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("tenant-a rejected with 403 on other tenant logs", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/local/pods/my-pod/logs?ns=tenant-b", nil).WithContext(tenantCtx)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden on tenant-b logs, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("platform_admin allowed on kube-system logs", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/k8s/local/pods/my-pod/logs?ns=kube-system", nil).WithContext(adminCtx)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("expected platform_admin NOT to get 403 on kube-system logs, got 403")
+		}
+	})
+}
+

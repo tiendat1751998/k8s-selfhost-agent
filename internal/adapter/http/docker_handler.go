@@ -330,13 +330,18 @@ func (h *DockerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 			targetKey = hostParam
 		}
 
+		tenantID := tenancy.TenantIDFromContext(r.Context())
+		userRole := tenancy.UserRoleFromContext(r.Context())
+
 		if nodeID != "" {
 			targetHost, _ = h.hostRepo.GetByID(r.Context(), nodeID)
+			if targetHost != nil && userRole != "platform_admin" && targetHost.TenantID != tenantID {
+				targetHost = nil
+			}
 		}
 		if targetHost == nil {
-			tenantID := tenancy.TenantIDFromContext(r.Context())
 			hosts, _ := h.hostRepo.List(r.Context(), tenantID)
-			if len(hosts) == 0 {
+			if len(hosts) == 0 && userRole == "platform_admin" {
 				hosts, _ = h.hostRepo.ListAll(r.Context())
 			}
 			for i := range hosts {
@@ -345,6 +350,11 @@ func (h *DockerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
+		}
+
+		if targetHost == nil {
+			writeError(w, http.StatusNotFound, "compute host not found", nil)
+			return
 		}
 
 		if targetHost != nil && targetHost.Endpoint != "" {
@@ -413,15 +423,28 @@ func (h *DockerHandler) SearchClusterLogs(w http.ResponseWriter, r *http.Request
 	}
 
 	tenantID := tenancy.TenantIDFromContext(r.Context())
-	hosts, err := h.hostRepo.List(r.Context(), tenantID)
-	if err != nil || len(hosts) == 0 {
-		allHosts, errAll := h.hostRepo.ListAll(r.Context())
-		if errAll == nil && len(allHosts) > 0 {
-			hosts = allHosts
-		} else if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to list compute hosts", err)
-			return
+	userRole := tenancy.UserRoleFromContext(r.Context())
+
+	var hosts []docker.ComputeHost
+	var err error
+	if userRole == "platform_admin" && tenantID == "" {
+		hosts, err = h.hostRepo.ListAll(r.Context())
+	} else {
+		hosts, err = h.hostRepo.List(r.Context(), tenantID)
+		if err == nil && len(hosts) == 0 && userRole == "platform_admin" {
+			hosts, err = h.hostRepo.ListAll(r.Context())
 		}
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list compute hosts", err)
+		return
+	}
+	if len(hosts) == 0 {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"data":  []agent.LogSearchResult{},
+			"total": 0,
+		})
+		return
 	}
 
 	results, err := h.logClient.SearchClusterLogs(r.Context(), hosts, *req)

@@ -43,11 +43,16 @@ func (h *K8sResourceHandler) ScaleDeployment(w http.ResponseWriter, r *http.Requ
 	if namespace == "" {
 		namespace = getNamespaceQuery(r)
 	}
+	var err error
+	namespace, err = resolveNamespaceForRequest(r, namespace)
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
 
 	k := strings.ToLower(strings.TrimSpace(kind))
 	isSts := k == "statefulsets" || k == "statefulset" || k == "sts"
 
-	var err error
 	targetType := "k8s_deployment"
 	successMsg := "deployment scaled successfully"
 	notFoundMsg := "deployment not found"
@@ -111,12 +116,15 @@ func (h *K8sResourceHandler) RestartDeployment(w http.ResponseWriter, r *http.Re
 	cluster := chi.URLParam(r, "cluster")
 	kind := chi.URLParam(r, "kind")
 	name := chi.URLParam(r, "name")
-	namespace := getNamespaceQuery(r)
+	namespace, err := resolveNamespaceForRequest(r, getNamespaceQuery(r))
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
 
 	k := strings.ToLower(strings.TrimSpace(kind))
 	isDs := k == "daemonsets" || k == "daemonset" || k == "ds"
 
-	var err error
 	targetType := "k8s_deployment"
 	successMsg := "deployment restart triggered successfully"
 	notFoundMsg := "deployment not found"
@@ -189,8 +197,13 @@ func (h *K8sResourceHandler) ScaleStatefulSet(w http.ResponseWriter, r *http.Req
 	if namespace == "" {
 		namespace = getNamespaceQuery(r)
 	}
+	namespace, err := resolveNamespaceForRequest(r, namespace)
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
 
-	err := h.repo.ScaleStatefulSet(r.Context(), cluster, namespace, name, *req.Replicas)
+	err = h.repo.ScaleStatefulSet(r.Context(), cluster, namespace, name, *req.Replicas)
 
 	userID := middleware.UserIDFromContext(r.Context())
 	if userID == "" {
@@ -239,9 +252,13 @@ func (h *K8sResourceHandler) RestartDaemonSet(w http.ResponseWriter, r *http.Req
 
 	cluster := chi.URLParam(r, "cluster")
 	name := chi.URLParam(r, "name")
-	namespace := getNamespaceQuery(r)
+	namespace, err := resolveNamespaceForRequest(r, getNamespaceQuery(r))
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
 
-	err := h.repo.RestartDaemonSet(r.Context(), cluster, namespace, name)
+	err = h.repo.RestartDaemonSet(r.Context(), cluster, namespace, name)
 
 	userID := middleware.UserIDFromContext(r.Context())
 	if userID == "" {
@@ -289,7 +306,11 @@ func (h *K8sResourceHandler) TriggerCronJob(w http.ResponseWriter, r *http.Reque
 
 	cluster := chi.URLParam(r, "cluster")
 	name := chi.URLParam(r, "name")
-	namespace := getNamespaceQuery(r)
+	namespace, err := resolveNamespaceForRequest(r, getNamespaceQuery(r))
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
 
 	job, err := h.repo.TriggerCronJob(r.Context(), cluster, namespace, name)
 
@@ -348,7 +369,11 @@ func (h *K8sResourceHandler) SuspendCronJob(w http.ResponseWriter, r *http.Reque
 
 	cluster := chi.URLParam(r, "cluster")
 	name := chi.URLParam(r, "name")
-	namespace := getNamespaceQuery(r)
+	namespace, err := resolveNamespaceForRequest(r, getNamespaceQuery(r))
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
 
 	var req suspendCronJobRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Suspend == nil {
@@ -356,7 +381,7 @@ func (h *K8sResourceHandler) SuspendCronJob(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err := h.repo.SuspendCronJob(r.Context(), cluster, namespace, name, *req.Suspend)
+	err = h.repo.SuspendCronJob(r.Context(), cluster, namespace, name, *req.Suspend)
 
 	action := "suspend"
 	if !*req.Suspend {
