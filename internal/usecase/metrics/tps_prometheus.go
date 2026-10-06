@@ -48,14 +48,6 @@ func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services [
 		statMap[strings.ToLower(strings.TrimSpace(s.ServiceName))] = s
 	}
 
-	// Calculate total Rx traffic across all container services for fallback proportional estimation
-	var totalRxTraffic int64
-	for _, s := range services {
-		if s.RxBytesPerSec > 0 {
-			totalRxTraffic += s.RxBytesPerSec
-		}
-	}
-
 	for i := range services {
 		sName := services[i].ServiceName
 		norm := normalizeServiceNameForLB(sName)
@@ -94,22 +86,8 @@ func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services [
 			continue
 		}
 
-		// 4. Proportional fallback for backend services with active network traffic
-		if services[i].RequestsPerSec == 0 && httpTPS.RequestsPerSec > 0 {
-			if totalRxTraffic > 0 && services[i].RxBytesPerSec > 0 {
-				ratio := float64(services[i].RxBytesPerSec) / float64(totalRxTraffic)
-				services[i].RequestsPerSec = math.Round(httpTPS.RequestsPerSec*ratio*100) / 100
-				if httpTPS.ErrorRate > 0 {
-					services[i].ErrorRate = httpTPS.ErrorRate
-				}
-				if httpTPS.AvgLatencyMs > 0 {
-					services[i].AvgLatencyMs = httpTPS.AvgLatencyMs
-				}
-				if httpTPS.MaxLatencyMs > 0 {
-					services[i].MaxLatencyMs = httpTPS.MaxLatencyMs
-				}
-			}
-		}
+		// Backend services lacking direct HTTP metrics report RequestsPerSec: 0,
+		// ErrorRate: 0, and AvgLatencyMs: 0 alongside their factual RxBytesPerSec and TxBytesPerSec.
 	}
 
 	return services

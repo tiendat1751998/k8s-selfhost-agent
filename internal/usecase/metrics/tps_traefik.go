@@ -61,7 +61,9 @@ func (c *TPSCollector) collectHTTPTPS(ctx context.Context, now time.Time) HTTPTP
 					var ov traefikOverview
 					if decodeErr := json.NewDecoder(resp.Body).Decode(&ov); decodeErr == nil {
 						activeConns = ov.HTTP.Services.Total + ov.HTTP.Routers.Total
-						errorCount = int64(ov.HTTP.Routers.Errors + ov.HTTP.Services.Errors)
+						// Note: ov.HTTP.Routers.Errors and ov.HTTP.Services.Errors represent configuration
+						// syntax errors in Traefik's dynamic router/service definitions, NOT runtime HTTP 5xx errors.
+						// They must not be treated as runtime HTTP request errors.
 						queuedReqs = ov.HTTP.Routers.Warnings + ov.HTTP.Services.Warnings
 					}
 				}
@@ -113,10 +115,14 @@ func (c *TPSCollector) collectHTTPTPS(ctx context.Context, now time.Time) HTTPTP
 			if totalReqs > 0 {
 				reqDelta := safeDeltaInt64(totalReqs, c.prevHTTPStats.totalRequests)
 				httpTPS.RequestsPerSec = math.Round((float64(reqDelta)/elapsed)*100) / 100
-			}
 
-			if totalReqs > 0 && errorCount > 0 {
-				httpTPS.ErrorRate = math.Round((float64(errorCount)/float64(totalReqs))*10000) / 100
+				// Report ErrorRate only if real runtime HTTP 5xx responses are measured
+				if errorCount > 0 {
+					errDelta := safeDeltaInt64(errorCount, c.prevHTTPStats.errorRequests)
+					if reqDelta > 0 && errDelta > 0 {
+						httpTPS.ErrorRate = math.Round((float64(errDelta)/float64(reqDelta))*10000) / 100
+					}
+				}
 			}
 		}
 	}

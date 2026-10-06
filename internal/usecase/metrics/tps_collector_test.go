@@ -1065,13 +1065,22 @@ func TestTPSCollector_EnrichServicesWithLBStats_TraefikAndBackends(t *testing.T)
 		t.Errorf("expected nats RequestsPerSec = 250.0, got %f", natsSvc.RequestsPerSec)
 	}
 
-	// Verify tiki_redis receives proportional traffic when active
+	// Verify tiki_redis reports 0 HTTP metrics without direct HTTP metrics, while preserving factual network stats
 	redisSvc, ok := enrichedMap["tiki_redis"]
 	if !ok {
 		t.Fatal("expected tiki_redis in enriched services")
 	}
-	if redisSvc.RequestsPerSec <= 0 {
-		t.Errorf("expected tiki_redis RequestsPerSec > 0, got %f", redisSvc.RequestsPerSec)
+	if redisSvc.RequestsPerSec != 0 {
+		t.Errorf("expected tiki_redis RequestsPerSec = 0 without direct HTTP metrics, got %f", redisSvc.RequestsPerSec)
+	}
+	if redisSvc.ErrorRate != 0 {
+		t.Errorf("expected tiki_redis ErrorRate = 0, got %f", redisSvc.ErrorRate)
+	}
+	if redisSvc.AvgLatencyMs != 0 {
+		t.Errorf("expected tiki_redis AvgLatencyMs = 0, got %f", redisSvc.AvgLatencyMs)
+	}
+	if redisSvc.RxBytesPerSec <= 0 {
+		t.Errorf("expected factual RxBytesPerSec > 0, got %d", redisSvc.RxBytesPerSec)
 	}
 }
 
@@ -1569,9 +1578,13 @@ func TestTPSCollector_MaxLatencyMs_Propagation(t *testing.T) {
 		t.Errorf("expected tiki_traefik MaxLatencyMs = 24.0, got %f", tr.MaxLatencyMs)
 	}
 
-	// tiki_orders (fallback backend) should inherit HTTP MaxLatencyMs (24.0)
-	if ord, ok := svcMap["tiki_orders"]; !ok || ord.MaxLatencyMs != 24.0 {
-		t.Errorf("expected tiki_orders MaxLatencyMs = 24.0, got %f", ord.MaxLatencyMs)
+	// tiki_orders lacks direct HTTP metrics, so it must not copy edge MaxLatencyMs
+	ord, ok := svcMap["tiki_orders"]
+	if !ok || ord.MaxLatencyMs != 0 {
+		t.Errorf("expected tiki_orders MaxLatencyMs = 0 without direct HTTP metrics, got %f", ord.MaxLatencyMs)
+	}
+	if ord.RxBytesPerSec <= 0 {
+		t.Errorf("expected factual tiki_orders RxBytesPerSec > 0, got %d", ord.RxBytesPerSec)
 	}
 }
 
