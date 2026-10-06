@@ -179,9 +179,52 @@ func TestContainerTailer_CatchesUpInitialLogsOnDiscovery(t *testing.T) {
 	opts := mockCli.lastLogsOptions["c999888777666"]
 	mockCli.mu.Unlock()
 
-	// Initial discovery must catch up logs on container creation (Tail: "all" or empty, NOT "100")
-	if opts.Tail != "all" && opts.Tail != "" {
-		t.Fatalf("expected Tail option to be 'all' or empty to catch up on container creation, got %q", opts.Tail)
+	// On agent restart or initial container discovery (lastTimestamp is zero),
+	// tail must default to "100" to prevent massive log replay floods.
+	if opts.Tail != "100" {
+		t.Fatalf("expected Tail option to be '100' on initial discovery, got %q", opts.Tail)
+	}
+}
+
+func TestContainerTailer_TailFallbackOnZeroTimestamp(t *testing.T) {
+	tempDir := t.TempDir()
+	dict := logengine.NewLabelDictionary()
+	writer, err := logengine.NewWriter(tempDir, dict)
+	if err != nil {
+		t.Fatalf("failed to create log writer: %v", err)
+	}
+	defer writer.Close()
+
+	mockCli := &mockDockerClientForTailer{
+		containers: []types.Container{
+			{
+				ID:     "c_restart_check",
+				Names:  []string{"/restart-svc"},
+				Labels: map[string]string{"com.docker.compose.service": "restart-svc"},
+			},
+		},
+		logStreams: map[string]string{
+			"c_restart_check": "2026-09-14T12:00:00Z [INFO] restart log\n",
+		},
+	}
+
+	tailer := NewContainerTailer(mockCli, writer, slog.Default())
+	tailer.tailLines = "" // simulate empty tailLines to verify fallback to "100"
+	tailer.pollInterval = 50 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go tailer.Start(ctx)
+	time.Sleep(150 * time.Millisecond)
+	tailer.Stop()
+
+	mockCli.mu.Lock()
+	opts := mockCli.lastLogsOptions["c_restart_check"]
+	mockCli.mu.Unlock()
+
+	if opts.Tail != "100" {
+		t.Fatalf("expected Tail option fallback to '100' when lastTimestamp is zero and tailLines is empty, got %q", opts.Tail)
 	}
 }
 

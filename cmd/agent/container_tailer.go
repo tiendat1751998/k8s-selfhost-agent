@@ -41,7 +41,7 @@ func NewContainerTailer(cli DockerClientInterface, writer *logengine.Writer, log
 		logger:           logger,
 		pollInterval:     5 * time.Second,
 		eofRetryInterval: 200 * time.Millisecond,
-		tailLines:        "all",
+		tailLines:        "100",
 		activeStreams:    make(map[string]context.CancelFunc),
 	}
 }
@@ -173,7 +173,11 @@ func (t *ContainerTailer) streamContainerLogs(ctx context.Context, containerID, 
 			Timestamps: true,
 		}
 		if lastTimestamp.IsZero() {
-			opts.Tail = t.tailLines
+			tail := t.tailLines
+			if tail == "" || tail == "all" {
+				tail = "100"
+			}
+			opts.Tail = tail
 		} else {
 			opts.Since = lastTimestamp.Format(time.RFC3339Nano)
 		}
