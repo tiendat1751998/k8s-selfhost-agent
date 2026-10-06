@@ -73,17 +73,11 @@ func TestSeedDefaultSLODefinitions_EmptyRepo(t *testing.T) {
 		}
 
 		snap, snapErr := repo.GetSLOSnapshotBySLOID(ctx, d.ID)
-		if snapErr != nil || snap == nil {
-			t.Fatalf("missing snapshot for service %s: %v", d.Service, snapErr)
+		if snapErr != nil {
+			t.Fatalf("unexpected error checking snapshot for service %s: %v", d.Service, snapErr)
 		}
-		if snap.Service != d.Service {
-			t.Errorf("snapshot service mismatch: expected %s, got %s", d.Service, snap.Service)
-		}
-		if snap.BudgetStatus != "healthy" {
-			t.Errorf("snapshot status mismatch: expected healthy, got %s", snap.BudgetStatus)
-		}
-		if snap.Actual != 99.94 {
-			t.Errorf("snapshot actual mismatch: expected 99.94, got %f", snap.Actual)
+		if snap != nil {
+			t.Errorf("expected no fake telemetry snapshot to be created during seeding, got %+v", snap)
 		}
 	}
 }

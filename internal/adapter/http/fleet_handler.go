@@ -145,57 +145,5 @@ func (h *FleetHandler) RemoveCluster(w http.ResponseWriter, r *http.Request) {
 
 // UpgradeCluster handles POST /api/v1/fleet/{id}/actions/upgrade
 func (h *FleetHandler) UpgradeCluster(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUUIDParam(r, "id")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "cluster id is required", err)
-		return
-	}
-
-	cluster, err := h.repo.GetCluster(r.Context(), id)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get cluster for upgrade", err)
-		return
-	}
-	if cluster == nil {
-		writeError(w, http.StatusNotFound, "cluster not found", nil)
-		return
-	}
-
-	targetVersion := "v1.31.0"
-	if cluster.Version != "" {
-		parts := strings.Split(cluster.Version, ".")
-		if len(parts) >= 2 {
-			var major, minor int
-			if _, err := fmt.Sscanf(parts[0], "v%d", &major); err == nil {
-				if _, err := fmt.Sscanf(parts[1], "%d", &minor); err == nil {
-					targetVersion = fmt.Sprintf("v%d.%d.0", major, minor+1)
-				}
-			}
-		}
-	}
-
-	err = h.repo.UpdateClusterStatus(r.Context(), id, "upgrading", cluster.Version, cluster.Nodes)
-	result := "success"
-	var details map[string]interface{}
-	if err != nil {
-		result = "failure"
-		details = map[string]interface{}{"error": err.Error()}
-	} else {
-		details = map[string]interface{}{"target_version": targetVersion}
-	}
-
-	userID := middleware.UserIDFromContext(r.Context())
-	if userID == "" {
-		userID = "system"
-	}
-	if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "upgrade", "kubernetes", id, cluster.Name, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
-		logger.Get().Warn("failed to record audit action", zap.Error(auditErr))
-	}
-
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to start cluster upgrade", err)
-		return
-	}
-
 	writeError(w, http.StatusNotImplemented, "Cluster upgrade is not implemented", fmt.Errorf("upgrade not implemented"))
 }
