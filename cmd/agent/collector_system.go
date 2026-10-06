@@ -177,7 +177,7 @@ func (c *SystemCollector) collectOSInfo() (string, string) {
 }
 
 func (c *SystemCollector) readOSDistro() string {
-	paths := []string{c.osReleasePath, "/usr/lib/os-release", "/etc/lsb-release"}
+	paths := []string{c.osReleasePath, "/usr/lib/os-release"}
 	for _, p := range paths {
 		if p == "" {
 			continue
@@ -187,7 +187,7 @@ func (c *SystemCollector) readOSDistro() string {
 			continue
 		}
 		lines := strings.Split(string(data), "\n")
-		var name, version, prettyName, distribDesc string
+		var name, version, prettyName string
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
 			if line == "" || strings.HasPrefix(line, "#") {
@@ -202,8 +202,6 @@ func (c *SystemCollector) readOSDistro() string {
 			switch key {
 			case "PRETTY_NAME":
 				prettyName = val
-			case "DISTRIB_DESCRIPTION":
-				distribDesc = val
 			case "NAME":
 				name = val
 			case "VERSION":
@@ -217,30 +215,11 @@ func (c *SystemCollector) readOSDistro() string {
 		if prettyName != "" {
 			return prettyName
 		}
-		if distribDesc != "" {
-			return distribDesc
-		}
 		if name != "" && version != "" {
 			return name + " " + version
 		}
 		if name != "" {
 			return name
-		}
-	}
-
-	// Fallback to /etc/redhat-release
-	if data, err := os.ReadFile("/etc/redhat-release"); err == nil {
-		content := strings.TrimSpace(string(data))
-		if content != "" {
-			return content
-		}
-	}
-
-	// Fallback to /etc/debian_version
-	if data, err := os.ReadFile("/etc/debian_version"); err == nil {
-		content := strings.TrimSpace(string(data))
-		if content != "" {
-			return "Debian " + content
 		}
 	}
 
