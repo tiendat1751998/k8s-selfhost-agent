@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"log/slog"
@@ -28,12 +28,12 @@ func (c *SystemCollector) readTopProcesses(limit int, totalMem int64) []ProcessM
 
 	entries, err := os.ReadDir(c.procPath)
 	if err != nil {
-		return c.fallbackTopProcesses(limit, totalMem)
+		return nil
 	}
 
 	pids := collectPIDs(entries)
 	if len(pids) == 0 {
-		return c.fallbackTopProcesses(limit, totalMem)
+		return nil
 	}
 
 	now := time.Now().UTC()
@@ -250,46 +250,3 @@ func parseProcessIO(pidDir string, pid int) (readBytes, writeBytes int64) {
 	return readBytes, writeBytes
 }
 
-func (c *SystemCollector) fallbackTopProcesses(limit int, totalMem int64) []ProcessMetric {
-	if totalMem <= 0 {
-		totalMem = 16 * 1024 * 1024 * 1024
-	}
-
-	calcMemPct := func(mem int64) float64 {
-		return math.Round((float64(mem)/float64(totalMem))*10000) / 100
-	}
-
-	mock := func(pid int, name, cmd, user, state string, cpu float64, memMB, rRate, wRate int64) ProcessMetric {
-		mem := memMB * 1024 * 1024
-		return ProcessMetric{
-			PID:              pid,
-			Name:             name,
-			CommandLine:      cmd,
-			User:             user,
-			CPUPercent:       cpu,
-			MemoryBytes:      mem,
-			MemoryPercent:    calcMemPct(mem),
-			ReadBytesPerSec:  rRate,
-			WriteBytesPerSec: wRate,
-			State:            state,
-		}
-	}
-
-	procs := []ProcessMetric{
-		mock(413, "nginx", "nginx: worker process", "www-data", "running", 4.20, 64, 1048576, 524288),
-		mock(305, "kubelet", "/usr/bin/kubelet --config=/etc/kubernetes/kubelet.conf", "root", "running", 2.10, 150, 20480, 10240),
-		mock(101, "dockerd", "/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock", "root", "running", 1.50, 120, 10240, 40960),
-		mock(521, "postgres", "postgres: writer", "postgres", "running", 1.10, 75, 204800, 1048576),
-		mock(630, "redis-server", "redis-server *:6379", "redis", "running", 0.90, 40, 5120, 5120),
-		mock(102, "containerd", "/usr/bin/containerd", "root", "sleeping", 0.80, 80, 4096, 8192),
-		mock(201, "k8s-agent", "/usr/local/bin/k8s-agent", "root", "running", 0.50, 45, 2048, 1024),
-		mock(412, "nginx", "nginx: master process /usr/sbin/nginx -g daemon off;", "root", "sleeping", 0.30, 30, 0, 0),
-		mock(520, "postgres", "postgres: checkpointer", "postgres", "sleeping", 0.20, 50, 10240, 51200),
-		mock(1, "systemd", "/sbin/init", "root", "sleeping", 0.10, 25, 512, 512),
-	}
-
-	if limit > 0 && len(procs) > limit {
-		return procs[:limit]
-	}
-	return procs
-}
