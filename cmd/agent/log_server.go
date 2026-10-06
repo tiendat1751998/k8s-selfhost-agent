@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"bufio"
@@ -216,10 +216,10 @@ func (s *LogServer) HandleGetLogs(w http.ResponseWriter, r *http.Request) {
 
 	tailStr := q.Get("tail")
 	tail := 100
-	if tailStr == "all" || tailStr == "0" {
-		tail = 0
+	if tailStr == "all" || tailStr == "-1" {
+		tail = -1
 	} else if tailStr != "" {
-		if t, err := strconv.Atoi(tailStr); err == nil && t >= 0 {
+		if t, err := strconv.Atoi(tailStr); err == nil && t > 0 {
 			tail = t
 		}
 	}

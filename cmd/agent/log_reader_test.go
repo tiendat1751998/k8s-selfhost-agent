@@ -7,6 +7,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/docker/docker/api/types"
+
 	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
 
@@ -252,3 +254,45 @@ func TestFileLogSource_EmptyDir(t *testing.T) {
 		t.Fatalf("expected nil error for empty dir/writer, got %v", err)
 	}
 }
+
+func TestDockerLogSource_GetLogs_TailHandling(t *testing.T) {
+	mockCli := &mockDockerClientForTailer{
+		containers: []types.Container{
+			{
+				ID:    "c123",
+				Names: []string{"/my-app"},
+			},
+		},
+		logStreams: map[string]string{
+			"c123": "2026-09-16T00:00:00Z [info] hello\n",
+		},
+	}
+
+	src := NewDockerLogSourceWithClient(mockCli)
+	ctx := context.Background()
+
+	tests := []struct {
+		name         string
+		tail         int
+		expectedTail string
+	}{
+		{name: "zero tail defaults to 100 lines", tail: 0, expectedTail: "100"},
+		{name: "positive tail uses requested lines", tail: 50, expectedTail: "50"},
+		{name: "negative tail -1 requests all", tail: -1, expectedTail: "all"},
+		{name: "negative tail -5 requests all", tail: -5, expectedTail: "all"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := src.GetLogs(ctx, "my-app", tc.tail, nil, nil, "", "")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			opts := mockCli.lastLogsOptions["c123"]
+			if opts.Tail != tc.expectedTail {
+				t.Errorf("for tail=%d, expected opts.Tail=%q, got %q", tc.tail, tc.expectedTail, opts.Tail)
+			}
+		})
+	}
+}
+
