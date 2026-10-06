@@ -68,7 +68,12 @@ func (h *K8sLogsHandler) HandlePodLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	namespace := getNamespaceQuery(r)
-	if namespace == "" {
+	if namespace != "" {
+		if err := checkNamespaceAccess(r, namespace); err != nil {
+			writeError(w, http.StatusForbidden, err.Error(), nil)
+			return
+		}
+	} else {
 		namespace = "default"
 	}
 
@@ -108,6 +113,11 @@ func (h *K8sLogsHandler) HandlePodLogs(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+	}
+
+	if err := checkNamespaceAccess(r, namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
 	}
 
 	opts := &corev1.PodLogOptions{

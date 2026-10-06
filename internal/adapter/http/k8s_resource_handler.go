@@ -14,6 +14,7 @@ import (
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // K8sResourceHandler provides HTTP handlers for managing generic Kubernetes resources.
@@ -125,6 +126,63 @@ func getNamespaceQuery(r *http.Request) string {
 	return ns
 }
 
+// isSystemNamespace returns true if the namespace is a reserved Kubernetes system namespace.
+func isSystemNamespace(namespace string) bool {
+	switch strings.ToLower(strings.TrimSpace(namespace)) {
+	case "kube-system", "kube-public", "kube-node-lease":
+		return true
+	default:
+		return false
+	}
+}
+
+// checkNamespaceAccess verifies that the caller is authorized to access the given namespace.
+// platform_admin can access any namespace. Non-admin callers cannot access reserved system
+// namespaces or namespaces belonging to other tenants.
+func checkNamespaceAccess(r *http.Request, namespace string) error {
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole == "platform_admin" {
+		return nil
+	}
+	ns := strings.TrimSpace(namespace)
+	if isSystemNamespace(ns) {
+		return errors.New("forbidden: access to system namespace is restricted to platform_admin")
+	}
+	tenantID := resolveTenant(r.Context(), r)
+	if tenantID != "" && !isTenantNamespaceAllowed(tenantID, ns) {
+		return errors.New("forbidden: access to namespace not allowed for tenant")
+	}
+	if userRole != "" && tenantID == "" && ns != "default" {
+		return errors.New("forbidden: access to namespace not allowed for tenant")
+	}
+	return nil
+}
+
+// resolveNamespaceForRequest determines the namespace to use for a request.
+// If explicitNs is provided, it verifies caller access. If not provided and caller is
+// platform_admin, it returns empty string to allow backend auto-discovery. For other roles,
+// it defaults to the caller's tenant namespace or "default" and validates access.
+func resolveNamespaceForRequest(r *http.Request, explicitNs string) (string, error) {
+	if explicitNs != "" {
+		if err := checkNamespaceAccess(r, explicitNs); err != nil {
+			return "", err
+		}
+		return explicitNs, nil
+	}
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole == "platform_admin" {
+		return "", nil
+	}
+	ns := resolveTenant(r.Context(), r)
+	if ns == "" {
+		ns = "default"
+	}
+	if err := checkNamespaceAccess(r, ns); err != nil {
+		return "", err
+	}
+	return ns, nil
+}
+
 // ListResources handles GET /api/v1/k8s/{cluster}/resources/{kind}?ns=default
 func (h *K8sResourceHandler) ListResources(w http.ResponseWriter, r *http.Request) {
 	if h.repo == nil {
@@ -135,6 +193,21 @@ func (h *K8sResourceHandler) ListResources(w http.ResponseWriter, r *http.Reques
 	cluster := chi.URLParam(r, "cluster")
 	kind := chi.URLParam(r, "kind")
 	ns := getNamespaceQuery(r)
+
+	if ns != "" {
+		if err := checkNamespaceAccess(r, ns); err != nil {
+			writeError(w, http.StatusForbidden, err.Error(), nil)
+			return
+		}
+	} else {
+		userRole := tenancy.UserRoleFromContext(r.Context())
+		if userRole != "platform_admin" {
+			tenantID := resolveTenant(r.Context(), r)
+			if tenantID != "" {
+				ns = tenantID
+			}
+		}
+	}
 
 	items, err := h.repo.ListResources(r.Context(), cluster, kind, ns)
 	if err != nil {
@@ -162,7 +235,11 @@ func (h *K8sResourceHandler) GetResource(w http.ResponseWriter, r *http.Request)
 	cluster := chi.URLParam(r, "cluster")
 	kind := chi.URLParam(r, "kind")
 	name := chi.URLParam(r, "name")
-	ns := getNamespaceQuery(r)
+	ns, err := resolveNamespaceForRequest(r, getNamespaceQuery(r))
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
 
 	item, err := h.repo.GetResource(r.Context(), cluster, kind, ns, name)
 	if err != nil {
@@ -172,6 +249,15 @@ func (h *K8sResourceHandler) GetResource(w http.ResponseWriter, r *http.Request)
 		}
 		writeError(w, http.StatusNotFound, "resource not found", err)
 		return
+	}
+
+	if md, ok := item["metadata"].(map[string]interface{}); ok {
+		if foundNs, ok := md["namespace"].(string); ok && foundNs != "" {
+			if err := checkNamespaceAccess(r, foundNs); err != nil {
+				writeError(w, http.StatusForbidden, err.Error(), nil)
+				return
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusOK, item)
@@ -187,6 +273,13 @@ func (h *K8sResourceHandler) CreateResource(w http.ResponseWriter, r *http.Reque
 	cluster := chi.URLParam(r, "cluster")
 	kind := chi.URLParam(r, "kind")
 	ns := getNamespaceQuery(r)
+	if ns == "" {
+		ns = "default"
+	}
+	if err := checkNamespaceAccess(r, ns); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
 
 	var manifest map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&manifest); err != nil {
@@ -242,7 +335,11 @@ func (h *K8sResourceHandler) UpdateResource(w http.ResponseWriter, r *http.Reque
 	cluster := chi.URLParam(r, "cluster")
 	kind := chi.URLParam(r, "kind")
 	name := chi.URLParam(r, "name")
-	ns := getNamespaceQuery(r)
+	ns, err := resolveNamespaceForRequest(r, getNamespaceQuery(r))
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
 
 	var manifest map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&manifest); err != nil {
@@ -290,9 +387,13 @@ func (h *K8sResourceHandler) DeleteResource(w http.ResponseWriter, r *http.Reque
 	cluster := chi.URLParam(r, "cluster")
 	kind := chi.URLParam(r, "kind")
 	name := chi.URLParam(r, "name")
-	ns := getNamespaceQuery(r)
+	ns, err := resolveNamespaceForRequest(r, getNamespaceQuery(r))
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
 
-	err := h.repo.DeleteResource(r.Context(), cluster, kind, ns, name)
+	err = h.repo.DeleteResource(r.Context(), cluster, kind, ns, name)
 
 	userID := middleware.UserIDFromContext(r.Context())
 	if userID == "" {
