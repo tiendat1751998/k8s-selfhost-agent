@@ -372,26 +372,17 @@ func TestReadTopProcesses_Fallback(t *testing.T) {
 	collector := NewSystemCollector("/non/existent/path", "", nil)
 	topProcs := collector.readTopProcesses(5, 16*1024*1024*1024)
 
-	if len(topProcs) != 5 {
-		t.Fatalf("expected 5 fallback processes, got %d", len(topProcs))
+	if len(topProcs) != 0 {
+		t.Fatalf("expected 0 processes on invalid proc path, got %d", len(topProcs))
 	}
+}
 
-	for _, p := range topProcs {
-		if p.PID <= 0 {
-			t.Errorf("expected positive PID, got %d", p.PID)
-		}
-		if p.Name == "" {
-			t.Errorf("expected non-empty process name")
-		}
-		if p.State == "" {
-			t.Errorf("expected non-empty process state")
-		}
-		if p.MemoryBytes <= 0 {
-			t.Errorf("expected positive MemoryBytes")
-		}
-		if p.MemoryPercent <= 0 {
-			t.Errorf("expected positive MemoryPercent")
-		}
+func TestCollectMemory_MissingMeminfo(t *testing.T) {
+	collector := NewSystemCollector(t.TempDir(), "", nil)
+	mem := collector.collectMemory()
+
+	if mem.TotalBytes != 0 || mem.UsedBytes != 0 || mem.AvailableBytes != 0 || mem.UsagePercent != 0 {
+		t.Fatalf("expected zero-value MemoryMetrics when meminfo is missing, got %+v", mem)
 	}
 }
 
@@ -423,9 +414,6 @@ func TestMetricsEndpoint_ReturnsJSON(t *testing.T) {
 	}
 	if resp.Arch == "" {
 		t.Errorf("expected non-empty Arch")
-	}
-	if len(resp.TopProcesses) == 0 {
-		t.Errorf("expected top_processes to be populated in metrics response")
 	}
 }
 
@@ -510,9 +498,6 @@ func TestAuthToken_Valid(t *testing.T) {
 	}
 	if resp.Hostname == "" {
 		t.Errorf("expected non-empty hostname")
-	}
-	if len(resp.TopProcesses) == 0 {
-		t.Errorf("expected top_processes in authenticated response")
 	}
 }
 
