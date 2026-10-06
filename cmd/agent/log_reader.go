@@ -65,21 +65,26 @@ func (d *DockerLogSource) ListServices(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
-	var services []string
-	seen := make(map[string]bool)
-	for _, c := range containers {
-		for _, svc := range []string{c.Labels["com.docker.swarm.service.name"], c.Labels["com.docker.compose.service"]} {
-			if svc != "" && !seen[svc] {
-				seen[svc] = true
-				services = append(services, svc)
-			}
-		}
-		for _, name := range c.Names {
-			clean := strings.TrimPrefix(name, "/")
-			if clean != "" && !seen[clean] {
-				seen[clean] = true
+	services := make([]string, 0, len(containers))
+	seen := make(map[string]struct{}, len(containers))
+	addService := func(name string) {
+		if clean := strings.TrimPrefix(name, "/"); clean != "" {
+			if _, exists := seen[clean]; !exists {
+				seen[clean] = struct{}{}
 				services = append(services, clean)
 			}
+		}
+	}
+
+	for _, c := range containers {
+		if svc := c.Labels["com.docker.swarm.service.name"]; svc != "" {
+			addService(svc)
+		}
+		if svc := c.Labels["com.docker.compose.service"]; svc != "" {
+			addService(svc)
+		}
+		for _, name := range c.Names {
+			addService(name)
 		}
 	}
 	return services, nil
