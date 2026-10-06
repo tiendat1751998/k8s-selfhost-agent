@@ -179,126 +179,139 @@ func (c *Collector) collectDockerContainers(ctx context.Context, now time.Time) 
 			statCh := make(chan rawContainerStat, len(containersList))
 			var wg sync.WaitGroup
 
+			const maxStatsWorkers = 8
+			numWorkers := maxStatsWorkers
+			if len(containersList) < numWorkers {
+				numWorkers = len(containersList)
+			}
+
+			jobsCh := make(chan container.Summary, len(containersList))
 			for _, cnt := range containersList {
+				jobsCh <- cnt
+			}
+			close(jobsCh)
+
+			for i := 0; i < numWorkers; i++ {
 				wg.Add(1)
-				go func(cSummary container.Summary) {
+				go func() {
 					defer wg.Done()
-
-					name := cSummary.ID
-					if len(cSummary.Names) > 0 {
-						name = cSummary.Names[0]
-						if len(name) > 0 && name[0] == '/' {
-							name = name[1:]
-						}
-					}
-
-					swarmNodeID := ""
-					if cSummary.Labels != nil {
-						if nid, ok := cSummary.Labels["com.docker.swarm.node.id"]; ok {
-							swarmNodeID = nid
-						}
-					}
-
-					var resolvedNodeID, resolvedNodeName string
-
-					if swarmNodeID != "" {
-						if sn, ok := swarmNodeMap[swarmNodeID]; ok {
-							resolvedNodeID, resolvedNodeName = matchHost(knownHosts, sn.Description.Hostname, sn.Status.Addr, "")
-							if resolvedNodeName == "" {
-								resolvedNodeName = sn.Description.Hostname
-							}
-							if resolvedNodeID == "" {
-								resolvedNodeID = swarmNodeID
-							}
-						} else if info.Swarm.NodeID != "" && swarmNodeID == info.Swarm.NodeID {
-							resolvedNodeID, resolvedNodeName = matchHost(knownHosts, info.Name, "", info.Name)
-							if resolvedNodeName == "" {
-								resolvedNodeName = info.Name
-							}
-							if resolvedNodeID == "" {
-								resolvedNodeID = swarmNodeID
-							}
-						} else {
-							resolvedNodeID = swarmNodeID
-						}
-					}
-
-					if resolvedNodeID == "" || resolvedNodeName == "" {
-						hID, hName := matchHost(knownHosts, info.Name, "", info.Name)
-						if resolvedNodeID == "" {
-							if hID != "" {
-								resolvedNodeID = hID
-							} else if len(knownHosts) == 1 {
-								resolvedNodeID = knownHosts[0].id
-							} else if info.ID != "" {
-								resolvedNodeID = info.ID
-							} else if swarmNodeID != "" {
-								resolvedNodeID = swarmNodeID
+					for cSummary := range jobsCh {
+						name := cSummary.ID
+						if len(cSummary.Names) > 0 {
+							name = cSummary.Names[0]
+							if len(name) > 0 && name[0] == '/' {
+								name = name[1:]
 							}
 						}
-						if resolvedNodeName == "" {
-							if hName != "" {
-								resolvedNodeName = hName
-							} else if len(knownHosts) == 1 {
-								resolvedNodeName = knownHosts[0].name
-							} else if info.Name != "" {
-								resolvedNodeName = info.Name
+
+						swarmNodeID := ""
+						if cSummary.Labels != nil {
+							if nid, ok := cSummary.Labels["com.docker.swarm.node.id"]; ok {
+								swarmNodeID = nid
+							}
+						}
+
+						var resolvedNodeID, resolvedNodeName string
+
+						if swarmNodeID != "" {
+							if sn, ok := swarmNodeMap[swarmNodeID]; ok {
+								resolvedNodeID, resolvedNodeName = matchHost(knownHosts, sn.Description.Hostname, sn.Status.Addr, "")
+								if resolvedNodeName == "" {
+									resolvedNodeName = sn.Description.Hostname
+								}
+								if resolvedNodeID == "" {
+									resolvedNodeID = swarmNodeID
+								}
+							} else if info.Swarm.NodeID != "" && swarmNodeID == info.Swarm.NodeID {
+								resolvedNodeID, resolvedNodeName = matchHost(knownHosts, info.Name, "", info.Name)
+								if resolvedNodeName == "" {
+									resolvedNodeName = info.Name
+								}
+								if resolvedNodeID == "" {
+									resolvedNodeID = swarmNodeID
+								}
 							} else {
-								resolvedNodeName = resolvedNodeID
+								resolvedNodeID = swarmNodeID
 							}
 						}
-					}
 
-					serviceName := ""
-					if cSummary.Labels != nil {
-						if sn, ok := cSummary.Labels["com.docker.swarm.service.name"]; ok && sn != "" {
-							serviceName = sn
-						} else if sn, ok := cSummary.Labels["com.docker.compose.service"]; ok && sn != "" {
-							serviceName = sn
-						}
-					}
-					if serviceName == "" {
-						serviceName = extractServiceNameFromContainerName(name)
-					}
-
-					cm := ContainerMetrics{
-						ContainerID:   cSummary.ID,
-						ContainerName: name,
-						NodeID:        resolvedNodeID,
-						NodeName:      resolvedNodeName,
-						Image:         cSummary.Image,
-						State:         string(cSummary.State),
-						ServiceName:   serviceName,
-						Labels:        cSummary.Labels,
-					}
-
-					if cSummary.State == "running" {
-						statCtx, statCancel := context.WithTimeout(ctx, 2*time.Second)
-						statsReader, err := c.dockerClient.ContainerStats(statCtx, cSummary.ID, false)
-						if err == nil && statsReader.Body != nil {
-							var stats container.StatsResponse
-							if decodeErr := json.NewDecoder(statsReader.Body).Decode(&stats); decodeErr == nil {
-								cm.CPUPercent = calculateCPUPercent(&stats)
-								cm.MemoryUsed = int64(stats.MemoryStats.Usage)
-								cm.MemoryLimit = int64(stats.MemoryStats.Limit)
-								if cm.MemoryLimit > 0 {
-									cm.MemoryPercent = math.Round((float64(cm.MemoryUsed)/float64(cm.MemoryLimit))*10000) / 100
+						if resolvedNodeID == "" || resolvedNodeName == "" {
+							hID, hName := matchHost(knownHosts, info.Name, "", info.Name)
+							if resolvedNodeID == "" {
+								if hID != "" {
+									resolvedNodeID = hID
+								} else if len(knownHosts) == 1 {
+									resolvedNodeID = knownHosts[0].id
+								} else if info.ID != "" {
+									resolvedNodeID = info.ID
+								} else if swarmNodeID != "" {
+									resolvedNodeID = swarmNodeID
 								}
-								var rx, tx int64
-								for _, netStat := range stats.Networks {
-									rx += int64(netStat.RxBytes)
-									tx += int64(netStat.TxBytes)
-								}
-								cm.NetworkRx = rx
-								cm.NetworkTx = tx
 							}
-							statsReader.Body.Close()
+							if resolvedNodeName == "" {
+								if hName != "" {
+									resolvedNodeName = hName
+								} else if len(knownHosts) == 1 {
+									resolvedNodeName = knownHosts[0].name
+								} else if info.Name != "" {
+									resolvedNodeName = info.Name
+								} else {
+									resolvedNodeName = resolvedNodeID
+								}
+							}
 						}
-						statCancel()
-					}
 
-					statCh <- rawContainerStat{cm: cm}
-				}(cnt)
+						serviceName := ""
+						if cSummary.Labels != nil {
+							if sn, ok := cSummary.Labels["com.docker.swarm.service.name"]; ok && sn != "" {
+								serviceName = sn
+							} else if sn, ok := cSummary.Labels["com.docker.compose.service"]; ok && sn != "" {
+								serviceName = sn
+							}
+						}
+						if serviceName == "" {
+							serviceName = extractServiceNameFromContainerName(name)
+						}
+
+						cm := ContainerMetrics{
+							ContainerID:   cSummary.ID,
+							ContainerName: name,
+							NodeID:        resolvedNodeID,
+							NodeName:      resolvedNodeName,
+							Image:         cSummary.Image,
+							State:         string(cSummary.State),
+							ServiceName:   serviceName,
+							Labels:        cSummary.Labels,
+						}
+
+						if cSummary.State == "running" {
+							statCtx, statCancel := context.WithTimeout(ctx, 2*time.Second)
+							statsReader, err := c.dockerClient.ContainerStats(statCtx, cSummary.ID, false)
+							if err == nil && statsReader.Body != nil {
+								var stats container.StatsResponse
+								if decodeErr := json.NewDecoder(statsReader.Body).Decode(&stats); decodeErr == nil {
+									cm.CPUPercent = calculateCPUPercent(&stats)
+									cm.MemoryUsed = int64(stats.MemoryStats.Usage)
+									cm.MemoryLimit = int64(stats.MemoryStats.Limit)
+									if cm.MemoryLimit > 0 {
+										cm.MemoryPercent = math.Round((float64(cm.MemoryUsed)/float64(cm.MemoryLimit))*10000) / 100
+									}
+									var rx, tx int64
+									for _, netStat := range stats.Networks {
+										rx += int64(netStat.RxBytes)
+										tx += int64(netStat.TxBytes)
+									}
+									cm.NetworkRx = rx
+									cm.NetworkTx = tx
+								}
+								statsReader.Body.Close()
+							}
+							statCancel()
+						}
+
+						statCh <- rawContainerStat{cm: cm}
+					}
+				}()
 			}
 
 			wg.Wait()
