@@ -223,7 +223,9 @@ func (h *RunbookHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	rb.LastUsedAt = &now
-	_ = h.repo.Update(r.Context(), rb)
+	if err := h.repo.Update(r.Context(), rb); err != nil {
+		logger.Get().Warn("failed to update runbook execution timestamp", zap.Error(err), zap.String("runbook_id", rb.ID))
+	}
 
 	userID := middleware.UserIDFromContext(r.Context())
 	if userID == "" {
@@ -235,7 +237,11 @@ func (h *RunbookHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		"steps_count": rb.StepsCount,
 		"status":      "completed",
 	}
-	_ = h.auditRepo.RecordAction(r.Context(), userID, "execute", "runbook", rb.ID, rb.Title, "success", details, r.RemoteAddr, r.Header.Get("User-Agent"))
+	if h.auditRepo != nil {
+		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "execute", "runbook", rb.ID, rb.Title, "success", details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+			logger.Get().Error("failed to record audit action for runbook execution", zap.Error(auditErr), zap.String("runbook_id", rb.ID))
+		}
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":      "executed",

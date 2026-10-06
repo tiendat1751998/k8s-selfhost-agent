@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,11 +15,12 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/observability"
 )
 
-
 type mockObservabilityRepo struct {
-	defs    map[string]observability.SLODefinition
-	snaps   map[string]observability.SLOSnapshot
-	samples []observability.HealthSample
+	defs                 map[string]observability.SLODefinition
+	snaps                map[string]observability.SLOSnapshot
+	samples              []observability.HealthSample
+	createSLOSnapshotErr error
+	updateSLOSnapshotErr error
 }
 
 func newMockObservabilityRepo() *mockObservabilityRepo {
@@ -76,11 +78,17 @@ func (m *mockObservabilityRepo) GetSLOSnapshotBySLOID(ctx context.Context, sloID
 }
 
 func (m *mockObservabilityRepo) CreateSLOSnapshot(ctx context.Context, s *observability.SLOSnapshot) error {
+	if m.createSLOSnapshotErr != nil {
+		return m.createSLOSnapshotErr
+	}
 	m.snaps[s.SLOID] = *s
 	return nil
 }
 
 func (m *mockObservabilityRepo) UpdateSLOSnapshot(ctx context.Context, s *observability.SLOSnapshot) error {
+	if m.updateSLOSnapshotErr != nil {
+		return m.updateSLOSnapshotErr
+	}
 	m.snaps[s.SLOID] = *s
 	return nil
 }
@@ -203,3 +211,49 @@ func TestObservabilityHandler_CRUD(t *testing.T) {
 		t.Fatalf("expected 200 OK, got %d", w.Code)
 	}
 }
+
+func TestTriggerAlert_SLOSnapshotDatabaseErrors(t *testing.T) {
+	repo := newMockObservabilityRepo()
+	handler := NewObservabilityHandler(repo)
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	def := &observability.SLODefinition{
+		ID:             "slo-fail-test",
+		Service:        "billing",
+		Target:         99.9,
+		AlertThreshold: 2.0,
+	}
+	_ = repo.CreateSLODefinition(context.Background(), def)
+
+	t.Run("CreateSLOSnapshot failure returns 500", func(t *testing.T) {
+		repo.createSLOSnapshotErr = errors.New("db insert connection error")
+		req := httptest.NewRequest(http.MethodPost, "/slo/definitions/slo-fail-test/trigger-alert", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500 InternalServerError, got %d: %s", w.Code, w.Body.String())
+		}
+		repo.createSLOSnapshotErr = nil
+	})
+
+	t.Run("UpdateSLOSnapshot failure returns 500", func(t *testing.T) {
+		snap := &observability.SLOSnapshot{
+			ID:    "snap-1",
+			SLOID: "slo-fail-test",
+		}
+		_ = repo.CreateSLOSnapshot(context.Background(), snap)
+
+		repo.updateSLOSnapshotErr = errors.New("db update timeout")
+		req := httptest.NewRequest(http.MethodPost, "/slo/definitions/slo-fail-test/trigger-alert", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500 InternalServerError, got %d: %s", w.Code, w.Body.String())
+		}
+		repo.updateSLOSnapshotErr = nil
+	})
+}
+
