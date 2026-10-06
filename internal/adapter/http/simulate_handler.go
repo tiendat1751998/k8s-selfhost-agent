@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/report"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type simulateIncidentRequest struct {
@@ -23,10 +25,35 @@ type simulateIncidentRequest struct {
 	ClusterName string `json:"cluster_name"`
 }
 
+func (h *Handler) isProduction() bool {
+	env := strings.ToLower(strings.TrimSpace(h.environment))
+	if env == "production" || env == "prod" {
+		return true
+	}
+	for _, envVar := range []string{"ENV", "ENVIRONMENT", "K8S_ENVIRONMENT", "K8S_TELEMETRY_ENVIRONMENT"} {
+		v := strings.ToLower(strings.TrimSpace(os.Getenv(envVar)))
+		if v == "production" || v == "prod" {
+			return true
+		}
+	}
+	return false
+}
+
 // SimulateIncident handles POST /api/v1/incidents/simulate
 // NOTE: This endpoint is strictly for development, debugging, and demo simulations.
 // In production environments, incidents are generated event-driven from Docker/K8s events.
 func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
+	if h.isProduction() {
+		writeError(w, http.StatusForbidden, "incident simulation is disabled in production", nil)
+		return
+	}
+
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole != "platform_admin" {
+		writeError(w, http.StatusForbidden, "platform_admin role required for incident simulation", nil)
+		return
+	}
+
 	var req simulateIncidentRequest
 	if r.Body != nil {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {

@@ -20,6 +20,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/usecase/gitops"
 	usecaseIncident "github.com/datdt/k8sselfhost/internal/usecase/incident"
 	"github.com/datdt/k8sselfhost/internal/usecase/rca"
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
@@ -33,6 +34,7 @@ type Handler struct {
 	publisher        *infraNats.Publisher
 	gitopsController *gitops.Controller
 	rcaPipeline      *rca.Pipeline
+	environment      string
 }
 
 // NewHandler creates a new dashboard HTTP handler.
@@ -61,13 +63,22 @@ func (h *Handler) SetRCAPipeline(p *rca.Pipeline) {
 	h.rcaPipeline = p
 }
 
+// SetEnvironment sets the deployment environment (e.g., "production", "development").
+func (h *Handler) SetEnvironment(env string) {
+	h.environment = env
+}
+
+// Environment returns the deployment environment.
+func (h *Handler) Environment() string {
+	return h.environment
+}
 
 // RegisterRoutes registers dashboard API routes on the given chi router.
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/incidents", func(r chi.Router) {
 		r.Get("/", h.ListIncidents)
 		r.Post("/", h.CreateIncident)
-		r.Post("/simulate", h.SimulateIncident)
+		r.With(middleware.RBACMiddleware("platform_admin")).Post("/simulate", h.SimulateIncident)
 		r.Get("/{id}", h.GetIncident)
 		r.Get("/{id}/report", h.GetIncidentReport)
 		r.Get("/{id}/pr", h.GetIncidentPR)

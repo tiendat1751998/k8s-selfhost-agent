@@ -18,6 +18,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type mockK8sAuditRepo struct {
@@ -815,3 +816,93 @@ func TestK8sResourceHandler_AutoNamespaceDiscoveryAndRouteShadowing(t *testing.T
 		t.Fatalf("expected 200 OK for SuspendCronJob with auto-discovery, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestK8sResourceHandler_NamespaceAuthorization(t *testing.T) {
+	fakeClient := fake.NewSimpleClientset()
+	repo := infraK8s.NewResourceRepoWithInterface(fakeClient, nil)
+	auditMock := &mockK8sAuditRepo{}
+	handler := NewK8sResourceHandler(repo, auditMock)
+
+	r := chi.NewRouter()
+	r.Route("/k8s/{cluster}", handler.RegisterRoutes)
+
+	tenantCtx := tenancy.WithUserRole(context.Background(), "tenant_admin")
+	tenantCtx = tenancy.WithTenantID(tenantCtx, "tenant-a")
+
+	adminCtx := tenancy.WithUserRole(context.Background(), "platform_admin")
+	adminCtx = tenancy.WithTenantID(adminCtx, "platform")
+
+	forbiddenEndpoints := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		// System namespaces
+		{"ListResources kube-system", "GET", "/k8s/local/resources/deployments?ns=kube-system", ""},
+		{"ListResources kube-public", "GET", "/k8s/local/resources/configmaps?ns=kube-public", ""},
+		{"ListResources kube-node-lease", "GET", "/k8s/local/resources/secrets?ns=kube-node-lease", ""},
+		{"GetResource kube-system", "GET", "/k8s/local/resources/deployments/dep1?ns=kube-system", ""},
+		{"CreateResource kube-system", "POST", "/k8s/local/resources/configmaps?ns=kube-system", `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"cm1"}}`},
+		{"UpdateResource kube-system", "PUT", "/k8s/local/resources/configmaps/cm1?ns=kube-system", `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"cm1"}}`},
+		{"DeleteResource kube-system", "DELETE", "/k8s/local/resources/configmaps/cm1?ns=kube-system", ""},
+		{"CreateNamespace kube-system", "POST", "/k8s/local/namespaces", `{"name":"kube-system"}`},
+		{"DeleteNamespace kube-system", "DELETE", "/k8s/local/namespaces/kube-system", ""},
+		{"ScaleDeployment kube-system", "POST", "/k8s/local/resources/deployments/dep1/scale?ns=kube-system", `{"replicas":2}`},
+		{"RestartDeployment kube-system", "POST", "/k8s/local/resources/deployments/dep1/restart?ns=kube-system", ""},
+		{"TriggerCronJob kube-system", "POST", "/k8s/local/resources/cronjobs/cj1/trigger?ns=kube-system", ""},
+		{"SuspendCronJob kube-system", "PUT", "/k8s/local/resources/cronjobs/cj1/suspend?ns=kube-system", `{"suspend":true}`},
+
+		// Cross-tenant namespaces
+		{"ListResources other tenant", "GET", "/k8s/local/resources/deployments?ns=tenant-b", ""},
+		{"GetResource other tenant", "GET", "/k8s/local/resources/deployments/dep1?ns=tenant-b", ""},
+		{"CreateResource other tenant", "POST", "/k8s/local/resources/configmaps?ns=tenant-b", `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"cm1"}}`},
+		{"UpdateResource other tenant", "PUT", "/k8s/local/resources/configmaps/cm1?ns=tenant-b", `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"cm1"}}`},
+		{"DeleteResource other tenant", "DELETE", "/k8s/local/resources/configmaps/cm1?ns=tenant-b", ""},
+		{"CreateNamespace other tenant", "POST", "/k8s/local/namespaces", `{"name":"tenant-b"}`},
+		{"DeleteNamespace other tenant", "DELETE", "/k8s/local/namespaces/tenant-b", ""},
+		{"ScaleDeployment other tenant", "POST", "/k8s/local/resources/deployments/dep1/scale?ns=tenant-b", `{"replicas":2}`},
+		{"RestartDeployment other tenant", "POST", "/k8s/local/resources/deployments/dep1/restart?ns=tenant-b", ""},
+		{"TriggerCronJob other tenant", "POST", "/k8s/local/resources/cronjobs/cj1/trigger?ns=tenant-b", ""},
+		{"SuspendCronJob other tenant", "PUT", "/k8s/local/resources/cronjobs/cj1/suspend?ns=tenant-b", `{"suspend":true}`},
+	}
+
+	for _, tc := range forbiddenEndpoints {
+		t.Run("tenant-a rejected with 403 on "+tc.name, func(t *testing.T) {
+			var bodyReader *bytes.Reader
+			if tc.body != "" {
+				bodyReader = bytes.NewReader([]byte(tc.body))
+			} else {
+				bodyReader = bytes.NewReader([]byte{})
+			}
+			req := httptest.NewRequest(tc.method, tc.path, bodyReader).WithContext(tenantCtx)
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("[%s %s] expected 403 Forbidden for unauthorized namespace, got %d: %s", tc.method, tc.path, rec.Code, rec.Body.String())
+			}
+		})
+	}
+
+	t.Run("platform_admin allowed on kube-system", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/k8s/local/resources/deployments?ns=kube-system", nil).WithContext(adminCtx)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("expected platform_admin NOT to get 403 on kube-system, got 403")
+		}
+	})
+
+	t.Run("tenant-a allowed on own namespace", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/k8s/local/resources/deployments?ns=tenant-a", nil).WithContext(tenantCtx)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("expected tenant-a NOT to get 403 on own namespace, got 403")
+		}
+	})
+}
+

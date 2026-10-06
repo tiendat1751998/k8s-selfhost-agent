@@ -183,7 +183,9 @@ func (m *mockComputeHostRepo) GetByID(ctx context.Context, id string) (*domain.C
 func (m *mockComputeHostRepo) List(ctx context.Context, tenantID string) ([]domain.ComputeHost, error) {
 	var result []domain.ComputeHost
 	for _, h := range m.hosts {
-		result = append(result, h)
+		if tenantID == "" || h.TenantID == "" || h.TenantID == tenantID {
+			result = append(result, h)
+		}
 	}
 	return result, nil
 }
@@ -1335,5 +1337,110 @@ func TestDockerHandler_StandaloneHostRoutes_And_AgentProbe(t *testing.T) {
 	if failResp.Message == "" {
 		t.Errorf("expected non-empty error message for unreachable agent")
 	}
+}
+
+func TestDockerHandler_TenantZeroHosts_NoLeak(t *testing.T) {
+	agentSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/logs/search" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"results": []agent.LogSearchResult{
+					{
+						Timestamp: time.Now(),
+						Service:   "secret-service",
+						Message:   "alpha secret log entry",
+						Level:     "info",
+					},
+				},
+			})
+			return
+		}
+		if r.Header.Get("Authorization") == "Bearer alpha-secret-token" {
+			_, _ = w.Write([]byte("alpha secret logs"))
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer agentSrv.Close()
+
+	hostRepo := newMockComputeHostRepo()
+	_ = hostRepo.Create(context.Background(), &domain.ComputeHost{
+		ID:        "node-alpha",
+		Name:      "worker-alpha",
+		HostType:  "agent",
+		Endpoint:  agentSrv.URL,
+		Status:    "connected",
+		TenantID:  "tenant-alpha",
+		Labels:    map[string]string{"auth_token": "alpha-secret-token"},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	})
+
+	repo := &testDockerRepo{}
+	logClient := agent.NewAgentLogClient()
+	handler := NewDockerHandler(repo, hostRepo, logClient)
+	router := chi.NewRouter()
+	router.Route("/docker", handler.RegisterRoutes)
+
+	t.Run("Non-admin tenant-beta with 0 hosts cannot leak cluster search logs from tenant-alpha", func(t *testing.T) {
+		searchReq := agent.SearchLogsRequest{
+			Query: "secret",
+			Limit: 10,
+		}
+		bodyBytes, _ := json.Marshal(searchReq)
+		req := httptest.NewRequest(http.MethodPost, "/docker/logs/cluster-search", bytes.NewReader(bodyBytes))
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		ctx = tenancy.WithTenantID(ctx, "tenant-beta")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp struct {
+			Data  []agent.LogSearchResult `json:"data"`
+			Total int                     `json:"total"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp.Total != 0 || len(resp.Data) != 0 {
+			t.Fatalf("LEAK DETECTED: tenant-beta with 0 hosts received %d logs from another tenant", resp.Total)
+		}
+	})
+
+	t.Run("Non-admin tenant-beta with 0 hosts cannot access node-alpha logs or token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=container-1&node_id=node-alpha", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		ctx = tenancy.WithTenantID(ctx, "tenant-beta")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		// Must return 404 Not Found, never 200 with alpha secret logs
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("LEAK DETECTED: expected 404 Not Found for non-admin targeting another tenant's host, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), "alpha secret") {
+			t.Fatalf("CRITICAL LEAK: response body contains tenant-alpha data")
+		}
+	})
+
+	t.Run("Non-admin tenant-beta targeting host by name cannot access tenant-alpha node", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/docker/logs?id=container-1&host=worker-alpha", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		ctx = tenancy.WithTenantID(ctx, "tenant-beta")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 Not Found for non-admin targeting another tenant's host by name, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
 }
 

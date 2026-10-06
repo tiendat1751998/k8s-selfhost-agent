@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // ListNamespaces handles GET /api/v1/k8s/{cluster}/namespaces
@@ -28,6 +30,22 @@ func (h *K8sResourceHandler) ListNamespaces(w http.ResponseWriter, r *http.Reque
 	}
 	if namespaces == nil {
 		namespaces = []corev1.Namespace{}
+	}
+
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	tenantID := resolveTenant(r.Context(), r)
+	if userRole != "platform_admin" {
+		filtered := make([]corev1.Namespace, 0, len(namespaces))
+		for _, ns := range namespaces {
+			if isSystemNamespace(ns.Name) {
+				continue
+			}
+			if tenantID != "" && !isTenantNamespaceAllowed(tenantID, ns.Name) {
+				continue
+			}
+			filtered = append(filtered, ns)
+		}
+		namespaces = filtered
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -53,6 +71,11 @@ func (h *K8sResourceHandler) CreateNamespace(w http.ResponseWriter, r *http.Requ
 	}
 	if strings.TrimSpace(req.Name) == "" {
 		writeError(w, http.StatusBadRequest, "namespace name cannot be empty", nil)
+		return
+	}
+
+	if err := checkNamespaceAccess(r, req.Name); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
 		return
 	}
 
@@ -83,6 +106,11 @@ func (h *K8sResourceHandler) DeleteNamespace(w http.ResponseWriter, r *http.Requ
 	name := chi.URLParam(r, "name")
 	if strings.TrimSpace(name) == "" {
 		writeError(w, http.StatusBadRequest, "namespace name cannot be empty", nil)
+		return
+	}
+
+	if err := checkNamespaceAccess(r, name); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
 		return
 	}
 

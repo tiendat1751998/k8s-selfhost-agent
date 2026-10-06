@@ -5,11 +5,22 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/backup"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
+
+var dbIdentifierRegex = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+
+func validateDatabase(database string) error {
+	if !dbIdentifierRegex.MatchString(database) {
+		return errors.NewValidation("database", "invalid database identifier: must match ^[a-zA-Z0-9_.-]+$")
+	}
+	return nil
+}
 
 type SQLServerDriver struct {
 	driverType string
@@ -27,6 +38,12 @@ func (d *SQLServerDriver) Type() string {
 }
 
 func (d *SQLServerDriver) ValidateConnection(ctx context.Context, opts backup.DumpOptions) error {
+	if opts.Database != "" {
+		if err := validateDatabase(opts.Database); err != nil {
+			return err
+		}
+	}
+
 	port := opts.Port
 	if port == 0 {
 		port = 1433
@@ -45,6 +62,10 @@ func (d *SQLServerDriver) ValidateConnection(ctx context.Context, opts backup.Du
 }
 
 func (d *SQLServerDriver) Dump(ctx context.Context, opts backup.DumpOptions, writer io.Writer) (*backup.DumpResult, error) {
+	if err := validateDatabase(opts.Database); err != nil {
+		return nil, err
+	}
+
 	start := time.Now()
 	port := opts.Port
 	if port == 0 {
@@ -52,13 +73,15 @@ func (d *SQLServerDriver) Dump(ctx context.Context, opts backup.DumpOptions, wri
 	}
 	server := fmt.Sprintf("%s,%d", opts.Host, port)
 
-	// Stream logical dump script via sqlcmd query or BCP
+	// Stream logical dump script via sqlcmd query or BCP with safely escaped identifiers
+	escapedDB := strings.ReplaceAll(opts.Database, "]", "]]")
+	escapedLiteral := strings.ReplaceAll(opts.Database, "'", "''")
 	query := fmt.Sprintf(`
 		SET NOCOUNT ON;
 		SELECT '-- MSSQL LOGICAL DUMP FOR [%s]' UNION ALL
 		SELECT 'PRINT ''Starting restore for %s'';' UNION ALL
 		SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';
-	`, opts.Database, opts.Database)
+	`, escapedDB, escapedLiteral)
 
 	if _, err := exec.LookPath("sqlcmd"); err != nil {
 		return nil, fmt.Errorf("%w: sqlcmd", errors.ErrBinaryNotFound)
@@ -102,6 +125,10 @@ func (d *SQLServerDriver) Dump(ctx context.Context, opts backup.DumpOptions, wri
 }
 
 func (d *SQLServerDriver) Restore(ctx context.Context, opts backup.RestoreOptions, reader io.Reader) error {
+	if err := validateDatabase(opts.Database); err != nil {
+		return err
+	}
+
 	port := opts.Port
 	if port == 0 {
 		port = 1433
