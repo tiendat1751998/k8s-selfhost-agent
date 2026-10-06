@@ -104,6 +104,24 @@ func formatLogEntry(e LogEntry) string {
 // Helper parsing functions
 // -----------------------------------------------------------------------------
 
+var logTimeLayouts = []string{
+	time.RFC3339Nano,
+	time.RFC3339,
+	"2006-01-02T15:04:05",
+	"2006-01-02 15:04:05",
+	time.DateTime,
+}
+
+func parseTimestamp(s string) (time.Time, bool) {
+	s = strings.Trim(strings.TrimSpace(s), "[]")
+	for _, layout := range logTimeLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC(), true
+		}
+	}
+	return time.Time{}, false
+}
+
 // parseLogLine parses timestamp, level, message from raw log line.
 func parseLogLine(rawLine string, defaultService string) LogEntry {
 	rawLine = strings.TrimRight(rawLine, "\r\n")
@@ -121,27 +139,8 @@ func parseLogLine(rawLine string, defaultService string) LogEntry {
 	fields := strings.SplitN(rawLine, " ", 2)
 	parsedTime := false
 	if len(fields) >= 1 {
-		tsCandidate := strings.Trim(fields[0], "[]")
-		if t, err := time.Parse(time.RFC3339Nano, tsCandidate); err == nil {
-			entry.Timestamp = t.UTC()
-			parsedTime = true
-			if len(fields) > 1 {
-				entry.Message = fields[1]
-			}
-		} else if t, err := time.Parse(time.RFC3339, tsCandidate); err == nil {
-			entry.Timestamp = t.UTC()
-			parsedTime = true
-			if len(fields) > 1 {
-				entry.Message = fields[1]
-			}
-		} else if t, err := time.Parse("2006-01-02T15:04:05.999999999Z07:00", tsCandidate); err == nil {
-			entry.Timestamp = t.UTC()
-			parsedTime = true
-			if len(fields) > 1 {
-				entry.Message = fields[1]
-			}
-		} else if t, err := time.Parse("2006-01-02 15:04:05", tsCandidate); err == nil {
-			entry.Timestamp = t.UTC()
+		if t, ok := parseTimestamp(fields[0]); ok {
+			entry.Timestamp = t
 			parsedTime = true
 			if len(fields) > 1 {
 				entry.Message = fields[1]
@@ -233,28 +232,9 @@ func parseTimeParam(val string) (*time.Time, error) {
 		return &t, nil
 	}
 
-	// Try RFC3339Nano
-	if t, err := time.Parse(time.RFC3339Nano, val); err == nil {
-		tUTC := t.UTC()
-		return &tUTC, nil
-	}
-
-	// Try RFC3339
-	if t, err := time.Parse(time.RFC3339, val); err == nil {
-		tUTC := t.UTC()
-		return &tUTC, nil
-	}
-
-	// Try "2006-01-02T15:04:05"
-	if t, err := time.Parse("2006-01-02T15:04:05", val); err == nil {
-		tUTC := t.UTC()
-		return &tUTC, nil
-	}
-
-	// Try "2006-01-02 15:04:05"
-	if t, err := time.Parse("2006-01-02 15:04:05", val); err == nil {
-		tUTC := t.UTC()
-		return &tUTC, nil
+	// Try standard timestamp layouts
+	if t, ok := parseTimestamp(val); ok {
+		return &t, nil
 	}
 
 	// Try unix timestamp
