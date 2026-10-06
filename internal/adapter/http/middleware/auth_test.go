@@ -455,3 +455,40 @@ func TestTokenFunctions_UnconfiguredSecret(t *testing.T) {
 	}
 }
 
+func TestValidateTokenClaims_And_PartialToken(t *testing.T) {
+	token, err := GenerateAccessToken("u1", "admin", "t1")
+	if err != nil {
+		t.Fatalf("failed to generate token: %v", err)
+	}
+	claims, err := ValidateTokenClaims(token)
+	if err != nil || claims.Sub != "u1" || claims.Role != "admin" || claims.Tenant != "t1" {
+		t.Fatalf("invalid claims: %+v, err: %v", claims, err)
+	}
+	if _, err := ValidateTokenClaims("bad.token"); err == nil {
+		t.Error("expected error for bad token")
+	}
+
+	partial, err := GeneratePartialToken("u1")
+	if err != nil {
+		t.Fatalf("failed to generate partial token: %v", err)
+	}
+	pClaims, err := ValidatePartialToken(partial)
+	if err != nil || pClaims.Type != TokenTypePartial {
+		t.Fatalf("invalid partial claims: %+v, err: %v", pClaims, err)
+	}
+	if _, err := ValidatePartialToken(token); err == nil {
+		t.Error("expected error validating access token as partial token")
+	}
+
+	handler := JWTAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+partial)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for partial token on API, got %d", rec.Code)
+	}
+}
+

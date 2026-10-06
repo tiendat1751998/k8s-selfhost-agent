@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -63,7 +64,10 @@ func (h *K8sBootstrapHandler) ExecuteBootstrap(w http.ResponseWriter, r *http.Re
 
 	var req clusterDomain.BootstrapRequest
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+			writeError(w, http.StatusBadRequest, "invalid request body", err)
+			return
+		}
 	}
 
 	res, err := h.usecase.ExecuteBootstrap(r.Context(), cluster, req)
