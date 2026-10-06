@@ -14,6 +14,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
@@ -33,6 +34,10 @@ func run() error {
 	// Validate encryption key
 	if err := crypto.ValidateKey(); err != nil {
 		return fmt.Errorf("cryptography validation: %w", err)
+	}
+
+	if err := middleware.ValidateJWTSecret(); err != nil {
+		return fmt.Errorf("jwt validation: %w", err)
 	}
 
 	logger.Init("debug")
