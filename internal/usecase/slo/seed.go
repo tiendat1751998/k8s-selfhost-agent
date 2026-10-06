@@ -4,13 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/observability"
 )
 
-// SeedDefaultSLODefinitions seeds enterprise-grade default SLO definitions and initial snapshots
+// SeedDefaultSLODefinitions seeds enterprise-grade default SLO definitions
 // if no SLO definitions currently exist in the repository.
 func SeedDefaultSLODefinitions(ctx context.Context, repo observability.Repository, logger *zap.Logger) error {
 	if repo == nil {
@@ -67,28 +66,12 @@ func SeedDefaultSLODefinitions(ctx context.Context, repo observability.Repositor
 		},
 	}
 
-	logger.Info("Seeding default enterprise SLO definitions and snapshots")
+	logger.Info("Seeding default enterprise SLO definitions")
 	for i := range defaultDefs {
 		def := defaultDefs[i]
 		if createErr := repo.CreateSLODefinition(ctx, &def); createErr != nil {
 			logger.Warn("Failed to create default SLO definition", zap.String("service", def.Service), zap.Error(createErr))
 			return createErr
-		}
-
-		snap := observability.SLOSnapshot{
-			ID:           uuid.NewString(),
-			SLOID:        def.ID,
-			Service:      def.Service,
-			Target:       def.Target,
-			Actual:       99.94,
-			BurnRate:     0.85,
-			ErrorBudget:  85.0,
-			BudgetStatus: "healthy",
-			RecordedAt:   now,
-		}
-		if snapErr := repo.CreateSLOSnapshot(ctx, &snap); snapErr != nil {
-			logger.Warn("Failed to create initial SLO snapshot", zap.String("service", def.Service), zap.Error(snapErr))
-			return snapErr
 		}
 	}
 

@@ -1,4 +1,4 @@
-﻿package sre
+package sre
 
 import (
 	"context"
@@ -281,4 +281,66 @@ func TestRemediationController_NilClientHardening(t *testing.T) {
 			t.Errorf("expected 'no active cluster connection' in error, got: %v", err)
 		}
 	})
+}
+
+func TestRemediationController_HandleNodeOffline_PendingPodsSpared(t *testing.T) {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "worker-1",
+		},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{
+					Type:   corev1.NodeReady,
+					Status: corev1.ConditionFalse,
+				},
+			},
+		},
+	}
+
+	scheduledPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "scheduled-pod",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "worker-1",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	pendingPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pending-pod",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "", // awaiting scheduling
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending,
+		},
+	}
+
+	client := fake.NewSimpleClientset(node, scheduledPod, pendingPod)
+	logger := zaptest.NewLogger(t)
+	ctrl := NewRemediationController(client, nil, logger)
+
+	result, err := ctrl.HandleNodeOffline(context.Background(), "local", "worker-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify scheduled pod was evicted
+	if len(result.EvictedPods) != 1 || result.EvictedPods[0] != "scheduled-pod" {
+		t.Errorf("expected only scheduled-pod to be evicted, got %v", result.EvictedPods)
+	}
+
+	// Verify pending pod still exists and was NOT deleted
+	_, err = client.CoreV1().Pods("default").Get(context.Background(), "pending-pod", metav1.GetOptions{})
+	if err != nil {
+		t.Errorf("expected pending-pod to be spared, but got error: %v", err)
+	}
 }

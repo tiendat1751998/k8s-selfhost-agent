@@ -211,11 +211,30 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	cloudHandler := adapthttp.NewCloudHandler(cloudAccountRepo, nil, log)
 
 	alertNotifiers := map[string]alert.Notifier{"slack": notifier.NewSlackNotifier(), "email": notifier.NewEmailNotifier(), "webhook": notifier.NewWebhookNotifier()}
-	_, err = usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers, usecaseAlert.WithLogger(log))
+	ruleEngine, err := usecaseAlert.NewRuleEngine(alertRepo, alertNotifiers, usecaseAlert.WithLogger(log))
 	if err != nil {
 		for i := len(stopFns) - 1; i >= 0; i-- { stopFns[i]() }
 		return nil, fmt.Errorf("initializing alert rule engine: %w", err)
 	}
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if snap := metricsCollector.GetLastSnapshot(); snap != nil {
+					for _, tenant := range []string{"default", ""} {
+						_ = ruleEngine.EvaluateRule(ctx, "cpu_usage", snap.TotalCPUPercent, tenant)
+						_ = ruleEngine.EvaluateRule(ctx, "memory_usage", snap.TotalMemPercent, tenant)
+						_ = ruleEngine.EvaluateRule(ctx, "disk_usage", snap.TotalDiskPercent, tenant)
+						_ = ruleEngine.EvaluateRule(ctx, "requests_per_sec", snap.RequestsPerSec, tenant)
+					}
+				}
+			}
+		}
+	}()
 	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
 
 	clientManager := infraCluster.NewClientManager(fleetRepo)

@@ -196,7 +196,25 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	if err != nil {
 		return nil, nil, fmt.Errorf("initializing alert rule engine: %w", err)
 	}
-	_ = ruleEngine
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if snap := metricsCollector.GetLastSnapshot(); snap != nil {
+					for _, tenant := range []string{"default", ""} {
+						_ = ruleEngine.EvaluateRule(ctx, "cpu_usage", snap.TotalCPUPercent, tenant)
+						_ = ruleEngine.EvaluateRule(ctx, "memory_usage", snap.TotalMemPercent, tenant)
+						_ = ruleEngine.EvaluateRule(ctx, "disk_usage", snap.TotalDiskPercent, tenant)
+						_ = ruleEngine.EvaluateRule(ctx, "requests_per_sec", snap.RequestsPerSec, tenant)
+					}
+				}
+			}
+		}
+	}()
 	alertUsecaseInstance := usecaseAlert.NewUsecase(alertRepo)
 
 	var healthCenterHandler *adapthttp.HealthCenterHandler

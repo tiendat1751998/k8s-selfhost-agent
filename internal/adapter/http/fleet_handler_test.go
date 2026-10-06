@@ -19,7 +19,8 @@ import (
 )
 
 type mockFleetHandlerRepo struct {
-	clusters map[string]*fleet.Cluster
+	clusters           map[string]*fleet.Cluster
+	updateStatusCalled bool
 }
 
 func (m *mockFleetHandlerRepo) ListClusters(ctx context.Context) ([]fleet.Cluster, error) {
@@ -43,6 +44,7 @@ func (m *mockFleetHandlerRepo) RegisterCluster(ctx context.Context, c *fleet.Clu
 }
 
 func (m *mockFleetHandlerRepo) UpdateClusterStatus(ctx context.Context, id, status, version string, nodes int) error {
+	m.updateStatusCalled = true
 	return nil
 }
 
@@ -204,3 +206,34 @@ func TestFleetHandler_ImportCluster_NoEncryptedTokenLeaked(t *testing.T) {
 		t.Fatalf("encrypted_token JSON field should not be serialized in response: %s", body)
 	}
 }
+
+func TestFleetHandler_UpgradeCluster_Returns501AndDoesNotUpdateDB(t *testing.T) {
+	clusterID := "c-test-upgrade"
+	repo := &mockFleetHandlerRepo{
+		clusters: map[string]*fleet.Cluster{
+			clusterID: {
+				ID:      clusterID,
+				Name:    "prod-cluster",
+				Region:  "us-east-1",
+				Status:  "ready",
+				Version: "v1.30.0",
+				Nodes:   3,
+			},
+		},
+	}
+
+	router := setupFleetTestRouter(repo)
+
+	req := httptest.NewRequest(http.MethodPost, "/"+clusterID+"/actions/upgrade", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501 Not Implemented, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if repo.updateStatusCalled {
+		t.Fatalf("CRITICAL BUG: UpdateClusterStatus was called on unimplemented 501 upgrade endpoint, causing DB status corruption")
+	}
+}
+

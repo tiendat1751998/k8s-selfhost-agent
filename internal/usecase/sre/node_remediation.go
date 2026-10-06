@@ -1,4 +1,4 @@
-﻿package sre
+package sre
 
 import (
 	"context"
@@ -161,7 +161,7 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 	// 3. Filter pods that are stuck in Terminating or whose node is not ready
 	for _, pod := range podList.Items {
 		// Filter by spec.nodeName (fieldSelector fallback for fake client)
-		if pod.Spec.NodeName != "" && pod.Spec.NodeName != nodeName {
+		if pod.Spec.NodeName != nodeName {
 			continue
 		}
 
