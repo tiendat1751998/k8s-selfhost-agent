@@ -171,23 +171,72 @@ func TestCostCalculator_GetNamespaceCosts_And_Waste(t *testing.T) {
 
 func TestExtractNamespace(t *testing.T) {
 	tests := []struct {
+		name     string
 		input    string
+		labels   map[string]string
 		expected string
 	}{
-		{"/k8s_web_frontend_123", "frontend"},
-		{"prometheus-server", "monitoring"},
-		{"traefik-proxy", "ingress"},
-		{"postgres-primary", "database"},
-		{"k8s-agent-daemon", "system"},
-		{"vault-sec", "security"},
-		{"custom-service", "default"},
+		{"k8s container name metadata", "/k8s_web_frontend_123", nil, "frontend"},
+		{"k8s pod infra metadata", "k8s_POD_nginx_kube-system_uid_0", nil, "kube-system"},
+		{"dashboard container does not match db substring", "dashboard", nil, "default"},
+		{"custom service without labels", "custom-service", nil, "default"},
+		{"k8s pod namespace label", "prometheus-server", map[string]string{"io.kubernetes.pod.namespace": "monitoring"}, "monitoring"},
+		{"docker stack namespace label", "traefik-proxy", map[string]string{"com.docker.stack.namespace": "ingress"}, "ingress"},
+		{"docker compose project label", "redis-cache", map[string]string{"com.docker.compose.project": "ecommerce"}, "ecommerce"},
+		{"generic namespace label", "vault-sec", map[string]string{"namespace": "security"}, "security"},
 	}
 
 	for _, tc := range tests {
-		got := ExtractNamespace(tc.input)
-		if got != tc.expected {
-			t.Errorf("ExtractNamespace(%q) = %q, expected %q", tc.input, got, tc.expected)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got := ExtractNamespace(tc.input, tc.labels)
+			if got != tc.expected {
+				t.Errorf("ExtractNamespace(%q, %v) = %q, expected %q", tc.input, tc.labels, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestCostCalculator_GetNamespaceCosts_NoArtificialFloors(t *testing.T) {
+	mp := &mockMetricsProvider{
+		snapshot: &usecaseMetrics.SystemOverview{
+			Containers: []usecaseMetrics.ContainerMetrics{
+				{
+					ContainerID:   "c-micro",
+					ContainerName: "micro-worker",
+					State:         "running",
+					CPUPercent:    1.0, // 0.01 vCPU (< 0.1 vCPU floor)
+					MemoryUsed:    50 * 1024 * 1024, // ~0.05 GB (< 0.25 GB floor)
+					MemoryPercent: 1.0,
+					Labels:        map[string]string{"namespace": "microservices"},
+				},
+			},
+		},
+	}
+
+	calc := NewCalculator(nil, mp)
+	nsCosts, err := calc.GetNamespaceCosts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(nsCosts) != 1 {
+		t.Fatalf("expected 1 namespace cost, got %d", len(nsCosts))
+	}
+
+	c := nsCosts[0]
+	if c.Namespace != "microservices" {
+		t.Errorf("expected namespace 'microservices', got %s", c.Namespace)
+	}
+	// CPU: 1% = 0.01 vCPU. Old code forced 0.10 vCPU.
+	if c.CPURequested != "0.01 vCPU" {
+		t.Errorf("expected factual '0.01 vCPU', got %s (artificial floor detected)", c.CPURequested)
+	}
+	// Memory: 50MB / 1024^3 = 0.05 GB. Old code forced 0.25 GB.
+	if c.MemoryRequested != "0.05 GB" {
+		t.Errorf("expected factual '0.05 GB', got %s (artificial floor detected)", c.MemoryRequested)
+	}
+	// Cost: (0.01*0.035 + 0.05*0.0045)*720 = (0.00035 + 0.000225)*720 = 0.414 -> rounds to 0. Old code forced $1.00.
+	if c.MonthlyCost != 0 {
+		t.Errorf("expected factual cost 0, got %d (artificial price floor detected)", c.MonthlyCost)
 	}
 }
 

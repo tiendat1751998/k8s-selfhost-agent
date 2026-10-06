@@ -164,7 +164,7 @@ func (c *Calculator) GetNamespaceCosts(ctx context.Context) ([]domainCost.Namesp
 	nsMap := make(map[string]*nsAgg)
 
 	for _, cnt := range snapshot.Containers {
-		ns := ExtractNamespace(cnt.ContainerName)
+		ns := ExtractNamespace(cnt.ContainerName, cnt.Labels)
 		agg, ok := nsMap[ns]
 		if !ok {
 			agg = &nsAgg{namespace: ns}
@@ -183,27 +183,17 @@ func (c *Calculator) GetNamespaceCosts(ctx context.Context) ([]domainCost.Namesp
 		}
 
 		cpuVCPU := agg.cpuPercentSum / 100.0
-		if cpuVCPU < 0.1 {
-			cpuVCPU = 0.1 * float64(agg.containerCount)
-		}
-
 		memGB := float64(agg.memBytesSum) / (1024.0 * 1024.0 * 1024.0)
-		if memGB < 0.2 {
-			memGB = 0.25 * float64(agg.containerCount)
-		}
 
 		cpuCost := cpuVCPU * CPURatePerHour * HoursPerMonth
 		memCost := memGB * RAMRatePerHour * HoursPerMonth
 		monthlyCost := cpuCost + memCost
-		if monthlyCost < 1.0 {
-			monthlyCost = 1.0 * float64(agg.containerCount)
-		}
 
 		avgUtil := agg.utilSum / float64(agg.containerCount)
 		if avgUtil > 100.0 {
 			avgUtil = 100.0
-		} else if avgUtil < 1.0 {
-			avgUtil = 1.0
+		} else if avgUtil < 0.0 {
+			avgUtil = 0.0
 		}
 
 		results = append(results, domainCost.NamespaceCost{
@@ -293,7 +283,7 @@ func (c *Calculator) GetResourceWaste(ctx context.Context) ([]domainCost.Resourc
 				ID:         "waste-" + cID,
 				Type:       wasteType,
 				Resource:   cnt.ContainerName,
-				Namespace:  ExtractNamespace(cnt.ContainerName),
+				Namespace:  ExtractNamespace(cnt.ContainerName, cnt.Labels),
 				Cluster:    "fleet-primary",
 				CPUUtil:    &cpuVal,
 				MemUtil:    &memVal,
@@ -311,27 +301,38 @@ func (c *Calculator) GetResourceWaste(ctx context.Context) ([]domainCost.Resourc
 	return wasteItems, nil
 }
 
-// ExtractNamespace extracts a logical namespace grouping from container names.
-func ExtractNamespace(containerName string) string {
+// ExtractNamespace derives a logical namespace grouping from labels or metadata, defaulting to "default".
+func ExtractNamespace(containerName string, labels ...map[string]string) string {
+	// 1. Check labels if provided
+	if len(labels) > 0 && labels[0] != nil {
+		lbls := labels[0]
+		if ns, ok := lbls["io.kubernetes.pod.namespace"]; ok && ns != "" {
+			return ns
+		}
+		if ns, ok := lbls["com.docker.stack.namespace"]; ok && ns != "" {
+			return ns
+		}
+		if ns, ok := lbls["com.docker.compose.project"]; ok && ns != "" {
+			return ns
+		}
+		if ns, ok := lbls["namespace"]; ok && ns != "" {
+			return ns
+		}
+	}
+
+	// 2. Check Kubernetes CRI container name metadata: k8s_<container>_<pod>_<namespace>_<uid>_<attempt>
 	name := strings.ToLower(strings.TrimPrefix(containerName, "/"))
-	switch {
-	case strings.HasPrefix(name, "k8s_"):
+	if strings.HasPrefix(name, "k8s_") {
 		parts := strings.Split(name, "_")
+		if len(parts) >= 4 && parts[1] == "pod" && parts[3] != "" {
+			return parts[3]
+		}
 		if len(parts) >= 3 && parts[2] != "" {
 			return parts[2]
 		}
 		return "k8s-system"
-	case strings.Contains(name, "monitor") || strings.Contains(name, "prom") || strings.Contains(name, "grafana") || strings.Contains(name, "loki") || strings.Contains(name, "tempo"):
-		return "monitoring"
-	case strings.Contains(name, "ingress") || strings.Contains(name, "traefik") || strings.Contains(name, "nginx") || strings.Contains(name, "envoy") || strings.Contains(name, "proxy"):
-		return "ingress"
-	case strings.Contains(name, "postgres") || strings.Contains(name, "mysql") || strings.Contains(name, "redis") || strings.Contains(name, "db") || strings.Contains(name, "mongo"):
-		return "database"
-	case strings.Contains(name, "agent") || strings.Contains(name, "k8s") || strings.Contains(name, "daemon") || strings.Contains(name, "system"):
-		return "system"
-	case strings.Contains(name, "sec") || strings.Contains(name, "vault") || strings.Contains(name, "cert"):
-		return "security"
-	default:
-		return "default"
 	}
+
+	// 3. Fallback to default
+	return "default"
 }

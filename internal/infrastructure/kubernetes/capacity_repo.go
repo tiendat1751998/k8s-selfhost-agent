@@ -106,35 +106,24 @@ func (r *capacityRepo) List(ctx context.Context, cluster string) ([]capacity.For
 	cpuPercent := (float64(totalUsedCPU) / float64(totalAllocatableCPU)) * 100.0
 	memPercent := (float64(totalUsedMem) / float64(totalAllocatableMem)) * 100.0
 
-	// Generate a projection forecast based on current metrics retrieved
-	now := time.Now()
-	exhaust := now.AddDate(0, 3, 0) // 3 months from now
+	return buildLiveForecasts(cluster, cpuPercent, memPercent, time.Now().UTC()), nil
+}
 
-	cpuStatus := "healthy"
-	if cpuPercent > 80.0 {
-		cpuStatus = "critical"
-	} else if cpuPercent > 60.0 {
-		cpuStatus = "warning"
-	}
-
-	memStatus := "healthy"
-	if memPercent > 80.0 {
-		memStatus = "critical"
-	} else if memPercent > 60.0 {
-		memStatus = "warning"
-	}
-
+// buildLiveForecasts constructs capacity forecasts from live cluster CPU and memory usage percentages.
+// When historical time-series data is not available, projections and exhaustion dates are omitted
+// and marked as "insufficient_data" rather than fabricating synthetic numbers.
+func buildLiveForecasts(cluster string, cpuPercent, memPercent float64, now time.Time) []capacity.Forecast {
 	return []capacity.Forecast{
 		{
 			ID:           "cap-cpu-live",
 			Cluster:      cluster,
 			ResourceType: capacity.ResourceCPU,
 			CurrentUsage: cpuPercent,
-			Forecast7d:   cpuPercent + (cpuPercent * 0.05),
-			Forecast30d:  cpuPercent + (cpuPercent * 0.15),
-			Forecast90d:  cpuPercent + (cpuPercent * 0.40),
-			ExhaustionAt: &exhaust,
-			Status:       cpuStatus,
+			Forecast7d:   0,
+			Forecast30d:  0,
+			Forecast90d:  0,
+			ExhaustionAt: nil,
+			Status:       "insufficient_data",
 			RecordedAt:   now,
 		},
 		{
@@ -142,14 +131,14 @@ func (r *capacityRepo) List(ctx context.Context, cluster string) ([]capacity.For
 			Cluster:      cluster,
 			ResourceType: capacity.ResourceMemory,
 			CurrentUsage: memPercent,
-			Forecast7d:   memPercent + (memPercent * 0.04),
-			Forecast30d:  memPercent + (memPercent * 0.12),
-			Forecast90d:  memPercent + (memPercent * 0.30),
-			ExhaustionAt: &exhaust,
-			Status:       memStatus,
+			Forecast7d:   0,
+			Forecast30d:  0,
+			Forecast90d:  0,
+			ExhaustionAt: nil,
+			Status:       "insufficient_data",
 			RecordedAt:   now,
 		},
-	}, nil
+	}
 }
 
 func (r *capacityRepo) Record(ctx context.Context, f *capacity.Forecast) error {
