@@ -62,13 +62,13 @@ func TestLogEntry_Validate(t *testing.T) {
 }
 
 func TestLogFilter_ValidateAndSanitize(t *testing.T) {
-	// Limit <= 0 defaults to 100
+	// Limit <= 0 defaults to 500
 	defaultFilter := logging.LogFilter{
 		TenantID: "tenant-1",
 		Limit:    0,
 	}
 	defaultFilter.Sanitize()
-	require.Equal(t, 100, defaultFilter.Limit)
+	require.Equal(t, 500, defaultFilter.Limit)
 
 	// Limit within [1, 10000] is preserved
 	midFilter := logging.LogFilter{
