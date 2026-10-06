@@ -444,3 +444,20 @@
     gap: 3px;
   }
 }
+
+/* Error Banner Mobile Responsiveness (<640px) */
+@media (max-width: 640px) {
+  .error-banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .error-banner .btn {
+    width: 100%;
+    text-align: center;
+    white-space: normal;
+  }
+}
+
