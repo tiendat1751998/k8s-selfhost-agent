@@ -190,27 +190,3 @@ export const standardColumns: Column<K8sResource>[] = [
   { key: 'actions', label: 'Actions', width: '130px', align: 'right' },
 ]
 
-export function getColumnsForKind(kind: string): Column<K8sResource>[] {
-  switch (kind) {
-    case 'pods': return podColumns
-    case 'deployments': return deploymentColumns
-    case 'statefulsets': return statefulSetColumns
-    case 'daemonsets': return daemonSetColumns
-    case 'jobs': return jobColumns
-    case 'cronjobs': return cronJobColumns
-    case 'services': return serviceColumns
-    case 'ingresses': return ingressColumns
-    case 'configmaps': return configMapColumns
-    case 'secrets': return secretColumns
-    case 'persistentvolumeclaims': return pvcColumns
-    case 'persistentvolumes': return pvColumns
-    case 'storageclasses': return storageClassColumns
-    case 'networkpolicies': return networkPolicyColumns
-    case 'serviceaccounts': return serviceAccountColumns
-    case 'horizontalpodautoscalers': return hpaColumns
-    case 'nodes': return nodeColumns
-    case 'events': return eventColumns
-    default: return standardColumns
-  }
-}
-

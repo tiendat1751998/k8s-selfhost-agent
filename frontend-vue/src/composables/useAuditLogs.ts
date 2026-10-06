@@ -7,7 +7,6 @@ import {
   type AuditSeverity,
   type AuditResultStatus,
 } from '../api/governance'
-import { isNotImplementedError } from '../api/client'
 
 export function useAuditLogs() {
   const logs = ref<AuditLogEntry[]>([])
@@ -120,16 +119,9 @@ export function useAuditLogs() {
       }
       await fetchLogs()
     } catch (err: unknown) {
-      if (isNotImplementedError(err)) {
-        statusMessage.value = {
-          type: 'error',
-          text: 'External Security Scanner controller (Trivy) is not connected. Audit scan cannot be triggered (HTTP 501).',
-        }
-      } else {
-        statusMessage.value = {
-          type: 'error',
-          text: err instanceof Error ? err.message : 'Failed to trigger audit scan',
-        }
+      statusMessage.value = {
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to trigger audit scan',
       }
     } finally {
       isTriggeringScan.value = false

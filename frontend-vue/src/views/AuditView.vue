@@ -19,12 +19,6 @@
       >
         <BaseIcon name="alert-triangle" size="xs" />
         <span>Vulnerability Findings & Trivy CVEs ({{ findings.length }})</span>
-        <IntegrationBadge
-          name="Trivy"
-          :status="trivyConnected ? 'connected' : 'not_connected'"
-          required-controller="Trivy Security Scanner"
-          install-hint="helm repo add aqua && helm install trivy-operator"
-        />
       </button>
     </div>
 
@@ -101,7 +95,6 @@
         :is-live-tailing="isLiveTailing"
         :loading="isLoading"
         :triggering-scan="isTriggeringScan"
-        :scanner-available="trivyConnected"
         @toggle-live-tail="toggleLiveTail"
         @export-json="exportToJson"
         @export-csv="exportToCsv"
@@ -144,7 +137,6 @@
         :loading="findingsLoading"
         :error="findingsError"
         :resolving-id="resolvingFindingId"
-        :trivy-connected="trivyConnected"
         @resolve="handleResolveFinding"
         @refresh="loadFindings"
       />
@@ -157,36 +149,26 @@ import { ref, onMounted } from 'vue'
 import '../assets/styles/views/audit.css'
 import { useAuditLogs } from '../composables/useAuditLogs'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import IntegrationBadge from '../components/common/IntegrationBadge.vue'
 import AuditTrailTable from '../components/audit/AuditTrailTable.vue'
 import AuditFilterToolbar from '../components/audit/AuditFilterToolbar.vue'
 import AuditMobileCards from '../components/audit/AuditMobileCards.vue'
 import AuditPayloadDrawer from '../components/audit/AuditPayloadDrawer.vue'
 import VulnerabilityFindingsTable from '../components/audit/VulnerabilityFindingsTable.vue'
 import { auditApi, type AuditFinding } from '../api/governance'
-import { isNotImplementedError } from '../api/client'
 
 const activeTab = ref<'logs' | 'findings'>('logs')
 const findings = ref<AuditFinding[]>([])
 const findingsLoading = ref(false)
 const findingsError = ref<string | null>(null)
 const resolvingFindingId = ref<string | null>(null)
-const trivyConnected = ref(true)
 
 async function loadFindings() {
   findingsLoading.value = true
   findingsError.value = null
   try {
     findings.value = await auditApi.getFindings('open')
-    trivyConnected.value = true
   } catch (err) {
-    if (isNotImplementedError(err)) {
-      trivyConnected.value = false
-      findingsError.value = null
-      findings.value = []
-    } else {
-      findingsError.value = err instanceof Error ? err.message : 'Failed to load vulnerability findings'
-    }
+    findingsError.value = err instanceof Error ? err.message : 'Failed to load vulnerability findings'
   } finally {
     findingsLoading.value = false
   }
