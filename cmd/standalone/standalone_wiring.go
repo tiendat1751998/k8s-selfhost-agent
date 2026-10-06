@@ -242,12 +242,6 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	dashboardHandler.SetRCAPipeline(rcaPipeline)
 
 	logAggregator := logging.NewLogAggregator(2000)
-	logAggregator.Ingest(logging.LogEntry{
-		Timestamp: time.Now().UTC(), Namespace: "system", Pod: "control-plane",
-		Container: "standalone", Service: "standalone", Node: "control-plane",
-		Stream: "stdout", Level: "INFO",
-		Message: "K8SCONTROL Hybrid Control Plane online — real-time telemetry log aggregator initialized",
-	})
 	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator, computeHostRepo)
 	centralizedLogs, chCleanup := wireCentralizedLogging(ctx, log, computeHostRepo)
 
