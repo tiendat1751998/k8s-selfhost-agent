@@ -96,6 +96,16 @@ func TestK8sBootstrapHandler_Live(t *testing.T) {
 		assert.Contains(t, res.Installed, "local-path-storageclass")
 	})
 
+	t.Run("ExecuteBootstrap_MalformedJSON", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/k8s/local/bootstrap", bytes.NewReader([]byte("{invalid-json")))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid request body")
+	})
+
 	t.Run("GetPodMetrics", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/k8s/local/metrics/pods", nil)
 		w := httptest.NewRecorder()
