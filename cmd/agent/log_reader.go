@@ -101,10 +101,10 @@ func (d *DockerLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 	}
 
 	tailStr := "100"
-	if tail == 0 {
-		tailStr = "all"
-	} else if tail > 0 {
+	if tail > 0 {
 		tailStr = strconv.Itoa(tail)
+	} else if tail < 0 {
+		tailStr = "all"
 	}
 	var sinceStr, untilStr string
 	if sinceTime != nil {
