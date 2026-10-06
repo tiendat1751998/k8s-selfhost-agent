@@ -450,3 +450,52 @@ func TestLogServer_HandleEngineStatus(t *testing.T) {
 		t.Errorf("expected blocks >= 1, got %v", statusResp["blocks"])
 	}
 }
+
+type recordingTailLogSource struct {
+	lastTail int
+}
+
+func (r *recordingTailLogSource) ListServices(ctx context.Context) ([]string, error) {
+	return []string{"app"}, nil
+}
+
+func (r *recordingTailLogSource) GetLogs(ctx context.Context, app string, tail int, sinceTime, untilTime *time.Time, query string, level string) ([]LogEntry, error) {
+	r.lastTail = tail
+	return []LogEntry{{Message: "msg"}}, nil
+}
+
+func TestLogServer_HandleGetLogs_TailParsing(t *testing.T) {
+	src := &recordingTailLogSource{}
+	srv := NewLogServer(WithLogSource(src))
+
+	tests := []struct {
+		url          string
+		expectedTail int
+	}{
+		{url: "/logs?app=app", expectedTail: 100},
+		{url: "/logs?app=app&tail=", expectedTail: 100},
+		{url: "/logs?app=app&tail=all", expectedTail: -1},
+		{url: "/logs?app=app&tail=-1", expectedTail: -1},
+		{url: "/logs?app=app&tail=0", expectedTail: 100},
+		{url: "/logs?app=app&tail=42", expectedTail: 42},
+		{url: "/logs?app=app&tail=invalid", expectedTail: 100},
+		{url: "/logs?app=app&tail=-5", expectedTail: 100},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.url, func(t *testing.T) {
+			src.lastTail = 9999
+			req := httptest.NewRequest(http.MethodGet, tc.url, nil)
+			rec := httptest.NewRecorder()
+			srv.HandleGetLogs(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", rec.Code)
+			}
+			if src.lastTail != tc.expectedTail {
+				t.Errorf("for %s, expected tail %d, got %d", tc.url, tc.expectedTail, src.lastTail)
+			}
+		})
+	}
+}
+
