@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"crypto/tls"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -166,36 +167,108 @@ func TestSecurityHeaders(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	t.Run("Standard security headers", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
 
-	checks := map[string]string{
-		"X-Content-Type-Options":    "nosniff",
-		"X-Frame-Options":           "DENY",
-		"X-XSS-Protection":          "1; mode=block",
-		"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-		"Referrer-Policy":           "strict-origin-when-cross-origin",
-		"Permissions-Policy":        "camera=(), microphone=(), geolocation=()",
-	}
-
-	for header, expected := range checks {
-		if w.Header().Get(header) != expected {
-			t.Errorf("expected %s: %s, got %s", header, expected, w.Header().Get(header))
+		checks := map[string]string{
+			"X-Content-Type-Options": "nosniff",
+			"X-Frame-Options":        "DENY",
+			"X-XSS-Protection":       "0",
+			"Referrer-Policy":        "strict-origin-when-cross-origin",
+			"Permissions-Policy":     "camera=(), microphone=(), geolocation=()",
 		}
-	}
 
-	// Verify CSP removes unsafe-inline from script-src but keeps in style-src
-	csp := w.Header().Get("Content-Security-Policy")
-	if strings.Contains(csp, "script-src 'self' 'unsafe-inline'") {
-		t.Errorf("CSP script-src must not contain unsafe-inline, got: %s", csp)
-	}
-	if !strings.Contains(csp, "script-src 'self'") {
-		t.Errorf("CSP script-src should contain 'self', got: %s", csp)
-	}
-	if !strings.Contains(csp, "style-src 'self' 'unsafe-inline'") {
-		t.Errorf("CSP style-src should contain 'unsafe-inline', got: %s", csp)
-	}
+		for header, expected := range checks {
+			if got := w.Header().Get(header); got != expected {
+				t.Errorf("expected %s: %q, got %q", header, expected, got)
+			}
+		}
+	})
+
+	t.Run("Content-Security-Policy directives", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+
+		csp := w.Header().Get("Content-Security-Policy")
+
+		// WebSocket / API connectivity
+		if !strings.Contains(csp, "connect-src 'self' ws: wss:") {
+			t.Errorf("CSP must allow WebSocket connections in connect-src, got: %s", csp)
+		}
+
+		// Air-gapped: no external Google Fonts
+		if strings.Contains(csp, "fonts.googleapis.com") || strings.Contains(csp, "fonts.gstatic.com") {
+			t.Errorf("CSP must not depend on external Google Fonts in air-gapped mode, got: %s", csp)
+		}
+
+		// Modern CSP directives
+		if !strings.Contains(csp, "frame-ancestors 'none'") {
+			t.Errorf("CSP must contain frame-ancestors 'none', got: %s", csp)
+		}
+		if !strings.Contains(csp, "object-src 'none'") {
+			t.Errorf("CSP must contain object-src 'none', got: %s", csp)
+		}
+		if !strings.Contains(csp, "base-uri 'self'") {
+			t.Errorf("CSP must contain base-uri 'self', got: %s", csp)
+		}
+
+		// Essential directives
+		if !strings.Contains(csp, "default-src 'self'") {
+			t.Errorf("CSP must contain default-src 'self', got: %s", csp)
+		}
+		if !strings.Contains(csp, "script-src 'self'") {
+			t.Errorf("CSP must contain script-src 'self', got: %s", csp)
+		}
+		if strings.Contains(csp, "script-src 'self' 'unsafe-inline'") {
+			t.Errorf("CSP script-src must not contain unsafe-inline, got: %s", csp)
+		}
+		if !strings.Contains(csp, "style-src 'self' 'unsafe-inline'") {
+			t.Errorf("CSP style-src should contain 'unsafe-inline', got: %s", csp)
+		}
+		if !strings.Contains(csp, "font-src 'self'") {
+			t.Errorf("CSP font-src should contain 'self', got: %s", csp)
+		}
+	})
+
+	t.Run("HSTS behavior on plain HTTP vs TLS vs X-Forwarded-Proto", func(t *testing.T) {
+		// Plain HTTP: HSTS must NOT be set to prevent breaking local/dev setups
+		rPlain := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
+		wPlain := httptest.NewRecorder()
+		handler.ServeHTTP(wPlain, rPlain)
+		if hsts := wPlain.Header().Get("Strict-Transport-Security"); hsts != "" {
+			t.Errorf("expected no HSTS on plain HTTP, got: %q", hsts)
+		}
+
+		// TLS request: HSTS MUST be set
+		rTLS := httptest.NewRequest(http.MethodGet, "https://localhost:8443/", nil)
+		rTLS.TLS = &tls.ConnectionState{}
+		wTLS := httptest.NewRecorder()
+		handler.ServeHTTP(wTLS, rTLS)
+		if hsts := wTLS.Header().Get("Strict-Transport-Security"); hsts != "max-age=31536000; includeSubDomains" {
+			t.Errorf("expected HSTS on TLS request, got: %q", hsts)
+		}
+
+		// Reverse proxy with X-Forwarded-Proto: https
+		rProxy := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
+		rProxy.Header.Set("X-Forwarded-Proto", "https")
+		wProxy := httptest.NewRecorder()
+		handler.ServeHTTP(wProxy, rProxy)
+		if hsts := wProxy.Header().Get("Strict-Transport-Security"); hsts != "max-age=31536000; includeSubDomains" {
+			t.Errorf("expected HSTS when X-Forwarded-Proto is https, got: %q", hsts)
+		}
+
+		// Case-insensitive X-Forwarded-Proto: HTTPS
+		rProxyUpper := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
+		rProxyUpper.Header.Set("X-Forwarded-Proto", "HTTPS")
+		wProxyUpper := httptest.NewRecorder()
+		handler.ServeHTTP(wProxyUpper, rProxyUpper)
+		if hsts := wProxyUpper.Header().Get("Strict-Transport-Security"); hsts != "max-age=31536000; includeSubDomains" {
+			t.Errorf("expected HSTS when X-Forwarded-Proto is HTTPS, got: %q", hsts)
+		}
+	})
 }
 
 func TestMetrics(t *testing.T) {
