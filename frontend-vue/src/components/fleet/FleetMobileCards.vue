@@ -64,8 +64,8 @@ const emit = defineEmits<{
         </button>
         <button
           class="btn btn-secondary btn-xs"
-          disabled
-          title="Requires Cluster Lifecycle Controller (Not Implemented)"
+          :disabled="actionLoading === cluster.id"
+          title="Upgrade Cluster"
           @click.stop="emit('upgrade', cluster)"
         >
           <BaseIcon name="arrow-up" size="xs" />

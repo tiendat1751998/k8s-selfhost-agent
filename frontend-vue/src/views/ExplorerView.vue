@@ -18,7 +18,6 @@ import ExplorerImportModal from '../components/explorer/ExplorerImportModal.vue'
 import ExplorerCreateNsModal from '../components/explorer/ExplorerCreateNsModal.vue'
 import PodLogsDrawer from '../components/explorer/PodLogsDrawer.vue'
 import PodTerminalDrawer from '../components/explorer/PodTerminalDrawer.vue'
-import IntegrationEmptyState from '../components/common/IntegrationEmptyState.vue'
 import { useK8sExplorer, getResourceStatus } from '../composables/useK8sExplorer'
 import { useGlobalContext } from '../composables/useGlobalContext'
 import type { ResourceKind } from '../api/k8s'
@@ -26,7 +25,6 @@ import type { ResourceKind } from '../api/k8s'
 const route = useRoute()
 const {
   loading, error, toastMessage, clusterOffline, offlineErrorMessage,
-  isControllerUnavailable, unavailableControllerName,
   selectedCluster, namespaces, selectedNamespace, selectedKind, resources,
   allKindItems, totalInKind, currentKindLabel, columns,
   loadClusters, loadNamespaces, fetchResources, selectKind,
@@ -238,8 +236,7 @@ onMounted(async () => {
           <button
             type="button"
             class="toolbar-btn btn-secondary"
-            :disabled="isControllerUnavailable"
-            :title="isControllerUnavailable ? `Controller not connected for ${currentKindLabel}` : 'Apply YAML Manifest'"
+            title="Apply YAML Manifest"
             @click="openApplyYamlModal"
           >
             <BaseIcon name="file-text" size="xs" />
@@ -249,8 +246,7 @@ onMounted(async () => {
           <button
             type="button"
             class="toolbar-btn btn-primary"
-            :disabled="isControllerUnavailable"
-            :title="isControllerUnavailable ? `Controller not connected for ${currentKindLabel}` : 'Create Resource'"
+            title="Create Resource"
             @click="showCreateModal = true"
           >
             <BaseIcon name="plus" size="xs" />
@@ -287,18 +283,9 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Events View or Controller Unavailable or Table / Mobile Cards -->
+      <!-- Events View or Table / Mobile Cards -->
       <div v-if="selectedKind === 'events'" class="events-main-section animate-fade-in">
         <EventsTimeline :cluster="selectedCluster" :namespace="selectedNamespace" :auto-refresh="true" />
-      </div>
-
-      <div v-else-if="isControllerUnavailable" class="explorer-resources-wrapper animate-fade-in">
-        <IntegrationEmptyState
-          :controller-name="unavailableControllerName || (currentKindLabel + ' Controller')"
-          :title="'Controller Not Connected: ' + currentKindLabel"
-          :description="'The Kubernetes cluster returned 501 Not Implemented for ' + currentKindLabel + '. The corresponding Custom Resource Definition (CRD) or Controller is not installed.'"
-          @retry="fetchResources"
-        />
       </div>
 
       <div v-else class="explorer-resources-wrapper">

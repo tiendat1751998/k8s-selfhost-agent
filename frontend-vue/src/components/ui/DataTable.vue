@@ -16,8 +16,6 @@ const props = defineProps<{
   loading?: boolean
   error?: string | null
   emptyMessage?: string
-  notImplemented?: boolean
-  notImplementedMessage?: string
   searchable?: boolean
   searchPlaceholder?: string
 }>()
@@ -126,18 +124,6 @@ function handleSort(key: string, sortable?: boolean) {
             <td :colspan="columns.length" class="cell-loading">
               <div class="spinner"></div>
               <span>Streaming telemetry & synchronizing state...</span>
-            </td>
-          </tr>
-
-          <!-- Not Implemented State -->
-          <tr v-else-if="notImplemented" class="row-state">
-            <td :colspan="columns.length" class="cell-not-implemented">
-              <slot name="not-implemented">
-                <div class="not-implemented-box font-mono">
-                  <span class="not-impl-icon"><BaseIcon name="shield" size="xs" /></span>
-                  <span class="not-impl-text">{{ notImplementedMessage || 'External controller is not connected (HTTP 501 Not Implemented).' }}</span>
-                </div>
-              </slot>
             </td>
           </tr>
 

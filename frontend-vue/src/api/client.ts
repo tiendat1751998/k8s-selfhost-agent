@@ -6,58 +6,6 @@ export interface ApiResponse<T> {
   error?: string
 }
 
-export class ApiError extends Error {
-  status: number
-  statusText?: string
-  code?: string
-  controller?: string
-  details?: unknown
-
-  constructor(message: string, status: number, statusText?: string, details?: unknown) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
-    this.statusText = statusText
-    this.details = details
-    if (details && typeof details === 'object' && 'controller' in details) {
-      this.controller = String((details as Record<string, unknown>).controller)
-    }
-  }
-
-  get isNotImplemented(): boolean {
-    return this.status === 501
-  }
-}
-
-export function isNotImplementedError(err: unknown): boolean {
-  if (!err) return false
-  if (err instanceof ApiError && err.status === 501) return true
-  if (typeof err === 'object' && err !== null) {
-    if ('status' in err && (err as { status?: unknown }).status === 501) return true
-    if ('statusCode' in err && (err as { statusCode?: unknown }).statusCode === 501) return true
-    if ('statusText' in err && typeof (err as { statusText?: unknown }).statusText === 'string') {
-      if ((err as { statusText: string }).statusText.toLowerCase().includes('not implemented')) return true
-    }
-    if ('message' in err && typeof (err as { message?: unknown }).message === 'string') {
-      const msg = ((err as { message: string }).message).toLowerCase()
-      if (msg.includes('501') || msg.includes('not implemented')) return true
-    }
-  }
-  return false
-}
-
-export function getControllerRequiredMessage(err: unknown, defaultController = 'External Controller'): string {
-  if (err instanceof ApiError && err.controller) {
-    return `Requires external controller: ${err.controller}`
-  }
-  if (err instanceof Error && err.message) {
-    if (err.message.toLowerCase().includes('not implemented') || err.message.includes('501')) {
-      return err.message
-    }
-  }
-  return `Controller not connected: requires ${defaultController}`
-}
-
 interface RequestOptions extends RequestInit {
   _retry?: boolean
 }
@@ -178,22 +126,13 @@ class ApiClient {
     if (!response.ok) {
       const errorBody = await response.text()
       let parsedMessage = errorBody
-      let parsedJson: unknown = null
       try {
-        parsedJson = JSON.parse(errorBody)
-        if (parsedJson && typeof parsedJson === 'object') {
-          const rec = parsedJson as Record<string, unknown>
-          parsedMessage = String(rec.error || rec.message || errorBody)
-        }
+        const jsonErr = JSON.parse(errorBody)
+        parsedMessage = jsonErr.error || jsonErr.message || errorBody
       } catch {
         // Keep raw text
       }
-      throw new ApiError(
-        parsedMessage || `API Error ${response.status} (${response.statusText})`,
-        response.status,
-        response.statusText,
-        parsedJson
-      )
+      throw new Error(parsedMessage || `API Error ${response.status} (${response.statusText})`)
     }
 
     if (response.status === 204) {

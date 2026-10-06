@@ -23,7 +23,7 @@ const emit = defineEmits<{
 const K8S_ACTIONS: ActionItem[] = [
   { id: 'details', label: 'Cluster Details', icon: 'zap' },
   { id: 'discover', label: 'Discover Resources', icon: 'search' },
-  { id: 'upgrade', label: 'Upgrade Cluster', icon: 'arrow-up', disabled: true, tooltip: 'Requires Cluster Lifecycle Controller (Not Implemented)' },
+  { id: 'upgrade', label: 'Upgrade Cluster', icon: 'arrow-up' },
   { id: 'sep-1', label: '', separator: true },
   { id: 'remove', label: 'Evict Cluster', icon: 'trash', variant: 'danger' },
 ]
