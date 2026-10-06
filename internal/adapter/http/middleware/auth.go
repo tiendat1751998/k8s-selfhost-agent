@@ -11,11 +11,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
@@ -45,32 +43,29 @@ const (
 
 var jwtSecret []byte
 
-var isTesting = testing.Testing
-
-func isRunningInTest() bool {
-	return isTesting()
-}
+var ErrJWTSecretMissing = errors.New("JWT_SECRET environment variable must be set (minimum 32 characters)")
 
 func init() {
-	secret := os.Getenv("JWT_SECRET")
-	if len(secret) < 32 {
-		// During go test execution, allow test runner to use test secret if JWT_SECRET is not explicitly exported in env
-		if isRunningInTest() {
-			secret = "k8sselfhost-jwt-test-secret-key-32bytes-secure!"
-			jwtSecret = []byte(secret)
-			return
-		}
-		log.Fatal("FATAL: JWT_SECRET environment variable must be set (minimum 32 characters)")
+	if secret := os.Getenv("JWT_SECRET"); len(secret) >= 32 {
+		jwtSecret = []byte(secret)
 	}
-	jwtSecret = []byte(secret)
+}
+
+// ValidateJWTSecret validates that the JWT signing secret is configured and meets length requirements.
+func ValidateJWTSecret() error {
+	if len(jwtSecret) < 32 {
+		return ErrJWTSecretMissing
+	}
+	return nil
 }
 
 // SetJWTSecret allows setting the JWT signing secret programmatically (e.g. for testing).
-func SetJWTSecret(secret string) {
+func SetJWTSecret(secret string) error {
 	if len(secret) < 32 {
-		log.Fatal("FATAL: JWT_SECRET environment variable must be set (minimum 32 characters)")
+		return ErrJWTSecretMissing
 	}
 	jwtSecret = []byte(secret)
+	return nil
 }
 
 // JWTClaims holds standard and custom JWT claims.
@@ -86,6 +81,10 @@ type JWTClaims struct {
 
 // GenerateAccessToken creates a secure HMAC-SHA256 JWT access token with 15-minute validity.
 func GenerateAccessToken(userID, role, tenantID string) (string, error) {
+	if len(jwtSecret) < 32 {
+		return "", ErrJWTSecretMissing
+	}
+
 	header := `{"alg":"HS256","typ":"JWT"}`
 	now := time.Now()
 	claims := JWTClaims{
@@ -117,6 +116,10 @@ func GenerateAccessToken(userID, role, tenantID string) (string, error) {
 
 // GeneratePartialToken creates a limited-scope temporary token (5 min) used between password verification and TOTP confirmation.
 func GeneratePartialToken(userID string) (string, error) {
+	if len(jwtSecret) < 32 {
+		return "", ErrJWTSecretMissing
+	}
+
 	header := `{"alg":"HS256","typ":"JWT"}`
 	now := time.Now()
 	claims := JWTClaims{
@@ -149,6 +152,11 @@ func GenerateJWT(userID, role, tenantID string) (string, error) {
 	return GenerateAccessToken(userID, role, tenantID)
 }
 
+// GenerateToken creates an access token (alias for GenerateAccessToken).
+func GenerateToken(userID, role, tenantID string) (string, error) {
+	return GenerateAccessToken(userID, role, tenantID)
+}
+
 // GenerateRefreshToken generates a cryptographically secure random 32-byte hex-encoded refresh token.
 func GenerateRefreshToken() (string, error) {
 	b := make([]byte, 32)
@@ -166,6 +174,10 @@ func HashToken(token string) string {
 
 // ValidateJWT verifies signature and standard claims (exp, iat, iss), returning the payload JSON string.
 func ValidateJWT(token string) (string, error) {
+	if len(jwtSecret) < 32 {
+		return "", ErrJWTSecretMissing
+	}
+
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return "", errors.New("invalid token format")
@@ -226,8 +238,32 @@ func ValidateJWT(token string) (string, error) {
 	return string(payloadBytes), nil
 }
 
+// ValidateToken verifies signature and standard claims, returning the payload JSON string.
+func ValidateToken(token string) (string, error) {
+	return ValidateJWT(token)
+}
+
+// ValidateTokenClaims verifies the token and parses its claims into JWTClaims.
+func ValidateTokenClaims(token string) (*JWTClaims, error) {
+	if len(jwtSecret) < 32 {
+		return nil, ErrJWTSecretMissing
+	}
+	payloadStr, err := ValidateJWT(token)
+	if err != nil {
+		return nil, err
+	}
+	var claims JWTClaims
+	if err := json.Unmarshal([]byte(payloadStr), &claims); err != nil {
+		return nil, errors.New("failed to decode payload claims")
+	}
+	return &claims, nil
+}
+
 // ValidatePartialToken checks that a token is a valid unexpired partial token.
 func ValidatePartialToken(token string) (*JWTClaims, error) {
+	if len(jwtSecret) < 32 {
+		return nil, ErrJWTSecretMissing
+	}
 	payloadStr, err := ValidateJWT(token)
 	if err != nil {
 		return nil, err
@@ -283,6 +319,15 @@ func IsStreamingRequest(r *http.Request) bool {
 // JWTAuthMiddleware validates the JWT token in the Authorization header or query parameters (for websockets and streaming).
 func JWTAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(jwtSecret) < 32 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			if _, err := w.Write([]byte(`{"error":"JWT authentication not configured"}`)); err != nil {
+				return
+			}
+			return
+		}
+
 		var token string
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" {
