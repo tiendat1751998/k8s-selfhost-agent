@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -413,7 +414,7 @@ func (s *LogServer) HandleTailLogs(w http.ResponseWriter, r *http.Request) {
 		scanner = bufio.NewScanner(bufReader)
 	}
 
-	scanner.Buffer(make([]byte, 4096), 64*1024)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		if r.Context().Err() != nil {
 			return
@@ -425,6 +426,14 @@ func (s *LogServer) HandleTailLogs(w http.ResponseWriter, r *http.Request) {
 		if _, err := fmt.Fprintf(w, "data: %s\n\n", line); err != nil {
 			return
 		}
+		if hasFlusher {
+			flusher.Flush()
+		}
+	}
+
+	if err := scanner.Err(); err != nil && r.Context().Err() == nil {
+		slog.Error("scanner error reading log stream", slog.Any("error", err))
+		_, _ = fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
 		if hasFlusher {
 			flusher.Flush()
 		}

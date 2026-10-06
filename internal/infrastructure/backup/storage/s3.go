@@ -14,6 +14,7 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/backup"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
 )
 
 const (
@@ -38,6 +39,7 @@ func NewS3Storage(storage *backup.BackupStorage) *S3Storage {
 	if region == "" {
 		region = s3DefaultRegion
 	}
+	guard := netguard.New(netguard.WithFromEnv(), netguard.WithAllowPrivate(true))
 	return &S3Storage{
 		endpoint:        cleanEndpoint,
 		bucket:          storage.Bucket,
@@ -45,7 +47,7 @@ func NewS3Storage(storage *backup.BackupStorage) *S3Storage {
 		accessKeyID:     storage.Credentials["access_key"],
 		secretAccessKey: storage.Credentials["secret_key"],
 		useSSL:          useSSL,
-		httpClient:      &http.Client{Timeout: 30 * time.Minute},
+		httpClient:      guard.NewClient(30 * time.Minute),
 	}
 }
 

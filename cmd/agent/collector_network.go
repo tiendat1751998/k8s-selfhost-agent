@@ -84,8 +84,10 @@ func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {
 			TxBytesPerSec: txRate,
 		})
 
-		totalRx += rxRate
-		totalTx += txRate
+		if isPhysicalNetworkInterface(iface) {
+			totalRx += rxRate
+			totalTx += txRate
+		}
 	}
 
 	c.prevNetTime = now
@@ -96,3 +98,16 @@ func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {
 		TotalTxBytesPerSec: totalTx,
 	}
 }
+
+// isPhysicalNetworkInterface returns true for physical host network interfaces (eth*, en*, wl*, bond*)
+// and filters out loopback (lo), container veths (veth*), and bridge devices (docker0, br-*, cni*).
+func isPhysicalNetworkInterface(name string) bool {
+	if name == "lo" || strings.HasPrefix(name, "veth") || name == "docker0" || strings.HasPrefix(name, "br-") || strings.HasPrefix(name, "cni") {
+		return false
+	}
+	return strings.HasPrefix(name, "eth") ||
+		strings.HasPrefix(name, "en") ||
+		strings.HasPrefix(name, "wl") ||
+		strings.HasPrefix(name, "bond")
+}
+
