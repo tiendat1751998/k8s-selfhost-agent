@@ -14,13 +14,7 @@ func (c *SystemCollector) collectMemory() MemoryMetrics {
 	memPath := filepath.Join(c.procPath, "meminfo")
 	file, err := os.Open(memPath)
 	if err != nil {
-		// Non-Linux or fallback
-		return MemoryMetrics{
-			TotalBytes:     16 * 1024 * 1024 * 1024,
-			UsedBytes:      8 * 1024 * 1024 * 1024,
-			AvailableBytes: 8 * 1024 * 1024 * 1024,
-			UsagePercent:   50.0,
-		}
+		return MemoryMetrics{}
 	}
 	defer file.Close()
 
