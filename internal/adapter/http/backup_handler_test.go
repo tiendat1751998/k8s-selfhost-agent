@@ -222,35 +222,3 @@ func TestBackupHandler_ListStorages_NoCredentialsLeaked(t *testing.T) {
 		t.Fatalf("credentials field should not be serialized in response: %s", body)
 	}
 }
-
-func TestBackupHandler_VeleroNotImplemented(t *testing.T) {
-	repo := newMockBackupHandlerRepo()
-	router := setupBackupTestRouter(repo)
-
-	// 1. Trigger backup with backup_type = "velero"
-	payload := `{"policy_id":"pol-1","backup_type":"velero","storage_path":"/tmp"}`
-	req := httptest.NewRequest(http.MethodPost, "/jobs", strings.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("expected 501 Not Implemented, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "Velero backup controller not installed") {
-		t.Errorf("expected error message to contain 'Velero backup controller not installed', got %s", rec.Body.String())
-	}
-
-	// 2. POST /cluster endpoint
-	reqCluster := httptest.NewRequest(http.MethodPost, "/cluster", strings.NewReader(`{}`))
-	reqCluster.Header.Set("Content-Type", "application/json")
-	recCluster := httptest.NewRecorder()
-	router.ServeHTTP(recCluster, reqCluster)
-
-	if recCluster.Code != http.StatusNotImplemented {
-		t.Fatalf("expected 501 Not Implemented for /cluster, got %d: %s", recCluster.Code, recCluster.Body.String())
-	}
-	if !strings.Contains(recCluster.Body.String(), "Velero backup controller not installed") {
-		t.Errorf("expected error message to contain 'Velero backup controller not installed', got %s", recCluster.Body.String())
-	}
-}

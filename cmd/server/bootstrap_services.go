@@ -303,10 +303,6 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		Cloud:         cloudHandler,
 		LogStream:       logStreamHandler,
 		CentralizedLogs: centralizedLogs,
-		Security:        adapthttp.NewSecurityHandler(),
-		Chaos:           adapthttp.NewChaosHandler(),
-		Mesh:            adapthttp.NewMeshHandler(),
-		Network:         adapthttp.NewNetworkHandler(),
 	}
 
 	return &appServices{

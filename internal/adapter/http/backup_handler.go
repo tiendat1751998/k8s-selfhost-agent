@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -29,7 +28,6 @@ func (h *BackupHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/jobs", h.ListJobs)
 	r.Post("/restores", h.TriggerRestore)
 	r.Get("/restores", h.ListRestores)
-	r.Post("/cluster", h.CreateClusterBackup)
 }
 
 type createStorageRequest struct {
@@ -193,16 +191,6 @@ func (h *BackupHandler) TriggerBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.EqualFold(req.BackupType, "velero") || strings.EqualFold(req.BackupType, "cluster") {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotImplemented)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Velero backup controller not installed",
-			"code":  http.StatusNotImplemented,
-		})
-		return
-	}
-
 	tenantID := normalizeTenantID(r)
 
 	job := &backup.BackupJob{
@@ -218,15 +206,6 @@ func (h *BackupHandler) TriggerBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, job)
-}
-
-// CreateClusterBackup handles POST /cluster (Velero-compatible backup).
-// Per CON-23 / Section 00: Return 501 Not Implemented since Velero backup controller is not installed in this edition.
-func (h *BackupHandler) CreateClusterBackup(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
-		"error": "Velero backup controller not installed",
-		"code":  http.StatusNotImplemented,
-	})
 }
 
 func (h *BackupHandler) ListJobs(w http.ResponseWriter, r *http.Request) {

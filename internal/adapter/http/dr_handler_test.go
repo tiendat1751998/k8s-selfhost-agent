@@ -1,11 +1,10 @@
-package http
+﻿package http
 
 import (
 	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -181,7 +180,7 @@ func TestDRHandler_RBAC_Enforcement(t *testing.T) {
 			t.Fatalf("expected 200 OK for restore, got %d: %s", recRestore.Code, recRestore.Body.String())
 		}
 
-		// 3. Create backup (CON-23: Return 501 Not Implemented when Velero is not installed)
+		// 3. Create backup
 		backupBody := `{"backup_name":"api-backup-01"}`
 		reqBackup := httptest.NewRequest(http.MethodPost, "/api/v1/k8s/local/dr/backups", bytes.NewBufferString(backupBody))
 		reqBackup.Header.Set("Authorization", "Bearer "+adminToken)
@@ -189,15 +188,8 @@ func TestDRHandler_RBAC_Enforcement(t *testing.T) {
 		recBackup := httptest.NewRecorder()
 		router.ServeHTTP(recBackup, reqBackup)
 
-		if recBackup.Code != http.StatusNotImplemented {
-			t.Fatalf("expected 501 Not Implemented for backup, got %d: %s", recBackup.Code, recBackup.Body.String())
-		}
-		var backupErrResp map[string]interface{}
-		if err := json.NewDecoder(recBackup.Body).Decode(&backupErrResp); err != nil {
-			t.Fatalf("failed to decode backup error response: %v", err)
-		}
-		if errMsg, _ := backupErrResp["error"].(string); !strings.Contains(errMsg, "Velero backup controller not installed") {
-			t.Errorf("expected error message to contain 'Velero backup controller not installed', got %q", errMsg)
+		if recBackup.Code != http.StatusCreated {
+			t.Fatalf("expected 201 Created for backup, got %d: %s", recBackup.Code, recBackup.Body.String())
 		}
 
 		// 4. Trigger remediation

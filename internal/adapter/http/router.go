@@ -64,10 +64,6 @@ type PlatformHandlers struct {
 	Helm          *HelmHandler
 	DR            *DRHandler
 	CentralizedLogs *LogHandler
-	Chaos         *ChaosHandler
-	Mesh          *MeshHandler
-	Network       *NetworkHandler
-	Security      *SecurityHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -383,18 +379,6 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Helm != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin")).Route("/helm", platform.Helm.RegisterRoutes)
-			}
-			if platform.Security != nil {
-				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/security", platform.Security.RegisterRoutes)
-			}
-			if platform.Chaos != nil {
-				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/chaos", platform.Chaos.RegisterRoutes)
-			}
-			if platform.Mesh != nil {
-				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/mesh", platform.Mesh.RegisterRoutes)
-			}
-			if platform.Network != nil {
-				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/network", platform.Network.RegisterRoutes)
 			}
 		}
 	})

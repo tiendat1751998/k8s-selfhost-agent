@@ -30,10 +30,6 @@ func NewCostHandler(calculator CostCalculator) *CostHandler {
 func (h *CostHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/summary", h.GetSummary)
 	r.Get("/waste", h.GetWaste)
-	r.Post("/optimize", h.OptimizationNotConfigured)
-	r.Post("/recommendations/{id}/apply", h.OptimizationNotConfigured)
-	r.Post("/budget", h.OptimizationNotConfigured)
-	r.Put("/budget", h.OptimizationNotConfigured)
 }
 
 // GetSummary handles GET /api/v1/cost/summary
@@ -74,14 +70,5 @@ func (h *CostHandler) GetWaste(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"data": waste,
-	})
-}
-
-// OptimizationNotConfigured returns 501 Not Implemented because cost optimization controller is not configured in this edition.
-// Per CON-26..30 / Section 00.
-func (h *CostHandler) OptimizationNotConfigured(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
-		"error": "Cost optimization controller not configured in this edition",
-		"code":  http.StatusNotImplemented,
 	})
 }

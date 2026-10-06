@@ -48,10 +48,6 @@ func TestRouter_RBACEnforcement(t *testing.T) {
 		Capacity:     NewCapacityHandler(nil),
 		HealthCenter: NewHealthCenterHandler(nil),
 		Dashboard:    NewHandler(nil, nil, nil, nil, nil),
-		Security:     NewSecurityHandler(),
-		Chaos:        NewChaosHandler(),
-		Mesh:         NewMeshHandler(),
-		Network:      NewNetworkHandler(),
 	}
 
 	router := NewRouterWithWS(healthHandler, nil, platform)
@@ -235,54 +231,4 @@ func TestRouter_RBACEnforcement(t *testing.T) {
 			t.Errorf("expected 200 OK for /metrics with valid JWT, got %d", recJWT.Code)
 		}
 	})
-
-	t.Run("Sanitized endpoints return 501 for authorized operator/admin but 401/403 for unauth/viewer", func(t *testing.T) {
-		sanitizedEndpoints := []struct {
-			method string
-			path   string
-		}{
-			{http.MethodPost, "/api/v1/security/scan"},
-			{http.MethodPost, "/api/v1/chaos/experiments"},
-			{http.MethodPost, "/api/v1/mesh/split"},
-			{http.MethodPost, "/api/v1/network/policies"},
-		}
-
-		for _, ep := range sanitizedEndpoints {
-			// 1. Unauthenticated -> 401 Unauthorized
-			reqUnauth := httptest.NewRequest(ep.method, ep.path, bytes.NewBufferString(`{}`))
-			recUnauth := httptest.NewRecorder()
-			router.ServeHTTP(recUnauth, reqUnauth)
-			if recUnauth.Code != http.StatusUnauthorized {
-				t.Errorf("[%s %s] expected 401 Unauthorized for unauth, got %d", ep.method, ep.path, recUnauth.Code)
-			}
-
-			// 2. Viewer -> 403 Forbidden
-			reqViewer := httptest.NewRequest(ep.method, ep.path, bytes.NewBufferString(`{}`))
-			reqViewer.Header.Set("Authorization", "Bearer "+viewerToken)
-			recViewer := httptest.NewRecorder()
-			router.ServeHTTP(recViewer, reqViewer)
-			if recViewer.Code != http.StatusForbidden {
-				t.Errorf("[%s %s] expected 403 Forbidden for viewer, got %d", ep.method, ep.path, recViewer.Code)
-			}
-
-			// 3. Operator -> 501 Not Implemented
-			reqOp := httptest.NewRequest(ep.method, ep.path, bytes.NewBufferString(`{}`))
-			reqOp.Header.Set("Authorization", "Bearer "+operatorToken)
-			recOp := httptest.NewRecorder()
-			router.ServeHTTP(recOp, reqOp)
-			if recOp.Code != http.StatusNotImplemented {
-				t.Errorf("[%s %s] expected 501 Not Implemented for operator, got %d", ep.method, ep.path, recOp.Code)
-			}
-
-			// 4. Admin -> 501 Not Implemented
-			reqAdmin := httptest.NewRequest(ep.method, ep.path, bytes.NewBufferString(`{}`))
-			reqAdmin.Header.Set("Authorization", "Bearer "+adminToken)
-			recAdmin := httptest.NewRecorder()
-			router.ServeHTTP(recAdmin, reqAdmin)
-			if recAdmin.Code != http.StatusNotImplemented {
-				t.Errorf("[%s %s] expected 501 Not Implemented for admin, got %d", ep.method, ep.path, recAdmin.Code)
-			}
-		}
-	})
 }
-
