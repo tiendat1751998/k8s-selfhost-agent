@@ -8,9 +8,12 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	clientgotesting "k8s.io/client-go/testing"
 )
 
 func TestResourceRepo_Namespaces(t *testing.T) {
@@ -492,6 +495,14 @@ func TestResourceRepo_Nodes(t *testing.T) {
 	}
 
 	fakeClient := fake.NewSimpleClientset(node1, node2, pod1, dsPod, mirrorPod, pod2)
+	fakeClient.PrependReactor("create", "pods", func(action clientgotesting.Action) (bool, runtime.Object, error) {
+		if action.GetSubresource() == "eviction" {
+			eviction := action.(clientgotesting.CreateAction).GetObject().(*policyv1.Eviction)
+			_ = fakeClient.Tracker().Delete(corev1.SchemeGroupVersion.WithResource("pods"), eviction.Namespace, eviction.Name)
+			return true, eviction, nil
+		}
+		return false, nil, nil
+	})
 	repo := &ResourceRepo{client: fakeClient}
 
 	// 1. List Nodes
