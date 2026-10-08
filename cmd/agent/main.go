@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -97,6 +98,28 @@ func setupHandler(collector *SystemCollector, authToken string, logServers ...*L
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(metrics)
 	})
+
+	// Debug/profiling endpoints (gated by AGENT_ENABLE_PPROF and protected by bearer token auth)
+	if os.Getenv("AGENT_ENABLE_PPROF") == "true" {
+		withAuth := func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !isAuthorized(r) {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUnauthorized)
+					_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+					return
+				}
+				next.ServeHTTP(w, r)
+			})
+		}
+
+		mux.Handle("/debug/pprof/", withAuth(http.HandlerFunc(pprof.Index)))
+		mux.Handle("/debug/pprof/cmdline", withAuth(http.HandlerFunc(pprof.Cmdline)))
+		mux.Handle("/debug/pprof/profile", withAuth(http.HandlerFunc(pprof.Profile)))
+		mux.Handle("/debug/pprof/symbol", withAuth(http.HandlerFunc(pprof.Symbol)))
+		mux.Handle("/debug/pprof/trace", withAuth(http.HandlerFunc(pprof.Trace)))
+		mux.Handle("/debug/pprof", withAuth(http.HandlerFunc(pprof.Index)))
+	}
 
 	mux.HandleFunc("/logs/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -313,6 +336,7 @@ func main() {
 		slog.String("bind", listenAddr),
 		slog.Duration("interval", interval),
 		slog.Bool("auth_enabled", authToken != ""),
+		slog.Bool("pprof_enabled", os.Getenv("AGENT_ENABLE_PPROF") == "true"),
 		slog.String("log_dir", logDir),
 	)
 
