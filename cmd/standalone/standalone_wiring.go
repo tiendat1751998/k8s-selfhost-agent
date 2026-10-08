@@ -60,7 +60,7 @@ import (
 func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (http.Handler, func(), error) {
 	healthHandler := health.NewHandler(5 * time.Second)
 	wsHub := adapthttp.NewWSHub()
-	go wsHub.Run()
+	go wsHub.Run(ctx)
 
 	// Initialize LLM Provider Registry
 	registry := initLLMRegistry(cfg, log)
