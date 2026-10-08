@@ -22,3 +22,7 @@ type Repository interface {
 	UpdateRestore(ctx context.Context, restore *RestoreJob) error
 }
 
+// StaleJobReconciler reconciles orphaned or interrupted running backup jobs on startup
+type StaleJobReconciler interface {
+	ReconcileStaleJobs(ctx context.Context) error
+}
