@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -51,58 +54,124 @@ func (r *ResourceRepo) UncordonNode(ctx context.Context, clusterID, name string)
 	return nil
 }
 
-// DrainNode cordons the node and gracefully deletes pods running on it.
+func isEvictablePod(p *corev1.Pod, nodeName string, ignoreDaemonSets bool) bool {
+	if p.Spec.NodeName != "" && p.Spec.NodeName != nodeName {
+		return false
+	}
+	// Skip mirror pods
+	if _, isMirror := p.Annotations[corev1.MirrorPodAnnotationKey]; isMirror {
+		return false
+	}
+	// Skip DaemonSet pods when ignoreDaemonSets is true
+	if ignoreDaemonSets {
+		for _, ref := range p.OwnerReferences {
+			if strings.EqualFold(ref.Kind, "DaemonSet") {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// DrainNode cordons the node, evicts pods via EvictV1 with 429 backoff,
+// and polls until no evictable pods remain on the node or ctx deadline.
 func (r *ResourceRepo) DrainNode(ctx context.Context, clusterID, name string, gracePeriodSeconds int64, ignoreDaemonSets bool) error {
-	client, err := r.getK8sClient(ctx, clusterID)
+	pollCtx := ctx
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		timeout := time.Duration(gracePeriodSeconds)*time.Second + 30*time.Second
+		if timeout < 60*time.Second {
+			timeout = 60 * time.Second
+		}
+		var cancel context.CancelFunc
+		pollCtx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	client, err := r.getK8sClient(pollCtx, clusterID)
 	if err != nil {
 		return err
 	}
 
 	// 1. Cordon the node
-	if err := r.CordonNode(ctx, clusterID, name); err != nil {
+	if err := r.CordonNode(pollCtx, clusterID, name); err != nil {
 		return fmt.Errorf("cordoning node during drain: %w", err)
 	}
 
 	// 2. List pods running on the node
-	podList, err := client.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+	podList, err := client.CoreV1().Pods("").List(pollCtx, metav1.ListOptions{
 		FieldSelector: "spec.nodeName=" + name,
 	})
 	if err != nil {
 		return fmt.Errorf("listing pods on node %s: %w", name, err)
 	}
 
-	// 3. Delete pods gracefully
-	var deleteOpts metav1.DeleteOptions
-	if gracePeriodSeconds >= 0 {
-		deleteOpts.GracePeriodSeconds = &gracePeriodSeconds
-	}
-
+	// 3. Evict pods via EvictV1 with 429 retry
 	for _, p := range podList.Items {
-		if p.Spec.NodeName != "" && p.Spec.NodeName != name {
+		if !isEvictablePod(&p, name, ignoreDaemonSets) {
 			continue
 		}
-		// Skip mirror pods
-		if _, isMirror := p.Annotations[corev1.MirrorPodAnnotationKey]; isMirror {
-			continue
+
+		eviction := &policyv1.Eviction{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      p.Name,
+				Namespace: p.Namespace,
+			},
 		}
-		// Skip DaemonSet pods when ignoreDaemonSets is true
-		isDaemonSet := false
-		for _, ref := range p.OwnerReferences {
-			if strings.EqualFold(ref.Kind, "DaemonSet") {
-				isDaemonSet = true
-				break
+		if gracePeriodSeconds >= 0 {
+			eviction.DeleteOptions = &metav1.DeleteOptions{
+				GracePeriodSeconds: &gracePeriodSeconds,
 			}
 		}
-		if isDaemonSet && ignoreDaemonSets {
-			continue
+
+		b := backoff.NewExponentialBackOff()
+		b.InitialInterval = 50 * time.Millisecond
+		b.MaxInterval = 2 * time.Second
+
+		operation := func() (struct{}, error) {
+			evictErr := client.CoreV1().Pods(p.Namespace).EvictV1(pollCtx, eviction)
+			if evictErr == nil || k8serrors.IsNotFound(evictErr) {
+				return struct{}{}, nil
+			}
+			if k8serrors.IsTooManyRequests(evictErr) {
+				return struct{}{}, evictErr
+			}
+			return struct{}{}, backoff.Permanent(evictErr)
 		}
 
-		if err := client.CoreV1().Pods(p.Namespace).Delete(ctx, p.Name, deleteOpts); err != nil && !k8serrors.IsNotFound(err) {
-			return fmt.Errorf("deleting pod %s/%s during drain: %w", p.Namespace, p.Name, err)
+		if _, err := backoff.Retry(pollCtx, operation, backoff.WithBackOff(b)); err != nil {
+			return fmt.Errorf("evicting pod %s/%s on node %s: %w", p.Namespace, p.Name, name, err)
 		}
 	}
 
-	return nil
+	// 4. Poll until no evictable pods remain on the node or ctx deadline
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		remainingPods, err := client.CoreV1().Pods("").List(pollCtx, metav1.ListOptions{
+			FieldSelector: "spec.nodeName=" + name,
+		})
+		if err != nil {
+			return fmt.Errorf("listing remaining pods on node %s: %w", name, err)
+		}
+
+		evictableRemaining := 0
+		for i := range remainingPods.Items {
+			if isEvictablePod(&remainingPods.Items[i], name, ignoreDaemonSets) {
+				evictableRemaining++
+			}
+		}
+
+		if evictableRemaining == 0 {
+			return nil
+		}
+
+		select {
+		case <-pollCtx.Done():
+			return fmt.Errorf("timed out waiting for %d evictable pods to terminate on node %s: %w", evictableRemaining, name, pollCtx.Err())
+		case <-ticker.C:
+		}
+	}
 }
 
 // UpdateNodeTaints updates taints on the specified node.

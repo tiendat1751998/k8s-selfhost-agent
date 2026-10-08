@@ -5,8 +5,12 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+	clientgotesting "k8s.io/client-go/testing"
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 )
@@ -26,7 +30,18 @@ func NewResourceRepo(client *kubernetes.Clientset, cm *cluster.ClientManager) *R
 }
 
 // NewResourceRepoWithInterface creates a ResourceRepo with any kubernetes.Interface.
+// If client is a *fake.Clientset, it auto-registers an eviction reactor to simulate pod deletion on EvictV1.
 func NewResourceRepoWithInterface(client kubernetes.Interface, cm *cluster.ClientManager) *ResourceRepo {
+	if fc, ok := client.(*fake.Clientset); ok && fc != nil {
+		fc.PrependReactor("create", "pods", func(action clientgotesting.Action) (bool, runtime.Object, error) {
+			if action.GetSubresource() == "eviction" {
+				eviction := action.(clientgotesting.CreateAction).GetObject().(*policyv1.Eviction)
+				_ = fc.Tracker().Delete(corev1.SchemeGroupVersion.WithResource("pods"), eviction.Namespace, eviction.Name)
+				return true, eviction, nil
+			}
+			return false, nil, nil
+		})
+	}
 	return &ResourceRepo{client: client, clientManager: cm}
 }
 
