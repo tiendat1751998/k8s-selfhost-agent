@@ -10,7 +10,39 @@ import (
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/release"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/syncutil"
 )
+
+var releaseLocks = syncutil.NewKeyedMutex()
+
+// ReleaseLocks returns the KeyedMutex used to synchronize release mutations.
+func ReleaseLocks() *syncutil.KeyedMutex {
+	return releaseLocks
+}
+
+func (m *ReleaseManager) lockRelease(clusterID, namespace, releaseName string) (func(), error) {
+	cluster := strings.TrimSpace(clusterID)
+	if cluster == "" {
+		cluster = "default"
+	}
+	ns := strings.TrimSpace(namespace)
+	if ns == "" {
+		ns = "default"
+	}
+	rel := strings.TrimSpace(releaseName)
+	if rel == "" {
+		return nil, fmt.Errorf("release name is required")
+	}
+
+	key := fmt.Sprintf("%s/%s/%s", cluster, ns, rel)
+	if !releaseLocks.TryLock(key) {
+		return nil, fmt.Errorf("%w: release %q in namespace %q on cluster %q", syncutil.ErrOperationInProgress, rel, ns, cluster)
+	}
+	return func() {
+		releaseLocks.Unlock(key)
+	}, nil
+}
 
 // InstallRequest represents parameters for installing a Helm chart.
 type InstallRequest struct {
@@ -52,6 +84,12 @@ func (m *ReleaseManager) InstallRelease(ctx context.Context, clusterID string, r
 	if strings.TrimSpace(ns) == "" {
 		ns = "default"
 	}
+
+	unlock, err := m.lockRelease(clusterID, ns, req.ReleaseName)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 
 	actionConfig, err := m.getActionConfig(ctx, clusterID, ns)
 	if err != nil {
@@ -121,6 +159,12 @@ func (m *ReleaseManager) UpgradeRelease(ctx context.Context, clusterID string, r
 	if strings.TrimSpace(ns) == "" {
 		ns = "default"
 	}
+
+	unlock, err := m.lockRelease(clusterID, ns, req.ReleaseName)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 
 	actionConfig, err := m.getActionConfig(ctx, clusterID, ns)
 	if err != nil {
@@ -196,7 +240,22 @@ func (m *ReleaseManager) RollbackRelease(ctx context.Context, clusterID, name, n
 		return fmt.Errorf("release name is required")
 	}
 
-	actionConfig, err := m.getActionConfig(ctx, clusterID, namespace)
+	ns := namespace
+	if strings.TrimSpace(ns) == "" {
+		ns = "default"
+	}
+
+	unlock, err := m.lockRelease(clusterID, ns, name)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	actionConfig, err := m.getActionConfig(ctx, clusterID, ns)
 	if err != nil {
 		return err
 	}
@@ -205,6 +264,11 @@ func (m *ReleaseManager) RollbackRelease(ctx context.Context, clusterID, name, n
 	rollbackAction.Version = revision
 	rollbackAction.Wait = true
 	rollbackAction.Timeout = 5 * time.Minute
+	if d, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(d); remaining > 0 {
+			rollbackAction.Timeout = remaining
+		}
+	}
 
 	if err := rollbackAction.Run(name); err != nil {
 		return fmt.Errorf("rolling back release %s to revision %d: %w", name, revision, err)
@@ -218,7 +282,22 @@ func (m *ReleaseManager) UninstallRelease(ctx context.Context, clusterID, name, 
 		return fmt.Errorf("release name is required")
 	}
 
-	actionConfig, err := m.getActionConfig(ctx, clusterID, namespace)
+	ns := namespace
+	if strings.TrimSpace(ns) == "" {
+		ns = "default"
+	}
+
+	unlock, err := m.lockRelease(clusterID, ns, name)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	actionConfig, err := m.getActionConfig(ctx, clusterID, ns)
 	if err != nil {
 		return err
 	}
@@ -226,9 +305,15 @@ func (m *ReleaseManager) UninstallRelease(ctx context.Context, clusterID, name, 
 	uninstallAction := action.NewUninstall(actionConfig)
 	uninstallAction.Wait = true
 	uninstallAction.Timeout = 5 * time.Minute
+	if d, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(d); remaining > 0 {
+			uninstallAction.Timeout = remaining
+		}
+	}
 
 	if _, err := uninstallAction.Run(name); err != nil {
 		return fmt.Errorf("uninstalling release %s: %w", name, err)
 	}
 	return nil
 }
+

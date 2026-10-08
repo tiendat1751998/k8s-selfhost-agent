@@ -270,3 +270,65 @@ func TestHelmHandler_RBACProtection(t *testing.T) {
 		t.Fatalf("expected 400 for empty body from admin, got %d", w.Code)
 	}
 }
+
+func TestHelmHandler_Conflict_409(t *testing.T) {
+	_, _, r := setupHelmTestHandler(t)
+	ctx := context.WithValue(context.Background(), tenancy.UserIDKey, "admin-user")
+	ctx = context.WithValue(ctx, tenancy.UserRoleKey, "platform_admin")
+
+	lockKey := "local/default/busy-release"
+	if !helm.ReleaseLocks().TryLock(lockKey) {
+		t.Fatalf("failed to acquire test lock on %s", lockKey)
+	}
+	defer helm.ReleaseLocks().Unlock(lockKey)
+
+	// 1. POST /local/releases (Install) while release is locked -> 409 Conflict
+	installBody := `{"releaseName":"busy-release","chart":"nginx","namespace":"default"}`
+	req := httptest.NewRequest(http.MethodPost, "/local/releases", bytes.NewBufferString(installBody)).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on install contention, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode 409 response: %v", err)
+	}
+	if resp["error"] != "operation already in progress" {
+		t.Fatalf("expected 'operation already in progress', got %q", resp["error"])
+	}
+
+	// 2. PUT /local/releases/busy-release (Upgrade) while release is locked -> 409 Conflict
+	upgradeBody := `{"chart":"nginx","namespace":"default"}`
+	req = httptest.NewRequest(http.MethodPut, "/local/releases/busy-release", bytes.NewBufferString(upgradeBody)).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on upgrade contention, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// 3. POST /local/releases/busy-release/rollback while release is locked -> 409 Conflict
+	rollbackBody := `{"revision":1,"namespace":"default"}`
+	req = httptest.NewRequest(http.MethodPost, "/local/releases/busy-release/rollback", bytes.NewBufferString(rollbackBody)).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on rollback contention, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// 4. DELETE /local/releases/busy-release while release is locked -> 409 Conflict
+	req = httptest.NewRequest(http.MethodDelete, "/local/releases/busy-release", nil).WithContext(ctx)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on uninstall contention, got %d: %s", w.Code, w.Body.String())
+	}
+}
+

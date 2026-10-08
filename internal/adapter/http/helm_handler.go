@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/helm"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/syncutil"
 )
 
 // HelmHandler provides HTTP endpoints for managing Helm repositories, searching charts, and release lifecycle.
@@ -171,11 +173,7 @@ func (h *HelmHandler) ListReleases(w http.ResponseWriter, r *http.Request) {
 
 	releases, err := h.releaseManager.ListReleases(r.Context(), clusterID, namespace)
 	if err != nil {
-		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to list releases", err)
+		h.handleReleaseError(w, "failed to list releases", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, releases)
@@ -198,15 +196,7 @@ func (h *HelmHandler) GetRelease(w http.ResponseWriter, r *http.Request) {
 
 	rel, err := h.releaseManager.GetRelease(r.Context(), clusterID, name, namespace)
 	if err != nil {
-		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
-			return
-		}
-		if strings.Contains(strings.ToLower(err.Error()), "not found") {
-			writeError(w, http.StatusNotFound, "release not found", err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to get release", err)
+		h.handleReleaseError(w, "failed to get release", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rel)
@@ -250,11 +240,7 @@ func (h *HelmHandler) InstallRelease(w http.ResponseWriter, r *http.Request) {
 	}, err)
 
 	if err != nil {
-		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to install release", err)
+		h.handleReleaseError(w, "failed to install release", err)
 		return
 	}
 
@@ -300,15 +286,7 @@ func (h *HelmHandler) UpgradeRelease(w http.ResponseWriter, r *http.Request) {
 	}, err)
 
 	if err != nil {
-		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
-			return
-		}
-		if strings.Contains(strings.ToLower(err.Error()), "not found") {
-			writeError(w, http.StatusNotFound, "release not found", err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to upgrade release", err)
+		h.handleReleaseError(w, "failed to upgrade release", err)
 		return
 	}
 
@@ -351,15 +329,7 @@ func (h *HelmHandler) UninstallRelease(w http.ResponseWriter, r *http.Request) {
 	}, err)
 
 	if err != nil {
-		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
-			return
-		}
-		if strings.Contains(strings.ToLower(err.Error()), "not found") {
-			writeError(w, http.StatusNotFound, "release not found", err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to uninstall release", err)
+		h.handleReleaseError(w, "failed to uninstall release", err)
 		return
 	}
 
@@ -411,15 +381,7 @@ func (h *HelmHandler) RollbackRelease(w http.ResponseWriter, r *http.Request) {
 	}, err)
 
 	if err != nil {
-		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
-			return
-		}
-		if strings.Contains(strings.ToLower(err.Error()), "not found") {
-			writeError(w, http.StatusNotFound, "release not found", err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to rollback release", err)
+		h.handleReleaseError(w, "failed to rollback release", err)
 		return
 	}
 
@@ -447,15 +409,7 @@ func (h *HelmHandler) GetReleaseHistory(w http.ResponseWriter, r *http.Request) 
 
 	history, err := h.releaseManager.GetReleaseHistory(r.Context(), clusterID, name, namespace)
 	if err != nil {
-		if isK8sUnavailable(err) {
-			writeK8sUnavailable(w)
-			return
-		}
-		if strings.Contains(strings.ToLower(err.Error()), "not found") {
-			writeError(w, http.StatusNotFound, "release not found", err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to get release history", err)
+		h.handleReleaseError(w, "failed to get release history", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, history)
@@ -480,4 +434,20 @@ func (h *HelmHandler) recordAudit(r *http.Request, action, releaseName, clusterI
 	if err := h.auditRepo.RecordAction(r.Context(), userID, action, "helm_release", releaseName, releaseName, result, details, r.RemoteAddr, r.Header.Get("User-Agent")); err != nil {
 		logger.Get().Error("failed to record helm audit action", zap.String("action", action), zap.String("release", releaseName), zap.Error(err))
 	}
+}
+
+func (h *HelmHandler) handleReleaseError(w http.ResponseWriter, defaultMsg string, err error) {
+	if isK8sUnavailable(err) {
+		writeK8sUnavailable(w)
+		return
+	}
+	if errors.Is(err, syncutil.ErrOperationInProgress) {
+		writeError(w, http.StatusConflict, "operation already in progress", nil)
+		return
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "not found") {
+		writeError(w, http.StatusNotFound, "release not found", err)
+		return
+	}
+	writeError(w, http.StatusInternalServerError, defaultMsg, err)
 }
