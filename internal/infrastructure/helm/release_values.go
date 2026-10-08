@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"helm.sh/helm/v3/cmd/helm/search"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
 )
+
+var repoFileMu sync.Mutex
 
 // ListRepos returns all configured Helm repositories.
 func (m *ReleaseManager) ListRepos() ([]*repo.Entry, error) {
@@ -56,17 +59,6 @@ func (m *ReleaseManager) AddRepo(name, url string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var repoFile repo.File
-	if fileExists(m.repoFile) {
-		rf, err := repo.LoadFile(m.repoFile)
-		if err != nil {
-			return fmt.Errorf("loading repo file: %w", err)
-		}
-		repoFile = *rf
-	} else {
-		repoFile = *repo.NewFile()
-	}
-
 	entry := &repo.Entry{
 		Name: name,
 		URL:  url,
@@ -85,6 +77,19 @@ func (m *ReleaseManager) AddRepo(name, url string) error {
 		return fmt.Errorf("downloading repository index for %s (%s): %w", name, url, err)
 	}
 
+	repoFileMu.Lock()
+	var repoFile repo.File
+	if fileExists(m.repoFile) {
+		rf, err := repo.LoadFile(m.repoFile)
+		if err != nil {
+			repoFileMu.Unlock()
+			return fmt.Errorf("loading repo file: %w", err)
+		}
+		repoFile = *rf
+	} else {
+		repoFile = *repo.NewFile()
+	}
+
 	if repoFile.Has(name) {
 		repoFile.Update(entry)
 	} else {
@@ -92,8 +97,10 @@ func (m *ReleaseManager) AddRepo(name, url string) error {
 	}
 
 	if err := repoFile.WriteFile(m.repoFile, 0644); err != nil {
+		repoFileMu.Unlock()
 		return fmt.Errorf("saving repo file: %w", err)
 	}
+	repoFileMu.Unlock()
 
 	m.cachedIndex = nil
 	m.cachedIndexTime = time.Time{}
@@ -155,22 +162,28 @@ func (m *ReleaseManager) RemoveRepo(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	repoFileMu.Lock()
 	if !fileExists(m.repoFile) {
+		repoFileMu.Unlock()
 		return fmt.Errorf("no repo named %q found", name)
 	}
 
 	repoFile, err := repo.LoadFile(m.repoFile)
 	if err != nil {
+		repoFileMu.Unlock()
 		return fmt.Errorf("loading repo file: %w", err)
 	}
 
 	if !repoFile.Remove(name) {
+		repoFileMu.Unlock()
 		return fmt.Errorf("no repo named %q found", name)
 	}
 
 	if err := repoFile.WriteFile(m.repoFile, 0644); err != nil {
+		repoFileMu.Unlock()
 		return fmt.Errorf("saving repo file: %w", err)
 	}
+	repoFileMu.Unlock()
 
 	indexPath := filepath.Join(m.repoCacheDir, fmt.Sprintf("%s-index.yaml", name))
 	_ = os.Remove(indexPath)
