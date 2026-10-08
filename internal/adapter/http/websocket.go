@@ -2,6 +2,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -64,6 +65,7 @@ type WSHub struct {
 	register       chan *wsClient
 	unregister     chan *wsClient
 	welcomeMessage []byte
+	done           chan struct{}
 	mu             sync.RWMutex
 }
 
@@ -80,13 +82,31 @@ func NewWSHub() *WSHub {
 		broadcast:  make(chan []byte, 1024),
 		register:   make(chan *wsClient, 256),
 		unregister: make(chan *wsClient, 256),
+		done:       make(chan struct{}),
 	}
 }
 
 // Run starts the hub's event loop. Call in a goroutine.
-func (h *WSHub) Run() {
+func (h *WSHub) Run(ctx context.Context) {
+	defer close(h.done)
 	for {
 		select {
+		case <-ctx.Done():
+			h.mu.Lock()
+			for client := range h.clients {
+				if client.conn != nil {
+					_ = client.conn.WriteControl(
+						websocket.CloseMessage,
+						websocket.FormatCloseMessage(websocket.CloseNormalClosure, "server shutting down"),
+						time.Now().Add(250*time.Millisecond),
+					)
+				}
+				close(client.send)
+				delete(h.clients, client)
+			}
+			h.mu.Unlock()
+			return
+
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client] = struct{}{}
@@ -164,6 +184,13 @@ func (h *WSHub) SetWelcomeMessage(msg WSMessage) {
 
 // ServeWS handles WebSocket upgrade requests.
 func (h *WSHub) ServeWS(w http.ResponseWriter, r *http.Request) {
+	select {
+	case <-h.done:
+		http.Error(w, "server shutting down", http.StatusServiceUnavailable)
+		return
+	default:
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Get().Error("WebSocket upgrade failed", zap.Error(err))
@@ -176,7 +203,17 @@ func (h *WSHub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		send: make(chan []byte, 256),
 	}
 
-	h.register <- client
+	select {
+	case h.register <- client:
+	case <-h.done:
+		_ = conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "server shutting down"),
+			time.Now().Add(250*time.Millisecond),
+		)
+		conn.Close()
+		return
+	}
 
 	go client.writePump()
 	go client.readPump()
@@ -184,7 +221,10 @@ func (h *WSHub) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 func (c *wsClient) readPump() {
 	defer func() {
-		c.hub.unregister <- c
+		select {
+		case c.hub.unregister <- c:
+		case <-c.hub.done:
+		}
 		c.conn.Close()
 	}()
 
@@ -215,7 +255,7 @@ func (c *wsClient) writePump() {
 		case message, ok := <-c.send:
 			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
-				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 				return
 			}
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
