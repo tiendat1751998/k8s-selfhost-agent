@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/fleet"
+	infraConfig "github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 )
 
@@ -249,6 +250,15 @@ users:
 	if cfg.Host != "https://127.0.0.1:6443" {
 		t.Fatalf("expected host https://127.0.0.1:6443, got %s", cfg.Host)
 	}
+	if cfg.QPS != 50 {
+		t.Fatalf("expected default QPS 50, got %f", cfg.QPS)
+	}
+	if cfg.Burst != 100 {
+		t.Fatalf("expected default Burst 100, got %d", cfg.Burst)
+	}
+	if cfg.Timeout != 30*time.Second {
+		t.Fatalf("expected default Timeout 30s, got %v", cfg.Timeout)
+	}
 
 	// Test caching - second call returns same instance
 	cfgCached, err := mgr.GetK8sRestConfig(context.Background(), "rest-cluster-1")
@@ -257,6 +267,57 @@ users:
 	}
 	if cfgCached != cfg {
 		t.Fatal("expected cached config pointer to match")
+	}
+}
+
+func TestGetK8sRestConfig_CustomConfig(t *testing.T) {
+	validKubeconfig := `apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://127.0.0.1:6443
+  name: test-cluster
+contexts:
+- context:
+    cluster: test-cluster
+    user: test-user
+  name: test-context
+current-context: test-context
+users:
+- name: test-user
+  user:
+    token: test-token
+`
+	repo := &mockFleetRepo{
+		cluster: &fleet.Cluster{
+			ID:             "rest-cluster-custom",
+			Provider:       "kubernetes",
+			EncryptedToken: validKubeconfig,
+		},
+	}
+
+	orig := infraConfig.GetK8sClientConfig()
+	defer infraConfig.SetK8sClientConfig(orig)
+
+	infraConfig.SetK8sClientConfig(infraConfig.K8sClientConfig{
+		QPS:     75,
+		Burst:   150,
+		Timeout: 45 * time.Second,
+	})
+
+	mgr := NewClientManager(repo)
+	cfg, err := mgr.GetK8sRestConfig(context.Background(), "rest-cluster-custom")
+	if err != nil {
+		t.Fatalf("GetK8sRestConfig failed: %v", err)
+	}
+	if cfg.QPS != 75 {
+		t.Fatalf("expected QPS 75, got %f", cfg.QPS)
+	}
+	if cfg.Burst != 150 {
+		t.Fatalf("expected Burst 150, got %d", cfg.Burst)
+	}
+	if cfg.Timeout != 45*time.Second {
+		t.Fatalf("expected Timeout 45s, got %v", cfg.Timeout)
 	}
 }
 

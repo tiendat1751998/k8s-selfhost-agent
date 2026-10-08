@@ -3,7 +3,9 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -121,3 +123,79 @@ func TestLoad_SecurityAndServerHardenedSettings(t *testing.T) {
 	assert.Equal(t, "http://localhost:5173,http://localhost:3000", cfg.Server.CORSAllowedOrigins)
 	assert.False(t, cfg.Server.CookieSecure)
 }
+
+func TestLoad_K8sClientDefaults(t *testing.T) {
+	t.Setenv("POSTGRES_PASSWORD", "mock-pass")
+	t.Setenv("K8S_CLIENT_QPS", "")
+	t.Setenv("K8S_CLIENT_BURST", "")
+	t.Setenv("K8S_CLIENT_TIMEOUT", "")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	assert.Equal(t, float32(50), cfg.K8sClient.QPS)
+	assert.Equal(t, 100, cfg.K8sClient.Burst)
+	assert.Equal(t, 30*time.Second, cfg.K8sClient.Timeout)
+
+	active := config.GetK8sClientConfig()
+	assert.Equal(t, float32(50), active.QPS)
+	assert.Equal(t, 100, active.Burst)
+	assert.Equal(t, 30*time.Second, active.Timeout)
+}
+
+func TestLoad_K8sClientEnvOverrides(t *testing.T) {
+	t.Setenv("POSTGRES_PASSWORD", "mock-pass")
+	t.Setenv("K8S_CLIENT_QPS", "120.5")
+	t.Setenv("K8S_CLIENT_BURST", "250")
+	t.Setenv("K8S_CLIENT_TIMEOUT", "45s")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	assert.Equal(t, float32(120.5), cfg.K8sClient.QPS)
+	assert.Equal(t, 250, cfg.K8sClient.Burst)
+	assert.Equal(t, 45*time.Second, cfg.K8sClient.Timeout)
+
+	active := config.GetK8sClientConfig()
+	assert.Equal(t, float32(120.5), active.QPS)
+	assert.Equal(t, 250, active.Burst)
+	assert.Equal(t, 45*time.Second, active.Timeout)
+}
+
+func TestLoad_K8sClientInvalidValuesFailFast(t *testing.T) {
+	t.Setenv("POSTGRES_PASSWORD", "mock-pass")
+
+	cases := []struct {
+		name    string
+		envKey  string
+		envVal  string
+		wantErr string
+	}{
+		{"qps is zero", "K8S_CLIENT_QPS", "0", "qps"},
+		{"qps is negative", "K8S_CLIENT_QPS", "-5", "qps"},
+		{"qps is non-numeric", "K8S_CLIENT_QPS", "invalid", "qps"},
+		{"burst is zero", "K8S_CLIENT_BURST", "0", "burst"},
+		{"burst is negative", "K8S_CLIENT_BURST", "-10", "burst"},
+		{"burst is non-numeric", "K8S_CLIENT_BURST", "notanint", "burst"},
+		{"timeout is zero", "K8S_CLIENT_TIMEOUT", "0s", "timeout"},
+		{"timeout is negative", "K8S_CLIENT_TIMEOUT", "-5s", "timeout"},
+		{"timeout is invalid", "K8S_CLIENT_TIMEOUT", "invalid-duration", "timeout"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("K8S_CLIENT_QPS", "")
+			t.Setenv("K8S_CLIENT_BURST", "")
+			t.Setenv("K8S_CLIENT_TIMEOUT", "")
+			t.Setenv(tc.envKey, tc.envVal)
+
+			cfg, err := config.Load()
+			assert.Error(t, err, "expected failure for %s=%s", tc.envKey, tc.envVal)
+			assert.Nil(t, cfg)
+			assert.Contains(t, strings.ToLower(err.Error()), tc.wantErr)
+		})
+	}
+}
+

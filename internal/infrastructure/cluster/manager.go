@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/docker/docker/client"
 	"k8s.io/client-go/kubernetes"
@@ -15,6 +14,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/datdt/k8sselfhost/internal/domain/fleet"
+	infraConfig "github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 )
 
@@ -121,9 +121,10 @@ func (m *ClientManager) GetK8sRestConfig(ctx context.Context, clusterID string) 
 		return nil, fmt.Errorf("parsing kubeconfig for cluster %s: %w", clusterID, err)
 	}
 
-	config.QPS = 50
-	config.Burst = 100
-	config.Timeout = 30 * time.Second
+	k8sCfg := infraConfig.GetK8sClientConfig()
+	config.QPS = k8sCfg.QPS
+	config.Burst = k8sCfg.Burst
+	config.Timeout = k8sCfg.Timeout
 	if len(config.TLSClientConfig.CAData) == 0 && config.TLSClientConfig.CAFile == "" {
 		config.TLSClientConfig.Insecure = true
 	}
