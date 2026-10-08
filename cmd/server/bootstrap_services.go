@@ -71,7 +71,7 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	// 1. Initialize WebSocket Hub
 	wsHub := adapthttp.NewWSHub()
 	eg.Go(func() error {
-		wsHub.Run()
+		wsHub.Run(ctx)
 		return nil
 	})
 
