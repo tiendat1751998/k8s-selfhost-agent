@@ -4,7 +4,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/viper"
@@ -22,6 +24,37 @@ type Config struct {
 	Log          LogConfig          `mapstructure:"log"`
 	Docker       DockerConfig       `mapstructure:"docker"`
 	LoadBalancer LoadBalancerConfig `mapstructure:"load_balancer"`
+	K8sClient    K8sClientConfig    `mapstructure:"client"`
+}
+
+// K8sClientConfig holds settings for Kubernetes client rate limiting and timeouts.
+type K8sClientConfig struct {
+	QPS     float32       `mapstructure:"qps"`
+	Burst   int           `mapstructure:"burst"`
+	Timeout time.Duration `mapstructure:"timeout"`
+}
+
+var activeK8sClientConfig atomic.Pointer[K8sClientConfig]
+
+func init() {
+	activeK8sClientConfig.Store(&K8sClientConfig{
+		QPS:     50,
+		Burst:   100,
+		Timeout: 30 * time.Second,
+	})
+}
+
+// GetK8sClientConfig returns the active Kubernetes client configuration.
+func GetK8sClientConfig() K8sClientConfig {
+	if cfg := activeK8sClientConfig.Load(); cfg != nil {
+		return *cfg
+	}
+	return K8sClientConfig{QPS: 50, Burst: 100, Timeout: 30 * time.Second}
+}
+
+// SetK8sClientConfig updates the active Kubernetes client configuration.
+func SetK8sClientConfig(c K8sClientConfig) {
+	activeK8sClientConfig.Store(&c)
 }
 
 // SecurityConfig holds encryption, token, and network egress security settings.
@@ -185,6 +218,9 @@ func Load() (*Config, error) {
 	v.SetDefault("security.master_encryption_key", "")
 	v.SetDefault("security.metrics_token", "")
 	v.SetDefault("security.egress_allow_private_cidrs", "")
+	v.SetDefault("client.qps", float32(50))
+	v.SetDefault("client.burst", 100)
+	v.SetDefault("client.timeout", 30*time.Second)
 
 	// Environment variables
 	v.SetEnvPrefix("K8S")
@@ -210,6 +246,42 @@ func Load() (*Config, error) {
 
 	// Resolve environment variable overrides and placeholders
 	resolveEnvOverrides(&cfg)
+
+	// K8s client environment variable overrides
+	if val := getFirstEnv("K8S_CLIENT_QPS", "CLIENT_QPS"); val != "" {
+		qps, err := strconv.ParseFloat(val, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid k8s client qps: %w", err)
+		}
+		cfg.K8sClient.QPS = float32(qps)
+	}
+	if val := getFirstEnv("K8S_CLIENT_BURST", "CLIENT_BURST"); val != "" {
+		burst, err := strconv.Atoi(val)
+		if err != nil {
+			return nil, fmt.Errorf("invalid k8s client burst: %w", err)
+		}
+		cfg.K8sClient.Burst = burst
+	}
+	if val := getFirstEnv("K8S_CLIENT_TIMEOUT", "CLIENT_TIMEOUT"); val != "" {
+		d, err := time.ParseDuration(val)
+		if err != nil {
+			return nil, fmt.Errorf("invalid k8s client timeout: %w", err)
+		}
+		cfg.K8sClient.Timeout = d
+	}
+
+	// Fail-fast validation
+	if cfg.K8sClient.QPS <= 0 {
+		return nil, fmt.Errorf("k8s client qps must be greater than 0")
+	}
+	if cfg.K8sClient.Burst <= 0 {
+		return nil, fmt.Errorf("k8s client burst must be greater than 0")
+	}
+	if cfg.K8sClient.Timeout <= 0 {
+		return nil, fmt.Errorf("k8s client timeout must be greater than 0")
+	}
+
+	activeK8sClientConfig.Store(&cfg.K8sClient)
 
 	// Fail-fast validation: Postgres password is required if host is configured
 	if cfg.Postgres.Host != "" && cfg.Postgres.Password == "" {
