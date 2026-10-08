@@ -130,9 +130,28 @@ func (m *MockBackupRepo) GetJob(ctx context.Context, id string) (*domainBackup.B
 }
 
 func (m *MockBackupRepo) UpdateJob(ctx context.Context, j *domainBackup.BackupJob) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.jobs[j.ID] = j
+	return nil
+}
+
+func (m *MockBackupRepo) ReconcileStaleJobs(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, j := range m.jobs {
+		if j.Status == "running" {
+			j.Status = "failed"
+			j.ErrorMessage = "interrupted by restart"
+			j.UpdatedAt = time.Now().UTC()
+		}
+	}
 	return nil
 }
 
@@ -169,6 +188,9 @@ func (m *MockBackupRepo) GetRestore(ctx context.Context, id string) (*domainBack
 }
 
 func (m *MockBackupRepo) UpdateRestore(ctx context.Context, r *domainBackup.RestoreJob) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.restores[r.ID] = r
@@ -293,3 +315,162 @@ func TestEngine_BackupAndRestoreFlow(t *testing.T) {
 		t.Errorf("expected restore status 'completed', got '%s'", updatedRestore.Status)
 	}
 }
+
+type cancellableDumpDriver struct {
+	started chan struct{}
+}
+
+func (d *cancellableDumpDriver) Type() string { return "postgres" }
+func (d *cancellableDumpDriver) ValidateConnection(ctx context.Context, opts domainBackup.DumpOptions) error {
+	return nil
+}
+func (d *cancellableDumpDriver) Dump(ctx context.Context, opts domainBackup.DumpOptions, writer io.Writer) (*domainBackup.DumpResult, error) {
+	_, _ = io.WriteString(writer, "PARTIAL BACKUP DATA HEADER\n")
+	select {
+	case <-d.started:
+	default:
+		close(d.started)
+	}
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+func (d *cancellableDumpDriver) Restore(ctx context.Context, opts domainBackup.RestoreOptions, reader io.Reader) error {
+	return nil
+}
+
+func TestEngine_CancelledJob_EndsFailedAndPartialArtifactDeleted(t *testing.T) {
+	tmpDir := t.TempDir()
+	repo := NewMockBackupRepo()
+
+	driver := &cancellableDumpDriver{started: make(chan struct{})}
+	driverReg := drivers.NewDriverRegistry()
+	driverReg.Register(driver)
+
+	localPath := filepath.Join(tmpDir, "local")
+	localStorage := storage.NewLocalStorage(localPath)
+	storageReg := storage.NewStorageRegistry(localStorage)
+
+	engine := infraBackup.NewEngine(repo, driverReg, storageReg)
+
+	storageModel := &domainBackup.BackupStorage{
+		ID:       "storage-local-2",
+		TenantID: "tenant-dev",
+		Name:     "Local Disk",
+		Type:     "local",
+		Endpoint: localPath,
+	}
+	_ = repo.CreateStorage(context.Background(), storageModel)
+
+	policy := &domainBackup.BackupPolicy{
+		ID:                "policy-2",
+		TenantID:          "tenant-dev",
+		Name:              "Daily Test Policy",
+		DBType:            "postgres",
+		DBHost:            "127.0.0.1",
+		DBPort:            5432,
+		DBName:            "test_db",
+		StorageID:         storageModel.ID,
+		CompressionLevel:  1,
+		EncryptionEnabled: false,
+		Enabled:           true,
+	}
+	_ = repo.CreatePolicy(context.Background(), policy)
+
+	job := &domainBackup.BackupJob{
+		ID:         "job-cancel-1",
+		TenantID:   "tenant-dev",
+		PolicyID:   policy.ID,
+		Status:     "pending",
+		BackupType: "full",
+	}
+	_ = repo.CreateJob(context.Background(), job)
+
+	jobCtx, cancel := context.WithCancel(context.Background())
+
+	execDone := make(chan error, 1)
+	go func() {
+		execDone <- engine.ExecuteBackup(jobCtx, job.ID)
+	}()
+
+	// Wait for dump to start
+	select {
+	case <-driver.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("driver Dump was not started in time")
+	}
+
+	// Wait a moment for partial file to be created on disk
+	time.Sleep(50 * time.Millisecond)
+
+	// Now cancel job context
+	cancel()
+
+	var execErr error
+	select {
+	case execErr = <-execDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ExecuteBackup did not return within 2s after cancel")
+	}
+
+	if execErr == nil {
+		t.Fatal("expected ExecuteBackup to return an error on cancellation, got nil")
+	}
+
+	// 1. Verify job in repo ended with status 'failed' (proves update did not use cancelled ctx)
+	updatedJob, err := repo.GetJob(context.Background(), job.ID)
+	if err != nil {
+		t.Fatalf("failed to retrieve updated job: %v", err)
+	}
+	if updatedJob.Status != "failed" {
+		t.Errorf("expected job status 'failed', got '%s'", updatedJob.Status)
+	}
+	if updatedJob.ErrorMessage == "" {
+		t.Error("expected non-empty error message on failed job")
+	}
+
+	// 2. Verify partial artifact was deleted from storage
+	if updatedJob.StoragePath != "" {
+		exists, err := localStorage.Exists(context.Background(), updatedJob.StoragePath)
+		if err != nil {
+			t.Fatalf("failed to check storage path existence: %v", err)
+		}
+		if exists {
+			t.Errorf("expected partial artifact at %s to be deleted, but it still exists", updatedJob.StoragePath)
+		}
+	}
+}
+
+func TestEngine_ReconcileStaleJobs_MarksRunningRowsFailed(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMockBackupRepo()
+	driverReg := drivers.NewDriverRegistry()
+	storageReg := storage.NewStorageRegistry(storage.NewLocalStorage(""))
+	engine := infraBackup.NewEngine(repo, driverReg, storageReg)
+
+	_ = repo.CreateJob(ctx, &domainBackup.BackupJob{ID: "job-running", TenantID: "tenant-1", Status: "running", BackupType: "full"})
+	_ = repo.CreateJob(ctx, &domainBackup.BackupJob{ID: "job-completed", TenantID: "tenant-1", Status: "completed", BackupType: "full"})
+	_ = repo.CreateJob(ctx, &domainBackup.BackupJob{ID: "job-pending", TenantID: "tenant-1", Status: "pending", BackupType: "full"})
+
+	if err := engine.ReconcileStaleJobs(ctx); err != nil {
+		t.Fatalf("ReconcileStaleJobs failed: %v", err)
+	}
+
+	j1, _ := repo.GetJob(ctx, "job-running")
+	if j1.Status != "failed" {
+		t.Errorf("expected running job to be marked 'failed', got '%s'", j1.Status)
+	}
+	if j1.ErrorMessage != "interrupted by restart" {
+		t.Errorf("expected error message 'interrupted by restart', got '%s'", j1.ErrorMessage)
+	}
+
+	j2, _ := repo.GetJob(ctx, "job-completed")
+	if j2.Status != "completed" {
+		t.Errorf("expected completed job to stay 'completed', got '%s'", j2.Status)
+	}
+
+	j3, _ := repo.GetJob(ctx, "job-pending")
+	if j3.Status != "pending" {
+		t.Errorf("expected pending job to stay 'pending', got '%s'", j3.Status)
+	}
+}
+
