@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 
@@ -65,11 +64,12 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	// Initialize LLM Provider Registry
 	registry := initLLMRegistry(cfg, log)
 
-	dsn := cfg.Postgres.DSN()
-	pgClient, err := pgxpool.New(ctx, dsn)
+	pgClient, err := postgres.NewClient(ctx, cfg.Postgres)
 	if err != nil {
 		log.Fatal("failed to connect to postgres", zap.Error(err))
 	}
+	healthHandler.Register("postgres", pgClient.HealthCheck)
+	dbPool := pgClient.Pool()
 
 	dockerClient, err := infraDocker.NewDockerClient(cfg.Docker.Host, cfg.Docker.Version)
 	var dockerRepo domainDocker.Repository
@@ -95,20 +95,20 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		log.Warn("failed to initialize Kubernetes client, kubernetes features will be unavailable", zap.Error(err))
 		k8sAvailable = false
 	}
-	auditRepo := postgres.NewAuditRepo(pgClient)
+	auditRepo := postgres.NewAuditRepo(dbPool)
 
-	fleetRepo := postgres.NewFleetRepo(pgClient)
+	fleetRepo := postgres.NewFleetRepo(dbPool)
 	clientManager := infraCluster.NewClientManager(fleetRepo)
 
-	agentRepo := postgres.NewAgentRepo(pgClient)
-	incRepo := postgres.NewIncidentRepo(pgClient)
-	reportRepo := postgres.NewReportRepo(pgClient)
-	prRepo := postgres.NewPRRepo(pgClient)
-	backupRepo := postgres.NewBackupRepo(pgClient)
-	settingsRepo := postgres.NewSettingsRepo(pgClient)
-	catalogRepo := postgres.NewCatalogRepo(pgClient)
-	scaffoldService := usecaseScaffold.NewService(postgres.NewScaffoldRepo(pgClient), catalogRepo, usecaseScaffold.NewEngine())
-	ecosystemRepo := postgres.NewEcosystemRepo(pgClient)
+	agentRepo := postgres.NewAgentRepo(dbPool)
+	incRepo := postgres.NewIncidentRepo(dbPool)
+	reportRepo := postgres.NewReportRepo(dbPool)
+	prRepo := postgres.NewPRRepo(dbPool)
+	backupRepo := postgres.NewBackupRepo(dbPool)
+	settingsRepo := postgres.NewSettingsRepo(dbPool)
+	catalogRepo := postgres.NewCatalogRepo(dbPool)
+	scaffoldService := usecaseScaffold.NewService(postgres.NewScaffoldRepo(dbPool), catalogRepo, usecaseScaffold.NewEngine())
+	ecosystemRepo := postgres.NewEcosystemRepo(dbPool)
 	var ecoOpts []usecaseEcosystem.Option
 	if dockerClient != nil {
 		ecoOpts = append(ecoOpts, usecaseEcosystem.WithDockerClient(dockerClient))
@@ -117,9 +117,9 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	ecosystemHandler := adapthttp.NewEcosystemHandler(ecosystemUsecase, log)
 	helmReleaseManager := infraHelm.NewReleaseManager(clientManager, infraK8s.GetLastConfig())
 	helmHandler := adapthttp.NewHelmHandler(helmReleaseManager, auditRepo)
-	computeHostRepo := postgres.NewComputeHostRepo(pgClient)
+	computeHostRepo := postgres.NewComputeHostRepo(dbPool)
 
-	txManager := postgres.NewTxManager(pgClient)
+	txManager := postgres.NewTxManager(dbPool)
 	defaultLLM, err := registry.Default()
 	if err != nil {
 		log.Warn("no default LLM provider available, proceeding with caution", zap.Error(err))
@@ -148,7 +148,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	}
 
 	tpsCollector := usecaseMetrics.NewTPSCollector(
-		metricsCollector, pgClient, log,
+		metricsCollector, dbPool, log,
 		usecaseMetrics.WithLoadBalancerProvider(lbProvider),
 		usecaseMetrics.WithTraefikURL(lbURL),
 		usecaseMetrics.WithNATSMonitorURL(usecaseMetrics.DeriveNATSMonitorURL(cfg.NATS.URL)),
@@ -165,7 +165,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		}()
 	}
 
-	nodeMetricsRepo := postgres.NewNodeMetricsRepo(pgClient)
+	nodeMetricsRepo := postgres.NewNodeMetricsRepo(dbPool)
 	nodeHistoryWorker := usecaseMetrics.NewNodeHistoryWorker(metricsCollector, nodeMetricsRepo, incRepo, log)
 	go func() {
 		if err := nodeHistoryWorker.Start(ctx); err != nil {
@@ -177,17 +177,17 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	overviewHandler.SetNodeMetricsRepo(nodeMetricsRepo)
 	overviewHandler.SetIncidentRepo(incRepo)
 
-	userRepo := postgres.NewUserRepo(pgClient)
-	refreshTokenRepo := postgres.NewRefreshTokenRepo(pgClient)
+	userRepo := postgres.NewUserRepo(dbPool)
+	refreshTokenRepo := postgres.NewRefreshTokenRepo(dbPool)
 	authUsecase := usecaseAuth.NewUsecase(userRepo)
 
-	searchRepo := postgres.NewSearchRepo(pgClient, nil)
+	searchRepo := postgres.NewSearchRepo(dbPool, nil)
 	searchUsecase := usecaseSearch.NewUsecase(searchRepo)
 
 	gitopsController := usecaseGitops.NewController(prRepo, incRepo, txManager)
-	tenancyRepo := postgres.NewTenancyRepo(pgClient)
+	tenancyRepo := postgres.NewTenancyRepo(dbPool)
 
-	alertRepo := postgres.NewAlertRepo(pgClient)
+	alertRepo := postgres.NewAlertRepo(dbPool)
 	ruleEngine, err := usecaseAlert.NewRuleEngine(alertRepo, map[string]alert.Notifier{
 		"slack":   notifier.NewSlackNotifier(),
 		"email":   notifier.NewEmailNotifier(),
@@ -236,7 +236,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, logger.Get())
 	go healthChecker.Start(ctx, 1*time.Minute)
 
-	obsRepo := postgres.NewObservabilityRepo(pgClient)
+	obsRepo := postgres.NewObservabilityRepo(dbPool)
 	if obsRepo != nil {
 		defs, err := obsRepo.ListSLODefinitions(ctx)
 		if err != nil {
@@ -271,23 +271,23 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		Dashboard:     dashboardHandler,
 		Docker:        adapthttp.NewDockerHandler(dockerRepo, computeHostRepo, authUsecase, metricsCollector),
 		Overview:      overviewHandler,
-		Drift:         adapthttp.NewDriftHandler(postgres.NewDriftRepo(pgClient)),
-		Correlation:   adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(pgClient)),
-		Compliance:    adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(pgClient)),
-		Tagging:       adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(pgClient)),
-		Runbook:       adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(pgClient), auditRepo),
+		Drift:         adapthttp.NewDriftHandler(postgres.NewDriftRepo(dbPool)),
+		Correlation:   adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(dbPool)),
+		Compliance:    adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(dbPool)),
+		Tagging:       adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(dbPool)),
+		Runbook:       adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(dbPool), auditRepo),
 		Observability: adapthttp.NewObservabilityHandler(obsRepo),
-		Capacity:      adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(metricsCollector, usecaseCapacity.WithComputeHostRepo(computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(pgClient)))),
-		Changes:       adapthttp.NewChangeHandler(postgres.NewChangesRepo(pgClient)),
-		Promotion:     adapthttp.NewPromotionHandler(usecasePromotion.NewUsecase(postgres.NewPromotionRepo(pgClient), dockerRepo, auditRepo)),
+		Capacity:      adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(metricsCollector, usecaseCapacity.WithComputeHostRepo(computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(dbPool)))),
+		Changes:       adapthttp.NewChangeHandler(postgres.NewChangesRepo(dbPool)),
+		Promotion:     adapthttp.NewPromotionHandler(usecasePromotion.NewUsecase(postgres.NewPromotionRepo(dbPool), dockerRepo, auditRepo)),
 		Explorer:      adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager)),
-		Reporting:     adapthttp.NewReportingHandler(postgres.NewReportingRepo(pgClient)),
+		Reporting:     adapthttp.NewReportingHandler(postgres.NewReportingRepo(dbPool)),
 		HealthCenter:  healthCenterHandler,
 		Fleet:         adapthttp.NewFleetHandler(fleetRepo, auditRepo, importUsecase),
 		Audit:         adapthttp.NewAuditHandler(auditRepo),
-		Notification:  adapthttp.NewNotificationHandler(postgres.NewNotificationRepo(pgClient)),
-		Automation:    adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(pgClient)),
-		Timeline:      adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(pgClient)),
+		Notification:  adapthttp.NewNotificationHandler(postgres.NewNotificationRepo(dbPool)),
+		Automation:    adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(dbPool)),
+		Timeline:      adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(dbPool)),
 		AI:            adapthttp.NewAIHandler(registry),
 		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo, adapthttp.WithCookieSecure(cfg.Server.CookieSecure)),
 		Search:        adapthttp.NewSearchHandler(searchUsecase),
@@ -303,11 +303,11 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		K8sBootstrap:  adapthttp.NewK8sBootstrapHandler(usecaseCluster.NewBootstrapUsecase(resourceRepo, clientManager, log)),
 		Storage:       adapthttp.NewStorageHandler(usecaseStorage.NewVolumeUsecase(k8sClient, clientManager, log)),
 		DR:            adapthttp.NewDRHandler(usecaseDR.NewDRUsecase(k8sClient, clientManager, log), remediationCtrl, log),
-		Cloud:         adapthttp.NewCloudHandler(postgres.NewCloudAccountRepo(pgClient), nil, log),
+		Cloud:         adapthttp.NewCloudHandler(postgres.NewCloudAccountRepo(dbPool), nil, log),
 		Settings:      adapthttp.NewSettingsHandler(settingsRepo, log),
 		Catalog:       adapthttp.NewCatalogHandler(catalogRepo, log),
 		Scaffolder:    adapthttp.NewScaffoldHandler(scaffoldService, log),
-		Plugin:        adapthttp.NewPluginHandler(postgres.NewPluginRepo(pgClient), log),
+		Plugin:        adapthttp.NewPluginHandler(postgres.NewPluginRepo(dbPool), log),
 		Ecosystem:     ecosystemHandler,
 		LogStream:       logStreamHandler,
 		CentralizedLogs: centralizedLogs,
