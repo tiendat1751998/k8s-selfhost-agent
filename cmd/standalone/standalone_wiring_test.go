@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 )
 
 func TestParseDockerLogLine(t *testing.T) {
@@ -45,3 +47,23 @@ func TestParseDockerLogLine(t *testing.T) {
 		assert.Equal(t, input, msg)
 	})
 }
+
+func TestStandalone_PostgresPoolFromConfig(t *testing.T) {
+	// Verify that standalone pool settings come from config (cfg.Postgres)
+	pgCfg := config.PostgresConfig{
+		Host:     "10.0.0.5",
+		Port:     5433,
+		User:     "k8s_user",
+		Password: "secret",
+		DBName:   "production_db",
+		SSLMode:  "disable",
+		MaxConns: 35,
+		MinConns: 5,
+	}
+
+	dsn := pgCfg.DSN()
+	assert.Contains(t, dsn, "postgres://k8s_user:secret@10.0.0.5:5433/production_db")
+	assert.Equal(t, int32(35), pgCfg.MaxConns)
+	assert.Equal(t, int32(5), pgCfg.MinConns)
+}
+

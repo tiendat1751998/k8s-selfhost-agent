@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/container"
-	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
@@ -354,7 +353,12 @@ func initLLMRegistry(cfg *config.Config, log *zap.Logger) *llm.ProviderRegistry 
 	return registry
 }
 
-func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Client, logAggregator *logging.LogAggregator, centralizedLogs *adapthttp.LogHandler, log *zap.Logger) {
+type serverDockerLogClient interface {
+	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
+	ContainerLogs(ctx context.Context, container string, options container.LogsOptions) (io.ReadCloser, error)
+}
+
+func startDockerLogStreamer(ctx context.Context, dockerClient serverDockerLogClient, logAggregator *logging.LogAggregator, centralizedLogs *adapthttp.LogHandler, log *zap.Logger) {
 	go func() {
 		containers, err := dockerClient.ContainerList(ctx, container.ListOptions{All: true})
 		if err != nil {
@@ -374,6 +378,16 @@ func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Clie
 					return
 				}
 				defer reader.Close()
+
+				done := make(chan struct{})
+				go func() {
+					select {
+					case <-ctx.Done(): _ = reader.Close()
+					case <-done:
+					}
+				}()
+				defer close(done)
+
 				stdoutReader, stdoutWriter := io.Pipe()
 				stderrReader, stderrWriter := io.Pipe()
 				pipeStream := func(r io.Reader, stream, defaultLvl string) {
@@ -403,23 +417,21 @@ func startDockerLogStreamer(ctx context.Context, dockerClient *dockerclient.Clie
 
 func detectLogLevel(msg, defaultLvl string) string {
 	u := strings.ToUpper(msg)
-	switch {
-	case strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC") || strings.Contains(u, "ERR"): return "ERROR"
-	case strings.Contains(u, "WARN"): return "WARN"
-	case strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE"): return "DEBUG"
-	case strings.Contains(u, "INFO"): return "INFO"
-	default: return defaultLvl
+	if strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC") || strings.Contains(u, "ERR") {
+		return "ERROR"
 	}
+	if strings.Contains(u, "WARN") { return "WARN" }
+	if strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE") { return "DEBUG" }
+	if strings.Contains(u, "INFO") { return "INFO" }
+	return defaultLvl
 }
 
 func getContainerNamespace(name string) string {
 	l := strings.ToLower(name)
-	switch {
-	case strings.Contains(l, "log") || strings.Contains(l, "nats"): return "logging"
-	case strings.Contains(l, "vault"): return "vault"
-	case strings.Contains(l, "stage") || strings.Contains(l, "staging"): return "staging"
-	default: return "production"
-	}
+	if strings.Contains(l, "log") || strings.Contains(l, "nats") { return "logging" }
+	if strings.Contains(l, "vault") { return "vault" }
+	if strings.Contains(l, "stage") || strings.Contains(l, "staging") { return "staging" }
+	return "production"
 }
 
 func extractTraceID(msg string) string {
@@ -429,8 +441,8 @@ func extractTraceID(msg string) string {
 			if len(rest) > 0 {
 				if rest[0] == '"' || rest[0] == 0x27 {
 					if end := strings.IndexByte(rest[1:], rest[0]); end != -1 { return strings.TrimSpace(rest[1 : end+1]) }
-				} else if end := strings.IndexAny(rest, " \t\r\n,;{}]"); end != -1 { return strings.TrimSpace(rest[:end])
-				} else { return rest }
+				} else if end := strings.IndexAny(rest, " \t\r\n,;{}]"); end != -1 { return strings.TrimSpace(rest[:end]) }
+				return rest
 			}
 		}
 	}

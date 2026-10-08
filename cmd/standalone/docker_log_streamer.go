@@ -1,17 +1,18 @@
-﻿package main
+package main
 
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
-	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"go.uber.org/zap"
 
@@ -20,6 +21,12 @@ import (
 	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
+
+type dockerLogClient interface {
+	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
+	ContainerLogs(ctx context.Context, container string, options container.LogsOptions) (io.ReadCloser, error)
+	Events(ctx context.Context, options events.ListOptions) (<-chan events.Message, <-chan error)
+}
 
 type dockerTailerManager struct {
 	mu      sync.Mutex
@@ -44,7 +51,7 @@ func (m *dockerTailerManager) cancel(cID string) {
 
 func (m *dockerTailerManager) attach(
 	ctx context.Context,
-	dockerClient *dockerclient.Client,
+	dockerClient dockerLogClient,
 	logAggregator *logging.LogAggregator,
 	centralizedLogs *adapthttp.LogHandler,
 	log *zap.Logger,
@@ -133,7 +140,7 @@ func (m *dockerTailerManager) attach(
 
 func startDockerLogStreamer(
 	ctx context.Context,
-	dockerClient *dockerclient.Client,
+	dockerClient dockerLogClient,
 	logAggregator *logging.LogAggregator,
 	centralizedLogs *adapthttp.LogHandler,
 	log *zap.Logger,
@@ -157,48 +164,61 @@ func startDockerLogStreamer(
 			}
 		}
 
-		// 2. Dynamically watch Docker container events for "start" and "restart"
+		// 2. Dynamically watch Docker container events for "start" and "restart" with backoff
 		f := filters.NewArgs()
 		f.Add("type", "container")
 		f.Add("event", "start")
 		f.Add("event", "restart")
 
-		msgCh, errCh := dockerClient.Events(ctx, events.ListOptions{Filters: f})
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case err, ok := <-errCh:
-				if !ok {
-					return
-				}
-				if err != nil && ctx.Err() == nil {
-					log.Debug("Docker log streamer event stream error", zap.Error(err))
-				}
-				return
-			case msg, ok := <-msgCh:
-				if !ok {
-					return
-				}
-				if msg.Action == "start" || msg.Action == "restart" {
-					cID := msg.Actor.ID
-					if cID == "" {
-						cID = msg.ID
+		bo := backoff.NewExponentialBackOff()
+		bo.InitialInterval = 200 * time.Millisecond
+		bo.MaxInterval = 10 * time.Second
+
+		_, _ = backoff.Retry(ctx, func() (struct{}, error) {
+			msgCh, errCh := dockerClient.Events(ctx, events.ListOptions{Filters: f})
+			if msgCh == nil || errCh == nil {
+				return struct{}{}, errors.New("docker events returned nil channels")
+			}
+			for {
+				select {
+				case <-ctx.Done():
+					return struct{}{}, backoff.Permanent(ctx.Err())
+				case err, ok := <-errCh:
+					if !ok {
+						return struct{}{}, errors.New("docker events error channel closed")
 					}
-					cName := msg.Actor.Attributes["name"]
-					if cName == "" {
-						cName = cID
-						if len(cName) > 12 {
-							cName = cName[:12]
+					if err != nil {
+						return struct{}{}, err
+					}
+				case msg, ok := <-msgCh:
+					if !ok {
+						return struct{}{}, errors.New("docker events message channel closed")
+					}
+					bo.Reset()
+					if msg.Action == "start" || msg.Action == "restart" {
+						cID := msg.Actor.ID
+						if cID == "" {
+							cID = msg.ID
 						}
+						cName := msg.Actor.Attributes["name"]
+						if cName == "" {
+							cName = cID
+							if len(cName) > 12 {
+								cName = cName[:12]
+							}
+						}
+						if msg.Action == "restart" {
+							globalTailerManager.cancel(cID)
+						}
+						globalTailerManager.attach(ctx, dockerClient, logAggregator, centralizedLogs, log, cID, cName)
 					}
-					if msg.Action == "restart" {
-						globalTailerManager.cancel(cID)
-					}
-					globalTailerManager.attach(ctx, dockerClient, logAggregator, centralizedLogs, log, cID, cName)
 				}
 			}
-		}
+		}, backoff.WithBackOff(bo), backoff.WithMaxElapsedTime(0), backoff.WithNotify(func(err error, d time.Duration) {
+			if ctx.Err() == nil {
+				log.Warn("Docker log streamer event stream error, re-subscribing", zap.Error(err), zap.Duration("backoff", d))
+			}
+		}))
 	}()
 }
 
