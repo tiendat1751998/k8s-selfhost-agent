@@ -76,18 +76,29 @@ func isEvictablePod(p *corev1.Pod, nodeName string, ignoreDaemonSets bool) bool 
 // DrainNode cordons the node, evicts pods via EvictV1 with 429 backoff,
 // and polls until no evictable pods remain on the node or ctx deadline.
 func (r *ResourceRepo) DrainNode(ctx context.Context, clusterID, name string, gracePeriodSeconds int64, ignoreDaemonSets bool) error {
-	client, err := r.getK8sClient(ctx, clusterID)
+	pollCtx := ctx
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		timeout := time.Duration(gracePeriodSeconds)*time.Second + 30*time.Second
+		if timeout < 60*time.Second {
+			timeout = 60 * time.Second
+		}
+		var cancel context.CancelFunc
+		pollCtx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	client, err := r.getK8sClient(pollCtx, clusterID)
 	if err != nil {
 		return err
 	}
 
 	// 1. Cordon the node
-	if err := r.CordonNode(ctx, clusterID, name); err != nil {
+	if err := r.CordonNode(pollCtx, clusterID, name); err != nil {
 		return fmt.Errorf("cordoning node during drain: %w", err)
 	}
 
 	// 2. List pods running on the node
-	podList, err := client.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+	podList, err := client.CoreV1().Pods("").List(pollCtx, metav1.ListOptions{
 		FieldSelector: "spec.nodeName=" + name,
 	})
 	if err != nil {
@@ -117,7 +128,7 @@ func (r *ResourceRepo) DrainNode(ctx context.Context, clusterID, name string, gr
 		b.MaxInterval = 2 * time.Second
 
 		operation := func() (struct{}, error) {
-			evictErr := client.CoreV1().Pods(p.Namespace).EvictV1(ctx, eviction)
+			evictErr := client.CoreV1().Pods(p.Namespace).EvictV1(pollCtx, eviction)
 			if evictErr == nil || k8serrors.IsNotFound(evictErr) {
 				return struct{}{}, nil
 			}
@@ -127,7 +138,7 @@ func (r *ResourceRepo) DrainNode(ctx context.Context, clusterID, name string, gr
 			return struct{}{}, backoff.Permanent(evictErr)
 		}
 
-		if _, err := backoff.Retry(ctx, operation, backoff.WithBackOff(b)); err != nil {
+		if _, err := backoff.Retry(pollCtx, operation, backoff.WithBackOff(b)); err != nil {
 			return fmt.Errorf("evicting pod %s/%s on node %s: %w", p.Namespace, p.Name, name, err)
 		}
 	}
@@ -137,7 +148,7 @@ func (r *ResourceRepo) DrainNode(ctx context.Context, clusterID, name string, gr
 	defer ticker.Stop()
 
 	for {
-		remainingPods, err := client.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		remainingPods, err := client.CoreV1().Pods("").List(pollCtx, metav1.ListOptions{
 			FieldSelector: "spec.nodeName=" + name,
 		})
 		if err != nil {
@@ -156,8 +167,8 @@ func (r *ResourceRepo) DrainNode(ctx context.Context, clusterID, name string, gr
 		}
 
 		select {
-		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for %d evictable pods to terminate on node %s: %w", evictableRemaining, name, ctx.Err())
+		case <-pollCtx.Done():
+			return fmt.Errorf("timed out waiting for %d evictable pods to terminate on node %s: %w", evictableRemaining, name, pollCtx.Err())
 		case <-ticker.C:
 		}
 	}
