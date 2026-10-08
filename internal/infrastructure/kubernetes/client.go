@@ -5,12 +5,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
@@ -39,9 +39,10 @@ func NewClient(kubeconfigPath string) (*kubernetes.Clientset, error) {
 	}
 
 	// Prevent K8s API server overload with rate limiting and timeouts
-	cfg.QPS = 50
-	cfg.Burst = 100
-	cfg.Timeout = 30 * time.Second
+	k8sCfg := config.GetK8sClientConfig()
+	cfg.QPS = k8sCfg.QPS
+	cfg.Burst = k8sCfg.Burst
+	cfg.Timeout = k8sCfg.Timeout
 
 	lastConfig = cfg
 
