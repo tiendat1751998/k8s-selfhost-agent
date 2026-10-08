@@ -1,7 +1,8 @@
-﻿package clickhouse_test
+package clickhouse_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -273,3 +274,192 @@ func TestBatchWriter_CloseUnstarted(t *testing.T) {
 		t.Fatal("BatchWriter.Close() deadlocked on unstarted writer")
 	}
 }
+
+func BenchmarkBatchWriter_Write(b *testing.B) {
+	cfg := clickhouse.BatchWriterConfig{
+		BatchSize:       1000,
+		FlushInterval:   10 * time.Millisecond,
+		ChannelCapacity: 1000000,
+	}
+	flushFn := func(ctx context.Context, batch []logging.LogEntry) error {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	writer := clickhouse.NewBatchWriterWithFn(ctx, nil, cfg, flushFn)
+	defer writer.Close()
+
+	entry := logging.LogEntry{
+		TenantID:  "tenant-bench",
+		ClusterID: "cluster-bench",
+		Message:   "benchmark log line payload",
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = writer.Write(entry)
+		if i%1000 == 0 {
+			_ = writer.Flush(ctx)
+		}
+	}
+}
+
+func BenchmarkBatchWriter_FlushRetry(b *testing.B) {
+	cfg := clickhouse.BatchWriterConfig{
+		BatchSize:            10,
+		FlushInterval:        10 * time.Second,
+		ChannelCapacity:      10000,
+		RetryInitialInterval: 1 * time.Millisecond,
+	}
+	var callCount atomic.Int64
+	flushFn := func(ctx context.Context, batch []logging.LogEntry) error {
+		if callCount.Add(1)%2 == 1 {
+			return errors.New("transient flush failure")
+		}
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	writer := clickhouse.NewBatchWriterWithFn(ctx, nil, cfg, flushFn)
+	defer writer.Close()
+
+	entry := logging.LogEntry{
+		TenantID:  "tenant-bench",
+		ClusterID: "cluster-bench",
+		Message:   "benchmark retry payload",
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = writer.Write(entry)
+		if i%10 == 0 {
+			_ = writer.Flush(ctx)
+		}
+	}
+}
+
+func TestBatchWriter_FlushFailureRetriesZeroLoss(t *testing.T) {
+	var collectedLogs []logging.LogEntry
+	var mu sync.Mutex
+	var attemptCount atomic.Int64
+
+	// Fail first 2 attempts, succeed on the 3rd
+	flushFn := func(ctx context.Context, batch []logging.LogEntry) error {
+		attempt := attemptCount.Add(1)
+		if attempt <= 2 {
+			return errors.New("temporary clickhouse outage")
+		}
+		mu.Lock()
+		collectedLogs = append(collectedLogs, batch...)
+		mu.Unlock()
+		return nil
+	}
+
+	cfg := clickhouse.BatchWriterConfig{
+		BatchSize:       5,
+		FlushInterval:   100 * time.Millisecond,
+		ChannelCapacity: 50,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	writer := clickhouse.NewBatchWriterWithFn(ctx, nil, cfg, flushFn)
+
+	for i := 0; i < 5; i++ {
+		err := writer.Write(logging.LogEntry{
+			TenantID:  "tenant-zero-loss",
+			ClusterID: "cluster-zero-loss",
+			Message:   "message zero loss",
+		})
+		require.NoError(t, err)
+	}
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collectedLogs) == 5
+	}, 3*time.Second, 20*time.Millisecond)
+
+	err := writer.Close()
+	require.NoError(t, err)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, 5, len(collectedLogs))
+	require.GreaterOrEqual(t, attemptCount.Load(), int64(3))
+}
+
+func TestBatchWriter_MemoryBoundedUnderPersistentFailure(t *testing.T) {
+	persistentErr := errors.New("clickhouse connection refused")
+	flushFn := func(ctx context.Context, batch []logging.LogEntry) error {
+		return persistentErr
+	}
+
+	cfg := clickhouse.BatchWriterConfig{
+		BatchSize:       5,
+		FlushInterval:   30 * time.Millisecond,
+		BufferCap:       10,
+		ChannelCapacity: 100,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	writer := clickhouse.NewBatchWriterWithFn(ctx, nil, cfg, flushFn)
+
+	// Write 25 entries. BufferCap is 10, so 15 should be evicted.
+	for i := 0; i < 25; i++ {
+		err := writer.Write(logging.LogEntry{
+			TenantID:  "tenant-bound",
+			ClusterID: "cluster-bound",
+			Message:   "bounded log entry",
+		})
+		require.NoError(t, err)
+	}
+
+	require.Eventually(t, func() bool {
+		return writer.DroppedLogs() == 15
+	}, 3*time.Second, 20*time.Millisecond)
+
+	err := writer.Close()
+	require.Error(t, err)
+	require.Equal(t, int64(15), writer.DroppedLogs())
+}
+
+func TestBatchWriter_ShutdownSurfacesFlushError(t *testing.T) {
+	flushFn := func(ctx context.Context, batch []logging.LogEntry) error {
+		return errors.New("clickhouse disk full")
+	}
+
+	cfg := clickhouse.BatchWriterConfig{
+		BatchSize:       10,
+		FlushInterval:   10 * time.Second,
+		ChannelCapacity: 50,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	writer := clickhouse.NewBatchWriterWithFn(ctx, nil, cfg, flushFn)
+
+	for i := 0; i < 5; i++ {
+		err := writer.Write(logging.LogEntry{
+			TenantID:  "tenant-shutdown",
+			ClusterID: "cluster-shutdown",
+			Message:   "shutdown log entry",
+		})
+		require.NoError(t, err)
+	}
+
+	cancel() // Cancel context to test graceful shutdown flush error capture
+	err := writer.Close()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "clickhouse disk full")
+}
+
+
+
