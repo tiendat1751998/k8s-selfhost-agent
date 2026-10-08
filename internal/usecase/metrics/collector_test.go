@@ -2414,7 +2414,43 @@ func TestCollector_ScrapeAgent_DiskIO(t *testing.T) {
 	}
 }
 
+func TestCollector_RunCollection_OncePerInterval(t *testing.T) {
+	mockDocker := &mockDockerAPI{
+		info: system.Info{
+			ID:       "engine-test",
+			Name:     "test-host",
+			MemTotal: 4 * 1024 * 1024 * 1024,
+		},
+	}
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{},
+	}
+	broadcaster := &mockBroadcaster{}
+	interval := 30 * time.Millisecond
+	collector := NewCollector(
+		mockDocker,
+		hostRepo,
+		broadcaster,
+		zap.NewNop(),
+		WithInterval(interval),
+	)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
+	go collector.Start(ctx)
 
+	// Wait for approximately 2 intervals:
+	// t=0: initial collection (1)
+	// t=30ms: interval 1 (1)
+	// t=60ms: interval 2 (1)
+	// Deduplicated: at most 3 collections.
+	// Double collection bug: 1 + 2 + 2 = 5 collections!
+	time.Sleep(80 * time.Millisecond)
+	collector.Stop()
 
+	msgs := broadcaster.getMessages()
+	if len(msgs) > 3 {
+		t.Fatalf("expected at most 3 collections for 2 intervals (1 per interval + initial), got %d (double collection detected)", len(msgs))
+	}
+}

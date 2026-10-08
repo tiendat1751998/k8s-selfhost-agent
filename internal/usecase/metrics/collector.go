@@ -287,8 +287,6 @@ func (c *Collector) Start(ctx context.Context) {
 
 	c.runCollection(ctx)
 
-	go c.pollAgentHosts(ctx)
-
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
 
@@ -301,6 +299,9 @@ func (c *Collector) Start(ctx context.Context) {
 			c.logger.Info("Stopping metrics collector (stop requested)")
 			return
 		case <-ticker.C:
+			if c.computeHostRepo != nil {
+				c.scrapeAllAgents(ctx)
+			}
 			c.runCollection(ctx)
 		}
 	}
@@ -327,29 +328,6 @@ func (c *Collector) SetLastSnapshot(s *SystemOverview) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.lastSnapshot = s
-}
-
-
-// pollAgentHosts periodically polls all registered compute host agents.
-func (c *Collector) pollAgentHosts(ctx context.Context) {
-	if c.computeHostRepo == nil {
-		return
-	}
-
-	ticker := time.NewTicker(c.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-c.stopCh:
-			return
-		case <-ticker.C:
-			c.scrapeAllAgents(ctx)
-			c.runCollection(ctx)
-		}
-	}
 }
 
 func (c *Collector) scrapeAllAgents(ctx context.Context) {
