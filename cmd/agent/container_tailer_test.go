@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 
@@ -25,6 +26,7 @@ type mockDockerClientForTailer struct {
 	callCounts      map[string]int
 	lastLogsOptions map[string]container.LogsOptions
 	streamGenerators map[string]func(call int, opts container.LogsOptions) string
+	errGenerators    map[string]func(call int) error
 	binaryLogStreams map[string][]byte
 }
 
@@ -45,6 +47,12 @@ func (m *mockDockerClientForTailer) ContainerLogs(ctx context.Context, container
 	}
 	m.callCounts[containerID]++
 	m.lastLogsOptions[containerID] = options
+
+	if m.errGenerators != nil && m.errGenerators[containerID] != nil {
+		if err := m.errGenerators[containerID](m.callCounts[containerID]); err != nil {
+			return nil, err
+		}
+	}
 
 	if m.streamGenerators != nil && m.streamGenerators[containerID] != nil {
 		content := m.streamGenerators[containerID](m.callCounts[containerID], options)
@@ -348,5 +356,221 @@ func TestContainerTailer_MultiplexedStdCopy_ConcurrentNoDataRace(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 	tailer.Stop()
+}
+
+func TestContainerTailer_SeenAtLastTS_CappedOnTimestampFlood(t *testing.T) {
+	tailer := NewContainerTailer(nil, nil, slog.Default())
+	var lastTS time.Time
+	seenAtLastTS := make(map[string]bool)
+
+	var buf bytes.Buffer
+	const floodCount = 25000
+	for i := 0; i < floodCount; i++ {
+		buf.WriteString(fmt.Sprintf("2026-09-14T12:00:00.000000000Z message line %d\n", i))
+	}
+
+	reader := io.NopCloser(&buf)
+	tailer.readContainerLogStream(context.Background(), reader, "flood-svc", &lastTS, seenAtLastTS)
+
+	if len(seenAtLastTS) > 10000 {
+		t.Fatalf("expected seenAtLastTS to be capped <= 10000 on identical-timestamp flood, got %d", len(seenAtLastTS))
+	}
+	if len(seenAtLastTS) == 0 {
+		t.Fatalf("expected seenAtLastTS to retain recent entries, got 0")
+	}
+}
+
+func TestContainerTailer_BackoffDelaysToCapAndResetAfterSuccess(t *testing.T) {
+	tempDir := t.TempDir()
+	dict := logengine.NewLabelDictionary()
+	writer, err := logengine.NewWriter(tempDir, dict)
+	if err != nil {
+		t.Fatalf("failed to create log writer: %v", err)
+	}
+	defer writer.Close()
+
+	const containerID = "c_backoff_test"
+	mockCli := &mockDockerClientForTailer{
+		containers: []types.Container{
+			{
+				ID:    containerID,
+				Names: []string{"/backoff-svc"},
+				Labels: map[string]string{
+					"com.docker.compose.service": "backoff-svc",
+				},
+			},
+		},
+		errGenerators: map[string]func(call int) error{
+			containerID: func(call int) error {
+				if call <= 10 || call >= 12 {
+					return fmt.Errorf("simulated docker error on call %d", call)
+				}
+				return nil
+			},
+		},
+		streamGenerators: map[string]func(call int, opts container.LogsOptions) string{
+			containerID: func(call int, opts container.LogsOptions) string {
+				if call == 11 {
+					return "2026-09-14T12:00:00Z [INFO] stream success\n"
+				}
+				return ""
+			},
+		},
+	}
+
+	tailer := NewContainerTailer(mockCli, writer, slog.Default())
+	tailer.pollInterval = 50 * time.Millisecond
+	tailer.eofRetryInterval = 50 * time.Millisecond
+
+	// Inject deterministic exponential backoff (no random jitter for predictable progression)
+	tailer.newBackOffFn = func() backoff.BackOff {
+		bo := backoff.NewExponentialBackOff()
+		bo.InitialInterval = 200 * time.Millisecond
+		bo.Multiplier = 1.5
+		bo.MaxInterval = 5 * time.Second
+		bo.RandomizationFactor = 0
+		return bo
+	}
+
+	var recordedDelays []time.Duration
+	var delayMu sync.Mutex
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tailer.sleepFn = func(sCtx context.Context, d time.Duration) error {
+		delayMu.Lock()
+		recordedDelays = append(recordedDelays, d)
+		count := len(recordedDelays)
+		delayMu.Unlock()
+
+		if count >= 13 {
+			cancel()
+			return context.Canceled
+		}
+		return nil
+	}
+
+	tailer.Start(ctx)
+
+	delayMu.Lock()
+	delays := append([]time.Duration(nil), recordedDelays...)
+	delayMu.Unlock()
+
+	if len(delays) < 12 {
+		t.Fatalf("expected at least 12 recorded delays, got %d: %+v", len(delays), delays)
+	}
+
+	// 1. Initial delay should be 200ms
+	if delays[0] != 200*time.Millisecond {
+		t.Errorf("expected first retry delay 200ms, got %v", delays[0])
+	}
+
+	// 2. Delays should monotonically increase up to 5s cap
+	for i := 1; i < 9; i++ {
+		if delays[i] <= delays[i-1] && delays[i] < 5*time.Second {
+			t.Errorf("expected delay[%d] (%v) > delay[%d] (%v)", i, delays[i], i-1, delays[i-1])
+		}
+		if delays[i] > 5*time.Second {
+			t.Errorf("expected delay[%d] <= 5s cap, got %v", i, delays[i])
+		}
+	}
+
+	// 3. Delays at attempts 9 and 10 should be capped at 5s
+	if delays[8] != 5*time.Second {
+		t.Errorf("expected delay[8] to be capped at 5s, got %v", delays[8])
+	}
+	if delays[9] != 5*time.Second {
+		t.Errorf("expected delay[9] to be capped at 5s, got %v", delays[9])
+	}
+
+	// 4. After call 11 succeeds and hits EOF (sleeps eofRetryInterval 50ms),
+	// call 12 fails -> NextBackOff should be reset back to 200ms!
+	if delays[10] != 50*time.Millisecond {
+		t.Errorf("expected delay[10] to be EOF retry interval 50ms, got %v", delays[10])
+	}
+	if delays[11] != 200*time.Millisecond {
+		t.Errorf("expected delay[11] after reset to be initial interval 200ms, got %v", delays[11])
+	}
+	if delays[12] != 300*time.Millisecond {
+		t.Errorf("expected delay[12] after reset to increase to 300ms, got %v", delays[12])
+	}
+}
+
+type mockBackOffSpy struct {
+	nextCalls  int
+	resetCalls int
+}
+
+func (m *mockBackOffSpy) NextBackOff() time.Duration {
+	m.nextCalls++
+	return 100 * time.Millisecond
+}
+
+func (m *mockBackOffSpy) Reset() {
+	m.resetCalls++
+}
+
+func TestContainerTailer_BackoffResetInjectedSpy(t *testing.T) {
+	tempDir := t.TempDir()
+	dict := logengine.NewLabelDictionary()
+	writer, err := logengine.NewWriter(tempDir, dict)
+	if err != nil {
+		t.Fatalf("failed to create log writer: %v", err)
+	}
+	defer writer.Close()
+
+	const containerID = "c_spy_test"
+	mockCli := &mockDockerClientForTailer{
+		containers: []types.Container{
+			{
+				ID:    containerID,
+				Names: []string{"/spy-svc"},
+				Labels: map[string]string{
+					"com.docker.compose.service": "spy-svc",
+				},
+			},
+		},
+		errGenerators: map[string]func(call int) error{
+			containerID: func(call int) error {
+				if call == 1 {
+					return fmt.Errorf("initial error")
+				}
+				return nil
+			},
+		},
+		streamGenerators: map[string]func(call int, opts container.LogsOptions) string{
+			containerID: func(call int, opts container.LogsOptions) string {
+				return "2026-09-14T12:00:00Z [INFO] spy log\n"
+			},
+		},
+	}
+
+	tailer := NewContainerTailer(mockCli, writer, slog.Default())
+	tailer.pollInterval = 50 * time.Millisecond
+
+	spy := &mockBackOffSpy{}
+	tailer.newBackOffFn = func() backoff.BackOff {
+		return spy
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tailer.sleepFn = func(sCtx context.Context, d time.Duration) error {
+		if spy.resetCalls >= 1 {
+			cancel()
+			return context.Canceled
+		}
+		return nil
+	}
+
+	tailer.Start(ctx)
+
+	if spy.nextCalls == 0 {
+		t.Errorf("expected NextBackOff to be called on error")
+	}
+	if spy.resetCalls == 0 {
+		t.Errorf("expected Reset to be called upon successful stream")
+	}
 }
 
