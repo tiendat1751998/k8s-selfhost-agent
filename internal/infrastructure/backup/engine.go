@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"go.uber.org/zap"
@@ -32,6 +33,53 @@ func NewEngine(repo backup.Repository, driverRegistry *drivers.DriverRegistry, s
 	}
 }
 
+func (e *Engine) terminalCtx(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+}
+
+func (e *Engine) ReconcileStaleJobs(ctx context.Context) error {
+	if reconciler, ok := e.repo.(backup.StaleJobReconciler); ok {
+		return reconciler.ReconcileStaleJobs(ctx)
+	}
+	return nil
+}
+
+func (e *Engine) failJob(ctx context.Context, job *backup.BackupJob, reason string, targets ...backup.StorageTarget) {
+	job.Fail(reason)
+	termCtx, cancel := e.terminalCtx(ctx)
+	defer cancel()
+
+	for _, target := range targets {
+		if target == nil {
+			continue
+		}
+		if job.StoragePath != "" {
+			if delErr := target.Delete(termCtx, job.StoragePath); delErr != nil && !os.IsNotExist(delErr) {
+				logger.Get().Warn("failed to delete partial artifact", zap.String("path", job.StoragePath), zap.Error(delErr))
+			}
+		}
+		if job.LocalStoragePath != "" && job.LocalStoragePath != job.StoragePath {
+			if delErr := target.Delete(termCtx, job.LocalStoragePath); delErr != nil && !os.IsNotExist(delErr) {
+				logger.Get().Warn("failed to delete partial artifact", zap.String("path", job.LocalStoragePath), zap.Error(delErr))
+			}
+		}
+	}
+
+	if updateErr := e.repo.UpdateJob(termCtx, job); updateErr != nil {
+		logger.Get().Error("failed to update backup job status", zap.String("job_id", job.ID), zap.Error(updateErr))
+	}
+}
+
+func (e *Engine) failRestore(ctx context.Context, restore *backup.RestoreJob, reason string) {
+	restore.Fail(reason)
+	termCtx, cancel := e.terminalCtx(ctx)
+	defer cancel()
+
+	if updateErr := e.repo.UpdateRestore(termCtx, restore); updateErr != nil {
+		logger.Get().Error("failed to update restore job status", zap.String("restore_id", restore.ID), zap.Error(updateErr))
+	}
+}
+
 func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 	start := time.Now()
 
@@ -42,26 +90,22 @@ func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 	}
 
 	job.Start()
-	if updateErr := e.repo.UpdateJob(ctx, job); updateErr != nil {
+	termCtx, startCancel := e.terminalCtx(ctx)
+	if updateErr := e.repo.UpdateJob(termCtx, job); updateErr != nil {
 		logger.Get().Error("failed to update backup job status", zap.String("job_id", jobID), zap.Error(updateErr))
 	}
+	startCancel()
 
 	// 2. Load Policy & Storages
 	policy, err := e.repo.GetPolicy(ctx, job.PolicyID)
 	if err != nil {
-		job.Fail(fmt.Sprintf("failed to get policy: %v", err))
-		if updateErr := e.repo.UpdateJob(ctx, job); updateErr != nil {
-			logger.Get().Error("failed to update backup job status", zap.String("job_id", jobID), zap.Error(updateErr))
-		}
+		e.failJob(ctx, job, fmt.Sprintf("failed to get policy: %v", err))
 		return err
 	}
 
 	primaryStorage, err := e.repo.GetStorage(ctx, policy.StorageID)
 	if err != nil {
-		job.Fail(fmt.Sprintf("failed to get primary storage: %v", err))
-		if updateErr := e.repo.UpdateJob(ctx, job); updateErr != nil {
-			logger.Get().Error("failed to update backup job status", zap.String("job_id", jobID), zap.Error(updateErr))
-		}
+		e.failJob(ctx, job, fmt.Sprintf("failed to get primary storage: %v", err))
 		return err
 	}
 
@@ -76,19 +120,13 @@ func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 	// 3. Resolve Driver & Storage Targets
 	driver, err := e.driverRegistry.Get(policy.DBType)
 	if err != nil {
-		job.Fail(fmt.Sprintf("unsupported db driver %s: %v", policy.DBType, err))
-		if updateErr := e.repo.UpdateJob(ctx, job); updateErr != nil {
-			logger.Get().Error("failed to update backup job status", zap.String("job_id", jobID), zap.Error(updateErr))
-		}
+		e.failJob(ctx, job, fmt.Sprintf("unsupported db driver %s: %v", policy.DBType, err))
 		return err
 	}
 
 	primaryTarget, err := e.storageRegistry.Resolve(primaryStorage)
 	if err != nil {
-		job.Fail(fmt.Sprintf("resolving primary storage: %v", err))
-		if updateErr := e.repo.UpdateJob(ctx, job); updateErr != nil {
-			logger.Get().Error("failed to update backup job status", zap.String("job_id", jobID), zap.Error(updateErr))
-		}
+		e.failJob(ctx, job, fmt.Sprintf("resolving primary storage: %v", err))
 		return err
 	}
 
@@ -100,6 +138,8 @@ func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 	// 4. Build streaming pipes for dual storage upload (avoids OOM on large DBs)
 	timestampStr := time.Now().UTC().Format("20060102-150405")
 	filename := fmt.Sprintf("%s/%s_%s_%s.sql.zst", job.TenantID, policy.Name, policy.DBName, timestampStr)
+	job.StoragePath = filename
+	job.LocalStoragePath = filename
 
 	primaryPR, primaryPW := io.Pipe()
 	var secondaryPR *io.PipeReader
@@ -127,10 +167,7 @@ func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 
 	pipe, pipeCloser, err := dualsync.NewProcessingPipe(dualWriter, pipeConfig)
 	if err != nil {
-		job.Fail(fmt.Sprintf("initializing processing pipe: %v", err))
-		if updateErr := e.repo.UpdateJob(ctx, job); updateErr != nil {
-			logger.Get().Error("failed to update backup job status", zap.String("job_id", jobID), zap.Error(updateErr))
-		}
+		e.failJob(ctx, job, fmt.Sprintf("initializing processing pipe: %v", err), primaryTarget, secondaryTarget)
 		return err
 	}
 
@@ -149,15 +186,38 @@ func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 		"checksum": "",
 	}
 
+	ctxDoneWatch := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			if closeErr := primaryPR.CloseWithError(ctx.Err()); closeErr != nil {
+				logger.Get().Warn("failed to close primary pipe reader on cancel", zap.Error(closeErr))
+			}
+			if secondaryPR != nil {
+				if closeErr := secondaryPR.CloseWithError(ctx.Err()); closeErr != nil {
+					logger.Get().Warn("failed to close secondary pipe reader on cancel", zap.Error(closeErr))
+				}
+			}
+		case <-ctxDoneWatch:
+		}
+	}()
+	defer close(ctxDoneWatch)
+
 	var dumpErr error
 	dumpDone := make(chan struct{})
 	go func() {
 		defer close(dumpDone)
 		_, dumpErr = driver.Dump(ctx, dumpOpts, pipeCloser)
-		_ = pipeCloser.Close()
-		_ = primaryPW.Close()
+		if closeErr := pipeCloser.Close(); closeErr != nil {
+			logger.Get().Warn("failed to close pipe closer", zap.Error(closeErr))
+		}
+		if closeErr := primaryPW.Close(); closeErr != nil {
+			logger.Get().Warn("failed to close primary pipe writer", zap.Error(closeErr))
+		}
 		if secondaryPW != nil {
-			_ = secondaryPW.Close()
+			if closeErr := secondaryPW.Close(); closeErr != nil {
+				logger.Get().Warn("failed to close secondary pipe writer", zap.Error(closeErr))
+			}
 		}
 	}()
 
@@ -178,20 +238,29 @@ func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 		<-secDone
 	}
 
-	if dumpErr != nil {
-		job.Fail(fmt.Sprintf("database dump failed: %v", dumpErr))
-		if updateErr := e.repo.UpdateJob(ctx, job); updateErr != nil {
-			logger.Get().Error("failed to update backup job status", zap.String("job_id", jobID), zap.Error(updateErr))
+	if dumpErr != nil || uploadErr != nil || secErr != nil || ctx.Err() != nil {
+		err := dumpErr
+		if err == nil {
+			err = uploadErr
 		}
-		return dumpErr
-	}
+		if err == nil {
+			err = secErr
+		}
+		if err == nil {
+			err = ctx.Err()
+		}
 
-	if uploadErr != nil {
-		job.Fail(fmt.Sprintf("primary storage upload failed: %v", uploadErr))
-		if updateErr := e.repo.UpdateJob(ctx, job); updateErr != nil {
-			logger.Get().Error("failed to update backup job status", zap.String("job_id", jobID), zap.Error(updateErr))
+		reason := fmt.Sprintf("database dump failed: %v", err)
+		if ctx.Err() != nil {
+			reason = fmt.Sprintf("backup cancelled: %v", ctx.Err())
+		} else if uploadErr != nil {
+			reason = fmt.Sprintf("primary storage upload failed: %v", uploadErr)
+		} else if secErr != nil {
+			reason = fmt.Sprintf("secondary storage upload failed: %v", secErr)
 		}
-		return uploadErr
+
+		e.failJob(ctx, job, reason, primaryTarget, secondaryTarget)
+		return err
 	}
 
 	rawSize, compSize, checksum := pipe.Summary()
@@ -204,11 +273,18 @@ func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 
 	// 8. Verify by re-downloading and comparing checksum
 	verificationStatus := "unverified"
+	if ctx.Err() != nil {
+		e.failJob(ctx, job, fmt.Sprintf("backup cancelled during verification: %v", ctx.Err()), primaryTarget, secondaryTarget)
+		return ctx.Err()
+	}
+
 	downloadStream, dlErr := primaryTarget.DownloadStream(ctx, primaryPath)
 	if dlErr == nil {
 		verifyHasher := sha256.New()
 		_, copyErr := io.Copy(verifyHasher, downloadStream)
-		_ = downloadStream.Close()
+		if closeErr := downloadStream.Close(); closeErr != nil {
+			logger.Get().Warn("failed to close download stream", zap.Error(closeErr))
+		}
 		if copyErr == nil {
 			downloadChecksum := hex.EncodeToString(verifyHasher.Sum(nil))
 			if downloadChecksum == checksum {
@@ -217,6 +293,11 @@ func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 				verificationStatus = "checksum_mismatch"
 			}
 		}
+	}
+
+	if ctx.Err() != nil {
+		e.failJob(ctx, job, fmt.Sprintf("backup cancelled after verification: %v", ctx.Err()), primaryTarget, secondaryTarget)
+		return ctx.Err()
 	}
 
 	// 9. Update Job with Success
@@ -229,7 +310,9 @@ func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 		CheckedAt:  time.Now().UTC(),
 	})
 
-	return e.repo.UpdateJob(ctx, job)
+	termCtx, compCancel := e.terminalCtx(ctx)
+	defer compCancel()
+	return e.repo.UpdateJob(termCtx, job)
 }
 
 func (e *Engine) ExecuteRestore(ctx context.Context, restoreID string) error {
@@ -239,52 +322,39 @@ func (e *Engine) ExecuteRestore(ctx context.Context, restoreID string) error {
 	}
 
 	restore.Start()
-	if updateErr := e.repo.UpdateRestore(ctx, restore); updateErr != nil {
+	termCtx, startCancel := e.terminalCtx(ctx)
+	if updateErr := e.repo.UpdateRestore(termCtx, restore); updateErr != nil {
 		logger.Get().Error("failed to update restore job status", zap.String("restore_id", restoreID), zap.Error(updateErr))
 	}
+	startCancel()
 
 	job, err := e.repo.GetJob(ctx, restore.BackupJobID)
 	if err != nil {
-		restore.Fail(fmt.Sprintf("loading backup job: %v", err))
-		if updateErr := e.repo.UpdateRestore(ctx, restore); updateErr != nil {
-			logger.Get().Error("failed to update restore job status", zap.String("restore_id", restoreID), zap.Error(updateErr))
-		}
+		e.failRestore(ctx, restore, fmt.Sprintf("loading backup job: %v", err))
 		return err
 	}
 
 	policy, err := e.repo.GetPolicy(ctx, job.PolicyID)
 	if err != nil {
-		restore.Fail(fmt.Sprintf("loading backup policy: %v", err))
-		if updateErr := e.repo.UpdateRestore(ctx, restore); updateErr != nil {
-			logger.Get().Error("failed to update restore job status", zap.String("restore_id", restoreID), zap.Error(updateErr))
-		}
+		e.failRestore(ctx, restore, fmt.Sprintf("loading backup policy: %v", err))
 		return err
 	}
 
 	storageModel, err := e.repo.GetStorage(ctx, policy.StorageID)
 	if err != nil {
-		restore.Fail(fmt.Sprintf("loading storage config: %v", err))
-		if updateErr := e.repo.UpdateRestore(ctx, restore); updateErr != nil {
-			logger.Get().Error("failed to update restore job status", zap.String("restore_id", restoreID), zap.Error(updateErr))
-		}
+		e.failRestore(ctx, restore, fmt.Sprintf("loading storage config: %v", err))
 		return err
 	}
 
 	driver, err := e.driverRegistry.Get(policy.DBType)
 	if err != nil {
-		restore.Fail(fmt.Sprintf("resolving driver: %v", err))
-		if updateErr := e.repo.UpdateRestore(ctx, restore); updateErr != nil {
-			logger.Get().Error("failed to update restore job status", zap.String("restore_id", restoreID), zap.Error(updateErr))
-		}
+		e.failRestore(ctx, restore, fmt.Sprintf("resolving driver: %v", err))
 		return err
 	}
 
 	storageTarget, err := e.storageRegistry.Resolve(storageModel)
 	if err != nil {
-		restore.Fail(fmt.Sprintf("resolving storage target: %v", err))
-		if updateErr := e.repo.UpdateRestore(ctx, restore); updateErr != nil {
-			logger.Get().Error("failed to update restore job status", zap.String("restore_id", restoreID), zap.Error(updateErr))
-		}
+		e.failRestore(ctx, restore, fmt.Sprintf("resolving storage target: %v", err))
 		return err
 	}
 
@@ -297,13 +367,14 @@ func (e *Engine) ExecuteRestore(ctx context.Context, restoreID string) error {
 		}
 	}
 	if err != nil {
-		restore.Fail(fmt.Sprintf("downloading backup stream: %v", err))
-		if updateErr := e.repo.UpdateRestore(ctx, restore); updateErr != nil {
-			logger.Get().Error("failed to update restore job status", zap.String("restore_id", restoreID), zap.Error(updateErr))
-		}
+		e.failRestore(ctx, restore, fmt.Sprintf("downloading backup stream: %v", err))
 		return err
 	}
-	defer srcStream.Close()
+	defer func() {
+		if closeErr := srcStream.Close(); closeErr != nil {
+			logger.Get().Warn("failed to close restore source stream", zap.Error(closeErr))
+		}
+	}()
 
 	// Decompress and Decrypt
 	var encKey []byte
@@ -313,13 +384,14 @@ func (e *Engine) ExecuteRestore(ctx context.Context, restoreID string) error {
 
 	decompStream, err := dualsync.NewDecompressionPipe(srcStream, encKey, policy.EncryptionEnabled && len(encKey) == 32)
 	if err != nil {
-		restore.Fail(fmt.Sprintf("initializing decompression stream: %v", err))
-		if updateErr := e.repo.UpdateRestore(ctx, restore); updateErr != nil {
-			logger.Get().Error("failed to update restore job status", zap.String("restore_id", restoreID), zap.Error(updateErr))
-		}
+		e.failRestore(ctx, restore, fmt.Sprintf("initializing decompression stream: %v", err))
 		return err
 	}
-	defer decompStream.Close()
+	defer func() {
+		if closeErr := decompStream.Close(); closeErr != nil {
+			logger.Get().Warn("failed to close decompression stream", zap.Error(closeErr))
+		}
+	}()
 
 	// Execute Restore
 	restoreOpts := backup.RestoreOptions{
@@ -333,13 +405,17 @@ func (e *Engine) ExecuteRestore(ctx context.Context, restoreID string) error {
 	}
 
 	if err := driver.Restore(ctx, restoreOpts, decompStream); err != nil {
-		restore.Fail(fmt.Sprintf("database restore execution failed: %v", err))
-		if updateErr := e.repo.UpdateRestore(ctx, restore); updateErr != nil {
-			logger.Get().Error("failed to update restore job status", zap.String("restore_id", restoreID), zap.Error(updateErr))
+		reason := fmt.Sprintf("database restore execution failed: %v", err)
+		if ctx.Err() != nil {
+			reason = fmt.Sprintf("database restore cancelled: %v", ctx.Err())
 		}
+		e.failRestore(ctx, restore, reason)
 		return err
 	}
 
 	restore.Complete(fmt.Sprintf("Restore completed at %s. Source backup checksum: %s.", time.Now().UTC().Format(time.RFC3339), job.ChecksumSHA256))
-	return e.repo.UpdateRestore(ctx, restore)
+	termCtx, compCancel := e.terminalCtx(ctx)
+	defer compCancel()
+	return e.repo.UpdateRestore(termCtx, restore)
 }
+

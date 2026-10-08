@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -389,6 +390,21 @@ func (r *BackupRepo) UpdateRestore(ctx context.Context, restore *backup.RestoreJ
 	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "updating restore job")
+	}
+	return nil
+}
+
+func (r *BackupRepo) ReconcileStaleJobs(ctx context.Context) error {
+	query := `
+		UPDATE backup_jobs 
+		SET status = $1, error_message = $2, updated_at = $3
+		WHERE status = $4`
+
+	query, args := BuildTenantQuery(ctx, query, "failed", "interrupted by restart", time.Now().UTC(), "running")
+
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
+	if err != nil {
+		return errors.Wrap(err, "reconciling stale backup jobs")
 	}
 	return nil
 }
