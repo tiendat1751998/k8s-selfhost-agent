@@ -27,57 +27,24 @@ const metricsSummary = {
 
 const clusters = [
   {
-    id: 'production-k8s',
-    name: 'production-k8s',
-    group: 'production',
-    region: 'us-east-1',
-    provider: 'baremetal',
-    orchestrator: 'kubernetes',
-    status: 'active',
-    version: 'v1.31.1',
-    nodes: 8,
-    health_status: 'healthy',
-    discovered_resources: {
-      namespaces: ['default', 'kube-system', 'production', 'monitoring'],
-      crd_count: 24,
-      api_server_latency: '12ms',
-    },
+    id: 'production-k8s', name: 'production-k8s', group: 'production', region: 'us-east-1',
+    provider: 'baremetal', orchestrator: 'kubernetes', status: 'active', version: 'v1.31.1',
+    nodes: 8, health_status: 'healthy',
+    discovered_resources: { namespaces: ['default', 'kube-system', 'production', 'monitoring'], crd_count: 24, api_server_latency: '12ms' },
     created_at: '2026-01-15T00:00:00Z',
   },
   {
-    id: 'staging-k8s',
-    name: 'staging-k8s',
-    group: 'staging',
-    region: 'us-west-2',
-    provider: 'baremetal',
-    orchestrator: 'kubernetes',
-    status: 'active',
-    version: 'v1.31.1',
-    nodes: 3,
-    health_status: 'healthy',
-    discovered_resources: {
-      namespaces: ['default', 'kube-system', 'staging'],
-      crd_count: 18,
-      api_server_latency: '18ms',
-    },
+    id: 'staging-k8s', name: 'staging-k8s', group: 'staging', region: 'us-west-2',
+    provider: 'baremetal', orchestrator: 'kubernetes', status: 'active', version: 'v1.31.1',
+    nodes: 3, health_status: 'healthy',
+    discovered_resources: { namespaces: ['default', 'kube-system', 'staging'], crd_count: 18, api_server_latency: '18ms' },
     created_at: '2026-02-01T00:00:00Z',
   },
   {
-    id: 'edge-worker-01',
-    name: 'edge-worker-01',
-    group: 'edge',
-    region: 'eu-central-1',
-    provider: 'k3s',
-    orchestrator: 'kubernetes',
-    status: 'active',
-    version: 'v1.30.3+k3s1',
-    nodes: 2,
-    health_status: 'healthy',
-    discovered_resources: {
-      namespaces: ['default', 'kube-system', 'iot-edge'],
-      crd_count: 8,
-      api_server_latency: '25ms',
-    },
+    id: 'edge-worker-01', name: 'edge-worker-01', group: 'edge', region: 'eu-central-1',
+    provider: 'k3s', orchestrator: 'kubernetes', status: 'active', version: 'v1.30.3+k3s1',
+    nodes: 2, health_status: 'healthy',
+    discovered_resources: { namespaces: ['default', 'kube-system', 'iot-edge'], crd_count: 8, api_server_latency: '25ms' },
     created_at: '2026-03-10T00:00:00Z',
   },
 ]
@@ -290,6 +257,22 @@ const systemOverview = {
   collected_at: new Date().toISOString(),
 }
 
+const mockDeployments = [
+  { id: 'dep-ingress-traefik', name: 'ingress-traefik', team: 'Platform Ops', env: 'production', image: 'traefik:v3.1.2', target: 'production-k8s', namespace: 'kube-system', type: 'kubernetes', replicas: 3, readyReplicas: 3, status: 'healthy', cpu: '150m', memory: '256MiB', port: 443, strategy: 'RollingUpdate' },
+  { id: 'dep-api-gateway', name: 'api-gateway', team: 'Core API', env: 'production', image: 'envoyproxy/envoy:v1.31.0', target: 'production-k8s', namespace: 'production', type: 'kubernetes', replicas: 4, readyReplicas: 4, status: 'healthy', cpu: '320m', memory: '512MiB', port: 8080, strategy: 'Canary', canaryWeight: 20, canaryVersion: 'envoyproxy/envoy:v1.32.0' },
+  { id: 'dep-auth-service', name: 'auth-service', team: 'Security Team', env: 'production', image: 'auth-service:v1.18.4', target: 'production-k8s', namespace: 'production', type: 'kubernetes', replicas: 2, readyReplicas: 2, status: 'healthy', cpu: '180m', memory: '384MiB', port: 9090, strategy: 'BlueGreen', blueGreenActive: 'blue' },
+  { id: 'dep-redis-master', name: 'redis-master', team: 'Data Infra', env: 'production', image: 'redis:7.2-alpine', target: 'staging-k8s', namespace: 'staging', type: 'kubernetes', replicas: 1, readyReplicas: 1, status: 'healthy', cpu: '90m', memory: '192MiB', port: 6379, strategy: 'RollingUpdate' },
+  { id: 'dep-postgres-operator', name: 'postgres-operator', team: 'Database Ops', env: 'production', image: 'ghcr.io/zalando/postgres-operator:v1.12.0', target: 'production-k8s', namespace: 'production', type: 'kubernetes', replicas: 2, readyReplicas: 2, status: 'healthy', cpu: '210m', memory: '420MiB', port: 5432, strategy: 'RollingUpdate' },
+]
+
+const mockDockerServices = [
+  { id: 'svc-telemetry-relay', name: 'telemetry-relay', image: 'fluent-bit:3.1', replicas: 2, ports: ['2020:2020'], updated_at: '2026-10-06T00:00:00Z' },
+]
+
+const mockDockerContainers = [
+  { id: 'c-edge-prom', name: 'prometheus-node-exporter', image: 'prom/node-exporter:v1.8.2', status: 'Up 12 days', state: 'running', created: '2026-09-24T00:00:00Z' },
+]
+
 // 2. Response Helpers
 function sendJson(res, statusCode, data) {
   const payload = JSON.stringify(data)
@@ -420,6 +403,20 @@ export function createMockServer() {
       pathname === '/overview/nodes'
     ) {
       return sendJson(res, 200, { data: systemOverview.nodes })
+    }
+
+    // Deployments & Workloads
+    if (pathname === '/api/v1/deployments' || pathname === '/api/deployments' || pathname === '/deployments') {
+      return sendJson(res, 200, { data: mockDeployments, total: mockDeployments.length })
+    }
+
+    // Docker Services & Containers
+    if (pathname === '/api/v1/docker/services' || pathname === '/api/docker/services' || pathname === '/docker/services') {
+      return sendJson(res, 200, { data: mockDockerServices, total: mockDockerServices.length })
+    }
+
+    if (pathname === '/api/v1/docker/containers' || pathname === '/api/docker/containers' || pathname === '/docker/containers') {
+      return sendJson(res, 200, { data: mockDockerContainers, total: mockDockerContainers.length })
     }
 
     // Fallback for other GET / POST API calls

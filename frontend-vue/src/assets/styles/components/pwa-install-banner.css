@@ -207,12 +207,63 @@
   transform: translateY(20px) scale(0.96);
 }
 
+.title-short,
+.desc-short,
+.btn-text-short {
+  display: none;
+}
+
 @media (max-width: 640px) {
+  .title-full,
+  .desc-full,
+  .btn-text-full {
+    display: none;
+  }
+  .title-short,
+  .desc-short,
+  .btn-text-short {
+    display: inline;
+  }
   .pwa-install-banner {
-    bottom: calc(64px + var(--sab) + 12px);
-    right: 12px;
-    left: 12px;
-    width: calc(100% - 24px);
+    bottom: calc(52px + var(--sab, env(safe-area-inset-bottom, 0px)) + 8px);
+    right: 8px;
+    left: 8px;
+    width: calc(100% - 16px);
     max-width: none;
+    border-radius: 12px;
+  }
+  .banner-content {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .banner-icon-box {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+  }
+  .banner-icon {
+    font-size: 16px;
+  }
+  .banner-title {
+    font-size: 12px;
+  }
+  .banner-desc {
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .banner-actions {
+    gap: 6px;
+  }
+  .btn-install {
+    padding: 6px 10px;
+    font-size: 11px;
+    border-radius: 6px;
+  }
+  .btn-dismiss {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
   }
 }
