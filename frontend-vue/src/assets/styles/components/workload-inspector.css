@@ -271,3 +271,9 @@
   background: var(--accent-cyan);
   box-shadow: 0 0 6px var(--accent-cyan);
 }
+
+@media (max-width: 640px) {
+  .inspector-quick-actions {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

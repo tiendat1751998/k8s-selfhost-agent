@@ -218,6 +218,7 @@ const ALIAS_MAP: Record<string, string> = {
   gear: 'sliders',
   cog: 'sliders',
   options: 'sliders',
+  'refresh-cw': 'refresh',
   link: 'git-branch',
   cluster: 'anchor',
   k8s: 'anchor',
