@@ -161,7 +161,7 @@ async function onCreateApp(payload: DeploymentApp) {
 
 <template>
   <div class="view-container animate-fade-in">
-    <!-- Compact 44px Mobile Command Bar (<768px) -->
+    <!-- Compact 36px Mobile Command Bar (<768px) with Inline Telemetry -->
     <div class="mobile-command-bar">
       <div class="mobile-search-compact-wrap">
         <span class="mobile-search-ico"><BaseIcon name="search" size="xs" /></span>
@@ -174,8 +174,10 @@ async function onCreateApp(payload: DeploymentApp) {
         <button v-if="searchQuery" type="button" class="mobile-search-clear" @click="searchQuery = ''"><BaseIcon name="x" size="xs" /></button>
       </div>
 
-      <div class="mobile-compact-badge font-mono" title="Total workloads and ready pods">
-        {{ totalWorkloads }} Workloads • {{ readyReplicas }}/{{ totalReplicas }} Ready
+      <div class="mobile-telemetry-pill font-mono" :title="`${totalWorkloads} workloads · ${readyReplicas}/${totalReplicas} pods · ${healthyCount} healthy`">
+        <span class="pill-pods">{{ readyReplicas }}/{{ totalReplicas }} pods</span>
+        <span class="pill-sep">·</span>
+        <span class="pill-ok">{{ healthyCount }} ok</span>
       </div>
 
       <button
@@ -185,7 +187,7 @@ async function onCreateApp(payload: DeploymentApp) {
         @click="showMobileFilters = !showMobileFilters"
         title="Toggle Filter Options"
       >
-        <BaseIcon name="sliders" size="xs" /> Filters
+        <BaseIcon name="sliders" size="xs" /> <span class="filter-btn-text">Filters</span>
       </button>
 
       <button
@@ -195,15 +197,6 @@ async function onCreateApp(payload: DeploymentApp) {
         @click="showCreateModal = true; selectedTemplate = null"
       >+
       </button>
-    </div>
-
-    <!-- Mobile Micro-Telemetry Strip (<640px) -->
-    <div class="micro-telemetry-strip font-mono">
-      <span><BaseIcon name="play" size="xs" /> {{ totalWorkloads }} workloads</span>
-      <span class="telemetry-sep">·</span>
-      <span>{{ readyReplicas }}/{{ totalReplicas }} pods</span>
-      <span class="telemetry-sep">·</span>
-      <span><BaseIcon name="shield" size="xs" /> {{ healthyCount }} healthy</span>
     </div>
 
     <!-- Mobile Expandable Filter Strip Accordion (<768px) -->
