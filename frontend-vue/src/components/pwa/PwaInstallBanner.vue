@@ -86,10 +86,16 @@ async function handleInstallClick() {
 
         <div class="banner-text">
           <div class="banner-title-row">
-            <span class="banner-title">Install K8sControl App</span>
+            <span class="banner-title">
+              <span class="title-full">Install K8sControl App</span>
+              <span class="title-short">Install App</span>
+            </span>
             <span class="banner-tag font-mono">PWA</span>
           </div>
-          <p class="banner-desc">Run as standalone desktop &amp; mobile app with offline shell</p>
+          <p class="banner-desc">
+            <span class="desc-full">Run as standalone desktop &amp; mobile app with offline shell</span>
+            <span class="desc-short">Standalone app with offline shell</span>
+          </p>
         </div>
 
         <div class="banner-actions">
@@ -98,7 +104,9 @@ async function handleInstallClick() {
             @click="handleInstallClick" 
             title="Install K8sControl to your device"
           >
-            <BaseIcon name="download" size="xs" /> <span>Install Now</span>
+            <BaseIcon name="download" size="xs" />
+            <span class="btn-text-full">Install Now</span>
+            <span class="btn-text-short">Install</span>
           </button>
           <button 
             class="btn-dismiss" 
