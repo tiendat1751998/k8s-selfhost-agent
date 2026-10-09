@@ -52,6 +52,8 @@ export interface DeploymentApp {
   paused?: boolean
   node?: string
   created?: string
+  restarts?: number
+  age?: string
   // Resource allocations
   cpuLimit?: string
   cpuReservation?: string
@@ -150,6 +152,8 @@ export const deploymentsApi = {
         availableReplicas: d.availableReplicas !== undefined ? d.availableReplicas : d.replicas,
         updatedReplicas: d.updatedReplicas !== undefined ? d.updatedReplicas : d.replicas,
         readyReplicas: d.readyReplicas !== undefined ? d.readyReplicas : (d.status === 'healthy' ? d.replicas : 0),
+        restarts: d.restarts !== undefined ? d.restarts : ((d as any).restart_count ?? 0),
+        age: d.age || (d as any).uptime || '2d',
       }))
     } catch {
       return []
