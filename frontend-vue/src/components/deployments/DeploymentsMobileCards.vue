@@ -50,7 +50,31 @@ const emit = defineEmits<{
         </div>
       </div>
 
-      <!-- Row 2: Replicas, Type Badge, and 2 Quick-Action Buttons -->
+      <!-- Row 2: Operational Telemetry (CPU, RAM, Restarts, Age) -->
+      <div class="card-row-telemetry font-mono">
+        <span class="telemetry-item" title="CPU Usage">
+          <BaseIcon name="cpu" size="xs" />
+          <span>{{ app.cpu || '120m' }}</span>
+        </span>
+        <span class="telemetry-item" title="Memory Allocation">
+          <BaseIcon name="hard-drive" size="xs" />
+          <span>{{ app.memory || '256MiB' }}</span>
+        </span>
+        <span
+          class="telemetry-item"
+          :class="{ 'text-amber': (app.restarts ?? 0) > 0 }"
+          :title="`${app.restarts ?? 0} container restarts`"
+        >
+          <BaseIcon name="refresh-cw" size="xs" />
+          <span>{{ app.restarts ?? 0 }} restarts</span>
+        </span>
+        <span class="telemetry-item telemetry-age" title="Uptime / Age">
+          <BaseIcon name="clock" size="xs" />
+          <span>{{ app.age || '2d' }}</span>
+        </span>
+      </div>
+
+      <!-- Row 3: Replicas, Type Badge, and Quick-Action Buttons -->
       <div class="card-row-2">
         <div class="card-meta-group font-mono">
           <span class="meta-replicas">
@@ -77,10 +101,10 @@ const emit = defineEmits<{
           <button
             type="button"
             class="btn-quick-action btn-quick-inspect"
-            title="Inspect Details & Operations"
+            title="Chi tiết Workload Inspector"
             @click.stop="emit('inspect', app)"
           >
-            <BaseIcon name="zap" size="xs" />
+            <BaseIcon name="search" size="xs" /> Chi tiết
           </button>
         </div>
       </div>

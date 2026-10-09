@@ -1,6 +1,6 @@
 @import './sidebar-rail.css';
 
-:root { --mobile-hud-height: 48px; }
+:root { --mobile-hud-height: 42px; }
 .app-layout {
   display: flex; width: 100vw; max-width: 100vw; min-height: 100vh;
   background-color: var(--bg-app); overflow-x: clip;
@@ -369,8 +369,8 @@
     justify-content: flex-start !important; width: 100% !important; height: auto !important; padding: 8px 10px !important;
   }
   .sidebar.sidebar-open .nav-menu { padding: 8px 12px !important; }
-  .top-hud { padding: 0 12px; gap: 8px; height: var(--mobile-hud-height, 48px); min-height: var(--mobile-hud-height, 48px); max-height: var(--mobile-hud-height, 48px); }
-  .hud-left { display: flex !important; align-items: center; gap: 10px; flex: 1; min-width: 0 !important; width: auto !important; }
+  .top-hud { padding: 0 12px; gap: 8px; height: 42px; min-height: 42px; max-height: 42px; }
+  .hud-left { padding-left: 0 !important; display: flex !important; align-items: center; gap: 10px; flex: 1; min-width: 0 !important; width: auto !important; }
   .hud-center { display: none !important; }
   .hud-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .tenant-selector-wrap { display: none !important; }
@@ -379,8 +379,8 @@
   .command-search-btn { display: none !important; }
   .hud-mobile-brand { display: flex !important; }
   .mobile-search-btn { display: inline-flex !important; }
-  .page-container { overflow: visible; padding: 12px 12px 80px; }
-  .page-container.route-logs { padding: 4px 0 calc(50px + var(--sab, env(safe-area-inset-bottom, 0px))) 0; overflow: hidden; height: calc(100vh - 48px); display: flex; flex-direction: column; }
+  .page-container { overflow: visible; padding: 6px 12px 80px; }
+  .page-container.route-logs { padding: 4px 0 calc(50px + var(--sab, env(safe-area-inset-bottom, 0px))) 0; overflow: hidden; height: calc(100vh - 42px); display: flex; flex-direction: column; }
   .mobile-bottom-bar {
     display: flex; position: fixed;
     bottom: 0; left: 0;
