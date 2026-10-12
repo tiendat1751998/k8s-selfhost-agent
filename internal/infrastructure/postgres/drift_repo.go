@@ -12,9 +12,9 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/drift"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	"go.uber.org/zap"
 )
-
 
 // DriftRepo implements drift.Repository using PostgreSQL.
 type DriftRepo struct {
@@ -65,8 +65,8 @@ func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
 
 		if actualReplicas != expectedReplicas {
 			var exists bool
-			err := r.getDB(ctx).QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM drift_records WHERE cluster = $1 AND resource = $2 AND status = 'drifted')",
-				"cls-dev-local", s.Spec.Name).Scan(&exists)
+			checkQuery, checkArgs := BuildTenantQuery(ctx, "SELECT EXISTS(SELECT 1 FROM drift_records WHERE cluster = $1 AND resource = $2 AND status = 'drifted')", "cls-dev-local", s.Spec.Name)
+			err := r.getDB(ctx).QueryRow(ctx, checkQuery, checkArgs...).Scan(&exists)
 			if err != nil {
 				logger.Get().Error("failed to check if drift record exists", zap.Error(err))
 				continue
@@ -93,8 +93,8 @@ func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
 				}
 			}
 		} else {
-			_, err := r.getDB(ctx).Exec(ctx, "UPDATE drift_records SET status = 'in_sync' WHERE cluster = $1 AND resource = $2 AND status = 'drifted'",
-				"cls-dev-local", s.Spec.Name)
+			updateQuery, updateArgs := BuildTenantQuery(ctx, "UPDATE drift_records SET status = 'in_sync' WHERE cluster = $1 AND resource = $2 AND status = 'drifted'", "cls-dev-local", s.Spec.Name)
+			_, err := r.getDB(ctx).Exec(ctx, updateQuery, updateArgs...)
 			if err != nil {
 				logger.Get().Error("failed to update drift status to in_sync", zap.Error(err))
 			}
@@ -123,13 +123,15 @@ func (r *DriftRepo) List(ctx context.Context, cluster string, status *drift.Drif
 		idx++
 	}
 
+	countQuery, countArgs := BuildTenantQuery(ctx, countQuery, args...)
 	var total int
-	if err := r.getDB(ctx).QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+	if err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, errors.Wrap(err, "counting drift records")
 	}
 
 	selectQuery := query + fmt.Sprintf(" ORDER BY detected_at DESC LIMIT $%d OFFSET $%d", idx, idx+1)
 	selectArgs := append(args, limit, offset)
+	selectQuery, selectArgs = BuildTenantQuery(ctx, selectQuery, selectArgs...)
 
 	rows, err := r.getDB(ctx).Query(ctx, selectQuery, selectArgs...)
 	if err != nil {
@@ -149,14 +151,19 @@ func (r *DriftRepo) List(ctx context.Context, cluster string, status *drift.Drif
 }
 
 func (r *DriftRepo) Create(ctx context.Context, d *drift.DriftRecord) error {
-	query := `INSERT INTO drift_records (cluster, namespace, resource, resource_kind, expected_state, actual_state, diff, status, detected_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
+	query := `INSERT INTO drift_records (cluster, namespace, resource, resource_kind, expected_state, actual_state, diff, status, detected_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id`
 
 	err := r.getDB(ctx).QueryRow(ctx, query,
 		d.Cluster, d.Namespace, d.Resource, d.ResourceKind,
 		d.ExpectedState, d.ActualState, d.Diff,
-		string(d.Status), d.DetectedAt,
+		string(d.Status), d.DetectedAt, tenantID,
 	).Scan(&d.ID)
 	if err != nil {
 		return errors.Wrap(err, "inserting drift record")
@@ -165,7 +172,8 @@ func (r *DriftRepo) Create(ctx context.Context, d *drift.DriftRecord) error {
 }
 
 func (r *DriftRepo) Resolve(ctx context.Context, id string) error {
-	_, err := r.getDB(ctx).Exec(ctx, `UPDATE drift_records SET status = 'in_sync' WHERE id = $1`, id)
+	query, args := BuildTenantQuery(ctx, `UPDATE drift_records SET status = 'in_sync' WHERE id = $1`, id)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "resolving drift record")
 	}
