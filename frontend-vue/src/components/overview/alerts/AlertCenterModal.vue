@@ -192,6 +192,6 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeyDown))
   />
 </template>
 
-<style scoped>
+<style>
 @import '../../../assets/styles/components/alert-center.css';
 </style>

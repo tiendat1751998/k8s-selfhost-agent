@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { NodeMetrics } from '../../../api/overview'
 
 defineProps<{ node: NodeMetrics }>()
@@ -80,7 +80,3 @@ function formatIoRate(bytesPerSec?: number): string {
     </div>
   </div>
 </template>
-
-<style scoped>
-@import '../../../assets/styles/views/overview.css';
-</style>

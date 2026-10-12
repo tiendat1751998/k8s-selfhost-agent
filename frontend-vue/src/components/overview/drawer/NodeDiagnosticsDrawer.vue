@@ -26,28 +26,19 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  overview: null,
-  tpsData: null,
-  nodeHistoryData: null,
-  nodeHistoryLoading: false,
-  nodeHistoryRange: '1h',
-  customHistFrom: '',
-  customHistTo: '',
-  initialMode: 'live',
+  overview: null, tpsData: null, nodeHistoryData: null,
+  nodeHistoryLoading: false, nodeHistoryRange: '1h',
+  customHistFrom: '', customHistTo: '', initialMode: 'live',
 })
 
 const emit = defineEmits<{
-  (e: 'close'): void
+  (e: 'close' | 'custom-range-apply' | 'open-incidents'): void
   (e: 'update:show', val: boolean): void
-  (e: 'update:nodeHistoryRange', range: string): void
-  (e: 'update:customHistFrom', val: string): void
-  (e: 'update:customHistTo', val: string): void
+  (e: 'update:nodeHistoryRange' | 'update:customHistFrom' | 'update:customHistTo', val: string): void
   (e: 'range-change', range: string, from?: string, to?: string): void
-  (e: 'custom-range-apply', from?: string, to?: string): void
   (e: 'apply-preset', preset: '30m' | '2h' | '6h' | 'today'): void
   (e: 'update:initialMode', val: 'live' | 'history'): void
   (e: 'manage-host', node: NodeMetrics): void
-  (e: 'open-incidents'): void
 }>()
 
 const router = useRouter()
@@ -254,7 +245,7 @@ function openAiIncidents() {
                     @update:customHistFrom="emit('update:customHistFrom', $event)"
                     @update:customHistTo="emit('update:customHistTo', $event)"
                     @range-change="handleRangeChange"
-                    @custom-range-apply="emit('custom-range-apply', customHistFrom, customHistTo)"
+                    @custom-range-apply="emit('custom-range-apply')"
                     @apply-preset="emit('apply-preset', $event)"
                     @sync-point-in-time="onSyncPointInTime"
                   />
@@ -273,37 +264,15 @@ function openAiIncidents() {
               <span v-if="cordonFeedback" class="footer-toast font-mono" :class="cordonFeedback.type">
                 {{ cordonFeedback.text }}
               </span>
-              <button
-                 type="button"
-                class="btn btn-primary btn-failover"
-                @click="showRemediationModal = true"
-                title="Trigger 1-Click Fast Failover SRE Remediation"
-              >
-                <BaseIcon name="activity" size="xs" />
-                <span>1-Click Failover</span>
+              <button type="button" class="btn btn-primary btn-failover" @click="showRemediationModal = true" title="Trigger 1-Click Fast Failover SRE Remediation">
+                <BaseIcon name="activity" size="xs" /><span>1-Click Failover</span>
               </button>
-              <button
-                type="button"
-                class="btn btn-secondary btn-cordon"
-                :disabled="isCordonLoading"
-                @click="toggleCordon"
-                :title="isNodeUnschedulable ? 'Mark node schedulable' : 'Mark node unschedulable'"
-              >
-                <BaseIcon :name="isNodeUnschedulable ? 'shield' : 'lock'" size="xs" />
-                <span>{{ isNodeUnschedulable ? 'Uncordon' : 'Cordon' }}</span>
+              <button type="button" class="btn btn-secondary btn-cordon" :disabled="isCordonLoading" @click="toggleCordon" :title="isNodeUnschedulable ? 'Mark node schedulable' : 'Mark node unschedulable'">
+                <BaseIcon :name="isNodeUnschedulable ? 'shield' : 'lock'" size="xs" /><span>{{ isNodeUnschedulable ? 'Uncordon' : 'Cordon' }}</span>
               </button>
-              <button type="button" class="btn btn-secondary" @click="manageHost">
-                <BaseIcon name="sliders" size="xs" />
-                <span>Manage Host</span>
-              </button>
-              <button type="button" class="btn btn-primary" @click="openAiIncidents">
-                <BaseIcon name="bot" size="xs" />
-                <span>AI RCA</span>
-              </button>
-              <button type="button" class="btn btn-secondary btn-close-footer" @click="handleClose" title="Close drawer (Esc)">
-                <BaseIcon name="x" size="xs" />
-                <span>Close</span>
-              </button>
+              <button type="button" class="btn btn-secondary" @click="manageHost"><BaseIcon name="sliders" size="xs" /><span>Manage Host</span></button>
+              <button type="button" class="btn btn-primary" @click="openAiIncidents"><BaseIcon name="bot" size="xs" /><span>AI RCA</span></button>
+              <button type="button" class="btn btn-secondary btn-close-footer" @click="handleClose" title="Close drawer (Esc)"><BaseIcon name="x" size="xs" /><span>Close</span></button>
             </div>
           </aside>
         </Transition>
@@ -322,6 +291,6 @@ function openAiIncidents() {
   </Teleport>
 </template>
 
-<style scoped>
+<style>
 @import '../../../assets/styles/components/node-diagnostics.css';
 </style>
