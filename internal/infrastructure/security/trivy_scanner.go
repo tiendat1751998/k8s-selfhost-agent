@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
 
+	domain "github.com/datdt/k8sselfhost/internal/domain/security"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
+// Vulnerability represents an individual CVE result from Trivy.
 type Vulnerability struct {
 	VulnerabilityID  string `json:"VulnerabilityID"`
 	PkgName          string `json:"PkgName"`
@@ -22,6 +25,7 @@ type Vulnerability struct {
 	PrimaryURL       string `json:"PrimaryURL"`
 }
 
+// ScanSummary aggregates CVE counts by severity.
 type ScanSummary struct {
 	CriticalCount int `json:"critical_count"`
 	HighCount     int `json:"high_count"`
@@ -30,34 +34,107 @@ type ScanSummary struct {
 	TotalCVEs     int `json:"total_cves"`
 }
 
+// ScanReport represents the result of a Trivy container image scan.
 type ScanReport struct {
-	Target          string          `json:"target"`
-	ScannedAt       time.Time       `json:"scanned_at"`
-	Summary         ScanSummary     `json:"summary"`
-	Vulnerabilities []Vulnerability `json:"vulnerabilities"`
-	PassSecurityGate bool           `json:"pass_security_gate"`
+	Target           string          `json:"target"`
+	ScannedAt        time.Time       `json:"scanned_at"`
+	Summary          ScanSummary     `json:"summary"`
+	Vulnerabilities  []Vulnerability `json:"vulnerabilities"`
+	PassSecurityGate bool            `json:"pass_security_gate"`
+	Status           GateStatus      `json:"status"`
+	Passed           bool            `json:"passed"`
+	ErrorMessage     string          `json:"error_message,omitempty"`
 }
 
-type TrivyScanner struct{}
+// ToDomainReport converts a ScanReport to domain.SecurityGateReport.
+func (r *ScanReport) ToDomainReport(scanID string) *domain.SecurityGateReport {
+	if r == nil {
+		return nil
+	}
 
+	report := &domain.SecurityGateReport{
+		ScanID:        scanID,
+		Target:        r.Target,
+		Status:        r.Status,
+		Passed:        r.Passed,
+		CriticalCount: r.Summary.CriticalCount,
+		HighCount:     r.Summary.HighCount,
+		MediumCount:   r.Summary.MediumCount,
+		LowCount:      r.Summary.LowCount,
+		ErrorMessage:  r.ErrorMessage,
+		ScannedAt:     r.ScannedAt,
+	}
+
+	for _, v := range r.Vulnerabilities {
+		report.Vulnerabilities = append(report.Vulnerabilities, domain.Vulnerability{
+			VulnerabilityID:  v.VulnerabilityID,
+			PkgName:          v.PkgName,
+			InstalledVersion: v.InstalledVersion,
+			FixedVersion:     v.FixedVersion,
+			Severity:         v.Severity,
+			Title:            v.Title,
+			Description:      v.Description,
+			PrimaryURL:       v.PrimaryURL,
+		})
+	}
+
+	return report
+}
+
+// TrivyScanner runs Trivy against container images.
+type TrivyScanner struct {
+	binaryPath string
+}
+
+// NewTrivyScanner creates a TrivyScanner reading TRIVY_BINARY or defaulting to "trivy".
 func NewTrivyScanner() *TrivyScanner {
-	return &TrivyScanner{}
+	bin := os.Getenv("TRIVY_BINARY")
+	if bin == "" {
+		bin = "trivy"
+	}
+	return &TrivyScanner{binaryPath: bin}
 }
 
+// NewTrivyScannerWithBinary creates a TrivyScanner with an explicit binary path.
+func NewTrivyScannerWithBinary(binary string) *TrivyScanner {
+	if binary == "" {
+		binary = "trivy"
+	}
+	return &TrivyScanner{binaryPath: binary}
+}
+
+// ScanImage executes Trivy container scanning.
+// Under the Fail-Close invariant, if Trivy execution fails or the binary is not found,
+// it returns an explicit error and a report with Passed = false, PassSecurityGate = false,
+// and Status = GateStatusScannerUnavailable.
 func (s *TrivyScanner) ScanImage(ctx context.Context, image string, maxSeverityAllowed string) (*ScanReport, error) {
 	start := time.Now().UTC()
 
-	// Run trivy image --format json --quiet <image>
-	cmd := exec.CommandContext(ctx, "trivy", "image", "--format", "json", "--quiet", image)
+	cmd := exec.CommandContext(ctx, s.binaryPath, "image", "--format", "json", "--quiet", image)
 	output, err := cmd.Output()
 	if err != nil {
-		// Fallback: If trivy binary is not installed locally in test container, provide standard clean baseline
-		return s.fallbackScanReport(image, start), nil
+		return &ScanReport{
+			Target:           image,
+			ScannedAt:        start,
+			PassSecurityGate: false,
+			Passed:           false,
+			Status:           GateStatusScannerUnavailable,
+			ErrorMessage:     fmt.Sprintf("trivy execution failed: %v", err),
+			Summary: ScanSummary{
+				TotalCVEs:     0,
+				CriticalCount: 0,
+				HighCount:     0,
+				MediumCount:   0,
+				LowCount:      0,
+			},
+			Vulnerabilities: []Vulnerability{},
+		}, fmt.Errorf("security scanner unavailable: trivy execution failed: %w", err)
 	}
 
 	return s.ParseTrivyJSON(output, image, maxSeverityAllowed, start)
 }
 
+// ParseTrivyJSON unmarshals Trivy output and evaluates gate thresholds.
 func (s *TrivyScanner) ParseTrivyJSON(data []byte, target, maxSeverity string, scannedAt time.Time) (*ScanReport, error) {
 	var trivyOut struct {
 		Results []struct {
@@ -93,34 +170,31 @@ func (s *TrivyScanner) ParseTrivyJSON(data []byte, target, maxSeverity string, s
 	report.Summary.TotalCVEs = len(report.Vulnerabilities)
 
 	// Gate rule: If maxAllowed is HIGH, block on CRITICAL. If MEDIUM, block on CRITICAL & HIGH.
-	if strings.ToUpper(maxSeverity) == "HIGH" && report.Summary.CriticalCount > 0 {
+	// Critical CVE > 0 ALWAYS fails the security gate under strict zero-trust.
+	if report.Summary.CriticalCount > 0 {
 		report.PassSecurityGate = false
-	} else if strings.ToUpper(maxSeverity) == "MEDIUM" && (report.Summary.CriticalCount > 0 || report.Summary.HighCount > 0) {
+		report.Passed = false
+		report.Status = GateStatusPolicyViolation
+	} else if strings.ToUpper(maxSeverity) == "MEDIUM" && report.Summary.HighCount > 0 {
 		report.PassSecurityGate = false
+		report.Passed = false
+		report.Status = GateStatusPolicyViolation
 	} else {
 		report.PassSecurityGate = true
+		report.Passed = true
+		report.Status = GateStatusPassed
 	}
 
 	return report, nil
 }
 
-func (s *TrivyScanner) fallbackScanReport(target string, scannedAt time.Time) *ScanReport {
-	return &ScanReport{
-		Target:           target,
-		ScannedAt:        scannedAt,
-		PassSecurityGate: true,
-		Summary: ScanSummary{
-			TotalCVEs:     0,
-			CriticalCount: 0,
-			HighCount:     0,
-		},
-		Vulnerabilities: []Vulnerability{},
-	}
-}
-
+// FormatSARIFSummary produces a human-readable summary of the scan.
 func (s *TrivyScanner) FormatSARIFSummary(report *ScanReport) string {
+	if report == nil {
+		return "Report is nil"
+	}
 	status := "PASSED ✅"
-	if !report.PassSecurityGate {
+	if !report.PassSecurityGate || !report.Passed {
 		status = "FAILED ❌"
 	}
 	return fmt.Sprintf("Image: %s | Security Gate: %s | Critical: %d | High: %d | Medium: %d | Low: %d",
