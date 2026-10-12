@@ -34,8 +34,8 @@
 | **01 – 15** | Crash Elimination, Tenancy | `done/018-crash-elimination-and-tenancy.md` | **MERGED (Done)** |
 | **16 – 20** | System Wiring, Cryptography & Migrations | `done/019-...`, `done/020-...` | **MERGED (Done)** |
 | **21 – 23** | DevSecOps Fail-Close, Storage Fencing, Telegram Copilot | `done/021-...`, `done/022-...`, `done/023-...` | **MERGED (Done)** |
-| **24 – 25** | DB Sanitization Clones & DR Drills | `inprocess/024-sanitized-staging-db-clones.md`, `inprocess/025-disaster-recovery-and-restore-drills.md` | Spec Complete |
-| **26 – 31** | CNI IPAM, CoreDNS, DB SRE, Secret Redaction, Baremetal, Canary | `inprocess/026` đến `031` (IPAM scavenger, Bloat killer, adjtimex, Kaniko rootless, Load shedding) | Spec Complete |
+| **24 – 26** | DB Sanitization Clones, DR Drills, CNI IPAM & DNS | `done/024-...`, `done/025-...`, `done/026-...` | **MERGED (Done)** |
+| **27 – 31** | DB Deep SRE, Secret Redaction, Baremetal, Canary | `inprocess/027` đến `031` (Bloat killer, in-stream secret, adjtimex, Kaniko rootless, Load shedding) | Spec Complete |
 | **51 – 55** | Service Mesh, HTTP Desync, Cloudflare ReDoS | `inprocess/033-service-mesh-lifecycle-and-redos-protection.md` | Spec Complete |
 | **56 – 60** | Kafka Rebalance, RabbitMQ Watermark, AWS Kinesis PIDs | `inprocess/034-message-queue-and-streaming-sre-engine.md` | Spec Complete |
 | **61 – 64** | Ceph RocksDB, MinIO Bit-Rot, GitLab Anti-Wipe | `inprocess/035-distributed-storage-resiliency-and-healing.md` | Spec Complete |
