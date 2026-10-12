@@ -235,7 +235,8 @@ onMounted(async () => {
         <div class="toolbar-actions-group">
           <button
             type="button"
-            class="toolbar-btn btn-secondary"
+            class="toolbar-btn btn-secondary btn-apply-yaml"
+            style="white-space: nowrap; font-size: 11px; padding: 4px 8px;"
             title="Apply YAML Manifest"
             @click="openApplyYamlModal"
           >
@@ -288,42 +289,56 @@ onMounted(async () => {
         <EventsTimeline :cluster="selectedCluster" :namespace="selectedNamespace" :auto-refresh="true" />
       </div>
 
-      <div v-else class="explorer-resources-wrapper">
-        <div class="explorer-desktop-table explorer-table-wrap">
-          <ExplorerResourceTable
-            :columns="columns"
-            :resources="filteredResources"
-            :loading="loading"
-            :error="error"
-            :selected-kind="selectedKind"
-            :operating-node="operatingNode"
-            @detail="openDetailDrawer"
-            @logs="openLogsDrawer"
-            @terminal="openTerminalDrawer"
-            @yaml="openYamlEditModal"
-            @scale="openScaleModal"
-            @restart="openRestartModal"
-            @trigger-cronjob="handleTriggerCronJob"
-            @toggle-suspend="handleToggleSuspend"
-            @cordon="handleCordonNode"
-            @uncordon="handleUncordonNode"
-            @drain="openDrainModal"
-            @delete="openDeleteModal"
-          />
+      <div v-else-if="!clusterOffline" class="explorer-resources-wrapper">
+        <!-- Clean Error State Panel (prevents table separator slicing) -->
+        <div v-if="error && filteredResources.length === 0" class="glass-panel explorer-error-state animate-fade-in">
+          <div class="empty-state-card">
+            <BaseIcon name="alert-triangle" size="md" class="text-amber" />
+            <h4 class="empty-title">Failed to load Kubernetes resources</h4>
+            <p class="empty-desc font-mono">{{ error }}</p>
+            <button type="button" class="btn btn-secondary btn-sm" @click="fetchResources">
+              <BaseIcon name="refresh" size="xs" /> Retry
+            </button>
+          </div>
         </div>
 
-        <div class="explorer-mobile-cards">
-          <ExplorerMobileCards
-            :resources="filteredResources"
-            :selected-kind="selectedKind"
-            :loading="loading"
-            @select="openDetailDrawer"
-            @logs="openLogsDrawer"
-            @scale="openScaleModal"
-            @restart="openRestartModal"
-            @delete="openDeleteModal"
-          />
-        </div>
+        <template v-else>
+          <div class="explorer-desktop-table explorer-table-wrap">
+            <ExplorerResourceTable
+              :columns="columns"
+              :resources="filteredResources"
+              :loading="loading"
+              :error="error"
+              :selected-kind="selectedKind"
+              :operating-node="operatingNode"
+              @detail="openDetailDrawer"
+              @logs="openLogsDrawer"
+              @terminal="openTerminalDrawer"
+              @yaml="openYamlEditModal"
+              @scale="openScaleModal"
+              @restart="openRestartModal"
+              @trigger-cronjob="handleTriggerCronJob"
+              @toggle-suspend="handleToggleSuspend"
+              @cordon="handleCordonNode"
+              @uncordon="handleUncordonNode"
+              @drain="openDrainModal"
+              @delete="openDeleteModal"
+            />
+          </div>
+
+          <div class="explorer-mobile-cards">
+            <ExplorerMobileCards
+              :resources="filteredResources"
+              :selected-kind="selectedKind"
+              :loading="loading"
+              @select="openDetailDrawer"
+              @logs="openLogsDrawer"
+              @scale="openScaleModal"
+              @restart="openRestartModal"
+              @delete="openDeleteModal"
+            />
+          </div>
+        </template>
       </div>
     </main>
 
@@ -353,4 +368,43 @@ onMounted(async () => {
 
 <style scoped>
 @import '../assets/styles/views/explorer.css';
+
+.btn-apply-yaml {
+  white-space: nowrap !important;
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+}
+
+.explorer-error-state {
+  padding: 36px 20px !important;
+  text-align: center !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  border-radius: 12px !important;
+  background: rgba(11, 15, 25, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  margin: 12px 0 !important;
+}
+
+.empty-state-card {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 10px !important;
+  max-width: 480px !important;
+}
+
+.empty-title {
+  margin: 0 !important;
+  font-size: 1rem !important;
+  color: #f1f5f9 !important;
+}
+
+.empty-desc {
+  margin: 0 !important;
+  font-size: 0.82rem !important;
+  color: #94a3b8 !important;
+  word-break: break-word !important;
+}
 </style>

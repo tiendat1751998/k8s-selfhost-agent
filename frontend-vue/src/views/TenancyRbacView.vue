@@ -52,8 +52,8 @@ const {
 
 <template>
   <div class="tenancy-page">
-    <!-- Sleek 42px Toolbar -->
-    <div class="tenancy-toolbar-sleek glass-panel desktop-only">
+    <!-- Sleek Toolbar (Responsive) -->
+    <div class="tenancy-toolbar-sleek glass-panel">
       <div class="toolbar-left">
         <div class="tab-pills">
           <button class="tab-btn" :class="{ active: activeTab === 'tenants' }" @click="activeTab = 'tenants'">
@@ -341,4 +341,53 @@ const {
     </ModalDrawer>
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 640px) {
+  .tenancy-toolbar-sleek {
+    height: auto !important;
+    min-height: 42px !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding: 8px 10px !important;
+  }
+  .tenancy-toolbar-sleek .toolbar-left {
+    width: 100% !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    padding-bottom: 2px !important;
+  }
+  .tenancy-toolbar-sleek .toolbar-left::-webkit-scrollbar {
+    display: none !important;
+  }
+  .tenancy-toolbar-sleek .tab-pills {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+  }
+  .tenancy-toolbar-sleek .tab-btn {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+  .tenancy-toolbar-sleek .toolbar-center {
+    flex: 1 1 140px !important;
+    min-width: 120px !important;
+  }
+  .tenancy-toolbar-sleek .search-pill {
+    width: 100% !important;
+  }
+  .tenancy-toolbar-sleek .search-input-sleek {
+    width: 100% !important;
+  }
+  .tenancy-toolbar-sleek .toolbar-right {
+    flex-shrink: 0 !important;
+    gap: 6px !important;
+    margin-left: auto !important;
+  }
+  .tenancy-toolbar-sleek .toolbar-right .btn-sm {
+    white-space: nowrap !important;
+  }
+}
+</style>
 

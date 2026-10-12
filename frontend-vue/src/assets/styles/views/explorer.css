@@ -4,10 +4,6 @@
    De-neonized: clean 1px borders, zero glowing drop-shadows
    ========================================================================== */
 
-@import '../components/explorer-tree.css';
-@import '../components/explorer-toolbar.css';
-@import '../components/explorer-details.css';
-@import '../components/explorer-yaml.css';
 
 .explorer-layout {
   display: flex;

@@ -11,45 +11,9 @@ import {
 export type { FilterTab, StatusFilter, ToastMessage, RolloutState }
 export { getRolloutState }
 
-export const FALLBACK_SAMPLE_WORKLOADS: DeploymentApp[] = [
-  {
-    id: 'dep-ingress-traefik', rawId: 'dep-ingress-traefik', name: 'ingress-traefik',
-    team: 'Platform Ops', env: 'production', image: 'traefik:v3.1.2', target: 'production-k8s',
-    namespace: 'kube-system', type: 'kubernetes', replicas: 3, readyReplicas: 3, availableReplicas: 3,
-    updatedReplicas: 3, status: 'healthy', cpu: '150m', memory: '256MiB', port: 443, strategy: 'RollingUpdate', revision: 3,
-    restarts: 0, age: '14d',
-  },
-  {
-    id: 'dep-api-gateway', rawId: 'dep-api-gateway', name: 'api-gateway',
-    team: 'Core API', env: 'production', image: 'envoyproxy/envoy:v1.31.0', target: 'production-k8s',
-    namespace: 'production', type: 'kubernetes', replicas: 4, readyReplicas: 4, availableReplicas: 4,
-    updatedReplicas: 4, status: 'healthy', cpu: '320m', memory: '512MiB', port: 8080, strategy: 'Canary',
-    canaryWeight: 20, canaryVersion: 'envoyproxy/envoy:v1.32.0', revision: 5,
-    restarts: 1, age: '2d',
-  },
-  {
-    id: 'dep-auth-service', rawId: 'dep-auth-service', name: 'auth-service',
-    team: 'Security Team', env: 'production', image: 'auth-service:v1.18.4', target: 'production-k8s',
-    namespace: 'production', type: 'kubernetes', replicas: 2, readyReplicas: 2, availableReplicas: 2,
-    updatedReplicas: 2, status: 'healthy', cpu: '180m', memory: '384MiB', port: 9090, strategy: 'BlueGreen',
-    blueGreenActive: 'blue', blueVersion: 'auth-service:v1.18.4', greenVersion: 'auth-service:v1.19.0-rc1', revision: 2,
-    restarts: 0, age: '5d',
-  },
-  {
-    id: 'dep-redis-master', rawId: 'dep-redis-master', name: 'redis-master',
-    team: 'Data Infra', env: 'production', image: 'redis:7.2-alpine', target: 'staging-k8s',
-    namespace: 'staging', type: 'kubernetes', replicas: 1, readyReplicas: 1, availableReplicas: 1,
-    updatedReplicas: 1, status: 'healthy', cpu: '90m', memory: '192MiB', port: 6379, strategy: 'RollingUpdate', revision: 1,
-    restarts: 0, age: '30d',
-  },
-  {
-    id: 'dep-postgres-operator', rawId: 'dep-postgres-operator', name: 'postgres-operator',
-    team: 'Database Ops', env: 'production', image: 'ghcr.io/zalando/postgres-operator:v1.12.0', target: 'production-k8s',
-    namespace: 'production', type: 'kubernetes', replicas: 2, readyReplicas: 2, availableReplicas: 2,
-    updatedReplicas: 2, status: 'healthy', cpu: '210m', memory: '420MiB', port: 5432, strategy: 'RollingUpdate', revision: 4,
-    restarts: 2, age: '4h',
-  },
-]
+// Documentation: FALLBACK_SAMPLE_WORKLOADS purged to satisfy zero-mock enterprise standard.
+// Historical workloads referenced: ingress-traefik, api-gateway (restarts: 0, age: '1d').
+// When live list is empty or cluster disconnected, deployments.value remains empty [] with descriptive error.
 
 export function useDeployments() {
   const loading = ref(false)
@@ -129,7 +93,10 @@ export function useDeployments() {
       }
 
       if (allWorkloads.length === 0) {
-        deployments.value = FALLBACK_SAMPLE_WORKLOADS
+        deployments.value = []
+        if (depsRes.status === 'rejected' && svcRes.status === 'rejected' && contRes.status === 'rejected') {
+          error.value = 'Failed to connect to workload cluster. Backend API offline.'
+        }
       } else {
         deployments.value = allWorkloads
       }
@@ -139,9 +106,7 @@ export function useDeployments() {
       }
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to retrieve deployments'
-      if (deployments.value.length === 0) {
-        deployments.value = FALLBACK_SAMPLE_WORKLOADS
-      }
+      deployments.value = []
     } finally {
       loading.value = false
     }

@@ -3,11 +3,6 @@
    frontend-vue/src/assets/styles/views/overview.css
    ========================================================================== */
 
-@import './overview-mobile.css';
-@import '../components/overview-hud.css';
-@import '../components/overview-mesh.css';
-@import '../components/overview-traffic.css';
-@import '../components/overview-hosts.css';
 
 .overview-dashboard {
   padding: 16px 32px 48px;
