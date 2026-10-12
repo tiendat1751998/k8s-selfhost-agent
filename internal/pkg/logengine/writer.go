@@ -1,4 +1,4 @@
-﻿package logengine
+package logengine
 
 import (
 	"encoding/json"
@@ -39,6 +39,13 @@ func WithFlushInterval(d time.Duration) WriterOption {
 	}
 }
 
+// WithRedactor configures the secret redactor on the Writer (pass nil to disable).
+func WithRedactor(r *InStreamRedactor) WriterOption {
+	return func(w *Writer) {
+		w.redactor = r
+	}
+}
+
 // Writer writes log entries to columnar parts on disk with sparse indexing.
 type Writer struct {
 	mu            sync.Mutex
@@ -46,6 +53,7 @@ type Writer struct {
 	partsDir      string
 	dict          *LabelDictionary
 	builder       *BlockBuilder
+	redactor      *InStreamRedactor
 	maxRows       int
 	flushInterval time.Duration
 	nextPartID    uint64
@@ -67,6 +75,7 @@ func NewWriter(dir string, dict *LabelDictionary, opts ...WriterOption) (*Writer
 		partsDir:      partsDir,
 		dict:          dict,
 		builder:       NewBlockBuilder(),
+		redactor:      NewInStreamRedactor(),
 		maxRows:       2048,
 		flushInterval: 5 * time.Second,
 		closeCh:       make(chan struct{}),
@@ -125,6 +134,11 @@ func (w *Writer) LastError() error {
 
 // Write appends an entry to the current staging block and flushes if threshold is reached.
 func (w *Writer) Write(entry Entry) error {
+	msg := entry.Message
+	if w.redactor != nil {
+		msg = w.redactor.MaskString(msg)
+	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -136,7 +150,7 @@ func (w *Writer) Write(entry Entry) error {
 	lvlID := w.dict.GetOrInsert(entry.Level)
 	ts := entry.Timestamp.UnixNano()
 
-	w.builder.Append(ts, svcID, lvlID, []byte(entry.Message))
+	w.builder.Append(ts, svcID, lvlID, []byte(msg))
 
 	if w.builder.RowCount() >= w.maxRows || w.builder.EstimatedSize() >= BlockBufferSize-4096 {
 		return w.flushLocked()
