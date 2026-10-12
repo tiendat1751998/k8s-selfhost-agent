@@ -11,9 +11,28 @@ import HostDetailDrawer from '../components/hosts/HostDetailDrawer.vue'
 import HostDeleteModal from '../components/hosts/HostDeleteModal.vue'
 import CanvasTimeSeries, { type TimeSeriesItem } from '../components/telemetry/CanvasTimeSeries.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
+import NodeStorageFencingModal from '../components/overview/drawer/NodeStorageFencingModal.vue'
+import type { FencingExecutionReport } from '../api/dr'
 
 const showMobileSearch = ref(false)
 const showTelemetry = ref(false)
+const showFencingModal = ref(false)
+const fencingTargetNode = ref('')
+const fencingTargetCluster = ref('default')
+
+function openFencingModal(nodeName: string, clusterId = 'default') {
+  fencingTargetNode.value = nodeName
+  fencingTargetCluster.value = clusterId
+  showFencingModal.value = true
+}
+
+function handleFenced(report: FencingExecutionReport) {
+  toastMessage.value = {
+    type: 'success',
+    text: `Storage fencing & pod failover completed for ${report.node_name} in ${report.duration_ms ?? 0}ms.`
+  }
+  fetchHosts()
+}
 
 const {
   loading, toastMessage, hosts, viewMode, searchQuery,
@@ -96,6 +115,12 @@ const availabilityThresholds = [
       <span class="tel-item tel-online"><BaseIcon name="shield" size="xs" /> {{ onlineHostsCount }} online</span>
       <span>·</span>
       <span class="tel-item tel-offline"><BaseIcon name="alert-triangle" size="xs" /> {{ offlineHostsCount }} offline</span>
+      <template v-if="offlineHostsCount > 0">
+        <span>·</span>
+        <button type="button" class="btn-micro-fence font-mono" @click="openFencingModal(hosts.find(h => h.status !== 'connected')?.name || '', 'default')">
+          <BaseIcon name="shield" size="xs" /> Safe Fence
+        </button>
+      </template>
       <span v-if="onlineHostsCount > 0 && avgLatency > 0">·</span>
       <span v-if="onlineHostsCount > 0 && avgLatency > 0" class="tel-item tel-latency"><BaseIcon name="zap" size="xs" /> avg {{ avgLatency }}ms</span>
     </div>
@@ -110,6 +135,33 @@ const availabilityThresholds = [
       <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" />
       <span>{{ toastMessage.text }}</span>
       <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
+    </div>
+
+    <!-- SRE Storage Fencing Alert Banner (When Unready/Offline Nodes Exist) -->
+    <div v-if="offlineHostsCount > 0" class="fencing-alert-strip glass-panel animate-fade-in">
+      <div class="fencing-alert-info">
+        <span class="fencing-alert-icon-box"><BaseIcon name="alert-triangle" size="sm" /></span>
+        <div class="fencing-alert-texts">
+          <span class="fencing-alert-title font-bold text-amber">
+            {{ offlineHostsCount }} Unready / Offline Host(s) Detected
+          </span>
+          <span class="fencing-alert-sub text-muted">
+            Workloads with RWO CSI volumes risk split-brain corruption without STONITH fencing.
+          </span>
+        </div>
+      </div>
+      <div class="fencing-alert-actions">
+        <button
+          v-for="unreadyHost in hosts.filter(h => h.status !== 'connected')"
+          :key="unreadyHost.id"
+          type="button"
+          class="btn btn-warning-sm btn-action-fence font-mono"
+          @click="openFencingModal(unreadyHost.name, unreadyHost.tenant_id || 'default')"
+        >
+          <BaseIcon name="shield" size="xs" />
+          <span>Safe Remediation / Fence: {{ unreadyHost.name }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- Unified 38px Controls Toolbar (Desktop Only) -->
@@ -319,6 +371,14 @@ const availabilityThresholds = [
       :deleting="deletingHost"
       @confirm="confirmDeleteHost"
     />
+
+    <!-- Dead Node Recovery & Zero-Data-Loss Storage Fencing Modal -->
+    <NodeStorageFencingModal
+      v-model:show="showFencingModal"
+      :node-name="fencingTargetNode"
+      :cluster-id="fencingTargetCluster"
+      @fenced="handleFenced"
+    />
   </div>
 </template>
 
@@ -351,5 +411,53 @@ const availabilityThresholds = [
 .chart-card-val { color: #f1f5f9; }
 .empty-icon-wrap { font-size: 32px; margin-bottom: 12px; color: #64748b; }
 :deep(.pill-count) { margin-left: 4px; }
+
+.fencing-alert-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.fencing-alert-info { display: flex; align-items: center; gap: 10px; }
+.fencing-alert-icon-box { color: #f59e0b; }
+.fencing-alert-texts { display: flex; flex-direction: column; font-size: 12px; line-height: 1.3; }
+.fencing-alert-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn-action-fence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-action-fence:hover {
+  background: #f59e0b;
+  color: #0f172a;
+}
+.btn-micro-fence {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
 </style>
 
