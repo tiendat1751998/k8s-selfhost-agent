@@ -122,15 +122,9 @@ func (d *DockerLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 		swarmSvc := c.Labels["com.docker.swarm.service.name"]
 		composeSvc := c.Labels["com.docker.compose.service"]
 
-		if app != "" {
-			matched := strings.EqualFold(name, app) ||
-				strings.Contains(strings.ToLower(name), strings.ToLower(app)) ||
-				strings.EqualFold(swarmSvc, app) ||
-				strings.EqualFold(composeSvc, app) ||
-				strings.HasPrefix(c.ID, app)
-			if !matched {
-				continue
-			}
+		if app != "" && !strings.EqualFold(name, app) && !strings.Contains(strings.ToLower(name), strings.ToLower(app)) &&
+			!strings.EqualFold(swarmSvc, app) && !strings.EqualFold(composeSvc, app) && !strings.HasPrefix(c.ID, app) {
+			continue
 		}
 
 		serviceName := swarmSvc
@@ -158,13 +152,22 @@ func (d *DockerLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 
 func readDockerLogStream(reader io.Reader, serviceName string, sinceTime, untilTime *time.Time, query string, level string) []LogEntry {
 	var entries []LogEntry
-	var buf bytes.Buffer
+	bufReader := bufio.NewReader(reader)
+	header, peekErr := bufReader.Peek(8)
+	isStdCopy := peekErr == nil && len(header) == 8 && (header[0] == 1 || header[0] == 2) && header[1] == 0 && header[2] == 0 && header[3] == 0
+
 	var scanner *bufio.Scanner
-	if _, err := stdcopy.StdCopy(&buf, &buf, reader); err == nil && buf.Len() > 0 {
-		scanner = bufio.NewScanner(&buf)
+	if isStdCopy {
+		pr, pw := io.Pipe()
+		go func() {
+			_, _ = stdcopy.StdCopy(pw, pw, bufReader)
+			_ = pw.Close()
+		}()
+		scanner = bufio.NewScanner(pr)
 	} else {
-		scanner = bufio.NewScanner(reader)
+		scanner = bufio.NewScanner(bufReader)
 	}
+	scanner.Buffer(make([]byte, 4096), 1024*1024)
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -186,10 +189,9 @@ type FileLogSource struct {
 var (
 	rotatedLogRegex   = regexp.MustCompile(`(\.[0-9]+(\.|$))|\.(gz|old|bak)($|\.)`)
 	ignoredOSServices = map[string]struct{}{
-		"alternatives": {}, "apport": {}, "dpkg": {}, "bootstrap": {},
-		"cloud-init": {}, "cloud-init-output": {}, "ubuntu-advantage": {},
-		"dist-upgrade": {}, "fontconfig": {}, "faillog": {}, "lastlog": {},
-		"wtmp": {}, "btmp": {}, "vmware-network": {},
+		"alternatives": {}, "apport": {}, "dpkg": {}, "bootstrap": {}, "cloud-init": {},
+		"cloud-init-output": {}, "ubuntu-advantage": {}, "dist-upgrade": {}, "fontconfig": {},
+		"faillog": {}, "lastlog": {}, "wtmp": {}, "btmp": {}, "vmware-network": {},
 	}
 )
 
@@ -475,12 +477,8 @@ func (e *EngineLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 		return nil, nil
 	}
 	var since, until time.Time
-	if sinceTime != nil {
-		since = *sinceTime
-	}
-	if untilTime != nil {
-		until = *untilTime
-	}
+	if sinceTime != nil { since = *sinceTime }
+	if untilTime != nil { until = *untilTime }
 	entries, err := e.reader.Search(ctx, logengine.QueryParams{
 		Service: app, Level: level, Query: query, Since: since, Until: until, Limit: tail,
 	})
