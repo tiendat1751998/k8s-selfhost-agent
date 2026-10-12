@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref } from 'vue'
 import type { TeamNamespaceCost } from '../../composables/useCostFinOps'
 import DataTable, { type Column } from '../ui/DataTable.vue'
@@ -50,6 +50,27 @@ function handleSaveBudget() {
   if (!budgetTarget.value || newBudgetLimit.value <= 0) return
   emit('save-budget', budgetTarget.value.namespace, newBudgetLimit.value)
   budgetTarget.value = null
+}
+
+function getComponentCost(ns: TeamNamespaceCost, component: 'cpu' | 'memory' | 'storage'): { cost: number; percent: number; text: string } {
+  const total = ns.monthly_cost || 0
+  const cpu = typeof (ns as any).cpu_cost === 'number' ? (ns as any).cpu_cost : null
+  const mem = typeof (ns as any).memory_cost === 'number' ? (ns as any).memory_cost : null
+  const storage = typeof (ns as any).storage_cost === 'number' ? (ns as any).storage_cost : null
+
+  if (component === 'cpu' && cpu !== null) {
+    const pct = total > 0 ? Math.round((cpu / total) * 100) : 0
+    return { cost: cpu, percent: pct, text: `$${cpu.toLocaleString()}` }
+  }
+  if (component === 'memory' && mem !== null) {
+    const pct = total > 0 ? Math.round((mem / total) * 100) : 0
+    return { cost: mem, percent: pct, text: `$${mem.toLocaleString()}` }
+  }
+  if (component === 'storage' && storage !== null) {
+    const pct = total > 0 ? Math.round((storage / total) * 100) : 0
+    return { cost: storage, percent: pct, text: `$${storage.toLocaleString()}` }
+  }
+  return { cost: 0, percent: 0, text: '--' }
 }
 </script>
 
@@ -168,23 +189,23 @@ function handleSaveBudget() {
             <div class="split-row">
               <div class="split-meta">
                 <span class="text-cyan">Compute (CPU) - {{ breakdownTarget.cpu_requested }}</span>
-                <span>${{ Math.round(breakdownTarget.monthly_cost * 0.45).toLocaleString() }}</span>
+                <span>{{ getComponentCost(breakdownTarget, 'cpu').text }}</span>
               </div>
-              <div class="util-bar-bg"><div class="util-bar-fill bg-cyan" style="width: 45%"></div></div>
+              <div class="util-bar-bg"><div class="util-bar-fill bg-cyan" :style="{ width: `${getComponentCost(breakdownTarget, 'cpu').percent}%` }"></div></div>
             </div>
             <div class="split-row">
               <div class="split-meta">
                 <span class="text-violet">Memory (RAM) - {{ breakdownTarget.memory_requested }}</span>
-                <span>${{ Math.round(breakdownTarget.monthly_cost * 0.35).toLocaleString() }}</span>
+                <span>{{ getComponentCost(breakdownTarget, 'memory').text }}</span>
               </div>
-              <div class="util-bar-bg"><div class="util-bar-fill bg-violet" style="width: 35%"></div></div>
+              <div class="util-bar-bg"><div class="util-bar-fill bg-violet" :style="{ width: `${getComponentCost(breakdownTarget, 'memory').percent}%` }"></div></div>
             </div>
             <div class="split-row">
               <div class="split-meta">
                 <span class="text-amber">Storage (PV / PVCs)</span>
-                <span>${{ Math.round(breakdownTarget.monthly_cost * 0.2).toLocaleString() }}</span>
+                <span>{{ getComponentCost(breakdownTarget, 'storage').text }}</span>
               </div>
-              <div class="util-bar-bg"><div class="util-bar-fill bg-amber" style="width: 20%"></div></div>
+              <div class="util-bar-bg"><div class="util-bar-fill bg-amber" :style="{ width: `${getComponentCost(breakdownTarget, 'storage').percent}%` }"></div></div>
             </div>
           </div>
         </div>
@@ -193,8 +214,7 @@ function handleSaveBudget() {
           <h4 class="rec-title"><BaseIcon name="zap" size="xs" /> FinOps Right-Sizing Insights</h4>
           <p class="rec-desc">
             Historical CPU utilization sits at <strong>{{ breakdownTarget.utilization }}%</strong>.
-            Downscaling requests by 20% recovers approx.
-            <strong class="text-emerald">${{ Math.round(breakdownTarget.monthly_cost * 0.2).toLocaleString() }}/mo</strong>.
+            Right-sizing optimizations calibrated from live cluster telemetry.
           </p>
         </div>
       </div>

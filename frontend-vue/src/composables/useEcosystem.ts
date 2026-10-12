@@ -299,27 +299,49 @@ export function useEcosystem() {
 
   async function runHealthProbe(tool: DetectedTool) {
     isProbing.value = true
+    webhookHistory.value = []
+    errorLogs.value = []
     const startTime = performance.now()
     try {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      const latency = Math.round(performance.now() - startTime)
-      const isOk = tool.health === 'healthy' || tool.status === 'detected'
-      healthProbeResult.value = {
-        latencyMs: latency, statusCode: isOk ? 200 : tool.status === 'unreachable' ? 503 : 429,
-        status: isOk ? 'healthy' : 'degraded', timestamp: new Date().toISOString(),
-        dnsResolveMs: 0, tlsExpiryDays: 0,
-        message: isOk ? 'Service responded with 200 OK — Probes healthy.' : 'Degraded response: upstream probe timed out or returned non-200.'
+      let isOk = tool.health === 'healthy' || tool.status === 'detected'
+      let statusCode = isOk ? 200 : (tool.status === 'unreachable' ? 503 : 429)
+      let message = isOk ? 'Service operational — Probes healthy.' : 'Degraded response: integration probe non-200.'
+
+      if (tool.endpoint && (tool.endpoint.startsWith('http://') || tool.endpoint.startsWith('https://'))) {
+        try {
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), 3000)
+          await fetch(tool.endpoint, { method: 'HEAD', mode: 'no-cors', signal: controller.signal })
+          clearTimeout(timer)
+          isOk = true
+          statusCode = 200
+          message = `Integration endpoint reachable: ${tool.endpoint}`
+        } catch (probeErr: unknown) {
+          isOk = false
+          statusCode = 503
+          message = probeErr instanceof Error ? probeErr.message : 'Probe connection failed'
+        }
       }
-      webhookHistory.value = [
-        { id: 'wh-1', toolId: tool.id, event: 'health_check_ping', status: isOk ? 'success' : 'failed', timestamp: new Date().toISOString(), durationMs: latency, payloadSize: '0.8 KB', details: `HTTP ${isOk ? '200 OK' : '503 Service Unavailable'} received` },
-        { id: 'wh-2', toolId: tool.id, event: 'periodic_sync', status: 'success', timestamp: new Date(Date.now() - 300000).toISOString(), durationMs: 0, payloadSize: '2.1 KB', details: 'Periodic discovery heartbeat sync complete' }
-      ]
-      errorLogs.value = isOk ? [] : [
-        { id: 'err-1', timestamp: new Date().toISOString(), level: 'error', message: `Upstream connection to ${tool.endpoint || 'endpoint'} timed out after 3000ms`, source: 'ProbeController' },
-        { id: 'err-2', timestamp: new Date(Date.now() - 60000).toISOString(), level: 'warn', message: 'Retrying webhook handshake with exponential backoff (attempt 2/5)', source: 'WebhookRelay' }
-      ]
+
+      const latency = Math.round(performance.now() - startTime)
+      healthProbeResult.value = {
+        latencyMs: isOk ? latency : 0,
+        statusCode,
+        status: isOk ? 'healthy' : 'degraded',
+        timestamp: new Date().toISOString(),
+        dnsResolveMs: 0,
+        tlsExpiryDays: 0,
+        message
+      }
     } catch {
-      healthProbeResult.value = { latencyMs: 0, statusCode: 504, status: 'unreachable', timestamp: new Date().toISOString(), dnsResolveMs: 0, message: 'Gateway Timeout: Failed to reach integration endpoint.' }
+      healthProbeResult.value = {
+        latencyMs: 0,
+        statusCode: 504,
+        status: 'unreachable',
+        timestamp: new Date().toISOString(),
+        dnsResolveMs: 0,
+        message: 'Gateway Timeout: Failed to reach integration endpoint.'
+      }
     } finally {
       isProbing.value = false
     }

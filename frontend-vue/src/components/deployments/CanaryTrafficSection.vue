@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { DeploymentApp } from '../../api/compute'
 import BaseIcon from '../ui/BaseIcon.vue'
 
@@ -8,13 +9,32 @@ interface Props {
   actionLoading?: string | null
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   (e: 'update:weight', val: number): void
   (e: 'abortCanary', app: DeploymentApp): void
   (e: 'promoteCanary', app: DeploymentApp): void
 }>()
+
+const passingProbesText = computed(() => {
+  if (props.app.replicas > 0 && props.app.readyReplicas !== undefined) {
+    const pct = Math.round((props.app.readyReplicas / props.app.replicas) * 100)
+    return `${pct}% Passing Probes`
+  }
+  if (props.app.status === 'healthy') {
+    return '100% Passing Probes'
+  }
+  return '-- Unmeasured'
+})
+
+const errorBudgetText = computed(() => {
+  const eb = (props.app as any).errorBudget ?? (props.app as any).error_budget
+  if (typeof eb === 'number') {
+    return `Error Budget: ${eb.toFixed(2)}%`
+  }
+  return 'Error Budget: --'
+})
 </script>
 
 <template>
@@ -62,12 +82,12 @@ const emit = defineEmits<{
       <div class="track-card track-stable">
         <span class="track-title">STABLE BASELINE ({{ 100 - weight }}%)</span>
         <span class="track-image">{{ app.image }}</span>
-        <span class="track-status text-emerald">● 100% Passing Probes</span>
+        <span class="track-status" :class="passingProbesText.includes('100%') ? 'text-emerald' : 'text-muted'">● {{ passingProbesText }}</span>
       </div>
       <div class="track-card track-canary">
         <span class="track-title">CANARY TRACK ({{ weight }}%)</span>
         <span class="track-image">{{ app.canaryVersion || `${app.image}-canary` }}</span>
-        <span class="track-status text-cyan">● Error Budget: 99.98%</span>
+        <span class="track-status" :class="errorBudgetText.includes('--') ? 'text-muted' : 'text-cyan'">● {{ errorBudgetText }}</span>
       </div>
     </div>
 

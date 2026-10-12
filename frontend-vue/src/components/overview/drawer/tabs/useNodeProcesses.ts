@@ -116,7 +116,7 @@ export function useNodeProcesses(props: NodeProcessesProps) {
 
       const matchedSvc = services.find(s => {
         const sName = (s.service_name || '').toLowerCase()
-        const sClean = sName.replace(/^(tiki_|k8s_|docker_)/, '')
+        const sClean = sName.replace(/^(k8s_|docker_)/, '')
         return (
           sName === pName ||
           pName.includes(sClean) ||

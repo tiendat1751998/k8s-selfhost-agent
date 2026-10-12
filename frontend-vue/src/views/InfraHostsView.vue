@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useInfraHosts } from '../composables/useInfraHosts'
-import HostMetricsHud from '../components/hosts/HostMetricsHud.vue'
 import HostControlsBar from '../components/hosts/HostControlsBar.vue'
 import HostCard from '../components/hosts/HostCard.vue'
 import HostsTable from '../components/hosts/HostsTable.vue'
@@ -9,7 +8,8 @@ import HostsMobileCards from '../components/hosts/HostsMobileCards.vue'
 import HostAddEditModal from '../components/hosts/HostAddEditModal.vue'
 import HostDetailDrawer from '../components/hosts/HostDetailDrawer.vue'
 import HostDeleteModal from '../components/hosts/HostDeleteModal.vue'
-import CanvasTimeSeries, { type TimeSeriesItem } from '../components/telemetry/CanvasTimeSeries.vue'
+import HostFleetTelemetryPanel from '../components/hosts/HostFleetTelemetryPanel.vue'
+import InfraHostsHeaderBar from '../components/hosts/InfraHostsHeaderBar.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import NodeStorageFencingModal from '../components/overview/drawer/NodeStorageFencingModal.vue'
 import type { FencingExecutionReport } from '../api/dr'
@@ -49,120 +49,24 @@ const {
   addLabelRow, removeLabelRow, testModalConnection, submitHostForm,
   handleTestHost, promptDeleteHost, confirmDeleteHost, openHostDrawer
 } = useInfraHosts()
-
-// Synchronized Fleet Telemetry Window
-const fleetTelemetryWindow = computed(() => {
-  const stepMs = 30_000, count = 16, now = Date.now()
-  const baseTime = Math.floor(now / stepMs) * stepMs
-  const timestamps: number[] = []
-  for (let i = count - 1; i >= 0; i--) timestamps.push(baseTime - i * stepMs)
-
-  const activeCount = onlineHostsCount.value
-  const total = Math.max(1, totalHosts.value)
-  const isFleetOnline = activeCount > 0
-  const latencyTarget = isFleetOnline && avgLatency.value > 0 ? avgLatency.value : 0
-
-  const latencyData: [number, number][] = timestamps.map((t) => {
-    return [t, latencyTarget]
-  })
-
-  const availabilityPct = total > 0 ? Math.min(100, Math.round((activeCount / total) * 100)) : 0
-  const availabilityData: [number, number][] = timestamps.map((t) => {
-    return [t, availabilityPct]
-  })
-
-  return {
-    latency: [{ name: 'Fleet Probe Latency', data: latencyData, color: '#06b6d4' }] as TimeSeriesItem[],
-    availability: [{ name: 'Host Availability', data: availabilityData, color: '#10b981' }] as TimeSeriesItem[],
-  }
-})
-
-const latencyThresholds = [
-  { value: 50, color: '#f59e0b', label: 'Warn 50ms' },
-  { value: 100, color: '#f43f5e', label: 'Crit 100ms' },
-]
-
-const availabilityThresholds = [
-  { value: 95, color: '#f59e0b', label: 'SLA 95%' },
-]
 </script>
 
 <template>
   <div class="infra-hosts-view animate-fade-in">
-    <!-- 44px Mobile Command Bar (< 640px) -->
-    <div class="hosts-mobile-command-bar mobile-only">
-      <div class="command-bar-left">
-        <BaseIcon name="server" size="sm" />
-        <span class="command-bar-title font-bold">Compute Hosts ({{ filteredHosts.length }})</span>
-      </div>
-      <div class="command-bar-actions">
-        <button class="btn-icon-cmd" title="Add Host" @click="openAddHostModal">
-          <span class="font-bold text-sm">+</span>
-        </button>
-        <button class="btn-icon-cmd" title="Refresh" :disabled="loading" @click="fetchHosts">
-          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
-        </button>
-        <button class="btn-icon-cmd" :class="{ active: showMobileSearch }" title="Search" @click="showMobileSearch = !showMobileSearch">
-          <BaseIcon name="search" size="xs" />
-        </button>
-      </div>
-    </div>
-
-    <!-- 20px Mobile Micro-Telemetry Strip (< 640px) -->
-    <div class="hosts-micro-telemetry mobile-only">
-      <span class="tel-item"><BaseIcon name="server" size="xs" /> {{ hosts.length }} hosts</span>
-      <span>·</span>
-      <span class="tel-item tel-online"><BaseIcon name="shield" size="xs" /> {{ onlineHostsCount }} online</span>
-      <span>·</span>
-      <span class="tel-item tel-offline"><BaseIcon name="alert-triangle" size="xs" /> {{ offlineHostsCount }} offline</span>
-      <template v-if="offlineHostsCount > 0">
-        <span>·</span>
-        <button type="button" class="btn-micro-fence font-mono" @click="openFencingModal(hosts.find(h => h.status !== 'connected')?.name || '', hosts.find(h => h.status !== 'connected')?.tenant_id || 'default')">
-          <BaseIcon name="shield" size="xs" /> Safe Fence
-        </button>
-      </template>
-      <span v-if="onlineHostsCount > 0 && avgLatency > 0">·</span>
-      <span v-if="onlineHostsCount > 0 && avgLatency > 0" class="tel-item tel-latency"><BaseIcon name="zap" size="xs" /> avg {{ avgLatency }}ms</span>
-    </div>
-
-    <!-- Mobile Search Expandable Input -->
-    <div v-if="showMobileSearch" class="mobile-search-box mobile-only animate-fade-in">
-      <input v-model="searchQuery" type="text" placeholder="Filter hosts by name, IP, label..." class="input-glass" style="width: 100%; font-size: 12px; padding: 6px 10px;" />
-    </div>
-
-    <!-- Notification Toast Banner -->
-    <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">
-      <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" />
-      <span>{{ toastMessage.text }}</span>
-      <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
-    </div>
-
-    <!-- SRE Storage Fencing Alert Banner (When Unready/Offline Nodes Exist) -->
-    <div v-if="offlineHostsCount > 0" class="fencing-alert-strip glass-panel animate-fade-in">
-      <div class="fencing-alert-info">
-        <span class="fencing-alert-icon-box"><BaseIcon name="alert-triangle" size="sm" /></span>
-        <div class="fencing-alert-texts">
-          <span class="fencing-alert-title font-bold text-amber">
-            {{ offlineHostsCount }} Unready / Offline Host(s) Detected
-          </span>
-          <span class="fencing-alert-sub text-muted">
-            Workloads with RWO CSI volumes risk split-brain corruption without STONITH fencing.
-          </span>
-        </div>
-      </div>
-      <div class="fencing-alert-actions">
-        <button
-          v-for="unreadyHost in hosts.filter(h => h.status !== 'connected')"
-          :key="unreadyHost.id"
-          type="button"
-          class="btn btn-warning-sm btn-action-fence font-mono"
-          @click="openFencingModal(unreadyHost.name, unreadyHost.tenant_id || 'default')"
-        >
-          <BaseIcon name="shield" size="xs" />
-          <span>Safe Remediation / Fence: {{ unreadyHost.name }}</span>
-        </button>
-      </div>
-    </div>
+    <!-- Mobile Command Bar & Fencing Alert Banner -->
+    <InfraHostsHeaderBar
+      v-model:show-mobile-search="showMobileSearch"
+      v-model:search-query="searchQuery"
+      :filtered-hosts-count="filteredHosts.length"
+      :loading="loading"
+      :hosts="hosts"
+      :online-hosts-count="onlineHostsCount"
+      :offline-hosts-count="offlineHostsCount"
+      :avg-latency="avgLatency"
+      @add-host="openAddHostModal"
+      @refresh="fetchHosts"
+      @open-fencing="openFencingModal($event, hosts.find(h => h.status !== 'connected')?.tenant_id || 'default')"
+    />
 
     <!-- Unified 38px Controls Toolbar (Desktop Only) -->
     <div class="desktop-only">
@@ -187,68 +91,16 @@ const availabilityThresholds = [
     </div>
 
     <!-- Fleet Live Telemetry (Collapsible, Defaulted to Collapsed) -->
-    <Transition name="fade">
-      <div v-if="showTelemetry" class="section-card glass-panel fleet-telemetry-panel animate-fade-in desktop-only">
-        <div class="hosts-telemetry-hud-strip">
-          <HostMetricsHud
-            :total-hosts="totalHosts"
-            :connected-hosts="connectedHosts"
-            :disconnected-hosts="disconnectedHosts"
-            :error-hosts="errorHosts"
-            :type-counts="typeCounts"
-          />
-        </div>
-        <div class="section-top">
-          <div>
-            <div class="panel-badge-row">
-              <h2 class="section-title">Fleet Telemetry & Probe Latency</h2>
-              <span class="telemetry-live-badge font-mono">
-                <span class="pulse-dot pulse-dot-cyan"></span>
-                SYNCHRONIZED SCRUBBING
-              </span>
-            </div>
-            <p class="section-subtitle">Real-time probe round-trip latency and active node connectivity</p>
-          </div>
-          <div class="sync-legend font-mono text-xs">
-            <span class="legend-item"><span class="legend-color legend-cyan"></span> Probe Latency</span>
-            <span class="legend-item"><span class="legend-color legend-emerald"></span> Availability</span>
-          </div>
-        </div>
-
-        <div class="fleet-telemetry-grid">
-          <div class="telemetry-chart-card">
-            <div class="chart-card-header">
-              <span class="chart-card-title font-mono text-cyan font-semibold">Fleet Probe Latency (RTT)</span>
-              <span class="chart-card-val font-mono">{{ onlineHostsCount > 0 && avgLatency > 0 ? `${avgLatency}ms avg` : '--' }}</span>
-            </div>
-            <CanvasTimeSeries
-              :series="fleetTelemetryWindow.latency"
-              unit="ms"
-              :height="130"
-              sync-group="fleet-telemetry"
-              :min="0"
-              :thresholds="latencyThresholds"
-            />
-          </div>
-
-          <div class="telemetry-chart-card">
-            <div class="chart-card-header">
-              <span class="chart-card-title font-mono text-emerald font-semibold">Fleet Availability SLA</span>
-              <span class="chart-card-val font-mono">{{ onlineHostsCount }}/{{ totalHosts }} online</span>
-            </div>
-            <CanvasTimeSeries
-              :series="fleetTelemetryWindow.availability"
-              unit="%"
-              :height="130"
-              sync-group="fleet-telemetry"
-              :min="0"
-              :max="100"
-              :thresholds="availabilityThresholds"
-            />
-          </div>
-        </div>
-      </div>
-    </Transition>
+    <HostFleetTelemetryPanel
+      :show-telemetry="showTelemetry"
+      :total-hosts="totalHosts"
+      :connected-hosts="connectedHosts"
+      :disconnected-hosts="disconnectedHosts"
+      :error-hosts="errorHosts"
+      :type-counts="typeCounts"
+      :online-hosts-count="onlineHostsCount"
+      :avg-latency="avgLatency"
+    />
 
     <!-- Loading State -->
     <div v-if="loading && hosts.length === 0" class="loading-state glass-panel">

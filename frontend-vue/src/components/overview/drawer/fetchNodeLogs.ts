@@ -59,7 +59,7 @@ export async function requestNodeLogs(params: FetchLogsParams): Promise<string> 
   }
 
   if (params.isHostApp) {
-    return `[INFO] Host process '${params.targetApp}' is running as a system service. Standard stdout/stderr stream is only accessible for Docker containerized workloads (e.g. tiki_redis, my-nginx, db, nats).`
+    return `[INFO] Host process '${params.targetApp}' is running as a system service. Standard stdout/stderr stream is only accessible for Docker containerized workloads (e.g. redis, nginx, db, nats).`
   }
 
   const windowInfo = params.since === 'custom'

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import { k8sApi } from '../../api/k8s'
 import { getDefaultYamlTemplate } from '../../utils/yaml'
 
@@ -107,7 +108,7 @@ async function handleApply() {
     :show="show"
     mode="modal"
     :title="title"
-    :subtitle="`Cluster: ${cluster} ? Target Namespace: ${namespace || 'default'}`"
+    :subtitle="`Cluster: ${cluster} • Target Namespace: ${namespace || 'default'}`"
     max-width="820px"
     @close="handleClose"
   >
@@ -125,7 +126,8 @@ async function handleApply() {
             @click="handleResetTemplate"
             title="Reset to default template"
           >
-            <span>?? Reset Template</span>
+            <BaseIcon name="rotate-ccw" size="xs" />
+            <span>Reset Template</span>
           </button>
           <button 
             type="button" 
@@ -134,23 +136,24 @@ async function handleApply() {
             @click="handleCopy"
             title="Copy YAML to clipboard"
           >
-            <span>{{ copied ? '? Copied!' : '?? Copy YAML' }}</span>
+            <BaseIcon :name="copied ? 'check' : 'copy'" size="xs" />
+            <span>{{ copied ? 'Copied!' : 'Copy YAML' }}</span>
           </button>
         </div>
       </div>
 
       <!-- Error / Success Notification -->
       <div v-if="errorMessage" class="editor-banner banner-error animate-fade-in">
-        <span class="banner-icon">??</span>
+        <span class="banner-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
         <div class="banner-content">
           <strong>Validation / Apply Error:</strong>
           <span>{{ errorMessage }}</span>
         </div>
-        <button class="banner-close" @click="errorMessage = null">?</button>
+        <button class="banner-close" @click="errorMessage = null">×</button>
       </div>
 
       <div v-if="successMessage" class="editor-banner banner-success animate-fade-in">
-        <span class="banner-icon">?</span>
+        <span class="banner-icon"><BaseIcon name="check-circle" size="xs" /></span>
         <div class="banner-content">
           <span>{{ successMessage }}</span>
         </div>
@@ -178,7 +181,9 @@ async function handleApply() {
         :disabled="applying || !yamlContent.trim()"
         @click="handleApply"
       >
-        <span>{{ applying ? '? Applying to Cluster...' : '?? Apply Manifest' }}</span>
+        <BaseIcon v-if="applying" name="loader" size="xs" class="animate-spin" />
+        <BaseIcon v-else name="upload" size="xs" />
+        <span>{{ applying ? 'Applying to Cluster...' : 'Apply Manifest' }}</span>
       </button>
     </template>
   </ModalDrawer>

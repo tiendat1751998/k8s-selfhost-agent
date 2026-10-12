@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useTenancyRbac } from '../composables/useTenancyRbac'
 import StatusBadge from '../components/ui/StatusBadge.vue'
-import ModalDrawer from '../components/ui/ModalDrawer.vue'
+import TenantProjectModal from '../components/tenancy/TenantProjectModal.vue'
+import TenantQuotaModal from '../components/tenancy/TenantQuotaModal.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import TenantListTable from '../components/tenancy/TenantListTable.vue'
 import TenancyMobileCards from '../components/tenancy/TenancyMobileCards.vue'
@@ -237,32 +238,13 @@ const {
     <!-- MODALS & DRAWERS -->
     <CreateTenantModal v-model:show="showOrgModal" :is-submitting="isSubmitting" @create="handleCreateOrg($event)" />
 
-    <ModalDrawer v-model:show="showProjectModal" title="Create Project Namespace" subtitle="Allocate cluster namespaces and resource quotas to an organization.">
-      <form class="form-layout" @submit.prevent="handleCreateProject()">
-        <div class="form-group">
-          <label>Parent Organization</label>
-          <select v-model="newProj.orgId" class="input-glass">
-            <option v-for="org in organizations" :key="org.id" :value="org.id">{{ org.name }} ({{ org.id }})</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Project Name</label> <input v-model="newProj.name" type="text" placeholder="e.g. Payment Gateway Ingress" class="input-glass" required />
-        </div>
-        <div class="form-group">
-          <label>Project Identifier</label> <input v-model="newProj.id" type="text" placeholder="e.g. proj-payment-gw" class="input-glass font-mono" required />
-        </div>
-        <div class="form-group">
-          <label>Environments (comma separated)</label> <input v-model="newProj.envs" type="text" placeholder="dev, staging, prod" class="input-glass" />
-        </div>
-        <div class="form-group">
-          <label>Initial Workload Pod Capacity</label> <input v-model="newProj.workloads" type="number" min="1" max="500" class="input-glass" />
-        </div>
-      </form>
-      <template #footer="{ close }">
-        <button class="btn btn-secondary" type="button" @click="close">Cancel</button>
-        <button class="btn btn-primary" :disabled="isSubmitting" @click="handleCreateProject()">{{ isSubmitting ? 'Creating...' : 'Create Project' }}</button>
-      </template>
-    </ModalDrawer>
+    <TenantProjectModal
+      v-model:show="showProjectModal"
+      :organizations="organizations"
+      :new-proj="newProj"
+      :is-submitting="isSubmitting"
+      @create="handleCreateProject"
+    />
 
     <TenantMemberDrawer
       v-model:show="showMemberDrawer"
@@ -284,61 +266,12 @@ const {
     />
 
     <!-- Quota Configuration Modal -->
-    <ModalDrawer
+    <TenantQuotaModal
       v-model:show="showQuotaModal"
-      :title="selectedOrgForQuota ? `Resource Quota: ${selectedOrgForQuota.name}` : 'Tenant Resource Quota'"
-      subtitle="Cluster compute boundaries, pod allocation limits, and namespace quotas."
-    >
-      <div v-if="selectedOrgForQuota" class="quota-modal-body">
-        <div class="quota-info-banner">
-          <span class="font-mono text-cyan">{{ selectedOrgForQuota.id }}</span>
-          <span class="quota-tier-tag font-mono">{{ selectedOrgForQuota.tier }}</span>
-        </div>
-
-        <div class="quota-bar-group">
-          <div class="quota-bar-header">
-            <span class="quota-metric-name">Workload Pods</span>
-            <span class="quota-metric-values font-mono">{{ organizationStats[selectedOrgForQuota.id]?.workloadCount ?? 0 }} / 50 pods</span>
-          </div>
-          <div class="quota-track">
-            <div
-              class="quota-fill quota-fill-cyan"
-              :style="{ width: Math.min(100, ((organizationStats[selectedOrgForQuota.id]?.workloadCount ?? 0) / 50) * 100) + '%' }"
-            ></div>
-          </div>
-        </div>
-
-        <div class="quota-bar-group">
-          <div class="quota-bar-header">
-            <span class="quota-metric-name">Project Namespaces</span>
-            <span class="quota-metric-values font-mono">{{ organizationStats[selectedOrgForQuota.id]?.projectCount ?? 0 }} / 10 namespaces</span>
-          </div>
-          <div class="quota-track">
-            <div
-              class="quota-fill quota-fill-emerald"
-              :style="{ width: Math.min(100, ((organizationStats[selectedOrgForQuota.id]?.projectCount ?? 0) / 10) * 100) + '%' }"
-            ></div>
-          </div>
-        </div>
-
-        <div class="quota-bar-group">
-          <div class="quota-bar-header">
-            <span class="quota-metric-name">SSO Identity Seats</span>
-            <span class="quota-metric-values font-mono">{{ organizationStats[selectedOrgForQuota.id]?.memberCount ?? 0 }} / 25 seats</span>
-          </div>
-          <div class="quota-track">
-            <div
-              class="quota-fill quota-fill-amber"
-              :style="{ width: Math.min(100, ((organizationStats[selectedOrgForQuota.id]?.memberCount ?? 0) / 25) * 100) + '%' }"
-            ></div>
-          </div>
-        </div>
-      </div>
-      <template #footer="{ close }">
-        <button class="btn btn-secondary" type="button" @click="close">Close</button>
-        <button class="btn btn-primary" type="button" @click="showFeedback('Resource quota saved for ' + selectedOrgForQuota?.name); close()">Save Quota</button>
-      </template>
-    </ModalDrawer>
+      :selected-org="selectedOrgForQuota"
+      :stats="organizationStats"
+      @save="showFeedback('Resource quota saved for ' + $event.name)"
+    />
   </div>
 </template>
 

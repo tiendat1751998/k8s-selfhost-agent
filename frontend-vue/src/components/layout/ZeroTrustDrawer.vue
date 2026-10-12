@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
+import { securityApi } from '../../api/security'
 
 const props = defineProps<{ show: boolean }>()
 const emit = defineEmits<{ (e: 'update:show', val: boolean): void; (e: 'close'): void }>()
@@ -20,7 +21,16 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && props.show) handleClose()
 }
 
-onMounted(() => { window.addEventListener('keydown', handleKeydown) })
+onMounted(async () => {
+  window.addEventListener('keydown', handleKeydown)
+  try {
+    const k = await securityApi.getKmsKey()
+    if (k?.key_id) activeKeyId.value = k.key_id
+    if (k?.version) keyVersion.value = k.version
+  } catch {
+    // Keep initial secure key reference
+  }
+})
 onUnmounted(() => { window.removeEventListener('keydown', handleKeydown) })
 
 async function copyKeyId() {
@@ -31,34 +41,28 @@ async function copyKeyId() {
   } catch { /* clipboard fallback */ }
 }
 
-function generateKmsKeyId(version: number): string {
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-    const bytes = new Uint8Array(4)
-    crypto.getRandomValues(bytes)
-    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
-    return `kms-k8s-v${version}-${hex}`
-  }
-  return `kms-k8s-v${version}-${Date.now().toString(16).slice(-6)}`
-}
-
-function rotateKey() {
+async function rotateKey() {
   if (rotationStatus.value === 'rotating') return
   rotationStatus.value = 'rotating'
-  setTimeout(() => {
-    keyVersion.value += 1
-    activeKeyId.value = generateKmsKeyId(keyVersion.value)
+  try {
+    const res = await securityApi.rotateKmsKey()
+    if (res?.key_id) activeKeyId.value = res.key_id
+    if (res?.version) keyVersion.value = res.version
     rotationStatus.value = 'rotated'
-    setTimeout(() => { rotationStatus.value = 'idle' }, 3500)
-  }, 900)
+  } catch {
+    rotationStatus.value = 'idle'
+  }
 }
 
-function verifyChecksum() {
+async function verifyChecksum() {
   if (verificationStatus.value === 'verifying') return
   verificationStatus.value = 'verifying'
-  setTimeout(() => {
+  try {
+    await securityApi.verifyKmsIntegrity()
     verificationStatus.value = 'verified'
-    setTimeout(() => { verificationStatus.value = 'idle' }, 3500)
-  }, 1000)
+  } catch {
+    verificationStatus.value = 'idle'
+  }
 }
 
 async function computeSha256(message: string): Promise<string> {
@@ -67,7 +71,12 @@ async function computeSha256(message: string): Promise<string> {
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
     return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
   }
-  return 'c948a31e8432a188f6154e8c14f08e64c3d4a0b22a613589b4317f2258d4a9cf'
+  let hash = 0
+  for (let i = 0; i < message.length; i++) {
+    hash = ((hash << 5) - hash) + message.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash).toString(16).padStart(64, '0')
 }
 
 async function downloadAttestation() {

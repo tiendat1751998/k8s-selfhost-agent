@@ -9,6 +9,7 @@ import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
 import LogTraceDrawer from '../components/logs/LogTraceDrawer.vue'
 import LogContextModal from '../components/logs/LogContextModal.vue'
+import LogStreamToolbar from '../components/logs/LogStreamToolbar.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { LogFilterParams } from '../api/logging'
 
@@ -33,27 +34,6 @@ const {
   runHistoricalQuery, loadMoreHistorical, handleHistogramFilterRange, handleClearHistogramFilter,
   targetFilteredLogs,
 } = useHistoricalLogSearch(logStore, selectedTarget, searchKeyword, selectedLevel)
-
-const severityFilters = [
-  { label: 'ALL', value: '' },
-  { label: 'ERR', value: 'ERROR' },
-  { label: 'WARN', value: 'WARN' },
-  { label: 'INFO', value: 'INFO' },
-  { label: 'DEBUG', value: 'DEBUG' },
-]
-
-function isCurrentLevel(val: string): boolean {
-  if (!val) return !selectedLevel.value || selectedLevel.value === 'ALL'
-  if (val === 'ERROR') return selectedLevel.value === 'ERROR' || selectedLevel.value === 'ERR'
-  return selectedLevel.value.toUpperCase() === val.toUpperCase()
-}
-
-function setLevel(val: string) {
-  selectedLevel.value = val
-  if (mode.value === 'historical') {
-    runHistoricalQuery()
-  }
-}
 
 let activeTargetId = ''
 
@@ -217,65 +197,31 @@ function handleExport() {
 
 <template>
   <div class="view-container log-explorer-page">
-    <!-- Sleek Unified 38px Enterprise Toolbar -->
-    <div class="logs-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Kubernetes Log Stream Controls">
-      <!-- Zone 1 (Left - Sidebar & Stream Search) -->
-      <div class="toolbar-zone-left">
-        <button type="button" class="toolbar-btn btn-secondary" :class="{ active: isSidebarCollapsed }" title="Toggle Log Targets Sidebar" aria-label="Toggle Log Targets Sidebar" @click="isSidebarCollapsed = !isSidebarCollapsed"><BaseIcon name="sidebar" size="xs" /></button>
-        <span class="toolbar-target-badge font-mono" :title="selectedTarget.name"><BaseIcon :name="selectedTarget.type === 'node' ? 'server' : (selectedTarget.icon || 'box')" size="xs" /> <span>{{ selectedTarget.name }}</span></span>
-        <div class="toolbar-search-wrap">
-          <BaseIcon name="search" size="xs" class="search-icon" />
-          <input
-            v-model="searchKeyword"
-            type="text"
-            :placeholder="mode === 'historical' ? 'ClickHouse search (query=...)' : 'Filter logs (regex)...'"
-            class="toolbar-search-input font-mono"
-            aria-label="Filter logs"
-            @keyup.enter="mode === 'historical' ? runHistoricalQuery() : null"
-          />
-          <button v-if="searchKeyword" type="button" class="clear-input-btn" aria-label="Clear filter" @click="searchKeyword = ''"><BaseIcon name="x" size="xs" /></button>
-        </div>
-      </div>
-
-      <!-- Zone 2 (Center-Left - Mode Tabs & Severity Pills) -->
-      <div class="toolbar-zone-mode">
-        <div class="toolbar-nav-pills font-mono" role="tablist" aria-label="Stream Mode">
-          <button type="button" role="tab" :aria-selected="mode === 'live'" class="toolbar-pill-btn" :class="{ active: mode === 'live' }" @click="mode = 'live'"><BaseIcon name="zap" size="xs" /> <span>Live Tail</span></button>
-          <button type="button" role="tab" :aria-selected="mode === 'historical'" class="toolbar-pill-btn" :class="{ active: mode === 'historical' }" @click="mode = 'historical'"><BaseIcon name="search" size="xs" /> <span>Historical Search</span></button>
-        </div>
-
-        <!-- In Live Tail mode: 28px quick severity filter pills -->
-        <div v-if="mode === 'live'" class="toolbar-severity-pills font-mono" role="group" aria-label="Filter by Severity">
-          <button v-for="lvl in severityFilters" :key="lvl.value" type="button" class="severity-pill-btn" :class="['pill-' + lvl.label.toLowerCase(), { active: isCurrentLevel(lvl.value) }]" @click="setLevel(lvl.value)">{{ lvl.label }}</button>
-        </div>
-
-        <!-- In Historical Search mode: time range pills, limit select + query button -->
-        <div v-if="mode === 'historical'" class="toolbar-historical-group font-mono">
-          <div class="toolbar-time-pills">
-            <button v-for="r in timeRanges" :key="r.label" type="button" class="time-pill-btn" :class="{ active: selectedTimeRange === r.label }" @click="selectedTimeRange = r.label; runHistoricalQuery()">{{ r.label }}</button>
-          </div>
-          <select v-model="selectedHistoricalLimit" class="historical-limit-select font-mono" title="Max Log Entries to Fetch" aria-label="Historical log limit" @change="runHistoricalQuery()">
-            <option :value="100">100</option>
-            <option :value="500">500</option>
-            <option :value="1000">1k</option>
-            <option :value="5000">5k</option>
-            <option :value="10000">10k</option>
-            <option :value="50000">All (Keyset)</option>
-          </select>
-          <button type="button" class="toolbar-btn btn-secondary" :disabled="logStore.isHistoricalLoading" title="Query ClickHouse" @click="runHistoricalQuery()"><BaseIcon name="search" size="xs" /> <span>{{ logStore.isHistoricalLoading ? 'Searching...' : 'Query ClickHouse' }}</span></button>
-          <button v-if="logStore.hasMoreHistorical || logStore.totalHistoricalCount > logStore.logs.length" type="button" class="toolbar-btn btn-secondary load-more-compact" :disabled="logStore.isHistoricalLoading" title="Load more historical logs" @click="loadMoreHistorical"><span>+More ({{ logStore.logs.length }}/{{ logStore.totalHistoricalCount }})</span></button>
-        </div>
-      </div>
-
-      <!-- Zone 4 (Right - Stream Actions Group) -->
-      <div class="toolbar-actions-group">
-        <button type="button" class="toolbar-btn btn-secondary" :class="{ 'btn-tail-active': autoScroll && !isScrollLocked, 'btn-tail-paused': !autoScroll || isScrollLocked }" @click="toggleLiveTail"><span class="tail-dot" /> <span>{{ autoScroll && !isScrollLocked ? 'Live Tail' : 'Paused' }}</span></button>
-        <button type="button" class="toolbar-btn btn-secondary" :class="{ active: wrapLines }" title="Toggle Line Wrap" @click="wrapLines = !wrapLines"><span>Wrap</span></button>
-        <button type="button" class="toolbar-btn btn-secondary" :class="{ active: showHistogram }" title="Toggle Volume Histogram" @click="showHistogram = !showHistogram"><BaseIcon name="bar-chart-2" size="xs" /> <span>Volume</span></button>
-        <button type="button" class="toolbar-btn btn-secondary" title="Clear Buffer" aria-label="Clear Buffer" @click="clearBuffer"><BaseIcon name="trash" size="xs" /></button>
-        <button type="button" class="toolbar-btn btn-secondary" title="Export Logs" aria-label="Export Logs" @click="handleExport"><BaseIcon name="download" size="xs" /></button>
-      </div>
-    </div>
+    <!-- Unified 38px Enterprise Toolbar & Mobile Command Bar -->
+    <LogStreamToolbar
+      v-model:search-keyword="searchKeyword"
+      v-model:mode="mode"
+      v-model:selected-level="selectedLevel"
+      v-model:selected-time-range="selectedTimeRange"
+      v-model:selected-historical-limit="selectedHistoricalLimit"
+      v-model:is-sidebar-collapsed="isSidebarCollapsed"
+      v-model:wrap-lines="wrapLines"
+      v-model:show-histogram="showHistogram"
+      v-model:show-mobile-tree="showMobileTree"
+      :selected-target="selectedTarget"
+      :time-ranges="timeRanges"
+      :is-historical-loading="logStore.isHistoricalLoading"
+      :has-more-historical="logStore.hasMoreHistorical"
+      :total-historical-count="logStore.totalHistoricalCount"
+      :current-logs-count="logStore.logs.length"
+      :auto-scroll="autoScroll"
+      :is-scroll-locked="isScrollLocked"
+      @run-historical-query="runHistoricalQuery"
+      @load-more-historical="loadMoreHistorical"
+      @toggle-live-tail="toggleLiveTail"
+      @clear-buffer="clearBuffer"
+      @export-logs="handleExport"
+    />
 
     <!-- Congested Buffer Warning Alert -->
     <div
@@ -302,19 +248,6 @@ function handleExport() {
       >
         <BaseIcon name="x" size="xs" />
       </button>
-    </div>
-
-    <!-- Mobile Command Bar (<768px) -->
-    <div class="logs-mobile-command-bar mobile-only">
-      <div class="mobile-bar-left">
-        <button type="button" class="mobile-tree-toggle-btn font-mono" aria-label="Toggle log targets drawer" @click="showMobileTree = !showMobileTree"><BaseIcon :name="selectedTarget.type === 'node' ? 'server' : (selectedTarget.icon || 'box')" size="xs" /> <span>{{ selectedTarget.name }}</span><BaseIcon name="chevron-down" size="xs" /></button>
-      </div>
-      <div class="mobile-bar-actions">
-        <button type="button" class="mobile-btn font-mono" :class="{ active: mode === 'live' }" @click="mode = mode === 'live' ? 'historical' : 'live'"><BaseIcon :name="mode === 'live' ? 'zap' : 'search'" size="xs" /> <span>{{ mode === 'live' ? 'Live' : 'History' }}</span></button>
-        <button type="button" class="mobile-btn font-mono" :class="{ 'btn-tail-active': autoScroll && !isScrollLocked, 'btn-tail-paused': !autoScroll || isScrollLocked }" @click="toggleLiveTail"><span class="tail-dot" /> <span>{{ autoScroll && !isScrollLocked ? 'Tail' : 'Pause' }}</span></button>
-        <button type="button" class="mobile-btn font-mono" :class="{ active: showHistogram }" aria-label="Toggle Volume Histogram" @click="showHistogram = !showHistogram"><BaseIcon name="bar-chart-2" size="xs" /></button>
-        <button type="button" class="mobile-btn font-mono" title="Clear Buffer" aria-label="Clear Buffer" @click="clearBuffer"><BaseIcon name="trash" size="xs" /></button>
-      </div>
     </div>
 
     <!-- Query Error Banner -->
