@@ -40,7 +40,8 @@
 | **16 – 20** | System Wiring, Cryptography & Migrations | `done/019-...`, `done/020-...` | **MERGED (Done)** |
 | **21 – 23** | DevSecOps Fail-Close, Storage Fencing, Telegram Copilot | `done/021-...`, `done/022-...`, `done/023-...` | **MERGED (Done)** |
 | **24 – 26** | DB Sanitization Clones, DR Drills, CNI IPAM & DNS | `done/024-...`, `done/025-...`, `done/026-...` | **MERGED (Done)** |
-| **27 – 31** | DB Deep SRE, Secret Redaction, Baremetal, Canary | `inprocess/027` đến `031` (Bloat killer, in-stream secret, adjtimex, Kaniko rootless, Load shedding) | Spec Complete |
+| **27 – 29** | DB Deep SRE, Secret Redaction, Baremetal Hardware Watchdog | `done/027-...`, `done/028-...`, `done/029-...` | **MERGED (Done)** |
+| **30 – 31** | Rootless Kaniko Builder, Adaptive Canary Load Shedding | `inprocess/030-rootless-build-and-admission-control.md`, `inprocess/031-automated-canary-and-loadshedding.md` | Spec Complete |
 | **51 – 55** | Service Mesh, HTTP Desync, Cloudflare ReDoS | `inprocess/033-service-mesh-lifecycle-and-redos-protection.md` | Spec Complete |
 | **56 – 60** | Kafka Rebalance, RabbitMQ Watermark, AWS Kinesis PIDs | `inprocess/034-message-queue-and-streaming-sre-engine.md` | Spec Complete |
 | **61 – 64** | Ceph RocksDB, MinIO Bit-Rot, GitLab Anti-Wipe | `inprocess/035-distributed-storage-resiliency-and-healing.md` | Spec Complete |
