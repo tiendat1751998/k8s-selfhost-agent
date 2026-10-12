@@ -6,13 +6,32 @@ import (
 	"strings"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/datdt/k8sselfhost/internal/domain/explorer"
 )
 
-func (r *explorerRepo) searchK8s(ctx context.Context, client *kubernetes.Clientset, kind, cluster, namespace, query string, limit, offset int) ([]explorer.Resource, int, error) {
+// computeDeploymentStatus safely calculates deployment ready status without nil pointer panics.
+func computeDeploymentStatus(d *appsv1.Deployment) string {
+	if d == nil {
+		return "NotReady"
+	}
+	var desiredReplicas int32 = 1
+	if d.Spec.Replicas != nil {
+		desiredReplicas = *d.Spec.Replicas
+	} else if d.Spec.Paused {
+		desiredReplicas = 0
+	}
+
+	if d.Status.ReadyReplicas < desiredReplicas {
+		return "NotReady"
+	}
+	return "Ready"
+}
+
+func (r *explorerRepo) searchK8s(ctx context.Context, client kubernetes.Interface, kind, cluster, namespace, query string, limit, offset int) ([]explorer.Resource, int, error) {
 	var results []explorer.Resource
 
 	// Default to all namespaces if empty
@@ -50,10 +69,7 @@ func (r *explorerRepo) searchK8s(ctx context.Context, client *kubernetes.Clients
 			if query != "" && !strings.Contains(d.Name, query) {
 				continue
 			}
-			status := "Ready"
-			if d.Status.ReadyReplicas < *d.Spec.Replicas {
-				status = "NotReady"
-			}
+			status := computeDeploymentStatus(&d)
 			results = append(results, explorer.Resource{
 				ID:        string(d.UID),
 				Kind:      "Deployment",
@@ -156,7 +172,7 @@ func (r *explorerRepo) searchK8s(ctx context.Context, client *kubernetes.Clients
 	return results[start:end], total, nil
 }
 
-func (r *explorerRepo) getK8sByID(ctx context.Context, client *kubernetes.Clientset, id, clusterName, kind, namespace, name string) (*explorer.Resource, error) {
+func (r *explorerRepo) getK8sByID(ctx context.Context, client kubernetes.Interface, id, clusterName, kind, namespace, name string) (*explorer.Resource, error) {
 	switch strings.ToLower(kind) {
 	case "pod", "pods":
 		p, err := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
@@ -178,10 +194,7 @@ func (r *explorerRepo) getK8sByID(ctx context.Context, client *kubernetes.Client
 		if err != nil {
 			return nil, err
 		}
-		status := "Ready"
-		if d.Status.ReadyReplicas < *d.Spec.Replicas {
-			status = "NotReady"
-		}
+		status := computeDeploymentStatus(d)
 		return &explorer.Resource{
 			ID:        id,
 			Kind:      "Deployment",
@@ -253,7 +266,7 @@ func (r *explorerRepo) getK8sByID(ctx context.Context, client *kubernetes.Client
 	}
 }
 
-func (r *explorerRepo) syncK8sResource(ctx context.Context, client *kubernetes.Clientset, res *explorer.Resource) error {
+func (r *explorerRepo) syncK8sResource(ctx context.Context, client kubernetes.Interface, res *explorer.Resource) error {
 	namespace := res.Namespace
 	if namespace == "" {
 		namespace = "default"

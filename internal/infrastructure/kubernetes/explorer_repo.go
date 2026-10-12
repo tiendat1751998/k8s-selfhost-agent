@@ -14,7 +14,7 @@ import (
 )
 
 type explorerRepo struct {
-	client        *kubernetes.Clientset
+	client        kubernetes.Interface
 	dockerRepo    domainDocker.Repository
 	clientManager *cluster.ClientManager
 }
@@ -28,8 +28,17 @@ func NewExplorerRepo(client *kubernetes.Clientset, dockerRepo domainDocker.Repos
 	}
 }
 
+// NewExplorerRepoWithInterface creates a new live Kubernetes-backed Explorer repository with any kubernetes.Interface.
+func NewExplorerRepoWithInterface(client kubernetes.Interface, dockerRepo domainDocker.Repository, clientManager *cluster.ClientManager) explorer.Repository {
+	return &explorerRepo{
+		client:        client,
+		dockerRepo:    dockerRepo,
+		clientManager: clientManager,
+	}
+}
+
 func (r *explorerRepo) Search(ctx context.Context, kind, cluster, namespace, query string, limit, offset int) ([]explorer.Resource, int, error) {
-	var client *kubernetes.Clientset
+	var client kubernetes.Interface
 	var activeDockerRepo domainDocker.Repository = r.dockerRepo
 
 	if r.clientManager != nil && cluster != "" {
@@ -47,10 +56,14 @@ func (r *explorerRepo) Search(ctx context.Context, kind, cluster, namespace, que
 	}
 
 	if client == nil {
-		var err error
-		client, err = getClient(ctx, r.client)
-		if err != nil {
-			return nil, 0, err
+		if cs, ok := r.client.(*kubernetes.Clientset); ok && cs != nil {
+			var err error
+			client, err = getClient(ctx, cs)
+			if err != nil {
+				return nil, 0, err
+			}
+		} else {
+			client = r.client
 		}
 	}
 
@@ -88,7 +101,7 @@ func (r *explorerRepo) GetByID(ctx context.Context, id string) (*explorer.Resour
 		return nil, fmt.Errorf("invalid resource ID format: %s", id)
 	}
 
-	var client *kubernetes.Clientset
+	var client kubernetes.Interface
 	if r.clientManager != nil && clusterName != "" {
 		kCli, err := r.clientManager.GetK8sClient(ctx, clusterName)
 		if err == nil && kCli != nil {
@@ -96,10 +109,14 @@ func (r *explorerRepo) GetByID(ctx context.Context, id string) (*explorer.Resour
 		}
 	}
 	if client == nil {
-		var err error
-		client, err = getClient(ctx, r.client)
-		if err != nil {
-			return nil, err
+		if cs, ok := r.client.(*kubernetes.Clientset); ok && cs != nil {
+			var err error
+			client, err = getClient(ctx, cs)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			client = r.client
 		}
 	}
 	if client == nil {
@@ -110,7 +127,7 @@ func (r *explorerRepo) GetByID(ctx context.Context, id string) (*explorer.Resour
 }
 
 func (r *explorerRepo) SyncResource(ctx context.Context, res *explorer.Resource) error {
-	var client *kubernetes.Clientset
+	var client kubernetes.Interface
 	if r.clientManager != nil && res.Cluster != "" {
 		kCli, err := r.clientManager.GetK8sClient(ctx, res.Cluster)
 		if err == nil && kCli != nil {
@@ -118,10 +135,14 @@ func (r *explorerRepo) SyncResource(ctx context.Context, res *explorer.Resource)
 		}
 	}
 	if client == nil {
-		var err error
-		client, err = getClient(ctx, r.client)
-		if err != nil {
-			return err
+		if cs, ok := r.client.(*kubernetes.Clientset); ok && cs != nil {
+			var err error
+			client, err = getClient(ctx, cs)
+			if err != nil {
+				return err
+			}
+		} else {
+			client = r.client
 		}
 	}
 	if client == nil {
