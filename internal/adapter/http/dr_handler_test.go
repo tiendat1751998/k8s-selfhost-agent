@@ -1,4 +1,4 @@
-﻿package http
+package http
 
 import (
 	"bytes"
@@ -48,7 +48,8 @@ func setupDRTestRouter(t *testing.T) (http.Handler, string, string, string, *fak
 	logger := zaptest.NewLogger(t)
 
 	remediationCtrl := sre.NewRemediationController(client, nil, logger)
-	drUc := dr.NewDRUsecase(client, nil, logger)
+	etcdDriver := dr.NewEtcdctlDriver(t.TempDir(), dr.WithIsolatedTestMode())
+	drUc := dr.NewDRUsecase(client, nil, logger, dr.WithEtcdDriver(etcdDriver))
 	drH := NewDRHandler(drUc, remediationCtrl, logger)
 
 	platform := &PlatformHandlers{
