@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOverviewDashboard } from '../composables/useOverviewDashboard'
 
@@ -8,8 +8,8 @@ import RequestFlowBar from '../components/overview/hud/RequestFlowBar.vue'
 import OverviewSaturationTrends from '../components/overview/hud/OverviewSaturationTrends.vue'
 import OverviewMobileStream from '../components/overview/OverviewMobileStream.vue'
 import OverviewTopologySection from '../components/overview/OverviewTopologySection.vue'
-import NodeDiagnosticsDrawer from '../components/overview/drawer/NodeDiagnosticsDrawer.vue'
-import DeepDiveTrafficModal from '../components/overview/modals/DeepDiveTrafficModal.vue'
+const NodeDiagnosticsDrawer = defineAsyncComponent(() => import('../components/overview/drawer/NodeDiagnosticsDrawer.vue'))
+const DeepDiveTrafficModal = defineAsyncComponent(() => import('../components/overview/modals/DeepDiveTrafficModal.vue'))
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { MutedAlertConfig } from '../stores/alertStore'
 
@@ -294,7 +294,7 @@ const {
   </div>
 </template>
 
-<style scoped>
+<style>
 @import '../assets/styles/views/overview.css';
 @import '../assets/styles/views/overview-mobile.css';
 </style>

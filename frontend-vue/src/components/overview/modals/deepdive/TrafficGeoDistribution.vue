@@ -148,7 +148,3 @@ const avgRam = computed(() => {
     </div>
   </section>
 </template>
-
-<style scoped>
-@import '../../../../assets/styles/components/deep-dive-traffic.css';
-</style>

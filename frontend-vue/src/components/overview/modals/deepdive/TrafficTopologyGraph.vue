@@ -224,7 +224,3 @@ function handleModalChartHover(event: MouseEvent) {
     </div>
   </section>
 </template>
-
-<style scoped>
-@import '../../../../assets/styles/components/deep-dive-traffic.css';
-</style>

@@ -152,7 +152,3 @@ const emit = defineEmits<{
     </div>
   </section>
 </template>
-
-<style scoped>
-@import '../../assets/styles/views/overview.css';
-</style>

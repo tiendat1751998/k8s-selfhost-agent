@@ -66,7 +66,3 @@ const emit = defineEmits<{
     </button>
   </div>
 </template>
-
-<style scoped>
-@import '../../../assets/styles/components/alert-center.css';
-</style>

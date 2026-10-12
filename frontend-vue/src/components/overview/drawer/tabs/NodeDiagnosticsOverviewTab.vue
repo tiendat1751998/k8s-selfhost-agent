@@ -114,7 +114,3 @@ defineProps<Props>()
     </div>
   </div>
 </template>
-
-<style scoped>
-@import '../../../../assets/styles/components/node-diagnostics.css';
-</style>

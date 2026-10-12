@@ -111,7 +111,3 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
     </div>
   </div>
 </template>
-
-<style scoped>
-@import '../../../assets/styles/components/node-diagnostics.css';
-</style>

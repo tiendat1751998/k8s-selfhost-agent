@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAlertStore } from '../../stores/alertStore'
@@ -109,7 +109,3 @@ const bannerDescription = computed(() => {
     </div>
   </transition>
 </template>
-
-<style scoped>
-@import '../../assets/styles/views/overview.css';
-</style>

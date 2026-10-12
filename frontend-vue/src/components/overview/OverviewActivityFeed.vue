@@ -140,7 +140,3 @@ function navigateTo(link?: string) {
     </div>
   </div>
 </template>
-
-<style scoped>
-@import '../../assets/styles/views/overview.css';
-</style>
