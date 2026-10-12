@@ -1,29 +1,29 @@
 # Task 032 — Continuous Production Edge-Case Discovery & FMEA Engine (Active Ingestion)
-# Checkpoint: 2026-10-12T12:05:00+07:00
+# Checkpoint: 2026-10-12T12:40:00+07:00
 
 > **Severity**: Ongoing Platform Intelligence & SRE Knowledge Base Expansion  
-> **Status**: BATCH_1_2_3_4_5_INGESTED_150_SCENARIOS_ACTIVE  
+> **Status**: BATCH_1_2_3_4_5_6_INGESTED_160_SCENARIOS_ACTIVE  
 > **Target Agent**: `research` / `architect` / `sre`  
 > **Knowledge Base File**: `docs/architecture/production_failure_modes_encyclopedia.md`  
 
 ---
 
-## 1. TIẾN ĐỘ THU THẬP & HỆ THỐNG HÓA KỊCH BẢN (FMEA INGESTION TRACKER: 150 SCENARIOS)
+## 1. TIẾN ĐỘ THU THẬP & HỆ THỐNG HÓA KỊCH BẢN (FMEA INGESTION TRACKER: 160 SCENARIOS)
 
 * **Đợt 1 (Đã hoàn thành - 50 Kịch bản cơ bản)**: 
   - Kịch bản 1 đến 50 bao phủ 9 tầng: Phần cứng NVMe/RAID, Linux Kernel, etcd internals, Kubelet PLEG, Ingress buffers, CSI multi-attach, Postgres XID/table bloat, Redis fragmentation, DinD root escapes, Git history leaks, Vault drift, Schrödinger's backup.
 * **Đợt 2 (Đã hoàn thành - 27 Kịch bản dị biệt & thảm khốc toàn cầu)**:
-  - Kịch bản 51 đến 77 bao phủ 6 lĩnh vực: Service Mesh (Istio startup race, Envoy memory leak, mTLS in-flight drop, HTTP/1.1 desync, ReDoS), Message Queue (Kafka rebalance storm, RabbitMQ watermark, NATS ack-timeout, Kinesis PIDs), Distributed Storage (Ceph OSD, MinIO bit-rot, GlusterFS locks, GitLab replication desync), Kernel/eBPF (cgroup v2 memory.high, eBPF map, slab leak), Zero-Trust (Vault quorum, lease herd, mesh mTLS, JWKS cache), Cloud (EBS GP2, IMDSv1, S3 consistency, Monzo etcd, GitHub link failover).
+  - Kịch bản 51 đến 77 bao phủ 6 lĩnh vực: Service Mesh, Message Queue, Distributed Storage, Kernel/eBPF, Zero-Trust, Cloud.
 * **Đợt 3 (Đã hoàn thành - 23 Kịch bản Edge Cases & Hệ thống Phức hợp)**:
   - Kịch bản 78 đến 100 bao phủ 8 tầng hạ tầng nâng cao (Secret Store CSI, eBPF Security, Hybrid WAN, ClickHouse Parts, Containerd Inodes, AI/GPU XID, Air-gapped DR, FinOps Cross-AZ).
 * **Đợt 4 (Đã hoàn thành - 30 Kịch bản Chuyên Sâu Tầng Thấp & Black Swans)**:
-  - Kịch bản 101 đến 130 bao phủ 6 tầng hạ tầng phức hợp: Kernel Networking & Sockets (TIME_WAIT, somaxconn, TCP BDP, ARP gc_thresh, Conntrack overflow), VFS & OS Lockups (0-byte inode, D-State VFS, Zombie fork bomb, THP defrag, NFS ESTALE), K8s Control Plane Deadlocks (Webhook deadlock, Orphan finalizers, PLEG CRI freeze, etcd WAL fsync, 1MB limit), Database & Cache Catastrophes (XID wraparound, Redis CoW spike, Resync storm, Kafka poison pill, ES watermark), DevSecOps Defense (Dependency confusion, docker.sock breakout, Sidecar race, IMDSv2 IPv6 SSRF, ServiceAccount token replay), Cloud Hardware Disasters (EBS gp2 collapse, API 429 throttle, Spot 2m termination, NAT SNAT port exhaustion, KMS key expiration).
+  - Kịch bản 101 đến 130 bao phủ 6 tầng hạ tầng phức hợp: Kernel Sockets, VFS/Inodes, K8s Control Plane Deadlocks, Database Catastrophes, DevSecOps Defense, Cloud Hardware Disasters.
 * **Đợt 5 (Đã hoàn thành - 20 Kịch bản Doanh Nghiệp Cốt Lõi Tầng Cao & Tầng Vật Lý)**:
-  - Kịch bản 131 đến 150 bao phủ 4 tầng hạ tầng chuyên sâu:
-    - *Multi-Cluster Service Mesh*: Istio cross-cluster ServiceEntry DNS stale IP black hole, Envoy route table memory bloat (>1.5GB OOMKill), Envoy SDS Unix domain socket hang & cert freeze, Anycast BGP route flapping & TCP RST storm, Cilium ClusterMesh MTU mismatch & VXLAN packet black hole.
-    - *Advanced Linux Memory & NUMA*: NUMA remote memory allocation latency spikes (`zone_reclaim_mode=1`), Dirty page cache saturation & 100% synchronous disk I/O lockup, 1Gi HugePages allocation fragmentation (`Unschedulable`), Kernel slab memory leak via cgroup kmem accounting (`SUnreclaim`), High-order kernel memory allocation failure on 100Gbps NIC drivers.
-    - *Hardware Failure Modes & IPMI*: Correctable ECC memory error spikes signaling impending hard DIMM crash, PCIe AER non-fatal interrupt flooding freezing NVMe to Read-Only, IPMI BMC watchdog timer expiry hard node reset without crash log, CPU thermal throttling silent degradation (3.6GHz to 800MHz), Dual PSU redundancy loss tripping rack PDU breaker.
-    - *Enterprise PKI & HSM*: Intermediate CA OCSP responder unreachable causing 100% TLS handshake failures worldwide, HSM PKCS#11 concurrent session pool saturation blocking JWT signing, OpenSSL FIPS mode incompatibility crashing on legacy MD5/SHA1, ACME cert-manager rate-limit blocking domain for 7 days, Ephemeral KEK cache eviction preventing database decryption during Cloud KMS outage.
+  - Kịch bản 131 đến 150 bao phủ 4 tầng hạ tầng chuyên sâu: Multi-Cluster Service Mesh, Advanced Linux Memory & NUMA, Hardware Failure Modes & IPMI, Enterprise PKI & HSM.
+* **Đợt 6 (Đã hoàn thành - 10 Kịch bản GitOps Concurrency & AI Cluster Networking)**:
+  - Kịch bản 151 đến 160 bao phủ 2 tầng hạ tầng hiện đại:
+    - *GitOps & CI/CD Concurrency*: ArgoCD/Flux sync-wave DAG circular dependency deadlock, Git provider webhook out-of-order delivery & rollback drift, Monorepo sparse-checkout memory exhaustion (OOM), Semantic release concurrent matrix tagging race, Helm release secret three-way merge conflict.
+    - *High-Density AI Cluster Networking*: RoCEv2 Priority Flow Control (PFC) deadlock storm, RDMA locked memory limit (`ulimit -l`) saturation in PyTorch DDP, Asymmetric NVLink/PCIe fabric bandwidth degradation, Fork after CUDA initialization deadlock in multi-process inference, Checkpoint write burst saturation on shared Lustre/CephFS.
 
 ---
 
@@ -60,3 +60,5 @@
 | **136 – 140** | NUMA Zone Reclaim, Dirty Page Cache Flush, 1Gi HugePages | `inprocess/054-numa-memory-zone-and-hugepages-allocator.md` | Spec Complete |
 | **141 – 145** | Hardware ECC EDAC, PCIe AER NVMe, Thermal Throttling, PSU | `inprocess/055-hardware-ecc-edac-and-thermal-throttling-watchdog.md` | Spec Complete |
 | **146 – 150** | Enterprise PKI OCSP Stapling, HSM PKCS#11 Pool, KMS Grace Cache | `inprocess/056-enterprise-pki-ocsp-and-hsm-session-pool.md` | Spec Complete |
+| **151 – 155** | GitOps Sync-Wave DAG, Webhook Monotonic, Monorepo OOM, Drift | `inprocess/057-gitops-sync-wave-deadlock-and-webhook-replay.md` | Spec Complete |
+| **156 – 160** | RoCEv2 PFC Deadlock, RDMA Memlock, Asymmetric NVLink, CUDA Fork | `inprocess/058-rocev2-pfc-deadlock-and-rdma-watchdog.md` | Spec Complete |
