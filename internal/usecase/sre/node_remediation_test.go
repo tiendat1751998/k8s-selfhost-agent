@@ -237,6 +237,7 @@ func TestRemediationController_HandleNodeOffline_Errors(t *testing.T) {
 		t.Error("expected error for non-existent node")
 	}
 }
+
 func TestRemediationController_NilClientHardening(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
@@ -489,5 +490,3 @@ func TestRemediationController_HandleNodeOffline_PDBRespected(t *testing.T) {
 		t.Errorf("guarded pod should still exist in cluster: %v", err)
 	}
 }
-
-
