@@ -117,7 +117,7 @@ const availabilityThresholds = [
       <span class="tel-item tel-offline"><BaseIcon name="alert-triangle" size="xs" /> {{ offlineHostsCount }} offline</span>
       <template v-if="offlineHostsCount > 0">
         <span>·</span>
-        <button type="button" class="btn-micro-fence font-mono" @click="openFencingModal(hosts.find(h => h.status !== 'connected')?.name || '', 'default')">
+        <button type="button" class="btn-micro-fence font-mono" @click="openFencingModal(hosts.find(h => h.status !== 'connected')?.name || '', hosts.find(h => h.status !== 'connected')?.tenant_id || 'default')">
           <BaseIcon name="shield" size="xs" /> Safe Fence
         </button>
       </template>
