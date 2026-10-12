@@ -846,3 +846,96 @@
 ### 170. Dual-Stack IPv4/IPv6 Ingress Allocation Failure Làm Đóng Băng Khởi Tạo Worker Node
 * **Cơ chế lỗi**: Cụm Kubernetes triển khai mô hình Dual-Stack Networking. Khi cụm tự động scale up thêm 50 worker nodes trong đợt flash sale, cloud provider cấp phát thành công địa chỉ IPv6 nhưng dải địa chỉ IPv4 công cộng (Elastic IPs / Public Subnet CIDR) của VPC bị cạn kiệt. Node controller của Kubernetes rơi vào vòng lặp lỗi `Node status unknown: failed to assign IPv4 address`. Node không thể hoàn tất khởi tạo, các pods không thể schedule, toàn bộ đợt scale-up bị tắc nghẽn hoàn toàn trong giờ cao điểm.
 * **Cơ chế tự động hóa**: Giám sát số lượng địa chỉ IPv4 khả dụng trong từng subnet (`aws_ec2_available_ip_addresses`); tự động kích hoạt chuyển hướng sang kiến trúc **IPv6-Only Worker Nodes** với Egress-Only Internet Gateway kết hợp NAT64/DNS64 để các pods vẫn truy cập được các dịch vụ IPv4 bên ngoài mà không tiêu tốn bất kỳ địa chỉ IPv4 nào của máy chủ; cảnh báo khi dung lượng subnet IPv4 chạm ngưỡng 85%.
+
+---
+
+## TẦNG 38: ZERO-TRUST IDENTITY, WORKLOAD IDENTITY & TOKEN ROTATION STORMS (KỊCH BẢN 171 — 175)
+
+### 171. SPIFFE/SPIRE Workload Attestation SVID Thundering Herd Khi Hàng Loạt Pod Tái Khởi Động
+* **Cơ chế lỗi**: Sau sự cố sập một node lớn, Kubernetes scheduler dời 200 Pods đồng thời sang các node khác. Khi khởi động, tất cả Pods đều kết nối vào SPIRE Agent qua UNIX domain socket `/tmp/spire-agent/public/api.sock` để yêu cầu cấp phát X.509 SVID (SPIFFE Verifiable Identity Document). SPIRE Agent bị quá tải socket backlog và cạn kiệt CPU do phải ký hàng loạt CSR (Certificate Signing Requests) đồng thời. Các ứng dụng bị từ chối kết nối hoặc timeout, dẫn đến việc Envoy sidecar không thể thiết lập mTLS handshake. Toàn bộ các service gọi nhau bị lỗi `Bad Certificate / Peer Verification Failed` kéo dài 15-20 phút.
+* **Cơ chế tự động hóa**: Triển khai cơ chế **Proactive Jittered SVID Renewal**: cấu hình SPIRE Agent tự động xoay vòng cert khi cert còn 50% thời hạn kèm độ trễ ngẫu nhiên (Jitter 0-20%); thiết lập In-Memory SVID Cache trên SDK phía client để tái sử dụng token hợp lệ; cấu hình Unix domain socket backlog của SPIRE Agent tăng từ mặc định 128 lên 2048 (`listen_backlog: 2048`).
+
+### 172. Kubernetes TokenRequest API Depletion & Projected Volume Stale Mounts
+* **Cơ chế lỗi**: Kubelet sử dụng Projected ServiceAccount Tokens với thời gian sống ngắn (ví dụ 1 giờ). Kubelet chịu trách nhiệm định kỳ làm mới file token tại `/var/run/secrets/kubernetes.io/serviceaccount/token` trước khi hết hạn. Khi Kubelet hoặc API Server bị nghẽn mạng hoặc CPU quá tải, tiến trình làm mới token bị trễ quá thời hạn. Các SDK client (AWS IRSA, HashiCorp Vault Agent, GCP Workload Identity) chỉ đọc file token một lần vào bộ nhớ khi pod khởi động hoặc kiểm tra lại file nhưng thấy file chưa được cập nhật. Kết quả là toàn bộ lệnh gọi API ra cloud hoặc secret store bị ném lỗi `HTTP 401 Unauthorized: token expired` vĩnh viễn cho đến khi Pod bị restart thủ công.
+* **Cơ chế tự động hóa**: Triển khai In-Container Token Watcher sử dụng Linux `inotify` trên thư mục token; tự động nạp lại token vào bộ nhớ ngay khi file được cập nhật; bổ sung logic kiểm tra claim `exp` trong JWT payload, nếu token còn dưới 5 phút mà chưa được Kubelet cập nhật, tự động gọi API `TokenRequest` trực tiếp tới Kubernetes API Server kèm exponential backoff để tự gia hạn khẩn cấp.
+
+### 173. OIDC Identity Provider (IdP) Token Clock Skew Gây Ra Ingress Auth Lockout Toàn Cụm
+* **Cơ chế lỗi**: Doanh nghiệp sử dụng OAuth2-Proxy hoặc Envoy JWT Authentication Filter kết nối tới OIDC Provider (Keycloak, Okta, Authentik). Do nhiệt độ phòng máy hoặc NTP daemon bị trôi dạt nhẹ, đồng hồ của Ingress Node chạy nhanh hơn đồng hồ của IdP server chỉ 2-3 giây. Khi người dùng xác thực và nhận JWT mới tinh, IdP đóng dấu claim `iat` (issued at) là `10:00:00`. Nhưng node Ingress kiểm tra token lúc `09:59:58` và lập tức từ chối token với mã lỗi `HTTP 401: token used before issued (iat in future)`. Hàng ngàn nhân viên và khách hàng bị khóa đăng nhập trên diện rộng.
+* **Cơ chế tự động hóa**: Bắt buộc cấu hình thông số **Clock Leeway** trong tất cả các JWT Validator / OAuth2 Proxy (`jwt_leeway: 60s` hoặc `clock_tolerance: 60s`); tích hợp kiểm tra độ trôi đồng hồ (NTP drift check) vào `/readyz` probe của Ingress Controller, tự động cảnh báo và cô lập node nếu độ lệch giờ vượt quá 100ms.
+
+### 174. Cross-Cloud Federated IAM Role Chaining Throttling (AssumeRoleWithWebIdentity)
+* **Cơ chế lỗi**: Hệ thống đa đám mây (Multi-Cloud) sử dụng AWS STS `AssumeRoleWithWebIdentity` hoặc GCP Workload Identity để Pods trên Kubernetes On-Premises/Bare-Metal truy cập tài nguyên S3/GCS. Khi có đợt scaling hàng loạt 500 pods worker xử lý batch data, tất cả pods đồng thời gửi request tới AWS STS API endpoint. AWS STS áp dụng rate limit nghiêm ngặt theo account (mặc định chỉ vài trăm TPS). Hàng loạt worker nhận lỗi `HTTP 429 Too Many Requests: ThrottlingException - Rate exceeded`, các pipeline dữ liệu bị gián đoạn và rớt jobs liên tục.
+* **Cơ chế tự động hóa**: Xây dựng **Centralized STS Credential Cache Service**: thay vì mỗi pod tự gọi trực tiếp AWS STS, các pods truy xuất qua một local daemon hoặc sidecar chia sẻ bộ nhớ; daemon này pre-fetch và cache Temporary AWS Credentials trong RAM, chỉ làm mới khi token còn 15 phút thời hạn; bổ sung Decorrelated Jitter Exponential Backoff khi gặp lỗi HTTP 429 từ STS.
+
+### 175. mTLS Root CA Revocation Emergency Partition Khi Rút Phép Chứng Chỉ Khẩn Cấp
+* **Cơ chế lỗi**: Đội ngũ an toàn thông tin phát hiện Private Key của Intermediate CA bị lộ và thực hiện thu hồi chứng chỉ (Certificate Revocation) trên HashiCorp Vault / Step-CA. Tuy nhiên, trong cụm Kubernetes gồm 400 microservices, việc phân phối CA bundle mới và CRL (Certificate Revocation List) tới các node mất tới 10-15 phút do độ trễ đồng bộ ConfigMap và Secret. Trong khoảng thời gian này, các pods nhận được CA mới sẽ lập tức ngắt kết nối với các pods vẫn đang sử dụng chứng chỉ ký bởi CA cũ. Toàn bộ mạng lưới mesh bị chia cắt cục bộ (Network Partition), hàng ngàn giao dịch thanh toán bị fail do lỗi `TLS handshake failed: unknown authority`.
+* **Cơ chế tự động hóa**: Thiết lập quy trình **Dual-Root Trust Transition Protocol**: luôn phân phối CA bundle mới chứa CẢ CA cũ và CA mới vào trust-store của pods ít nhất 24 giờ trước khi tiến hành chuyển đổi (Transition Window); cấu hình envoy `combined_validation_context` hỗ trợ nhiều trusted CA; chỉ thu hồi CA cũ sau khi xác nhận 100% workloads đã chuyển sang sử dụng chứng chỉ mới được cấp bởi CA mới.
+
+---
+
+## TẦNG 39: DISTRIBUTED CONSENSUS, STATE MACHINES & SPLIT-BRAIN FENCING (KỊCH BẢN 176 — 180)
+
+### 176. Zookeeper / Raft Ephemeral Node Leaks & GC Jitter Trong Kafka & ClickHouse Keeper
+* **Cơ chế lỗi**: Kafka hoặc ClickHouse Keeper phụ thuộc vào Zookeeper / Raft để theo dõi trạng thái sống còn của node thông qua Ephemeral Nodes và heartbeat. Khi một node Kafka gặp hiện tượng JVM Garbage Collection Stop-the-World kéo dài 20 giây (vượt quá `zookeeper.session.timeout.ms = 18000`), Zookeeper coi node này đã chết và xóa Ephemeral Node. Sau 20 giây, JVM tỉnh lại và tiếp tục thực hiện ghi partition mà không biết rằng partition đó đã được gán cho broker khác. Hiện tượng này dẫn đến việc dữ liệu bị ghi đè, corrupt message log và leader election rơi vào vòng lặp flapping không bao giờ dừng lại.
+* **Cơ chế tự động hóa**: Kích hoạt **Monotonic Fencing Tokens** và Generation ID trên mọi storage write operation: storage layer từ chối mọi request ghi có Generation ID cũ hơn ID hiện tại; tinh chỉnh JVM GC sang ZGC hoặc Shenandoah GC với cam kết STW pause time $< 10ms$; tích hợp GC Pause Watchdog: nếu phát hiện STW pause $> 5s$, tiến trình tự động kích hoạt `SIGTERM` rút lui một cách trật tự thay vì cố gắng tái kết nối trong tình trạng zombie.
+
+### 177. etcd Database Defragmentation Disk I/O Spike Gây Mất Leader Toàn Cụm
+* **Cơ chế lỗi**: Sau khi thực hiện dọn dẹp hàng ngàn Pods hoặc events cũ, SRE chạy lệnh `etcdctl defrag` để thu hồi dung lượng đĩa vật lý của etcd backend file (bbolt). Lệnh defrag tạo một bản sao cơ sở dữ liệu mới và thực hiện copy tuần tự, gây khóa toàn bộ I/O đĩa trong vòng 5-15 giây. Khi chạy defrag trên etcd leader node, tiến trình bị block đĩa không thể phản hồi heartbeat tin nhắn Raft gửi tới các follower. Các follower timeout và kích hoạt cuộc bầu cử leader mới. Nhưng leader mới nhận được traffic cũng bị nghẽn đĩa nếu cronjob defrag đang quét tuần tự qua các node. Kết quả là etcd cluster rơi vào tình trạng liên tục bầu cử (Election Storm) và K8s API Server rớt toàn bộ kết nối.
+* **Cơ chế tự động hóa**: Xây dựng **Safe Defragmentation Coordinator**: 
+  1. Kiểm tra etcd endpoint, nếu node là leader thì ra lệnh chuyển quyền lãnh đạo (`etcdctl move-leader`) sang node khác trước khi defrag;
+  2. Chỉ thực hiện defrag lần lượt từng non-leader node;
+  3. Sau mỗi node, chờ tối thiểu 60 giây và kiểm tra độ trễ commit Raft (`etcd_disk_wal_fsync_duration_seconds < 10ms`) trước khi tiến hành node tiếp theo;
+  4. Tuyệt đối cấm chạy defrag đồng thời trên nhiều node.
+
+### 178. Distributed Lock Lease Expiration Bị Gãy Do Clock Jump (Martin Kleppmann GC Pause Catastrophe)
+* **Cơ chế lỗi**: Microservice A mua một Distributed Lock trong Redis hoặc etcd với TTL là 10 giây để đảm bảo chỉ duy nhất một instance được ghi vào cơ sở dữ liệu. Ngay sau khi lấy được lock, service A bị dừng đột ngột (do Linux Kernel swapping bộ nhớ, VM hypervisor pause, hoặc GC freeze) trong 12 giây. Trong lúc đó, TTL 10 giây hết hạn, và Distributed Lock Manager cấp phát lock đó cho Microservice B. Microservice B bắt đầu ghi dữ liệu. Cùng thời điểm đó, Microservice A tỉnh lại, tin tưởng rằng mình vẫn đang sở hữu lock (vì chưa có logic kiểm tra lại), và thực hiện thao tác ghi đè lên dữ liệu của Microservice B. Cơ sở dữ liệu bị sai lệch logic tài chính nghiêm trọng.
+* **Cơ chế tự động hóa**: Bắt buộc triển khai **Fencing Tokens (Generation Counter)**: mỗi lần acquire lock thành công, lock service trả về một số nguyên tăng dần (ví dụ Token 101, 102...). Khi thực hiện write xuống database, query bắt buộc phải kèm theo điều kiện `WHERE current_fencing_token < $new_token`. Nếu database phát hiện có token lớn hơn đã ghi trước đó, transaction của service A bị từ chối ngay lập tức (`ERR_FENCING_TOKEN_STALE`).
+
+### 179. Patroni / PgBouncer Connection Pool Poisoning Khi PostgreSQL Failover
+* **Cơ chế lỗi**: Cụm PostgreSQL High Availability quản lý bởi Patroni thực hiện failover: Node 1 (Master cũ) gặp sự cố phần cứng, Patroni promote Node 2 (Replica) lên thành Master mới, và chuyển Node 1 về trạng thái Read-Only. Tuy nhiên, connection pooler (PgBouncer) ở tầng giữa vẫn duy trì một danh sách hàng trăm TCP connections đã mở sẵn tới Node 1. Khi ứng dụng backend gửi các câu lệnh `INSERT`/`UPDATE`, PgBouncer tái sử dụng các connection cũ này và gửi vào Node 1. Ứng dụng nhận về hàng loạt lỗi `ERROR: cannot execute INSERT in a read-only transaction`. Do application pooling không tự đóng socket, tình trạng này kéo dài hàng chục phút sau khi failover đã hoàn tất.
+* **Cơ chế tự động hóa**: Tích hợp **Patroni Post-Failover Hook với PgBouncer API**: ngay khi failover hoàn tất, hook script tự động gửi lệnh `PAUSE` tới PgBouncer, thực hiện `RECONNECT` hoặc `KILL_CLIENTS` trên các database bị ảnh hưởng để ép đóng toàn bộ socket cũ tới node read-only, sau đó reload danh sách master mới và `RESUME` pooler trong vòng dưới 500ms; phía Go backend cấu hình `ConnMaxLifetime: 5m` và tự động discard connection khi gặp lỗi `read-only transaction`.
+
+### 180. Consul / Memberlist Serf Gossip Flapping Storm Do Packet Loss Mạng UDP
+* **Cơ chế lỗi**: Hệ thống discovery hoặc clustering sử dụng giao thức Gossip (Consul, Nomad, Memberlist) qua cổng UDP 8301. Khi một đường switch mạng bị lỗi chập chờn gây mất 3-5% gói tin UDP, các bản tin probe ping giữa các node bị drop. Gossip protocol kết luận node đã chết và broadcast bản tin `node-failed` tới toàn bộ 300 nodes trong cụm. Vài giây sau, một gói tin TCP probe kiểm tra lại thành công, gossip protocol lại broadcast bản tin `node-joined`. Chu kỳ flapping này lặp lại liên tục, sinh ra bão broadcast UDP làm nghẽn toàn bộ băng thông card mạng của các máy chủ và khiến CPU của cluster nodes bị bão hòa ở mức 100%.
+* **Cơ chế tự động hóa**: Tinh chỉnh thông số **Gossip Flapping Dampening**: cấu hình `suspicion_mult: 5` và `probe_interval: 2s` để tăng độ kiên nhẫn trước khi công bố node failed; cấu hình TCP fallback probe trước khi phát tán thông điệp; tích hợp thuật toán tự động nhận diện bão gossip: nếu tần suất thay đổi trạng thái của một node vượt quá 3 lần/phút, tự động cách ly cảnh báo và tạm dừng broadcast sự kiện của node đó trong 10 phút.
+
+---
+
+## TẦNG 40: ENTERPRISE CONTAINER IMAGES, ARTIFACT MUTABILITY & STORAGE SPILLOVER (KỊCH BẢN 181 — 185)
+
+### 181. OCI Container Image Tag Mutability & Inconsistent Cluster State
+* **Cơ chế lỗi**: Đội ngũ CI/CD vô tình cho phép ghi đè (overwrite) tag của container image trong registry riêng (ví dụ tag `production-v1.4.0` bị build và push lại 2 lần với source code khác nhau). Trong cụm Kubernetes gồm 20 worker nodes: 10 nodes đã chạy pod từ trước có sẵn layer image cache cũ trong local storage (với `imagePullPolicy: IfNotPresent`), trong khi 10 nodes mới scale-up pull image mới nhất về. Kết quả là trong cùng một Deployment và cùng một Service, 50% pods chạy code phiên bản mới và 50% pods chạy code phiên bản cũ. Người dùng nhận được các response không nhất quán, và bug vừa fix vẫn tiếp tục xuất hiện ngẫu nhiên.
+* **Cơ chế tự động hóa**: Triển khai **Immutable Image Digest Enforcement**:
+  1. Kích hoạt tính năng Immutable Tags trên Container Registry (Harbor, AWS ECR, GCP Artifact Registry) để ngăn chặn hoàn toàn việc ghi đè tag đã phát hành;
+  2. Xây dựng Validating / Mutating Admission Webhook trong Kubernetes: tự động chuyển đổi tag image sang sha256 digest (`myrepo/app:v1.4.0` $\implies$ `myrepo/app@sha256:7f83b...`) trước khi ghi vào etcd;
+  3. Từ chối deploy bất kỳ pod nào sử dụng tag trôi nổi như `latest`, `dev`, hoặc `staging`.
+
+### 182. Ephemeral Storage Eviction Cascade Do Ứng Dụng Ghi Log Tràn Vào `/tmp`
+* **Cơ chế lỗi**: Một container Java hoặc Python bị lỗi lặp vô hạn và ghi unrotated debug log hoặc heap dump trực tiếp vào `/tmp/app.log`. Trong Kubernetes, thư mục `/tmp` mặc định được mount từ root filesystem (`/`) của worker node nếu pod không khai báo emptyDir. Khi dung lượng ổ đĩa root của node vượt ngưỡng 85%, Kubelet kích hoạt cơ chế `DiskPressure` và tiến hành evict (trục xuất) các pods để giải phóng đĩa. Pod gây lỗi bị kill và được scheduler điều phối sang node khác. Trên node mới, pod tiếp tục ghi đầy thư mục `/tmp` và lại kéo sập tiếp node đó. Cứ như vậy, một pod duy nhất lần lượt đánh sập toàn bộ các worker nodes trong cụm.
+* **Cơ chế tự động hóa**: Bắt buộc cấu hình **Ephemeral Storage Quotas & Limits**:
+  1. Admission Webhook bắt buộc mọi pod phải có `resources.limits.ephemeral-storage` (ví dụ `2Gi`);
+  2. Bắt buộc mount `/tmp` dưới dạng `emptyDir` có giới hạn `medium: Memory` hoặc `sizeLimit: 1Gi`;
+  3. Kubelet tự động SIGKILL ngay container nào vượt quá quota ephemeral storage thay vì để node bị `DiskPressure` gây trục xuất các pod vô tội khác.
+
+### 183. Kubelet Disk Pressure Image Garbage Collection Freeze
+* **Cơ chế lỗi**: Ổ đĩa chứa container runtime (`/var/lib/containerd` hoặc `/var/lib/docker`) chạm ngưỡng cảnh báo 85% dung lượng. Kubelet bắt đầu kích hoạt Image Garbage Collection để xóa các unused container images. Tuy nhiên, do một số Deployments trong cụm đang rơi vào tình trạng CrashLoopBackOff liên tục restart, containerd giữ lock trên các layer cache và không thể xóa được. Kubelet liên tục gọi gRPC `RemoveImage` vào containerd trong vòng lặp vô tận mà không nghỉ. Quá trình này ngốn 100% CPU của containerd daemon, khiến mọi lệnh kiểm tra sức khỏe của Kubelet (`CRI status`) bị timeout. Node chuyển sang trạng thái `NotReady` kéo theo việc Kubelet ngưng hoạt động.
+* **Cơ chế tự động hóa**: Cấu hình `imageGCHighThresholdPercent: 80` và `imageGCLowThresholdPercent: 70` với khoảng cách an toàn; thiết lập cơ chế tự động dọn dẹp các container đã chết (Dead Container GC) trước khi kích hoạt Image GC; giới hạn tần suất gọi Image GC không quá 1 lần mỗi 5 phút; tự động quarantine các pod CrashLoopBackOff quá 10 lần để giải phóng lock file layer của container runtime.
+
+### 184. Linux Host PID Table Exhaustion Do Rogue Pod Fork Bomb
+* **Cơ chế lỗi**: Một container trong cụm bị xâm nhập hoặc dính lỗi lập trình đệ quy spawn tiến trình vô hạn (Fork Bomb). Mặc dù pod có thể đã được cấu hình limit CPU/RAM, nhưng admin quên cấu hình giới hạn số lượng Process ID (PIDs). Số lượng tiến trình trên máy chủ nhanh chóng chạm mức tối đa của hệ điều hành (`/proc/sys/kernel/pid_max`, thường là 32768). Hậu quả là toàn bộ hệ thống máy chủ bị tê liệt: Linux không thể spawn thêm bất kỳ tiến trình nào mới, Kubelet không thể chạy lệnh exec probe kiểm tra sức khỏe, và quản trị viên không thể đăng nhập SSH vào máy chủ để can thiệp.
+* **Cơ chế tự động hóa**: 
+  1. Bắt buộc cấu hình `SupportPodPidsLimit=true` trên toàn bộ Kubelet;
+  2. Admission Controller tự động inject mặc định `podPidsLimit: 1024` cho tất cả workloads thông qua Pod Security Standards hoặc mutating webhook;
+  3. Tinh chỉnh kernel sysctl máy chủ vật lý: tăng `kernel.pid_max = 4194304`;
+  4. Giám sát cgroup metric `pids.current` và gửi cảnh báo khi số lượng process của một container vượt quá 500.
+
+### 185. Linux Page Cache Writeback Latency (dirty_ratio) Làm Đóng Băng Kubelet Heartbeat
+* **Cơ chế lỗi**: Trên một worker node chạy cơ sở dữ liệu hoặc tác vụ sao lưu (Backup), một tiến trình ghi file nén 50GB xuống đĩa cục bộ. Linux Kernel cho phép ghi nhanh vào Page Cache trong RAM mà chưa cần flush ngay xuống đĩa vật lý. Tuy nhiên, khi dung lượng dirty memory trong RAM chạm ngưỡng sysctl mặc định `vm.dirty_ratio = 20%` (trên máy chủ 256GB RAM, con số này lên tới 50GB), Kernel lập tức kích hoạt cơ chế **Synchronous Write Throttling**: ép TẤT CẢ các tiến trình đang thực hiện I/O trên toàn bộ hệ thống phải dừng lại để chờ flush toàn bộ 50GB dirty pages xuống đĩa. Quá trình flush đĩa này làm I/O latency vọt lên hàng chục giây. Kubelet không thể ghi file heartbeat cập nhật node status, khiến control plane đánh dấu node là `NotReady` và evict toàn bộ hàng trăm pods đang chạy bình thường.
+* **Cơ chế tự động hóa**: Tinh chỉnh bắt buộc các tham số bộ nhớ ảo Linux Kernel trên toàn bộ cụm Kubernetes:
+  ```sysctl
+  vm.dirty_background_bytes = 268435456   # 256MB: Bắt đầu flush ngầm từ rất sớm
+  vm.dirty_bytes = 1073741824             # 1GB: Giới hạn tối đa bộ đệm ghi đồng bộ
+  vm.dirty_writeback_centisecs = 500      # 5 giây flush một lần
+  ```
+  Việc chuyển từ phần trăm RAM (`dirty_ratio`) sang số byte cố định (`dirty_bytes`) ngăn chặn hoàn toàn hiện tượng tích tụ hàng chục GB dữ liệu chờ flush trên các máy chủ có dung lượng RAM lớn, giữ vững I/O latency ổn định cho Kubelet.
+
