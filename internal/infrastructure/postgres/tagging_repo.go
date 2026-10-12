@@ -3,9 +3,9 @@ package postgres
 import (
 	"context"
 
-
 	"github.com/datdt/k8sselfhost/internal/domain/tagging"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // TaggingRepo implements tagging.Repository using PostgreSQL.
@@ -24,7 +24,8 @@ func (r *TaggingRepo) getDB(ctx context.Context) DBTX {
 
 func (r *TaggingRepo) ListTags(ctx context.Context) ([]tagging.Tag, error) {
 	query := `SELECT id, key, value, category, created_at FROM tags ORDER BY key, value`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "listing tags")
 	}
@@ -42,9 +43,14 @@ func (r *TaggingRepo) ListTags(ctx context.Context) ([]tagging.Tag, error) {
 }
 
 func (r *TaggingRepo) CreateTag(ctx context.Context, tag *tagging.Tag) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	err := r.getDB(ctx).QueryRow(ctx,
-		`INSERT INTO tags (key, value, category) VALUES ($1, $2, $3) RETURNING id, created_at`,
-		tag.Key, tag.Value, tag.Category,
+		`INSERT INTO tags (key, value, category, tenant_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
+		tag.Key, tag.Value, tag.Category, tenantID,
 	).Scan(&tag.ID, &tag.CreatedAt)
 	if err != nil {
 		return errors.Wrap(err, "creating tag")
@@ -53,7 +59,8 @@ func (r *TaggingRepo) CreateTag(ctx context.Context, tag *tagging.Tag) error {
 }
 
 func (r *TaggingRepo) DeleteTag(ctx context.Context, id string) error {
-	_, err := r.getDB(ctx).Exec(ctx, `DELETE FROM tags WHERE id = $1`, id)
+	query, args := BuildTenantQuery(ctx, `DELETE FROM tags WHERE id = $1`, id)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "deleting tag")
 	}
@@ -61,9 +68,14 @@ func (r *TaggingRepo) DeleteTag(ctx context.Context, id string) error {
 }
 
 func (r *TaggingRepo) TagResource(ctx context.Context, resourceID, tagID string) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	_, err := r.getDB(ctx).Exec(ctx,
-		`INSERT INTO resource_tags (resource_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-		resourceID, tagID,
+		`INSERT INTO resource_tags (resource_id, tag_id, tenant_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+		resourceID, tagID, tenantID,
 	)
 	if err != nil {
 		return errors.Wrap(err, "tagging resource")
@@ -72,7 +84,8 @@ func (r *TaggingRepo) TagResource(ctx context.Context, resourceID, tagID string)
 }
 
 func (r *TaggingRepo) UntagResource(ctx context.Context, resourceID, tagID string) error {
-	_, err := r.getDB(ctx).Exec(ctx, `DELETE FROM resource_tags WHERE resource_id = $1 AND tag_id = $2`, resourceID, tagID)
+	query, args := BuildTenantQuery(ctx, `DELETE FROM resource_tags WHERE resource_id = $1 AND tag_id = $2`, resourceID, tagID)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "untagging resource")
 	}
@@ -85,7 +98,8 @@ func (r *TaggingRepo) GetResourceTags(ctx context.Context, resourceID string) ([
 		 JOIN resource_tags rt ON rt.tag_id = t.id
 		 WHERE rt.resource_id = $1
 		 ORDER BY t.key, t.value`
-	rows, err := r.getDB(ctx).Query(ctx, query, resourceID)
+	query, args := BuildTenantQuery(ctx, query, resourceID)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "getting resource tags")
 	}

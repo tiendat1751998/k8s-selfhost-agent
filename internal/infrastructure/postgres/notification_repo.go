@@ -161,13 +161,15 @@ func (r *notificationRepo) ListNotifications(ctx context.Context, limit, offset 
 	`
 	countQuery := `SELECT COUNT(*) FROM notifications WHERE is_read = false`
 
+	countQuery, countArgs := BuildTenantQuery(ctx, countQuery)
 	var total int
-	err := r.getDB(ctx).QueryRow(ctx, countQuery).Scan(&total)
+	err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting notifications: %w", err)
 	}
 
-	rows, err := r.getDB(ctx).Query(ctx, query, limit, offset)
+	query, args := BuildTenantQuery(ctx, query, limit, offset)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying notifications: %w", err)
 	}
@@ -186,13 +188,15 @@ func (r *notificationRepo) ListHistory(ctx context.Context, limit, offset int) (
 	`
 	countQuery := `SELECT COUNT(*) FROM notifications`
 
+	countQuery, countArgs := BuildTenantQuery(ctx, countQuery)
 	var total int
-	err := r.getDB(ctx).QueryRow(ctx, countQuery).Scan(&total)
+	err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting notifications history: %w", err)
 	}
 
-	rows, err := r.getDB(ctx).Query(ctx, query, limit, offset)
+	query, args := BuildTenantQuery(ctx, query, limit, offset)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying notifications history: %w", err)
 	}
@@ -229,7 +233,8 @@ func (r *notificationRepo) scanNotifications(rows pgx.Rows) []notification.Notif
 
 func (r *notificationRepo) MarkRead(ctx context.Context, id string) error {
 	query := `UPDATE notifications SET is_read = true WHERE id = $1`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
+	query, args := BuildTenantQuery(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("marking notification read: %w", err)
 	}
@@ -241,7 +246,8 @@ func (r *notificationRepo) MarkRead(ctx context.Context, id string) error {
 
 func (r *notificationRepo) MarkAllRead(ctx context.Context) error {
 	query := `UPDATE notifications SET is_read = true WHERE is_read = false`
-	_, err := r.getDB(ctx).Exec(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("marking all notifications read: %w", err)
 	}
@@ -249,9 +255,14 @@ func (r *notificationRepo) MarkAllRead(ctx context.Context) error {
 }
 
 func (r *notificationRepo) CreateNotification(ctx context.Context, n *notification.Notification) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO notifications (channel_id, title, severity, message, status, error_detail, is_read, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO notifications (channel_id, title, severity, message, status, error_detail, is_read, created_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
 	`
 	
@@ -265,7 +276,7 @@ func (r *notificationRepo) CreateNotification(ctx context.Context, n *notificati
 	}
 
 	err := r.getDB(ctx).QueryRow(ctx, query,
-		channelID, n.Title, string(n.Severity), n.Message, string(n.Status), errDetail, n.Read, n.CreatedAt,
+		channelID, n.Title, string(n.Severity), n.Message, string(n.Status), errDetail, n.Read, n.CreatedAt, tenantID,
 	).Scan(&n.ID)
 	
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/promotion"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type promotionRepo struct {
@@ -50,12 +51,14 @@ func (r *promotionRepo) List(ctx context.Context, status string, limit, offset i
 		args = []interface{}{limit, offset}
 	}
 
+	countQuery, countArgs = BuildTenantQuery(ctx, countQuery, countArgs...)
 	var total int
 	err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting promotions: %w", err)
 	}
 
+	query, args = BuildTenantQuery(ctx, query, args...)
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying promotions: %w", err)
@@ -94,10 +97,11 @@ func (r *promotionRepo) GetByID(ctx context.Context, id string) (*promotion.Prom
 		FROM promotions 
 		WHERE id = $1
 	`
+	query, args := BuildTenantQuery(ctx, query, id)
 	var p promotion.Promotion
 	var approver *string
 
-	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&p.ID, &p.Service, &p.Version, &p.FromEnv, &p.ToEnv, &p.Status, 
 		&p.Requester, &approver, &p.ApprovedAt, &p.CompletedAt, &p.CreatedAt,
 	)
@@ -116,13 +120,18 @@ func (r *promotionRepo) GetByID(ctx context.Context, id string) (*promotion.Prom
 }
 
 func (r *promotionRepo) Create(ctx context.Context, p *promotion.Promotion) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO promotions (service, version, from_env, to_env, status, requester, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO promotions (service, version, from_env, to_env, status, requester, created_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 	err := r.getDB(ctx).QueryRow(ctx, query,
-		p.Service, p.Version, string(p.FromEnv), string(p.ToEnv), string(p.Status), p.Requester, p.CreatedAt,
+		p.Service, p.Version, string(p.FromEnv), string(p.ToEnv), string(p.Status), p.Requester, p.CreatedAt, tenantID,
 	).Scan(&p.ID)
 	
 	if err != nil {
@@ -138,7 +147,8 @@ func (r *promotionRepo) Approve(ctx context.Context, id, approver string) error 
 		SET status = 'approved', approver = $1, approved_at = NOW() 
 		WHERE id = $2 AND status = 'pending'
 	`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, approver, id)
+	query, args := BuildTenantQuery(ctx, query, approver, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("approving promotion: %w", err)
 	}
@@ -154,7 +164,8 @@ func (r *promotionRepo) Reject(ctx context.Context, id, rejecter string) error {
 		SET status = 'rejected', approver = $1, approved_at = NOW() 
 		WHERE id = $2 AND status = 'pending'
 	`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, rejecter, id)
+	query, args := BuildTenantQuery(ctx, query, rejecter, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("rejecting promotion: %w", err)
 	}
@@ -170,7 +181,8 @@ func (r *promotionRepo) Complete(ctx context.Context, id string) error {
 		SET status = 'completed', completed_at = NOW() 
 		WHERE id = $1 AND (status = 'approved' OR status = 'promoting')
 	`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
+	query, args := BuildTenantQuery(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("completing promotion: %w", err)
 	}

@@ -21,23 +21,27 @@ type recordingDBTX struct {
 	queryCount    int
 	queryRowCount int
 	lastSQL       string
+	lastArgs      []any
 }
 
 func (r *recordingDBTX) Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
 	r.execCount++
 	r.lastSQL = sql
+	r.lastArgs = arguments
 	return pgconn.NewCommandTag("EXEC 1"), nil
 }
 
 func (r *recordingDBTX) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	r.queryCount++
 	r.lastSQL = sql
-	return nil, nil
+	r.lastArgs = args
+	return &emptyRows{}, nil
 }
 
 func (r *recordingDBTX) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
 	r.queryRowCount++
 	r.lastSQL = sql
+	r.lastArgs = args
 	return &dummyRow{}
 }
 
