@@ -25,9 +25,7 @@ export function useWebSocket(options?: UseWebSocketOptions | string) {
     if (resolvedOptions.url) return resolvedOptions.url
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
-    const query = token ? `?token=${encodeURIComponent(token)}` : ''
-    return `${proto}//${host}/ws${query}`
+    return `${proto}//${host}/ws`
   }
 
   function connect() {
@@ -35,7 +33,9 @@ export function useWebSocket(options?: UseWebSocketOptions | string) {
     store.setConnection('connecting')
     try {
       const url = getWsUrl()
-      ws = new WebSocket(url)
+      const token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
+      const protocols = token ? ['bearer', token] : undefined
+      ws = protocols ? new WebSocket(url, protocols) : new WebSocket(url)
       
       ws.onopen = () => {
         if (isUnmounted) {
