@@ -1,6 +1,9 @@
 package cluster
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // Standard component names for cluster essentials.
 const (
@@ -72,6 +75,12 @@ func NewClusterEssentialsStatus(clusterID string, components []EssentialComponen
 	}
 }
 
+func isStandardMasterTaint(taint string) bool {
+	t := strings.TrimSpace(taint)
+	return strings.HasPrefix(t, "node-role.kubernetes.io/control-plane") ||
+		strings.HasPrefix(t, "node-role.kubernetes.io/master")
+}
+
 func computeReady(components []EssentialComponent, taintsInfo []NodeTaintInfo) bool {
 	if len(components) == 0 {
 		return false
@@ -82,8 +91,17 @@ func computeReady(components []EssentialComponent, taintsInfo []NodeTaintInfo) b
 		}
 	}
 	for _, t := range taintsInfo {
-		if t.Tainted {
+		if !t.Tainted {
+			continue
+		}
+		if t.Taints == "" {
 			return false
+		}
+		for _, part := range strings.Split(t.Taints, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" || !isStandardMasterTaint(part) {
+				return false
+			}
 		}
 	}
 	return true

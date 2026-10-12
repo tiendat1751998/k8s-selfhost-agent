@@ -119,8 +119,8 @@ func TestBootstrapUsecase_GetEssentialsStatus_Installed(t *testing.T) {
 	require.NotNil(t, status)
 
 	assert.Equal(t, "local", status.ClusterID)
-	// Ready should be false because master node is tainted
-	assert.False(t, status.Ready)
+	// Ready should be true because all components are running and standard master control-plane taint is tolerated
+	assert.True(t, status.Ready)
 
 	// Verify metrics-server
 	var metricsComp *clusterDomain.EssentialComponent

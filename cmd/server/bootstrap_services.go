@@ -34,8 +34,6 @@ import (
 	gitproviderGitea "github.com/datdt/k8sselfhost/internal/infrastructure/gitprovider/gitea"
 	gitproviderGithub "github.com/datdt/k8sselfhost/internal/infrastructure/gitprovider/github"
 	gitproviderGitlab "github.com/datdt/k8sselfhost/internal/infrastructure/gitprovider/gitlab"
-	"github.com/datdt/k8sselfhost/internal/infrastructure/helm"
-	"github.com/datdt/k8sselfhost/internal/infrastructure/iac"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
@@ -47,19 +45,14 @@ import (
 	usecaseAlert "github.com/datdt/k8sselfhost/internal/usecase/alert"
 	usecaseAuth "github.com/datdt/k8sselfhost/internal/usecase/auth"
 	usecaseBackup "github.com/datdt/k8sselfhost/internal/usecase/backup"
-	usecaseCapacity "github.com/datdt/k8sselfhost/internal/usecase/capacity"
 	usecaseCluster "github.com/datdt/k8sselfhost/internal/usecase/cluster"
-	usecaseCost "github.com/datdt/k8sselfhost/internal/usecase/cost"
 	usecaseDeployment "github.com/datdt/k8sselfhost/internal/usecase/deployment"
-	"github.com/datdt/k8sselfhost/internal/usecase/dr"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
 	usecaseMetrics "github.com/datdt/k8sselfhost/internal/usecase/metrics"
 	usecasePromotion "github.com/datdt/k8sselfhost/internal/usecase/promotion"
 	"github.com/datdt/k8sselfhost/internal/usecase/rca"
 	usecaseSearch "github.com/datdt/k8sselfhost/internal/usecase/search"
 	usecaseSLO "github.com/datdt/k8sselfhost/internal/usecase/slo"
-	"github.com/datdt/k8sselfhost/internal/usecase/sre"
-	usecaseStorage "github.com/datdt/k8sselfhost/internal/usecase/storage"
 	"errors"
 )
 
@@ -302,28 +295,6 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		}()
 	}
 
-	helmHome := cfg.Helm.HomeDir
-	helmManager := helm.NewReleaseManager(clientManager, nil, helmHome)
-	helmHandler := adapthttp.NewHelmHandler(helmManager, auditRepo)
-	storageUsecase := usecaseStorage.NewVolumeUsecase(infra.k8sClient, clientManager, log)
-	storageHandler := adapthttp.NewStorageHandler(storageUsecase)
-	drUsecase := dr.NewDRUsecase(infra.k8sClient, clientManager, log)
-	remediationController := sre.NewRemediationController(infra.k8sClient, clientManager, log)
-	drHandler := adapthttp.NewDRHandler(drUsecase, remediationController, log)
-	gitopsHandler := adapthttp.NewGitOpsHandler(gitopsController)
-	iacHandler := adapthttp.NewIaCHandler(iac.NewTerraformRunner(""), iac.NewAnsibleRunner(""))
-	telegramHandler := adapthttp.NewTelegramHandler(telegramBot)
-
-	tenancyRepo := postgres.NewTenancyRepo(infra.pgClient.Pool())
-
-	var healthCenterHandler *adapthttp.HealthCenterHandler
-	if infra.k8sAvailable {
-		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(infra.k8sClient, clientManager))
-	}
-	k8sHandler := adapthttp.NewK8sResourceHandler(infraK8s.NewResourceRepo(infra.k8sClient, clientManager), auditRepo)
-	k8sExecHandler := adapthttp.NewK8sExecHandler(infra.k8sClient, clientManager)
-	k8sLogsHandler := adapthttp.NewK8sLogsHandler(infra.k8sClient, clientManager)
-
 	logAggregator := logging.NewLogAggregator(2000)
 	logStreamHandler := adapthttp.NewLogStreamHandler(logAggregator, computeHostRepo)
 	centralizedLogs, chCleanup := wireCentralizedLogging(ctx, log)
@@ -335,49 +306,39 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		startDockerLogStreamer(ctx, infra.dockerClient, logAggregator, centralizedLogs, log)
 	}
 
-	platformHandlers := &adapthttp.PlatformHandlers{
-		AI:            adapthttp.NewAIHandler(registry),
-		Dashboard:     adapthttp.NewHandler(incRepo, reportRepo, prRepo, publisher, gitopsController),
-		Docker:        adapthttp.NewDockerHandler(infra.dockerRepo, computeHostRepo, authUsecase, metricsCollector),
-		Overview:      overviewHandler,
-		Drift:         adapthttp.NewDriftHandler(postgres.NewDriftRepo(infra.pgClient.Pool())),
-		Correlation:   adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(infra.pgClient.Pool())),
-		Compliance:    adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(infra.pgClient.Pool())),
-		Tagging:       adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(infra.pgClient.Pool())),
-		Runbook:       adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(infra.pgClient.Pool()), auditRepo),
-		Observability: adapthttp.NewObservabilityHandler(obsRepo),
-		Capacity:      adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(metricsCollector, usecaseCapacity.WithComputeHostRepo(computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(infra.pgClient.Pool())))),
-		Changes:       adapthttp.NewChangeHandler(postgres.NewChangesRepo(infra.pgClient.Pool())),
-		Promotion:     adapthttp.NewPromotionHandler(promotionUsecase),
-		Explorer:      adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(infra.k8sClient, infra.dockerRepo, clientManager)),
-		Reporting:     adapthttp.NewReportingHandler(postgres.NewReportingRepo(infra.pgClient.Pool())),
-		HealthCenter:  healthCenterHandler,
-		Fleet:         adapthttp.NewFleetHandler(fleetRepo, auditRepo, importUsecase),
-		Audit:         adapthttp.NewAuditHandler(auditRepo),
-		Notification:  adapthttp.NewNotificationHandler(postgres.NewNotificationRepo(infra.pgClient.Pool())),
-		Automation:    adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(infra.pgClient.Pool())),
-		Timeline:      adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(infra.pgClient.Pool())),
-		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo, adapthttp.WithCookieSecure(cfg.Server.CookieSecure)),
-		Search:        adapthttp.NewSearchHandler(searchUsecase),
-		Cost:          adapthttp.NewCostHandler(usecaseCost.NewCalculator(computeHostRepo, metricsCollector)),
-		Backup:        adapthttp.NewBackupHandler(backupUsecase),
-		Agents:        adapthttp.NewAgentHandler(agentRepo, orchestrator),
-		Deployments:   adapthttp.NewDeploymentHandler(deploymentUsecaseInstance),
-		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
-		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
-		K8s:           k8sHandler,
-		K8sExec:       k8sExecHandler,
-		K8sLogs:       k8sLogsHandler,
-		Cloud:         cloudHandler,
-		LogStream:       logStreamHandler,
-		CentralizedLogs: centralizedLogs,
-		Helm:          helmHandler,
-		Storage:       storageHandler,
-		DR:            drHandler,
-		GitOps:        gitopsHandler,
-		IaC:           iacHandler,
-		Telegram:      telegramHandler,
-	}
+	platformHandlers := initPlatformHandlers(platformHandlerParams{
+		cfg:                       cfg,
+		infra:                     infra,
+		clientManager:             clientManager,
+		auditRepo:                 auditRepo,
+		gitopsController:          gitopsController,
+		telegramBot:               telegramBot,
+		computeHostRepo:           computeHostRepo,
+		logStreamHandler:          logStreamHandler,
+		centralizedLogs:           centralizedLogs,
+		registry:                  registry,
+		incRepo:                   incRepo,
+		reportRepo:                reportRepo,
+		prRepo:                    prRepo,
+		publisher:                 publisher,
+		authUsecase:               authUsecase,
+		metricsCollector:          metricsCollector,
+		overviewHandler:           overviewHandler,
+		obsRepo:                   obsRepo,
+		promotionUsecase:          promotionUsecase,
+		fleetRepo:                 fleetRepo,
+		importUsecase:             importUsecase,
+		userRepo:                  userRepo,
+		refreshTokenRepo:          refreshTokenRepo,
+		searchUsecase:             searchUsecase,
+		backupUsecase:             backupUsecase,
+		agentRepo:                 agentRepo,
+		orchestrator:              orchestrator,
+		deploymentUsecaseInstance:  deploymentUsecaseInstance,
+		alertUsecaseInstance:      alertUsecaseInstance,
+		cloudHandler:              cloudHandler,
+		log:                       log,
+	})
 
 	return &appServices{
 		wsHub:            wsHub,

@@ -135,7 +135,7 @@ func (j *BackupJob) MarkVerified(result VerificationResult) {
 		checkedAt = time.Now().UTC()
 	}
 	j.VerifiedAt = &checkedAt
-	if result.Passed || result.ChecksumOK {
+	if result.Passed && result.ChecksumOK {
 		j.VerificationStatus = VerificationStatusVerified
 	} else {
 		j.VerificationStatus = VerificationStatusMismatch
