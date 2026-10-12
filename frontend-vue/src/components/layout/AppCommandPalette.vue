@@ -104,6 +104,9 @@ onUnmounted(() => {
       <div class="palette-input-wrap">
         <span class="palette-search-icon"><BaseIcon name="search" size="sm" /></span>
         <input
+          id="command-palette-search"
+          name="command-palette-search"
+          aria-label="Search routes and commands"
           v-model="searchQuery"
           type="text"
           placeholder="Type a route, view, or category..."

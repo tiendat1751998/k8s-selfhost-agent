@@ -15,7 +15,9 @@ app.use(router)
 
 ;(window as any).__router = router
 
-app.mount('#app')
+router.isReady().then(() => {
+  app.mount('#app')
+})
 
 registerSW()
 
