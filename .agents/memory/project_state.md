@@ -67,10 +67,13 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
   - `done/021-devsecops-failclose-and-supply-chain.md` (MERGED).
   - `done/022-real-storage-expansion-and-fencing.md` (MERGED).
   - `done/023-telegram-sre-copilot-and-runbooks.md` (MERGED).
-  - `inprocess/024-sanitized-staging-db-clones.md` (Active Coder: `6af605c4`).
-  - `inprocess/025-disaster-recovery-and-restore-drills.md` (Active Coder: `52d4ebaa`).
-  - `inprocess/026-network-cni-ipam-and-coredns-mitigation.md` (Active Coder: `896fbff4`).
-  - `inprocess/027` to `031`: Postgres idle transaction terminator, in-stream secret redactor, NTP/SMART hardware watchdog, rootless Kaniko, automated canary & load shedding.
+  - `done/024-sanitized-staging-db-clones.md` (MERGED).
+  - `done/025-disaster-recovery-and-restore-drills.md` (MERGED).
+  - `done/026-network-cni-ipam-and-coredns-mitigation.md` (MERGED).
+  - `inprocess/027-database-deep-sre-engine.md` (Ready for Batch 4).
+  - `inprocess/028-instream-secret-redaction-engine.md` (Ready for Batch 4).
+  - `inprocess/029-baremetal-airgapped-hardware-watchdog.md` (Ready for Batch 4).
+  - `inprocess/030` to `031`: Rootless Kaniko build enforcer, automated canary & load shedding.
   - `inprocess/033` to `038`: Istio startup race injector, Kafka CooperativeSticky tuner, Ceph RocksDB PITR, cgroup v2 memory.high interceptor, Vault unseal operator, multi-DC STONITH fencing.
   - `inprocess/039` to `046`: SecretStore CSI polling rate limiter, eBPF ringbuffer watchdog, hybrid WAN MTU blackhole detector, ClickHouse batching buffer, containerd inode pruner, GPU XID fault tainter, Velero break-lock, FinOps cross-AZ optimizer.
   - `inprocess/047` to `052`: Kernel socket backlog & conntrack scaler, VFS inode watchdog & D-State breaker, K8s webhook deadlock breaker & PLEG watchdog, Postgres XID wraparound & Redis resync storm shield, DevSecOps supply chain firewall & IMDSv2 defense, Cloud burst credit monitor & Spot 2m drainer.
@@ -80,6 +83,4 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
 ---
 
 ## 6. Current Active Subagents & Worktrees
-1. `6af605c4` (`backend-coder`, DB Sanitization & Masking Coder): Executing Task 024 in worktree `subagent-DB-Sanitization---Masking-Coder-backend-coder-9728582f`.
-2. `52d4ebaa` (`backend-coder`, Disaster Recovery & Drills Coder): Executing Task 025 in worktree `subagent-Disaster-Recovery---Drills-Coder-backend-coder-19f2d2ed`.
-3. `896fbff4` (`backend-coder`, CNI IPAM & CoreDNS Coder): Executing Task 026 in worktree `subagent-CNI-IPAM---CoreDNS-Coder-backend-coder-5fde3990`.
+*(Idle / Ready for Batch 4: Tasks 027, 028, 029)*
