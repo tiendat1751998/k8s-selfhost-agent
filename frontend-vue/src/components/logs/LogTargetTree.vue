@@ -56,29 +56,10 @@ const appsExpanded = ref(true)
 const systemdExpanded = ref(true)
 const nodesExpanded = ref(true)
 
-// Static default workloads and system services
-const DEFAULT_APPS: readonly TargetServiceItem[] = [
-  { id: 'postgres_db', name: 'postgres_db', icon: 'database', type: 'Container', category: 'app' },
-  { id: 'tiki_redis', name: 'tiki_redis', icon: 'database', type: 'Container', category: 'app' },
-  { id: 'my-nginx', name: 'my-nginx', icon: 'radio', type: 'Container', category: 'app' },
-  { id: 'nats', name: 'nats', icon: 'zap', type: 'Container', category: 'app' },
-  { id: 'traefik', name: 'traefik', icon: 'radio', type: 'Container', category: 'app' },
-]
-
-const DEFAULT_SYSTEMD: readonly TargetServiceItem[] = [
-  { id: 'vgauth.service', name: 'vgauth.service', icon: 'cpu', type: 'SystemD Service', category: 'systemd' },
-  { id: 'dbus.service', name: 'dbus.service', icon: 'cpu', type: 'SystemD Service', category: 'systemd' },
-  { id: 'chrony.service', name: 'chrony.service', icon: 'cpu', type: 'SystemD Service', category: 'systemd' },
-  { id: 'systemd-resolved.service', name: 'systemd-resolved.service', icon: 'cpu', type: 'SystemD Service', category: 'systemd' },
-]
-
-const DEFAULT_NODES: readonly TargetNodeItem[] = [
-  { id: 'k8smasterdeb', name: 'k8smasterdeb', icon: 'server', role: 'Control Plane · SystemD', systemd: true },
-  { id: 'k8sworker', name: 'k8sworker', icon: 'server', role: 'Worker Node · SystemD', systemd: true },
-  { id: 'k8smater133', name: 'k8smater133', icon: 'server', role: 'Control Plane · SystemD', systemd: true },
-  { id: '10.10.10.60', name: '10.10.10.60', icon: 'server', role: 'Worker Node · SystemD', systemd: true },
-  { id: '10.10.10.80', name: '10.10.10.80', icon: 'server', role: 'Worker Node · SystemD', systemd: true },
-]
+// Dynamic target discovery only — zero static fallback mocks
+const DEFAULT_APPS: readonly TargetServiceItem[] = []
+const DEFAULT_SYSTEMD: readonly TargetServiceItem[] = []
+const DEFAULT_NODES: readonly TargetNodeItem[] = []
 
 async function fetchDynamicServices() {
   const foundNames = new Set<string>()
@@ -338,6 +319,15 @@ onMounted(async () => {
     </div>
 
     <div class="tree-content">
+      <div
+        v-if="filteredAppServices.length === 0 && filteredSystemdServices.length === 0 && filteredHostNodes.length === 0"
+        class="tree-empty-state font-mono"
+        style="padding: 24px 16px; text-align: center; color: var(--text-muted); font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px;"
+      >
+        <BaseIcon name="layers" size="md" />
+        <span>No log targets discovered</span>
+      </div>
+
       <!-- Section 1: Running Apps (Containers) -->
       <div class="tree-section">
         <div class="section-toggle" @click="appsExpanded = !appsExpanded">

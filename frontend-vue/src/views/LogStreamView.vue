@@ -21,7 +21,7 @@ const {
 } = useLogStreamer({ autoConnect: false })
 
 const route = useRoute()
-const selectedTarget = ref<LogTarget>({ type: 'service', id: 'postgres_db', name: 'postgres_db', icon: 'database' })
+const selectedTarget = ref<LogTarget>({ type: 'service', id: '', name: 'Select Target', icon: 'layers' })
 const showMobileTree = ref(false)
 const isSidebarCollapsed = ref(false)
 const showHistogram = ref(false)
@@ -370,4 +370,9 @@ function handleExport() {
 
 <style scoped>
 @import '../assets/styles/views/logstream.css';
+
+:deep(.virtual-fps-badge) {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
 </style>

@@ -217,23 +217,8 @@ const availabilityThresholds = [
       </button>
     </div>
 
-    <!-- Mobile Stream (< 640px) -->
-    <div v-else-if="filteredHosts.length > 0" class="mobile-only">
-      <HostsMobileCards
-        :hosts="filteredHosts"
-        :host-test-results="hostTestResults"
-        :testing-host-id="testingHostId"
-        :get-host-type-meta="getHostTypeMeta"
-        :get-latency-badge-class="getLatencyBadgeClass"
-        @select="openHostDrawer"
-        @test="handleTestHost"
-        @edit="openEditHostModal"
-        @delete="promptDeleteHost"
-      />
-    </div>
-
-    <!-- Mobile Empty Filter State (< 640px) -->
-    <div v-else-if="filteredHosts.length === 0" class="empty-state glass-panel mobile-only">
+    <!-- Empty Filter State (Hosts exist, but filter yields 0) -->
+    <div v-else-if="filteredHosts.length === 0" class="empty-state glass-panel">
       <div class="empty-icon-wrap">
         <BaseIcon name="search" size="xl" />
       </div>
@@ -241,48 +226,57 @@ const availabilityThresholds = [
       <p class="empty-desc text-muted">No hosts match the selected search and filter criteria.</p>
     </div>
 
-    <!-- Desktop Grid View -->
-    <div v-if="viewMode === 'grid' && filteredHosts.length > 0" class="hosts-grid desktop-only animate-fade-in">
-      <HostCard
-        v-for="host in filteredHosts"
-        :key="host.id"
-        :host="host"
-        :test-result="hostTestResults[host.id]"
-        :is-testing="testingHostId === host.id"
-        @select="openHostDrawer"
-        @test="handleTestHost"
-        @edit="openEditHostModal"
-        @delete="promptDeleteHost"
-        @copy="copyToClipboard"
-      />
-    </div>
-
-    <!-- Desktop Grid Empty Filter State -->
-    <div v-else-if="viewMode === 'grid' && filteredHosts.length === 0" class="empty-state glass-panel desktop-only">
-      <div class="empty-icon-wrap">
-        <BaseIcon name="search" size="xl" />
+    <!-- Live Hosts Content -->
+    <div v-else>
+      <!-- Mobile Stream (< 640px) -->
+      <div class="mobile-only">
+        <HostsMobileCards
+          :hosts="filteredHosts"
+          :host-test-results="hostTestResults"
+          :testing-host-id="testingHostId"
+          :get-host-type-meta="getHostTypeMeta"
+          :get-latency-badge-class="getLatencyBadgeClass"
+          @select="openHostDrawer"
+          @test="handleTestHost"
+          @edit="openEditHostModal"
+          @delete="promptDeleteHost"
+        />
       </div>
-      <h3 class="empty-title">No compute hosts found</h3>
-      <p class="empty-desc text-muted">No hosts match the selected search and filter criteria.</p>
-    </div>
 
-    <!-- Desktop Table View -->
-    <div v-else-if="viewMode === 'table'" class="desktop-only animate-fade-in">
-      <HostsTable
-        :hosts="filteredHosts"
-        :total-count="hosts.length"
-        :host-test-results="hostTestResults"
-        :testing-host-id="testingHostId"
-        :get-host-type-meta="getHostTypeMeta"
-        :get-latency-badge-class="getLatencyBadgeClass"
-        :format-date="formatDate"
-        @select="openHostDrawer"
-        @test="handleTestHost"
-        @edit="openEditHostModal"
-        @delete="promptDeleteHost"
-        @copy="copyToClipboard"
-        @add-host="openAddHostModal"
-      />
+      <!-- Desktop Grid View -->
+      <div v-if="viewMode === 'grid'" class="hosts-grid desktop-only animate-fade-in">
+        <HostCard
+          v-for="host in filteredHosts"
+          :key="host.id"
+          :host="host"
+          :test-result="hostTestResults[host.id]"
+          :is-testing="testingHostId === host.id"
+          @select="openHostDrawer"
+          @test="handleTestHost"
+          @edit="openEditHostModal"
+          @delete="promptDeleteHost"
+          @copy="copyToClipboard"
+        />
+      </div>
+
+      <!-- Desktop Table View -->
+      <div v-else-if="viewMode === 'table'" class="desktop-only animate-fade-in">
+        <HostsTable
+          :hosts="filteredHosts"
+          :total-count="hosts.length"
+          :host-test-results="hostTestResults"
+          :testing-host-id="testingHostId"
+          :get-host-type-meta="getHostTypeMeta"
+          :get-latency-badge-class="getLatencyBadgeClass"
+          :format-date="formatDate"
+          @select="openHostDrawer"
+          @test="handleTestHost"
+          @edit="openEditHostModal"
+          @delete="promptDeleteHost"
+          @copy="copyToClipboard"
+          @add-host="openAddHostModal"
+        />
+      </div>
     </div>
 
     <!-- Add / Edit Modal -->
@@ -356,5 +350,6 @@ const availabilityThresholds = [
 }
 .chart-card-val { color: #f1f5f9; }
 .empty-icon-wrap { font-size: 32px; margin-bottom: 12px; color: #64748b; }
+:deep(.pill-count) { margin-left: 4px; }
 </style>
 
