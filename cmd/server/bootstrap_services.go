@@ -29,12 +29,19 @@ import (
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	infraLB "github.com/datdt/k8sselfhost/internal/infrastructure/loadbalancer"
+	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
+	gitproviderGitea "github.com/datdt/k8sselfhost/internal/infrastructure/gitprovider/gitea"
+	gitproviderGithub "github.com/datdt/k8sselfhost/internal/infrastructure/gitprovider/github"
+	gitproviderGitlab "github.com/datdt/k8sselfhost/internal/infrastructure/gitprovider/gitlab"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/helm"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/iac"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/llm"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/notifier"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/telegram"
 	usecaseAgent "github.com/datdt/k8sselfhost/internal/usecase/agent"
 	"github.com/datdt/k8sselfhost/internal/usecase/ai"
 	usecaseAlert "github.com/datdt/k8sselfhost/internal/usecase/alert"
@@ -44,12 +51,16 @@ import (
 	usecaseCluster "github.com/datdt/k8sselfhost/internal/usecase/cluster"
 	usecaseCost "github.com/datdt/k8sselfhost/internal/usecase/cost"
 	usecaseDeployment "github.com/datdt/k8sselfhost/internal/usecase/deployment"
+	"github.com/datdt/k8sselfhost/internal/usecase/dr"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
 	usecaseMetrics "github.com/datdt/k8sselfhost/internal/usecase/metrics"
 	usecasePromotion "github.com/datdt/k8sselfhost/internal/usecase/promotion"
 	"github.com/datdt/k8sselfhost/internal/usecase/rca"
 	usecaseSearch "github.com/datdt/k8sselfhost/internal/usecase/search"
 	usecaseSLO "github.com/datdt/k8sselfhost/internal/usecase/slo"
+	"github.com/datdt/k8sselfhost/internal/usecase/sre"
+	usecaseStorage "github.com/datdt/k8sselfhost/internal/usecase/storage"
+	"errors"
 )
 
 type appServices struct {
@@ -264,6 +275,45 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	searchUsecase := usecaseSearch.NewUsecase(searchRepo)
 	promotionUsecase := usecasePromotion.NewUsecase(postgres.NewPromotionRepo(infra.pgClient.Pool()), infra.dockerRepo, auditRepo)
 	gitopsController := usecaseGitops.NewController(prRepo, incRepo, txManager)
+	if cfg.GitOps.GitHubToken != "" {
+		gitopsController.RegisterProvider(domainGitops.ProviderGitHub, gitproviderGithub.NewProvider(cfg.GitOps.GitHubToken))
+	}
+	if cfg.GitOps.GitLabToken != "" {
+		gitopsController.RegisterProvider(domainGitops.ProviderGitLab, gitproviderGitlab.NewProvider(cfg.GitOps.GitLabToken, cfg.GitOps.GitLabURL))
+	}
+	if cfg.GitOps.GiteaToken != "" {
+		gitopsController.RegisterProvider(domainGitops.ProviderGitea, gitproviderGitea.NewProvider(cfg.GitOps.GiteaToken, cfg.GitOps.GiteaURL))
+	}
+
+	deploymentUsecaseInstance := usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(infra.k8sClient, infra.dockerRepo, fleetRepo, clientManager))
+	telegramBot := telegram.NewSREBot(telegram.TelegramConfig{
+		BotToken:            cfg.Telegram.BotToken,
+		AdminChatIDs:        cfg.Telegram.AdminChatIDs,
+		EnableDeduplication: true,
+		DebounceWindow:      30 * time.Second,
+	}, nil, deploymentUsecaseInstance, backupUsecase, log)
+
+	if cfg.Telegram.BotToken != "" {
+		go func() {
+			log.Info("Starting Telegram SRE Copilot background bot...")
+			if err := telegramBot.Start(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				log.Error("Telegram bot listener exited with error", zap.Error(err))
+			}
+		}()
+	}
+
+	helmHome := cfg.Helm.HomeDir
+	helmManager := helm.NewReleaseManager(clientManager, nil, helmHome)
+	helmHandler := adapthttp.NewHelmHandler(helmManager, auditRepo)
+	storageUsecase := usecaseStorage.NewVolumeUsecase(infra.k8sClient, clientManager, log)
+	storageHandler := adapthttp.NewStorageHandler(storageUsecase)
+	drUsecase := dr.NewDRUsecase(infra.k8sClient, clientManager, log)
+	remediationController := sre.NewRemediationController(infra.k8sClient, clientManager, log)
+	drHandler := adapthttp.NewDRHandler(drUsecase, remediationController, log)
+	gitopsHandler := adapthttp.NewGitOpsHandler(gitopsController)
+	iacHandler := adapthttp.NewIaCHandler(iac.NewTerraformRunner(""), iac.NewAnsibleRunner(""))
+	telegramHandler := adapthttp.NewTelegramHandler(telegramBot)
+
 	tenancyRepo := postgres.NewTenancyRepo(infra.pgClient.Pool())
 
 	var healthCenterHandler *adapthttp.HealthCenterHandler
@@ -312,7 +362,7 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		Cost:          adapthttp.NewCostHandler(usecaseCost.NewCalculator(computeHostRepo, metricsCollector)),
 		Backup:        adapthttp.NewBackupHandler(backupUsecase),
 		Agents:        adapthttp.NewAgentHandler(agentRepo, orchestrator),
-		Deployments:   adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(infra.k8sClient, infra.dockerRepo, fleetRepo, clientManager))),
+		Deployments:   adapthttp.NewDeploymentHandler(deploymentUsecaseInstance),
 		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
 		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
 		K8s:           k8sHandler,
@@ -321,6 +371,12 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		Cloud:         cloudHandler,
 		LogStream:       logStreamHandler,
 		CentralizedLogs: centralizedLogs,
+		Helm:          helmHandler,
+		Storage:       storageHandler,
+		DR:            drHandler,
+		GitOps:        gitopsHandler,
+		IaC:           iacHandler,
+		Telegram:      telegramHandler,
 	}
 
 	return &appServices{
@@ -413,39 +469,5 @@ func startDockerLogStreamer(ctx context.Context, dockerClient serverDockerLogCli
 			}(cID, cName, ns)
 		}
 	}()
-}
-
-func detectLogLevel(msg, defaultLvl string) string {
-	u := strings.ToUpper(msg)
-	if strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC") || strings.Contains(u, "ERR") {
-		return "ERROR"
-	}
-	if strings.Contains(u, "WARN") { return "WARN" }
-	if strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE") { return "DEBUG" }
-	if strings.Contains(u, "INFO") { return "INFO" }
-	return defaultLvl
-}
-
-func getContainerNamespace(name string) string {
-	l := strings.ToLower(name)
-	if strings.Contains(l, "log") || strings.Contains(l, "nats") { return "logging" }
-	if strings.Contains(l, "vault") { return "vault" }
-	if strings.Contains(l, "stage") || strings.Contains(l, "staging") { return "staging" }
-	return "production"
-}
-
-func extractTraceID(msg string) string {
-	for _, p := range []string{`"trace_id":`, `"traceId":`, `trace_id=`, `traceId=`, `trace-id=`} {
-		if idx := strings.Index(msg, p); idx != -1 {
-			rest := strings.TrimSpace(msg[idx+len(p):])
-			if len(rest) > 0 {
-				if rest[0] == '"' || rest[0] == 0x27 {
-					if end := strings.IndexByte(rest[1:], rest[0]); end != -1 { return strings.TrimSpace(rest[1 : end+1]) }
-				} else if end := strings.IndexAny(rest, " \t\r\n,;{}]"); end != -1 { return strings.TrimSpace(rest[:end]) }
-				return rest
-			}
-		}
-	}
-	return ""
 }
 

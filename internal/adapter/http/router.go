@@ -64,6 +64,9 @@ type PlatformHandlers struct {
 	Helm          *HelmHandler
 	DR            *DRHandler
 	CentralizedLogs *LogHandler
+	GitOps        *GitOpsHandler
+	IaC           *IaCHandler
+	Telegram      *TelegramHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
