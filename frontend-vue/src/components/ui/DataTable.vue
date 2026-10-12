@@ -120,26 +120,32 @@ function handleSort(key: string, sortable?: boolean) {
 
         <tbody>
           <!-- Loading State -->
-          <tr v-if="loading" class="row-state">
-            <td :colspan="columns.length" class="cell-loading">
-              <div class="spinner"></div>
-              <span>Streaming telemetry & synchronizing state...</span>
+          <tr v-if="loading" class="row-state row-loading">
+            <td :colspan="columns.length || 7" class="cell-loading">
+              <div class="cell-loading-content">
+                <div class="spinner"></div>
+                <span>Streaming telemetry & synchronizing state...</span>
+              </div>
             </td>
           </tr>
 
           <!-- Error State -->
-          <tr v-else-if="error" class="row-state">
-            <td :colspan="columns.length" class="cell-error">
-              <span class="error-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
-              <span>{{ error }}</span>
+          <tr v-else-if="error" class="row-state row-error">
+            <td :colspan="columns.length || 7" class="cell-error">
+              <div class="cell-error-content">
+                <span class="error-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
+                <span>{{ error }}</span>
+              </div>
             </td>
           </tr>
 
           <!-- Empty State -->
-          <tr v-else-if="filteredData.length === 0" class="row-state">
-            <td :colspan="columns.length" class="cell-empty">
-              <div class="empty-icon"><BaseIcon name="package" size="lg" /></div>
-              <div class="empty-text">{{ emptyMessage || 'No matching records discovered.' }}</div>
+          <tr v-else-if="filteredData.length === 0" class="row-state row-empty">
+            <td :colspan="columns.length || 7" class="cell-empty">
+              <div class="cell-empty-content">
+                <div class="empty-icon"><BaseIcon name="package" size="lg" /></div>
+                <div class="empty-text">{{ emptyMessage || 'No matching records discovered.' }}</div>
+              </div>
             </td>
           </tr>
 
