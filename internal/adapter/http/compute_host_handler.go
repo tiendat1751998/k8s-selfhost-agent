@@ -177,6 +177,20 @@ func (h *DockerHandler) GetHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	callerTenant := tenancy.TenantIDFromContext(r.Context())
+	if callerTenant == "" {
+		callerTenant = "default-tenant"
+	}
+	hostTenant := host.TenantID
+	if hostTenant == "" {
+		hostTenant = "default-tenant"
+	}
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole != "platform_admin" && callerTenant != hostTenant {
+		writeError(w, http.StatusForbidden, "forbidden: access denied to compute host belonging to another tenant", nil)
+		return
+	}
+
 	host.TLSKey = ""
 	writeJSON(w, http.StatusOK, redactComputeHost(host))
 }
@@ -205,6 +219,20 @@ func (h *DockerHandler) UpdateHost(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing == nil {
 		writeError(w, http.StatusNotFound, "compute host not found", nil)
+		return
+	}
+
+	callerTenant := tenancy.TenantIDFromContext(r.Context())
+	if callerTenant == "" {
+		callerTenant = "default-tenant"
+	}
+	hostTenant := existing.TenantID
+	if hostTenant == "" {
+		hostTenant = "default-tenant"
+	}
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole != "platform_admin" && callerTenant != hostTenant {
+		writeError(w, http.StatusForbidden, "forbidden: access denied to compute host belonging to another tenant", nil)
 		return
 	}
 
@@ -265,7 +293,31 @@ func (h *DockerHandler) DeleteHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.hostRepo.Delete(r.Context(), id)
+	existing, err := h.hostRepo.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete compute host", err)
+		return
+	}
+	if existing == nil {
+		writeError(w, http.StatusNotFound, "compute host not found", nil)
+		return
+	}
+
+	callerTenant := tenancy.TenantIDFromContext(r.Context())
+	if callerTenant == "" {
+		callerTenant = "default-tenant"
+	}
+	hostTenant := existing.TenantID
+	if hostTenant == "" {
+		hostTenant = "default-tenant"
+	}
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole != "platform_admin" && callerTenant != hostTenant {
+		writeError(w, http.StatusForbidden, "forbidden: access denied to compute host belonging to another tenant", nil)
+		return
+	}
+
+	err = h.hostRepo.Delete(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete compute host", err)
 		return

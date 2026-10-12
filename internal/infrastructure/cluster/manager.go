@@ -126,7 +126,10 @@ func (m *ClientManager) GetK8sRestConfig(ctx context.Context, clusterID string) 
 	config.Burst = k8sCfg.Burst
 	config.Timeout = k8sCfg.Timeout
 	if len(config.TLSClientConfig.CAData) == 0 && config.TLSClientConfig.CAFile == "" {
-		config.TLSClientConfig.Insecure = true
+		return nil, fmt.Errorf("insecure TLS rejected: cluster %s is missing CA certificate", clusterID)
+	}
+	if config.TLSClientConfig.Insecure {
+		return nil, fmt.Errorf("insecure TLS rejected: cluster %s has insecure TLS enabled", clusterID)
 	}
 
 	m.k8sConfigPool[clusterID] = config

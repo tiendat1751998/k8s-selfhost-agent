@@ -111,6 +111,23 @@ func TestCheckovScanner_ParseAndScore(t *testing.T) {
 	if len(report.Checks) != 2 {
 		t.Errorf("expected 2 checks in details list, got %d", len(report.Checks))
 	}
+	if report.Passed {
+		t.Error("expected report.Passed == false when failed checks > 0")
+	}
+	if report.PassSecurityGate {
+		t.Error("expected report.PassSecurityGate == false when failed checks > 0")
+	}
+	if report.Status != security.GateStatusPolicyViolation {
+		t.Errorf("expected status %s, got %s", security.GateStatusPolicyViolation, report.Status)
+	}
+
+	domainReport := report.ToDomainReport("test-scan-123")
+	if domainReport.Passed {
+		t.Error("expected domain report Passed == false")
+	}
+	if len(domainReport.FailedChecks) != 1 {
+		t.Errorf("expected 1 failed check in domain report, got %d", len(domainReport.FailedChecks))
+	}
 }
 
 func TestVaultClient_MockOperations(t *testing.T) {
@@ -209,6 +226,63 @@ func TestCosign_BinaryMissing_FailClose(t *testing.T) {
 	}
 	if ok {
 		t.Errorf("expected verify to return false when cosign binary fails")
+	}
+}
+
+func TestCheckov_ParseInvalidJSON_FailClose(t *testing.T) {
+	scanner := security.NewCheckovScanner()
+
+	report, err := scanner.ParseCheckovJSON([]byte(`{not-valid-json`), "kubernetes", time.Now())
+	if err == nil {
+		t.Fatal("expected error parsing invalid checkov JSON")
+	}
+	if report == nil {
+		t.Fatal("expected non-nil fail-close report")
+	}
+	if report.Passed || report.PassSecurityGate {
+		t.Errorf("expected Passed and PassSecurityGate to be false on invalid JSON")
+	}
+	if report.ScorePercentage != 0.0 {
+		t.Errorf("expected ScorePercentage == 0.0, got %f", report.ScorePercentage)
+	}
+}
+
+func TestCheckov_ZeroChecks_FailClose(t *testing.T) {
+	scanner := security.NewCheckovScanner()
+
+	emptyJSON := []byte(`{"summary": {"passed": 0, "failed": 0}, "results": {}}`)
+	report, err := scanner.ParseCheckovJSON(emptyJSON, "kubernetes", time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if report.Passed || report.PassSecurityGate {
+		t.Errorf("expected zero checks scan to fail security gate, got Passed=%v, PassGate=%v", report.Passed, report.PassSecurityGate)
+	}
+	if report.ScorePercentage != 0.0 {
+		t.Errorf("expected ScorePercentage == 0.0, got %f", report.ScorePercentage)
+	}
+}
+
+func TestCheckov_AllPassed(t *testing.T) {
+	scanner := security.NewCheckovScanner()
+
+	cleanJSON := []byte(`{
+		"summary": {"passed": 5, "failed": 0},
+		"results": {
+			"passed_checks": [
+				{"check_id": "CKV_1", "check_name": "clean", "resource": "res", "file_path": "f.yaml"}
+			]
+		}
+	}`)
+	report, err := scanner.ParseCheckovJSON(cleanJSON, "kubernetes", time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !report.Passed || !report.PassSecurityGate {
+		t.Errorf("expected clean scan to pass, got Passed=%v, PassGate=%v", report.Passed, report.PassSecurityGate)
+	}
+	if report.ScorePercentage != 100.0 {
+		t.Errorf("expected ScorePercentage == 100.0, got %f", report.ScorePercentage)
 	}
 }
 

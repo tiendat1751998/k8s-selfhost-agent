@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 func TestComputeHost_RedactionInAPIResponses(t *testing.T) {
@@ -144,4 +145,88 @@ func TestComputeHost_RedactionInAPIResponses(t *testing.T) {
 		assert.Equal(t, "super-secret-agent-token-123", stored.Labels["auth_token"])
 	})
 }
+
+func TestComputeHost_IDORProtection(t *testing.T) {
+	hostRepo := newMockComputeHostRepo()
+	targetHost := &docker.ComputeHost{
+		ID:         "host-target-99",
+		Name:       "victim-host",
+		Endpoint:   "http://10.0.0.99:9100",
+		TenantID:   "tenant-victim",
+		TLSKey:     "sensitive-victim-private-key",
+		TLSEnabled: true,
+	}
+	err := hostRepo.Create(context.Background(), targetHost)
+	require.NoError(t, err)
+
+	handler := NewDockerHandler(nil, hostRepo)
+
+	t.Run("GetHost returns 403 Forbidden for cross-tenant access and never returns private key", func(t *testing.T) {
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "host-target-99")
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/docker/hosts/host-target-99", nil)
+		ctx := tenancy.WithTenantID(req.Context(), "tenant-attacker")
+		ctx = tenancy.WithUserRole(ctx, "tenant_member")
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		handler.GetHost(rec, req)
+
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+		assert.NotContains(t, rec.Body.String(), "sensitive-victim-private-key")
+	})
+
+	t.Run("GetHost succeeds for same tenant", func(t *testing.T) {
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "host-target-99")
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/docker/hosts/host-target-99", nil)
+		ctx := tenancy.WithTenantID(req.Context(), "tenant-victim")
+		ctx = tenancy.WithUserRole(ctx, "tenant_member")
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		handler.GetHost(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("UpdateHost returns 403 Forbidden on tenant mismatch", func(t *testing.T) {
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "host-target-99")
+
+		body := `{"name":"compromised-host"}`
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/docker/hosts/host-target-99", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		ctx := tenancy.WithTenantID(req.Context(), "tenant-attacker")
+		ctx = tenancy.WithUserRole(ctx, "tenant_member")
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		handler.UpdateHost(rec, req)
+
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+	})
+
+	t.Run("DeleteHost returns 403 Forbidden on tenant mismatch", func(t *testing.T) {
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "host-target-99")
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/docker/hosts/host-target-99", nil)
+		ctx := tenancy.WithTenantID(req.Context(), "tenant-attacker")
+		ctx = tenancy.WithUserRole(ctx, "tenant_member")
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		handler.DeleteHost(rec, req)
+
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+	})
+}
+
 

@@ -2,6 +2,14 @@ package cluster
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
+	"encoding/pem"
+	"fmt"
+	"math/big"
 	"os"
 	"strings"
 	"testing"
@@ -11,6 +19,48 @@ import (
 	infraConfig "github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
 )
+
+var testCAData = func() string {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	tmpl := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "test-ca"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
+	if err != nil {
+		panic(err)
+	}
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	return base64.StdEncoding.EncodeToString(certPEM)
+}()
+
+func makeTestKubeconfig(caData string) string {
+	return fmt.Sprintf(`apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://127.0.0.1:6443
+    certificate-authority-data: %s
+  name: test-cluster
+contexts:
+- context:
+    cluster: test-cluster
+    user: test-user
+  name: test-context
+current-context: test-context
+users:
+- name: test-user
+  user:
+    token: test-token
+`, caData)
+}
 
 type mockFleetRepo struct {
 	cluster *fleet.Cluster
@@ -46,23 +96,7 @@ func TestGetK8sClient_Decryption(t *testing.T) {
 	defer os.Setenv("ENCRYPTION_KEY", origKey)
 	os.Setenv("ENCRYPTION_KEY", "12345678901234567890123456789012")
 
-	validKubeconfig := `apiVersion: v1
-kind: Config
-clusters:
-- cluster:
-    server: https://127.0.0.1:6443
-  name: test-cluster
-contexts:
-- context:
-    cluster: test-cluster
-    user: test-user
-  name: test-context
-current-context: test-context
-users:
-- name: test-user
-  user:
-    token: test-token
-`
+	validKubeconfig := makeTestKubeconfig(testCAData)
 
 	// Test 1: Cluster with encrypted token
 	encrypted, err := crypto.Encrypt(validKubeconfig)
@@ -107,23 +141,7 @@ users:
 }
 
 func TestGetK8sClient_Providers(t *testing.T) {
-	validKubeconfig := `apiVersion: v1
-kind: Config
-clusters:
-- cluster:
-    server: https://127.0.0.1:6443
-  name: test-cluster
-contexts:
-- context:
-    cluster: test-cluster
-    user: test-user
-  name: test-context
-current-context: test-context
-users:
-- name: test-user
-  user:
-    token: test-token
-`
+	validKubeconfig := makeTestKubeconfig(testCAData)
 
 	tests := []struct {
 		name         string
@@ -200,23 +218,7 @@ users:
 }
 
 func TestGetK8sRestConfig(t *testing.T) {
-	validKubeconfig := `apiVersion: v1
-kind: Config
-clusters:
-- cluster:
-    server: https://127.0.0.1:6443
-  name: test-cluster
-contexts:
-- context:
-    cluster: test-cluster
-    user: test-user
-  name: test-context
-current-context: test-context
-users:
-- name: test-user
-  user:
-    token: test-token
-`
+	validKubeconfig := makeTestKubeconfig(testCAData)
 	repo := &mockFleetRepo{
 		cluster: &fleet.Cluster{
 			ID:             "rest-cluster-1",
@@ -271,23 +273,7 @@ users:
 }
 
 func TestGetK8sRestConfig_CustomConfig(t *testing.T) {
-	validKubeconfig := `apiVersion: v1
-kind: Config
-clusters:
-- cluster:
-    server: https://127.0.0.1:6443
-  name: test-cluster
-contexts:
-- context:
-    cluster: test-cluster
-    user: test-user
-  name: test-context
-current-context: test-context
-users:
-- name: test-user
-  user:
-    token: test-token
-`
+	validKubeconfig := makeTestKubeconfig(testCAData)
 	repo := &mockFleetRepo{
 		cluster: &fleet.Cluster{
 			ID:             "rest-cluster-custom",
@@ -318,6 +304,80 @@ users:
 	}
 	if cfg.Timeout != 45*time.Second {
 		t.Fatalf("expected Timeout 45s, got %v", cfg.Timeout)
+	}
+}
+
+func TestGetK8sRestConfig_RejectMissingCA(t *testing.T) {
+	missingCAKubeconfig := `apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://127.0.0.1:6443
+  name: test-cluster
+contexts:
+- context:
+    cluster: test-cluster
+    user: test-user
+  name: test-context
+current-context: test-context
+users:
+- name: test-user
+  user:
+    token: test-token
+`
+	repo := &mockFleetRepo{
+		cluster: &fleet.Cluster{
+			ID:             "cluster-missing-ca",
+			Provider:       "kubernetes",
+			EncryptedToken: missingCAKubeconfig,
+		},
+	}
+
+	mgr := NewClientManager(repo)
+	_, err := mgr.GetK8sRestConfig(context.Background(), "cluster-missing-ca")
+	if err == nil {
+		t.Fatal("expected error rejecting cluster missing CA certificate, got nil")
+	}
+	if !strings.Contains(err.Error(), "missing CA certificate") {
+		t.Fatalf("expected error containing 'missing CA certificate', got %v", err)
+	}
+}
+
+func TestGetK8sRestConfig_RejectInsecureTLS(t *testing.T) {
+	insecureKubeconfig := `apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://127.0.0.1:6443
+    insecure-skip-tls-verify: true
+    certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCg==
+  name: test-cluster
+contexts:
+- context:
+    cluster: test-cluster
+    user: test-user
+  name: test-context
+current-context: test-context
+users:
+- name: test-user
+  user:
+    token: test-token
+`
+	repo := &mockFleetRepo{
+		cluster: &fleet.Cluster{
+			ID:             "cluster-insecure-tls",
+			Provider:       "kubernetes",
+			EncryptedToken: insecureKubeconfig,
+		},
+	}
+
+	mgr := NewClientManager(repo)
+	_, err := mgr.GetK8sRestConfig(context.Background(), "cluster-insecure-tls")
+	if err == nil {
+		t.Fatal("expected error rejecting cluster with insecure TLS, got nil")
+	}
+	if !strings.Contains(err.Error(), "insecure TLS enabled") {
+		t.Fatalf("expected error containing 'insecure TLS enabled', got %v", err)
 	}
 }
 

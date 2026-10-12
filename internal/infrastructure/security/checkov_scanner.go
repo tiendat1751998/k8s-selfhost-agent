@@ -35,16 +35,17 @@ type IaCCheckResult struct {
 
 // IaCScanReport summarizes an IaC scan across a directory or manifest file.
 type IaCScanReport struct {
-	Target          string           `json:"target,omitempty"`
-	Framework       string           `json:"framework"` // terraform, kubernetes, helm
-	PassedChecks    int              `json:"passed_checks"`
-	FailedChecks    int              `json:"failed_checks"`
-	ScorePercentage float64          `json:"score_percentage"`
-	Checks          []IaCCheckResult `json:"checks"`
-	Status          GateStatus       `json:"status"`
-	Passed          bool             `json:"passed"`
-	ErrorMessage    string           `json:"error_message,omitempty"`
-	ScannedAt       time.Time        `json:"scanned_at"`
+	Target           string           `json:"target,omitempty"`
+	Framework        string           `json:"framework"` // terraform, kubernetes, helm
+	PassedChecks     int              `json:"passed_checks"`
+	FailedChecks     int              `json:"failed_checks"`
+	ScorePercentage  float64          `json:"score_percentage"`
+	Checks           []IaCCheckResult `json:"checks"`
+	PassSecurityGate bool             `json:"pass_security_gate"`
+	Status           GateStatus       `json:"status"`
+	Passed           bool             `json:"passed"`
+	ErrorMessage     string           `json:"error_message,omitempty"`
+	ScannedAt        time.Time        `json:"scanned_at"`
 }
 
 // ToDomainReport converts IaCScanReport to domain.SecurityGateReport.
@@ -57,7 +58,7 @@ func (r *IaCScanReport) ToDomainReport(scanID string) *domain.SecurityGateReport
 		ScanID:       scanID,
 		Target:       r.Target,
 		Status:       r.Status,
-		Passed:       r.Passed,
+		Passed:       r.Passed && r.PassSecurityGate,
 		ErrorMessage: r.ErrorMessage,
 		ScannedAt:    r.ScannedAt,
 	}
@@ -116,6 +117,22 @@ func NewCheckovScannerWithBinary(binary string) *CheckovScanner {
 func (c *CheckovScanner) ScanDirectory(ctx context.Context, dirPath string, framework string) (*IaCScanReport, error) {
 	start := time.Now().UTC()
 
+	if _, err := exec.LookPath(c.binaryPath); err != nil {
+		return &IaCScanReport{
+			Target:           dirPath,
+			Framework:        framework,
+			ScannedAt:        start,
+			PassedChecks:     0,
+			FailedChecks:     0,
+			ScorePercentage:  0.0,
+			Checks:           []IaCCheckResult{},
+			PassSecurityGate: false,
+			Status:           GateStatusScannerUnavailable,
+			Passed:           false,
+			ErrorMessage:     fmt.Sprintf("checkov binary not found: %v", err),
+		}, fmt.Errorf("security scanner unavailable: checkov binary not found: %w", err)
+	}
+
 	args := []string{"-d", dirPath, "--output", "json", "--quiet"}
 	if framework != "" {
 		args = append(args, "--framework", framework)
@@ -124,21 +141,32 @@ func (c *CheckovScanner) ScanDirectory(ctx context.Context, dirPath string, fram
 	cmd := exec.CommandContext(ctx, c.binaryPath, args...)
 	output, err := cmd.Output()
 	if err != nil {
+		if len(output) > 0 {
+			if report, parseErr := c.ParseCheckovJSON(output, framework, start); parseErr == nil && report != nil {
+				report.Target = dirPath
+				return report, nil
+			}
+		}
 		return &IaCScanReport{
-			Target:          dirPath,
-			Framework:       framework,
-			ScannedAt:       start,
-			PassedChecks:    0,
-			FailedChecks:    0,
-			ScorePercentage: 0.0,
-			Checks:          []IaCCheckResult{},
-			Status:          GateStatusScannerUnavailable,
-			Passed:          false,
-			ErrorMessage:    fmt.Sprintf("checkov execution failed: %v", err),
+			Target:           dirPath,
+			Framework:        framework,
+			ScannedAt:        start,
+			PassedChecks:     0,
+			FailedChecks:     0,
+			ScorePercentage:  0.0,
+			Checks:           []IaCCheckResult{},
+			PassSecurityGate: false,
+			Status:           GateStatusScannerUnavailable,
+			Passed:           false,
+			ErrorMessage:     fmt.Sprintf("checkov execution failed: %v", err),
 		}, fmt.Errorf("security scanner unavailable: checkov execution failed: %w", err)
 	}
 
-	return c.ParseCheckovJSON(output, framework, start)
+	report, err := c.ParseCheckovJSON(output, framework, start)
+	if report != nil {
+		report.Target = dirPath
+	}
+	return report, err
 }
 
 // ScanManifest scans a single Kubernetes/Terraform manifest file.
@@ -146,24 +174,51 @@ func (c *CheckovScanner) ScanDirectory(ctx context.Context, dirPath string, fram
 func (c *CheckovScanner) ScanManifest(ctx context.Context, manifestPath string) (*IaCScanReport, error) {
 	start := time.Now().UTC()
 
+	if _, err := exec.LookPath(c.binaryPath); err != nil {
+		return &IaCScanReport{
+			Target:           manifestPath,
+			Framework:        "kubernetes",
+			ScannedAt:        start,
+			PassedChecks:     0,
+			FailedChecks:     0,
+			ScorePercentage:  0.0,
+			Checks:           []IaCCheckResult{},
+			PassSecurityGate: false,
+			Status:           GateStatusScannerUnavailable,
+			Passed:           false,
+			ErrorMessage:     fmt.Sprintf("checkov binary not found: %v", err),
+		}, fmt.Errorf("security scanner unavailable: checkov binary not found: %w", err)
+	}
+
 	cmd := exec.CommandContext(ctx, c.binaryPath, "-f", manifestPath, "--output", "json", "--quiet")
 	output, err := cmd.Output()
 	if err != nil {
+		if len(output) > 0 {
+			if report, parseErr := c.ParseCheckovJSON(output, "kubernetes", start); parseErr == nil && report != nil {
+				report.Target = manifestPath
+				return report, nil
+			}
+		}
 		return &IaCScanReport{
-			Target:          manifestPath,
-			Framework:       "kubernetes",
-			ScannedAt:       start,
-			PassedChecks:    0,
-			FailedChecks:    0,
-			ScorePercentage: 0.0,
-			Checks:          []IaCCheckResult{},
-			Status:          GateStatusScannerUnavailable,
-			Passed:          false,
-			ErrorMessage:    fmt.Sprintf("checkov execution failed: %v", err),
+			Target:           manifestPath,
+			Framework:        "kubernetes",
+			ScannedAt:        start,
+			PassedChecks:     0,
+			FailedChecks:     0,
+			ScorePercentage:  0.0,
+			Checks:           []IaCCheckResult{},
+			PassSecurityGate: false,
+			Status:           GateStatusScannerUnavailable,
+			Passed:           false,
+			ErrorMessage:     fmt.Sprintf("checkov execution failed: %v", err),
 		}, fmt.Errorf("security scanner unavailable: checkov execution failed: %w", err)
 	}
 
-	return c.ParseCheckovJSON(output, "kubernetes", start)
+	report, err := c.ParseCheckovJSON(output, "kubernetes", start)
+	if report != nil {
+		report.Target = manifestPath
+	}
+	return report, err
 }
 
 // ParseCheckovJSON parses Checkov's JSON output into an IaCScanReport.
@@ -193,7 +248,15 @@ func (c *CheckovScanner) ParseCheckovJSON(data []byte, framework string, scanned
 	}
 
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, errors.Wrap(err, "parsing checkov json")
+		return &IaCScanReport{
+			Framework:        framework,
+			PassSecurityGate: false,
+			Status:           GateStatusPolicyViolation,
+			Passed:           false,
+			ScorePercentage:  0.0,
+			ScannedAt:        scannedAt,
+			ErrorMessage:     fmt.Sprintf("parsing checkov json: %v", err),
+		}, errors.Wrap(err, "parsing checkov json")
 	}
 
 	report := &IaCScanReport{
@@ -234,15 +297,17 @@ func (c *CheckovScanner) ParseCheckovJSON(data []byte, framework string, scanned
 	if total > 0 {
 		report.ScorePercentage = float64(report.PassedChecks) / float64(total) * 100
 	} else {
-		report.ScorePercentage = 100.0
+		report.ScorePercentage = 0.0
 	}
 
-	if report.FailedChecks > 0 {
+	if report.FailedChecks > 0 || total == 0 {
 		report.Status = GateStatusPolicyViolation
 		report.Passed = false
+		report.PassSecurityGate = false
 	} else {
 		report.Status = GateStatusPassed
 		report.Passed = true
+		report.PassSecurityGate = true
 	}
 
 	return report, nil

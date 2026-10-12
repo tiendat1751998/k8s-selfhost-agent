@@ -325,8 +325,15 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" {
 			parts := strings.Split(authHeader, " ")
-			if len(parts) == 2 && parts[0] == "Bearer" {
+			if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
 				token = parts[1]
+			}
+		}
+
+		// Support extracting token from Sec-WebSocket-Protocol header
+		if token == "" {
+			if secProto := r.Header.Get("Sec-WebSocket-Protocol"); secProto != "" {
+				token = extractTokenFromSecWebSocketProtocol(secProto)
 			}
 		}
 
@@ -346,6 +353,13 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 		if err != nil {
 			http.Error(w, "invalid token: signature verification failed", http.StatusUnauthorized)
 			return
+		}
+
+		// If client connected via Sec-WebSocket-Protocol with bearer, echo back Sec-WebSocket-Protocol: bearer
+		if secProto := r.Header.Get("Sec-WebSocket-Protocol"); secProto != "" {
+			if strings.Contains(strings.ToLower(secProto), "bearer") {
+				w.Header().Set("Sec-WebSocket-Protocol", "bearer")
+			}
 		}
 
 		// REJECT partial tokens - they are only permitted for 2FA verification endpoints
