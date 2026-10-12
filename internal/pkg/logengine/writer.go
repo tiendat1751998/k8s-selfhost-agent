@@ -1,6 +1,7 @@
 package logengine
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -46,21 +47,36 @@ func WithRedactor(r *InStreamRedactor) WriterOption {
 	}
 }
 
+// WithRingBufferCapacity configures the ingest ring buffer capacity.
+func WithRingBufferCapacity(cap int) WriterOption {
+	return func(w *Writer) {
+		if cap > 0 {
+			w.ringCap = cap
+		}
+	}
+}
+
 // Writer writes log entries to columnar parts on disk with sparse indexing.
+// Ingestion is completely decoupled from disk I/O via a lock-free MPSC ring buffer.
 type Writer struct {
-	mu            sync.Mutex
 	dir           string
 	partsDir      string
 	dict          *LabelDictionary
 	builder       *BlockBuilder
 	redactor      *InStreamRedactor
+	ringBuf       *RingBuffer
+	ringCap       int
 	maxRows       int
 	flushInterval time.Duration
 	nextPartID    uint64
-	closeCh       chan struct{}
-	wg            sync.WaitGroup
-	closed        bool
-	lastErr       error
+
+	flushReqCh chan chan error
+	closeCh    chan struct{}
+	wg         sync.WaitGroup
+
+	closedMu sync.RWMutex
+	closed   bool
+	lastErr  error
 }
 
 // NewWriter initializes a Writer on the specified directory.
@@ -76,14 +92,18 @@ func NewWriter(dir string, dict *LabelDictionary, opts ...WriterOption) (*Writer
 		dict:          dict,
 		builder:       NewBlockBuilder(),
 		redactor:      NewInStreamRedactor(),
+		ringCap:       DefaultRingBufferCapacity,
 		maxRows:       2048,
 		flushInterval: 5 * time.Second,
+		flushReqCh:    make(chan chan error),
 		closeCh:       make(chan struct{}),
 	}
 
 	for _, opt := range opts {
 		opt(w)
 	}
+
+	w.ringBuf = NewRingBuffer(w.ringCap)
 
 	entries, _ := os.ReadDir(partsDir)
 	for _, e := range entries {
@@ -101,71 +121,223 @@ func NewWriter(dir string, dict *LabelDictionary, opts ...WriterOption) (*Writer
 	}
 
 	w.wg.Add(1)
-	go w.flushLoop()
+	go w.flusherLoop()
 
 	return w, nil
 }
 
-func (w *Writer) flushLoop() {
+// flusherLoop is the single background flusher thread that drains batches
+// from the lock-free ring buffer, packs columnar blocks, compresses via zstd,
+// and writes parts to disk.
+func (w *Writer) flusherLoop() {
 	defer w.wg.Done()
 	ticker := time.NewTicker(w.flushInterval)
 	defer ticker.Stop()
 
+	batch := make([]Entry, w.maxRows)
+
 	for {
+		drained := w.drainToBuilder(batch)
+
+		if w.builder.RowCount() >= w.maxRows || w.builder.EstimatedSize() >= BlockBufferSize-4096 {
+			if err := w.flushCurrentBlock(); err != nil {
+				w.setLastError(err)
+			}
+		}
+
 		select {
 		case <-w.closeCh:
-			return
-		case <-ticker.C:
-			w.mu.Lock()
-			if err := w.flushLocked(); err != nil {
-				w.lastErr = err
+			// Drain all remaining items in the ring buffer
+			for {
+				n := w.drainToBuilder(batch)
+				if n == 0 {
+					break
+				}
+				if w.builder.RowCount() >= w.maxRows || w.builder.EstimatedSize() >= BlockBufferSize-4096 {
+					if err := w.flushCurrentBlock(); err != nil {
+						w.setLastError(err)
+					}
+				}
 			}
-			w.mu.Unlock()
+			// Flush final block
+			if err := w.flushCurrentBlock(); err != nil {
+				w.setLastError(err)
+			}
+			return
+
+		case req := <-w.flushReqCh:
+			// Explicit Flush() request: drain all items currently in ring buffer
+			for {
+				n := w.drainToBuilder(batch)
+				if n == 0 {
+					break
+				}
+				if w.builder.RowCount() >= w.maxRows || w.builder.EstimatedSize() >= BlockBufferSize-4096 {
+					if err := w.flushCurrentBlock(); err != nil {
+						w.setLastError(err)
+					}
+				}
+			}
+			err := w.flushCurrentBlock()
+			if err != nil {
+				w.setLastError(err)
+			}
+			req <- err
+
+		case <-ticker.C:
+			if w.builder.RowCount() > 0 {
+				if err := w.flushCurrentBlock(); err != nil {
+					w.setLastError(err)
+				}
+			}
+
+		default:
+			if drained > 0 {
+				continue
+			}
+			// Ring buffer is empty, wait briefly or for notifications
+			select {
+			case <-w.closeCh:
+			case req := <-w.flushReqCh:
+				for {
+					n := w.drainToBuilder(batch)
+					if n == 0 {
+						break
+					}
+					if w.builder.RowCount() >= w.maxRows || w.builder.EstimatedSize() >= BlockBufferSize-4096 {
+						if err := w.flushCurrentBlock(); err != nil {
+							w.setLastError(err)
+						}
+					}
+				}
+				err := w.flushCurrentBlock()
+				if err != nil {
+					w.setLastError(err)
+				}
+				req <- err
+			case <-ticker.C:
+				if w.builder.RowCount() > 0 {
+					if err := w.flushCurrentBlock(); err != nil {
+						w.setLastError(err)
+					}
+				}
+			case <-time.After(10 * time.Millisecond):
+			}
 		}
 	}
 }
 
-// LastError returns the last asynchronous error encountered during periodic flush.
+func (w *Writer) drainToBuilder(batch []Entry) int {
+	n := w.ringBuf.DrainBatch(batch)
+	for i := 0; i < n; i++ {
+		e := &batch[i]
+		svcID := w.dict.GetOrInsert(e.Service)
+		lvlID := w.dict.GetOrInsert(e.Level)
+		ts := e.Timestamp.UnixNano()
+		w.builder.Append(ts, svcID, lvlID, []byte(e.Message))
+	}
+	return n
+}
+
+// LastError returns the last asynchronous error encountered during flush.
 func (w *Writer) LastError() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	w.closedMu.RLock()
+	defer w.closedMu.RUnlock()
 	return w.lastErr
 }
 
-// Write appends an entry to the current staging block and flushes if threshold is reached.
-func (w *Writer) Write(entry Entry) error {
-	msg := entry.Message
-	if w.redactor != nil {
-		msg = w.redactor.MaskString(msg)
+func (w *Writer) setLastError(err error) {
+	if err == nil {
+		return
 	}
+	w.closedMu.Lock()
+	w.lastErr = err
+	w.closedMu.Unlock()
+}
 
-	w.mu.Lock()
-	defer w.mu.Unlock()
+// DroppedEntries returns total entries dropped by ingest ring buffer.
+func (w *Writer) DroppedEntries() uint64 {
+	if w.ringBuf != nil {
+		return w.ringBuf.Dropped()
+	}
+	return 0
+}
 
+// Write pushes an entry into the lock-free ring buffer without acquiring a disk mutex.
+func (w *Writer) Write(entry Entry) error {
+	w.closedMu.RLock()
 	if w.closed {
+		w.closedMu.RUnlock()
 		return fmt.Errorf("writer is closed")
 	}
+	w.closedMu.RUnlock()
 
-	svcID := w.dict.GetOrInsert(entry.Service)
-	lvlID := w.dict.GetOrInsert(entry.Level)
-	ts := entry.Timestamp.UnixNano()
+	if w.redactor != nil {
+		entry.Message = w.redactor.MaskString(entry.Message)
+	}
 
-	w.builder.Append(ts, svcID, lvlID, []byte(msg))
+	if w.ringBuf.Push(entry) {
+		return nil
+	}
 
-	if w.builder.RowCount() >= w.maxRows || w.builder.EstimatedSize() >= BlockBufferSize-4096 {
-		return w.flushLocked()
+	// Backpressure: buffer is temporarily full, retry with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := w.ringBuf.PushWait(ctx, entry); err != nil {
+		return fmt.Errorf("ingest ring buffer full: %w", err)
 	}
 	return nil
 }
 
-// Flush forces a write of buffered rows to a new part directory.
-func (w *Writer) Flush() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.flushLocked()
+// WriteBatch pushes a slice of entries into the lock-free ring buffer.
+func (w *Writer) WriteBatch(entries []Entry) error {
+	w.closedMu.RLock()
+	if w.closed {
+		w.closedMu.RUnlock()
+		return fmt.Errorf("writer is closed")
+	}
+	w.closedMu.RUnlock()
+
+	var writeErr error
+	for i := range entries {
+		entry := entries[i]
+		if w.redactor != nil {
+			entry.Message = w.redactor.MaskString(entry.Message)
+		}
+		if !w.ringBuf.Push(entry) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			if err := w.ringBuf.PushWait(ctx, entry); err != nil {
+				cancel()
+				if writeErr == nil {
+					writeErr = fmt.Errorf("ingest ring buffer full: %w", err)
+				}
+				continue
+			}
+			cancel()
+		}
+	}
+	return writeErr
 }
 
-func (w *Writer) flushLocked() error {
+// Flush forces a synchronous write of all buffered items to disk.
+func (w *Writer) Flush() error {
+	w.closedMu.RLock()
+	if w.closed {
+		w.closedMu.RUnlock()
+		return fmt.Errorf("writer is closed")
+	}
+	w.closedMu.RUnlock()
+
+	resp := make(chan error, 1)
+	select {
+	case w.flushReqCh <- resp:
+		return <-resp
+	case <-w.closeCh:
+		return fmt.Errorf("writer is closed")
+	}
+}
+
+func (w *Writer) flushCurrentBlock() error {
 	if w.builder.RowCount() == 0 {
 		return nil
 	}
@@ -213,7 +385,7 @@ func (w *Writer) flushLocked() error {
 		return fmt.Errorf("failed to write bloom.bin: %w", err)
 	}
 
-	// 4. Write primary.idx with deferred close helper
+	// 4. Write primary.idx
 	pidx := NewPrimaryIndex()
 	pidx.Add(minTime, maxTime)
 	if err := writePrimaryIndexAtomic(filepath.Join(tmpDir, "primary.idx"), pidx); err != nil {
@@ -249,20 +421,17 @@ func writePrimaryIndexAtomic(path string, pidx *PrimaryIndex) error {
 	return pidx.WritePrimaryIndex(f)
 }
 
-// Close flushes buffered rows, stops the flush loop, and releases resources.
+// Close flushes all remaining items in the ring buffer, writes the final block, and stops flusher.
 func (w *Writer) Close() error {
-	w.mu.Lock()
+	w.closedMu.Lock()
 	if w.closed {
-		w.mu.Unlock()
+		w.closedMu.Unlock()
 		return nil
 	}
 	w.closed = true
 	close(w.closeCh)
-	w.mu.Unlock()
+	w.closedMu.Unlock()
 
 	w.wg.Wait()
-
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.flushLocked()
+	return w.LastError()
 }
