@@ -77,7 +77,7 @@ describe('Mobile Telemetry & Header Stack Compaction Specifications', () => {
     )
   })
 
-  it('3. api/deployments.ts & useDeployments.ts: adds restarts & age to DeploymentApp and sample workloads', () => {
+  it('3. api/deployments.ts & useDeployments.ts: adds restarts & age to DeploymentApp and initializes authentic state', () => {
     assert.ok(fs.existsSync(apiDeploymentsTsPath), 'deployments.ts must exist')
     assert.ok(fs.existsSync(useDeploymentsTsPath), 'useDeployments.ts must exist')
 
@@ -96,20 +96,15 @@ describe('Mobile Telemetry & Header Stack Compaction Specifications', () => {
       'DeploymentApp interface must have age field'
     )
 
-    // FALLBACK_SAMPLE_WORKLOADS checks
+    // Authentic state initialization check
     assert.match(
       composableContent,
-      /restarts:\s*\d+/,
-      'FALLBACK_SAMPLE_WORKLOADS must supply realistic restarts telemetry'
-    )
-    assert.match(
-      composableContent,
-      /age:\s*['"][0-9]+[dhms]['"]/,
-      'FALLBACK_SAMPLE_WORKLOADS must supply realistic age telemetry'
+      /deployments\s*=\s*ref<DeploymentApp\[\]>\(\[\]\)/,
+      'useDeployments.ts must initialize deployments with an authentic empty array'
     )
   })
 
-  it('4. DeploymentsMobileCards.vue: renders CPU, RAM, Restarts, Age, and clear Inspect button', () => {
+  it('4. DeploymentsMobileCards.vue: renders CPU, RAM, Restarts, Age, empty state, and clear Inspect button', () => {
     assert.ok(fs.existsSync(mobileCardsVuePath), 'DeploymentsMobileCards.vue must exist')
     const content = fs.readFileSync(mobileCardsVuePath, 'utf-8')
 
@@ -125,6 +120,9 @@ describe('Mobile Telemetry & Header Stack Compaction Specifications', () => {
     // Inspect button
     assert.match(content, /Inspect|Chi tiết/, 'Mobile cards must provide prominent Inspect / Chi tiết button')
     assert.doesNotMatch(content, /btn-quick-inspect[^>]*>\s*<BaseIcon name="zap"/, 'Must replace cryptic zap icon with explicit Inspect action')
+
+    // Empty state verification
+    assert.match(content, /empty-mobile-state/, 'Mobile cards must render authentic empty state when no workloads exist')
   })
 
   it('5. workload-inspector.css: responsive 2-column quick actions on mobile <= 640px', () => {
