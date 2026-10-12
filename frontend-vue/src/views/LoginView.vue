@@ -83,8 +83,10 @@
             </div>
 
             <div class="form-row-remember">
-              <label class="checkbox-label">
+              <label for="rememberMe" class="checkbox-label">
                 <input
+                  id="rememberMe"
+                  name="rememberMe"
                   type="checkbox"
                   v-model="rememberMe"
                   class="form-checkbox"

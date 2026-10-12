@@ -31,8 +31,10 @@
     </div>
 
     <div class="form-row-remember">
-      <label class="checkbox-label">
+      <label for="rememberMe" class="checkbox-label">
         <input
+          id="rememberMe"
+          name="rememberMe"
           type="checkbox"
           :checked="rememberMe"
           class="form-checkbox"
