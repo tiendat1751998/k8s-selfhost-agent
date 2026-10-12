@@ -48,6 +48,8 @@ describe('Task 065: Dead Node Recovery & Zero-Data-Loss Storage Fencing UI', () 
 
     // Stage 5 check: Post-Recovery Summary
     assert.ok(content.includes('Copy RCA Report') || content.includes('copyReport'), 'Must have copy RCA report action')
+    // Reviewer Fix: Anti-trapped UI resets stage.value = 2 on error so confirmation screen remains visible
+    assert.ok(content.includes('stage.value = 2'), 'Must reset stage.value = 2 in error catch block')
   })
 
   it('3. node-fencing.css exists and stays under 350 lines', () => {
@@ -64,5 +66,11 @@ describe('Task 065: Dead Node Recovery & Zero-Data-Loss Storage Fencing UI', () 
     assert.ok(lines < 500, `InfraHostsView.vue must be < 500 lines (got ${lines})`)
     assert.ok(content.includes('NodeStorageFencingModal'), 'InfraHostsView.vue must import/use NodeStorageFencingModal')
     assert.ok(content.includes('Safe Remediation') || content.includes('Fence'), 'InfraHostsView.vue must have Safe Remediation / Fence action')
+
+    // Reviewer Fix: No hardcoded 'default' in mobile micro-telemetry fencing trigger
+    assert.ok(
+      content.includes("hosts.find(h => h.status !== 'connected')?.tenant_id || 'default'"),
+      "InfraHostsView must resolve tenant_id dynamically for fencing modal"
+    )
   })
 })
