@@ -6,7 +6,7 @@ import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import IncidentDetailPane from '../components/incidents/IncidentDetailPane.vue'
 import IncidentSimulationModal from '../components/incidents/IncidentSimulationModal.vue'
 import IncidentCreatePrModal from '../components/incidents/IncidentCreatePrModal.vue'
-import IncidentMicroTelemetry from '../components/incidents/IncidentMicroTelemetry.vue'
+import IncidentsHeaderBar from '../components/incidents/IncidentsHeaderBar.vue'
 import { useIncidents } from '../composables/useIncidents'
 import type { Incident } from '../api/compute'
 
@@ -102,179 +102,25 @@ function formatRelativeTime(dateStr?: string): string {
       <button class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Sleek Unified 38px Enterprise Toolbar -->
-    <div class="incidents-toolbar-sleek glass-panel desktop-only">
-      <!-- Search input with search icon and clear button -->
-      <div class="toolbar-search-wrap">
-        <BaseIcon name="search" size="xs" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Filter pod, cluster, ns, error..."
-          class="toolbar-search-input"
-          aria-label="Filter incidents by pod, cluster, namespace, or error"
-        />
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="clear-input-btn"
-          aria-label="Clear search"
-          @click="searchQuery = ''"
-        >
-          <BaseIcon name="x" size="xs" />
-        </button>
-      </div>
-
-      <!-- Status tabs / pills with count badges -->
-      <div class="toolbar-status-pills" role="tablist" aria-label="Filter incidents by status">
-        <button
-          v-for="tab in [
-            { key: 'all', label: 'All', count: countAll },
-            { key: 'open', label: 'Open', count: countOpen },
-            { key: 'in_progress', label: 'In Progress', count: countInProgress },
-            { key: 'resolved', label: 'Resolved', count: countResolved }
-          ]"
-          :key="tab.key"
-          type="button"
-          role="tab"
-          :aria-selected="filterStatus === tab.key"
-          class="toolbar-pill-btn"
-          :class="{ active: filterStatus === tab.key }"
-          @click="filterStatus = tab.key"
-        >
-          {{ tab.label }} ({{ tab.count }})
-        </button>
-      </div>
-
-      <!-- Severity filter dropdown -->
-      <select
-        v-model="filterSeverity"
-        class="toolbar-select severity-dropdown"
-        aria-label="Filter incidents by severity"
-      >
-        <option value="all">All Severities</option>
-        <option value="critical">Critical</option>
-        <option value="high">High</option>
-        <option value="medium">Medium</option>
-        <option value="low">Low</option>
-      </select>
-
-      <!-- Inline compact KPI badge strip font-mono -->
-      <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Incident metrics summary">
-        <span class="kpi-live-dot"></span>
-        <span class="kpi-live-text">{{ totalIncidents }} Incidents ({{ criticalCount }} Critical · {{ resolvedCount }} Resolved)</span>
-      </div>
-
-      <!-- Action buttons -->
-      <div class="toolbar-actions-group">
-        <button
-          type="button"
-          class="toolbar-btn btn-primary"
-          aria-label="Declare Operational Incident"
-          @click="openDeclareModal"
-        >
-          <BaseIcon name="plus" size="xs" />
-          <span>Declare Incident</span>
-        </button>
-        <button
-          type="button"
-          class="toolbar-btn btn-secondary"
-          :disabled="loading"
-          @click="fetchIncidents"
-        >
-          <BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" :class="{ 'spin-animate': loading }" />
-          <span>{{ loading ? 'Querying...' : 'Refresh Feed' }}</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Mobile Sleek 40px Command Bar -->
-    <div class="mobile-command-bar mobile-only">
-      <div class="mobile-command-title">
-        <span class="mobile-title-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
-        <span class="mobile-title-text">Incidents ({{ filteredIncidents.length }})</span>
-      </div>
-      <div class="mobile-command-actions">
-        <button
-          class="mobile-action-btn"
-          title="Declare Incident"
-          aria-label="Declare Incident"
-          @click="openDeclareModal"
-        >
-          <BaseIcon name="plus" size="xs" />
-        </button>
-        <button
-          class="mobile-action-btn"
-          title="Simulate Test Incident (Demo Mode)"
-          aria-label="Simulate Test Incident"
-          @click="showSimulateModal = true"
-        >
-          <BaseIcon name="zap" size="xs" />
-        </button>
-        <button
-          class="mobile-action-btn"
-          :disabled="loading"
-          title="Refresh Feed"
-          aria-label="Refresh Feed"
-          @click="fetchIncidents"
-        >
-          <BaseIcon name="refresh" size="xs" />
-        </button>
-        <button
-          class="mobile-action-btn"
-          :class="{ active: showMobileSearch }"
-          title="Search and Filter"
-          aria-label="Toggle Search"
-          @click="showMobileSearch = !showMobileSearch"
-        >
-          <BaseIcon name="search" size="xs" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Mobile Micro-Telemetry Strip (20px) -->
-    <IncidentMicroTelemetry
-      class="mobile-only"
+    <IncidentsHeaderBar
+      v-model:search-query="searchQuery"
+      v-model:filter-status="filterStatus"
+      v-model:filter-severity="filterSeverity"
+      v-model:show-mobile-search="showMobileSearch"
+      :count-all="countAll"
+      :count-open="countOpen"
+      :count-in-progress="countInProgress"
+      :count-resolved="countResolved"
       :total-incidents="totalIncidents"
       :critical-count="criticalCount"
       :analyzing-count="analyzingCount"
       :resolved-count="resolvedCount"
+      :filtered-count="filteredIncidents.length"
+      :loading="loading"
+      @declare-incident="openDeclareModal"
+      @simulate-incident="showSimulateModal = true"
+      @refresh="fetchIncidents"
     />
-
-    <!-- Mobile Collapsible Search & Filter Bar -->
-    <div v-if="showMobileSearch" class="mobile-filter-bar mobile-only animate-fade-in">
-      <div class="status-tab-group mobile-status-tabs">
-        <button
-          v-for="tab in [
-            { key: 'all', label: 'All', count: countAll },
-            { key: 'open', label: 'Open', count: countOpen },
-            { key: 'in_progress', label: 'In Progress', count: countInProgress },
-            { key: 'resolved', label: 'Resolved', count: countResolved }
-          ]"
-          :key="tab.key"
-          class="status-tab-btn"
-          :class="{ active: filterStatus === tab.key }"
-          @click="filterStatus = tab.key"
-        >
-          {{ tab.label }} ({{ tab.count }})
-        </button>
-      </div>
-      <div class="mobile-filter-inputs">
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Filter pod, cluster, ns..."
-          class="search-mini"
-        />
-        <select v-model="filterSeverity" class="select-mini">
-          <option value="all">All Severities</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </div>
-    </div>
 
     <!-- Specialized Split-Pane Incident Inspector -->
     <div class="split-pane-layout" :class="{ 'mobile-showing-detail': showMobileDetail }">

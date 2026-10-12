@@ -123,4 +123,16 @@ export const securityApi = {
       total: res.total ?? items.length,
     }
   },
+
+  async getKmsKey(): Promise<{ key_id: string; version: number; algorithm: string }> {
+    return api.get<{ key_id: string; version: number; algorithm: string }>('/security/kms/key')
+  },
+
+  async rotateKmsKey(): Promise<{ key_id: string; version: number; rotated_at: string }> {
+    return api.post<{ key_id: string; version: number; rotated_at: string }>('/security/kms/rotate', {})
+  },
+
+  async verifyKmsIntegrity(): Promise<{ verified: boolean; checksum: string }> {
+    return api.post<{ verified: boolean; checksum: string }>('/security/kms/verify', {})
+  },
 }

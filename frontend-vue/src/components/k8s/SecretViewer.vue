@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { K8sResource } from '../../api/k8s'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = defineProps<{
   secret?: K8sResource | null
@@ -24,7 +25,12 @@ function decodeVal(val: string): string {
   if (!val) return ''
   if (props.secret?.stringData) return val
   try {
-    return atob(val)
+    const binStr = atob(val.trim())
+    const bytes = new Uint8Array(binStr.length)
+    for (let i = 0; i < binStr.length; i++) {
+      bytes[i] = binStr.charCodeAt(i)
+    }
+    return new TextDecoder('utf-8', { fatal: false }).decode(bytes)
   } catch {
     return val
   }
@@ -58,9 +64,9 @@ async function copyValue(key: string, rawVal: string) {
 <template>
   <div class="secret-viewer">
     <div class="secret-warning-banner">
-      <span class="warning-icon">??</span>
+      <span class="warning-icon"><BaseIcon name="shield" size="xs" /></span>
       <div class="warning-text">
-        <strong>Sensitive data ? do not share</strong>
+        <strong>Sensitive data — do not share</strong>
         <span>Credentials, tokens, and private keys are masked by default to prevent unauthorized viewing.</span>
       </div>
       <button 
@@ -69,7 +75,8 @@ async function copyValue(key: string, rawVal: string) {
         class="btn btn-secondary btn-xs reveal-all-btn"
         @click="toggleRevealAll"
       >
-        <span>{{ revealAll ? '?? Hide All' : '??? Reveal All' }}</span>
+        <BaseIcon :name="revealAll ? 'eye-off' : 'eye'" size="xs" />
+        <span>{{ revealAll ? 'Hide All' : 'Reveal All' }}</span>
       </button>
     </div>
 
@@ -97,7 +104,7 @@ async function copyValue(key: string, rawVal: string) {
                   {{ decodeVal(rawVal) }}
                 </span>
                 <span v-else class="masked-text">
-                  ????????????????????
+                  ••••••••••••••••••••
                 </span>
               </div>
             </td>
@@ -109,7 +116,7 @@ async function copyValue(key: string, rawVal: string) {
                   :title="revealedKeys[key] || revealAll ? 'Hide value' : 'Reveal value'"
                   @click="toggleReveal(key)"
                 >
-                  <span>{{ revealedKeys[key] || revealAll ? '??' : '???' }}</span>
+                  <BaseIcon :name="revealedKeys[key] || revealAll ? 'eye-off' : 'eye'" size="xs" />
                 </button>
                 <button 
                   type="button"
@@ -118,7 +125,7 @@ async function copyValue(key: string, rawVal: string) {
                   :title="copiedKey === key ? 'Copied to clipboard!' : 'Copy decoded value'"
                   @click="copyValue(key, rawVal)"
                 >
-                  <span>{{ copiedKey === key ? '?' : '??' }}</span>
+                  <BaseIcon :name="copiedKey === key ? 'check' : 'copy'" size="xs" />
                 </button>
               </div>
             </td>

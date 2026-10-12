@@ -30,3 +30,25 @@ export const settingsApi = {
   getDefaults: () => api.get<Record<string, Record<string, string>>>('/settings/defaults'),
   testIntegration: (url: string) => api.post<IntegrationTestResult>('/settings/integrations/test', { url }),
 }
+
+export interface ApiKeyItem {
+  id: string
+  name: string
+  prefix: string
+  role: string
+  created_at: string
+  last_used: string
+}
+
+export const apiKeysApi = {
+  async list(): Promise<ApiKeyItem[]> {
+    const res = await api.get<{ data: ApiKeyItem[] } | ApiKeyItem[]>('/settings/api-keys')
+    return Array.isArray(res) ? res : (res?.data || [])
+  },
+  async create(data: { name: string; role: string }): Promise<ApiKeyItem> {
+    return api.post<ApiKeyItem>('/settings/api-keys', data)
+  },
+  async revoke(id: string): Promise<{ status: string }> {
+    return api.delete<{ status: string }>(`/settings/api-keys/${id}`)
+  },
+}

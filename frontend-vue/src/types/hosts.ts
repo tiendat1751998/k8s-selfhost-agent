@@ -55,7 +55,7 @@ export const hostTypeDefinitions: HostTypeDefinition[] = [
     color: 'cyan',
     badgeClass: 'badge-slate text-muted',
     desc: 'System metrics telemetry (CPU/RAM/Disk/Network) via host daemon',
-    placeholder: 'http://10.10.10.200:9100',
+    placeholder: 'http://127.0.0.1:9100',
     hint: 'Run `./deploy-agent.sh user@server-ip` to install agent daemon'
   },
   {
@@ -65,7 +65,7 @@ export const hostTypeDefinitions: HostTypeDefinition[] = [
     color: 'blue',
     badgeClass: 'badge-slate text-muted',
     desc: 'Standalone Docker Engine socket / TCP container manager',
-    placeholder: 'tcp://10.10.10.133:2375',
+    placeholder: 'tcp://127.0.0.1:2375',
     hint: 'Use port 2376 for TLS mTLS authenticated socket endpoints'
   },
   {

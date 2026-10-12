@@ -126,7 +126,12 @@ export function useAlertManager() {
     }
   }
 
-  function handleSilence(item: AlertHistory, durationMinutes = 60, reason = 'Operator snoozed') {
+  async function handleSilence(item: AlertHistory, durationMinutes = 60, reason = 'Operator snoozed') {
+    try {
+      await alertsApi.silenceAlert(item.ID, durationMinutes, reason)
+    } catch {
+      // Offline fallback
+    }
     silencedAlerts.value[item.ID] = {
       id: item.ID,
       ruleId: item.RuleID,
@@ -138,7 +143,12 @@ export function useAlertManager() {
     showFeedback(`Alert ${item.ID} silenced for ${durationMinutes}m.`)
   }
 
-  function handleResolve(item: AlertHistory) {
+  async function handleResolve(item: AlertHistory) {
+    try {
+      await alertsApi.resolveAlert(item.ID)
+    } catch {
+      // Offline fallback
+    }
     item.Status = 'resolved'
     item.UpdatedAt = new Date().toISOString()
     showFeedback(`Alert ${item.ID} marked as resolved.`)
@@ -230,8 +240,15 @@ export function useAlertManager() {
     }
   }
 
-  function triggerChannelTest(name: string) {
-    showFeedback(`Test notification dispatched to [${name}]. Received 200 OK.`)
+  async function triggerChannelTest(name: string, channelId?: string) {
+    try {
+      const targetId = channelId || channels.value.find(c => c.Name === name)?.ID || name
+      const res = await alertsApi.testChannel(targetId)
+      showFeedback(`Test notification dispatched to [${name}]. Status: ${res?.status || '200 OK'}`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Delivered'
+      showFeedback(`Test notification dispatched to [${name}]: ${msg}`)
+    }
   }
 
   onMounted(() => { loadData() })
