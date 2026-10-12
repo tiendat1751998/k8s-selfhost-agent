@@ -11,38 +11,29 @@ interface Props {
   runningContainers: number
   totalContainers: number
   effectiveHttpRps: number
-  tpsData?: any
-  isLiveWs?: boolean
-  lastUpdated?: Date
-  loading?: boolean
-  trendHistory?: TrendPoint[]
-  clusterAvgLatencyMs?: number
+  tpsData?: any; isLiveWs?: boolean; lastUpdated?: Date
+  loading?: boolean; trendHistory?: TrendPoint[]; clusterAvgLatencyMs?: number
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  (e: 'inspect', node: NodeMetrics): void
-  (e: 'manage', node: NodeMetrics): void
-  (e: 'logs', node: NodeMetrics): void
-  (e: 'refresh'): void
-  (e: 'deepDive'): void
+  (e: 'inspect' | 'manage' | 'logs', node: NodeMetrics): void
+  (e: 'refresh' | 'deepDive'): void
 }>()
 
 const viewMode = ref<'grid' | 'table'>('grid')
 
 function formatBytes(bytes?: number): string {
   if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
 function formatRps(val: number): string {
   if (!val || isNaN(val)) return '0'
-  if (val >= 1000) return `${(val / 1000).toFixed(1)}k`
-  return Math.round(val).toString()
+  return val >= 1000 ? `${(val / 1000).toFixed(1)}k` : Math.round(val).toString()
 }
 
 function isNodeDown(node: NodeMetrics): boolean {
@@ -56,8 +47,7 @@ function getNodeStatusDotClass(node: NodeMetrics): string {
 }
 
 function isControlPlane(node: NodeMetrics): boolean {
-  const r = (node.role || '').toLowerCase()
-  return r.includes('master') || r.includes('control') || r.includes('manager')
+  return /master|control|manager/i.test(node.role || '')
 }
 
 function getNodeRole(node: NodeMetrics): string {
@@ -65,12 +55,8 @@ function getNodeRole(node: NodeMetrics): string {
 }
 
 function getNodeIdentifier(node: NodeMetrics): string {
-  const anyNode = node as any
-  if (anyNode.ip) return anyNode.ip
-  if (anyNode.ip_address) return anyNode.ip_address
-  if (anyNode.internal_ip) return anyNode.internal_ip
-  if (anyNode.endpoint) return anyNode.endpoint.replace(/^https?:\/\//, '').split(':')[0]
-  return node.node_id || '--'
+  const n = node as any
+  return n.ip || n.ip_address || n.internal_ip || (n.endpoint ? n.endpoint.replace(/^https?:\/\//, '').split(':')[0] : '') || node.node_id || '--'
 }
 
 function getCpuColorClass(cpu?: number): string {
@@ -309,18 +295,5 @@ const mobileMemArea = computed(() => {
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/overview.css';
-@import '../../assets/styles/views/overview-mobile.css';
-
-.chart-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.mobile-view-toggle .toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
+.chart-badge, .mobile-view-toggle .toggle-btn { display: inline-flex; align-items: center; gap: 4px; }
 </style>

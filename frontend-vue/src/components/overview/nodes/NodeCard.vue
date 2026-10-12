@@ -131,7 +131,3 @@ function formatOsSummary(node?: NodeMetrics | null): string {
     </div>
   </div>
 </template>
-
-<style scoped>
-@import '../../../assets/styles/views/overview.css';
-</style>

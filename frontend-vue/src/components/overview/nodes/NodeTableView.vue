@@ -10,13 +10,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'click', node: NodeMetrics): void
-  (e: 'details', node: NodeMetrics): void
-  (e: 'logs', node: NodeMetrics): void
-  (e: 'scale', node: NodeMetrics): void
-  (e: 'restart', node: NodeMetrics): void
-  (e: 'yaml', node: NodeMetrics): void
-  (e: 'delete', node: NodeMetrics): void
+  (e: 'click' | 'details' | 'logs' | 'scale' | 'restart' | 'yaml' | 'delete', node: NodeMetrics): void
 }>()
 
 type SortField = 'status' | 'name' | 'ip' | 'cpu' | 'ram' | 'disk' | 'workloads' | 'probe'
@@ -288,53 +282,15 @@ function getNodePing(node: NodeMetrics): number {
 </template>
 
 <style scoped>
-@import '../../../assets/styles/views/overview.css';
-
-.node-table {
-  table-layout: fixed !important;
-  width: 100% !important;
-  max-width: 1030px !important;
-}
-
-.node-table th {
-  padding: 6px 8px !important;
-}
-
-.node-table td {
-  padding: 2px 8px !important;
-}
-
-.sortable-th {
-  cursor: pointer;
-  user-select: none;
-  transition: color 0.15s ease;
-}
-
-.sortable-th:hover {
-  color: var(--text-primary, #fff);
-}
-
-.th-sort-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sort-icon {
-  font-size: 10px;
-  opacity: 0.4;
-}
-
-.sort-icon.active {
-  opacity: 1;
-  color: var(--color-cyan, #06b6d4);
-  font-weight: bold;
-}
-
+.node-table { table-layout: fixed !important; width: 100% !important; max-width: 1030px !important; }
+.node-table th { padding: 6px 8px !important; }
+.node-table td { padding: 2px 8px !important; }
+.sortable-th { cursor: pointer; user-select: none; transition: color 0.15s ease; }
+.sortable-th:hover { color: var(--text-primary, #fff); }
+.th-sort-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.sort-icon { font-size: 10px; opacity: 0.4; }
+.sort-icon.active { opacity: 1; color: var(--color-cyan, #06b6d4); font-weight: bold; }
 @media (max-width: 1100px) {
-  .col-ip,
-  .col-probe {
-    display: none !important;
-  }
+  .col-ip, .col-probe { display: none !important; }
 }
 </style>

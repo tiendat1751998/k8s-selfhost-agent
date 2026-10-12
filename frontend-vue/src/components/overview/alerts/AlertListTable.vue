@@ -189,7 +189,3 @@ onUnmounted(() => document.removeEventListener('click', handleDocumentClick))
     </div>
   </div>
 </template>
-
-<style scoped>
-@import '../../../assets/styles/components/alert-center.css';
-</style>

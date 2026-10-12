@@ -6,49 +6,22 @@ import { formatPercent, formatBytes, formatIoRate } from './nodeChartMath'
 import { useNodeHistoricalChart, type HistoricalChartProps, type HistoricalChartEmit } from './useNodeHistoricalChart'
 
 const props = withDefaults(defineProps<HistoricalChartProps>(), {
-  tpsData: null,
-  nodeHistoryData: null,
-  nodeHistoryLoading: false,
-  nodeHistoryRange: '1h',
-  customHistFrom: '',
-  customHistTo: '',
+  tpsData: null, nodeHistoryData: null, nodeHistoryLoading: false,
+  nodeHistoryRange: '1h', customHistFrom: '', customHistTo: '',
 })
 
 const emit = defineEmits<HistoricalChartEmit>()
 
 const {
-  showHistCpu,
-  showHistMem,
-  showHistDisk,
-  showHistPeakEnvelope,
-  histViewMode,
-  showCustomHistoryPicker,
-  customHistoryFrom,
-  customHistoryTo,
-  hoveredNodeHistIndex,
-  isNodeHistHovered,
-  nodeHistoryWindowBadge,
-  nodeHistoryList,
-  nodeHistoryChartCpuPath,
-  nodeHistoryChartCpuPeakPath,
-  nodeHistoryChartCpuEnvelope,
-  nodeHistorySpikeMarkers,
-  nodeHistoryChartCpuArea,
-  nodeHistoryChartMemPath,
-  nodeHistoryChartMemArea,
-  nodeHistoryChartDiskPath,
-  nodeHistoryTimeMarkers,
-  hoveredNodeHistPoint,
-  hoveredPointSuspect,
-  nodeHistHoverCoords,
-  nodeHistTooltipStyle,
-  toggleCustomHistoryPicker,
-  switchNodeDrawerToHistory,
-  applyPreset,
-  handleNodeHistChartHover,
-  handleNodeHistChartLeave,
-  loadNodeHistory,
-  syncLogsToPointInTime,
+  showHistCpu, showHistMem, showHistDisk, showHistPeakEnvelope,
+  histViewMode, showCustomHistoryPicker, customHistoryFrom, customHistoryTo,
+  hoveredNodeHistIndex, isNodeHistHovered, nodeHistoryWindowBadge, nodeHistoryList,
+  nodeHistoryChartCpuPath, nodeHistoryChartCpuPeakPath, nodeHistoryChartCpuEnvelope,
+  nodeHistorySpikeMarkers, nodeHistoryChartCpuArea, nodeHistoryChartMemPath,
+  nodeHistoryChartMemArea, nodeHistoryChartDiskPath, nodeHistoryTimeMarkers,
+  hoveredNodeHistPoint, hoveredPointSuspect, nodeHistHoverCoords, nodeHistTooltipStyle,
+  toggleCustomHistoryPicker, switchNodeDrawerToHistory, applyPreset,
+  handleNodeHistChartHover, handleNodeHistChartLeave, loadNodeHistory, syncLogsToPointInTime,
 } = useNodeHistoricalChart(props, emit)
 </script>
 
@@ -68,48 +41,17 @@ const {
 
         <!-- Interactive Series Toggles with Live Values -->
         <div class="series-toggles-group" v-if="nodeHistoryList.length > 0">
-          <button
-            type="button"
-            class="series-toggle-btn"
-            :class="{ 'toggle-active cpu-active': showHistCpu }"
-            @click="showHistCpu = !showHistCpu"
-            title="Click to toggle CPU curve"
-          >
-            <span class="toggle-dot bg-violet"></span>
-            <span>CPU: <strong>{{ formatPercent(node?.cpu_percent) }}</strong></span>
+          <button type="button" class="series-toggle-btn" :class="{ 'toggle-active cpu-active': showHistCpu }" @click="showHistCpu = !showHistCpu" title="Click to toggle CPU curve">
+            <span class="toggle-dot bg-violet"></span><span>CPU: <strong>{{ formatPercent(node?.cpu_percent) }}</strong></span>
           </button>
-
-          <button
-            type="button"
-            class="series-toggle-btn"
-            :class="{ 'toggle-active peak-active': showHistPeakEnvelope }"
-            @click="showHistPeakEnvelope = !showHistPeakEnvelope"
-            title="Toggle Peak Spike Envelope layer"
-          >
-            <span class="toggle-dot bg-rose"></span>
-            <span>Peak Envelope: <strong>{{ showHistPeakEnvelope ? 'ON' : 'OFF' }}</strong></span>
+          <button type="button" class="series-toggle-btn" :class="{ 'toggle-active peak-active': showHistPeakEnvelope }" @click="showHistPeakEnvelope = !showHistPeakEnvelope" title="Toggle Peak Spike Envelope layer">
+            <span class="toggle-dot bg-rose"></span><span>Peak Envelope: <strong>{{ showHistPeakEnvelope ? 'ON' : 'OFF' }}</strong></span>
           </button>
-
-          <button
-            type="button"
-            class="series-toggle-btn"
-            :class="{ 'toggle-active mem-active': showHistMem }"
-            @click="showHistMem = !showHistMem"
-            title="Click to toggle RAM curve"
-          >
-            <span class="toggle-dot bg-cyan"></span>
-            <span>RAM: <strong>{{ formatPercent(node?.memory_percent) }}</strong></span>
+          <button type="button" class="series-toggle-btn" :class="{ 'toggle-active mem-active': showHistMem }" @click="showHistMem = !showHistMem" title="Click to toggle RAM curve">
+            <span class="toggle-dot bg-cyan"></span><span>RAM: <strong>{{ formatPercent(node?.memory_percent) }}</strong></span>
           </button>
-
-          <button
-            type="button"
-            class="series-toggle-btn"
-            :class="{ 'toggle-active disk-active reqs-active': showHistDisk }"
-            @click="showHistDisk = !showHistDisk"
-            title="Click to toggle Disk curve"
-          >
-            <span class="toggle-dot bg-emerald"></span>
-            <span>Disk: <strong>{{ formatPercent(node?.disk_percent) }}</strong></span>
+          <button type="button" class="series-toggle-btn" :class="{ 'toggle-active disk-active reqs-active': showHistDisk }" @click="showHistDisk = !showHistDisk" title="Click to toggle Disk curve">
+            <span class="toggle-dot bg-emerald"></span><span>Disk: <strong>{{ formatPercent(node?.disk_percent) }}</strong></span>
           </button>
         </div>
       </div>
@@ -272,36 +214,28 @@ const {
             <BaseIcon name="clock" size="xs" /> {{ new Date(hoveredNodeHistPoint.recorded_at).toLocaleString() }}
           </div>
           <div class="tooltip-series-row" v-if="showHistCpu">
-            <span class="tooltip-dot dot-violet"></span>
-            <span class="tooltip-label">CPU:</span>
+            <span class="tooltip-dot dot-violet"></span><span class="tooltip-label">CPU:</span>
             <strong class="tooltip-val text-violet">
               {{ formatPercent(hoveredNodeHistPoint.cpu_percent) }}
-              <span v-if="(hoveredNodeHistPoint.cpu_peak || 0) > hoveredNodeHistPoint.cpu_percent" class="tooltip-peak-highlight">
-                (Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})
-              </span>
+              <span v-if="(hoveredNodeHistPoint.cpu_peak || 0) > hoveredNodeHistPoint.cpu_percent" class="tooltip-peak-highlight">(Peak: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }})</span>
             </strong>
           </div>
           <div v-if="showHistCpu && (hoveredNodeHistPoint.cpu_peak || 0) >= 85" class="tooltip-spike-alert">
             <span class="spike-alert-tag"><BaseIcon name="alert-triangle" size="xs" /> Critical Spike: {{ formatPercent(hoveredNodeHistPoint.cpu_peak) }}</span>
           </div>
           <div v-if="hoveredPointSuspect" class="tooltip-suspect-row">
-            <span class="tooltip-suspect-tag">
-              Top Offender: <strong class="text-rose">{{ hoveredPointSuspect.name }}</strong> ({{ hoveredPointSuspect.reason }})
-            </span>
+            <span class="tooltip-suspect-tag">Top Offender: <strong class="text-rose">{{ hoveredPointSuspect.name }}</strong> ({{ hoveredPointSuspect.reason }})</span>
           </div>
           <div class="tooltip-series-row" v-if="showHistMem">
-            <span class="tooltip-dot dot-cyan"></span>
-            <span class="tooltip-label">Memory:</span>
+            <span class="tooltip-dot dot-cyan"></span><span class="tooltip-label">Memory:</span>
             <strong class="tooltip-val text-cyan">{{ formatPercent(hoveredNodeHistPoint.mem_percent) }} ({{ formatBytes(hoveredNodeHistPoint.mem_used_bytes) }})</strong>
           </div>
           <div class="tooltip-series-row" v-if="showHistDisk">
-            <span class="tooltip-dot dot-emerald"></span>
-            <span class="tooltip-label">Disk:</span>
+            <span class="tooltip-dot dot-emerald"></span><span class="tooltip-label">Disk:</span>
             <strong class="tooltip-val text-emerald">{{ formatPercent(hoveredNodeHistPoint.disk_percent) }} ({{ formatBytes(hoveredNodeHistPoint.disk_used_bytes) }})</strong>
           </div>
           <div class="tooltip-series-row">
-            <span class="tooltip-dot dot-indigo"></span>
-            <span class="tooltip-label">Net I/O:</span>
+            <span class="tooltip-dot dot-indigo"></span><span class="tooltip-label">Net I/O:</span>
             <strong class="tooltip-val text-indigo">↓ {{ formatIoRate(hoveredNodeHistPoint.rx_bytes_per_sec) }} ↑ {{ formatIoRate(hoveredNodeHistPoint.tx_bytes_per_sec) }}</strong>
           </div>
           <button
@@ -337,6 +271,6 @@ const {
   </div>
 </template>
 
-<style scoped>
+<style>
 @import '../../../assets/styles/components/node-historical-chart.css';
 </style>

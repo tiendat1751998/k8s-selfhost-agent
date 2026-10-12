@@ -61,7 +61,3 @@ const emit = defineEmits<{
     </div>
   </div>
 </template>
-
-<style scoped>
-@import '../../../assets/styles/components/node-log-terminal.css';
-</style>

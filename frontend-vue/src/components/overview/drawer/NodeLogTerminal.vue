@@ -13,38 +13,13 @@ const props = withDefaults(defineProps<LogTerminalProps>(), {
 const terminalBodyRef = ref<HTMLElement | null>(null)
 
 const {
-  selectedLogApp,
-  selectedLogTail,
-  selectedLogSince,
-  selectedLogLevel,
-  appLogSearch,
-  customLogFrom,
-  customLogTo,
-  showCustomDatePicker,
-  wrapLogLines,
-  isLogStreaming,
-  autoScrollLogs,
-  userScrolledUp,
-  appLogsLoading,
-  appLogsError,
-  appLogsCopied,
-  nodeAvailableContainerApps,
-  nodeAvailableHostApps,
-  appLogLevelCounts,
-  parsedAppLogLines,
-  totalVirtualHeight,
-  visibleLogLines,
-  onLogSinceChange,
-  applyLogPreset,
-  fetchNodeAppLogs,
-  toggleLogStreaming,
-  handleTerminalScroll,
-  scrollToBottom,
-  clearLogTerminal,
-  copyAppLogs,
-  downloadAppLogs,
-  selectIncidentLog,
-  syncToTime,
+  selectedLogApp, selectedLogTail, selectedLogSince, selectedLogLevel,
+  appLogSearch, customLogFrom, customLogTo, showCustomDatePicker, wrapLogLines,
+  isLogStreaming, autoScrollLogs, userScrolledUp, appLogsLoading, appLogsError,
+  appLogsCopied, nodeAvailableContainerApps, nodeAvailableHostApps, appLogLevelCounts,
+  parsedAppLogLines, totalVirtualHeight, visibleLogLines, onLogSinceChange,
+  applyLogPreset, fetchNodeAppLogs, toggleLogStreaming, handleTerminalScroll,
+  scrollToBottom, clearLogTerminal, copyAppLogs, downloadAppLogs, selectIncidentLog, syncToTime,
 } = useNodeLogTerminal(props, terminalBodyRef)
 
 defineExpose({
@@ -314,6 +289,6 @@ defineExpose({
   </div>
 </template>
 
-<style scoped>
+<style>
 @import '../../../assets/styles/components/node-log-terminal.css';
 </style>
