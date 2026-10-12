@@ -27,6 +27,12 @@ type GitProvider interface {
 	Name() string
 }
 
+// PRMerger is an optional capability interface for GitProviders supporting pull request merging.
+type PRMerger interface {
+	MergePullRequest(ctx context.Context, repo string, prNumber int) error
+}
+
+
 // FileCommit represents a file to be committed.
 type FileCommit struct {
 	Path    string
@@ -281,6 +287,15 @@ func (c *Controller) MergePR(ctx context.Context, id string) (*domainGitops.Pull
 	pr, err := c.prRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PR: %w", err)
+	}
+
+	// 1. If provider is registered, invoke remote merge before updating local database transaction
+	if gitProvider, ok := c.providers[pr.Provider]; ok && gitProvider != nil {
+		if merger, ok := gitProvider.(PRMerger); ok {
+			if err := merger.MergePullRequest(ctx, pr.RepoURL, pr.PRNumber); err != nil {
+				return nil, fmt.Errorf("remote git provider failed to merge PR: %w", err)
+			}
+		}
 	}
 
 	if err := pr.MarkMerged(); err != nil {

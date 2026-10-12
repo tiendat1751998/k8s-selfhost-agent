@@ -2,6 +2,7 @@ package capacity
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -24,7 +25,8 @@ func (m *mockMetricsProvider) GetAgentMetrics() map[string]*usecaseMetrics.Agent
 }
 
 type mockCapacityRepo struct {
-	items []domainCapacity.Forecast
+	items     []domainCapacity.Forecast
+	snapshots []domainCapacity.Snapshot
 }
 
 func (m *mockCapacityRepo) List(ctx context.Context, cluster string) ([]domainCapacity.Forecast, error) {
@@ -34,6 +36,10 @@ func (m *mockCapacityRepo) List(ctx context.Context, cluster string) ([]domainCa
 func (m *mockCapacityRepo) Record(ctx context.Context, f *domainCapacity.Forecast) error {
 	m.items = append(m.items, *f)
 	return nil
+}
+
+func (m *mockCapacityRepo) ListSnapshots(ctx context.Context, cluster string) ([]domainCapacity.Snapshot, error) {
+	return m.snapshots, nil
 }
 
 func TestForecaster_List_GracefulEmptyFallback(t *testing.T) {
@@ -49,7 +55,7 @@ func TestForecaster_List_GracefulEmptyFallback(t *testing.T) {
 	}
 }
 
-func TestForecaster_List_WithLiveSnapshot(t *testing.T) {
+func TestForecaster_List_WithLiveSnapshot_NoHistoricalSnapshots_Flat(t *testing.T) {
 	mp := &mockMetricsProvider{
 		snapshot: &usecaseMetrics.SystemOverview{
 			TotalNodes:       2,
@@ -80,12 +86,12 @@ func TestForecaster_List_WithLiveSnapshot(t *testing.T) {
 		}
 	}
 
-	// CPU: 45% -> healthy (<70%)
-	if cpuFc.Status != "healthy" {
-		t.Errorf("expected CPU status healthy, got %s", cpuFc.Status)
+	// Without >= 2 snapshots, slope MUST be 0.0 (flat/unprojected)
+	if cpuFc.Forecast7d != 45.0 || cpuFc.Forecast30d != 45.0 || cpuFc.Forecast90d != 45.0 {
+		t.Errorf("expected flat 45.0%% projection for CPU without snapshots: 7d=%.1f, 30d=%.1f, 90d=%.1f", cpuFc.Forecast7d, cpuFc.Forecast30d, cpuFc.Forecast90d)
 	}
-	if cpuFc.Forecast7d <= 45.0 || cpuFc.Forecast30d <= cpuFc.Forecast7d || cpuFc.Forecast90d <= cpuFc.Forecast30d {
-		t.Errorf("expected increasing projection trend for CPU: 7d=%.1f, 30d=%.1f, 90d=%.1f", cpuFc.Forecast7d, cpuFc.Forecast30d, cpuFc.Forecast90d)
+	if cpuFc.ExhaustionAt != nil {
+		t.Errorf("expected nil exhaustion for flat slope")
 	}
 
 	// Memory: 72% -> warning (70-85%)
@@ -97,8 +103,73 @@ func TestForecaster_List_WithLiveSnapshot(t *testing.T) {
 	if diskFc.Status != "critical" {
 		t.Errorf("expected Storage status critical, got %s", diskFc.Status)
 	}
-	if diskFc.ExhaustionAt == nil {
-		t.Errorf("expected exhaustion runway calculated for storage")
+}
+
+func TestForecaster_List_WithHistoricalLinearRegression(t *testing.T) {
+	mp := &mockMetricsProvider{
+		snapshot: &usecaseMetrics.SystemOverview{
+			TotalNodes:       2,
+			TotalCPUPercent:  50.0,
+			TotalMemPercent:  60.0,
+			TotalDiskPercent: 70.0,
+		},
+	}
+
+	baseTime := time.Now().UTC().Add(-20 * 24 * time.Hour)
+	repo := &mockCapacityRepo{
+		snapshots: []domainCapacity.Snapshot{
+			{Cluster: "fleet-primary", CPU: 40.0, Memory: 50.0, Storage: 60.0, RecordedAt: baseTime},
+			{Cluster: "fleet-primary", CPU: 45.0, Memory: 55.0, Storage: 65.0, RecordedAt: baseTime.Add(10 * 24 * time.Hour)},
+			{Cluster: "fleet-primary", CPU: 50.0, Memory: 60.0, Storage: 70.0, RecordedAt: baseTime.Add(20 * 24 * time.Hour)},
+		},
+	}
+
+	forecaster := NewForecaster(mp, WithRepository(repo))
+	forecasts, err := forecaster.List(context.Background(), "fleet-primary")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var cpuFc domainCapacity.Forecast
+	for _, fc := range forecasts {
+		if fc.ResourceType == domainCapacity.ResourceCPU {
+			cpuFc = fc
+		}
+	}
+
+	// Linear slope: 0.5% growth per day
+	// Current = 50%, 7d = 50 + 0.5*7 = 53.5%, 30d = 50 + 0.5*30 = 65.0%, 90d = 50 + 0.5*90 = 95.0%
+	if cpuFc.Forecast7d != 53.5 {
+		t.Errorf("expected CPU 7d forecast 53.5, got %.1f", cpuFc.Forecast7d)
+	}
+	if cpuFc.Forecast30d != 65.0 {
+		t.Errorf("expected CPU 30d forecast 65.0, got %.1f", cpuFc.Forecast30d)
+	}
+	if cpuFc.Forecast90d != 95.0 {
+		t.Errorf("expected CPU 90d forecast 95.0, got %.1f", cpuFc.Forecast90d)
+	}
+	if cpuFc.ExhaustionAt == nil {
+		t.Errorf("expected non-nil exhaustion runway for positive slope")
+	}
+}
+
+func TestCalculateLinearSlope(t *testing.T) {
+	// < 2 points
+	if slope := CalculateLinearSlope([]float64{1.0}, []float64{10.0}); slope != 0.0 {
+		t.Errorf("expected 0.0 slope for N<2, got %f", slope)
+	}
+
+	// Horizontal points
+	xs := []float64{0.0, 1.0, 2.0}
+	ysFlat := []float64{50.0, 50.0, 50.0}
+	if slope := CalculateLinearSlope(xs, ysFlat); slope != 0.0 {
+		t.Errorf("expected 0.0 slope for flat points, got %f", slope)
+	}
+
+	// Slope of 2.0: y = 2*x + 10
+	ysGrowing := []float64{10.0, 12.0, 14.0}
+	if slope := CalculateLinearSlope(xs, ysGrowing); math.Abs(slope-2.0) > 1e-6 {
+		t.Errorf("expected slope 2.0, got %f", slope)
 	}
 }
 

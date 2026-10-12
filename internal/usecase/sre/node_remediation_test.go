@@ -8,9 +8,12 @@ import (
 
 	"go.uber.org/zap/zaptest"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	clienttesting "k8s.io/client-go/testing"
 )
 
 func TestRemediationController_HandleNodeOffline_CrashingNode(t *testing.T) {
@@ -344,3 +347,147 @@ func TestRemediationController_HandleNodeOffline_PendingPodsSpared(t *testing.T)
 		t.Errorf("expected pending-pod to be spared, but got error: %v", err)
 	}
 }
+
+func TestRemediationController_HandleNodeOffline_RemoteClusterFailFast(t *testing.T) {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "worker-1",
+		},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeReady, Status: corev1.ConditionFalse},
+			},
+		},
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "app-local", Namespace: "default"},
+		Spec:       corev1.PodSpec{NodeName: "worker-1"},
+		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+
+	client := fake.NewSimpleClientset(node, pod)
+	logger := zaptest.NewLogger(t)
+	// Local k8sClient is provided, but remote cluster "remote-prod-east" cannot be resolved
+	ctrl := NewRemediationController(client, nil, logger)
+
+	_, err := ctrl.HandleNodeOffline(context.Background(), "remote-prod-east", "worker-1")
+	if err == nil {
+		t.Fatal("expected fail-fast error when resolving remote cluster, got nil (cross-contamination hazard!)")
+	}
+	if !strings.Contains(err.Error(), "remote cluster 'remote-prod-east'") && !strings.Contains(err.Error(), "no active cluster connection") {
+		t.Errorf("expected error message citing remote cluster failure, got: %v", err)
+	}
+
+	// Local pod must remain untouched (never accidentally evicted!)
+	_, err = client.CoreV1().Pods("default").Get(context.Background(), "app-local", metav1.GetOptions{})
+	if err != nil {
+		t.Errorf("local pod was accidentally deleted during remote cluster failure: %v", err)
+	}
+}
+
+func TestRemediationController_HandleNodeOffline_DaemonSetPodsSpared(t *testing.T) {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "worker-1",
+		},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeReady, Status: corev1.ConditionFalse},
+			},
+		},
+	}
+
+	dsPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fluentd-ds",
+			Namespace: "kube-system",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "DaemonSet",
+					Name:       "fluentd",
+					UID:        "ds-uid-123",
+				},
+			},
+		},
+		Spec: corev1.PodSpec{NodeName: "worker-1"},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+
+	appPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "api-deployment-pod",
+			Namespace: "default",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "ReplicaSet",
+					Name:       "api-rs",
+					UID:        "rs-uid-456",
+				},
+			},
+		},
+		Spec: corev1.PodSpec{NodeName: "worker-1"},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+
+	client := fake.NewSimpleClientset(node, dsPod, appPod)
+	logger := zaptest.NewLogger(t)
+	ctrl := NewRemediationController(client, nil, logger)
+
+	res, err := ctrl.HandleNodeOffline(context.Background(), "local", "worker-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Only appPod should be evicted; DaemonSet pod MUST be spared
+	if len(res.EvictedPods) != 1 || res.EvictedPods[0] != "api-deployment-pod" {
+		t.Errorf("expected only api-deployment-pod evicted, got: %v", res.EvictedPods)
+	}
+
+	// Verify DaemonSet pod is still present in cluster
+	_, err = client.CoreV1().Pods("kube-system").Get(context.Background(), "fluentd-ds", metav1.GetOptions{})
+	if err != nil {
+		t.Errorf("DaemonSet pod should still exist, but got err: %v", err)
+	}
+}
+
+func TestRemediationController_HandleNodeOffline_PDBRespected(t *testing.T) {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-1"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}},
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pdb-guarded-pod", Namespace: "default"},
+		Spec:       corev1.PodSpec{NodeName: "worker-1"},
+		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+
+	client := fake.NewSimpleClientset(node, pod)
+	client.PrependReactor("create", "pods", func(action clienttesting.Action) (bool, runtime.Object, error) {
+		if action.GetSubresource() == "eviction" {
+			return true, nil, k8serrors.NewTooManyRequestsError("Cannot evict pod: PDB violation")
+		}
+		return false, nil, nil
+	})
+
+	logger := zaptest.NewLogger(t)
+	ctrl := NewRemediationController(client, nil, logger)
+
+	res, err := ctrl.HandleNodeOffline(context.Background(), "local", "worker-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// PDB violation blocked eviction: pod must NOT be evicted/deleted
+	if len(res.EvictedPods) != 0 {
+		t.Errorf("expected 0 evicted pods when PDB blocks, got: %v", res.EvictedPods)
+	}
+
+	_, err = client.CoreV1().Pods("default").Get(context.Background(), "pdb-guarded-pod", metav1.GetOptions{})
+	if err != nil {
+		t.Errorf("guarded pod should still exist in cluster: %v", err)
+	}
+}
+
+
