@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
 import type { NodeMetrics } from '../../../api/overview'
 import CircularGauge from '../../ui/CircularGauge.vue'
@@ -23,7 +23,3 @@ const isDisabled = computed(() =>
     </div>
   </div>
 </template>
-
-<style scoped>
-@import '../../../assets/styles/views/overview.css';
-</style>

@@ -71,6 +71,6 @@ function handleClose() {
   </ModalDrawer>
 </template>
 
-<style scoped>
+<style>
 @import '../../../assets/styles/components/deep-dive-traffic.css';
 </style>

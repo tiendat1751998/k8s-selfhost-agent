@@ -9,6 +9,23 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('@xterm')) {
+            return 'vendor-xterm'
+          }
+          if (id.includes('qrcode')) {
+            return 'vendor-qrcode'
+          }
+          if (id.includes('lucide-vue-next')) {
+            return 'vendor-lucide'
+          }
+        }
+      }
+    }
+  },
   server: {
     port: 3000,
     hmr: {

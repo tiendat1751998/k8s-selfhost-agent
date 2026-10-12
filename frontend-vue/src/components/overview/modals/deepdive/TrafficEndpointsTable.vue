@@ -184,7 +184,3 @@ function formatIoRate(rate?: number): string { return `${formatBytes(rate)}/s` }
     </div>
   </section>
 </template>
-
-<style scoped>
-@import '../../../../assets/styles/components/deep-dive-traffic.css';
-</style>

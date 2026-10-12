@@ -46,7 +46,3 @@ const isNodeOffline = computed(() => {
     />
   </div>
 </template>
-
-<style scoped>
-@import '../../../assets/styles/components/node-diagnostics.css';
-</style>

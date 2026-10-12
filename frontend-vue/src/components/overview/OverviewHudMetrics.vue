@@ -155,7 +155,3 @@ function formatBytes(bytes: number): string {
     </div>
   </section>
 </template>
-
-<style scoped>
-@import '../../assets/styles/views/overview.css';
-</style>
