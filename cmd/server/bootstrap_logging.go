@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -88,4 +89,38 @@ func (p *chStatusProvider) GetStatus(ctx context.Context) (*adapthttp.LogEngineS
 		}
 	}
 	return &adapthttp.LogEngineStatus{Engine: "ClickHouse MergeTree", Status: status, LatencyMS: latency, TotalRecords: total, RetentionDays: 30}, nil
+}
+
+func detectLogLevel(msg, defaultLvl string) string {
+	u := strings.ToUpper(msg)
+	if strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC") || strings.Contains(u, "ERR") {
+		return "ERROR"
+	}
+	if strings.Contains(u, "WARN") { return "WARN" }
+	if strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE") { return "DEBUG" }
+	if strings.Contains(u, "INFO") { return "INFO" }
+	return defaultLvl
+}
+
+func getContainerNamespace(name string) string {
+	l := strings.ToLower(name)
+	if strings.Contains(l, "log") || strings.Contains(l, "nats") { return "logging" }
+	if strings.Contains(l, "vault") { return "vault" }
+	if strings.Contains(l, "stage") || strings.Contains(l, "staging") { return "staging" }
+	return "production"
+}
+
+func extractTraceID(msg string) string {
+	for _, p := range []string{`"trace_id":`, `"traceId":`, `trace_id=`, `traceId=`, `trace-id=`} {
+		if idx := strings.Index(msg, p); idx != -1 {
+			rest := strings.TrimSpace(msg[idx+len(p):])
+			if len(rest) > 0 {
+				if rest[0] == '"' || rest[0] == 0x27 {
+					if end := strings.IndexByte(rest[1:], rest[0]); end != -1 { return strings.TrimSpace(rest[1 : end+1]) }
+				} else if end := strings.IndexAny(rest, " \t\r\n,;{}]"); end != -1 { return strings.TrimSpace(rest[:end]) }
+				return rest
+			}
+		}
+	}
+	return ""
 }

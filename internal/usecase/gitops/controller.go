@@ -56,6 +56,12 @@ func (c *Controller) RegisterProvider(providerType domainGitops.Provider, provid
 	c.providers[providerType] = provider
 }
 
+// HasProvider checks if the specified Git provider is registered.
+func (c *Controller) HasProvider(providerType domainGitops.Provider) bool {
+	_, ok := c.providers[providerType]
+	return ok
+}
+
 // CreateRemediationPR creates a GitOps PR with the remediation changes from an RCA report.
 func (c *Controller) CreateRemediationPR(ctx context.Context, inc *incident.Incident, rpt *report.Report, provider domainGitops.Provider, repoURL, baseBranch string, files []FileCommit) (*domainGitops.PullRequest, error) {
 	log := logger.WithContext(ctx)

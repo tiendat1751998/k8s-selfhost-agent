@@ -304,3 +304,11 @@ func (b *SREBot) HandleCallbackQuery(ctx context.Context, callbackID string, cha
 		return "", errors.NewValidation("action", "unknown action")
 	}
 }
+
+// Start starts the Telegram bot worker and listens until the context is canceled.
+func (b *SREBot) Start(ctx context.Context) error {
+	b.logger.Info("Telegram SRE bot worker started")
+	<-ctx.Done()
+	b.logger.Info("Telegram SRE bot worker stopped")
+	return ctx.Err()
+}
