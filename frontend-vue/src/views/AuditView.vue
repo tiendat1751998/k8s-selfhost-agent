@@ -183,11 +183,15 @@ function switchTab(tab: 'logs' | 'findings') {
 
 async function handleResolveFinding(id: string) {
   resolvingFindingId.value = id
+  findingsError.value = null
   try {
     await auditApi.resolveFinding(id)
     findings.value = findings.value.map(f => f.id === id ? { ...f, status: 'resolved' } : f)
-  } catch {
-    findings.value = findings.value.map(f => f.id === id ? { ...f, status: 'resolved' } : f)
+    statusMessage.value = { type: 'success', text: `Vulnerability finding [${id}] resolved.` }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Failed to resolve vulnerability finding'
+    findingsError.value = errorMsg
+    statusMessage.value = { type: 'error', text: `Failed to resolve finding [${id}]: ${errorMsg}` }
   } finally {
     resolvingFindingId.value = null
   }

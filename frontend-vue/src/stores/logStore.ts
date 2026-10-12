@@ -1,4 +1,4 @@
-﻿import { defineStore } from 'pinia'
+import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
   searchLogs,
@@ -164,13 +164,13 @@ export const useLogStore = defineStore('log', () => {
     if (q) params.append('query', q)
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
-    if (token) params.append('token', token)
 
     const queryStr = params.toString()
     const wsUrl = `${proto}//${host}/api/v1/logs/stream${queryStr ? '?' + queryStr : ''}`
 
     try {
-      socket.value = new WebSocket(wsUrl)
+      const protocols = token ? ['bearer', token] : undefined
+      socket.value = protocols ? new WebSocket(wsUrl, protocols) : new WebSocket(wsUrl)
       socket.value.onopen = () => {
         isConnected.value = true
         reconnectAttempts.value = 0

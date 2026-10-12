@@ -30,10 +30,8 @@ export function usePodTerminal(
     const host = window.location.host
     const ns = props.namespace || 'default'
     const containerParam = selectedContainer.value ? `&container=${encodeURIComponent(selectedContainer.value)}` : ''
-    const token = localStorage.getItem('k8s_token')
-    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : ''
 
-    return `${protocol}//${host}/api/v1/k8s/${encodeURIComponent(props.cluster)}/pods/${encodeURIComponent(props.pod)}/exec?namespace=${encodeURIComponent(ns)}${containerParam}&command=/bin/sh${tokenParam}`
+    return `${protocol}//${host}/api/v1/k8s/${encodeURIComponent(props.cluster)}/pods/${encodeURIComponent(props.pod)}/exec?namespace=${encodeURIComponent(ns)}${containerParam}&command=/bin/sh`
   }
 
   function sendResize(cols?: number, rows?: number) {
@@ -66,9 +64,11 @@ export function usePodTerminal(
     }
 
     const url = buildWebSocketUrl()
+    const token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
+    const protocols = token ? ['bearer', token] : undefined
 
     try {
-      ws = new WebSocket(url)
+      ws = protocols ? new WebSocket(url, protocols) : new WebSocket(url)
     } catch (err: unknown) {
       connectionStatus.value = 'error'
       const msg = err instanceof Error ? err.message : 'Failed to create WebSocket connection'
