@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
+	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	gitproviderGitea "github.com/datdt/k8sselfhost/internal/infrastructure/gitprovider/gitea"
 	gitproviderGithub "github.com/datdt/k8sselfhost/internal/infrastructure/gitprovider/github"
@@ -26,9 +27,11 @@ import (
 )
 
 func init() {
+	const secret = "this-is-a-test-secret-at-least-32-chars-long"
 	if os.Getenv("JWT_SECRET") == "" {
-		_ = os.Setenv("JWT_SECRET", "this-is-a-test-secret-at-least-32-chars-long")
+		_ = os.Setenv("JWT_SECRET", secret)
 	}
+	_ = mw.SetJWTSecret(secret)
 }
 
 func setupTestRouter() http.Handler {
@@ -86,7 +89,11 @@ func TestRouter_MountedRoutes_UnauthorizedNotNotFound(t *testing.T) {
 	}
 
 	t.Run("unmapped route returns 404", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/unmapped-endpoint-xyz", nil)
+		token, err := mw.GenerateToken("test-user", "platform_admin", "default")
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/nonexistent-endpoint-xyz", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
 		rec := httptest.NewRecorder()
 
 		router.ServeHTTP(rec, req)
