@@ -72,17 +72,24 @@ describe('Mobile UI Defect Remediation & Workload Stream', () => {
     assert.match(mockContent, /postgres-operator/, 'Must return postgres-operator workload')
   })
 
-  it('useDeployments: provides graceful fallback sample workloads when live list is empty', () => {
+  it('useDeployments & Mobile Cards: handles empty states cleanly without hardcoded fallback collusion', () => {
     assert.ok(fs.existsSync(useDeploymentsTsPath), 'useDeployments.ts must exist')
     const useDeploymentsContent = fs.readFileSync(useDeploymentsTsPath, 'utf-8')
 
+    // Authentic state management: initializes empty array and provides fetchDeployments
     assert.match(
       useDeploymentsContent,
-      /FALLBACK_SAMPLE_WORKLOADS|fallback.*workloads/i,
-      'useDeployments.ts must provide fallback sample workloads'
+      /deployments\s*=\s*ref<DeploymentApp\[\]>\(\[\]\)/,
+      'useDeployments.ts must initialize deployments with an authentic empty array'
     )
-    assert.match(useDeploymentsContent, /ingress-traefik/, 'Fallback workloads must contain ingress-traefik')
-    assert.match(useDeploymentsContent, /api-gateway/, 'Fallback workloads must contain api-gateway')
+    assert.match(useDeploymentsContent, /fetchDeployments/, 'useDeployments.ts must provide fetchDeployments')
+
+    // Authentic empty state in mobile cards
+    const mobileCardsVuePath = path.join(rootDir, 'src', 'components', 'deployments', 'DeploymentsMobileCards.vue')
+    assert.ok(fs.existsSync(mobileCardsVuePath), 'DeploymentsMobileCards.vue must exist')
+    const mobileCardsContent = fs.readFileSync(mobileCardsVuePath, 'utf-8')
+    assert.match(mobileCardsContent, /empty-mobile-state/, 'Mobile cards must render authentic empty state')
+    assert.match(mobileCardsContent, /0 Workloads matching active filters/, 'Mobile cards must display clear empty state message')
   })
 
   it('File line count constraints: all modified files strictly < 500 lines', () => {
