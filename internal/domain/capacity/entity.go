@@ -44,3 +44,13 @@ type NodeHeadroom struct {
 	Status            string  `json:"status"` // "healthy" | "warning" | "critical"
 	HeadroomPercent   float64 `json:"headroom_percent"`
 }
+
+// Snapshot represents a point-in-time capacity usage snapshot for regression modeling.
+type Snapshot struct {
+	Cluster    string    `json:"cluster"`
+	CPU        float64   `json:"cpu"`     // percentage (0-100)
+	Memory     float64   `json:"memory"`  // percentage (0-100)
+	Storage    float64   `json:"storage"` // percentage (0-100)
+	RecordedAt time.Time `json:"recorded_at"`
+}
+

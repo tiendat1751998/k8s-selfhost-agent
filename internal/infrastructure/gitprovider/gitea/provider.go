@@ -202,3 +202,25 @@ func parseGiteaRepo(repo string) (string, string) {
 	}
 	return parts[0], parts[1]
 }
+
+// MergePullRequest merges the pull request on Gitea via API.
+func (p *Provider) MergePullRequest(ctx context.Context, repo string, prNumber int) error {
+	owner, repoName := parseGiteaRepo(repo)
+	mergeURL := fmt.Sprintf("%s/repos/%s/%s/pulls/%d/merge", p.apiURL, owner, repoName, prNumber)
+
+	body := map[string]interface{}{
+		"Do": "merge",
+	}
+	resp, err := p.doRequest(ctx, http.MethodPost, mergeURL, body)
+	if err != nil {
+		return fmt.Errorf("merging Gitea pull request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected status %d merging Gitea pull request: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+

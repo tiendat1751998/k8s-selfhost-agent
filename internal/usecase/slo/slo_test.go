@@ -31,9 +31,10 @@ func (m *mockDockerClient) ContainerList(ctx context.Context, options container.
 }
 
 type mockObsRepo struct {
-	samples []observability.HealthSample
-	defs    []observability.SLODefinition
-	snaps   map[string]*observability.SLOSnapshot
+	samples    []observability.HealthSample
+	defs       []observability.SLODefinition
+	snaps      map[string]*observability.SLOSnapshot
+	computeErr error
 }
 
 func newMockObsRepo() *mockObsRepo {
@@ -138,6 +139,9 @@ func (r *mockObsRepo) GetHealthSamples(ctx context.Context, serviceName string, 
 }
 
 func (r *mockObsRepo) ComputeSLI(ctx context.Context, serviceName string, window time.Duration) (float64, error) {
+	if r.computeErr != nil {
+		return 0.0, r.computeErr
+	}
 	total := 0
 	healthy := 0
 	for _, s := range r.samples {
@@ -251,3 +255,42 @@ func TestSLOSnapshotUpdater_UpdateOnce(t *testing.T) {
 		t.Errorf("expected critical status, got %s", snap.BudgetStatus)
 	}
 }
+
+func TestSLOSnapshotUpdater_UpdateOnce_ComputeSLIError_EradicateFakePerfection(t *testing.T) {
+	repoMock := newMockObsRepo()
+	repoMock.defs = []observability.SLODefinition{
+		{
+			ID:             "def-err",
+			Service:        "failing_service",
+			Target:         99.9,
+			IndicatorType:  "availability",
+			Window:         "30d",
+			AlertThreshold: 1.5,
+		},
+	}
+	repoMock.computeErr = context.DeadlineExceeded
+
+	updater := NewSLOSnapshotUpdater(repoMock, zap.NewNop(), WithUpdaterInterval(10*time.Millisecond))
+	updater.UpdateOnce(context.Background())
+
+	snap := repoMock.snaps["def-err"]
+	if snap == nil {
+		t.Fatalf("expected snapshot created for def-err")
+	}
+
+	// Must NOT fake actual SLI to 100.0!
+	if snap.Actual == 100.0 {
+		t.Errorf("critical failure: actual SLI was faked to 100.0 on ComputeSLI error")
+	}
+	if snap.Actual != 0.0 {
+		t.Errorf("expected actual SLI 0.0, got %f", snap.Actual)
+	}
+	// Error budget must be consumed (0.0), NOT 100.0
+	if snap.ErrorBudget != 0.0 {
+		t.Errorf("expected error budget to be 0.0 (consumed), got %f", snap.ErrorBudget)
+	}
+	if snap.BudgetStatus != "critical" && snap.BudgetStatus != "error" {
+		t.Errorf("expected critical or error status, got %s", snap.BudgetStatus)
+	}
+}
+

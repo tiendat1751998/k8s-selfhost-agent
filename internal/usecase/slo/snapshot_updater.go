@@ -106,8 +106,8 @@ func (u *SLOSnapshotUpdater) UpdateOnce(ctx context.Context) {
 		window := ParseWindow(d.Window)
 		actualSLI, computeErr := u.repo.ComputeSLI(evalCtx, d.Service, window)
 		if computeErr != nil {
-			u.logger.Debug("Failed to compute SLI for service", zap.String("service", d.Service), zap.Error(computeErr))
-			actualSLI = 100.0
+			u.logger.Warn("Failed to compute SLI for service; marking unmeasured/zero", zap.String("service", d.Service), zap.Error(computeErr))
+			actualSLI = 0.0
 		}
 
 		target := d.Target
@@ -132,7 +132,9 @@ func (u *SLOSnapshotUpdater) UpdateOnce(ctx context.Context) {
 		}
 
 		budgetStatus := "healthy"
-		if burnRate > 2.0 {
+		if computeErr != nil {
+			budgetStatus = "critical"
+		} else if burnRate > 2.0 {
 			budgetStatus = "critical"
 		} else if burnRate > 1.0 {
 			budgetStatus = "warning"
