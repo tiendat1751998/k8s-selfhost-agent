@@ -33,7 +33,8 @@
 | :--- | :--- | :--- | :--- |
 | **01 – 15** | Crash Elimination, Tenancy | `done/018-crash-elimination-and-tenancy.md` | **MERGED (Done)** |
 | **16 – 20** | System Wiring, Cryptography & Migrations | `done/019-...`, `done/020-...` | **MERGED (Done)** |
-| **21 – 25** | Supply Chain, Storage Expansion, SRE Copilot, DB Clones, DR | `inprocess/021` đến `025` (Trivy, Cosign, Velero, StorageClass, SRE Copilot) | Spec Complete |
+| **21 – 23** | DevSecOps Fail-Close, Storage Fencing, Telegram Copilot | `done/021-...`, `done/022-...`, `done/023-...` | **MERGED (Done)** |
+| **24 – 25** | DB Sanitization Clones & DR Drills | `inprocess/024-sanitized-staging-db-clones.md`, `inprocess/025-disaster-recovery-and-restore-drills.md` | Spec Complete |
 | **26 – 31** | CNI IPAM, CoreDNS, DB SRE, Secret Redaction, Baremetal, Canary | `inprocess/026` đến `031` (IPAM scavenger, Bloat killer, adjtimex, Kaniko rootless, Load shedding) | Spec Complete |
 | **51 – 55** | Service Mesh, HTTP Desync, Cloudflare ReDoS | `inprocess/033-service-mesh-lifecycle-and-redos-protection.md` | Spec Complete |
 | **56 – 60** | Kafka Rebalance, RabbitMQ Watermark, AWS Kinesis PIDs | `inprocess/034-message-queue-and-streaming-sre-engine.md` | Spec Complete |

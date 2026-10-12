@@ -64,10 +64,13 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
   - `done/018-crash-elimination-and-tenancy.md` (MERGED).
   - `done/019-platform-wiring-and-entrypoint-parity.md` (MERGED).
   - `done/020-backup-drivers-crypto-and-migrations.md` (MERGED).
-  - `inprocess/021-devsecops-failclose-and-supply-chain.md` (Active Coder: `30c63e8c`).
-  - `inprocess/022-real-storage-expansion-and-fencing.md` (Active Coder: `ca985d91`).
-  - `inprocess/023-telegram-sre-copilot-and-runbooks.md` (Active Coder: `720fe7e7`).
-  - `inprocess/024` to `031`: Staging DB masking, disaster recovery drills, CNI IPAM scavenger, Postgres idle transaction terminator, in-stream secret redactor, NTP/SMART hardware watchdog, rootless Kaniko, automated canary & load shedding.
+  - `done/021-devsecops-failclose-and-supply-chain.md` (MERGED).
+  - `done/022-real-storage-expansion-and-fencing.md` (MERGED).
+  - `done/023-telegram-sre-copilot-and-runbooks.md` (MERGED).
+  - `inprocess/024-sanitized-staging-db-clones.md` (Ready for Batch 3).
+  - `inprocess/025-disaster-recovery-and-restore-drills.md` (Ready for Batch 3).
+  - `inprocess/026-network-cni-ipam-and-coredns-mitigation.md` (Ready for Batch 3).
+  - `inprocess/027` to `031`: Postgres idle transaction terminator, in-stream secret redactor, NTP/SMART hardware watchdog, rootless Kaniko, automated canary & load shedding.
   - `inprocess/033` to `038`: Istio startup race injector, Kafka CooperativeSticky tuner, Ceph RocksDB PITR, cgroup v2 memory.high interceptor, Vault unseal operator, multi-DC STONITH fencing.
   - `inprocess/039` to `046`: SecretStore CSI polling rate limiter, eBPF ringbuffer watchdog, hybrid WAN MTU blackhole detector, ClickHouse batching buffer, containerd inode pruner, GPU XID fault tainter, Velero break-lock, FinOps cross-AZ optimizer.
   - `inprocess/047` to `052`: Kernel socket backlog & conntrack scaler, VFS inode watchdog & D-State breaker, K8s webhook deadlock breaker & PLEG watchdog, Postgres XID wraparound & Redis resync storm shield, DevSecOps supply chain firewall & IMDSv2 defense, Cloud burst credit monitor & Spot 2m drainer.
@@ -76,6 +79,4 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
 ---
 
 ## 6. Current Active Subagents & Worktrees
-1. `30c63e8c` (`backend-coder`, DevSecOps Security Gate Coder): Executing Task 021 in worktree `subagent-DevSecOps-Security-Gate-Coder-backend-coder-58db5c33`.
-2. `ca985d91` (`backend-coder`, Real Storage & CSI Fencing Coder): Executing Task 022 in worktree `subagent-Real-Storage---CSI-Fencing-Coder-backend-coder-a09808d7`.
-3. `720fe7e7` (`backend-coder`, Telegram SRE Copilot Coder): Executing Task 023 in worktree `subagent-Telegram-SRE-Copilot-Coder-backend-coder-f1b16e9c`.
+*(Idle / Ready for Batch 3: Tasks 024, 025, 026)*
