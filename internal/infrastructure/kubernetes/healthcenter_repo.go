@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -13,6 +14,7 @@ import (
 )
 
 type healthCenterRepo struct {
+	mu            sync.RWMutex
 	client        *kubernetes.Clientset
 	clientManager *infraCluster.ClientManager
 	cache         map[string]healthcenter.ComponentStatus
@@ -136,15 +138,43 @@ func (r *healthCenterRepo) GetStatuses(ctx context.Context) ([]healthcenter.Comp
 	}
 
 	// 7. Add cached AI/other component statuses
+	r.mu.RLock()
 	for _, st := range r.cache {
 		statuses = append(statuses, st)
 	}
+	r.mu.RUnlock()
 
 	return statuses, nil
 }
 
 func (r *healthCenterRepo) UpdateStatus(ctx context.Context, cs *healthcenter.ComponentStatus) error {
 	cs.LastCheckedAt = time.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.cache[cs.ID] = *cs
 	return nil
+}
+
+// GetComponentStatus retrieves a single component status from cache by ID in a thread-safe manner.
+func (r *healthCenterRepo) GetComponentStatus(id string) (healthcenter.ComponentStatus, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	st, ok := r.cache[id]
+	return st, ok
+}
+
+// GetAllComponentStatuses retrieves all cached component statuses in a thread-safe manner.
+func (r *healthCenterRepo) GetAllComponentStatuses() []healthcenter.ComponentStatus {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	statuses := make([]healthcenter.ComponentStatus, 0, len(r.cache))
+	for _, st := range r.cache {
+		statuses = append(statuses, st)
+	}
+	return statuses
+}
+
+// UpdateComponentStatus is a thread-safe helper to update status without explicit context.
+func (r *healthCenterRepo) UpdateComponentStatus(cs *healthcenter.ComponentStatus) error {
+	return r.UpdateStatus(context.Background(), cs)
 }
