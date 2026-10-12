@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import type { LogEntry } from '../../stores/logStore'
 import { useLogStore } from '../../stores/logStore'
@@ -199,7 +199,8 @@ defineExpose({
         <span class="virtual-buffer-meta">({{ logs.length.toLocaleString() }} in buffer)</span>
       </div>
       <div class="virtual-fps-badge">
-        <span>60 FPS Virtualized</span>
+        <span class="fps-text-desktop">60 FPS Virtualized</span>
+        <span class="fps-text-mobile">60 FPS</span>
       </div>
     </div>
 
