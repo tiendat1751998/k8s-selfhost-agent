@@ -2,13 +2,13 @@
 # Checkpoint: 2026-10-12T12:40:00+07:00
 
 > **Severity**: Ongoing Platform Intelligence & SRE Knowledge Base Expansion  
-> **Status**: BATCH_1_2_3_4_5_6_7_INGESTED_170_SCENARIOS_ACTIVE  
+> **Status**: BATCH_1_2_3_4_5_6_7_8_INGESTED_185_SCENARIOS_ACTIVE  
 > **Target Agent**: `research` / `architect` / `sre`  
 > **Knowledge Base File**: `docs/architecture/production_failure_modes_encyclopedia.md`  
 
 ---
 
-## 1. TIẾN ĐỘ THU THẬP & HỆ THỐNG HÓA KỊCH BẢN (FMEA INGESTION TRACKER: 170 SCENARIOS)
+## 1. TIẾN ĐỘ THU THẬP & HỆ THỐNG HÓA KỊCH BẢN (FMEA INGESTION TRACKER: 185 SCENARIOS)
 
 * **Đợt 1 (Đã hoàn thành - 50 Kịch bản cơ bản)**: 
   - Kịch bản 1 đến 50 bao phủ 9 tầng: Phần cứng NVMe/RAID, Linux Kernel, etcd internals, Kubelet PLEG, Ingress buffers, CSI multi-attach, Postgres XID/table bloat, Redis fragmentation, DinD root escapes, Git history leaks, Vault drift, Schrödinger's backup.
@@ -23,9 +23,12 @@
 * **Đợt 6 (Đã hoàn thành - 10 Kịch bản GitOps Concurrency & AI Cluster Networking)**:
   - Kịch bản 151 đến 160 bao phủ 2 tầng hạ tầng hiện đại: GitOps & CI/CD Concurrency (Sync-wave deadlock, webhook out-of-order, monorepo OOM) và AI Cluster Networking (RoCEv2 PFC deadlock, RDMA locked memory, CUDA fork deadlock, checkpoint I/O saturation).
 * **Đợt 7 (Đã hoàn thành - 10 Kịch bản K8s Control Plane Under Load & Hybrid Cloud Networking)**:
-  - Kịch bản 161 đến 170 bao phủ 2 tầng hạ tầng phức hợp:
-    - *K8s Control Plane Under Extreme Load*: API Server Unbounded List-Watches & Watch Cache Compaction 410 Thundering Herd, APF Queue Starvation of Leader Election, CRD Conversion Webhook Lockup, Metrics-Server Drop & HPA Freeze.
-    - *Multi-Cloud & Hybrid Networking Dark Corners*: AWS Transit Gateway / DirectConnect Asymmetric BGP Routing, VPC Peering Jumbo MTU Black Hole, AWS NLB Cross-Zone Imbalance, Hybrid Cloud Split-View DNS NXDOMAIN Poisoning, Dual-Stack IPv4/IPv6 Ingress Allocation Failure.
+  - Kịch bản 161 đến 170 bao phủ 2 tầng hạ tầng phức hợp: K8s APF Queue Starvation & Watch Cache Compaction 410, và Hybrid Cloud Transit Gateway / DirectConnect Asymmetric BGP Routing.
+* **Đợt 8 (Đã hoàn thành - 15 Kịch bản Zero-Trust Identity, Distributed Consensus & Container Artifact Guards)**:
+  - Kịch bản 171 đến 185 bao phủ 3 tầng hạ tầng doanh nghiệp:
+    - *Zero-Trust Identity & Token Rotation*: SPIFFE/SPIRE SVID Thundering Herd, TokenRequest API Depletion & Projected Mounts, OIDC Clock Skew Lockout, Cross-Cloud STS Rate Limit Throttling, mTLS Root CA Revocation Partition.
+    - *Distributed Consensus & Split-Brain Fencing*: Zookeeper/Raft GC Jitter Phantom Writes, etcd Defragmentation Disk I/O Leader Loss, Distributed Lock GC Pause Catastrophe (Fencing Tokens), Patroni/PgBouncer Pool Poisoning, Consul Serf Gossip UDP Flapping Storm.
+    - *Container Images & Runtime Evictions*: OCI Image Tag Mutability & Inconsistent State, Ephemeral Storage Eviction Cascade, Kubelet Disk Pressure CRI Image GC Freeze, Linux Host PID Exhaustion Fork Bomb, Linux Page Cache dirty_ratio Synchronous Write Throttling.
 
 ---
 
@@ -66,3 +69,7 @@
 | **156 – 160** | RoCEv2 PFC Deadlock, RDMA Memlock, Asymmetric NVLink, CUDA Fork | `inprocess/058-rocev2-pfc-deadlock-and-rdma-watchdog.md` | Spec Complete |
 | **161 – 165** | K8s APF Queue Starvation, Watch Cache 410, CRD Conversion Lockup | `inprocess/059-k8s-apf-queue-and-watch-cache-mitigator.md` | Spec Complete |
 | **166 – 170** | AWS TGW Asymmetric BGP, VPC Peering Jumbo MTU, Split DNS NXDOMAIN | `inprocess/060-hybrid-cloud-transit-gateway-and-asymmetric-routing.md` | Spec Complete |
+| **171 – 175** | SPIFFE/SPIRE Jitter Renewal, TokenRequest Stale, OIDC Clock Skew | `inprocess/061-spiffe-spire-workload-identity-and-token-refresher.md` | Spec Complete |
+| **176 – 180** | Consensus Fencing, Safe etcd Defrag Coordinator, PgBouncer Poisoning | `inprocess/062-distributed-consensus-fencing-and-etcd-defrag.md` | Spec Complete |
+| **181 – 185** | Immutable Image Digest, Ephemeral Storage Eviction, PID Limit Guard | `inprocess/063-oci-immutable-digest-and-ephemeral-storage-guard.md` | Spec Complete |
+
