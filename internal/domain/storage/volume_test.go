@@ -99,12 +99,16 @@ func TestStorageDomain_VolumeExpandRequest_Validate(t *testing.T) {
 }
 
 func TestStorageDomain_JSONSerialization(t *testing.T) {
+	used := int64(3758096384)
+	usagePct := 35.0
 	vol := DistributedVolume{
 		Name:             "data-volume",
 		Namespace:        "prod",
 		StorageClass:     "longhorn",
 		CapacityBytes:    10737418240,
-		UsedBytes:        3758096384,
+		UsedBytes:        &used,
+		UsagePercentage:  &usagePct,
+		UsageSource:      UsageSourceKubeletMetrics,
 		ReplicationCount: 3,
 		HealthStatus:     HealthStatusHealthy,
 		AttachedNode:     "node-worker-1",
@@ -143,8 +147,60 @@ func TestStorageDomain_JSONSerialization(t *testing.T) {
 	if decoded.Name != vol.Name || decoded.ReplicationCount != 3 || len(decoded.Replicas) != 3 {
 		t.Errorf("decoded volume mismatch: %+v", decoded)
 	}
+	if decoded.UsedBytes == nil || *decoded.UsedBytes != used {
+		t.Errorf("expected used bytes %d, got %v", used, decoded.UsedBytes)
+	}
 	if !decoded.IsHealthy() {
 		t.Errorf("expected decoded volume to be healthy")
+	}
+}
+
+func TestStorageDomain_VolumeDetails(t *testing.T) {
+	details := VolumeDetails{
+		VolumeID:         "pvc-12345",
+		PersistentVolume: "pv-12345",
+		ClaimName:        "mysql-pvc",
+		Namespace:        "default",
+		StorageClassName: "standard",
+		CapacityBytes:    100 * 1024 * 1024 * 1024,
+		UsedBytes:        nil,
+		UsagePercentage:  nil,
+		UsageSource:      UsageSourceUnknown,
+		AllowExpansion:   true,
+		VolumeMode:       "Filesystem",
+		AccessModes:      []string{"ReadWriteOnce"},
+		Phase:            "Bound",
+	}
+
+	data, err := json.Marshal(details)
+	if err != nil {
+		t.Fatalf("failed to marshal volume details: %v", err)
+	}
+
+	var decoded VolumeDetails
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal volume details: %v", err)
+	}
+
+	if decoded.ClaimName != "mysql-pvc" || decoded.UsedBytes != nil || decoded.UsageSource != UsageSourceUnknown {
+		t.Errorf("decoded details mismatch: %+v", decoded)
+	}
+}
+
+func TestStorageDomain_Errors(t *testing.T) {
+	shrinkErr := NewErrStorageShrinkUnsupported()
+	if shrinkErr.Code != ErrCodeStorageShrinkUnsupported {
+		t.Errorf("expected code %s, got %s", ErrCodeStorageShrinkUnsupported, shrinkErr.Code)
+	}
+
+	scErr := NewErrStorageClassNoExpansion("gp2")
+	if scErr.Code != ErrCodeStorageClassNoExpansion {
+		t.Errorf("expected code %s, got %s", ErrCodeStorageClassNoExpansion, scErr.Code)
+	}
+
+	lockErr := NewErrVolumeAttachmentLocked("pvc-db", "worker-node-1")
+	if lockErr.Code != ErrCodeVolumeAttachmentLocked {
+		t.Errorf("expected code %s, got %s", ErrCodeVolumeAttachmentLocked, lockErr.Code)
 	}
 }
 

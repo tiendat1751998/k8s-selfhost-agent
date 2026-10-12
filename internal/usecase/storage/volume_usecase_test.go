@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -118,8 +119,11 @@ func TestStorageUsecase_ListVolumes_Longhorn(t *testing.T) {
 	if lhVol.CapacityBytes != 10*1024*1024*1024 {
 		t.Errorf("expected capacity 10Gi, got %d bytes", lhVol.CapacityBytes)
 	}
-	if lhVol.UsedBytes <= 0 {
-		t.Errorf("expected positive used bytes estimate, got %d", lhVol.UsedBytes)
+	if lhVol.UsedBytes != nil {
+		t.Errorf("expected nil UsedBytes when metrics unavailable, got %v", *lhVol.UsedBytes)
+	}
+	if lhVol.UsageSource != storage.UsageSourceUnknown {
+		t.Errorf("expected UsageSourceUnknown when metrics unavailable, got %s", lhVol.UsageSource)
 	}
 
 	// Verify standard PVC
@@ -137,7 +141,7 @@ func TestStorageUsecase_ListVolumes_Longhorn(t *testing.T) {
 	}
 }
 
-func TestStorageUsecase_ListVolumes_SyntheticNodesFallback(t *testing.T) {
+func TestStorageUsecase_ListVolumes_NoNodes_NoFakeReplicas(t *testing.T) {
 	ctx := context.Background()
 
 	scLonghorn := "longhorn-fast"
@@ -159,7 +163,7 @@ func TestStorageUsecase_ListVolumes_SyntheticNodesFallback(t *testing.T) {
 		},
 	}
 
-	// No nodes registered in fake client
+	// No physical nodes registered in fake client
 	fakeClient := fake.NewSimpleClientset(longhornPVC)
 	uc := NewVolumeUsecase(fakeClient, nil, nil)
 
@@ -173,11 +177,9 @@ func TestStorageUsecase_ListVolumes_SyntheticNodesFallback(t *testing.T) {
 	}
 
 	vol := volumes[0]
-	if len(vol.Replicas) != 3 {
-		t.Fatalf("expected 3 synthetic replicas, got %d", len(vol.Replicas))
-	}
-	if vol.Replicas[0].NodeName != "node-1" || vol.Replicas[1].NodeName != "node-2" || vol.Replicas[2].NodeName != "node-3" {
-		t.Errorf("synthetic node names mismatch: %+v", vol.Replicas)
+	// Zero fake nodes must be fabricated
+	if len(vol.Replicas) != 0 {
+		t.Fatalf("expected 0 replicas when no nodes exist, got %d", len(vol.Replicas))
 	}
 }
 
@@ -185,6 +187,12 @@ func TestStorageUsecase_ExpandVolume_Success(t *testing.T) {
 	ctx := context.Background()
 
 	scLonghorn := "longhorn"
+	allowExpansion := true
+	sc := &storagev1.StorageClass{
+		ObjectMeta: metav1.ObjectMeta{Name: scLonghorn},
+		AllowVolumeExpansion: &allowExpansion,
+	}
+
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pvc-expand-target",
@@ -203,7 +211,7 @@ func TestStorageUsecase_ExpandVolume_Success(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewSimpleClientset(pvc)
+	fakeClient := fake.NewSimpleClientset(pvc, sc)
 	uc := NewVolumeUsecase(fakeClient, nil, nil)
 
 	newSizeBytes := int64(20 * 1024 * 1024 * 1024) // 20Gi
@@ -227,6 +235,17 @@ func TestStorageUsecase_ExpandVolume_Success(t *testing.T) {
 func TestStorageUsecase_ExpandVolume_AutoDiscoverNamespace(t *testing.T) {
 	ctx := context.Background()
 
+	allowExpansion := true
+	defaultSC := &storagev1.StorageClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "standard",
+			Annotations: map[string]string{
+				"storageclass.kubernetes.io/is-default-class": "true",
+			},
+		},
+		AllowVolumeExpansion: &allowExpansion,
+	}
+
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pvc-auto-discover",
@@ -241,7 +260,7 @@ func TestStorageUsecase_ExpandVolume_AutoDiscoverNamespace(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewSimpleClientset(pvc)
+	fakeClient := fake.NewSimpleClientset(pvc, defaultSC)
 	uc := NewVolumeUsecase(fakeClient, nil, nil)
 
 	// Pass empty namespace -> discover

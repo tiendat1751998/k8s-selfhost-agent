@@ -17,6 +17,8 @@ import (
 
 type mockVolumeService struct {
 	volumes         []storage.DistributedVolume
+	volumeDetails   *storage.VolumeDetails
+	detailsErr      error
 	listErr         error
 	expandErr       error
 	snapshotErr     error
@@ -29,6 +31,23 @@ func (m *mockVolumeService) ListVolumes(ctx context.Context, clusterID string) (
 		return nil, m.listErr
 	}
 	return m.volumes, nil
+}
+
+func (m *mockVolumeService) GetVolumeDetails(ctx context.Context, clusterID, namespace, name string) (*storage.VolumeDetails, error) {
+	if m.detailsErr != nil {
+		return nil, m.detailsErr
+	}
+	if m.volumeDetails != nil {
+		return m.volumeDetails, nil
+	}
+	return &storage.VolumeDetails{
+		VolumeID:         name,
+		ClaimName:        name,
+		Namespace:        namespace,
+		CapacityBytes:    10737418240,
+		StorageClassName: "longhorn",
+		Phase:            "Bound",
+	}, nil
 }
 
 func (m *mockVolumeService) ExpandVolume(ctx context.Context, clusterID, namespace, name string, newSizeBytes int64) error {
@@ -242,6 +261,7 @@ func TestStorageHandler_OfflineGraceful(t *testing.T) {
 		path   string
 	}{
 		{http.MethodGet, "/k8s/local/storage/volumes"},
+		{http.MethodGet, "/k8s/local/storage/volumes/vol-1"},
 		{http.MethodPost, "/k8s/local/storage/volumes/vol-1/expand"},
 		{http.MethodPost, "/k8s/local/storage/volumes/vol-1/snapshot"},
 	}
@@ -258,5 +278,45 @@ func TestStorageHandler_OfflineGraceful(t *testing.T) {
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Errorf("[%s %s] expected status 503 Service Unavailable, got %d", ep.method, ep.path, rec.Code)
 		}
+	}
+}
+
+func TestStorageHandler_GetVolumeDetails_Success(t *testing.T) {
+	used := int64(42949672960)
+	pct := 40.0
+	svc := &mockVolumeService{
+		volumeDetails: &storage.VolumeDetails{
+			VolumeID:         "pvc-100",
+			ClaimName:        "mysql-claim",
+			Namespace:        "default",
+			StorageClassName: "longhorn",
+			CapacityBytes:    107374182400,
+			UsedBytes:        &used,
+			UsagePercentage:  &pct,
+			UsageSource:      storage.UsageSourceKubeletMetrics,
+			AllowExpansion:   true,
+			Phase:            "Bound",
+		},
+	}
+	_, r := setupStorageTestRouter(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/k8s/cluster-1/storage/volumes/mysql-claim", nil)
+	ctx := context.WithValue(req.Context(), middleware.UserRoleKey, "viewer")
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var res storage.VolumeDetails
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("failed to decode volume details: %v", err)
+	}
+
+	if res.ClaimName != "mysql-claim" || res.UsedBytes == nil || *res.UsedBytes != used {
+		t.Errorf("unexpected volume details response: %+v", res)
 	}
 }
