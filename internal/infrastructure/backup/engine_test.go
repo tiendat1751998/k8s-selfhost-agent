@@ -1,6 +1,7 @@
 package backup_test
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/klauspost/compress/zstd"
 
 	domainBackup "github.com/datdt/k8sselfhost/internal/domain/backup"
 	infraBackup "github.com/datdt/k8sselfhost/internal/infrastructure/backup"
@@ -473,4 +476,71 @@ func TestEngine_ReconcileStaleJobs_MarksRunningRowsFailed(t *testing.T) {
 		t.Errorf("expected pending job to stay 'pending', got '%s'", j3.Status)
 	}
 }
+
+func TestEngine_VerifyBackup_DryRun_Safe(t *testing.T) {
+	ctx := context.Background()
+	tempDir := t.TempDir()
+	repo := NewMockBackupRepo()
+	driverReg := drivers.NewDriverRegistry()
+	storageReg := storage.NewStorageRegistry(storage.NewLocalStorage(tempDir))
+	engine := infraBackup.NewEngine(repo, driverReg, storageReg)
+
+	// Create storage, policy, and artifact file
+	_ = repo.CreateStorage(ctx, &domainBackup.BackupStorage{
+		ID:       "storage-1",
+		TenantID: "tenant-1",
+		Type:     "local",
+	})
+	_ = repo.CreatePolicy(ctx, &domainBackup.BackupPolicy{
+		ID:        "policy-1",
+		TenantID:  "tenant-1",
+		DBType:    "postgres",
+		StorageID: "storage-1",
+		DBName:    "prod_db",
+		DBHost:    "127.0.0.1",
+		DBPort:    5432,
+	})
+
+	// Write valid custom archive into storage path
+	artifactRel := "tenant-1/backup.sql.zst"
+	fullPath := filepath.Join(tempDir, artifactRel)
+	_ = os.MkdirAll(filepath.Dir(fullPath), 0755)
+
+	// Create valid zstd compressed PGDMP data
+	validPayload := append([]byte("PGDMP"), []byte("\x01\x14\x00\x00\x00data")...)
+	var buf bytes.Buffer
+	enc, err := zstd.NewWriter(&buf)
+	if err != nil {
+		t.Fatalf("failed to create zstd writer: %v", err)
+	}
+	if _, err := enc.Write(validPayload); err != nil {
+		t.Fatalf("failed to write payload to zstd: %v", err)
+	}
+	if err := enc.Close(); err != nil {
+		t.Fatalf("failed to close zstd writer: %v", err)
+	}
+	if err := os.WriteFile(fullPath, buf.Bytes(), 0644); err != nil {
+		t.Fatalf("failed to write test artifact: %v", err)
+	}
+
+	job := &domainBackup.BackupJob{
+		ID:          "job-1",
+		TenantID:    "tenant-1",
+		PolicyID:    "policy-1",
+		Status:      "completed",
+		StoragePath: artifactRel,
+	}
+	_ = repo.CreateJob(ctx, job)
+
+	// Run VerifyBackup
+	if err := engine.VerifyBackup(ctx, "job-1"); err != nil {
+		t.Fatalf("expected VerifyBackup to succeed in dry-run mode, got: %v", err)
+	}
+
+	updatedJob, _ := repo.GetJob(ctx, "job-1")
+	if updatedJob.VerificationStatus != "verified" {
+		t.Fatalf("expected job verification_status to be 'verified', got: %s", updatedJob.VerificationStatus)
+	}
+}
+
 

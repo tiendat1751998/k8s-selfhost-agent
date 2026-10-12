@@ -16,6 +16,7 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 func isSameHost(uHost, rHost string) bool {
@@ -36,6 +37,7 @@ func isSameHost(uHost, rHost string) bool {
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	Subprotocols:    []string{"bearer"},
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
 		if origin == "" {
@@ -54,14 +56,20 @@ var upgrader = websocket.Upgrader{
 
 // WSMessage is the standard WebSocket message envelope.
 type WSMessage struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
+	Type     string      `json:"type"`
+	Data     interface{} `json:"data"`
+	TenantID string      `json:"tenant_id,omitempty"`
+}
+
+type wsBroadcastItem struct {
+	tenantID string
+	data     []byte
 }
 
 // WSHub manages WebSocket connections and broadcasts messages.
 type WSHub struct {
 	clients        map[*wsClient]struct{}
-	broadcast      chan []byte
+	broadcast      chan wsBroadcastItem
 	register       chan *wsClient
 	unregister     chan *wsClient
 	welcomeMessage []byte
@@ -70,16 +78,17 @@ type WSHub struct {
 }
 
 type wsClient struct {
-	hub  *WSHub
-	conn *websocket.Conn
-	send chan []byte
+	hub      *WSHub
+	conn     *websocket.Conn
+	send     chan []byte
+	TenantID string
 }
 
 // NewWSHub creates a new WebSocket hub.
 func NewWSHub() *WSHub {
 	return &WSHub{
 		clients:    make(map[*wsClient]struct{}),
-		broadcast:  make(chan []byte, 1024),
+		broadcast:  make(chan wsBroadcastItem, 1024),
 		register:   make(chan *wsClient, 256),
 		unregister: make(chan *wsClient, 256),
 		done:       make(chan struct{}),
@@ -137,8 +146,13 @@ func (h *WSHub) Run(ctx context.Context) {
 		case message := <-h.broadcast:
 			h.mu.Lock()
 			for client := range h.clients {
+				// Filter broadcast events strictly by client.TenantID.
+				// If message has a specified tenant and client doesn't match, do NOT send message.
+				if message.tenantID != "" && client.TenantID != message.tenantID {
+					continue
+				}
 				select {
-				case client.send <- message:
+				case client.send <- message.data:
 				default:
 					close(client.send)
 					delete(h.clients, client)
@@ -149,15 +163,19 @@ func (h *WSHub) Run(ctx context.Context) {
 	}
 }
 
-// Broadcast sends a message to all connected WebSocket clients.
+// Broadcast sends a message to all connected WebSocket clients matching the event tenant.
 func (h *WSHub) Broadcast(msg WSMessage) {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		logger.Get().Error("failed to marshal WebSocket message", zap.Error(err))
 		return
 	}
+	item := wsBroadcastItem{
+		tenantID: msg.TenantID,
+		data:     data,
+	}
 	select {
-	case h.broadcast <- data:
+	case h.broadcast <- item:
 	default:
 		logger.Get().Warn("WebSocket broadcast channel full, dropping message")
 	}
@@ -191,16 +209,32 @@ func (h *WSHub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	default:
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	var responseHeader http.Header
+	if secProto := r.Header.Get("Sec-WebSocket-Protocol"); secProto != "" {
+		if strings.Contains(strings.ToLower(secProto), "bearer") {
+			responseHeader = http.Header{"Sec-WebSocket-Protocol": []string{"bearer"}}
+		}
+	}
+
+	conn, err := upgrader.Upgrade(w, r, responseHeader)
 	if err != nil {
 		logger.Get().Error("WebSocket upgrade failed", zap.Error(err))
 		return
 	}
 
+	tenantID := tenancy.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = r.URL.Query().Get("tenant_id")
+	}
+	if tenantID == "" {
+		tenantID = r.Header.Get("X-Tenant-ID")
+	}
+
 	client := &wsClient{
-		hub:  h,
-		conn: conn,
-		send: make(chan []byte, 256),
+		hub:      h,
+		conn:     conn,
+		send:     make(chan []byte, 256),
+		TenantID: tenantID,
 	}
 
 	select {

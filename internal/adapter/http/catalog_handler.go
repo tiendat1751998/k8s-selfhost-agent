@@ -217,6 +217,20 @@ func (h *CatalogHandler) GetService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	callerTenant := tenancy.TenantIDFromContext(r.Context())
+	if callerTenant == "" {
+		callerTenant = "default-tenant"
+	}
+	itemTenant := entry.TenantID
+	if itemTenant == "" {
+		itemTenant = "default-tenant"
+	}
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole != "platform_admin" && callerTenant != itemTenant {
+		writeError(w, http.StatusForbidden, "forbidden: access denied to service belonging to another tenant", nil)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, entry)
 }
 
@@ -241,6 +255,20 @@ func (h *CatalogHandler) UpdateService(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing == nil {
 		writeError(w, http.StatusNotFound, "service not found", nil)
+		return
+	}
+
+	callerTenant := tenancy.TenantIDFromContext(r.Context())
+	if callerTenant == "" {
+		callerTenant = "default-tenant"
+	}
+	itemTenant := existing.TenantID
+	if itemTenant == "" {
+		itemTenant = "default-tenant"
+	}
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole != "platform_admin" && callerTenant != itemTenant {
+		writeError(w, http.StatusForbidden, "forbidden: access denied to service belonging to another tenant", nil)
 		return
 	}
 
@@ -296,6 +324,20 @@ func (h *CatalogHandler) DeleteService(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing == nil {
 		writeError(w, http.StatusNotFound, "service not found", nil)
+		return
+	}
+
+	callerTenant := tenancy.TenantIDFromContext(r.Context())
+	if callerTenant == "" {
+		callerTenant = "default-tenant"
+	}
+	itemTenant := existing.TenantID
+	if itemTenant == "" {
+		itemTenant = "default-tenant"
+	}
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole != "platform_admin" && callerTenant != itemTenant {
+		writeError(w, http.StatusForbidden, "forbidden: access denied to service belonging to another tenant", nil)
 		return
 	}
 

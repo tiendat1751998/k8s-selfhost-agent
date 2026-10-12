@@ -250,3 +250,44 @@ func TestDecrypt_BackwardCompatibility_Plaintext(t *testing.T) {
 	}
 }
 
+func TestDecrypt_FailFast_WithoutKey(t *testing.T) {
+	origMaster := os.Getenv("MASTER_ENCRYPTION_KEY")
+	origEnc := os.Getenv("ENCRYPTION_KEY")
+	origK8s := os.Getenv("K8S_ENCRYPTION_KEY")
+	defer func() {
+		os.Setenv("MASTER_ENCRYPTION_KEY", origMaster)
+		os.Setenv("ENCRYPTION_KEY", origEnc)
+		os.Setenv("K8S_ENCRYPTION_KEY", origK8s)
+	}()
+
+	os.Setenv("MASTER_ENCRYPTION_KEY", "")
+	os.Setenv("ENCRYPTION_KEY", "")
+	os.Setenv("K8S_ENCRYPTION_KEY", "")
+
+	// Encrypted string with enc:v1: prefix
+	dummyEncrypted := "enc:v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	_, err := Decrypt(dummyEncrypted)
+	if err == nil {
+		t.Fatal("expected error decrypting without encryption key set, got nil")
+	}
+}
+
+func TestDecrypt_WrongKey_Fail(t *testing.T) {
+	origEnc := os.Getenv("ENCRYPTION_KEY")
+	defer os.Setenv("ENCRYPTION_KEY", origEnc)
+
+	// Encrypt with key 1
+	os.Setenv("ENCRYPTION_KEY", "12345678901234567890123456789012")
+	ciphertext, err := Encrypt("sensitive payload")
+	if err != nil {
+		t.Fatalf("encryption failed: %v", err)
+	}
+
+	// Attempt decrypt with different key 2
+	os.Setenv("ENCRYPTION_KEY", "98765432109876543210987654321098")
+	_, err = Decrypt(ciphertext)
+	if err == nil {
+		t.Fatal("expected decryption error with wrong key, got nil")
+	}
+}
+

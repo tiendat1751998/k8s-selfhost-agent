@@ -1,6 +1,7 @@
 package drivers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -109,6 +110,51 @@ func (d *PostgresDriver) Dump(ctx context.Context, opts backup.DumpOptions, writ
 
 
 func (d *PostgresDriver) Restore(ctx context.Context, opts backup.RestoreOptions, reader io.Reader) error {
+	// 1. Dry run validation: inspect archive structure without touching target database
+	if opts.DryRun {
+		header := make([]byte, 5)
+		n, err := io.ReadFull(reader, header)
+		if err != nil && err != io.ErrUnexpectedEOF {
+			return errors.NewValidation("archive_stream", fmt.Sprintf("failed to read archive header: %v", err))
+		}
+		if n < 2 {
+			return errors.NewValidation("archive_stream", "invalid archive stream: header too short")
+		}
+
+		isCustomFormat := n >= 5 && bytes.Equal(header[:5], []byte("PGDMP"))
+		isSQLText := bytes.HasPrefix(header[:n], []byte("--")) ||
+			bytes.HasPrefix(header[:n], []byte("/*")) ||
+			bytes.Contains(header[:n], []byte("SET")) ||
+			bytes.Contains(header[:n], []byte("CREATE"))
+
+		if !isCustomFormat && !isSQLText {
+			return errors.NewValidation("archive_stream", fmt.Sprintf("invalid PostgreSQL archive header: got %q, expected 'PGDMP' or SQL preamble", string(header[:n])))
+		}
+
+		// When pg_restore is installed, run pg_restore --list to validate archive TOC without database writes
+		if isCustomFormat {
+			if _, pathErr := exec.LookPath("pg_restore"); pathErr == nil {
+				cmd := exec.CommandContext(ctx, "pg_restore", "--list")
+				stdinPipe, pipeErr := cmd.StdinPipe()
+				if pipeErr != nil {
+					return errors.Wrap(pipeErr, "creating stdin pipe for pg_restore list")
+				}
+				if startErr := cmd.Start(); startErr != nil {
+					return errors.Wrap(startErr, "starting pg_restore list")
+				}
+				fullReader := io.MultiReader(bytes.NewReader(header[:n]), reader)
+				if _, copyErr := io.Copy(stdinPipe, fullReader); copyErr != nil {
+					return errors.Wrap(copyErr, "streaming archive to pg_restore list")
+				}
+				_ = stdinPipe.Close()
+				if waitErr := cmd.Wait(); waitErr != nil {
+					return errors.Wrap(waitErr, "pg_restore list verification failed")
+				}
+			}
+		}
+		return nil
+	}
+
 	port := opts.Port
 	if port == 0 {
 		port = 5432
