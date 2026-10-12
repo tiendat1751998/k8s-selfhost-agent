@@ -1,10 +1,13 @@
 package drivers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/backup"
@@ -43,33 +46,37 @@ func (d *RedisDriver) Dump(ctx context.Context, opts backup.DumpOptions, writer 
 		port = 6379
 	}
 	if _, err := exec.LookPath("redis-cli"); err != nil {
-		return nil, fmt.Errorf("%w: redis-cli", errors.ErrInternal) // Fallback to ErrInternal since ErrBinaryNotFound is in errors package
+		return nil, fmt.Errorf("%w: redis-cli", errors.ErrInternal)
 	}
+
+	tempFile, err := os.CreateTemp("", "redis-backup-*.rdb")
+	if err != nil {
+		return nil, errors.Wrap(err, "creating temp file for redis backup")
+	}
+	tempPath := tempFile.Name()
+	_ = tempFile.Close()
+	defer os.Remove(tempPath)
 
 	args := []string{"-h", opts.Host, "-p", fmt.Sprintf("%d", port)}
 	if opts.Password != "" {
 		args = append(args, "-a", opts.Password)
 	}
-	args = append(args, "--rdb", "/dev/stdout")
+	args = append(args, "--rdb", tempPath)
 
 	cmd := exec.CommandContext(ctx, "redis-cli", args...)
+	if err := cmd.Run(); err != nil {
+		return nil, errors.Wrap(err, "redis-cli dump execution failed")
+	}
 
-	stdoutPipe, err := cmd.StdoutPipe()
+	f, err := os.Open(tempPath)
 	if err != nil {
-		return nil, errors.Wrap(err, "creating stdout pipe")
+		return nil, errors.Wrap(err, "reading dumped redis rdb file")
 	}
+	defer f.Close()
 
-	if err := cmd.Start(); err != nil {
-		return nil, errors.Wrap(err, "starting redis-cli")
-	}
-
-	n, err := io.Copy(writer, stdoutPipe)
+	n, err := io.Copy(writer, f)
 	if err != nil {
-		return nil, errors.Wrap(err, "streaming redis-cli output")
-	}
-
-	if err := cmd.Wait(); err != nil {
-		return nil, errors.Wrap(err, "redis-cli execution failed")
+		return nil, errors.Wrap(err, "streaming redis rdb backup")
 	}
 
 	return &backup.DumpResult{
@@ -78,41 +85,90 @@ func (d *RedisDriver) Dump(ctx context.Context, opts backup.DumpOptions, writer 
 	}, nil
 }
 
+func (d *RedisDriver) resolveRDBPath(opts backup.RestoreOptions) string {
+	if opts.ExtraParams != nil {
+		if path := opts.ExtraParams["rdb_path"]; path != "" {
+			return path
+		}
+		if dir := opts.ExtraParams["data_dir"]; dir != "" {
+			return filepath.Join(dir, "dump.rdb")
+		}
+	}
+	for _, dir := range []string{"/data", "/var/lib/redis"} {
+		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+			return filepath.Join(dir, "dump.rdb")
+		}
+	}
+	return ""
+}
+
 func (d *RedisDriver) Restore(ctx context.Context, opts backup.RestoreOptions, reader io.Reader) error {
-	port := opts.Port
-	if port == 0 {
-		port = 6379
-	}
-	if _, err := exec.LookPath("redis-cli"); err != nil {
-		return fmt.Errorf("%w: redis-cli", errors.ErrInternal)
+	// 1. Dry run validation: inspect RDB magic header
+	if opts.DryRun {
+		header := make([]byte, 5)
+		if _, err := io.ReadFull(reader, header); err != nil {
+			return errors.NewValidation("rdb_stream", fmt.Sprintf("invalid RDB stream: %v", err))
+		}
+		if !bytes.Equal(header, []byte("REDIS")) {
+			return errors.NewValidation("rdb_stream", fmt.Sprintf("invalid RDB magic header: got %q, expected 'REDIS'", string(header)))
+		}
+		return nil
 	}
 
-	args := []string{"-h", opts.Host, "-p", fmt.Sprintf("%d", port)}
-	if opts.Password != "" {
-		args = append(args, "-a", opts.Password)
+	// 2. Direct RDB file replacement into Redis data directory
+	targetPath := d.resolveRDBPath(opts)
+	if targetPath == "" {
+		// Save to temporary file and provide clear guidance error
+		tempFile, err := os.CreateTemp("", "redis-restore-*.rdb")
+		if err != nil {
+			return errors.Wrap(err, "creating temp file for redis restore")
+		}
+		tempPath := tempFile.Name()
+		defer tempFile.Close()
+
+		if _, err := io.Copy(tempFile, reader); err != nil {
+			return errors.Wrap(err, "buffering restore rdb stream")
+		}
+
+		return fmt.Errorf("%w: binary RDB restore requires direct file replacement into Redis data directory; restored RDB saved to %s, please specify 'rdb_path' or 'data_dir' in ExtraParams", errors.ErrValidation, tempPath)
 	}
-	// For restore, we can just pipe to redis-cli in mass-insertion mode or just execute script
-	args = append(args, "--pipe")
 
-	cmd := exec.CommandContext(ctx, "redis-cli", args...)
+	// Ensure destination directory exists
+	targetDir := filepath.Dir(targetPath)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return errors.Wrap(err, "creating redis target directory")
+	}
 
-	stdinPipe, err := cmd.StdinPipe()
+	// Write to temporary file first for atomic replacement
+	tmpFile, err := os.CreateTemp(targetDir, "dump-*.rdb.tmp")
 	if err != nil {
-		return errors.Wrap(err, "creating stdin pipe")
+		return errors.Wrap(err, "creating temporary rdb destination file")
+	}
+	tmpName := tmpFile.Name()
+	defer func() {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpName)
+	}()
+
+	if _, err := io.Copy(tmpFile, reader); err != nil {
+		return errors.Wrap(err, "writing rdb stream to temporary file")
+	}
+	if err := tmpFile.Sync(); err != nil {
+		return errors.Wrap(err, "syncing rdb file to disk")
+	}
+	if err := tmpFile.Close(); err != nil {
+		return errors.Wrap(err, "closing temporary rdb file")
 	}
 
-	if err := cmd.Start(); err != nil {
-		return errors.Wrap(err, "starting redis-cli restore")
-	}
-
-	if _, err := io.Copy(stdinPipe, reader); err != nil {
-		return errors.Wrap(err, "streaming restore data to redis-cli")
-	}
-	_ = stdinPipe.Close()
-
-	if err := cmd.Wait(); err != nil {
-		return errors.Wrap(err, "redis-cli restore failed")
+	// Atomically replace target dump.rdb
+	if err := os.Rename(tmpName, targetPath); err != nil {
+		// On Windows, rename over existing file may fail; try removal then rename
+		_ = os.Remove(targetPath)
+		if err := os.Rename(tmpName, targetPath); err != nil {
+			return errors.Wrap(err, "atomically replacing target rdb file")
+		}
 	}
 
 	return nil
 }
+
