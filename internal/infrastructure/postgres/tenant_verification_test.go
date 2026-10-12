@@ -100,22 +100,8 @@ func TestAllPostgresRepos_QueryCallsUseBuildTenantQuery(t *testing.T) {
 	}
 
 	knownExceptions := map[string][]string{
-		"backup_repo.go":        {"*"},                             // Non-tenant tables (backup_history)
-		"changes_repo.go":       {"*"},                             // Non-tenant tables (change_requests, maintenance_windows)
-		"capacity_repo.go":      {"*"},                             // Non-tenant tables (capacity_forecasts)
-		"compliance_repo.go":    {"*"},                             // Non-tenant tables (compliance_frameworks, compliance_violations)
-		"correlation_repo.go":   {"*"},                             // Non-tenant tables (correlated_events)
-		"cost_repo.go":          {"*"},                             // Non-tenant tables (cluster_costs, namespace_costs, resource_waste)
-		"drift_repo.go":         {"*"},                             // Non-tenant tables (drift_records)
-		"notification_repo.go":  {"ListNotifications", "MarkRead", "MarkAllRead", "CreateNotification"}, // Non-tenant notifications table; notification_channels is now tenant-isolated
-		"observability_repo.go": {"*"},                             // Non-tenant tables (slo_definitions, slo_snapshots)
-		"promotion_repo.go":     {"*"},                             // Non-tenant tables (promotions)
-		"reporting_repo.go":     {"*"},                             // Non-tenant tables (reports)
-		"search_repo.go":        {"Search"},                        // Search dynamically compiles domain queries with BuildTenantQuery enforcing tenant isolation across all domains including audit_logs
-		"tagging_repo.go":       {"*"},                             // Non-tenant tables (tags, resource_tags)
-		"tenancy_repo.go":       {"*"},                             // Non-tenant tables (organizations, projects, tenant_members, rbac_matrix)
-		"timeline_repo.go":      {"*"},                             // Non-tenant tables (timeline_events)
-		"user_repo.go":          {"GetByEmail", "GetByID"},          // Authentication and re-authentication prior to/during user context lookup
+		"search_repo.go": {"Search"},                // Search dynamically compiles domain queries with BuildTenantQuery enforcing tenant isolation across all domains including audit_logs
+		"user_repo.go":   {"GetByEmail", "GetByID"}, // Authentication and re-authentication prior to/during user context lookup (global users table)
 	}
 
 	var violations []string
@@ -185,3 +171,4 @@ func TestAllPostgresRepos_QueryCallsUseBuildTenantQuery(t *testing.T) {
 		t.Errorf("Violation: %s", v)
 	}
 }
+

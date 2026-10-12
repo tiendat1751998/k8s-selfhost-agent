@@ -27,7 +27,8 @@ func (r *costRepo) GetClusterCosts(ctx context.Context) ([]cost.ClusterCost, err
 		FROM cluster_costs
 		ORDER BY monthly_cost DESC
 	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying cluster costs: %w", err)
 	}
@@ -58,7 +59,8 @@ func (r *costRepo) GetNamespaceCosts(ctx context.Context) ([]cost.NamespaceCost,
 		FROM namespace_costs
 		ORDER BY monthly_cost DESC
 	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying namespace costs: %w", err)
 	}
@@ -88,7 +90,8 @@ func (r *costRepo) GetResourceWaste(ctx context.Context) ([]cost.ResourceWaste, 
 		FROM resource_waste
 		ORDER BY wasted_cost DESC
 	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying resource waste: %w", err)
 	}

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-
 	"github.com/datdt/k8sselfhost/internal/domain/compliance"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // ComplianceRepo implements compliance.Repository using PostgreSQL.
@@ -25,7 +25,8 @@ func (r *ComplianceRepo) getDB(ctx context.Context) DBTX {
 
 func (r *ComplianceRepo) ListFrameworks(ctx context.Context) ([]compliance.Framework, error) {
 	query := `SELECT id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, created_at, updated_at FROM compliance_frameworks ORDER BY name`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "listing compliance frameworks")
 	}
@@ -45,7 +46,8 @@ func (r *ComplianceRepo) ListFrameworks(ctx context.Context) ([]compliance.Frame
 func (r *ComplianceRepo) GetFramework(ctx context.Context, id string) (*compliance.Framework, error) {
 	var f compliance.Framework
 	query := `SELECT id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, created_at, updated_at FROM compliance_frameworks WHERE id = $1`
-	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(&f.ID, &f.Name, &f.Icon, &f.TotalChecks, &f.PassedChecks, &f.FailedChecks, &f.Score, &f.LastScanAt, &f.CreatedAt, &f.UpdatedAt)
+	query, args := BuildTenantQuery(ctx, query, id)
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(&f.ID, &f.Name, &f.Icon, &f.TotalChecks, &f.PassedChecks, &f.FailedChecks, &f.Score, &f.LastScanAt, &f.CreatedAt, &f.UpdatedAt)
 	if err != nil {
 		return nil, errors.Wrap(err, "getting compliance framework")
 	}
@@ -53,15 +55,20 @@ func (r *ComplianceRepo) GetFramework(ctx context.Context, id string) (*complian
 }
 
 func (r *ComplianceRepo) UpsertFramework(ctx context.Context, f *compliance.Framework) error {
-	query := `INSERT INTO compliance_frameworks (name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
+	query := `INSERT INTO compliance_frameworks (name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, updated_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
 		ON CONFLICT (name) DO UPDATE SET
 			icon = EXCLUDED.icon, total_checks = EXCLUDED.total_checks, passed_checks = EXCLUDED.passed_checks,
 			failed_checks = EXCLUDED.failed_checks, score = EXCLUDED.score, last_scan_at = EXCLUDED.last_scan_at, updated_at = NOW()
 		RETURNING id`
 
 	err := r.getDB(ctx).QueryRow(ctx, query,
-		f.Name, f.Icon, f.TotalChecks, f.PassedChecks, f.FailedChecks, f.Score, f.LastScanAt,
+		f.Name, f.Icon, f.TotalChecks, f.PassedChecks, f.FailedChecks, f.Score, f.LastScanAt, tenantID,
 	).Scan(&f.ID)
 	if err != nil {
 		return errors.Wrap(err, "upserting compliance framework")
@@ -82,13 +89,15 @@ func (r *ComplianceRepo) ListViolations(ctx context.Context, severity *complianc
 		idx++
 	}
 
+	countQuery, countArgs := BuildTenantQuery(ctx, countQuery, args...)
 	var total int
-	if err := r.getDB(ctx).QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+	if err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, errors.Wrap(err, "counting compliance violations")
 	}
 
 	selectQuery := query + fmt.Sprintf(" ORDER BY detected_at DESC LIMIT $%d OFFSET $%d", idx, idx+1)
 	selectArgs := append(args, limit, offset)
+	selectQuery, selectArgs = BuildTenantQuery(ctx, selectQuery, selectArgs...)
 
 	rows, err := r.getDB(ctx).Query(ctx, selectQuery, selectArgs...)
 	if err != nil {
@@ -108,12 +117,17 @@ func (r *ComplianceRepo) ListViolations(ctx context.Context, severity *complianc
 }
 
 func (r *ComplianceRepo) CreateViolation(ctx context.Context, v *compliance.Violation) error {
-	query := `INSERT INTO compliance_violations (framework_id, severity, policy, resource, namespace, cluster, message, resolved, detected_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
+	query := `INSERT INTO compliance_violations (framework_id, severity, policy, resource, namespace, cluster, message, resolved, detected_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id`
 
 	err := r.getDB(ctx).QueryRow(ctx, query,
-		v.FrameworkID, string(v.Severity), v.Policy, v.Resource, v.Namespace, v.Cluster, v.Message, v.Resolved, v.DetectedAt,
+		v.FrameworkID, string(v.Severity), v.Policy, v.Resource, v.Namespace, v.Cluster, v.Message, v.Resolved, v.DetectedAt, tenantID,
 	).Scan(&v.ID)
 	if err != nil {
 		return errors.Wrap(err, "inserting compliance violation")
@@ -122,7 +136,9 @@ func (r *ComplianceRepo) CreateViolation(ctx context.Context, v *compliance.Viol
 }
 
 func (r *ComplianceRepo) ResolveViolation(ctx context.Context, id string) error {
-	_, err := r.getDB(ctx).Exec(ctx, `UPDATE compliance_violations SET resolved = TRUE WHERE id = $1`, id)
+	query := `UPDATE compliance_violations SET resolved = TRUE WHERE id = $1`
+	query, args := BuildTenantQuery(ctx, query, id)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "resolving compliance violation")
 	}
