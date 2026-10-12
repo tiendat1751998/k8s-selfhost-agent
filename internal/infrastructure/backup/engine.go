@@ -401,7 +401,7 @@ func (e *Engine) ExecuteRestore(ctx context.Context, restoreID string) error {
 		Database:      restore.TargetDBName,
 		PITRTimestamp: restore.PITRTimestamp,
 		DryRun:        restore.DryRun,
-		CleanTarget:   true,
+		CleanTarget:   !restore.DryRun,
 	}
 
 	if err := driver.Restore(ctx, restoreOpts, decompStream); err != nil {
@@ -418,4 +418,5 @@ func (e *Engine) ExecuteRestore(ctx context.Context, restoreID string) error {
 	defer compCancel()
 	return e.repo.UpdateRestore(termCtx, restore)
 }
+
 

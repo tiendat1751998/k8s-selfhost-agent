@@ -501,3 +501,77 @@ func TestCatalog_GetStats(t *testing.T) {
 		t.Errorf("expected 1 development lifecycle, got %d", stats.ByLifecycle[catalog.LifecycleDevelopment])
 	}
 }
+
+func TestCatalogHandler_IDORProtection(t *testing.T) {
+	repo := newMockCatalogRepo()
+	targetID := "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+	_ = repo.Create(context.Background(), &catalog.ServiceEntry{
+		ID:       targetID,
+		Name:     "alpha-payment-service",
+		TenantID: "tenant-alpha",
+	})
+	router := setupCatalogTestRouter(repo)
+
+	t.Run("GetService returns 403 Forbidden on tenant mismatch", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/catalog/services/"+targetID, nil)
+		// Caller tenant is tenant-beta
+		ctx := tenancy.WithTenantID(req.Context(), "tenant-beta")
+		ctx = tenancy.WithUserRole(ctx, "tenant_member")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden for cross-tenant access, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("GetService allows same-tenant access", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/catalog/services/"+targetID, nil)
+		ctx := tenancy.WithTenantID(req.Context(), "tenant-alpha")
+		ctx = tenancy.WithUserRole(ctx, "tenant_member")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK for same-tenant access, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("UpdateService returns 403 Forbidden on tenant mismatch", func(t *testing.T) {
+		body := `{"name":"hacked-payment-service"}`
+		req := httptest.NewRequest(http.MethodPut, "/catalog/services/"+targetID, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		ctx := tenancy.WithTenantID(req.Context(), "tenant-beta")
+		ctx = tenancy.WithUserRole(ctx, "tenant_member")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden for cross-tenant update, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("UpdateService allows same-tenant update", func(t *testing.T) {
+		body := `{"name":"updated-payment-service"}`
+		req := httptest.NewRequest(http.MethodPut, "/catalog/services/"+targetID, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		ctx := tenancy.WithTenantID(req.Context(), "tenant-alpha")
+		ctx = tenancy.WithUserRole(ctx, "tenant_member")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK for same-tenant update, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+

@@ -216,6 +216,83 @@ func TestJWTAuth_WebSocketQueryTokenAllowed(t *testing.T) {
 	}
 }
 
+func TestJWTAuth_SecWebSocketProtocol(t *testing.T) {
+	handler := JWTAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		tenantID := TenantIDFromContext(r.Context())
+		if userID != "ws-user-123" {
+			t.Errorf("expected userID ws-user-123, got %s", userID)
+		}
+		if tenantID != "tenant-alpha" {
+			t.Errorf("expected tenantID tenant-alpha, got %s", tenantID)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	token, err := GenerateJWT("ws-user-123", "viewer", "tenant-alpha")
+	if err != nil {
+		t.Fatalf("failed to generate test JWT: %v", err)
+	}
+
+	t.Run("comma-separated bearer, token format", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Sec-WebSocket-Protocol", "bearer, "+token)
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		if proto := w.Header().Get("Sec-WebSocket-Protocol"); proto != "bearer" {
+			t.Errorf("expected Sec-WebSocket-Protocol header 'bearer', got %q", proto)
+		}
+	})
+
+	t.Run("space-separated bearer token format", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Sec-WebSocket-Protocol", "bearer "+token)
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		if proto := w.Header().Get("Sec-WebSocket-Protocol"); proto != "bearer" {
+			t.Errorf("expected Sec-WebSocket-Protocol header 'bearer', got %q", proto)
+		}
+	})
+
+	t.Run("invalid token in Sec-WebSocket-Protocol fails 401", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+		r.Header.Set("Sec-WebSocket-Protocol", "bearer, invalid.token.payload")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", w.Code)
+		}
+	})
+
+	t.Run("bearer without token fails 401", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+		r.Header.Set("Sec-WebSocket-Protocol", "bearer")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", w.Code)
+		}
+	})
+}
+
 func TestJWTAuth_TenantClaim(t *testing.T) {
 	handler := JWTAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tenantID := TenantIDFromContext(r.Context())

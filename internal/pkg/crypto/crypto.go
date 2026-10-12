@@ -135,51 +135,31 @@ func decryptAESGCM(hexString string) (string, error) {
 		return "", err
 	}
 
-	keysToTry := [][]byte{}
-	if primaryKey, err := getEncryptionKey(); err == nil {
-		keysToTry = append(keysToTry, primaryKey)
-	}
-	// Fallback dev keys for cross-session compatibility
-	for _, fallbackStr := range []string{
-		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		"0123456789abcdef0123456789abcdef",
-		"12345678901234567890123456789012",
-	} {
-		if len(fallbackStr) == 64 {
-			if dec, err := hex.DecodeString(fallbackStr); err == nil {
-				keysToTry = append(keysToTry, dec)
-			}
-		} else if len(fallbackStr) >= 32 {
-			keysToTry = append(keysToTry, []byte(fallbackStr[:32]))
-		}
+	key, err := getEncryptionKey()
+	if err != nil {
+		return "", fmt.Errorf("encryption key missing or invalid: %w", err)
 	}
 
-	var lastErr error
-	for _, k := range keysToTry {
-		block, err := aes.NewCipher(k)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-
-		aesgcm, err := cipher.NewGCM(block)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-
-		nonceSize := aesgcm.NonceSize()
-		if len(ciphertext) < nonceSize {
-			return "", fmt.Errorf("ciphertext too short")
-		}
-
-		nonce, cipherData := ciphertext[:nonceSize], ciphertext[nonceSize:]
-		plaintext, err := aesgcm.Open(nil, nonce, cipherData, nil)
-		if err == nil {
-			return string(plaintext), nil
-		}
-		lastErr = err
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
 	}
 
-	return "", lastErr
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	nonceSize := aesgcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+
+	nonce, cipherData := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := aesgcm.Open(nil, nonce, cipherData, nil)
+	if err != nil {
+		return "", fmt.Errorf("decryption failed: %w", err)
+	}
+
+	return string(plaintext), nil
 }
