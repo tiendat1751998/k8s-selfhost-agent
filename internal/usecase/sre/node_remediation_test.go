@@ -2,6 +2,7 @@ package sre
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -10,8 +11,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	clientgotesting "k8s.io/client-go/testing"
 )
 
 func TestRemediationController_HandleNodeOffline_CrashingNode(t *testing.T) {
@@ -457,5 +460,92 @@ func TestRemediationController_ExecuteFencing_FullPipelineAndUntaint(t *testing.
 		t.Error("expected out-of-service taint on worker")
 	}
 }
+
+func TestRemediationController_ExecuteFencing_EmergencyUntaintMaster_ErrorLogged(t *testing.T) {
+	master := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "master-1", Labels: map[string]string{"node-role.kubernetes.io/control-plane": ""}},
+		Spec:       corev1.NodeSpec{Taints: []corev1.Taint{{Key: "node-role.kubernetes.io/control-plane", Effect: corev1.TaintEffectNoSchedule}}},
+	}
+	worker := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}}
+	client := fake.NewSimpleClientset(master, worker)
+
+	// Simulate failure when updating master node
+	client.PrependReactor("update", "nodes", func(action clientgotesting.Action) (bool, runtime.Object, error) {
+		updateAction := action.(clientgotesting.UpdateAction)
+		n := updateAction.GetObject().(*corev1.Node)
+		if n.Name == "master-1" {
+			return true, nil, errors.New("simulated update conflict on master")
+		}
+		return false, nil, nil
+	})
+
+	ctrl := NewRemediationController(client, nil, zaptest.NewLogger(t))
+	report, err := ctrl.ExecuteFencing(context.Background(), "local", "worker-1", FencingExecutionOptions{
+		ConfirmPowerIsolated:   true,
+		EmergencyUntaintMaster: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected ExecuteFencing error: %v", err)
+	}
+
+	if report.MasterUntainted {
+		t.Errorf("expected report.MasterUntainted to be false when node update fails, got true")
+	}
+}
+
+func TestRemediationController_ExecuteFencing_ForceVolumeDetachRespected(t *testing.T) {
+	pvName := "pv-data-1"
+	va := &storagev1.VolumeAttachment{
+		ObjectMeta: metav1.ObjectMeta{Name: "va-locked-1"},
+		Spec: storagev1.VolumeAttachmentSpec{
+			NodeName: "worker-1",
+			Source:   storagev1.VolumeAttachmentSource{PersistentVolumeName: &pvName},
+		},
+		Status: storagev1.VolumeAttachmentStatus{Attached: true},
+	}
+
+	t.Run("ForceVolumeDetach false does not delete locked VolumeAttachment", func(t *testing.T) {
+		worker := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}}
+		client := fake.NewSimpleClientset(worker, va.DeepCopy())
+		ctrl := NewRemediationController(client, nil, zaptest.NewLogger(t))
+
+		_, err := ctrl.ExecuteFencing(context.Background(), "local", "worker-1", FencingExecutionOptions{
+			ConfirmPowerIsolated:   true,
+			ForceVolumeDetach:      false,
+			VolumeDetachTimeoutSec: 1,
+		})
+		if err != nil {
+			t.Fatalf("unexpected ExecuteFencing error: %v", err)
+		}
+
+		// Volume attachment should still exist
+		stillVA, getErr := client.StorageV1().VolumeAttachments().Get(context.Background(), "va-locked-1", metav1.GetOptions{})
+		if getErr != nil || stillVA == nil {
+			t.Errorf("expected VolumeAttachment va-locked-1 to NOT be deleted when ForceVolumeDetach=false, got err=%v", getErr)
+		}
+	})
+
+	t.Run("ForceVolumeDetach true force deletes locked VolumeAttachment", func(t *testing.T) {
+		worker := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}}
+		client := fake.NewSimpleClientset(worker, va.DeepCopy())
+		ctrl := NewRemediationController(client, nil, zaptest.NewLogger(t))
+
+		_, err := ctrl.ExecuteFencing(context.Background(), "local", "worker-1", FencingExecutionOptions{
+			ConfirmPowerIsolated:   true,
+			ForceVolumeDetach:      true,
+			VolumeDetachTimeoutSec: 1,
+		})
+		if err != nil {
+			t.Fatalf("unexpected ExecuteFencing error: %v", err)
+		}
+
+		// Volume attachment should be force deleted
+		_, getErr := client.StorageV1().VolumeAttachments().Get(context.Background(), "va-locked-1", metav1.GetOptions{})
+		if getErr == nil {
+			t.Errorf("expected VolumeAttachment va-locked-1 to be deleted when ForceVolumeDetach=true, but it still exists")
+		}
+	})
+}
+
 
 

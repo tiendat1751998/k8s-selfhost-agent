@@ -294,8 +294,11 @@ func (c *RemediationController) ExecuteFencing(ctx context.Context, clusterID, n
 					}
 					if taintsRemoved {
 						n.Spec.Taints = filteredTaints
-						_, _ = client.CoreV1().Nodes().Update(ctx, &n, metav1.UpdateOptions{})
-						masterUntainted = true
+						if _, err := client.CoreV1().Nodes().Update(ctx, &n, metav1.UpdateOptions{}); err != nil {
+							c.logger.Warn("failed to emergency untaint master", zap.String("master", n.Name), zap.Error(err))
+						} else {
+							masterUntainted = true
+						}
 					}
 				}
 			}
@@ -365,13 +368,13 @@ func (c *RemediationController) ExecuteFencing(ctx context.Context, clusterID, n
 
 	// 5. VolumeAttachment Release
 	detachStart := time.Now()
-	timeoutDur := 100 * time.Millisecond
+	timeoutDur := 30 * time.Second
 	if opts.VolumeDetachTimeoutSec > 0 {
 		timeoutDur = time.Duration(opts.VolumeDetachTimeoutSec) * time.Second
 	}
 	csiHelper.SetPollInterval(10 * time.Millisecond)
 	waitErr := csiHelper.WaitForVolumeAttachmentsDetached(ctx, client, nodeName, timeoutDur)
-	if waitErr != nil && opts.ConfirmPowerIsolated {
+	if waitErr != nil && opts.ConfirmPowerIsolated && opts.ForceVolumeDetach {
 		for _, va := range attachedVAs {
 			_ = client.StorageV1().VolumeAttachments().Delete(ctx, va.Name, metav1.DeleteOptions{})
 		}
