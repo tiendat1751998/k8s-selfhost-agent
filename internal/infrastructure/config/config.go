@@ -25,6 +25,29 @@ type Config struct {
 	Docker       DockerConfig       `mapstructure:"docker"`
 	LoadBalancer LoadBalancerConfig `mapstructure:"load_balancer"`
 	K8sClient    K8sClientConfig    `mapstructure:"client"`
+	GitOps       GitOpsConfig       `mapstructure:"gitops"`
+	Telegram     TelegramConfig     `mapstructure:"telegram"`
+	Helm         HelmConfig         `mapstructure:"helm"`
+}
+
+// GitOpsConfig holds settings for GitOps repository integrations.
+type GitOpsConfig struct {
+	GitHubToken string `mapstructure:"github_token"`
+	GitLabToken string `mapstructure:"gitlab_token"`
+	GitLabURL   string `mapstructure:"gitlab_url"`
+	GiteaToken  string `mapstructure:"gitea_token"`
+	GiteaURL    string `mapstructure:"gitea_url"`
+}
+
+// TelegramConfig holds settings for the Telegram SRE alert bot.
+type TelegramConfig struct {
+	BotToken     string  `mapstructure:"bot_token"`
+	AdminChatIDs []int64 `mapstructure:"admin_chat_ids"`
+}
+
+// HelmConfig holds settings for Helm package manager operations.
+type HelmConfig struct {
+	HomeDir string `mapstructure:"home_dir"`
 }
 
 // K8sClientConfig holds settings for Kubernetes client rate limiting and timeouts.
@@ -340,6 +363,28 @@ func resolveEnvOverrides(cfg *Config) {
 	// Egress SSRF Guard allowlisted CIDRs/hosts
 	if envVal := getFirstEnv("EGRESS_ALLOW_PRIVATE_CIDRS", "K8S_SECURITY_EGRESS_ALLOW_PRIVATE_CIDRS"); envVal != "" {
 		cfg.Security.EgressAllowPrivateCIDRs = envVal
+	}
+
+	// GitOps repository integration tokens
+	if envVal := getFirstEnv("GITHUB_TOKEN", "K8S_GITOPS_GITHUB_TOKEN"); envVal != "" {
+		cfg.GitOps.GitHubToken = envVal
+	}
+	if envVal := getFirstEnv("GITLAB_TOKEN", "K8S_GITOPS_GITLAB_TOKEN"); envVal != "" {
+		cfg.GitOps.GitLabToken = envVal
+	}
+	if envVal := getFirstEnv("GITLAB_URL", "K8S_GITOPS_GITLAB_URL"); envVal != "" {
+		cfg.GitOps.GitLabURL = envVal
+	}
+	if envVal := getFirstEnv("GITEA_TOKEN", "K8S_GITOPS_GITEA_TOKEN"); envVal != "" {
+		cfg.GitOps.GiteaToken = envVal
+	}
+	if envVal := getFirstEnv("GITEA_URL", "K8S_GITOPS_GITEA_URL"); envVal != "" {
+		cfg.GitOps.GiteaURL = envVal
+	}
+
+	// Telegram SRE bot token
+	if envVal := getFirstEnv("TELEGRAM_BOT_TOKEN", "K8S_TELEGRAM_BOT_TOKEN"); envVal != "" {
+		cfg.Telegram.BotToken = envVal
 	}
 }
 

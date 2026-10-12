@@ -7,12 +7,11 @@ import (
 
 	"go.uber.org/zap"
 
-	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 )
 
 func newHTTPServer(_ context.Context, cfg *config.Config, infra *infrastructure, services *appServices, _ *zap.Logger) *http.Server {
-	router := adapthttp.NewRouterWithWS(infra.health, services.wsHub, services.platformHandlers)
+	router := newRouter(infra.health, services.wsHub, services.platformHandlers)
 
 	return &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
