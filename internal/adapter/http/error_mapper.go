@@ -33,6 +33,12 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 			return http.StatusNotFound, domErr.Message
 		case domainerrors.CodeK8sUnavailable:
 			return http.StatusServiceUnavailable, domErr.Message
+		case "ERR_STORAGE_SHRINK_UNSUPPORTED":
+			return http.StatusBadRequest, domErr.Message
+		case "ERR_STORAGE_CLASS_NO_EXPANSION":
+			return http.StatusUnprocessableEntity, domErr.Message
+		case "ERR_VOLUME_ATTACHMENT_LOCKED":
+			return http.StatusConflict, domErr.Message
 		case domainerrors.CodeInternal:
 			return http.StatusInternalServerError, "Internal server error"
 		}

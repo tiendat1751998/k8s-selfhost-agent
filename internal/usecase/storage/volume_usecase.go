@@ -4,14 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/datdt/k8sselfhost/internal/domain/storage"
@@ -20,30 +16,65 @@ import (
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
+// VolumeMetricsProvider defines the interface for fetching real volume disk usage.
+type VolumeMetricsProvider interface {
+	GetVolumeMetrics(ctx context.Context, client kubernetes.Interface, namespace, pvcName string) (*int64, error)
+}
+
 // VolumeService defines the business operations for distributed volume management.
 type VolumeService interface {
 	ListVolumes(ctx context.Context, clusterID string) ([]storage.DistributedVolume, error)
+	GetVolumeDetails(ctx context.Context, clusterID, namespace, name string) (*storage.VolumeDetails, error)
 	ExpandVolume(ctx context.Context, clusterID, namespace, name string, newSizeBytes int64) error
 	CreateSnapshot(ctx context.Context, clusterID, namespace, name string, req storage.VolumeSnapshotRequest) (*storage.VolumeSnapshotResult, error)
 }
 
 // VolumeUsecase implements VolumeService with Kubernetes cluster interaction.
 type VolumeUsecase struct {
-	k8sClient     kubernetes.Interface
-	clientManager *cluster.ClientManager
-	logger        *zap.Logger
+	k8sClient              kubernetes.Interface
+	clientManager          *cluster.ClientManager
+	metricsProvider        VolumeMetricsProvider
+	defaultMetricsProvider VolumeMetricsProvider
+	fencingHelper          *CSIFencingHelper
+	logger                 *zap.Logger
+}
+
+// VolumeUsecaseOption configures VolumeUsecase instances.
+type VolumeUsecaseOption func(*VolumeUsecase)
+
+// WithMetricsProvider configures a custom volume metrics provider.
+func WithMetricsProvider(provider VolumeMetricsProvider) VolumeUsecaseOption {
+	return func(u *VolumeUsecase) {
+		u.metricsProvider = provider
+	}
 }
 
 // NewVolumeUsecase creates a new VolumeUsecase instance.
-func NewVolumeUsecase(k8sClient kubernetes.Interface, cm *cluster.ClientManager, logger *zap.Logger) *VolumeUsecase {
+func NewVolumeUsecase(k8sClient kubernetes.Interface, cm *cluster.ClientManager, logger *zap.Logger, opts ...VolumeUsecaseOption) *VolumeUsecase {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	return &VolumeUsecase{
-		k8sClient:     k8sClient,
-		clientManager: cm,
-		logger:        logger,
+	u := &VolumeUsecase{
+		k8sClient:              k8sClient,
+		clientManager:          cm,
+		defaultMetricsProvider: infraK8s.NewKubeletVolumeMetricsProvider(),
+		fencingHelper:          NewCSIFencingHelper(),
+		logger:                 logger,
 	}
+	for _, opt := range opts {
+		opt(u)
+	}
+	return u
+}
+
+// SetMetricsProvider overrides the metrics provider (useful for testing or dynamic wiring).
+func (u *VolumeUsecase) SetMetricsProvider(provider VolumeMetricsProvider) {
+	u.metricsProvider = provider
+}
+
+// FencingHelper returns the CSI fencing helper instance.
+func (u *VolumeUsecase) FencingHelper() *CSIFencingHelper {
+	return u.fencingHelper
 }
 
 func (u *VolumeUsecase) getK8sClient(ctx context.Context, clusterID string) (kubernetes.Interface, error) {
@@ -78,8 +109,8 @@ func (u *VolumeUsecase) discoverPVCNamespace(ctx context.Context, client kuberne
 	return "default"
 }
 
-// ListVolumes queries PVCs across all namespaces, detects replicas topology for distributed storage engines (e.g. Longhorn),
-// and returns rich distributed volume metadata.
+// ListVolumes queries PVCs across all namespaces, detects physical replicas topology for distributed engines,
+// and retrieves real Kubelet/Prometheus storage metrics with nil fallback.
 func (u *VolumeUsecase) ListVolumes(ctx context.Context, clusterID string) ([]storage.DistributedVolume, error) {
 	client, err := u.getK8sClient(ctx, clusterID)
 	if err != nil {
@@ -115,10 +146,25 @@ func (u *VolumeUsecase) ListVolumes(ctx context.Context, clusterID string) ([]st
 			capacityBytes = qty.Value()
 		}
 
-		usedBytes := int64(0)
-		if pvc.Status.Phase == corev1.ClaimBound && capacityBytes > 0 {
-			// Proportional active allocation baseline (35%)
-			usedBytes = int64(float64(capacityBytes) * 0.35)
+		// Retrieve real volume usage metrics with zero fake telemetry
+		var usedBytes *int64
+		var usagePercentage *float64
+		usageSource := storage.UsageSourceUnknown
+
+		provider := u.metricsProvider
+		if provider == nil {
+			provider = u.defaultMetricsProvider
+		}
+		if provider != nil {
+			if uBytes, mErr := provider.GetVolumeMetrics(ctx, client, pvc.Namespace, pvc.Name); mErr == nil && uBytes != nil {
+				uVal := *uBytes
+				usedBytes = &uVal
+				usageSource = storage.UsageSourceKubeletMetrics
+				if capacityBytes > 0 {
+					pct := (float64(uVal) / float64(capacityBytes)) * 100.0
+					usagePercentage = &pct
+				}
+			}
 		}
 
 		healthStatus := storage.HealthStatusHealthy
@@ -145,21 +191,22 @@ func (u *VolumeUsecase) ListVolumes(ctx context.Context, clusterID string) ([]st
 		var replicas []storage.VolumeReplica
 
 		if isLonghorn {
-			replicationCount = 3
-			replicas = make([]storage.VolumeReplica, 0, 3)
-			for i := 0; i < 3; i++ {
-				replicaNodeName := fmt.Sprintf("node-%d", i+1)
-				replicaNodeID := fmt.Sprintf("node-id-%d", i+1)
-				if i < len(nodeNames) {
-					replicaNodeName = nodeNames[i]
-					replicaNodeID = nodeUIDs[i]
+			// Place replicas only on physical nodes that actually exist in the cluster
+			maxReplicas := len(nodeNames)
+			if maxReplicas > 3 {
+				maxReplicas = 3
+			}
+			replicationCount = maxReplicas
+			if maxReplicas > 0 {
+				replicas = make([]storage.VolumeReplica, 0, maxReplicas)
+				for i := 0; i < maxReplicas; i++ {
+					replicas = append(replicas, storage.VolumeReplica{
+						NodeID:   nodeUIDs[i],
+						NodeName: nodeNames[i],
+						Mode:     "RW",
+						Size:     capacityBytes,
+					})
 				}
-				replicas = append(replicas, storage.VolumeReplica{
-					NodeID:   replicaNodeID,
-					NodeName: replicaNodeName,
-					Mode:     "RW",
-					Size:     capacityBytes,
-				})
 			}
 		} else {
 			replicationCount = 1
@@ -187,6 +234,8 @@ func (u *VolumeUsecase) ListVolumes(ctx context.Context, clusterID string) ([]st
 			StorageClass:     scName,
 			CapacityBytes:    capacityBytes,
 			UsedBytes:        usedBytes,
+			UsagePercentage:  usagePercentage,
+			UsageSource:      usageSource,
 			ReplicationCount: replicationCount,
 			HealthStatus:     healthStatus,
 			AttachedNode:     attachedNode,
@@ -195,102 +244,4 @@ func (u *VolumeUsecase) ListVolumes(ctx context.Context, clusterID string) ([]st
 	}
 
 	return volumes, nil
-}
-
-// ExpandVolume performs an online volume expansion by patching PVC requests.storage.
-func (u *VolumeUsecase) ExpandVolume(ctx context.Context, clusterID, namespace, name string, newSizeBytes int64) error {
-	if newSizeBytes <= 0 {
-		return domainerrors.NewValidation("new_size_bytes", "volume size must be greater than zero")
-	}
-	if strings.TrimSpace(name) == "" {
-		return domainerrors.NewValidation("name", "volume name cannot be empty")
-	}
-
-	client, err := u.getK8sClient(ctx, clusterID)
-	if err != nil {
-		return err
-	}
-
-	if strings.TrimSpace(namespace) == "" {
-		namespace = u.discoverPVCNamespace(ctx, client, name)
-	}
-
-	pvc, err := client.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return domainerrors.NewNotFound("pvc", name)
-		}
-		return fmt.Errorf("getting pvc %s/%s: %w", namespace, name, err)
-	}
-
-	newQty := resource.NewQuantity(newSizeBytes, resource.BinarySI)
-
-	// Execute patch against Kubernetes API
-	patchBytes := []byte(fmt.Sprintf(`{"spec":{"resources":{"requests":{"storage":"%s"}}}}`, newQty.String()))
-	_, patchErr := client.CoreV1().PersistentVolumeClaims(namespace).Patch(ctx, name, types.MergePatchType, patchBytes, metav1.PatchOptions{})
-	if patchErr != nil {
-		// Fallback to direct update if patch is not supported by the client implementation
-		if pvc.Spec.Resources.Requests == nil {
-			pvc.Spec.Resources.Requests = corev1.ResourceList{}
-		}
-		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = *newQty
-		if _, updateErr := client.CoreV1().PersistentVolumeClaims(namespace).Update(ctx, pvc, metav1.UpdateOptions{}); updateErr != nil {
-			return fmt.Errorf("expanding pvc %s/%s: %w", namespace, name, updateErr)
-		}
-	}
-
-	u.logger.Info("Expanded distributed volume",
-		zap.String("cluster", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name),
-		zap.Int64("new_size_bytes", newSizeBytes),
-	)
-
-	return nil
-}
-
-// CreateSnapshot creates a VolumeSnapshot for the given persistent volume claim.
-func (u *VolumeUsecase) CreateSnapshot(ctx context.Context, clusterID, namespace, name string, req storage.VolumeSnapshotRequest) (*storage.VolumeSnapshotResult, error) {
-	if strings.TrimSpace(name) == "" {
-		return nil, domainerrors.NewValidation("name", "volume name cannot be empty")
-	}
-
-	client, err := u.getK8sClient(ctx, clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	if strings.TrimSpace(namespace) == "" {
-		namespace = u.discoverPVCNamespace(ctx, client, name)
-	}
-
-	// Verify PVC exists
-	_, err = client.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return nil, domainerrors.NewNotFound("pvc", name)
-		}
-		return nil, fmt.Errorf("getting pvc %s/%s: %w", namespace, name, err)
-	}
-
-	snapName := strings.TrimSpace(req.SnapshotName)
-	if snapName == "" {
-		snapName = fmt.Sprintf("%s-snapshot-%d", name, time.Now().Unix())
-	}
-
-	result := &storage.VolumeSnapshotResult{
-		SnapshotName: snapName,
-		VolumeName:   name,
-		Status:       storage.SnapshotStatusReady,
-		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
-	}
-
-	u.logger.Info("Created volume snapshot",
-		zap.String("cluster", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("volume", name),
-		zap.String("snapshot", snapName),
-	)
-
-	return result, nil
 }
