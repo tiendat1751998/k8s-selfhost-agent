@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -136,11 +137,52 @@ func (s *S3Storage) UploadStream(ctx context.Context, relPath string, reader io.
 	}
 	url := fmt.Sprintf("%s://%s/%s/%s", scheme, s.endpoint, s.bucket, relPath)
 
+	// 1. Calculate Content-Length if not provided (via io.Seeker or spooling)
+	var cleanup func()
+	if size <= 0 {
+		if seeker, ok := reader.(io.Seeker); ok {
+			cur, err := seeker.Seek(0, io.SeekCurrent)
+			if err == nil {
+				end, err := seeker.Seek(0, io.SeekEnd)
+				if err == nil {
+					size = end - cur
+					_, _ = seeker.Seek(cur, io.SeekStart)
+				}
+			}
+		}
+	}
+
+	if size <= 0 {
+		// Non-seekable stream with unknown size: spool to temp file to determine Content-Length
+		spoolFile, err := os.CreateTemp("", "s3-upload-spool-*.tmp")
+		if err != nil {
+			return "", errors.Wrap(err, "creating temp spool file for S3 upload")
+		}
+		spoolPath := spoolFile.Name()
+		cleanup = func() {
+			_ = spoolFile.Close()
+			_ = os.Remove(spoolPath)
+		}
+		defer cleanup()
+
+		written, err := io.Copy(spoolFile, reader)
+		if err != nil {
+			return "", errors.Wrap(err, "spooling stream to temp file")
+		}
+		if _, err := spoolFile.Seek(0, io.SeekStart); err != nil {
+			return "", errors.Wrap(err, "rewinding temp file for S3 upload")
+		}
+		reader = spoolFile
+		size = written
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, reader)
 	if err != nil {
 		return "", errors.Wrap(err, "creating S3 upload request")
 	}
 
+	req.ContentLength = size
+	req.Header.Set("Content-Length", fmt.Sprintf("%d", size))
 	req.Header.Set("Content-Type", "application/zstd")
 	for k, v := range metadata {
 		req.Header.Set(fmt.Sprintf("x-amz-meta-%s", k), v)
