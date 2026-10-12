@@ -2,13 +2,13 @@
 # Checkpoint: 2026-10-12T12:40:00+07:00
 
 > **Severity**: Ongoing Platform Intelligence & SRE Knowledge Base Expansion  
-> **Status**: BATCH_1_2_3_4_5_6_INGESTED_160_SCENARIOS_ACTIVE  
+> **Status**: BATCH_1_2_3_4_5_6_7_INGESTED_170_SCENARIOS_ACTIVE  
 > **Target Agent**: `research` / `architect` / `sre`  
 > **Knowledge Base File**: `docs/architecture/production_failure_modes_encyclopedia.md`  
 
 ---
 
-## 1. TIẾN ĐỘ THU THẬP & HỆ THỐNG HÓA KỊCH BẢN (FMEA INGESTION TRACKER: 160 SCENARIOS)
+## 1. TIẾN ĐỘ THU THẬP & HỆ THỐNG HÓA KỊCH BẢN (FMEA INGESTION TRACKER: 170 SCENARIOS)
 
 * **Đợt 1 (Đã hoàn thành - 50 Kịch bản cơ bản)**: 
   - Kịch bản 1 đến 50 bao phủ 9 tầng: Phần cứng NVMe/RAID, Linux Kernel, etcd internals, Kubelet PLEG, Ingress buffers, CSI multi-attach, Postgres XID/table bloat, Redis fragmentation, DinD root escapes, Git history leaks, Vault drift, Schrödinger's backup.
@@ -21,9 +21,11 @@
 * **Đợt 5 (Đã hoàn thành - 20 Kịch bản Doanh Nghiệp Cốt Lõi Tầng Cao & Tầng Vật Lý)**:
   - Kịch bản 131 đến 150 bao phủ 4 tầng hạ tầng chuyên sâu: Multi-Cluster Service Mesh, Advanced Linux Memory & NUMA, Hardware Failure Modes & IPMI, Enterprise PKI & HSM.
 * **Đợt 6 (Đã hoàn thành - 10 Kịch bản GitOps Concurrency & AI Cluster Networking)**:
-  - Kịch bản 151 đến 160 bao phủ 2 tầng hạ tầng hiện đại:
-    - *GitOps & CI/CD Concurrency*: ArgoCD/Flux sync-wave DAG circular dependency deadlock, Git provider webhook out-of-order delivery & rollback drift, Monorepo sparse-checkout memory exhaustion (OOM), Semantic release concurrent matrix tagging race, Helm release secret three-way merge conflict.
-    - *High-Density AI Cluster Networking*: RoCEv2 Priority Flow Control (PFC) deadlock storm, RDMA locked memory limit (`ulimit -l`) saturation in PyTorch DDP, Asymmetric NVLink/PCIe fabric bandwidth degradation, Fork after CUDA initialization deadlock in multi-process inference, Checkpoint write burst saturation on shared Lustre/CephFS.
+  - Kịch bản 151 đến 160 bao phủ 2 tầng hạ tầng hiện đại: GitOps & CI/CD Concurrency (Sync-wave deadlock, webhook out-of-order, monorepo OOM) và AI Cluster Networking (RoCEv2 PFC deadlock, RDMA locked memory, CUDA fork deadlock, checkpoint I/O saturation).
+* **Đợt 7 (Đã hoàn thành - 10 Kịch bản K8s Control Plane Under Load & Hybrid Cloud Networking)**:
+  - Kịch bản 161 đến 170 bao phủ 2 tầng hạ tầng phức hợp:
+    - *K8s Control Plane Under Extreme Load*: API Server Unbounded List-Watches & Watch Cache Compaction 410 Thundering Herd, APF Queue Starvation of Leader Election, CRD Conversion Webhook Lockup, Metrics-Server Drop & HPA Freeze.
+    - *Multi-Cloud & Hybrid Networking Dark Corners*: AWS Transit Gateway / DirectConnect Asymmetric BGP Routing, VPC Peering Jumbo MTU Black Hole, AWS NLB Cross-Zone Imbalance, Hybrid Cloud Split-View DNS NXDOMAIN Poisoning, Dual-Stack IPv4/IPv6 Ingress Allocation Failure.
 
 ---
 
@@ -62,3 +64,5 @@
 | **146 – 150** | Enterprise PKI OCSP Stapling, HSM PKCS#11 Pool, KMS Grace Cache | `inprocess/056-enterprise-pki-ocsp-and-hsm-session-pool.md` | Spec Complete |
 | **151 – 155** | GitOps Sync-Wave DAG, Webhook Monotonic, Monorepo OOM, Drift | `inprocess/057-gitops-sync-wave-deadlock-and-webhook-replay.md` | Spec Complete |
 | **156 – 160** | RoCEv2 PFC Deadlock, RDMA Memlock, Asymmetric NVLink, CUDA Fork | `inprocess/058-rocev2-pfc-deadlock-and-rdma-watchdog.md` | Spec Complete |
+| **161 – 165** | K8s APF Queue Starvation, Watch Cache 410, CRD Conversion Lockup | `inprocess/059-k8s-apf-queue-and-watch-cache-mitigator.md` | Spec Complete |
+| **166 – 170** | AWS TGW Asymmetric BGP, VPC Peering Jumbo MTU, Split DNS NXDOMAIN | `inprocess/060-hybrid-cloud-transit-gateway-and-asymmetric-routing.md` | Spec Complete |
