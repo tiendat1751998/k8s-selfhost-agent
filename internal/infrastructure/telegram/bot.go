@@ -1,92 +1,19 @@
 package telegram
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	domainBackup "github.com/datdt/k8sselfhost/internal/domain/backup"
+	"github.com/datdt/k8sselfhost/internal/domain/sre"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 	backupUsecase "github.com/datdt/k8sselfhost/internal/usecase/backup"
 	deploymentUsecase "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 	"go.uber.org/zap"
+	"k8s.io/client-go/kubernetes"
 )
-
-type BotClient interface {
-	SendMessage(ctx context.Context, chatID int64, text string, replyMarkup interface{}) error
-	AnswerCallbackQuery(ctx context.Context, callbackQueryID string, text string) error
-}
-
-type HTTPBotClient struct {
-	botToken   string
-	httpClient *http.Client
-}
-
-func NewHTTPBotClient(botToken string) *HTTPBotClient {
-	return &HTTPBotClient{
-		botToken:   botToken,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-	}
-}
-
-func (c *HTTPBotClient) SendMessage(ctx context.Context, chatID int64, text string, replyMarkup interface{}) error {
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", c.botToken)
-	payload := map[string]interface{}{
-		"chat_id":    chatID,
-		"text":       text,
-		"parse_mode": "Markdown",
-	}
-	if replyMarkup != nil {
-		payload["reply_markup"] = replyMarkup
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return errors.Wrap(err, "marshaling telegram message payload")
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return errors.Wrap(err, "creating telegram request")
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return errors.Wrap(err, "sending telegram message")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return errors.NewInternal(fmt.Sprintf("telegram api returned status %d", resp.StatusCode), errors.ErrInternal)
-	}
-	return nil
-}
-
-func (c *HTTPBotClient) AnswerCallbackQuery(ctx context.Context, callbackQueryID string, text string) error {
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/answerCallbackQuery", c.botToken)
-	payload := map[string]interface{}{
-		"callback_query_id": callbackQueryID,
-		"text":              text,
-		"show_alert":        true,
-	}
-
-	body, _ := json.Marshal(payload)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return errors.Wrap(err, "answering telegram callback query")
-	}
-	defer resp.Body.Close()
-	return nil
-}
 
 type SREBot struct {
 	config            TelegramConfig
@@ -94,6 +21,9 @@ type SREBot struct {
 	debouncer         *AlertDebouncer
 	deploymentUsecase *deploymentUsecase.Usecase
 	backupUsecase     *backupUsecase.Usecase
+	k8sClient         kubernetes.Interface
+	runbookExecutor   sre.RunbookExecutor
+	logFetcher        PodLogFetcher
 	logger            *zap.Logger
 	adminMap          map[int64]bool
 	mu                sync.RWMutex
@@ -122,6 +52,7 @@ func NewSREBot(
 		backupUsecase:     backupUsecase,
 		logger:            logger,
 		adminMap:          adminMap,
+		runbookExecutor:   NewInteractiveRunbookExecutor(nil, logger),
 	}
 
 	if config.EnableDeduplication {
@@ -131,6 +62,33 @@ func NewSREBot(
 	}
 
 	return bot
+}
+
+// SetK8sClient injects a Kubernetes interface and wires default logFetcher and runbookExecutor.
+func (b *SREBot) SetK8sClient(client kubernetes.Interface) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.k8sClient = client
+	if b.runbookExecutor == nil {
+		b.runbookExecutor = NewInteractiveRunbookExecutor(client, b.logger)
+	}
+	if b.logFetcher == nil {
+		b.logFetcher = NewK8sPodLogFetcher(client)
+	}
+}
+
+// SetRunbookExecutor injects an SRE runbook executor.
+func (b *SREBot) SetRunbookExecutor(executor sre.RunbookExecutor) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.runbookExecutor = executor
+}
+
+// SetLogFetcher injects a pod log fetcher.
+func (b *SREBot) SetLogFetcher(fetcher PodLogFetcher) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.logFetcher = fetcher
 }
 
 func (b *SREBot) IsAuthorized(chatID int64) bool {
@@ -215,6 +173,19 @@ func (b *SREBot) BuildInlineMarkup(a *AlertPayload) interface{} {
 		},
 	}
 
+	podTarget := a.Pod
+	if podTarget == "" {
+		podTarget = a.Service
+	}
+	if podTarget != "" {
+		keyboard = append(keyboard, []map[string]string{
+			{
+				"text":          "📄 Xem 50 Dòng Log",
+				"callback_data": fmt.Sprintf("logs:%s:%s", a.Namespace, podTarget),
+			},
+		})
+	}
+
 	if a.BackupJobID != "" {
 		keyboard = append(keyboard, []map[string]string{
 			{
@@ -246,10 +217,11 @@ func (b *SREBot) broadcastAlert(ctx context.Context, a *AlertPayload) error {
 
 func (b *SREBot) HandleCallbackQuery(ctx context.Context, callbackID string, chatID int64, data string) (string, error) {
 	if !b.IsAuthorized(chatID) {
-		_ = b.client.AnswerCallbackQuery(ctx, callbackID, "❌ Bạn không có quyền thực thi thao tác này!")
+		if b.client != nil {
+			_ = b.client.AnswerCallbackQuery(ctx, callbackID, "❌ Bạn không có quyền thực thi thao tác này!")
+		}
 		return "Unauthorized", errors.ErrUnauthorized
 	}
-
 
 	parts := strings.Split(data, ":")
 	if len(parts) == 0 {
@@ -265,18 +237,71 @@ func (b *SREBot) HandleCallbackQuery(ctx context.Context, callbackID string, cha
 		targetType, cluster, ns, name := parts[1], parts[2], parts[3], parts[4]
 		if b.deploymentUsecase != nil {
 			if err := b.deploymentUsecase.RestartDeployment(ctx, targetType, cluster, ns, name); err != nil {
-				_ = b.client.AnswerCallbackQuery(ctx, callbackID, fmt.Sprintf("❌ Lỗi restart: %v", err))
+				if b.client != nil {
+					_ = b.client.AnswerCallbackQuery(ctx, callbackID, fmt.Sprintf("❌ Lỗi restart: %v", err))
+				}
 				return "", err
 			}
 		}
 		result := fmt.Sprintf("✅ Đã kích hoạt restart thành công cho service %s/%s", ns, name)
-		_ = b.client.AnswerCallbackQuery(ctx, callbackID, result)
+		if b.client != nil {
+			_ = b.client.AnswerCallbackQuery(ctx, callbackID, result)
+		}
 		return result, nil
 
 	case "rollback":
-		err := errors.NewValidation("action", "rollback is not yet implemented")
-		_ = b.client.AnswerCallbackQuery(ctx, callbackID, fmt.Sprintf("❌ Lỗi: %v", err))
-		return "", err
+		var ns, name string
+		switch {
+		case len(parts) >= 5:
+			ns, name = parts[3], parts[4]
+		case len(parts) == 4:
+			ns, name = parts[2], parts[3]
+		case len(parts) == 3:
+			ns, name = parts[1], parts[2]
+		default:
+			return "", errors.NewValidation("data", "insufficient params for rollback")
+		}
+
+		prevRev, err := b.rollbackDeployment(ctx, ns, name)
+		if err != nil {
+			if b.client != nil {
+				_ = b.client.AnswerCallbackQuery(ctx, callbackID, fmt.Sprintf("❌ Lỗi rollback: %v", err))
+			}
+			return "", err
+		}
+
+		result := fmt.Sprintf("✅ Rollback deployment %s/%s thành công về Revision %s. Dịch vụ đã hoạt động ổn định.", ns, name, prevRev)
+		if b.client != nil {
+			_ = b.client.SendMessage(ctx, chatID, result, nil)
+			_ = b.client.AnswerCallbackQuery(ctx, callbackID, fmt.Sprintf("✅ Đã rollback %s về rev %s", name, prevRev))
+		}
+		return result, nil
+
+	case "logs":
+		var ns, pod string
+		switch {
+		case len(parts) >= 5:
+			ns, pod = parts[3], parts[4]
+		case len(parts) == 3:
+			ns, pod = parts[1], parts[2]
+		default:
+			return "", errors.NewValidation("data", "insufficient params for logs")
+		}
+
+		rawLogs, err := b.fetchLogs(ctx, ns, pod, 50)
+		if err != nil {
+			if b.client != nil {
+				_ = b.client.AnswerCallbackQuery(ctx, callbackID, fmt.Sprintf("❌ Lỗi lấy log: %v", err))
+			}
+			return "", err
+		}
+
+		formattedLogs := FormatPodLogs(rawLogs)
+		if b.client != nil {
+			_ = b.client.SendMessage(ctx, chatID, formattedLogs, nil)
+			_ = b.client.AnswerCallbackQuery(ctx, callbackID, "✅ Đã tải 50 dòng log mới nhất")
+		}
+		return formattedLogs, nil
 
 	case "restore_db":
 		if len(parts) < 4 {
@@ -291,18 +316,98 @@ func (b *SREBot) HandleCallbackQuery(ctx context.Context, callbackID string, cha
 				Status:       "pending",
 			}
 			if err := b.backupUsecase.TriggerRestore(ctx, restoreJob); err != nil {
-				_ = b.client.AnswerCallbackQuery(ctx, callbackID, fmt.Sprintf("❌ Lỗi restore DB: %v", err))
+				if b.client != nil {
+					_ = b.client.AnswerCallbackQuery(ctx, callbackID, fmt.Sprintf("❌ Lỗi restore DB: %v", err))
+				}
 				return "", err
 			}
 		}
 		result := fmt.Sprintf("✅ Đã đưa yêu cầu Restore DB (Job: %s) vào hàng đợi thực thi!", jobID)
-		_ = b.client.AnswerCallbackQuery(ctx, callbackID, result)
+		if b.client != nil {
+			_ = b.client.AnswerCallbackQuery(ctx, callbackID, result)
+		}
 		return result, nil
 
+	case "runbook":
+		if len(parts) < 2 {
+			return "", errors.NewValidation("data", "insufficient params for runbook")
+		}
+		rbID := sre.RunbookID(parts[1])
+		req := sre.RunbookExecutionRequest{
+			RunbookID:   rbID,
+			TriggeredBy: fmt.Sprintf("Telegram:%d", chatID),
+			Parameters:  make(map[string]string),
+		}
+		if len(parts) >= 4 {
+			req.Parameters["namespace"] = parts[2]
+			req.Parameters["deployment"] = parts[3]
+		}
+		b.mu.RLock()
+		executor := b.runbookExecutor
+		b.mu.RUnlock()
+		if executor == nil {
+			return "", errors.NewInternal("runbook executor not configured", errors.ErrInternal)
+		}
+		res, err := executor.Execute(ctx, req)
+		if err != nil {
+			if b.client != nil {
+				_ = b.client.AnswerCallbackQuery(ctx, callbackID, fmt.Sprintf("❌ Lỗi runbook: %v", err))
+			}
+			return "", err
+		}
+		if b.client != nil {
+			_ = b.client.SendMessage(ctx, chatID, res.Output, nil)
+			_ = b.client.AnswerCallbackQuery(ctx, callbackID, "✅ Runbook hoàn tất")
+		}
+		return res.Output, nil
+
 	default:
-		_ = b.client.AnswerCallbackQuery(ctx, callbackID, "Hành động không xác định")
+		if b.client != nil {
+			_ = b.client.AnswerCallbackQuery(ctx, callbackID, "Hành động không xác định")
+		}
 		return "", errors.NewValidation("action", "unknown action")
 	}
+}
+
+func (b *SREBot) rollbackDeployment(ctx context.Context, namespace, name string) (string, error) {
+	b.mu.RLock()
+	client := b.k8sClient
+	executor := b.runbookExecutor
+	b.mu.RUnlock()
+
+	if client != nil {
+		return RollbackDeployment(ctx, client, namespace, name)
+	}
+	if executor != nil {
+		res, err := executor.Execute(ctx, sre.RunbookExecutionRequest{
+			RunbookID: sre.RunbookRollbackDeployment,
+			Parameters: map[string]string{
+				"namespace":  namespace,
+				"deployment": name,
+			},
+		})
+		if err != nil {
+			return "", err
+		}
+		return res.Output, nil
+	}
+	return "", errors.NewInternal("k8s client or runbook executor not configured for rollback", errors.ErrInternal)
+}
+
+func (b *SREBot) fetchLogs(ctx context.Context, namespace, pod string, tailLines int64) (string, error) {
+	b.mu.RLock()
+	fetcher := b.logFetcher
+	client := b.k8sClient
+	b.mu.RUnlock()
+
+	if fetcher != nil {
+		return fetcher.GetPodLogs(ctx, namespace, pod, tailLines)
+	}
+	if client != nil {
+		f := NewK8sPodLogFetcher(client)
+		return f.GetPodLogs(ctx, namespace, pod, tailLines)
+	}
+	return "", errors.NewInternal("log fetcher or k8s client not configured", errors.ErrInternal)
 }
 
 // Start starts the Telegram bot worker and listens until the context is canceled.
