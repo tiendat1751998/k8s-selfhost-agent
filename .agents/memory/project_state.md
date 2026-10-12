@@ -149,13 +149,22 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
 
 ---
 
-## 6. Master FMEA Knowledge Base (100 Scenarios) & Task Specifications (018-046)
-- **Definitive FMEA Encyclopedia**: `docs/architecture/production_failure_modes_encyclopedia.md` codifies 100 battle-tested failure scenarios across 23 layers (Hardware, Kernel, Control Plane, Workers/PLEG, CNI/DNS, Storage/CSI, Postgres/Redis, CI/CD, DevSecOps, Cascading Storms, Service Mesh, MQs/Streaming, Distributed Storage, cgroup v2/eBPF, Zero-Trust/Vault, Hypervisor/Cloud, Secret Store CSI, eBPF Security, Hybrid WAN, TSDB/BigData, Container Runtime, AI/GPU SRE, Air-Gapped DR, FinOps).
+## 6. Master FMEA Knowledge Base (130 Scenarios) & Task Specifications (018-052)
+- **Definitive FMEA Encyclopedia**: `docs/architecture/production_failure_modes_encyclopedia.md` codifies 130 battle-tested failure scenarios across 29 layers (Hardware, Kernel, Control Plane, Workers/PLEG, CNI/DNS, Storage/CSI, Postgres/Redis, CI/CD, DevSecOps, Cascading Storms, Service Mesh, MQs/Streaming, Distributed Storage, cgroup v2/eBPF, Zero-Trust/Vault, Hypervisor/Cloud, Secret Store CSI, eBPF Security, Hybrid WAN, TSDB/BigData, Container Runtime, AI/GPU SRE, Air-Gapped DR, FinOps, Kernel Sockets, VFS/Inodes, K8s Webhook Deadlocks, DB XID Wraparound, Advanced DevSecOps, Cloud Burst Credit/Spot).
 - **Master Roadmap & Invariants**: `017-core-domain-spec-and-invariants.md` (6 Core Platform Domains, 10 SRE Invariants).
-- **Continuous Ingestion Engine**: `032-continuous-fmea-edge-case-catalog.md` (Batches 1, 2, 3 complete with 100 scenarios mapped).
+- **Continuous Ingestion Engine**: `032-continuous-fmea-edge-case-catalog.md` (Batches 1, 2, 3, 4 complete with 130 scenarios mapped).
 - **Remediation & Autonomous Mitigators**:
-  - `018-crash-elimination-and-tenancy.md` (Active in Git worktrees: backend-coder & database-engineer).
-  - `019` to `025`: Entrypoint parity, crypto drivers, fail-close DevSecOps, storage fencing, Telegram SRE Copilot runbooks, staging DB masking, disaster recovery drills.
+  - `018-crash-elimination-and-tenancy.md` (100% COMPLETE & MERGED in commit `80ca8e4`).
+  - `019-platform-wiring-and-entrypoint-parity.md` (Active in Git worktree: Platform Wiring & Entrypoint Coder).
+  - `020-backup-drivers-crypto-and-migrations.md` (Active in Git worktree: Backup Crypto & Migrations Coder).
+  - `021` to `025`: Fail-close DevSecOps, storage fencing, Telegram SRE Copilot runbooks, staging DB masking, disaster recovery drills.
   - `026` to `031`: CNI IPAM scavenger, Postgres idle transaction terminator, in-stream secret redactor, NTP/SMART hardware watchdog, rootless Kaniko, automated canary & load shedding.
   - `033` to `038`: Istio startup race injector, Kafka CooperativeSticky tuner, Ceph RocksDB PITR, cgroup v2 memory.high interceptor, Vault unseal operator, multi-DC STONITH fencing.
   - `039` to `046`: SecretStore CSI polling rate limiter, eBPF ringbuffer watchdog, hybrid WAN MTU blackhole detector, ClickHouse batching buffer, containerd inode pruner, GPU XID fault tainter, Velero break-lock, FinOps cross-AZ optimizer.
+  - `047` to `052`: Kernel socket backlog & conntrack scaler, VFS inode watchdog & D-State breaker, K8s webhook deadlock breaker & PLEG watchdog, Postgres XID wraparound & Redis resync storm shield, DevSecOps supply chain firewall & IMDSv2 defense, Cloud burst credit monitor & Spot 2m drainer.
+
+---
+
+## 7. Current Active Subagents & Worktrees
+1. `8dd2685a` (`backend-coder`, Platform Wiring & Entrypoint Coder): Executing Task 019 in worktree `subagent-Platform-Wiring---Entrypoint-Coder-backend-coder-a7bf3838`.
+2. `281efd87` (`backend-coder`, Backup Crypto & Migrations Coder): Executing Task 020 in worktree `subagent-Backup-Crypto---Migrations-Coder-backend-coder-2ca79c8c`.
