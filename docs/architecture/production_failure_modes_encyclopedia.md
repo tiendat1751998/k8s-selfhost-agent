@@ -512,3 +512,147 @@
 ### 100. Zombie Cloud Load Balancers & Unattached PVC Volumes Sau Khi Xóa K8s Namespaces
 * **Cơ chế lỗi**: Khi xóa một namespace thử nghiệm (`kubectl delete ns staging`), do lỗi webhook hoặc finalizer bị kẹt, K8s Cloud Controller Manager không thể gửi lệnh deprovisioning cho AWS ALB / NLB và EBS volumes. Namespace biến mất khỏi K8s, nhưng hàng chục Load Balancer và hàng chục Terabytes ổ đĩa đắt tiền vẫn tiếp tục chạy âm thầm trên tài khoản AWS/GCP, tiêu tốn hàng ngàn USD mỗi tháng mà không phục vụ bất kỳ ai.
 * **Cơ chế tự động hóa**: Triển khai `Cloud Orphan Resource Reaper` quét định kỳ giữa danh sách K8s Ingress/PVC và AWS/GCP API; phát hiện mọi tài nguyên mang tag `kubernetes.io/cluster` nhưng không còn tồn tại trong K8s API server; tự động gửi thông báo phê duyệt dọn dẹp qua Telegram bot sau 48 giờ.
+
+---
+
+## TẦNG 24: KERNEL TCP/SOCKET LOW-LEVEL, CONGESTION & TIME_WAIT SATURATION (KỊCH BẢN 101 — 105)
+
+### 101. TCP TIME_WAIT Accumulation & Local Ephemeral Port Starvation Dưới Tải Microservices
+* **Cơ chế lỗi**: Khi microservices thực hiện hàng chục ngàn HTTP/1.1 requests ngắn (short-lived without keep-alive) tới internal services hoặc external APIs, các TCP connections bị đóng sẽ duy trì ở trạng thái `TIME_WAIT` trong $2 \times \text{MSL}$ (khoảng 60 giây). Dải cổng cục bộ (`net.ipv4.ip_local_port_range`, mặc định 32768–60999 = 28,231 ports) bị cạn kiệt hoàn toàn. Các lệnh gọi mạng mới thất bại với lỗi `bind: address already in use` hoặc `dial: cannot assign requested address`, làm tê liệt toàn bộ microservices dù CPU và RAM còn rất rảnh.
+* **Cơ chế tự động hóa**: Bật HTTP Client Connection Pooling (Keep-Alive, `MaxIdleConnsPerHost >= 100`); tinh chỉnh sysctl kernel qua daemonset node-initializer: `net.ipv4.tcp_tw_reuse = 1`, mở rộng `net.ipv4.ip_local_port_range = 10240 65535`; tự động giám sát metric `node_sockstat_TCP_tw` và gửi alert khi tiệm cận 80% ngưỡng dải port.
+
+### 102. TCP Listen Backlog Overflow (`somaxconn` & `tcp_max_syn_backlog`) Âm Thầm Drop Gói SYN
+* **Cơ chế lỗi**: Khi có đợt traffic spike bất ngờ, hàng ngàn client cùng gửi gói TCP SYN tới API server (Go / Nginx). Hàng đợi TCP listen backlog bị đầy do giá trị mặc định của Linux kernel quá thấp (`net.core.somaxconn = 128` hoặc `4096`). Kernel âm thầm vứt bỏ (silent drop) các gói SYN mới mà không gửi RST. Client bị timeout từ 3 đến 21 giây do phải TCP retransmit, người dùng thấy ứng dụng quay đơ không phản hồi, trong khi server logs hoàn toàn không ghi nhận bất kỳ access log nào vì kết nối chưa bao giờ hoàn tất bắt tay 3 bước.
+* **Cơ chế tự động hóa**: Tự động cấu hình sysctl `net.core.somaxconn = 65535` và `net.ipv4.tcp_max_syn_backlog = 65535` trong initContainer của Node; đặt `listen(fd, 65535)` trong backend Go; cấu hình eBPF probe theo dõi bộ đếm `ListenOverflows` và `ListenDrops` từ `/proc/net/netstat` để kích hoạt autoscaling pod trước khi backlog tràn.
+
+### 103. TCP Window Starvation & Bandwidth-Delay Product (BDP) Collapse Trên Cross-Region VPC Peering
+* **Cơ chế lỗi**: Hai cụm Kubernetes đồng bộ dữ liệu Kafka hoặc database backup qua đường truyền VPC Peering xuyên lục địa (ví dụ: us-east-1 tới ap-southeast-1, RTT ~200ms, băng thông 10Gbps). Kích thước TCP buffer mặc định của Linux (`net.ipv4.tcp_wmem` và `net.ipv4.tcp_rmem` giới hạn ở 4MB) không đủ lớn để lấp đầy BDP ($\text{BDP} = 10\text{Gbps} \times 0.2\text{s} = 250\text{MB}$). Tốc độ truyền tải thực tế bị bóp nghẹt xuống chỉ còn 20–30MB/s (1% dung lượng mạng), làm việc sao lưu và đồng bộ chậm trễ hàng chục giờ.
+* **Cơ chế tự động hóa**: Tự động phát hiện các kết nối liên vùng (RTT > 50ms) và áp dụng thuật toán TCP BBR (`net.ipv4.tcp_congestion_control = bbr`); mở rộng kích thước buffer tối đa: `net.core.rmem_max = 67108864`, `net.core.wmem_max = 67108864`; bật TCP Window Scaling (`net.ipv4.tcp_window_scaling = 1`).
+
+### 104. ARP Cache Table Saturation (`gc_thresh3`) Gây Silent Packet Drop Trong Cụm /16 Flat Network
+* **Cơ chế lỗi**: Trong cụm Kubernetes baremetal lớn sử dụng CNI Flat Network (Host-GW hoặc Calico mà không có overlay) với dải mạng `/16` (hơn 1,000 node và hàng chục ngàn Pod IPs). Khi một node cố gắng giao tiếp với các pods khác, bảng ARP cache của kernel vượt quá ngưỡng dọn dẹp rác (`net.ipv4.neigh.default.gc_thresh3 = 1024`). Kernel từ chối thêm entry ARP mới và in lỗi `neighbor table overflow`. Các kết nối mạng tới các node/pod ngẫu nhiên trong cụm bị rớt hoàn toàn gói tin mà không có lý do rõ ràng.
+* **Cơ chế tự động hóa**: Giám sát kích thước ARP cache table; cấu hình tự động nâng ngưỡng qua tuning daemonset: `gc_thresh1 = 4096`, `gc_thresh2 = 8192`, `gc_thresh3 = 16384`; khuyến nghị chuyển đổi sang eBPF-based IP routing (Cilium) để thay thế hoàn toàn bảng ARP truyền thống bằng eBPF maps.
+
+### 105. Kernel Conntrack Table Saturation (`nf_conntrack_max`) Đánh Sập Toàn Bộ Outbound/NAT Traffic
+* **Cơ chế lỗi**: Tất cả traffic đi qua Kube-proxy (iptables mode) hoặc NAT Gateway trên node Linux đều phải tạo entry trong bảng Conntrack để theo dõi trạng thái luồng. Khi microservices mở hàng loạt kết nối UDP DNS hoặc short-lived HTTP không tái sử dụng connection, số lượng entry vượt quá `net.netfilter.nf_conntrack_max`. Kernel từ chối nhận diện các gói tin mới và drop sạch: `nf_conntrack: table full, dropping packet`. Toàn bộ node bị cô lập mạng: CoreDNS không phân giải được, database connection bị đứt, Kubelet không thể heartbeat về API server.
+* **Cơ chế tự động hóa**: Giám sát tỷ lệ lấp đầy conntrack (`node_nf_conntrack_entries / node_nf_conntrack_entries_limit`); tự động nâng `nf_conntrack_max = 1048576`; giảm `nf_conntrack_tcp_timeout_close_wait = 10` và `nf_conntrack_tcp_timeout_time_wait = 30`; tự động bypass conntrack cho các port nội bộ hoặc chuyển đổi sang IPVS / Cilium eBPF mode.
+
+---
+
+## TẦNG 25: LINUX VFS, INODES, CORRUPTED METADATA & D-STATE LOCKUPS (KỊCH BẢN 106 — 110)
+
+### 106. Inode Exhaustion Với 90% Ổ Đĩa Còn Trống Do Hàng Triệu File Rác 0-Byte
+* **Cơ chế lỗi**: Ứng dụng PHP/Node.js/Python sinh ra hàng triệu session files hoặc temporary uploads có kích thước 0 byte hoặc vài bytes trong `/tmp` hoặc thư mục log. Ổ đĩa báo dung lượng còn trống 500GB (chỉ dùng 10% blocks), nhưng số lượng Inodes khả dụng (`df -i`) đã chạm 100%. Mọi thao tác tạo file, ghi log, hoặc khởi tạo socket mới của hệ thống đều báo lỗi `No space left on device` (ENOSPC). Kubelet không thể khởi động container mới, hệ điều hành tê liệt.
+* **Cơ chế tự động hóa**: Triển khai Inode Watchdog kiểm tra metric `node_filesystem_files_free / node_filesystem_files`; khi Inode usage > 85%, tự động định vị top 5 thư mục có mật độ file cao nhất bằng thuật toán tối ưu `find / -xdev -printf '%h\n' | sort | uniq -c | sort -nr | head -5`; tự động kích hoạt cronjob dọn dẹp file tạm cũ hơn 24 giờ.
+
+### 107. Uninterruptible Sleep (D-State) Process Lockup Không Thể Kill Bằng SIGKILL
+* **Cơ chế lỗi**: Một tiến trình I/O (ví dụ backup agent hoặc database writer) thực hiện lệnh `write()` lên một NFS volume hoặc Ceph mount đang bị đứt cáp mạng. Tiến trình rơi vào trạng thái Uninterruptible Sleep (D-State trong kernel). Tiến trình này nắm giữ file lock độc quyền hoặc semaphore bộ nhớ. Kỹ sư thực hiện `kill -9 <PID>` nhưng lệnh hoàn toàn vô hiệu vì kernel không phân phối tín hiệu cho tiến trình đang chờ hardware/NFS I/O. Cụm Kubernetes không thể terminate pod, pod kẹt ở `Terminating` nhiều ngày.
+* **Cơ chế tự động hóa**: Giám sát số lượng D-State processes trên node qua `/proc/[pid]/status`; sử dụng eBPF hoặc `dmesg` để phát hiện kernel call trace bị nghẽn trong VFS; tự động ngắt kết nối NFS bị treo bằng `umount -f -l <mount_point>` (lazy unmount); nếu process nắm giữ tài nguyên quan trọng quá 15 phút mà không nhả, kích hoạt SysRq reboot an toàn (`echo b > /proc/sysrq-trigger`).
+
+### 108. Zombie Process Fork Bomb & Cạn Kiệt PID Table (`pid_max`) Thiếu Subreaper Tini
+* **Cơ chế lỗi**: Container chạy ứng dụng Node.js hoặc Python sinh ra các tiến trình con bằng `fork()` / `exec()` nhưng không gọi `waitpid()` để thu dọn exit status. Do trong container ứng dụng đóng vai trò PID 1 nhưng không được tích hợp logic init system (subreaper), các tiến trình chết biến thành Zombie (`<defunct>`). Khi số lượng Zombie chạm ngưỡng `/proc/sys/kernel/pid_max` (thường là 32,768 hoặc 4,194,304), hệ điều hành máy chủ không thể cấp phát thêm PID mới. Bất kỳ lệnh nào chạy trên host (kể cả `ps`, `ls`, `ssh`) đều báo lỗi `fork: Cannot allocate memory`.
+* **Cơ chế tự động hóa**: Bắt buộc cấu hình Pod Security Standard hoặc OCI runtime bật `shareProcessNamespace: false` và sử dụng `tini` / `dumb-init` làm entrypoint cho mọi container; thiết lập `pidsLimit` trong K8s Pod spec (`spec.containers[].resources.limits.pids = 1000`) để ngăn chặn một pod làm cạn kiệt PID của toàn bộ máy chủ.
+
+### 109. Transparent HugePages (THP) Defragmentation Latency Spikes Gây Đơ Hệ Thống Hàng Giây
+* **Cơ chế lỗi**: Linux kernel mặc định bật tính năng Transparent HugePages (`/sys/kernel/mm/transparent_hugepage/enabled = always`). Khi cơ sở dữ liệu như Redis, PostgreSQL, hoặc JVM phân bổ bộ nhớ động, tiến trình `khugepaged` chạy ngầm để nén và dọn dẹp phân mảnh (memory defragmentation). Quá trình này khóa bộ nhớ ảo (memory lock) trên toàn hệ thống. Redis latency đột ngột nhảy vọt từ 0.5ms lên 8,000ms. Clients bị timeout hàng loạt, các probe Kubernetes tưởng Redis chết nên kill pod, tạo thành chu kỳ crash loop thảm họa.
+* **Cơ chế tự động hóa**: Tạo daemonset tinh chỉnh kernel lúc boot máy chủ: thiết lập `echo madvise > /sys/kernel/mm/transparent_hugepage/enabled` và `echo never > /sys/kernel/mm/transparent_hugepage/defrag`; tự động kiểm tra trạng thái THP trong checklist sức khỏe của các node chạy database.
+
+### 110. NFS Stale File Handle (`ESTALE`) Cascade Trên Shared Storage Sau Khi Server Khởi Động Lại
+* **Cơ chế lỗi**: Cụm Kubernetes sử dụng NFS server (hoặc EFS/Filestore) cho shared storage giữa nhiều pods. Khi NFS server khởi động lại hoặc thay đổi inode id của thư mục sau một thao tác failover, các client K8s nodes vẫn giữ file handle cũ trong bộ nhớ đệm VFS. Mọi thao tác đọc/ghi file từ ứng dụng lập tức ném lỗi `ESTALE (Stale file handle)`. Ứng dụng crash, pod restart nhưng vẫn mount lại đúng mountpoint bị stale nên tiếp tục crash.
+* **Cơ chế tự động hóa**: Triển khai Storage Health Checker phát hiện lỗi `ESTALE`; tự động thực hiện remount với cờ `-o remount` hoặc lazy unmount và mount lại volume mới; gửi alert yêu cầu kiểm tra tính nhất quán dữ liệu của NFS server.
+
+---
+
+## TẦNG 26: KUBERNETES CONTROL PLANE, WEBHOOK DEADLOCKS & PLEG FREEZES (KỊCH BẢN 111 — 115)
+
+### 111. Mutating/Validating Webhook Timeout Deadlock Làm Đóng Băng Việc Tạo Mọi Pod Cụm
+* **Cơ chế lỗi**: Một Mutating/Validating Webhook được cấu hình để kiểm tra bảo mật (ví dụ OPA Gatekeeper, Kyverno, hoặc Istio Injector) với chính sách `failurePolicy: Fail`. Do sự cố mạng hoặc thiếu tài nguyên, toàn bộ các Pod của webhook controller bị chết hoặc node chứa webhook bị khởi động lại. Khi K8s API server cố gắng tạo lại Pod cho chính webhook controller đó, request tạo Pod lại bị chuyển hướng đến webhook service (vốn đang chết!). Cả cụm rơi vào **Tử Huyệt Deadlock**: Không thể tạo bất kỳ Pod nào trong toàn bộ cụm, kể cả pod cứu hộ!
+* **Cơ chế tự động hóa**: Cấu hình `failurePolicy: Ignore` hoặc thiết lập `namespaceSelector` loại trừ tuyệt đối namespace hệ thống (`kube-system`, `gatekeeper-system`); cấu hình `timeoutSeconds: 3` (không để mặc định 10-30s); webhook controllers phải sử dụng `priorityClassName: system-cluster-critical` và chạy tối thiểu 3 replicas trên các node vật lý khác nhau; k8s-selfhost watchdog tự động phát hiện webhook timeout và tự động patch emergency disable webhook khi phát hiện deadlock.
+
+### 112. Orphaned Finalizers Deadlock Ghi Kẹt Namespace Ở Trạng Thái `Terminating` Vĩnh Viễn
+* **Cơ chế lỗi**: Khi xóa một namespace (`kubectl delete ns staging`), K8s controller chờ tất cả tài nguyên con được dọn dẹp. Một Custom Resource (CR) trong namespace mang một `finalizer` trỏ tới một Custom Resource Definition (CRD) hoặc APIService đã bị xóa trước đó. K8s namespace controller không thể liên lạc với API handler để thực thi dọn dẹp tài nguyên con, dẫn đến việc namespace bị kẹt ở trạng thái `Terminating` suốt nhiều tháng. Các công cụ CI/CD cố gắng tạo lại namespace cùng tên đều thất bại.
+* **Cơ chế tự động hóa**: Tự động rà soát các namespaces kẹt `Terminating` > 10 phút; truy quét các custom resources mồ côi nằm bên trong bằng script liệt kê discovery API; tự động bóc tách và xóa bỏ finalizers bị kẹt (`kubectl patch cr <name> -p '{"metadata":{"finalizers":null}}' --type=merge`) để giải phóng namespace an toàn.
+
+### 113. Kubelet PLEG (Pod Lifecycle Event Generator) Timeout Lockup Do Containerd Treo I/O
+* **Cơ chế lỗi**: Kubelet định kỳ gọi Container Runtime Interface (CRI) để liệt kê trạng thái của tất cả containers trên node thông qua cơ chế PLEG (chu kỳ 3 phút). Khi một container thực hiện quá nhiều thao tác I/O trên ổ cứng đĩa chậm hoặc containerd daemon bị deadlock bộ nhớ, lệnh CRI gRPC `ListContainers` bị treo quá 3 phút. Kubelet ghi nhận lỗi `PLEG is not healthy` và chuyển node sang trạng thái `NotReady`. Controller manager lập tức trục xuất (evict) hàng loạt Pods khỏi node, dồn tải sang các node khác và gây sập dây chuyền toàn cụm.
+* **Cơ chế tự động hóa**: Giám sát latency của metric `kubelet_pleg_relist_duration_seconds`; tách riêng ổ đĩa chứa root filesystem và ổ đĩa chứa thư mục `/var/lib/containerd`; tự động restart containerd daemon khi CRI calls bị timeout 3 lần liên tiếp trước khi PLEG đánh sập node.
+
+### 114. Controller-Manager & Scheduler Leader Election Flapping Do Disk Latency Trên etcd
+* **Cơ chế lỗi**: Các thành phần K8s Control Plane (`kube-controller-manager`, `kube-scheduler`) sử dụng cơ chế Leader Election dựa trên Lease API lưu trong etcd (`leaseDuration: 15s`, `renewDeadline: 10s`). Khi đĩa SSD chạy etcd có `fsync` latency tăng đột biến từ 2ms lên 50ms (do chạy chung với các ứng dụng ghi nặng hoặc cloud EBS throttling), các node Master không thể gia hạn Lease đúng hạn. Hai master controllers liên tục tranh cướp quyền lãnh đạo (Flapping), dẫn đến các quyết định reconcile pod bị đảo lộn, pod bị kill và tạo liên tục gây nhiễu loạn toàn hệ thống.
+* **Cơ chế tự động hóa**: Giám sát chặt chẽ `etcd_disk_wal_fsync_duration_seconds` (phải < 10ms ở 99th percentile); cấp phát ổ đĩa NVMe chuyên dụng với IOPS cao nhất cho etcd WAL; tự động cách ly các workload không thuộc control plane ra khỏi master nodes.
+
+### 115. ConfigMap / Secret 1MB etcd Limit Exceeded Đánh Sập Deployment Đột Ngột
+* **Cơ chế lỗi**: etcd có giới hạn cứng về kích thước của một object lưu trữ là 1.5MB (mặc định khuyến nghị của K8s là 1MB). Khi một developer vô tình bundle tài sản nhị phân (như file model AI nhỏ, database seed dump, hoặc file cấu hình lớn) vào bên trong K8s ConfigMap hoặc Secret, API server từ chối request với lỗi `etcdserver: request is too large`. Các pipeline Helm/GitOps bị crash giữa chừng, để lại release ở trạng thái `failed/pending-upgrade` và không thể rollback tự động.
+* **Cơ chế tự động hóa**: Kiểm tra kích thước của tất cả manifest ConfigMap/Secret trong CI/CD pipeline trước khi deploy; nếu kích thước vượt quá 500KB, tự động kích hoạt cảnh báo và chuyển hướng lưu trữ sang External Storage (S3 / Persistent Volume) với cơ chế mount trong initContainer.
+
+---
+
+## TẦNG 27: DATABASE & CACHE CRITICAL CATASTROPHES (KỊCH BẢN 116 — 120)
+
+### 116. PostgreSQL Transaction ID (XID) Wraparound Freeze Đưa Database Về Chế Độ Read-Only Cưỡng Chế
+* **Cơ chế lỗi**: PostgreSQL sử dụng số nguyên 32-bit cho Transaction ID (tối đa ~4 tỷ giao dịch). Cơ chế MVCC yêu cầu `autovacuum` phải chạy liên tục để đóng băng (freeze) các tuple cũ. Nếu autovacuum bị chặn bởi một transaction dài (long-running query hoặc uncommitted transaction bị bỏ quên) suốt nhiều tuần, số lượng transaction khả dụng giảm dần về 0. Khi chạm ngưỡng 10 triệu transactions cuối cùng, PostgreSQL tự động phát lệnh ngắt khẩn cấp và chuyển toàn bộ database sang chế độ **Chỉ Đọc (Read-Only)** để bảo vệ dữ liệu khỏi bị ghi đè. Mọi ứng dụng ghi đều sập hoàn toàn.
+* **Cơ chế tự động hóa**: Giám sát metric `pg_database_wraparound_age`; tự động gửi cảnh báo khẩn cấp khi tuổi transaction vượt quá 1 tỷ; cấu hình tự động kill các transactions chạy quá 1 giờ (`statement_timeout = 3600000`) và tinh chỉnh `autovacuum_freeze_max_age` cùng `autovacuum_cost_limit = 2000` để autovacuum luôn đủ tài nguyên I/O hoàn tất trước khi nguy cấp.
+
+### 117. Redis BGSAVE Fork Copy-on-Write (CoW) Memory Spike Kích Hoạt Linux OOM Killer
+* **Cơ chế lỗi**: Redis lưu trữ 25GB dữ liệu trên máy chủ có 32GB RAM. Khi Redis thực thi lệnh lưu snapshot RDB (`BGSAVE`) hoặc ghi AOF rewrite, nó gọi kernel hàm `fork()` để tạo tiến trình con. Nếu lúc đó ứng dụng có lưu lượng ghi cao, cơ chế Copy-on-Write của Linux phải nhân bản các trang bộ nhớ bị sửa đổi. Tổng lượng RAM tiêu thụ vọt lên 45GB. Linux OOM Killer lập tức can thiệp và tiêu diệt tiến trình cha Redis Master, đánh mất toàn bộ cache nóng và gây sập dây chuyền xuống toàn bộ hệ thống frontend.
+* **Cơ chế tự động hóa**: Cấu hình quy tắc an toàn: Không bao giờ cấp phát dữ liệu Redis vượt quá 50-60% dung lượng RAM vật lý của máy chủ; cấu hình sysctl `vm.overcommit_memory = 1`; tắt hoàn toàn background RDB snapshotting trên Redis Master và chuyển trách nhiệm snapshot sang Redis Read-Replica chuyên dụng.
+
+### 118. Redis Replication Buffer Overflow Gây Vòng Lặp Vô Tận Full Resync Storm
+* **Cơ chế lỗi**: Khi mạng giữa Redis Master và Redis Replica bị chập chờn trong 10 giây hoặc replica bị chậm I/O, master lưu các thay đổi vào bộ đệm replication (`client-output-buffer-limit replica`). Khi bộ đệm vượt quá giới hạn (ví dụ 256MB), master ngắt kết nối replica. Khi kết nối lại, replica yêu cầu Partial Resynchronization (PSYNC) nhưng offset đã bị mất, buộc master phải thực hiện Full Resync (sinh lại toàn bộ file RDB và gửi qua mạng). Quá trình gửi RDB lớn lại làm đầy buffer, master lại ngắt kết nối, tạo thành **Vòng Lặp Resync Bão Táp (Full Resync Storm)** vắt kiệt CPU và băng thông mạng của Master.
+* **Cơ chế tự động hóa**: Tự động cấu hình `client-output-buffer-limit replica 1gb 512mb 60`; mở rộng kích thước `repl-backlog-size = 512mb` để tăng thời gian chịu đựng mất kết nối tạm thời; giám sát metric `connected_slaves` và replication lag để tự động ngắt kết nối replica lỗi trước khi kéo sập master.
+
+### 119. Kafka Consumer Group Head-of-Line Blocking Do Poison Pill Message Serialization Bug
+* **Cơ chế lỗi**: Một producer gửi vào Kafka topic một message bị lỗi cấu trúc dữ liệu hoặc phiên bản schema mới mà consumer không thể parse được (Poison Pill). Consumer ném ngoại lệ `SerializationException` hoặc `UnmarshalError` và crash trước khi commit offset. K8s khởi động lại consumer pod, pod lại đọc đúng message lỗi đó ở đầu partition và crash tiếp. Toàn bộ Consumer Group bị đình trệ (Head-of-Line Blocking), độ trễ (Consumer Lag) tăng lên hàng triệu messages, dữ liệu thời gian thực bị đóng băng hoàn toàn.
+* **Cơ chế tự động hóa**: Triển khai mẫu hình **Dead Letter Queue (DLQ)** tự động trong framework consumer Go/Java: khi unmarshal thất bại, bắt exception, gửi payload lỗi cùng stack trace sang `topic-error-dlq`, sau đó commit offset để tiếp tục xử lý các message tiếp theo; gửi alert tới đội ngũ phát triển kèm link xem message bị lỗi trên dashboard.
+
+### 120. Elasticsearch High Disk Watermark Flood Stage Đóng Băng Mọi Chỉ Mục Log Read-Only
+* **Cơ chế lỗi**: Cụm Elasticsearch/Opensearch lưu trữ log hệ thống và audit trail. Khi dung lượng ổ đĩa trên một data node chạm ngưỡng 95% (`cluster.routing.allocation.disk.watermark.flood_stage`), Elasticsearch tự động chuyển tất cả các index trên cụm sang chế độ `read_only_allow_delete = true`. Mọi request đẩy log từ Vector, Fluentbit, hoặc Logstash đều bị từ chối với lỗi `HTTP 403 ClusterBlockException`. Mất mát toàn bộ log và giám sát trong giai đoạn xảy ra sự cố.
+* **Cơ chế tự động hóa**: Giám sát dung lượng đĩa trước ngưỡng 80%; tự động cấu hình **Index Lifecycle Management (ILM)** xóa các chỉ mục log cũ hơn 30 ngày hoặc tự động di chuyển các index sang Cold/Frozen tier lưu trên object storage rẻ hơn; tự động chạy lệnh unblock `index.blocks.read_only_allow_delete: null` ngay sau khi dung lượng đĩa được giải phóng.
+
+---
+
+## TẦNG 28: ADVANCED DEVSECOPS, ZERO-TRUST & SUPPLY CHAIN ATTACKS (KỊCH BẢN 121 — 125)
+
+### 121. Dependency Confusion & Typosquatting Tấn Công Chiếm Quyền CI/CD Pipeline
+* **Cơ chế lỗi**: Công ty sử dụng các thư viện nội bộ (ví dụ `@company/auth-utils` trong NPM hoặc `github.com/company/common` trong Go). Kẻ tấn công đăng ký một package trùng tên nhưng có số version cực cao (ví dụ `99.9.9`) trên public NPM registry hoặc public proxy. Khi build runner trong CI/CD tải dependencies mà không chỉ định private registry an toàn, hệ thống tự động ưu tiên kéo phiên bản độc hại từ public registry về. Mã độc chạy ngay trong giai đoạn postinstall và gửi toàn bộ biến môi trường (AWS Keys, K8s tokens) về máy chủ của hacker.
+* **Cơ chế tự động hóa**: Cấu hình bắt buộc scoped registry private (`.npmrc`, `GOPRIVATE`); triển khai Dependency Firewall (Sonatype Nexus hoặc JFrog Artifactory) chặn kéo các package có scope nội bộ từ Internet; kích hoạt quét SCA tự động trước khi build và khóa phiên bản bằng lockfile nghiêm ngặt (`package-lock.json`, `go.sum`).
+
+### 122. Compromised CI/CD Runner Privilege Escalation Qua Docker Socket (`docker.sock`)
+* **Cơ chế lỗi**: Để hỗ trợ kỹ sư build container image trong pipeline (Docker-in-Docker), một số admin gắn volume `/var/run/docker.sock` từ máy chủ vật lý vào bên trong container của GitLab Runner hoặc GitHub Actions runner. Một commit chứa pull request từ bên ngoài thực thi script gọi Docker API trên host, khởi tạo một container mới với cờ `--privileged -v /:/host` và chiếm quyền điều khiển root hoàn toàn trên máy chủ mẹ, cài mã độc đào coin và đánh cắp credential của cụm.
+* **Cơ chế tự động hóa**: Cấm tuyệt đối việc mount `/var/run/docker.sock` trong bất kỳ Pod nào; thay thế hoàn toàn công nghệ build bằng **Rootless Container Builders** chạy hoàn toàn trong userspace (như Kaniko, Buildah, hoặc Google distroless); kích hoạt OPA Gatekeeper policy cấm mount hostPath socket.
+
+### 123. Sidecar Injection Race Condition Làm Rò Rỉ Traffic Không Mã Hóa Ra Mạng Ngoài
+* **Cơ chế lỗi**: Trong Service Mesh (Istio / Linkerd), một initContainer hoặc sidecar Envoy được inject để định tuyến mTLS. Khi pod khởi động, container ứng dụng chính (App) có thể khởi động nhanh hơn sidecar Envoy. Trong vài giây đầu tiên, ứng dụng gửi các bản tin HTTP không mã hóa hoặc kết nối tới các dịch vụ bên ngoài trực tiếp mà không đi qua chính sách kiểm soát của proxy. Kẻ tấn công trên cùng mạng có thể nghe lén dữ liệu nhạy cảm hoặc bypass authentication.
+* **Cơ chế tự động hóa**: Bật tính năng Kubernetes Native Sidecar Containers (từ K8s 1.28+) với cờ `restartPolicy: Always` trong `initContainers` để bảo đảm proxy khởi động và sẵn sàng 100% trước khi app container được phép boot; cấu hình `holdApplicationUntilProxyStarts: true` trong cấu hình Istio.
+
+### 124. Cloud Instance Metadata IPv6 / DNS Rebinding SSRF Bỏ Qua Chặn Metadata IPv4
+* **Cơ chế lỗi**: Hệ thống có cơ chế chống SSRF (Server-Side Request Forgery) bằng cách lọc các URL trỏ về IPv4 `169.254.169.254`. Kẻ tấn công khai thác địa chỉ IPv6 của AWS Nitro Metadata (`[fd00:ec2::254]`) hoặc sử dụng kỹ thuật DNS Rebinding (tên miền trỏ về IP nội bộ sau khi vượt qua vòng kiểm tra DNS đầu tiên). Ứng dụng tải URL do hacker cung cấp, lấy được IAM Role Temporary Credentials của EC2 instance và chiếm đoạt tài khoản cloud.
+* **Cơ chế tự động hóa**: Sử dụng NetGuard SSRF Validator kiểm tra toàn diện cả IPv4 và IPv6 (chặn dải Link-Local `fe80::/10` và `fd00::/8`); bắt buộc kích hoạt **AWS IMDSv2** với `HttpTokens=required` và `HttpPutResponseHopLimit=1` để triệt tiêu hoàn toàn khả năng khai thác SSRF từ container.
+
+### 125. Stale Projected ServiceAccount Token Replay Attack Trên Cụm Phân Tán
+* **Cơ chế lỗi**: Kubernetes cấp phát ServiceAccount token cho pod. Nếu sử dụng static token trong Secret cũ, token này không bao giờ hết hạn. Kẻ tấn công trích xuất token từ bộ nhớ hoặc log, sau đó tái sử dụng token từ một máy chủ ở bên ngoài Internet để gọi K8s API Server nhiều tháng sau đó mà không bị phát hiện.
+* **Cơ chế tự động hóa**: Bắt buộc sử dụng **Bound Service Account Token Volume** (`BoundServiceAccountTokenVolume`) với thời gian sống ngắn (`expirationSeconds: 3600`) và gắn chặt với identity của Pod; kích hoạt Token Audience (`audiences`) để token chỉ có giá trị khi gửi đến đúng dịch vụ mục tiêu; tự động vô hiệu hóa token ngay khi pod bị xóa khỏi cụm.
+
+---
+
+## TẦNG 29: CLOUD HARDWARE, SPOT TERMINATION & HYBRID DISASTERS (KỊCH BẢN 126 — 130)
+
+### 126. AWS EBS IOPS Burst Credit Exhaustion Làm Đóng Băng Hoàn Toàn Ổ Đĩa Dữ Liệu
+* **Cơ chế lỗi**: Ứng dụng chạy trên volume AWS EBS gp2 dung lượng nhỏ (ví dụ 100GB). gp2 sử dụng cơ chế cấp điểm Burst Credit để đạt 3,000 IOPS trong thời gian ngắn, nhưng tốc độ cơ bản (baseline) chỉ là $3 \times 100 = 300\text{ IOPS}$. Khi ứng dụng có đợt ghi tải nặng kéo dài vài giờ, toàn bộ Burst Credits bị cạn kiệt. AWS bóp nghẹt tốc độ đĩa xuống mức baseline tối thiểu. Thao tác ghi của PostgreSQL hoặc Elasticsearch bị nghẽn, Disk I/O Queue nhảy vọt lên hàng trăm, ứng dụng hoàn toàn bị freeze không phản hồi.
+* **Cơ chế tự động hóa**: Di chuyển 100% volumes từ gp2 sang **gp3** với baseline 3,000 IOPS độc lập với dung lượng; giám sát metric AWS CloudWatch `BurstBalance` (đối với gp2) và tự động kích hoạt resize volume hoặc tăng IOPS qua AWS API trước khi credit chạm mức 20%.
+
+### 127. Cloud Provider API Throttling (`RequestLimitExceeded`) Làm Tê Liệt Cluster Autoscaler
+* **Cơ chế lỗi**: Trong một đợt scale-up khẩn cấp, hàng chục tools trong cụm (Cluster Autoscaler, ExternalDNS, AWS Load Balancer Controller, Karpenter, Datadog Agent) đồng thời gửi hàng ngàn requests tới AWS/GCP API (ví dụ `DescribeInstances`, `DescribeSubnets`). Cloud provider áp dụng giới hạn Rate Limit và trả về lỗi `HTTP 429 Too Many Requests` hoặc `RequestLimitExceeded`. Cluster Autoscaler không thể gọi lệnh tạo thêm node mới. Cụm bị kẹt với hàng trăm Pods ở trạng thái `Pending` trong khi người dùng không thể truy cập hệ thống.
+* **Cơ chế tự động hóa**: Triển khai AWS API Proxy Cache (local caching cho read-only API calls); cấu hình Exponential Backoff với Jitter cho tất cả controllers; giảm tần suất polling của Cluster Autoscaler (`--scan-interval=30s`); tích hợp thông báo alert khi AWS API Throttling metric bắt đầu xuất hiện.
+
+### 128. Cloud Spot Instance 2-Minute Termination Warning Bị Bỏ Quên Gây Mất Dữ Liệu
+* **Cơ chế lỗi**: Doanh nghiệp sử dụng Spot/Preemptible Instances để tiết kiệm 70% chi phí. Khi cloud provider cần thu hồi máy chủ, họ gửi một cảnh báo Termination Notice qua Instance Metadata Service trước đúng 2 phút. Nếu cụm không có daemon lắng nghe cảnh báo này, máy chủ sẽ bị ngắt điện đột ngột sau 120 giây. Các tiến trình đang xử lý dở giao dịch thanh toán hoặc đang ghi file bị mất dữ liệu, các kết nối TCP bị drop đột ngột gây ra hàng ngàn lỗi 502/504 cho người dùng.
+* **Cơ chế tự động hóa**: Cài đặt `AWS Node Termination Handler` (hoặc GCP Preemptible Killer); liên tục polling endpoint metadata mỗi 5 giây; ngay khi nhận được tín hiệu cảnh báo 2 phút, lập tức thực hiện `kubectl cordon` node và `kubectl drain` với `grace-period=90s`, chuyển hướng traffic sang các node khác một cách êm ái trước khi máy chủ bị tắt.
+
+### 129. Cloud NAT Gateway SNAT Port Exhaustion Gây Đứt Kết Nối Ra Mạng Ngoài Ngẫu Nhiên
+* **Cơ chế lỗi**: Hàng trăm Pods trên nhiều node trong private subnet gửi concurrent requests tới các dịch vụ bên ngoài (Payment Gateways, Twilio, OpenAI API) thông qua một Cloud NAT Gateway duy nhất. Một địa chỉ IP của NAT Gateway chỉ cung cấp tối đa 64,512 SNAT ports. Khi số lượng kết nối đồng thời tới cùng một destination IP:port vượt quá số port khả dụng, NAT Gateway âm thầm drop các gói SYN mới. Khoảng 5-10% các giao dịch thanh toán của khách hàng bị timeout ngẫu nhiên dù server nội bộ hoàn toàn bình thường.
+* **Cơ chế tự động hóa**: Giám sát CloudWatch metric `ErrorPortAllocation`; tự động gán thêm các Elastic IP dự phòng vào NAT Gateway (mỗi IP bổ sung thêm 64,000 ports); cấu hình Connection Pooling chặt chẽ trên microservices để tái sử dụng outbound TCP sockets; triển khai VPC Endpoints (PrivateLink) cho các dịch vụ AWS nội bộ để tránh đi qua NAT Gateway.
+
+### 130. KMS Key Revocation / Expiration Đánh Sập Toàn Bộ Hệ Thống Trong Một Giờ
+* **Cơ chế lỗi**: Toàn bộ Secret, Config, và EBS Volumes của cụm Kubernetes được mã hóa bằng Customer Managed Key (CMK) trên AWS KMS hoặc HashiCorp Vault. Do sơ suất hành chính, khóa KMS bị hết hạn (expiration date) hoặc chính sách IAM Key Policy bị chỉnh sửa sai quyền. Khi Pod mới khởi động hoặc Kubelet cần mount lại volume, lệnh giải mã bị từ chối với lỗi `KMS.AccessDeniedException`. Các pod crash loop không thể đọc mật khẩu database, toàn bộ cụm rơi vào tình trạng đóng băng trên diện rộng.
+* **Cơ chế tự động hóa**: Giám sát thời hạn của KMS Keys và Vault Certificates trước 30 ngày; thiết lập Canary Secret Decryption Probe chạy mỗi 60 giây: nếu probe không giải mã được canary secret, lập tức kích hoạt P0 alert khẩn cấp lên Telegram SRE Copilot trước khi các ứng dụng chính bị ảnh hưởng; duy trì Break-Glass Offline Recovery Key được niêm phong an toàn.

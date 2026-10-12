@@ -21,15 +21,15 @@
     - *Zero-Trust & Vault*: Vault unseal key quorum deadlock, Secret lease renewal thundering herd burst, Mesh mTLS trust domain mismatch, OIDC JWKS cache expiration & 100% 401 Unauthorized.
     - *Hypervisor & Cloud*: AWS EBS GP2 burst credit exhaustion, IMDSv1 169.254.169.254 SSRF exfiltration, S3 eventual consistency 404, Monzo 2019 etcd election storm, GitHub 2018 43s optical link failover partition.
 * **Đợt 3 (Đã hoàn thành - 23 Kịch bản Edge Cases & Hệ thống Phức hợp)**:
-  - Kịch bản 78 đến 100 bao phủ 8 tầng hạ tầng nâng cao:
-    - *Secret Store CSI & ESO*: Vault polling storm rate limit (HTTP 429), SealedSecrets/SOPS GPG private key lost in DR, In-memory secret staleness without rolling restart.
-    - *eBPF Security & Runtime*: Tetragon/Falco RingBuffer dropping events (Silent audit blindness), Kprobe kernel layout panic across minor updates, eBPF tail call depth & CPU limiter.
-    - *Hybrid WAN & Networking*: WireGuard/IPSec MTU Black Hole & TCP MSS Clamping, Tailscale DERP relay fallback latency jump, Asymmetric BGP multi-homing `rp_filter` drop.
-    - *Big Data & TSDB*: ClickHouse `Too many parts` micro-insert explosion, VictoriaMetrics/Prometheus TSDB out-of-order sample rejection, OpenSearch JVM heap circuit breaker crash.
-    - *Runtime & OCI Distribution*: Containerd layer inode exhaustion despite free disk space, Docker Hub HTTP 429 rate limit breaking rolling updates, Spegel/Dragonfly P2P DHT routing churn loop.
-    - *AI/LLM Infrastructure*: NVIDIA GPU XID 31/43 MMU faults & zombie hang, vLLM/Triton KV-cache fragmentation CUDA OOM, NCCL AllReduce distributed deadlock.
-    - *Air-Gapped DR & Storage*: Velero/Kopia stale repository exclusive lock breaker, SQLite WAL corruption on consumer SSD power cut, KMS key policy deletion prevention.
-    - *FinOps & Waste Elimination*: Cross-AZ egress network cost explosion ($25,000/mo) via topology un-awareness, Zombie cloud load balancers & detached EBS volumes after namespace deletion.
+  - Kịch bản 78 đến 100 bao phủ 8 tầng hạ tầng nâng cao (Secret Store CSI, eBPF Security, Hybrid WAN, ClickHouse Parts, Containerd Inodes, AI/GPU XID, Air-gapped DR, FinOps Cross-AZ).
+* **Đợt 4 (Đã hoàn thành - 30 Kịch bản Chuyên Sâu Tầng Thấp & Black Swans)**:
+  - Kịch bản 101 đến 130 bao phủ 6 tầng hạ tầng phức hợp:
+    - *Kernel Networking & Sockets*: TCP TIME_WAIT accumulation & port exhaustion, Listen backlog overflow (`somaxconn` / SYN drops), TCP BDP collapse, ARP table gc_thresh overflow, Conntrack table full packet drop.
+    - *VFS & OS Lockups*: Inode exhaustion 0-byte files, Uninterruptible Sleep (D-State) VFS hung mounts, Zombie fork bomb & PID table exhaustion, Transparent HugePages latency spikes, NFS ESTALE stale handle cascades.
+    - *K8s Control Plane Deadlocks*: Mutating/Validating Webhook timeout cluster freeze, Orphaned finalizers stuck namespace, Kubelet PLEG relist timeout containerd hang, etcd WAL fsync leader election flapping, ConfigMap/Secret 1MB etcd limit.
+    - *Database & Cache Catastrophes*: Postgres Transaction ID (XID) wraparound read-only freeze, Redis BGSAVE memory fork CoW OOM spike, Redis replica full resync storm loop, Kafka poison pill head-of-line blocking, Elasticsearch high watermark flood stage index freeze.
+    - *DevSecOps Advanced Defense*: Dependency confusion public hijacking, Compromised CI/CD runner docker.sock host breakout, Service mesh sidecar startup plaintext leak race, Cloud instance metadata IPv6 SSRF bypass, Stale projected ServiceAccount token replay.
+    - *Cloud & Spot Hardware Disasters*: AWS EBS gp2 burst credit collapse to 100 IOPS, Cloud API rate limit (`RequestLimitExceeded`) autoscaler freeze, Spot instance 2-minute termination warning unhandled, Cloud NAT Gateway SNAT port exhaustion, KMS key revocation/expiration system blackout.
 
 ---
 
@@ -54,3 +54,9 @@
 | **93 – 95** | GPU XID Fault Tainter, vLLM KV-Cache Swap, NCCL Timeout | `044-gpu-ai-workload-watchdog-and-kv-cache-guard.md` | Spec Complete |
 | **96 – 98** | Velero Break-Lock, Edge SQLite WAL Repair, KMS Quorum | `045-velero-snapshot-lock-and-airgap-dr-healing.md` | Spec Complete |
 | **99 – 100** | TopologyAwareHints Injector, Cloud Orphan Resource Reaper | `046-finops-cross-az-and-orphan-resource-fencing.md` | Spec Complete |
+| **101 – 105** | Kernel Sockets, TIME_WAIT, Backlog Drops, Conntrack | `047-kernel-socket-backlog-and-conntrack-scaler.md` | Spec Complete |
+| **106 – 110** | Inode 0-Byte Watchdog, D-State VFS Lockup, Zombie Subreaper | `048-vfs-inode-watchdog-and-dstate-process-killer.md` | Spec Complete |
+| **111 – 115** | K8s Webhook Deadlock, PLEG CRI Freeze, Finalizer Reaper | `049-k8s-webhook-deadlock-and-pleg-watchdog.md` | Spec Complete |
+| **116 – 120** | Postgres XID Wraparound, Redis CoW Spike, Kafka Poison Pill | `050-database-xid-wraparound-and-cache-storm-guard.md` | Spec Complete |
+| **121 – 125** | Dependency Confusion, IMDSv2 IPv6 SSRF, Sidecar Barrier | `051-devsecops-supply-chain-and-imds-v2-defense.md` | Spec Complete |
+| **126 – 130** | EBS Burst IOPS Collapse, Spot 2m Drain, SNAT Port Elasticity | `052-cloud-burst-credit-and-spot-interruption-engine.md` | Spec Complete |
