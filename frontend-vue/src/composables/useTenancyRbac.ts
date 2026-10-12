@@ -220,11 +220,7 @@ export function useTenancyRbac() {
       if (selectedOrgId.value === orgId) selectedOrgId.value = 'all'
       showFeedback(`Organization [${orgName}] and associated bindings purged.`)
     } catch (e: unknown) {
-      organizations.value = organizations.value.filter(o => o.id !== orgId)
-      projects.value = projects.value.filter(p => p.orgId !== orgId)
-      members.value = members.value.filter(m => m.orgId !== orgId)
-      if (selectedOrgId.value === orgId) selectedOrgId.value = 'all'
-      showFeedback(`Organization [${orgName}] purged locally (${e instanceof Error ? e.message : 'API offline'}).`)
+      showFeedback(`Failed to delete organization [${orgName}]: ${e instanceof Error ? e.message : 'API request failed'}`)
     } finally {
       isSubmitting.value = false
     }
@@ -279,9 +275,7 @@ export function useTenancyRbac() {
       showFeedback(`Invitation dispatched for ${mem.user} with [${mem.role}] role.`)
       newMember.value = { id: '', orgId: '', user: '', role: 'developer', scope: 'project-wide' }
     } catch (e: unknown) {
-      members.value.push(mem)
-      showMemberModal.value = false
-      showFeedback(`Invitation saved locally for ${mem.user}.`)
+      showFeedback(`Failed to invite member ${mem.user}: ${e instanceof Error ? e.message : 'API request failed'}`)
     } finally {
       isSubmitting.value = false
     }
@@ -294,8 +288,7 @@ export function useTenancyRbac() {
       members.value = members.value.filter(m => m.id !== id)
       showFeedback('Member revoked successfully.')
     } catch (e: unknown) {
-      members.value = members.value.filter(m => m.id !== id)
-      showFeedback('Member revoked locally.')
+      showFeedback(`Failed to revoke member: ${e instanceof Error ? e.message : 'API request failed'}`)
     } finally {
       isSubmitting.value = false
     }
@@ -309,7 +302,7 @@ export function useTenancyRbac() {
       showFeedback('Organization quota policy updated successfully.')
     } catch (e: unknown) {
       showQuotaModal.value = false
-      showFeedback(`Quota updated locally (${e instanceof Error ? e.message : 'API offline'}).`)
+      showFeedback(`Failed to update quota policy: ${e instanceof Error ? e.message : 'API request failed'}`)
     } finally {
       isSubmitting.value = false
     }

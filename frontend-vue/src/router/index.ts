@@ -90,7 +90,7 @@ const router = createRouter({
       path: '/audit',
       name: 'audit',
       component: () => import('../views/AuditView.vue'),
-      meta: { requiresAuth: true, title: 'Audit & CVEs' }
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'Audit & CVEs' }
     },
     {
       path: '/security',
@@ -127,7 +127,7 @@ const router = createRouter({
       alias: ['/tenancy/rbac', '/rbac'],
       name: 'tenancy',
       component: () => import('../views/TenancyRbacView.vue'),
-      meta: { requiresAuth: true, title: 'Tenancy & RBAC' }
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'Tenancy & RBAC' }
     },
     {
       path: '/alerts',
@@ -139,14 +139,14 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),
-      meta: { requiresAuth: true, title: 'System Settings' }
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'System Settings' }
     },
     {
       path: '/settings/2fa-setup',
       name: 'totp-setup',
       component: () => import('../views/TOTPSetupView.vue'),
       alias: ['/totp', '/2fa', '/mfa'],
-      meta: { requiresAuth: true, title: 'Two-Factor Authentication Setup' }
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'Two-Factor Authentication Setup' }
     },
 
     // 6. Generic Platform Fallback / Extension
@@ -178,13 +178,51 @@ const router = createRouter({
   ]
 })
 
+import {
+  parseAndValidateToken,
+  isPrivilegedAdminRole,
+  type TokenClaims
+} from './tokenValidator'
+
+export { parseAndValidateToken, isPrivilegedAdminRole, type TokenClaims }
+
 router.beforeEach((to, _from, next) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
-  const isAuthenticated = !!token
+  const claims = parseAndValidateToken(token)
+  const isAuthenticated = !!claims
+
+  // If token string is invalid or expired, clear untrusted credentials
+  if (token && !isAuthenticated && typeof window !== 'undefined') {
+    localStorage.removeItem('k8s_token')
+    localStorage.removeItem('k8s_user')
+  }
 
   if (to.meta.requiresAuth && !isAuthenticated) {
     next({ path: '/login', query: { redirect: to.fullPath } })
-  } else if (to.path === '/login' && isAuthenticated) {
+    return
+  }
+
+  // Sensitive Admin Route Protection: verify active session state and role
+  const isSensitiveAdminRoute = Boolean(to.meta.requiresAdmin) || ['/audit', '/tenancy', '/settings'].some(p => to.path.startsWith(p))
+  if (isSensitiveAdminRoute && isAuthenticated) {
+    const savedUserStr = typeof window !== 'undefined' ? localStorage.getItem('k8s_user') : null
+    let activeRole = claims.role || ''
+    if (savedUserStr) {
+      try {
+        const parsed = JSON.parse(savedUserStr)
+        if (parsed.role) activeRole = parsed.role
+      } catch {
+        activeRole = ''
+      }
+    }
+
+    if (!isPrivilegedAdminRole(activeRole)) {
+      next({ path: '/' })
+      return
+    }
+  }
+
+  if (to.path === '/login' && isAuthenticated) {
     next({ path: '/' })
   } else {
     next()
