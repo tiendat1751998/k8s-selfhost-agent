@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/timeline"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type timelineRepo struct {
@@ -54,12 +55,14 @@ func (r *timelineRepo) List(ctx context.Context, eventType *timeline.EventType, 
 		countArgs = []interface{}{since}
 	}
 
+	countQuery, countArgs = BuildTenantQuery(ctx, countQuery, countArgs...)
 	var total int
 	err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting timeline events: %w", err)
 	}
 
+	query, args = BuildTenantQuery(ctx, query, args...)
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying timeline events: %w", err)
@@ -109,11 +112,12 @@ func (r *timelineRepo) GetByID(ctx context.Context, id string) (*timeline.Event,
 		FROM timeline_events 
 		WHERE id = $1
 	`
+	query, args := BuildTenantQuery(ctx, query, id)
 	var e timeline.Event
 	var metaBytes []byte
 	var ns, cl *string
 
-	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&e.ID, &e.Type, &e.Title, &e.Detail, &ns, &cl, &metaBytes, &e.CreatedAt,
 	)
 	if err != nil {
@@ -142,9 +146,14 @@ func (r *timelineRepo) GetByID(ctx context.Context, id string) (*timeline.Event,
 }
 
 func (r *timelineRepo) Create(ctx context.Context, e *timeline.Event) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO timeline_events (type, title, detail, namespace, cluster, metadata, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO timeline_events (type, title, detail, namespace, cluster, metadata, created_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 	
@@ -162,7 +171,7 @@ func (r *timelineRepo) Create(ctx context.Context, e *timeline.Event) error {
 	}
 
 	err = r.getDB(ctx).QueryRow(ctx, query,
-		string(e.Type), e.Title, e.Detail, ns, cl, metaBytes, e.CreatedAt,
+		string(e.Type), e.Title, e.Detail, ns, cl, metaBytes, e.CreatedAt, tenantID,
 	).Scan(&e.ID)
 	
 	if err != nil {

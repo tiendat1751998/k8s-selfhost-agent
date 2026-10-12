@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/capacity"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type capacityRepo struct {
@@ -41,6 +42,7 @@ func (r *capacityRepo) List(ctx context.Context, cluster string) ([]capacity.For
 		`
 	}
 
+	query, args = BuildTenantQuery(ctx, query, args...)
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying capacity forecasts: %w", err)
@@ -73,15 +75,20 @@ func (r *capacityRepo) Record(ctx context.Context, f *capacity.Forecast) error {
 		f.RecordedAt = time.Now().UTC()
 	}
 
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO capacity_forecasts (cluster, resource_type, current_usage, forecast_7d, forecast_30d, forecast_90d, exhaustion_at, status, recorded_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO capacity_forecasts (cluster, resource_type, current_usage, forecast_7d, forecast_30d, forecast_90d, exhaustion_at, status, recorded_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id
 	`
 	err := r.getDB(ctx).QueryRow(ctx, query,
 		f.Cluster, string(f.ResourceType), f.CurrentUsage,
 		f.Forecast7d, f.Forecast30d, f.Forecast90d,
-		f.ExhaustionAt, f.Status, f.RecordedAt,
+		f.ExhaustionAt, f.Status, f.RecordedAt, tenantID,
 	).Scan(&f.ID)
 
 	if err != nil {

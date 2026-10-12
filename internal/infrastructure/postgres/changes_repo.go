@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/changes"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type changesRepo struct {
@@ -50,12 +51,14 @@ func (r *changesRepo) ListRequests(ctx context.Context, status *changes.ChangeSt
 		args = []interface{}{limit, offset}
 	}
 
+	countQuery, countArgs = BuildTenantQuery(ctx, countQuery, countArgs...)
 	var total int
 	err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting change requests: %w", err)
 	}
 
+	query, args = BuildTenantQuery(ctx, query, args...)
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying change requests: %w", err)
@@ -95,10 +98,11 @@ func (r *changesRepo) GetRequest(ctx context.Context, id string) (*changes.Chang
 		FROM change_requests 
 		WHERE id = $1
 	`
+	query, args := BuildTenantQuery(ctx, query, id)
 	var req changes.ChangeRequest
 	var approver *string
 
-	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&req.ID, &req.Title, &req.Description, &req.Type, &req.Status, &req.Requester, 
 		&approver, &req.Cluster, &req.Namespace, &req.Resource, 
 		&req.ScheduledAt, &req.ApprovedAt, &req.CreatedAt, &req.UpdatedAt,
@@ -118,14 +122,19 @@ func (r *changesRepo) GetRequest(ctx context.Context, id string) (*changes.Chang
 }
 
 func (r *changesRepo) CreateRequest(ctx context.Context, req *changes.ChangeRequest) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO change_requests (title, description, type, status, requester, cluster, namespace, resource, scheduled_at, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO change_requests (title, description, type, status, requester, cluster, namespace, resource, scheduled_at, created_at, updated_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id
 	`
 	err := r.getDB(ctx).QueryRow(ctx, query,
 		req.Title, req.Description, string(req.Type), string(req.Status), req.Requester, 
-		req.Cluster, req.Namespace, req.Resource, req.ScheduledAt, req.CreatedAt, req.UpdatedAt,
+		req.Cluster, req.Namespace, req.Resource, req.ScheduledAt, req.CreatedAt, req.UpdatedAt, tenantID,
 	).Scan(&req.ID)
 	
 	if err != nil {
@@ -141,7 +150,8 @@ func (r *changesRepo) ApproveRequest(ctx context.Context, id, approver string) e
 		SET status = 'approved', approver = $1, approved_at = NOW(), updated_at = NOW() 
 		WHERE id = $2 AND status = 'pending'
 	`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, approver, id)
+	query, args := BuildTenantQuery(ctx, query, approver, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("approving change request: %w", err)
 	}
@@ -157,7 +167,8 @@ func (r *changesRepo) RejectRequest(ctx context.Context, id, approver string) er
 		SET status = 'rejected', approver = $1, updated_at = NOW() 
 		WHERE id = $2 AND status = 'pending'
 	`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, approver, id)
+	query, args := BuildTenantQuery(ctx, query, approver, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("rejecting change request: %w", err)
 	}
@@ -173,7 +184,8 @@ func (r *changesRepo) ListWindows(ctx context.Context) ([]changes.MaintenanceWin
 		FROM maintenance_windows 
 		ORDER BY start_at DESC
 	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying maintenance windows: %w", err)
 	}
@@ -196,13 +208,18 @@ func (r *changesRepo) ListWindows(ctx context.Context) ([]changes.MaintenanceWin
 }
 
 func (r *changesRepo) CreateWindow(ctx context.Context, w *changes.MaintenanceWindow) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO maintenance_windows (title, cluster, start_at, end_at, active, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO maintenance_windows (title, cluster, start_at, end_at, active, created_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id
 	`
 	err := r.getDB(ctx).QueryRow(ctx, query,
-		w.Title, w.Cluster, w.StartAt, w.EndAt, w.Active, w.CreatedAt,
+		w.Title, w.Cluster, w.StartAt, w.EndAt, w.Active, w.CreatedAt, tenantID,
 	).Scan(&w.ID)
 	
 	if err != nil {

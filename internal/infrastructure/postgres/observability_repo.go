@@ -34,7 +34,8 @@ func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observabi
 		FROM slo_definitions 
 		ORDER BY created_at DESC
 	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	q, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, q, args...)
 	if err != nil {
 		// If columns don't exist yet, try basic select
 		fallbackQuery := `
@@ -42,8 +43,9 @@ func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observabi
 			FROM slo_definitions 
 			ORDER BY created_at DESC
 		`
+		fbQ, fbArgs := BuildTenantQuery(ctx, fallbackQuery)
 		var fbErr error
-		rows, fbErr = r.getDB(ctx).Query(ctx, fallbackQuery)
+		rows, fbErr = r.getDB(ctx).Query(ctx, fbQ, fbArgs...)
 		if fbErr != nil {
 			return nil, fmt.Errorf("querying slo definitions: %w", err)
 		}
@@ -86,8 +88,9 @@ func (r *observabilityRepo) GetSLODefinition(ctx context.Context, id string) (*o
 		FROM slo_definitions 
 		WHERE id = $1
 	`
+	query, args := BuildTenantQuery(ctx, query, id)
 	var d observability.SLODefinition
-	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&d.ID, &d.Service, &d.Target, &d.IndicatorType, &d.Window, &d.Query, &d.AlertThreshold, &d.CreatedAt, &d.UpdatedAt,
 	)
 	if err != nil {
@@ -120,9 +123,14 @@ func (r *observabilityRepo) CreateSLODefinition(ctx context.Context, d *observab
 		d.Window = "30d"
 	}
 
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO slo_definitions (id, service, target, indicator_type, "window", query, alert_threshold, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO slo_definitions (id, service, target, indicator_type, "window", query, alert_threshold, created_at, updated_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (id) DO UPDATE SET
 			service = EXCLUDED.service,
 			target = EXCLUDED.target,
@@ -130,25 +138,27 @@ func (r *observabilityRepo) CreateSLODefinition(ctx context.Context, d *observab
 			"window" = EXCLUDED."window",
 			query = EXCLUDED.query,
 			alert_threshold = EXCLUDED.alert_threshold,
-			updated_at = EXCLUDED.updated_at
+			updated_at = EXCLUDED.updated_at,
+			tenant_id = EXCLUDED.tenant_id
 	`
 	_, err := r.getDB(ctx).Exec(ctx, query,
-		d.ID, d.Service, d.Target, d.IndicatorType, d.Window, d.Query, d.AlertThreshold, d.CreatedAt, d.UpdatedAt,
+		d.ID, d.Service, d.Target, d.IndicatorType, d.Window, d.Query, d.AlertThreshold, d.CreatedAt, d.UpdatedAt, tenantID,
 	)
 	if err != nil {
 		// Fallback for schema without query/alert_threshold
 		fallbackQuery := `
-			INSERT INTO slo_definitions (id, service, target, indicator_type, "window", created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO slo_definitions (id, service, target, indicator_type, "window", created_at, updated_at, tenant_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (id) DO UPDATE SET
 				service = EXCLUDED.service,
 				target = EXCLUDED.target,
 				indicator_type = EXCLUDED.indicator_type,
 				"window" = EXCLUDED."window",
-				updated_at = EXCLUDED.updated_at
+				updated_at = EXCLUDED.updated_at,
+				tenant_id = EXCLUDED.tenant_id
 		`
 		_, fbErr := r.getDB(ctx).Exec(ctx, fallbackQuery,
-			d.ID, d.Service, d.Target, d.IndicatorType, d.Window, d.CreatedAt, d.UpdatedAt,
+			d.ID, d.Service, d.Target, d.IndicatorType, d.Window, d.CreatedAt, d.UpdatedAt, tenantID,
 		)
 		if fbErr != nil {
 			return fmt.Errorf("inserting slo definition: %w", err)
@@ -169,18 +179,20 @@ func (r *observabilityRepo) UpdateSLODefinition(ctx context.Context, d *observab
 		SET service = $1, target = $2, indicator_type = $3, "window" = $4, query = $5, alert_threshold = $6, updated_at = $7
 		WHERE id = $8
 	`
-	_, err := r.getDB(ctx).Exec(ctx, query,
+	query, args := BuildTenantQuery(ctx, query,
 		d.Service, d.Target, d.IndicatorType, d.Window, d.Query, d.AlertThreshold, d.UpdatedAt, d.ID,
 	)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		fallbackQuery := `
 			UPDATE slo_definitions 
 			SET service = $1, target = $2, indicator_type = $3, "window" = $4, updated_at = $5
 			WHERE id = $6
 		`
-		_, fbErr := r.getDB(ctx).Exec(ctx, fallbackQuery,
+		fallbackQuery, fbArgs := BuildTenantQuery(ctx, fallbackQuery,
 			d.Service, d.Target, d.IndicatorType, d.Window, d.UpdatedAt, d.ID,
 		)
+		_, fbErr := r.getDB(ctx).Exec(ctx, fallbackQuery, fbArgs...)
 		if fbErr != nil {
 			return fmt.Errorf("updating slo definition: %w", err)
 		}
@@ -188,7 +200,8 @@ func (r *observabilityRepo) UpdateSLODefinition(ctx context.Context, d *observab
 
 	// Update matching snapshots service name & target
 	updateSnapQuery := `UPDATE slo_snapshots SET service = $1, target = $2 WHERE slo_id = $3`
-	_, _ = r.getDB(ctx).Exec(ctx, updateSnapQuery, d.Service, d.Target, d.ID)
+	updateSnapQuery, updateSnapArgs := BuildTenantQuery(ctx, updateSnapQuery, d.Service, d.Target, d.ID)
+	_, _ = r.getDB(ctx).Exec(ctx, updateSnapQuery, updateSnapArgs...)
 
 	return nil
 }
@@ -197,7 +210,8 @@ func (r *observabilityRepo) DeleteSLODefinition(ctx context.Context, id string) 
 	_ = r.DeleteSLOSnapshotBySLOID(ctx, id)
 
 	query := `DELETE FROM slo_definitions WHERE id = $1`
-	_, err := r.getDB(ctx).Exec(ctx, query, id)
+	query, args := BuildTenantQuery(ctx, query, id)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("deleting slo definition: %w", err)
 	}
@@ -211,7 +225,8 @@ func (r *observabilityRepo) ListSLOSnapshots(ctx context.Context) ([]observabili
 		ORDER BY recorded_at DESC 
 		LIMIT 100
 	`
-	rows, err := r.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying slo snapshots: %w", err)
 	}
@@ -241,8 +256,9 @@ func (r *observabilityRepo) GetSLOSnapshotBySLOID(ctx context.Context, sloID str
 		ORDER BY recorded_at DESC 
 		LIMIT 1
 	`
+	query, args := BuildTenantQuery(ctx, query, sloID)
 	var s observability.SLOSnapshot
-	err := r.getDB(ctx).QueryRow(ctx, query, sloID).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&s.ID, &s.SLOID, &s.Service, &s.Target, &s.Actual, &s.BurnRate, &s.ErrorBudget, &s.BudgetStatus, &s.RecordedAt,
 	)
 	if err != nil {
@@ -262,19 +278,25 @@ func (r *observabilityRepo) CreateSLOSnapshot(ctx context.Context, s *observabil
 		s.RecordedAt = time.Now().UTC()
 	}
 
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO slo_snapshots (id, slo_id, service, target, actual, burn_rate, error_budget, budget_status, recorded_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO slo_snapshots (id, slo_id, service, target, actual, burn_rate, error_budget, budget_status, recorded_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (id) DO UPDATE SET
 			target = EXCLUDED.target,
 			actual = EXCLUDED.actual,
 			burn_rate = EXCLUDED.burn_rate,
 			error_budget = EXCLUDED.error_budget,
 			budget_status = EXCLUDED.budget_status,
-			recorded_at = EXCLUDED.recorded_at
+			recorded_at = EXCLUDED.recorded_at,
+			tenant_id = EXCLUDED.tenant_id
 	`
 	_, err := r.getDB(ctx).Exec(ctx, query,
-		s.ID, s.SLOID, s.Service, s.Target, s.Actual, s.BurnRate, s.ErrorBudget, s.BudgetStatus, s.RecordedAt,
+		s.ID, s.SLOID, s.Service, s.Target, s.Actual, s.BurnRate, s.ErrorBudget, s.BudgetStatus, s.RecordedAt, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting slo snapshot: %w", err)
@@ -289,9 +311,10 @@ func (r *observabilityRepo) UpdateSLOSnapshot(ctx context.Context, s *observabil
 		SET actual = $1, burn_rate = $2, error_budget = $3, budget_status = $4, recorded_at = $5 
 		WHERE id = $6 OR slo_id = $6
 	`
-	_, err := r.getDB(ctx).Exec(ctx, query,
+	query, args := BuildTenantQuery(ctx, query,
 		s.Actual, s.BurnRate, s.ErrorBudget, s.BudgetStatus, s.RecordedAt, s.ID,
 	)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating slo snapshot: %w", err)
 	}
@@ -300,7 +323,8 @@ func (r *observabilityRepo) UpdateSLOSnapshot(ctx context.Context, s *observabil
 
 func (r *observabilityRepo) DeleteSLOSnapshotBySLOID(ctx context.Context, sloID string) error {
 	query := `DELETE FROM slo_snapshots WHERE slo_id = $1`
-	_, err := r.getDB(ctx).Exec(ctx, query, sloID)
+	query, args := BuildTenantQuery(ctx, query, sloID)
+	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("deleting slo snapshot: %w", err)
 	}

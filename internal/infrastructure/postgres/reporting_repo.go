@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/reporting"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type reportingRepo struct {
@@ -31,13 +32,15 @@ func (r *reportingRepo) ListReports(ctx context.Context, limit, offset int) ([]r
 	`
 	countQuery := `SELECT COUNT(*) FROM reports`
 
+	countQuery, countArgs := BuildTenantQuery(ctx, countQuery)
 	var total int
-	err := r.getDB(ctx).QueryRow(ctx, countQuery).Scan(&total)
+	err := r.getDB(ctx).QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting reports: %w", err)
 	}
 
-	rows, err := r.getDB(ctx).Query(ctx, query, limit, offset)
+	query, args := BuildTenantQuery(ctx, query, limit, offset)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("querying reports: %w", err)
 	}
@@ -68,8 +71,9 @@ func (r *reportingRepo) GetReport(ctx context.Context, id string) (*reporting.Re
 		FROM reports 
 		WHERE id = $1
 	`
+	query, args := BuildTenantQuery(ctx, query, id)
 	var rep reporting.Report
-	err := r.getDB(ctx).QueryRow(ctx, query, id).Scan(
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(
 		&rep.ID, &rep.Title, &rep.Type, &rep.Format, &rep.Status, 
 		&rep.FileURL, &rep.CreatedBy, &rep.CreatedAt, &rep.ExpiresAt,
 	)
@@ -83,13 +87,18 @@ func (r *reportingRepo) GetReport(ctx context.Context, id string) (*reporting.Re
 }
 
 func (r *reportingRepo) CreateReport(ctx context.Context, rep *reporting.Report) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
 	query := `
-		INSERT INTO reports (title, type, format, status, created_by, created_at, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO reports (title, type, format, status, created_by, created_at, expires_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 	err := r.getDB(ctx).QueryRow(ctx, query,
-		rep.Title, rep.Type, rep.Format, rep.Status, rep.CreatedBy, rep.CreatedAt, rep.ExpiresAt,
+		rep.Title, rep.Type, rep.Format, rep.Status, rep.CreatedBy, rep.CreatedAt, rep.ExpiresAt, tenantID,
 	).Scan(&rep.ID)
 	
 	if err != nil {
@@ -105,7 +114,8 @@ func (r *reportingRepo) UpdateStatus(ctx context.Context, id, status, fileURL st
 		SET status = $1, file_url = $2 
 		WHERE id = $3
 	`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, status, fileURL, id)
+	query, args := BuildTenantQuery(ctx, query, status, fileURL, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating report status: %w", err)
 	}
@@ -117,7 +127,8 @@ func (r *reportingRepo) UpdateStatus(ctx context.Context, id, status, fileURL st
 
 func (r *reportingRepo) DeleteReport(ctx context.Context, id string) error {
 	query := `DELETE FROM reports WHERE id = $1`
-	cmd, err := r.getDB(ctx).Exec(ctx, query, id)
+	query, args := BuildTenantQuery(ctx, query, id)
+	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("deleting report: %w", err)
 	}
