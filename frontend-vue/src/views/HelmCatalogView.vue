@@ -9,6 +9,7 @@ import HelmReleaseDetailsDrawer from '../components/helm/HelmReleaseDetailsDrawe
 import HelmRepositoryModal from '../components/helm/HelmRepositoryModal.vue'
 import HelmMobileCards from '../components/helm/HelmMobileCards.vue'
 import HelmActionModals from '../components/helm/HelmActionModals.vue'
+import HelmCatalogToolbar from '../components/helm/HelmCatalogToolbar.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 
 const {
@@ -75,178 +76,26 @@ const filteredRepos = computed(() => {
       </div>
     </Transition>
 
-    <!-- Unified 42px Sleek Enterprise Toolbar (Desktop Only) -->
-    <div class="helm-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Helm Enterprise Toolbar">
-      <!-- Left: Segmented capsule tabs -->
-      <div class="toolbar-capsule-pills" role="tablist" aria-label="Helm Catalog Sections">
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'releases'"
-          class="capsule-pill font-mono"
-          :class="{ active: activeTab === 'releases' }"
-          @click="activeTab = 'releases'"
-        >
-          <BaseIcon name="anchor" size="xs" class="capsule-icon" />
-          <span>Releases</span>
-          <span class="capsule-count">({{ releases.length }})</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'charts'"
-          class="capsule-pill font-mono"
-          :class="{ active: activeTab === 'charts' }"
-          @click="activeTab = 'charts'"
-        >
-          <BaseIcon name="package" size="xs" class="capsule-icon" />
-          <span>Chart Catalog</span>
-          <span class="capsule-count">({{ charts.length }})</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'repos'"
-          class="capsule-pill font-mono"
-          :class="{ active: activeTab === 'repos' }"
-          @click="activeTab = 'repos'"
-        >
-          <BaseIcon name="database" size="xs" class="capsule-icon" />
-          <span>Repositories</span>
-          <span class="capsule-count">({{ repos.length }})</span>
-        </button>
-      </div>
-
-      <!-- Center-Left: Standard 30px Capsule Pill search input -->
-      <div class="toolbar-search-wrap">
-        <BaseIcon name="search" size="xs" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          :placeholder="searchPlaceholder"
-          class="toolbar-search-input"
-          aria-label="Filter or search Helm resources"
-        />
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="clear-input-btn"
-          aria-label="Clear search"
-          @click="searchQuery = ''"
-        >
-          <BaseIcon name="x" size="xs" />
-        </button>
-      </div>
-
-      <!-- Center-Right: Contextual filter -->
-      <div class="toolbar-context-filter">
-        <select
-          v-if="activeTab === 'releases'"
-          v-model="releaseStatusFilter"
-          class="toolbar-select font-mono"
-          aria-label="Filter Releases by Status"
-        >
-          <option value="all">All Statuses ({{ releases.length }})</option>
-          <option value="deployed">Deployed</option>
-          <option value="failed">Failed</option>
-          <option value="pending">Pending</option>
-          <option value="superseded">Superseded</option>
-        </select>
-        <select
-          v-else-if="activeTab === 'charts'"
-          v-model="selectedRepoFilter"
-          class="toolbar-select font-mono"
-          aria-label="Filter Charts by Repository"
-        >
-          <option value="all">All Repositories ({{ repos.length }})</option>
-          <option v-for="repo in repos" :key="repo.name" :value="repo.name">
-            {{ repo.name }}
-          </option>
-        </select>
-      </div>
-
-      <!-- Right: Action buttons -->
-      <div class="toolbar-actions-group">
-        <button
-          type="button"
-          class="toolbar-btn btn-primary"
-          title="Add Helm Repository"
-          @click="openAddRepoModal"
-        >
-          <BaseIcon name="plus" size="xs" />
-          <span>Add Repo</span>
-        </button>
-        <button
-          type="button"
-          class="toolbar-btn btn-secondary toolbar-btn-icon"
-          :disabled="loading || loadingCharts || loadingRepos"
-          title="Refresh view"
-          aria-label="Refresh view"
-          @click="refreshActiveTab"
-        >
-          <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': loading || loadingCharts || loadingRepos }" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Mobile 40px Command Bar (<=640px) -->
-    <div class="helm-mobile-command-bar mobile-only">
-      <div class="command-bar-left">
-        <span class="command-bar-title font-bold"><BaseIcon name="anchor" size="sm" /> Helm ({{ releases.length }})</span>
-      </div>
-      <div class="command-bar-actions">
-        <button type="button" class="btn-icon-cmd" title="Add Repository" aria-label="Add Repository" @click="openAddRepoModal">
-          <BaseIcon name="plus" size="xs" />
-        </button>
-        <button type="button" class="btn-icon-cmd" :disabled="loading || loadingCharts || loadingRepos" title="Refresh" aria-label="Refresh" @click="refreshActiveTab">
-          <BaseIcon name="refresh" size="xs" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<=640px) -->
-    <div class="helm-micro-telemetry mobile-only font-mono" role="status" aria-label="Helm Micro Telemetry">
-      <span class="tel-item tel-rel"><BaseIcon name="anchor" size="xs" /> {{ totalReleasesCount }} rel</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-ok"><BaseIcon name="shield" size="xs" /> {{ deployedRate }} ok</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-charts"><BaseIcon name="package" size="xs" /> {{ charts.length }} charts</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-repos"><BaseIcon name="database" size="xs" /> {{ repos.length }} repos</span>
-    </div>
-
-    <!-- Slim Mobile Cluster & Namespace Pill Row (<=640px) -->
-    <div class="helm-mobile-cluster-bar helm-mobile-selectors mobile-only">
-      <div class="pill-select-wrap">
-        <BaseIcon name="anchor" size="xs" class="pill-prefix" />
-        <select v-model="selectedCluster" class="pill-select" aria-label="Target Cluster">
-          <option v-for="c in clusters" :key="c.id || c.name" :value="c.name || c.id">{{ c.name || c.id }}</option>
-          <option v-if="clusters.length === 0" value="primary-cluster">primary-cluster</option>
-        </select>
-      </div>
-      <div class="pill-select-wrap">
-        <BaseIcon name="grid" size="xs" class="pill-prefix" />
-        <select v-model="selectedNamespace" class="pill-select" aria-label="Namespace Scope">
-          <option value="all">all namespaces</option>
-          <option v-for="ns in namespaces" :key="ns.name" :value="ns.name">{{ ns.name }}</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Mobile Section Tabs Navigation (<768px) -->
-    <nav class="catalog-tabs-bar mobile-only glass-panel" aria-label="Helm Catalog Sections">
-      <div class="tabs-list">
-        <button type="button" class="tab-btn" :class="{ active: activeTab === 'releases' }" @click="activeTab = 'releases'">
-          <BaseIcon name="anchor" size="xs" class="tab-icon" /><span class="tab-label">Releases</span><span class="tab-counter">{{ releases.length }}</span>
-        </button>
-        <button type="button" class="tab-btn" :class="{ active: activeTab === 'charts' }" @click="activeTab = 'charts'">
-          <BaseIcon name="package" size="xs" class="tab-icon" /><span class="tab-label">Charts</span><span class="tab-counter">{{ charts.length }}</span>
-        </button>
-        <button type="button" class="tab-btn" :class="{ active: activeTab === 'repos' }" @click="activeTab = 'repos'">
-          <BaseIcon name="database" size="xs" class="tab-icon" /><span class="tab-label">Repos</span><span class="tab-counter">{{ repos.length }}</span>
-        </button>
-      </div>
-    </nav>
+    <HelmCatalogToolbar
+      v-model:active-tab="activeTab"
+      v-model:search-query="searchQuery"
+      v-model:release-status-filter="releaseStatusFilter"
+      v-model:selected-repo-filter="selectedRepoFilter"
+      v-model:selected-cluster="selectedCluster"
+      v-model:selected-namespace="selectedNamespace"
+      :releases-count="releases.length"
+      :charts-count="charts.length"
+      :repos-count="repos.length"
+      :total-releases-count="totalReleasesCount"
+      :deployed-rate="deployedRate"
+      :search-placeholder="searchPlaceholder"
+      :repos="repos"
+      :loading="loading || loadingCharts || loadingRepos"
+      :clusters="clusters"
+      :namespaces="namespaces"
+      @add-repo="openAddRepoModal"
+      @refresh="refreshActiveTab"
+    />
 
     <!-- Tab 1: Releases -->
     <section v-if="activeTab === 'releases'" class="tab-content">

@@ -7,8 +7,7 @@ import OverviewHud from '../components/overview/hud/OverviewHud.vue'
 import RequestFlowBar from '../components/overview/hud/RequestFlowBar.vue'
 import OverviewSaturationTrends from '../components/overview/hud/OverviewSaturationTrends.vue'
 import OverviewMobileStream from '../components/overview/OverviewMobileStream.vue'
-import NodeCard from '../components/overview/nodes/NodeCard.vue'
-import NodeTableView from '../components/overview/nodes/NodeTableView.vue'
+import OverviewTopologySection from '../components/overview/OverviewTopologySection.vue'
 import NodeDiagnosticsDrawer from '../components/overview/drawer/NodeDiagnosticsDrawer.vue'
 import DeepDiveTrafficModal from '../components/overview/modals/DeepDiveTrafficModal.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
@@ -239,146 +238,28 @@ const {
       />
 
       <!-- 4. INFRASTRUCTURE SERVER TOPOLOGY & NODE CARDS -->
-      <section class="topology-section">
-        <div class="hosts-header-row topology-header-row">
-          <div class="hosts-title-group">
-            <span class="hosts-pulse-dot"></span>
-            <h2 class="hosts-section-title">Infrastructure Hosts</h2>
-          </div>
-
-          <!-- Compact Monospace Live Status Badge -->
-          <div class="hosts-status-badge font-mono" title="Online servers out of total cluster servers">
-            <span class="hosts-dot-online"></span>
-            <span class="hosts-status-text font-bold text-cyan">{{ overview.healthy_nodes }}/{{ overview.total_nodes }} Online</span>
-          </div>
-        </div>
-
-        <!-- Sleek Unified 38px Host Controls Toolbar -->
-        <div class="hosts-controls-toolbar topology-filter-bar glass-panel">
-          <!-- Left side: Smooth Capsule Pills -->
-          <div class="hosts-capsule-pills topology-filter-pills" role="tablist" aria-label="Filter servers by state">
-            <button
-              type="button"
-              class="hosts-capsule-pill filter-pill-btn"
-              :class="{ active: selectedTopologyFilter === 'all' }"
-              @click="selectedTopologyFilter = 'all'"
-            >
-              All ({{ topologyFilterCounts.all }})
-            </button>
-
-            <button
-              type="button"
-              class="hosts-capsule-pill filter-pill-btn"
-              :class="{ active: selectedTopologyFilter === 'control_plane' }"
-              @click="selectedTopologyFilter = 'control_plane'"
-            >
-              Control-Plane ({{ topologyFilterCounts.control }})
-            </button>
-
-            <button
-              type="button"
-              class="hosts-capsule-pill filter-pill-btn"
-              :class="{ active: selectedTopologyFilter === 'worker' }"
-              @click="selectedTopologyFilter = 'worker'"
-            >
-              Workers ({{ topologyFilterCounts.worker }})
-            </button>
-
-            <button
-              type="button"
-              class="hosts-capsule-pill filter-pill-btn"
-              :class="{ active: selectedTopologyFilter === 'hot' }"
-              @click="selectedTopologyFilter = 'hot'"
-            >
-              Hot ({{ topologyFilterCounts.hot }})
-            </button>
-
-            <button
-              type="button"
-              class="hosts-capsule-pill filter-pill-btn"
-              :class="{ active: selectedTopologyFilter === 'overloaded' }"
-              @click="selectedTopologyFilter = 'overloaded'"
-            >
-              Overloaded ({{ topologyFilterCounts.overloaded }})
-            </button>
-          </div>
-
-          <!-- Right side: Segmented View Mode Toggle & Reset Order -->
-          <div class="hosts-toolbar-right topology-order-actions">
-            <div class="hosts-segmented-toggle view-mode-toggle" role="group" aria-label="View mode">
-              <button
-                type="button"
-                class="hosts-seg-btn toggle-btn"
-                :class="{ active: nodeViewMode === 'table' }"
-                @click="nodeViewMode = 'table'"
-                title="Table view"
-              >
-                <BaseIcon name="file-text" size="xs" /> Table
-              </button>
-              <button
-                type="button"
-                class="hosts-seg-btn toggle-btn"
-                :class="{ active: nodeViewMode === 'grid' }"
-                @click="nodeViewMode = 'grid'"
-                title="Grid view"
-              >
-                <BaseIcon name="grid" size="xs" /> Grid
-              </button>
-            </div>
-
-            <button
-              v-if="customNodeOrder.length > 0"
-              type="button"
-              class="hosts-btn-reset-order btn-reset-order-icon font-mono"
-              @click="resetNodeOrder"
-              title="Reset customized card order"
-              aria-label="Reset customized card order"
-            >
-              <BaseIcon name="refresh" size="xs" />
-            </button>
-          </div>
-        </div>
-
-        <template v-if="nodeViewMode === 'table'">
-          <NodeTableView
-            :nodes="filteredTopologyNodes"
-            :busiestNodeId="busiestNodeId"
-            @click="handleNodeCardClick"
-            @details="inspectNode"
-            @logs="viewNodeLogs"
-            @scale="manageNode"
-            @restart="manageNode"
-            @yaml="manageNode"
-            @delete="manageNode"
-          />
-        </template>
-        <template v-else>
-          <!-- Node Cards Grid -->
-          <div class="node-cards-grid">
-          <div
-            v-if="filteredTopologyNodes.length === 0"
-            class="empty-topology-state glass-panel"
-          >
-            <span class="empty-topology-icon">
-              <BaseIcon name="search" size="lg" />
-            </span>
-            <span class="empty-topology-text">No servers match the selected filter "{{ selectedTopologyFilter }}".</span>
-            <button class="btn-reset-filters" @click="selectedTopologyFilter = 'all'">Show All Servers</button>
-          </div>
-
-          <NodeCard
-            v-for="node in filteredTopologyNodes"
-            :key="node.node_id"
-            :node="node"
-            :busiestNodeId="busiestNodeId" :draggedNodeId="draggedNodeId" :dragOverNodeId="dragOverNodeId"
-            @click="handleNodeCardClick"
-            @inspect="inspectNode"
-            @manage="manageNode"
-            @dragstart="onDragStart" @dragover="onDragOver" @dragenter="onDragEnter" @dragleave="onDragLeave" @drop="onDrop" @dragend="onDragEnd"
-          />
-        </div>
-        </template>
-      </section>
+      <OverviewTopologySection
+        v-model:selected-topology-filter="selectedTopologyFilter"
+        v-model:node-view-mode="nodeViewMode"
+        :overview="overview"
+        :filtered-topology-nodes="filteredTopologyNodes"
+        :topology-filter-counts="topologyFilterCounts"
+        :busiest-node-id="busiestNodeId"
+        :custom-node-order="customNodeOrder"
+        :dragged-node-id="draggedNodeId"
+        :drag-over-node-id="dragOverNodeId"
+        @reset-node-order="resetNodeOrder"
+        @card-click="handleNodeCardClick"
+        @inspect="inspectNode"
+        @manage="manageNode"
+        @logs="viewNodeLogs"
+        @dragstart="onDragStart"
+        @dragover="onDragOver"
+        @dragenter="onDragEnter"
+        @dragleave="onDragLeave"
+        @drop="onDrop"
+        @dragend="onDragEnd"
+      />
       </div>
     </div>
 

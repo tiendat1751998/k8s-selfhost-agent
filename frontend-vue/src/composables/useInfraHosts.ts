@@ -2,41 +2,18 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { hostsApi, type ComputeHost } from '../api/compute'
 import {
-  type HostTestResult,
-  type HostTestHistoryItem,
-  type ModalTestResult,
-  type HostFormData,
-  createDefaultHostForm,
-  populateHostForm,
-  buildHostPayload,
-  matchesHostFilters,
-  getLatencyBadgeClass,
-  formatDate,
-  formatUptime,
+  type HostTestResult, type HostTestHistoryItem, type ModalTestResult, type HostFormData, type HostTypeDefinition,
+  createDefaultHostForm, populateHostForm, buildHostPayload, matchesHostFilters,
+  getLatencyBadgeClass, formatDate, formatUptime
 } from '../types/hosts'
-import type { HostTypeDefinition } from '../types/hosts'
 
 // Re-export domain types and utilities for consumers
-export type {
-  HostTestResult,
-  HostTestHistoryItem,
-  ModalTestResult,
-  HostFormData,
-  HostTypeDefinition,
-} from '../types/hosts'
-export {
-  createDefaultHostForm,
-  populateHostForm,
-  buildHostPayload,
-  matchesHostFilters,
-  getLatencyBadgeClass,
-  formatDate,
-  formatUptime,
-} from '../types/hosts'
+export type { HostTestResult, HostTestHistoryItem, ModalTestResult, HostFormData, HostTypeDefinition } from '../types/hosts'
+export { createDefaultHostForm, populateHostForm, buildHostPayload, matchesHostFilters, getLatencyBadgeClass, formatDate, formatUptime } from '../types/hosts'
 
 export const hostTypeDefinitions: HostTypeDefinition[] = [
-  { type: 'agent', label: 'K8s-Agent', icon: 'server', color: 'cyan', badgeClass: 'badge-slate text-muted', desc: 'System metrics telemetry (CPU/RAM/Disk/Network) via host daemon', placeholder: 'http://10.10.10.200:9100', hint: 'Run ./deploy-agent.sh user@server-ip to install agent daemon' },
-  { type: 'docker', label: 'Docker Engine', icon: 'box', color: 'blue', badgeClass: 'badge-slate text-muted', desc: 'Standalone Docker Engine socket / TCP container manager', placeholder: 'tcp://10.10.10.133:2375', hint: 'Use port 2376 for TLS mTLS authenticated socket endpoints' },
+  { type: 'agent', label: 'K8s-Agent', icon: 'server', color: 'cyan', badgeClass: 'badge-slate text-muted', desc: 'System metrics telemetry (CPU/RAM/Disk/Network) via host daemon', placeholder: 'http://127.0.0.1:9100', hint: 'Run ./deploy-agent.sh user@server-ip to install agent daemon' },
+  { type: 'docker', label: 'Docker Engine', icon: 'box', color: 'blue', badgeClass: 'badge-slate text-muted', desc: 'Standalone Docker Engine socket / TCP container manager', placeholder: 'tcp://127.0.0.1:2375', hint: 'Use port 2376 for TLS mTLS authenticated socket endpoints' },
   { type: 'k8s', label: 'Kubernetes API', icon: 'cpu', color: 'purple', badgeClass: 'badge-slate text-muted', desc: 'Direct Kubernetes Control Plane API Server endpoint', placeholder: 'https://k8s-master:6443', hint: 'Connects directly to API server with optional client certificates' },
   { type: 'prometheus', label: 'Prometheus Target', icon: 'activity', color: 'orange', badgeClass: 'badge-slate text-muted', desc: 'Prometheus metrics scraping and time-series query target', placeholder: 'http://prometheus:9090', hint: 'Validates /-/healthy and build status endpoints' },
   { type: 'git', label: 'Git Repository', icon: 'git-branch', color: 'green', badgeClass: 'badge-slate text-muted', desc: 'GitHub, GitLab, Gitea GitOps repository endpoint', placeholder: 'https://github.com/org/repo', hint: 'Git repository URL used for automated pipeline synchronization' },
@@ -223,7 +200,7 @@ export function useInfraHosts() {
 
     try {
       if (isEditing.value && editingHostId.value) {
-        const res = await hostsApi.test(editingHostId.value)
+        const res = await hostsApi.testEndpoint(editingHostId.value)
         const isSuccess = res.status === 'connected' || res.status === 'ok'
         modalTestResult.value = {
           success: isSuccess,
@@ -232,19 +209,40 @@ export function useInfraHosts() {
           agent_info: res.agent_info
         }
       } else {
-        await new Promise(r => setTimeout(r, 600))
-        const isHttp = hostForm.value.endpoint.startsWith('http://') || hostForm.value.endpoint.startsWith('https://') || hostForm.value.endpoint.startsWith('tcp://')
-        if (isHttp || hostForm.value.host_type === 'database') {
-          modalTestResult.value = {
-            success: true,
-            latency_ms: 0,
-            message: `Endpoint format valid and reachable: ${hostForm.value.endpoint}`
-          }
-        } else {
+        const targetUrl = hostForm.value.endpoint.trim()
+        const isHttp = targetUrl.startsWith('http://') || targetUrl.startsWith('https://')
+        if (!isHttp && !targetUrl.startsWith('tcp://') && hostForm.value.host_type !== 'database') {
           modalTestResult.value = {
             success: false,
             latency_ms: 0,
             message: 'Invalid endpoint format. Please include protocol prefix (http://, https://, tcp://, postgresql://)'
+          }
+        } else if (isHttp) {
+          const startTime = performance.now()
+          let reachable = false
+          let probeMsg = ''
+          try {
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), 4000)
+            await fetch(targetUrl, { method: 'HEAD', mode: 'no-cors', signal: controller.signal })
+            clearTimeout(timer)
+            reachable = true
+            probeMsg = `Endpoint reachable: ${targetUrl}`
+          } catch (probeErr: unknown) {
+            probeMsg = probeErr instanceof Error ? probeErr.message : 'Probe connection failed'
+            reachable = false
+          }
+          const latency = Math.round(performance.now() - startTime)
+          modalTestResult.value = {
+            success: reachable,
+            latency_ms: reachable ? latency : 0,
+            message: reachable ? probeMsg : `Endpoint unreachable: ${probeMsg}`
+          }
+        } else {
+          modalTestResult.value = {
+            success: true,
+            latency_ms: 0,
+            message: `Endpoint format valid: ${targetUrl}. Connection verified upon registration.`
           }
         }
       }
@@ -254,6 +252,10 @@ export function useInfraHosts() {
     } finally {
       modalTesting.value = false
     }
+  }
+
+  async function testConnection(hostId: string) {
+    return hostsApi.testEndpoint(hostId)
   }
 
   async function submitHostForm() {
@@ -461,6 +463,7 @@ export function useInfraHosts() {
     addLabelRow,
     removeLabelRow,
     testModalConnection,
+    testConnection,
     submitHostForm,
     handleTestHost,
     promptDeleteHost,
