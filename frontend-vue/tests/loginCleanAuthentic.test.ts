@@ -76,6 +76,18 @@ describe('Login View Clean & Authentic Specifications', () => {
     assert.ok(content.includes('padding: 32px 32px'), 'cards must have 32px 32px padding')
   })
 
+  it('LoginView & LoginFormCard: checkbox input has id and name rememberMe and label has for=rememberMe', () => {
+    const loginViewContent = fs.readFileSync(loginViewPath, 'utf-8')
+    assert.ok(loginViewContent.includes('id="rememberMe"'), 'LoginView must have id="rememberMe"')
+    assert.ok(loginViewContent.includes('name="rememberMe"'), 'LoginView must have name="rememberMe"')
+    assert.ok(loginViewContent.includes('for="rememberMe"'), 'LoginView must have for="rememberMe"')
+
+    const cardContent = fs.readFileSync(loginFormCardPath, 'utf-8')
+    assert.ok(cardContent.includes('id="rememberMe"'), 'LoginFormCard must have id="rememberMe"')
+    assert.ok(cardContent.includes('name="rememberMe"'), 'LoginFormCard must have name="rememberMe"')
+    assert.ok(cardContent.includes('for="rememberMe"'), 'LoginFormCard must have for="rememberMe"')
+  })
+
   it('Line counts: all target files are strictly under 500 lines', () => {
     const files = [loginViewPath, loginFormCardPath, loginHeroPath, useLoginAuthPath, loginCssPath]
     for (const file of files) {
