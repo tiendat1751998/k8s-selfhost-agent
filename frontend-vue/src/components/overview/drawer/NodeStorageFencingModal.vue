@@ -103,7 +103,7 @@ async function fetchPreflightScan() {
   }
 }
 
-async function runStorageFencing() {
+async function executeFencing() {
   if (!canProceedStonith.value) return
   executing.value = true
   errorMessage.value = ''
@@ -143,7 +143,7 @@ async function runStorageFencing() {
     emit('fenced', report)
   } catch (err: unknown) {
     clearTimers()
-    executing.value = false
+    stage.value = 2
     errorMessage.value = err instanceof Error ? err.message : 'Storage fencing execution failed.'
   } finally {
     executing.value = false
@@ -248,16 +248,17 @@ onUnmounted(() => {
               <span>Auditing CSI volumes, pods &amp; performing Root Cause Analysis...</span>
             </div>
 
-            <!-- Error Banner -->
-            <div v-else-if="errorMessage" class="error-banner" style="margin-bottom: 16px;">
-              <span class="error-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
-              <div class="error-content">
-                <div class="error-title font-bold">Fencing Procedure Error</div>
-                <div class="error-msg font-mono text-sm">{{ errorMessage }}</div>
+            <template v-else>
+              <!-- Error Banner -->
+              <div v-if="errorMessage" class="error-banner" style="margin-bottom: 16px;">
+                <span class="error-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
+                <div class="error-content">
+                  <div class="error-title font-bold">Fencing Procedure Error</div>
+                  <div class="error-msg font-mono text-sm">{{ errorMessage }}</div>
+                </div>
               </div>
-            </div>
 
-            <template v-else-if="preflight">
+              <template v-if="preflight">
               <!-- STAGE 1: Pre-flight Impact Scan & RCA Analysis -->
               <div v-if="stage === 1" class="stage-container animate-fade-in">
                 <!-- RCA Badge & Recommendation -->
@@ -379,6 +380,7 @@ onUnmounted(() => {
                   </div>
                 </div>
               </div>
+              </template>
             </template>
           </div>
 
@@ -394,7 +396,7 @@ onUnmounted(() => {
 
             <template v-else-if="stage === 2">
               <button type="button" class="btn btn-secondary" @click="stage = 1">Back</button>
-              <button type="button" class="btn btn-danger" :disabled="!canProceedStonith" @click="runStorageFencing">
+              <button type="button" class="btn btn-danger" :disabled="!canProceedStonith" @click="executeFencing">
                 <BaseIcon name="shield" size="xs" />
                 <span>Confirm STONITH &amp; Execute Fencing</span>
               </button>
