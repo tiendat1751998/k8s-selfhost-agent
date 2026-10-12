@@ -154,3 +154,61 @@ func TestVaultClient_MockOperations(t *testing.T) {
 		t.Errorf("expected password 'super_secret_db_pass', got '%v'", secret["password"])
 	}
 }
+
+func TestCheckov_BinaryMissing_FailClose(t *testing.T) {
+	scanner := security.NewCheckovScannerWithBinary("non_existent_checkov_binary_path_12345")
+	ctx := context.Background()
+
+	report, err := scanner.ScanManifest(ctx, "/path/to/manifest.yaml")
+	if err == nil {
+		t.Fatal("expected non-nil error when checkov binary is missing")
+	}
+	if report == nil {
+		t.Fatal("expected non-nil fail-close report")
+	}
+	if report.Passed {
+		t.Errorf("expected report.Passed == false on binary missing, got true")
+	}
+	if report.Status != security.GateStatusScannerUnavailable {
+		t.Errorf("expected Status == %s, got %s", security.GateStatusScannerUnavailable, report.Status)
+	}
+	if report.ScorePercentage == 100.0 && report.PassedChecks > 0 {
+		t.Errorf("detected fake 100%% pass fallback report: PassedChecks=%d, Score=%f", report.PassedChecks, report.ScorePercentage)
+	}
+}
+
+func TestTrivy_ExecutionError_FailClose(t *testing.T) {
+	scanner := security.NewTrivyScannerWithBinary("non_existent_trivy_binary_path_12345")
+	ctx := context.Background()
+
+	report, err := scanner.ScanImage(ctx, "k8sselfhost/backend:latest", "HIGH")
+	if err == nil {
+		t.Fatal("expected non-nil error when trivy execution fails")
+	}
+	if report == nil {
+		t.Fatal("expected non-nil fail-close report")
+	}
+	if report.Passed {
+		t.Errorf("expected report.Passed == false on execution failure, got true")
+	}
+	if report.PassSecurityGate {
+		t.Errorf("expected report.PassSecurityGate == false on execution failure, got true")
+	}
+	if report.Status != security.GateStatusScannerUnavailable {
+		t.Errorf("expected Status == %s, got %s", security.GateStatusScannerUnavailable, report.Status)
+	}
+}
+
+func TestCosign_BinaryMissing_FailClose(t *testing.T) {
+	verifier := security.NewCosignVerifierWithBinary("non_existent_cosign_binary_path_12345")
+	ctx := context.Background()
+
+	ok, err := verifier.VerifyImage(ctx, "k8sselfhost/backend:latest", "/tmp/cosign.pub")
+	if err == nil {
+		t.Fatal("expected error when cosign binary is missing")
+	}
+	if ok {
+		t.Errorf("expected verify to return false when cosign binary fails")
+	}
+}
+
