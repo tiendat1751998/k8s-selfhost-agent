@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -83,13 +84,16 @@ func (c *RemediationController) getK8sClient(ctx context.Context, clusterID stri
 		}
 	} else {
 		if c.clientManager != nil {
-			if cli, err := c.clientManager.GetK8sClient(ctx, clusterID); err == nil && !isNilK8sClient(cli) {
+			cli, err := c.clientManager.GetK8sClient(ctx, clusterID)
+			if err != nil {
+				return nil, fmt.Errorf("resolving remote cluster '%s': %w", clusterID, err)
+			}
+			if !isNilK8sClient(cli) {
 				return cli, nil
 			}
 		}
-		if c.k8sClient != nil && !isNilK8sClient(c.k8sClient) {
-			return c.k8sClient, nil
-		}
+		// NEVER fall back to c.k8sClient for remote clusters (prevents cross-contamination)
+		return nil, fmt.Errorf("kubernetes client unavailable for remote cluster '%s': no active cluster connection", clusterID)
 	}
 
 	return nil, fmt.Errorf("kubernetes client unavailable for cluster '%s': no active cluster connection", clusterID)
@@ -154,9 +158,6 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 	}
 
 	evictedPods := make([]string, 0)
-	deleteOpts := metav1.DeleteOptions{
-		GracePeriodSeconds: new(int64), // 0 seconds for force deletion
-	}
 
 	// 3. Filter pods that are stuck in Terminating or whose node is not ready
 	for _, pod := range podList.Items {
@@ -170,6 +171,18 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 			continue
 		}
 
+		// Skip DaemonSet pods (cannot be evicted and will be immediately recreated)
+		isDaemonSet := false
+		for _, owner := range pod.OwnerReferences {
+			if owner.Kind == "DaemonSet" {
+				isDaemonSet = true
+				break
+			}
+		}
+		if isDaemonSet {
+			continue
+		}
+
 		isTerminating := pod.DeletionTimestamp != nil
 		if !isTerminating && !nodeNotReady {
 			continue
@@ -180,14 +193,61 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 			continue
 		}
 
-		// 4. Force delete pod
+		// 4. Evict or delete pod
 		ns := pod.Namespace
 		if ns == "" {
 			ns = "default"
 		}
 
+		gracePeriod := int64(30)
+		isStuckTerminating := false
+		if isTerminating {
+			allowedGrace := int64(30)
+			if pod.DeletionGracePeriodSeconds != nil && *pod.DeletionGracePeriodSeconds > 0 {
+				allowedGrace = *pod.DeletionGracePeriodSeconds
+			}
+			if time.Since(pod.DeletionTimestamp.Time) >= time.Duration(allowedGrace)*time.Second {
+				isStuckTerminating = true
+			}
+		}
+
+		deleteOpts := metav1.DeleteOptions{}
+		if isStuckTerminating {
+			// Force delete pod stuck in Terminating past grace period
+			zeroGrace := int64(0)
+			deleteOpts.GracePeriodSeconds = &zeroGrace
+		} else {
+			// Respect PDB and attempt eviction API first (with 30s grace period)
+			deleteOpts.GracePeriodSeconds = &gracePeriod
+			if !isTerminating && client.PolicyV1() != nil {
+				eviction := &policyv1.Eviction{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pod.Name,
+						Namespace: ns,
+					},
+					DeleteOptions: &deleteOpts,
+				}
+				if err := client.PolicyV1().Evictions(ns).Evict(ctx, eviction); err != nil {
+					// Check for PDB violation (HTTP 429 Too Many Requests)
+					if k8serrors.IsTooManyRequests(err) {
+						c.logger.Warn("pod eviction blocked by PodDisruptionBudget (PDB)",
+							zap.String("cluster", clusterID),
+							zap.String("node", nodeName),
+							zap.String("pod", pod.Name),
+							zap.Error(err),
+						)
+						continue
+					}
+					c.logger.Debug("eviction API call returned non-PDB error; proceeding with graceful delete",
+						zap.String("pod", pod.Name),
+						zap.Error(err),
+					)
+				}
+			}
+		}
+
 		if err := client.CoreV1().Pods(ns).Delete(ctx, pod.Name, deleteOpts); err != nil && !k8serrors.IsNotFound(err) {
-			c.logger.Warn("failed to force delete pod during remediation",
+			c.logger.Warn("failed to delete pod during remediation",
 				zap.String("cluster", clusterID),
 				zap.String("node", nodeName),
 				zap.String("pod", pod.Name),

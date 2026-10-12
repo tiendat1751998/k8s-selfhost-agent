@@ -223,3 +223,26 @@ func parseRepo(repo string) (string, string) {
 func encodeBase64(content string) string {
 	return base64.StdEncoding.EncodeToString([]byte(content))
 }
+
+// MergePullRequest merges the pull request on GitHub via API.
+func (p *Provider) MergePullRequest(ctx context.Context, repo string, prNumber int) error {
+	owner, repoName := parseRepo(repo)
+	mergeURL := fmt.Sprintf("%s/repos/%s/%s/pulls/%d/merge", p.apiURL, owner, repoName, prNumber)
+
+	body := map[string]interface{}{
+		"merge_method": "merge",
+	}
+
+	resp, err := p.doRequest(ctx, http.MethodPut, mergeURL, body)
+	if err != nil {
+		return fmt.Errorf("merging pull request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected status %d merging pull request: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+

@@ -28,7 +28,7 @@ func TestDRUsecase_TriggerEtcdSnapshot(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	uc := NewDRUsecase(client, nil, logger,
 		WithBaseDir(tempDir),
-		WithEtcdDriver(NewEtcdctlDriver(tempDir)),
+		WithEtcdDriver(NewEtcdctlDriver(tempDir, WithIsolatedTestMode())),
 	)
 
 	res, err := uc.TriggerEtcdSnapshot(context.Background(), "local")
@@ -65,7 +65,7 @@ func TestDRUsecase_RestoreEtcdSnapshot(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	uc := NewDRUsecase(client, nil, logger,
 		WithBaseDir(tempDir),
-		WithEtcdDriver(NewEtcdctlDriver(tempDir)),
+		WithEtcdDriver(NewEtcdctlDriver(tempDir, WithIsolatedTestMode())),
 	)
 
 	snap, err := uc.TriggerEtcdSnapshot(context.Background(), "local")
@@ -216,3 +216,12 @@ func TestDRUsecase_ValidationErrors(t *testing.T) {
 	// Verify domain error values
 	assert.NotNil(t, domain.ErrEtcdSnapshotFailed)
 }
+
+func TestEtcdctlDriver_BinaryNotFoundInPATH(t *testing.T) {
+	tempDir := t.TempDir()
+	// Driver without cmdRunner and without isolated test mode
+	driver := NewEtcdctlDriver(tempDir, WithBinaryPath("nonexistent-etcdctl-binary-xyz"))
+	_, err := driver.SaveSnapshot(context.Background(), "https://127.0.0.1:2379", "", "", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "etcdctl binary not found in PATH")
+}

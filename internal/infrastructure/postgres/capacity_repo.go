@@ -96,3 +96,67 @@ func (r *capacityRepo) Record(ctx context.Context, f *capacity.Forecast) error {
 	}
 	return nil
 }
+
+func (r *capacityRepo) ListSnapshots(ctx context.Context, cluster string) ([]capacity.Snapshot, error) {
+	query := `
+		SELECT cluster, resource_type, current_usage, recorded_at
+		FROM capacity_forecasts
+	`
+	var args []interface{}
+	if cluster != "" && cluster != "all" {
+		query += " WHERE cluster = $1 ORDER BY recorded_at ASC"
+		args = append(args, cluster)
+	} else {
+		query += " ORDER BY recorded_at ASC"
+	}
+
+	query, args = BuildTenantQuery(ctx, query, args...)
+	rows, err := r.getDB(ctx).Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("querying capacity snapshots: %w", err)
+	}
+	defer rows.Close()
+
+	type snapKey struct {
+		sec int64
+	}
+	snapMap := make(map[snapKey]*capacity.Snapshot)
+	var orderedKeys []snapKey
+
+	for rows.Next() {
+		var cl, resType string
+		var usage float64
+		var recordedAt time.Time
+		if err := rows.Scan(&cl, &resType, &usage, &recordedAt); err != nil {
+			return nil, fmt.Errorf("scanning capacity snapshot row: %w", err)
+		}
+		k := snapKey{sec: recordedAt.Unix()}
+		s, ok := snapMap[k]
+		if !ok {
+			s = &capacity.Snapshot{
+				Cluster:    cl,
+				RecordedAt: recordedAt,
+			}
+			snapMap[k] = s
+			orderedKeys = append(orderedKeys, k)
+		}
+		switch capacity.ResourceType(resType) {
+		case capacity.ResourceCPU:
+			s.CPU = usage
+		case capacity.ResourceMemory:
+			s.Memory = usage
+		case capacity.ResourceStorage:
+			s.Storage = usage
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating capacity snapshot rows: %w", err)
+	}
+
+	result := make([]capacity.Snapshot, 0, len(orderedKeys))
+	for _, k := range orderedKeys {
+		result = append(result, *snapMap[k])
+	}
+	return result, nil
+}
+
