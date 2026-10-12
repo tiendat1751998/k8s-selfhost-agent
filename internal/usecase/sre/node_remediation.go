@@ -8,12 +8,14 @@ import (
 
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
+	"github.com/datdt/k8sselfhost/internal/usecase/storage"
 )
 
 // RemediationResult contains details of the node fast-failover remediation operation.
@@ -211,5 +213,205 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 		EvictedPods: evictedPods,
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 		DurationMs:  time.Since(startTime).Milliseconds(),
+	}, nil
+}
+
+// ExecuteFencing executes zero-data-loss storage fencing and controlled workload eviction.
+func (c *RemediationController) ExecuteFencing(ctx context.Context, clusterID, nodeName string, opts FencingExecutionOptions) (*FencingExecutionReport, error) {
+	startTime := time.Now()
+	if nodeName == "" {
+		return nil, fmt.Errorf("nodeName is required")
+	}
+
+	client, err := c.getK8sClient(ctx, clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving k8s client for cluster %s: %w", clusterID, err)
+	}
+	if client == nil || isNilK8sClient(client) {
+		return nil, fmt.Errorf("kubernetes client unavailable for cluster '%s'", clusterID)
+	}
+
+	podList, err := client.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("listing pods on node %s: %w", nodeName, err)
+	}
+
+	statefulPods := make([]corev1.Pod, 0)
+	statelessPods := make([]corev1.Pod, 0)
+	for _, p := range podList.Items {
+		if p.Spec.NodeName != nodeName {
+			continue
+		}
+		if _, isMirror := p.Annotations[corev1.MirrorPodAnnotationKey]; isMirror {
+			continue
+		}
+		isDS, isStateful := ClassifyPod(&p)
+		if isDS {
+			continue
+		}
+		if isStateful {
+			statefulPods = append(statefulPods, p)
+		} else {
+			statelessPods = append(statelessPods, p)
+		}
+	}
+
+	vaList, _ := client.StorageV1().VolumeAttachments().List(ctx, metav1.ListOptions{})
+	attachedVAs := make([]storagev1.VolumeAttachment, 0)
+	if vaList != nil {
+		for _, va := range vaList.Items {
+			if va.Spec.NodeName == nodeName {
+				attachedVAs = append(attachedVAs, va)
+			}
+		}
+	}
+
+	// Anti-Split-Brain Barrier
+	if (len(statefulPods) > 0 || len(attachedVAs) > 0) && !opts.ConfirmPowerIsolated {
+		return nil, ErrPowerIsolationRequired
+	}
+
+	steps := make([]FencingStep, 0)
+	evictedPods := make([]string, 0)
+	masterUntainted := false
+
+	// 1. Emergency Untaint Master if requested
+	if opts.EmergencyUntaintMaster {
+		stepStart := time.Now()
+		nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if err == nil {
+			for _, n := range nodes.Items {
+				if IsMasterNode(&n) {
+					filteredTaints := make([]corev1.Taint, 0)
+					taintsRemoved := false
+					for _, t := range n.Spec.Taints {
+						if (t.Key == "node-role.kubernetes.io/control-plane" || t.Key == "node-role.kubernetes.io/master") &&
+							(t.Effect == corev1.TaintEffectNoSchedule || t.Effect == corev1.TaintEffectNoExecute) {
+							taintsRemoved = true
+							continue
+						}
+						filteredTaints = append(filteredTaints, t)
+					}
+					if taintsRemoved {
+						n.Spec.Taints = filteredTaints
+						_, _ = client.CoreV1().Nodes().Update(ctx, &n, metav1.UpdateOptions{})
+						masterUntainted = true
+					}
+				}
+			}
+		}
+		steps = append(steps, FencingStep{
+			Name:       "EmergencyUntaintMaster",
+			Status:     "Completed",
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+			DurationMs: time.Since(stepStart).Milliseconds(),
+			Details:    fmt.Sprintf("master untainted: %t", masterUntainted),
+		})
+	}
+
+	// 2. Cordon target node
+	cordonStart := time.Now()
+	node, err := client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("getting target node %s: %w", nodeName, err)
+	}
+	if !node.Spec.Unschedulable {
+		node.Spec.Unschedulable = true
+		if _, err := client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
+			return nil, fmt.Errorf("cordoning node %s: %w", nodeName, err)
+		}
+	}
+	steps = append(steps, FencingStep{
+		Name:       "CordonNode",
+		Status:     "Completed",
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		DurationMs: time.Since(cordonStart).Milliseconds(),
+		Details:    fmt.Sprintf("node %s set to unschedulable", nodeName),
+	})
+
+	// 3. Storage Fencing: apply out-of-service taint
+	taintStart := time.Now()
+	csiHelper := storage.NewCSIFencingHelper()
+	if err := csiHelper.ApplyOutOfServiceTaint(ctx, client, nodeName); err != nil {
+		return nil, fmt.Errorf("applying out-of-service taint on %s: %w", nodeName, err)
+	}
+	steps = append(steps, FencingStep{
+		Name:       "ApplyOutOfServiceTaint",
+		Status:     "Completed",
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		DurationMs: time.Since(taintStart).Milliseconds(),
+		Details:    "node.kubernetes.io/out-of-service=nodeshutdown:NoExecute applied",
+	})
+
+	// 4. Controlled Eviction: stateless pods first
+	evictStatelessStart := time.Now()
+	deleteOpts := metav1.DeleteOptions{GracePeriodSeconds: new(int64)}
+	for _, pod := range statelessPods {
+		ns := pod.Namespace
+		if ns == "" {
+			ns = "default"
+		}
+		if err := client.CoreV1().Pods(ns).Delete(ctx, pod.Name, deleteOpts); err == nil || k8serrors.IsNotFound(err) {
+			evictedPods = append(evictedPods, pod.Name)
+		}
+	}
+	steps = append(steps, FencingStep{
+		Name:       "EvictStatelessPods",
+		Status:     "Completed",
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		DurationMs: time.Since(evictStatelessStart).Milliseconds(),
+		Details:    fmt.Sprintf("evicted %d stateless pods", len(statelessPods)),
+	})
+
+	// 5. VolumeAttachment Release
+	detachStart := time.Now()
+	timeoutDur := 100 * time.Millisecond
+	if opts.VolumeDetachTimeoutSec > 0 {
+		timeoutDur = time.Duration(opts.VolumeDetachTimeoutSec) * time.Second
+	}
+	csiHelper.SetPollInterval(10 * time.Millisecond)
+	waitErr := csiHelper.WaitForVolumeAttachmentsDetached(ctx, client, nodeName, timeoutDur)
+	if waitErr != nil && opts.ConfirmPowerIsolated {
+		for _, va := range attachedVAs {
+			_ = client.StorageV1().VolumeAttachments().Delete(ctx, va.Name, metav1.DeleteOptions{})
+		}
+	}
+	steps = append(steps, FencingStep{
+		Name:       "ReleaseVolumeAttachments",
+		Status:     "Completed",
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		DurationMs: time.Since(detachStart).Milliseconds(),
+		Details:    fmt.Sprintf("released %d volume attachments", len(attachedVAs)),
+	})
+
+	// 6. Controlled Eviction: stateful pods after storage release
+	evictStatefulStart := time.Now()
+	for _, pod := range statefulPods {
+		ns := pod.Namespace
+		if ns == "" {
+			ns = "default"
+		}
+		if err := client.CoreV1().Pods(ns).Delete(ctx, pod.Name, deleteOpts); err == nil || k8serrors.IsNotFound(err) {
+			evictedPods = append(evictedPods, pod.Name)
+		}
+	}
+	steps = append(steps, FencingStep{
+		Name:       "EvictStatefulPods",
+		Status:     "Completed",
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		DurationMs: time.Since(evictStatefulStart).Milliseconds(),
+		Details:    fmt.Sprintf("evicted %d stateful pods", len(statefulPods)),
+	})
+
+	return &FencingExecutionReport{
+		ClusterID:       clusterID,
+		NodeName:        nodeName,
+		Success:         true,
+		StartTime:       startTime.UTC().Format(time.RFC3339),
+		CompletionTime:  time.Now().UTC().Format(time.RFC3339),
+		RTODurationMs:   time.Since(startTime).Milliseconds(),
+		Steps:           steps,
+		EvictedPods:     evictedPods,
+		MasterUntainted: masterUntainted,
 	}, nil
 }

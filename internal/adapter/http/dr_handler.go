@@ -1,7 +1,8 @@
-﻿package http
+package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -36,13 +37,27 @@ func NewDRHandler(drUsecase *dr.DRUsecase, remediation *sre.RemediationControlle
 // Read endpoints are available to authenticated users; mutating endpoints require platform_admin or tenant_admin.
 func (h *DRHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/backups", h.ListBackups)
+	r.Get("/nodes/{node}/fencing/preflight", h.PreflightFencing)
 
 	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Group(func(mut chi.Router) {
 		mut.Post("/etcd/snapshot", h.TriggerEtcdSnapshot)
 		mut.Post("/etcd/restore", h.RestoreEtcdSnapshot)
 		mut.Post("/backups", h.CreateBackup)
 		mut.Post("/remediation/{node}", h.TriggerRemediation)
+		mut.Post("/nodes/{node}/fencing/execute", h.ExecuteFencing)
 	})
+}
+
+// RegisterClusterFencingRoutes registers /clusters/:clusterId/nodes/:nodeName/fencing routes.
+func (h *DRHandler) RegisterClusterFencingRoutes(r chi.Router) {
+	r.Get("/preflight", h.PreflightFencing)
+	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Post("/execute", h.ExecuteFencing)
+}
+
+// WireToRouter mounts cluster fencing endpoints onto a parent router.
+func (h *DRHandler) WireToRouter(r chi.Router) {
+	r.Get("/clusters/{clusterId}/nodes/{nodeName}/fencing/preflight", h.PreflightFencing)
+	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Post("/clusters/{clusterId}/nodes/{nodeName}/fencing/execute", h.ExecuteFencing)
 }
 
 // TriggerEtcdSnapshot triggers an immediate etcd snapshot on the cluster.
@@ -189,6 +204,88 @@ func (h *DRHandler) TriggerRemediation(w http.ResponseWriter, r *http.Request) {
 	result, err := h.remediation.HandleNodeOffline(r.Context(), clusterID, nodeName)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to remediate node", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// PreflightFencing performs pre-flight scan and RCA analysis for node storage fencing.
+// GET /api/v1/clusters/:clusterId/nodes/:nodeName/fencing/preflight
+func (h *DRHandler) PreflightFencing(w http.ResponseWriter, r *http.Request) {
+	if h.remediation == nil {
+		writeError(w, http.StatusServiceUnavailable, "Remediation controller is not configured", nil)
+		return
+	}
+
+	clusterID := chi.URLParam(r, "clusterId")
+	if clusterID == "" {
+		clusterID = chi.URLParam(r, "cluster")
+	}
+	if clusterID == "" {
+		writeError(w, http.StatusBadRequest, "clusterId parameter is required", nil)
+		return
+	}
+
+	nodeName := chi.URLParam(r, "nodeName")
+	if nodeName == "" {
+		nodeName = chi.URLParam(r, "node")
+	}
+	if nodeName == "" {
+		writeError(w, http.StatusBadRequest, "nodeName parameter is required", nil)
+		return
+	}
+
+	result, err := h.remediation.PreflightScan(r.Context(), clusterID, nodeName)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to perform fencing preflight scan", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// ExecuteFencing triggers controlled storage fencing and workload failover.
+// POST /api/v1/clusters/:clusterId/nodes/:nodeName/fencing/execute
+func (h *DRHandler) ExecuteFencing(w http.ResponseWriter, r *http.Request) {
+	if h.remediation == nil {
+		writeError(w, http.StatusServiceUnavailable, "Remediation controller is not configured", nil)
+		return
+	}
+
+	clusterID := chi.URLParam(r, "clusterId")
+	if clusterID == "" {
+		clusterID = chi.URLParam(r, "cluster")
+	}
+	if clusterID == "" {
+		writeError(w, http.StatusBadRequest, "clusterId parameter is required", nil)
+		return
+	}
+
+	nodeName := chi.URLParam(r, "nodeName")
+	if nodeName == "" {
+		nodeName = chi.URLParam(r, "node")
+	}
+	if nodeName == "" {
+		writeError(w, http.StatusBadRequest, "nodeName parameter is required", nil)
+		return
+	}
+
+	var opts sre.FencingExecutionOptions
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&opts); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body", err)
+			return
+		}
+	}
+
+	result, err := h.remediation.ExecuteFencing(r.Context(), clusterID, nodeName, opts)
+	if err != nil {
+		if errors.Is(err, sre.ErrPowerIsolationRequired) {
+			writeError(w, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to execute storage fencing", err)
 		return
 	}
 

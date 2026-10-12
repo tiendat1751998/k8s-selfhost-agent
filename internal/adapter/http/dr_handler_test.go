@@ -1,7 +1,8 @@
-﻿package http
+package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
 	"github.com/datdt/k8sselfhost/internal/usecase/dr"
@@ -251,5 +253,125 @@ func TestDRHandler_NilGracefulHandling(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable && rec.Code != http.StatusNotFound {
 		t.Errorf("expected 503 or 404 when DR is nil, got %d", rec.Code)
+	}
+}
+
+func setupFencingTestRouter(t *testing.T) (http.Handler, string, string, string, *fake.Clientset) {
+	master := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "master-1", Labels: map[string]string{"node-role.kubernetes.io/control-plane": ""}},
+		Spec:       corev1.NodeSpec{Taints: []corev1.Taint{{Key: "node-role.kubernetes.io/control-plane", Effect: corev1.TaintEffectNoSchedule}}},
+	}
+	worker := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-dead"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}, {Type: corev1.NodeMemoryPressure, Status: corev1.ConditionTrue}}},
+	}
+	stateless := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "default"}, Spec: corev1.PodSpec{NodeName: "worker-dead"}}
+	stateful := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "default"},
+		Spec:       corev1.PodSpec{NodeName: "worker-dead", Volumes: []corev1.Volume{{Name: "data", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "data-pvc"}}}}},
+	}
+	client := fake.NewSimpleClientset(master, worker, stateless, stateful)
+	logger := zaptest.NewLogger(t)
+
+	remediationCtrl := sre.NewRemediationController(client, nil, logger)
+	drUc := dr.NewDRUsecase(client, nil, logger)
+	drH := NewDRHandler(drUc, remediationCtrl, logger)
+
+	r := chi.NewRouter()
+	r.Use(middleware.JWTAuthMiddleware)
+	r.Route("/api/v1", func(api chi.Router) {
+		drH.WireToRouter(api)
+		api.Route("/k8s/{cluster}/dr", drH.RegisterRoutes)
+	})
+
+	adminToken, _ := middleware.GenerateJWT("admin", "platform_admin", "default-tenant")
+	tenantAdminToken, _ := middleware.GenerateJWT("t-admin", "tenant_admin", "default-tenant")
+	viewerToken, _ := middleware.GenerateJWT("viewer", "viewer", "default-tenant")
+
+	return r, adminToken, tenantAdminToken, viewerToken, client
+}
+
+func TestDRHandler_PreflightFencing(t *testing.T) {
+	router, _, _, viewerToken, _ := setupFencingTestRouter(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/clusters/local/nodes/worker-dead/fencing/preflight", nil)
+	req.Header.Set("Authorization", "Bearer "+viewerToken)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for preflight, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var preflight sre.NodeFencingPreflight
+	if err := json.NewDecoder(rec.Body).Decode(&preflight); err != nil {
+		t.Fatalf("failed to decode preflight response: %v", err)
+	}
+	if !preflight.IsSingleWorkerCluster || preflight.RCA.ProbableCause != "OOM_KILLER_CASCADE" {
+		t.Errorf("unexpected preflight data: %+v", preflight)
+	}
+
+	// Relative route under /k8s/{cluster}/dr
+	reqRel := httptest.NewRequest(http.MethodGet, "/api/v1/k8s/local/dr/nodes/worker-dead/fencing/preflight", nil)
+	reqRel.Header.Set("Authorization", "Bearer "+viewerToken)
+	recRel := httptest.NewRecorder()
+	router.ServeHTTP(recRel, reqRel)
+	if recRel.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for relative preflight, got %d", recRel.Code)
+	}
+}
+
+func TestDRHandler_ExecuteFencing_AntiSplitBrainAndRBAC(t *testing.T) {
+	router, adminToken, _, viewerToken, _ := setupFencingTestRouter(t)
+
+	// 1. Viewer is forbidden
+	reqViewer := httptest.NewRequest(http.MethodPost, "/api/v1/clusters/local/nodes/worker-dead/fencing/execute", bytes.NewBufferString(`{"confirm_power_isolated":true}`))
+	reqViewer.Header.Set("Authorization", "Bearer "+viewerToken)
+	reqViewer.Header.Set("Content-Type", "application/json")
+	recViewer := httptest.NewRecorder()
+	router.ServeHTTP(recViewer, reqViewer)
+	if recViewer.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for viewer execute, got %d", recViewer.Code)
+	}
+
+	// 2. Admin with confirm_power_isolated=false rejected with 400 Bad Request
+	reqUnsafe := httptest.NewRequest(http.MethodPost, "/api/v1/clusters/local/nodes/worker-dead/fencing/execute", bytes.NewBufferString(`{"confirm_power_isolated":false}`))
+	reqUnsafe.Header.Set("Authorization", "Bearer "+adminToken)
+	reqUnsafe.Header.Set("Content-Type", "application/json")
+	recUnsafe := httptest.NewRecorder()
+	router.ServeHTTP(recUnsafe, reqUnsafe)
+	if recUnsafe.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for split-brain rejection, got %d: %s", recUnsafe.Code, recUnsafe.Body.String())
+	}
+}
+
+func TestDRHandler_ExecuteFencing_SuccessPipeline(t *testing.T) {
+	router, _, tenantAdminToken, _, client := setupFencingTestRouter(t)
+
+	body := `{"confirm_power_isolated":true,"emergency_untaint_master":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/clusters/local/nodes/worker-dead/fencing/execute", bytes.NewBufferString(body))
+	req.Header.Set("Authorization", "Bearer "+tenantAdminToken)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for execute, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var report sre.FencingExecutionReport
+	if err := json.NewDecoder(rec.Body).Decode(&report); err != nil {
+		t.Fatalf("failed to decode report: %v", err)
+	}
+	if !report.Success || !report.MasterUntainted {
+		t.Errorf("unexpected report output: %+v", report)
+	}
+
+	// Verify master untainted in fake client
+	master, _ := client.CoreV1().Nodes().Get(context.Background(), "master-1", metav1.GetOptions{})
+	for _, taint := range master.Spec.Taints {
+		if taint.Key == "node-role.kubernetes.io/control-plane" && taint.Effect == corev1.TaintEffectNoSchedule {
+			t.Errorf("expected control-plane taint removed, still present: %+v", taint)
+		}
 	}
 }
