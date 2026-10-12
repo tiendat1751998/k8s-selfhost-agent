@@ -222,7 +222,7 @@ export function useNodeLogTerminal(props: LogTerminalProps, externalTerminalRef?
     } catch (err: any) {
       if (isHostApp) {
         appLogsError.value = null
-        appLogsText.value = `[INFO] Host process '${targetApp}' is running as a system service. Standard stdout/stderr stream is only accessible for Docker containerized workloads (e.g. tiki_redis, my-nginx, db, nats).`
+        appLogsText.value = `[INFO] Host process '${targetApp}' is running as a system service. Standard stdout/stderr stream is only accessible for Docker containerized workloads (e.g. redis, nginx, db, nats).`
       } else {
         appLogsError.value = err.message || 'Failed to fetch logs from agent daemon'
         appLogsText.value = `[ERROR] Unable to reach agent log collector on node ${props.node?.node_name}: ${err.message}`

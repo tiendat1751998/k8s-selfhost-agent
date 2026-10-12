@@ -69,10 +69,11 @@ function setMemoryReservationPreset(preset: string) {
 
 function setCpuLimitPreset(preset: string) {
   if (preset.includes('0.5')) {
-    emit('update:cpuLimit', '0.5')
+    emit('update:cpuLimit', '500m')
   } else {
     const num = preset.replace(/[^0-9.]/g, '')
-    emit('update:cpuLimit', num ? `${num} Cores` : '1 Core')
+    const cores = parseFloat(num || '1')
+    emit('update:cpuLimit', `${Math.round(cores * 1000)}m`)
   }
 }
 
@@ -81,16 +82,18 @@ function isCpuLimitActive(preset: string): boolean {
     return props.cpuLimit === '0.5' || props.cpuLimit === '500m' || props.cpuLimit === '0.5 Core'
   }
   const num = preset.replace(/[^0-9.]/g, '')
+  const milli = `${parseInt(num || '1') * 1000}m`
   return props.cpuLimit === num ||
     props.cpuLimit === `${num} Core` ||
     props.cpuLimit === `${num} Cores` ||
-    props.cpuLimit === `${parseInt(num || '1') * 1000}m`
+    props.cpuLimit === milli
 }
 
 function setCpuReservationPreset(preset: string) {
   if (preset.includes('Core')) {
     const num = preset.replace(/[^0-9.]/g, '') || '1'
-    emit('update:cpuReservation', `${num} Core`)
+    const cores = parseFloat(num)
+    emit('update:cpuReservation', `${Math.round(cores * 1000)}m`)
   } else {
     emit('update:cpuReservation', preset.trim())
   }
@@ -99,7 +102,8 @@ function setCpuReservationPreset(preset: string) {
 function isCpuResActive(preset: string): boolean {
   if (preset.includes('Core')) {
     const num = preset.replace(/[^0-9.]/g, '') || '1'
-    return props.cpuReservation === num || props.cpuReservation === `${num} Core` || props.cpuReservation === '1000m'
+    const milli = `${parseInt(num) * 1000}m`
+    return props.cpuReservation === num || props.cpuReservation === `${num} Core` || props.cpuReservation === milli
   }
   return props.cpuReservation === preset.trim()
 }

@@ -188,6 +188,9 @@ export const hostsApi = {
   async test(id: string): Promise<TestHostResponse> {
     return dockerApi.testHost(id)
   },
+  async testEndpoint(id: string): Promise<TestHostResponse> {
+    return dockerApi.testHost(id)
+  },
 }
 
 export const explorerApi = {

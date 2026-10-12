@@ -1,11 +1,7 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import {
-  sloApi,
-  dockerApi,
-  type SLODefinition,
-  type SLOSnapshot,
-  type CreateSLOPayload,
-  type UpdateSLOPayload
+  sloApi, dockerApi, type SLODefinition, type SLOSnapshot,
+  type CreateSLOPayload, type UpdateSLOPayload
 } from '../api/compute'
 
 export type TimeWindowFilter = '1h' | '6h' | '24h' | '7d' | '30d'
@@ -205,12 +201,17 @@ export function useSLOMonitor() {
     if (!targetLatencyP99 || targetLatencyP99 <= 0) {
       return { p50: 0, p90: 0, p99: 0, p999: 0 }
     }
+    // Pure measured target only — no synthetic percentile multipliers
     return {
-      p50: Math.round(targetLatencyP99 * 0.25),
-      p90: Math.round(targetLatencyP99 * 0.6),
+      p50: 0,
+      p90: 0,
       p99: Math.round(targetLatencyP99),
-      p999: Math.round(targetLatencyP99 * 1.5)
+      p999: 0
     }
+  }
+
+  function formatLatencyMetric(val?: number): string {
+    return (!val || val <= 0) ? '--' : `${val}ms`
   }
 
   // Formatters
@@ -468,6 +469,7 @@ export function useSLOMonitor() {
     calculateErrorBudget,
     calculateBurnRateVelocity,
     getTargetLatencyPercentiles,
+    formatLatencyMetric,
     formatPercent,
     getEffectiveBurnRate,
     getBurnRateColor,

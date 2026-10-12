@@ -90,7 +90,7 @@ export function buildSwarmAppItem(s: DockerService): DeploymentApp {
     id: s.id,
     rawId: s.id,
     name: s.name,
-    team: s.name.startsWith('tiki_') ? 'Tiki Team' : 'Infrastructure',
+    team: s.name.includes('_') ? s.name.split('_')[0] : 'Infrastructure',
     env: 'production',
     image: s.image || 'docker.io/library/unknown:latest',
     target: 'swarm-manager',

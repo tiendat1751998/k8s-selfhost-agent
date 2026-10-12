@@ -356,6 +356,22 @@ export const alertsApi = {
   async acknowledgeAlert(id: string): Promise<{ status: string }> {
     return api.post<{ status: string }>(`/alerts/history/${id}/acknowledge`)
   },
+
+  async testChannel(channelId: string): Promise<{ status: string; message?: string }> {
+    return api.post<{ status: string; message?: string }>(`/alertmanager/channels/${channelId}/test`)
+  },
+
+  async silenceAlert(alertId: string, durationMinutes: number, reason: string): Promise<{ status: string }> {
+    return api.post<{ status: string }>('/alertmanager/silences', {
+      alert_id: alertId,
+      duration_minutes: durationMinutes,
+      comment: reason
+    })
+  },
+
+  async resolveAlert(alertId: string): Promise<{ status: string }> {
+    return api.post<{ status: string }>(`/alertmanager/alerts/${alertId}/resolve`)
+  },
 }
 
 // ==========================================

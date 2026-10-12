@@ -72,16 +72,25 @@ async function fetchDynamicServices() {
     items.push({ id: name, name, icon: c.icon, type: c.type, category: c.category })
   }
 
-  // 1. Try GET /logs/services (centralized logging or agent services)
+  // 1. Try GET /logs/targets or /logs/services (centralized logging or agent services)
   try {
-    const res = await api.get<{ services?: string[] } | string[]>('/logs/services')
-    const rawList = Array.isArray(res) ? res : (res?.services || [])
+    const res = await api.get<{ targets?: string[]; services?: string[] } | string[]>('/logs/targets')
+    const rawList = Array.isArray(res) ? res : (res?.targets || res?.services || [])
     for (const item of rawList) {
       const name = typeof item === 'string' ? item : (item as { name?: string })?.name || String(item)
       addService(name)
     }
   } catch {
-    // Graceful fallback to docker services
+    try {
+      const res = await api.get<{ services?: string[] } | string[]>('/logs/services')
+      const rawList = Array.isArray(res) ? res : (res?.services || [])
+      for (const item of rawList) {
+        const name = typeof item === 'string' ? item : (item as { name?: string })?.name || String(item)
+        addService(name)
+      }
+    } catch {
+      // Graceful fallback to docker services
+    }
   }
 
   // 2. Try GET /docker/services and /docker/containers
@@ -225,26 +234,49 @@ function selectTarget(target: LogTarget) {
   emit('select', target)
 }
 
+const targetLogCounts = computed(() => {
+  const serviceCounts = new Map<string, number>()
+  const nodeCounts = new Map<string, number>()
+
+  for (const l of props.logs) {
+    const sTargets = [
+      l.service?.toLowerCase(),
+      l.container?.toLowerCase(),
+      l.attributes?.app?.toLowerCase(),
+      l.attributes?.service?.toLowerCase(),
+      l.pod?.toLowerCase(),
+      l.namespace?.toLowerCase(),
+    ].filter(Boolean) as string[]
+
+    const uniqueSTargets = new Set(sTargets)
+    for (const key of uniqueSTargets) {
+      serviceCounts.set(key, (serviceCounts.get(key) || 0) + 1)
+    }
+
+    const nTargets = [
+      l.node?.toLowerCase(),
+      l.attributes?.node?.toLowerCase(),
+      l.pod?.toLowerCase(),
+      l.namespace?.toLowerCase(),
+    ].filter(Boolean) as string[]
+
+    const uniqueNTargets = new Set(nTargets)
+    for (const key of uniqueNTargets) {
+      nodeCounts.set(key, (nodeCounts.get(key) || 0) + 1)
+    }
+  }
+
+  return { serviceCounts, nodeCounts }
+})
+
 function getNodeCount(nodeId: string): number {
   const q = nodeId.toLowerCase()
-  return props.logs.filter(l =>
-    (l.node && l.node.toLowerCase().includes(q)) ||
-    (l.attributes?.node && l.attributes.node.toLowerCase().includes(q)) ||
-    (l.pod && l.pod.toLowerCase().includes(q)) ||
-    (l.namespace && l.namespace.toLowerCase().includes(q))
-  ).length
+  return targetLogCounts.value.nodeCounts.get(q) || 0
 }
 
 function getServiceCount(serviceId: string): number {
   const q = serviceId.toLowerCase()
-  return props.logs.filter(l =>
-    (l.service && l.service.toLowerCase().includes(q)) ||
-    (l.container && l.container.toLowerCase().includes(q)) ||
-    (l.attributes?.app && l.attributes.app.toLowerCase().includes(q)) ||
-    (l.attributes?.service && l.attributes.service.toLowerCase().includes(q)) ||
-    (l.pod && l.pod.toLowerCase().includes(q)) ||
-    (l.namespace && l.namespace.toLowerCase().includes(q))
-  ).length
+  return targetLogCounts.value.serviceCounts.get(q) || 0
 }
 
 // Default selection when page opens: first available container app, systemd service, or node.

@@ -42,7 +42,7 @@ const allClusterServices = computed<DeepDiveServiceItem[]>(() => {
   if (props.tpsData?.services?.length) {
     list = props.tpsData.services.map(s => ({
       service_name: s.service_name,
-      node_name: nodeMap.get((s.node_id || '').toLowerCase()) || nodeMap.get((s.node_name || '').toLowerCase()) || s.node_name || s.node_id || 'k8smaster',
+      node_name: nodeMap.get((s.node_id || '').toLowerCase()) || nodeMap.get((s.node_name || '').toLowerCase()) || s.node_name || s.node_id || '--',
       requests_per_sec: s.requests_per_sec || 0, traffic_percent: 0,
       rx_bytes_per_sec: s.rx_bytes_per_sec || 0, tx_bytes_per_sec: s.tx_bytes_per_sec || 0,
       total_rx_bytes: s.total_rx_bytes || 0, total_tx_bytes: s.total_tx_bytes || 0,
@@ -52,7 +52,7 @@ const allClusterServices = computed<DeepDiveServiceItem[]>(() => {
   } else if (props.dockerContainers?.length) {
     list = props.dockerContainers.map(c => ({
       service_name: ((c.names || (c.name ? [c.name] : ['unknown-service']))[0] || 'service').replace(/^\//, ''),
-      node_name: nodeMap.get((c.node_id || '').toLowerCase()) || c.node_id || 'k8smaster',
+      node_name: nodeMap.get((c.node_id || '').toLowerCase()) || c.node_id || '--',
       requests_per_sec: 0, traffic_percent: 0, rx_bytes_per_sec: 0, tx_bytes_per_sec: 0, total_rx_bytes: 0, total_tx_bytes: 0,
       cpu_percent: c.cpu_percent || 0, memory_used_mb: c.memory_usage ? Math.round(c.memory_usage / (1024 * 1024)) : 0,
       status: c.state === 'running' ? 'healthy' : 'degraded', container_count: 1,

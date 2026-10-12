@@ -7,6 +7,7 @@ import ActiveAlertsStream from '../components/alerts/ActiveAlertsStream.vue'
 import AlertRulesTable from '../components/alerts/AlertRulesTable.vue'
 import AlertRulesMobileCards from '../components/alerts/AlertRulesMobileCards.vue'
 import AlertsMobileCards from '../components/alerts/AlertsMobileCards.vue'
+import AlertsHeaderBar from '../components/alerts/AlertsHeaderBar.vue'
 import CreateAlertRuleModal from '../components/alerts/CreateAlertRuleModal.vue'
 import AlertDetailDrawer from '../components/alerts/AlertDetailDrawer.vue'
 import AlertChannelsGrid from '../components/alerts/AlertChannelsGrid.vue'
@@ -20,7 +21,6 @@ const {
   rules,
   channels,
   history,
-  feedbackMessage,
   showRuleModal,
   showChannelModal,
   isSubmitting,
@@ -108,215 +108,21 @@ const historyColumns: Column<AlertHistory>[] = [
 
 <template>
   <div class="alerts-page">
-    <!-- Mobile 40-44px Command Bar (<768px) -->
-    <div class="alerts-mobile-command-bar mobile-only">
-      <div class="command-bar-left">
-        <span class="command-bar-title font-bold"><BaseIcon name="bell" size="sm" /> Alerts ({{ firingCount }})</span>
-      </div>
-      <div class="command-bar-actions">
-        <button
-          class="btn-icon-cmd"
-          title="New Alert Rule"
-          aria-label="New Alert Rule"
-          @click="openCreateRule"
-        >
-          <BaseIcon name="plus" size="xs" />
-        </button>
-        <button
-          class="btn-icon-cmd"
-          :disabled="loading"
-          title="Sync / Refresh Telemetry"
-          aria-label="Sync / Refresh Telemetry"
-          @click="loadData"
-        >
-          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px) -->
-    <div class="alerts-micro-telemetry mobile-only font-mono" role="status" aria-label="Alerts Micro Telemetry">
-      <span class="tel-item tel-crit"><BaseIcon name="alert-triangle" size="xs" /> {{ criticalP1Count }} Critical</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-warn"><BaseIcon name="alert-triangle" size="xs" /> {{ warningCount }} Warning</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-silent"><BaseIcon name="bell-off" size="xs" /> {{ silencedRulesCount }} Silenced</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-chan"><BaseIcon name="radio" size="xs" /> {{ channels.length }} Channels</span>
-    </div>
-
-    <!-- Mobile Tab Navigation Strip (<768px) -->
-    <div class="alerts-mobile-tabs mobile-only" role="tablist" aria-label="Alerts Navigation">
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'firing'"
-        class="mobile-tab-btn"
-        :class="{ active: activeTab === 'firing' }"
-        @click="activeTab = 'firing'"
-      >
-        <BaseIcon name="flame" size="xs" />
-        <span>Firing ({{ firingCount }})</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'rules'"
-        class="mobile-tab-btn"
-        :class="{ active: activeTab === 'rules' }"
-        @click="activeTab = 'rules'"
-      >
-        <BaseIcon name="sliders" size="xs" />
-        <span>Rules ({{ rules.length }})</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'channels'"
-        class="mobile-tab-btn"
-        :class="{ active: activeTab === 'channels' }"
-        @click="activeTab = 'channels'"
-      >
-        <BaseIcon name="radio" size="xs" />
-        <span>Channels ({{ channels.length }})</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'history'"
-        class="mobile-tab-btn"
-        :class="{ active: activeTab === 'history' }"
-        @click="activeTab = 'history'"
-      >
-        <BaseIcon name="clock" size="xs" />
-        <span>History ({{ history.length }})</span>
-      </button>
-    </div>
-
-    <div v-if="feedbackMessage" class="feedback-banner animate-fade-in">
-      <BaseIcon name="check-circle" size="xs" class="feedback-icon" />
-      <span>{{ feedbackMessage }}</span>
-    </div>
-
-    <!-- Sleek Unified 42px Enterprise Toolbar (.alerts-toolbar-sleek) -->
-    <div class="alerts-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Alerts Management Toolbar">
-      <!-- Search input with search icon and clear button (filters alert message, rule ID, channel name) -->
-      <div class="toolbar-search-wrap">
-        <BaseIcon name="search" size="xs" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Filter message, rule, channel..."
-          class="toolbar-search-input"
-          aria-label="Filter alert message, rule ID, channel name"
-        />
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="clear-input-btn"
-          aria-label="Clear search"
-          @click="searchQuery = ''"
-        >
-          <BaseIcon name="x" size="xs" />
-        </button>
-      </div>
-
-      <!-- Navigation tabs / pills: Active Firing, Alert Rules, Notification Channels, Alert History -->
-      <div class="toolbar-nav-pills" role="tablist" aria-label="Alerts Navigation Tabs">
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'firing'"
-          class="toolbar-pill-btn"
-          :class="{ active: activeTab === 'firing' }"
-          @click="activeTab = 'firing'"
-        >
-          <BaseIcon name="flame" size="xs" />
-          <span>Active Firing</span>
-          <span class="pill-badge">{{ firingCount }}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'rules'"
-          class="toolbar-pill-btn"
-          :class="{ active: activeTab === 'rules' }"
-          @click="activeTab = 'rules'"
-        >
-          <BaseIcon name="sliders" size="xs" />
-          <span>Alert Rules</span>
-          <span class="pill-badge">{{ rules.length }}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'channels'"
-          class="toolbar-pill-btn"
-          :class="{ active: activeTab === 'channels' }"
-          @click="activeTab = 'channels'"
-        >
-          <BaseIcon name="radio" size="xs" />
-          <span>Notification Channels</span>
-          <span class="pill-badge">{{ channels.length }}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'history'"
-          class="toolbar-pill-btn"
-          :class="{ active: activeTab === 'history' }"
-          @click="activeTab = 'history'"
-        >
-          <BaseIcon name="clock" size="xs" />
-          <span>Alert History</span>
-          <span class="pill-badge">{{ history.length }}</span>
-        </button>
-      </div>
-
-      <!-- Inline compact KPI badge strip font-mono -->
-      <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Alerts Telemetry KPI summary">
-        <span class="kpi-badge font-mono">
-          {{ firingCount }} Firing ({{ criticalP1Count }} Critical · {{ warningCount }} Warning · {{ silencedRulesCount }} Silenced)
-        </span>
-      </div>
-
-      <!-- Context-Aware Action Buttons: only context CTA + Refresh across all tabs -->
-      <div class="toolbar-actions-group">
-        <button
-          v-if="activeTab === 'rules'"
-          type="button"
-          class="btn btn-primary toolbar-btn"
-          title="Create New Alert Rule"
-          aria-label="New Alert Rule"
-          @click="openCreateRule"
-        >
-          <BaseIcon name="plus" size="xs" />
-          <span>+ New Rule</span>
-        </button>
-        <button
-          v-else-if="activeTab === 'channels'"
-          type="button"
-          class="btn btn-primary toolbar-btn"
-          title="Add Notification Channel"
-          aria-label="Add Channel"
-          @click="showChannelModal = true"
-        >
-          <BaseIcon name="plus" size="xs" />
-          <span>+ Add Channel</span>
-        </button>
-        <button
-          type="button"
-          class="btn btn-secondary toolbar-btn"
-          :disabled="loading"
-          title="Refresh Alerts & Telemetry"
-          aria-label="Refresh"
-          @click="loadData"
-        >
-          <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': loading }" />
-          <span>{{ loading ? 'Syncing...' : 'Refresh' }}</span>
-        </button>
-      </div>
-    </div>
+    <AlertsHeaderBar
+      v-model:active-tab="activeTab"
+      v-model:search-query="searchQuery"
+      :firing-count="firingCount"
+      :rules-count="rules.length"
+      :channels-count="channels.length"
+      :history-count="history.length"
+      :critical-p1-count="criticalP1Count"
+      :warning-count="warningCount"
+      :silenced-rules-count="silencedRulesCount"
+      :loading="loading"
+      @open-create-rule="openCreateRule"
+      @open-create-channel="showChannelModal = true"
+      @refresh="loadData"
+    />
 
     <!-- Elevated Content Stream & Tables directly below toolbar (~65-75px from Top HUD) -->
     <!-- Tab Content 1: Active Firing Stream -->

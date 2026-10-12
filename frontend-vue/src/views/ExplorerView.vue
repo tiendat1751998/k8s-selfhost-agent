@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import ActionDropdown, { type ActionItem } from '../components/ui/ActionDropdown.vue'
+import ExplorerToolbar from '../components/explorer/ExplorerToolbar.vue'
 import EventsTimeline from '../components/k8s/EventsTimeline.vue'
 
 import ExplorerResourceTable from '../components/explorer/ExplorerResourceTable.vue'
@@ -55,53 +55,6 @@ watch(activeNamespace, (newNs) => {
   }
 })
 
-// Primary Kinds for Linear Segmented Control
-const primaryKinds: { label: string; kind: ResourceKind }[] = [
-  { label: 'Pods', kind: 'pods' },
-  { label: 'Deployments', kind: 'deployments' },
-  { label: 'StatefulSets', kind: 'statefulsets' },
-  { label: 'DaemonSets', kind: 'daemonsets' },
-  { label: 'ConfigMaps', kind: 'configmaps' },
-  { label: 'Services', kind: 'services' },
-]
-
-// Secondary Kinds in Dropdown
-const secondaryKinds: { label: string; kind: ResourceKind; icon: string }[] = [
-  { label: 'Jobs', kind: 'jobs', icon: 'clock' },
-  { label: 'CronJobs', kind: 'cronjobs', icon: 'clock' },
-  { label: 'Secrets', kind: 'secrets', icon: 'shield' },
-  { label: 'Ingresses', kind: 'ingresses', icon: 'globe' },
-  { label: 'Nodes', kind: 'nodes', icon: 'server' },
-  { label: 'Events', kind: 'events', icon: 'activity' },
-  { label: 'PersistentVolumeClaims', kind: 'persistentvolumeclaims', icon: 'database' },
-  { label: 'HorizontalPodAutoscalers', kind: 'horizontalpodautoscalers', icon: 'layers' },
-  { label: 'NetworkPolicies', kind: 'networkpolicies', icon: 'shield' },
-]
-
-const moreActions = computed<ActionItem[]>(() => [
-  ...secondaryKinds.map((k) => ({
-    id: `kind:${k.kind}`,
-    label: k.label,
-    icon: k.icon,
-  })),
-  { id: 'sep-actions', label: '', separator: true },
-  { id: 'refresh', label: 'Refresh', icon: 'refresh' },
-  { id: 'import-cluster', label: 'Import Cluster', icon: 'cloud' },
-  { id: 'new-namespace', label: 'New Namespace', icon: 'plus' },
-])
-
-function handleMoreActionSelect(actionId: string) {
-  if (actionId.startsWith('kind:')) {
-    const kind = actionId.replace('kind:', '') as ResourceKind
-    selectKind(kind)
-  } else if (actionId === 'refresh') {
-    fetchResources()
-  } else if (actionId === 'import-cluster') {
-    showImportModal.value = true
-  } else if (actionId === 'new-namespace') {
-    showNewNsModal.value = true
-  }
-}
 
 const showMobileSearch = ref(false)
 const searchQuery = ref('')
@@ -146,122 +99,23 @@ onMounted(async () => {
 <template>
   <div class="explorer-layout animate-fade-in">
     <main class="explorer-main">
-      <!-- Mobile 44px Command Bar (< 640px) -->
-      <div class="explorer-mobile-command-bar">
-        <div class="mobile-command-brand">
-          <span class="mobile-command-title font-mono"><BaseIcon name="anchor" size="xs" /> {{ currentKindLabel }}</span>
-          <span class="mobile-count-badge font-mono">({{ totalInKind }})</span>
-        </div>
-        <div class="mobile-command-actions">
-          <button type="button" class="btn-mobile-cmd" title="Toggle Search" aria-label="Search" @click="showMobileSearch = !showMobileSearch"><BaseIcon name="search" size="xs" /></button>
-          <button type="button" class="btn-mobile-cmd" title="Refresh" aria-label="Refresh" :disabled="loading" @click="fetchResources"><BaseIcon :name="loading ? 'clock' : 'refresh'" size="xs" /></button>
-          <button type="button" class="btn-mobile-cmd" title="Apply YAML" aria-label="Apply YAML" @click="openApplyYamlModal"><BaseIcon name="file-text" size="xs" /></button>
-          <button type="button" class="btn-mobile-cmd" title="Create Resource" aria-label="Create Resource" @click="showCreateModal = true"><BaseIcon name="plus" size="xs" /></button>
-        </div>
-      </div>
-
-      <!-- Mobile Search Strip (toggled by search) -->
-      <div v-if="showMobileSearch" class="mobile-search-strip">
-        <BaseIcon name="search" size="xs" class="search-icon" />
-        <input v-model="searchQuery" type="text" placeholder="Filter by name, namespace, status..." class="input-glass mobile-search-input font-mono" />
-      </div>
-
-      <!-- Mobile Micro-Telemetry (20px) -->
-      <div class="mobile-micro-telemetry font-mono">
-        <BaseIcon name="globe" size="xs" /> {{ selectedCluster }} · <BaseIcon name="folder" size="xs" /> {{ selectedNamespace }} · <BaseIcon name="box" size="xs" /> {{ totalInKind }} {{ currentKindLabel }}
-      </div>
-
-      <!-- Mobile Horizontal Kind Scroller -->
-      <div class="mobile-kind-scroller">
-        <button
-          v-for="item in allKindItems"
-          :key="item.kind"
-          type="button"
-          class="mobile-kind-pill"
-          :class="{ 'is-active': selectedKind === item.kind }"
-          @click="selectKind(item.kind)"
-        >
-          <span class="pill-label font-mono">{{ item.label }}</span>
-        </button>
-      </div>
-
-      <!-- Sleek 1-line Enterprise Command Bar (~42px) -->
-      <div class="explorer-command-bar glass-panel desktop-only" role="toolbar" aria-label="Kubernetes Explorer Command Bar">
-        <!-- Left: Search input -->
-        <div class="toolbar-search-wrap">
-          <BaseIcon name="search" size="xs" class="search-icon" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search resources in namespace..."
-            class="toolbar-search-input font-mono"
-            aria-label="Search resources in namespace"
-          />
-          <button
-            v-if="searchQuery"
-            type="button"
-            class="clear-input-btn"
-            aria-label="Clear search"
-            @click="searchQuery = ''"
-          >
-            <BaseIcon name="x" size="xs" />
-          </button>
-        </div>
-
-        <!-- Center: Linear-style segmented control -->
-        <div class="linear-segmented-group" role="tablist" aria-label="Resource Types">
-          <button
-            v-for="item in primaryKinds"
-            :key="item.kind"
-            type="button"
-            role="tab"
-            :aria-selected="selectedKind === item.kind"
-            class="linear-segment-btn font-mono"
-            :class="{ active: selectedKind === item.kind }"
-            @click="selectKind(item.kind)"
-          >
-            <span>{{ item.label }}</span>
-          </button>
-          <!-- Secondary Active Kind Indicator -->
-          <div
-            v-if="!primaryKinds.some(k => k.kind === selectedKind)"
-            class="linear-segment-btn active font-mono secondary-active-segment"
-          >
-            <span>{{ currentKindLabel }}</span>
-          </div>
-        </div>
-
-        <!-- Right: Actions group -->
-        <div class="toolbar-actions-group">
-          <button
-            type="button"
-            class="toolbar-btn btn-secondary btn-apply-yaml"
-            style="white-space: nowrap; font-size: 11px; padding: 4px 8px;"
-            title="Apply YAML Manifest"
-            @click="openApplyYamlModal"
-          >
-            <BaseIcon name="file-text" size="xs" />
-            <span>Apply YAML</span>
-          </button>
-
-          <button
-            type="button"
-            class="toolbar-btn btn-primary"
-            title="Create Resource"
-            @click="showCreateModal = true"
-          >
-            <BaseIcon name="plus" size="xs" />
-            <span>+ Create Resource</span>
-          </button>
-
-          <ActionDropdown
-            :items="moreActions"
-            size="sm"
-            trigger-title="More actions"
-            @select="handleMoreActionSelect"
-          />
-        </div>
-      </div>
+      <ExplorerToolbar
+        v-model:show-mobile-search="showMobileSearch"
+        v-model:search-query="searchQuery"
+        :current-kind-label="currentKindLabel"
+        :total-in-kind="totalInKind"
+        :loading="loading"
+        :selected-cluster="selectedCluster"
+        :selected-namespace="selectedNamespace"
+        :selected-kind="selectedKind"
+        :all-kind-items="allKindItems"
+        @select-kind="selectKind"
+        @refresh="fetchResources"
+        @apply-yaml="openApplyYamlModal"
+        @create-resource="showCreateModal = true"
+        @import-cluster="showImportModal = true"
+        @new-namespace="showNewNsModal = true"
+      />
 
       <!-- Toast & Offline Notifications -->
       <div v-if="toastMessage" class="toast-banner animate-fade-in" :class="`toast-${toastMessage.type}`">

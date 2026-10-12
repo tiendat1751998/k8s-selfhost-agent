@@ -138,7 +138,7 @@ async function fetchLogs(targetApp?: DeploymentApp | null) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch logs'
     logsError.value = msg
     const now = new Date().toISOString()
-    logsRawContent.value = `[${now}] [INFO] Connected to container output stream for '${target.name}'.\n[${now}] [INFO] Image: ${target.image} (${target.type})\n[${now}] [WARN] Direct Docker log daemon returned: ${msg}\n[${now}] [INFO] Container PID is active and operational.`
+    logsRawContent.value = `[${now}] [WARN] Direct log daemon returned: ${msg}`
   } finally {
     logsLoading.value = false
     if (logsAutoScroll.value) {
