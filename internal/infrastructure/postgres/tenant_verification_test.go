@@ -99,10 +99,9 @@ func TestAllPostgresRepos_QueryCallsUseBuildTenantQuery(t *testing.T) {
 		t.Fatalf("Failed to read directory: %v", err)
 	}
 
-	knownExceptions := map[string][]string{
-		"search_repo.go": {"Search"},                // Search dynamically compiles domain queries with BuildTenantQuery enforcing tenant isolation across all domains including audit_logs
-		"user_repo.go":   {"GetByEmail", "GetByID"}, // Authentication and re-authentication prior to/during user context lookup (global users table)
-	}
+	// In Phase 0 whitelist purge (DEC-177), all repository whitelist bypasses are removed.
+	// Every repository is inspected for direct raw SELECT queries without concealment.
+	knownExceptions := map[string][]string{}
 
 	var violations []string
 
