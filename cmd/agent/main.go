@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -350,6 +351,9 @@ func main() {
 
 	logServer := NewLogServer(WithLogDir(logDir))
 	var engineSrc *EngineLogSource
+	var tailerWg sync.WaitGroup
+	var containerTailer *ContainerTailer
+	var podTailer *PodTailer
 
 	if eng, err := NewEngineLogSource(engineDir); err == nil {
 		engineSrc = eng
@@ -357,7 +361,9 @@ func main() {
 		logServer.AddSource(engineSrc)
 
 		fileSrc := &FileLogSource{logDir: logDir}
+		tailerWg.Add(1)
 		go func() {
+			defer tailerWg.Done()
 			if err := fileSrc.IngestToWriter(ctx, engineSrc.Writer()); err != nil && ctx.Err() == nil {
 				logger.Warn("Initial log ingestion into log engine encountered warning", slog.String("error", err.Error()))
 			}
@@ -366,24 +372,39 @@ func main() {
 		// Continuous container log tailing
 		if dockerCli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation()); err == nil {
 			logServer.SetDockerClient(dockerCli)
-			containerTailer := NewContainerTailer(dockerCli, engineSrc.Writer(), logger)
-			go containerTailer.Start(ctx)
+			containerTailer = NewContainerTailer(dockerCli, engineSrc.Writer(), logger)
+			tailerWg.Add(1)
+			go func() {
+				defer tailerWg.Done()
+				containerTailer.Start(ctx)
+			}()
 		}
 
 		// Continuous journalctl log tailing
 		journalTailer := NewJournalTailer(engineSrc.Writer(), logger)
-		go journalTailer.Start(ctx)
+		tailerWg.Add(1)
+		go func() {
+			defer tailerWg.Done()
+			journalTailer.Start(ctx)
+		}()
+
+		// Continuous Kubernetes CRI Pod log tailing
+		podTailer = NewPodTailer("/var/log/pods", engineSrc.Writer(), logger)
+		tailerWg.Add(1)
+		go func() {
+			defer tailerWg.Done()
+			podTailer.Start(ctx)
+		}()
 	} else {
 		logger.Warn("Failed to initialize columnar log engine, falling back to standard sources", slog.String("error", err.Error()))
 	}
 
 	handler := setupHandler(collector, authToken, logServer)
 	srv := &http.Server{
-		Addr:         listenAddr,
-		Handler:      handler,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  30 * time.Second,
+		Addr:        listenAddr,
+		Handler:     handler,
+		ReadTimeout: 10 * time.Second,
+		IdleTimeout: 30 * time.Second,
 	}
 
 	go func() {
@@ -401,14 +422,25 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Error during agent shutdown", slog.String("error", err.Error()))
+	}
+
 	collector.Stop()
+
+	// Drain active tailers before closing log engine
+	if containerTailer != nil {
+		containerTailer.Stop()
+	}
+	if podTailer != nil {
+		podTailer.Stop()
+	}
+	tailerWg.Wait()
+
 	if engineSrc != nil {
 		if err := engineSrc.Close(); err != nil {
 			logger.Error("Error closing log engine", slog.String("error", err.Error()))
 		}
-	}
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("Error during agent shutdown", slog.String("error", err.Error()))
 	}
 	logger.Info("Monitoring agent exited cleanly")
 }
