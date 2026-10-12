@@ -26,6 +26,7 @@ func NewStorageHandler(usecase usecaseStorage.VolumeService) *StorageHandler {
 // RegisterRoutes registers the distributed storage routes onto a Chi sub-router.
 func (h *StorageHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.ListVolumes)
+	r.Get("/{name}", h.GetVolumeDetails)
 	r.Post("/{name}/expand", h.ExpandVolume)
 	r.Post("/{name}/snapshot", h.CreateSnapshot)
 }
@@ -57,6 +58,39 @@ func (h *StorageHandler) ListVolumes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, volumes)
+}
+
+// GetVolumeDetails handles GET /api/v1/k8s/{cluster}/storage/volumes/{name}
+func (h *StorageHandler) GetVolumeDetails(w http.ResponseWriter, r *http.Request) {
+	if h.usecase == nil {
+		writeK8sUnavailable(w)
+		return
+	}
+
+	cluster := chi.URLParam(r, "cluster")
+	if cluster == "" {
+		cluster = r.URL.Query().Get("cluster")
+	}
+
+	name := chi.URLParam(r, "name")
+	if strings.TrimSpace(name) == "" {
+		writeError(w, http.StatusBadRequest, "volume name cannot be empty", nil)
+		return
+	}
+
+	namespace := r.URL.Query().Get("namespace")
+
+	details, err := h.usecase.GetVolumeDetails(r.Context(), cluster, namespace, name)
+	if err != nil {
+		if isK8sUnavailable(err) {
+			writeK8sUnavailableWithErr(w, err)
+			return
+		}
+		writeError(w, 0, "", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, details)
 }
 
 type expandVolumeRequest struct {
@@ -104,7 +138,7 @@ func (h *StorageHandler) ExpandVolume(w http.ResponseWriter, r *http.Request) {
 			writeK8sUnavailableWithErr(w, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to expand volume", err)
+		writeError(w, 0, "", err)
 		return
 	}
 
