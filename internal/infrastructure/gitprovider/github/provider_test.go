@@ -1,6 +1,12 @@
 package github
 
-import "testing"
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 func TestParseRepo_FullURL(t *testing.T) {
 	owner, repo := parseRepo("https://github.com/datdt/k8sselfhost")
@@ -64,3 +70,43 @@ func TestNewProviderWithURL(t *testing.T) {
 		t.Errorf("unexpected API URL: %s", p.apiURL)
 	}
 }
+
+func TestMergePullRequest_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT method, got %s", r.Method)
+		}
+		if r.URL.Path != "/repos/owner/myrepo/pulls/42/merge" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		var req map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req["merge_method"] != "merge" {
+			t.Errorf("expected merge_method 'merge', got %v", req["merge_method"])
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"sha":"6dcb09b5b57875f334f61aebed695e2e4193db5e","merged":true,"message":"Pull Request successfully merged"}`))
+	}))
+	defer server.Close()
+
+	p := NewProviderWithURL("mock-token", server.URL)
+	err := p.MergePullRequest(context.Background(), "owner/myrepo", 42)
+	if err != nil {
+		t.Fatalf("unexpected MergePullRequest error: %v", err)
+	}
+}
+
+func TestMergePullRequest_Failure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, _ = w.Write([]byte(`{"message":"Pull Request is not mergeable"}`))
+	}))
+	defer server.Close()
+
+	p := NewProviderWithURL("mock-token", server.URL)
+	err := p.MergePullRequest(context.Background(), "owner/myrepo", 42)
+	if err == nil {
+		t.Fatal("expected error when GitHub rejects merge, got nil")
+	}
+}
+

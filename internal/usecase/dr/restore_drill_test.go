@@ -24,7 +24,7 @@ func TestDRUsecase_ExecuteRestoreDrill_Success(t *testing.T) {
 
 	uc := dr.NewDRUsecase(client, nil, logger,
 		dr.WithBaseDir(tempDir),
-		dr.WithEtcdDriver(dr.NewEtcdctlDriver(tempDir)),
+		dr.WithEtcdDriver(dr.NewEtcdctlDriver(tempDir, dr.WithIsolatedTestMode())),
 	)
 
 	// Step 1: Create a real snapshot on disk
@@ -63,7 +63,7 @@ func TestDRUsecase_ExecuteRestoreDrill_IntegrityMismatch(t *testing.T) {
 
 	uc := dr.NewDRUsecase(client, nil, logger,
 		dr.WithBaseDir(tempDir),
-		dr.WithEtcdDriver(dr.NewEtcdctlDriver(tempDir)),
+		dr.WithEtcdDriver(dr.NewEtcdctlDriver(tempDir, dr.WithIsolatedTestMode())),
 	)
 
 	snap, err := uc.TriggerEtcdSnapshot(context.Background(), "local")
@@ -107,7 +107,7 @@ func TestDRUsecase_ExecuteRestoreDrill_WithK8sResources(t *testing.T) {
 
 	uc := dr.NewDRUsecase(client, nil, logger,
 		dr.WithBaseDir(tempDir),
-		dr.WithEtcdDriver(dr.NewEtcdctlDriver(tempDir)),
+		dr.WithEtcdDriver(dr.NewEtcdctlDriver(tempDir, dr.WithIsolatedTestMode())),
 	)
 
 	snap, err := uc.TriggerEtcdSnapshot(context.Background(), "local")

@@ -22,6 +22,7 @@ type EtcdctlDriver struct {
 	baseDir    string
 	binaryPath string
 	cmdRunner  CommandRunner
+	testMode   bool
 }
 
 // EtcdctlDriverOption configures EtcdctlDriver.
@@ -38,6 +39,13 @@ func WithCommandRunner(runner CommandRunner) EtcdctlDriverOption {
 func WithBinaryPath(binaryPath string) EtcdctlDriverOption {
 	return func(d *EtcdctlDriver) {
 		d.binaryPath = binaryPath
+	}
+}
+
+// WithIsolatedTestMode enables synthetic snapshot generation exclusively for hermetic unit testing.
+func WithIsolatedTestMode() EtcdctlDriverOption {
+	return func(d *EtcdctlDriver) {
+		d.testMode = true
 	}
 }
 
@@ -82,10 +90,15 @@ func (d *EtcdctlDriver) SaveSnapshot(ctx context.Context, endpoint, caPath, cert
 		executedCLI = true
 	}
 
-	// If CLI wasn't run (e.g. host lacks etcdctl in sandbox or test), create real snapshot on disk
+	// If CLI wasn't run (e.g. host lacks etcdctl in PATH):
+	// Do NOT silently create synthetic fake snapshot files unless explicitly configured in isolated test mode.
 	if !executedCLI {
-		if err := writeSyntheticSnapshotFile(destFile); err != nil {
-			return nil, fmt.Errorf("writing snapshot to disk: %w", err)
+		if d.testMode {
+			if err := writeSyntheticSnapshotFile(destFile); err != nil {
+				return nil, fmt.Errorf("writing snapshot to disk: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("etcdctl binary not found in PATH")
 		}
 	}
 

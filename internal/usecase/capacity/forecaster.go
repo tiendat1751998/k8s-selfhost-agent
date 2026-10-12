@@ -111,25 +111,50 @@ func (f *Forecaster) List(ctx context.Context, cluster string) ([]domainCapacity
 
 	now := time.Now().UTC()
 
-	// 1. CPU linear trend: current value + average daily delta * days_ahead
-	dailyDeltaCPU := 0.0
-	if currCPU > 0 {
-		dailyDeltaCPU = math.Max(0.05, currCPU*0.005)
+	var dailyDeltaCPU, dailyDeltaMem, dailyDeltaDisk float64
+	if f.repo != nil {
+		snapshots, err := f.repo.ListSnapshots(ctx, cluster)
+		if err == nil && len(snapshots) >= 2 {
+			sort.Slice(snapshots, func(i, j int) bool {
+				return snapshots[i].RecordedAt.Before(snapshots[j].RecordedAt)
+			})
+			t0 := snapshots[0].RecordedAt
+			xs := make([]float64, len(snapshots))
+			ysCPU := make([]float64, len(snapshots))
+			ysMem := make([]float64, len(snapshots))
+			ysDisk := make([]float64, len(snapshots))
+
+			for i, s := range snapshots {
+				xs[i] = s.RecordedAt.Sub(t0).Hours() / 24.0
+				ysCPU[i] = s.CPU
+				ysMem[i] = s.Memory
+				ysDisk[i] = s.Storage
+			}
+
+			slopeCPU := CalculateLinearSlope(xs, ysCPU)
+			slopeMem := CalculateLinearSlope(xs, ysMem)
+			slopeDisk := CalculateLinearSlope(xs, ysDisk)
+
+			if slopeCPU > 0 {
+				dailyDeltaCPU = slopeCPU
+			}
+			if slopeMem > 0 {
+				dailyDeltaMem = slopeMem
+			}
+			if slopeDisk > 0 {
+				dailyDeltaDisk = slopeDisk
+			}
+		}
 	}
+	// If fewer than 2 snapshots exist, slope remains 0.0 (flat/unprojected), NEVER synthetic growth rate.
+
+	// 1. CPU linear trend
 	fc7dCPU, fc30dCPU, fc90dCPU, exhaustCPU, statusCPU := ComputeProjection(currCPU, dailyDeltaCPU, now)
 
 	// 2. Memory linear trend
-	dailyDeltaMem := 0.0
-	if currMem > 0 {
-		dailyDeltaMem = math.Max(0.04, currMem*0.004)
-	}
 	fc7dMem, fc30dMem, fc90dMem, exhaustMem, statusMem := ComputeProjection(currMem, dailyDeltaMem, now)
 
 	// 3. Storage linear trend
-	dailyDeltaDisk := 0.0
-	if currDisk > 0 {
-		dailyDeltaDisk = math.Max(0.03, currDisk*0.003)
-	}
 	fc7dDisk, fc30dDisk, fc90dDisk, exhaustDisk, statusDisk := ComputeProjection(currDisk, dailyDeltaDisk, now)
 
 	forecasts := []domainCapacity.Forecast{
@@ -181,6 +206,15 @@ func (f *Forecaster) Record(ctx context.Context, item *domainCapacity.Forecast) 
 	}
 	return nil
 }
+
+// ListSnapshots retrieves historical capacity snapshots if backing repository is configured.
+func (f *Forecaster) ListSnapshots(ctx context.Context, cluster string) ([]domainCapacity.Snapshot, error) {
+	if f.repo != nil {
+		return f.repo.ListSnapshots(ctx, cluster)
+	}
+	return nil, nil
+}
+
 
 
 // ListNodeHeadroom calculates factual node-level capacity headroom from live telemetry.
@@ -331,3 +365,29 @@ func ComputeProjection(currUsage, dailyDelta float64, now time.Time) (float64, f
 
 	return fc7d, fc30d, fc90d, exhaustAt, status
 }
+
+// CalculateLinearSlope computes linear regression slope m from points (x, y):
+// slope = (N*sum(x*y) - sum(x)*sum(y)) / (N*sum(x^2) - (sum(x))^2)
+// If fewer than 2 snapshots exist or denominator is zero, slope must be 0.0.
+func CalculateLinearSlope(xs, ys []float64) float64 {
+	n := float64(len(xs))
+	if n < 2 || len(xs) != len(ys) {
+		return 0.0
+	}
+
+	var sumX, sumY, sumXY, sumX2 float64
+	for i := 0; i < len(xs); i++ {
+		sumX += xs[i]
+		sumY += ys[i]
+		sumXY += xs[i] * ys[i]
+		sumX2 += xs[i] * xs[i]
+	}
+
+	denom := n*sumX2 - sumX*sumX
+	if math.Abs(denom) < 1e-9 {
+		return 0.0
+	}
+
+	return (n*sumXY - sumX*sumY) / denom
+}
+

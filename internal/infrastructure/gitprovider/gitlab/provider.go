@@ -171,3 +171,22 @@ func encodeProjectID(repo string) string {
 	repo = strings.TrimRight(repo, "/")
 	return url.PathEscape(repo)
 }
+
+// MergePullRequest accepts/merges the merge request on GitLab via API.
+func (p *Provider) MergePullRequest(ctx context.Context, repo string, prNumber int) error {
+	projectID := encodeProjectID(repo)
+	mergeURL := fmt.Sprintf("%s/projects/%s/merge_requests/%d/merge", p.apiURL, projectID, prNumber)
+
+	resp, err := p.doRequest(ctx, http.MethodPut, mergeURL, nil)
+	if err != nil {
+		return fmt.Errorf("merging GitLab merge request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected status %d merging GitLab merge request: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+

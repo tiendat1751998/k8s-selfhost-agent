@@ -144,3 +144,8 @@ func buildLiveForecasts(cluster string, cpuPercent, memPercent float64, now time
 func (r *capacityRepo) Record(ctx context.Context, f *capacity.Forecast) error {
 	return fmt.Errorf("Record not implemented: missing persistence layer")
 }
+
+func (r *capacityRepo) ListSnapshots(ctx context.Context, cluster string) ([]capacity.Snapshot, error) {
+	return nil, nil
+}
+
