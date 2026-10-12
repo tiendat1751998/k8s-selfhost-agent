@@ -78,6 +78,24 @@ func TestBackupJob_Lifecycle(t *testing.T) {
 		t.Errorf("expected verification status '%s', got '%s'", backup.VerificationStatusMismatch, job.VerificationStatus)
 	}
 
+	// Partial failure: passed=false, checksum=true must result in mismatch
+	job.MarkVerified(backup.VerificationResult{
+		Passed:     false,
+		ChecksumOK: true,
+	})
+	if job.VerificationStatus != backup.VerificationStatusMismatch {
+		t.Errorf("expected verification status '%s' for passed=false/checksum=true, got '%s'", backup.VerificationStatusMismatch, job.VerificationStatus)
+	}
+
+	// Partial failure: passed=true, checksum=false must result in mismatch
+	job.MarkVerified(backup.VerificationResult{
+		Passed:     true,
+		ChecksumOK: false,
+	})
+	if job.VerificationStatus != backup.VerificationStatusMismatch {
+		t.Errorf("expected verification status '%s' for passed=true/checksum=false, got '%s'", backup.VerificationStatusMismatch, job.VerificationStatus)
+	}
+
 	// 5. Fail
 	job.Fail("disk write failure")
 	if job.Status != backup.StatusFailed {

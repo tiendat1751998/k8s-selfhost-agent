@@ -117,7 +117,7 @@ func TestNewClusterEssentialsStatus(t *testing.T) {
 		assert.False(t, status.Ready)
 	})
 
-	t.Run("tainted node makes ready false", func(t *testing.T) {
+	t.Run("standard master taints do not prevent ready status", func(t *testing.T) {
 		comps := []cluster.EssentialComponent{
 			{
 				Name:      cluster.ComponentNameMetricsServer,
@@ -127,6 +127,24 @@ func TestNewClusterEssentialsStatus(t *testing.T) {
 		}
 		taints := []cluster.NodeTaintInfo{
 			{NodeName: "master-1", Tainted: true, Taints: "node-role.kubernetes.io/control-plane:NoSchedule"},
+			{NodeName: "master-2", Tainted: true, Taints: "node-role.kubernetes.io/master:NoSchedule"},
+			{NodeName: "worker-1", Tainted: false},
+		}
+		status := cluster.NewClusterEssentialsStatus("c1", comps, taints)
+		assert.True(t, status.Ready)
+	})
+
+	t.Run("unexpected worker taints make ready false", func(t *testing.T) {
+		comps := []cluster.EssentialComponent{
+			{
+				Name:      cluster.ComponentNameMetricsServer,
+				Installed: true,
+				Status:    cluster.ComponentStatusRunning,
+			},
+		}
+		taints := []cluster.NodeTaintInfo{
+			{NodeName: "master-1", Tainted: true, Taints: "node-role.kubernetes.io/control-plane:NoSchedule"},
+			{NodeName: "worker-1", Tainted: true, Taints: "dedicated=gpu:NoSchedule"},
 		}
 		status := cluster.NewClusterEssentialsStatus("c1", comps, taints)
 		assert.False(t, status.Ready)
