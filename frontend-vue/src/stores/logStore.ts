@@ -163,10 +163,26 @@ export const useLogStore = defineStore('log', () => {
     const q = opts.query || opts.keyword
     if (q) params.append('query', q)
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
+    // Security P0: Explicitly ensure token is NEVER placed in queryParams
+    params.delete('token')
+    params.delete('access_token')
+    params.delete('auth_token')
+
+    const token = typeof window !== 'undefined'
+      ? (localStorage.getItem('k8s_token') || localStorage.getItem('token'))
+      : null
 
     const queryStr = params.toString()
-    const wsUrl = `${proto}//${host}/api/v1/logs/stream${queryStr ? '?' + queryStr : ''}`
+    let wsUrl = `${proto}//${host}/api/v1/logs/stream${queryStr ? '?' + queryStr : ''}`
+    try {
+      const parsedUrl = new URL(wsUrl)
+      parsedUrl.searchParams.delete('token')
+      parsedUrl.searchParams.delete('access_token')
+      parsedUrl.searchParams.delete('auth_token')
+      wsUrl = parsedUrl.toString()
+    } catch {
+      // Keep sanitized wsUrl
+    }
 
     try {
       const protocols = token ? ['bearer', token] : undefined

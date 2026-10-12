@@ -22,10 +22,21 @@ export function useWebSocket(options?: UseWebSocketOptions | string) {
     : (options || {})
 
   function getWsUrl(): string {
-    if (resolvedOptions.url) return resolvedOptions.url
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    return `${proto}//${host}/ws`
+    const rawUrl = resolvedOptions.url || (() => {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const host = window.location.host
+      return `${proto}//${host}/ws`
+    })()
+    try {
+      const baseOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+      const parsed = new URL(rawUrl, baseOrigin)
+      parsed.searchParams.delete('token')
+      parsed.searchParams.delete('access_token')
+      parsed.searchParams.delete('auth_token')
+      return parsed.toString()
+    } catch {
+      return rawUrl
+    }
   }
 
   function connect() {
@@ -33,7 +44,9 @@ export function useWebSocket(options?: UseWebSocketOptions | string) {
     store.setConnection('connecting')
     try {
       const url = getWsUrl()
-      const token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('k8s_token') || localStorage.getItem('token'))
+        : null
       const protocols = token ? ['bearer', token] : undefined
       ws = protocols ? new WebSocket(url, protocols) : new WebSocket(url)
       

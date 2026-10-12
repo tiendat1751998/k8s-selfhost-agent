@@ -110,14 +110,19 @@ td {
 .row-state td {
   padding: 48px 24px;
   text-align: center;
+  vertical-align: middle;
 }
 
 .cell-loading {
-  display: flex;
+  color: var(--text-muted);
+}
+
+.cell-loading-content {
+  display: inline-flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 12px;
-  color: var(--text-muted);
 }
 
 .spinner {
@@ -136,14 +141,25 @@ td {
 .cell-error {
   color: #fb7185;
   font-weight: 500;
-  display: flex;
+}
+
+.cell-error-content {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  width: 100%;
 }
 
 .cell-empty {
   color: var(--text-muted);
+}
+
+.cell-empty-content {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .empty-icon {

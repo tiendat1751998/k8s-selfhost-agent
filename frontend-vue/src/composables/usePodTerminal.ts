@@ -31,7 +31,16 @@ export function usePodTerminal(
     const ns = props.namespace || 'default'
     const containerParam = selectedContainer.value ? `&container=${encodeURIComponent(selectedContainer.value)}` : ''
 
-    return `${protocol}//${host}/api/v1/k8s/${encodeURIComponent(props.cluster)}/pods/${encodeURIComponent(props.pod)}/exec?namespace=${encodeURIComponent(ns)}${containerParam}&command=/bin/sh`
+    const rawUrl = `${protocol}//${host}/api/v1/k8s/${encodeURIComponent(props.cluster)}/pods/${encodeURIComponent(props.pod)}/exec?namespace=${encodeURIComponent(ns)}${containerParam}&command=/bin/sh`
+    try {
+      const parsed = new URL(rawUrl)
+      parsed.searchParams.delete('token')
+      parsed.searchParams.delete('access_token')
+      parsed.searchParams.delete('auth_token')
+      return parsed.toString()
+    } catch {
+      return rawUrl
+    }
   }
 
   function sendResize(cols?: number, rows?: number) {
