@@ -57,9 +57,9 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
 ---
 
 ## 5. Master FMEA Knowledge Base (150 Scenarios) & Task Specifications (018-056)
-- **Definitive FMEA Encyclopedia**: `docs/architecture/production_failure_modes_encyclopedia.md` codifies 150 battle-tested failure scenarios across 33 layers (Hardware, Kernel, Control Plane, Workers/PLEG, CNI/DNS, Storage/CSI, Postgres/Redis, CI/CD, DevSecOps, Cascading Storms, Service Mesh, MQs/Streaming, Distributed Storage, cgroup v2/eBPF, Zero-Trust/Vault, Hypervisor/Cloud, Secret Store CSI, eBPF Security, Hybrid WAN, TSDB/BigData, Container Runtime, AI/GPU SRE, Air-Gapped DR, FinOps, Kernel Sockets, VFS/Inodes, K8s Webhook Deadlocks, DB XID Wraparound, Advanced DevSecOps, Cloud Burst Credit/Spot, Multi-Cluster Mesh, Advanced NUMA/HugePages, Hardware/ECC/AER/IPMI, Enterprise PKI/HSM).
+- **Definitive FMEA Encyclopedia**: `docs/architecture/production_failure_modes_encyclopedia.md` codifies 160 battle-tested failure scenarios across 35 layers (Hardware, Kernel, Control Plane, Workers/PLEG, CNI/DNS, Storage/CSI, Postgres/Redis, CI/CD, DevSecOps, Cascading Storms, Service Mesh, MQs/Streaming, Distributed Storage, cgroup v2/eBPF, Zero-Trust/Vault, Hypervisor/Cloud, Secret Store CSI, eBPF Security, Hybrid WAN, TSDB/BigData, Container Runtime, AI/GPU SRE, Air-Gapped DR, FinOps, Kernel Sockets, VFS/Inodes, K8s Webhook Deadlocks, DB XID Wraparound, Advanced DevSecOps, Cloud Burst Credit/Spot, Multi-Cluster Mesh, Advanced NUMA/HugePages, Hardware/ECC/AER/IPMI, Enterprise PKI/HSM, GitOps Concurrency, High-Density AI Cluster Networking & RoCEv2).
 - **Master Roadmap & Invariants**: `017-core-domain-spec-and-invariants.md` (6 Core Platform Domains, 10 SRE Invariants).
-- **Continuous Ingestion Engine**: `032-continuous-fmea-edge-case-catalog.md` (Batches 1, 2, 3, 4, 5 complete with 150 scenarios mapped).
+- **Continuous Ingestion Engine**: `032-continuous-fmea-edge-case-catalog.md` (Batches 1, 2, 3, 4, 5, 6 complete with 160 scenarios mapped).
 - **Active & Codified Execution Tasks**:
   - `done/018-crash-elimination-and-tenancy.md` (MERGED).
   - `done/019-platform-wiring-and-entrypoint-parity.md` (MERGED).
@@ -67,16 +67,19 @@ The Enterprise UI/UX overhaul across Core Tier 1 and Tier 2 views (`/`, `/deploy
   - `done/021-devsecops-failclose-and-supply-chain.md` (MERGED).
   - `done/022-real-storage-expansion-and-fencing.md` (MERGED).
   - `done/023-telegram-sre-copilot-and-runbooks.md` (MERGED).
-  - `inprocess/024-sanitized-staging-db-clones.md` (Ready for Batch 3).
-  - `inprocess/025-disaster-recovery-and-restore-drills.md` (Ready for Batch 3).
-  - `inprocess/026-network-cni-ipam-and-coredns-mitigation.md` (Ready for Batch 3).
+  - `inprocess/024-sanitized-staging-db-clones.md` (Active Coder: `6af605c4`).
+  - `inprocess/025-disaster-recovery-and-restore-drills.md` (Active Coder: `52d4ebaa`).
+  - `inprocess/026-network-cni-ipam-and-coredns-mitigation.md` (Active Coder: `896fbff4`).
   - `inprocess/027` to `031`: Postgres idle transaction terminator, in-stream secret redactor, NTP/SMART hardware watchdog, rootless Kaniko, automated canary & load shedding.
   - `inprocess/033` to `038`: Istio startup race injector, Kafka CooperativeSticky tuner, Ceph RocksDB PITR, cgroup v2 memory.high interceptor, Vault unseal operator, multi-DC STONITH fencing.
   - `inprocess/039` to `046`: SecretStore CSI polling rate limiter, eBPF ringbuffer watchdog, hybrid WAN MTU blackhole detector, ClickHouse batching buffer, containerd inode pruner, GPU XID fault tainter, Velero break-lock, FinOps cross-AZ optimizer.
   - `inprocess/047` to `052`: Kernel socket backlog & conntrack scaler, VFS inode watchdog & D-State breaker, K8s webhook deadlock breaker & PLEG watchdog, Postgres XID wraparound & Redis resync storm shield, DevSecOps supply chain firewall & IMDSv2 defense, Cloud burst credit monitor & Spot 2m drainer.
   - `inprocess/053` to `056`: Service mesh SDS & egress route memory shield, NUMA memory zone optimizer & HugePages allocator, Hardware ECC EDAC & thermal throttling watchdog, Enterprise PKI OCSP enforcer & HSM session pool guard.
+  - `inprocess/057` to `058`: GitOps sync-wave DAG verifier & webhook monotonic ordering guard, RoCEv2 PFC deadlock watchdog & GPU RDMA fabric resilience.
 
 ---
 
 ## 6. Current Active Subagents & Worktrees
-*(Idle / Ready for Batch 3: Tasks 024, 025, 026)*
+1. `6af605c4` (`backend-coder`, DB Sanitization & Masking Coder): Executing Task 024 in worktree `subagent-DB-Sanitization---Masking-Coder-backend-coder-9728582f`.
+2. `52d4ebaa` (`backend-coder`, Disaster Recovery & Drills Coder): Executing Task 025 in worktree `subagent-Disaster-Recovery---Drills-Coder-backend-coder-19f2d2ed`.
+3. `896fbff4` (`backend-coder`, CNI IPAM & CoreDNS Coder): Executing Task 026 in worktree `subagent-CNI-IPAM---CoreDNS-Coder-backend-coder-5fde3990`.
