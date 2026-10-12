@@ -56,7 +56,7 @@ func (r *ScanReport) ToDomainReport(scanID string) *domain.SecurityGateReport {
 		ScanID:        scanID,
 		Target:        r.Target,
 		Status:        r.Status,
-		Passed:        r.Passed,
+		Passed:        r.Passed && r.PassSecurityGate,
 		CriticalCount: r.Summary.CriticalCount,
 		HighCount:     r.Summary.HighCount,
 		MediumCount:   r.Summary.MediumCount,
@@ -110,6 +110,25 @@ func NewTrivyScannerWithBinary(binary string) *TrivyScanner {
 func (s *TrivyScanner) ScanImage(ctx context.Context, image string, maxSeverityAllowed string) (*ScanReport, error) {
 	start := time.Now().UTC()
 
+	if _, lookErr := exec.LookPath(s.binaryPath); lookErr != nil {
+		return &ScanReport{
+			Target:           image,
+			ScannedAt:        start,
+			PassSecurityGate: false,
+			Passed:           false,
+			Status:           GateStatusScannerUnavailable,
+			ErrorMessage:     fmt.Sprintf("trivy binary not found: %v", lookErr),
+			Summary: ScanSummary{
+				TotalCVEs:     0,
+				CriticalCount: 0,
+				HighCount:     0,
+				MediumCount:   0,
+				LowCount:      0,
+			},
+			Vulnerabilities: []Vulnerability{},
+		}, fmt.Errorf("security scanner unavailable: trivy binary not found: %w", lookErr)
+	}
+
 	cmd := exec.CommandContext(ctx, s.binaryPath, "image", "--format", "json", "--quiet", image)
 	output, err := cmd.Output()
 	if err != nil {
@@ -144,7 +163,16 @@ func (s *TrivyScanner) ParseTrivyJSON(data []byte, target, maxSeverity string, s
 	}
 
 	if err := json.Unmarshal(data, &trivyOut); err != nil {
-		return nil, errors.Wrap(err, "parsing trivy JSON report")
+		return &ScanReport{
+			Target:           target,
+			ScannedAt:        scannedAt,
+			PassSecurityGate: false,
+			Passed:           false,
+			Status:           GateStatusScannerUnavailable,
+			ErrorMessage:     fmt.Sprintf("parsing trivy JSON report: %v", err),
+			Summary:          ScanSummary{},
+			Vulnerabilities:  []Vulnerability{},
+		}, errors.Wrap(err, "parsing trivy JSON report")
 	}
 
 	report := &ScanReport{

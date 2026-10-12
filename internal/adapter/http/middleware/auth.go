@@ -309,6 +309,32 @@ func IsStreamingRequest(r *http.Request) bool {
 	return false
 }
 
+// extractTokenFromSecWebSocketProtocol extracts JWT token from Sec-WebSocket-Protocol header.
+// Supported formats:
+// 1. "bearer, <token>" or "<token>, bearer" (standard browser WebSocket subprotocol array)
+// 2. "bearer <token>" or "Bearer <token>"
+func extractTokenFromSecWebSocketProtocol(header string) string {
+	if header == "" {
+		return ""
+	}
+	if strings.Contains(header, ",") {
+		parts := strings.Split(header, ",")
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if strings.HasPrefix(strings.ToLower(trimmed), "bearer ") {
+				return strings.TrimSpace(trimmed[7:])
+			}
+			if !strings.EqualFold(trimmed, "bearer") && trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	if strings.HasPrefix(strings.ToLower(header), "bearer ") {
+		return strings.TrimSpace(header[7:])
+	}
+	return ""
+}
+
 // JWTAuthMiddleware validates the JWT token in the Authorization header or query parameters (for websockets and streaming).
 func JWTAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -325,8 +351,15 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" {
 			parts := strings.Split(authHeader, " ")
-			if len(parts) == 2 && parts[0] == "Bearer" {
+			if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
 				token = parts[1]
+			}
+		}
+
+		// Support extracting token from Sec-WebSocket-Protocol header
+		if token == "" {
+			if secProto := r.Header.Get("Sec-WebSocket-Protocol"); secProto != "" {
+				token = extractTokenFromSecWebSocketProtocol(secProto)
 			}
 		}
 
@@ -346,6 +379,13 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 		if err != nil {
 			http.Error(w, "invalid token: signature verification failed", http.StatusUnauthorized)
 			return
+		}
+
+		// If client connected via Sec-WebSocket-Protocol with bearer, echo back Sec-WebSocket-Protocol: bearer
+		if secProto := r.Header.Get("Sec-WebSocket-Protocol"); secProto != "" {
+			if strings.Contains(strings.ToLower(secProto), "bearer") {
+				w.Header().Set("Sec-WebSocket-Protocol", "bearer")
+			}
 		}
 
 		// REJECT partial tokens - they are only permitted for 2FA verification endpoints

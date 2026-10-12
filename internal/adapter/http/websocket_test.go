@@ -316,5 +316,79 @@ func BenchmarkWSHub_Broadcast(b *testing.B) {
 	}
 }
 
+func TestWSHub_TenantIsolation(t *testing.T) {
+	hub := NewWSHub()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go hub.Run(ctx)
+
+	clientA := &wsClient{
+		hub:      hub,
+		send:     make(chan []byte, 10),
+		TenantID: "tenant-A",
+	}
+	clientB := &wsClient{
+		hub:      hub,
+		send:     make(chan []byte, 10),
+		TenantID: "tenant-B",
+	}
+
+	hub.register <- clientA
+	hub.register <- clientB
+
+	deadline := time.Now().Add(1 * time.Second)
+	for hub.ClientCount() < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// 1. Broadcast event for tenant-A
+	hub.Broadcast(WSMessage{
+		Type:     "incident",
+		Data:     map[string]string{"msg": "incident in tenant-A"},
+		TenantID: "tenant-A",
+	})
+
+	select {
+	case msg := <-clientA.send:
+		if !strings.Contains(string(msg), "incident in tenant-A") {
+			t.Fatalf("clientA received unexpected payload: %s", string(msg))
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("clientA expected to receive tenant-A broadcast, but timed out")
+	}
+
+	select {
+	case msg := <-clientB.send:
+		t.Fatalf("cross-tenant leak! clientB received tenant-A message: %s", string(msg))
+	case <-time.After(100 * time.Millisecond):
+		// Expected: clientB receives nothing!
+	}
+
+	// 2. Broadcast event for tenant-B
+	hub.Broadcast(WSMessage{
+		Type:     "incident",
+		Data:     map[string]string{"msg": "incident in tenant-B"},
+		TenantID: "tenant-B",
+	})
+
+	select {
+	case msg := <-clientB.send:
+		if !strings.Contains(string(msg), "incident in tenant-B") {
+			t.Fatalf("clientB received unexpected payload: %s", string(msg))
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("clientB expected to receive tenant-B broadcast, but timed out")
+	}
+
+	select {
+	case msg := <-clientA.send:
+		t.Fatalf("cross-tenant leak! clientA received tenant-B message: %s", string(msg))
+	case <-time.After(100 * time.Millisecond):
+		// Expected: clientA receives nothing!
+	}
+}
+
+
 
 
