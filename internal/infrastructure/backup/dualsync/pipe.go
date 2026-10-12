@@ -1,17 +1,18 @@
 package dualsync
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	stderrors "errors"
 	"hash"
 	"io"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
+
+// ErrCorruptedBackupData is returned when AEAD authentication verification fails.
+var ErrCorruptedBackupData = stderrors.New("backup data integrity check failed: GCM authentication tag mismatch")
 
 // PipeConfig holds options for compression and encryption pipeline
 type PipeConfig struct {
@@ -24,11 +25,10 @@ type PipeConfig struct {
 type ProcessingPipe struct {
 	underlying io.Writer
 	zstdWriter *zstd.Encoder
+	gcmWriter  *GCMStreamWriter
 	hasher     hash.Hash
 	rawBytes   int64
 	compBytes  int64
-	iv         []byte
-	encWriter  io.Writer
 }
 
 // ByteCountingWriter tracks written bytes
@@ -56,27 +56,15 @@ func NewProcessingPipe(dst io.Writer, cfg PipeConfig) (*ProcessingPipe, io.Write
 	// 1. Destination with byte counting
 	destWithCount := &ByteCountingWriter{W: dst, Count: &p.compBytes}
 
-	// 2. Encryption layer (AES-CTR stream)
+	// 2. Encryption layer (AES-256-GCM chunked AEAD)
 	var finalSink io.Writer = destWithCount
 	if cfg.EnableEncryption && len(cfg.EncryptionKey) > 0 {
-		block, err := aes.NewCipher(cfg.EncryptionKey)
+		gw, err := NewGCMStreamWriter(destWithCount, cfg.EncryptionKey)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "creating AES cipher")
+			return nil, nil, errors.Wrap(err, "creating GCM stream writer")
 		}
-
-		iv := make([]byte, aes.BlockSize)
-		if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-			return nil, nil, errors.Wrap(err, "generating random IV")
-		}
-		p.iv = iv
-
-		// Write IV at the beginning of the stream
-		if _, err := destWithCount.Write(iv); err != nil {
-			return nil, nil, errors.Wrap(err, "writing IV to destination")
-		}
-
-		stream := cipher.NewCTR(block, iv)
-		finalSink = &cipher.StreamWriter{S: stream, W: destWithCount}
+		p.gcmWriter = gw
+		finalSink = gw
 	}
 
 	// 3. Compression layer (zstd)
@@ -113,7 +101,14 @@ func (pc *pipeCloser) Write(p []byte) (int, error) {
 
 func (pc *pipeCloser) Close() error {
 	if pc.p.zstdWriter != nil {
-		return pc.p.zstdWriter.Close()
+		if err := pc.p.zstdWriter.Close(); err != nil {
+			return err
+		}
+	}
+	if pc.p.gcmWriter != nil {
+		if err := pc.p.gcmWriter.Close(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -129,18 +124,11 @@ func NewDecompressionPipe(src io.Reader, encryptionKey []byte, enableEncryption 
 	var inputSource io.Reader = src
 
 	if enableEncryption && len(encryptionKey) > 0 {
-		block, err := aes.NewCipher(encryptionKey)
+		gr, err := NewGCMStreamReader(src, encryptionKey)
 		if err != nil {
-			return nil, errors.Wrap(err, "creating AES cipher for decompression")
+			return nil, errors.Wrap(err, "creating GCM stream reader for decompression")
 		}
-
-		iv := make([]byte, aes.BlockSize)
-		if _, err := io.ReadFull(src, iv); err != nil {
-			return nil, errors.Wrap(err, "reading IV from stream")
-		}
-
-		stream := cipher.NewCTR(block, iv)
-		inputSource = &cipher.StreamReader{S: stream, R: src}
+		inputSource = gr
 	}
 
 	zstdDec, err := zstd.NewReader(inputSource)

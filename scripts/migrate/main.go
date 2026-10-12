@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,6 +22,18 @@ import (
 //   DB_NAME / K8S_POSTGRES_DBNAME                           - PostgreSQL database name (default: "mydatabase")
 //   DB_SSLMODE / K8S_POSTGRES_SSLMODE                       - SSL mode (default: "disable")
 
+// SQL queries for migration locking and timeouts
+const (
+	AdvisoryLockQuery   = "SELECT pg_advisory_lock(hashtext('k8s_selfhost_migrations'));"
+	AdvisoryUnlockQuery = "SELECT pg_advisory_unlock(hashtext('k8s_selfhost_migrations'));"
+	SetLockTimeoutQuery = "SET lock_timeout = '2s'; SET statement_timeout = '30s';"
+)
+
+// MigrationExecutor defines the interface for executing migration SQL statements.
+type MigrationExecutor interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
 func getEnv(primary, secondary, fallback string) string {
 	if v := os.Getenv(primary); v != "" {
 		return v
@@ -29,6 +42,52 @@ func getEnv(primary, secondary, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// RunMigrations executes migration files sequentially under a PostgreSQL advisory lock and lock timeout.
+func RunMigrations(ctx context.Context, conn MigrationExecutor, files []string, directionName string) error {
+	fmt.Println("Acquiring PostgreSQL advisory lock for migrations...")
+	if _, err := conn.Exec(ctx, AdvisoryLockQuery); err != nil {
+		return fmt.Errorf("acquiring advisory lock: %w", err)
+	}
+
+	defer func() {
+		fmt.Println("Releasing PostgreSQL advisory lock...")
+		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, unlockErr := conn.Exec(unlockCtx, AdvisoryUnlockQuery); unlockErr != nil {
+			fmt.Printf("Warning: failed to release advisory lock: %v\n", unlockErr)
+		}
+	}()
+
+	fmt.Println("Setting lock_timeout = '2s' and statement_timeout = '30s'...")
+	if _, err := conn.Exec(ctx, SetLockTimeoutQuery); err != nil {
+		return fmt.Errorf("setting lock_timeout: %w", err)
+	}
+
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			fmt.Printf("Error reading %s: %v\n", file, err)
+			return fmt.Errorf("reading migration file %s: %w", file, err)
+		}
+
+		fmt.Printf("Applying %s... ", filepath.Base(file))
+
+		_, err = conn.Exec(ctx, string(content))
+		if err != nil {
+			if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate key") {
+				fmt.Println("Already applied (or partially).")
+			} else {
+				fmt.Printf("Error: %v\n", err)
+				return fmt.Errorf("executing migration %s: %w", file, err)
+			}
+		} else {
+			fmt.Println("Success.")
+		}
+	}
+	fmt.Printf("Migrations %s complete!\n", directionName)
+	return nil
 }
 
 func main() {
@@ -58,7 +117,7 @@ func main() {
 	}
 
 	fmt.Printf("Connecting to PostgreSQL at %s:%s (database: %s)...\n", host, port, dbName)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	pool, err := pgxpool.New(ctx, dsn)
@@ -83,31 +142,20 @@ func main() {
 
 	sort.Strings(files)
 	if directionName == "DOWN" {
-		// Reverse order for down migrations
 		for i, j := 0, len(files)-1; i < j; i, j = i+1, j-1 {
 			files[i], files[j] = files[j], files[i]
 		}
 	}
 
-	for _, file := range files {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			fmt.Printf("Error reading %s: %v\n", file, err)
-			continue
-		}
-
-		fmt.Printf("Applying %s... ", filepath.Base(file))
-
-		_, err = pool.Exec(ctx, string(content))
-		if err != nil {
-			if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate key") {
-				fmt.Println("Already applied (or partially).")
-			} else {
-				fmt.Printf("Error: %v\n", err)
-			}
-		} else {
-			fmt.Println("Success.")
-		}
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		fmt.Printf("Failed to acquire connection: %v\n", err)
+		os.Exit(1)
 	}
-	fmt.Printf("Migrations %s complete!\n", directionName)
+	defer conn.Release()
+
+	if err := RunMigrations(ctx, conn, files, directionName); err != nil {
+		fmt.Printf("Migration run failed: %v\n", err)
+		os.Exit(1)
+	}
 }
