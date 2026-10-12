@@ -37,6 +37,7 @@ function confirmDelete(org: Organization) {
       tabindex="0"
       @click="emit('createOrg')"
       @keydown.enter="emit('createOrg')"
+      @keydown.space.prevent="emit('createOrg')"
     >
       <p class="empty-mobile-text"><BaseIcon name="building" size="sm" /> No organizations configured yet. Tap + to onboard a new tenant workspace.</p>
     </div>

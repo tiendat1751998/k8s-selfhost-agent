@@ -101,10 +101,10 @@ const emit = defineEmits<{
           <button
             type="button"
             class="btn-quick-action btn-quick-inspect"
-            title="Chi tiết Workload Inspector"
+            title="Inspect Workload"
             @click.stop="emit('inspect', app)"
           >
-            <BaseIcon name="search" size="xs" /> Chi tiết
+            <BaseIcon name="search" size="xs" /> Details
           </button>
         </div>
       </div>

@@ -44,15 +44,65 @@
         <!-- Steps Transition -->
         <Transition name="step-fade" mode="out-in">
           <!-- STEP 1: Email & Password -->
-          <LoginFormCard
+          <form
             v-if="step === 'credentials'"
             key="step-creds"
-            v-model:email="email"
-            v-model:password="password"
-            v-model:remember-me="rememberMe"
-            :loading="isLoading"
-            @submit="handleCredentialsSubmit"
-          />
+            class="login-form"
+            @submit.prevent="handleCredentialsSubmit"
+          >
+            <div class="form-group">
+              <label for="username" class="form-label">Email / Username</label>
+              <input
+                id="username"
+                name="username"
+                v-model="email"
+                type="text"
+                required
+                autocomplete="username"
+                aria-label="Username or Email"
+                placeholder="user@k8s.local"
+                class="input-glass form-input"
+                :disabled="isLoading"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="password" class="form-label">Password</label>
+              <input
+                id="password"
+                name="password"
+                v-model="password"
+                type="password"
+                required
+                autocomplete="current-password"
+                aria-label="Password"
+                placeholder="••••••••••••"
+                class="input-glass form-input"
+                :disabled="isLoading"
+              />
+            </div>
+
+            <div class="form-row-remember">
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  v-model="rememberMe"
+                  class="form-checkbox"
+                  :disabled="isLoading"
+                />
+                <span>Remember credentials</span>
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              class="btn btn-primary login-btn"
+              :disabled="isLoading || !email || !password"
+            >
+              <span v-if="isLoading" class="spinner"></span>
+              <span>{{ isLoading ? 'Authenticating...' : 'Sign In to Console' }}</span>
+            </button>
+          </form>
 
           <!-- STEP 2: TOTP / Recovery MFA -->
           <MFAVerificationStep
@@ -82,7 +132,6 @@
 import '../assets/styles/views/login.css'
 import { useLoginAuth } from '../composables/useLoginAuth'
 import LoginBrandingHero from '../components/auth/LoginBrandingHero.vue'
-import LoginFormCard from '../components/auth/LoginFormCard.vue'
 import MFAVerificationStep from '../components/auth/MFAVerificationStep.vue'
 
 const {
