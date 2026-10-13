@@ -325,12 +325,12 @@ export function useNodeProcesses(props: NodeProcessesProps) {
 
   function getProcessOriginBadge(proc: UnifiedProcessItem): { label: string; class: string; icon: string } {
     if (proc.app_type === 'container') {
-      return { label: 'CONTAINER', class: 'tag-container', icon: '📦' }
+      return { label: 'CONTAINER', class: 'tag-container', icon: 'box' }
     }
     if (proc.app_type === 'host_app') {
-      return { label: 'HOST APP', class: 'tag-host-daemon', icon: '⚙️' }
+      return { label: 'HOST APP', class: 'tag-host-daemon', icon: 'settings' }
     }
-    return { label: 'KERNEL', class: 'tag-kernel', icon: '🐧' }
+    return { label: 'KERNEL', class: 'tag-kernel', icon: 'cpu' }
   }
 
   return {

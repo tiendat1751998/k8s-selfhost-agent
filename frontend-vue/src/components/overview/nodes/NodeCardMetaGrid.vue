@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NodeMetrics } from '../../../api/overview'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 defineProps<{ node: NodeMetrics }>()
 
@@ -69,11 +70,11 @@ function formatIoRate(bytesPerSec?: number): string {
       <div v-if="isNodeOffline(node)" class="io-offline text-muted font-mono">—</div>
       <div v-else class="io-dual-stream font-mono">
         <span class="io-stream rx" title="Physical Disk Read Rate">
-          <span class="stream-arrow text-sky">📖</span>
+          <span class="stream-arrow text-sky"><BaseIcon name="book-open" size="xs" /></span>
           <span class="stream-val">{{ formatIoRate(node.disk_read_bytes_per_sec || 0) }}</span>
         </span>
         <span class="io-stream tx" title="Physical Disk Write Rate">
-          <span class="stream-arrow text-amber">✍️</span>
+          <span class="stream-arrow text-amber"><BaseIcon name="edit" size="xs" /></span>
           <span class="stream-val">{{ formatIoRate(node.disk_write_bytes_per_sec || 0) }}</span>
         </span>
       </div>

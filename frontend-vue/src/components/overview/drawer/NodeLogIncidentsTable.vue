@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BaseIcon from '../../ui/BaseIcon.vue'
+
 interface Props {
   incidents: any[]
 }
@@ -12,7 +14,7 @@ const emit = defineEmits<{
 
 <template>
   <div class="incidents-table-wrapper mt-4">
-    <h5 class="inc-subheading">🚨 Automated Anomaly & Incident Snapshots</h5>
+    <h5 class="inc-subheading"><BaseIcon name="alert-triangle" size="xs" /> Automated Anomaly & Incident Snapshots</h5>
     <table class="incidents-mini-table">
       <thead>
         <tr>
@@ -52,7 +54,7 @@ const emit = defineEmits<{
           </td>
           <td>
             <button class="btn btn-xs btn-secondary font-mono" @click="emit('select-incident', inc)">
-              🔍 Logs
+              <BaseIcon name="search" size="xs" /> Logs
             </button>
           </td>
         </tr>

@@ -41,7 +41,7 @@ function formatCpu(millis: number): string {
     <!-- Fleet Circuit Breaker Tripped Alert -->
     <div v-if="circuitBreaker?.eviction_frozen" class="circuit-breaker-banner animate-fade-in">
       <div class="circuit-breaker-header">
-        <span class="breaker-icon">⛔</span>
+        <span class="breaker-icon"><BaseIcon name="x-circle" size="xs" /></span>
         <div>
           <div class="breaker-title">
             Evictions Frozen: Cluster Blast-Radius Limit Exceeded

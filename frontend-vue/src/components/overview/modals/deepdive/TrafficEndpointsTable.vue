@@ -104,16 +104,16 @@ function formatIoRate(rate?: number): string { return `${formatBytes(rate)}/s` }
     <div class="breakdown-header-bar">
       <div class="breakdown-title-wrap">
         <h4 class="modal-section-title">
-          <span class="breakdown-title-full">📦 Ranked Service & Workload Contributors</span>
-          <span class="breakdown-title-mobile">📦 Ranked Workloads</span>
+          <span class="breakdown-title-full"><BaseIcon name="box" size="sm" /> Ranked Service & Workload Contributors</span>
+          <span class="breakdown-title-mobile"><BaseIcon name="box" size="sm" /> Ranked Workloads</span>
         </h4>
         <span class="badge badge-cyan font-mono">{{ filteredAndSortedClusterServices.length }} Active Services</span>
       </div>
       <div class="breakdown-actions-bar">
         <div class="table-search-input-wrap">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon"><BaseIcon name="search" size="xs" /></span>
           <input type="text" v-model="modalServiceSearch" placeholder="Filter services or nodes..." class="table-search-field font-mono" />
-          <button v-if="modalServiceSearch" class="btn-clear-search" @click="modalServiceSearch = ''">✕</button>
+          <button v-if="modalServiceSearch" class="btn-clear-search" aria-label="Clear Search" @click="modalServiceSearch = ''"><BaseIcon name="x" size="xs" /></button>
         </div>
         <div class="mobile-sort-pills">
           <button v-for="c in [{ k: 'traffic', l: 'Traffic' }, { k: 'rps', l: 'RPS' }, { k: 'cpu', l: 'CPU' }, { k: 'bandwidth', l: 'BW' }]" :key="c.k" type="button" class="mobile-sort-pill" :class="{ active: modalServiceSortBy === c.k }" @click="toggleModalSort(c.k as any)">
@@ -141,7 +141,7 @@ function formatIoRate(rate?: number): string { return `${formatBytes(rate)}/s` }
                 <div class="service-name-wrap"><span class="service-title font-mono">{{ svc.service_name }}</span><span class="service-replica-tag" v-if="svc.container_count > 1">{{ svc.container_count }} replicas</span></div>
               </div>
             </td>
-            <td class="col-node"><div class="node-cell-wrap"><span class="node-server-icon">🖥️</span><span class="node-server-name font-mono">{{ svc.node_name }}</span></div></td>
+            <td class="col-node"><div class="node-cell-wrap"><span class="node-server-icon"><BaseIcon name="server" size="xs" /></span><span class="node-server-name font-mono">{{ svc.node_name }}</span></div></td>
             <td class="col-traffic"><div class="traffic-bar-cell"><div class="traffic-track"><div class="traffic-fill" :style="{ width: `${Math.max(4, Math.min(100, svc.traffic_percent))}%` }"></div></div><span class="traffic-label font-mono font-bold">{{ svc.traffic_percent.toFixed(1) }}%</span></div></td>
             <td class="col-rps font-mono"><span class="smooth-value" :class="svc.requests_per_sec > 0 ? 'text-emerald font-bold' : 'text-muted'">{{ svc.requests_per_sec > 0 ? svc.requests_per_sec.toFixed(1) : '0.0' }}</span><span class="text-xs text-muted" v-if="svc.requests_per_sec > 0"> rps</span></td>
             <td class="col-bw font-mono"><div class="bandwidth-stack"><span class="bw-rx text-cyan" :title="'Live: ' + formatIoRate(svc.rx_bytes_per_sec) + ' | Total: ' + formatBytes(svc.total_rx_bytes) + ' recv'">↓ {{ formatIoRate(svc.rx_bytes_per_sec) }}</span><span class="bw-tx text-violet" :title="'Live: ' + formatIoRate(svc.tx_bytes_per_sec) + ' | Total: ' + formatBytes(svc.total_tx_bytes) + ' sent'">↑ {{ formatIoRate(svc.tx_bytes_per_sec) }}</span></div></td>

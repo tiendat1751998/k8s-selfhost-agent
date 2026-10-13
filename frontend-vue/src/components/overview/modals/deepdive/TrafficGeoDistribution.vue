@@ -131,7 +131,7 @@ const avgRam = computed(() => {
           <span class="stat-title-full">Peak Memory Pressure</span>
           <span class="stat-title-mobile">Peak RAM</span>
         </span>
-        <span class="hud-icon">🧠</span>
+        <span class="hud-icon"><BaseIcon name="cpu" size="xs" /></span>
       </div>
       <div class="deep-stat-body">
         <span

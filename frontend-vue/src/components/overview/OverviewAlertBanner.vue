@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAlertStore } from '../../stores/alertStore'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
   isClusterDegraded: boolean
@@ -71,7 +72,7 @@ const bannerDescription = computed(() => {
     >
       <div class="banner-left">
         <div class="banner-icon-wrap">
-          <span class="banner-icon">{{ bannerSeverity === 'critical' ? '🚨' : '⚠️' }}</span>
+          <span class="banner-icon"><BaseIcon name="alert-triangle" size="md" /></span>
         </div>
         <div class="banner-content">
           <div class="banner-title-row">
@@ -90,21 +91,22 @@ const bannerDescription = computed(() => {
           class="btn-banner btn-banner-primary font-mono"
           @click="alertStore.showAlertCenterModal = true"
         >
-          <span>🔔 View Alerts ({{ alertStore.activeAlerts.length }})</span>
+          <BaseIcon name="bell" size="xs" /> <span>View Alerts ({{ alertStore.activeAlerts.length }})</span>
         </button>
         <button
           type="button"
           class="btn-banner btn-banner-secondary font-mono"
           @click="router.push('/hosts')"
         >
-          <span>🖥️ Hosts</span>
+          <BaseIcon name="server" size="xs" /> <span>Hosts</span>
         </button>
         <button
           type="button"
           class="btn-banner-close"
           @click="emit('dismiss')"
           title="Dismiss banner"
-        >✕</button>
+          aria-label="Dismiss banner"
+        ><BaseIcon name="x" size="xs" /></button>
       </div>
     </div>
   </transition>

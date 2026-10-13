@@ -75,7 +75,7 @@ const {
           class="input-proc-search"
           @input="processCurrentPage = 1"
         />
-        <button v-if="processSearch" class="btn-clear-search" @click="processSearch = ''; processCurrentPage = 1">✕</button>
+        <button v-if="processSearch" class="btn-clear-search" aria-label="Clear Search" @click="processSearch = ''; processCurrentPage = 1"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <div class="proc-sort-group">
@@ -124,7 +124,7 @@ const {
                 <div class="proc-name-row">
                   <span class="proc-name">{{ proc.name }}</span>
                   <span class="proc-origin-tag font-mono" :class="getProcessOriginBadge(proc).class">
-                    {{ getProcessOriginBadge(proc).icon }} {{ getProcessOriginBadge(proc).label }}
+                    <BaseIcon :name="getProcessOriginBadge(proc).icon" size="xs" /> {{ getProcessOriginBadge(proc).label }}
                   </span>
                 </div>
                 <span class="proc-cmd-line font-mono" v-if="proc.command_line">
@@ -263,7 +263,7 @@ const {
     <div class="proc-empty-state glass-panel" v-else>
       <div class="radar-glow-container">
         <div class="radar-beacon"></div>
-        <span class="proc-empty-icon">📡</span>
+        <span class="proc-empty-icon"><BaseIcon name="radio" size="md" /></span>
       </div>
       <h5 class="proc-empty-title">
         {{ processSearch ? 'No Processes Matching Filter' : 'No Process Telemetry Streamed' }}
@@ -277,7 +277,7 @@ const {
         </p>
         <div class="troubleshooting-hint-box">
           <div class="hint-header">
-            <span class="hint-icon">💡</span>
+            <span class="hint-icon"><BaseIcon name="help-circle" size="xs" /></span>
             <strong class="hint-title">Troubleshooting & Activation</strong>
           </div>
           <ul class="hint-list">

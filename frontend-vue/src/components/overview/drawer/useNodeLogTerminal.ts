@@ -68,7 +68,7 @@ export function useNodeLogTerminal(props: LogTerminalProps, externalTerminalRef?
     for (const s of rawNodeServices.value || []) {
       if (!seen.has(s.service_name)) {
         seen.add(s.service_name)
-        list.push({ name: s.service_name, type: 'container', icon: '📦' })
+        list.push({ name: s.service_name, type: 'container', icon: 'box' })
       }
     }
 
@@ -76,12 +76,12 @@ export function useNodeLogTerminal(props: LogTerminalProps, externalTerminalRef?
       const pName = p.name || ''
       if (pName && !seen.has(pName) && !pName.startsWith('[')) {
         seen.add(pName)
-        list.push({ name: pName, type: 'host', icon: '⚙️' })
+        list.push({ name: pName, type: 'host', icon: 'settings' })
       }
     }
 
     if (list.length === 0) {
-      list.push({ name: 'k8s-agent', type: 'host', icon: '📡' })
+      list.push({ name: 'k8s-agent', type: 'host', icon: 'radio' })
     }
     return list
   })

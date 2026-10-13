@@ -35,7 +35,7 @@ const {
       <!-- 2a. Chart Header with Title, Badge, and Series Toggles -->
       <div class="hist-chart-header">
         <div class="chart-title-group">
-          <h4 class="hist-chart-title">📈 {{ node?.node_name || 'Node' }} Hardware Saturation Trends</h4>
+          <h4 class="hist-chart-title"><BaseIcon name="trending-up" size="sm" /> {{ node?.node_name || 'Node' }} Hardware Saturation Trends</h4>
           <span class="hist-chart-desc badge-history-window font-mono">{{ nodeHistoryWindowBadge }}</span>
         </div>
 
@@ -73,7 +73,7 @@ const {
             :class="{ active: nodeHistoryRange === 'custom' || showCustomHistoryPicker }"
             @click="toggleCustomHistoryPicker"
           >
-            📅 Custom
+            <BaseIcon name="calendar" size="xs" /> Custom
           </button>
         </div>
         <div class="range-right">
@@ -81,7 +81,7 @@ const {
             Sample Rate: {{ nodeHistoryData.resolution }}
           </span>
           <button class="btn btn-secondary btn-xs" @click="emit('range-change', nodeHistoryRange)" :disabled="nodeHistoryLoading">
-            ↺ Refresh
+            <BaseIcon name="refresh" size="xs" /> Refresh
           </button>
         </div>
       </div>
@@ -244,7 +244,7 @@ const {
             @click.stop="syncLogsToPointInTime(hoveredNodeHistPoint)"
             title="Sync live and historical failure logs to this point in time (±15 minutes)"
           >
-            <span>🔍</span> View Logs at this time
+            <BaseIcon name="search" size="xs" /> View Logs at this time
           </button>
         </div>
 
@@ -259,7 +259,7 @@ const {
       <!-- Empty History Chart Placeholder -->
       <div v-else class="hist-chart-empty">
         <div class="empty-chart-illustration">
-          <span class="empty-chart-icon">📈</span>
+          <span class="empty-chart-icon"><BaseIcon name="trending-up" size="md" /></span>
           <span class="empty-pulse-badge">Awaiting Telemetry Rollups</span>
         </div>
         <h5 class="empty-chart-title">No Telemetry Recorded in {{ nodeHistoryRange }} Window</h5>

@@ -266,7 +266,7 @@ onUnmounted(() => {
                 />
 
                 <div v-if="preflight.is_single_worker_cluster && !preflight.capacity_plan" class="single-worker-alert animate-fade-in font-mono">
-                  <span>⚠️ <strong>Single Worker Cluster:</strong> Untaint Master node to allow rescheduling.</span>
+                  <span><BaseIcon name="alert-triangle" size="xs" /> <strong>Single Worker Cluster:</strong> Untaint Master node to allow rescheduling.</span>
                   <label class="untaint-toggle-label"><input type="checkbox" v-model="emergencyUntaintMaster" /> Emergency Untaint Master</label>
                 </div>
 
@@ -285,7 +285,7 @@ onUnmounted(() => {
               <div v-else-if="stage === 2" class="stage-container animate-fade-in">
                 <div v-if="circuitBreakerBlocked" class="circuit-breaker-banner animate-fade-in">
                   <div class="circuit-breaker-header">
-                    <span class="breaker-icon">⛔</span>
+                    <span class="breaker-icon"><BaseIcon name="x-circle" size="xs" /></span>
                     <div>
                       <div class="breaker-title">Circuit Breaker Active: Evictions Frozen</div>
                       <div class="breaker-reason text-xs">Over 15% fleet unready. SRE Override required before proceeding.</div>

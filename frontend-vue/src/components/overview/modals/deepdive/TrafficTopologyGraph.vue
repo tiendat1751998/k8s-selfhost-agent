@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { TpsSnapshot } from '../../../../api/overview'
 import type { TrendPoint } from './TrafficGeoDistribution.vue'
 import { computeCeiling, buildSmoothSpline, formatMetricRate } from './trafficChartMath'
+import BaseIcon from '../../../ui/BaseIcon.vue'
 
 interface Props {
   trendHistory: TrendPoint[]
@@ -131,8 +132,8 @@ function handleModalChartHover(event: MouseEvent) {
     <div class="modal-chart-top-bar">
       <div class="chart-title-group">
         <h4 class="modal-section-title">
-          <span class="chart-title-full">📈 High-Resolution Telemetry Overlay</span>
-          <span class="chart-title-mobile">📈 Telemetry Spline</span>
+          <span class="chart-title-full"><BaseIcon name="trending-up" size="sm" /> High-Resolution Telemetry Overlay</span>
+          <span class="chart-title-mobile"><BaseIcon name="trending-up" size="sm" /> Telemetry Spline</span>
         </h4>
         <span class="trend-chart-subtitle">Time-synchronized CPU %, RAM %, and Throughput RPS (30 rolling samples)</span>
       </div>
@@ -211,7 +212,7 @@ function handleModalChartHover(event: MouseEvent) {
       <!-- Floating Tooltip -->
       <div v-if="hoveredModalPoint" class="modal-rich-tooltip" :style="modalTooltipStyle">
         <div class="tooltip-time-header">
-          <span>🕒</span>
+          <BaseIcon name="clock" size="xs" />
           <span class="font-mono font-bold">{{ hoveredModalPoint.time }}</span>
           <span class="tooltip-time-elapsed">({{ hoveredModalElapsed }})</span>
         </div>
