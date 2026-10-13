@@ -43,6 +43,7 @@ import (
 	usecaseSecurity "github.com/datdt/k8sselfhost/internal/usecase/security"
 	"github.com/datdt/k8sselfhost/internal/usecase/sre"
 	usecaseStorage "github.com/datdt/k8sselfhost/internal/usecase/storage"
+	usecaseMesh "github.com/datdt/k8sselfhost/internal/usecase/mesh"
 )
 
 type platformHandlerParams struct {
@@ -130,6 +131,16 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 	canaryEngine := usecasePromotion.NewCanaryEngine(usecasePromotion.WithLogger(p.log))
 	canaryHandler := adapthttp.NewCanaryHandler(canaryEngine)
 
+	var meshOpts []usecaseMesh.Option
+	if p.infra.k8sClient != nil {
+		meshOpts = append(meshOpts, usecaseMesh.WithKubernetesClient(p.infra.k8sClient))
+	}
+	if p.log != nil {
+		meshOpts = append(meshOpts, usecaseMesh.WithLogger(p.log))
+	}
+	meshService := usecaseMesh.NewLifecycleService(meshOpts...)
+	meshHandler := adapthttp.NewMeshHandler(meshService, p.log)
+
 	return &adapthttp.PlatformHandlers{
 		AI:              adapthttp.NewAIHandler(p.registry),
 		Dashboard:       adapthttp.NewHandler(p.incRepo, p.reportRepo, p.prRepo, p.publisher, p.gitopsController),
@@ -145,6 +156,7 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 		Changes:         adapthttp.NewChangeHandler(postgres.NewChangesRepo(p.infra.pgClient.Pool())),
 		Promotion:       adapthttp.NewPromotionHandler(p.promotionUsecase),
 		Canary:          canaryHandler,
+		Mesh:            meshHandler,
 		Explorer:        adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(p.infra.k8sClient, p.infra.dockerRepo, p.clientManager)),
 		Reporting:       adapthttp.NewReportingHandler(postgres.NewReportingRepo(p.infra.pgClient.Pool())),
 		HealthCenter:    healthCenterHandler,

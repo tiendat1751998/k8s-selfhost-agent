@@ -69,6 +69,7 @@ type PlatformHandlers struct {
 	Telegram      *TelegramHandler
 	Admission     *AdmissionHandler
 	Canary        *CanaryHandler
+	Mesh          *MeshHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -393,6 +394,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Helm != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin")).Route("/helm", platform.Helm.RegisterRoutes)
+			}
+			if platform.Mesh != nil {
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/mesh", platform.Mesh.RegisterRoutes)
 			}
 		}
 	})
