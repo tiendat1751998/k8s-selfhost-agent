@@ -15,8 +15,8 @@ const emit = defineEmits<{
 }>()
 
 const nodeActions: ActionItem[] = [
-  { id: 'rebalance', label: 'Rebalance Pods', icon: 'zap' },
-  { id: 'inspect', label: 'Inspect Telemetry', icon: 'search' },
+  { action: 'rebalance', label: 'Rebalance Pods', icon: 'zap' },
+  { action: 'inspect', label: 'Inspect Telemetry', icon: 'search' },
 ]
 
 function handleNodeAction(actionId: string, nodeId: string) {
@@ -57,13 +57,13 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
     <div class="node-table-wrapper">
       <table class="node-matrix-table">
         <colgroup>
-          <col style="width: 18%;" />
-          <col style="width: 9%;" />
-          <col style="width: 25%;" />
-          <col style="width: 13%;" />
-          <col style="width: 13%;" />
+          <col style="width: 20%;" />
+          <col style="width: 10%;" />
+          <col style="width: 26%;" />
           <col style="width: 14%;" />
-          <col style="width: 8%;" />
+          <col style="width: 14%;" />
+          <col style="width: 16%;" />
+          <col style="width: 40px;" />
         </colgroup>
         <thead>
           <tr>
@@ -73,7 +73,7 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
             <th>Load Trajectory</th>
             <th>Pods & Density</th>
             <th>Safe Headroom</th>
-            <th style="text-align: right;">Actions</th>
+            <th style="width: 40px; text-align: center;"></th>
           </tr>
         </thead>
         <tbody>
@@ -144,7 +144,7 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
                 <StatusBadge :status="node.status" :label="node.status.toUpperCase()" size="sm" />
               </div>
             </td>
-            <td style="text-align: right;">
+            <td style="width: 40px; text-align: center;">
               <ActionDropdown
                 size="xs"
                 :items="nodeActions"
