@@ -68,6 +68,7 @@ type PlatformHandlers struct {
 	IaC           *IaCHandler
 	Telegram      *TelegramHandler
 	Admission     *AdmissionHandler
+	Canary        *CanaryHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -92,6 +93,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	r.Use(mw.RequestCounter)
 	r.Use(mw.Tracing)
 	r.Use(mw.SecurityHeaders)
+	r.Use(mw.AdaptiveLoadShedding(mw.DefaultLoadSheddingConfig()))
 
 	// Health endpoints
 	r.Get("/healthz", healthHandler.ServeHTTP)
@@ -313,6 +315,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Changes != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/changes", platform.Changes.RegisterRoutes)
+			}
+			if platform.Canary != nil {
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/promotions/canary", platform.Canary.RegisterRoutes)
 			}
 			if platform.Promotion != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/promotions", platform.Promotion.RegisterRoutes)
