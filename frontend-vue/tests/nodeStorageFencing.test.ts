@@ -73,4 +73,45 @@ describe('Task 065: Dead Node Recovery & Zero-Data-Loss Storage Fencing UI', () 
       "InfraHostsView must resolve tenant_id dynamically for fencing modal"
     )
   })
+
+  it('5. dr.ts executeNodeRescue uses clean route /k8s/{clusterId}/dr/nodes/{nodeName}/rescue without api/v1 prefix', () => {
+    const content = fs.readFileSync(drApiPath, 'utf-8')
+    assert.ok(
+      content.includes('`/k8s/${cid}/dr/nodes/${node}/rescue`') || content.includes('`/k8s/${clusterId}/dr/nodes/${nodeName}/rescue`'),
+      'executeNodeRescue must use /k8s/${clusterId}/dr/nodes/${nodeName}/rescue'
+    )
+    assert.ok(!content.includes('/api/v1/clusters/'), 'executeNodeRescue must NOT have /api/v1 prefix')
+  })
+
+  it('6. dr.ts getFencingPreflight normalizes probe_report, dynamic_rca, capacity_plan, circuit_breaker', () => {
+    const content = fs.readFileSync(drApiPath, 'utf-8')
+    // probe_report normalization
+    assert.ok(content.includes('classification'), 'probe_report must map state/classification')
+    assert.ok(content.includes('ping_reachable'), 'probe_report must map ping_reachable')
+    assert.ok(content.includes('kubelet_responsive'), 'probe_report must map kubelet_responsive')
+    assert.ok(content.includes('containerd_responsive'), 'probe_report must map containerd_responsive')
+
+    // capacity_plan normalization
+    assert.ok(content.includes('headroom_ram_percent'), 'capacity_plan must compute headroom_ram_percent')
+    assert.ok(content.includes('headroom_cpu_percent'), 'capacity_plan must compute headroom_cpu_percent')
+
+    // circuit_breaker normalization
+    assert.ok(content.includes('eviction_frozen'), 'circuit_breaker must map eviction_frozen')
+    assert.ok(content.includes('freeze_reason'), 'circuit_breaker must map freeze_reason')
+  })
+
+  it('7. NodeFencingRescueSection.vue handleRescue checks cancel_fencing, success, recovered_to_ready', () => {
+    const rescueComponentPath = path.join(rootDir, 'src', 'components', 'overview', 'drawer', 'NodeFencingRescueSection.vue')
+    assert.ok(fs.existsSync(rescueComponentPath), 'NodeFencingRescueSection.vue must exist')
+    const content = fs.readFileSync(rescueComponentPath, 'utf-8')
+    assert.ok(
+      content.includes('cancel_fencing'),
+      'handleRescue must check cancel_fencing'
+    )
+    assert.ok(
+      content.includes('res.cancel_fencing || res.success || res.recovered_to_ready') ||
+      content.includes('cancel_fencing || res.success || res.recovered_to_ready'),
+      'handleRescue must check cancel_fencing || res.success || res.recovered_to_ready'
+    )
+  })
 })
