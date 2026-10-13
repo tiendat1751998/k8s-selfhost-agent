@@ -22,6 +22,7 @@ import (
 	usecaseDR "github.com/datdt/k8sselfhost/internal/usecase/dr"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
 	usecaseSRE "github.com/datdt/k8sselfhost/internal/usecase/sre"
+	usecasesec "github.com/datdt/k8sselfhost/internal/usecase/security"
 	usecaseStorage "github.com/datdt/k8sselfhost/internal/usecase/storage"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
 )
@@ -46,13 +47,16 @@ func setupTestRouter() http.Handler {
 	ansibleRunner := iac.NewAnsibleRunner("")
 	bot := telegram.NewSREBot(telegram.TelegramConfig{BotToken: "test-token"}, nil, nil, nil, nil)
 
+	admissionEnforcer := usecasesec.NewAdmissionEnforcer()
+
 	handlers := &adapthttp.PlatformHandlers{
-		Helm:     adapthttp.NewHelmHandler(helmMgr, nil),
-		Storage:  adapthttp.NewStorageHandler(storageUc),
-		DR:       adapthttp.NewDRHandler(drUc, remediationCtrl, nil),
-		GitOps:   adapthttp.NewGitOpsHandler(gitopsCtrl),
-		IaC:      adapthttp.NewIaCHandler(tfRunner, ansibleRunner),
-		Telegram: adapthttp.NewTelegramHandler(bot),
+		Helm:      adapthttp.NewHelmHandler(helmMgr, nil),
+		Storage:   adapthttp.NewStorageHandler(storageUc),
+		DR:        adapthttp.NewDRHandler(drUc, remediationCtrl, nil),
+		GitOps:    adapthttp.NewGitOpsHandler(gitopsCtrl),
+		IaC:       adapthttp.NewIaCHandler(tfRunner, ansibleRunner),
+		Telegram:  adapthttp.NewTelegramHandler(bot),
+		Admission: adapthttp.NewAdmissionHandler(admissionEnforcer),
 	}
 
 	return newRouter(healthHandler, nil, handlers)
@@ -128,12 +132,13 @@ func TestPlatformHandlers_WiringFieldsParity(t *testing.T) {
 	bot := telegram.NewSREBot(telegram.TelegramConfig{BotToken: "test-token"}, nil, nil, nil, nil)
 
 	handlers := &adapthttp.PlatformHandlers{
-		Helm:     adapthttp.NewHelmHandler(helmMgr, nil),
-		Storage:  adapthttp.NewStorageHandler(storageUc),
-		DR:       adapthttp.NewDRHandler(drUc, remediationCtrl, nil),
-		GitOps:   adapthttp.NewGitOpsHandler(gitopsCtrl),
-		IaC:      adapthttp.NewIaCHandler(tfRunner, ansibleRunner),
-		Telegram: adapthttp.NewTelegramHandler(bot),
+		Helm:      adapthttp.NewHelmHandler(helmMgr, nil),
+		Storage:   adapthttp.NewStorageHandler(storageUc),
+		DR:        adapthttp.NewDRHandler(drUc, remediationCtrl, nil),
+		GitOps:    adapthttp.NewGitOpsHandler(gitopsCtrl),
+		IaC:       adapthttp.NewIaCHandler(tfRunner, ansibleRunner),
+		Telegram:  adapthttp.NewTelegramHandler(bot),
+		Admission: adapthttp.NewAdmissionHandler(usecasesec.NewAdmissionEnforcer()),
 	}
 
 	require.NotNil(t, handlers.Helm, "Helm handler must be initialized")
@@ -142,4 +147,18 @@ func TestPlatformHandlers_WiringFieldsParity(t *testing.T) {
 	require.NotNil(t, handlers.GitOps, "GitOps handler must be initialized")
 	require.NotNil(t, handlers.IaC, "IaC handler must be initialized")
 	require.NotNil(t, handlers.Telegram, "Telegram handler must be initialized")
+	require.NotNil(t, handlers.Admission, "Admission handler must be initialized")
+}
+
+func TestRouter_AdmissionWebhook_Mounted(t *testing.T) {
+	router := setupTestRouter()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/security/admission/validate", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	// Route must be mounted and respond with 400 Bad Request on empty body (not 404 Not Found)
+	assert.NotEqual(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }

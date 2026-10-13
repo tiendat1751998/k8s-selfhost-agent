@@ -67,6 +67,7 @@ type PlatformHandlers struct {
 	GitOps        *GitOpsHandler
 	IaC           *IaCHandler
 	Telegram      *TelegramHandler
+	Admission     *AdmissionHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -146,6 +147,11 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			})
 		}
 	})
+
+	// Kubernetes Admission Webhook routes (/api/v1/security/admission/*)
+	if platform != nil && platform.Admission != nil {
+		r.Route("/api/v1/security/admission", platform.Admission.RegisterRoutes)
+	}
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
