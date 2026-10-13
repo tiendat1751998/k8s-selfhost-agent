@@ -262,7 +262,11 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 
 	userRepo := postgres.NewUserRepo(infra.pgClient.Pool())
 	refreshTokenRepo := postgres.NewRefreshTokenRepo(infra.pgClient.Pool())
-	authUsecase := usecaseAuth.NewUsecase(userRepo)
+	authUsecase := usecaseAuth.NewUsecase(
+		userRepo,
+		usecaseAuth.WithRefreshTokenRepo(refreshTokenRepo),
+		usecaseAuth.WithTxManager(txManager),
+	)
 
 	searchRepo := postgres.NewSearchRepo(infra.pgClient.Pool())
 	searchUsecase := usecaseSearch.NewUsecase(searchRepo)

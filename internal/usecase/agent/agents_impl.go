@@ -48,8 +48,8 @@ type qaAgent struct {
 }
 
 func (a *qaAgent) Execute(ctx context.Context, task *agent.Task, input string) (string, error) {
-	// Prevent recursive testing loops inside unit tests
-	if flag.Lookup("test.v") != nil {
+	// Prevent recursive testing loops inside unit tests unless explicitly testing qaAgent
+	if flag.Lookup("test.v") != nil && os.Getenv("QA_AGENT_TEST") == "" {
 		return "QA SUCCESS: Bypassed actual compiler and test runs during unit tests to prevent recursion.", nil
 	}
 
@@ -63,7 +63,7 @@ func (a *qaAgent) Execute(ctx context.Context, task *agent.Task, input string) (
 	cmdBuild.Dir = projectDir
 	buildOut, err := cmdBuild.CombinedOutput()
 	if err != nil {
-		return fmt.Sprintf("QA FAILURE: Compilation failed:\n%s", string(buildOut)), nil
+		return "", fmt.Errorf("qa build verification failed: %s (exit %w)", string(buildOut), err)
 	}
 
 	cmdTest := exec.CommandContext(ctx, "go", "test", "./...")
@@ -71,7 +71,7 @@ func (a *qaAgent) Execute(ctx context.Context, task *agent.Task, input string) (
 
 	testOut, err := cmdTest.CombinedOutput()
 	if err != nil {
-		return fmt.Sprintf("QA FAILURE: Tests failed:\n%s", string(testOut)), nil
+		return "", fmt.Errorf("qa test verification failed: %s (exit %w)", string(testOut), err)
 	}
 
 	return fmt.Sprintf("QA SUCCESS: All packages compiled and tested successfully.\nCompilation output:\n%s\nTest output:\n%s",
