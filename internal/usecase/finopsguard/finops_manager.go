@@ -66,6 +66,9 @@ func (m *FinOpsManager) GetTracker() *finopsguard.FinOpsTelemetryTracker {
 // If multi-AZ services with >3 endpoints lack topology hints, it records telemetry
 // and returns ErrFinOpsCrossAZWasteDetected.
 func (m *FinOpsManager) AuditTopologyHints(ctx context.Context) (int, error) {
+	if m.k8sPort == nil {
+		return 0, nil
+	}
 	services, err := m.k8sPort.ListServices(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("listing k8s services: %w", err)
@@ -89,6 +92,9 @@ func (m *FinOpsManager) AuditTopologyHints(ctx context.Context) (int, error) {
 // InjectTopologyAwareHints configures topology-aware hints on target service with safety guardrails.
 // If traffic skew exceeds 80% on a single pod in an AZ, it falls back to global round-robin.
 func (m *FinOpsManager) InjectTopologyAwareHints(ctx context.Context, namespace, serviceName string) error {
+	if m.k8sPort == nil {
+		return nil
+	}
 	svc, err := m.k8sPort.GetService(ctx, namespace, serviceName)
 	if err != nil {
 		return fmt.Errorf("retrieving service %s/%s: %w", namespace, serviceName, err)
@@ -127,6 +133,9 @@ func (m *FinOpsManager) InjectTopologyAwareHints(ctx context.Context, namespace,
 
 // ScanOrphanCloudResources scans cloud inventory for idle resources >= 48 hours.
 func (m *FinOpsManager) ScanOrphanCloudResources(ctx context.Context) ([]finopsguard.OrphanCloudResource, error) {
+	if m.scannerPort == nil {
+		return nil, nil
+	}
 	rawResources, err := m.scannerPort.ListCloudResources(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("scanning cloud resources: %w", err)

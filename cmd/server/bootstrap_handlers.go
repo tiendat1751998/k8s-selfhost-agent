@@ -79,6 +79,7 @@ type platformHandlerParams struct {
 	alertUsecaseInstance      *usecaseAlert.Usecase
 	cloudHandler              *adapthttp.CloudHandler
 	log                       *zap.Logger
+	meshHandler               *adapthttp.MeshHandler
 }
 
 func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
@@ -144,6 +145,7 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 
 	messagingManager := usecaseMessaging.NewManager(nil, nil, nil, usecaseMessaging.DefaultSREManagerConfig())
 	messagingHandler := adapthttp.NewMessagingHandler(messagingManager)
+	p.meshHandler = meshHandler
 	sreHandlers := bootstrapSREHandlers(p)
 
 	return &adapthttp.PlatformHandlers{

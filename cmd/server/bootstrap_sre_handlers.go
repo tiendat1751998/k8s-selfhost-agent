@@ -92,6 +92,7 @@ func bootstrapSREHandlers(p platformHandlerParams) *adapthttp.SREResilienceHandl
 		SecDefense:        adapthttp.NewSecDefenseHandler(secDefenseMgr),
 		CloudResilience:   adapthttp.NewCloudResilienceHandler(cloudResilienceMgr, p.log),
 		ServiceMesh:       adapthttp.NewServiceMeshHandler(meshResilienceMgr, p.log),
+		Mesh:              p.meshHandler,
 		NUMAMemory:        adapthttp.NewNUMAMemoryHandler(numaMgr, p.log),
 		Hardware:          adapthttp.NewHardwareHandler(hardwareMgr, p.log),
 		Crypto:            adapthttp.NewCryptoHandler(cryptoMgr),

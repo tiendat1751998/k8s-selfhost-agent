@@ -63,6 +63,7 @@ func setupTestRouter() http.Handler {
 		Mesh:      adapthttp.NewMeshHandler(meshService),
 		SRE:       bootstrapSREHandlers(platformHandlerParams{log: zap.NewNop()}),
 	}
+	handlers.SRE.Mesh = handlers.Mesh
 
 	return newRouter(healthHandler, nil, handlers)
 }
