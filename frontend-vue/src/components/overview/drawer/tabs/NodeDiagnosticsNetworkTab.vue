@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { NodeMetrics } from '../../../../api/overview'
 import { getUtilizationColor, formatBytes, formatIoRate } from './nodeDiagnosticsUtils'
+import BaseIcon from '../../../ui/BaseIcon.vue'
 
 interface Props {
   node: NodeMetrics
@@ -24,7 +25,7 @@ const filteredNodeDiskDevices = computed(() => {
     <div class="network-interfaces-section" v-if="filteredNodeInterfaces.length > 0">
       <div class="hud-section-header">
         <h4 class="hud-section-heading">
-          <span class="heading-icon">📡</span> Network Interface Throughput
+          <span class="heading-icon"><BaseIcon name="radio" size="xs" /></span> Network Interface Throughput
         </h4>
         <span class="badge badge-cyan font-mono">{{ filteredNodeInterfaces.length }} {{ filteredNodeInterfaces.length === 1 ? 'interface' : 'interfaces' }}</span>
       </div>
@@ -36,7 +37,7 @@ const filteredNodeDiskDevices = computed(() => {
         >
           <div class="iface-top">
             <div class="iface-name-group">
-              <span class="iface-icon">🌐</span>
+              <span class="iface-icon"><BaseIcon name="globe" size="xs" /></span>
               <span class="iface-name font-mono" :title="iface.name">{{ iface.name }}</span>
             </div>
             <span class="iface-nic-tag font-mono">NIC</span>
@@ -58,7 +59,7 @@ const filteredNodeDiskDevices = computed(() => {
     <div class="disk-io-section mt-4">
       <div class="hud-section-header">
         <h4 class="hud-section-heading">
-          <span class="heading-icon">💽</span> Disk I/O & Block Device Telemetry
+          <span class="heading-icon"><BaseIcon name="hard-drive" size="xs" /></span> Disk I/O & Block Device Telemetry
         </h4>
         <span class="badge badge-indigo font-mono" v-if="filteredNodeDiskDevices.length > 0">
           {{ filteredNodeDiskDevices.length }} {{ filteredNodeDiskDevices.length === 1 ? 'device' : 'devices' }}
@@ -71,25 +72,25 @@ const filteredNodeDiskDevices = computed(() => {
       <!-- Summary Strip -->
       <div class="disk-summary-strip glass-panel">
         <div class="disk-summary-item" title="Physical Disk Read Throughput">
-          <span class="disk-summary-label">📖 READ THROUGHPUT</span>
+          <span class="disk-summary-label"><BaseIcon name="book-open" size="xs" /> READ THROUGHPUT</span>
           <span class="disk-summary-val font-mono text-cyan font-bold">
             {{ formatBytes(node.disk_read_bytes_per_sec || 0) }}/s
           </span>
         </div>
         <div class="disk-summary-item" title="Physical Disk Write Throughput">
-          <span class="disk-summary-label">✍️ WRITE THROUGHPUT</span>
+          <span class="disk-summary-label"><BaseIcon name="edit" size="xs" /> WRITE THROUGHPUT</span>
           <span class="disk-summary-val font-mono text-purple font-bold">
             {{ formatBytes(node.disk_write_bytes_per_sec || 0) }}/s
           </span>
         </div>
         <div class="disk-summary-item" title="Total Physical Read & Write IOPS">
-          <span class="disk-summary-label">⚡ TOTAL IOPS</span>
+          <span class="disk-summary-label"><BaseIcon name="zap" size="xs" /> TOTAL IOPS</span>
           <span class="disk-summary-val font-mono text-emerald font-bold">
             {{ (node.disk_read_iops || 0).toFixed(0) }} R · {{ (node.disk_write_iops || 0).toFixed(0) }} W
           </span>
         </div>
         <div class="disk-summary-item" title="Average Total Latency Per I/O Operation (await)">
-          <span class="disk-summary-label">⏱️ AVG LATENCY (await)</span>
+          <span class="disk-summary-label"><BaseIcon name="clock" size="xs" /> AVG LATENCY (await)</span>
           <span
             class="disk-summary-val font-mono font-bold"
             :class="(node.disk_avg_await_ms || 0) > 30 ? 'text-rose' : (node.disk_avg_await_ms || 0) > 10 ? 'text-amber' : 'text-emerald'"
@@ -98,7 +99,7 @@ const filteredNodeDiskDevices = computed(() => {
           </span>
         </div>
         <div class="disk-summary-item" title="Maximum Block Device I/O Saturation Percentage">
-          <span class="disk-summary-label">📊 MAX %UTIL</span>
+          <span class="disk-summary-label"><BaseIcon name="activity" size="xs" /> MAX %UTIL</span>
           <span
             class="disk-summary-val font-mono font-bold"
             :class="`text-${getUtilizationColor(node.disk_max_io_util_pct || 0)}`"
@@ -118,7 +119,7 @@ const filteredNodeDiskDevices = computed(() => {
           >
             <div class="dev-card-header">
               <div class="dev-name-group">
-                <span class="dev-icon">💾</span>
+                <span class="dev-icon"><BaseIcon name="hard-drive" size="xs" /></span>
                 <span class="dev-name font-mono font-bold" :title="dev.device_name">{{ dev.device_name }}</span>
               </div>
               <span
@@ -133,11 +134,11 @@ const filteredNodeDiskDevices = computed(() => {
             <div class="dev-metrics-grid font-mono">
               <div class="dev-metric-col" title="Read Throughput Rate">
                 <span class="dev-metric-label">READ RATE</span>
-                <span class="dev-metric-val text-cyan font-bold">📖 {{ formatIoRate(dev.read_bytes_per_sec) }}</span>
+                <span class="dev-metric-val text-cyan font-bold"><BaseIcon name="book-open" size="xs" /> {{ formatIoRate(dev.read_bytes_per_sec) }}</span>
               </div>
               <div class="dev-metric-col" title="Write Throughput Rate">
                 <span class="dev-metric-label">WRITE RATE</span>
-                <span class="dev-metric-val text-purple font-bold">✍️ {{ formatIoRate(dev.write_bytes_per_sec) }}</span>
+                <span class="dev-metric-val text-purple font-bold"><BaseIcon name="edit" size="xs" /> {{ formatIoRate(dev.write_bytes_per_sec) }}</span>
               </div>
               <div class="dev-metric-col" title="IOPS (Read / Write)">
                 <span class="dev-metric-label">IOPS (R/W)</span>
@@ -193,7 +194,7 @@ const filteredNodeDiskDevices = computed(() => {
       <!-- Fallback when no devices reported -->
       <div class="disk-fallback-panel glass-panel" v-else>
         <div class="fallback-content">
-          <span class="fallback-icon">💾</span>
+          <span class="fallback-icon"><BaseIcon name="hard-drive" size="sm" /></span>
           <div class="fallback-info">
             <span class="fallback-title font-mono">Block Device Breakdown Unavailable</span>
             <span class="fallback-subtitle text-muted">
@@ -201,8 +202,8 @@ const filteredNodeDiskDevices = computed(() => {
             </span>
           </div>
           <div class="fallback-rates font-mono">
-            <span class="rate-pill text-cyan">📖 {{ formatIoRate(node.disk_read_bytes_per_sec || 0) }} Read</span>
-            <span class="rate-pill text-purple">✍️ {{ formatIoRate(node.disk_write_bytes_per_sec || 0) }} Write</span>
+            <span class="rate-pill text-cyan"><BaseIcon name="book-open" size="xs" /> {{ formatIoRate(node.disk_read_bytes_per_sec || 0) }} Read</span>
+            <span class="rate-pill text-purple"><BaseIcon name="edit" size="xs" /> {{ formatIoRate(node.disk_write_bytes_per_sec || 0) }} Write</span>
           </div>
         </div>
       </div>

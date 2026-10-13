@@ -4,6 +4,7 @@ import { useNodeLogTerminal, type LogTerminalProps } from './useNodeLogTerminal'
 import { LINE_HEIGHT } from './nodeLogUtils'
 import NodeLogIncidentsTable from './NodeLogIncidentsTable.vue'
 import NodeLogCustomRangeBar from './NodeLogCustomRangeBar.vue'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 const props = withDefaults(defineProps<LogTerminalProps>(), {
   nodeHistoryData: null,
@@ -36,7 +37,7 @@ defineExpose({
   <div class="node-incidents-section glass-panel">
     <div class="incidents-section-header">
       <div class="inc-title-group">
-        <h4>📜 Live & Historical Failure Logs / Incident Evidence</h4>
+        <h4><BaseIcon name="terminal" size="sm" /> Live & Historical Failure Logs / Incident Evidence</h4>
         <span class="badge badge-rose font-mono" v-if="appLogLevelCounts.error > 0">
           {{ appLogLevelCounts.error }} error{{ appLogLevelCounts.error === 1 ? '' : 's' }}
         </span>
@@ -61,14 +62,14 @@ defineExpose({
             class="select-log-input font-mono"
             @change="fetchNodeAppLogs(selectedLogApp)"
           >
-            <optgroup v-if="nodeAvailableContainerApps.length > 0" label="📦 Container Workloads">
+            <optgroup v-if="nodeAvailableContainerApps.length > 0" label="Container Workloads">
               <option v-for="app in nodeAvailableContainerApps" :key="app.name" :value="app.name">
-                {{ app.icon }} {{ app.name }}
+                {{ app.name }}
               </option>
             </optgroup>
-            <optgroup v-if="nodeAvailableHostApps.length > 0" label="⚙️ Host Services">
+            <optgroup v-if="nodeAvailableHostApps.length > 0" label="Host Services">
               <option v-for="app in nodeAvailableHostApps" :key="app.name" :value="app.name">
-                {{ app.icon }} {{ app.name }}
+                {{ app.name }}
               </option>
             </optgroup>
           </select>
@@ -104,7 +105,7 @@ defineExpose({
             <option value="6h">Last 6h</option>
             <option value="24h">Last 24h</option>
             <option value="168h">Last 7d</option>
-            <option value="custom">📅 Custom Time Range...</option>
+            <option value="custom">Custom Time Range...</option>
           </select>
           <button
             v-if="selectedLogSince === 'custom' || showCustomDatePicker"
@@ -113,7 +114,7 @@ defineExpose({
             @click="selectedLogSince = 'all'; showCustomDatePicker = false; customLogFrom = ''; customLogTo = ''; fetchNodeAppLogs(selectedLogApp)"
             title="Reset time window to show all available logs"
           >
-            ✕ Clear Window (Show All)
+            <BaseIcon name="x" size="xs" /> Clear Window (Show All)
           </button>
         </div>
 
@@ -131,27 +132,27 @@ defineExpose({
             :class="{ active: selectedLogLevel === 'error' }"
             @click="selectedLogLevel = 'error'"
           >
-            🔴 Errors ({{ appLogLevelCounts.error }})
+            <BaseIcon name="x-circle" size="xs" /> Errors ({{ appLogLevelCounts.error }})
           </button>
           <button
             class="chip-btn chip-amber"
             :class="{ active: selectedLogLevel === 'warn' }"
             @click="selectedLogLevel = 'warn'"
           >
-            🟡 Warnings ({{ appLogLevelCounts.warn }})
+            <BaseIcon name="alert-triangle" size="xs" /> Warnings ({{ appLogLevelCounts.warn }})
           </button>
         </div>
 
         <!-- Log Search Box -->
         <div class="log-search-box">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon"><BaseIcon name="search" size="xs" /></span>
           <input
             v-model="appLogSearch"
             type="text"
             placeholder="Filter logs / stack traces..."
             class="input-log-search font-mono"
           />
-          <button v-if="appLogSearch" class="btn-clear-search" @click="appLogSearch = ''">✕</button>
+          <button v-if="appLogSearch" class="btn-clear-search" aria-label="Clear Search" @click="appLogSearch = ''"><BaseIcon name="x" size="xs" /></button>
         </div>
       </div>
 
@@ -174,7 +175,7 @@ defineExpose({
             @click="autoScrollLogs = !autoScrollLogs"
             title="Toggle Auto-Scroll to Bottom"
           >
-            <span>⬇️</span>
+            <BaseIcon name="arrow-down" size="xs" />
             <span>Auto-Scroll: {{ autoScrollLogs ? 'ON' : 'OFF' }}</span>
           </button>
           <button
@@ -183,7 +184,7 @@ defineExpose({
             @click="fetchNodeAppLogs(selectedLogApp)"
             title="Reload Logs"
           >
-            <span :class="{ 'spin-icon': appLogsLoading }">🔄</span>
+            <span :class="{ 'spin-icon': appLogsLoading }"><BaseIcon name="refresh" size="xs" /></span>
             {{ appLogsLoading ? 'Fetching...' : 'Refresh' }}
           </button>
           <button
@@ -191,7 +192,7 @@ defineExpose({
             @click="copyAppLogs"
             title="Copy Log Text"
           >
-            <span>📋</span>
+            <BaseIcon name="copy" size="xs" />
             {{ appLogsCopied ? 'Copied!' : 'Copy' }}
           </button>
           <button
@@ -199,7 +200,7 @@ defineExpose({
             @click="downloadAppLogs"
             title="Download Raw Log File"
           >
-            <span>⬇️</span>
+            <BaseIcon name="download" size="xs" />
             Export .log
           </button>
         </div>
@@ -236,7 +237,7 @@ defineExpose({
 
       <div class="terminal-body" v-else-if="appLogsError">
         <div class="terminal-error">
-          <span class="text-rose font-bold">⚠️ {{ appLogsError }}</span>
+          <span class="text-rose font-bold"><BaseIcon name="alert-triangle" size="xs" /> {{ appLogsError }}</span>
           <button class="btn btn-xs btn-secondary mt-2" @click="fetchNodeAppLogs(selectedLogApp)">Try Again</button>
         </div>
       </div>
@@ -266,7 +267,7 @@ defineExpose({
 
       <div class="terminal-body" v-else>
         <div class="terminal-empty">
-          <span>🛡️ No matching log lines found for current filters.</span>
+          <span><BaseIcon name="shield" size="xs" /> No matching log lines found for current filters.</span>
         </div>
       </div>
 
@@ -276,7 +277,7 @@ defineExpose({
         class="jump-bottom-btn font-mono"
         @click="scrollToBottom"
       >
-        ⬇️ New logs available - Jump to bottom
+        <BaseIcon name="arrow-down" size="xs" /> New logs available - Jump to bottom
       </button>
     </div>
 

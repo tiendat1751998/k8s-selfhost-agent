@@ -94,7 +94,7 @@ const emit = defineEmits<{
         title="Filter degraded clusters"
         @click="statusFilter = 'degraded'"
       >
-        <span class="status-dot dot-degraded">▲</span>
+        <span class="status-dot dot-degraded"><BaseIcon name="alert-triangle" size="xs" /></span>
         <span>Degraded</span>
       </button>
       <button
@@ -104,7 +104,7 @@ const emit = defineEmits<{
         title="Filter offline clusters"
         @click="statusFilter = 'offline'"
       >
-        <span class="status-dot dot-offline">✕</span>
+        <span class="status-dot dot-offline"><BaseIcon name="x" size="xs" /></span>
         <span>Offline</span>
       </button>
     </div>

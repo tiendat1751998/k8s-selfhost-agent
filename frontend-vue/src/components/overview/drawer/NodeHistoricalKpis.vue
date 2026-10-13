@@ -2,6 +2,7 @@
 import type { NodeMetrics } from '../../../api/overview'
 import type { NodeHistoryResponse } from '../../../api/compute'
 import { formatPercent, formatBytes, formatIoRate } from './nodeChartMath'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 interface Props {
   node?: NodeMetrics | null
@@ -56,7 +57,7 @@ defineProps<Props>()
         {{ formatPercent(nodeHistoryData?.summary?.uptime_percent || 99) }}
       </span>
       <span class="kpi-sub font-mono">
-        💾 Disk: {{ formatPercent(node?.disk_percent) }} <span class="text-slate">({{ formatBytes(node?.disk_used) }} / {{ formatBytes(node?.disk_total) }})</span>
+        <BaseIcon name="hard-drive" size="xs" /> Disk: {{ formatPercent(node?.disk_percent) }} <span class="text-slate">({{ formatBytes(node?.disk_used) }} / {{ formatBytes(node?.disk_total) }})</span>
       </span>
     </div>
   </div>

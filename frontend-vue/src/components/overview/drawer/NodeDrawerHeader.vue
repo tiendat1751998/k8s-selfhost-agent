@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NodeMetrics } from '../../../api/overview'
+import BaseIcon from '../../ui/BaseIcon.vue'
 
 interface Props {
   node: NodeMetrics
@@ -69,7 +70,7 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
             {{ node.status === 'ready' || node.status === 'online' ? '● ONLINE' : '● OFFLINE' }}
           </span>
           <span class="badge badge-indigo">
-            📡 {{ (node.role || node.source || 'K8S-AGENT').toUpperCase() }}
+            <BaseIcon name="radio" size="xs" /> {{ (node.role || node.source || 'K8S-AGENT').toUpperCase() }}
           </span>
         </div>
       </div>
@@ -105,7 +106,7 @@ function formatLoadAvg(loadAvg?: [number, number, number] | number[] | string): 
           @click="emit('close')"
           type="button"
         >
-          <span class="close-icon">✕</span>
+          <span class="close-icon"><BaseIcon name="x" size="xs" /></span>
         </button>
       </div>
     </div>

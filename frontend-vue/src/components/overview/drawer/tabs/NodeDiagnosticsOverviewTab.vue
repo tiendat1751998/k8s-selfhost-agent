@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { NodeMetrics } from '../../../../api/overview'
 import { getUtilizationColor, formatPercent, formatBytes, formatIoRate } from './nodeDiagnosticsUtils'
+import BaseIcon from '../../../ui/BaseIcon.vue'
 
 interface Props {
   node: NodeMetrics
@@ -14,7 +15,7 @@ defineProps<Props>()
   <div class="hardware-hud-section">
     <div class="hud-section-header">
       <h4 class="hud-section-heading">
-        <span class="heading-icon">📊</span> Hardware Saturation Telemetry
+        <span class="heading-icon"><BaseIcon name="activity" size="xs" /></span> Hardware Saturation Telemetry
       </h4>
       <span class="badge badge-indigo font-mono">LIVE METRICS</span>
     </div>

@@ -89,13 +89,14 @@ export type KnownIconName =
 
 export type IconName = KnownIconName | (string & {})
 
-interface Props {
-  name: IconName
+export interface BaseIconProps {
+  name: string
   size?: IconSize
   strokeWidth?: number | string
+  class?: string | Record<string, boolean | undefined | null> | (string | Record<string, boolean | undefined | null>)[]
 }
 
-const props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<BaseIconProps>(), {
   size: 'sm',
   strokeWidth: 1.5,
 })
@@ -203,20 +204,22 @@ const ICONS: Record<string, string> = {
   'eye-off': '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>',
   'rotate-ccw': '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
   'share-2': '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>',
+  network: '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
 }
 
 const ALIAS_MAP: Record<string, string> = {
   warning: 'alert-triangle',
   alert: 'alert-triangle',
   danger: 'alert-triangle',
+  siren: 'alert-triangle',
   success: 'check-circle',
   ok: 'check-circle',
   close: 'x',
   cross: 'x',
   info: 'help-circle',
-  settings: 'sliders',
-  gear: 'sliders',
-  cog: 'sliders',
+  gear: 'settings',
+  cog: 'settings',
   options: 'sliders',
   'refresh-cw': 'refresh',
   link: 'git-branch',
@@ -311,7 +314,7 @@ const svgContent = computed<string>(() => {
     :stroke-width="strokeWidth"
     stroke-linecap="round"
     stroke-linejoin="round"
-    class="base-icon"
+    :class="['base-icon', props.class]"
     aria-hidden="true"
     v-html="svgContent"
   />

@@ -210,7 +210,7 @@ function openAiIncidents() {
                   :class="{ active: nodeDrawerMode === 'live' }"
                   @click="switchMode('live')"
                 >
-                  <span class="tab-icon">📩</span>
+                  <span class="tab-icon"><BaseIcon name="activity" size="xs" /></span>
                   <span class="tab-label-full">Live Telemetry (Real-time)</span>
                   <span class="tab-label-mobile">Live</span>
                   <span class="tab-pill">5s Poll</span>
@@ -221,7 +221,7 @@ function openAiIncidents() {
                   :class="{ active: nodeDrawerMode === 'history' }"
                   @click="switchMode('history')"
                 >
-                  <span class="tab-icon">🔅</span>
+                  <span class="tab-icon"><BaseIcon name="clock" size="xs" /></span>
                   <span class="tab-label-full">Historical Trends (Timeseries)</span>
                   <span class="tab-label-mobile">History</span>
                   <span class="tab-pill">1h - 24h</span>

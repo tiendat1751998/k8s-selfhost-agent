@@ -154,7 +154,7 @@ onUnmounted(() => {
           <!-- Status: Error -->
           <div v-else-if="status === 'error'" class="modal-body">
             <div class="error-banner">
-              <span class="error-icon">⚠️</span>
+              <span class="error-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
               <div class="error-content">
                 <div class="error-title">Remediation Failed</div>
                 <div class="error-msg font-mono">{{ errorMessage }}</div>
