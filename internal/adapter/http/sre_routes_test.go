@@ -132,7 +132,11 @@ func TestSRERoutes_All30HandlersMounted(t *testing.T) {
 	handlers := setupTestSREResilienceHandlers()
 
 	r.Route("/api/v1", func(sub chi.Router) {
+		sub.Use(mw.JWTAuthMiddleware)
 		adapthttp.RegisterSRERoutes(sub, handlers)
+		if handlers.ServiceMesh != nil {
+			sub.Route("/mesh", handlers.ServiceMesh.RegisterRoutes)
+		}
 	})
 
 	endpoints := []struct {

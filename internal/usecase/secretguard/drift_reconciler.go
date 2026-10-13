@@ -84,7 +84,17 @@ func (r *DriftReconciler) TrackSecretBaseline(policy domain.ExternalSecretPolicy
 // If any CRD specifies a refreshInterval < 1h, it automatically flags the violation and
 // applies a safe interval (1h + randomized jitter up to 10m) to defeat synchronized Vault DDoS spikes.
 func (r *DriftReconciler) AuditAndMitigatePollingStorms(ctx context.Context, namespace string) (*ReconcileResult, error) {
+	if r == nil {
+		return &ReconcileResult{Policies: []domain.ExternalSecretPolicy{}}, nil
+	}
 	atomic.AddUint64(&r.telemetry.AuditRuns, 1)
+
+	if r.detector == nil {
+		return &ReconcileResult{
+			AuditedCount: 0,
+			Policies:     make([]domain.ExternalSecretPolicy, 0),
+		}, nil
+	}
 
 	policies, err := r.detector.AuditExternalSecrets(ctx, namespace)
 	if err != nil {

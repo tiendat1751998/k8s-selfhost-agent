@@ -199,10 +199,7 @@ func RegisterSRERoutes(r chi.Router, handlers *SREResilienceHandlers) {
 		r.With(mutRoles).Route("/transitnet", handlers.TransitNet.RegisterRoutes)
 	}
 
-	// 18. Service Mesh SDS & Egress Shield
-	if handlers.ServiceMesh != nil {
-		r.With(mutRoles).Route("/mesh", handlers.ServiceMesh.RegisterRoutes)
-	}
+	// 18. Service Mesh SDS & Egress Shield: registered unified under /mesh in router.go to prevent duplicate mount panics.
 
 	// 19. Bare-Metal Hardware & EDAC
 	if handlers.Hardware != nil {
