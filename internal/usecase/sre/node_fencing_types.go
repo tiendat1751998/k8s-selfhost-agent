@@ -78,6 +78,7 @@ type FencingExecutionOptions struct {
 	EmergencyUntaintMaster bool `json:"emergency_untaint_master"`
 	ForceVolumeDetach      bool `json:"force_volume_detach"`
 	VolumeDetachTimeoutSec int  `json:"volume_detach_timeout_sec,omitempty"`
+	OverrideCircuitBreaker bool `json:"override_circuit_breaker"`
 }
 
 // FencingStep captures an individual milestone during fencing execution.
