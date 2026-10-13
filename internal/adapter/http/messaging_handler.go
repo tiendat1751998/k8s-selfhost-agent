@@ -41,6 +41,32 @@ func (h *MessagingHandler) WireToRouter(r chi.Router) {
 	})
 }
 
+func extractGroupID(r *http.Request) string {
+	if id := strings.TrimSpace(chi.URLParam(r, "groupId")); id != "" {
+		return id
+	}
+	if id := strings.TrimSpace(chi.URLParam(r, "group_id")); id != "" {
+		return id
+	}
+	if id := strings.TrimSpace(r.URL.Query().Get("groupId")); id != "" {
+		return id
+	}
+	return strings.TrimSpace(r.URL.Query().Get("group_id"))
+}
+
+func extractNodeName(r *http.Request) string {
+	if name := strings.TrimSpace(chi.URLParam(r, "nodeName")); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(chi.URLParam(r, "node_name")); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(r.URL.Query().Get("nodeName")); name != "" {
+		return name
+	}
+	return strings.TrimSpace(r.URL.Query().Get("node_name"))
+}
+
 // InspectKafkaConsumerGroups handles GET /api/v1/clusters/{clusterId}/messaging/kafka/consumer-groups
 func (h *MessagingHandler) InspectKafkaConsumerGroups(w http.ResponseWriter, r *http.Request) {
 	if h.manager == nil {
@@ -48,7 +74,7 @@ func (h *MessagingHandler) InspectKafkaConsumerGroups(w http.ResponseWriter, r *
 		return
 	}
 
-	clusterID := strings.TrimSpace(chi.URLParam(r, "clusterId"))
+	clusterID := extractClusterID(r)
 	if clusterID == "" {
 		writeError(w, http.StatusBadRequest, "clusterId parameter is required", nil)
 		return
@@ -77,13 +103,13 @@ func (h *MessagingHandler) EnforceKafkaCooperativePolicy(w http.ResponseWriter, 
 		return
 	}
 
-	clusterID := strings.TrimSpace(chi.URLParam(r, "clusterId"))
+	clusterID := extractClusterID(r)
 	if clusterID == "" {
 		writeError(w, http.StatusBadRequest, "clusterId parameter is required", nil)
 		return
 	}
 
-	groupID := strings.TrimSpace(chi.URLParam(r, "groupId"))
+	groupID := extractGroupID(r)
 	if groupID == "" {
 		writeError(w, http.StatusBadRequest, "groupId parameter is required", nil)
 		return
@@ -114,7 +140,7 @@ func (h *MessagingHandler) AuditRabbitMQ(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	clusterID := strings.TrimSpace(chi.URLParam(r, "clusterId"))
+	clusterID := extractClusterID(r)
 	if clusterID == "" {
 		writeError(w, http.StatusBadRequest, "clusterId parameter is required", nil)
 		return
@@ -140,7 +166,7 @@ func (h *MessagingHandler) ApplyKafkaKernelTuning(w http.ResponseWriter, r *http
 		return
 	}
 
-	nodeName := strings.TrimSpace(chi.URLParam(r, "nodeName"))
+	nodeName := extractNodeName(r)
 	if nodeName == "" {
 		writeError(w, http.StatusBadRequest, "nodeName parameter is required", nil)
 		return

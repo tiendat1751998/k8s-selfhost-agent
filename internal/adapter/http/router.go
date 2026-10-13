@@ -70,7 +70,7 @@ type PlatformHandlers struct {
 	Admission     *AdmissionHandler
 	Canary        *CanaryHandler
 	Mesh          *MeshHandler
-	MessagingSRE  *MessagingSREHandler
+	MessagingSRE  *MessagingHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -401,6 +401,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.MessagingSRE != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/messaging", platform.MessagingSRE.RegisterRoutes)
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/clusters/{clusterId}/messaging", platform.MessagingSRE.RegisterRoutes)
 			}
 		}
 	})

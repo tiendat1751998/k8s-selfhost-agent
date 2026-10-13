@@ -46,10 +46,16 @@ func extractClusterID(r *http.Request) string {
 		clusterID = chi.URLParam(r, "cluster")
 	}
 	if clusterID == "" {
+		clusterID = chi.URLParam(r, "cluster_id")
+	}
+	if clusterID == "" {
 		clusterID = r.URL.Query().Get("clusterId")
 	}
 	if clusterID == "" {
 		clusterID = r.URL.Query().Get("cluster")
+	}
+	if clusterID == "" {
+		clusterID = r.URL.Query().Get("cluster_id")
 	}
 	return strings.TrimSpace(clusterID)
 }
