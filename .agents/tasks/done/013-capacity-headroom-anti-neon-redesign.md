@@ -1,8 +1,8 @@
-﻿# TASK 013: Capacity & Headroom Matrix Anti-Neon Redesign
+# TASK 013: Capacity & Headroom Matrix Anti-Neon Redesign
 
 > **Location**: .agents/tasks/enterprise-ui-redesign/013-capacity-headroom-anti-neon-redesign.md  
 > **Benchmark Source**: Lens Resource Allocation, Kubernetes Scheduling Headroom Formula  
-> **Status**: READY_FOR_DISPATCH  
+> **Status**: COMPLETED  
 
 ## 1. Problem Statement
 In CapacityView.vue and NodeHeadroomTable.vue:

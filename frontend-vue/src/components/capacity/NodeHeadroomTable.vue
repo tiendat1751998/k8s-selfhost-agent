@@ -12,16 +12,31 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'rebalance', nodeId: string): void
   (e: 'inspect', nodeId: string): void
+  (e: 'drain', nodeId: string): void
+  (e: 'action', action: string, node: NodeHeadroom): void
 }>()
 
 const nodeActions: ActionItem[] = [
   { action: 'rebalance', label: 'Rebalance Pods', icon: 'zap' },
-  { action: 'inspect', label: 'Inspect Telemetry', icon: 'search' },
+  { action: 'inspect', label: 'Inspect Allocations', icon: 'search' },
+  { action: 'drain', label: 'Drain Node', icon: 'trash-2', isDestructive: true, variant: 'danger' },
 ]
 
-function handleNodeAction(actionId: string, nodeId: string) {
-  if (actionId === 'rebalance') emit('rebalance', nodeId)
-  else if (actionId === 'inspect') emit('inspect', nodeId)
+function handleAction(actionId: string, node: NodeHeadroom) {
+  if (actionId === 'rebalance') {
+    emit('rebalance', node.id)
+  } else if (actionId === 'inspect') {
+    emit('inspect', node.id)
+  } else if (actionId === 'drain') {
+    emit('drain', node.id)
+  }
+  emit('action', actionId, node)
+}
+
+function getAllocationColor(pct: number): string {
+  if (pct >= 85) return '#f43f5e'
+  if (pct >= 70) return '#f59e0b'
+  return '#06b6d4'
 }
 
 function getRiskTextColor(pct: number): string {
@@ -34,6 +49,28 @@ function getSparklineColor(pct: number): string {
   if (pct >= 85) return '#f43f5e'
   if (pct >= 70) return '#f59e0b'
   return '#06b6d4'
+}
+
+function getHeadroomTextColor(pct: number): string {
+  if (pct < 15) return 'text-rose'
+  if (pct < 30) return 'text-amber'
+  return 'text-cyan'
+}
+
+function getNodeHealthStatus(node: NodeHeadroom): string {
+  if (node.status === 'cordoned') return 'cordoned'
+  if (node.status === 'critical' || node.status === 'failed') return 'critical'
+  if (node.cpuUsagePercent >= 85 || node.memUsagePercent >= 85) return 'warning'
+  if (node.status === 'warning' || node.cpuUsagePercent >= 70 || node.memUsagePercent >= 70) return 'warning'
+  return 'ready'
+}
+
+function getNodeHealthLabel(node: NodeHeadroom): string {
+  if (node.status === 'cordoned') return 'Cordoned'
+  if (node.status === 'critical' || node.status === 'failed') return 'Critical'
+  if (node.cpuUsagePercent >= 85 || node.memUsagePercent >= 85) return 'High Commitment'
+  if (node.status === 'warning') return 'Warning'
+  return 'Ready'
 }
 
 function getNodeTrajectory(node: NodeHeadroom): number[] {
@@ -57,12 +94,13 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
     <div class="node-table-wrapper">
       <table class="node-matrix-table">
         <colgroup>
-          <col style="width: 20%;" />
-          <col style="width: 10%;" />
-          <col style="width: 26%;" />
-          <col style="width: 14%;" />
-          <col style="width: 14%;" />
-          <col style="width: 16%;" />
+          <col style="width: 18%;" />
+          <col style="width: 9%;" />
+          <col style="width: 25%;" />
+          <col style="width: 12%;" />
+          <col style="width: 12%;" />
+          <col style="width: 11%;" />
+          <col style="width: 13%;" />
           <col style="width: 40px;" />
         </colgroup>
         <thead>
@@ -73,20 +111,21 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
             <th>Load Trajectory</th>
             <th>Pods & Density</th>
             <th>Safe Headroom</th>
-            <th style="width: 40px; text-align: center;"></th>
+            <th>Health</th>
+            <th style="width: 40px; text-align: center;" aria-label="Actions"></th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="nodes.length === 0">
-            <td colspan="7" class="empty-state-cell font-mono text-center text-muted" style="padding: 32px 16px; text-align: center;">
+            <td colspan="8" class="empty-state-cell font-mono text-center text-muted" style="padding: 32px 16px; text-align: center;">
               No cluster nodes reporting headroom telemetry.
             </td>
           </tr>
           <tr v-for="node in nodes" v-else :key="node.id">
             <td>
               <div class="node-name-cell">
-                <span class="node-name font-mono" :title="node.name">{{ node.name }}</span>
-                <span class="node-role-tag font-mono text-muted" :title="node.id">{{ node.id }}</span>
+                <span class="node-name font-mono font-medium" :title="node.name">{{ node.name }}</span>
+                <span class="node-role-tag font-mono text-muted text-xs" :title="node.id">{{ node.id }}</span>
               </div>
             </td>
             <td>
@@ -98,19 +137,19 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
               <div class="dual-resource-cell">
                 <div class="resource-row">
                   <div class="resource-row-info font-mono">
-                    <span class="res-tag text-cyan font-bold">CPU</span>
+                    <span class="res-tag text-muted font-bold">CPU</span>
                     <span :class="getRiskTextColor(node.cpuUsagePercent)" class="font-bold">{{ node.cpuUsagePercent.toFixed(1) }}%</span>
-                    <span class="text-muted text-xs">({{ node.cpuAllocatedCores }}/{{ node.cpuTotalCores }}C)</span>
+                    <span class="text-muted text-xs">({{ node.cpuAllocatedCores }}/{{ node.cpuTotalCores }} cores)</span>
                   </div>
-                  <PercentageBar :percentage="node.cpuUsagePercent" :height="4" />
+                  <PercentageBar :percentage="node.cpuUsagePercent" :height="5" :variant="getAllocationColor(node.cpuUsagePercent)" />
                 </div>
                 <div class="resource-row">
                   <div class="resource-row-info font-mono">
-                    <span class="res-tag text-amber font-bold">MEM</span>
+                    <span class="res-tag text-muted font-bold">MEM</span>
                     <span :class="getRiskTextColor(node.memUsagePercent)" class="font-bold">{{ node.memUsagePercent.toFixed(1) }}%</span>
-                    <span class="text-muted text-xs">({{ node.memAllocatedGiB }}/{{ node.memTotalGiB }}G)</span>
+                    <span class="text-muted text-xs">({{ node.memAllocatedGiB }}/{{ node.memTotalGiB }} GiB)</span>
                   </div>
-                  <PercentageBar :percentage="node.memUsagePercent" :height="4" />
+                  <PercentageBar :percentage="node.memUsagePercent" :height="5" :variant="getAllocationColor(node.memUsagePercent)" />
                 </div>
               </div>
             </td>
@@ -134,21 +173,30 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
               </div>
             </td>
             <td>
-              <div class="headroom-health-cell">
+              <div class="headroom-cell font-mono">
                 <span
-                  class="font-mono font-bold"
-                  :class="node.headroomPercent < 20 ? 'text-rose' : node.headroomPercent < 35 ? 'text-amber' : 'text-emerald'"
+                  class="font-bold"
+                  :class="getHeadroomTextColor(node.headroomPercent)"
                 >
                   {{ node.headroomPercent.toFixed(1) }}%
                 </span>
-                <StatusBadge :status="node.status" :label="node.status.toUpperCase()" size="sm" />
+              </div>
+            </td>
+            <td>
+              <div class="health-cell">
+                <StatusBadge
+                  :status="getNodeHealthStatus(node)"
+                  :label="getNodeHealthLabel(node)"
+                  size="sm"
+                />
               </div>
             </td>
             <td style="width: 40px; text-align: center;">
               <ActionDropdown
                 size="xs"
                 :items="nodeActions"
-                @select="(actionId) => handleNodeAction(actionId, node.id)"
+                aria-label="Node actions"
+                @select="handleAction($event, node)"
               />
             </td>
           </tr>
@@ -168,6 +216,17 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
 .node-matrix-table {
   table-layout: fixed;
   width: 100%;
+}
+.node-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.node-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dual-resource-cell {
   display: flex;
@@ -202,10 +261,12 @@ function getNodeTrajectory(node: NodeHeadroom): number[] {
   gap: 2px;
   font-size: 11px;
 }
-.headroom-health-cell {
+.headroom-cell {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+}
+.health-cell {
+  display: flex;
+  align-items: center;
 }
 </style>
