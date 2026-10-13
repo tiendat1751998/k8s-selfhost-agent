@@ -45,6 +45,7 @@ func (h *DRHandler) RegisterRoutes(r chi.Router) {
 		mut.Post("/backups", h.CreateBackup)
 		mut.Post("/remediation/{node}", h.TriggerRemediation)
 		mut.Post("/nodes/{node}/fencing/execute", h.ExecuteFencing)
+		mut.Post("/nodes/{node}/rescue", h.ExecuteRescue)
 	})
 }
 
@@ -52,12 +53,14 @@ func (h *DRHandler) RegisterRoutes(r chi.Router) {
 func (h *DRHandler) RegisterClusterFencingRoutes(r chi.Router) {
 	r.Get("/preflight", h.PreflightFencing)
 	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Post("/execute", h.ExecuteFencing)
+	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Post("/rescue", h.ExecuteRescue)
 }
 
 // WireToRouter mounts cluster fencing endpoints onto a parent router.
 func (h *DRHandler) WireToRouter(r chi.Router) {
 	r.Get("/clusters/{clusterId}/nodes/{nodeName}/fencing/preflight", h.PreflightFencing)
 	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Post("/clusters/{clusterId}/nodes/{nodeName}/fencing/execute", h.ExecuteFencing)
+	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Post("/clusters/{clusterId}/nodes/{nodeName}/rescue", h.ExecuteRescue)
 }
 
 // TriggerEtcdSnapshot triggers an immediate etcd snapshot on the cluster.
@@ -285,7 +288,55 @@ func (h *DRHandler) ExecuteFencing(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error(), err)
 			return
 		}
+		if errors.Is(err, sre.ErrCircuitBreakerTripped) {
+			writeError(w, http.StatusConflict, err.Error(), err)
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to execute storage fencing", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+type serviceRescueRequest struct {
+	Services []string `json:"services"`
+}
+
+// ExecuteRescue triggers soft-death service restart rescue.
+// POST /api/v1/clusters/:clusterId/nodes/:nodeName/rescue
+func (h *DRHandler) ExecuteRescue(w http.ResponseWriter, r *http.Request) {
+	if h.remediation == nil {
+		writeError(w, http.StatusServiceUnavailable, "Remediation controller is not configured", nil)
+		return
+	}
+
+	clusterID := chi.URLParam(r, "clusterId")
+	if clusterID == "" {
+		clusterID = chi.URLParam(r, "cluster")
+	}
+	if clusterID == "" {
+		writeError(w, http.StatusBadRequest, "clusterId parameter is required", nil)
+		return
+	}
+
+	nodeName := chi.URLParam(r, "nodeName")
+	if nodeName == "" {
+		nodeName = chi.URLParam(r, "node")
+	}
+	if nodeName == "" {
+		writeError(w, http.StatusBadRequest, "nodeName parameter is required", nil)
+		return
+	}
+
+	var req serviceRescueRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	result, err := h.remediation.ExecuteRescue(r.Context(), clusterID, nodeName, req.Services)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to execute service rescue", err)
 		return
 	}
 

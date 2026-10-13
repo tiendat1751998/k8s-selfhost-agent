@@ -376,3 +376,35 @@ func TestDRHandler_ExecuteFencing_SuccessPipeline(t *testing.T) {
 		}
 	}
 }
+
+func TestDRHandler_ExecuteRescue(t *testing.T) {
+	router, _, tenantAdminToken, viewerToken, _ := setupFencingTestRouter(t)
+
+	// 1. Viewer is forbidden (RBAC)
+	reqViewer := httptest.NewRequest(http.MethodPost, "/api/v1/clusters/local/nodes/worker-dead/rescue", bytes.NewBufferString(`{"services":["containerd"]}`))
+	reqViewer.Header.Set("Authorization", "Bearer "+viewerToken)
+	recViewer := httptest.NewRecorder()
+	router.ServeHTTP(recViewer, reqViewer)
+	if recViewer.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for viewer, got %d", recViewer.Code)
+	}
+
+	// 2. Tenant admin triggers rescue
+	reqAdmin := httptest.NewRequest(http.MethodPost, "/api/v1/clusters/local/nodes/worker-dead/rescue", bytes.NewBufferString(`{"services":["containerd","kubelet"]}`))
+	reqAdmin.Header.Set("Authorization", "Bearer "+tenantAdminToken)
+	reqAdmin.Header.Set("Content-Type", "application/json")
+	recAdmin := httptest.NewRecorder()
+	router.ServeHTTP(recAdmin, reqAdmin)
+
+	if recAdmin.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for rescue, got %d: %s", recAdmin.Code, recAdmin.Body.String())
+	}
+
+	var res sre.ServiceRescueResult
+	if err := json.NewDecoder(recAdmin.Body).Decode(&res); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if res.NodeName != "worker-dead" {
+		t.Errorf("expected nodeName worker-dead, got %s", res.NodeName)
+	}
+}
