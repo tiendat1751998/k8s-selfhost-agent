@@ -127,6 +127,9 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 	ecosystemUsecase := usecaseEcosystem.NewUsecase(ecosystemRepo, settingsRepo, httputil.NewSafeHTTPClient(5*time.Second), p.log, ecoOpts...)
 	ecosystemHandler := adapthttp.NewEcosystemHandler(ecosystemUsecase, p.log)
 
+	canaryEngine := usecasePromotion.NewCanaryEngine(usecasePromotion.WithLogger(p.log))
+	canaryHandler := adapthttp.NewCanaryHandler(canaryEngine)
+
 	return &adapthttp.PlatformHandlers{
 		AI:              adapthttp.NewAIHandler(p.registry),
 		Dashboard:       adapthttp.NewHandler(p.incRepo, p.reportRepo, p.prRepo, p.publisher, p.gitopsController),
@@ -141,6 +144,7 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 		Capacity:        adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(p.metricsCollector, usecaseCapacity.WithComputeHostRepo(p.computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(p.infra.pgClient.Pool())))),
 		Changes:         adapthttp.NewChangeHandler(postgres.NewChangesRepo(p.infra.pgClient.Pool())),
 		Promotion:       adapthttp.NewPromotionHandler(p.promotionUsecase),
+		Canary:          canaryHandler,
 		Explorer:        adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(p.infra.k8sClient, p.infra.dockerRepo, p.clientManager)),
 		Reporting:       adapthttp.NewReportingHandler(postgres.NewReportingRepo(p.infra.pgClient.Pool())),
 		HealthCenter:    healthCenterHandler,
