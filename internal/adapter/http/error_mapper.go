@@ -39,6 +39,10 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 			return http.StatusUnprocessableEntity, domErr.Message
 		case "ERR_VOLUME_ATTACHMENT_LOCKED":
 			return http.StatusConflict, domErr.Message
+		case "ERR_DIND_NOT_ALLOWED":
+			return http.StatusForbidden, domErr.Message
+		case "ERR_ADMISSION_MUTATION_FAILED":
+			return http.StatusUnprocessableEntity, domErr.Message
 		case domainerrors.CodeInternal:
 			return http.StatusInternalServerError, "Internal server error"
 		}

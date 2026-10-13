@@ -40,6 +40,7 @@ import (
 	usecasePromotion "github.com/datdt/k8sselfhost/internal/usecase/promotion"
 	usecaseScaffold "github.com/datdt/k8sselfhost/internal/usecase/scaffold"
 	usecaseSearch "github.com/datdt/k8sselfhost/internal/usecase/search"
+	usecaseSecurity "github.com/datdt/k8sselfhost/internal/usecase/security"
 	"github.com/datdt/k8sselfhost/internal/usecase/sre"
 	usecaseStorage "github.com/datdt/k8sselfhost/internal/usecase/storage"
 )
@@ -174,5 +175,6 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 		GitOps:          gitopsHandler,
 		IaC:             iacHandler,
 		Telegram:        telegramHandler,
+		Admission:       adapthttp.NewAdmissionHandler(usecaseSecurity.NewAdmissionEnforcer()),
 	}
 }
