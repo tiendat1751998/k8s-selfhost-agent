@@ -84,18 +84,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	r := chi.NewRouter()
 
 	// Standard middleware stack
-	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
-	r.Use(chimw.Recoverer)
-	r.Use(conditionalTimeout(60 * time.Second))
-	r.Use(chimw.Heartbeat("/ping"))
-	r.Use(mw.RequestBodyLimit(1 << 20))
-	r.Use(mw.StructuredLogger)
-	r.Use(mw.CORS)
-	r.Use(mw.Metrics)
-	r.Use(mw.RequestCounter)
-	r.Use(mw.Tracing)
-	r.Use(mw.SecurityHeaders)
+	r.Use(chimw.RequestID, chimw.RealIP, chimw.Recoverer, conditionalTimeout(60*time.Second))
+	r.Use(chimw.Heartbeat("/ping"), mw.RequestBodyLimit(1<<20), mw.StructuredLogger, mw.CORS)
+	r.Use(mw.Metrics, mw.RequestCounter, mw.Tracing, mw.SecurityHeaders)
 	r.Use(mw.AdaptiveLoadShedding(mw.DefaultLoadSheddingConfig()))
 
 	// Health endpoints
@@ -117,12 +108,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 				r.HandleFunc("/profile", pprof.Profile)
 				r.HandleFunc("/symbol", pprof.Symbol)
 				r.HandleFunc("/trace", pprof.Trace)
-				r.Handle("/heap", pprof.Handler("heap"))
-				r.Handle("/goroutine", pprof.Handler("goroutine"))
-				r.Handle("/allocs", pprof.Handler("allocs"))
-				r.Handle("/block", pprof.Handler("block"))
-				r.Handle("/mutex", pprof.Handler("mutex"))
-				r.Handle("/threadcreate", pprof.Handler("threadcreate"))
+				for _, p := range []string{"heap", "goroutine", "allocs", "block", "mutex", "threadcreate"} {
+					r.Handle("/"+p, pprof.Handler(p))
+				}
 			})
 		})
 	}
@@ -133,39 +121,41 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	}
 
 	// Auth API routes
-	r.Route("/api/v1/auth", func(r chi.Router) {
-		if platform != nil && platform.Auth != nil {
-			authRateLimit := mw.RateLimit(10, time.Minute)
-			r.With(authRateLimit).Post("/login", platform.Auth.Login)
-			r.With(authRateLimit).Post("/verify-mfa", platform.Auth.VerifyMFA)
-			r.With(authRateLimit).Post("/refresh", platform.Auth.RefreshToken)
-			r.With(authRateLimit).Post("/recovery/verify", platform.Auth.VerifyRecoveryCode)
-			r.With(authRateLimit).Post("/logout", platform.Auth.Logout)
+	if platform != nil && (platform.Auth != nil || (platform.SRE != nil && (platform.SRE.Vault != nil || platform.SRE.JWKS != nil))) {
+		r.Route("/api/v1/auth", func(r chi.Router) {
+			if platform.Auth != nil {
+				authRateLimit := mw.RateLimit(10, time.Minute)
+				r.With(authRateLimit).Post("/login", platform.Auth.Login)
+				r.With(authRateLimit).Post("/verify-mfa", platform.Auth.VerifyMFA)
+				r.With(authRateLimit).Post("/refresh", platform.Auth.RefreshToken)
+				r.With(authRateLimit).Post("/recovery/verify", platform.Auth.VerifyRecoveryCode)
+				r.With(authRateLimit).Post("/logout", platform.Auth.Logout)
 
-			// Authenticated TOTP routes
-			r.Group(func(r chi.Router) {
-				r.Use(mw.JWTAuthMiddleware)
-				r.Post("/totp/setup", platform.Auth.SetupTOTP)
-				r.Post("/totp/verify-setup", platform.Auth.VerifyTOTPSetup)
-				r.Post("/totp/disable", platform.Auth.DisableTOTP)
-				r.Get("/totp/status", platform.Auth.TOTPStatus)
-			})
-		}
-		if platform != nil && platform.SRE != nil {
-			vault := platform.SRE.Vault
-			if vault == nil {
-				vault = platform.SRE.JWKS
-			}
-			if vault != nil {
-				r.Group(func(ar chi.Router) {
-					ar.Use(mw.JWTAuthMiddleware)
-					ar.Get("/jwks/status", vault.GetJWKSStatus)
-					ar.Post("/jwks/refresh", vault.RefreshJWKS)
-					ar.Get("/vault/unseal-status", vault.GetVaultUnsealStatus)
+				r.Group(func(r chi.Router) {
+					r.Use(mw.JWTAuthMiddleware)
+					r.Post("/totp/setup", platform.Auth.SetupTOTP)
+					r.Post("/totp/verify-setup", platform.Auth.VerifyTOTPSetup)
+					r.Post("/totp/disable", platform.Auth.DisableTOTP)
+					r.Get("/totp/status", platform.Auth.TOTPStatus)
 				})
 			}
-		}
-	})
+			if platform.SRE != nil {
+				vault := platform.SRE.Vault
+				if vault == nil {
+					vault = platform.SRE.JWKS
+				}
+				if vault != nil {
+					r.Group(func(r chi.Router) {
+						r.Use(mw.JWTAuthMiddleware)
+						mut := mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")
+						r.With(mut).Get("/jwks/status", vault.GetJWKSStatus)
+						r.With(mut).Post("/jwks/refresh", vault.RefreshJWKS)
+						r.With(mut).Get("/vault/unseal-status", vault.GetVaultUnsealStatus)
+					})
+				}
+			}
+		})
+	}
 
 	// Kubernetes Admission Webhook routes (/api/v1/security/admission/*)
 	if platform != nil && platform.Admission != nil {
@@ -413,17 +403,25 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			if platform.Helm != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin")).Route("/helm", platform.Helm.RegisterRoutes)
 			}
+			meshMut := mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")
+			hasMesh := platform.Mesh != nil
+			hasSREMesh := platform.SRE != nil && platform.SRE.ServiceMesh != nil
+			if hasMesh || hasSREMesh {
+				r.With(meshMut).Route("/mesh", func(meshR chi.Router) {
+					if hasMesh {
+						platform.Mesh.RegisterRoutes(meshR)
+					}
+					if hasSREMesh {
+						platform.SRE.ServiceMesh.RegisterRoutes(meshR)
+					}
+				})
+			}
 			if platform.MessagingSRE != nil {
-				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/messaging", platform.MessagingSRE.RegisterRoutes)
-				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/clusters/{clusterId}/messaging", platform.MessagingSRE.RegisterRoutes)
+				r.With(meshMut).Route("/messaging", platform.MessagingSRE.RegisterRoutes)
+				r.With(meshMut).Route("/clusters/{clusterId}/messaging", platform.MessagingSRE.RegisterRoutes)
 			}
 			if platform.SRE != nil {
-				if platform.Mesh != nil && platform.SRE.Mesh == nil {
-					platform.SRE.Mesh = platform.Mesh
-				}
 				RegisterSRERoutes(r, platform.SRE)
-			} else if platform.Mesh != nil {
-				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/mesh", platform.Mesh.RegisterRoutes)
 			}
 		}
 	})
@@ -445,8 +443,9 @@ func findFrontendDir() string {
 		}
 	}
 	candidates := []string{
-		"frontend", "/frontend", "/app/frontend", "frontend-vue/dist",
-		"../frontend-vue/dist", "../../frontend-vue/dist", "../frontend", "../../frontend", "dist",
+		"frontend", "/frontend", "/app/frontend",
+		"frontend-vue/dist", "../frontend-vue/dist", "../../frontend-vue/dist",
+		"../frontend", "../../frontend", "dist",
 	}
 	for _, dir := range candidates {
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
@@ -478,22 +477,19 @@ type skipStreamRouter struct {
 }
 
 func (s skipStreamRouter) Get(pattern string, h http.HandlerFunc) {
-	if pattern == "/stream" {
-		return
+	if pattern != "/stream" {
+		s.Router.Get(pattern, h)
 	}
-	s.Router.Get(pattern, h)
 }
 
 func (s skipStreamRouter) HandleFunc(pattern string, h http.HandlerFunc) {
-	if pattern == "/stream" {
-		return
+	if pattern != "/stream" {
+		s.Router.HandleFunc(pattern, h)
 	}
-	s.Router.HandleFunc(pattern, h)
 }
 
 func (s skipStreamRouter) MethodFunc(method, pattern string, h http.HandlerFunc) {
-	if method == http.MethodGet && pattern == "/stream" {
-		return
+	if method != http.MethodGet || pattern != "/stream" {
+		s.Router.MethodFunc(method, pattern, h)
 	}
-	s.Router.MethodFunc(method, pattern, h)
 }
