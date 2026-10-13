@@ -30,6 +30,7 @@ type SREResilienceHandlers struct {
 	SecDefense        *SecDefenseHandler
 	CloudResilience   *CloudResilienceHandler
 	ServiceMesh       *ServiceMeshHandler
+	Mesh              *MeshHandler
 	NUMAMemory        *NUMAMemoryHandler
 	Hardware          *HardwareHandler
 	Crypto            *CryptoHandler

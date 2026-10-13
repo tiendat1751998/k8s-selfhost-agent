@@ -32,7 +32,7 @@ func TestSearchRepo_ConnectionLeaks(t *testing.T) {
 	}
 	defer pool.Close()
 
-	repo := NewSearchRepo(pool, nil)
+	repo := NewSearchRepo(pool)
 
 	// Ensure the pool is working
 	if err := pool.Ping(ctx); err != nil {

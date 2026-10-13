@@ -18,14 +18,10 @@ services:
       K8S_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       K8S_POSTGRES_DBNAME: "k8sselfhost"
       K8S_POSTGRES_SSLMODE: "disable"
-      K8S_REDIS_HOST: "redis"
-      K8S_REDIS_PORT: "6379"
       K8S_NATS_URL: "nats://nats:4222"
       K8S_LOG_LEVEL: "debug"
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       nats:
         condition: service_healthy
@@ -61,25 +57,6 @@ services:
     networks:
       - k8sselfhost
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    security_opt:
-      - no-new-privileges:true
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-changeme}
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-changeme} ping | grep PONG || redis-cli ping | grep PONG"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    networks:
-      - k8sselfhost
-
   nats:
     image: nats:2-alpine
     restart: unless-stopped
@@ -102,7 +79,6 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
   nats_data:
 
 networks:

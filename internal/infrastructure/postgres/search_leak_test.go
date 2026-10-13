@@ -47,7 +47,7 @@ func TestSearchRepo_ConnectionLeak(t *testing.T) {
 		t.Fatalf("database ping failed: %v", err)
 	}
 
-	repo := postgres.NewSearchRepo(pool, nil)
+	repo := postgres.NewSearchRepo(pool)
 
 	// We will run 30 concurrent search queries.
 	// Since MaxConns is 3, if any query leaks a connection, subsequent queries will hang

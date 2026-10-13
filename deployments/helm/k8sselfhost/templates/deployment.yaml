@@ -73,10 +73,6 @@ spec:
               value: "{{ .Values.config.postgres.dbname }}"
             - name: K8S_POSTGRES_SSLMODE
               value: "{{ .Values.config.postgres.sslmode }}"
-            - name: K8S_REDIS_HOST
-              value: "{{ .Values.config.redis.host }}"
-            - name: K8S_REDIS_PORT
-              value: "{{ .Values.config.redis.port }}"
             - name: K8S_NATS_URL
               value: "{{ .Values.config.nats.url }}"
             - name: K8S_LLM_PROVIDER

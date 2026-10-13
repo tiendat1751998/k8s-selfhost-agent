@@ -88,7 +88,7 @@ func TestDockerComposeHardening(t *testing.T) {
 		t.Fatalf("invalid YAML in compose file: %v", err)
 	}
 
-	expectedServices := []string{"app", "postgres", "redis", "nats"}
+	expectedServices := []string{"app", "postgres", "nats"}
 	for _, svc := range expectedServices {
 		s, ok := compose.Services[svc]
 		if !ok {
