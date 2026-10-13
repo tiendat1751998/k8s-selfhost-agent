@@ -25,13 +25,15 @@ const currentCluster = computed(() => {
   }
 })
 
-const clusterStatusDotClass = computed(() => {
-  const s = (currentCluster.value.status || '').toLowerCase()
+function getClusterDotClass(status?: string): string {
+  const s = (status || '').toLowerCase()
   if (['healthy', 'ready', 'active', 'online', 'ok', 'running'].includes(s)) return 'dot-emerald'
-  if (['degraded', 'warning', 'pending'].includes(s)) return 'dot-amber dot-pulse'
-  if (['offline', 'failed', 'critical', 'down'].includes(s)) return 'dot-rose'
+  if (['degraded', 'warning', 'pending', 'elevated'].includes(s)) return 'dot-amber dot-pulse'
+  if (['offline', 'failed', 'critical', 'down', 'error'].includes(s)) return 'dot-rose'
   return 'dot-slate'
-})
+}
+
+const clusterStatusDotClass = computed(() => getClusterDotClass(currentCluster.value.status))
 
 const activeNamespaceDisplay = computed(() => (!activeNamespace.value || activeNamespace.value === 'all') ? 'All Namespaces' : activeNamespace.value)
 
@@ -78,13 +80,26 @@ function closeDropdown(refocus = false) {
 function selectCluster(id: string) { setCluster(id); closeDropdown(true) }
 function selectNamespace(ns: string) { setNamespace(ns); closeDropdown(true) }
 
+function scrollFocusedIntoView(index: number) {
+  nextTick(() => {
+    const el = menuRef.value?.querySelectorAll('.context-item')[index] as HTMLElement | undefined
+    el?.scrollIntoView({ block: 'nearest' })
+  })
+}
+
 function onMenuKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') { e.preventDefault(); closeDropdown(true); return }
   const count = activeDropdown.value === 'cluster' ? filteredClusters.value.length : filteredNamespaces.value.length
   if (count === 0) return
-  if (e.key === 'ArrowDown') { e.preventDefault(); focusedIndex.value = (focusedIndex.value + 1) % count }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); focusedIndex.value = (focusedIndex.value - 1 + count) % count }
-  else if (e.key === 'Enter') {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    focusedIndex.value = (focusedIndex.value + 1) % count
+    scrollFocusedIntoView(focusedIndex.value)
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    focusedIndex.value = (focusedIndex.value - 1 + count) % count
+    scrollFocusedIntoView(focusedIndex.value)
+  } else if (e.key === 'Enter') {
     e.preventDefault()
     if (activeDropdown.value === 'cluster') {
       const target = filteredClusters.value[focusedIndex.value]
@@ -129,6 +144,7 @@ onUnmounted(() => {
     >
       <span class="status-dot" :class="clusterStatusDotClass" />
       <span class="pill-text font-mono">{{ currentCluster.name || currentCluster.id }}</span>
+      <BaseIcon name="chevron-down" size="xs" class="pill-caret" />
     </button>
     <span class="pill-slash font-mono">/</span>
     <button
@@ -155,6 +171,9 @@ onUnmounted(() => {
             ref="searchInputRef" v-model="searchQuery" type="text" class="context-search-input"
             :placeholder="activeDropdown === 'cluster' ? 'Search clusters...' : 'Search namespaces...'" @keydown="onMenuKeydown"
           />
+          <span class="context-count-badge font-mono">
+            {{ activeDropdown === 'cluster' ? filteredClusters.length : filteredNamespaces.length }}
+          </span>
         </div>
         <div class="context-menu-items" role="presentation">
           <template v-if="activeDropdown === 'cluster'">
@@ -164,7 +183,7 @@ onUnmounted(() => {
               role="option" :aria-selected="c.id === activeClusterId" @mouseenter="focusedIndex = idx" @click="selectCluster(c.id)"
             >
               <div class="item-main">
-                <span class="status-dot" :class="c.status === 'healthy' ? 'dot-emerald' : 'dot-amber'" />
+                <span class="status-dot" :class="getClusterDotClass(c.status)" />
                 <span class="item-name font-mono">{{ c.name || c.id }}</span>
               </div>
               <span v-if="c.region" class="item-region">{{ c.region }}</span>
@@ -259,6 +278,16 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.05); border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .context-search-input { flex: 1; background: transparent; border: none; outline: none; color: #f1f5f9; font-size: 11px; }
+.context-count-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  padding: 1px 6px;
+  min-width: 16px;
+  text-align: center;
+}
 .context-menu-items { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .context-item {
   display: flex; align-items: center; justify-content: space-between; width: 100%;
