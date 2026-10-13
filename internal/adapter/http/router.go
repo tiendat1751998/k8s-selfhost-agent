@@ -266,6 +266,8 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 					sub.Get("/logs", platform.K8sLogs.HandlePodLogs)
 					sub.Get("/logs/{pod}", platform.K8sLogs.HandlePodLogs)
 					sub.Get("/pods/{pod}/logs", platform.K8sLogs.HandlePodLogs)
+					sub.Get("/workloads/{kind}/{name}/logs", platform.K8sLogs.HandleWorkloadLogs)
+					sub.Get("/deployments/{name}/logs", platform.K8sLogs.HandleWorkloadLogs)
 				}
 				if platform.K8sBootstrap != nil {
 					sub.Get("/essentials", platform.K8sBootstrap.GetEssentialsStatus)
@@ -486,5 +488,3 @@ func (s skipStreamRouter) MethodFunc(method, pattern string, h http.HandlerFunc)
 	}
 	s.Router.MethodFunc(method, pattern, h)
 }
-
-

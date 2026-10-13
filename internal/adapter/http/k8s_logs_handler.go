@@ -155,7 +155,10 @@ func (h *K8sLogsHandler) HandlePodLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Follow=true -> Server-Sent Events (SSE) stream
+	h.streamSinglePodLogs(w, r, stream)
+}
+
+func (h *K8sLogsHandler) streamSinglePodLogs(w http.ResponseWriter, r *http.Request, stream io.Reader) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -186,3 +189,4 @@ func (h *K8sLogsHandler) HandlePodLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
