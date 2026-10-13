@@ -8,6 +8,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	domainsre "github.com/datdt/k8sselfhost/internal/domain/sre"
 )
 
 // AnalyzeNodeRCA inspects node conditions, lease status, and cluster events to infer root cause.
@@ -20,47 +22,41 @@ func AnalyzeNodeRCA(node *corev1.Node, leaseHealthy bool, eventMessages []string
 		}
 	}
 
-	signals := make([]string, 0)
-	isReady := false
-	memPressure := false
-	diskPressure := false
-	pidPressure := false
-	plegIssue := false
-	heartbeatLost := !leaseHealthy
+	var signals domainsre.TelemetrySignals
 
 	for _, cond := range node.Status.Conditions {
 		switch cond.Type {
 		case corev1.NodeReady:
 			if cond.Status == corev1.ConditionTrue {
-				isReady = true
+				signals.NodeReadyTrue = true
 			} else {
-				signals = append(signals, "NodeReady: "+string(cond.Status)+" ("+cond.Reason+")")
-				if cond.Status == corev1.ConditionUnknown || cond.Reason == "NodeStatusUnknown" || cond.Reason == "KubeletStopped" {
-					heartbeatLost = true
+				if cond.Status == corev1.ConditionUnknown {
+					signals.NodeReadyUnknown = true
 				}
-				if strings.Contains(strings.ToUpper(cond.Reason), "PLEG") || strings.Contains(strings.ToUpper(cond.Message), "PLEG") {
-					plegIssue = true
+				reasonUpper := strings.ToUpper(cond.Reason)
+				msgUpper := strings.ToUpper(cond.Message)
+				if strings.Contains(reasonUpper, "PLEG") || strings.Contains(msgUpper, "PLEG") {
+					signals.PLEGUnhealthyLog = true
+				}
+				if cond.Reason == "KubeletStopped" || cond.Reason == "NodeStatusUnknown" {
+					signals.KubeletPortTimeout = true
 				}
 			}
 		case corev1.NodeMemoryPressure:
 			if cond.Status == corev1.ConditionTrue {
-				memPressure = true
-				signals = append(signals, "MemoryPressure: True")
+				signals.MemoryPressureCond = true
 			}
 		case corev1.NodeDiskPressure:
 			if cond.Status == corev1.ConditionTrue {
-				diskPressure = true
-				signals = append(signals, "DiskPressure: True")
+				signals.DiskPressureCond = true
 			}
 		case corev1.NodePIDPressure:
 			if cond.Status == corev1.ConditionTrue {
-				pidPressure = true
-				signals = append(signals, "PIDPressure: True")
+				signals.PIDPressureCond = true
 			}
 		default:
 			if strings.Contains(strings.ToUpper(string(cond.Type)), "PLEG") && cond.Status == corev1.ConditionTrue {
-				plegIssue = true
-				signals = append(signals, string(cond.Type)+": True")
+				signals.PLEGUnhealthyLog = true
 			}
 		}
 	}
@@ -68,78 +64,47 @@ func AnalyzeNodeRCA(node *corev1.Node, leaseHealthy bool, eventMessages []string
 	for _, msg := range eventMessages {
 		upper := strings.ToUpper(msg)
 		if strings.Contains(upper, "OOM") || strings.Contains(upper, "OUT OF MEMORY") || strings.Contains(upper, "SYSTEMOOM") {
-			memPressure = true
-			signals = append(signals, "Event: "+msg)
+			signals.DmesgOOMDetected = true
+			signals.OOMKilledEventsDetected = true
 		}
 		if strings.Contains(upper, "PLEG") {
-			plegIssue = true
-			signals = append(signals, "Event: "+msg)
+			signals.PLEGUnhealthyLog = true
 		}
-		if strings.Contains(upper, "DISK") || strings.Contains(upper, "IOWAIT") || strings.Contains(upper, "READ-ONLY FILE SYSTEM") {
-			diskPressure = true
-			signals = append(signals, "Event: "+msg)
+		if strings.Contains(upper, "CONTAINERD") || strings.Contains(upper, "RUNTIME TIMEOUT") {
+			signals.ContainerdSocketTimeout = true
+		}
+		if strings.Contains(upper, "DISK") || strings.Contains(upper, "IOWAIT") {
+			signals.DiskPressureCond = true
+			signals.DiskAwaitMs = 5000.0
+		}
+		if strings.Contains(upper, "READ-ONLY") {
+			signals.FilesystemReadOnly = true
 		}
 		if strings.Contains(upper, "HEARTBEAT") || strings.Contains(upper, "PING TIMEOUT") || strings.Contains(upper, "UNRESPONSIVE") {
-			heartbeatLost = true
-			signals = append(signals, "Event: "+msg)
+			signals.PingTimeout = true
+		}
+		if strings.Contains(upper, "AGENT TIMEOUT") {
+			signals.AgentTimeout = true
+		}
+		if strings.Contains(upper, "FORK") || strings.Contains(upper, "EAGAIN") {
+			signals.ForkRejectedLog = true
 		}
 	}
 
-	// 1. OOM Killer Cascade heuristic
-	if memPressure {
-		return RCAAnalysis{
-			ProbableCause:  "OOM_KILLER_CASCADE",
-			Confidence:     0.94,
-			Recommendation: "Assign memory limits to workload pods before eviction to protect destination node.",
-			Signals:        signals,
+	if !leaseHealthy {
+		if !signals.MemoryPressureCond && !signals.DiskPressureCond && !signals.PIDPressureCond && !signals.PLEGUnhealthyLog {
+			signals.PingTimeout = true
+			signals.AgentTimeout = true
 		}
 	}
 
-	// 2. PLEG Runtime Deadlock heuristic
-	if plegIssue {
-		return RCAAnalysis{
-			ProbableCause:  "PLEG_CONTAINER_RUNTIME_DEADLOCK",
-			Confidence:     0.91,
-			Recommendation: "Restart container runtime daemon (containerd/CRI-O) or reboot node.",
-			Signals:        signals,
-		}
-	}
-
-	// 3. Disk I/O Hang heuristic
-	if diskPressure {
-		return RCAAnalysis{
-			ProbableCause:  "DISK_IO_HANG",
-			Confidence:     0.89,
-			Recommendation: "Investigate storage controllers and clean ephemeral disk volumes.",
-			Signals:        signals,
-		}
-	}
-
-	// 4. Hardware Power / Kernel Panic heuristic
-	if heartbeatLost || !isReady {
-		return RCAAnalysis{
-			ProbableCause:  "HARDWARE_POWER_OR_KERNEL_PANIC",
-			Confidence:     0.88,
-			Recommendation: "Inspect host IPMI/BMC console for kernel panic or hardware power failure.",
-			Signals:        signals,
-		}
-	}
-
-	if pidPressure {
-		return RCAAnalysis{
-			ProbableCause:  "PID_EXHAUSTION",
-			Confidence:     0.85,
-			Recommendation: "Increase kernel max PID limit or isolate process leaking tasks.",
-			Signals:        signals,
-		}
-	}
-
-	// Healthy node
+	report := domainsre.EvaluateRCAMatrix(signals)
 	return RCAAnalysis{
-		ProbableCause:  "NODE_HEALTHY",
-		Confidence:     1.00,
-		Recommendation: "Node is operational and reports healthy conditions.",
-		Signals:        []string{"NodeReady: True"},
+		ProbableCause:  report.PrimaryCause,
+		Confidence:     report.Confidence,
+		Recommendation: report.Recommendation,
+		Signals:        report.MatchingEvidence,
+		DynamicReport:  report,
 	}
 }
 
@@ -350,6 +315,39 @@ func (c *RemediationController) PreflightScan(ctx context.Context, clusterID, no
 	}
 	rca := AnalyzeNodeRCA(node, leaseHealthy, eventMsgs)
 
+	var cbStatus *CircuitBreakerStatus
+	if c.circuitBreaker != nil {
+		unreadyCount := 0
+		for _, n := range nodeList.Items {
+			for _, cond := range n.Status.Conditions {
+				if cond.Type == corev1.NodeReady && cond.Status != corev1.ConditionTrue {
+					unreadyCount++
+					break
+				}
+			}
+		}
+		cbStatus, _ = c.circuitBreaker.EvaluateBlastRadius(clusterID, unreadyCount, len(nodeList.Items))
+	}
+
+	var probeReport *NodeProbeReport
+	if c.rescueManager != nil {
+		probeReport, _ = c.rescueManager.ProbeNodeHealth(ctx, client, nodeName)
+	}
+
+	var admissionPlan *CapacityAdmissionPlan
+	if c.capacityEngine != nil && masterName != "" {
+		rawWorkerPods := make([]corev1.Pod, 0)
+		for _, p := range podList.Items {
+			if p.Spec.NodeName == nodeName {
+				isDS, _ := ClassifyPod(&p)
+				if !isDS {
+					rawWorkerPods = append(rawWorkerPods, p)
+				}
+			}
+		}
+		admissionPlan, _ = c.capacityEngine.EvaluateMasterAdmission(ctx, client, masterName, rawWorkerPods)
+	}
+
 	return &NodeFencingPreflight{
 		ClusterID:                clusterID,
 		NodeName:                 nodeName,
@@ -368,5 +366,8 @@ func (c *RemediationController) PreflightScan(ctx context.Context, clusterID, no
 		StatelessPods:            statelessPods,
 		DaemonSetPods:            daemonSetPods,
 		VolumeInventory:          volumeInventory,
+		CircuitBreaker:           cbStatus,
+		ProbeReport:              probeReport,
+		CapacityAdmissionPlan:    admissionPlan,
 	}, nil
 }
