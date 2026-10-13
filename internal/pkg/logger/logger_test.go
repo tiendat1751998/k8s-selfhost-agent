@@ -67,6 +67,9 @@ func TestParseLevel(t *testing.T) {
 		{"info", "info"},
 		{"warn", "warn"},
 		{"error", "error"},
+		{"dpanic", "dpanic"},
+		{"panic", "panic"},
+		{"fatal", "fatal"},
 		{"unknown", "info"},
 	}
 

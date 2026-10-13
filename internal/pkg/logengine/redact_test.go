@@ -232,6 +232,19 @@ func TestRedactor_MixedLogs(t *testing.T) {
 	assert.Equal(t, expected, maskedStr)
 }
 
+func TestRedactor_TriggerWithoutMatch_ZeroAllocs(t *testing.T) {
+	redactor := NewInStreamRedactor()
+	require.NotNil(t, redactor)
+
+	// Line contains triggers '://' and 'token' but does not match credentials regex patterns
+	nonSecretLine := []byte("2026-10-12T10:35:00.123Z [INFO] request to https://k8s.local/api with token verification status=valid")
+	allocs := testing.AllocsPerRun(100, func() {
+		res := redactor.MaskBytes(nonSecretLine)
+		_ = res
+	})
+	assert.Equal(t, float64(0), allocs, "MaskBytes must have 0 allocations when triggers do not match regex")
+}
+
 func TestRedactor_Benchmark_Throughput(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping throughput benchmark test in short mode")

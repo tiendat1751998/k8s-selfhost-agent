@@ -174,11 +174,13 @@ func (w *BatchWriter) Write(entry logging.LogEntry) error {
 		// Bound memory under channel pressure: evict oldest entry to prevent lockups.
 		select {
 		case <-w.logCh:
-			w.droppedLogs.Add(1)
-			logger.Get().Error("clickhouse batch writer channel overflow: dropping oldest log",
-				zap.Int64("total_dropped", w.droppedLogs.Load()),
-				zap.Int("channel_capacity", cap(w.logCh)),
-			)
+			dropped := w.droppedLogs.Add(1)
+			if dropped == 1 || dropped%1000 == 0 {
+				logger.Get().Warn("clickhouse batch writer channel overflow: dropping oldest log",
+					zap.Int64("total_dropped", dropped),
+					zap.Int("channel_capacity", cap(w.logCh)),
+				)
+			}
 		default:
 		}
 

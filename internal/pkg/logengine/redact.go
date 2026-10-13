@@ -109,6 +109,9 @@ func (r *InStreamRedactor) MaskBytes(line []byte) []byte {
 	out := line
 	for k := 0; k < matchCount; k++ {
 		rule := &r.rules[matchedIndices[k]]
+		if !rule.Regex.Match(out) {
+			continue
+		}
 		out = rule.Regex.ReplaceAll(out, rule.Replacement)
 	}
 	return out
@@ -138,6 +141,9 @@ func (r *InStreamRedactor) MaskString(s string) string {
 	out := s
 	for k := 0; k < matchCount; k++ {
 		rule := &r.rules[matchedIndices[k]]
+		if !rule.Regex.MatchString(out) {
+			continue
+		}
 		out = rule.Regex.ReplaceAllString(out, rule.replacementStr)
 	}
 	return out
