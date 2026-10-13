@@ -2,8 +2,8 @@
 
 DROP TABLE IF EXISTS _health_check;
 
-DELETE FROM slo_snapshots WHERE service IN ('tiki_traefik', 'tiki_drone', 'tiki_redis', 'postgres_db', 'nats');
-DELETE FROM slo_definitions WHERE service IN ('tiki_traefik', 'tiki_drone', 'tiki_redis', 'postgres_db', 'nats');
+DELETE FROM slo_snapshots WHERE service IN ('edge_gateway', 'ci_runner', 'app_cache', 'tiki_traefik', 'tiki_drone', 'tiki_redis', 'postgres_db', 'nats');
+DELETE FROM slo_definitions WHERE service IN ('edge_gateway', 'ci_runner', 'app_cache', 'tiki_traefik', 'tiki_drone', 'tiki_redis', 'postgres_db', 'nats');
 
 DELETE FROM runbooks WHERE title IN (
     'Node Drain & Cordon Playbook',

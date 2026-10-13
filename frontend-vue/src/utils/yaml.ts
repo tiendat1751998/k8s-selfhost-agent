@@ -144,8 +144,8 @@ metadata:
     app.kubernetes.io/managed-by: k8sselfhost
 type: Opaque
 stringData:
-  API_KEY: "super-secret-key-12345"
-  DB_PASSWORD: "cluster-secret-pass"
+  API_KEY: "<your-base64-secret>"
+  DB_PASSWORD: "<your-base64-secret>"
 `
 
     case 'deployment':

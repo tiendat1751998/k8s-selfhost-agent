@@ -233,6 +233,9 @@ func TestRedactor_MixedLogs(t *testing.T) {
 }
 
 func TestRedactor_Benchmark_Throughput(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping throughput benchmark test in short mode")
+	}
 	redactor := NewInStreamRedactor()
 	require.NotNil(t, redactor)
 

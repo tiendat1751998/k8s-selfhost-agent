@@ -6,4 +6,4 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS requires_password_change BOOLEAN NOT 
 -- Mark seeded default admin user as requiring password change on first login for security
 UPDATE users
 SET requires_password_change = TRUE
-WHERE email = 'admin@k8s.local';
+WHERE email IN ('admin@k8sselfhost.local', 'admin@k8s.local');

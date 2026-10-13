@@ -1,15 +1,15 @@
 -- Migration: 044_sre_finops_real_telemetry.up.sql
 -- Description: Seed real operational telemetry for SRE, SLOs, Runbooks, Automation, FinOps Cost & Capacity planning.
 
--- 1. Seed Real Infrastructure SLO Definitions & Live Snapshots (tied to real services: tiki_traefik, tiki_drone, tiki_redis, postgres_db, nats)
+-- 1. Seed Real Infrastructure SLO Definitions & Live Snapshots (tied to real services: edge_gateway, ci_runner, app_cache, postgres_db, nats)
 DELETE FROM slo_snapshots;
 DELETE FROM slo_definitions;
 
 WITH inserted_slos AS (
     INSERT INTO slo_definitions (id, service, target, indicator_type, "window", query, alert_threshold, created_at, updated_at) VALUES
-        ('a0000001-0000-0000-0000-000000000001', 'tiki_traefik', 99.90, 'availability', '30d', 'sum(rate(traefik_service_requests_total{code!~"5..",service="tiki_traefik@docker"}[30d])) / sum(rate(traefik_service_requests_total{service="tiki_traefik@docker"}[30d])) * 100', 1.5, NOW() - INTERVAL '14 days', NOW()),
-        ('a0000001-0000-0000-0000-000000000002', 'tiki_drone', 99.90, 'availability', '30d', 'sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="tiki_drone"}[30d]))', 1.5, NOW() - INTERVAL '8 days', NOW()),
-        ('a0000001-0000-0000-0000-000000000003', 'tiki_redis', 99.90, 'latency', '30d', 'sum(rate(redis_commands_duration_seconds_total{service="tiki_redis"}[30d]))', 2.0, NOW() - INTERVAL '12 days', NOW()),
+        ('a0000001-0000-0000-0000-000000000001', 'edge_gateway', 99.90, 'availability', '30d', 'sum(rate(traefik_service_requests_total{code!~"5..",service="edge_gateway@docker"}[30d])) / sum(rate(traefik_service_requests_total{service="edge_gateway@docker"}[30d])) * 100', 1.5, NOW() - INTERVAL '14 days', NOW()),
+        ('a0000001-0000-0000-0000-000000000002', 'ci_runner', 99.90, 'availability', '30d', 'sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="ci_runner"}[30d]))', 1.5, NOW() - INTERVAL '8 days', NOW()),
+        ('a0000001-0000-0000-0000-000000000003', 'app_cache', 99.90, 'latency', '30d', 'sum(rate(redis_commands_duration_seconds_total{service="app_cache"}[30d]))', 2.0, NOW() - INTERVAL '12 days', NOW()),
         ('a0000001-0000-0000-0000-000000000004', 'postgres_db', 99.90, 'availability', '30d', 'avg_over_time(pg_up{service="postgres_db"}[30d]) * 100', 2.0, NOW() - INTERVAL '10 days', NOW()),
         ('a0000001-0000-0000-0000-000000000005', 'nats', 99.90, 'error_rate', '30d', 'sum(rate(nats_messages_received_total{service="nats"}[30d]))', 1.5, NOW() - INTERVAL '15 days', NOW())
     RETURNING id, service, target
@@ -21,25 +21,25 @@ SELECT
     service, 
     target,
     CASE 
-        WHEN service = 'tiki_traefik' THEN 99.98
-        WHEN service = 'tiki_drone' THEN 99.94
-        WHEN service = 'tiki_redis' THEN 99.99
+        WHEN service = 'edge_gateway' THEN 99.98
+        WHEN service = 'ci_runner' THEN 99.94
+        WHEN service = 'app_cache' THEN 99.99
         WHEN service = 'postgres_db' THEN 99.97
         WHEN service = 'nats' THEN 99.99
         ELSE 99.95
     END as actual,
     CASE 
-        WHEN service = 'tiki_traefik' THEN 0.20
-        WHEN service = 'tiki_drone' THEN 0.60
-        WHEN service = 'tiki_redis' THEN 0.10
+        WHEN service = 'edge_gateway' THEN 0.20
+        WHEN service = 'ci_runner' THEN 0.60
+        WHEN service = 'app_cache' THEN 0.10
         WHEN service = 'postgres_db' THEN 0.30
         WHEN service = 'nats' THEN 0.10
         ELSE 0.25
     END as burn_rate,
     CASE 
-        WHEN service = 'tiki_traefik' THEN 80.0
-        WHEN service = 'tiki_drone' THEN 40.0
-        WHEN service = 'tiki_redis' THEN 90.0
+        WHEN service = 'edge_gateway' THEN 80.0
+        WHEN service = 'ci_runner' THEN 40.0
+        WHEN service = 'app_cache' THEN 90.0
         WHEN service = 'postgres_db' THEN 70.0
         WHEN service = 'nats' THEN 90.0
         ELSE 75.0
@@ -80,9 +80,9 @@ INSERT INTO runbooks (title, category, content, tags, author, steps_count, last_
     'Service Rolling Restart & Verification',
     'Incident Response',
     '1. Trigger rolling update restart for target Swarm/K8s service:
-`docker service update --force --update-parallelism 1 --update-delay 10s tiki_traefik`
+`docker service update --force --update-parallelism 1 --update-delay 10s edge_gateway`
 2. Monitor task container state transition and convergence:
-`docker service ps tiki_traefik --filter "desired-state=running"`
+`docker service ps edge_gateway --filter "desired-state=running"`
 3. Verify HTTP 200 health probe on ingress endpoint:
 `curl -I -s http://localhost:80/ping | head -n 1`',
     ARRAY['swarm', 'docker', 'restart', 'zero-downtime', 'traefik'],
@@ -101,7 +101,7 @@ INSERT INTO runbooks (title, category, content, tags, author, steps_count, last_
 2. Signal failover promotion on standby replica:
 `pg_ctl promote -D /var/lib/postgresql/data`
 3. Re-route application connection pooler to new primary host:
-`docker service update --env-add DB_HOST=postgres_replica tiki_drone`
+`docker service update --env-add DB_HOST=postgres_replica ci_runner`
 4. Verify read-write transaction capability:
 `psql -U postgres -d k8sselfhost -c "CREATE TABLE IF NOT EXISTS _health_check (t timestamp); INSERT INTO _health_check VALUES (NOW());"`',
     ARRAY['postgres', 'database', 'ha', 'failover', 'patroni'],
@@ -116,7 +116,7 @@ INSERT INTO runbooks (title, category, content, tags, author, steps_count, last_
     'Emergency Memory Purge & Buffer Eviction',
     'Capacity Scaling',
     '1. Asynchronously flush expired cache keys and defragment memory:
-`docker exec -i $(docker ps -q -f name=tiki_redis) redis-cli FLUSHDB ASYNC`
+`docker exec -i $(docker ps -q -f name=app_cache) redis-cli FLUSHDB ASYNC`
 2. Trigger kernel buffer cache reclamation on host:
 `sync && echo 3 | sudo tee /proc/sys/vm/drop_caches`
 3. Verify reclaimed RAM headroom and container stats:
@@ -175,7 +175,7 @@ WITH inserted_rules AS (
         (
             'Emergency Cache Purge on Memory Spike',
             'high_memory',
-            '{"target_service": "tiki_redis", "threshold": "85%"}'::jsonb,
+            '{"target_service": "app_cache", "threshold": "85%"}'::jsonb,
             'restart_pod',
             '{"action": "async_flush", "notify_channel": "#alerts-sre"}'::jsonb,
             true,
@@ -203,17 +203,17 @@ SELECT
     id, 
     name,
     CASE 
-        WHEN trigger_type = 'deployment_failure' THEN 'CrashLoopBackOff detected on tiki_drone.1 (exit code 137 OOMKilled)'
+        WHEN trigger_type = 'deployment_failure' THEN 'CrashLoopBackOff detected on ci_runner.1 (exit code 137 OOMKilled)'
         WHEN trigger_type = 'pod_restart' THEN 'Postgres connection pool exhausted (>95 conns active for 5m)'
         WHEN trigger_type = 'node_pressure' THEN 'Disk pressure threshold >90% on host node worker2'
-        WHEN trigger_type = 'high_memory' THEN 'Redis memory usage reached 88% limit on tiki_redis'
+        WHEN trigger_type = 'high_memory' THEN 'Redis memory usage reached 88% limit on app_cache'
         ELSE 'SLO fast burn rate 2.4x detected on payment-api'
     END as trigger_event,
     CASE 
         WHEN action_type = 'rollback' THEN 'Automated rollback triggered to Git revision sha:9f2bc4a'
         WHEN action_type = 'generate_rca' THEN 'AI RCA diagnostic report generated with automated remediation patch'
         WHEN action_type = 'cordon_node' THEN 'Node worker2 cordoned and pods drained to worker1'
-        WHEN action_type = 'restart_pod' THEN 'Async FLUSHDB and memory defrag command executed on tiki_redis'
+        WHEN action_type = 'restart_pod' THEN 'Async FLUSHDB and memory defrag command executed on app_cache'
         ELSE 'P1 escalation notification dispatched to Slack #sre-incidents'
     END as action_taken,
     'success' as result,
@@ -231,9 +231,9 @@ INSERT INTO cluster_costs (name, provider, monthly_cost, daily_cost, cpu_cost, m
 ('swarm-edge-cluster', 'local', 960, 32, 420, 320, 140, 80, 2, NOW());
 
 INSERT INTO namespace_costs (namespace, cluster, cpu_requested, memory_requested, monthly_cost, utilization, updated_at) VALUES
-('tiki_traefik', 'k8s-prod-mesh', '4 Cores', '8 GB', 140, 82, NOW()),
-('tiki_drone', 'k8s-prod-mesh', '8 Cores', '24 GB', 360, 78, NOW()),
-('tiki_redis', 'k8s-prod-mesh', '4 Cores', '16 GB', 210, 91, NOW()),
+('edge_gateway', 'k8s-prod-mesh', '4 Cores', '8 GB', 140, 82, NOW()),
+('ci_runner', 'k8s-prod-mesh', '8 Cores', '24 GB', 360, 78, NOW()),
+('app_cache', 'k8s-prod-mesh', '4 Cores', '16 GB', 210, 91, NOW()),
 ('postgres_db', 'k8s-prod-mesh', '8 Cores', '32 GB', 450, 88, NOW()),
 ('nats', 'k8s-prod-mesh', '4 Cores', '8 GB', 120, 85, NOW()),
 ('system-monitoring', 'k8s-prod-mesh', '4 Cores', '12 GB', 160, 94, NOW()),
@@ -241,8 +241,8 @@ INSERT INTO namespace_costs (namespace, cluster, cpu_requested, memory_requested
 ('edge-workers', 'swarm-edge-cluster', '8 Cores', '16 GB', 280, 68, NOW());
 
 INSERT INTO resource_waste (type, resource, namespace, cluster, cpu_util, mem_util, wasted_cost, severity, updated_at) VALUES
-('Over-provisioned Pod', 'tiki_drone_idle_test_worker', 'tiki_drone', 'k8s-prod-mesh', 12, 35, 45, 'medium', NOW()),
-('Orphaned PVC', 'orphan_pvc_temp_build_artifacts', 'tiki_drone', 'k8s-prod-mesh', NULL, NULL, 28, 'low', NOW()),
+('Over-provisioned Pod', 'ci_runner_idle_test_worker', 'ci_runner', 'k8s-prod-mesh', 12, 35, 45, 'medium', NOW()),
+('Orphaned PVC', 'orphan_pvc_temp_build_artifacts', 'ci_runner', 'k8s-prod-mesh', NULL, NULL, 28, 'low', NOW()),
 ('Underutilized Pod', 'dev_redis_cache_idle', 'default', 'swarm-edge-cluster', 5, 14, 18, 'low', NOW());
 
 -- 5. Seed Capacity Planning Forecasts (Based on 6 Connected Hosts)

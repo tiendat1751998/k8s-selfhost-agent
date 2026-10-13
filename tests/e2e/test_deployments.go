@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/provider/docker"
@@ -11,7 +12,11 @@ import (
 )
 
 func main() {
-	dockerRepo, err := docker.NewRealDockerRepo("tcp://10.10.10.133:2375", "")
+	dockerHost := os.Getenv("DOCKER_HOST")
+	if dockerHost == "" {
+		dockerHost = "unix:///var/run/docker.sock"
+	}
+	dockerRepo, err := docker.NewRealDockerRepo(dockerHost, "")
 	if err != nil {
 		log.Fatal(err)
 	}

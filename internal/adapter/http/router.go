@@ -403,24 +403,19 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin")).Route("/helm", platform.Helm.RegisterRoutes)
 			}
 			meshMut := mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")
-			hasMesh := platform.Mesh != nil
-			hasSREMesh := platform.SRE != nil && platform.SRE.ServiceMesh != nil
-			if hasMesh || hasSREMesh {
-				r.With(meshMut).Route("/mesh", func(meshR chi.Router) {
-					if hasMesh {
-						platform.Mesh.RegisterRoutes(meshR)
-					}
-					if hasSREMesh {
-						platform.SRE.ServiceMesh.RegisterRoutes(meshR)
-					}
-				})
-			}
 			if platform.MessagingSRE != nil {
 				r.With(meshMut).Route("/messaging", platform.MessagingSRE.RegisterRoutes)
 				r.With(meshMut).Route("/clusters/{clusterId}/messaging", platform.MessagingSRE.RegisterRoutes)
 			}
 			if platform.SRE != nil {
+				if platform.SRE.Mesh == nil && platform.Mesh != nil {
+					platform.SRE.Mesh = platform.Mesh
+				}
 				RegisterSRERoutes(r, platform.SRE)
+			} else if platform.Mesh != nil {
+				r.With(meshMut).Route("/mesh", func(meshR chi.Router) {
+					platform.Mesh.RegisterRoutes(meshR)
+				})
 			}
 		}
 	})

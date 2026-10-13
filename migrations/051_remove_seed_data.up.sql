@@ -139,8 +139,8 @@ WHERE title IN (
 
 -- 8. Service Catalog
 DELETE FROM service_catalog 
-WHERE id IN ('srv-tiki-drone', 'srv-tiki-traefik', 'srv-tiki-redis', 'srv-tiki-cart', 'srv-tiki-product', 'srv-postgres-db', 'srv-nats')
-   OR name IN ('tiki_drone', 'tiki_traefik', 'tiki_redis', 'tiki_cart', 'tiki_product', 'postgres_db', 'nats', 'Payment Service', 'Order Service', 'Auth Service', 'Inventory DB', 'Notification Worker');
+WHERE id IN ('srv-tiki-drone', 'srv-tiki-traefik', 'srv-tiki-redis', 'srv-tiki-cart', 'srv-tiki-product', 'srv-ci-runner', 'srv-edge-gateway', 'srv-app-cache', 'srv-cart-service', 'srv-product-service', 'srv-postgres-db', 'srv-nats')
+   OR name IN ('tiki_drone', 'tiki_traefik', 'tiki_redis', 'tiki_cart', 'tiki_product', 'ci_runner', 'edge_gateway', 'app_cache', 'cart_service', 'product_service', 'postgres_db', 'nats', 'Payment Service', 'Order Service', 'Auth Service', 'Inventory DB', 'Notification Worker');
 
 -- 9. Runtime Plugins
 DELETE FROM plugins 
