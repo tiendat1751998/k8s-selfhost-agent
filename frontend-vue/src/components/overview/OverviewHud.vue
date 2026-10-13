@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import OverviewHud from './hud/OverviewHud.vue'
 import type { SystemOverview, NodeMetrics } from '../../api/overview'
+import type { TrendPoint } from '../../composables/useOverviewDashboard'
 
 interface Props {
   overview: SystemOverview
@@ -11,6 +12,7 @@ interface Props {
   clusterTotalMemBytes: number
   clusterUsedDiskBytes: number
   clusterTotalDiskBytes: number
+  trendHistory?: TrendPoint[]
 }
 
 defineProps<Props>()

@@ -1,8 +1,8 @@
-﻿# TASK 017: Datadog & Grafana Telemetry HUD with Inline Sparklines
+# TASK 017: Datadog & Grafana Telemetry HUD with Inline Sparklines
 
 > **Location**: .agents/tasks/enterprise-ui-redesign/017-datadog-grafana-telemetry-hud-sparklines.md  
 > **Benchmark Source**: Datadog Host Telemetry Cards, Grafana Stat Panels  
-> **Status**: READY_FOR_DISPATCH  
+> **Status**: COMPLETED  
 
 ## 1. Goal:
 Standardize HUD metric cards to 88px height with embedded inline SVG micro-sparklines for live resource trends.
