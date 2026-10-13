@@ -27,6 +27,7 @@ func NewMessagingHandler(manager domain.MessageQueueSREManager) *MessagingHandle
 func (h *MessagingHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/kafka/consumer-groups", h.InspectKafkaConsumerGroups)
 	r.Get("/rabbitmq/health", h.AuditRabbitMQ)
+	r.Get("/tenants/{tenantId}/backlog-alerts", h.GetTenantBacklogAlerts)
 
 	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Group(func(mut chi.Router) {
 		mut.Post("/kafka/consumer-groups/{groupId}/enforce-cooperative", h.EnforceKafkaCooperativePolicy)
@@ -186,5 +187,18 @@ func (h *MessagingHandler) ApplyKafkaKernelTuning(w http.ResponseWriter, r *http
 		"node_name": nodeName,
 		"status":    "KERNEL_PROFILE_APPLIED",
 		"profile":   domain.DefaultKafkaKernelProfile(),
+	})
+}
+
+// GetTenantBacklogAlerts handles GET /api/v1/messaging/tenants/{tenantId}/backlog-alerts
+func (h *MessagingHandler) GetTenantBacklogAlerts(w http.ResponseWriter, r *http.Request) {
+	tenantID := strings.TrimSpace(chi.URLParam(r, "tenantId"))
+	if tenantID == "" {
+		writeError(w, http.StatusBadRequest, "tenantId parameter is required", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"tenant_id": tenantID,
+		"alerts":    []interface{}{},
 	})
 }

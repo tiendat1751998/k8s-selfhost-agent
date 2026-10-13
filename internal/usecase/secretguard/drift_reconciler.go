@@ -86,6 +86,13 @@ func (r *DriftReconciler) TrackSecretBaseline(policy domain.ExternalSecretPolicy
 func (r *DriftReconciler) AuditAndMitigatePollingStorms(ctx context.Context, namespace string) (*ReconcileResult, error) {
 	atomic.AddUint64(&r.telemetry.AuditRuns, 1)
 
+	if r.detector == nil {
+		return &ReconcileResult{
+			AuditedCount: 0,
+			Policies:     make([]domain.ExternalSecretPolicy, 0),
+		}, nil
+	}
+
 	policies, err := r.detector.AuditExternalSecrets(ctx, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("auditing external secrets: %w", err)

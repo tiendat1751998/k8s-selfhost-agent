@@ -174,6 +174,9 @@ func (m *APFManager) GetMetrics() (domain.PaddedAPFMetrics, domain.PaddedCompact
 // AuditAPFQueueStatus inspects APF queue depths, drops, and starvation states.
 // When system-leader-election is starved, alerts P0 and patches assuredConcurrencyShares.
 func (m *APFManager) AuditAPFQueueStatus(ctx context.Context) ([]domain.APFQueueStatus, error) {
+	if m.client == nil {
+		return []domain.APFQueueStatus{}, nil
+	}
 	statuses, err := m.client.GetPriorityLevelStatuses(ctx)
 	if err != nil {
 		m.logger.Error("Failed to fetch APF priority level statuses", zap.Error(err))

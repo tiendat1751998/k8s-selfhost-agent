@@ -151,6 +151,20 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 				r.Get("/totp/status", platform.Auth.TOTPStatus)
 			})
 		}
+		if platform != nil && platform.SRE != nil {
+			vault := platform.SRE.Vault
+			if vault == nil {
+				vault = platform.SRE.JWKS
+			}
+			if vault != nil {
+				r.Group(func(ar chi.Router) {
+					ar.Use(mw.JWTAuthMiddleware)
+					ar.Get("/jwks/status", vault.GetJWKSStatus)
+					ar.Post("/jwks/refresh", vault.RefreshJWKS)
+					ar.Get("/vault/unseal-status", vault.GetVaultUnsealStatus)
+				})
+			}
+		}
 	})
 
 	// Kubernetes Admission Webhook routes (/api/v1/security/admission/*)
@@ -397,15 +411,17 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			if platform.Helm != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin")).Route("/helm", platform.Helm.RegisterRoutes)
 			}
-			if platform.Mesh != nil {
-				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/mesh", platform.Mesh.RegisterRoutes)
-			}
 			if platform.MessagingSRE != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/messaging", platform.MessagingSRE.RegisterRoutes)
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/clusters/{clusterId}/messaging", platform.MessagingSRE.RegisterRoutes)
 			}
 			if platform.SRE != nil {
+				if platform.Mesh != nil && platform.SRE.Mesh == nil {
+					platform.SRE.Mesh = platform.Mesh
+				}
 				RegisterSRERoutes(r, platform.SRE)
+			} else if platform.Mesh != nil {
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/mesh", platform.Mesh.RegisterRoutes)
 			}
 		}
 	})
@@ -427,15 +443,8 @@ func findFrontendDir() string {
 		}
 	}
 	candidates := []string{
-		"frontend",
-		"/frontend",
-		"/app/frontend",
-		"frontend-vue/dist",
-		"../frontend-vue/dist",
-		"../../frontend-vue/dist",
-		"../frontend",
-		"../../frontend",
-		"dist",
+		"frontend", "/frontend", "/app/frontend", "frontend-vue/dist",
+		"../frontend-vue/dist", "../../frontend-vue/dist", "../frontend", "../../frontend", "dist",
 	}
 	for _, dir := range candidates {
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
@@ -486,5 +495,3 @@ func (s skipStreamRouter) MethodFunc(method, pattern string, h http.HandlerFunc)
 	}
 	s.Router.MethodFunc(method, pattern, h)
 }
-
-

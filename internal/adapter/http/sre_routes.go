@@ -30,6 +30,7 @@ type SREResilienceHandlers struct {
 	SecDefense        *SecDefenseHandler
 	CloudResilience   *CloudResilienceHandler
 	ServiceMesh       *ServiceMeshHandler
+	Mesh              *MeshHandler
 	NUMAMemory        *NUMAMemoryHandler
 	Hardware          *HardwareHandler
 	Crypto            *CryptoHandler
@@ -199,9 +200,16 @@ func RegisterSRERoutes(r chi.Router, handlers *SREResilienceHandlers) {
 		r.With(mutRoles).Route("/transitnet", handlers.TransitNet.RegisterRoutes)
 	}
 
-	// 18. Service Mesh SDS & Egress Shield
-	if handlers.ServiceMesh != nil {
-		r.With(mutRoles).Route("/mesh", handlers.ServiceMesh.RegisterRoutes)
+	// 18. Service Mesh SDS & Egress Shield & Platform Mesh Lifecycle
+	if handlers.Mesh != nil || handlers.ServiceMesh != nil {
+		r.With(mutRoles).Route("/mesh", func(sub chi.Router) {
+			if handlers.Mesh != nil {
+				handlers.Mesh.RegisterRoutes(sub)
+			}
+			if handlers.ServiceMesh != nil {
+				handlers.ServiceMesh.RegisterRoutes(sub)
+			}
+		})
 	}
 
 	// 19. Bare-Metal Hardware & EDAC
