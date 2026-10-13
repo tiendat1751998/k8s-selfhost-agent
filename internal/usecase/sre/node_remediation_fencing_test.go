@@ -44,8 +44,14 @@ func TestRemediationController_PreflightScan_TopologyAndRCA(t *testing.T) {
 	if preflight.MasterNodeName != "master-node" || !preflight.MasterHasNoScheduleTaint {
 		t.Errorf("expected master-node with NoSchedule taint, got name=%s taint=%v", preflight.MasterNodeName, preflight.MasterHasNoScheduleTaint)
 	}
-	if preflight.RCA.ProbableCause != "OOM_KILLER_CASCADE" || preflight.RCA.Confidence != 0.94 {
-		t.Errorf("expected OOM_KILLER_CASCADE (0.94), got %+v", preflight.RCA)
+	if preflight.RCA.ProbableCause != "OOM_KILLER_CASCADE" || preflight.RCA.Confidence <= 0.0 {
+		t.Errorf("expected OOM_KILLER_CASCADE with dynamic confidence > 0, got %+v", preflight.RCA)
+	}
+	if preflight.CircuitBreaker == nil {
+		t.Error("expected CircuitBreaker status populated in preflight")
+	}
+	if preflight.ProbeReport == nil {
+		t.Error("expected ProbeReport populated in preflight")
 	}
 	if len(preflight.StatefulPods) != 1 || len(preflight.StatelessPods) != 1 || len(preflight.VolumeInventory) != 1 {
 		t.Errorf("expected 1 stateful, 1 stateless, 1 volume, got %+v", preflight)
@@ -58,16 +64,46 @@ func TestRemediationController_RCA_Heuristics(t *testing.T) {
 		node            *corev1.Node
 		leaseOk         bool
 	}{
-		{"DiskPressure", "DISK_IO_HANG", &corev1.Node{Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}, {Type: corev1.NodeDiskPressure, Status: corev1.ConditionTrue}}}}, true},
-		{"PLEG deadlocked", "PLEG_CONTAINER_RUNTIME_DEADLOCK", &corev1.Node{Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse, Reason: "PLEGNotHealthy"}}}}, true},
+		{"DiskPressure", "DISK_IO_HANG_AND_DSTATE", &corev1.Node{Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}, {Type: corev1.NodeDiskPressure, Status: corev1.ConditionTrue}}}}, true},
+		{"PLEG deadlocked", "PLEG_RUNTIME_DEADLOCK", &corev1.Node{Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse, Reason: "PLEGNotHealthy"}}}}, true},
 		{"Heartbeat lost", "HARDWARE_POWER_OR_KERNEL_PANIC", &corev1.Node{Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionUnknown, Reason: "NodeStatusUnknown"}}}}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if res := AnalyzeNodeRCA(tc.node, tc.leaseOk, nil); res.ProbableCause != tc.wantCause {
+			res := AnalyzeNodeRCA(tc.node, tc.leaseOk, nil)
+			if res.ProbableCause != tc.wantCause {
 				t.Errorf("expected %s, got %s", tc.wantCause, res.ProbableCause)
 			}
+			if res.DynamicReport == nil {
+				t.Error("expected non-nil DynamicReport")
+			}
 		})
+	}
+}
+
+func TestRemediationController_ExecuteFencing_CircuitBreakerFreeze(t *testing.T) {
+	node1 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-1"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}},
+	}
+	node2 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-2"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}},
+	}
+	node3 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-3"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}},
+	}
+	// 2 unready out of 3 = 66.7% unready > 15% -> Tripped!
+	client := fake.NewSimpleClientset(node1, node2, node3)
+	ctrl := NewRemediationController(client, nil, zaptest.NewLogger(t))
+
+	_, err := ctrl.ExecuteFencing(context.Background(), "local", "worker-1", FencingExecutionOptions{ConfirmPowerIsolated: true})
+	if err == nil {
+		t.Fatal("expected ExecuteFencing to fail when circuit breaker trips")
+	}
+	if !errors.Is(err, ErrCircuitBreakerTripped) {
+		t.Fatalf("expected ErrCircuitBreakerTripped, got %v", err)
 	}
 }
 

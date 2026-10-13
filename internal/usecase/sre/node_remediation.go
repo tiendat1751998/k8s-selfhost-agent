@@ -29,9 +29,12 @@ type RemediationResult struct {
 
 // RemediationController handles automated node remediation (<30s fast failover) for offline/crashing nodes.
 type RemediationController struct {
-	k8sClient     kubernetes.Interface
-	clientManager *cluster.ClientManager
-	logger        *zap.Logger
+	k8sClient      kubernetes.Interface
+	clientManager  *cluster.ClientManager
+	logger         *zap.Logger
+	rescueManager  *NodeServiceRescueManager
+	capacityEngine *CapacityAdmissionEngine
+	circuitBreaker *FleetCircuitBreaker
 }
 
 // isNilK8sClient checks if a kubernetes.Interface is nil or holds a typed nil value.
@@ -39,13 +42,8 @@ func isNilK8sClient(client kubernetes.Interface) bool {
 	if client == nil {
 		return true
 	}
-	val := reflect.ValueOf(client)
-	switch val.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return val.IsNil()
-	default:
-		return false
-	}
+	k := reflect.ValueOf(client).Kind()
+	return (k == reflect.Pointer || k == reflect.Interface || k == reflect.Map || k == reflect.Slice || k == reflect.Func || k == reflect.Chan) && reflect.ValueOf(client).IsNil()
 }
 
 // NewRemediationController constructs a new RemediationController instance.
@@ -57,11 +55,23 @@ func NewRemediationController(k8sClient kubernetes.Interface, clientManager *clu
 		k8sClient = nil
 	}
 	return &RemediationController{
-		k8sClient:     k8sClient,
-		clientManager: clientManager,
-		logger:        logger,
+		k8sClient:      k8sClient,
+		clientManager:  clientManager,
+		logger:         logger,
+		rescueManager:  NewNodeServiceRescueManager(nil, nil),
+		capacityEngine: NewCapacityAdmissionEngine(),
+		circuitBreaker: NewFleetCircuitBreaker(),
 	}
 }
+
+// SetRescueManager sets a custom rescue manager (for tests or customized probers).
+func (c *RemediationController) SetRescueManager(m *NodeServiceRescueManager) { c.rescueManager = m }
+
+// SetCircuitBreaker sets a custom fleet circuit breaker.
+func (c *RemediationController) SetCircuitBreaker(b *FleetCircuitBreaker) { c.circuitBreaker = b }
+
+// SetCapacityEngine sets a custom capacity admission engine.
+func (c *RemediationController) SetCapacityEngine(e *CapacityAdmissionEngine) { c.capacityEngine = e }
 
 // getK8sClient resolves the kubernetes.Interface for the given clusterID.
 func (c *RemediationController) getK8sClient(ctx context.Context, clusterID string) (kubernetes.Interface, error) {
@@ -70,35 +80,26 @@ func (c *RemediationController) getK8sClient(ctx context.Context, clusterID stri
 			return c.k8sClient, nil
 		}
 		if c.clientManager != nil {
-			targetID := clusterID
-			if targetID != "" {
-				if cli, err := c.clientManager.GetK8sClient(ctx, targetID); err == nil && !isNilK8sClient(cli) {
-					return cli, nil
-				}
-			}
-			for _, fallbackID := range []string{"default", "local"} {
-				if fallbackID != targetID {
-					if cli, err := c.clientManager.GetK8sClient(ctx, fallbackID); err == nil && !isNilK8sClient(cli) {
+			for _, id := range []string{clusterID, "default", "local"} {
+				if id != "" {
+					if cli, err := c.clientManager.GetK8sClient(ctx, id); err == nil && !isNilK8sClient(cli) {
 						return cli, nil
 					}
 				}
 			}
 		}
-	} else {
-		if c.clientManager != nil {
-			cli, err := c.clientManager.GetK8sClient(ctx, clusterID)
-			if err != nil {
-				return nil, fmt.Errorf("resolving remote cluster '%s': %w", clusterID, err)
-			}
-			if !isNilK8sClient(cli) {
-				return cli, nil
-			}
-		}
-		// NEVER fall back to c.k8sClient for remote clusters (prevents cross-contamination)
-		return nil, fmt.Errorf("kubernetes client unavailable for remote cluster '%s': no active cluster connection", clusterID)
+		return nil, fmt.Errorf("kubernetes client unavailable for cluster '%s': no active cluster connection", clusterID)
 	}
-
-	return nil, fmt.Errorf("kubernetes client unavailable for cluster '%s': no active cluster connection", clusterID)
+	if c.clientManager != nil {
+		cli, err := c.clientManager.GetK8sClient(ctx, clusterID)
+		if err != nil {
+			return nil, fmt.Errorf("resolving remote cluster '%s': %w", clusterID, err)
+		}
+		if !isNilK8sClient(cli) {
+			return cli, nil
+		}
+	}
+	return nil, fmt.Errorf("kubernetes client unavailable for remote cluster '%s': no active cluster connection", clusterID)
 }
 
 // HandleNodeOffline performs fast-failover remediation on an offline or crashing node:
@@ -109,7 +110,6 @@ func (c *RemediationController) getK8sClient(ctx context.Context, clusterID stri
 // 5. Returns RemediationResult
 func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID, nodeName string) (*RemediationResult, error) {
 	startTime := time.Now()
-
 	if nodeName == "" {
 		return nil, fmt.Errorf("nodeName is required")
 	}
@@ -128,13 +128,10 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 		return nil, fmt.Errorf("getting node %s: %w", nodeName, err)
 	}
 
-	// Strategic merge patch for cordoning
 	patchBytes := []byte(`{"spec":{"unschedulable":true}}`)
 	if _, patchErr := client.CoreV1().Nodes().Patch(ctx, nodeName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}); patchErr != nil {
 		c.logger.Debug("cordon strategic merge patch non-critical error", zap.String("node", nodeName), zap.Error(patchErr))
 	}
-
-	// Ensure node struct reflects unschedulable = true for fake and live clients
 	if !node.Spec.Unschedulable {
 		node.Spec.Unschedulable = true
 		if _, err := client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
@@ -142,7 +139,6 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 		}
 	}
 
-	// Determine if node is not ready
 	nodeNotReady := true
 	for _, cond := range node.Status.Conditions {
 		if cond.Type == corev1.NodeReady {
@@ -163,25 +159,13 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 
 	// 3. Filter pods that are stuck in Terminating or whose node is not ready
 	for _, pod := range podList.Items {
-		// Filter by spec.nodeName (fieldSelector fallback for fake client)
 		if pod.Spec.NodeName != nodeName {
 			continue
 		}
-
-		// Skip mirror pods
 		if _, isMirror := pod.Annotations[corev1.MirrorPodAnnotationKey]; isMirror {
 			continue
 		}
-
-		// Skip DaemonSet pods (cannot be evicted and will be immediately recreated)
-		isDaemonSet := false
-		for _, owner := range pod.OwnerReferences {
-			if owner.Kind == "DaemonSet" {
-				isDaemonSet = true
-				break
-			}
-		}
-		if isDaemonSet {
+		if isDS, _ := ClassifyPod(&pod); isDS {
 			continue
 		}
 
@@ -189,13 +173,10 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 		if !isTerminating && !nodeNotReady {
 			continue
 		}
-
-		// Skip pods already completed or failed unless terminating
 		if (pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed) && !isTerminating {
 			continue
 		}
 
-		// 4. Evict or delete pod
 		ns := pod.Namespace
 		if ns == "" {
 			ns = "default"
@@ -208,9 +189,7 @@ func (c *RemediationController) HandleNodeOffline(ctx context.Context, clusterID
 			if pod.DeletionGracePeriodSeconds != nil && *pod.DeletionGracePeriodSeconds > 0 {
 				allowedGrace = *pod.DeletionGracePeriodSeconds
 			}
-			if time.Since(pod.DeletionTimestamp.Time) >= time.Duration(allowedGrace)*time.Second {
-				isStuckTerminating = true
-			}
+			isStuckTerminating = time.Since(pod.DeletionTimestamp.Time) >= time.Duration(allowedGrace)*time.Second
 		}
 
 		deleteOpts := metav1.DeleteOptions{}
@@ -323,6 +302,26 @@ func (c *RemediationController) ExecuteFencing(ctx context.Context, clusterID, n
 			if va.Spec.NodeName == nodeName {
 				attachedVAs = append(attachedVAs, va)
 			}
+		}
+	}
+
+	// 0. Circuit Breaker Check
+	if c.circuitBreaker != nil {
+		allNodes, _ := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		unreadyCount, totalCount := 0, 0
+		if allNodes != nil {
+			totalCount = len(allNodes.Items)
+			for _, n := range allNodes.Items {
+				for _, cond := range n.Status.Conditions {
+					if cond.Type == corev1.NodeReady && cond.Status != corev1.ConditionTrue {
+						unreadyCount++
+						break
+					}
+				}
+			}
+		}
+		if cbStatus, _ := c.circuitBreaker.EvaluateBlastRadius(clusterID, unreadyCount, totalCount); cbStatus != nil && cbStatus.Tripped {
+			return nil, fmt.Errorf("%w: %s (%s)", ErrCircuitBreakerTripped, cbStatus.Status, cbStatus.Reason)
 		}
 	}
 
