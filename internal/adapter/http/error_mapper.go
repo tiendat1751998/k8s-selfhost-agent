@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	domaincrypto "github.com/datdt/k8sselfhost/internal/domain/crypto"
+	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	"github.com/datdt/k8sselfhost/internal/domain/k8sresilience"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
@@ -39,6 +40,15 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 	}
 	if errors.Is(err, domaincrypto.ErrKMSDEKGraceExpired) {
 		return http.StatusInternalServerError, err.Error()
+	}
+	if errors.Is(err, domainGitops.ErrGitOpsObsoleteWebhook) {
+		return http.StatusConflict, err.Error()
+	}
+	if errors.Is(err, domainGitops.ErrGitOpsCircularSyncWave) {
+		return http.StatusUnprocessableEntity, err.Error()
+	}
+	if errors.Is(err, domainGitops.ErrGitOpsDriftConflict) {
+		return http.StatusConflict, err.Error()
 	}
 	var domErr *domainerrors.DomainError
 	if errors.As(err, &domErr) {
