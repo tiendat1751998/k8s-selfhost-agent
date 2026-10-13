@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import BaseIcon from '../../ui/BaseIcon.vue'
+import NodeFencingRescueSection from './NodeFencingRescueSection.vue'
+import NodeFencingRcaEvidence from './NodeFencingRcaEvidence.vue'
+import NodeFencingCapacitySection from './NodeFencingCapacitySection.vue'
 import {
   getFencingPreflight,
   executeNodeFencing,
   type NodeFencingPreflight,
   type FencingExecutionReport,
+  type ServiceRescueResult,
 } from '../../../api/dr'
 
 interface Props {
@@ -14,33 +18,36 @@ interface Props {
   clusterId?: string
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  clusterId: 'default'
-})
-
+const props = withDefaults(defineProps<Props>(), { clusterId: 'default' })
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'update:show', val: boolean): void
   (e: 'fenced', report: FencingExecutionReport): void
 }>()
 
-// 5 Stages: 1 = Pre-flight/RCA, 2 = STONITH Gate, 3 = Storage Fencing, 4 = Pod Eviction, 5 = Post-Recovery Summary
+const STAGES = ['RCA Scan', 'STONITH Gate', 'Fencing', 'Eviction', 'Summary']
+const EXEC_STEPS = [
+  'Cordoning node (spec.unschedulable = true)...',
+  'Applying K8s 1.28+ out-of-service taint...',
+  'Detaching VolumeAttachments from CSI controller...'
+]
+
 const stage = ref<number>(1)
 const loadingPreflight = ref(false)
 const executing = ref(false)
 const errorMessage = ref<string>('')
 const copySuccess = ref(false)
 
-// Preflight & Options
 const preflight = ref<NodeFencingPreflight | null>(null)
 const confirmPowerIsolated = ref(false)
 const emergencyUntaintMaster = ref(false)
 const autoFenceStorage = ref(true)
 const evictStatelessFirst = ref(true)
 const evictStatefulAfterFencing = ref(true)
+const overrideCircuitBreaker = ref(false)
+const rescuedRecovered = ref(false)
 
-// Execution Status
-const execStep = ref<number>(1) // 1: Cordon, 2: Out-of-service taint, 3: Detaching VolumeAttachments
+const execStep = ref<number>(1)
 const evictionProgress = ref<number>(0)
 const executionReport = ref<FencingExecutionReport | null>(null)
 let execTimer: ReturnType<typeof setInterval> | null = null
@@ -50,14 +57,24 @@ const statelessCount = computed(() => preflight.value?.stateless_pods?.length ??
 const daemonsetCount = computed(() => preflight.value?.daemonset_pods?.length ?? 0)
 const volumeCount = computed(() => preflight.value?.volume_attachments?.length ?? 0)
 
+const workloadPills = computed(() => [
+  { type: 'stateful', label: 'Stateful Pods (PVC)', count: statefulCount.value, icon: 'database' },
+  { type: 'stateless', label: 'Stateless Pods', count: statelessCount.value, icon: 'box' },
+  { type: 'daemonset', label: 'DaemonSets', count: daemonsetCount.value, icon: 'server' },
+])
+
 const hasStatefulWorkloads = computed(() => statefulCount.value > 0 || volumeCount.value > 0)
+const circuitBreakerBlocked = computed(() => {
+  return !!preflight.value?.circuit_breaker?.eviction_frozen && !overrideCircuitBreaker.value
+})
+
 const canProceedStonith = computed(() => {
-  if (!hasStatefulWorkloads.value) return true
-  return confirmPowerIsolated.value
+  if (rescuedRecovered.value || circuitBreakerBlocked.value) return false
+  return !hasStatefulWorkloads.value || confirmPowerIsolated.value
 })
 
 const confidencePercent = computed(() => {
-  const conf = preflight.value?.confidence ?? preflight.value?.rca?.confidence ?? 0.94
+  const conf = preflight.value?.dynamic_rca?.confidence ?? preflight.value?.confidence ?? 0.94
   return Math.round(conf * 100)
 })
 
@@ -65,9 +82,7 @@ watch(() => props.show, async (isOpen) => {
   if (isOpen && props.nodeName) {
     resetState()
     await fetchPreflightScan()
-  } else {
-    clearTimers()
-  }
+  } else clearTimers()
 })
 
 function resetState() {
@@ -75,6 +90,8 @@ function resetState() {
   executing.value = false
   errorMessage.value = ''
   confirmPowerIsolated.value = false
+  overrideCircuitBreaker.value = false
+  rescuedRecovered.value = false
   execStep.value = 1
   evictionProgress.value = 0
   executionReport.value = null
@@ -83,10 +100,7 @@ function resetState() {
 }
 
 function clearTimers() {
-  if (execTimer) {
-    clearInterval(execTimer)
-    execTimer = null
-  }
+  if (execTimer) { clearInterval(execTimer); execTimer = null }
 }
 
 async function fetchPreflightScan() {
@@ -103,6 +117,10 @@ async function fetchPreflightScan() {
   }
 }
 
+function handleRescued(res: ServiceRescueResult) {
+  if (res.recovered_to_ready) rescuedRecovered.value = true
+}
+
 async function executeFencing() {
   if (!canProceedStonith.value) return
   executing.value = true
@@ -110,19 +128,12 @@ async function executeFencing() {
   stage.value = 3
   execStep.value = 1
 
-  // Start visual transition steps
   execTimer = setInterval(() => {
     if (stage.value === 3) {
-      if (execStep.value < 3) {
-        execStep.value++
-      } else {
-        stage.value = 4
-        evictionProgress.value = 40
-      }
-    } else if (stage.value === 4) {
-      if (evictionProgress.value < 90) {
-        evictionProgress.value += 25
-      }
+      if (execStep.value < 3) execStep.value++
+      else { stage.value = 4; evictionProgress.value = 40 }
+    } else if (stage.value === 4 && evictionProgress.value < 90) {
+      evictionProgress.value += 25
     }
   }, 700)
 
@@ -134,8 +145,8 @@ async function executeFencing() {
       evict_stateless_first: evictStatelessFirst.value,
       evict_stateful_after_fencing: evictStatefulAfterFencing.value,
       timeout_seconds: 30,
+      override_circuit_breaker: overrideCircuitBreaker.value,
     })
-
     clearTimers()
     evictionProgress.value = 100
     executionReport.value = report
@@ -152,25 +163,18 @@ async function executeFencing() {
 
 function copyRcaReport() {
   if (!preflight.value) return
-  const reportText = [
-    `# SRE Zero-Data-Loss Fencing & RCA Report`,
-    `Node: ${props.nodeName}`,
-    `Cluster: ${props.clusterId}`,
-    `Probable Cause: ${preflight.value.probable_cause} (${confidencePercent.value}% confidence)`,
-    `Recommendation: ${preflight.value.recommendation}`,
-    `Single Worker Cluster: ${preflight.value.is_single_worker_cluster ? 'YES (Master untainted)' : 'NO'}`,
-    `Execution Duration: ${executionReport.value?.duration_ms ?? 0}ms`,
+  const text = [
+    `# SRE Zero-Data-Loss Fencing & RCA: ${props.nodeName} (${props.clusterId})`,
+    `Cause: ${preflight.value.probable_cause} (${confidencePercent.value}% conf) | Plan: ${preflight.value.recommendation}`,
+    `Single Worker: ${preflight.value.is_single_worker_cluster ? 'YES' : 'NO'} | Duration: ${executionReport.value?.duration_ms ?? 0}ms`,
+    `Circuit Breaker: ${preflight.value.circuit_breaker?.eviction_frozen ? 'TRIPPED (Override: ' + overrideCircuitBreaker.value + ')' : 'NORMAL'}`,
     `Evicted Pods (${executionReport.value?.evicted_pods?.length ?? 0}): ${(executionReport.value?.evicted_pods ?? []).join(', ') || 'None'}`,
-    `Detached Volumes (${executionReport.value?.detached_volumes?.length ?? 0}): ${(executionReport.value?.detached_volumes ?? []).join(', ') || 'All confirmed'}`,
-    `Timestamp: ${executionReport.value?.timestamp || new Date().toISOString()}`
+    `Detached Volumes: ${(executionReport.value?.detached_volumes ?? []).join(', ') || 'All confirmed'}`
   ].join('\n')
-
-  navigator.clipboard.writeText(reportText).then(() => {
+  navigator.clipboard.writeText(text).then(() => {
     copySuccess.value = true
     setTimeout(() => { copySuccess.value = false }, 3000)
-  }).catch(() => {
-    copySuccess.value = false
-  })
+  }).catch(() => { copySuccess.value = false })
 }
 
 function handleClose() {
@@ -181,9 +185,7 @@ function handleClose() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && props.show && !executing.value) {
-    handleClose()
-  }
+  if (e.key === 'Escape' && props.show && !executing.value) handleClose()
 }
 
 onMounted(() => window.addEventListener('keydown', handleKeydown))
@@ -212,44 +214,25 @@ onUnmounted(() => {
             <button type="button" class="btn-close" :disabled="executing" @click="handleClose" title="Close (Esc)"><BaseIcon name="x" size="xs" /></button>
           </div>
 
-          <!-- 5-Stage Stepper Header -->
+          <!-- Stepper Header -->
           <div class="fencing-stepper font-mono">
-            <div class="stepper-step" :class="{ active: stage === 1, done: stage > 1 }">
-              <span class="stepper-num">1</span>
-              <span class="stepper-label">RCA Scan</span>
-            </div>
-            <div class="stepper-line" :class="{ done: stage > 1 }"></div>
-            <div class="stepper-step" :class="{ active: stage === 2, done: stage > 2 }">
-              <span class="stepper-num">2</span>
-              <span class="stepper-label">STONITH Gate</span>
-            </div>
-            <div class="stepper-line" :class="{ done: stage > 2 }"></div>
-            <div class="stepper-step" :class="{ active: stage === 3, done: stage > 3 }">
-              <span class="stepper-num">3</span>
-              <span class="stepper-label">Fencing</span>
-            </div>
-            <div class="stepper-line" :class="{ done: stage > 3 }"></div>
-            <div class="stepper-step" :class="{ active: stage === 4, done: stage > 4 }">
-              <span class="stepper-num">4</span>
-              <span class="stepper-label">Eviction</span>
-            </div>
-            <div class="stepper-line" :class="{ done: stage > 4 }"></div>
-            <div class="stepper-step" :class="{ active: stage === 5, done: stage === 5 }">
-              <span class="stepper-num">5</span>
-              <span class="stepper-label">Summary</span>
-            </div>
+            <template v-for="(stepName, idx) in STAGES" :key="stepName">
+              <div class="stepper-step" :class="{ active: stage === idx + 1, done: stage > idx + 1 }">
+                <span class="stepper-num">{{ idx + 1 }}</span>
+                <span class="stepper-label">{{ stepName }}</span>
+              </div>
+              <div v-if="idx < STAGES.length - 1" class="stepper-line" :class="{ done: stage > idx + 1 }"></div>
+            </template>
           </div>
 
           <!-- Modal Body -->
           <div class="fencing-body">
-            <!-- Loading Preflight -->
             <div v-if="loadingPreflight" class="loading-box">
               <div class="cyber-spinner"></div>
               <span>Auditing CSI volumes, pods &amp; performing Root Cause Analysis...</span>
             </div>
 
             <template v-else>
-              <!-- Error Banner -->
               <div v-if="errorMessage" class="error-banner" style="margin-bottom: 16px;">
                 <span class="error-icon"><BaseIcon name="alert-triangle" size="xs" /></span>
                 <div class="error-content">
@@ -259,47 +242,40 @@ onUnmounted(() => {
               </div>
 
               <template v-if="preflight">
-              <!-- STAGE 1: Pre-flight Impact Scan & RCA Analysis -->
+              <!-- STAGE 1: RCA, Soft-Death Rescue & Capacity Plan -->
               <div v-if="stage === 1" class="stage-container animate-fade-in">
-                <!-- RCA Badge & Recommendation -->
-                <div class="rca-card">
-                  <div class="rca-top">
-                    <span class="rca-badge">
-                      <BaseIcon name="bot" size="xs" />
-                      Probable Cause: {{ preflight.probable_cause }}
-                    </span>
-                    <span class="rca-confidence font-mono">{{ confidencePercent }}% confidence</span>
-                  </div>
-                  <p class="rca-recommendation"><strong>Recommendation:</strong> {{ preflight.recommendation }}</p>
+                <NodeFencingRescueSection
+                  :probe-report="preflight.probe_report"
+                  :cluster-id="clusterId"
+                  :node-name="nodeName"
+                  @rescued="handleRescued"
+                />
+
+                <NodeFencingRcaEvidence
+                  :dynamic-rca="preflight.dynamic_rca"
+                  :fallback-cause="preflight.probable_cause"
+                  :fallback-confidence="preflight.confidence"
+                  :fallback-recommendation="preflight.recommendation"
+                />
+
+                <NodeFencingCapacitySection
+                  :capacity-plan="preflight.capacity_plan"
+                  :circuit-breaker="preflight.circuit_breaker"
+                  :is-single-worker-cluster="preflight.is_single_worker_cluster"
+                  v-model:override-breaker="overrideCircuitBreaker"
+                />
+
+                <div v-if="preflight.is_single_worker_cluster && !preflight.capacity_plan" class="single-worker-alert animate-fade-in font-mono">
+                  <span>⚠️ <strong>Single Worker Cluster:</strong> Untaint Master node to allow rescheduling.</span>
+                  <label class="untaint-toggle-label"><input type="checkbox" v-model="emergencyUntaintMaster" /> Emergency Untaint Master</label>
                 </div>
 
-                <!-- 1M+1W Topology Alert -->
-                <div v-if="preflight.is_single_worker_cluster" class="single-worker-alert animate-fade-in">
-                  <div class="alert-message-row">
-                    <BaseIcon name="alert-triangle" size="sm" class="text-amber" />
-                    <span><strong>⚠️ Single Worker Cluster:</strong> All workloads will get stuck in Pending unless Master node is untainted.</span>
-                  </div>
-                  <label class="untaint-toggle-label font-mono">
-                    <input type="checkbox" v-model="emergencyUntaintMaster" />
-                    <span>Emergency Untaint Master Node (Recommended)</span>
-                  </label>
-                </div>
-
-                <!-- Workload Pills -->
                 <div class="workload-section">
                   <div class="section-label">Impacted Workload Inventory</div>
                   <div class="pills-grid font-mono">
-                    <div class="workload-pill stateful">
-                      <span class="pill-title"><span>Stateful Pods (PVC)</span> <BaseIcon name="database" size="xs" /></span>
-                      <span class="pill-count">{{ statefulCount }}</span>
-                    </div>
-                    <div class="workload-pill stateless">
-                      <span class="pill-title"><span>Stateless Pods</span> <BaseIcon name="box" size="xs" /></span>
-                      <span class="pill-count">{{ statelessCount }}</span>
-                    </div>
-                    <div class="workload-pill daemonset">
-                      <span class="pill-title"><span>DaemonSets</span> <BaseIcon name="server" size="xs" /></span>
-                      <span class="pill-count">{{ daemonsetCount }}</span>
+                    <div v-for="item in workloadPills" :key="item.type" :class="['workload-pill', item.type]">
+                      <span class="pill-title"><span>{{ item.label }}</span> <BaseIcon :name="item.icon" size="xs" /></span>
+                      <span class="pill-count">{{ item.count }}</span>
                     </div>
                   </div>
                 </div>
@@ -307,6 +283,20 @@ onUnmounted(() => {
 
               <!-- STAGE 2: STONITH & Power Isolation Gate -->
               <div v-else-if="stage === 2" class="stage-container animate-fade-in">
+                <div v-if="circuitBreakerBlocked" class="circuit-breaker-banner animate-fade-in">
+                  <div class="circuit-breaker-header">
+                    <span class="breaker-icon">⛔</span>
+                    <div>
+                      <div class="breaker-title">Circuit Breaker Active: Evictions Frozen</div>
+                      <div class="breaker-reason text-xs">Over 15% fleet unready. SRE Override required before proceeding.</div>
+                    </div>
+                  </div>
+                  <label class="breaker-override-toggle font-mono">
+                    <input type="checkbox" v-model="overrideCircuitBreaker" />
+                    <span>Emergency SRE Override: Force evictions despite circuit breaker trip</span>
+                  </label>
+                </div>
+
                 <div class="stonith-gate-card">
                   <div class="stonith-warning-header">
                     <BaseIcon name="shield" size="sm" />
@@ -325,19 +315,10 @@ onUnmounted(() => {
               <!-- STAGE 3: Storage Fencing Execution -->
               <div v-else-if="stage === 3" class="stage-container animate-fade-in font-mono">
                 <div class="execution-stepper-box">
-                  <div class="exec-step-item" :class="{ active: execStep === 1, done: execStep > 1 }">
-                    <span>1. Cordoning node (spec.unschedulable = true)...</span>
-                    <span v-if="execStep > 1" class="text-emerald font-bold">DONE</span>
-                    <span v-else class="cyber-spinner-sm"></span>
-                  </div>
-                  <div class="exec-step-item" :class="{ active: execStep === 2, done: execStep > 2 }">
-                    <span>2. Applying K8s 1.28+ out-of-service taint...</span>
-                    <span v-if="execStep > 2" class="text-emerald font-bold">DONE</span>
-                    <span v-else-if="execStep === 2" class="cyber-spinner-sm"></span>
-                  </div>
-                  <div class="exec-step-item" :class="{ active: execStep === 3 }">
-                    <span>3. Detaching VolumeAttachments from CSI controller...</span>
-                    <span class="cyber-spinner-sm"></span>
+                  <div v-for="(label, i) in EXEC_STEPS" :key="label" class="exec-step-item" :class="{ active: execStep === i + 1, done: execStep > i + 1 }">
+                    <span>{{ i + 1 }}. {{ label }}</span>
+                    <span v-if="execStep > i + 1" class="text-emerald font-bold">DONE</span>
+                    <span v-else-if="execStep === i + 1" class="cyber-spinner-sm"></span>
                   </div>
                 </div>
               </div>
@@ -367,7 +348,7 @@ onUnmounted(() => {
                   </div>
                   <div class="summary-list-box">
                     <div class="font-bold text-cyan" style="margin-bottom: 4px;">Evicted Workloads ({{ executionReport?.evicted_pods?.length ?? 0 }}):</div>
-                    <ul v-if="executionReport?.evicted_pods && executionReport.evicted_pods.length > 0" style="padding-left: 18px; margin: 0;">
+                    <ul v-if="executionReport?.evicted_pods?.length" style="padding-left: 18px; margin: 0;">
                       <li v-for="pod in executionReport.evicted_pods" :key="pod">{{ pod }}</li>
                     </ul>
                     <div v-else class="text-muted">All workloads gracefully relocated or zero unevicted pods.</div>
@@ -387,33 +368,23 @@ onUnmounted(() => {
           <!-- Modal Footer Actions -->
           <div class="fencing-footer">
             <template v-if="stage === 1">
-              <button type="button" class="btn btn-secondary" @click="handleClose">Cancel</button>
-              <button type="button" class="btn btn-primary" :disabled="loadingPreflight" @click="stage = 2">
-                <span>Proceed to STONITH Safety Gate</span>
-                <BaseIcon name="arrow-right" size="xs" />
+              <button type="button" class="btn btn-secondary" @click="handleClose">{{ rescuedRecovered ? 'Close' : 'Cancel' }}</button>
+              <button v-if="!rescuedRecovered" type="button" class="btn btn-primary" :disabled="loadingPreflight" @click="stage = 2">
+                <span>Proceed to STONITH Safety Gate</span><BaseIcon name="arrow-right" size="xs" />
               </button>
             </template>
-
             <template v-else-if="stage === 2">
               <button type="button" class="btn btn-secondary" @click="stage = 1">Back</button>
-              <button type="button" class="btn btn-danger" :disabled="!canProceedStonith" @click="executeFencing">
-                <BaseIcon name="shield" size="xs" />
-                <span>Confirm STONITH &amp; Execute Fencing</span>
+              <button type="button" class="btn btn-danger" :disabled="!canProceedStonith" @click="executeFencing" :title="circuitBreakerBlocked ? 'Evictions frozen by circuit breaker.' : ''">
+                <BaseIcon name="shield" size="xs" /><span>Confirm STONITH &amp; Execute Fencing</span>
               </button>
             </template>
-
-            <template v-else-if="stage === 3 || stage === 4">
-              <span class="text-muted font-mono text-xs">Fencing sequence in progress (Safe SRE Failover)...</span>
-            </template>
-
+            <span v-else-if="stage === 3 || stage === 4" class="text-muted font-mono text-xs">Fencing sequence in progress (Safe SRE Failover)...</span>
             <template v-else-if="stage === 5">
               <button type="button" class="btn btn-secondary" @click="copyRcaReport">
-                <BaseIcon :name="copySuccess ? 'check' : 'copy'" size="xs" />
-                <span>{{ copySuccess ? 'Copied RCA Report!' : 'Copy RCA Report' }}</span>
+                <BaseIcon :name="copySuccess ? 'check' : 'copy'" size="xs" /><span>{{ copySuccess ? 'Copied RCA Report!' : 'Copy RCA Report' }}</span>
               </button>
-              <button type="button" class="btn btn-primary" @click="handleClose">
-                <span>Close &amp; Refresh Fleet</span>
-              </button>
+              <button type="button" class="btn btn-primary" @click="handleClose"><span>Close &amp; Refresh Fleet</span></button>
             </template>
           </div>
         </div>
