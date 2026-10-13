@@ -24,6 +24,7 @@ import (
 	usecaseSRE "github.com/datdt/k8sselfhost/internal/usecase/sre"
 	usecasesec "github.com/datdt/k8sselfhost/internal/usecase/security"
 	usecaseStorage "github.com/datdt/k8sselfhost/internal/usecase/storage"
+	usecaseMesh "github.com/datdt/k8sselfhost/internal/usecase/mesh"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
 )
 
@@ -48,6 +49,7 @@ func setupTestRouter() http.Handler {
 	bot := telegram.NewSREBot(telegram.TelegramConfig{BotToken: "test-token"}, nil, nil, nil, nil)
 
 	admissionEnforcer := usecasesec.NewAdmissionEnforcer()
+	meshService := usecaseMesh.NewLifecycleService()
 
 	handlers := &adapthttp.PlatformHandlers{
 		Helm:      adapthttp.NewHelmHandler(helmMgr, nil),
@@ -57,6 +59,7 @@ func setupTestRouter() http.Handler {
 		IaC:       adapthttp.NewIaCHandler(tfRunner, ansibleRunner),
 		Telegram:  adapthttp.NewTelegramHandler(bot),
 		Admission: adapthttp.NewAdmissionHandler(admissionEnforcer),
+		Mesh:      adapthttp.NewMeshHandler(meshService),
 	}
 
 	return newRouter(healthHandler, nil, handlers)
@@ -76,6 +79,9 @@ func TestRouter_MountedRoutes_UnauthorizedNotNotFound(t *testing.T) {
 		{http.MethodGet, "/api/v1/gitops/prs", "GitOps pull requests route"},
 		{http.MethodGet, "/api/v1/iac/status", "IaC status route"},
 		{http.MethodGet, "/api/v1/telegram/status", "Telegram status route"},
+		{http.MethodPost, "/api/v1/mesh/sidecar/inject-guard", "Mesh sidecar inject-guard route"},
+		{http.MethodPost, "/api/v1/mesh/waf/verify-regex", "Mesh WAF verify-regex route"},
+		{http.MethodPost, "/api/v1/mesh/tls/drain", "Mesh TLS drain route"},
 	}
 
 	for _, ep := range endpoints {
