@@ -1,65 +1,69 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
 
-interface Props {
-  percentage: number
+export interface PercentageBarProps {
+  value?: number
+  percentage?: number
   threshold?: number
   height?: number | string
   variant?: 'spectrum' | 'cyan' | 'emerald' | 'amber' | 'rose' | 'violet' | string
+  class?: string | Record<string, boolean | undefined | null> | (string | Record<string, boolean | undefined | null>)[]
 }
 
-const props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<PercentageBarProps>(), {
   threshold: undefined,
   height: 3,
   variant: 'spectrum',
 })
 
-const clampedPercentage = computed(() => {
-  if (isNaN(props.percentage) || props.percentage < 0) return 0
-  return Math.min(100, props.percentage)
+const resolvedValue = computed<number>(() => {
+  const raw = props.value !== undefined ? props.value : (props.percentage !== undefined ? props.percentage : 0)
+  if (Number.isNaN(raw) || raw < 0) return 0
+  return Math.min(100, raw)
 })
 
-const barHeight = computed(() => {
+const barHeight = computed<string>(() => {
   if (typeof props.height === 'number') return `${props.height}px`
-  return props.height
+  return props.height || '3px'
 })
 
-// Semantic fill spectrum:
-// < 70%: Muted Cyan / Emerald (#06b6d4 / #10b981)
-// 70% – 84.9%: Warm Amber (#f59e0b)
-// >= 85%: Rose Coral (#ef4444)
-const fillColor = computed(() => {
+// Semantic fill thresholds:
+// < 70%: Emerald (#10b981)
+// 70% – 84.9%: Amber (#f59e0b)
+// >= 85%: Rose (#f43f5e)
+const fillColor = computed<string>(() => {
   if (props.variant && props.variant !== 'spectrum') {
     switch (props.variant) {
       case 'cyan': return '#06b6d4'
       case 'emerald': return '#10b981'
       case 'amber': return '#f59e0b'
-      case 'rose': return '#ef4444'
+      case 'rose': return '#f43f5e'
       case 'violet': return '#8b5cf6'
       default: return props.variant
     }
   }
 
-  const pct = clampedPercentage.value
+  const pct = resolvedValue.value
   const thresh = props.threshold
 
   if (thresh !== undefined) {
-    if (pct >= thresh) return '#ef4444'
+    if (pct >= thresh) return '#f43f5e'
     if (pct >= thresh * 0.85) return '#f59e0b'
-    return '#06b6d4'
+    return '#10b981'
   }
 
-  if (pct >= 85) return '#ef4444'
+  if (pct >= 85) return '#f43f5e'
   if (pct >= 70) return '#f59e0b'
-  return '#06b6d4'
+  return '#10b981'
 })
 </script>
 
 <template>
   <div
     class="percentage-bar-track"
+    :class="props.class"
     role="progressbar"
-    :aria-valuenow="Math.round(clampedPercentage)"
+    :aria-valuenow="Math.round(resolvedValue)"
     aria-valuemin="0"
     aria-valuemax="100"
     :style="{ height: barHeight }"
@@ -67,7 +71,7 @@ const fillColor = computed(() => {
     <div
       class="percentage-bar-fill"
       :style="{
-        width: `${clampedPercentage}%`,
+        width: `${resolvedValue}%`,
         backgroundColor: fillColor,
       }"
     />
