@@ -109,6 +109,13 @@ export const fleetApi = {
   },
 
   /**
+   * Fetch all registered Kubernetes clusters in the fleet.
+   */
+  async getClusters(): Promise<Cluster[]> {
+    return this.list()
+  },
+
+  /**
    * Fetch active Docker Swarm cluster status.
    * Returns null if Swarm is inactive or unavailable.
    */

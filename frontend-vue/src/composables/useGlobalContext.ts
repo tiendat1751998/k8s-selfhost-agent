@@ -66,20 +66,47 @@ async function loadNamespacesForCluster(clusterId: string): Promise<void> {
   }
 }
 
+// Cross-tab storage synchronization
+function onStorage(event: StorageEvent): void {
+  if (event.key === 'k8s_active_cluster' && event.newValue) {
+    if (activeClusterId.value !== event.newValue) {
+      activeClusterId.value = event.newValue
+      loadNamespacesForCluster(event.newValue).catch(() => {})
+    }
+  } else if (event.key === 'k8s_active_namespace' && event.newValue) {
+    if (activeNamespace.value !== event.newValue) {
+      activeNamespace.value = event.newValue
+    }
+  }
+}
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('storage', onStorage)
+}
+
 async function loadClusters(): Promise<void> {
   error.value = null
   try {
     let list: Cluster[] = []
     try {
-      const res = await api.get<ApiResponse<Cluster[]> | Cluster[]>('/clusters')
-      if (Array.isArray(res)) {
-        list = res
-      } else if (res && Array.isArray((res as ApiResponse<Cluster[]>).data)) {
-        list = (res as ApiResponse<Cluster[]>).data
+      if (typeof fleetApi.getClusters === 'function') {
+        list = await fleetApi.getClusters()
+      } else {
+        list = await fleetApi.list()
       }
     } catch {
-      list = await fleetApi.list()
+      try {
+        const res = await api.get<ApiResponse<Cluster[]> | Cluster[]>('/clusters')
+        if (Array.isArray(res)) {
+          list = res
+        } else if (res && Array.isArray((res as ApiResponse<Cluster[]>).data)) {
+          list = (res as ApiResponse<Cluster[]>).data
+        }
+      } catch {
+        list = []
+      }
     }
+
     if (list && list.length > 0) {
       availableClusters.value = list.map(c => ({
         id: c.id,
@@ -94,15 +121,26 @@ async function loadClusters(): Promise<void> {
         setStored('k8s_active_cluster', activeClusterId.value)
       }
     } else {
-      availableClusters.value = []
+      // Fallback to active cluster item so operator context is never empty
+      const fallbackId = activeClusterId.value || 'local'
+      availableClusters.value = [{
+        id: fallbackId,
+        name: fallbackId,
+        status: 'healthy'
+      }]
       if (!activeClusterId.value) {
         activeClusterId.value = 'local'
         setStored('k8s_active_cluster', 'local')
       }
     }
   } catch (err: unknown) {
-    availableClusters.value = []
     error.value = err instanceof Error ? err.message : 'Failed to retrieve cluster list'
+    const fallbackId = activeClusterId.value || 'local'
+    availableClusters.value = [{
+      id: fallbackId,
+      name: fallbackId,
+      status: 'healthy'
+    }]
     if (!activeClusterId.value) {
       activeClusterId.value = 'local'
       setStored('k8s_active_cluster', 'local')
