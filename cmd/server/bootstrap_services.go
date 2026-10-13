@@ -264,7 +264,7 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	refreshTokenRepo := postgres.NewRefreshTokenRepo(infra.pgClient.Pool())
 	authUsecase := usecaseAuth.NewUsecase(userRepo)
 
-	searchRepo := postgres.NewSearchRepo(infra.pgClient.Pool(), infra.cacheManager)
+	searchRepo := postgres.NewSearchRepo(infra.pgClient.Pool())
 	searchUsecase := usecaseSearch.NewUsecase(searchRepo)
 	promotionUsecase := usecasePromotion.NewUsecase(postgres.NewPromotionRepo(infra.pgClient.Pool()), infra.dockerRepo, auditRepo)
 	gitopsController := usecaseGitops.NewController(prRepo, incRepo, txManager)

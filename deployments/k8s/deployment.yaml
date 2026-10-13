@@ -92,10 +92,6 @@ spec:
               value: "k8sselfhost"
             - name: K8S_POSTGRES_SSLMODE
               value: "disable"
-            - name: K8S_REDIS_HOST
-              value: "redis-master"
-            - name: K8S_REDIS_PORT
-              value: "6379"
             - name: K8S_NATS_URL
               value: "nats://nats:4222"
             - name: K8S_LOG_LEVEL

@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"context"
@@ -17,7 +17,6 @@ import (
 	infraNats "github.com/datdt/k8sselfhost/internal/infrastructure/nats"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	infraDocker "github.com/datdt/k8sselfhost/internal/infrastructure/provider/docker"
-	infraRedis "github.com/datdt/k8sselfhost/internal/infrastructure/redis"
 	"github.com/datdt/k8sselfhost/internal/pkg/health"
 	"github.com/datdt/k8sselfhost/internal/pkg/telemetry"
 )
@@ -25,8 +24,6 @@ import (
 type infrastructure struct {
 	tp           *telemetry.Provider
 	pgClient     *postgres.Client
-	redisClient  *infraRedis.Client
-	cacheManager *infraRedis.CacheManager
 	natsClient   *infraNats.Client
 	k8sClient    *kubernetes.Clientset
 	k8sAvailable bool
@@ -56,22 +53,9 @@ func initInfrastructure(ctx context.Context, cfg *config.Config, log *zap.Logger
 		return nil, fmt.Errorf("connecting to postgres: %w", err)
 	}
 
-	// Connect to Redis
-	redisClient, err := infraRedis.NewClient(ctx, cfg.Redis)
-	if err != nil {
-		pgClient.Close()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = tp.Shutdown(shutdownCtx)
-		cancel()
-		return nil, fmt.Errorf("connecting to redis: %w", err)
-	}
-
-	cacheManager := infraRedis.NewCacheManager(redisClient)
-
 	// Connect to NATS
 	natsClient, err := infraNats.NewClient(ctx, cfg.NATS)
 	if err != nil {
-		_ = redisClient.Close()
 		pgClient.Close()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = tp.Shutdown(shutdownCtx)
@@ -82,7 +66,6 @@ func initInfrastructure(ctx context.Context, cfg *config.Config, log *zap.Logger
 	// Setup health checks
 	healthHandler := health.NewHandler(5 * time.Second)
 	healthHandler.Register("postgres", pgClient.HealthCheck)
-	healthHandler.Register("redis", redisClient.HealthCheck)
 	healthHandler.Register("nats", natsClient.HealthCheck)
 
 	// Initialize K8s Client
@@ -94,8 +77,6 @@ func initInfrastructure(ctx context.Context, cfg *config.Config, log *zap.Logger
 	return &infrastructure{
 		tp:           tp,
 		pgClient:     pgClient,
-		redisClient:  redisClient,
-		cacheManager: cacheManager,
 		natsClient:   natsClient,
 		k8sClient:    k8sClient,
 		k8sAvailable: k8sAvailable,
@@ -141,19 +122,6 @@ func (i *infrastructure) close(log *zap.Logger) {
 			}()
 			if closeErr := i.natsClient.Close(); closeErr != nil {
 				log.Error("failed to close nats", zap.Error(closeErr))
-			}
-		}()
-	}
-
-	if i.redisClient != nil {
-		func() {
-			defer func() {
-				if p := recover(); p != nil {
-					log.Error("panic closing redis", zap.Any("panic", p))
-				}
-			}()
-			if closeErr := i.redisClient.Close(); closeErr != nil {
-				log.Error("failed to close redis", zap.Error(closeErr))
 			}
 		}()
 	}

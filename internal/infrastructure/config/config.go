@@ -17,7 +17,7 @@ type Config struct {
 	Server       ServerConfig       `mapstructure:"server"`
 	Security     SecurityConfig     `mapstructure:"security"`
 	Postgres     PostgresConfig     `mapstructure:"postgres"`
-	Redis        RedisConfig        `mapstructure:"redis"`
+	Redis        RedisConfig        `mapstructure:"redis"` // Deprecated: Redis dependency has been eradicated.
 	NATS         NATSConfig         `mapstructure:"nats"`
 	LLM          LLMConfig          `mapstructure:"llm"`
 	Telemetry    TelemetryConfig    `mapstructure:"telemetry"`
@@ -124,7 +124,7 @@ func (c PostgresConfig) DSN() string {
 	)
 }
 
-// RedisConfig holds Redis connection settings.
+// RedisConfig holds Redis connection settings (deprecated: Redis dependency eradicated).
 type RedisConfig struct {
 	Host     string `mapstructure:"host"`
 	Port     int    `mapstructure:"port"`

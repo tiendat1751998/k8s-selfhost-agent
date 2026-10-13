@@ -181,7 +181,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	refreshTokenRepo := postgres.NewRefreshTokenRepo(dbPool)
 	authUsecase := usecaseAuth.NewUsecase(userRepo)
 
-	searchRepo := postgres.NewSearchRepo(dbPool, nil)
+	searchRepo := postgres.NewSearchRepo(dbPool)
 	searchUsecase := usecaseSearch.NewUsecase(searchRepo)
 
 	gitopsController := usecaseGitops.NewController(prRepo, incRepo, txManager)
