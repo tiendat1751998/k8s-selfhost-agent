@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	domaincrypto "github.com/datdt/k8sselfhost/internal/domain/crypto"
 	"github.com/datdt/k8sselfhost/internal/domain/k8sresilience"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
@@ -27,8 +28,17 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 	if errors.Is(err, k8sresilience.ErrWebhookNotFound) || errors.Is(err, k8sresilience.ErrNodeNotFound) {
 		return http.StatusNotFound, err.Error()
 	}
-	if errors.Is(err, k8sresilience.ErrNamespaceNotStuck) {
-		return http.StatusConflict, err.Error()
+	if errors.Is(err, domaincrypto.ErrOCSPStapleFetchFailed) {
+		return http.StatusBadGateway, err.Error()
+	}
+	if errors.Is(err, domaincrypto.ErrHSMPoolSaturated) {
+		return http.StatusServiceUnavailable, err.Error()
+	}
+	if errors.Is(err, domaincrypto.ErrFIPSNonCompliantHash) {
+		return http.StatusUnprocessableEntity, err.Error()
+	}
+	if errors.Is(err, domaincrypto.ErrKMSDEKGraceExpired) {
+		return http.StatusInternalServerError, err.Error()
 	}
 	var domErr *domainerrors.DomainError
 	if errors.As(err, &domErr) {
