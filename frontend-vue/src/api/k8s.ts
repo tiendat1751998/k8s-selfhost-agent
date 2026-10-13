@@ -441,4 +441,54 @@ export const k8sApi = {
       return { logs: [], error }
     }
   },
+
+  async getWorkloadLogs(
+    cluster: string,
+    name: string,
+    namespace: string,
+    options?: {
+      kind?: string
+      pod?: string
+      container?: string
+      tailLines?: number
+      follow?: boolean
+    }
+  ): Promise<{ pods: string[]; logs: string }> {
+    try {
+      const kind = options?.kind || 'deployments'
+      const q = new URLSearchParams()
+      if (namespace && namespace !== 'all') {
+        q.set('namespace', namespace)
+      }
+      if (options?.pod) q.set('pod', options.pod)
+      if (options?.container) q.set('container', options.container)
+      if (options?.tailLines) q.set('tailLines', String(options.tailLines))
+      if (options?.follow) q.set('follow', 'true')
+      const query = q.toString() ? `?${q.toString()}` : ''
+      const path = `/k8s/${encodeURIComponent(cluster)}/workloads/${encodeURIComponent(kind)}/${encodeURIComponent(name)}/logs${query}`
+
+      const res = await api.get<any>(path)
+      if (typeof res === 'string') {
+        return { pods: [], logs: res }
+      }
+      if (res && typeof res === 'object') {
+        if (res.data && typeof res.data === 'object' && ('logs' in res.data || 'pods' in res.data)) {
+          return {
+            pods: Array.isArray(res.data.pods) ? res.data.pods : [],
+            logs: typeof res.data.logs === 'string' ? res.data.logs : (Array.isArray(res.data.logs) ? res.data.logs.join('\n') : ''),
+          }
+        }
+        if ('logs' in res || 'pods' in res) {
+          return {
+            pods: Array.isArray(res.pods) ? res.pods : [],
+            logs: typeof res.logs === 'string' ? res.logs : (Array.isArray(res.logs) ? res.logs.join('\n') : ''),
+          }
+        }
+      }
+      return { pods: [], logs: '' }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return { pods: [], logs: `[ERROR] Failed to fetch workload logs: ${msg}` }
+    }
+  },
 }
