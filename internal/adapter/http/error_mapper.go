@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 	"github.com/datdt/k8sselfhost/internal/domain/k8sresilience"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
@@ -28,6 +29,15 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 		return http.StatusNotFound, err.Error()
 	}
 	if errors.Is(err, k8sresilience.ErrNamespaceNotStuck) {
+		return http.StatusConflict, err.Error()
+	}
+	if errors.Is(err, domainGitops.ErrGitOpsObsoleteWebhook) {
+		return http.StatusConflict, err.Error()
+	}
+	if errors.Is(err, domainGitops.ErrGitOpsCircularSyncWave) {
+		return http.StatusUnprocessableEntity, err.Error()
+	}
+	if errors.Is(err, domainGitops.ErrGitOpsDriftConflict) {
 		return http.StatusConflict, err.Error()
 	}
 	var domErr *domainerrors.DomainError
