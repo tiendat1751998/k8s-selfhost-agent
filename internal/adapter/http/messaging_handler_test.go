@@ -95,6 +95,20 @@ func TestMessagingHandler_InspectKafkaConsumerGroups(t *testing.T) {
 		}
 	})
 
+	t.Run("Success with query parameter fallback", func(t *testing.T) {
+		r := chi.NewRouter()
+		handler := NewMessagingHandler(mgr)
+		r.Get("/kafka/consumer-groups", handler.InspectKafkaConsumerGroups)
+
+		req := httptest.NewRequest(http.MethodGet, "/kafka/consumer-groups?clusterId=cluster-01", nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d. Body: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("Internal error from manager", func(t *testing.T) {
 		errMgr := &mockMessageQueueSREManager{inspectErr: errors.New("backend timeout")}
 		errRouter := setupMessagingTestRouter(errMgr)
@@ -200,4 +214,40 @@ func TestMessagingHandler_ApplyKafkaKernelTuning(t *testing.T) {
 			t.Errorf("expected tuned node 'worker-node-01', got '%s'", mgr.tunedNode)
 		}
 	})
+}
+
+func TestMessagingHandler_RouterMounting(t *testing.T) {
+	gh, _ := domain.NewKafkaGroupHealth("order-grp", "orders.v1", 12, 12, 100, domain.CooperativeStickyAssignor, true, 2)
+	mgr := &mockMessageQueueSREManager{
+		groups: []domain.KafkaGroupHealth{*gh},
+	}
+	handler := NewMessagingHandler(mgr)
+	platform := &PlatformHandlers{
+		MessagingSRE: handler,
+	}
+
+	router := NewRouterWithWS(nil, nil, platform)
+
+	token, err := middleware.GenerateJWT("test-admin", "platform_admin", "default-tenant")
+	if err != nil {
+		t.Fatalf("failed to generate token: %v", err)
+	}
+
+	// 1. Cluster-scoped route
+	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/clusters/cluster-01/messaging/kafka/consumer-groups", nil)
+	req1.Header.Set("Authorization", "Bearer "+token)
+	rec1 := httptest.NewRecorder()
+	router.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for /api/v1/clusters/cluster-01/messaging/kafka/consumer-groups, got %d: %s", rec1.Code, rec1.Body.String())
+	}
+
+	// 2. Direct /messaging route with query param
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/messaging/kafka/consumer-groups?clusterId=cluster-01", nil)
+	req2.Header.Set("Authorization", "Bearer "+token)
+	rec2 := httptest.NewRecorder()
+	router.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for /api/v1/messaging/kafka/consumer-groups?clusterId=cluster-01, got %d: %s", rec2.Code, rec2.Body.String())
+	}
 }
