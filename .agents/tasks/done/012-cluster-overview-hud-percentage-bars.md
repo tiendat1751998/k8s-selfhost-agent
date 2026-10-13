@@ -1,8 +1,8 @@
-﻿# TASK 012: Cluster Overview HUD & Symmetric PercentageBar Redesign
+# TASK 012: Cluster Overview HUD & Symmetric PercentageBar Redesign
 
 > **Location**: .agents/tasks/enterprise-ui-redesign/012-cluster-overview-hud-percentage-bars.md  
 > **Benchmark Source**: Rancher 2.8+ (PercentageBar), Lens 2024 (Cluster HUD), Vercel Metrics  
-> **Status**: READY_FOR_DISPATCH  
+> **Status**: COMPLETED  
 
 ## 1. Problem Statement
 In OverviewView.vue and OverviewHud.vue:
