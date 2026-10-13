@@ -1,0 +1,191 @@
+# ==============================================================================
+# K8S-SELFHOST CHAOS, FAULT INJECTION & RESILIENCY ORCHESTRATION ENVIRONMENT
+# ==============================================================================
+# Architecture:
+# - All inter-service traffic routes through Toxiproxy sidecar for zero-trust
+#   fault injection (latency, bandwidth throttling, packet drops, TCP cut).
+# - Enables physical hardware constraints simulation:
+#   * TCP zero-window stalls and socket severance mid-backup stream.
+#   * Process freeze (dockerd SIGSTOP) backpressure.
+#   * Storage buffer overflow and ClickHouse recovery under ingest load.
+#   * 30-min bounded soak memory/goroutine leak profiling via pprof.
+# ==============================================================================
+
+services:
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.11.0
+    container_name: chaos-toxiproxy
+    restart: unless-stopped
+    command: ["-host=0.0.0.0"]
+    ports:
+      - "8474:8474"   # Toxiproxy REST Management API
+      - "5433:5433"   # Proxied PostgreSQL (upstream: postgres:5432)
+      - "9002:9002"   # Proxied MinIO S3 API (upstream: minio:9000)
+      - "8124:8124"   # Proxied ClickHouse HTTP (upstream: clickhouse:8123)
+      - "9001:9001"   # Proxied ClickHouse Native (upstream: clickhouse:9000)
+    networks:
+      - chaos-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8474/version || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 5
+
+  toxiproxy-init:
+    image: curlimages/curl:8.7.1
+    container_name: chaos-toxiproxy-init
+    restart: "no"
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - chaos-net
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Configuring Toxiproxy endpoints for chaos fault injection..."
+        # 1. PostgreSQL Proxy (5433 -> postgres:5432)
+        curl -s -X POST http://toxiproxy:8474/proxies -d '{"name":"postgres_chaos","listen":"0.0.0.0:5433","upstream":"postgres:5432","enabled":true}'
+        # 2. MinIO S3 Proxy (9002 -> minio:9000)
+        curl -s -X POST http://toxiproxy:8474/proxies -d '{"name":"minio_chaos","listen":"0.0.0.0:9002","upstream":"minio:9000","enabled":true}'
+        # 3. ClickHouse HTTP Proxy (8124 -> clickhouse:8123)
+        curl -s -X POST http://toxiproxy:8474/proxies -d '{"name":"clickhouse_http_chaos","listen":"0.0.0.0:8124","upstream":"clickhouse:8123","enabled":true}'
+        # 4. ClickHouse Native Proxy (9001 -> clickhouse:9000)
+        curl -s -X POST http://toxiproxy:8474/proxies -d '{"name":"clickhouse_native_chaos","listen":"0.0.0.0:9001","upstream":"clickhouse:9000","enabled":true}'
+        echo "Toxiproxy proxies initialized successfully."
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: chaos-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-k8sselfhost}
+    volumes:
+      - postgres_chaos_data:/var/lib/postgresql/data
+      - ../../migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-k8sselfhost}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - chaos-net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    container_name: chaos-clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    mem_limit: 512m
+    volumes:
+      - clickhouse_chaos_data:/var/lib/clickhouse
+      - ../../migrations/clickhouse:/docker-entrypoint-initdb.d:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8123/ping | grep ok || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - chaos-net
+
+  minio:
+    image: minio/minio:RELEASE.2024-03-30T09-41-56Z
+    container_name: chaos-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9090"
+    ports:
+      - "9000:9000"
+      - "9090:9090"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_chaos_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - chaos-net
+
+  k8s-selfhost-server:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    container_name: chaos-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      K8S_SERVER_HOST: "0.0.0.0"
+      K8S_SERVER_PORT: "8080"
+      K8S_ENABLE_PPROF: "true"
+      K8S_LOG_LEVEL: "debug"
+      K8S_POSTGRES_HOST: "toxiproxy"
+      K8S_POSTGRES_PORT: "5433"
+      K8S_POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      K8S_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      K8S_POSTGRES_DBNAME: ${POSTGRES_DB:-k8sselfhost}
+      K8S_POSTGRES_SSLMODE: "disable"
+      CLICKHOUSE_HOST: "toxiproxy"
+      CLICKHOUSE_PORT: "9001"
+      MINIO_ENDPOINT: "toxiproxy:9002"
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
+      SECURITY_MASTER_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      JWT_SECRET: "supersecretjwtkeyforchaostesting1234567890"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      toxiproxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/probe", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - chaos-net
+
+volumes:
+  postgres_chaos_data:
+  clickhouse_chaos_data:
+  minio_chaos_data:
+
+networks:
+  chaos-net:
+    driver: bridge
