@@ -2,10 +2,15 @@ package sre
 
 import (
 	"errors"
+
+	domainsre "github.com/datdt/k8sselfhost/internal/domain/sre"
 )
 
 // ErrPowerIsolationRequired is returned when storage fencing cannot proceed without confirmed power isolation (STONITH).
 var ErrPowerIsolationRequired = errors.New("cannot fence storage: power isolation / STONITH must be confirmed to prevent split-brain data corruption")
+
+// ErrCircuitBreakerTripped is returned when automated remediation is frozen by blast-radius controls.
+var ErrCircuitBreakerTripped = errors.New("circuit breaker tripped: automated fencing and evictions frozen")
 
 // NodeConditionSummary holds a condensed representation of a node's condition.
 type NodeConditionSummary struct {
@@ -36,10 +41,11 @@ type VolumeAttachmentSummary struct {
 
 // RCAAnalysis contains root-cause-analysis heuristic conclusions and confidence scores.
 type RCAAnalysis struct {
-	ProbableCause  string   `json:"probable_cause"`
-	Confidence     float64  `json:"confidence"`
-	Recommendation string   `json:"recommendation"`
-	Signals        []string `json:"signals,omitempty"`
+	ProbableCause  string                    `json:"probable_cause"`
+	Confidence     float64                   `json:"confidence"`
+	Recommendation string                    `json:"recommendation"`
+	Signals        []string                  `json:"signals,omitempty"`
+	DynamicReport  *domainsre.DynamicRCAReport `json:"dynamic_report,omitempty"`
 }
 
 // NodeFencingPreflight represents the complete pre-flight audit for node remediation and storage fencing.
@@ -61,6 +67,9 @@ type NodeFencingPreflight struct {
 	StatelessPods            []PodSummary              `json:"stateless_pods"`
 	DaemonSetPods            []PodSummary              `json:"daemonset_pods"`
 	VolumeInventory          []VolumeAttachmentSummary `json:"volume_inventory"`
+	CircuitBreaker           *CircuitBreakerStatus     `json:"circuit_breaker,omitempty"`
+	ProbeReport              *NodeProbeReport          `json:"probe_report,omitempty"`
+	CapacityAdmissionPlan    *CapacityAdmissionPlan    `json:"capacity_admission_plan,omitempty"`
 }
 
 // FencingExecutionOptions configures the storage fencing and failover sequence.
