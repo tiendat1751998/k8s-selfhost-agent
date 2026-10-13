@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/datdt/k8sselfhost/internal/domain/k8sresilience"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
@@ -13,6 +14,21 @@ import (
 func mapDomainErrorToHTTP(err error) (int, string) {
 	if errors.Is(err, infraK8s.ErrK8sUnavailable) || errors.Is(err, domainerrors.ErrK8sUnavailable) {
 		return http.StatusServiceUnavailable, "Kubernetes cluster not connected or unconfigured"
+	}
+	if errors.Is(err, k8sresilience.ErrK8sWebhookDeadlock) {
+		return http.StatusInternalServerError, err.Error()
+	}
+	if errors.Is(err, k8sresilience.ErrK8sPLEGTimeout) {
+		return http.StatusGatewayTimeout, err.Error()
+	}
+	if errors.Is(err, k8sresilience.ErrFinalizerReapFailed) {
+		return http.StatusInternalServerError, err.Error()
+	}
+	if errors.Is(err, k8sresilience.ErrWebhookNotFound) || errors.Is(err, k8sresilience.ErrNodeNotFound) {
+		return http.StatusNotFound, err.Error()
+	}
+	if errors.Is(err, k8sresilience.ErrNamespaceNotStuck) {
+		return http.StatusConflict, err.Error()
 	}
 	var domErr *domainerrors.DomainError
 	if errors.As(err, &domErr) {
