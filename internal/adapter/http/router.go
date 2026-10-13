@@ -70,6 +70,7 @@ type PlatformHandlers struct {
 	Admission     *AdmissionHandler
 	Canary        *CanaryHandler
 	Mesh          *MeshHandler
+	MessagingSRE  *MessagingSREHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -397,6 +398,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 			}
 			if platform.Mesh != nil {
 				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/mesh", platform.Mesh.RegisterRoutes)
+			}
+			if platform.MessagingSRE != nil {
+				r.With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")).Route("/messaging", platform.MessagingSRE.RegisterRoutes)
 			}
 		}
 	})

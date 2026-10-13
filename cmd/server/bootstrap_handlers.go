@@ -44,6 +44,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/usecase/sre"
 	usecaseStorage "github.com/datdt/k8sselfhost/internal/usecase/storage"
 	usecaseMesh "github.com/datdt/k8sselfhost/internal/usecase/mesh"
+	usecaseMessaging "github.com/datdt/k8sselfhost/internal/usecase/messaging"
 )
 
 type platformHandlerParams struct {
@@ -141,6 +142,16 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 	meshService := usecaseMesh.NewLifecycleService(meshOpts...)
 	meshHandler := adapthttp.NewMeshHandler(meshService, p.log)
 
+	var messagingOpts []usecaseMessaging.Option
+	if p.infra.k8sClient != nil {
+		messagingOpts = append(messagingOpts, usecaseMessaging.WithKubernetesClient(p.infra.k8sClient))
+	}
+	if p.log != nil {
+		messagingOpts = append(messagingOpts, usecaseMessaging.WithLogger(p.log))
+	}
+	messagingService := usecaseMessaging.NewService(messagingOpts...)
+	messagingHandler := adapthttp.NewMessagingSREHandler(messagingService, p.log)
+
 	return &adapthttp.PlatformHandlers{
 		AI:              adapthttp.NewAIHandler(p.registry),
 		Dashboard:       adapthttp.NewHandler(p.incRepo, p.reportRepo, p.prRepo, p.publisher, p.gitopsController),
@@ -192,5 +203,6 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 		IaC:             iacHandler,
 		Telegram:        telegramHandler,
 		Admission:       adapthttp.NewAdmissionHandler(usecaseSecurity.NewAdmissionEnforcer()),
+		MessagingSRE:    messagingHandler,
 	}
 }
