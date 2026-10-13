@@ -66,6 +66,42 @@ a {
 }
 
 /* ==========================================================================
+   Typography Standards: Negative Tracking & Tabular-Nums
+   ========================================================================== */
+
+/* Negative tracking on headings and titles for tight editorial rhythm */
+h1, h2, h3, h4, h5, h6,
+.view-title,
+.title,
+.heading {
+  letter-spacing: -0.025em;
+}
+
+/* Enforce tabular-nums globally across tables, metrics, badges, and numeric displays */
+.tabular-nums,
+table td,
+th,
+.metric-value,
+.badge {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tight negative tracking on numeric displays to eliminate jitter */
+.tabular-nums,
+.metric-value,
+.stat-value,
+.text-number,
+.badge-count {
+  letter-spacing: -0.025em;
+}
+
+/* Crisp hairline border utility & diffuse shadow eradication */
+.hairline-border,
+.border-subtle {
+  border: var(--border-subtle);
+}
+
+/* ==========================================================================
    Responsive Utilities & Layout Helpers
    ========================================================================== */
 
@@ -94,7 +130,7 @@ a {
   font-size: var(--text-title-fluid, 24px);
   font-weight: 800;
   color: var(--color-on-dark, #ffffff);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   line-height: 1.25;
 }
 
@@ -181,7 +217,7 @@ a {
     font-size: var(--text-title-fluid, clamp(18px, 4.5vw, 22px));
     font-weight: 700;
     line-height: 1.25;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
   }
 
   .view-header-responsive .view-desc,
