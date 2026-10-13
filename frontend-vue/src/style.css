@@ -25,16 +25,16 @@
 :root {
   --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, 'Cascadia Mono', monospace;
-  --font-number: var(--font-mono);
+  --font-number: 'JetBrains Mono', 'Inter', monospace;
   --font-display: var(--font-sans);
 
-  /* Deep High-End Dark Palette */
-  --bg-app: #0b0f19;
-  --bg-sidebar: #0b0f19;
-  --bg-card: #161f30;
-  --bg-card-hover: #1e293b;
-  --bg-elevated: #1e293b;
-  --bg-terminal: #0b0f19;
+  /* Deep High-End Dark Palette -- Linear 4-Tier Surface Ladder */
+  --bg-app: var(--color-canvas-dark, #08090a);
+  --bg-sidebar: var(--color-canvas-dark, #08090a);
+  --bg-card: var(--color-surface-card, #141516);
+  --bg-card-hover: var(--color-surface-elevated, #1a1b1e);
+  --bg-elevated: var(--color-surface-elevated, #1a1b1e);
+  --bg-terminal: var(--color-canvas-dark, #08090a);
 
   /* Borders & Hairlines */
   --border-subtle: rgba(255, 255, 255, 0.08);
