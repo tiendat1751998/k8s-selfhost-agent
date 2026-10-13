@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { SystemOverview, NodeMetrics } from '../../../api/overview'
+import type { TrendPoint } from '../../../composables/useOverviewDashboard'
 import BaseIcon from '../../ui/BaseIcon.vue'
 import PercentageBar from '../../ui/PercentageBar.vue'
+import MetricSparkline from '../../ui/MetricSparkline.vue'
 
 interface Props {
   overview: SystemOverview
@@ -13,6 +15,7 @@ interface Props {
   clusterTotalMemBytes: number
   clusterUsedDiskBytes: number
   clusterTotalDiskBytes: number
+  trendHistory?: TrendPoint[]
 }
 
 const props = defineProps<Props>()
@@ -27,6 +30,46 @@ const containersPct = computed(() => {
   return (props.runningContainers / props.totalContainers) * 100
 })
 
+const nodesHistory = ref<number[]>([])
+const containersHistory = ref<number[]>([])
+const cpuHistory = ref<number[]>([])
+const memHistory = ref<number[]>([])
+const diskHistory = ref<number[]>([])
+
+watch(
+  () => [
+    nodesPct.value,
+    containersPct.value,
+    props.overview?.total_cpu_percent,
+    props.overview?.total_mem_percent,
+    props.overview?.total_disk_percent,
+  ],
+  ([nPct, cPct, cpu, mem, disk]) => {
+    nodesHistory.value = [...nodesHistory.value.slice(-29), nPct ?? 0]
+    containersHistory.value = [...containersHistory.value.slice(-29), cPct ?? 0]
+    cpuHistory.value = [...cpuHistory.value.slice(-29), cpu ?? 0]
+    memHistory.value = [...memHistory.value.slice(-29), mem ?? 0]
+    diskHistory.value = [...diskHistory.value.slice(-29), disk ?? 0]
+  },
+  { immediate: true }
+)
+
+const nodesPoints = computed<number[]>(() =>
+  nodesHistory.value.length ? nodesHistory.value : [nodesPct.value]
+)
+const containersPoints = computed<number[]>(() =>
+  containersHistory.value.length ? containersHistory.value : [containersPct.value]
+)
+const cpuPoints = computed<number[]>(() =>
+  props.trendHistory?.length ? props.trendHistory.map((p) => p.cpu) : (cpuHistory.value.length ? cpuHistory.value : [props.overview?.total_cpu_percent || 0])
+)
+const memPoints = computed<number[]>(() =>
+  props.trendHistory?.length ? props.trendHistory.map((p) => p.mem) : (memHistory.value.length ? memHistory.value : [props.overview?.total_mem_percent || 0])
+)
+const diskPoints = computed<number[]>(() =>
+  props.trendHistory?.length ? props.trendHistory.map((p) => p.disk) : (diskHistory.value.length ? diskHistory.value : [props.overview?.total_disk_percent || 0])
+)
+
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 B'
   const k = 1024
@@ -37,24 +80,11 @@ function formatBytes(bytes: number): string {
 }
 
 function getRiskColor(pct: number): 'rose' | 'amber' | 'emerald' {
-  if (pct >= 85) return 'rose'
-  if (pct >= 70) return 'amber'
-  return 'emerald'
+  return pct >= 85 ? 'rose' : pct >= 70 ? 'amber' : 'emerald'
 }
 
 function getRiskStroke(pct: number): string {
-  if (pct >= 85) return '#f43f5e'
-  if (pct >= 70) return '#f59e0b'
-  return '#10b981'
-}
-
-function computeSparkline(pct: number): string {
-  const clamped = Math.max(0, Math.min(100, pct || 0))
-  const endY = (7 - (clamped / 100) * 5.5).toFixed(1)
-  const p1 = (7 - ((clamped * 0.7) / 100) * 5.5).toFixed(1)
-  const p2 = (7 - ((clamped * 0.9) / 100) * 5.5).toFixed(1)
-  const p3 = (7 - ((clamped * 0.8) / 100) * 5.5).toFixed(1)
-  return `M 1 ${p1} L 7 ${p2} L 14 ${p3} L 21 ${p2} L 29 ${endY}`
+  return pct >= 85 ? '#f43f5e' : pct >= 70 ? '#f59e0b' : '#10b981'
 }
 </script>
 
@@ -79,9 +109,7 @@ function computeSparkline(pct: number): string {
       </div>
       <div class="hud-card-bottom">
         <PercentageBar :value="nodesPct" :height="3" variant="emerald" class="hud-bar" />
-        <svg class="micro-sparkline" width="30" height="8" viewBox="0 0 30 8" fill="none" aria-hidden="true">
-          <path :d="computeSparkline(nodesPct)" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <MetricSparkline :data="nodesPoints" color="#10b981" />
       </div>
     </div>
 
@@ -102,9 +130,7 @@ function computeSparkline(pct: number): string {
       </div>
       <div class="hud-card-bottom">
         <PercentageBar :value="containersPct" :height="3" variant="cyan" class="hud-bar" />
-        <svg class="micro-sparkline" width="30" height="8" viewBox="0 0 30 8" fill="none" aria-hidden="true">
-          <path :d="computeSparkline(containersPct)" stroke="#06b6d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <MetricSparkline :data="containersPoints" color="#06b6d4" />
       </div>
     </div>
 
@@ -125,9 +151,7 @@ function computeSparkline(pct: number): string {
       </div>
       <div class="hud-card-bottom">
         <PercentageBar :value="overview.total_cpu_percent" :height="3" class="hud-bar" />
-        <svg class="micro-sparkline" width="30" height="8" viewBox="0 0 30 8" fill="none" aria-hidden="true">
-          <path :d="computeSparkline(overview.total_cpu_percent)" :stroke="getRiskStroke(overview.total_cpu_percent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <MetricSparkline :data="cpuPoints" :color="getRiskStroke(overview.total_cpu_percent)" />
       </div>
     </div>
 
@@ -148,9 +172,7 @@ function computeSparkline(pct: number): string {
       </div>
       <div class="hud-card-bottom">
         <PercentageBar :value="overview.total_mem_percent" :height="3" class="hud-bar" />
-        <svg class="micro-sparkline" width="30" height="8" viewBox="0 0 30 8" fill="none" aria-hidden="true">
-          <path :d="computeSparkline(overview.total_mem_percent)" :stroke="getRiskStroke(overview.total_mem_percent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <MetricSparkline :data="memPoints" :color="getRiskStroke(overview.total_mem_percent)" />
       </div>
     </div>
 
@@ -171,9 +193,7 @@ function computeSparkline(pct: number): string {
       </div>
       <div class="hud-card-bottom">
         <PercentageBar :value="overview.total_disk_percent" :height="3" class="hud-bar" />
-        <svg class="micro-sparkline" width="30" height="8" viewBox="0 0 30 8" fill="none" aria-hidden="true">
-          <path :d="computeSparkline(overview.total_disk_percent)" :stroke="getRiskStroke(overview.total_disk_percent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <MetricSparkline :data="diskPoints" :color="getRiskStroke(overview.total_disk_percent)" />
       </div>
     </div>
   </section>
@@ -290,15 +310,8 @@ function computeSparkline(pct: number): string {
 .badge-rose { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
 .badge-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
 
-.hud-card-bottom {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 12px;
-}
-
+.hud-card-bottom { display: flex; align-items: center; gap: 8px; height: 12px; }
 .hud-bar { flex: 1; min-width: 0; }
-.micro-sparkline { flex-shrink: 0; opacity: 0.85; }
 .font-mono { font-family: var(--font-mono, monospace); }
 
 .text-emerald { color: #10b981; }

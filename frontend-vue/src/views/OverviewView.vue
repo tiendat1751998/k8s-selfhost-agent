@@ -216,6 +216,7 @@ const {
         :clusterTotalMemBytes="clusterTotalMemBytes"
         :clusterUsedDiskBytes="clusterUsedDiskBytes"
         :clusterTotalDiskBytes="clusterTotalDiskBytes"
+        :trendHistory="trendHistory"
       />
 
       <!-- 2. ANIMATED REQUEST FLOW BAR -->
