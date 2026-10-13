@@ -17,24 +17,22 @@ const emit = defineEmits<{
   (e: 'upgrade', cluster: Cluster): void
   (e: 'remove', cluster: Cluster): void
   (e: 'details', cluster: Cluster): void
+  (e: 'inspect', cluster: Cluster): void
+  (e: 'probe', cluster: Cluster): void
+  (e: 'rebalance', cluster: Cluster): void
+  (e: 'cordon', cluster: Cluster): void
+  (e: 'evict', cluster: Cluster): void
   (e: 'import'): void
 }>()
 
-const K8S_ACTIONS: ActionItem[] = [
-  { id: 'details', label: 'Cluster Details', icon: 'zap' },
-  { id: 'discover', label: 'Discover Resources', icon: 'search' },
-  { id: 'upgrade', label: 'Upgrade Cluster', icon: 'arrow-up' },
+const clusterActions: ActionItem[] = [
+  { action: 'inspect', label: 'Inspect', icon: 'search' },
+  { action: 'probe', label: 'Probe', icon: 'activity' },
+  { action: 'rebalance', label: 'Rebalance', icon: 'zap' },
+  { action: 'cordon', label: 'Cordon / Drain', icon: 'pause' },
   { id: 'sep-1', label: '', separator: true },
-  { id: 'remove', label: 'Evict Cluster', icon: 'trash', variant: 'danger' },
+  { action: 'evict', label: 'Evict', icon: 'trash', isDestructive: true, variant: 'danger' },
 ]
-
-const SWARM_ACTIONS: ActionItem[] = [
-  { id: 'details', label: 'Cluster Details', icon: 'zap' },
-]
-
-function getClusterActions(cluster: Cluster): ActionItem[] {
-  return cluster.orchestrator === 'swarm' ? SWARM_ACTIONS : K8S_ACTIONS
-}
 
 const clusterColumns: Column<Cluster>[] = [
   { key: 'name', label: 'Cluster Name', sortable: true },
@@ -43,14 +41,26 @@ const clusterColumns: Column<Cluster>[] = [
   { key: 'version', label: 'Version', width: '150px', sortable: true },
   { key: 'nodes', label: 'Nodes', width: '65px', sortable: true, align: 'center' },
   { key: 'health_status', label: 'Health Status', width: '110px', sortable: true },
-  { key: 'actions', label: 'Operations', width: '130px', align: 'right' },
+  { key: 'actions', label: '', width: '40px', align: 'center' },
 ]
 
-function handleClusterAction(actionId: string, cluster: Cluster) {
-  if (actionId === 'details') emit('details', cluster)
-  else if (actionId === 'discover') emit('discover', cluster)
-  else if (actionId === 'upgrade') emit('upgrade', cluster)
-  else if (actionId === 'remove') emit('remove', cluster)
+function handleAction(action: string, cluster: Cluster) {
+  if (action === 'inspect' || action === 'details') {
+    emit('details', cluster)
+    emit('inspect', cluster)
+  } else if (action === 'probe' || action === 'discover') {
+    emit('discover', cluster)
+    emit('probe', cluster)
+  } else if (action === 'rebalance') {
+    emit('rebalance', cluster)
+  } else if (action === 'cordon') {
+    emit('cordon', cluster)
+  } else if (action === 'evict' || action === 'remove') {
+    emit('remove', cluster)
+    emit('evict', cluster)
+  } else if (action === 'upgrade') {
+    emit('upgrade', cluster)
+  }
 }
 </script>
 
@@ -115,21 +125,12 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
       </template>
 
       <template #cell-actions="{ row }">
-        <div class="table-actions-row">
-          <button
-            type="button"
-            class="btn btn-primary btn-xs"
-            title="Cluster Details"
-            @click="emit('details', row)"
-          >
-            <BaseIcon name="zap" size="xs" />
-            <span>Details</span>
-          </button>
+        <div class="kebab-cell">
           <ActionDropdown
             size="xs"
-            :items="getClusterActions(row)"
+            :items="clusterActions"
             :disabled="actionLoading === row.id"
-            @select="(actionId) => handleClusterAction(actionId, row)"
+            @select="handleAction($event, row)"
           />
         </div>
       </template>
@@ -192,22 +193,10 @@ function handleClusterAction(actionId: string, cluster: Cluster) {
   border: 1px solid rgba(59, 130, 246, 0.35);
 }
 
-.text-blue {
-  color: #60a5fa;
-}
-
-.table-actions-row {
+.kebab-cell {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.table-actions-row .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 6px;
-  font-size: 11px;
+  justify-content: center;
+  width: 100%;
 }
 </style>

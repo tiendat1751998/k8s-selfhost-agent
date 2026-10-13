@@ -81,15 +81,19 @@ const sortedNodes = computed<NodeMetrics[]>(() => {
 })
 
 const nodeActions: ActionItem[] = [
-  { id: 'scale', label: 'Scale Workloads', icon: 'sliders' },
-  { id: 'restart', label: 'Restart Agent', icon: 'refresh' },
-  { id: 'yaml', label: 'View YAML', icon: 'file-text' },
+  { action: 'details', label: 'Inspect Details', icon: 'search' },
+  { action: 'logs', label: 'Stream Logs', icon: 'file-text' },
+  { action: 'scale', label: 'Scale Workloads', icon: 'sliders' },
+  { action: 'restart', label: 'Restart Agent', icon: 'refresh' },
+  { action: 'yaml', label: 'View YAML', icon: 'file-text' },
   { id: 'sep-1', label: '', separator: true },
-  { id: 'delete', label: 'Cordon / Evict', icon: 'trash', variant: 'danger' },
+  { action: 'delete', label: 'Cordon / Evict', icon: 'trash', isDestructive: true, variant: 'danger' },
 ]
 
 function handleMenuAction(event: string, node: NodeMetrics) {
-  if (event === 'scale') emit('scale', node)
+  if (event === 'details') emit('details', node)
+  else if (event === 'logs') emit('logs', node)
+  else if (event === 'scale') emit('scale', node)
   else if (event === 'restart') emit('restart', node)
   else if (event === 'yaml') emit('yaml', node)
   else if (event === 'delete') emit('delete', node)
@@ -202,7 +206,7 @@ function getNodePing(node: NodeMetrics): number {
                 <span class="sort-icon" :class="{ active: sortField === 'probe' }">{{ sortField === 'probe' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕' }}</span>
               </div>
             </th>
-            <th class="col-actions text-right">ACTIONS</th>
+            <th class="col-actions text-center"></th>
           </tr>
         </thead>
         <tbody>
@@ -257,22 +261,12 @@ function getNodePing(node: NodeMetrics): number {
                 <BaseIcon name="activity" size="xs" /> {{ getNodePing(node) }}ms
               </span>
             </td>
-            <td class="col-actions text-right" @click.stop>
-              <div class="sre-suite">
-                <button type="button" class="sre-btn btn-logs" title="Stream Logs" @click="emit('logs', node)">
-                  <BaseIcon name="file-text" size="xs" />
-                  <span>Logs</span>
-                </button>
-                <button type="button" class="sre-btn btn-details" title="Diagnostics & Details" @click="emit('details', node)">
-                  <BaseIcon name="search" size="xs" />
-                  <span>Details</span>
-                </button>
-                <ActionDropdown
-                  size="xs"
-                  :items="nodeActions"
-                  @select="(actionId) => handleMenuAction(actionId, node)"
-                />
-              </div>
+            <td class="col-actions text-center" @click.stop>
+              <ActionDropdown
+                size="xs"
+                :items="nodeActions"
+                @select="(actionId) => handleMenuAction(actionId, node)"
+              />
             </td>
           </tr>
         </tbody>
@@ -285,6 +279,7 @@ function getNodePing(node: NodeMetrics): number {
 .node-table { table-layout: fixed !important; width: 100% !important; max-width: 1030px !important; }
 .node-table th { padding: 6px 8px !important; }
 .node-table td { padding: 2px 8px !important; }
+.col-actions { width: 44px !important; min-width: 40px !important; max-width: 48px !important; text-align: center !important; }
 .sortable-th { cursor: pointer; user-select: none; transition: color 0.15s ease; }
 .sortable-th:hover { color: var(--text-primary, #fff); }
 .th-sort-wrap { display: inline-flex; align-items: center; gap: 6px; }
