@@ -37,6 +37,86 @@ export interface RemediationResult {
   duration_ms?: number;
 }
 
+export interface IndicatorSignal {
+  id: string
+  description: string
+  weight: number
+  detected: boolean
+  evidence: string
+}
+
+export interface FailureHypothesis {
+  category: string
+  probable_cause: string
+  indicators: IndicatorSignal[]
+  recommendation: string
+  score: number
+  confidence: number
+}
+
+export interface DynamicRCAReport {
+  node_name: string
+  cluster_id: string
+  timestamp: string
+  primary_cause: string
+  confidence: number
+  hypotheses: FailureHypothesis[]
+  action_plan: string
+}
+
+export interface NodeProbeReport {
+  node_name: string
+  host_ip: string
+  ping_ok: boolean
+  agent_reachable: boolean
+  kubelet_healthy: boolean
+  runtime_healthy: boolean
+  state: string
+  recommended_action: string
+}
+
+export interface ServiceRescueResult {
+  node_name: string
+  services_restarted: string[]
+  success: boolean
+  recovered_to_ready: boolean
+  message: string
+  duration_ms: number
+}
+
+export interface PodCapacityItem {
+  name: string
+  namespace: string
+  tier: number
+  tier_name: string
+  requested_ram_bytes: number
+  requested_cpu_millis: number
+  shedding_reason?: string
+}
+
+export interface CapacityAdmissionPlan {
+  master_node_name: string
+  allocatable_ram_bytes: number
+  allocatable_cpu_millis: number
+  available_ram_bytes: number
+  available_cpu_millis: number
+  headroom_ram_percent: number
+  headroom_cpu_percent: number
+  admitted_pods: PodCapacityItem[]
+  shedded_pods: PodCapacityItem[]
+}
+
+export interface CircuitBreakerStatus {
+  cluster_id: string
+  unready_nodes_count: number
+  total_nodes_count: number
+  unready_ratio: number
+  cluster_breaker_tripped: boolean
+  fleet_breaker_tripped: boolean
+  eviction_frozen: boolean
+  freeze_reason: string
+}
+
 export interface VolumeAttachmentItem {
   pv_name?: string
   pvc_name?: string
@@ -93,6 +173,10 @@ export interface NodeFencingPreflight {
   total_nodes?: number
   worker_nodes?: number
   master_nodes?: number
+  dynamic_rca?: DynamicRCAReport
+  probe_report?: NodeProbeReport
+  capacity_plan?: CapacityAdmissionPlan
+  circuit_breaker?: CircuitBreakerStatus
 }
 
 export interface FencingExecutionPayload {
@@ -104,6 +188,7 @@ export interface FencingExecutionPayload {
   timeout_seconds?: number
   force_volume_detach?: boolean
   volume_detach_timeout_sec?: number
+  override_circuit_breaker?: boolean
 }
 
 export interface FencingStepItem {
@@ -186,9 +271,9 @@ export async function getFencingPreflight(clusterId: string, nodeName: string): 
     lease_expired: raw.lease_expired ?? (raw.lease_healthy !== undefined ? !raw.lease_healthy : true),
     is_single_worker_cluster: !!raw.is_single_worker_cluster,
     master_has_no_schedule_taint: !!raw.master_has_no_schedule_taint,
-    probable_cause: raw.probable_cause || raw.rca?.probable_cause || 'UNRESPONSIVE_KUBELET_HEARTBEAT',
-    confidence: raw.confidence ?? raw.rca?.confidence ?? 0.94,
-    recommendation: raw.recommendation || raw.rca?.recommendation || 'Power isolate node (STONITH) and apply out-of-service taint to trigger volume release.',
+    probable_cause: raw.probable_cause || raw.rca?.probable_cause || raw.dynamic_rca?.primary_cause || 'UNRESPONSIVE_KUBELET_HEARTBEAT',
+    confidence: raw.confidence ?? raw.rca?.confidence ?? raw.dynamic_rca?.confidence ?? 0.94,
+    recommendation: raw.recommendation || raw.rca?.recommendation || raw.dynamic_rca?.action_plan || 'Power isolate node (STONITH) and apply out-of-service taint to trigger volume release.',
     stateful_pods: raw.stateful_pods ?? [],
     stateless_pods: raw.stateless_pods ?? [],
     daemonset_pods: raw.daemonset_pods ?? [],
@@ -198,7 +283,11 @@ export async function getFencingPreflight(clusterId: string, nodeName: string): 
       storage_class: v.storage_class,
       is_rwo: v.is_rwo ?? true,
       attached: v.attached ?? true
-    })) ?? [])
+    })) ?? []),
+    dynamic_rca: raw.dynamic_rca,
+    probe_report: raw.probe_report,
+    capacity_plan: raw.capacity_plan,
+    circuit_breaker: raw.circuit_breaker
   }
 }
 
@@ -214,6 +303,7 @@ export async function executeNodeFencing(clusterId: string, nodeName: string, pa
     timeout_seconds: payload.timeout_seconds ?? 30,
     force_volume_detach: payload.force_volume_detach ?? payload.auto_fence_storage ?? true,
     volume_detach_timeout_sec: payload.volume_detach_timeout_sec ?? payload.timeout_seconds ?? 30,
+    override_circuit_breaker: payload.override_circuit_breaker,
   }
   const res = await api.post<ApiResponse<FencingExecutionReport> | FencingExecutionReport>(`/k8s/${cid}/dr/nodes/${node}/fencing/execute`, body)
   const raw = unwrapData(res)
@@ -231,6 +321,16 @@ export async function executeNodeFencing(clusterId: string, nodeName: string, pa
   }
 }
 
+export async function executeNodeRescue(clusterId: string, nodeName: string, services?: string[]): Promise<ServiceRescueResult> {
+  const cid = encodeURIComponent(clusterId)
+  const node = encodeURIComponent(nodeName)
+  const res = await api.post<ApiResponse<ServiceRescueResult> | ServiceRescueResult>(
+    `/api/v1/clusters/${cid}/nodes/${node}/rescue`,
+    { services }
+  )
+  return unwrapData(res)
+}
+
 export const drApi = {
   triggerEtcdSnapshot,
   restoreEtcdSnapshot,
@@ -239,4 +339,5 @@ export const drApi = {
   triggerRemediation,
   getFencingPreflight,
   executeNodeFencing,
+  executeNodeRescue,
 }

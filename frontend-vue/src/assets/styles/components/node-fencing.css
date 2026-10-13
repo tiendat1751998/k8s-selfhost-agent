@@ -190,11 +190,118 @@
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Mobile Responsiveness */
+/* Probe Telemetry Grid */
+.probe-telemetry-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px;
+}
+.probe-pill {
+  padding: 8px 10px; border-radius: 6px; background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; gap: 3px;
+}
+.probe-pill.healthy { border-color: rgba(16, 185, 129, 0.35); background: rgba(16, 185, 129, 0.07); }
+.probe-pill.failed { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1); }
+.probe-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+.probe-val { font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
+.probe-pill.healthy .probe-val { color: #10b981; }
+.probe-pill.failed .probe-val { color: #f87171; }
+
+/* Soft-Death Banner & Rescue */
+.soft-death-banner {
+  background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+}
+.soft-death-content { flex: 1; min-width: 240px; }
+.soft-death-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #fbbf24; margin-bottom: 4px; }
+.soft-death-desc { font-size: 11px; color: #fde68a; line-height: 1.4; margin: 0; }
+.btn-rescue {
+  padding: 8px 14px; border-radius: 6px; font-size: 11px; font-weight: 700;
+  background: #0284c7; color: #ffffff; border: 1px solid #38bdf8; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease;
+}
+.btn-rescue:hover:not(:disabled) { background: #0369a1; box-shadow: 0 0 12px rgba(56, 189, 248, 0.35); }
+.btn-rescue:disabled { opacity: 0.6; cursor: not-allowed; }
+.rescue-success-banner {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 6px;
+  background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399; font-size: 12px; margin-bottom: 14px;
+}
+.rescue-fail-note {
+  display: flex; align-items: center; gap: 6px; color: #f87171; margin-bottom: 10px;
+}
+.spin-anim { animation: spin 1s linear infinite; }
+
+/* RCA Signals Accordion */
+.rca-signals-container { margin-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 8px; }
+.rca-signals-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: transparent; border: none; color: #94a3b8; font-size: 11px; cursor: pointer; padding: 4px 0;
+}
+.rca-signals-toggle:hover { color: #38bdf8; }
+.signals-toggle-title { display: flex; align-items: center; gap: 6px; }
+.signals-toggle-tag { font-size: 10px; opacity: 0.7; }
+.rca-signals-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.rca-signal-item {
+  padding: 6px 10px; border-radius: 6px; background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06); font-size: 11px;
+}
+.rca-signal-item.signal-detected { border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.08); }
+.signal-header { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.signal-desc { flex: 1; color: #e2e8f0; }
+.signal-weight { color: #f59e0b; font-size: 10px; }
+.signal-evidence { font-size: 10px; color: #94a3b8; margin-top: 2px; padding-left: 18px; }
+
+/* Circuit Breaker & Headroom */
+.circuit-breaker-banner {
+  background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
+}
+.circuit-breaker-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.breaker-icon { font-size: 16px; }
+.breaker-title { font-size: 12px; font-weight: 700; color: #f87171; line-height: 1.3; }
+.breaker-reason { color: #fca5a5; margin-top: 2px; }
+.breaker-override-toggle {
+  display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 6px; font-size: 11px; color: #fca5a5; font-weight: 600;
+}
+.admission-plan-card {
+  background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px; padding: 12px; margin-bottom: 14px;
+}
+.admission-plan-title {
+  display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #38bdf8; margin-bottom: 10px;
+}
+.headroom-meters-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.headroom-meter { display: flex; flex-direction: column; gap: 4px; font-size: 10px; }
+.meter-info { display: flex; justify-content: space-between; color: #94a3b8; }
+.meter-bar-track { height: 6px; background: rgba(51, 65, 85, 0.6); border-radius: 3px; overflow: hidden; }
+.meter-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+.meter-bar-fill.meter-safe { background: #10b981; }
+.meter-bar-fill.meter-danger { background: #ef4444; }
+.admission-lists-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.workload-admission-box {
+  background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px; padding: 8px 10px; font-size: 10px;
+}
+.admission-box-title { display: flex; align-items: center; gap: 5px; font-weight: 700; margin-bottom: 6px; }
+.admission-items-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.admission-item { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.pod-name { color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+.pod-tier-badge { color: #34d399; font-size: 9px; }
+.pod-shed-badge { color: #f59e0b; font-size: 9px; }
+
+/* Responsive Breakpoints */
+@media (max-width: 768px) {
+  .headroom-meters-grid, .admission-lists-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 640px) {
   .fencing-modal { max-height: 96vh; border-radius: 8px; }
   .fencing-stepper { padding: 8px 12px; }
   .stepper-label { display: none; }
-  .fencing-body { padding: 14px; }
+  .fencing-body { padding: 12px; }
   .pills-grid { grid-template-columns: 1fr; }
+  .probe-telemetry-grid { grid-template-columns: 1fr 1fr; }
+  .soft-death-banner { flex-direction: column; align-items: stretch; }
+  .btn-rescue { width: 100%; justify-content: center; }
 }
