@@ -140,10 +140,12 @@ const {
           :testing-host-id="testingHostId"
           :get-host-type-meta="getHostTypeMeta"
           :get-latency-badge-class="getLatencyBadgeClass"
+          :format-date="formatDate"
           @select="openHostDrawer"
           @test="handleTestHost"
           @edit="openEditHostModal"
           @delete="promptDeleteHost"
+          @fencing="openFencingModal($event.name, $event.tenant_id || 'default')"
         />
       </div>
 
@@ -297,19 +299,6 @@ const {
 .btn-action-fence:hover {
   background: #f59e0b;
   color: #0f172a;
-}
-.btn-micro-fence {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  font-size: 10px;
-  font-weight: 600;
-  cursor: pointer;
 }
 </style>
 

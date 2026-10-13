@@ -55,18 +55,10 @@ const emit = defineEmits<{
       <span class="tel-item tel-online"><BaseIcon name="shield" size="xs" /> {{ onlineHostsCount }} online</span>
       <span>·</span>
       <span class="tel-item tel-offline"><BaseIcon name="alert-triangle" size="xs" /> {{ offlineHostsCount }} offline</span>
-      <template v-if="offlineHostsCount > 0">
+      <template v-if="onlineHostsCount > 0 && avgLatency > 0">
         <span>·</span>
-        <button
-          type="button"
-          class="btn-micro-fence font-mono"
-          @click="emit('openFencing', hosts.find(h => h.status !== 'connected')?.name || '', hosts.find(h => h.status !== 'connected')?.tenant_id || 'default')"
-        >
-          <BaseIcon name="shield" size="xs" /> Safe Fence
-        </button>
+        <span class="tel-item tel-latency"><BaseIcon name="zap" size="xs" /> avg {{ avgLatency }}ms</span>
       </template>
-      <span v-if="onlineHostsCount > 0 && avgLatency > 0">·</span>
-      <span v-if="onlineHostsCount > 0 && avgLatency > 0" class="tel-item tel-latency"><BaseIcon name="zap" size="xs" /> avg {{ avgLatency }}ms</span>
     </div>
 
     <!-- Mobile Search Expandable Input -->
