@@ -49,7 +49,8 @@ async function handleRescue() {
   try {
     const res = await executeNodeRescue(props.clusterId, props.nodeName)
     clearRescueTimer()
-    if (res.recovered_to_ready) {
+    const isSuccess = res.cancel_fencing || res.success || res.recovered_to_ready
+    if (isSuccess) {
       rescueSuccess.value = true
       rescueMessage.value = res.message || 'Node recovered to Ready! Fencing canceled — all workloads preserved.'
       emit('rescued', res)

@@ -77,11 +77,14 @@ export interface NodeProbeReport {
 
 export interface ServiceRescueResult {
   node_name: string
-  services_restarted: string[]
+  services_restarted?: string[]
+  services?: string[]
   success: boolean
-  recovered_to_ready: boolean
+  recovered_to_ready?: boolean
+  cancel_fencing?: boolean
   message: string
   duration_ms: number
+  action_taken?: string
 }
 
 export interface PodCapacityItem {
@@ -261,7 +264,117 @@ export async function getFencingPreflight(clusterId: string, nodeName: string): 
   const cid = encodeURIComponent(clusterId)
   const node = encodeURIComponent(nodeName)
   const res = await api.get<ApiResponse<NodeFencingPreflight> | NodeFencingPreflight>(`/k8s/${cid}/dr/nodes/${node}/fencing/preflight`)
-  const raw = unwrapData(res)
+  const raw = unwrapData(res) as Record<string, any>
+
+  // 1. Normalize probe_report
+  const rawProbe = (raw.probe_report || (raw.classification ? raw : undefined)) as Record<string, any> | undefined
+  const probe_report: NodeProbeReport | undefined = rawProbe ? {
+    node_name: rawProbe.node_name || nodeName,
+    host_ip: rawProbe.host_ip || '',
+    state: rawProbe.classification || rawProbe.state || 'HEALTHY',
+    ping_ok: rawProbe.ping_reachable ?? rawProbe.ping_ok ?? true,
+    agent_reachable: rawProbe.agent_reachable ?? true,
+    kubelet_healthy: rawProbe.kubelet_responsive ?? rawProbe.kubelet_healthy ?? false,
+    runtime_healthy: rawProbe.containerd_responsive ?? rawProbe.runtime_healthy ?? false,
+    recommended_action: rawProbe.recommended_action || (Array.isArray(rawProbe.details) ? rawProbe.details.join('; ') : ''),
+  } : undefined
+
+  // 2. Normalize dynamic_rca
+  const rawRca = (raw.rca?.dynamic_report || raw.dynamic_rca) as Record<string, any> | undefined
+  let dynamic_rca: DynamicRCAReport | undefined
+  if (rawRca) {
+    const rawHypotheses = Array.isArray(rawRca.hypotheses) ? rawRca.hypotheses : []
+    const hypotheses: FailureHypothesis[] = rawHypotheses.map((h: any) => {
+      const indicators: IndicatorSignal[] = Array.isArray(h.indicators)
+        ? h.indicators.map((ind: any, idx: number) => ({
+            id: ind.id || `signal-${idx}`,
+            description: ind.description || String(ind),
+            weight: typeof ind.weight === 'number' ? ind.weight : 1.0,
+            detected: ind.detected ?? true,
+            evidence: ind.evidence || 'Probed signal match',
+          }))
+        : Array.isArray(h.matched_indicators)
+          ? h.matched_indicators.map((ind: any, idx: number) => {
+              const str = typeof ind === 'string' ? ind : (ind?.description || ind?.id || String(ind))
+              return {
+                id: typeof ind === 'object' && ind?.id ? ind.id : `signal-${idx}`,
+                description: str,
+                weight: typeof ind === 'object' && typeof ind?.weight === 'number' ? ind.weight : 1.0,
+                detected: typeof ind === 'object' && ind?.detected !== undefined ? !!ind.detected : true,
+                evidence: typeof ind === 'object' && ind?.evidence ? ind.evidence : `Matched telemetry indicator: ${str}`,
+              }
+            })
+          : []
+      return {
+        category: h.category || h.hypothesis || 'Infrastructure',
+        probable_cause: h.probable_cause || h.hypothesis || 'Unknown cause',
+        indicators,
+        recommendation: h.recommendation || '',
+        score: typeof h.score === 'number' ? h.score : 0,
+        confidence: typeof h.confidence === 'number' && !isNaN(h.confidence) ? h.confidence : 0,
+      }
+    })
+
+    const conf = typeof rawRca.confidence === 'number' && !isNaN(rawRca.confidence)
+      ? rawRca.confidence
+      : (typeof raw.confidence === 'number' ? raw.confidence : (raw.rca?.confidence ?? 0.94))
+
+    dynamic_rca = {
+      node_name: rawRca.node_name || raw.node_name || nodeName,
+      cluster_id: rawRca.cluster_id || raw.cluster_id || clusterId,
+      timestamp: rawRca.timestamp || new Date().toISOString(),
+      primary_cause: rawRca.primary_cause || raw.probable_cause || raw.rca?.probable_cause || 'UNRESPONSIVE_KUBELET_HEARTBEAT',
+      confidence: conf,
+      action_plan: rawRca.action_plan || rawRca.recommendation || raw.recommendation || raw.rca?.recommendation || '',
+      hypotheses,
+    }
+  }
+
+  // 3. Normalize capacity_plan
+  const rawCap = (raw.capacity_admission_plan || raw.capacity_plan) as Record<string, any> | undefined
+  let capacity_plan: CapacityAdmissionPlan | undefined
+  if (rawCap) {
+    const allocMem = rawCap.allocatable_ram_bytes ?? rawCap.master_allocatable_mem_bytes ?? raw.master_allocatable_mem_bytes ?? 0
+    const availMem = rawCap.available_ram_bytes ?? rawCap.master_available_mem_bytes ?? raw.master_available_mem_bytes ?? 0
+    const allocCpu = rawCap.allocatable_cpu_millis ?? rawCap.master_allocatable_cpu_millis ?? raw.master_allocatable_cpu_millis ?? 0
+    const availCpu = rawCap.available_cpu_millis ?? rawCap.master_available_cpu_millis ?? raw.master_available_cpu_millis ?? 0
+
+    const headroom_ram_percent = rawCap.headroom_ram_percent !== undefined
+      ? rawCap.headroom_ram_percent
+      : (allocMem > 0 ? (availMem / allocMem) * 100 : 0)
+
+    const headroom_cpu_percent = rawCap.headroom_cpu_percent !== undefined
+      ? rawCap.headroom_cpu_percent
+      : (allocCpu > 0 ? (availCpu / allocCpu) * 100 : 0)
+
+    capacity_plan = {
+      master_node_name: rawCap.master_node_name || raw.master_node_name || '',
+      allocatable_ram_bytes: allocMem,
+      allocatable_cpu_millis: allocCpu,
+      available_ram_bytes: availMem,
+      available_cpu_millis: availCpu,
+      headroom_ram_percent,
+      headroom_cpu_percent,
+      admitted_pods: Array.isArray(rawCap.admitted_pods) ? rawCap.admitted_pods : [],
+      shedded_pods: Array.isArray(rawCap.shedded_pods) ? rawCap.shedded_pods : [],
+    }
+  }
+
+  // 4. Normalize circuit_breaker
+  const rawCb = raw.circuit_breaker as Record<string, any> | undefined
+  let circuit_breaker: CircuitBreakerStatus | undefined
+  if (rawCb) {
+    circuit_breaker = {
+      cluster_id: rawCb.cluster_id || clusterId,
+      unready_nodes_count: rawCb.unready_nodes_count ?? rawCb.unready_nodes ?? 0,
+      total_nodes_count: rawCb.total_nodes_count ?? rawCb.total_nodes ?? 0,
+      unready_ratio: rawCb.unready_ratio ?? 0,
+      cluster_breaker_tripped: rawCb.cluster_breaker_tripped ?? rawCb.tripped ?? false,
+      fleet_breaker_tripped: rawCb.fleet_breaker_tripped ?? false,
+      eviction_frozen: rawCb.tripped ?? rawCb.eviction_frozen ?? false,
+      freeze_reason: rawCb.reason ?? rawCb.freeze_reason ?? '',
+    }
+  }
 
   return {
     ...raw,
@@ -277,17 +390,17 @@ export async function getFencingPreflight(clusterId: string, nodeName: string): 
     stateful_pods: raw.stateful_pods ?? [],
     stateless_pods: raw.stateless_pods ?? [],
     daemonset_pods: raw.daemonset_pods ?? [],
-    volume_attachments: raw.volume_attachments ?? (raw.volume_inventory?.map(v => ({
+    volume_attachments: raw.volume_attachments ?? (raw.volume_inventory?.map((v: any) => ({
       pv_name: v.persistent_volume_name || v.attachment_name || v.pv_name,
       pvc_name: v.pvc_name,
       storage_class: v.storage_class,
       is_rwo: v.is_rwo ?? true,
       attached: v.attached ?? true
     })) ?? []),
-    dynamic_rca: raw.dynamic_rca,
-    probe_report: raw.probe_report,
-    capacity_plan: raw.capacity_plan,
-    circuit_breaker: raw.circuit_breaker
+    dynamic_rca,
+    probe_report,
+    capacity_plan,
+    circuit_breaker,
   }
 }
 
@@ -325,10 +438,20 @@ export async function executeNodeRescue(clusterId: string, nodeName: string, ser
   const cid = encodeURIComponent(clusterId)
   const node = encodeURIComponent(nodeName)
   const res = await api.post<ApiResponse<ServiceRescueResult> | ServiceRescueResult>(
-    `/api/v1/clusters/${cid}/nodes/${node}/rescue`,
+    `/k8s/${cid}/dr/nodes/${node}/rescue`,
     { services }
   )
-  return unwrapData(res)
+  const raw = unwrapData(res) as Record<string, any>
+  return {
+    ...raw,
+    node_name: raw.node_name || nodeName,
+    success: !!raw.success,
+    cancel_fencing: raw.cancel_fencing ?? raw.success ?? raw.recovered_to_ready ?? false,
+    recovered_to_ready: raw.recovered_to_ready ?? raw.cancel_fencing ?? raw.success ?? false,
+    services_restarted: raw.services_restarted ?? raw.services ?? [],
+    message: raw.message || '',
+    duration_ms: raw.duration_ms ?? 0,
+  }
 }
 
 export const drApi = {
