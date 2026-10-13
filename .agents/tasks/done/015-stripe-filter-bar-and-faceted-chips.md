@@ -1,8 +1,8 @@
-﻿# TASK 015: Stripe-Style Filter Bar & Faceted Chips
+# TASK 015: Stripe-Style Filter Bar & Faceted Chips
 
 > **Location**: .agents/tasks/enterprise-ui-redesign/015-stripe-filter-bar-and-faceted-chips.md  
 > **Benchmark Source**: Stripe Workbench, Datadog Faceted Query Bar  
-> **Status**: READY_FOR_DISPATCH  
+> **Status**: DONE  
 
 ## 1. Goal:
 Implement a standardized filter & search toolbar mounted above all data tables with interactive, dismissible token chips ([ Status: Running ✕ ] [ Cluster: prod-east ✕ ] [ + Filter ]).
