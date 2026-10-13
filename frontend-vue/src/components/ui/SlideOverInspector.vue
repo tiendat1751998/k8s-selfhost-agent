@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, onMounted, onUnmounted, computed } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import BaseIcon from './BaseIcon.vue'
 import StatusBadge from './StatusBadge.vue'
 
@@ -7,89 +7,138 @@ export interface InspectorTab {
   id: string
   label: string
   icon?: string
-  count?: number
+  badge?: number | string
 }
 
-const props = withDefaults(
-  defineProps<{
-    show: boolean
-    title: string
-    subtitle?: string
-    icon?: string
-    status?: string
-    tabs?: InspectorTab[]
-    activeTab?: string
-    closable?: boolean
-    closeOnEsc?: boolean
-    closeOnBackdrop?: boolean
-  }>(),
-  {
-    subtitle: undefined,
-    icon: undefined,
-    status: undefined,
-    tabs: () => [],
-    activeTab: undefined,
-    closable: true,
-    closeOnEsc: true,
-    closeOnBackdrop: true,
+interface Props {
+  isOpen: boolean
+  title: string
+  subtitle?: string
+  status?: string
+  icon?: string
+  tabs?: InspectorTab[]
+  activeTab?: string
+  width?: string
+  closeOnBackdrop?: boolean
+  closeOnEsc?: boolean
+  ariaLabel?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  subtitle: undefined,
+  status: undefined,
+  icon: undefined,
+  tabs: undefined,
+  activeTab: undefined,
+  width: '580px',
+  closeOnBackdrop: true,
+  closeOnEsc: true,
+  ariaLabel: undefined
+})
+
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'update:isOpen', value: boolean): void
+  (e: 'update:activeTab', tabId: string): void
+  (e: 'action', actionName: string): void
+}>()
+
+const DEFAULT_TABS: InspectorTab[] = [
+  { id: 'overview', label: 'Overview', icon: 'eye' },
+  { id: 'yaml', label: 'YAML', icon: 'file-code' },
+  { id: 'logs', label: 'Logs', icon: 'file-text' },
+  { id: 'actions', label: 'Actions', icon: 'sliders' },
+]
+
+const availableTabs = computed<InspectorTab[]>(() => {
+  return props.tabs && props.tabs.length > 0 ? props.tabs : DEFAULT_TABS
+})
+
+const localTab = ref<string>(props.activeTab || availableTabs.value[0]?.id || 'overview')
+
+watch(
+  () => props.activeTab,
+  (newTab) => {
+    if (newTab) {
+      localTab.value = newTab
+    }
   }
 )
 
-const emit = defineEmits<{
-  (e: 'update:show', value: boolean): void
-  (e: 'update:activeTab', tabId: string): void
-  (e: 'tab-change', tabId: string): void
-  (e: 'close'): void
-}>()
-
-const currentTab = computed(() => {
-  if (props.activeTab !== undefined) return props.activeTab
-  if (props.tabs && props.tabs.length > 0) return props.tabs[0].id
-  return ''
+const currentTab = computed<string>(() => {
+  return props.activeTab || localTab.value
 })
+
+function selectTab(tabId: string) {
+  localTab.value = tabId
+  emit('update:activeTab', tabId)
+  if (tabId === 'actions') {
+    emit('action', 'tab-actions-opened')
+  }
+}
+
+function triggerAction(actionName: string) {
+  emit('action', actionName)
+}
 
 function handleClose() {
   emit('close')
-  emit('update:show', false)
+  emit('update:isOpen', false)
 }
 
 function handleBackdropClick() {
-  if (props.closeOnBackdrop) handleClose()
+  if (props.closeOnBackdrop) {
+    handleClose()
+  }
 }
+
+const drawerRef = ref<HTMLElement | null>(null)
+let previousActiveElement: HTMLElement | null = null
 
 function handleKeydown(e: KeyboardEvent) {
-  if (props.closeOnEsc && e.key === 'Escape' && props.show) handleClose()
-}
+  if (!props.isOpen) return
 
-function selectTab(tabId: string) {
-  emit('update:activeTab', tabId)
-  emit('tab-change', tabId)
-}
+  if (props.closeOnEsc && e.key === 'Escape') {
+    e.stopPropagation()
+    handleClose()
+    return
+  }
 
-function handleTabKeydown(e: KeyboardEvent, tabId: string) {
-  if (!props.tabs || props.tabs.length === 0) return
-  const currentIdx = props.tabs.findIndex((t) => t.id === tabId)
-  if (currentIdx === -1) return
+  // Focus trap for accessibility
+  if (e.key === 'Tab' && drawerRef.value) {
+    const focusable = drawerRef.value.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    if (!focusable.length) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
 
-  if (e.key === 'ArrowRight') {
-    e.preventDefault()
-    const nextIdx = (currentIdx + 1) % props.tabs.length
-    selectTab(props.tabs[nextIdx].id)
-  } else if (e.key === 'ArrowLeft') {
-    e.preventDefault()
-    const prevIdx = (currentIdx - 1 + props.tabs.length) % props.tabs.length
-    selectTab(props.tabs[prevIdx].id)
+    if (e.shiftKey && document.activeElement === first) {
+      last.focus()
+      e.preventDefault()
+    } else if (!e.shiftKey && document.activeElement === last) {
+      first.focus()
+      e.preventDefault()
+    }
   }
 }
 
 watch(
-  () => props.show,
-  (isOpen) => {
+  () => props.isOpen,
+  (open) => {
     if (typeof document !== 'undefined') {
-      document.body.style.overflow = isOpen ? 'hidden' : ''
+      if (open) {
+        previousActiveElement = document.activeElement as HTMLElement | null
+        document.body.style.overflow = 'hidden'
+        nextTick(() => {
+          drawerRef.value?.focus()
+        })
+      } else {
+        document.body.style.overflow = ''
+        previousActiveElement?.focus?.()
+      }
     }
-  },
-  { immediate: true }
+  }
 )
 
 onMounted(() => {
@@ -101,176 +150,208 @@ onMounted(() => {
 onUnmounted(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('keydown', handleKeydown)
-    document.body.style.overflow = ''
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = ''
+    }
   }
 })
 </script>
 
 <template>
   <Teleport to="body">
-    <Transition name="slide-over-fade">
+    <Transition name="inspector-fade">
       <div
-        v-if="show"
+        v-if="isOpen"
         class="slide-over-backdrop"
-        role="presentation"
         @click.self="handleBackdropClick"
+        aria-hidden="false"
       >
-        <Transition name="slide-over-panel" appear>
-          <aside
-            class="slide-over-panel"
+        <Transition name="inspector-slide" appear>
+          <div
+            v-if="isOpen"
+            ref="drawerRef"
+            class="inspector-panel"
+            :style="{ '--drawer-width': width || '580px' }"
             role="dialog"
             aria-modal="true"
-            :aria-label="title"
+            :aria-label="ariaLabel || title"
+            tabindex="-1"
           >
-            <!-- Header -->
-            <header class="slide-over-header">
-              <div class="slide-over-title-area">
-                <div v-if="icon" class="slide-over-icon-box">
-                  <BaseIcon :name="icon" size="md" />
+            <!-- 48px Fixed Header Bar -->
+            <header class="inspector-header">
+              <div class="header-left">
+                <BaseIcon
+                  v-if="icon"
+                  :name="icon"
+                  size="md"
+                  class="entity-icon"
+                />
+                <div class="header-meta">
+                  <h3 class="header-title" :title="title">{{ title }}</h3>
+                  <span v-if="subtitle" class="header-subtitle" :title="subtitle">
+                    {{ subtitle }}
+                  </span>
                 </div>
-                <div class="slide-over-titles">
-                  <div class="slide-over-title-row">
-                    <h2 class="slide-over-title">{{ title }}</h2>
-                    <StatusBadge v-if="status" :status="status" size="sm" />
-                  </div>
-                  <p v-if="subtitle" class="slide-over-subtitle">{{ subtitle }}</p>
-                </div>
+                <StatusBadge v-if="status" :status="status" size="sm" class="header-status" />
               </div>
 
-              <div class="slide-over-actions">
-                <slot name="header-actions"></slot>
+              <div class="header-right">
+                <slot name="header-actions" :close="handleClose"></slot>
                 <button
-                  v-if="closable"
                   type="button"
-                  class="slide-over-close-btn"
+                  class="close-button"
                   title="Close inspector (Esc)"
                   aria-label="Close inspector"
                   @click="handleClose"
                 >
-                  <BaseIcon name="x" size="sm" />
+                  <BaseIcon name="x-circle" size="md" class="close-icon" />
                 </button>
               </div>
             </header>
 
-            <!-- Tabs Navigation -->
-            <nav
-              v-if="tabs && tabs.length > 0"
-              class="slide-over-tabs"
-              role="tablist"
-              aria-label="Inspector tabs"
-            >
+            <!-- Tab Navigation Strip -->
+            <nav class="inspector-tabs" role="tablist" aria-label="Inspector Sections">
               <button
-                v-for="tab in tabs"
+                v-for="tab in availableTabs"
                 :key="tab.id"
                 type="button"
                 role="tab"
+                :id="`tab-${tab.id}`"
+                :aria-controls="`tabpanel-${tab.id}`"
                 :aria-selected="currentTab === tab.id"
-                :tabindex="currentTab === tab.id ? 0 : -1"
-                class="slide-over-tab-btn"
+                class="tab-btn"
                 :class="{ 'is-active': currentTab === tab.id }"
                 @click="selectTab(tab.id)"
-                @keydown="handleTabKeydown($event, tab.id)"
               >
-                <BaseIcon v-if="tab.icon" :name="tab.icon" size="xs" />
+                <BaseIcon v-if="tab.icon" :name="tab.icon" size="xs" class="tab-icon" />
                 <span class="tab-label">{{ tab.label }}</span>
-                <span v-if="tab.count !== undefined" class="tab-count-badge">{{ tab.count }}</span>
+                <span v-if="tab.badge !== undefined" class="tab-badge">{{ tab.badge }}</span>
               </button>
             </nav>
 
-            <!-- Scrollable Body Slot -->
-            <div class="slide-over-body">
-              <slot :active-tab="currentTab" :close="handleClose"></slot>
-            </div>
+            <!-- Content Area (Active Tab Slot or Fallback) -->
+            <main
+              class="inspector-body"
+              :id="`tabpanel-${currentTab}`"
+              role="tabpanel"
+              :aria-labelledby="`tab-${currentTab}`"
+            >
+              <slot :name="currentTab" :action="triggerAction">
+                <slot></slot>
+              </slot>
+            </main>
 
-            <!-- Optional Footer Slot -->
-            <footer v-if="$slots.footer" class="slide-over-footer">
-              <slot name="footer" :close="handleClose"></slot>
+            <!-- Optional Footer -->
+            <footer v-if="$slots.footer" class="inspector-footer">
+              <slot name="footer" :close="handleClose" :action="triggerAction"></slot>
             </footer>
-          </aside>
+          </div>
         </Transition>
       </div>
     </Transition>
   </Teleport>
 </template>
 
-<style>
+<style scoped>
 .slide-over-backdrop {
-  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-  z-index: 1000; display: flex; justify-content: flex-end;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100dvh;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1050;
+  display: flex;
+  justify-content: flex-end;
 }
-.slide-over-panel {
-  position: fixed; top: 0; right: 0; bottom: 0; height: 100vh;
-  width: 580px; max-width: 100vw; background: #141516;
+.inspector-panel {
+  width: var(--drawer-width, 580px);
+  max-width: 100vw;
+  height: 100vh;
+  min-height: 100dvh;
+  background: rgba(11, 16, 28, 0.98);
   border-left: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
-  z-index: 1000; display: flex; flex-direction: column;
+  box-shadow: -12px 0 36px -4px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  outline: none;
+  overflow: hidden;
+  box-sizing: border-box;
 }
-@media (min-width: 768px) and (max-width: 1023px) { .slide-over-panel { width: 480px; } }
-@media (max-width: 767px) { .slide-over-panel { width: 100vw; } }
-
-.slide-over-header {
-  padding: 16px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; flex-shrink: 0;
-}
-.slide-over-title-area { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.slide-over-icon-box {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: 8px; background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08); color: #38bdf8; flex-shrink: 0;
-}
-.slide-over-titles { min-width: 0; }
-.slide-over-title-row { display: flex; align-items: center; gap: 8px; }
-.slide-over-title {
-  margin: 0; font-size: 15px; font-weight: 600; color: #f8fafc;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.slide-over-subtitle {
-  margin: 2px 0 0; font-size: 12px; color: var(--text-muted, #94a3b8);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.slide-over-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.slide-over-close-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border-radius: 6px; border: 1px solid transparent;
-  background: transparent; color: var(--text-muted, #94a3b8); cursor: pointer;
-  transition: all 0.15s ease;
-}
-.slide-over-close-btn:hover {
-  background: rgba(255, 255, 255, 0.08); color: #f8fafc;
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.slide-over-tabs {
-  display: flex; gap: 4px; padding: 0 16px;
+.inspector-header {
+  height: 48px;
+  min-height: 48px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.75);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.2); overflow-x: auto; flex-shrink: 0;
+  flex-shrink: 0;
 }
-.slide-over-tab-btn {
-  display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px;
-  font-size: 12px; font-weight: 500; color: var(--text-muted, #94a3b8);
-  border: none; background: transparent; cursor: pointer;
-  border-bottom: 2px solid transparent; transition: all 0.15s ease; white-space: nowrap;
+.header-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.entity-icon { color: #38bdf8; flex-shrink: 0; }
+.header-meta { display: flex; flex-direction: column; justify-content: center; min-width: 0; gap: 1px; }
+.header-title {
+  margin: 0; font-size: 14px; font-weight: 700; color: #f8fafc; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.slide-over-tab-btn:hover { color: #f8fafc; }
-.slide-over-tab-btn.is-active { color: #38bdf8; border-bottom-color: #38bdf8; font-weight: 600; }
-.tab-count-badge {
-  font-family: var(--font-mono, monospace); font-size: 10px; padding: 1px 6px;
-  border-radius: 9999px; background: rgba(255, 255, 255, 0.08); color: #cbd5e1;
+.header-subtitle {
+  font-size: 11px; color: #94a3b8; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-
-.slide-over-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px; }
-.slide-over-footer {
-  padding: 14px 20px; border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.2); display: flex; align-items: center;
-  justify-content: flex-end; gap: 8px; flex-shrink: 0;
+.header-status { flex-shrink: 0; }
+.header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.close-button {
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center;
+  justify-content: center; color: #94a3b8; cursor: pointer; padding: 0; transition: all 0.15s ease;
 }
-
-.slide-over-fade-enter-active, .slide-over-fade-leave-active { transition: opacity 0.2s ease; }
-.slide-over-fade-enter-from, .slide-over-fade-leave-to { opacity: 0; }
-.slide-over-panel-enter-active, .slide-over-panel-leave-active {
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+.close-button:hover {
+  background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.4); color: #fb7185;
 }
-.slide-over-panel-enter-from, .slide-over-panel-leave-to { transform: translateX(100%); }
+.close-icon { flex-shrink: 0; }
+.inspector-tabs {
+  display: flex; align-items: center; gap: 2px; padding: 0 12px; height: 38px;
+  background: rgba(13, 19, 33, 0.95); border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-x: auto; flex-shrink: 0; scrollbar-width: none;
+}
+.inspector-tabs::-webkit-scrollbar { display: none; }
+.tab-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; height: 28px;
+  border: 1px solid transparent; border-radius: 6px; background: transparent; color: #94a3b8;
+  font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all 0.15s ease;
+}
+.tab-btn:hover { color: #e2e8f0; background: rgba(255, 255, 255, 0.04); }
+.tab-btn.is-active {
+  color: #38bdf8; background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.25); font-weight: 600;
+}
+.tab-icon { flex-shrink: 0; }
+.tab-badge {
+  display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; height: 16px;
+  font-size: 10px; font-weight: 600; border-radius: 9999px; background: rgba(255, 255, 255, 0.1); color: #cbd5e1;
+}
+.tab-btn.is-active .tab-badge { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+.inspector-body { flex: 1; padding: 16px; overflow-y: auto; min-height: 0; }
+.inspector-footer {
+  padding: 12px 16px; border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.5); display: flex; align-items: center;
+  justify-content: flex-end; gap: 10px; flex-shrink: 0;
+}
+.inspector-fade-enter-active, .inspector-fade-leave-active { transition: opacity 0.22s ease; }
+.inspector-fade-enter-from, .inspector-fade-leave-to { opacity: 0; }
+.inspector-slide-enter-active { transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+.inspector-slide-leave-active { transition: transform 0.2s cubic-bezier(0.4, 0, 1, 1); }
+.inspector-slide-enter-from, .inspector-slide-leave-to { transform: translateX(100%); }
+.inspector-slide-enter-to, .inspector-slide-leave-from { transform: translateX(0); }
+@media (max-width: 640px) {
+  .inspector-panel { width: 100vw !important; max-width: 100vw !important; border-left: none; }
+  .inspector-header { height: 48px; padding: 0 12px; }
+  .header-subtitle { display: none; }
+  .inspector-body { padding: 12px; }
+  .inspector-footer { padding: 10px 12px; padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)); }
+}
 </style>

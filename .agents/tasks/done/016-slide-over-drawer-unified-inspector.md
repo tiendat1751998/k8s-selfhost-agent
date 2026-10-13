@@ -1,8 +1,8 @@
-﻿# TASK 016: Unified Slide-Over Contextual Inspector Drawer
+# TASK 016: Unified Slide-Over Contextual Inspector Drawer
 
 > **Location**: .agents/tasks/enterprise-ui-redesign/016-slide-over-drawer-unified-inspector.md  
 > **Benchmark Source**: Cloudflare Edge Script Inspector, Stripe Drawer, Lens Inspector  
-> **Status**: READY_FOR_DISPATCH  
+> **Status**: COMPLETED  
 
 ## 1. Goal:
 Upgrade ModalDrawer.vue into a unified SlideOverInspector.vue supporting tabbed detail exploration across Pods, Nodes, Deployments, and Clusters without unmounting or obscuring the background table.
