@@ -3,8 +3,9 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import type { DeploymentApp } from '../../api/compute'
 import { dockerApi } from '../../api/compute'
-import { k8sApi, type K8sResource } from '../../api/k8s'
+import { k8sApi } from '../../api/k8s'
 import BaseIcon from '../ui/BaseIcon.vue'
+import WorkloadLogToolbar from './WorkloadLogToolbar.vue'
 
 interface Props {
   app: DeploymentApp | null
@@ -26,7 +27,15 @@ const logsError = ref<string | null>(null)
 const logsSearchQuery = ref('')
 const logsAutoScroll = ref(true)
 const logsTerminalRef = ref<HTMLElement | null>(null)
-const resolvedPodName = ref<string>('')
+
+const availablePods = ref<string[]>([])
+const selectedPod = ref<string>('')
+const availableContainers = ref<string[]>([])
+const selectedContainer = ref<string>('')
+
+const isK8s = computed(() => {
+  return props.app?.type === 'kubernetes' || props.app?.type === 'k8s'
+})
 
 watch(
   () => props.active,
@@ -42,37 +51,20 @@ watch(
   () => props.app,
   (newApp) => {
     if (props.active && newApp) {
+      selectedPod.value = ''
+      selectedContainer.value = ''
+      availablePods.value = []
+      availableContainers.value = []
       fetchLogs(newApp)
     }
   }
 )
 
-function findMatchingPod(pods: K8sResource[], workloadName: string): K8sResource | undefined {
-  if (!Array.isArray(pods) || pods.length === 0) return undefined
-  const candidates = pods.filter((p) => {
-    const name = p.metadata?.name || ''
-    if (name === workloadName || name.startsWith(`${workloadName}-`)) {
-      return true
-    }
-    const labels = p.metadata?.labels || {}
-    return (
-      labels['app'] === workloadName ||
-      labels['app.kubernetes.io/name'] === workloadName ||
-      labels['app.kubernetes.io/instance'] === workloadName ||
-      labels['k8s-app'] === workloadName ||
-      labels['name'] === workloadName
-    )
-  })
-
-  if (candidates.length === 0) return undefined
-
-  // Prefer a Running pod if available
-  const running = candidates.find((p) => {
-    const phase = typeof p.status?.phase === 'string' ? p.status.phase.toLowerCase() : ''
-    return phase === 'running'
-  })
-  return running || candidates[0]
-}
+watch([selectedPod, selectedContainer], () => {
+  if (props.active && props.app) {
+    fetchLogs(props.app)
+  }
+})
 
 async function fetchLogs(targetApp?: DeploymentApp | null) {
   const target = targetApp || props.app
@@ -80,65 +72,40 @@ async function fetchLogs(targetApp?: DeploymentApp | null) {
 
   logsLoading.value = true
   logsError.value = null
-  resolvedPodName.value = ''
 
   try {
-    if (target.type === 'kubernetes' || target.type === 'k8s') {
-      const cluster = target.target && target.target !== 'docker-engine' && target.target !== 'swarm-manager' ? target.target : 'default'
-      let fetchedLogs = false
+    if (isK8s.value) {
+      const cluster = target.target && target.target !== 'docker-engine' && target.target !== 'swarm-manager'
+        ? target.target
+        : 'default'
+      const ns = target.namespace && target.namespace !== 'all' ? target.namespace : 'default'
 
-      try {
-        const ns = target.namespace && target.namespace !== 'all' ? target.namespace : undefined
-        const pods = await k8sApi.listResources(cluster, 'pods', ns)
-        const matchingPod = findMatchingPod(pods, target.name)
+      const res = await k8sApi.getWorkloadLogs(cluster, target.name, ns, {
+        pod: selectedPod.value || undefined,
+        container: selectedContainer.value || undefined,
+      })
 
-        if (matchingPod?.metadata?.name) {
-          resolvedPodName.value = matchingPod.metadata.name
-          try {
-            const res = await k8sApi.getPodLogs(cluster, matchingPod.metadata.name, target.namespace)
-            const logLines = res?.logs
-            const joinedLogs = Array.isArray(logLines)
-              ? logLines.join('\n').trim()
-              : (typeof logLines === 'string' ? (logLines as string).trim() : '')
-            if (joinedLogs.length > 0) {
-              logsRawContent.value = joinedLogs
-              fetchedLogs = true
-            }
-          } catch {
-            // pod log fetch failed - DO NOT call getPodLogs with raw deployment name!
-          }
-        }
-      } catch {
-        // listResources failed or other error
+      if (Array.isArray(res.pods) && res.pods.length > 0) {
+        availablePods.value = res.pods
       }
 
-      if (!fetchedLogs) {
-        // DO NOT call getPodLogs with the raw deployment name!
-        // Cleanly set logsRawContent.value to the required fallback format
-        const now = new Date().toISOString()
-        logsRawContent.value = `[${now}] [INFO] Kubernetes Workload: ${target.name} [${target.status || 'Active'}]\n[${now}] [INFO] Namespace: ${target.namespace || 'default'} | Cluster: ${cluster}\n[${now}] [INFO] Replicas: ${target.readyReplicas || target.replicas}/${target.replicas} (Desired: ${target.replicas})\n[${now}] [INFO] Direct pod log streaming: Open Live Logs Explorer (/logs?namespace=${target.namespace}&pod=${target.name})`
-        logsLoading.value = false
-        logsError.value = null
+      if (res.logs && res.logs.trim().length > 0) {
+        logsRawContent.value = res.logs
+      } else {
+        logsRawContent.value = ''
       }
     } else if (target.type === 'docker' || target.type === 'swarm') {
       const targetId = target.rawId || target.id || target.name
       const targetType = target.type === 'swarm' ? 'service' : 'container'
       const res = await dockerApi.getLogs(targetId, targetType)
-      if (res && res.logs && res.logs.trim().length > 0) {
-        logsRawContent.value = res.logs
-      } else {
-        const now = new Date().toISOString()
-        logsRawContent.value = `[${now}] [INFO] Container log stream connected for '${target.name}'.\n[${now}] [INFO] Namespace: ${target.namespace || 'default'} | Runtime: ${target.type} | Image: ${target.image}\n[${now}] [INFO] Active replicas: ${target.readyReplicas || target.replicas}/${target.replicas} (Health status: ${target.status})\n[${now}] [INFO] Stdout/Stderr buffer initialized. Listening for workload runtime events...`
-      }
+      logsRawContent.value = res?.logs?.trim() || ''
     } else {
-      const now = new Date().toISOString()
-      logsRawContent.value = `[${now}] [INFO] Workload: ${target.name} (Namespace: ${target.namespace || 'default'})\n[${now}] [INFO] Replicas: ${target.readyReplicas || target.replicas}/${target.replicas} | Status: ${target.status}`
+      logsRawContent.value = ''
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch logs'
     logsError.value = msg
-    const now = new Date().toISOString()
-    logsRawContent.value = `[${now}] [WARN] Direct log daemon returned: ${msg}`
+    logsRawContent.value = ''
   } finally {
     logsLoading.value = false
     if (logsAutoScroll.value) {
@@ -203,8 +170,9 @@ function openFullLogs(targetApp?: DeploymentApp | null) {
     path: '/logs',
     query: {
       namespace: target.namespace || '',
-      pod: resolvedPodName.value || target.name,
-      search: target.name
+      pod: selectedPod.value || undefined,
+      app: target.name,
+      search: target.name,
     }
   })
 }
@@ -216,54 +184,19 @@ defineExpose({
 
 <template>
   <div v-if="app" class="insp-panel animate-fade-in logs-insp-panel">
-    <div class="logs-control-deck glass-panel">
-      <div class="logs-search-wrapper">
-        <BaseIcon name="search" size="xs" class="logs-search-ico" />
-        <input
-          v-model="logsSearchQuery"
-          type="text"
-          placeholder="Filter logs by keyword, error, timestamp..."
-          class="input-glass logs-search-input font-mono"
-        />
-        <button v-if="logsSearchQuery" type="button" class="logs-search-clear" aria-label="Clear search" @click="logsSearchQuery = ''"><BaseIcon name="x" size="xs" /></button>
-      </div>
-
-      <div class="logs-deck-actions">
-        <label class="logs-auto-scroll-label font-mono">
-          <input v-model="logsAutoScroll" type="checkbox" class="toggle-cb" />
-          <span>Auto-Scroll</span>
-        </label>
-
-        <button
-          type="button"
-          class="btn btn-secondary btn-xs"
-          :disabled="logsLoading"
-          title="Refresh logs from container daemon"
-          @click="fetchLogs(app)"
-        >
-          <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': logsLoading }" />
-          <span>{{ logsLoading ? 'Fetching...' : 'Refresh' }}</span>
-        </button>
-
-        <button
-          type="button"
-          class="btn btn-secondary btn-xs"
-          title="Copy log buffer to clipboard"
-          @click="copyLogsToClipboard"
-        >
-          <BaseIcon name="copy" size="xs" /> <span>Copy</span>
-        </button>
-
-        <button
-          type="button"
-          class="btn btn-secondary btn-xs btn-open-logs"
-          title="Open full interactive live tail in Log Stream View"
-          @click="openFullLogs(app)"
-        >
-          <BaseIcon name="external-link" size="xs" /> <span>Full Stream</span>
-        </button>
-      </div>
-    </div>
+    <WorkloadLogToolbar
+      v-model:search-query="logsSearchQuery"
+      v-model:auto-scroll="logsAutoScroll"
+      v-model:selected-pod="selectedPod"
+      v-model:selected-container="selectedContainer"
+      :loading="logsLoading"
+      :is-k8s="isK8s"
+      :available-pods="availablePods"
+      :available-containers="availableContainers"
+      @refresh="fetchLogs(app)"
+      @copy="copyLogsToClipboard"
+      @full-stream="openFullLogs(app)"
+    />
 
     <div class="logs-terminal-window">
       <div class="logs-terminal-titlebar">
@@ -274,7 +207,7 @@ defineExpose({
         </div>
         <div class="terminal-title-text font-mono">
           <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>{{ app.type === 'kubernetes' || app.type === 'k8s' ? 'k8s' : 'docker' }}://{{ resolvedPodName || app.name }} [{{ app.type }}]</span>
+          <span>{{ isK8s ? 'k8s' : 'docker' }}://{{ selectedPod || app.name }} [{{ app.type }}]</span>
           <span class="logs-count">({{ filteredLogLines.length }} lines)</span>
         </div>
         <div class="terminal-status font-mono">
@@ -286,6 +219,11 @@ defineExpose({
         <div v-if="logsLoading && filteredLogLines.length === 0" class="logs-loading-state">
           <BaseIcon name="refresh" size="xs" class="spin-icon" />
           <span>Connecting to container log stream...</span>
+        </div>
+
+        <div v-else-if="logsError" class="logs-empty-state">
+          <BaseIcon name="alert-triangle" size="md" class="text-amber" />
+          <p class="font-mono">Log stream unavailable: {{ logsError }}</p>
         </div>
 
         <template v-else-if="filteredLogLines.length > 0">
@@ -302,7 +240,8 @@ defineExpose({
 
         <div v-else class="logs-empty-state">
           <BaseIcon name="file-text" size="md" />
-          <p>No log entries match the search filter "{{ logsSearchQuery }}".</p>
+          <p v-if="logsSearchQuery">No log entries match the search filter "{{ logsSearchQuery }}".</p>
+          <p v-else>No log entries available for {{ app.name }} (0 active pods or empty output).</p>
         </div>
       </div>
     </div>

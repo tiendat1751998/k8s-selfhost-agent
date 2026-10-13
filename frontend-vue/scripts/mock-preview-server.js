@@ -16,12 +16,7 @@ const metricsSummary = {
   pod_count: 48,
   node_count: 3,
   status: 'healthy',
-  host: {
-    hostname: 'k8s-node-01.prod.internal',
-    os: 'linux',
-    arch: 'amd64',
-    uptime_seconds: 864200,
-  },
+  host: { hostname: 'k8s-node-01.prod.internal', os: 'linux', arch: 'amd64', uptime_seconds: 864200 },
   latency: 14.2,
 }
 
@@ -50,199 +45,37 @@ const clusters = [
 ]
 
 const incidents = [
-  {
-    id: 'INC-8021',
-    cluster_name: 'production-k8s',
-    namespace: 'production',
-    pod_name: 'checkout-svc-78bd4',
-    type: 'OOMKilled',
-    status: 'remediating',
-    severity: 'critical',
-    message: 'Pod exceeded memory limit 512MiB and was terminated by Linux OOM killer',
-    created_at: '2026-10-06T08:15:00Z',
-    updated_at: '2026-10-06T08:20:00Z',
-  },
-  {
-    id: 'INC-8022',
-    cluster_name: 'staging-k8s',
-    namespace: 'staging',
-    pod_name: 'payment-relay-3f21b',
-    type: 'CrashLoopBackOff',
-    status: 'detected',
-    severity: 'high',
-    message: 'Container failing liveness probe: connection refused on port 8080',
-    created_at: '2026-10-06T08:25:00Z',
-    updated_at: '2026-10-06T08:27:00Z',
-  },
-  {
-    id: 'INC-8019',
-    cluster_name: 'edge-worker-01',
-    namespace: 'iot-edge',
-    pod_name: 'telemetry-collector-9c12a',
-    type: 'HighCPU',
-    status: 'resolved',
-    severity: 'medium',
-    message: 'Node CPU throttle limit reached during telemetry burst',
-    created_at: '2026-10-05T14:10:00Z',
-    updated_at: '2026-10-05T14:45:00Z',
-    resolved_at: '2026-10-05T14:45:00Z',
-  },
+  { id: 'INC-8021', cluster_name: 'production-k8s', namespace: 'production', pod_name: 'checkout-svc-78bd4', type: 'OOMKilled', status: 'remediating', severity: 'critical', message: 'Pod exceeded memory limit 512MiB and was terminated by Linux OOM killer', created_at: '2026-10-06T08:15:00Z', updated_at: '2026-10-06T08:20:00Z' },
+  { id: 'INC-8022', cluster_name: 'staging-k8s', namespace: 'staging', pod_name: 'payment-relay-3f21b', type: 'CrashLoopBackOff', status: 'detected', severity: 'high', message: 'Container failing liveness probe: connection refused on port 8080', created_at: '2026-10-06T08:25:00Z', updated_at: '2026-10-06T08:27:00Z' },
+  { id: 'INC-8019', cluster_name: 'edge-worker-01', namespace: 'iot-edge', pod_name: 'telemetry-collector-9c12a', type: 'HighCPU', status: 'resolved', severity: 'medium', message: 'Node CPU throttle limit reached during telemetry burst', created_at: '2026-10-05T14:10:00Z', updated_at: '2026-10-05T14:45:00Z', resolved_at: '2026-10-05T14:45:00Z' },
 ]
 
 const auditFindings = [
-  {
-    id: 'CVE-2024-21626',
-    category: 'cve_vulnerability',
-    severity: 'critical',
-    description: 'Container escape vulnerability via file descriptor leak in runc process initialization',
-    remediation: 'Upgrade containerd/runc runtime to version >= 1.1.12 across all worker nodes',
-    status: 'open',
-    detected_at: '2026-10-06T06:00:00Z',
-  },
-  {
-    id: 'CVE-2023-44487',
-    category: 'cve_vulnerability',
-    severity: 'high',
-    description: 'HTTP/2 Rapid Reset DDoS vulnerability in reverse proxy ingress controller',
-    remediation: 'Apply rate-limiting patch to Traefik / Envoy ingress configurations',
-    status: 'open',
-    detected_at: '2026-10-06T06:15:00Z',
-  },
-  {
-    id: 'CVE-2024-38475',
-    category: 'iac_misconfiguration',
-    severity: 'medium',
-    description: 'Privileged container securityContext detected without seccomp profile attachment',
-    remediation: 'Enforce baseline Pod Security Standard admitting only restricted pods',
-    status: 'open',
-    detected_at: '2026-10-06T07:30:00Z',
-  },
+  { id: 'CVE-2024-21626', category: 'cve_vulnerability', severity: 'critical', description: 'Container escape vulnerability via file descriptor leak in runc process initialization', remediation: 'Upgrade containerd/runc runtime to version >= 1.1.12 across all worker nodes', status: 'open', detected_at: '2026-10-06T06:00:00Z' },
+  { id: 'CVE-2023-44487', category: 'cve_vulnerability', severity: 'high', description: 'HTTP/2 Rapid Reset DDoS vulnerability in reverse proxy ingress controller', remediation: 'Apply rate-limiting patch to Traefik / Envoy ingress configurations', status: 'open', detected_at: '2026-10-06T06:15:00Z' },
+  { id: 'CVE-2024-38475', category: 'iac_misconfiguration', severity: 'medium', description: 'Privileged container securityContext detected without seccomp profile attachment', remediation: 'Enforce baseline Pod Security Standard admitting only restricted pods', status: 'open', detected_at: '2026-10-06T07:30:00Z' },
 ]
 
 const logEntries = [
-  {
-    timestamp: '2026-10-06T08:30:00.123Z',
-    cluster_id: 'production-k8s',
-    namespace: 'production',
-    pod_name: 'checkout-svc-78bd4',
-    container_name: 'checkout',
-    log_level: 'INFO',
-    message: 'Handling HTTP POST /api/checkout/cart (duration=12ms, status=200)',
-  },
-  {
-    timestamp: '2026-10-06T08:30:01.456Z',
-    cluster_id: 'production-k8s',
-    namespace: 'production',
-    pod_name: 'checkout-svc-78bd4',
-    container_name: 'checkout',
-    log_level: 'WARN',
-    message: 'Memory heap approaching high threshold: 468MiB / 512MiB',
-  },
-  {
-    timestamp: '2026-10-06T08:30:02.789Z',
-    cluster_id: 'staging-k8s',
-    namespace: 'staging',
-    pod_name: 'payment-relay-3f21b',
-    container_name: 'relay',
-    log_level: 'ERROR',
-    message: 'Failed to connect to upstream payment gateway: connection timeout',
-  },
+  { timestamp: '2026-10-06T08:30:00.123Z', cluster_id: 'production-k8s', namespace: 'production', pod_name: 'checkout-svc-78bd4', container_name: 'checkout', log_level: 'INFO', message: 'Handling HTTP POST /api/checkout/cart (duration=12ms, status=200)' },
+  { timestamp: '2026-10-06T08:30:01.456Z', cluster_id: 'production-k8s', namespace: 'production', pod_name: 'checkout-svc-78bd4', container_name: 'checkout', log_level: 'WARN', message: 'Memory heap approaching high threshold: 468MiB / 512MiB' },
+  { timestamp: '2026-10-06T08:30:02.789Z', cluster_id: 'staging-k8s', namespace: 'staging', pod_name: 'payment-relay-3f21b', container_name: 'relay', log_level: 'ERROR', message: 'Failed to connect to upstream payment gateway: connection timeout' },
 ]
 
 const explorerResources = [
-  {
-    id: 'pod-checkout-78bd4',
-    kind: 'Pod',
-    name: 'checkout-svc-78bd4',
-    namespace: 'production',
-    cluster: 'production-k8s',
-    status: 'Running',
-    labels: { app: 'checkout', env: 'production' },
-    age: '3d',
-  },
-  {
-    id: 'pod-api-gw-7f9d1',
-    kind: 'Pod',
-    name: 'api-gateway-7f9d1',
-    namespace: 'production',
-    cluster: 'production-k8s',
-    status: 'Running',
-    labels: { app: 'api-gateway', env: 'production' },
-    age: '7d',
-  },
-  {
-    id: 'deploy-checkout-svc',
-    kind: 'Deployment',
-    name: 'checkout-svc',
-    namespace: 'production',
-    cluster: 'production-k8s',
-    status: '3/3 Ready',
-    labels: { app: 'checkout' },
-    age: '14d',
-  },
-  {
-    id: 'svc-checkout-lb',
-    kind: 'Service',
-    name: 'checkout-svc',
-    namespace: 'production',
-    cluster: 'production-k8s',
-    status: 'Active',
-    labels: { app: 'checkout' },
-    age: '14d',
-  },
-  {
-    id: 'node-prod-01',
-    kind: 'Node',
-    name: 'k8s-node-01.prod.internal',
-    cluster: 'production-k8s',
-    status: 'Ready',
-    labels: { 'node-role.kubernetes.io/control-plane': '' },
-    age: '45d',
-  },
+  { id: 'pod-checkout-78bd4', kind: 'Pod', name: 'checkout-svc-78bd4', namespace: 'production', cluster: 'production-k8s', status: 'Running', labels: { app: 'checkout', env: 'production' }, age: '3d' },
+  { id: 'pod-api-gw-7f9d1', kind: 'Pod', name: 'api-gateway-7f9d1', namespace: 'production', cluster: 'production-k8s', status: 'Running', labels: { app: 'api-gateway', env: 'production' }, age: '7d' },
+  { id: 'deploy-checkout-svc', kind: 'Deployment', name: 'checkout-svc', namespace: 'production', cluster: 'production-k8s', status: '3/3 Ready', labels: { app: 'checkout' }, age: '14d' },
+  { id: 'svc-checkout-lb', kind: 'Service', name: 'checkout-svc', namespace: 'production', cluster: 'production-k8s', status: 'Active', labels: { app: 'checkout' }, age: '14d' },
+  { id: 'node-prod-01', kind: 'Node', name: 'k8s-node-01.prod.internal', cluster: 'production-k8s', status: 'Ready', labels: { 'node-role.kubernetes.io/control-plane': '' }, age: '45d' },
 ]
 
 const namespaces = ['default', 'kube-system', 'production', 'staging', 'iot-edge']
 
 const systemOverview = {
   nodes: [
-    {
-      node_id: 'node-prod-01',
-      node_name: 'k8s-node-01.prod.internal',
-      role: 'control-plane',
-      status: 'ready',
-      cpu_percent: 35.5,
-      memory_used: 8589934592,
-      memory_total: 17179869184,
-      memory_percent: 50.0,
-      disk_used: 53687091200,
-      disk_total: 214748364800,
-      disk_percent: 25.0,
-      network_rx_bytes: 1048576,
-      network_tx_bytes: 2097152,
-      container_count: 12,
-      running_count: 12,
-      uptime: 864200,
-      load_avg: [0.45, 0.52, 0.48],
-    },
-    {
-      node_id: 'node-prod-02',
-      node_name: 'k8s-node-02.prod.internal',
-      role: 'worker',
-      status: 'ready',
-      cpu_percent: 48.2,
-      memory_used: 12884901888,
-      memory_total: 17179869184,
-      memory_percent: 75.0,
-      disk_used: 75161927680,
-      disk_total: 214748364800,
-      disk_percent: 35.0,
-      network_rx_bytes: 5242880,
-      network_tx_bytes: 4194304,
-      container_count: 16,
-      running_count: 16,
-      uptime: 864200,
-      load_avg: [1.12, 0.95, 0.88],
-    },
+    { node_id: 'node-prod-01', node_name: 'k8s-node-01.prod.internal', role: 'control-plane', status: 'ready', cpu_percent: 35.5, memory_used: 8589934592, memory_total: 17179869184, memory_percent: 50.0, disk_used: 53687091200, disk_total: 214748364800, disk_percent: 25.0, network_rx_bytes: 1048576, network_tx_bytes: 2097152, container_count: 12, running_count: 12, uptime: 864200, load_avg: [0.45, 0.52, 0.48] },
+    { node_id: 'node-prod-02', node_name: 'k8s-node-02.prod.internal', role: 'worker', status: 'ready', cpu_percent: 48.2, memory_used: 12884901888, memory_total: 17179869184, memory_percent: 75.0, disk_used: 75161927680, disk_total: 214748364800, disk_percent: 35.0, network_rx_bytes: 5242880, network_tx_bytes: 4194304, container_count: 16, running_count: 16, uptime: 864200, load_avg: [1.12, 0.95, 0.88] },
   ],
   containers: [],
   total_nodes: 2,
@@ -264,6 +97,52 @@ const mockDeployments = [
   { id: 'dep-redis-master', name: 'redis-master', team: 'Data Infra', env: 'production', image: 'redis:7.2-alpine', target: 'staging-k8s', namespace: 'staging', type: 'kubernetes', replicas: 1, readyReplicas: 1, status: 'healthy', cpu: '90m', memory: '192MiB', port: 6379, strategy: 'RollingUpdate' },
   { id: 'dep-postgres-operator', name: 'postgres-operator', team: 'Database Ops', env: 'production', image: 'ghcr.io/zalando/postgres-operator:v1.12.0', target: 'production-k8s', namespace: 'production', type: 'kubernetes', replicas: 2, readyReplicas: 2, status: 'healthy', cpu: '210m', memory: '420MiB', port: 5432, strategy: 'RollingUpdate' },
 ]
+
+const workloadLogs = {
+  'ingress-traefik': {
+    pods: ['ingress-traefik-67d8f9bc-4k8x2', 'ingress-traefik-67d8f9bc-7m2p9', 'ingress-traefik-67d8f9bc-9w5rt'],
+    logs: [
+      '{"time":"2026-10-13T06:00:01Z","level":"INFO","msg":"Configuration reloaded successfully from Kubernetes Ingress provider"}',
+      '{"time":"2026-10-13T06:00:02Z","level":"INFO","msg":"HTTP request router initialized: 42 entrypoints active on :443"}',
+      '{"time":"2026-10-13T06:00:05Z","level":"INFO","msg":"Client 192.168.1.105:54210 GET /api/v1/health status=200 duration=1.2ms"}',
+      '{"time":"2026-10-13T06:00:08Z","level":"INFO","msg":"TLS handshake completed for sni=dashboard.prod.internal cipher=TLS_AES_256_GCM_SHA384"}',
+    ].join('\n'),
+  },
+  'api-gateway': {
+    pods: ['api-gateway-5c4f8d7b-2p8xm', 'api-gateway-5c4f8d7b-4l9pq', 'api-gateway-5c4f8d7b-8k1nr', 'api-gateway-5c4f8d7b-9v3zt'],
+    logs: [
+      '{"time":"2026-10-13T06:00:01Z","level":"INFO","msg":"Envoy proxy core initialized v1.31.0, listening on 0.0.0.0:8080"}',
+      '{"time":"2026-10-13T06:00:03Z","level":"INFO","msg":"RDS route config ingress_http applied: 18 routes active"}',
+      '{"time":"2026-10-13T06:00:06Z","level":"INFO","msg":"POST /api/v1/auth/login [200 OK] upstream=auth-service:9090 latency=8.4ms"}',
+      '{"time":"2026-10-13T06:00:09Z","level":"WARN","msg":"Upstream cluster rate_limit response latency elevated: 42ms"}',
+    ].join('\n'),
+  },
+  'auth-service': {
+    pods: ['auth-service-7d8e9f01-x8k1l', 'auth-service-7d8e9f01-m2b5c'],
+    logs: [
+      '{"time":"2026-10-13T06:00:01Z","level":"INFO","msg":"Auth service v1.18.4 started on :9090 with RS256 JWT key rotation enabled"}',
+      '{"time":"2026-10-13T06:00:04Z","level":"INFO","msg":"OIDC discovery endpoint syncd with Vault PKI identity provider"}',
+      '{"time":"2026-10-13T06:00:07Z","level":"INFO","msg":"Token issue request for tenant=prod-team user=admin@k8s.local status=success"}',
+    ].join('\n'),
+  },
+  'redis-master': {
+    pods: ['redis-master-0'],
+    logs: [
+      '1:M 13 Oct 2026 06:00:01.000 * Running mode=standalone, port=6379.',
+      '1:M 13 Oct 2026 06:00:01.002 * Server initialized with maxmemory 192MB policy=allkeys-lru.',
+      '1:M 13 Oct 2026 06:00:05.120 * DB 0: 4820 keys (0 volatile) in 8192 slots. 0 clients connected.',
+      '1:M 13 Oct 2026 06:00:10.450 * Ready to accept connections tcp-backlog=511.',
+    ].join('\n'),
+  },
+  'postgres-operator': {
+    pods: ['postgres-operator-6c8d7e9f-9z2pl', 'postgres-operator-6c8d7e9f-1k4mq'],
+    logs: [
+      '{"time":"2026-10-13T06:00:01Z","level":"INFO","msg":"Postgres operator v1.12.0 watching 4 database clusters across all namespaces"}',
+      '{"time":"2026-10-13T06:00:04Z","level":"INFO","msg":"Spilo cluster acid-minimal sync check: 2/2 pods healthy, Patroni leader alive"}',
+      '{"time":"2026-10-13T06:00:08Z","level":"INFO","msg":"WAL archiving verification passed: S3 backup stream consistent"}',
+    ].join('\n'),
+  },
+}
 
 const mockDockerServices = [
   { id: 'svc-telemetry-relay', name: 'telemetry-relay', image: 'fluent-bit:3.1', replicas: 2, ports: ['2020:2020'], updated_at: '2026-10-06T00:00:00Z' },
@@ -298,9 +177,7 @@ function handleCorsPreflight(res) {
 // 3. Request Handler
 export function createMockServer() {
   return http.createServer((req, res) => {
-    if (req.method === 'OPTIONS') {
-      return handleCorsPreflight(res)
-    }
+    if (req.method === 'OPTIONS') return handleCorsPreflight(res)
 
     const parsedUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`)
     const pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/'
@@ -311,115 +188,84 @@ export function createMockServer() {
     }
 
     // Telemetry Summary
-    if (
-      pathname === '/api/metrics/summary' ||
-      pathname === '/api/v1/metrics/summary' ||
-      pathname === '/metrics/summary'
-    ) {
+    if (pathname === '/api/metrics/summary' || pathname === '/api/v1/metrics/summary' || pathname === '/metrics/summary') {
       return sendJson(res, 200, metricsSummary)
     }
 
     // Clusters List
-    if (
-      pathname === '/api/v1/clusters' ||
-      pathname === '/api/clusters' ||
-      pathname === '/clusters' ||
-      pathname === '/api/v1/fleet' ||
-      pathname === '/api/v1/fleet/clusters' ||
-      pathname === '/api/fleet' ||
-      pathname === '/api/fleet/clusters' ||
-      pathname === '/fleet' ||
-      pathname === '/fleet/clusters'
-    ) {
+    if (pathname.includes('/clusters') || pathname.includes('/fleet')) {
       return sendJson(res, 200, { data: clusters, total: clusters.length })
     }
 
     // Incidents List
-    if (
-      pathname === '/api/v1/incidents' ||
-      pathname === '/api/incidents' ||
-      pathname === '/incidents'
-    ) {
-      return sendJson(res, 200, {
-        data: incidents,
-        total: incidents.length,
-        limit: 50,
-        offset: 0,
-      })
+    if (pathname.includes('/incidents')) {
+      return sendJson(res, 200, { data: incidents, total: incidents.length, limit: 50, offset: 0 })
     }
 
     // Audit Findings
-    if (
-      pathname === '/api/v1/audit/findings' ||
-      pathname === '/api/audit/findings' ||
-      pathname === '/audit/findings'
-    ) {
+    if (pathname.includes('/audit/findings')) {
       return sendJson(res, 200, { data: auditFindings, total: auditFindings.length })
     }
 
-    // Logs Search / Query
-    if (
-      pathname === '/api/v1/logs/query' ||
-      pathname === '/api/logs/query' ||
-      pathname === '/logs/query' ||
-      pathname === '/api/v1/logs/search' ||
-      pathname === '/api/logs/search' ||
-      pathname === '/logs/search'
-    ) {
+    // Workload Logs by kind/deployment
+    const wlLogsMatch = pathname.match(/^\/(?:api\/v1\/|api\/)?k8s\/([^/]+)\/(?:workloads\/[^/]+|deployments)\/([^/]+)\/logs$/)
+    if (wlLogsMatch) {
+      const [, clusterName, workloadName] = wlLogsMatch
+      const podParam = parsedUrl.searchParams.get('pod')
+      const targetData = workloadLogs[workloadName] || {
+        pods: [`${workloadName}-pod-1`],
+        logs: `[INFO] Workload ${workloadName} logs stream active on cluster ${clusterName}.`,
+      }
+
+      if (podParam) {
+        return sendJson(res, 200, {
+          data: {
+            pods: targetData.pods,
+            logs: targetData.logs.split('\n').map(l => `[${podParam}] ${l}`).join('\n'),
+          },
+        })
+      }
+
       return sendJson(res, 200, {
-        entries: logEntries,
-        total_count: logEntries.length,
-        has_more: false,
+        data: {
+          pods: targetData.pods,
+          logs: targetData.logs,
+        },
       })
+    }
+
+    // Logs Search / Query
+    if (pathname.includes('/logs/query') || pathname.includes('/logs/search')) {
+      return sendJson(res, 200, { entries: logEntries, total_count: logEntries.length, has_more: false })
     }
 
     // Resource Explorer
-    if (
-      pathname === '/api/v1/explorer' ||
-      pathname === '/api/explorer' ||
-      pathname === '/explorer' ||
-      pathname.startsWith('/api/v1/explorer/') ||
-      pathname.startsWith('/api/explorer/')
-    ) {
-      return sendJson(res, 200, {
-        data: explorerResources,
-        namespaces,
-        total: explorerResources.length,
-      })
+    if (pathname.includes('/explorer')) {
+      return sendJson(res, 200, { data: explorerResources, namespaces, total: explorerResources.length })
     }
 
     // Overview & TPS
-    if (
-      pathname === '/api/v1/overview' ||
-      pathname === '/api/overview' ||
-      pathname === '/overview'
-    ) {
+    if (pathname === '/api/v1/overview/nodes' || pathname === '/overview/nodes') {
+      return sendJson(res, 200, { data: systemOverview.nodes })
+    }
+    if (pathname.includes('/overview')) {
       return sendJson(res, 200, { data: systemOverview })
     }
 
-    if (
-      pathname === '/api/v1/overview/nodes' ||
-      pathname === '/api/overview/nodes' ||
-      pathname === '/overview/nodes'
-    ) {
-      return sendJson(res, 200, { data: systemOverview.nodes })
-    }
-
     // Deployments & Workloads
-    if (pathname === '/api/v1/deployments' || pathname === '/api/deployments' || pathname === '/deployments') {
+    if (pathname.includes('/deployments')) {
       return sendJson(res, 200, { data: mockDeployments, total: mockDeployments.length })
     }
 
     // Docker Services & Containers
-    if (pathname === '/api/v1/docker/services' || pathname === '/api/docker/services' || pathname === '/docker/services') {
+    if (pathname.includes('/docker/services')) {
       return sendJson(res, 200, { data: mockDockerServices, total: mockDockerServices.length })
     }
-
-    if (pathname === '/api/v1/docker/containers' || pathname === '/api/docker/containers' || pathname === '/docker/containers') {
+    if (pathname.includes('/docker/containers')) {
       return sendJson(res, 200, { data: mockDockerContainers, total: mockDockerContainers.length })
     }
 
-    // Fallback for other GET / POST API calls
+    // Fallback
     return sendJson(res, 200, { status: 'ok', data: [] })
   })
 }
@@ -434,9 +280,7 @@ if (isTestMode) {
 
     http.get(testUrl, (res) => {
       let body = ''
-      res.on('data', (chunk) => {
-        body += chunk
-      })
+      res.on('data', (chunk) => { body += chunk })
       res.on('end', () => {
         try {
           const parsed = JSON.parse(body)
@@ -444,7 +288,7 @@ if (isTestMode) {
             console.log(`[PASS] Mock server self-test succeeded: GET /health returned 200 OK (${body})`)
             server.close(() => process.exit(0))
           } else {
-            console.error(`[FAIL] Expected status 200 and { status: 'ok' }, got ${res.statusCode}: ${body}`)
+            console.error(`[FAIL] Expected status 200, got ${res.statusCode}: ${body}`)
             server.close(() => process.exit(1))
           }
         } catch (err) {

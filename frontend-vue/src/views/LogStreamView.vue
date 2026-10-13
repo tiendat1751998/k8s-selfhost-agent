@@ -41,12 +41,14 @@ async function preloadRecentLogs(target: LogTarget) {
   if (!target || !target.id) return
   try {
     const kw = searchKeyword.value.trim()
-    const filter: LogFilterParams & { service?: string; container?: string } = {
+    const ns = target.namespace || (route.query.namespace ? String(route.query.namespace) : undefined)
+    const filter: LogFilterParams & { service?: string; container?: string; namespace?: string } = {
       limit: 50,
       query: kw ? kw : undefined,
       service: target.type === 'service' ? target.id : undefined,
       container: target.type === 'service' ? target.id : undefined,
       container_name: target.type === 'service' ? target.id : undefined,
+      namespace: ns,
       node: target.type === 'node' ? target.id : undefined,
       attributes: target.type === 'node' ? { node: target.id } : undefined,
       cluster_id: activeClusterId.value || undefined,
@@ -64,7 +66,8 @@ function connectTarget(target: LogTarget) {
   if (target.type === 'node') {
     logStore.connect({ node: target.id })
   } else {
-    logStore.connect({ service: target.id, container: target.id })
+    const ns = target.namespace || (route.query.namespace ? String(route.query.namespace) : undefined)
+    logStore.connect({ service: target.id, container: target.id, namespace: ns })
   }
 }
 
@@ -104,18 +107,53 @@ watch(mode, (newMode) => {
   }
 })
 
+function syncTargetFromRoute(): boolean {
+  const node = route.query.node
+  const app = route.query.app
+  const pod = route.query.pod
+  const ns = route.query.namespace
+  const search = route.query.search
+
+  if (search) {
+    searchKeyword.value = String(search)
+  }
+
+  if (pod || app) {
+    const targetId = String(pod || app)
+    const displayName = pod && app && pod !== app ? `${app} (${pod})` : targetId
+    selectedTarget.value = {
+      type: 'service',
+      id: targetId,
+      name: displayName,
+      icon: 'box',
+      namespace: ns ? String(ns) : undefined,
+    }
+    return true
+  } else if (node) {
+    selectedTarget.value = {
+      type: 'node',
+      id: String(node),
+      name: String(node),
+      icon: 'server',
+    }
+    return true
+  }
+  return false
+}
+
 watch(
-  () => route.query.node,
-  (newNode) => {
-    if (newNode) {
-      selectedTarget.value = {
-        type: 'node',
-        id: String(newNode),
-        name: String(newNode),
-        icon: 'server',
-      }
-      if (route.query.search) {
-        searchKeyword.value = String(route.query.search)
+  () => [route.query.node, route.query.app, route.query.pod, route.query.namespace, route.query.search],
+  () => {
+    if (syncTargetFromRoute()) {
+      if (selectedTarget.value.id && selectedTarget.value.id !== activeTargetId) {
+        activeTargetId = selectedTarget.value.id
+        if (mode.value === 'live') {
+          connectTarget(selectedTarget.value)
+          preloadRecentLogs(selectedTarget.value)
+          fetchLiveHistogram()
+        } else {
+          runHistoricalQuery()
+        }
       }
     }
   }
@@ -135,17 +173,7 @@ async function fetchLiveHistogram() {
 }
 
 onMounted(() => {
-  if (route.query.node) {
-    selectedTarget.value = {
-      type: 'node',
-      id: String(route.query.node),
-      name: String(route.query.node),
-      icon: 'server',
-    }
-    if (route.query.search) {
-      searchKeyword.value = String(route.query.search)
-    }
-  }
+  syncTargetFromRoute()
 
   if (mode.value === 'live' && selectedTarget.value.id) {
     activeTargetId = selectedTarget.value.id
