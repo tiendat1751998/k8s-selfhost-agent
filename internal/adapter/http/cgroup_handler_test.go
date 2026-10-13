@@ -2,199 +2,145 @@ package http_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
-	adapter "github.com/datdt/k8sselfhost/internal/adapter/http"
-	nodemetricsDomain "github.com/datdt/k8sselfhost/internal/domain/nodemetrics"
-	nodemetricsUsecase "github.com/datdt/k8sselfhost/internal/usecase/nodemetrics"
+	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
+	domain "github.com/datdt/k8sselfhost/internal/domain/nodemetrics"
+	usecase "github.com/datdt/k8sselfhost/internal/usecase/nodemetrics"
 )
 
-type mockKernelManager struct {
-	events      []nodemetricsDomain.CGroupV2MemoryEvent
-	maps        []nodemetricsDomain.EBPFMapUtilization
-	auditErr    error
-	resizeErr   error
-	tuneErr     error
-	resizedCap  int64
-}
+func setupCGroupTestRouter() (*chi.Mux, *usecase.CGroupScalerService) {
+	scaler := usecase.NewCGroupScalerService(
+		usecase.WithLogger(zap.NewNop()),
+		usecase.WithHostRAM(16*1024*1024*1024), // 16GB RAM
+	)
+	handler := adapthttp.NewCGroupHandler(scaler, zap.NewNop())
 
-func (m *mockKernelManager) AuditCGroupV2Events(ctx context.Context, nodeName string) ([]nodemetricsDomain.CGroupV2MemoryEvent, error) {
-	if m.auditErr != nil {
-		return nil, m.auditErr
-	}
-	return m.events, nil
-}
-
-func (m *mockKernelManager) InspectEBPFMaps(ctx context.Context, clusterID string) ([]nodemetricsDomain.EBPFMapUtilization, error) {
-	return m.maps, nil
-}
-
-func (m *mockKernelManager) AutoResizeEBPFConntrackMap(ctx context.Context, clusterID string, newCapacity int64) error {
-	if m.resizeErr != nil {
-		return m.resizeErr
-	}
-	m.resizedCap = newCapacity
-	return nil
-}
-
-func (m *mockKernelManager) EnforceNodeSlabTuning(ctx context.Context, nodeName string) error {
-	if m.tuneErr != nil {
-		return m.tuneErr
-	}
-	return nil
-}
-
-func setupTestRouter(handler *adapter.CGroupHandler) *chi.Mux {
 	r := chi.NewRouter()
-	r.Route("/api/v1", func(api chi.Router) {
-		handler.RegisterRoutes(api)
-	})
-	return r
+	r.Route("/api/v1/kernel", handler.RegisterRoutes)
+
+	return r, scaler
 }
 
 func TestCGroupHandler_GetCGroupEvents(t *testing.T) {
-	mockMgr := &mockKernelManager{
-		events: []nodemetricsDomain.CGroupV2MemoryEvent{
-			{
-				ContainerID:       "cont-99",
-				PodName:           "payment-pod",
-				Namespace:         "prod",
-				HighEvents:        45,
-				ThrottledDuration: 120 * time.Millisecond,
-				UpdatedAt:         time.Now(),
-			},
-		},
-	}
-	usecase := nodemetricsUsecase.NewCGroupScalerUsecase(mockMgr, nil)
-	handler := adapter.NewCGroupHandler(usecase, mockMgr)
-	router := setupTestRouter(handler)
+	r, scaler := setupCGroupTestRouter()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/worker-node-1/kernel/cgroup/events", nil)
+	scaler.RegisterCGroupEvent("node-beta", domain.CGroupV2MemoryEvent{
+		ContainerID:       "c-200",
+		PodName:           "ingress-router",
+		Namespace:         "kube-system",
+		HighEvents:        35,
+		ThrottledDuration: 30 * time.Second,
+		UpdatedAt:         time.Now().UTC(),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/kernel/nodes/node-beta/cgroup-events", nil)
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	var resp struct {
-		Events          []nodemetricsDomain.CGroupV2MemoryEvent `json:"events"`
-		Recommendations []nodemetricsUsecase.CGroupRecommendation `json:"recommendations"`
+		NodeName string                       `json:"node_name"`
+		Events   []domain.CGroupV2MemoryEvent `json:"events"`
+		Count    int                          `json:"count"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to parse response JSON: %v", err)
-	}
-
-	if len(resp.Events) != 1 || len(resp.Recommendations) != 1 {
-		t.Fatalf("expected 1 event and 1 recommendation, got %d and %d", len(resp.Events), len(resp.Recommendations))
-	}
-}
-
-func TestCGroupHandler_TuneSlabCache(t *testing.T) {
-	mockMgr := &mockKernelManager{}
-	usecase := nodemetricsUsecase.NewCGroupScalerUsecase(mockMgr, nil)
-	handler := adapter.NewCGroupHandler(usecase, mockMgr)
-	router := setupTestRouter(handler)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/nodes/worker-node-1/kernel/slab/tune", nil)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode: %v", err)
 	}
 
-	var report nodemetricsUsecase.SlabTuningReport
-	if err := json.Unmarshal(rec.Body.Bytes(), &report); err != nil {
-		t.Fatalf("failed to decode slab tuning response: %v", err)
-	}
-
-	if report.VFSCachePressure != 150 {
-		t.Fatalf("expected VFSCachePressure=150, got %d", report.VFSCachePressure)
+	if resp.Count != 1 || len(resp.Events) != 1 {
+		t.Fatalf("expected 1 event, got %d", resp.Count)
 	}
 }
 
 func TestCGroupHandler_GetEBPFMaps(t *testing.T) {
-	mockMgr := &mockKernelManager{
-		maps: []nodemetricsDomain.EBPFMapUtilization{
-			nodemetricsDomain.NewEBPFMapUtilization("cilium_ct_any4_global", 450000, 512000),
-		},
-	}
-	usecase := nodemetricsUsecase.NewCGroupScalerUsecase(mockMgr, nil)
-	handler := adapter.NewCGroupHandler(usecase, mockMgr)
-	router := setupTestRouter(handler)
+	r, scaler := setupCGroupTestRouter()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/clusters/cluster-prod/ebpf/maps", nil)
+	scaler.RegisterEBPFMap("cluster-eu", domain.EBPFMapUtilization{
+		MapName:        "cilium_ct4_global",
+		CurrentEntries: 220000,
+		MaxEntries:     262144,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/kernel/clusters/cluster-eu/ebpf-maps", nil)
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var maps []nodemetricsDomain.EBPFMapUtilization
-	if err := json.Unmarshal(rec.Body.Bytes(), &maps); err != nil {
-		t.Fatalf("failed to decode ebpf maps response: %v", err)
+	var resp struct {
+		ClusterID string                      `json:"cluster_id"`
+		Maps      []domain.EBPFMapUtilization `json:"maps"`
+		Count     int                         `json:"count"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode: %v", err)
 	}
 
-	if len(maps) != 1 || maps[0].MapName != "cilium_ct_any4_global" {
-		t.Fatalf("unexpected maps response: %+v", maps)
+	if resp.Count != 1 || resp.Maps[0].Status != domain.StatusCritical {
+		t.Errorf("expected 1 map with CRITICAL, got %+v", resp)
 	}
 }
 
-func TestCGroupHandler_ResizeConntrackMap(t *testing.T) {
-	mockMgr := &mockKernelManager{}
-	usecase := nodemetricsUsecase.NewCGroupScalerUsecase(mockMgr, nil)
-	handler := adapter.NewCGroupHandler(usecase, mockMgr)
-	router := setupTestRouter(handler)
+func TestCGroupHandler_ResizeEBPFMap_SuccessAndGuardrailRejection(t *testing.T) {
+	r, _ := setupCGroupTestRouter()
 
-	// Valid resize
-	body, _ := json.Marshal(map[string]int64{"capacity": 1024000})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/clusters/cluster-prod/ebpf/conntrack/resize", bytes.NewReader(body))
+	// 1. Success case
+	payload := []byte(`{"new_capacity": 524288}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/kernel/clusters/cluster-eu/ebpf-maps/resize", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if mockMgr.resizedCap != 1024000 {
-		t.Fatalf("expected resized capacity 1024000, got %d", mockMgr.resizedCap)
+		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Invalid negative capacity
-	invalidBody, _ := json.Marshal(map[string]int64{"capacity": -10})
-	badReq := httptest.NewRequest(http.MethodPost, "/api/v1/clusters/cluster-prod/ebpf/conntrack/resize", bytes.NewReader(invalidBody))
-	badReq.Header.Set("Content-Type", "application/json")
-	badRec := httptest.NewRecorder()
-	router.ServeHTTP(badRec, badReq)
+	// 2. Host RAM Guardrail violation (>10% RAM) -> 422
+	payloadExcess := []byte(`{"new_capacity": 10000000}`)
+	reqExcess := httptest.NewRequest(http.MethodPost, "/api/v1/kernel/clusters/cluster-eu/ebpf-maps/resize", bytes.NewReader(payloadExcess))
+	reqExcess.Header.Set("Content-Type", "application/json")
+	recExcess := httptest.NewRecorder()
+	r.ServeHTTP(recExcess, reqExcess)
 
-	if badRec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400 for negative capacity, got %d", badRec.Code)
+	if recExcess.Code != http.StatusUnprocessableEntity && recExcess.Code != http.StatusBadRequest {
+		t.Fatalf("expected 422 or 400 for guardrail, got %d", recExcess.Code)
+	}
+
+	var prob adapthttp.ProblemDetails
+	if err := json.NewDecoder(recExcess.Body).Decode(&prob); err != nil {
+		t.Fatalf("failed to decode problem: %v", err)
+	}
+	if prob.Code != domain.CodeEBPFMemoryLimitExceeded && prob.Code != "BAD_REQUEST" {
+		t.Errorf("unexpected error code: %s", prob.Code)
 	}
 }
 
-func TestCGroupHandler_ErrorPropagation(t *testing.T) {
-	mockMgr := &mockKernelManager{
-		auditErr: errors.New("cannot connect to node agent"),
-	}
-	usecase := nodemetricsUsecase.NewCGroupScalerUsecase(mockMgr, nil)
-	handler := adapter.NewCGroupHandler(usecase, mockMgr)
-	router := setupTestRouter(handler)
+func TestCGroupHandler_SlabTune(t *testing.T) {
+	r, scaler := setupCGroupTestRouter()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/worker-down/kernel/cgroup/events", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/kernel/nodes/node-beta/slab-tune", nil)
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected status 500 when kernel audit fails, got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	val, found := scaler.GetNodeSysctl("node-beta", "vm.vfs_cache_pressure")
+	if !found || val != 150 {
+		t.Errorf("expected sysctl 150 applied in usecase scaler, got found=%v val=%d", found, val)
 	}
 }

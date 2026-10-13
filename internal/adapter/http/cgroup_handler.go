@@ -1,184 +1,200 @@
+// Package http provides HTTP adapters and handlers for the k8sselfhost API.
 package http
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	domain "github.com/datdt/k8sselfhost/internal/domain/nodemetrics"
 	usecase "github.com/datdt/k8sselfhost/internal/usecase/nodemetrics"
 )
 
-// Hardware Bottleneck & Kernel Failure Mode Notes:
-// 1. Kernel Context Switches & TLB Flushes:
-//    High-frequency cgroup inotify polling causes kernel thread preemption and cross-CPU TLB shootdowns.
-//    The handler passes buffered telemetry without blocking kernel scheduler rings.
-// 2. RLIMIT_MEMLOCK & eBPF Map Limits:
-//    Scaling eBPF maps allocates unevictable kernel pages locked under RLIMIT_MEMLOCK. If limits are reached,
-//    new conntrack entries fail with -EPERM or -ENOMEM, dropping traffic at line rate.
-// 3. cgroup v2 memory.high Sleep Penalty:
-//    Exceeding memory.high forces synchronous proportional delays in alloc_pages(). The handler surfaces
-//    these hidden latency stalls so operators can adjust memory.high.factor = 0 or elevate container limits.
-// 4. Kernel Slab Inflation:
-//    Build workloads inflate dentry/inode caches, triggering false Kubelet memory pressure evictions.
-//    Tuning vm.vfs_cache_pressure = 150 forces cache reclamation before pod eviction.
-
-// resizeConntrackRequest defines the input payload for manual or automated eBPF conntrack resizing.
-type resizeConntrackRequest struct {
-	Capacity int64 `json:"capacity"`
-}
-
-// CGroupEventsResponse wraps audited cgroup v2 memory events alongside mitigation recommendations.
-type CGroupEventsResponse struct {
-	Events          []domain.CGroupV2MemoryEvent     `json:"events"`
-	Recommendations []usecase.CGroupRecommendation `json:"recommendations"`
-}
-
-// CGroupHandler handles HTTP requests for cgroup v2 kernel telemetry and eBPF auto-scaling.
+// CGroupHandler exposes HTTP REST endpoints for Linux cgroup v2
+// memory throttling event auditing, eBPF connection tracking map inspection/scaling,
+// and VFS slab cache pressure tuning. It delegates to CGroupScalerService.
 type CGroupHandler struct {
-	scalerUsecase *usecase.CGroupScalerUsecase
-	interceptor   domain.KernelInterceptorManager
+	scaler *usecase.CGroupScalerService
+	logger *zap.Logger
 }
 
-// NewCGroupHandler constructs a new CGroupHandler instance.
-func NewCGroupHandler(
-	scalerUsecase *usecase.CGroupScalerUsecase,
-	interceptor domain.KernelInterceptorManager,
-) *CGroupHandler {
+// NewCGroupHandler constructs a CGroupHandler instance with the usecase service.
+func NewCGroupHandler(scaler *usecase.CGroupScalerService, loggers ...*zap.Logger) *CGroupHandler {
+	var l *zap.Logger
+	if len(loggers) > 0 && loggers[0] != nil {
+		l = loggers[0]
+	} else {
+		l = zap.NewNop()
+	}
 	return &CGroupHandler{
-		scalerUsecase: scalerUsecase,
-		interceptor:   interceptor,
+		scaler: scaler,
+		logger: l,
 	}
 }
 
-// RegisterRoutes mounts all kernel and eBPF routes onto the provided chi Router.
+// RegisterRoutes mounts cgroup interceptor and eBPF auto-scaling routes on the provided chi router.
 func (h *CGroupHandler) RegisterRoutes(r chi.Router) {
-	r.Route("/nodes/{nodeName}/kernel", func(nodeSub chi.Router) {
-		h.RegisterNodeKernelRoutes(nodeSub)
-	})
-	r.Route("/clusters/{clusterId}/ebpf", func(clusterSub chi.Router) {
-		h.RegisterClusterEBPFRoutes(clusterSub)
-	})
+	r.Get("/nodes/{node_name}/cgroup-events", h.GetNodeCGroupEvents)
+	r.Get("/clusters/{cluster_id}/ebpf-maps", h.GetClusterEBPFMaps)
+	r.Post("/clusters/{cluster_id}/ebpf-maps/resize", h.ResizeClusterEBPFMap)
+	r.Post("/nodes/{node_name}/slab-tune", h.EnforceNodeSlabTune)
 }
 
-// RegisterNodeKernelRoutes registers routes under /nodes/{nodeName}/kernel.
-func (h *CGroupHandler) RegisterNodeKernelRoutes(r chi.Router) {
-	r.Get("/cgroup/events", h.GetCGroupEvents)
-	r.Post("/slab/tune", h.TuneSlabCache)
-}
-
-// RegisterClusterEBPFRoutes registers routes under /clusters/{clusterId}/ebpf.
-func (h *CGroupHandler) RegisterClusterEBPFRoutes(r chi.Router) {
-	r.Get("/maps", h.GetEBPFMaps)
-	r.Post("/conntrack/resize", h.ResizeConntrackMap)
-}
-
-// GetCGroupEvents handles GET /api/v1/nodes/{nodeName}/kernel/cgroup/events
-func (h *CGroupHandler) GetCGroupEvents(w http.ResponseWriter, r *http.Request) {
-	nodeName := strings.TrimSpace(chi.URLParam(r, "nodeName"))
+// GetNodeCGroupEvents handles GET /api/v1/kernel/nodes/:node_name/cgroup-events.
+func (h *CGroupHandler) GetNodeCGroupEvents(w http.ResponseWriter, r *http.Request) {
+	nodeName := chi.URLParam(r, "node_name")
 	if nodeName == "" {
-		http.Error(w, `{"error":"nodeName parameter is required"}`, http.StatusBadRequest)
+		nodeName = chi.URLParam(r, "nodeName")
+	}
+	if strings.TrimSpace(nodeName) == "" {
+		h.writeProblem(w, http.StatusBadRequest, "Bad Request", "node_name path parameter is required", "VALIDATION_ERROR", r.URL.Path)
 		return
 	}
 
-	events, recommendations, err := h.scalerUsecase.AuditCGroupThrottling(r.Context(), nodeName)
+	events, err := h.scaler.AuditCGroupV2Events(r.Context(), nodeName)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-		return
-	}
-
-	resp := CGroupEventsResponse{
-		Events:          events,
-		Recommendations: recommendations,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(resp)
-}
-
-// TuneSlabCache handles POST /api/v1/nodes/{nodeName}/kernel/slab/tune
-func (h *CGroupHandler) TuneSlabCache(w http.ResponseWriter, r *http.Request) {
-	nodeName := strings.TrimSpace(chi.URLParam(r, "nodeName"))
-	if nodeName == "" {
-		http.Error(w, `{"error":"nodeName parameter is required"}`, http.StatusBadRequest)
-		return
-	}
-
-	report, err := h.scalerUsecase.TuneKernelSlabCache(r.Context(), nodeName)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(report)
-}
-
-// GetEBPFMaps handles GET /api/v1/clusters/{clusterId}/ebpf/maps
-func (h *CGroupHandler) GetEBPFMaps(w http.ResponseWriter, r *http.Request) {
-	clusterID := strings.TrimSpace(chi.URLParam(r, "clusterId"))
-	if clusterID == "" {
-		http.Error(w, `{"error":"clusterId parameter is required"}`, http.StatusBadRequest)
-		return
-	}
-
-	maps, err := h.scalerUsecase.MonitorAndScaleEBPFMaps(r.Context(), clusterID)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(maps)
-}
-
-// ResizeConntrackMap handles POST /api/v1/clusters/{clusterId}/ebpf/conntrack/resize
-func (h *CGroupHandler) ResizeConntrackMap(w http.ResponseWriter, r *http.Request) {
-	clusterID := strings.TrimSpace(chi.URLParam(r, "clusterId"))
-	if clusterID == "" {
-		http.Error(w, `{"error":"clusterId parameter is required"}`, http.StatusBadRequest)
-		return
-	}
-
-	var req resizeConntrackRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "malformed json payload"})
-		return
-	}
-
-	if req.Capacity <= 0 {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "capacity must be positive integer"})
-		return
-	}
-
-	if err := h.interceptor.AutoResizeEBPFConntrackMap(r.Context(), clusterID, req.Capacity); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		if errors.Is(err, domain.ErrCGroupV2MemoryThrottled) {
+			h.writeProblem(w, http.StatusTooManyRequests, "Too Many Requests",
+				fmt.Sprintf("Container is experiencing kernel-level memory.high throttling: %v", err),
+				domain.CodeCGroupV2MemoryThrottled, r.URL.Path)
+			return
+		}
+		h.logger.Error("Failed to audit cgroup v2 events", zap.String("node", nodeName), zap.Error(err))
+		h.writeProblem(w, http.StatusInternalServerError, "Internal Server Error", err.Error(), "INTERNAL_ERROR", r.URL.Path)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":       "success",
-		"cluster_id":   clusterID,
-		"new_capacity": req.Capacity,
-		"message":      "eBPF conntrack map dynamically resized without dropping active TCP connections",
+		"node_name": nodeName,
+		"events":    events,
+		"count":     len(events),
 	})
+}
+
+// GetClusterEBPFMaps handles GET /api/v1/kernel/clusters/:cluster_id/ebpf-maps.
+func (h *CGroupHandler) GetClusterEBPFMaps(w http.ResponseWriter, r *http.Request) {
+	clusterID := chi.URLParam(r, "cluster_id")
+	if clusterID == "" {
+		clusterID = chi.URLParam(r, "clusterId")
+	}
+	if strings.TrimSpace(clusterID) == "" {
+		h.writeProblem(w, http.StatusBadRequest, "Bad Request", "cluster_id path parameter is required", "VALIDATION_ERROR", r.URL.Path)
+		return
+	}
+
+	maps, err := h.scaler.InspectEBPFMaps(r.Context(), clusterID)
+	if err != nil {
+		if errors.Is(err, domain.ErrEBPFMapSaturated) {
+			h.writeProblem(w, http.StatusServiceUnavailable, "Service Unavailable",
+				fmt.Sprintf("eBPF map utilization exceeded critical threshold (80%%). Silent packet drop imminent: %v", err),
+				domain.CodeEBPFMapSaturated, r.URL.Path)
+			return
+		}
+		h.logger.Error("Failed to inspect eBPF maps", zap.String("cluster_id", clusterID), zap.Error(err))
+		h.writeProblem(w, http.StatusInternalServerError, "Internal Server Error", err.Error(), "INTERNAL_ERROR", r.URL.Path)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"cluster_id": clusterID,
+		"maps":       maps,
+		"count":      len(maps),
+	})
+}
+
+type resizeCGroupEBPFMapRequest struct {
+	NewCapacity int64 `json:"new_capacity"`
+}
+
+// ResizeClusterEBPFMap handles POST /api/v1/kernel/clusters/:cluster_id/ebpf-maps/resize.
+func (h *CGroupHandler) ResizeClusterEBPFMap(w http.ResponseWriter, r *http.Request) {
+	clusterID := chi.URLParam(r, "cluster_id")
+	if clusterID == "" {
+		clusterID = chi.URLParam(r, "clusterId")
+	}
+	if strings.TrimSpace(clusterID) == "" {
+		h.writeProblem(w, http.StatusBadRequest, "Bad Request", "cluster_id path parameter is required", "VALIDATION_ERROR", r.URL.Path)
+		return
+	}
+
+	var req resizeCGroupEBPFMapRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeProblem(w, http.StatusBadRequest, "Bad Request", "Invalid request body JSON payload", "BAD_REQUEST", r.URL.Path)
+		return
+	}
+
+	if req.NewCapacity <= 0 {
+		h.writeProblem(w, http.StatusBadRequest, "Bad Request", "new_capacity must be greater than zero", "VALIDATION_ERROR", r.URL.Path)
+		return
+	}
+
+	if err := h.scaler.AutoResizeEBPFConntrackMap(r.Context(), clusterID, req.NewCapacity); err != nil {
+		if errors.Is(err, domain.ErrEBPFMemoryLimitExceeded) {
+			h.writeProblem(w, http.StatusUnprocessableEntity, "Unprocessable Entity",
+				err.Error(), domain.CodeEBPFMemoryLimitExceeded, r.URL.Path)
+			return
+		}
+		h.logger.Error("Failed to resize eBPF conntrack map", zap.String("cluster_id", clusterID), zap.Error(err))
+		h.writeProblem(w, http.StatusBadRequest, "Bad Request", err.Error(), "BAD_REQUEST", r.URL.Path)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":       "resized",
+		"cluster_id":   clusterID,
+		"new_capacity": req.NewCapacity,
+	})
+}
+
+// EnforceNodeSlabTune handles POST /api/v1/kernel/nodes/:node_name/slab-tune.
+func (h *CGroupHandler) EnforceNodeSlabTune(w http.ResponseWriter, r *http.Request) {
+	nodeName := chi.URLParam(r, "node_name")
+	if nodeName == "" {
+		nodeName = chi.URLParam(r, "nodeName")
+	}
+	if strings.TrimSpace(nodeName) == "" {
+		h.writeProblem(w, http.StatusBadRequest, "Bad Request", "node_name path parameter is required", "VALIDATION_ERROR", r.URL.Path)
+		return
+	}
+
+	if err := h.scaler.EnforceNodeSlabTuning(r.Context(), nodeName); err != nil {
+		h.logger.Error("Failed to enforce slab tuning", zap.String("node", nodeName), zap.Error(err))
+		h.writeProblem(w, http.StatusInternalServerError, "Internal Server Error", err.Error(), domain.CodeSlabTuningFailed, r.URL.Path)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":    "applied",
+		"node_name": nodeName,
+		"sysctl": map[string]int{
+			domain.SysctlVFSNodeCachePressure: domain.DefaultVFSNodeCachePressure,
+		},
+	})
+}
+
+func (h *CGroupHandler) writeProblem(w http.ResponseWriter, status int, title, detail, code, instance string) {
+	problem := ProblemDetails{
+		Type:     "about:blank",
+		Title:    title,
+		Status:   status,
+		Detail:   detail,
+		Instance: instance,
+		Code:     code,
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(problem)
 }

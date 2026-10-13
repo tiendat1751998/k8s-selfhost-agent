@@ -1,166 +1,126 @@
 package nodemetrics_test
 
 import (
-	"context"
-	"sync"
+	"strings"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/nodemetrics"
 )
 
-func TestCGroupV2MemoryEvent_ValidationAndPadding(t *testing.T) {
-	evt := nodemetrics.CGroupV2MemoryEvent{
-		ContainerID:       "container-123",
-		PodName:           "payment-pod",
-		Namespace:         "production",
-		LowEvents:         10,
-		HighEvents:        50,
-		MaxEvents:         2,
-		OOMKillEvents:     1,
-		ThrottledDuration: 350 * time.Millisecond,
-		UpdatedAt:         time.Now().UTC(),
+func TestCGroupV2_ParseMemoryEvents(t *testing.T) {
+	rawContent := `low 15
+high 50
+max 4
+oom 1
+oom_kill 1`
+
+	event, err := nodemetrics.ParseCGroupMemoryEvents(rawContent)
+	if err != nil {
+		t.Fatalf("unexpected error parsing cgroup memory events: %v", err)
 	}
 
-	if evt.ContainerID != "container-123" || evt.HighEvents != 50 {
-		t.Fatalf("unexpected cgroup event data: %+v", evt)
+	if event.LowEvents != 15 {
+		t.Errorf("expected LowEvents 15, got %d", event.LowEvents)
 	}
-
-	// Verify cache-line padded counter structure isolates CPU cache lines
-	counter := nodemetrics.PaddedKernelEventCounter{}
-	if unsafe.Sizeof(counter) < 64 {
-		t.Fatalf("PaddedKernelEventCounter must be at least 64 bytes to eliminate false sharing, got %d", unsafe.Sizeof(counter))
+	if event.HighEvents != 50 {
+		t.Errorf("expected HighEvents 50, got %d", event.HighEvents)
 	}
-
-	ebpfMetric := nodemetrics.PaddedEBPFMetric{}
-	if unsafe.Sizeof(ebpfMetric) < 64 {
-		t.Fatalf("PaddedEBPFMetric must be at least 64 bytes to prevent cache line contention, got %d", unsafe.Sizeof(ebpfMetric))
+	if event.MaxEvents != 4 {
+		t.Errorf("expected MaxEvents 4, got %d", event.MaxEvents)
+	}
+	if event.OOMKillEvents != 1 {
+		t.Errorf("expected OOMKillEvents 1, got %d", event.OOMKillEvents)
 	}
 }
 
-func TestEBPFMapUtilization_StatusCalculation(t *testing.T) {
-	tests := []struct {
-		name       string
-		current    int64
-		max        int64
-		wantStatus string
-		wantRecom  int64
-	}{
-		{
-			name:       "Normal usage",
-			current:    200000,
-			max:        512000,
-			wantStatus: nodemetrics.MapStatusNormal,
-			wantRecom:  512000,
-		},
-		{
-			name:       "Warning usage between 70% and 80%",
-			current:    380000,
-			max:        512000, // ~74.2%
-			wantStatus: nodemetrics.MapStatusWarning,
-			wantRecom:  512000,
-		},
-		{
-			name:       "Critical usage over 80%",
-			current:    450000,
-			max:        512000, // ~87.8%
-			wantStatus: nodemetrics.MapStatusCritical,
-			wantRecom:  1024000, // Doubled capacity
-		},
+func TestCGroupV2_ThrottlingSpikeDetection(t *testing.T) {
+	// Delta > 10 in 1 min
+	if !nodemetrics.IsThrottlingSpike(12, 1*time.Minute) {
+		t.Errorf("expected 12 delta in 1m to trigger throttling spike")
+	}
+	if nodemetrics.IsThrottlingSpike(8, 1*time.Minute) {
+		t.Errorf("expected 8 delta in 1m not to trigger throttling spike")
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			util := nodemetrics.NewEBPFMapUtilization("cilium_ct_any4_global", tc.current, tc.max)
-			if util.Status != tc.wantStatus {
-				t.Fatalf("expected status %s, got %s", tc.wantStatus, util.Status)
-			}
-			if util.RecommendedSize != tc.wantRecom {
-				t.Fatalf("expected recommended size %d, got %d", tc.wantRecom, util.RecommendedSize)
-			}
-			if util.PressureRatio < 0.0 || util.PressureRatio > 1.0 {
-				t.Fatalf("invalid pressure ratio %f", util.PressureRatio)
-			}
-		})
+	// Delta > 20 in 30s
+	if !nodemetrics.IsThrottlingSpike(25, 30*time.Second) {
+		t.Errorf("expected 25 delta in 30s to trigger throttling spike")
+	}
+	if nodemetrics.IsThrottlingSpike(15, 30*time.Second) {
+		t.Errorf("expected 15 delta in 30s not to trigger throttling spike")
 	}
 }
 
-func TestKernelEventRingBuffer_BoundedConcurrencyAndBackpressure(t *testing.T) {
-	bufferSize := 16
-	rb := nodemetrics.NewKernelEventRingBuffer(bufferSize)
-
-	var wg sync.WaitGroup
-	workers := 8
-	itemsPerWorker := 10
-
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			for j := 0; j < itemsPerWorker; j++ {
-				evt := nodemetrics.CGroupV2MemoryEvent{
-					ContainerID: "cont-1",
-					PodName:     "worker-pod",
-					HighEvents:  int64(j),
-					UpdatedAt:   time.Now(),
-				}
-				rb.Push(evt)
-			}
-		}(i)
+func TestEBPF_AutoResizeCalculation(t *testing.T) {
+	// 220,000 / 262,144 entries = 83.92% (CRITICAL)
+	ratio, status, recommended := nodemetrics.CalculateEBPFRecommendation(220000, 262144)
+	if ratio < 0.83 || ratio > 0.84 {
+		t.Errorf("unexpected ratio: %f", ratio)
+	}
+	if status != nodemetrics.StatusCritical {
+		t.Errorf("expected status CRITICAL, got %s", status)
+	}
+	if recommended != 524288 {
+		t.Errorf("expected recommended 524288, got %d", recommended)
 	}
 
-	wg.Wait()
-
-	totalAccepted := rb.TotalAccepted()
-	totalDropped := rb.TotalDropped()
-
-	if totalAccepted+totalDropped != int64(workers*itemsPerWorker) {
-		t.Fatalf("sum of accepted (%d) and dropped (%d) must match total pushed (%d)",
-			totalAccepted, totalDropped, workers*itemsPerWorker)
+	// 200,000 / 262,144 entries = 76.29% (WARNING)
+	_, statusW, recommendedW := nodemetrics.CalculateEBPFRecommendation(200000, 262144)
+	if statusW != nodemetrics.StatusWarning {
+		t.Errorf("expected status WARNING, got %s", statusW)
+	}
+	if recommendedW != 524288 {
+		t.Errorf("expected recommended 524288, got %d", recommendedW)
 	}
 
-	// Drain ring buffer
-	drained := rb.Drain()
-	if len(drained) > bufferSize {
-		t.Fatalf("drained items (%d) exceeded ring buffer capacity (%d)", len(drained), bufferSize)
+	// 100,000 / 262,144 entries = 38.15% (NORMAL)
+	_, statusN, recommendedN := nodemetrics.CalculateEBPFRecommendation(100000, 262144)
+	if statusN != nodemetrics.StatusNormal {
+		t.Errorf("expected status NORMAL, got %s", statusN)
+	}
+	if recommendedN != 262144 {
+		t.Errorf("expected recommended to remain 262144, got %d", recommendedN)
+	}
+
+	// Ceiling test: 2,097,152 entries max
+	_, _, recommendedMax := nodemetrics.CalculateEBPFRecommendation(1500000, 1500000)
+	if recommendedMax != nodemetrics.MaxEBPFMapEntries {
+		t.Errorf("expected capped at %d, got %d", nodemetrics.MaxEBPFMapEntries, recommendedMax)
 	}
 }
 
-type mockKernelManager struct {
-	events []nodemetrics.CGroupV2MemoryEvent
-	maps   []nodemetrics.EBPFMapUtilization
-	err    error
-}
+func TestEBPF_MaxCapacityGuardrail(t *testing.T) {
+	hostRAMBytes := int64(16 * 1024 * 1024 * 1024) // 16GB -> 1.6GB limit
 
-func (m *mockKernelManager) AuditCGroupV2Events(ctx context.Context, nodeName string) ([]nodemetrics.CGroupV2MemoryEvent, error) {
-	if m.err != nil {
-		return nil, m.err
+	// Safe: 1,048,576 entries * 256 bytes = 256MB (< 1.6GB)
+	err := nodemetrics.ValidateEBPFMapMemory(1048576, hostRAMBytes)
+	if err != nil {
+		t.Errorf("expected safe entries to pass guardrail, got: %v", err)
 	}
-	return m.events, nil
-}
 
-func (m *mockKernelManager) InspectEBPFMaps(ctx context.Context, clusterID string) ([]nodemetrics.EBPFMapUtilization, error) {
-	if m.err != nil {
-		return nil, m.err
+	// Exceeds ceiling: 3,000,000 > 2,097,152
+	err = nodemetrics.ValidateEBPFMapMemory(3000000, hostRAMBytes)
+	if err == nil {
+		t.Errorf("expected rejection when exceeding ceiling, got nil")
 	}
-	return m.maps, nil
+
+	// Exceeds 10% RAM: on 1GB host (10% = 100MB), 1,000,000 entries = 256MB > 100MB
+	err = nodemetrics.ValidateEBPFMapMemory(1000000, 1024*1024*1024)
+	if err == nil {
+		t.Errorf("expected rejection when exceeding 10%% host RAM, got nil")
+	}
 }
 
-func (m *mockKernelManager) AutoResizeEBPFConntrackMap(ctx context.Context, clusterID string, newCapacity int64) error {
-	return m.err
-}
+func BenchmarkParseCGroupEvents(b *testing.B) {
+	rawContent := strings.Repeat("low 12\nhigh 142\nmax 0\noom 0\noom_kill 0\n", 10)
+	b.ResetTimer()
+	b.ReportAllocs()
 
-func (m *mockKernelManager) EnforceNodeSlabTuning(ctx context.Context, nodeName string) error {
-	return m.err
-}
-
-func TestKernelInterceptorManager_InterfaceContract(t *testing.T) {
-	var mgr nodemetrics.KernelInterceptorManager = &mockKernelManager{}
-	ctx := context.Background()
-
-	evts, err := mgr.AuditCGroupV2Events(ctx, "worker-node-1")
-	if err != nil || evts != nil {
-		t.Fatalf("unexpected response from mock KernelInterceptorManager")
+	for i := 0; i < b.N; i++ {
+		_, err := nodemetrics.ParseCGroupMemoryEvents(rawContent)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }

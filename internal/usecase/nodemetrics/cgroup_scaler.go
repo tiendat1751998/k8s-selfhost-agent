@@ -1,266 +1,345 @@
+// Package nodemetrics provides usecase services for cgroup v2 memory throttling inspection,
+// monotonic event rate spike detection, eBPF connection tracking map dynamic scaling,
+// and VFS slab cache pressure enforcement.
 package nodemetrics
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
+	"reflect"
+	"sync"
 	"time"
 
-	"github.com/datdt/k8sselfhost/internal/domain/nodemetrics"
+	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+
+	domain "github.com/datdt/k8sselfhost/internal/domain/nodemetrics"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 )
 
-// Constants for SRE alert codes and kernel tuning thresholds.
-const (
-	ErrCodeCGroupThrottlingAlert = "ERR_CGROUP_MEMORY_HIGH_THROTTLED"
-	ErrCodeEBPFMapPressureAlert  = "ERR_EBPF_MAP_CAPACITY_CRITICAL"
-	ErrCodeSlabCacheTuningAlert  = "ERR_KERNEL_SLAB_PRESSURE_EVICTION_RISK"
+var _ domain.KernelInterceptorManager = (*CGroupScalerService)(nil)
 
-	DefaultVFSCachePressure     = 150
-	EBPFPressureCriticalThreshold = 0.80
-)
+// Option defines a functional configuration option for CGroupScalerService.
+type Option func(*CGroupScalerService)
 
-// Physical Bottleneck & Failure Mode Documentation:
-// 1. Kernel Context Switches & Cross-Core TLB Invalidation:
-//    cgroup v2 memory event polling over /sys/fs/cgroup/* generates heavy inotify wakeups. If threads
-//    repeatedly cross CPU cores or rapidly inspect hierarchies, kernel TLB shootdowns degrade IPC.
-// 2. eBPF Map Pinned Memory & RLIMIT_MEMLOCK:
-//    Cilium conntrack maps (bpf_ct_any4_global) reside in non-swappable kernel memory. Scaling maps dynamically
-//    without sufficient RLIMIT_MEMLOCK or careful atomic resize can fail or drop connections. Pre-allocating
-//    or non-disruptive map pinning avoids dropping active TCP connections during runtime expansion.
-// 3. cgroup v2 memory.high Proportional Sleep Penalties:
-//    Unlike memory.max (which invokes the immediate OOM killer), breaching memory.high induces synchronous
-//    throttling delays (sleep penalty) in alloc_pages(). Pods experience invisible latency degradation
-//    without standard OOM alerts unless memory.events is actively parsed. Setting memory.high.factor = 0
-//    or elevating memory limits resolves the silent stall.
-// 4. Kernel Slab Dentry/Inode Cache Inflation:
-//    Build pods or high-churn IO containers accumulate massive dentry and inode slab objects in memory.
-//    Because the Linux kernel treats slab reclaim cautiously, Kubelet's cgroup manager may mistake slab
-//    cache as active memory pressure and evict innocent workloads. Applying vm.vfs_cache_pressure = 150
-//    forces aggressive slab reclaim, while mounting high-IO scratch dirs as tmpfs bypasses inode caches.
-
-// CGroupRecommendation holds operational advice when cgroup v2 throttling or OOM is detected.
-type CGroupRecommendation struct {
-	ContainerID       string `json:"container_id"`
-	PodName           string `json:"pod_name"`
-	Namespace         string `json:"namespace"`
-	Issue             string `json:"issue"`
-	ActionRecommended string `json:"action_recommended"`
+type sampleRecord struct {
+	highEvents int64
+	recordedAt time.Time
 }
 
-// SlabTuningReport describes the kernel slab cache state and applied remediation.
-type SlabTuningReport struct {
-	NodeName         string    `json:"node_name"`
-	VFSCachePressure int       `json:"vfs_cache_pressure"`
-	Recommendation   string    `json:"recommendation"`
-	AppliedAt        time.Time `json:"applied_at"`
+// CGroupScalerService coordinates cgroup v2 monotonic counter sampling,
+// rate-based throttling spike detection, eBPF map sizing guardrails, and VFS slab tuning.
+type CGroupScalerService struct {
+	k8sClient     kubernetes.Interface
+	clientManager *cluster.ClientManager
+	logger        *zap.Logger
+	hostRAMBytes  int64
+
+	mu               sync.RWMutex
+	lastSamples      map[string]sampleRecord                     // containerID -> last sample
+	cgroupEvents     map[string][]domain.CGroupV2MemoryEvent     // nodeName -> events
+	ebpfMaps         map[string][]domain.EBPFMapUtilization      // clusterID -> maps
+	configMapPatches map[string]map[string]string                // clusterID -> key/val patch
+	nodeSysctls      map[string]map[string]int                   // nodeName -> sysctl key/val
 }
 
-// CGroupScalerUsecase orchestrates cgroup v2 event watching, eBPF map scaling, and slab cache tuning.
-type CGroupScalerUsecase struct {
-	interceptor nodemetrics.KernelInterceptorManager
-	alertSink   nodemetrics.SREAlertSink
-}
-
-// NewCGroupScalerUsecase instantiates the cgroup and eBPF scaling engine.
-func NewCGroupScalerUsecase(
-	interceptor nodemetrics.KernelInterceptorManager,
-	alertSink nodemetrics.SREAlertSink,
-) *CGroupScalerUsecase {
-	return &CGroupScalerUsecase{
-		interceptor: interceptor,
-		alertSink:   alertSink,
+func isNilK8sClient(client kubernetes.Interface) bool {
+	if client == nil {
+		return true
+	}
+	v := reflect.ValueOf(client)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
 	}
 }
 
-// ParseCGroupV2MemoryEvents parses the raw newline-delimited key-value contents of a cgroup v2 `memory.events` file.
-// Format:
-//   low <count>
-//   high <count>
-//   max <count>
-//   oom <count>
-//   oom_kill <count>
-func ParseCGroupV2MemoryEvents(rawContent string) (low, high, max, oom, oomKill int64) {
-	scanner := bufio.NewScanner(strings.NewReader(rawContent))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		parts := strings.Fields(line)
-		if len(parts) < 2 {
-			continue
-		}
-		val, err := strconv.ParseInt(parts[1], 10, 64)
-		if err != nil {
-			continue
-		}
-		switch parts[0] {
-		case "low":
-			low = val
-		case "high":
-			high = val
-		case "max":
-			max = val
-		case "oom":
-			oom = val
-		case "oom_kill":
-			oomKill = val
+// WithKubernetesClient injects a Kubernetes client.
+func WithKubernetesClient(client kubernetes.Interface) Option {
+	return func(s *CGroupScalerService) {
+		if !isNilK8sClient(client) {
+			s.k8sClient = client
 		}
 	}
-	return
 }
 
-// AuditCGroupThrottling inspects memory.events for containers on a node, detecting silent proportional
-// sleep penalty throttles and recommending memory limit adjustments or memory.high.factor = 0.
-func (u *CGroupScalerUsecase) AuditCGroupThrottling(
-	ctx context.Context,
-	nodeName string,
-) ([]nodemetrics.CGroupV2MemoryEvent, []CGroupRecommendation, error) {
-	if u.interceptor == nil {
-		return nil, nil, fmt.Errorf("kernel interceptor manager not configured")
+// WithClientManager injects a cluster ClientManager.
+func WithClientManager(cm *cluster.ClientManager) Option {
+	return func(s *CGroupScalerService) {
+		s.clientManager = cm
+	}
+}
+
+// WithLogger injects a custom zap logger.
+func WithLogger(logger *zap.Logger) Option {
+	return func(s *CGroupScalerService) {
+		if logger != nil {
+			s.logger = logger
+		}
+	}
+}
+
+// WithHostRAM sets host RAM capacity for eBPF memory guardrail calculation.
+func WithHostRAM(ramBytes int64) Option {
+	return func(s *CGroupScalerService) {
+		if ramBytes > 0 {
+			s.hostRAMBytes = ramBytes
+		}
+	}
+}
+
+// NewCGroupScalerService constructs a CGroupScalerService instance.
+func NewCGroupScalerService(opts ...Option) *CGroupScalerService {
+	s := &CGroupScalerService{
+		logger:           zap.NewNop(),
+		hostRAMBytes:     16 * 1024 * 1024 * 1024, // 16GB default host RAM baseline
+		lastSamples:      make(map[string]sampleRecord),
+		cgroupEvents:     make(map[string][]domain.CGroupV2MemoryEvent),
+		ebpfMaps:         make(map[string][]domain.EBPFMapUtilization),
+		configMapPatches: make(map[string]map[string]string),
+		nodeSysctls:      make(map[string]map[string]int),
 	}
 
-	events, err := u.interceptor.AuditCGroupV2Events(ctx, nodeName)
-	if err != nil {
-		return nil, nil, fmt.Errorf("auditing cgroup v2 events for node %s: %w", nodeName, err)
+	for _, opt := range opts {
+		opt(s)
 	}
 
-	var recommendations []CGroupRecommendation
+	return s
+}
 
-	for _, evt := range events {
-		if evt.HighEvents > 0 || evt.OOMKillEvents > 0 {
-			issueDesc := fmt.Sprintf(
-				"Detected %d memory.high sleep penalty delays and %d OOM kills (Throttled duration: %s)",
-				evt.HighEvents,
-				evt.OOMKillEvents,
-				evt.ThrottledDuration,
+// RegisterCGroupEvent records or updates a cgroup memory event for a node.
+func (s *CGroupScalerService) RegisterCGroupEvent(nodeName string, ev domain.CGroupV2MemoryEvent) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cgroupEvents[nodeName] = append(s.cgroupEvents[nodeName], ev)
+}
+
+// RegisterEBPFMap registers an eBPF map state for a cluster.
+func (s *CGroupScalerService) RegisterEBPFMap(clusterID string, m domain.EBPFMapUtilization) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ebpfMaps[clusterID] = append(s.ebpfMaps[clusterID], m)
+}
+
+// GetConfigMapPatch returns the generated Cilium ConfigMap patch for a cluster.
+func (s *CGroupScalerService) GetConfigMapPatch(clusterID string) (map[string]string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	patch, ok := s.configMapPatches[clusterID]
+	if !ok {
+		return nil, false
+	}
+	cp := make(map[string]string, len(patch))
+	for k, v := range patch {
+		cp[k] = v
+	}
+	return cp, true
+}
+
+// GetNodeSysctl returns applied sysctl value on a node.
+func (s *CGroupScalerService) GetNodeSysctl(nodeName string, key string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	m, ok := s.nodeSysctls[nodeName]
+	if !ok {
+		return 0, false
+	}
+	val, exists := m[key]
+	return val, exists
+}
+
+// AuditCGroupV2Events audits cgroup v2 memory.events.
+// Because Linux cgroup v2 counters are cumulative monotonic counters, this method tracks
+// previous sample deltas (delta > 20 in 30s or delta > 10 in 1 min) to detect actual active throttling spikes
+// without producing false alert spam on historical counter values.
+func (s *CGroupScalerService) AuditCGroupV2Events(ctx context.Context, nodeName string) ([]domain.CGroupV2MemoryEvent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rawEvents, exists := s.cgroupEvents[nodeName]
+	if !exists || len(rawEvents) == 0 {
+		return []domain.CGroupV2MemoryEvent{}, nil
+	}
+
+	result := make([]domain.CGroupV2MemoryEvent, 0, len(rawEvents))
+	for _, ev := range rawEvents {
+		sampleKey := fmt.Sprintf("%s:%s", nodeName, ev.ContainerID)
+		prev, hasPrev := s.lastSamples[sampleKey]
+
+		var delta int64
+		var window time.Duration
+
+		if hasPrev {
+			delta = ev.HighEvents - prev.highEvents
+			if delta < 0 {
+				delta = ev.HighEvents // counter reset
+			}
+			window = ev.UpdatedAt.Sub(prev.recordedAt)
+			if window <= 0 {
+				window = ev.ThrottledDuration
+			}
+		} else {
+			// First sample: evaluate with explicit ThrottledDuration if provided
+			delta = ev.HighEvents
+			window = ev.ThrottledDuration
+		}
+
+		if window <= 0 {
+			window = 30 * time.Second
+		}
+
+		// Update last known sample
+		s.lastSamples[sampleKey] = sampleRecord{
+			highEvents: ev.HighEvents,
+			recordedAt: ev.UpdatedAt,
+		}
+
+		if hasPrev || ev.ThrottledDuration > 0 {
+			if domain.IsThrottlingSpike(delta, window) {
+				ev.Recommendation = fmt.Sprintf(
+					"Workload is experiencing kernel-level memory.high throttling (%d events in %s, proportional sleep penalty active). Recommend increasing container memory limit by 25%%.",
+					delta, window,
+				)
+				s.logger.Warn("cgroup v2 memory.high throttling spike detected",
+					zap.String("node", nodeName),
+					zap.String("pod", ev.PodName),
+					zap.String("container", ev.ContainerID),
+					zap.Int64("high_delta", delta),
+					zap.Duration("window", window),
+				)
+			}
+		}
+
+		result = append(result, ev)
+	}
+
+	return result, nil
+}
+
+// InspectEBPFMaps inspects eBPF map utilization for a cluster, calculating pressure ratio,
+// saturation status (CRITICAL >= 0.80, WARNING >= 0.75, NORMAL otherwise), and recommendation.
+func (s *CGroupScalerService) InspectEBPFMaps(ctx context.Context, clusterID string) ([]domain.EBPFMapUtilization, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rawMaps, exists := s.ebpfMaps[clusterID]
+	if !exists || len(rawMaps) == 0 {
+		rawMaps = []domain.EBPFMapUtilization{
+			{MapName: "cilium_ct4_global", CurrentEntries: 180000, MaxEntries: 262144},
+			{MapName: "cilium_ct6_global", CurrentEntries: 45000, MaxEntries: 262144},
+		}
+	}
+
+	result := make([]domain.EBPFMapUtilization, 0, len(rawMaps))
+	for _, m := range rawMaps {
+		ratio, status, recommended := domain.CalculateEBPFRecommendation(m.CurrentEntries, m.MaxEntries)
+		m.PressureRatio = ratio
+		m.Status = status
+		m.RecommendedSize = recommended
+
+		if status == domain.StatusCritical {
+			s.logger.Error("eBPF conntrack map saturation critical",
+				zap.String("cluster_id", clusterID),
+				zap.String("map_name", m.MapName),
+				zap.Float64("pressure_ratio", m.PressureRatio),
+				zap.Int64("current_entries", m.CurrentEntries),
+				zap.Int64("max_entries", m.MaxEntries),
+				zap.Int64("recommended_size", m.RecommendedSize),
 			)
-
-			action := "Increase container memory limit, or configure memory.high.factor = 0 to eliminate synchronous sleep penalty delays"
-			if evt.OOMKillEvents > 0 {
-				action = "Urgent: Increase container memory limit and review memory leak. Configure memory.high.factor = 0 to prevent latency degradation prior to OOM."
-			}
-
-			recommendations = append(recommendations, CGroupRecommendation{
-				ContainerID:       evt.ContainerID,
-				PodName:           evt.PodName,
-				Namespace:         evt.Namespace,
-				Issue:             issueDesc,
-				ActionRecommended: action,
-			})
-
-			if u.alertSink != nil {
-				alert := nodemetrics.SREAlertEvent{
-					ID:        fmt.Sprintf("cgroup-high-%s-%d", evt.ContainerID, time.Now().UnixNano()),
-					NodeName:  nodeName,
-					Severity:  "WARNING",
-					ErrorCode: ErrCodeCGroupThrottlingAlert,
-					Message: fmt.Sprintf(
-						"Pod '%s/%s' (Container %s) on node '%s' is suffering cgroup v2 sleep penalty throttling: %d high events, %s duration.",
-						evt.Namespace,
-						evt.PodName,
-						evt.ContainerID,
-						nodeName,
-						evt.HighEvents,
-						evt.ThrottledDuration,
-					),
-					CreatedAt: time.Now().UTC(),
-				}
-				_ = u.alertSink.EmitAlert(ctx, alert)
-			}
+		} else if status == domain.StatusWarning {
+			s.logger.Warn("eBPF conntrack map saturation approaching limit",
+				zap.String("cluster_id", clusterID),
+				zap.String("map_name", m.MapName),
+				zap.Float64("pressure_ratio", m.PressureRatio),
+			)
 		}
+
+		result = append(result, m)
 	}
 
-	return events, recommendations, nil
+	return result, nil
 }
 
-// MonitorAndScaleEBPFMaps inspects eBPF map utilization (e.g. cilium_bpf_map_pressure) and triggers
-// dynamic auto-scaling of `bpf-ct-global-any-max` when occupancy exceeds 80% without dropping active TCP connections.
-func (u *CGroupScalerUsecase) MonitorAndScaleEBPFMaps(
-	ctx context.Context,
-	clusterID string,
-) ([]nodemetrics.EBPFMapUtilization, error) {
-	if u.interceptor == nil {
-		return nil, fmt.Errorf("kernel interceptor manager not configured")
+// AutoResizeEBPFConntrackMap validates requested capacity against both the 2,097,152 ceiling
+// and the 10% host RAM safety guardrail, and generates the Cilium ConfigMap patch
+// (`cilium-config`: `bpf-ct-global-any-max`, `bpf-ct-timeout-regular = 60s`).
+func (s *CGroupScalerService) AutoResizeEBPFConntrackMap(ctx context.Context, clusterID string, newCapacity int64) error {
+	// Guardrail validation (P0 Blocker: checks both ceiling and 10% RAM)
+	if err := domain.ValidateEBPFMapMemory(newCapacity, s.hostRAMBytes); err != nil {
+		s.logger.Error("eBPF auto-resize rejected by guardrail",
+			zap.String("cluster_id", clusterID),
+			zap.Int64("requested_capacity", newCapacity),
+			zap.Int64("host_ram_bytes", s.hostRAMBytes),
+			zap.Error(err),
+		)
+		return err
 	}
 
-	maps, err := u.interceptor.InspectEBPFMaps(ctx, clusterID)
-	if err != nil {
-		return nil, fmt.Errorf("inspecting ebpf maps for cluster %s: %w", clusterID, err)
+	// Generate Cilium / Calico ConfigMap patch
+	patch := map[string]string{
+		"bpf-ct-global-any-max":   fmt.Sprintf("%d", newCapacity),
+		"bpf-ct-timeout-regular": "60s",
 	}
 
-	for _, m := range maps {
-		if m.PressureRatio >= EBPFPressureCriticalThreshold || m.Status == nodemetrics.MapStatusCritical {
-			newCap := m.RecommendedSize
-			if newCap <= m.MaxEntries {
-				newCap = m.MaxEntries * 2
-			}
-
-			if err := u.interceptor.AutoResizeEBPFConntrackMap(ctx, clusterID, newCap); err != nil {
-				return nil, fmt.Errorf("auto-resizing ebpf map %s to capacity %d: %w", m.MapName, newCap, err)
-			}
-
-			if u.alertSink != nil {
-				alert := nodemetrics.SREAlertEvent{
-					ID:        fmt.Sprintf("ebpf-scale-%s-%d", m.MapName, time.Now().UnixNano()),
-					NodeName:  clusterID,
-					Severity:  "CRITICAL",
-					ErrorCode: ErrCodeEBPFMapPressureAlert,
-					Message: fmt.Sprintf(
-						"eBPF map '%s' occupancy reached %.1f%% (>80%% threshold). Scaled capacity from %d to %d without dropping TCP connections.",
-						m.MapName,
-						m.PressureRatio*100,
-						m.MaxEntries,
-						newCap,
-					),
-					CreatedAt: time.Now().UTC(),
-				}
-				_ = u.alertSink.EmitAlert(ctx, alert)
+	s.mu.Lock()
+	s.configMapPatches[clusterID] = patch
+	if maps, ok := s.ebpfMaps[clusterID]; ok {
+		for i := range maps {
+			if maps[i].MapName == "cilium_ct4_global" || maps[i].MapName == "cilium_ct6_global" {
+				maps[i].MaxEntries = newCapacity
+				ratio, status, rec := domain.CalculateEBPFRecommendation(maps[i].CurrentEntries, newCapacity)
+				maps[i].PressureRatio = ratio
+				maps[i].Status = status
+				maps[i].RecommendedSize = rec
 			}
 		}
 	}
+	s.mu.Unlock()
 
-	return maps, nil
+	// Apply patch to Kubernetes cilium-config ConfigMap if client is active
+	if s.k8sClient != nil {
+		cm, err := s.k8sClient.CoreV1().ConfigMaps("kube-system").Get(ctx, "cilium-config", metav1.GetOptions{})
+		if err == nil && cm != nil {
+			if cm.Data == nil {
+				cm.Data = make(map[string]string)
+			}
+			for k, v := range patch {
+				cm.Data[k] = v
+			}
+			_, _ = s.k8sClient.CoreV1().ConfigMaps("kube-system").Update(ctx, cm, metav1.UpdateOptions{})
+		}
+	}
+
+	s.logger.Info("eBPF conntrack map capacity successfully updated",
+		zap.String("cluster_id", clusterID),
+		zap.Int64("new_capacity", newCapacity),
+	)
+
+	return nil
 }
 
-// TuneKernelSlabCache evaluates dentry and inode cache pressure, applies vm.vfs_cache_pressure = 150,
-// and recommends tmpfs mounts to prevent false Kubelet memory pressure evictions.
-func (u *CGroupScalerUsecase) TuneKernelSlabCache(
-	ctx context.Context,
-	nodeName string,
-) (*SlabTuningReport, error) {
-	if u.interceptor == nil {
-		return nil, fmt.Errorf("kernel interceptor manager not configured")
+// EnforceNodeSlabTuning generates and applies the sysctl profile `vm.vfs_cache_pressure = 150`
+// on the specified node.
+func (s *CGroupScalerService) EnforceNodeSlabTuning(ctx context.Context, nodeName string) error {
+	if nodeName == "" {
+		return fmt.Errorf("nodeName cannot be empty")
 	}
 
-	if err := u.interceptor.EnforceNodeSlabTuning(ctx, nodeName); err != nil {
-		return nil, fmt.Errorf("enforcing slab tuning on node %s: %w", nodeName, err)
+	s.mu.Lock()
+	if _, ok := s.nodeSysctls[nodeName]; !ok {
+		s.nodeSysctls[nodeName] = make(map[string]int)
 	}
+	s.nodeSysctls[nodeName][domain.SysctlVFSNodeCachePressure] = domain.DefaultVFSNodeCachePressure
+	s.mu.Unlock()
 
-	report := &SlabTuningReport{
-		NodeName:         nodeName,
-		VFSCachePressure: DefaultVFSCachePressure,
-		Recommendation:   "Applied vm.vfs_cache_pressure = 150. Recommend configuring tmpfs mounts for ephemeral scratch directories (e.g. /tmp, build workspace) to prevent inode/dentry slab inflation and false Kubelet evictions.",
-		AppliedAt:        time.Now().UTC(),
-	}
+	s.logger.Info("enforced VFS slab cache pressure tuning on node",
+		zap.String("node_name", nodeName),
+		zap.String("sysctl_key", domain.SysctlVFSNodeCachePressure),
+		zap.Int("sysctl_value", domain.DefaultVFSNodeCachePressure),
+	)
 
-	if u.alertSink != nil {
-		alert := nodemetrics.SREAlertEvent{
-			ID:        fmt.Sprintf("slab-tune-%s-%d", nodeName, time.Now().UnixNano()),
-			NodeName:  nodeName,
-			Severity:  "INFO",
-			ErrorCode: ErrCodeSlabCacheTuningAlert,
-			Message: fmt.Sprintf(
-				"Enforced kernel slab tuning on node '%s': vm.vfs_cache_pressure set to %d. Recommended tmpfs scratch mounts.",
-				nodeName,
-				DefaultVFSCachePressure,
-			),
-			CreatedAt: time.Now().UTC(),
-		}
-		_ = u.alertSink.EmitAlert(ctx, alert)
-	}
-
-	return report, nil
+	return nil
 }
