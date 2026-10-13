@@ -144,6 +144,7 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 
 	messagingManager := usecaseMessaging.NewManager(nil, nil, nil, usecaseMessaging.DefaultSREManagerConfig())
 	messagingHandler := adapthttp.NewMessagingHandler(messagingManager)
+	sreHandlers := bootstrapSREHandlers(p)
 
 	return &adapthttp.PlatformHandlers{
 		AI:              adapthttp.NewAIHandler(p.registry),
@@ -197,5 +198,6 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 		Telegram:        telegramHandler,
 		Admission:       adapthttp.NewAdmissionHandler(usecaseSecurity.NewAdmissionEnforcer()),
 		MessagingSRE:    messagingHandler,
+		SRE:             sreHandlers,
 	}
 }

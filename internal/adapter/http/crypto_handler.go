@@ -27,6 +27,13 @@ func NewCryptoHandler(manager *usecasecrypto.ShieldManager) *CryptoHandler {
 
 // RegisterRoutes registers the cryptographic shielding endpoints on the router.
 func (h *CryptoHandler) RegisterRoutes(r chi.Router) {
+	// Direct sub-route endpoints when mounted under /crypto or /api/v1/crypto
+	r.Post("/ocsp/verify-staple", h.VerifyAndPrefetchOCSPStaple)
+	r.Get("/hsm/session-status", h.GetHSMSessionPoolStatus)
+	r.Post("/envelope/dek", h.GetOrExtendEnvelopeDEK)
+	r.Post("/fips/scan", h.ScanSourceForNonFIPSAlgorithms)
+
+	// Top-level mounting when called on a root router
 	r.Route("/api/v1/crypto", func(sub chi.Router) {
 		sub.Post("/ocsp/verify-staple", h.VerifyAndPrefetchOCSPStaple)
 		sub.Get("/hsm/session-status", h.GetHSMSessionPoolStatus)

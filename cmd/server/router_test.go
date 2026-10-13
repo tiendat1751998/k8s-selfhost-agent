@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
@@ -60,6 +61,7 @@ func setupTestRouter() http.Handler {
 		Telegram:  adapthttp.NewTelegramHandler(bot),
 		Admission: adapthttp.NewAdmissionHandler(admissionEnforcer),
 		Mesh:      adapthttp.NewMeshHandler(meshService),
+		SRE:       bootstrapSREHandlers(platformHandlerParams{log: zap.NewNop()}),
 	}
 
 	return newRouter(healthHandler, nil, handlers)
@@ -82,6 +84,37 @@ func TestRouter_MountedRoutes_UnauthorizedNotNotFound(t *testing.T) {
 		{http.MethodPost, "/api/v1/mesh/sidecar/inject-guard", "Mesh sidecar inject-guard route"},
 		{http.MethodPost, "/api/v1/mesh/waf/verify-regex", "Mesh WAF verify-regex route"},
 		{http.MethodPost, "/api/v1/mesh/tls/drain", "Mesh TLS drain route"},
+		// SRE Resilience routes
+		{http.MethodGet, "/api/v1/clusters/c1/storage/ceph/osds", "SRE Storage Resiliency"},
+		{http.MethodGet, "/api/v1/kernel/nodes/node-1/cgroup-events", "SRE CGroup v2"},
+		{http.MethodGet, "/api/v1/auth/jwks/status", "SRE JWKS Shield"},
+		{http.MethodGet, "/api/v1/clusters/c1/fencing/readiness", "SRE Multi-DC Fencing"},
+		{http.MethodGet, "/api/v1/secrets/drift/audit", "SRE Secret Drift"},
+		{http.MethodGet, "/api/v1/ebpf/probes/pressure", "SRE eBPF Watchdog"},
+		{http.MethodGet, "/api/v1/network/tunnels/health", "SRE NetGuard"},
+		{http.MethodGet, "/api/v1/analytics/clickhouse/parts-health", "SRE IngestGuard"},
+		{http.MethodGet, "/api/v1/runtime/nodes/storage-health", "SRE RuntimeGuard"},
+		{http.MethodGet, "/api/v1/gpu/nodes/gpu-1/telemetry", "SRE GPUWatch"},
+		{http.MethodGet, "/api/v1/dr/backup/locks", "SRE DRHealing"},
+		{http.MethodGet, "/api/v1/finops/services/topology-audit", "SRE FinOpsGuard"},
+		{http.MethodGet, "/api/v1/kernel/network/socket-metrics", "SRE Netscaler"},
+		{http.MethodGet, "/api/v1/vfs/inodes/report", "SRE VFSWatchdog"},
+		{http.MethodGet, "/api/v1/k8s/webhooks/audit", "SRE K8sResilience"},
+		{http.MethodGet, "/api/v1/db/postgres/xid-health", "SRE DBSafeguard"},
+		{http.MethodPost, "/api/v1/security/ssrf/validate-url", "SRE SecDefense"},
+		{http.MethodGet, "/api/v1/cloud/storage/burst-status", "SRE CloudResilience"},
+		{http.MethodGet, "/api/v1/mesh/sds/socket-status", "SRE ServiceMesh"},
+		{http.MethodGet, "/api/v1/kernel/memory/numa-status", "SRE NUMAMemory"},
+		{http.MethodGet, "/api/v1/hardware/ecc/dimm-status", "SRE Hardware"},
+		{http.MethodGet, "/api/v1/crypto/hsm/session-status", "SRE Crypto"},
+		{http.MethodPost, "/api/v1/gitops/sync-waves/audit-cycle", "SRE GitOpsSyncWave"},
+		{http.MethodGet, "/api/v1/ai/rdma/fabric-bandwidth", "SRE RDMAWatch"},
+		{http.MethodGet, "/api/v1/k8s/apf/queue-status", "SRE APFGuard"},
+		{http.MethodGet, "/api/v1/cloud/network/nlb/cross-zone-balance", "SRE TransitNet"},
+		{http.MethodGet, "/api/v1/identity/spiffe/svid-status", "SRE SPIFFEGuard"},
+		{http.MethodPost, "/api/v1/consensus/locks/acquire-fencing", "SRE Consensus"},
+		{http.MethodPost, "/api/v1/workload/storage/validate-ephemeral", "SRE WorkloadGuard"},
+		{http.MethodGet, "/api/v1/messaging/tenants/t-1/backlog-alerts", "SRE Messaging"},
 	}
 
 	for _, ep := range endpoints {
