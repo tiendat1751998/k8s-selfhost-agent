@@ -107,6 +107,35 @@ func TestRemediationController_ExecuteFencing_CircuitBreakerFreeze(t *testing.T)
 	}
 }
 
+func TestRemediationController_ExecuteFencing_CircuitBreakerOverride(t *testing.T) {
+	node1 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-1"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}},
+	}
+	node2 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-2"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}},
+	}
+	node3 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-3"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}},
+	}
+	// 2 unready out of 3 = 66.7% unready > 15% -> Tripped!
+	client := fake.NewSimpleClientset(node1, node2, node3)
+	ctrl := NewRemediationController(client, nil, zaptest.NewLogger(t))
+
+	report, err := ctrl.ExecuteFencing(context.Background(), "local", "worker-1", FencingExecutionOptions{
+		ConfirmPowerIsolated:   true,
+		OverrideCircuitBreaker: true,
+	})
+	if err != nil {
+		t.Fatalf("expected ExecuteFencing to proceed when OverrideCircuitBreaker=true, got err: %v", err)
+	}
+	if report == nil || !report.Success {
+		t.Fatalf("expected successful report when OverrideCircuitBreaker=true, got: %+v", report)
+	}
+}
+
 func TestRemediationController_ExecuteFencing_AntiSplitBrainBarrier(t *testing.T) {
 	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}}
 	pod := &corev1.Pod{

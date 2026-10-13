@@ -320,8 +320,16 @@ func (c *RemediationController) ExecuteFencing(ctx context.Context, clusterID, n
 				}
 			}
 		}
-		if cbStatus, _ := c.circuitBreaker.EvaluateBlastRadius(clusterID, unreadyCount, totalCount); cbStatus != nil && cbStatus.Tripped {
-			return nil, fmt.Errorf("%w: %s (%s)", ErrCircuitBreakerTripped, cbStatus.Status, cbStatus.Reason)
+		cbStatus, _ := c.circuitBreaker.EvaluateBlastRadius(clusterID, unreadyCount, totalCount)
+		if cbStatus != nil && cbStatus.Tripped {
+			if !opts.OverrideCircuitBreaker {
+				return nil, ErrCircuitBreakerTripped
+			}
+			c.logger.Warn("sre operator emergency override: bypassing circuit breaker freeze",
+				zap.String("cluster_id", clusterID),
+				zap.String("node_name", nodeName),
+				zap.String("reason", cbStatus.Reason),
+			)
 		}
 	}
 
