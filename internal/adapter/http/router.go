@@ -152,6 +152,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 				if vault != nil {
 					r.Group(func(ar chi.Router) {
 						ar.Use(mw.JWTAuthMiddleware)
+						ar.Use(mw.RBACMiddleware("platform_admin"))
 						ar.Get("/jwks/status", vault.GetJWKSStatus)
 						ar.Post("/jwks/refresh", vault.RefreshJWKS)
 						ar.Get("/vault/unseal-status", vault.GetVaultUnsealStatus)

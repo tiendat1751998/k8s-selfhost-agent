@@ -42,6 +42,16 @@ func (h *SettingsHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/integrations/test", h.TestIntegration)
 }
 
+func isSensitiveKey(k string) bool {
+	lower := strings.ToLower(k)
+	for _, sub := range []string{"password", "secret", "token", "key", "webhook_url", "bot_token"} {
+		if strings.Contains(lower, sub) {
+			return true
+		}
+	}
+	return false
+}
+
 // GetSettings handles GET / - returns settings for a tenant, optionally filtered by ?category=
 func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	tenantID := tenancy.TenantIDFromContext(r.Context())
@@ -69,7 +79,16 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		items = make([]settings.Setting, 0)
 	}
 
-	writeJSON(w, http.StatusOK, items)
+	maskedItems := make([]settings.Setting, len(items))
+	for i, item := range items {
+		masked := item
+		if isSensitiveKey(item.Key) && masked.Value != "" {
+			masked.Value = "***"
+		}
+		maskedItems[i] = masked
+	}
+
+	writeJSON(w, http.StatusOK, maskedItems)
 }
 
 type updateSettingItem struct {
@@ -111,21 +130,27 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 	}
 	userID := tenancy.UserIDFromContext(r.Context())
 
-	items := make([]settings.Setting, len(req.Settings))
-	for i, s := range req.Settings {
-		items[i] = settings.Setting{
+	items := make([]settings.Setting, 0, len(req.Settings))
+	for _, s := range req.Settings {
+		if s.Value == "***" {
+			// Skip masked placeholders so real secrets are preserved
+			continue
+		}
+		items = append(items, settings.Setting{
 			Category:  s.Category,
 			Key:       s.Key,
 			Value:     s.Value,
 			TenantID:  tenantID,
 			UpdatedBy: userID,
-		}
+		})
 	}
 
-	if err := h.repo.BulkUpsert(r.Context(), items); err != nil {
-		h.logger.Error("failed to update settings", zap.Error(err), zap.String("tenant_id", tenantID))
-		writeError(w, http.StatusInternalServerError, "failed to update settings", err)
-		return
+	if len(items) > 0 {
+		if err := h.repo.BulkUpsert(r.Context(), items); err != nil {
+			h.logger.Error("failed to update settings", zap.Error(err), zap.String("tenant_id", tenantID))
+			writeError(w, http.StatusInternalServerError, "failed to update settings", err)
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, items)

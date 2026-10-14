@@ -7,6 +7,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -180,6 +181,21 @@ func (r *ResourceRepo) getWorkload(ctx context.Context, client kubernetes.Interf
 
 func (r *ResourceRepo) createWorkload(ctx context.Context, client kubernetes.Interface, kind, namespace string, manifest map[string]interface{}) (map[string]interface{}, bool, error) {
 	switch kind {
+	case "pods":
+		var obj corev1.Pod
+		if err := fromMap(manifest, &obj); err != nil {
+			return nil, true, fmt.Errorf("decoding pod manifest: %w", err)
+		}
+		if namespace != "" && obj.Namespace == "" {
+			obj.Namespace = namespace
+		}
+		created, err := client.CoreV1().Pods(obj.Namespace).Create(ctx, &obj, metav1.CreateOptions{})
+		if err != nil {
+			return nil, true, fmt.Errorf("creating pod: %w", err)
+		}
+		m, err := toMap(created, "v1", "Pod")
+		return m, true, err
+
 	case "deployments":
 		var obj appsv1.Deployment
 		if err := fromMap(manifest, &obj); err != nil {
@@ -276,6 +292,24 @@ func (r *ResourceRepo) createWorkload(ctx context.Context, client kubernetes.Int
 
 func (r *ResourceRepo) updateWorkload(ctx context.Context, client kubernetes.Interface, kind, namespace, name string, manifest map[string]interface{}) (map[string]interface{}, bool, error) {
 	switch kind {
+	case "pods":
+		var obj corev1.Pod
+		if err := fromMap(manifest, &obj); err != nil {
+			return nil, true, fmt.Errorf("decoding pod manifest: %w", err)
+		}
+		if obj.Name == "" {
+			obj.Name = name
+		}
+		if namespace != "" && obj.Namespace == "" {
+			obj.Namespace = namespace
+		}
+		updated, err := client.CoreV1().Pods(obj.Namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+		if err != nil {
+			return nil, true, fmt.Errorf("updating pod %s: %w", name, err)
+		}
+		m, err := toMap(updated, "v1", "Pod")
+		return m, true, err
+
 	case "deployments":
 		var obj appsv1.Deployment
 		if err := fromMap(manifest, &obj); err != nil {

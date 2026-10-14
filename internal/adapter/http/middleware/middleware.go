@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -207,6 +208,40 @@ func StructuredLogger(next http.Handler) http.Handler {
 	})
 }
 
+var (
+	corsCacheMu   sync.RWMutex
+	corsCachedEnv string
+	corsCachedMap map[string]struct{}
+)
+
+func getCachedAllowedOrigins(env string) map[string]struct{} {
+	corsCacheMu.RLock()
+	if env == corsCachedEnv && corsCachedMap != nil {
+		m := corsCachedMap
+		corsCacheMu.RUnlock()
+		return m
+	}
+	corsCacheMu.RUnlock()
+
+	corsCacheMu.Lock()
+	defer corsCacheMu.Unlock()
+	if env == corsCachedEnv && corsCachedMap != nil {
+		return corsCachedMap
+	}
+
+	newMap := make(map[string]struct{})
+	for _, o := range strings.Split(env, ",") {
+		o = strings.ToLower(strings.TrimRight(strings.TrimSpace(o), "/"))
+		if o == "" || o == "*" {
+			continue
+		}
+		newMap[o] = struct{}{}
+	}
+	corsCachedEnv = env
+	corsCachedMap = newMap
+	return newMap
+}
+
 // IsOriginAllowed checks whether the specified origin is permitted by CORS_ALLOWED_ORIGINS.
 // By default, no cross-origin requests are allowed unless explicitly configured in CORS_ALLOWED_ORIGINS.
 // Wildcards ('*') are rejected to prevent unauthenticated/credentialed reflection attacks.
@@ -220,16 +255,9 @@ func IsOriginAllowed(origin string) bool {
 	}
 
 	normOrigin := strings.ToLower(strings.TrimRight(strings.TrimSpace(origin), "/"))
-	for _, o := range strings.Split(allowedOriginsEnv, ",") {
-		o = strings.ToLower(strings.TrimRight(strings.TrimSpace(o), "/"))
-		if o == "" || o == "*" {
-			continue
-		}
-		if o == normOrigin {
-			return true
-		}
-	}
-	return false
+	allowedMap := getCachedAllowedOrigins(allowedOriginsEnv)
+	_, ok := allowedMap[normOrigin]
+	return ok
 }
 
 // CORS adds Cross-Origin Resource Sharing headers.

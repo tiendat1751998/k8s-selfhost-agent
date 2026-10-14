@@ -249,6 +249,7 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stdinReader, stdinWriter := io.Pipe()
+	defer stdinReader.Close()
 	defer stdinWriter.Close()
 
 	sizeQueue := newTerminalSizeQueue()
@@ -258,6 +259,23 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 
 	execCtx, cancelExec := context.WithCancel(r.Context())
 	defer cancelExec()
+
+	stdinChan := make(chan []byte, 64)
+	go func() {
+		for {
+			select {
+			case <-execCtx.Done():
+				return
+			case chunk, ok := <-stdinChan:
+				if !ok {
+					return
+				}
+				if _, err := stdinWriter.Write(chunk); err != nil {
+					return
+				}
+			}
+		}
+	}()
 
 	// Read pump for WebSocket messages
 	go func() {
@@ -287,8 +305,11 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 						}
 						continue
 					} else if ctrlMsg.Type == "stdin" {
-						if _, err := stdinWriter.Write([]byte(ctrlMsg.Data)); err != nil {
+						select {
+						case <-execCtx.Done():
 							return
+						case stdinChan <- []byte(ctrlMsg.Data):
+						default:
 						}
 						continue
 					} else if ctrlMsg.Type == "ping" {
@@ -299,8 +320,11 @@ func (h *K8sExecHandler) HandleExec(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-			if _, err := stdinWriter.Write(data); err != nil {
+			select {
+			case <-execCtx.Done():
 				return
+			case stdinChan <- data:
+			default:
 			}
 		}
 	}()

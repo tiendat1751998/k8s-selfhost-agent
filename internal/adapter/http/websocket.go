@@ -9,12 +9,14 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
+	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
@@ -75,6 +77,7 @@ type WSHub struct {
 	welcomeMessage []byte
 	done           chan struct{}
 	mu             sync.RWMutex
+	dropCount      atomic.Uint64
 }
 
 type wsClient struct {
@@ -82,6 +85,7 @@ type wsClient struct {
 	conn     *websocket.Conn
 	send     chan []byte
 	TenantID string
+	Role     string
 }
 
 // NewWSHub creates a new WebSocket hub.
@@ -146,10 +150,16 @@ func (h *WSHub) Run(ctx context.Context) {
 		case message := <-h.broadcast:
 			h.mu.Lock()
 			for client := range h.clients {
-				// Filter broadcast events strictly by client.TenantID.
-				// If message has a specified tenant and client doesn't match, do NOT send message.
-				if message.tenantID != "" && client.TenantID != message.tenantID {
-					continue
+				// Filter broadcast events strictly by client.TenantID and Role.
+				if message.tenantID != "" {
+					if client.TenantID != message.tenantID && client.Role != "platform_admin" {
+						continue
+					}
+				} else {
+					// Empty tenant: deliver only to default tenant, untyped, or platform_admin
+					if client.TenantID != "" && client.TenantID != "default" && client.Role != "platform_admin" {
+						continue
+					}
 				}
 				select {
 				case client.send <- message.data:
@@ -177,8 +187,13 @@ func (h *WSHub) Broadcast(msg WSMessage) {
 	select {
 	case h.broadcast <- item:
 	default:
-		logger.Get().Warn("WebSocket broadcast channel full, dropping message")
+		h.dropCount.Add(1)
 	}
+}
+
+// DroppedMessages returns the total count of dropped broadcast messages.
+func (h *WSHub) DroppedMessages() uint64 {
+	return h.dropCount.Load()
 }
 
 // ClientCount returns the number of connected clients.
@@ -230,11 +245,17 @@ func (h *WSHub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		tenantID = r.Header.Get("X-Tenant-ID")
 	}
 
+	role := tenancy.UserRoleFromContext(r.Context())
+	if role == "" {
+		role = r.URL.Query().Get("role")
+	}
+
 	client := &wsClient{
 		hub:      h,
 		conn:     conn,
 		send:     make(chan []byte, 256),
 		TenantID: tenantID,
+		Role:     role,
 	}
 
 	select {
@@ -315,7 +336,40 @@ func NewWSBridge(hub *WSHub) *WSBridge {
 	return &WSBridge{Hub: hub}
 }
 
-// Broadcast sends a message to the hub.
+// extractTenantID attempts to retrieve the tenant ID from the broadcast payload.
+func extractTenantID(data interface{}) string {
+	if data == nil {
+		return ""
+	}
+	switch v := data.(type) {
+	case *incident.Incident:
+		if v != nil {
+			return v.TenantID
+		}
+	case incident.Incident:
+		return v.TenantID
+	case interface{ GetTenantID() string }:
+		return v.GetTenantID()
+	case map[string]interface{}:
+		if tid, ok := v["tenant_id"].(string); ok {
+			return tid
+		}
+		if tid, ok := v["TenantID"].(string); ok {
+			return tid
+		}
+	case map[string]string:
+		if tid, ok := v["tenant_id"]; ok {
+			return tid
+		}
+		if tid, ok := v["TenantID"]; ok {
+			return tid
+		}
+	}
+	return ""
+}
+
+// Broadcast sends a message to the hub with tenant isolation.
 func (b *WSBridge) Broadcast(msgType string, data interface{}) {
-	b.Hub.Broadcast(WSMessage{Type: msgType, Data: data})
+	tenantID := extractTenantID(data)
+	b.Hub.Broadcast(WSMessage{Type: msgType, Data: data, TenantID: tenantID})
 }

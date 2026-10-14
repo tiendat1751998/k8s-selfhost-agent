@@ -146,16 +146,44 @@ func testComputeHostConnection(ctx context.Context, host *docker.ComputeHost) er
 		opts = append(opts, client.WithAPIVersionNegotiation())
 	}
 
-	if host.TLSEnabled && host.TLSCA != "" && host.TLSCert != "" && host.TLSKey != "" {
-		tlsConfig, err := configureDockerTLS(host.TLSCA, host.TLSCert, host.TLSKey)
-		if err != nil {
-			return fmt.Errorf("tls configuration error: %w", err)
+	guard := hostTesterGuard()
+	endpoint := strings.TrimSpace(host.Endpoint)
+
+	// Attach SSRF-guarded transport for network endpoints (tcp, http, https)
+	if !strings.HasPrefix(endpoint, "unix://") && !strings.HasPrefix(endpoint, "npipe://") && endpoint != "" {
+		checkURL := endpoint
+		if strings.HasPrefix(checkURL, "tcp://") {
+			checkURL = "http://" + strings.TrimPrefix(checkURL, "tcp://")
+		} else if !strings.HasPrefix(checkURL, "http://") && !strings.HasPrefix(checkURL, "https://") {
+			checkURL = "http://" + checkURL
 		}
-		opts = append(opts, client.WithHTTPClient(&http.Client{
-			Transport: &http.Transport{
+		parsedURL, err := guard.ValidateURL(checkURL, "http", "https")
+		if err != nil {
+			return fmt.Errorf("validating docker endpoint: %w", err)
+		}
+		if ip := net.ParseIP(parsedURL.Hostname()); ip != nil {
+			if err := guard.ValidateIP(ip); err != nil {
+				return fmt.Errorf("docker endpoint ip blocked: %w", err)
+			}
+		}
+
+		var transport *http.Transport
+		if host.TLSEnabled && host.TLSCA != "" && host.TLSCert != "" && host.TLSKey != "" {
+			tlsConfig, err := configureDockerTLS(host.TLSCA, host.TLSCert, host.TLSKey)
+			if err != nil {
+				return fmt.Errorf("tls configuration error: %w", err)
+			}
+			transport = &http.Transport{
 				TLSClientConfig: tlsConfig,
-			},
-			Timeout: 5 * time.Second,
+				DialContext:     guard.DialContext,
+			}
+		} else {
+			transport = guard.NewTransport()
+		}
+
+		opts = append(opts, client.WithHTTPClient(&http.Client{
+			Transport: transport,
+			Timeout:   5 * time.Second,
 		}))
 	}
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	corev1 "k8s.io/api/core/v1"
@@ -16,12 +17,21 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
+	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
+
+var logScanBufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 64*1024)
+		return &b
+	},
+}
 
 // K8sLogsHandler provides HTTP handlers for retrieving and streaming Kubernetes pod logs.
 type K8sLogsHandler struct {
 	defaultClient kubernetes.Interface
 	clientManager *cluster.ClientManager
+	redactor      *logengine.InStreamRedactor
 }
 
 // NewK8sLogsHandler creates a new K8sLogsHandler.
@@ -29,6 +39,7 @@ func NewK8sLogsHandler(defaultClient kubernetes.Interface, cm *cluster.ClientMan
 	return &K8sLogsHandler{
 		defaultClient: defaultClient,
 		clientManager: cm,
+		redactor:      logengine.NewInStreamRedactor(),
 	}
 }
 
@@ -147,9 +158,13 @@ func (h *K8sLogsHandler) HandlePodLogs(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to read logs", err)
 			return
 		}
+		rawLogs := string(logsBytes)
+		if h.redactor != nil {
+			rawLogs = h.redactor.MaskString(rawLogs)
+		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"data": map[string]string{
-				"logs": string(logsBytes),
+				"logs": rawLogs,
 			},
 		})
 		return
@@ -169,9 +184,30 @@ func (h *K8sLogsHandler) streamSinglePodLogs(w http.ResponseWriter, r *http.Requ
 		flusher.Flush()
 	}
 
+	done := make(chan struct{})
+	defer close(done)
+
+	// Cancellation watcher goroutine tied to r.Context().Done() that calls stream.Close()
+	// immediately unblocking scanner.Scan()
+	go func() {
+		select {
+		case <-r.Context().Done():
+			if closer, ok := stream.(io.Closer); ok {
+				_ = closer.Close()
+			}
+		case <-done:
+		}
+	}()
+
 	scanner := bufio.NewScanner(stream)
-	buf := make([]byte, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
+	bufPtr := logScanBufPool.Get().(*[]byte)
+	defer logScanBufPool.Put(bufPtr)
+	scanner.Buffer(*bufPtr, 1024*1024)
+
+	redactor := h.redactor
+	if redactor == nil {
+		redactor = logengine.NewInStreamRedactor()
+	}
 
 	for scanner.Scan() {
 		select {
@@ -180,7 +216,7 @@ func (h *K8sLogsHandler) streamSinglePodLogs(w http.ResponseWriter, r *http.Requ
 		default:
 		}
 
-		line := scanner.Text()
+		line := redactor.MaskString(scanner.Text())
 		if _, err := fmt.Fprintf(w, "data: %s\n\n", line); err != nil {
 			return
 		}
@@ -189,4 +225,12 @@ func (h *K8sLogsHandler) streamSinglePodLogs(w http.ResponseWriter, r *http.Requ
 		}
 	}
 }
+
+func (h *K8sLogsHandler) redactLogString(s string) string {
+	if h.redactor != nil {
+		return h.redactor.MaskString(s)
+	}
+	return s
+}
+
 
