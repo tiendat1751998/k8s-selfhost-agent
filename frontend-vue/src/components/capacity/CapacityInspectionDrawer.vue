@@ -176,3 +176,8 @@ const recommendation = computed(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/components/capacity-drawers.css';
+</style>
+

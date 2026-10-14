@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { reactive } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import type { CapacityPolicy } from '../../composables/useCapacityForecast'
@@ -132,3 +132,7 @@ function handleSubmit() {
     </div>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/components/capacity-drawers.css';
+</style>

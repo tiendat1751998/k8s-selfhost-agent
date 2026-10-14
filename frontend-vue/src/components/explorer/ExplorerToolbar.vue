@@ -236,3 +236,9 @@ function handleMoreActionSelect(actionId: string) {
     </div>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/explorer.css';
+@import '../../assets/styles/components/explorer-toolbar.css';
+</style>
+

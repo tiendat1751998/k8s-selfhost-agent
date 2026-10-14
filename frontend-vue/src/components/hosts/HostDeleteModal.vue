@@ -44,3 +44,8 @@ const emit = defineEmits<{
     </div>
   </ModalDrawer>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/infra-hosts.css';
+</style>
+

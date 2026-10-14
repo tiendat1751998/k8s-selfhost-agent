@@ -66,3 +66,7 @@ const emit = defineEmits<{
     </template>
   </ModalDrawer>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/incidents.css';
+</style>

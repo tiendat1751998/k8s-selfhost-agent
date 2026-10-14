@@ -141,4 +141,5 @@ const isWorkload = computed(() => {
 
 <style scoped>
 @import '../../assets/styles/views/explorer.css';
+@import '../../assets/styles/components/explorer-details.css';
 </style>

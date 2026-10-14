@@ -127,3 +127,8 @@ function formatTime(d?: string) {
     </div>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/incidents.css';
+</style>
+

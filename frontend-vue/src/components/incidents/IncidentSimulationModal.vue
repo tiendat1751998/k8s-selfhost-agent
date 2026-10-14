@@ -133,3 +133,8 @@ const simulationScenarios: SimulationScenario[] = [
     </template>
   </ModalDrawer>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/incidents.css';
+</style>
+

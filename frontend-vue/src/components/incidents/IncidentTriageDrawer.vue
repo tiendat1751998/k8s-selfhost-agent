@@ -252,3 +252,8 @@ const emit = defineEmits<{
     </div>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/incidents.css';
+</style>
+

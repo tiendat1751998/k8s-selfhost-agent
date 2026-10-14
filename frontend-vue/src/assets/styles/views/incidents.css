@@ -197,12 +197,13 @@
 .border-sev-low { border-left: 3px solid rgba(52, 211, 153, 0.6) !important; }
 
 .card-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.item-title-group { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; }
-.item-pod { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-title-group { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; flex: 1; }
+.item-pod { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 .item-ns { font-size: 11px; color: #94a3b8; white-space: nowrap; flex-shrink: 0; }
 .card-badges { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
 .card-item-bot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; }
-.type-badge { background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.2); padding: 2px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
+.card-bot-left { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.type-badge { background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.2); padding: 2px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
 .time-stamp-clean { color: var(--text-muted); font-size: 10.5px; white-space: nowrap; flex-shrink: 0; }
 
 /* Right Pane: Inspector Container */
@@ -331,6 +332,7 @@
 .right-pane-wrapper { display: flex; flex-direction: column; min-width: 0; }
 @media (min-width: 641px) {
   .mobile-only { display: none !important; }
+  .mobile-command-bar.mobile-only { display: none !important; }
   .mobile-back-bar { display: none !important; }
 }
 
@@ -357,6 +359,7 @@
 @media (max-width: 640px) {
   .view-container { gap: 8px; padding: 0 4px; }
   .desktop-only { display: none !important; }
+  .incidents-toolbar-sleek.desktop-only { display: none !important; }
 
   /* Sleek 40px View Command Bar */
   .mobile-command-bar {

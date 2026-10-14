@@ -101,3 +101,8 @@ const emit = defineEmits<{
     </div>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/infra-hosts.css';
+</style>
+

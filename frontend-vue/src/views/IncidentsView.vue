@@ -167,10 +167,7 @@ function formatRelativeTime(dateStr?: string): string {
             @click="handleCardSelect(inc)"
           >
             <div class="card-item-top">
-              <div class="item-title-group">
-                <span class="item-pod" :title="inc.pod_name">{{ inc.pod_name }}</span>
-                <span class="item-ns font-mono">{{ inc.namespace }}</span>
-              </div>
+              <span class="item-pod" :title="inc.pod_name">{{ inc.pod_name }}</span>
               <div class="card-badges">
                 <StatusBadge :status="inc.severity" size="sm" />
                 <StatusBadge :status="inc.status" size="sm" />
@@ -178,7 +175,10 @@ function formatRelativeTime(dateStr?: string): string {
             </div>
 
             <div class="card-item-bot">
-              <span class="type-badge font-mono">{{ inc.type }}</span>
+              <div class="card-bot-left">
+                <span class="type-badge font-mono">{{ inc.type }}</span>
+                <span class="item-ns font-mono">{{ inc.namespace }}</span>
+              </div>
               <span class="time-stamp-clean font-mono" :title="inc.created_at">
                 {{ formatRelativeTime(inc.created_at) }}
               </span>
