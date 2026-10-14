@@ -61,3 +61,79 @@ func TestAnsibleRunner_RunPlaybook(t *testing.T) {
 		t.Errorf("expected failed playbook execution when binary is not found")
 	}
 }
+
+func TestNormalizeWorkDir_RejectsForbiddenSystemPathsAndTraversal(t *testing.T) {
+	forbiddenPaths := []string{
+		"/etc",
+		"/root",
+		"/proc",
+		"/sys",
+		"/boot",
+		"/dev",
+		"/var/run",
+		"/usr",
+		"/bin",
+		"/sbin",
+		"../../etc",
+		"/etc/shadow",
+		"/root/.ssh",
+		`C:\Windows`,
+		`C:\Windows\System32`,
+		`c:/windows/system32`,
+		`C:\System32`,
+	}
+
+	for _, path := range forbiddenPaths {
+		_, err := iac.NormalizeWorkDir(path)
+		if err == nil {
+			t.Errorf("expected NormalizeWorkDir to reject forbidden path %q, got nil", path)
+		}
+	}
+}
+
+func TestNormalizeWorkDir_BaseDirContainment(t *testing.T) {
+	baseDir := t.TempDir()
+	subDir := baseDir + "/terraform/prod"
+
+	// Valid sub directory within baseDir
+	normalized, err := iac.NormalizeWorkDir(subDir, baseDir)
+	if err != nil {
+		t.Fatalf("expected valid subDir to succeed, got: %v", err)
+	}
+	if normalized == "" {
+		t.Errorf("expected non-empty normalized path")
+	}
+
+	// Escaping directory outside baseDir
+	outsideDir := t.TempDir()
+	_, err = iac.NormalizeWorkDir(outsideDir, baseDir)
+	if err == nil {
+		t.Errorf("expected outsideDir %q to be rejected when baseDir is %q", outsideDir, baseDir)
+	}
+}
+
+func TestTerraformRunner_RejectsForbiddenWorkingDir(t *testing.T) {
+	runner := iac.NewTerraformRunner("terraform-bin")
+	ctx := context.Background()
+
+	opts := iac.TerraformRunOptions{
+		WorkingDir: "/etc",
+	}
+	_, err := runner.Plan(ctx, opts, nil)
+	if err == nil {
+		t.Errorf("expected runner.Plan to reject WorkingDir '/etc'")
+	}
+}
+
+func TestAnsibleRunner_RejectsForbiddenWorkingDir(t *testing.T) {
+	runner := iac.NewAnsibleRunner("ansible-bin")
+	ctx := context.Background()
+
+	opts := iac.AnsiblePlaybookOptions{
+		WorkingDir: "/root",
+	}
+	_, err := runner.RunPlaybook(ctx, opts, nil)
+	if err == nil {
+		t.Errorf("expected runner.RunPlaybook to reject WorkingDir '/root'")
+	}
+}

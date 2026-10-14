@@ -11,14 +11,17 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/datdt/k8sselfhost/internal/domain/storage"
-	"github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
-	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // VolumeMetricsProvider defines the interface for fetching real volume disk usage.
 type VolumeMetricsProvider interface {
 	GetVolumeMetrics(ctx context.Context, client kubernetes.Interface, namespace, pvcName string) (*int64, error)
+}
+
+// ClusterClientsetResolver provides cluster-aware Kubernetes client resolution.
+type ClusterClientsetResolver interface {
+	GetClusterClient(ctx context.Context, clusterID string) (kubernetes.Interface, error)
 }
 
 // VolumeService defines the business operations for distributed volume management.
@@ -31,12 +34,11 @@ type VolumeService interface {
 
 // VolumeUsecase implements VolumeService with Kubernetes cluster interaction.
 type VolumeUsecase struct {
-	k8sClient              kubernetes.Interface
-	clientManager          *cluster.ClientManager
-	metricsProvider        VolumeMetricsProvider
-	defaultMetricsProvider VolumeMetricsProvider
-	fencingHelper          *CSIFencingHelper
-	logger                 *zap.Logger
+	k8sClient       kubernetes.Interface
+	clientResolver  ClusterClientsetResolver
+	metricsProvider VolumeMetricsProvider
+	fencingHelper   *CSIFencingHelper
+	logger          *zap.Logger
 }
 
 // VolumeUsecaseOption configures VolumeUsecase instances.
@@ -50,16 +52,15 @@ func WithMetricsProvider(provider VolumeMetricsProvider) VolumeUsecaseOption {
 }
 
 // NewVolumeUsecase creates a new VolumeUsecase instance.
-func NewVolumeUsecase(k8sClient kubernetes.Interface, cm *cluster.ClientManager, logger *zap.Logger, opts ...VolumeUsecaseOption) *VolumeUsecase {
+func NewVolumeUsecase(k8sClient kubernetes.Interface, resolver ClusterClientsetResolver, logger *zap.Logger, opts ...VolumeUsecaseOption) *VolumeUsecase {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 	u := &VolumeUsecase{
-		k8sClient:              k8sClient,
-		clientManager:          cm,
-		defaultMetricsProvider: infraK8s.NewKubeletVolumeMetricsProvider(),
-		fencingHelper:          NewCSIFencingHelper(),
-		logger:                 logger,
+		k8sClient:      k8sClient,
+		clientResolver: resolver,
+		fencingHelper:  NewCSIFencingHelper(),
+		logger:         logger,
 	}
 	for _, opt := range opts {
 		opt(u)
@@ -78,8 +79,8 @@ func (u *VolumeUsecase) FencingHelper() *CSIFencingHelper {
 }
 
 func (u *VolumeUsecase) getK8sClient(ctx context.Context, clusterID string) (kubernetes.Interface, error) {
-	if u.clientManager != nil && clusterID != "" && clusterID != "local" && clusterID != "default" && clusterID != "in-cluster" {
-		cli, err := u.clientManager.GetK8sClient(ctx, clusterID)
+	if u.clientResolver != nil && clusterID != "" && clusterID != "local" && clusterID != "default" && clusterID != "in-cluster" {
+		cli, err := u.clientResolver.GetClusterClient(ctx, clusterID)
 		if err == nil && cli != nil {
 			return cli, nil
 		}
@@ -92,7 +93,7 @@ func (u *VolumeUsecase) getK8sClient(ctx context.Context, clusterID string) (kub
 		return u.k8sClient, nil
 	}
 
-	return nil, infraK8s.ErrK8sUnavailable
+	return nil, domainerrors.ErrK8sUnavailable
 }
 
 func (u *VolumeUsecase) discoverPVCNamespace(ctx context.Context, client kubernetes.Interface, name string) string {
@@ -152,9 +153,6 @@ func (u *VolumeUsecase) ListVolumes(ctx context.Context, clusterID string) ([]st
 		usageSource := storage.UsageSourceUnknown
 
 		provider := u.metricsProvider
-		if provider == nil {
-			provider = u.defaultMetricsProvider
-		}
 		if provider != nil {
 			if uBytes, mErr := provider.GetVolumeMetrics(ctx, client, pvc.Namespace, pvc.Name); mErr == nil && uBytes != nil {
 				uVal := *uBytes

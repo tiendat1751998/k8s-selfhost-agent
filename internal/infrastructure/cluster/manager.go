@@ -245,3 +245,51 @@ func (m *ClientManager) PingDB(ctx context.Context) error {
 	}
 	return nil
 }
+
+// GetClusterClient resolves a kubernetes.Interface client for clusterID, satisfying clean architecture ports.
+func (m *ClientManager) GetClusterClient(ctx context.Context, clusterID string) (kubernetes.Interface, error) {
+	if m == nil {
+		return nil, fmt.Errorf("client manager is not configured")
+	}
+	return m.GetK8sClient(ctx, clusterID)
+}
+
+// ClientManagerAdapter adapts ClientManager to clean architecture usecase client resolver ports.
+type ClientManagerAdapter struct {
+	mgr *ClientManager
+}
+
+// NewClientManagerAdapter wraps ClientManager as a generic cluster resolver.
+func NewClientManagerAdapter(mgr *ClientManager) *ClientManagerAdapter {
+	return &ClientManagerAdapter{mgr: mgr}
+}
+
+// GetClusterClient delegates to ClientManager.GetClusterClient.
+func (a *ClientManagerAdapter) GetClusterClient(ctx context.Context, clusterID string) (kubernetes.Interface, error) {
+	if a == nil || a.mgr == nil {
+		return nil, fmt.Errorf("client manager is not configured")
+	}
+	return a.mgr.GetClusterClient(ctx, clusterID)
+}
+
+// GetK8sClient delegates to ClientManager.GetK8sClient returning kubernetes.Interface.
+func (a *ClientManagerAdapter) GetK8sClient(ctx context.Context, clusterID string) (kubernetes.Interface, error) {
+	if a == nil || a.mgr == nil {
+		return nil, fmt.Errorf("client manager is not configured")
+	}
+	return a.mgr.GetK8sClient(ctx, clusterID)
+}
+
+// GetK8sRestConfig delegates to ClientManager.GetK8sRestConfig.
+func (a *ClientManagerAdapter) GetK8sRestConfig(ctx context.Context, clusterID string) (*rest.Config, error) {
+	if a == nil || a.mgr == nil {
+		return nil, fmt.Errorf("client manager is not configured")
+	}
+	return a.mgr.GetK8sRestConfig(ctx, clusterID)
+}
+
+// AsClusterResolver returns a ClientManagerAdapter wrapping this ClientManager.
+func (m *ClientManager) AsClusterResolver() *ClientManagerAdapter {
+	return NewClientManagerAdapter(m)
+}
+
