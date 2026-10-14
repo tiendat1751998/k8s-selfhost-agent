@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +34,24 @@ const (
 	AnnotationGitOpsDependsOn = "gitops.k8sselfhost.io/depends-on"
 )
 
+var commitSHARegex = regexp.MustCompile(`^[a-fA-F0-9]{7,64}$`)
+
+// ValidateCommitSHA verifies that a commit SHA is not empty, does not start with '-',
+// and matches the hexadecimal git commit hash pattern (short SHA or full SHA).
+func ValidateCommitSHA(sha string) error {
+	trimmed := strings.TrimSpace(sha)
+	if trimmed == "" {
+		return errors.New("commit SHA cannot be empty")
+	}
+	if strings.HasPrefix(trimmed, "-") {
+		return fmt.Errorf("commit SHA %q cannot start with '-'", sha)
+	}
+	if !commitSHARegex.MatchString(trimmed) {
+		return fmt.Errorf("commit SHA %q does not match hex pattern ^[a-fA-F0-9]{7,64}$", sha)
+	}
+	return nil
+}
+
 // GitCommander abstracts git CLI invocation for monotonic commit verification.
 type GitCommander interface {
 	IsAncestor(ctx context.Context, repoPath, ancestorSHA, descendantSHA string) (bool, error)
@@ -43,7 +62,13 @@ type DefaultGitCommander struct{}
 
 // IsAncestor checks if ancestorSHA is an ancestor of descendantSHA via git merge-base --is-ancestor.
 func (g *DefaultGitCommander) IsAncestor(ctx context.Context, repoPath, ancestorSHA, descendantSHA string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "merge-base", "--is-ancestor", ancestorSHA, descendantSHA)
+	if err := ValidateCommitSHA(ancestorSHA); err != nil {
+		return false, fmt.Errorf("invalid ancestorSHA: %w", err)
+	}
+	if err := ValidateCommitSHA(descendantSHA); err != nil {
+		return false, fmt.Errorf("invalid descendantSHA: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "merge-base", "--is-ancestor", "--", ancestorSHA, descendantSHA)
 	err := cmd.Run()
 	if err == nil {
 		return true, nil
@@ -106,6 +131,9 @@ func (m *SyncWaveManager) Metrics() *domainGitops.SyncWaveMetrics {
 func (m *SyncWaveManager) VerifyCommitMonotonicOrdering(ctx context.Context, repoPath string, incomingSHA, currentSHA string) (bool, error) {
 	if incomingSHA == "" || currentSHA == "" {
 		return false, errors.New("incomingSHA and currentSHA must not be empty")
+	}
+	if strings.HasPrefix(strings.TrimSpace(incomingSHA), "-") || strings.HasPrefix(strings.TrimSpace(currentSHA), "-") {
+		return false, errors.New("commit SHA cannot start with '-'")
 	}
 
 	if incomingSHA == currentSHA {

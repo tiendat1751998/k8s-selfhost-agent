@@ -319,6 +319,9 @@ func (m *VFSManager) RemountOrUnmountHungNFS(ctx context.Context, mountPoint str
 	if trimmed == "" {
 		return domainerrors.NewValidation("mount_point", "mount_point cannot be empty for unmount")
 	}
+	if strings.HasPrefix(trimmed, "-") {
+		return domainerrors.NewValidation("mount_point", "mount_point cannot start with '-'")
+	}
 
 	m.logger.Info("Executing forced lazy unmount on hung storage mount", zap.String("mount", trimmed))
 	if err := m.unmounter.LazyUnmount(ctx, trimmed); err != nil {
@@ -456,7 +459,11 @@ func (s *defaultProcScanner) ScanDStateProcesses(ctx context.Context, maxDuratio
 type defaultUnmounter struct{}
 
 func (u *defaultUnmounter) LazyUnmount(ctx context.Context, mountPoint string) error {
-	cmd := exec.CommandContext(ctx, "umount", "-f", "-l", mountPoint)
+	trimmed := strings.TrimSpace(mountPoint)
+	if trimmed == "" || strings.HasPrefix(trimmed, "-") {
+		return fmt.Errorf("invalid mount point %q: cannot be empty or start with '-'", mountPoint)
+	}
+	cmd := exec.CommandContext(ctx, "umount", "-f", "-l", "--", trimmed)
 	return cmd.Run()
 }
 

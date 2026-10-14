@@ -145,6 +145,10 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	keyword := firstNonEmpty(query.Get("keyword"), query.Get("query"), query.Get("search_text"), query.Get("q"))
 
 	tenantID := resolveTenant(r.Context(), r)
+	if tenancy.UserRoleFromContext(r.Context()) == "platform_admin" {
+		reqTenant := firstNonEmpty(r.Header.Get("X-Tenant-ID"), query.Get("tenant_id"), query.Get("tenant"))
+		tenantID = strings.TrimSpace(reqTenant)
+	}
 
 	// SEC-07: Validate node against registered compute hosts before dialing or upgrading
 	var agentURL string

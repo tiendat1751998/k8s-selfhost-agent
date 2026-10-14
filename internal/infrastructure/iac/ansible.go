@@ -34,6 +34,7 @@ type AnsibleResult struct {
 type AnsibleRunner struct {
 	binaryPath     string
 	defaultTimeout time.Duration
+	baseDir        string
 	locks          *syncutil.KeyedMutex
 }
 
@@ -60,6 +61,14 @@ func (r *AnsibleRunner) DefaultTimeout() time.Duration {
 	return r.defaultTimeout
 }
 
+func (r *AnsibleRunner) SetBaseDir(baseDir string) {
+	r.baseDir = baseDir
+}
+
+func (r *AnsibleRunner) BaseDir() string {
+	return r.baseDir
+}
+
 func (r *AnsibleRunner) RunPlaybook(ctx context.Context, opts AnsiblePlaybookOptions, outStream io.Writer) (*AnsibleResult, error) {
 	start := time.Now()
 
@@ -71,7 +80,7 @@ func (r *AnsibleRunner) RunPlaybook(ctx context.Context, opts AnsiblePlaybookOpt
 			dir = "."
 		}
 	}
-	workDir, err := normalizeWorkDir(dir)
+	workDir, err := normalizeWorkDir(dir, r.baseDir)
 	if err != nil {
 		return nil, err
 	}

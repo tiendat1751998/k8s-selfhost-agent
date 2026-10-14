@@ -215,3 +215,48 @@ func TestConcurrentProbes_NoRace(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestValidateInterfaceName(t *testing.T) {
+	valid := []string{"eth0", "wg0", "tun0", "ens3", "br0", "bond0.100", "docker_0"}
+	for _, iface := range valid {
+		if err := usecase.ValidateInterfaceName(iface); err != nil {
+			t.Errorf("expected %q to be valid, got: %v", iface, err)
+		}
+	}
+
+	invalid := []string{
+		"",
+		"   ",
+		"-A INPUT",
+		"-j DROP",
+		"eth0 -j DROP",
+		"eth0; rm -rf /",
+		"eth0`whoami`",
+		"eth0$(id)",
+		"eth0\nDROP",
+		"interface-name-too-long-for-linux", // > 15 chars
+	}
+	for _, iface := range invalid {
+		if err := usecase.ValidateInterfaceName(iface); err == nil {
+			t.Errorf("expected %q to be rejected, got nil error", iface)
+		}
+	}
+}
+
+func TestTunnelManager_EnforceMSSClamping_FlagInjectionRejected(t *testing.T) {
+	mgr := usecase.NewTunnelManager()
+	ctx := context.Background()
+
+	malicious := []string{"eth0 -j DROP", "-A INPUT", "eth0; rm -rf /", ""}
+	for _, iface := range malicious {
+		err := mgr.EnforceMSSClamping(ctx, iface, 1420)
+		if err == nil {
+			t.Errorf("expected EnforceMSSClamping to reject %q", iface)
+		}
+		rules := mgr.GenerateIPTablesMSSRules(iface, 1380)
+		if len(rules) != 0 {
+			t.Errorf("expected GenerateIPTablesMSSRules to return nil for %q, got: %v", iface, rules)
+		}
+	}
+}
+
