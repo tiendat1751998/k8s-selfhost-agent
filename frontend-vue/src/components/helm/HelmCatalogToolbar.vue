@@ -231,3 +231,8 @@ const emit = defineEmits<{
     </nav>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/helm.css';
+</style>
+

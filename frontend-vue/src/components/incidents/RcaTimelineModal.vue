@@ -106,3 +106,8 @@ function getIconForType(type: RcaTimelineEvent['type']): string {
     </template>
   </ModalDrawer>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/incidents.css';
+</style>
+

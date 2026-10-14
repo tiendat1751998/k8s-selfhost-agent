@@ -201,3 +201,8 @@ const hosts = computed(() => props.hosts || { length: props.totalHosts ?? 0 })
     </button>
   </div>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/infra-hosts.css';
+</style>
+

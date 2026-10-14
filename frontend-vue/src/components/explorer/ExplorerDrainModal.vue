@@ -82,3 +82,8 @@ const drainOptions = ref<DrainOptions>({
     </template>
   </ModalDrawer>
 </template>
+
+<style scoped>
+@import '../../assets/styles/views/explorer.css';
+</style>
+
