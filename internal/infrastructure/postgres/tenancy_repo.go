@@ -23,7 +23,7 @@ func (r *tenancyRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *tenancyRepo) GetOrganizations(ctx context.Context) ([]tenancy.Organization, error) {
-	query, args := BuildTenantQuery(ctx, "SELECT id, name, tier FROM organizations ORDER BY id")
+	query, args := BuildTenantQuery(ctx, "SELECT id, name, tier FROM organizations ORDER BY id LIMIT 500")
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying organizations: %w", err)
@@ -42,7 +42,7 @@ func (r *tenancyRepo) GetOrganizations(ctx context.Context) ([]tenancy.Organizat
 }
 
 func (r *tenancyRepo) GetProjects(ctx context.Context) ([]tenancy.Project, error) {
-	query, args := BuildTenantQuery(ctx, "SELECT id, org_id, name, envs, workloads FROM projects ORDER BY id")
+	query, args := BuildTenantQuery(ctx, "SELECT id, org_id, name, envs, workloads FROM projects ORDER BY id LIMIT 500")
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying projects: %w", err)
@@ -65,7 +65,7 @@ func (r *tenancyRepo) GetProjects(ctx context.Context) ([]tenancy.Project, error
 }
 
 func (r *tenancyRepo) GetMembers(ctx context.Context) ([]tenancy.Member, error) {
-	query, args := BuildTenantQuery(ctx, "SELECT id, org_id, username, role, scope FROM tenant_members ORDER BY username")
+	query, args := BuildTenantQuery(ctx, "SELECT id, org_id, username, role, scope FROM tenant_members ORDER BY username LIMIT 500")
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying tenant members: %w", err)

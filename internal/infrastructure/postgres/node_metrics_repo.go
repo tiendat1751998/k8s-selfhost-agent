@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -72,52 +73,73 @@ func (r *nodeMetricsRepo) InsertBatch(ctx context.Context, rollups []nodemetrics
 		tenantID = defaultTenantUUID
 	}
 
-	query := `
-		INSERT INTO node_metric_rollups (
+	db := r.getDB(ctx)
+	const chunkSize = 200
+	for i := 0; i < len(rollups); i += chunkSize {
+		end := i + chunkSize
+		if end > len(rollups) {
+			end = len(rollups)
+		}
+		chunk := rollups[i:end]
+
+		var sb strings.Builder
+		sb.WriteString(`INSERT INTO node_metric_rollups (
 			id, tenant_id, node_id, node_name,
 			cpu_percent, cpu_peak, mem_used_bytes, mem_total_bytes, mem_percent,
 			disk_used_bytes, disk_total_bytes, disk_percent,
 			rx_bytes_per_sec, tx_bytes_per_sec, process_count, container_count,
 			status, resolution, recorded_at
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
-		)
-	`
-	db := r.getDB(ctx)
-	for _, nr := range rollups {
-		id := nr.ID
-		if id == "" {
-			id = uuid.NewString()
-		}
-		tID := nr.TenantID
-		if tID == "" {
-			tID = tenantID
-		}
-		tUUID, err := uuid.Parse(tID)
-		if err != nil {
-			tUUID = uuid.MustParse(defaultTenantUUID)
-		}
-		recAt := nr.RecordedAt
-		if recAt.IsZero() {
-			recAt = time.Now().UTC()
-		}
-		res := nr.Resolution
-		if res == "" {
-			res = "1m"
-		}
-		stat := nr.Status
-		if stat == "" {
-			stat = "online"
+		) VALUES `)
+
+		args := make([]any, 0, len(chunk)*19)
+		for j, nr := range chunk {
+			if j > 0 {
+				sb.WriteString(", ")
+			}
+			paramOffset := j * 19
+			fmt.Fprintf(&sb, "($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+				paramOffset+1, paramOffset+2, paramOffset+3, paramOffset+4,
+				paramOffset+5, paramOffset+6, paramOffset+7, paramOffset+8,
+				paramOffset+9, paramOffset+10, paramOffset+11, paramOffset+12,
+				paramOffset+13, paramOffset+14, paramOffset+15, paramOffset+16,
+				paramOffset+17, paramOffset+18, paramOffset+19,
+			)
+
+			id := nr.ID
+			if id == "" {
+				id = uuid.NewString()
+			}
+			tID := nr.TenantID
+			if tID == "" {
+				tID = tenantID
+			}
+			tUUID, err := uuid.Parse(tID)
+			if err != nil {
+				tUUID = uuid.MustParse(defaultTenantUUID)
+			}
+			recAt := nr.RecordedAt
+			if recAt.IsZero() {
+				recAt = time.Now().UTC()
+			}
+			res := nr.Resolution
+			if res == "" {
+				res = "1m"
+			}
+			stat := nr.Status
+			if stat == "" {
+				stat = "online"
+			}
+
+			args = append(args,
+				id, tUUID, nr.NodeID, nr.NodeName,
+				nr.CPUPercent, nr.CPUPeak, nr.MemUsedBytes, nr.MemTotalBytes, nr.MemPercent,
+				nr.DiskUsedBytes, nr.DiskTotalBytes, nr.DiskPercent,
+				nr.RxBytesPerSec, nr.TxBytesPerSec, nr.ProcessCount, nr.ContainerCount,
+				stat, res, recAt,
+			)
 		}
 
-		_, err = db.Exec(ctx, query,
-			id, tUUID, nr.NodeID, nr.NodeName,
-			nr.CPUPercent, nr.CPUPeak, nr.MemUsedBytes, nr.MemTotalBytes, nr.MemPercent,
-			nr.DiskUsedBytes, nr.DiskTotalBytes, nr.DiskPercent,
-			nr.RxBytesPerSec, nr.TxBytesPerSec, nr.ProcessCount, nr.ContainerCount,
-			stat, res, recAt,
-		)
-		if err != nil {
+		if _, err := db.Exec(ctx, sb.String(), args...); err != nil {
 			return fmt.Errorf("inserting node metric rollup: %w", err)
 		}
 	}

@@ -25,6 +25,13 @@ func (r *runbookRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *runbookRepo) List(ctx context.Context, category string, limit, offset int) ([]runbook.Runbook, int, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
 	var query string
 	var countQuery string
 	var args []interface{}
