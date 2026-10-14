@@ -32,11 +32,12 @@ type Config struct {
 
 // GitOpsConfig holds settings for GitOps repository integrations.
 type GitOpsConfig struct {
-	GitHubToken string `mapstructure:"github_token"`
-	GitLabToken string `mapstructure:"gitlab_token"`
-	GitLabURL   string `mapstructure:"gitlab_url"`
-	GiteaToken  string `mapstructure:"gitea_token"`
-	GiteaURL    string `mapstructure:"gitea_url"`
+	GitHubToken   string `mapstructure:"github_token"`
+	GitLabToken   string `mapstructure:"gitlab_token"`
+	GitLabURL     string `mapstructure:"gitlab_url"`
+	GiteaToken    string `mapstructure:"gitea_token"`
+	GiteaURL      string `mapstructure:"gitea_url"`
+	WebhookSecret string `mapstructure:"webhook_secret"`
 }
 
 // TelegramConfig holds settings for the Telegram SRE alert bot.
@@ -244,6 +245,7 @@ func Load() (*Config, error) {
 	v.SetDefault("client.qps", float32(50))
 	v.SetDefault("client.burst", 100)
 	v.SetDefault("client.timeout", 30*time.Second)
+	v.SetDefault("gitops.webhook_secret", "")
 
 	// Environment variables
 	v.SetEnvPrefix("K8S")
@@ -380,6 +382,9 @@ func resolveEnvOverrides(cfg *Config) {
 	}
 	if envVal := getFirstEnv("GITEA_URL", "K8S_GITOPS_GITEA_URL"); envVal != "" {
 		cfg.GitOps.GiteaURL = envVal
+	}
+	if envVal := getFirstEnv("GITOPS_WEBHOOK_SECRET", "K8S_GITOPS_WEBHOOK_SECRET", "WEBHOOK_SECRET"); envVal != "" {
+		cfg.GitOps.WebhookSecret = envVal
 	}
 
 	// Telegram SRE bot token

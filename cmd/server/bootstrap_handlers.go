@@ -1,9 +1,12 @@
 package main
 
 import (
+	"os"
 	"time"
 
+	dockerclient "github.com/docker/docker/client"
 	"go.uber.org/zap"
+	"k8s.io/client-go/kubernetes"
 
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	"github.com/datdt/k8sselfhost/internal/domain/agent"
@@ -83,54 +86,91 @@ type platformHandlerParams struct {
 }
 
 func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
-	helmHome := p.cfg.Helm.HomeDir
+	var pgPool postgres.DBTX
+	var k8sClient *kubernetes.Clientset
+	var k8sAvailable bool
+	var dockerClient *dockerclient.Client
+	var dockerRepo domainDocker.Repository
+	if p.infra != nil {
+		if p.infra.pgClient != nil {
+			pgPool = p.infra.pgClient.Pool()
+		}
+		k8sClient = p.infra.k8sClient
+		k8sAvailable = p.infra.k8sAvailable
+		dockerClient = p.infra.dockerClient
+		dockerRepo = p.infra.dockerRepo
+	}
+
+	var helmHome string
+	var cookieSecure bool
+	if p.cfg != nil {
+		helmHome = p.cfg.Helm.HomeDir
+		cookieSecure = p.cfg.Server.CookieSecure
+	}
+
 	helmManager := helm.NewReleaseManager(p.clientManager, nil, helmHome)
 	helmHandler := adapthttp.NewHelmHandler(helmManager, p.auditRepo)
 	storageUsecase := usecaseStorage.NewVolumeUsecase(
-		p.infra.k8sClient,
+		k8sClient,
 		p.clientManager,
 		p.log,
 		usecaseStorage.WithMetricsProvider(infraK8s.NewKubeletVolumeMetricsProvider()),
 	)
 	storageHandler := adapthttp.NewStorageHandler(storageUsecase)
-	drUsecase := dr.NewDRUsecase(p.infra.k8sClient, p.clientManager, p.log)
-	remediationController := sre.NewRemediationController(p.infra.k8sClient, p.clientManager, p.log)
+	drUsecase := dr.NewDRUsecase(k8sClient, p.clientManager, p.log)
+	remediationController := sre.NewRemediationController(k8sClient, p.clientManager, p.log)
 	drHandler := adapthttp.NewDRHandler(drUsecase, remediationController, p.log)
-	gitopsHandler := adapthttp.NewGitOpsHandler(p.gitopsController)
-	iacHandler := adapthttp.NewIaCHandler(iac.NewTerraformRunner(""), iac.NewAnsibleRunner(""))
+
+	var gitopsOpts []adapthttp.GitOpsHandlerOption
+	webhookSecret := os.Getenv("GITOPS_WEBHOOK_SECRET")
+	if webhookSecret == "" && p.cfg != nil {
+		webhookSecret = p.cfg.GitOps.WebhookSecret
+	}
+	if webhookSecret != "" {
+		gitopsOpts = append(gitopsOpts, adapthttp.WithWebhookSecret([]byte(webhookSecret)))
+	}
+	gitopsHandler := adapthttp.NewGitOpsHandler(p.gitopsController, gitopsOpts...)
+
+	tfRunner := iac.NewTerraformRunner("")
+	ansibleRunner := iac.NewAnsibleRunner("")
+	if iacWorkspaceDir := os.Getenv("IAC_WORKSPACE_DIR"); iacWorkspaceDir != "" {
+		tfRunner.SetBaseDir(iacWorkspaceDir)
+		ansibleRunner.SetBaseDir(iacWorkspaceDir)
+	}
+	iacHandler := adapthttp.NewIaCHandler(tfRunner, ansibleRunner)
 	telegramHandler := adapthttp.NewTelegramHandler(p.telegramBot)
 
-	tenancyRepo := postgres.NewTenancyRepo(p.infra.pgClient.Pool())
+	tenancyRepo := postgres.NewTenancyRepo(pgPool)
 
 	var healthCenterHandler *adapthttp.HealthCenterHandler
-	if p.infra.k8sAvailable {
-		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(p.infra.k8sClient, p.clientManager))
+	if k8sAvailable {
+		healthCenterHandler = adapthttp.NewHealthCenterHandler(infraK8s.NewHealthCenterRepo(k8sClient, p.clientManager))
 	}
-	k8sResourceRepo := infraK8s.NewResourceRepo(p.infra.k8sClient, p.clientManager)
+	k8sResourceRepo := infraK8s.NewResourceRepo(k8sClient, p.clientManager)
 	k8sHandler := adapthttp.NewK8sResourceHandler(k8sResourceRepo, p.auditRepo)
-	k8sExecHandler := adapthttp.NewK8sExecHandler(p.infra.k8sClient, p.clientManager)
-	k8sLogsHandler := adapthttp.NewK8sLogsHandler(p.infra.k8sClient, p.clientManager)
+	k8sExecHandler := adapthttp.NewK8sExecHandler(k8sClient, p.clientManager)
+	k8sLogsHandler := adapthttp.NewK8sLogsHandler(k8sClient, p.clientManager)
 
 	bootstrapUsecase := usecaseCluster.NewBootstrapUsecase(k8sResourceRepo, p.clientManager, p.log)
 	k8sBootstrapHandler := adapthttp.NewK8sBootstrapHandler(bootstrapUsecase)
 
-	settingsRepo := postgres.NewSettingsRepo(p.infra.pgClient.Pool())
+	settingsRepo := postgres.NewSettingsRepo(pgPool)
 	settingsHandler := adapthttp.NewSettingsHandler(settingsRepo, p.log)
 
-	catalogRepo := postgres.NewCatalogRepo(p.infra.pgClient.Pool())
+	catalogRepo := postgres.NewCatalogRepo(pgPool)
 	catalogHandler := adapthttp.NewCatalogHandler(catalogRepo, p.log)
 
-	scaffoldRepo := postgres.NewScaffoldRepo(p.infra.pgClient.Pool())
+	scaffoldRepo := postgres.NewScaffoldRepo(pgPool)
 	scaffoldService := usecaseScaffold.NewService(scaffoldRepo, catalogRepo, usecaseScaffold.NewEngine())
 	scaffolderHandler := adapthttp.NewScaffoldHandler(scaffoldService, p.log)
 
-	pluginRepo := postgres.NewPluginRepo(p.infra.pgClient.Pool())
+	pluginRepo := postgres.NewPluginRepo(pgPool)
 	pluginHandler := adapthttp.NewPluginHandler(pluginRepo, p.log)
 
-	ecosystemRepo := postgres.NewEcosystemRepo(p.infra.pgClient.Pool())
+	ecosystemRepo := postgres.NewEcosystemRepo(pgPool)
 	var ecoOpts []usecaseEcosystem.Option
-	if p.infra.dockerClient != nil {
-		ecoOpts = append(ecoOpts, usecaseEcosystem.WithDockerClient(p.infra.dockerClient))
+	if dockerClient != nil {
+		ecoOpts = append(ecoOpts, usecaseEcosystem.WithDockerClient(dockerClient))
 	}
 	ecosystemUsecase := usecaseEcosystem.NewUsecase(ecosystemRepo, settingsRepo, httputil.NewSafeHTTPClient(5*time.Second), p.log, ecoOpts...)
 	ecosystemHandler := adapthttp.NewEcosystemHandler(ecosystemUsecase, p.log)
@@ -139,8 +179,8 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 	canaryHandler := adapthttp.NewCanaryHandler(canaryEngine)
 
 	var meshOpts []usecaseMesh.Option
-	if p.infra.k8sClient != nil {
-		meshOpts = append(meshOpts, usecaseMesh.WithKubernetesClient(p.infra.k8sClient))
+	if k8sClient != nil {
+		meshOpts = append(meshOpts, usecaseMesh.WithKubernetesClient(k8sClient))
 	}
 	if p.log != nil {
 		meshOpts = append(meshOpts, usecaseMesh.WithLogger(p.log))
@@ -156,28 +196,28 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 	return &adapthttp.PlatformHandlers{
 		AI:              adapthttp.NewAIHandler(p.registry),
 		Dashboard:       adapthttp.NewHandler(p.incRepo, p.reportRepo, p.prRepo, p.publisher, p.gitopsController),
-		Docker:          adapthttp.NewDockerHandler(p.infra.dockerRepo, p.computeHostRepo, p.authUsecase, p.metricsCollector),
+		Docker:          adapthttp.NewDockerHandler(dockerRepo, p.computeHostRepo, p.authUsecase, p.metricsCollector),
 		Overview:        p.overviewHandler,
-		Drift:           adapthttp.NewDriftHandler(postgres.NewDriftRepo(p.infra.pgClient.Pool())),
-		Correlation:     adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(p.infra.pgClient.Pool())),
-		Compliance:      adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(p.infra.pgClient.Pool())),
-		Tagging:         adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(p.infra.pgClient.Pool())),
-		Runbook:         adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(p.infra.pgClient.Pool()), p.auditRepo),
+		Drift:           adapthttp.NewDriftHandler(postgres.NewDriftRepo(pgPool)),
+		Correlation:     adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(pgPool)),
+		Compliance:      adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(pgPool)),
+		Tagging:         adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(pgPool)),
+		Runbook:         adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(pgPool), p.auditRepo),
 		Observability:   adapthttp.NewObservabilityHandler(p.obsRepo),
-		Capacity:        adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(p.metricsCollector, usecaseCapacity.WithComputeHostRepo(p.computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(p.infra.pgClient.Pool())))),
-		Changes:         adapthttp.NewChangeHandler(postgres.NewChangesRepo(p.infra.pgClient.Pool())),
+		Capacity:        adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(p.metricsCollector, usecaseCapacity.WithComputeHostRepo(p.computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(pgPool)))),
+		Changes:         adapthttp.NewChangeHandler(postgres.NewChangesRepo(pgPool)),
 		Promotion:       adapthttp.NewPromotionHandler(p.promotionUsecase),
 		Canary:          canaryHandler,
 		Mesh:            meshHandler,
-		Explorer:        adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(p.infra.k8sClient, p.infra.dockerRepo, p.clientManager)),
-		Reporting:       adapthttp.NewReportingHandler(postgres.NewReportingRepo(p.infra.pgClient.Pool())),
+		Explorer:        adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, p.clientManager)),
+		Reporting:       adapthttp.NewReportingHandler(postgres.NewReportingRepo(pgPool)),
 		HealthCenter:    healthCenterHandler,
 		Fleet:           adapthttp.NewFleetHandler(p.fleetRepo, p.auditRepo, p.importUsecase),
 		Audit:           adapthttp.NewAuditHandler(p.auditRepo),
-		Notification:    adapthttp.NewNotificationHandler(postgres.NewNotificationRepo(p.infra.pgClient.Pool())),
-		Automation:      adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(p.infra.pgClient.Pool())),
-		Timeline:        adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(p.infra.pgClient.Pool())),
-		Auth:            adapthttp.NewAuthHandler(p.authUsecase, p.userRepo, p.refreshTokenRepo, adapthttp.WithCookieSecure(p.cfg.Server.CookieSecure)),
+		Notification:    adapthttp.NewNotificationHandler(postgres.NewNotificationRepo(pgPool)),
+		Automation:      adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(pgPool)),
+		Timeline:        adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(pgPool)),
+		Auth:            adapthttp.NewAuthHandler(p.authUsecase, p.userRepo, p.refreshTokenRepo, adapthttp.WithCookieSecure(cookieSecure)),
 		Search:          adapthttp.NewSearchHandler(p.searchUsecase),
 		Cost:            adapthttp.NewCostHandler(usecaseCost.NewCalculator(p.computeHostRepo, p.metricsCollector)),
 		Backup:          adapthttp.NewBackupHandler(p.backupUsecase),
