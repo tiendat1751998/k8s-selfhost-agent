@@ -3,6 +3,7 @@ package main
 import (
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	domainIngestGuard "github.com/datdt/k8sselfhost/internal/domain/ingestguard"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	usecaseAPFGuard "github.com/datdt/k8sselfhost/internal/usecase/apfguard"
 	usecaseAuth "github.com/datdt/k8sselfhost/internal/usecase/auth"
 	usecaseCloudResilience "github.com/datdt/k8sselfhost/internal/usecase/cloudresilience"
@@ -38,7 +39,17 @@ import (
 // bootstrapSREHandlers instantiates all 30 SRE resilience managers and handlers.
 func bootstrapSREHandlers(p platformHandlerParams) *adapthttp.SREResilienceHandlers {
 	storageMgr := usecaseStorage.NewResiliencyManager(p.log)
-	cgroupScaler := usecaseNodeMetrics.NewCGroupScalerService(usecaseNodeMetrics.WithLogger(p.log))
+	var cgroupOpts []usecaseNodeMetrics.Option
+	if p.log != nil {
+		cgroupOpts = append(cgroupOpts, usecaseNodeMetrics.WithLogger(p.log))
+	}
+	if p.infra != nil && p.infra.k8sClient != nil {
+		cgroupOpts = append(cgroupOpts, usecaseNodeMetrics.WithKubernetesClient(p.infra.k8sClient))
+	}
+	if p.clientManager != nil {
+		cgroupOpts = append(cgroupOpts, usecaseNodeMetrics.WithClientManager(p.clientManager))
+	}
+	cgroupScaler := usecaseNodeMetrics.NewCGroupScalerService(cgroupOpts...)
 	jwksShield := usecaseAuth.NewJWKSShieldManager()
 	fencingMgr := usecaseCluster.NewFencingManager(nil, nil, nil, nil, p.log)
 	driftReconciler := usecaseSecretGuard.NewDriftReconciler(nil, nil)
@@ -51,6 +62,7 @@ func bootstrapSREHandlers(p platformHandlerParams) *adapthttp.SREResilienceHandl
 	finopsMgr := usecaseFinOpsGuard.NewFinOpsManager(nil, nil, nil, nil)
 	netscalerMgr := usecaseNetscaler.NewScalerManager(usecaseNetscaler.WithLogger(p.log))
 	vfsMgr := usecaseVFSWatchdog.NewVFSManager(usecaseVFSWatchdog.WithLogger(p.log))
+	// k8sResilienceMgr and apfMgr accept custom ClusterResilienceClient and ClusterAPFClient interfaces
 	k8sResilienceMgr := usecaseK8sResilience.NewResilienceManager(nil, p.log)
 	dbSafeguardMgr := usecaseDBSafeguard.NewSafeguardManager(nil, nil, nil, nil)
 	secDefenseMgr := usecaseSecDefense.NewDefenseManager(nil)
@@ -64,7 +76,12 @@ func bootstrapSREHandlers(p platformHandlerParams) *adapthttp.SREResilienceHandl
 	apfMgr := usecaseAPFGuard.NewAPFManager(nil, p.log)
 	transitNetMgr := usecaseTransitNet.NewRoutingManager(usecaseTransitNet.WithLogger(p.log))
 	spiffeMgr := usecaseSPIFFEGuard.NewIdentityManager(usecaseSPIFFEGuard.IdentityManagerConfig{})
-	consensusMgr := usecaseConsensus.NewCoordinatorManager(nil, nil)
+	var consensusOpts []usecaseConsensus.CoordinatorOption
+	if p.infra != nil && p.infra.pgClient != nil && p.infra.pgClient.Pool() != nil {
+		leaseStore := postgres.NewConsensusLeaseRepo(p.infra.pgClient.Pool())
+		consensusOpts = append(consensusOpts, usecaseConsensus.WithLeaseStore(leaseStore))
+	}
+	consensusMgr := usecaseConsensus.NewCoordinatorManager(nil, nil, consensusOpts...)
 	workloadMgr := usecaseWorkloadGuard.NewArtifactManager()
 	messagingMgr := usecaseMessaging.NewManager(nil, nil, nil, usecaseMessaging.DefaultSREManagerConfig())
 
