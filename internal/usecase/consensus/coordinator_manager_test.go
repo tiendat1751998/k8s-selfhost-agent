@@ -384,9 +384,7 @@ func TestCoordinatorManager_ConcurrentLockAcquisition(t *testing.T) {
 			token, err := mgr.AcquireLockWithFencing(ctx, "global/resource", fmt.Sprintf("worker-%d", workerID), 1*time.Minute)
 			if err != nil {
 				t.Errorf("worker %d acquire error: %v", workerID, err)
-				return
-			}
-			if _, loaded := generations.LoadOrStore(token.Generation, true); loaded {
+			} else if _, loaded := generations.LoadOrStore(token.Generation, true); loaded {
 				duplicates.Add(1)
 			}
 		}(i)
@@ -397,3 +395,104 @@ func TestCoordinatorManager_ConcurrentLockAcquisition(t *testing.T) {
 		t.Errorf("detected %d duplicate generation tokens across concurrent goroutines", duplicates.Load())
 	}
 }
+
+type fakeLeaseStore struct {
+	mu     sync.Mutex
+	leases map[string]*domainconsensus.FencingLease
+}
+
+func newFakeLeaseStore() *fakeLeaseStore {
+	return &fakeLeaseStore{leases: make(map[string]*domainconsensus.FencingLease)}
+}
+
+func (s *fakeLeaseStore) AcquireOrRenewLease(ctx context.Context, clusterID, holderID string, ttl time.Duration) (*domainconsensus.FencingLease, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	if cur, ok := s.leases[clusterID]; ok {
+		if now.Before(cur.ExpiresAt) && cur.HolderID != holderID {
+			return nil, domainconsensus.ErrLeaseConflict
+		}
+		lease := &domainconsensus.FencingLease{ClusterID: clusterID, HolderID: holderID, FencingToken: cur.FencingToken + 1, AcquiredAt: now, ExpiresAt: now.Add(ttl)}
+		s.leases[clusterID] = lease
+		return lease, nil
+	}
+	lease := &domainconsensus.FencingLease{ClusterID: clusterID, HolderID: holderID, FencingToken: 1, AcquiredAt: now, ExpiresAt: now.Add(ttl)}
+	s.leases[clusterID] = lease
+	return lease, nil
+}
+
+func (s *fakeLeaseStore) GetActivePrimary(ctx context.Context, clusterID string) (string, int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cur, ok := s.leases[clusterID]; ok {
+		return cur.HolderID, cur.FencingToken, nil
+	}
+	return "", 0, nil
+}
+
+func (s *fakeLeaseStore) ValidateToken(ctx context.Context, clusterID string, token int64) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cur, ok := s.leases[clusterID]
+	if !ok || token != cur.FencingToken {
+		return false, domainconsensus.ErrFencingTokenStale
+	}
+	if time.Now().UTC().After(cur.ExpiresAt) {
+		return false, fmt.Errorf("%w: lock lease has expired", domainconsensus.ErrFencingTokenStale)
+	}
+	return true, nil
+}
+
+func TestCoordinatorManager_MultiReplicaHA_SharedLeaseStore(t *testing.T) {
+	ctx := context.Background()
+	sharedStore := newFakeLeaseStore()
+	pgClientA := &fakePgBouncerClient{}
+	pgClientB := &fakePgBouncerClient{}
+
+	replicaA := usecaseconsensus.NewCoordinatorManager(
+		newFakeEtcdClient(nil),
+		pgClientA,
+		usecaseconsensus.WithLeaseStore(sharedStore),
+	)
+	replicaB := usecaseconsensus.NewCoordinatorManager(
+		newFakeEtcdClient(nil),
+		pgClientB,
+		usecaseconsensus.WithLeaseStore(sharedStore),
+	)
+
+	clusterID := "pg-cluster-prod"
+	ttl := 20 * time.Millisecond
+
+	// 1. Replica A acquires lease (token 1); Replica B is rejected while Replica A's lease is active
+	leaseA, err := replicaA.AcquireLease(ctx, clusterID, "replica-a", ttl)
+	if err != nil || leaseA.FencingToken != 1 || leaseA.HolderID != "replica-a" {
+		t.Fatalf("unexpected replica A acquire: lease=%+v, err=%v", leaseA, err)
+	}
+
+	_, err = replicaB.AcquireLease(ctx, clusterID, "replica-b", ttl)
+	if !errors.Is(err, domainconsensus.ErrLeaseConflict) {
+		t.Fatalf("expected ErrLeaseConflict for replica B, got: %v", err)
+	}
+
+	// 2. When Replica A's lease expires, Replica B acquires lease (token 2 > token 1)
+	time.Sleep(25 * time.Millisecond)
+
+	leaseB, err := replicaB.AcquireLease(ctx, clusterID, "replica-b", ttl)
+	if err != nil || leaseB.FencingToken != 2 || leaseB.HolderID != "replica-b" {
+		t.Fatalf("expected replica B token 2, got: %+v (err=%v)", leaseB, err)
+	}
+
+	// 3. Replica A's stale token 1 is rejected by ValidateFencingToken
+	valid, err := replicaA.ValidateFencingToken(ctx, clusterID, leaseA.FencingToken)
+	if valid || !errors.Is(err, domainconsensus.ErrFencingTokenStale) {
+		t.Fatalf("expected ErrFencingTokenStale for replica A, got: valid=%v, err=%v", valid, err)
+	}
+
+	// 4. ExecuteStonithFence fences Replica A dynamically
+	fencedNode, err := replicaB.ExecuteStonithFence(ctx, clusterID)
+	if err != nil || fencedNode != "replica-a" || pgClientB.killedHost != "replica-a" {
+		t.Fatalf("expected fenced node replica-a with severed connections, got fenced=%s (host=%s, err=%v)", fencedNode, pgClientB.killedHost, err)
+	}
+}
+

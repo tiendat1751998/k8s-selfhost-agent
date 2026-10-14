@@ -24,6 +24,13 @@ func WithCooldownDuration(d time.Duration) CoordinatorOption {
 	}
 }
 
+// WithLeaseStore configures the distributed HA consensus lease store.
+func WithLeaseStore(store domainconsensus.LeaseStore) CoordinatorOption {
+	return func(cm *CoordinatorManager) {
+		cm.leaseStore = store
+	}
+}
+
 type lockRecord struct {
 	ownerID    string
 	generation int64
@@ -35,15 +42,17 @@ type lockRecord struct {
 type CoordinatorManager struct {
 	etcdClient       domainconsensus.EtcdClusterClient
 	pgClient         domainconsensus.PgBouncerClient
+	leaseStore       domainconsensus.LeaseStore
 	cooldownDuration time.Duration
 
 	telemetry    *domainconsensus.ConsensusTelemetryTracker
 	stateMachine *domainconsensus.EtcdDefragStateMachine
 
-	mu           sync.RWMutex
-	activeLocks     map[string]lockRecord
-	committedGen    map[string]int64
-	activePrimaries map[string]string
+	mu                sync.RWMutex
+	activeLocks       map[string]lockRecord
+	committedGen      map[string]int64
+	activePrimaries   map[string]string
+	previousPrimaries map[string]string
 }
 
 // NewCoordinatorManager initializes a new CoordinatorManager with required infrastructure clients.
@@ -53,14 +62,15 @@ func NewCoordinatorManager(
 	opts ...CoordinatorOption,
 ) *CoordinatorManager {
 	cm := &CoordinatorManager{
-		etcdClient:       etcdClient,
-		pgClient:         pgClient,
-		cooldownDuration: DefaultDefragCooldown,
-		telemetry:        domainconsensus.NewConsensusTelemetryTracker(),
-		stateMachine:     domainconsensus.NewEtcdDefragStateMachine(),
-		activeLocks:      make(map[string]lockRecord),
-		committedGen:     make(map[string]int64),
-		activePrimaries:  make(map[string]string),
+		etcdClient:        etcdClient,
+		pgClient:          pgClient,
+		cooldownDuration:  DefaultDefragCooldown,
+		telemetry:         domainconsensus.NewConsensusTelemetryTracker(),
+		stateMachine:      domainconsensus.NewEtcdDefragStateMachine(),
+		activeLocks:       make(map[string]lockRecord),
+		committedGen:      make(map[string]int64),
+		activePrimaries:   make(map[string]string),
+		previousPrimaries: make(map[string]string),
 	}
 
 	for _, opt := range opts {
@@ -68,6 +78,13 @@ func NewCoordinatorManager(
 	}
 
 	return cm
+}
+
+// SetLeaseStore dynamically attaches or updates the distributed HA consensus lease store.
+func (cm *CoordinatorManager) SetLeaseStore(store domainconsensus.LeaseStore) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.leaseStore = store
 }
 
 // SafeDefragCluster safely defragments etcd members one-by-one, enforcing quorum preservation
@@ -183,6 +200,8 @@ func (cm *CoordinatorManager) SafeDefragCluster(ctx context.Context, endpoints [
 }
 
 // AcquireLockWithFencing acquires a distributed lock lease protected by an atomic monotonic fencing token.
+// When leaseStore is configured, it delegates atomically to the distributed store;
+// otherwise it falls back to the thread-safe local in-memory tracker.
 func (cm *CoordinatorManager) AcquireLockWithFencing(
 	ctx context.Context,
 	key, ownerID string,
@@ -193,6 +212,18 @@ func (cm *CoordinatorManager) AcquireLockWithFencing(
 	}
 	if ttl <= 0 {
 		return nil, fmt.Errorf("%w: ttl must be positive", domainconsensus.ErrInvalidConsensusInput)
+	}
+
+	cm.mu.RLock()
+	store := cm.leaseStore
+	cm.mu.RUnlock()
+
+	if store != nil {
+		lease, err := store.AcquireOrRenewLease(ctx, key, ownerID, ttl)
+		if err != nil {
+			return nil, err
+		}
+		return domainconsensus.NewFencingToken(key, ownerID, lease.FencingToken, lease.ExpiresAt)
 	}
 
 	generation := cm.telemetry.NextGeneration()
@@ -207,6 +238,66 @@ func (cm *CoordinatorManager) AcquireLockWithFencing(
 	cm.mu.Unlock()
 
 	return domainconsensus.NewFencingToken(key, ownerID, generation, expiresAt)
+}
+
+// AcquireLease acquires or renews a distributed fencing lease for an HA cluster.
+// When leaseStore is configured, it delegates atomically to the distributed store;
+// otherwise it falls back to the thread-safe local in-memory tracker.
+func (cm *CoordinatorManager) AcquireLease(
+	ctx context.Context,
+	clusterID, holderID string,
+	ttl time.Duration,
+) (*domainconsensus.FencingLease, error) {
+	if clusterID == "" || holderID == "" {
+		return nil, fmt.Errorf("%w: clusterID and holderID cannot be empty", domainconsensus.ErrInvalidConsensusInput)
+	}
+	if ttl <= 0 {
+		return nil, fmt.Errorf("%w: ttl must be positive", domainconsensus.ErrInvalidConsensusInput)
+	}
+
+	cm.mu.RLock()
+	store := cm.leaseStore
+	cm.mu.RUnlock()
+
+	if store != nil {
+		prevHolder, _, _ := store.GetActivePrimary(ctx, clusterID)
+		lease, err := store.AcquireOrRenewLease(ctx, clusterID, holderID, ttl)
+		if err != nil {
+			return nil, err
+		}
+		cm.mu.Lock()
+		if prevHolder != "" && prevHolder != holderID {
+			cm.previousPrimaries[clusterID] = prevHolder
+		}
+		cm.activePrimaries[clusterID] = holderID
+		cm.mu.Unlock()
+		return lease, nil
+	}
+
+	// Thread-safe in-memory fallback
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	now := time.Now().UTC()
+	current, exists := cm.activeLocks[clusterID]
+	if exists && now.Before(current.expiresAt) && current.ownerID != holderID {
+		return nil, domainconsensus.ErrLeaseConflict
+	}
+
+	if exists && current.ownerID != holderID && current.ownerID != "" {
+		cm.previousPrimaries[clusterID] = current.ownerID
+	}
+
+	generation := cm.telemetry.NextGeneration()
+	expiresAt := now.Add(ttl)
+	cm.activeLocks[clusterID] = lockRecord{
+		ownerID:    holderID,
+		generation: generation,
+		expiresAt:  expiresAt,
+	}
+	cm.activePrimaries[clusterID] = holderID
+
+	return domainconsensus.NewFencingLease(clusterID, holderID, generation, now, expiresAt)
 }
 
 // SetActivePrimary explicitly records the active primary host for a connection pooler.
@@ -225,12 +316,31 @@ func (cm *CoordinatorManager) GetActivePrimary(poolerAddr string) string {
 
 // ValidateFencingToken validates that a fencing token is strictly greater than the committed generation,
 // is monotonic against active lease generations, and has not expired.
+// When leaseStore is configured, validation is delegated to the shared distributed store.
 func (cm *CoordinatorManager) ValidateFencingToken(ctx context.Context, key string, token int64) (bool, error) {
 	if key == "" {
 		return false, fmt.Errorf("%w: key cannot be empty", domainconsensus.ErrInvalidConsensusInput)
 	}
 	if token <= 0 {
 		return false, fmt.Errorf("%w: token must be greater than zero", domainconsensus.ErrInvalidConsensusInput)
+	}
+
+	cm.mu.RLock()
+	store := cm.leaseStore
+	cm.mu.RUnlock()
+
+	if store != nil {
+		valid, err := store.ValidateToken(ctx, key, token)
+		if err != nil {
+			cm.telemetry.IncStaleRejects()
+			return false, err
+		}
+		if !valid {
+			cm.telemetry.IncStaleRejects()
+			return false, domainconsensus.ErrFencingTokenStale
+		}
+		cm.telemetry.IncValidations()
+		return true, nil
 	}
 
 	cm.mu.Lock()
@@ -257,6 +367,56 @@ func (cm *CoordinatorManager) ValidateFencingToken(ctx context.Context, key stri
 	cm.committedGen[key] = token
 	cm.telemetry.IncValidations()
 	return true, nil
+}
+
+// ExecuteStonithFence dynamically fences the stale or previously active primary node for clusterID.
+// It queries the shared distributed lease store (or local memory) to resolve the target node,
+// severs any stale backend connection pools via PgBouncer, and records telemetry.
+func (cm *CoordinatorManager) ExecuteStonithFence(ctx context.Context, clusterID string, targetNode ...string) (string, error) {
+	if clusterID == "" {
+		return "", fmt.Errorf("%w: clusterID cannot be empty", domainconsensus.ErrInvalidConsensusInput)
+	}
+
+	var target string
+	if len(targetNode) > 0 && targetNode[0] != "" {
+		target = targetNode[0]
+	}
+
+	cm.mu.RLock()
+	store := cm.leaseStore
+	prevPrimary := cm.previousPrimaries[clusterID]
+	activePrimary := cm.activePrimaries[clusterID]
+	cm.mu.RUnlock()
+
+	if target == "" {
+		if prevPrimary != "" {
+			target = prevPrimary
+		} else if store != nil {
+			primary, _, err := store.GetActivePrimary(ctx, clusterID)
+			if err != nil {
+				return "", fmt.Errorf("resolving active primary from lease store: %w", err)
+			}
+			target = primary
+		} else if activePrimary != "" {
+			target = activePrimary
+		} else if rec, exists := cm.activeLocks[clusterID]; exists {
+			target = rec.ownerID
+		}
+	}
+
+	if target == "" {
+		return "", fmt.Errorf("no active or previous primary found to fence for cluster %s", clusterID)
+	}
+
+	if cm.pgClient != nil {
+		killed, err := cm.pgClient.KillStaleConnections(ctx, clusterID, target)
+		if err != nil {
+			return "", fmt.Errorf("severing stale connections during stonith fencing for host %s: %w", target, err)
+		}
+		cm.telemetry.AddStaleSocketsKilled(uint64(killed))
+	}
+
+	return target, nil
 }
 
 // FlushPgBouncerStaleConnections executes connection pause, severs stale backend sockets,

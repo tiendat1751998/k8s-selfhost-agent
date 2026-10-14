@@ -40,6 +40,15 @@ var (
 		Detail: "Cluster healthy member count is below required Raft quorum threshold (healthy < N/2 + 1); defragmentation halted to prevent catastrophic cluster partition",
 		Code:   "ERR_CONSENSUS_QUORUM_LOST",
 	}
+
+	// ErrLeaseConflict indicates a fencing lease is currently held by another active coordinator node.
+	ErrLeaseConflict = &RFC7807ProblemDetail{
+		Type:   "https://k8sselfhost.io/errors/ERR_LEASE_CONFLICT",
+		Title:  "Consensus Fencing Lease Conflict",
+		Status: http.StatusConflict, // 409
+		Detail: "Fencing lease is actively held by another coordinator node; lease acquisition rejected to maintain HA single-primary invariant",
+		Code:   "ERR_LEASE_CONFLICT",
+	}
 )
 
 // RFC7807ProblemDetail implements RFC 7807 Problem Details for HTTP APIs.
@@ -138,6 +147,52 @@ func NewFencingToken(lockKey, ownerID string, generation int64, expiresAt time.T
 // IsExpired checks whether the fencing token lease has lapsed against the provided reference clock.
 func (f *FencingToken) IsExpired(ref time.Time) bool {
 	return ref.After(f.ExpiresAt) || ref.Equal(f.ExpiresAt)
+}
+
+// FencingLease represents an HA cluster fencing lease with a monotonic fencing token.
+type FencingLease struct {
+	ClusterID    string    `json:"cluster_id"`
+	HolderID     string    `json:"holder_id"`
+	FencingToken int64     `json:"fencing_token"`
+	AcquiredAt   time.Time `json:"acquired_at"`
+	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+// NewFencingLease constructs and validates a FencingLease domain entity.
+func NewFencingLease(
+	clusterID, holderID string,
+	fencingToken int64,
+	acquiredAt, expiresAt time.Time,
+) (*FencingLease, error) {
+	if clusterID == "" {
+		return nil, fmt.Errorf("%w: clusterID cannot be empty", ErrInvalidConsensusInput)
+	}
+	if holderID == "" {
+		return nil, fmt.Errorf("%w: holderID cannot be empty", ErrInvalidConsensusInput)
+	}
+	if fencingToken <= 0 {
+		return nil, fmt.Errorf("%w: fencing token must be greater than zero", ErrInvalidConsensusInput)
+	}
+	return &FencingLease{
+		ClusterID:    clusterID,
+		HolderID:     holderID,
+		FencingToken: fencingToken,
+		AcquiredAt:   acquiredAt,
+		ExpiresAt:    expiresAt,
+	}, nil
+}
+
+// IsExpired checks whether the lease has lapsed against the provided reference clock.
+func (l *FencingLease) IsExpired(ref time.Time) bool {
+	return ref.After(l.ExpiresAt) || ref.Equal(l.ExpiresAt)
+}
+
+// LeaseStore defines the persistence and consensus synchronization contract
+// for multi-replica distributed HA fencing leases across coordinator nodes.
+type LeaseStore interface {
+	AcquireOrRenewLease(ctx context.Context, clusterID, holderID string, ttl time.Duration) (*FencingLease, error)
+	GetActivePrimary(ctx context.Context, clusterID string) (holderID string, fencingToken int64, err error)
+	ValidateToken(ctx context.Context, clusterID string, token int64) (bool, error)
 }
 
 // ConsensusCoordinator is the core domain port for distributed lock fencing, etcd defrag, and pooler hygiene.
