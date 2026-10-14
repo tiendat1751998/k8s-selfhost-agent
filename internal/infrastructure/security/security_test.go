@@ -286,3 +286,28 @@ func TestCheckov_AllPassed(t *testing.T) {
 	}
 }
 
+func TestTrivyScanner_RejectsHyphenAndEmptyImage(t *testing.T) {
+	scanner := security.NewTrivyScanner()
+	ctx := context.Background()
+
+	badImages := []string{
+		"",
+		"   ",
+		"--format",
+		"-o /tmp/evil",
+		"--quiet",
+		"-j DROP",
+	}
+
+	for _, img := range badImages {
+		report, err := scanner.ScanImage(ctx, img, "HIGH")
+		if err == nil {
+			t.Errorf("expected ScanImage to reject invalid image %q, got nil error", img)
+		}
+		if report == nil || report.PassSecurityGate {
+			t.Errorf("expected report.PassSecurityGate=false for invalid image %q", img)
+		}
+	}
+}
+
+

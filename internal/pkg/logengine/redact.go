@@ -24,28 +24,79 @@ type RedactionRule struct {
 	Replacement    []byte
 	replacementStr string
 	triggers       []string
+	triggerBytes   [][]byte
 }
 
 // InStreamRedactor performs in-stream detection and masking of sensitive credentials.
 type InStreamRedactor struct {
-	rules []RedactionRule
+	rules      []RedactionRule
+	triggerMap map[byte][]int
 }
 
 // NewInStreamRedactor constructs an InStreamRedactor with pre-compiled automata rules.
 func NewInStreamRedactor() *InStreamRedactor {
-	rules := []RedactionRule{
+	r := &InStreamRedactor{
+		rules:      make([]RedactionRule, 0, 8),
+		triggerMap: make(map[byte][]int),
+	}
+	defaultRules := []RedactionRule{
 		{Type: PatternConnectionString, Regex: regexp.MustCompile(`(?i)(postgres|mysql|mongodb|redis|amqp):\/\/[^:\s]+:[^@\s]+@`), Replacement: []byte(`$1://[REDACTED_USER]:[REDACTED_SECRET]@`), triggers: []string{"postgres://", "mysql://", "mongodb://", "redis://", "amqp://"}},
 		{Type: PatternBearerToken, Regex: regexp.MustCompile(`(?i)(bearer\s+)[a-zA-Z0-9_\-\.]{20,}`), Replacement: []byte(`$1[REDACTED_BEARER_TOKEN]`), triggers: []string{"bearer"}},
 		{Type: PatternAPIKey, Regex: regexp.MustCompile(`(?i)(sk_live_|ghp_|glpat-|xoxb-)[a-zA-Z0-9_\-]{16,}`), Replacement: []byte(`$1[REDACTED_API_KEY]`), triggers: []string{"sk_live_", "ghp_", "glpat-", "xoxb-"}},
 		{Type: PatternPasswordKeyValue, Regex: regexp.MustCompile(`(?i)("(?:password|secret|token|api_key|access_key)"\s*:\s*")[^"]+(")`), Replacement: []byte(`$1[REDACTED_SECRET]$2`), triggers: []string{"\"password\"", "\"secret\"", "\"token\"", "\"api_key\"", "\"access_key\""}},
 		{Type: PatternPrivateKey, Regex: regexp.MustCompile(`(?s)-----BEGIN [A-Z ]+PRIVATE KEY-----.*?-----END [A-Z ]+PRIVATE KEY-----`), Replacement: []byte(`[REDACTED_PRIVATE_KEY]`), triggers: []string{"BEGIN"}},
 	}
-
-	for i := range rules {
-		rules[i].replacementStr = string(rules[i].Replacement)
+	for _, rule := range defaultRules {
+		r.AddRule(rule)
 	}
+	return r
+}
 
-	return &InStreamRedactor{rules: rules}
+// AddRule adds a new custom redaction rule to the InStreamRedactor with safe case indexing.
+func (r *InStreamRedactor) AddRule(rule RedactionRule) {
+	if rule.replacementStr == "" {
+		rule.replacementStr = string(rule.Replacement)
+	}
+	if len(rule.triggerBytes) == 0 && len(rule.triggers) > 0 {
+		rule.triggerBytes = make([][]byte, len(rule.triggers))
+		for i, tr := range rule.triggers {
+			rule.triggerBytes[i] = []byte(tr)
+		}
+	}
+	ruleIdx := len(r.rules)
+	r.rules = append(r.rules, rule)
+	if r.triggerMap == nil {
+		r.triggerMap = make(map[byte][]int)
+	}
+	for _, tr := range rule.triggers {
+		if len(tr) > 0 {
+			r.indexTriggerByte(tr[0], ruleIdx)
+		}
+	}
+}
+
+// indexTriggerByte safely maps initial byte variations into triggerMap without arithmetic underflow.
+func (r *InStreamRedactor) indexTriggerByte(b byte, ruleIdx int) {
+	if r.triggerMap == nil {
+		r.triggerMap = make(map[byte][]int)
+	}
+	if b >= 'a' && b <= 'z' {
+		r.triggerMap[b] = append(r.triggerMap[b], ruleIdx)
+		r.triggerMap[b-('a'-'A')] = append(r.triggerMap[b-('a'-'A')], ruleIdx)
+	} else if b >= 'A' && b <= 'Z' {
+		r.triggerMap[b] = append(r.triggerMap[b], ruleIdx)
+		r.triggerMap[b+('a'-'A')] = append(r.triggerMap[b+('a'-'A')], ruleIdx)
+	} else {
+		r.triggerMap[b] = append(r.triggerMap[b], ruleIdx)
+	}
+}
+
+// GetTriggerRules returns the rule indices matching an initial byte, if any.
+func (r *InStreamRedactor) GetTriggerRules(b byte) []int {
+	if r.triggerMap == nil {
+		return nil
+	}
+	return r.triggerMap[b]
 }
 
 // MaskBytes replaces sensitive credentials in line []byte with redacted placeholders.
@@ -54,21 +105,19 @@ func (r *InStreamRedactor) MaskBytes(line []byte) []byte {
 	if len(line) == 0 {
 		return line
 	}
-
-	var matchedIndices [8]int
+	var matchedIndices [16]int
 	matchCount := 0
-
 	for i := range r.rules {
 		if ruleTriggeredBytes(&r.rules[i], line) {
-			matchedIndices[matchCount] = i
-			matchCount++
+			if matchCount < len(matchedIndices) {
+				matchedIndices[matchCount] = i
+				matchCount++
+			}
 		}
 	}
-
 	if matchCount == 0 {
 		return line
 	}
-
 	out := line
 	for k := 0; k < matchCount; k++ {
 		rule := &r.rules[matchedIndices[k]]
@@ -88,7 +137,7 @@ func (r *InStreamRedactor) MaskBytes(line []byte) []byte {
 		if handled {
 			continue
 		}
-		if rule.Regex.Match(out) {
+		if rule.Regex != nil && rule.Regex.Match(out) {
 			out = rule.Regex.ReplaceAll(out, rule.Replacement)
 		}
 	}
@@ -129,24 +178,19 @@ func maskConnectionStringBytes(b []byte) ([]byte, bool) {
 	if !bytes.Contains(b, triggerColons) {
 		return b, false
 	}
-	modified := false
-	out := b
-	offset := 0
+	modified, out, offset := false, b, 0
 	for {
-		foundScheme := ""
-		schemePos := -1
+		foundScheme, schemePos := "", -1
 		for _, s := range connectionSchemes {
 			idx := indexFoldBytes(out[offset:], s)
 			if idx != -1 && (schemePos == -1 || idx < schemePos) {
-				schemePos = idx
-				foundScheme = s
+				schemePos, foundScheme = idx, s
 			}
 		}
 		if schemePos == -1 {
 			break
 		}
-		credStart := offset + schemePos + len(foundScheme)
-		atRel := -1
+		credStart, atRel := offset+schemePos+len(foundScheme), -1
 		for i := credStart; i < len(out); i++ {
 			c := out[i]
 			if c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '/' || c == '"' { break }
@@ -161,10 +205,7 @@ func maskConnectionStringBytes(b []byte) ([]byte, bool) {
 			offset = atRel + 1
 			continue
 		}
-
-		out = splice(out, credStart, atRel+1, connRedacted)
-		modified = true
-		offset = credStart + len(connRedacted)
+		out, modified, offset = splice(out, credStart, atRel+1, connRedacted), true, credStart+len(connRedacted)
 	}
 	return out, modified
 }
@@ -173,9 +214,7 @@ func maskPasswordKeyValueBytes(b []byte) ([]byte, bool) {
 	if bytes.IndexByte(b, '"') == -1 || bytes.IndexByte(b, ':') == -1 {
 		return b, false
 	}
-	modified := false
-	out := b
-	offset := 0
+	modified, out, offset := false, b, 0
 	for {
 		keyPos, keyLen := -1, 0
 		for _, k := range passwordKeys {
@@ -205,18 +244,13 @@ func maskPasswordKeyValueBytes(b []byte) ([]byte, bool) {
 			offset = valStart
 			continue
 		}
-		valEnd := valStart + q
-		out = splice(out, valStart, valEnd, passRedacted)
-		modified = true
-		offset = valStart + len(passRedacted) + 1
+		out, modified, offset = splice(out, valStart, valStart+q, passRedacted), true, valStart+len(passRedacted)+1
 	}
 	return out, modified
 }
 
 func maskBearerTokenBytes(b []byte) ([]byte, bool) {
-	modified := false
-	out := b
-	offset := 0
+	modified, out, offset := false, b, 0
 	for {
 		idx := indexFoldBytes(out[offset:], "bearer")
 		if idx == -1 {
@@ -227,8 +261,7 @@ func maskBearerTokenBytes(b []byte) ([]byte, bool) {
 			offset = pos + 6
 			continue
 		}
-		p := pos + 6
-		spaceCount := 0
+		p, spaceCount := pos+6, 0
 		for p < len(out) && (out[p] == ' ' || out[p] == '\t') { spaceCount++; p++ }
 		if spaceCount == 0 || p >= len(out) {
 			offset = p
@@ -240,17 +273,13 @@ func maskBearerTokenBytes(b []byte) ([]byte, bool) {
 			offset = p
 			continue
 		}
-		out = splice(out, tokStart, p, bearerRedacted)
-		modified = true
-		offset = tokStart + len(bearerRedacted)
+		out, modified, offset = splice(out, tokStart, p, bearerRedacted), true, tokStart+len(bearerRedacted)
 	}
 	return out, modified
 }
 
 func maskAPIKeyBytes(b []byte) ([]byte, bool) {
-	modified := false
-	out := b
-	offset := 0
+	modified, out, offset := false, b, 0
 	for {
 		prefixPos, prefixLen := -1, 0
 		for _, pfx := range apiKeyPrefixes {
@@ -269,17 +298,13 @@ func maskAPIKeyBytes(b []byte) ([]byte, bool) {
 			offset = p
 			continue
 		}
-		out = splice(out, tokStart, p, apiKeyRedacted)
-		modified = true
-		offset = tokStart + len(apiKeyRedacted)
+		out, modified, offset = splice(out, tokStart, p, apiKeyRedacted), true, tokStart+len(apiKeyRedacted)
 	}
 	return out, modified
 }
 
 func maskPrivateKeyBytes(b []byte) ([]byte, bool) {
-	modified := false
-	out := b
-	offset := 0
+	modified, out, offset := false, b, 0
 	for {
 		relBegin := bytes.Index(out[offset:], beginPem)
 		if relBegin == -1 {
@@ -297,9 +322,7 @@ func maskPrivateKeyBytes(b []byte) ([]byte, bool) {
 			continue
 		}
 		pemEnd := endStart + suffixIdx + len(keySuffix)
-		out = splice(out, beginIdx, pemEnd, privKeyRedacted)
-		modified = true
-		offset = beginIdx + len(privKeyRedacted)
+		out, modified, offset = splice(out, beginIdx, pemEnd, privKeyRedacted), true, beginIdx+len(privKeyRedacted)
 	}
 	return out, modified
 }
@@ -319,39 +342,25 @@ func hasAPIKeyTrigger(b []byte) bool {
 	offset := 0
 	for {
 		i1, i2 := bytes.IndexByte(b[offset:], '_'), bytes.IndexByte(b[offset:], '-')
-		if i1 == -1 && i2 == -1 {
-			return false
-		}
+		if i1 == -1 && i2 == -1 { return false }
 		cand := i1
-		if i1 == -1 || (i2 != -1 && i2 < i1) {
-			cand = i2
-		}
+		if i1 == -1 || (i2 != -1 && i2 < i1) { cand = i2 }
 		pos := offset + cand
 		if b[pos] == '_' {
-			if (pos >= 7 && equalFoldBytes(b[pos-7:pos], "sk_live")) || (pos >= 3 && equalFoldBytes(b[pos-3:pos], "ghp")) {
-				return true
-			}
+			if (pos >= 7 && equalFoldBytes(b[pos-7:pos], "sk_live")) || (pos >= 3 && equalFoldBytes(b[pos-3:pos], "ghp")) { return true }
 		} else {
-			if (pos >= 5 && equalFoldBytes(b[pos-5:pos], "glpat")) || (pos >= 4 && equalFoldBytes(b[pos-4:pos], "xoxb")) {
-				return true
-			}
+			if (pos >= 5 && equalFoldBytes(b[pos-5:pos], "glpat")) || (pos >= 4 && equalFoldBytes(b[pos-4:pos], "xoxb")) { return true }
 		}
 		offset = pos + 1
 	}
 }
 
 func equalFoldBytes(b []byte, s string) bool {
-	if len(b) != len(s) {
-		return false
-	}
+	if len(b) != len(s) { return false }
 	for i := range b {
 		c := b[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 'a' - 'A'
-		}
-		if c != s[i] {
-			return false
-		}
+		if c >= 'A' && c <= 'Z' { c += 'a' - 'A' }
+		if c != s[i] { return false }
 	}
 	return true
 }
@@ -360,22 +369,14 @@ func hasAPIKeyTriggerString(s string) bool {
 	offset := 0
 	for {
 		i1, i2 := strings.IndexByte(s[offset:], '_'), strings.IndexByte(s[offset:], '-')
-		if i1 == -1 && i2 == -1 {
-			return false
-		}
+		if i1 == -1 && i2 == -1 { return false }
 		cand := i1
-		if i1 == -1 || (i2 != -1 && i2 < i1) {
-			cand = i2
-		}
+		if i1 == -1 || (i2 != -1 && i2 < i1) { cand = i2 }
 		pos := offset + cand
 		if s[pos] == '_' {
-			if (pos >= 7 && strings.EqualFold(s[pos-7:pos], "sk_live")) || (pos >= 3 && strings.EqualFold(s[pos-3:pos], "ghp")) {
-				return true
-			}
+			if (pos >= 7 && strings.EqualFold(s[pos-7:pos], "sk_live")) || (pos >= 3 && strings.EqualFold(s[pos-3:pos], "ghp")) { return true }
 		} else {
-			if (pos >= 5 && strings.EqualFold(s[pos-5:pos], "glpat")) || (pos >= 4 && strings.EqualFold(s[pos-4:pos], "xoxb")) {
-				return true
-			}
+			if (pos >= 5 && strings.EqualFold(s[pos-5:pos], "glpat")) || (pos >= 4 && strings.EqualFold(s[pos-4:pos], "xoxb")) { return true }
 		}
 		offset = pos + 1
 	}
@@ -385,8 +386,9 @@ func indexFoldBytes(s []byte, sub string) int {
 	n := len(sub)
 	if n == 0 { return 0 }
 	if len(s) < n { return -1 }
-	f0L, f0U := sub[0], sub[0]
-	if f0L >= 'a' && f0L <= 'z' { f0U -= 'a' - 'A' }
+	b0 := sub[0]
+	var f0L, f0U byte
+	if b0 >= 'a' && b0 <= 'z' { f0L, f0U = b0, b0-('a'-'A') } else if b0 >= 'A' && b0 <= 'Z' { f0L, f0U = b0+('a'-'A'), b0 } else { f0L, f0U = b0, b0 }
 	if bytes.IndexByte(s, f0L) == -1 && (f0L == f0U || bytes.IndexByte(s, f0U) == -1) { return -1 }
 	offset, limit := 0, len(s)-n
 	for offset <= limit {
@@ -397,9 +399,10 @@ func indexFoldBytes(s []byte, sub string) int {
 		if cand == -1 || offset+cand > limit { return -1 }
 		pos, match := offset+cand, true
 		for j := 1; j < n; j++ {
-			sc := s[pos+j]
+			sc, tc := s[pos+j], sub[j]
 			if sc >= 'A' && sc <= 'Z' { sc += 'a' - 'A' }
-			if sc != sub[j] { match = false; break }
+			if tc >= 'A' && tc <= 'Z' { tc += 'a' - 'A' }
+			if sc != tc { match = false; break }
 		}
 		if match { return pos }
 		offset = pos + 1
@@ -414,18 +417,15 @@ func ruleTriggeredBytes(rule *RedactionRule, b []byte) bool {
 	case PatternPrivateKey:
 		return bytes.Contains(b, triggerBegin)
 	case PatternPasswordKeyValue:
-		if bytes.IndexByte(b, '"') == -1 || bytes.IndexByte(b, ':') == -1 {
-			return false
-		}
+		return bytes.IndexByte(b, '"') != -1 && bytes.IndexByte(b, ':') != -1
 	case PatternBearerToken:
 		return containsFoldBytes(b, "bearer")
 	case PatternAPIKey:
 		return hasAPIKeyTrigger(b)
 	}
+	if len(rule.triggers) == 0 { return true }
 	for _, tr := range rule.triggers {
-		if containsFoldBytes(b, tr) {
-			return true
-		}
+		if containsFoldBytes(b, tr) { return true }
 	}
 	return false
 }
@@ -437,31 +437,28 @@ func ruleTriggeredString(rule *RedactionRule, s string) bool {
 	case PatternPrivateKey:
 		return strings.Contains(s, "BEGIN")
 	case PatternPasswordKeyValue:
-		if strings.IndexByte(s, '"') == -1 || strings.IndexByte(s, ':') == -1 {
-			return false
-		}
+		return strings.IndexByte(s, '"') != -1 && strings.IndexByte(s, ':') != -1
 	case PatternBearerToken:
 		return containsFoldString(s, "bearer")
 	case PatternAPIKey:
 		return hasAPIKeyTriggerString(s)
 	}
+	if len(rule.triggers) == 0 { return true }
 	for _, tr := range rule.triggers {
-		if containsFoldString(s, tr) {
-			return true
-		}
+		if containsFoldString(s, tr) { return true }
 	}
 	return false
 }
 
 func containsFoldBytes(s []byte, sub string) bool { return indexFoldBytes(s, sub) != -1 }
 
-// containsFoldString checks if sub occurs within s (ASCII case-insensitive) without heap allocation.
 func containsFoldString(s string, sub string) bool {
 	n := len(sub)
 	if n == 0 { return true }
 	if len(s) < n { return false }
-	f0L, f0U := sub[0], sub[0]
-	if f0L >= 'a' && f0L <= 'z' { f0U -= 'a' - 'A' }
+	b0 := sub[0]
+	var f0L, f0U byte
+	if b0 >= 'a' && b0 <= 'z' { f0L, f0U = b0, b0-('a'-'A') } else if b0 >= 'A' && b0 <= 'Z' { f0L, f0U = b0+('a'-'A'), b0 } else { f0L, f0U = b0, b0 }
 	if strings.IndexByte(s, f0L) == -1 && (f0L == f0U || strings.IndexByte(s, f0U) == -1) { return false }
 	offset, limit := 0, len(s)-n
 	for offset <= limit {
@@ -472,9 +469,10 @@ func containsFoldString(s string, sub string) bool {
 		if cand == -1 || offset+cand > limit { return false }
 		pos, match := offset+cand, true
 		for j := 1; j < n; j++ {
-			sc := s[pos+j]
+			sc, tc := s[pos+j], sub[j]
 			if sc >= 'A' && sc <= 'Z' { sc += 'a' - 'A' }
-			if sc != sub[j] { match = false; break }
+			if tc >= 'A' && tc <= 'Z' { tc += 'a' - 'A' }
+			if sc != tc { match = false; break }
 		}
 		if match { return true }
 		offset = pos + 1

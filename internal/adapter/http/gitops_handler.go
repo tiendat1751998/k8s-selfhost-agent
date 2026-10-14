@@ -153,6 +153,16 @@ func (h *GitOpsHandler) ClosePR(w http.ResponseWriter, r *http.Request) {
 
 // HandleWebhook handles POST /api/v1/gitops/webhook
 func (h *GitOpsHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
+	if len(h.webhookSecret) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "webhook secret is not configured",
+			"code":  "ERR_WEBHOOK_SECRET_UNSET",
+		})
+		return
+	}
+
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "failed to read webhook payload", err)
@@ -162,29 +172,28 @@ func (h *GitOpsHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	sigHeader := r.Header.Get("X-Hub-Signature-256")
 	gitlabToken := r.Header.Get("X-Gitlab-Token")
 
-	if len(h.webhookSecret) > 0 {
-		var valid bool
-		if sigHeader != "" {
-			valid = h.verifier.VerifyGitHubSignature(bodyBytes, sigHeader, h.webhookSecret)
-		} else if gitlabToken != "" {
-			valid = h.verifier.VerifyGitLabToken(gitlabToken, string(h.webhookSecret))
-		}
-
-		if !valid {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error": "Invalid X-Hub-Signature-256 HMAC signature.",
-				"code":  "ERR_WEBHOOK_HMAC_INVALID",
-			})
-			return
-		}
-	} else if strings.TrimSpace(sigHeader) == "" && strings.TrimSpace(gitlabToken) == "" {
-		// When no signature headers are sent on webhook endpoint, reject if signature expected
+	if strings.TrimSpace(sigHeader) == "" && strings.TrimSpace(gitlabToken) == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error": "Missing webhook signature or token header.",
+			"code":  "ERR_WEBHOOK_HMAC_INVALID",
+		})
+		return
+	}
+
+	var valid bool
+	if sigHeader != "" {
+		valid = h.verifier.VerifyGitHubSignature(bodyBytes, sigHeader, h.webhookSecret)
+	} else if gitlabToken != "" {
+		valid = h.verifier.VerifyGitLabToken(gitlabToken, string(h.webhookSecret))
+	}
+
+	if !valid {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "Invalid X-Hub-Signature-256 HMAC signature.",
 			"code":  "ERR_WEBHOOK_HMAC_INVALID",
 		})
 		return

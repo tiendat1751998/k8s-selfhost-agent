@@ -402,3 +402,16 @@ func TestVFSManager_ConcurrentLoadAndMetrics(t *testing.T) {
 		t.Errorf("expected ScannedFiles to be accumulated concurrently")
 	}
 }
+
+func TestVFSManager_RemountOrUnmountHungNFS_RejectsHyphenAndEmpty(t *testing.T) {
+	mgr := usecase.NewVFSManager()
+	ctx := context.Background()
+
+	badMounts := []string{"", "   ", "-f", "-l", "--help", "-o remount"}
+	for _, bad := range badMounts {
+		err := mgr.RemountOrUnmountHungNFS(ctx, bad)
+		if err == nil {
+			t.Errorf("expected RemountOrUnmountHungNFS to reject invalid mount %q, got nil", bad)
+		}
+	}
+}

@@ -90,6 +90,7 @@ type fakePgBouncerClient struct {
 	resumed       bool
 	relocatedAddr string
 	killedCount   int
+	killedHost    string
 	pauseErr      error
 	resumeErr     error
 	killErr       error
@@ -123,6 +124,7 @@ func (p *fakePgBouncerClient) KillStaleConnections(ctx context.Context, poolerAd
 		return 0, p.killErr
 	}
 	p.killedCount = 14
+	p.killedHost = staleHost
 	return 14, nil
 }
 
@@ -293,6 +295,13 @@ func TestCoordinatorManager_FlushPgBouncerStaleConnections(t *testing.T) {
 
 	mgr := usecaseconsensus.NewCoordinatorManager(etcdClient, pgClient)
 
+	// Explicitly register active primary for pooler
+	mgr.SetActivePrimary("10.0.0.10:6432", "10.0.0.1:5432")
+	if primary := mgr.GetActivePrimary("10.0.0.10:6432"); primary != "10.0.0.1:5432" {
+		t.Fatalf("expected active primary 10.0.0.1:5432, got %s", primary)
+	}
+
+	// First failover: severs connections to 10.0.0.1:5432 and relocates to 10.0.0.2:5432
 	err := mgr.FlushPgBouncerStaleConnections(ctx, "10.0.0.10:6432", "10.0.0.2:5432")
 	if err != nil {
 		t.Fatalf("unexpected error flushing pgbouncer: %v", err)
@@ -303,6 +312,7 @@ func TestCoordinatorManager_FlushPgBouncerStaleConnections(t *testing.T) {
 	resumed := pgClient.resumed
 	relocated := pgClient.relocatedAddr
 	killed := pgClient.killedCount
+	killedHost := pgClient.killedHost
 	pgClient.mu.Unlock()
 
 	if !paused || !resumed {
@@ -313,6 +323,45 @@ func TestCoordinatorManager_FlushPgBouncerStaleConnections(t *testing.T) {
 	}
 	if killed == 0 {
 		t.Errorf("expected killed stale connections > 0, got %d", killed)
+	}
+	if killedHost != "10.0.0.1:5432" {
+		t.Errorf("expected demoted primary 10.0.0.1:5432 to be killed, got: %s", killedHost)
+	}
+	if current := mgr.GetActivePrimary("10.0.0.10:6432"); current != "10.0.0.2:5432" {
+		t.Errorf("expected updated active primary 10.0.0.2:5432, got: %s", current)
+	}
+
+	// Second failover: automatically severs previous master 10.0.0.2:5432 and relocates to 10.0.0.3:5432
+	err = mgr.FlushPgBouncerStaleConnections(ctx, "10.0.0.10:6432", "10.0.0.3:5432")
+	if err != nil {
+		t.Fatalf("unexpected error on second flush: %v", err)
+	}
+	pgClient.mu.Lock()
+	secondKilledHost := pgClient.killedHost
+	pgClient.mu.Unlock()
+	if secondKilledHost != "10.0.0.2:5432" {
+		t.Errorf("expected second demoted primary 10.0.0.2:5432 to be killed, got: %s", secondKilledHost)
+	}
+}
+
+func TestCoordinatorManager_FencingToken_ExpiredLeaseRejected(t *testing.T) {
+	ctx := context.Background()
+	mgr := usecaseconsensus.NewCoordinatorManager(newFakeEtcdClient(nil), &fakePgBouncerClient{})
+
+	token, err := mgr.AcquireLockWithFencing(ctx, "resource/lease", "client-a", 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Sleep until lease expires
+	time.Sleep(25 * time.Millisecond)
+
+	valid, err := mgr.ValidateFencingToken(ctx, "resource/lease", token.Generation)
+	if valid {
+		t.Errorf("expected valid to be false for expired lease")
+	}
+	if !errors.Is(err, domainconsensus.ErrFencingTokenStale) {
+		t.Fatalf("expected ErrFencingTokenStale for expired lease, got: %v", err)
 	}
 }
 

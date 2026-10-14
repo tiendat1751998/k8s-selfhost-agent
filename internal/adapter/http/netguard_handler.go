@@ -135,8 +135,8 @@ func (h *NetGuardHandler) ApplyMSSClamping(w http.ResponseWriter, r *http.Reques
 	if iface == "" {
 		iface = chi.URLParam(r, "interface")
 	}
-	if strings.TrimSpace(iface) == "" {
-		h.writeProblem(w, http.StatusBadRequest, "Bad Request", "iface path parameter is required", "VALIDATION_ERROR", r.URL.Path)
+	if err := usecase.ValidateInterfaceName(iface); err != nil {
+		h.writeProblem(w, http.StatusBadRequest, "Bad Request", err.Error(), domain.CodeInvalidTunnelConfig, r.URL.Path)
 		return
 	}
 

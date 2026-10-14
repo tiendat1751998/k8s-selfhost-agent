@@ -23,7 +23,19 @@ func IaCLocks() *syncutil.KeyedMutex {
 	return defaultIaCLocks
 }
 
-func normalizeWorkDir(dir string) (string, error) {
+var forbiddenSystemPrefixes = []string{
+	"/etc", "/root", "/proc", "/sys", "/boot", "/dev", "/var/run", "/usr", "/bin", "/sbin",
+	`c:/windows`, `c:/system32`,
+}
+
+// NormalizeWorkDir validates, cleans, and sandboxes an IaC runner's working directory.
+// It rejects traversal (".."), forbidden system directories, and enforces containment
+// within baseDir (if configured).
+func NormalizeWorkDir(dir string, baseDir ...string) (string, error) {
+	return normalizeWorkDir(dir, baseDir...)
+}
+
+func normalizeWorkDir(dir string, baseDir ...string) (string, error) {
 	if strings.TrimSpace(dir) == "" {
 		dir = "."
 	}
@@ -31,10 +43,46 @@ func normalizeWorkDir(dir string) (string, error) {
 	if strings.Contains(dir, "..") || strings.HasPrefix(cleaned, "..") {
 		return "", fmt.Errorf("directory traversal rejected: %s", dir)
 	}
+
+	cleanSlash := strings.ToLower(filepath.ToSlash(cleaned))
+	for _, prefix := range forbiddenSystemPrefixes {
+		pLower := strings.ToLower(filepath.ToSlash(prefix))
+		if cleanSlash == pLower || strings.HasPrefix(cleanSlash, pLower+"/") {
+			return "", fmt.Errorf("access to forbidden system directory rejected: %s", dir)
+		}
+	}
+
 	abs, err := filepath.Abs(cleaned)
 	if err != nil {
 		return "", fmt.Errorf("resolving absolute path: %w", err)
 	}
+
+	absSlash := strings.ToLower(filepath.ToSlash(abs))
+	for _, prefix := range forbiddenSystemPrefixes {
+		pLower := strings.ToLower(filepath.ToSlash(prefix))
+		if absSlash == pLower || strings.HasPrefix(absSlash, pLower+"/") {
+			return "", fmt.Errorf("access to forbidden system directory rejected: %s", dir)
+		}
+		if len(absSlash) >= 2 && absSlash[1] == ':' {
+			driveStripped := absSlash[2:]
+			if driveStripped == pLower || strings.HasPrefix(driveStripped, pLower+"/") {
+				return "", fmt.Errorf("access to forbidden system directory rejected: %s", dir)
+			}
+		}
+	}
+
+	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
+		baseClean := filepath.Clean(baseDir[0])
+		absBase, err := filepath.Abs(baseClean)
+		if err != nil {
+			return "", fmt.Errorf("resolving base directory: %w", err)
+		}
+		rel, err := filepath.Rel(absBase, abs)
+		if err != nil || strings.HasPrefix(rel, "..") || rel == ".." || filepath.IsAbs(rel) {
+			return "", fmt.Errorf("directory %s is outside allowed base directory %s", dir, baseDir[0])
+		}
+	}
+
 	return abs, nil
 }
 
@@ -55,6 +103,7 @@ type TerraformResult struct {
 type TerraformRunner struct {
 	binaryPath     string
 	defaultTimeout time.Duration
+	baseDir        string
 	locks          *syncutil.KeyedMutex
 }
 
@@ -132,8 +181,16 @@ func (r *TerraformRunner) Destroy(ctx context.Context, opts TerraformRunOptions,
 	return r.execute(ctx, opts.WorkingDir, args, outStream, start)
 }
 
+func (r *TerraformRunner) SetBaseDir(baseDir string) {
+	r.baseDir = baseDir
+}
+
+func (r *TerraformRunner) BaseDir() string {
+	return r.baseDir
+}
+
 func (r *TerraformRunner) execute(ctx context.Context, dir string, args []string, outStream io.Writer, start time.Time) (*TerraformResult, error) {
-	workDir, err := normalizeWorkDir(dir)
+	workDir, err := normalizeWorkDir(dir, r.baseDir)
 	if err != nil {
 		return nil, err
 	}

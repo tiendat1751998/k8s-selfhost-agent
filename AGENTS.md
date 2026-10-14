@@ -15,6 +15,7 @@
   - Acknowledge reality, slow down, verify factual evidence, and solve the root cause.
 - **MANDATORY PROACTIVE MCP AUDIT**:
   - Orchestrator and QA agents MUST use `chrome-devtools-mcp` (`emulate` mobile 375x812, `resize_page`, `take_screenshot`) to inspect responsive breakpoints, information density, contrast, and real scrolling UX.
+  - **Screenshot & Evidence Directory Hygiene**: All QA screenshots MUST be organized by date and task under `docs/qa-evidence/<YYYY-MM-DD>/<task-name>/` (or the brain artifact folder). Dumping `.png` files into the project root or `frontend-vue/` root is strictly forbidden.
   - Report completion only after exhaustive visual and functional verification.
 
 ## 0. MANDATORY INVARIANT: MAIN AGENT IS PERMANENT ORCHESTRATOR

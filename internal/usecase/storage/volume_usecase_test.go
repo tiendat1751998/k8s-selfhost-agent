@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/datdt/k8sselfhost/internal/domain/storage"
-	infraK8s "github.com/datdt/k8sselfhost/internal/infrastructure/kubernetes"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
@@ -407,17 +406,17 @@ func TestStorageUsecase_K8sUnavailable(t *testing.T) {
 	uc := NewVolumeUsecase(nil, nil, nil)
 
 	_, err := uc.ListVolumes(ctx, "local")
-	if !errors.Is(err, infraK8s.ErrK8sUnavailable) {
+	if !errors.Is(err, domainerrors.ErrK8sUnavailable) {
 		t.Errorf("expected ErrK8sUnavailable for ListVolumes, got: %v", err)
 	}
 
 	err = uc.ExpandVolume(ctx, "local", "default", "pvc-1", 1024)
-	if !errors.Is(err, infraK8s.ErrK8sUnavailable) {
+	if !errors.Is(err, domainerrors.ErrK8sUnavailable) {
 		t.Errorf("expected ErrK8sUnavailable for ExpandVolume, got: %v", err)
 	}
 
 	_, err = uc.CreateSnapshot(ctx, "local", "default", "pvc-1", storage.VolumeSnapshotRequest{})
-	if !errors.Is(err, infraK8s.ErrK8sUnavailable) {
+	if !errors.Is(err, domainerrors.ErrK8sUnavailable) {
 		t.Errorf("expected ErrK8sUnavailable for CreateSnapshot, got: %v", err)
 	}
 }

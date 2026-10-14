@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -197,5 +198,28 @@ func TestNetGuardHandler_AuditRPFilter(t *testing.T) {
 
 	if len(resp.StrictMultiHomedInterfaces) == 0 {
 		t.Errorf("expected strict multi-homed interfaces detected")
+	}
+}
+
+func TestNetGuardHandler_ApplyMSSClamping_MaliciousInterfaceRejected(t *testing.T) {
+	r, _ := setupNetGuardTestRouter(1500)
+
+	maliciousPayloads := []string{
+		"eth0 -j DROP",
+		"-A INPUT",
+		"eth0; rm -rf /",
+		"interface-name-too-long-exceeding-fifteen",
+	}
+
+	for _, badIface := range maliciousPayloads {
+		body := []byte(`{"pmtu":1420,"ipv6":false}`)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/network/tunnels/"+url.PathEscape(badIface)+"/mss-clamp", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 Bad Request for iface %q, got %d: %s", badIface, rec.Code, rec.Body.String())
+		}
 	}
 }

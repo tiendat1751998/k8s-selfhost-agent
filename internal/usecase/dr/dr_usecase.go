@@ -19,9 +19,9 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 
 	domain "github.com/datdt/k8sselfhost/internal/domain/dr"
-	"github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 )
 
 // Re-export domain types for backward compatibility across usecase and HTTP layers.
@@ -29,6 +29,12 @@ type EtcdSnapshotResult = domain.EtcdSnapshotResult
 type ClusterBackupResult = domain.ClusterBackupResult
 type RestoreDrillReport = domain.RestoreDrillReport
 type EtcdClientDriver = domain.EtcdClientDriver
+
+// ClusterClientResolver provides cluster-aware Kubernetes client and configuration resolution.
+type ClusterClientResolver interface {
+	GetClusterClient(ctx context.Context, clusterID string) (kubernetes.Interface, error)
+	GetK8sRestConfig(ctx context.Context, clusterID string) (*rest.Config, error)
+}
 
 var veleroBackupGVR = schema.GroupVersionResource{
 	Group:    "velero.io",
@@ -71,7 +77,7 @@ func WithVeleroNamespace(ns string) Option {
 type DRUsecase struct {
 	k8sClient       kubernetes.Interface
 	dynamicClient   dynamic.Interface
-	clientManager   *cluster.ClientManager
+	clientResolver  ClusterClientResolver
 	etcdDriver      domain.EtcdClientDriver
 	baseDir         string
 	veleroNamespace string
@@ -80,7 +86,7 @@ type DRUsecase struct {
 }
 
 // NewDRUsecase creates a new DRUsecase instance.
-func NewDRUsecase(k8sClient kubernetes.Interface, clientManager *cluster.ClientManager, logger *zap.Logger, opts ...Option) *DRUsecase {
+func NewDRUsecase(k8sClient kubernetes.Interface, resolver ClusterClientResolver, logger *zap.Logger, opts ...Option) *DRUsecase {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -88,7 +94,7 @@ func NewDRUsecase(k8sClient kubernetes.Interface, clientManager *cluster.ClientM
 	baseDir := filepath.Join(os.TempDir(), "k8sselfhost-dr")
 	uc := &DRUsecase{
 		k8sClient:       k8sClient,
-		clientManager:   clientManager,
+		clientResolver:  resolver,
 		etcdDriver:      NewEtcdctlDriver(baseDir),
 		baseDir:         baseDir,
 		veleroNamespace: "velero",
@@ -117,8 +123,8 @@ func (u *DRUsecase) getK8sClient(ctx context.Context, clusterID string) (kuberne
 	if clusterID == "" {
 		return nil, fmt.Errorf("clusterID is required")
 	}
-	if u.clientManager != nil && clusterID != "local" && clusterID != "default" && clusterID != "in-cluster" {
-		cli, err := u.clientManager.GetK8sClient(ctx, clusterID)
+	if u.clientResolver != nil && clusterID != "local" && clusterID != "default" && clusterID != "in-cluster" {
+		cli, err := u.clientResolver.GetClusterClient(ctx, clusterID)
 		if err != nil {
 			return nil, err
 		}
@@ -140,8 +146,8 @@ func (u *DRUsecase) getDynamicClient(ctx context.Context, clusterID string) (dyn
 	if u.dynamicClient != nil {
 		return u.dynamicClient, nil
 	}
-	if u.clientManager != nil && clusterID != "local" && clusterID != "default" && clusterID != "in-cluster" {
-		cfg, err := u.clientManager.GetK8sRestConfig(ctx, clusterID)
+	if u.clientResolver != nil && clusterID != "local" && clusterID != "default" && clusterID != "in-cluster" {
+		cfg, err := u.clientResolver.GetK8sRestConfig(ctx, clusterID)
 		if err != nil {
 			return nil, err
 		}
@@ -149,8 +155,8 @@ func (u *DRUsecase) getDynamicClient(ctx context.Context, clusterID string) (dyn
 			return dynamic.NewForConfig(cfg)
 		}
 	}
-	if u.clientManager != nil {
-		if cfg, err := u.clientManager.GetK8sRestConfig(ctx, clusterID); err == nil && cfg != nil {
+	if u.clientResolver != nil {
+		if cfg, err := u.clientResolver.GetK8sRestConfig(ctx, clusterID); err == nil && cfg != nil {
 			return dynamic.NewForConfig(cfg)
 		}
 	}

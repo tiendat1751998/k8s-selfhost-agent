@@ -176,7 +176,7 @@ type LogFilter struct {
 }
 
 func (f *LogFilter) Matches(entry LogEntry) bool {
-	if f.TenantID != "" && entry.TenantID != "" && entry.TenantID != f.TenantID {
+	if f.TenantID != "" && entry.TenantID != f.TenantID {
 		return false
 	}
 	if f.Namespace != "" && entry.Namespace != f.Namespace {

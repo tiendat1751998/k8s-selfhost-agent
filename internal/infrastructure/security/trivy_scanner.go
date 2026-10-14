@@ -110,9 +110,29 @@ func NewTrivyScannerWithBinary(binary string) *TrivyScanner {
 func (s *TrivyScanner) ScanImage(ctx context.Context, image string, maxSeverityAllowed string) (*ScanReport, error) {
 	start := time.Now().UTC()
 
-	if _, lookErr := exec.LookPath(s.binaryPath); lookErr != nil {
+	trimmed := strings.TrimSpace(image)
+	if trimmed == "" || strings.HasPrefix(trimmed, "-") {
 		return &ScanReport{
 			Target:           image,
+			ScannedAt:        start,
+			PassSecurityGate: false,
+			Passed:           false,
+			Status:           GateStatusScannerUnavailable,
+			ErrorMessage:     fmt.Sprintf("invalid container image %q: cannot be empty or start with '-'", image),
+			Summary: ScanSummary{
+				TotalCVEs:     0,
+				CriticalCount: 0,
+				HighCount:     0,
+				MediumCount:   0,
+				LowCount:      0,
+			},
+			Vulnerabilities: []Vulnerability{},
+		}, fmt.Errorf("invalid container image %q: cannot be empty or start with '-'", image)
+	}
+
+	if _, lookErr := exec.LookPath(s.binaryPath); lookErr != nil {
+		return &ScanReport{
+			Target:           trimmed,
 			ScannedAt:        start,
 			PassSecurityGate: false,
 			Passed:           false,
@@ -129,11 +149,11 @@ func (s *TrivyScanner) ScanImage(ctx context.Context, image string, maxSeverityA
 		}, fmt.Errorf("security scanner unavailable: trivy binary not found: %w", lookErr)
 	}
 
-	cmd := exec.CommandContext(ctx, s.binaryPath, "image", "--format", "json", "--quiet", image)
+	cmd := exec.CommandContext(ctx, s.binaryPath, "image", "--format", "json", "--quiet", "--", trimmed)
 	output, err := cmd.Output()
 	if err != nil {
 		return &ScanReport{
-			Target:           image,
+			Target:           trimmed,
 			ScannedAt:        start,
 			PassSecurityGate: false,
 			Passed:           false,
@@ -150,7 +170,7 @@ func (s *TrivyScanner) ScanImage(ctx context.Context, image string, maxSeverityA
 		}, fmt.Errorf("security scanner unavailable: trivy execution failed: %w", err)
 	}
 
-	return s.ParseTrivyJSON(output, image, maxSeverityAllowed, start)
+	return s.ParseTrivyJSON(output, trimmed, maxSeverityAllowed, start)
 }
 
 // ParseTrivyJSON unmarshals Trivy output and evaluates gate thresholds.

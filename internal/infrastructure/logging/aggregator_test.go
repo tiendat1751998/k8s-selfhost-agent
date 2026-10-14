@@ -323,3 +323,52 @@ func TestLogEntry_MarshalUnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestLogFilter_TenantIsolation(t *testing.T) {
+	tenantFilter := logging.LogFilter{
+		TenantID: "tenant-a",
+	}
+
+	adminFilter := logging.LogFilter{
+		TenantID: "", // Platform admin matches everything
+	}
+
+	entryTenantA := logging.LogEntry{
+		TenantID: "tenant-a",
+		Message:  "tenant a log message",
+	}
+	entryTenantB := logging.LogEntry{
+		TenantID: "tenant-b",
+		Message:  "tenant b log message",
+	}
+	entryUntenanted := logging.LogEntry{
+		TenantID: "",
+		Message:  "host system or untracked pod log message",
+	}
+
+	// 1. Tenant-A filter MUST match Tenant-A log
+	if !tenantFilter.Matches(entryTenantA) {
+		t.Errorf("expected tenant-a filter to match tenant-a log")
+	}
+
+	// 2. Tenant-A filter MUST REJECT Tenant-B log
+	if tenantFilter.Matches(entryTenantB) {
+		t.Errorf("tenant-a filter must NOT match tenant-b log")
+	}
+
+	// 3. Tenant-A filter MUST REJECT untenanted/empty tenant log (critical security invariant)
+	if tenantFilter.Matches(entryUntenanted) {
+		t.Errorf("tenant-a filter must NOT match untenanted/empty log entry")
+	}
+
+	// 4. Admin filter (empty TenantID) receives all logs
+	if !adminFilter.Matches(entryTenantA) {
+		t.Errorf("expected admin filter to match tenant-a log")
+	}
+	if !adminFilter.Matches(entryTenantB) {
+		t.Errorf("expected admin filter to match tenant-b log")
+	}
+	if !adminFilter.Matches(entryUntenanted) {
+		t.Errorf("expected admin filter to match untenanted log")
+	}
+}
+

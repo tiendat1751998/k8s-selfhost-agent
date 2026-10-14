@@ -3,6 +3,7 @@ package logengine
 import (
 	"context"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -270,6 +271,63 @@ func TestRedactor_Benchmark_Throughput(t *testing.T) {
 	t.Logf("Processed %d lines in %v (%.2f lines/sec)", totalLines, elapsed, linesPerSec)
 
 	assert.Greater(t, linesPerSec, 200000.0, "Throughput baseline sanity check must exceed 200,000 lines/second")
+}
+
+func TestRedactor_AddRule_CaseAndSymbolIndexing(t *testing.T) {
+	redactor := NewInStreamRedactor()
+
+	// 1. Uppercase ASCII rule
+	upperRule := RedactionRule{
+		Type:        "UPPERCASE_SECRET",
+		Regex:       regexp.MustCompile(`(?i)(UPPER_SECRET_)[a-zA-Z0-9]{8,}`),
+		Replacement: []byte(`$1[REDACTED]`),
+		triggers:    []string{"UPPER_SECRET_"},
+	}
+	redactor.AddRule(upperRule)
+
+	// 2. Digit/Symbol rule (starts with digit '9' or symbol '$')
+	symbolRule := RedactionRule{
+		Type:        "SYMBOL_SECRET",
+		Regex:       regexp.MustCompile(`(\$vault_token:)[a-zA-Z0-9]{8,}`),
+		Replacement: []byte(`$1[REDACTED]`),
+		triggers:    []string{"$vault_token:"},
+	}
+	redactor.AddRule(symbolRule)
+
+	digitRule := RedactionRule{
+		Type:        "DIGIT_SECRET",
+		Regex:       regexp.MustCompile(`(99_api_key_)[a-zA-Z0-9]{8,}`),
+		Replacement: []byte(`$1[REDACTED]`),
+		triggers:    []string{"99_api_key_"},
+	}
+	redactor.AddRule(digitRule)
+
+	// 3. Non-ASCII rule (starts with UTF-8 byte >= 128)
+	unicodeRule := RedactionRule{
+		Type:        "NON_ASCII_SECRET",
+		Regex:       regexp.MustCompile(`(🔑secret:)[a-zA-Z0-9]{8,}`),
+		Replacement: []byte(`$1[REDACTED]`),
+		triggers:    []string{"🔑secret:"},
+	}
+	redactor.AddRule(unicodeRule)
+
+	// Verify safe indexing into triggerMap
+	assert.NotEmpty(t, redactor.GetTriggerRules('U'))
+	assert.NotEmpty(t, redactor.GetTriggerRules('u')) // case folded
+	assert.NotEmpty(t, redactor.GetTriggerRules('$')) // symbol
+	assert.NotEmpty(t, redactor.GetTriggerRules('9')) // digit
+	assert.NotEmpty(t, redactor.GetTriggerRules(0xf0)) // emoji initial byte
+
+	// Verify masking works for uppercase ASCII
+	assert.Equal(t, "found UPPER_SECRET_[REDACTED] in logs", redactor.MaskString("found UPPER_SECRET_abcdef123 in logs"))
+	assert.Equal(t, "found upper_secret_[REDACTED] in logs", redactor.MaskString("found upper_secret_abcdef123 in logs"))
+
+	// Verify masking works for digits and symbols without underflow
+	assert.Equal(t, "env $vault_token:[REDACTED] active", redactor.MaskString("env $vault_token:secret123456 active"))
+	assert.Equal(t, "key 99_api_key_[REDACTED] loaded", redactor.MaskString("key 99_api_key_secret123456 loaded"))
+
+	// Verify masking works for non-ASCII
+	assert.Equal(t, "auth 🔑secret:[REDACTED] ok", redactor.MaskString("auth 🔑secret:secret123456 ok"))
 }
 
 func TestWriter_WithRedactor_MasksSecretsInStoredBlocks(t *testing.T) {

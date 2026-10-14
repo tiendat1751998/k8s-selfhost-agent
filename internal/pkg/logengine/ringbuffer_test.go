@@ -1,6 +1,7 @@
 package logengine
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"sync"
@@ -182,3 +183,44 @@ func BenchmarkRingBuffer_MPSC(b *testing.B) {
 	b.StopTimer()
 	close(done)
 }
+
+func TestRingBuffer_PushWait_BackpressureAndCancel(t *testing.T) {
+	const capacity = 16
+	rb := NewRingBuffer(capacity)
+
+	// Fill buffer completely
+	for i := 0; i < capacity; i++ {
+		require.True(t, rb.Push(Entry{Message: fmt.Sprintf("fill-%d", i)}))
+	}
+
+	// PushWait with canceled context must abort promptly with ctx.Err()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Millisecond)
+	defer cancel()
+
+	err := rb.PushWait(ctx, Entry{Message: "overflow-blocked"})
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestRingBuffer_PushWait_SucceedsAfterDrain(t *testing.T) {
+	const capacity = 16
+	rb := NewRingBuffer(capacity)
+
+	// Fill buffer completely
+	for i := 0; i < capacity; i++ {
+		require.True(t, rb.Push(Entry{Message: fmt.Sprintf("fill-%d", i)}))
+	}
+
+	// Drain in goroutine after short delay
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		buf := make([]Entry, 4)
+		_ = rb.DrainBatch(buf)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	err := rb.PushWait(ctx, Entry{Message: "unblocked-push"})
+	assert.NoError(t, err)
+}
+

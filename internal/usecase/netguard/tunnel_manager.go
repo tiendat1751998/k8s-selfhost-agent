@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -280,6 +281,9 @@ func (m *TunnelManager) CalculateMSS(pmtu int, isIPv6 bool) (int, error) {
 
 // GenerateIPTablesMSSRules creates iptables mangle rules for TCP SYN clamping.
 func (m *TunnelManager) GenerateIPTablesMSSRules(iface string, targetMSS int) []string {
+	if err := ValidateInterfaceName(iface); err != nil {
+		return nil
+	}
 	return []string{
 		fmt.Sprintf("iptables -t mangle -A POSTROUTING -o %s -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss %d", iface, targetMSS),
 		fmt.Sprintf("iptables -t mangle -A FORWARD -o %s -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss %d", iface, targetMSS),
@@ -288,6 +292,9 @@ func (m *TunnelManager) GenerateIPTablesMSSRules(iface string, targetMSS int) []
 
 // GenerateNFTablesMSSRules creates nftables rules for TCP SYN clamping.
 func (m *TunnelManager) GenerateNFTablesMSSRules(iface string, targetMSS int) []string {
+	if err := ValidateInterfaceName(iface); err != nil {
+		return nil
+	}
 	return []string{
 		fmt.Sprintf("nft add rule inet filter forward oifname \"%s\" tcp flags syn / syn,rst tcp option maxseg size set %d", iface, targetMSS),
 		fmt.Sprintf("nft add rule ip mangle postrouting oifname \"%s\" tcp flags syn / syn,rst tcp option maxseg size set %d", iface, targetMSS),
@@ -296,21 +303,22 @@ func (m *TunnelManager) GenerateNFTablesMSSRules(iface string, targetMSS int) []
 
 // EnforceMSSClamping implements domain.TunnelWatchdog.
 func (m *TunnelManager) EnforceMSSClamping(ctx context.Context, iface string, pmtu int) error {
-	if strings.TrimSpace(iface) == "" {
-		return domain.ErrInvalidInterface
+	if err := ValidateInterfaceName(iface); err != nil {
+		return err
 	}
 	targetMSS, err := m.CalculateMSS(pmtu, false)
 	if err != nil {
 		return err
 	}
 
-	rules := m.GenerateIPTablesMSSRules(iface, targetMSS)
-	for _, rule := range rules {
-		parts := strings.Fields(rule)
-		if len(parts) > 1 {
-			if execErr := m.executor.ExecuteCommand(ctx, parts[0], parts[1:]...); execErr != nil {
-				m.logger.Warn("Failed executing iptables rule", zap.String("rule", rule), zap.Error(execErr))
-			}
+	targetMSSStr := strconv.Itoa(targetMSS)
+	commands := [][]string{
+		{"iptables", "-t", "mangle", "-A", "POSTROUTING", "-o", iface, "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN", "-j", "TCPMSS", "--set-mss", targetMSSStr},
+		{"iptables", "-t", "mangle", "-A", "FORWARD", "-o", iface, "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN", "-j", "TCPMSS", "--set-mss", targetMSSStr},
+	}
+	for _, args := range commands {
+		if execErr := m.executor.ExecuteCommand(ctx, args[0], args[1:]...); execErr != nil {
+			m.logger.Warn("Failed executing iptables rule", zap.Strings("args", args), zap.Error(execErr))
 		}
 	}
 
