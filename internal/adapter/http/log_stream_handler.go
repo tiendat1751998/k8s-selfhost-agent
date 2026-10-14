@@ -16,6 +16,7 @@ import (
 	docker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/agent"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
+	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
@@ -29,12 +30,14 @@ type LogStreamHandler struct {
 	aggregator *logging.LogAggregator
 	streamer   RemoteLogStreamer
 	hostRepo   docker.ComputeHostRepository
+	redactor   *logengine.InStreamRedactor
 }
 
 func NewLogStreamHandler(aggregator *logging.LogAggregator, args ...any) *LogStreamHandler {
 	h := &LogStreamHandler{
 		aggregator: aggregator,
 		streamer:   agent.NewAgentLogClient(),
+		redactor:   logengine.NewInStreamRedactor(),
 	}
 	for _, arg := range args {
 		switch v := arg.(type) {
@@ -238,6 +241,11 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 	}
 
+	// Redact historical logs before sending
+	for i := range history {
+		history[i].Message = h.maskLogMessage(history[i].Message)
+	}
+
 	// Send historical logs first
 	if batchMode {
 		for i := 0; i < len(history); i += 50 {
@@ -373,6 +381,7 @@ func (h *LogStreamHandler) streamBatched(conn *websocket.Conn, sub *logging.Subs
 				return
 			}
 			entriesThisWindow++
+			entry.Message = h.maskLogMessage(entry.Message)
 			batch = append(batch, entry)
 			if len(batch) >= 50 {
 				if err := flushBatch(); err != nil {
@@ -400,6 +409,7 @@ func (h *LogStreamHandler) streamLegacy(conn *websocket.Conn, sub *logging.Subsc
 			if !ok {
 				return
 			}
+			entry.Message = h.maskLogMessage(entry.Message)
 			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			data, err := json.Marshal(entry)
 			if err != nil {
@@ -411,3 +421,11 @@ func (h *LogStreamHandler) streamLegacy(conn *websocket.Conn, sub *logging.Subsc
 		}
 	}
 }
+
+func (h *LogStreamHandler) maskLogMessage(msg string) string {
+	if h.redactor != nil {
+		return h.redactor.MaskString(msg)
+	}
+	return msg
+}
+

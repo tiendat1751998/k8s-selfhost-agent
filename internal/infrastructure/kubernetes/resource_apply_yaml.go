@@ -227,6 +227,92 @@ func fromMap(manifest map[string]interface{}, target interface{}) error {
 	return json.Unmarshal(data, target)
 }
 
+func extractPodSpec(raw map[string]interface{}) (map[string]interface{}, bool) {
+	kind, _ := raw["kind"].(string)
+	k := strings.ToLower(strings.TrimSpace(kind))
+	spec, ok := raw["spec"].(map[string]interface{})
+	if !ok || spec == nil {
+		return nil, false
+	}
+
+	switch k {
+	case "pod", "pods", "po":
+		return spec, true
+	case "deployment", "deployments", "deploy",
+		"statefulset", "statefulsets", "sts",
+		"daemonset", "daemonsets", "ds",
+		"job", "jobs":
+		if tmpl, ok := spec["template"].(map[string]interface{}); ok && tmpl != nil {
+			if podSpec, ok := tmpl["spec"].(map[string]interface{}); ok && podSpec != nil {
+				return podSpec, true
+			}
+		}
+	case "cronjob", "cronjobs", "cj":
+		if jobTmpl, ok := spec["jobTemplate"].(map[string]interface{}); ok && jobTmpl != nil {
+			if jobSpec, ok := jobTmpl["spec"].(map[string]interface{}); ok && jobSpec != nil {
+				if tmpl, ok := jobSpec["template"].(map[string]interface{}); ok && tmpl != nil {
+					if podSpec, ok := tmpl["spec"].(map[string]interface{}); ok && podSpec != nil {
+						return podSpec, true
+					}
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+func validateSecurityPolicy(raw map[string]interface{}) error {
+	podSpec, found := extractPodSpec(raw)
+	if !found {
+		return nil
+	}
+
+	if hostNet, ok := podSpec["hostNetwork"].(bool); ok && hostNet {
+		return fmt.Errorf("security violation: hostNetwork is not allowed")
+	}
+	if hostPID, ok := podSpec["hostPID"].(bool); ok && hostPID {
+		return fmt.Errorf("security violation: hostPID is not allowed")
+	}
+	if hostIPC, ok := podSpec["hostIPC"].(bool); ok && hostIPC {
+		return fmt.Errorf("security violation: hostIPC is not allowed")
+	}
+
+	for _, containerField := range []string{"containers", "initContainers", "ephemeralContainers"} {
+		if list, ok := podSpec[containerField].([]interface{}); ok {
+			for _, item := range list {
+				c, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if secCtx, ok := c["securityContext"].(map[string]interface{}) ; ok {
+					if priv, ok := secCtx["privileged"].(bool); ok && priv {
+						return fmt.Errorf("security violation: privileged containers are not allowed")
+					}
+				}
+			}
+		}
+	}
+
+	if volumes, ok := podSpec["volumes"].([]interface{}); ok {
+		for _, v := range volumes {
+			vol, ok := v.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if hp, ok := vol["hostPath"].(map[string]interface{}); ok {
+				path, _ := hp["path"].(string)
+				cleaned := strings.TrimSpace(path)
+				if cleaned == "/var/run/docker.sock" || strings.HasPrefix(cleaned, "/var/run/docker.sock/") ||
+					cleaned == "/etc" || strings.HasPrefix(cleaned, "/etc/") {
+					return fmt.Errorf("security violation: hostPath targeting %q is not allowed", path)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // ApplyYAML parses and applies one or more YAML resource documents.
 func (r *ResourceRepo) ApplyYAML(ctx context.Context, clusterID, namespace string, yamlContent []byte) error {
 	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(yamlContent), 4096)
@@ -257,6 +343,10 @@ func (r *ResourceRepo) ApplyYAML(ctx context.Context, clusterID, namespace strin
 		name, _ := metadata["name"].(string)
 		if name == "" {
 			return fmt.Errorf("manifest missing required field 'metadata.name'")
+		}
+
+		if err := validateSecurityPolicy(raw); err != nil {
+			return err
 		}
 
 		// Use namespace from manifest if present, otherwise fall back to parameter

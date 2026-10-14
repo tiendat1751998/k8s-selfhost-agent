@@ -1,8 +1,10 @@
 package http
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 
@@ -61,12 +63,27 @@ func (h *TelegramHandler) SendAlert(w http.ResponseWriter, r *http.Request) {
 }
 
 type telegramWebhookUpdate struct {
-	UpdateID      int64 `json:"update_id"`
+	UpdateID int64 `json:"update_id"`
+	Message  *struct {
+		MessageID int64 `json:"message_id"`
+		Chat      struct {
+			ID int64 `json:"id"`
+		} `json:"chat"`
+		From struct {
+			ID int64 `json:"id"`
+		} `json:"from"`
+		Text string `json:"text"`
+	} `json:"message,omitempty"`
 	CallbackQuery *struct {
 		ID   string `json:"id"`
 		From struct {
 			ID int64 `json:"id"`
 		} `json:"from"`
+		Message *struct {
+			Chat struct {
+				ID int64 `json:"id"`
+			} `json:"chat"`
+		} `json:"message,omitempty"`
 		Data string `json:"data"`
 	} `json:"callback_query,omitempty"`
 }
@@ -78,10 +95,40 @@ func (h *TelegramHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	secret := os.Getenv("TELEGRAM_WEBHOOK_SECRET")
+	headerVal := r.Header.Get("X-Telegram-Bot-Api-Secret-Token")
+
+	if secret != "" {
+		if subtle.ConstantTimeCompare([]byte(headerVal), []byte(secret)) != 1 {
+			writeError(w, http.StatusUnauthorized, "invalid webhook secret token", nil)
+			return
+		}
+	}
+
 	var update telegramWebhookUpdate
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid webhook update payload", err)
 		return
+	}
+
+	// If secret is not set, strictly validate sender authorization
+	if secret == "" {
+		var chatID, fromID int64
+		if update.CallbackQuery != nil {
+			fromID = update.CallbackQuery.From.ID
+			if update.CallbackQuery.Message != nil {
+				chatID = update.CallbackQuery.Message.Chat.ID
+			} else {
+				chatID = fromID
+			}
+		} else if update.Message != nil {
+			chatID = update.Message.Chat.ID
+			fromID = update.Message.From.ID
+		}
+		if chatID == 0 || fromID == 0 || !h.bot.IsAuthorized(chatID) || !h.bot.IsAuthorized(fromID) {
+			writeError(w, http.StatusUnauthorized, "unauthorized telegram caller", nil)
+			return
+		}
 	}
 
 	if update.CallbackQuery != nil {

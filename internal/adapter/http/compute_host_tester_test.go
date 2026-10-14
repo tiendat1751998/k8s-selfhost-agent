@@ -139,6 +139,18 @@ func TestComputeHostTester_SSRFBlocked(t *testing.T) {
 		}
 	})
 
+	t.Run("docker host probe blocks metadata endpoint", func(t *testing.T) {
+		host := &docker.ComputeHost{
+			ID:       "docker-meta",
+			HostType: "docker",
+			Endpoint: "tcp://169.254.169.254:2375",
+		}
+		_, err := testDockerHostConnection(ctx, host)
+		if err == nil || !strings.Contains(err.Error(), "blocked") {
+			t.Fatalf("expected error containing 'blocked', got: %v", err)
+		}
+	})
+
 	t.Run("agent host probe blocks loopback by default", func(t *testing.T) {
 		host := &docker.ComputeHost{
 			ID:       "agent-loopback",

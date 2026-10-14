@@ -90,7 +90,28 @@ func (h *AlertHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list channels", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"data": channels})
+
+	masked := make([]*alert.NotificationChannel, len(channels))
+	for i, ch := range channels {
+		if ch == nil {
+			continue
+		}
+		clone := *ch
+		if len(clone.Config) > 0 {
+			cfg := make(map[string]interface{}, len(clone.Config))
+			for k, v := range clone.Config {
+				if isSensitiveKey(k) {
+					cfg[k] = "***"
+				} else {
+					cfg[k] = v
+				}
+			}
+			clone.Config = cfg
+		}
+		masked[i] = &clone
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": masked})
 }
 
 type createAlertRuleRequest struct {

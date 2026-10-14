@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/deployment"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	deploymentUsecase "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 )
 
@@ -73,6 +74,13 @@ func (h *DeploymentHandler) ScaleDeployment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if req.Namespace != "" {
+		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
+			writeError(w, http.StatusForbidden, err.Error(), nil)
+			return
+		}
+	}
+
 	err := h.usecase.ScaleDeployment(r.Context(), req.Type, req.Cluster, req.Namespace, req.Name, req.Replicas)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to scale deployment", err)
@@ -115,6 +123,13 @@ func (h *DeploymentHandler) UpdateResources(w http.ResponseWriter, r *http.Reque
 	req, ok := decodeJSON[updateResourcesRequest](w, r)
 	if !ok {
 		return
+	}
+
+	if req.Namespace != "" {
+		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
+			writeError(w, http.StatusForbidden, err.Error(), nil)
+			return
+		}
 	}
 
 	err := h.usecase.UpdateResources(r.Context(), deploymentUsecase.UpdateResourcesRequest{
@@ -164,6 +179,13 @@ func (h *DeploymentHandler) RestartDeployment(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if req.Namespace != "" {
+		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
+			writeError(w, http.StatusForbidden, err.Error(), nil)
+			return
+		}
+	}
+
 	err := h.usecase.RestartDeployment(r.Context(), req.Type, req.Cluster, req.Namespace, req.Name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to restart deployment", err)
@@ -198,6 +220,19 @@ func (h *DeploymentHandler) DeleteDeployment(w http.ResponseWriter, r *http.Requ
 	req, ok := decodeJSON[deleteDeploymentRequest](w, r)
 	if !ok {
 		return
+	}
+
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole != "" && userRole != "platform_admin" && userRole != "tenant_admin" {
+		writeError(w, http.StatusForbidden, "forbidden: deleting deployment requires platform_admin or tenant_admin", nil)
+		return
+	}
+
+	if req.Namespace != "" {
+		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
+			writeError(w, http.StatusForbidden, err.Error(), nil)
+			return
+		}
 	}
 
 	err := h.usecase.DeleteDeployment(r.Context(), req.Type, req.Cluster, req.Namespace, req.Name)

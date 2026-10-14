@@ -84,6 +84,9 @@ func (r *createSLODefinitionRequest) Validate() error {
 	if r.Target <= 0 {
 		return fmt.Errorf("target must be greater than 0")
 	}
+	if r.Target > 100.0 {
+		return fmt.Errorf("target must not exceed 100")
+	}
 	return nil
 }
 
@@ -171,6 +174,10 @@ func (h *ObservabilityHandler) UpdateSLODefinition(w http.ResponseWriter, r *htt
 		existing.Service = strings.TrimSpace(req.Service)
 	}
 	if req.Target > 0 {
+		if req.Target > 100.0 {
+			writeError(w, http.StatusBadRequest, "target must not exceed 100", nil)
+			return
+		}
 		target := req.Target
 		if target <= 1.0 && target > 0 {
 			target = target * 100
@@ -321,11 +328,17 @@ func parseWindowDuration(windowStr string) time.Duration {
 		daysStr := strings.TrimSuffix(windowStr, "d")
 		var days int
 		if _, err := fmt.Sscanf(daysStr, "%d", &days); err == nil && days > 0 {
+			if days > 365 {
+				days = 365
+			}
 			return time.Duration(days) * 24 * time.Hour
 		}
 	}
 	d, err := time.ParseDuration(windowStr)
 	if err == nil && d > 0 {
+		if d > 365*24*time.Hour {
+			d = 365 * 24 * time.Hour
+		}
 		return d
 	}
 	return 30 * 24 * time.Hour

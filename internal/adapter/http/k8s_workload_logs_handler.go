@@ -116,7 +116,7 @@ func (h *K8sLogsHandler) HandleWorkloadLogs(w http.ResponseWriter, r *http.Reque
 				writeError(w, http.StatusInternalServerError, "failed to read logs", err)
 				return
 			}
-			logsStr := string(logsBytes)
+			logsStr := h.redactLogString(string(logsBytes))
 			totalLines := 0
 			if len(logsStr) > 0 {
 				totalLines = len(strings.Split(strings.TrimRight(logsStr, "\r\n"), "\n"))
@@ -262,6 +262,8 @@ func (h *K8sLogsHandler) HandleWorkloadLogs(w http.ResponseWriter, r *http.Reque
 		}
 
 		var aggregatedLines []string
+		bufPtr := logScanBufPool.Get().(*[]byte)
+		defer logScanBufPool.Put(bufPtr)
 		for _, p := range activePods {
 			req := client.CoreV1().Pods(namespace).GetLogs(p.Name, opts)
 			stream, err := req.Stream(r.Context())
@@ -269,13 +271,13 @@ func (h *K8sLogsHandler) HandleWorkloadLogs(w http.ResponseWriter, r *http.Reque
 				continue
 			}
 			sc := bufio.NewScanner(stream)
-			buf := make([]byte, 64*1024)
-			sc.Buffer(buf, 1024*1024)
+			sc.Buffer(*bufPtr, 1024*1024)
 			for sc.Scan() {
 				text := sc.Text()
 				if strings.TrimSpace(text) == "" {
 					continue
 				}
+				text = h.redactLogString(text)
 				aggregatedLines = append(aggregatedLines, fmt.Sprintf("[%s] %s", p.Name, text))
 			}
 			_ = stream.Close()
@@ -342,15 +344,26 @@ func (h *K8sLogsHandler) HandleWorkloadLogs(w http.ResponseWriter, r *http.Reque
 			}
 			defer stream.Close()
 
+			streamDone := make(chan struct{})
+			defer close(streamDone)
+			go func() {
+				select {
+				case <-ctx.Done():
+					_ = stream.Close()
+				case <-streamDone:
+				}
+			}()
+
 			scanner := bufio.NewScanner(stream)
-			buf := make([]byte, 64*1024)
-			scanner.Buffer(buf, 1024*1024)
+			bufPtr := logScanBufPool.Get().(*[]byte)
+			defer logScanBufPool.Put(bufPtr)
+			scanner.Buffer(*bufPtr, 1024*1024)
 
 			for scanner.Scan() {
 				select {
 				case <-ctx.Done():
 					return
-				case linesChan <- podLine{pod: podName, text: scanner.Text()}:
+				case linesChan <- podLine{pod: podName, text: h.redactLogString(scanner.Text())}:
 				}
 			}
 		}(p.Name)

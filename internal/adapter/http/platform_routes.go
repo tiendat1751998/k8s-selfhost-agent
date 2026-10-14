@@ -130,7 +130,7 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 		r.With(adminOnly).Route("/fleet", platform.Fleet.RegisterRoutes)
 	}
 	if platform.Audit != nil {
-		r.With(mutRoles).Route("/audit", platform.Audit.RegisterRoutes)
+		r.With(adminOnly).Route("/audit", platform.Audit.RegisterRoutes)
 	}
 	if platform.Docker != nil {
 		r.With(mutRoles).Route("/docker", platform.Docker.RegisterRoutes)

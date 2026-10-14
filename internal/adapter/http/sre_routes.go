@@ -51,6 +51,7 @@ func RegisterSRERoutes(r chi.Router, handlers *SREResilienceHandlers) {
 	}
 
 	mutRoles := mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator")
+	adminOnly := mw.RBACMiddleware("platform_admin")
 
 	// 1. Storage Resiliency & Healing
 	storage := handlers.StorageResiliency
@@ -89,12 +90,12 @@ func RegisterSRERoutes(r chi.Router, handlers *SREResilienceHandlers) {
 		vault = handlers.JWKS
 	}
 	if vault != nil {
-		r.With(mutRoles).Route("/auth", func(ar chi.Router) {
+		r.With(adminOnly).Route("/auth", func(ar chi.Router) {
 			ar.Get("/jwks/status", vault.GetJWKSStatus)
 			ar.Post("/jwks/refresh", vault.RefreshJWKS)
 			ar.Get("/vault/unseal-status", vault.GetVaultUnsealStatus)
 		})
-		r.With(mutRoles).Route("/vault", func(vr chi.Router) {
+		r.With(adminOnly).Route("/vault", func(vr chi.Router) {
 			vr.Get("/unseal-status", vault.GetVaultUnsealStatus)
 		})
 	}
@@ -103,7 +104,7 @@ func RegisterSRERoutes(r chi.Router, handlers *SREResilienceHandlers) {
 	if handlers.Fencing != nil {
 		r.With(mutRoles).Route("/clusters/{clusterId}", handlers.Fencing.RegisterRoutes)
 		r.With(mutRoles).Route("/fencing", func(fr chi.Router) {
-			fr.Post("/stonith", handlers.Fencing.ExecuteSTONITH)
+			fr.With(adminOnly).Post("/stonith", handlers.Fencing.ExecuteSTONITH)
 			fr.Get("/readiness", handlers.Fencing.GetFailoverReadiness)
 		})
 	}

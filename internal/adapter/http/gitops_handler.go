@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -18,6 +20,8 @@ type GitOpsHandler struct {
 	controller    *gitops.Controller
 	verifier      middleware.WebhookHMACVerifier
 	webhookSecret []byte
+	deliveryMu    sync.Mutex
+	deliveryCache map[string]time.Time
 }
 
 // GitOpsHandlerOption configures GitOpsHandler.
@@ -40,8 +44,9 @@ func WithWebhookVerifier(verifier middleware.WebhookHMACVerifier) GitOpsHandlerO
 // NewGitOpsHandler creates a new GitOpsHandler.
 func NewGitOpsHandler(controller *gitops.Controller, opts ...GitOpsHandlerOption) *GitOpsHandler {
 	h := &GitOpsHandler{
-		controller: controller,
-		verifier:   middleware.NewWebhookVerifier(),
+		controller:    controller,
+		verifier:      middleware.NewWebhookVerifier(),
+		deliveryCache: make(map[string]time.Time),
 	}
 	for _, opt := range opts {
 		opt(h)
@@ -199,7 +204,40 @@ func (h *GitOpsHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	deliveryID := strings.TrimSpace(r.Header.Get("X-GitHub-Delivery"))
+	if deliveryID != "" && h.checkAndRecordDelivery(deliveryID) {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status":  "duplicate",
+			"message": "delivery already processed",
+		})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status": "received",
 	})
+}
+
+func (h *GitOpsHandler) checkAndRecordDelivery(deliveryID string) bool {
+	if deliveryID == "" {
+		return false
+	}
+	h.deliveryMu.Lock()
+	defer h.deliveryMu.Unlock()
+
+	now := time.Now()
+	for id, t := range h.deliveryCache {
+		if now.Sub(t) > 15*time.Minute {
+			delete(h.deliveryCache, id)
+		}
+	}
+
+	if seenAt, exists := h.deliveryCache[deliveryID]; exists {
+		if now.Sub(seenAt) <= 15*time.Minute {
+			return true
+		}
+	}
+
+	h.deliveryCache[deliveryID] = now
+	return false
 }
