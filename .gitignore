@@ -111,3 +111,7 @@ generate_subtitles.py
 !frontend-vue/public/*.png
 *.pyc
 bin/
+
+# Prevent loose screenshots in workspace or frontend roots (use docs/qa-evidence/<YYYY-MM-DD>/<task>/)
+/*.png
+/frontend-vue/*.png
