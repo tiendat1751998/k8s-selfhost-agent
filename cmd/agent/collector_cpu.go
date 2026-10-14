@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"log/slog"
@@ -76,6 +76,7 @@ func (c *SystemCollector) collectCPU() CPUMetrics {
 	}
 
 	var usagePercent float64
+	c.mu.Lock()
 	if foundOverall {
 		if c.prevCPUTotal > 0 && totalVal > c.prevCPUTotal {
 			deltaTotal := totalVal - c.prevCPUTotal
@@ -89,6 +90,7 @@ func (c *SystemCollector) collectCPU() CPUMetrics {
 		c.prevCPUActive = activeVal
 	}
 	c.lastCPUCount = cpuCount
+	c.mu.Unlock()
 
 	return CPUMetrics{
 		Count:        cpuCount,

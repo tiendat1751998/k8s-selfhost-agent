@@ -177,9 +177,13 @@ func (w *NodeHistoryWorker) recordRollup(ctx context.Context) error {
 	now := time.Now().UTC()
 	rollups := make([]nodemetrics.NodeMetricRollup, 0, len(snap.Nodes))
 
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	type anomalyTrigger struct {
+		metrics NodeMetrics
+		status  string
+	}
+	var anomalies []anomalyTrigger
 
+	w.mu.Lock()
 	for _, n := range snap.Nodes {
 		nodeID := n.NodeID
 		if nodeID == "" {
@@ -206,7 +210,7 @@ func (w *NodeHistoryWorker) recordRollup(ctx context.Context) error {
 		// Sentinel check: detect node transition to offline or degraded
 		prevStat, hasPrev := w.prevNodeStatus[nodeID]
 		if hasPrev && prevStat == "online" && (status == "offline" || status == "degraded") {
-			w.triggerNodeAnomalyIncident(ctx, n, status, now)
+			anomalies = append(anomalies, anomalyTrigger{metrics: n, status: status})
 		}
 		w.prevNodeStatus[nodeID] = status
 
@@ -256,6 +260,11 @@ func (w *NodeHistoryWorker) recordRollup(ctx context.Context) error {
 			RecordedAt:           now,
 		}
 		rollups = append(rollups, rollup)
+	}
+	w.mu.Unlock()
+
+	for _, a := range anomalies {
+		w.triggerNodeAnomalyIncident(ctx, a.metrics, a.status, now)
 	}
 
 	if len(rollups) > 0 {

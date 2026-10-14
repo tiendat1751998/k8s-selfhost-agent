@@ -133,6 +133,8 @@ func (w *Writer) flusherLoop() {
 	defer w.wg.Done()
 	ticker := time.NewTicker(w.flushInterval)
 	defer ticker.Stop()
+	idleTimer := time.NewTimer(10 * time.Millisecond)
+	defer idleTimer.Stop()
 
 	batch := make([]Entry, w.maxRows)
 
@@ -196,6 +198,14 @@ func (w *Writer) flusherLoop() {
 				continue
 			}
 			// Ring buffer is empty, wait briefly or for notifications
+			if !idleTimer.Stop() {
+				select {
+				case <-idleTimer.C:
+				default:
+				}
+			}
+			idleTimer.Reset(10 * time.Millisecond)
+
 			select {
 			case <-w.closeCh:
 			case req := <-w.flushReqCh:
@@ -221,7 +231,7 @@ func (w *Writer) flusherLoop() {
 						w.setLastError(err)
 					}
 				}
-			case <-time.After(10 * time.Millisecond):
+			case <-idleTimer.C:
 			}
 		}
 	}

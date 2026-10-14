@@ -57,23 +57,41 @@ type TransitionListener interface {
 	OnStateTransition(ctx context.Context, event StateTransitionEvent) error
 }
 
+const numSentinelShards = 64
+
+type sentinelShard struct {
+	mu     sync.RWMutex
+	states map[string]SentinelState
+}
+
+func getSentinelShardIndex(nodeID string) int {
+	var h uint64 = 14695981039346656037
+	for i := 0; i < len(nodeID); i++ {
+		h ^= uint64(nodeID[i])
+		h *= 1099511628211
+	}
+	return int(h & (numSentinelShards - 1))
+}
+
 // EdgeSentinel manages autonomous deterministic watchdog evaluations and delta emission filtering.
 type EdgeSentinel struct {
-	mu          sync.RWMutex
 	executor    RemediationExecutor
 	listener    TransitionListener
-	nodeStates  map[string]SentinelState
+	shards      [numSentinelShards]sentinelShard
 	tickCounter atomic.Uint64
 	emitCounter atomic.Uint64
 }
 
 // NewEdgeSentinel initializes an autonomous sentinel with required executor and optional listener.
 func NewEdgeSentinel(executor RemediationExecutor, listener TransitionListener) *EdgeSentinel {
-	return &EdgeSentinel{
-		executor:   executor,
-		listener:   listener,
-		nodeStates: make(map[string]SentinelState),
+	s := &EdgeSentinel{
+		executor: executor,
+		listener: listener,
 	}
+	for i := 0; i < numSentinelShards; i++ {
+		s.shards[i].states = make(map[string]SentinelState)
+	}
+	return s
 }
 
 // EvaluateSnapshot executes 100ms deterministic rule checks against the hardware snapshot.
@@ -153,20 +171,23 @@ func (s *EdgeSentinel) applyStateTransition(
 	reasons []string,
 	remediations []string,
 ) error {
-	s.mu.Lock()
-	currentState, tracked := s.nodeStates[nodeID]
+	idx := getSentinelShardIndex(nodeID)
+	shard := &s.shards[idx]
+
+	shard.mu.Lock()
+	currentState, tracked := shard.states[nodeID]
 	if !tracked {
 		currentState = StateNominal
 	}
 
 	// Suppress identical state ticks (Delta Filter)
 	if tracked && currentState == targetState {
-		s.mu.Unlock()
+		shard.mu.Unlock()
 		return nil
 	}
 
-	s.nodeStates[nodeID] = targetState
-	s.mu.Unlock()
+	shard.states[nodeID] = targetState
+	shard.mu.Unlock()
 
 	// If transitioning to or between non-nominal states, or leaving non-nominal back to nominal
 	if currentState != targetState {

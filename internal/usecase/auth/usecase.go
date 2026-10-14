@@ -11,10 +11,14 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/user"
 )
 
+// dummyBcryptHash is a precomputed valid bcrypt hash used to mitigate timing side-channel attacks when a user is not found.
+const dummyBcryptHash = "$2a$10$w095Hk4W4r1k6XGjS9j72.g98Z/JpT10wI7y8YkPZ3X9eU56q1iGi"
+
 // Usecase coordinates authentication logic.
 type Usecase struct {
 	repo                 user.Repository
 	rateLimiter          *totpRateLimiter
+	replayTracker        *totpReplayTracker
 	tokenRepo            user.RefreshTokenRepository
 	txManager            ports.TransactionManager
 	tokenIssuer          TokenIssuer
@@ -72,6 +76,7 @@ func NewUsecase(repo user.Repository, opts ...Option) *Usecase {
 	u := &Usecase{
 		repo:                 repo,
 		rateLimiter:          newTOTPRateLimiter(5, 15*time.Minute),
+		replayTracker:        newTOTPReplayTracker(),
 		txManager:            noopTxManager{},
 		refreshTokenDuration: 7 * 24 * time.Hour,
 	}
@@ -97,6 +102,7 @@ type AuthResult struct {
 func (u *Usecase) Authenticate(ctx context.Context, email, password string) (*AuthResult, error) {
 	usr, err := u.repo.GetByEmail(ctx, email)
 	if err != nil || usr == nil {
+		_ = bcrypt.CompareHashAndPassword([]byte(dummyBcryptHash), []byte(password))
 		return nil, errors.New("invalid credentials")
 	}
 
@@ -128,6 +134,7 @@ type PasswordVerifier interface {
 func (u *Usecase) VerifyPassword(ctx context.Context, userID, password string) error {
 	usr, err := u.repo.GetByID(ctx, userID)
 	if err != nil || usr == nil {
+		_ = bcrypt.CompareHashAndPassword([]byte(dummyBcryptHash), []byte(password))
 		return errors.New("user not found")
 	}
 

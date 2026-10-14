@@ -77,6 +77,37 @@ func (rl *totpRateLimiter) recordSuccess(userID string) {
 	delete(rl.attempts, userID)
 }
 
+type totpReplayTracker struct {
+	mu       sync.Mutex
+	consumed map[string]time.Time
+}
+
+func newTOTPReplayTracker() *totpReplayTracker {
+	return &totpReplayTracker{
+		consumed: make(map[string]time.Time),
+	}
+}
+
+func (t *totpReplayTracker) checkAndRecord(userID, code string, ttl time.Duration) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	now := time.Now()
+	for k, exp := range t.consumed {
+		if now.After(exp) {
+			delete(t.consumed, k)
+		}
+	}
+
+	key := userID + ":" + code
+	if exp, ok := t.consumed[key]; ok && now.Before(exp) {
+		return false
+	}
+
+	t.consumed[key] = now.Add(ttl)
+	return true
+}
+
 // SetupTOTP generates a new TOTP secret and otpauth URL for the user.
 func (u *Usecase) SetupTOTP(ctx context.Context, userID string) (*TOTPSetupResult, error) {
 	usr, err := u.repo.GetByID(ctx, userID)
@@ -212,14 +243,24 @@ func (u *Usecase) VerifyTOTP(ctx context.Context, userID, code string) error {
 		return errors.New("invalid TOTP code")
 	}
 
+	if u.replayTracker != nil && !u.replayTracker.checkAndRecord(userID, code, 90*time.Second) {
+		u.rateLimiter.recordFailure(userID)
+		return errors.New("TOTP code already used")
+	}
+
 	u.rateLimiter.recordSuccess(userID)
 	return nil
 }
 
 // VerifyRecoveryCode consumes a single recovery code for 2FA login.
 func (u *Usecase) VerifyRecoveryCode(ctx context.Context, userID, code string) error {
+	if !u.rateLimiter.allowAttempt(userID) {
+		return errors.New("too many failed MFA attempts, please try again in 15 minutes")
+	}
+
 	usr, err := u.repo.GetByID(ctx, userID)
 	if err != nil || usr == nil {
+		u.rateLimiter.recordFailure(userID)
 		return errors.New("user not found")
 	}
 
@@ -250,6 +291,7 @@ func (u *Usecase) VerifyRecoveryCode(ctx context.Context, userID, code string) e
 	}
 
 	if matchIndex == -1 {
+		u.rateLimiter.recordFailure(userID)
 		return errors.New("invalid recovery code")
 	}
 
@@ -272,6 +314,7 @@ func (u *Usecase) VerifyRecoveryCode(ctx context.Context, userID, code string) e
 		return fmt.Errorf("updating recovery codes: %w", err)
 	}
 
+	u.rateLimiter.recordSuccess(userID)
 	return nil
 }
 

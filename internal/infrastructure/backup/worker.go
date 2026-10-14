@@ -42,9 +42,28 @@ func (w *WorkerPool) Start(workersCount int) {
 		w.logger.Error("failed to reconcile stale backup jobs on worker pool start", zap.Error(err))
 	}
 
+	// Dedicated restore worker to ensure restore operations are never starved by concurrent backups
+	w.wg.Add(1)
+	go w.restoreWorkerLoop()
+
 	for i := 0; i < workersCount; i++ {
 		w.wg.Add(1)
 		go w.workerLoop(i)
+	}
+}
+
+func (w *WorkerPool) restoreWorkerLoop() {
+	defer w.wg.Done()
+	w.logger.Info("starting dedicated restore worker")
+
+	for {
+		select {
+		case <-w.ctx.Done():
+			w.logger.Info("stopping dedicated restore worker")
+			return
+		case restoreID := <-w.resQueue:
+			w.handleRestore(restoreID, -1)
+		}
 	}
 }
 
@@ -53,29 +72,48 @@ func (w *WorkerPool) workerLoop(id int) {
 	w.logger.Info("starting backup worker", zap.Int("worker_id", id))
 
 	for {
+		// Prioritize checking resQueue before jobQueue
 		select {
 		case <-w.ctx.Done():
 			w.logger.Info("stopping backup worker", zap.Int("worker_id", id))
 			return
-		case jobID := <-w.jobQueue:
-			ctx, cancel := context.WithTimeout(w.ctx, 2*time.Hour)
-			w.logger.Info("executing backup job", zap.String("job_id", jobID), zap.Int("worker_id", id))
-			if err := w.engine.ExecuteBackup(ctx, jobID); err != nil {
-				w.logger.Error("backup job failed", zap.String("job_id", jobID), zap.Error(err))
-			} else {
-				w.logger.Info("backup job completed successfully", zap.String("job_id", jobID))
-			}
-			cancel()
 		case restoreID := <-w.resQueue:
-			ctx, cancel := context.WithTimeout(w.ctx, 2*time.Hour)
-			w.logger.Info("executing restore job", zap.String("restore_id", restoreID), zap.Int("worker_id", id))
-			if err := w.engine.ExecuteRestore(ctx, restoreID); err != nil {
-				w.logger.Error("restore job failed", zap.String("restore_id", restoreID), zap.Error(err))
-			} else {
-				w.logger.Info("restore job completed successfully", zap.String("restore_id", restoreID))
-			}
-			cancel()
+			w.handleRestore(restoreID, id)
+			continue
+		default:
 		}
+
+		select {
+		case <-w.ctx.Done():
+			w.logger.Info("stopping backup worker", zap.Int("worker_id", id))
+			return
+		case restoreID := <-w.resQueue:
+			w.handleRestore(restoreID, id)
+		case jobID := <-w.jobQueue:
+			w.handleBackup(jobID, id)
+		}
+	}
+}
+
+func (w *WorkerPool) handleBackup(jobID string, workerID int) {
+	ctx, cancel := context.WithTimeout(w.ctx, 2*time.Hour)
+	defer cancel()
+	w.logger.Info("executing backup job", zap.String("job_id", jobID), zap.Int("worker_id", workerID))
+	if err := w.engine.ExecuteBackup(ctx, jobID); err != nil {
+		w.logger.Error("backup job failed", zap.String("job_id", jobID), zap.Error(err))
+	} else {
+		w.logger.Info("backup job completed successfully", zap.String("job_id", jobID))
+	}
+}
+
+func (w *WorkerPool) handleRestore(restoreID string, workerID int) {
+	ctx, cancel := context.WithTimeout(w.ctx, 2*time.Hour)
+	defer cancel()
+	w.logger.Info("executing restore job", zap.String("restore_id", restoreID), zap.Int("worker_id", workerID))
+	if err := w.engine.ExecuteRestore(ctx, restoreID); err != nil {
+		w.logger.Error("restore job failed", zap.String("restore_id", restoreID), zap.Error(err))
+	} else {
+		w.logger.Info("restore job completed successfully", zap.String("restore_id", restoreID))
 	}
 }
 

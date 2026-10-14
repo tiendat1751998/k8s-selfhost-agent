@@ -58,7 +58,10 @@ func NewProcessingPipe(dst io.Writer, cfg PipeConfig) (*ProcessingPipe, io.Write
 
 	// 2. Encryption layer (AES-256-GCM chunked AEAD)
 	var finalSink io.Writer = destWithCount
-	if cfg.EnableEncryption && len(cfg.EncryptionKey) > 0 {
+	if cfg.EnableEncryption {
+		if len(cfg.EncryptionKey) != 32 {
+			return nil, nil, errors.NewValidation("encryption_key", "encryption key must be exactly 32 bytes for AES-256")
+		}
 		gw, err := NewGCMStreamWriter(destWithCount, cfg.EncryptionKey)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "creating GCM stream writer")
@@ -123,7 +126,10 @@ func (p *ProcessingPipe) Summary() (rawSize int64, compressedSize int64, sha256C
 func NewDecompressionPipe(src io.Reader, encryptionKey []byte, enableEncryption bool) (io.ReadCloser, error) {
 	var inputSource io.Reader = src
 
-	if enableEncryption && len(encryptionKey) > 0 {
+	if enableEncryption {
+		if len(encryptionKey) != 32 {
+			return nil, errors.NewValidation("encryption_key", "encryption key must be exactly 32 bytes for AES-256")
+		}
 		gr, err := NewGCMStreamReader(src, encryptionKey)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating GCM stream reader for decompression")

@@ -154,15 +154,16 @@ func (e *Engine) ExecuteBackup(ctx context.Context, jobID string) error {
 	}
 
 	// 5. Setup Compression & Encryption Pipe
-	var encKey []byte
-	if policy.EncryptionEnabled && len(policy.EncryptionKeyID) >= 32 {
-		encKey = []byte(policy.EncryptionKeyID[:32])
+	encKey, err := resolveEncryptionKey(policy)
+	if err != nil {
+		e.failJob(ctx, job, err.Error(), primaryTarget, secondaryTarget)
+		return err
 	}
 
 	pipeConfig := dualsync.PipeConfig{
 		CompressionLevel: policy.CompressionLevel,
 		EncryptionKey:    encKey,
-		EnableEncryption: policy.EncryptionEnabled && len(encKey) == 32,
+		EnableEncryption: policy.EncryptionEnabled,
 	}
 
 	pipe, pipeCloser, err := dualsync.NewProcessingPipe(dualWriter, pipeConfig)
@@ -377,12 +378,13 @@ func (e *Engine) ExecuteRestore(ctx context.Context, restoreID string) error {
 	}()
 
 	// Decompress and Decrypt
-	var encKey []byte
-	if policy.EncryptionEnabled && len(policy.EncryptionKeyID) >= 32 {
-		encKey = []byte(policy.EncryptionKeyID[:32])
+	encKey, err := resolveEncryptionKey(policy)
+	if err != nil {
+		e.failRestore(ctx, restore, err.Error())
+		return err
 	}
 
-	decompStream, err := dualsync.NewDecompressionPipe(srcStream, encKey, policy.EncryptionEnabled && len(encKey) == 32)
+	decompStream, err := dualsync.NewDecompressionPipe(srcStream, encKey, policy.EncryptionEnabled)
 	if err != nil {
 		e.failRestore(ctx, restore, fmt.Sprintf("initializing decompression stream: %v", err))
 		return err
@@ -418,5 +420,22 @@ func (e *Engine) ExecuteRestore(ctx context.Context, restoreID string) error {
 	defer compCancel()
 	return e.repo.UpdateRestore(termCtx, restore)
 }
+
+func resolveEncryptionKey(policy *backup.BackupPolicy) ([]byte, error) {
+	if !policy.EncryptionEnabled {
+		return nil, nil
+	}
+	if policy.EncryptionKeyID == "" {
+		return nil, fmt.Errorf("encryption enabled but EncryptionKeyID is empty")
+	}
+	if len(policy.EncryptionKeyID) >= 32 {
+		return []byte(policy.EncryptionKeyID[:32]), nil
+	}
+	derived := sha256.Sum256([]byte(policy.EncryptionKeyID))
+	key := make([]byte, 32)
+	copy(key, derived[:])
+	return key, nil
+}
+
 
 

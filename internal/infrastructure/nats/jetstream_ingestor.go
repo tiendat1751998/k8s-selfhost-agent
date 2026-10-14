@@ -2,6 +2,7 @@
 package nats
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -31,6 +32,17 @@ var (
 		New: func() any {
 			dec, _ := zstd.NewReader(nil)
 			return dec
+		},
+	}
+	bytesBufferPool = sync.Pool{
+		New: func() any {
+			return new(bytes.Buffer)
+		},
+	}
+	decodeBufferPool = sync.Pool{
+		New: func() any {
+			b := make([]byte, 0, 16*1024)
+			return &b
 		},
 	}
 )
@@ -86,10 +98,15 @@ func (p *MicroBatchPusher) CompressAndFlush() ([]byte, error) {
 		return nil, nil
 	}
 
-	raw, err := json.Marshal(p.records)
-	if err != nil {
+	buf := bytesBufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bytesBufferPool.Put(buf)
+
+	if err := json.NewEncoder(buf).Encode(p.records); err != nil {
 		return nil, fmt.Errorf("marshaling telemetry batch: %w", err)
 	}
+
+	raw := buf.Bytes()
 
 	enc := encoderPool.Get().(*zstd.Encoder)
 	defer encoderPool.Put(enc)
@@ -108,7 +125,13 @@ func DecompressBatch(compressed []byte) ([]TelemetryRecord, error) {
 	dec := decoderPool.Get().(*zstd.Decoder)
 	defer decoderPool.Put(dec)
 
-	raw, err := dec.DecodeAll(compressed, nil)
+	bufPtr := decodeBufferPool.Get().(*[]byte)
+	defer func() {
+		*bufPtr = (*bufPtr)[:0]
+		decodeBufferPool.Put(bufPtr)
+	}()
+
+	raw, err := dec.DecodeAll(compressed, (*bufPtr)[:0])
 	if err != nil {
 		return nil, fmt.Errorf("decompressing zstd batch: %w", err)
 	}

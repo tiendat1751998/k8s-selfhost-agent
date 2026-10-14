@@ -3,6 +3,7 @@ package helm
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/release"
 
+	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
 	"github.com/datdt/k8sselfhost/internal/pkg/syncutil"
 )
 
@@ -72,6 +74,21 @@ type UpgradeRequest struct {
 }
 
 
+func validateRepoURL(rawURL string) error {
+	parsedURL, err := netguard.ValidateURL(rawURL, "http", "https", "oci")
+	if err != nil {
+		return fmt.Errorf("invalid helm repository url: %w", err)
+	}
+	if host := parsedURL.Hostname(); host != "" {
+		if ip := net.ParseIP(host); ip != nil {
+			if err := netguard.NewDefault().ValidateIP(ip); err != nil {
+				return fmt.Errorf("invalid helm repository url: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
 // InstallRelease installs a Helm chart into the specified cluster and namespace.
 func (m *ReleaseManager) InstallRelease(ctx context.Context, clusterID string, req InstallRequest) (*release.Release, error) {
 	if strings.TrimSpace(req.ReleaseName) == "" {
@@ -79,6 +96,14 @@ func (m *ReleaseManager) InstallRelease(ctx context.Context, clusterID string, r
 	}
 	if strings.TrimSpace(req.Chart) == "" {
 		return nil, fmt.Errorf("chart name is required")
+	}
+	if strings.Contains(req.Chart, "..") || strings.HasPrefix(req.Chart, "/") || strings.HasPrefix(req.Chart, `\`) {
+		return nil, fmt.Errorf("invalid chart name or path: %q", req.Chart)
+	}
+	if req.Repo != "" {
+		if err := validateRepoURL(req.Repo); err != nil {
+			return nil, err
+		}
 	}
 	ns := req.Namespace
 	if strings.TrimSpace(ns) == "" {
@@ -154,6 +179,16 @@ func (m *ReleaseManager) InstallRelease(ctx context.Context, clusterID string, r
 func (m *ReleaseManager) UpgradeRelease(ctx context.Context, clusterID string, req UpgradeRequest) (*release.Release, error) {
 	if strings.TrimSpace(req.ReleaseName) == "" {
 		return nil, fmt.Errorf("release name is required")
+	}
+	if req.Chart != "" {
+		if strings.Contains(req.Chart, "..") || strings.HasPrefix(req.Chart, "/") || strings.HasPrefix(req.Chart, `\`) {
+			return nil, fmt.Errorf("invalid chart name or path: %q", req.Chart)
+		}
+	}
+	if req.Repo != "" {
+		if err := validateRepoURL(req.Repo); err != nil {
+			return nil, err
+		}
 	}
 	ns := req.Namespace
 	if strings.TrimSpace(ns) == "" {

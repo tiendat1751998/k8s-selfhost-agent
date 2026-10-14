@@ -154,11 +154,22 @@ func (m *NodeServiceRescueManager) ExecuteServiceRescue(ctx context.Context, cli
 	deadline := time.Now().Add(m.pollTimeout)
 	isRestored := false
 
+	pollTimer := time.NewTimer(m.pollInterval)
+	defer pollTimer.Stop()
+
 	for time.Now().Before(deadline) {
+		if !pollTimer.Stop() {
+			select {
+			case <-pollTimer.C:
+			default:
+			}
+		}
+		pollTimer.Reset(m.pollInterval)
+
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(m.pollInterval):
+		case <-pollTimer.C:
 		}
 
 		updatedNode, err := client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})

@@ -21,16 +21,17 @@ const (
 
 // GCMStreamWriter wraps an io.Writer with chunked AES-256-GCM encryption.
 type GCMStreamWriter struct {
-	w         io.Writer
-	aead      cipher.AEAD
-	baseNonce []byte
-	chunkSeq  uint64
-	buf       []byte
-	closed    bool
+	w             io.Writer
+	aead          cipher.AEAD
+	baseNonce     []byte
+	chunkSeq      uint64
+	buf           []byte
+	closed        bool
+	headerWritten bool
 }
 
 // NewGCMStreamWriter initializes a GCM stream writer.
-// It generates a random 12-byte base nonce and writes it as the stream header.
+// It generates a random 12-byte base nonce and prepares the stream.
 func NewGCMStreamWriter(w io.Writer, key []byte) (*GCMStreamWriter, error) {
 	if len(key) != 32 {
 		return nil, errors.NewValidation("encryption_key", "AES-256 key must be exactly 32 bytes")
@@ -51,11 +52,6 @@ func NewGCMStreamWriter(w io.Writer, key []byte) (*GCMStreamWriter, error) {
 		return nil, errors.Wrap(err, "generating random base nonce")
 	}
 
-	// Write 12-byte base nonce header
-	if _, err := w.Write(baseNonce); err != nil {
-		return nil, errors.Wrap(err, "writing base nonce header")
-	}
-
 	return &GCMStreamWriter{
 		w:         w,
 		aead:      aead,
@@ -72,6 +68,13 @@ func deriveNonce(baseNonce []byte, seq uint64) []byte {
 }
 
 func (gw *GCMStreamWriter) writeChunk(plaintext []byte, isLast byte) error {
+	if !gw.headerWritten {
+		if _, err := gw.w.Write(gw.baseNonce); err != nil {
+			return errors.Wrap(err, "writing base nonce header")
+		}
+		gw.headerWritten = true
+	}
+
 	nonce := deriveNonce(gw.baseNonce, gw.chunkSeq)
 	ad := make([]byte, 9)
 	binary.BigEndian.PutUint64(ad[:8], gw.chunkSeq)

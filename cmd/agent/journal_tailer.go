@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"bufio"
@@ -61,6 +61,15 @@ type journalJSONEntry struct {
 }
 
 func (j *JournalTailer) streamLoop(ctx context.Context) {
+	retryTimer := time.NewTimer(time.Hour)
+	if !retryTimer.Stop() {
+		select {
+		case <-retryTimer.C:
+		default:
+		}
+	}
+	defer retryTimer.Stop()
+
 	for {
 		if ctx.Err() != nil {
 			return
@@ -69,10 +78,11 @@ func (j *JournalTailer) streamLoop(ctx context.Context) {
 		r, err := j.openStream(ctx)
 		if err != nil {
 			j.logger.Warn("Failed to start journalctl stream, retrying in 5s", slog.String("error", err.Error()))
+			retryTimer.Reset(5 * time.Second)
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(5 * time.Second):
+			case <-retryTimer.C:
 				continue
 			}
 		}
@@ -80,10 +90,11 @@ func (j *JournalTailer) streamLoop(ctx context.Context) {
 		j.readStream(ctx, r)
 		_ = r.Close()
 
+		retryTimer.Reset(1 * time.Second)
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(1 * time.Second):
+		case <-retryTimer.C:
 		}
 	}
 }

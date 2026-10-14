@@ -152,3 +152,39 @@ func TestRedisDriver_Restore_FallbackGracefulError(t *testing.T) {
 		t.Errorf("expected error message to guide user to provide data_dir or rdb_path, got: %v", err)
 	}
 }
+
+func TestRedisDriver_Restore_RejectsPathTraversalAndForbiddenPaths(t *testing.T) {
+	d := drivers.NewRedisDriver()
+	forbiddenCases := []string{
+		"../../etc/redis/dump.rdb",
+		"/etc/dump.rdb",
+		"/etc/redis/dump.rdb",
+		"/root/dump.rdb",
+		"/bin/dump.rdb",
+		"/usr/bin/dump.rdb",
+		"/proc/version",
+		"/sys/dump.rdb",
+		"c:/windows/system32/dump.rdb",
+		"C:\\Windows\\dump.rdb",
+		"/var/lib/redis/dump\x00.rdb",
+	}
+
+	for _, badPath := range forbiddenCases {
+		opts := backup.RestoreOptions{
+			DBType:   "redis",
+			Host:     "127.0.0.1",
+			Port:     6379,
+			Database: "0",
+			ExtraParams: map[string]string{
+				"rdb_path": badPath,
+			},
+		}
+
+		reader := bytes.NewReader([]byte("REDIS0011dummydata"))
+		err := d.Restore(context.Background(), opts, reader)
+		if err == nil {
+			t.Errorf("expected error for forbidden/traversal path %q, got nil", badPath)
+		}
+	}
+}
+

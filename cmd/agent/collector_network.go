@@ -25,15 +25,21 @@ func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {
 		}
 	}
 
+	c.mu.RLock()
+	prevNetStats := c.prevNetStats
+	prevNetTime := c.prevNetTime
+	c.mu.RUnlock()
+
 	var elapsed float64
-	if !c.prevNetTime.IsZero() {
-		elapsed = now.Sub(c.prevNetTime).Seconds()
+	if !prevNetTime.IsZero() {
+		elapsed = now.Sub(prevNetTime).Seconds()
 	}
 	if elapsed <= 0 {
 		elapsed = 1.0
 	}
 
 	interfaces := make([]NetworkInterfaceMetrics, 0)
+	newNetStats := make(map[string]netDevStat)
 	var totalRx, totalTx int64
 
 	lines := strings.Split(string(data), "\n")
@@ -63,7 +69,7 @@ func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {
 		}
 
 		var rxRate, txRate int64
-		prev, ok := c.prevNetStats[iface]
+		prev, ok := prevNetStats[iface]
 		if ok && elapsed > 0 {
 			if rxBytes >= prev.rxBytes {
 				rxRate = int64(float64(rxBytes-prev.rxBytes) / elapsed)
@@ -73,7 +79,7 @@ func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {
 			}
 		}
 
-		c.prevNetStats[iface] = netDevStat{
+		newNetStats[iface] = netDevStat{
 			rxBytes: rxBytes,
 			txBytes: txBytes,
 		}
@@ -90,7 +96,10 @@ func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {
 		}
 	}
 
+	c.mu.Lock()
+	c.prevNetStats = newNetStats
 	c.prevNetTime = now
+	c.mu.Unlock()
 
 	return NetworkMetrics{
 		Interfaces:         interfaces,

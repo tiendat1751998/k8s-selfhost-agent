@@ -303,10 +303,27 @@ func TestGCM_InvalidKeyLength(t *testing.T) {
 		t.Fatalf("expected error for invalid key length, got nil")
 	}
 
+	// Empty key with encryption enabled must also return error
+	cfgEmpty := dualsync.PipeConfig{
+		CompressionLevel: 1,
+		EncryptionKey:    nil,
+		EnableEncryption: true,
+	}
+	_, _, err = dualsync.NewProcessingPipe(&buf, cfgEmpty)
+	if err == nil {
+		t.Fatalf("expected error for nil key with EnableEncryption=true, got nil")
+	}
+
 	_, err = dualsync.NewDecompressionPipe(&buf, []byte("short"), true)
 	if err == nil {
 		t.Fatalf("expected error for invalid key in decompression, got nil")
 	}
+
+	_, err = dualsync.NewDecompressionPipe(&buf, nil, true)
+	if err == nil {
+		t.Fatalf("expected error for nil key in decompression, got nil")
+	}
 }
+
 
 
