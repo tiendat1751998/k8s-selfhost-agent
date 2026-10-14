@@ -26,7 +26,10 @@ var (
 	TenantIDKey = tenancy.TenantIDKey
 )
 
-const JWTIssuer = "k8s-selfhost"
+const (
+	JWTIssuer   = "k8s-selfhost"
+	headerHS256 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+)
 
 const (
 	AccessTokenDuration  = 15 * time.Minute
@@ -85,7 +88,6 @@ func GenerateAccessToken(userID, role, tenantID string) (string, error) {
 		return "", ErrJWTSecretMissing
 	}
 
-	header := `{"alg":"HS256","typ":"JWT"}`
 	now := time.Now()
 	claims := JWTClaims{
 		Sub:    userID,
@@ -102,16 +104,15 @@ func GenerateAccessToken(userID, role, tenantID string) (string, error) {
 		return "", err
 	}
 
-	encHeader := base64.RawURLEncoding.EncodeToString([]byte(header))
 	encPayload := base64.RawURLEncoding.EncodeToString(payloadBytes)
-	signingString := encHeader + "." + encPayload
+	signingString := headerHS256 + "." + encPayload
 
 	h := hmac.New(sha256.New, jwtSecret)
-	if _, err := h.Write([]byte(signingString)); err != nil {
-		return "", err
-	}
-	signature := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
-	return signingString + "." + signature, nil
+	_, _ = h.Write([]byte(signingString))
+	var sigBuf [32]byte
+	sig := base64.RawURLEncoding.EncodeToString(h.Sum(sigBuf[:0]))
+
+	return signingString + "." + sig, nil
 }
 
 // GeneratePartialToken creates a limited-scope temporary token (5 min) used between password verification and TOTP confirmation.
@@ -120,7 +121,6 @@ func GeneratePartialToken(userID string) (string, error) {
 		return "", ErrJWTSecretMissing
 	}
 
-	header := `{"alg":"HS256","typ":"JWT"}`
 	now := time.Now()
 	claims := JWTClaims{
 		Sub:  userID,
@@ -135,27 +135,22 @@ func GeneratePartialToken(userID string) (string, error) {
 		return "", err
 	}
 
-	encHeader := base64.RawURLEncoding.EncodeToString([]byte(header))
 	encPayload := base64.RawURLEncoding.EncodeToString(payloadBytes)
-	signingString := encHeader + "." + encPayload
+	signingString := headerHS256 + "." + encPayload
 
 	h := hmac.New(sha256.New, jwtSecret)
-	if _, err := h.Write([]byte(signingString)); err != nil {
-		return "", err
-	}
-	signature := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
-	return signingString + "." + signature, nil
+	_, _ = h.Write([]byte(signingString))
+	var sigBuf [32]byte
+	sig := base64.RawURLEncoding.EncodeToString(h.Sum(sigBuf[:0]))
+
+	return signingString + "." + sig, nil
 }
 
 // GenerateJWT creates an access token (backward-compatible alias for GenerateAccessToken).
-func GenerateJWT(userID, role, tenantID string) (string, error) {
-	return GenerateAccessToken(userID, role, tenantID)
-}
+func GenerateJWT(userID, role, tenantID string) (string, error) { return GenerateAccessToken(userID, role, tenantID) }
 
 // GenerateToken creates an access token (alias for GenerateAccessToken).
-func GenerateToken(userID, role, tenantID string) (string, error) {
-	return GenerateAccessToken(userID, role, tenantID)
-}
+func GenerateToken(userID, role, tenantID string) (string, error) { return GenerateAccessToken(userID, role, tenantID) }
 
 // GenerateRefreshToken generates a cryptographically secure random 32-byte hex-encoded refresh token.
 func GenerateRefreshToken() (string, error) {
@@ -179,43 +174,52 @@ func parseAndValidateToken(token string) (*JWTClaims, []byte, error) {
 		return nil, nil, ErrJWTSecretMissing
 	}
 
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
+	dot1 := strings.IndexByte(token, '.')
+	dot2 := -1
+	if dot1 >= 0 {
+		if d := strings.IndexByte(token[dot1+1:], '.'); d >= 0 {
+			dot2 = dot1 + 1 + d
+		}
+	}
+	if dot1 < 0 || dot2 < 0 || strings.IndexByte(token[dot2+1:], '.') >= 0 {
 		return nil, nil, errors.New("invalid token format")
 	}
+	p0, p1, p2 := token[:dot1], token[dot1+1:dot2], token[dot2+1:]
 
-	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return nil, nil, errors.New("failed to decode header")
-	}
-	var header struct {
-		Alg string `json:"alg"`
-		Typ string `json:"typ"`
-	}
-	if err := json.Unmarshal(headerBytes, &header); err != nil {
-		return nil, nil, errors.New("failed to decode header JSON")
-	}
-	if header.Alg != "HS256" {
-		return nil, nil, errors.New("unsupported signing algorithm")
+	if p0 != headerHS256 {
+		headerBytes, err := base64.RawURLEncoding.DecodeString(p0)
+		if err != nil {
+			return nil, nil, errors.New("failed to decode header")
+		}
+		var header struct {
+			Alg string `json:"alg"`
+			Typ string `json:"typ"`
+		}
+		if err := json.Unmarshal(headerBytes, &header); err != nil {
+			return nil, nil, errors.New("failed to decode header JSON")
+		}
+		if header.Alg != "HS256" {
+			return nil, nil, errors.New("unsupported signing algorithm")
+		}
 	}
 
-	signingString := parts[0] + "." + parts[1]
-	expectedSigBytes, err := base64.RawURLEncoding.DecodeString(parts[2])
+	signingString := token[:dot2]
+	var expectedSig [48]byte
+	n, err := base64.RawURLEncoding.Decode(expectedSig[:], []byte(p2))
 	if err != nil {
 		return nil, nil, errors.New("failed to decode signature")
 	}
 
 	h := hmac.New(sha256.New, jwtSecret)
-	if _, err := h.Write([]byte(signingString)); err != nil {
-		return nil, nil, err
-	}
-	actualSigBytes := h.Sum(nil)
+	_, _ = h.Write([]byte(signingString))
+	var actualSig [32]byte
+	actualSigSlice := h.Sum(actualSig[:0])
 
-	if !hmac.Equal(expectedSigBytes, actualSigBytes) {
+	if n != len(actualSigSlice) || subtle.ConstantTimeCompare(expectedSig[:n], actualSigSlice) != 1 {
 		return nil, nil, errors.New("invalid signature")
 	}
 
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(p1)
 	if err != nil {
 		return nil, nil, errors.New("failed to decode payload")
 	}
@@ -249,9 +253,7 @@ func ValidateJWT(token string) (string, error) {
 }
 
 // ValidateToken verifies signature and standard claims, returning the payload JSON string.
-func ValidateToken(token string) (string, error) {
-	return ValidateJWT(token)
-}
+func ValidateToken(token string) (string, error) { return ValidateJWT(token) }
 
 // ValidateTokenClaims verifies the token and parses its claims into JWTClaims.
 func ValidateTokenClaims(token string) (*JWTClaims, error) {
@@ -282,24 +284,15 @@ func IsStreamingRequest(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
-	// 1. WebSocket upgrade headers
 	if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" ||
-		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") {
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") ||
+		strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/event-stream") {
 		return true
 	}
-	// 2. Server-Sent Events (SSE) Accept header
-	if strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/event-stream") {
-		return true
-	}
-	// 3. Known streaming routes
 	path := r.URL.Path
-	if path == "/ws" || strings.HasPrefix(path, "/ws/") {
-		return true
-	}
-	if path == "/stream" || strings.HasSuffix(path, "/stream") || strings.Contains(path, "/stream/") || strings.Contains(path, "/stream") {
-		return true
-	}
-	if strings.Contains(path, "/exec") {
+	if path == "/ws" || strings.HasPrefix(path, "/ws/") ||
+		path == "/stream" || strings.HasSuffix(path, "/stream") || strings.Contains(path, "/stream/") || strings.Contains(path, "/stream") ||
+		strings.Contains(path, "/exec") {
 		return true
 	}
 	if (strings.Contains(path, "/logs") || strings.Contains(path, "/pods/")) &&
@@ -307,6 +300,27 @@ func IsStreamingRequest(r *http.Request) bool {
 		return true
 	}
 	return false
+}
+
+// authCtx avoids multiple heap-allocated context.WithValue wrappers on authenticated requests.
+type authCtx struct {
+	context.Context
+	userID   string
+	userRole string
+	tenantID string
+}
+
+func (c authCtx) Value(key any) any {
+	switch key {
+	case tenancy.UserIDKey:
+		return c.userID
+	case tenancy.UserRoleKey:
+		return c.userRole
+	case tenancy.TenantIDKey:
+		return c.tenantID
+	default:
+		return c.Context.Value(key)
+	}
 }
 
 // JWTAuthMiddleware validates the JWT token in the Authorization header or query parameters (for websockets and streaming).
@@ -324,24 +338,20 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 		var token string
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" {
-			parts := strings.Split(authHeader, " ")
-			if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
-				token = parts[1]
+			prefix, rest, found := strings.Cut(authHeader, " ")
+			if found && strings.EqualFold(prefix, "Bearer") {
+				token = rest
 			}
 		}
 
-		// Support extracting token from Sec-WebSocket-Protocol header
 		if token == "" {
 			if secProto := r.Header.Get("Sec-WebSocket-Protocol"); secProto != "" {
 				token = extractTokenFromSecWebSocketProtocol(secProto)
 			}
 		}
 
-		// Fallback to query parameter "token" for WebSocket upgrade connections and streaming/SSE routes
-		if token == "" {
-			if IsStreamingRequest(r) {
-				token = r.URL.Query().Get("token")
-			}
+		if token == "" && IsStreamingRequest(r) {
+			token = r.URL.Query().Get("token")
 		}
 
 		if token == "" {
@@ -355,23 +365,18 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// If client connected via Sec-WebSocket-Protocol with bearer, echo back Sec-WebSocket-Protocol: bearer
 		if secProto := r.Header.Get("Sec-WebSocket-Protocol"); secProto != "" {
 			if strings.Contains(strings.ToLower(secProto), "bearer") {
 				w.Header().Set("Sec-WebSocket-Protocol", "bearer")
 			}
 		}
 
-		// REJECT partial tokens - they are only permitted for 2FA verification endpoints
 		if claims.Type == TokenTypePartial {
 			http.Error(w, "unauthorized: partial token cannot access API", http.StatusUnauthorized)
 			return
 		}
 
-		userID := "guest"
-		userRole := "guest"
-		tenantID := "default-tenant"
-
+		userID, userRole, tenantID := "guest", "guest", "default-tenant"
 		if claims.Sub != "" {
 			userID = claims.Sub
 		}
@@ -382,10 +387,7 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 			tenantID = claims.Tenant
 		}
 
-		ctx := context.WithValue(r.Context(), UserIDKey, userID)
-		ctx = context.WithValue(ctx, UserRoleKey, userRole)
-		ctx = context.WithValue(ctx, TenantIDKey, tenantID)
-
+		ctx := authCtx{Context: r.Context(), userID: userID, userRole: userRole, tenantID: tenantID}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -422,33 +424,15 @@ func RBACMiddleware(requiredRoles ...string) func(http.Handler) http.Handler {
 // (POST, PUT, PATCH, DELETE). Safe read-only methods (GET, HEAD, OPTIONS) are allowed
 // for all authenticated callers.
 func RequireRolesForMutations(requiredRoles ...string) func(http.Handler) http.Handler {
+	rbac := RBACMiddleware(requiredRoles...)
 	return func(next http.Handler) http.Handler {
+		rbacHandler := rbac(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
 				next.ServeHTTP(w, r)
 				return
 			}
-
-			userRole, ok := r.Context().Value(UserRoleKey).(string)
-			if !ok || userRole == "" {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-
-			hasRole := false
-			for _, role := range requiredRoles {
-				if userRole == role {
-					hasRole = true
-					break
-				}
-			}
-
-			if !hasRole {
-				http.Error(w, fmt.Sprintf("forbidden: requires one of %v", requiredRoles), http.StatusForbidden)
-				return
-			}
-
-			next.ServeHTTP(w, r)
+			rbacHandler.ServeHTTP(w, r)
 		})
 	}
 }
@@ -462,9 +446,9 @@ func MetricsAuthMiddleware(next http.Handler) http.Handler {
 		authHeader := r.Header.Get("Authorization")
 		var token string
 		if authHeader != "" {
-			parts := strings.Split(authHeader, " ")
-			if len(parts) == 2 && parts[0] == "Bearer" {
-				token = parts[1]
+			prefix, rest, found := strings.Cut(authHeader, " ")
+			if found && prefix == "Bearer" {
+				token = rest
 			}
 		}
 

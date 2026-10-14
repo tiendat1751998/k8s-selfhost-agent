@@ -40,6 +40,12 @@ func DefaultBatchWriterConfig() BatchWriterConfig {
 	}
 }
 
+var errChanPool = sync.Pool{
+	New: func() any {
+		return make(chan error, 1)
+	},
+}
+
 type flushRequest struct {
 	ctx   context.Context
 	errCh chan error
@@ -53,19 +59,27 @@ type BatchWriterStats struct {
 
 // BatchWriter manages asynchronous, zero-allocation batched writes to ClickHouse.
 type BatchWriter struct {
+	// Hot-path state padded to 64 bytes to eliminate false sharing / cache-line bouncing
+	closed      atomic.Bool
+	_           [63]byte
+	droppedLogs atomic.Int64
+	_           [56]byte
+	retryCount  atomic.Int64
+	_           [56]byte
+
 	client       *Client
 	cfg          BatchWriterConfig
 	logCh        chan logging.LogEntry
+	stopCh       chan struct{}
 	flushReqCh   chan flushRequest
 	doneCh       chan struct{}
 	startOnce    sync.Once
 	closeOnce    sync.Once
 	started      atomic.Bool
-	droppedLogs  atomic.Int64
 	mu           sync.RWMutex
-	closed       bool
 	flushFn      func(ctx context.Context, batch []logging.LogEntry) error
 	lastFlushErr error
+	buf          []logging.LogEntry
 }
 
 // NewBatchWriter constructs a new background BatchWriter attached to a ClickHouse Client.
@@ -80,35 +94,25 @@ func NewBatchWriterWithFn(
 	cfg BatchWriterConfig,
 	flushFn func(ctx context.Context, batch []logging.LogEntry) error,
 ) *BatchWriter {
-	if cfg.BatchSize <= 0 {
-		cfg.BatchSize = 5000
-	}
-	if cfg.FlushInterval <= 0 {
-		cfg.FlushInterval = 5 * time.Second
-	}
-	if cfg.BufferCap > 0 && cfg.ChannelCapacity <= 0 {
-		cfg.ChannelCapacity = cfg.BufferCap
-	}
-	if cfg.ChannelCapacity <= 0 {
-		cfg.ChannelCapacity = 10000
-	}
-	if cfg.BufferCap <= 0 {
-		cfg.BufferCap = cfg.ChannelCapacity
-	}
-	if cfg.TableName == "" {
-		cfg.TableName = "cluster_logs"
-	}
-	if cfg.RetryInitialInterval <= 0 {
-		cfg.RetryInitialInterval = 50 * time.Millisecond
-	}
+	if cfg.BatchSize <= 0 { cfg.BatchSize = 5000 }
+	if cfg.FlushInterval <= 0 { cfg.FlushInterval = 5 * time.Second }
+	if cfg.BufferCap > 0 && cfg.ChannelCapacity <= 0 { cfg.ChannelCapacity = cfg.BufferCap }
+	if cfg.ChannelCapacity <= 0 { cfg.ChannelCapacity = 10000 }
+	if cfg.BufferCap <= 0 { cfg.BufferCap = cfg.ChannelCapacity }
+	if cfg.TableName == "" { cfg.TableName = "cluster_logs" }
+	if cfg.RetryInitialInterval <= 0 { cfg.RetryInitialInterval = 50 * time.Millisecond }
+	initialCap := cfg.BatchSize * 2
+	if initialCap < 1024 { initialCap = 1024 }
 
 	w := &BatchWriter{
 		client:     client,
 		cfg:        cfg,
 		logCh:      make(chan logging.LogEntry, cfg.ChannelCapacity),
+		stopCh:     make(chan struct{}),
 		flushReqCh: make(chan flushRequest),
 		doneCh:     make(chan struct{}),
 		flushFn:    flushFn,
+		buf:        make([]logging.LogEntry, 0, initialCap),
 	}
 
 	if ctx != nil {
@@ -146,24 +150,22 @@ func (w *BatchWriter) DroppedLogs() int64 {
 	return w.droppedLogs.Load()
 }
 
+// RetryCount returns total retry operations performed.
+func (w *BatchWriter) RetryCount() int64 {
+	return w.retryCount.Load()
+}
+
 // Stats returns a snapshot of current dropped and pending log counters.
 func (w *BatchWriter) Stats() BatchWriterStats {
-	w.mu.RLock()
-	pending := len(w.logCh)
-	w.mu.RUnlock()
 	return BatchWriterStats{
 		DroppedLogs: w.droppedLogs.Load(),
-		PendingLogs: pending,
+		PendingLogs: len(w.logCh),
 	}
 }
 
-// Write enqueues a log entry into the channel buffer.
-// Holding RLock prevents racing with Close() and channel close panics.
+// Write enqueues a log entry into the channel buffer lock-free.
 func (w *BatchWriter) Write(entry logging.LogEntry) error {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-
-	if w.closed {
+	if w.closed.Load() {
 		return errors.New("batch writer is closed")
 	}
 
@@ -175,7 +177,7 @@ func (w *BatchWriter) Write(entry logging.LogEntry) error {
 		select {
 		case <-w.logCh:
 			dropped := w.droppedLogs.Add(1)
-			if dropped == 1 || dropped%1000 == 0 {
+			if dropped == 1 || dropped%10000 == 0 {
 				logger.Get().Warn("clickhouse batch writer channel overflow: dropping oldest log",
 					zap.Int64("total_dropped", dropped),
 					zap.Int("channel_capacity", cap(w.logCh)),
@@ -205,41 +207,49 @@ func (w *BatchWriter) WriteBatch(entries []logging.LogEntry) error {
 
 // Flush synchronously drains pending channel items and forces an immediate batch write honoring caller ctx.
 func (w *BatchWriter) Flush(ctx context.Context) error {
-	w.mu.RLock()
-	if w.closed {
-		w.mu.RUnlock()
+	if w.closed.Load() {
 		return errors.New("batch writer is closed")
 	}
-	w.mu.RUnlock()
 
+	errCh := errChanPool.Get().(chan error)
 	req := flushRequest{
 		ctx:   ctx,
-		errCh: make(chan error, 1),
+		errCh: errCh,
+	}
+
+	putErrChan := func(ch chan error) {
+		select {
+		case <-ch:
+		default:
+		}
+		errChanPool.Put(ch)
 	}
 
 	select {
 	case w.flushReqCh <- req:
 	case <-ctx.Done():
+		putErrChan(errCh)
 		return ctx.Err()
 	case <-w.doneCh:
+		putErrChan(errCh)
 		return errors.New("batch writer flusher already terminated")
 	}
 
 	select {
-	case err := <-req.errCh:
+	case err := <-errCh:
+		putErrChan(errCh)
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-// Close gracefully marks writer closed, closes channel under write lock, and waits for final flush.
+// Close gracefully marks writer closed via CAS, closes stopCh without closing logCh, and waits for final flush.
 func (w *BatchWriter) Close() error {
 	w.closeOnce.Do(func() {
-		w.mu.Lock()
-		w.closed = true
-		close(w.logCh)
-		w.mu.Unlock()
+		if w.closed.CompareAndSwap(false, true) {
+			close(w.stopCh)
+		}
 	})
 
 	if !w.started.Load() {
@@ -292,12 +302,20 @@ func (w *BatchWriter) flushWithRetry(ctx context.Context, entries []logging.LogE
 		return nil
 	}
 
+	// Zero-allocation fast-path for non-failing flushes
+	if err := w.executeFlush(ctx, entries); err == nil {
+		return nil
+	}
+
+	w.retryCount.Add(1)
+
 	exp := backoff.NewExponentialBackOff()
 	exp.InitialInterval = w.cfg.RetryInitialInterval
 	exp.Multiplier = 1.5
 	exp.MaxInterval = 500 * time.Millisecond
 
 	_, err := backoff.Retry(ctx, func() (struct{}, error) {
+		w.retryCount.Add(1)
 		if flushErr := w.executeFlush(ctx, entries); flushErr != nil {
 			return struct{}{}, flushErr
 		}
@@ -314,12 +332,26 @@ func (w *BatchWriter) flusherLoop(ctx context.Context) {
 	ticker := time.NewTicker(w.cfg.FlushInterval)
 	defer ticker.Stop()
 
-	buf := make([]logging.LogEntry, 0, w.cfg.BatchSize+w.cfg.ChannelCapacity)
+	buf := w.buf
 	var lastFailure time.Time
 	retryCooldown := w.cfg.RetryInitialInterval * 2
 
 	for {
 		select {
+		case <-w.stopCh:
+			buf = w.drainRemaining(buf)
+			buf = w.enforceBufferCap(buf)
+			if len(buf) > 0 {
+				flushCtx, cancel := shutdownContext(ctx)
+				err := w.flushWithRetry(flushCtx, buf)
+				w.recordFlushError(err)
+				cancel()
+				if err == nil {
+					buf = buf[:0]
+				}
+			}
+			return
+
 		case <-ctx.Done():
 			buf = w.drainRemaining(buf)
 			buf = w.enforceBufferCap(buf)
@@ -350,22 +382,7 @@ func (w *BatchWriter) flusherLoop(ctx context.Context) {
 			}
 			req.errCh <- err
 
-		case entry, ok := <-w.logCh:
-			if !ok {
-				buf = w.drainRemaining(buf)
-				buf = w.enforceBufferCap(buf)
-				if len(buf) > 0 {
-					flushCtx, cancel := shutdownContext(ctx)
-					err := w.flushWithRetry(flushCtx, buf)
-					w.recordFlushError(err)
-					cancel()
-					if err == nil {
-						buf = buf[:0]
-					}
-				}
-				return
-			}
-
+		case entry := <-w.logCh:
 			buf = append(buf, entry)
 			buf = w.enforceBufferCap(buf)
 			if len(buf) >= w.cfg.BatchSize {
@@ -402,10 +419,7 @@ func (w *BatchWriter) flusherLoop(ctx context.Context) {
 func (w *BatchWriter) drainRemaining(buf []logging.LogEntry) []logging.LogEntry {
 	for {
 		select {
-		case entry, ok := <-w.logCh:
-			if !ok {
-				return buf
-			}
+		case entry := <-w.logCh:
 			buf = append(buf, entry)
 		default:
 			return buf

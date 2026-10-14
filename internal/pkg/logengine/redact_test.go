@@ -197,6 +197,11 @@ func TestRedactor_PrivateKey_Masked(t *testing.T) {
 	inputEC := "Loaded EC key: " + ecKey
 	expectedEC := "Loaded EC key: [REDACTED_PRIVATE_KEY]"
 	assert.Equal(t, expectedEC, redactor.MaskString(inputEC))
+
+	multiKeyInput := "Primary: " + pemKey + "\nBackup: " + ecKey
+	expectedMulti := "Primary: [REDACTED_PRIVATE_KEY]\nBackup: [REDACTED_PRIVATE_KEY]"
+	assert.Equal(t, expectedMulti, redactor.MaskString(multiKeyInput))
+	assert.Equal(t, expectedMulti, string(redactor.MaskBytes([]byte(multiKeyInput))))
 }
 
 func TestRedactor_CleanLogs_FastPath(t *testing.T) {
