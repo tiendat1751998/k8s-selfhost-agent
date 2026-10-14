@@ -95,7 +95,15 @@ function renderMatrix() {
   })
 }
 
-function onMouseMove(event: MouseEvent) {
+let mouseMoveRafId: number | null = null
+let pendingMouseMoveEvent: MouseEvent | null = null
+
+function processMouseMove() {
+  mouseMoveRafId = null
+  if (!pendingMouseMoveEvent) return
+  const event = pendingMouseMoveEvent
+  pendingMouseMoveEvent = null
+
   const canvas = canvasRef.value
   if (!canvas || !quadtree) return
   const rect = canvas.getBoundingClientRect()
@@ -113,6 +121,13 @@ function onMouseMove(event: MouseEvent) {
   }
 }
 
+function onMouseMove(event: MouseEvent) {
+  pendingMouseMoveEvent = event
+  if (mouseMoveRafId === null) {
+    mouseMoveRafId = requestAnimationFrame(processMouseMove)
+  }
+}
+
 function onClick(event: MouseEvent) {
   const canvas = canvasRef.value
   if (!canvas || !quadtree) return
@@ -126,6 +141,11 @@ function onClick(event: MouseEvent) {
 }
 
 function onMouseLeave() {
+  if (mouseMoveRafId !== null) {
+    cancelAnimationFrame(mouseMoveRafId)
+    mouseMoveRafId = null
+  }
+  pendingMouseMoveEvent = null
   hoveredNode.value = null
   emit('hover-node', null)
 }
@@ -143,6 +163,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (rafHandle) cancelAnimationFrame(rafHandle)
+  if (mouseMoveRafId !== null) cancelAnimationFrame(mouseMoveRafId)
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null

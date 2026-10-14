@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '../stores/app'
 import ClusterDetailsDrawer from '../components/fleet/ClusterDetailsDrawer.vue'
@@ -154,12 +154,15 @@ function openClusterDetails(c: Cluster) {
   showClusterDetailsDrawer.value = true
 }
 
+let toastTimer: ReturnType<typeof setTimeout> | null = null
 function showToast(text: string, type: 'success' | 'error' = 'success') {
+  if (toastTimer) clearTimeout(toastTimer)
   toastMessage.value = { text, type }
-  setTimeout(() => {
+  toastTimer = setTimeout(() => {
     if (toastMessage.value?.text === text) toastMessage.value = null
   }, 4000)
 }
+onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
 
 async function handleUpgrade(cluster: Cluster) {
   actionLoading.value = cluster.id

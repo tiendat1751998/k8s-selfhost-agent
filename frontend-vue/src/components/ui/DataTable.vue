@@ -29,18 +29,33 @@ function getCellValue(row: T, key: keyof T | string): unknown {
   return (row as Record<string, unknown>)[key as string]
 }
 
-function deepSearchMatch(obj: unknown, query: string): boolean {
-  if (obj === null || obj === undefined) return false
+function deepSearchMatch(obj: unknown, query: string, depth = 0): boolean {
+  if (obj === null || obj === undefined || depth > 2) return false
   if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') {
     return String(obj).toLowerCase().includes(query)
   }
   if (Array.isArray(obj)) {
-    return obj.some(item => deepSearchMatch(item, query))
+    return obj.some(item => deepSearchMatch(item, query, depth + 1))
   }
   if (typeof obj === 'object') {
-    return Object.values(obj as Record<string, unknown>).some(val => deepSearchMatch(val, query))
+    return Object.values(obj as Record<string, unknown>).some(val => deepSearchMatch(val, query, depth + 1))
   }
   return false
+}
+
+function getRowKey(row: T, idx: number): string | number {
+  if (row && typeof row === 'object') {
+    const r = row as Record<string, unknown>
+    if (r.id !== undefined && r.id !== null) return String(r.id)
+    if (r.name !== undefined && r.name !== null) return String(r.name)
+    if (r.key !== undefined && r.key !== null) return String(r.key)
+    if (r.metadata && typeof r.metadata === 'object') {
+      const meta = r.metadata as Record<string, unknown>
+      if (meta.uid) return String(meta.uid)
+      if (meta.name) return String(meta.name)
+    }
+  }
+  return idx
 }
 
 const filteredData = computed(() => {
@@ -150,7 +165,7 @@ function handleSort(key: string, sortable?: boolean) {
           </tr>
 
           <!-- Data Rows -->
-          <tr v-else v-for="(row, idx) in filteredData" :key="idx" class="data-row">
+          <tr v-else v-for="(row, idx) in filteredData" :key="getRowKey(row, idx)" class="data-row">
             <td 
               v-for="col in columns" 
               :key="String(col.key)"

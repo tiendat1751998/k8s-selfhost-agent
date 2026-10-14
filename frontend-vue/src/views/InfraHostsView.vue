@@ -236,8 +236,11 @@ const {
   </div>
 </template>
 
-<style scoped>
+<style>
 @import '../assets/styles/views/infra-hosts.css';
+</style>
+
+<style scoped>
 
 .fleet-telemetry-panel { margin-bottom: 16px; }
 .hosts-telemetry-hud-strip { margin-bottom: 12px; }

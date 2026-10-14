@@ -1,14 +1,17 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { AuditLogEntry } from '../../api/governance'
 import BaseIcon from '../ui/BaseIcon.vue'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 
-defineProps<{
+const props = defineProps<{
   logs: AuditLogEntry[]
   loading?: boolean
   error?: string | null
 }>()
+
+const cappedLogs = computed(() => props.logs && props.logs.length > 100 ? props.logs.slice(0, 100) : props.logs)
 
 defineEmits<{
   (e: 'select-payload', event: AuditLogEntry): void
@@ -57,7 +60,7 @@ function formatDate(d: string): string {
   <div class="audit-table-card">
     <DataTable
       :columns="columns"
-      :data="logs"
+      :data="cappedLogs"
       :loading="loading"
       :error="error"
       empty-message="No audit trail events matching the query criteria."

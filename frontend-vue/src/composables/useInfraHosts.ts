@@ -1,4 +1,4 @@
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { hostsApi, type ComputeHost } from '../api/compute'
 import {
@@ -77,9 +77,11 @@ export function useInfraHosts() {
   const hostToDelete = ref<ComputeHost | null>(null)
   const deletingHost = ref(false)
 
+  let toastTimer: ReturnType<typeof setTimeout> | null = null
   function showToast(text: string, type: 'success' | 'error' = 'success') {
+    if (toastTimer) clearTimeout(toastTimer)
     toastMessage.value = { text, type }
-    setTimeout(() => {
+    toastTimer = setTimeout(() => {
       if (toastMessage.value?.text === text) {
         toastMessage.value = null
       }
@@ -104,6 +106,10 @@ export function useInfraHosts() {
 
   onMounted(() => {
     fetchHosts()
+  })
+
+  onUnmounted(() => {
+    if (toastTimer) clearTimeout(toastTimer)
   })
 
   // Computed Stats
@@ -221,16 +227,17 @@ export function useInfraHosts() {
           const startTime = performance.now()
           let reachable = false
           let probeMsg = ''
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), 4000)
           try {
-            const controller = new AbortController()
-            const timer = setTimeout(() => controller.abort(), 4000)
             await fetch(targetUrl, { method: 'HEAD', mode: 'no-cors', signal: controller.signal })
-            clearTimeout(timer)
             reachable = true
             probeMsg = `Endpoint reachable: ${targetUrl}`
           } catch (probeErr: unknown) {
             probeMsg = probeErr instanceof Error ? probeErr.message : 'Probe connection failed'
             reachable = false
+          } finally {
+            clearTimeout(timer)
           }
           const latency = Math.round(performance.now() - startTime)
           modalTestResult.value = {

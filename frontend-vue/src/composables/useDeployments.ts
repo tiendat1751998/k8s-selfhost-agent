@@ -1,4 +1,4 @@
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   deploymentsApi, dockerApi, type DeploymentApp, type DeploymentTemplate,
   type UpdateResourcesPayload, type ScaleDeploymentPayload
@@ -29,9 +29,11 @@ export function useDeployments() {
   const searchQuery = ref('')
   const selectedNamespaceFilter = ref<string>('all')
 
+  let toastTimer: ReturnType<typeof setTimeout> | null = null
   function showToast(text: string, type: 'success' | 'error' | 'info' = 'success') {
+    if (toastTimer) clearTimeout(toastTimer)
     toastMessage.value = { text, type }
-    setTimeout(() => {
+    toastTimer = setTimeout(() => {
       if (toastMessage.value?.text === text) {
         toastMessage.value = null
       }
@@ -367,6 +369,10 @@ export function useDeployments() {
 
   onMounted(() => {
     fetchDeployments()
+  })
+
+  onUnmounted(() => {
+    if (toastTimer) clearTimeout(toastTimer)
   })
 
   return {

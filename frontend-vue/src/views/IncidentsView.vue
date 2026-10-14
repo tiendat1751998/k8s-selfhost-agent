@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
@@ -48,6 +48,10 @@ const {
   handleCreatePR,
   handleMergePR
 } = useIncidents()
+
+const cappedIncidents = computed(() => {
+  return filteredIncidents.value.length > 100 ? filteredIncidents.value.slice(0, 100) : filteredIncidents.value
+})
 
 function resetFilters() {
   filterStatus.value = 'all'
@@ -160,7 +164,7 @@ function formatRelativeTime(dateStr?: string): string {
 
           <!-- High-Density Incident Cards (~68-76px height) -->
           <div
-            v-for="inc in filteredIncidents"
+            v-for="inc in cappedIncidents"
             :key="inc.id"
             class="incident-card-item"
             :class="{ 'incident-item-active': selectedIncident?.id === inc.id, [`border-sev-${inc.severity}`]: true }"
