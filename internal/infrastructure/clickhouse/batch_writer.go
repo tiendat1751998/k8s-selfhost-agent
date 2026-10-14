@@ -217,19 +217,27 @@ func (w *BatchWriter) Flush(ctx context.Context) error {
 		errCh: errCh,
 	}
 
+	putErrChan := func(ch chan error) {
+		select {
+		case <-ch:
+		default:
+		}
+		errChanPool.Put(ch)
+	}
+
 	select {
 	case w.flushReqCh <- req:
 	case <-ctx.Done():
-		errChanPool.Put(errCh)
+		putErrChan(errCh)
 		return ctx.Err()
 	case <-w.doneCh:
-		errChanPool.Put(errCh)
+		putErrChan(errCh)
 		return errors.New("batch writer flusher already terminated")
 	}
 
 	select {
 	case err := <-errCh:
-		errChanPool.Put(errCh)
+		putErrChan(errCh)
 		return err
 	case <-ctx.Done():
 		return ctx.Err()

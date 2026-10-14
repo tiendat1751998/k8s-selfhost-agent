@@ -11,11 +11,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash"
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
@@ -48,12 +46,6 @@ const (
 
 var jwtSecret []byte
 
-var hmacPool = sync.Pool{
-	New: func() any {
-		return hmac.New(sha256.New, jwtSecret)
-	},
-}
-
 var ErrJWTSecretMissing = errors.New("JWT_SECRET environment variable must be set (minimum 32 characters)")
 
 func init() {
@@ -76,11 +68,6 @@ func SetJWTSecret(secret string) error {
 		return ErrJWTSecretMissing
 	}
 	jwtSecret = []byte(secret)
-	hmacPool = sync.Pool{
-		New: func() any {
-			return hmac.New(sha256.New, jwtSecret)
-		},
-	}
 	return nil
 }
 
@@ -120,12 +107,10 @@ func GenerateAccessToken(userID, role, tenantID string) (string, error) {
 	encPayload := base64.RawURLEncoding.EncodeToString(payloadBytes)
 	signingString := headerHS256 + "." + encPayload
 
-	h := hmacPool.Get().(hash.Hash)
-	h.Reset()
+	h := hmac.New(sha256.New, jwtSecret)
 	_, _ = h.Write([]byte(signingString))
 	var sigBuf [32]byte
 	sig := base64.RawURLEncoding.EncodeToString(h.Sum(sigBuf[:0]))
-	hmacPool.Put(h)
 
 	return signingString + "." + sig, nil
 }
@@ -153,12 +138,10 @@ func GeneratePartialToken(userID string) (string, error) {
 	encPayload := base64.RawURLEncoding.EncodeToString(payloadBytes)
 	signingString := headerHS256 + "." + encPayload
 
-	h := hmacPool.Get().(hash.Hash)
-	h.Reset()
+	h := hmac.New(sha256.New, jwtSecret)
 	_, _ = h.Write([]byte(signingString))
 	var sigBuf [32]byte
 	sig := base64.RawURLEncoding.EncodeToString(h.Sum(sigBuf[:0]))
-	hmacPool.Put(h)
 
 	return signingString + "." + sig, nil
 }
@@ -227,12 +210,10 @@ func parseAndValidateToken(token string) (*JWTClaims, []byte, error) {
 		return nil, nil, errors.New("failed to decode signature")
 	}
 
-	h := hmacPool.Get().(hash.Hash)
-	h.Reset()
+	h := hmac.New(sha256.New, jwtSecret)
 	_, _ = h.Write([]byte(signingString))
 	var actualSig [32]byte
 	actualSigSlice := h.Sum(actualSig[:0])
-	hmacPool.Put(h)
 
 	if n != len(actualSigSlice) || subtle.ConstantTimeCompare(expectedSig[:n], actualSigSlice) != 1 {
 		return nil, nil, errors.New("invalid signature")

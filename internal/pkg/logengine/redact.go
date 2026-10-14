@@ -277,14 +277,31 @@ func maskAPIKeyBytes(b []byte) ([]byte, bool) {
 }
 
 func maskPrivateKeyBytes(b []byte) ([]byte, bool) {
-	beginIdx := bytes.Index(b, beginPem)
-	if beginIdx == -1 { return b, false }
-	endIdx := bytes.Index(b[beginIdx:], endPem)
-	if endIdx == -1 { return b, false }
-	endStart := beginIdx + endIdx + len(endPem)
-	suffixIdx := bytes.Index(b[endStart:], keySuffix)
-	if suffixIdx == -1 { return b, false }
-	return splice(b, beginIdx, endStart+suffixIdx+len(keySuffix), privKeyRedacted), true
+	modified := false
+	out := b
+	offset := 0
+	for {
+		relBegin := bytes.Index(out[offset:], beginPem)
+		if relBegin == -1 {
+			break
+		}
+		beginIdx := offset + relBegin
+		relEnd := bytes.Index(out[beginIdx:], endPem)
+		if relEnd == -1 {
+			break
+		}
+		endStart := beginIdx + relEnd + len(endPem)
+		suffixIdx := bytes.Index(out[endStart:], keySuffix)
+		if suffixIdx == -1 {
+			offset = endStart
+			continue
+		}
+		pemEnd := endStart + suffixIdx + len(keySuffix)
+		out = splice(out, beginIdx, pemEnd, privKeyRedacted)
+		modified = true
+		offset = beginIdx + len(privKeyRedacted)
+	}
+	return out, modified
 }
 
 func splice(b []byte, start, end int, rep []byte) []byte {
