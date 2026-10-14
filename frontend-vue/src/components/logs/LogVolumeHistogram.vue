@@ -4,7 +4,7 @@ import type { LogAggregationBucket } from '../../api/logging'
 import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
-  buckets?: LogAggregationBucket[]
+  buckets?: LogAggregationBucket[] | { data?: LogAggregationBucket[]; buckets?: LogAggregationBucket[] } | null
   height?: number
   selectedRange?: { start: string; end: string } | null
 }
@@ -36,20 +36,30 @@ const hoveredBucket = ref<ParsedBucket | null>(null)
 const activeBucketKey = ref<string | null>(null)
 
 const parsedBuckets = computed<ParsedBucket[]>(() => {
-  if (!props.buckets || props.buckets.length === 0) return []
+  const safeBuckets: LogAggregationBucket[] = Array.isArray(props.buckets)
+    ? props.buckets
+    : Array.isArray((props.buckets as any)?.data)
+    ? (props.buckets as any).data
+    : Array.isArray((props.buckets as any)?.buckets)
+    ? (props.buckets as any).buckets
+    : []
 
-  return props.buckets.map((b, idx, arr) => {
-    const counts = b.level_count || {}
-    const errCount = (counts.error || counts.ERROR || 0) + (counts.fatal || counts.FATAL || 0)
-    const warnCount = counts.warn || counts.WARN || 0
-    const infoCount = counts.info || counts.INFO || 0
-    const debugCount = counts.debug || counts.DEBUG || 0
-    const total = b.total_count || (errCount + warnCount + infoCount + debugCount)
+  if (safeBuckets.length === 0) return []
 
-    const start = b.time_bucket
+  return safeBuckets.map((b: LogAggregationBucket, idx: number, arr: LogAggregationBucket[]) => {
+    const counts = (b as any).level_count || {}
+    const errCount = (b as any).error_count ?? ((counts.error || counts.ERROR || 0) + (counts.fatal || counts.FATAL || 0))
+    const warnCount = (b as any).warn_count ?? (counts.warn || counts.WARN || 0)
+    const infoCount = (b as any).info_count ?? (counts.info || counts.INFO || 0)
+    const debugCount = (b as any).debug_count ?? (counts.debug || counts.DEBUG || 0)
+    const total = (b as any).total ?? b.total_count ?? (errCount + warnCount + infoCount + debugCount)
+
+    const start = b.time_bucket || (b as any).timestamp || new Date().toISOString()
     let end: string
-    if (idx < arr.length - 1 && arr[idx + 1].time_bucket) {
-      end = arr[idx + 1].time_bucket
+    const nextItem = arr[idx + 1]
+    const nextStart = nextItem ? (nextItem.time_bucket || (nextItem as any).timestamp) : null
+    if (idx < arr.length - 1 && nextStart) {
+      end = nextStart
     } else {
       const d = new Date(start)
       end = new Date(d.getTime() + 60000).toISOString()

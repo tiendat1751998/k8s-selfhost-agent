@@ -8,6 +8,7 @@ import { URL } from 'node:url'
 
 const PORT = parseInt(process.env.PORT || '8080', 10)
 const isTestMode = process.argv.includes('--test')
+const isDirectRun = process.argv[1] && (process.argv[1].endsWith('mock-preview-server.js') || process.argv[1].endsWith('mock-preview-server'))
 
 // 1. Mock Data Definitions
 const metricsSummary = {
@@ -152,6 +153,36 @@ const mockDockerContainers = [
   { id: 'c-edge-prom', name: 'prometheus-node-exporter', image: 'prom/node-exporter:v1.8.2', status: 'Up 12 days', state: 'running', created: '2026-09-24T00:00:00Z' },
 ]
 
+function generateMockHistogramBuckets(intervalSeconds = 60, count = 20) {
+  const now = Date.now()
+  const buckets = []
+  for (let i = count - 1; i >= 0; i--) {
+    const bucketTime = new Date(now - i * intervalSeconds * 1000).toISOString()
+    const errorCount = i % 4 === 0 ? 3 : 0
+    const warnCount = i % 3 === 0 ? 5 : 1
+    const infoCount = 20 + (i % 7) * 4
+    const debugCount = 10 + (i % 5) * 2
+    const total = errorCount + warnCount + infoCount + debugCount
+    buckets.push({
+      time_bucket: bucketTime,
+      timestamp: bucketTime,
+      total_count: total,
+      total: total,
+      error_count: errorCount,
+      warn_count: warnCount,
+      info_count: infoCount,
+      debug_count: debugCount,
+      level_count: {
+        error: errorCount,
+        warn: warnCount,
+        info: infoCount,
+        debug: debugCount,
+      },
+    })
+  }
+  return buckets
+}
+
 // 2. Response Helpers
 function sendJson(res, statusCode, data) {
   const payload = JSON.stringify(data)
@@ -239,6 +270,12 @@ export function createMockServer() {
       return sendJson(res, 200, { entries: logEntries, total_count: logEntries.length, has_more: false })
     }
 
+    // Log Aggregation Histogram
+    if (pathname.includes('/logs/histogram')) {
+      const interval = parseInt(parsedUrl.searchParams.get('interval_seconds') || '60', 10)
+      return sendJson(res, 200, generateMockHistogramBuckets(interval, 20))
+    }
+
     // Resource Explorer
     if (pathname.includes('/explorer')) {
       return sendJson(res, 200, { data: explorerResources, namespaces, total: explorerResources.length })
@@ -301,7 +338,7 @@ if (isTestMode) {
       server.close(() => process.exit(1))
     })
   })
-} else {
+} else if (isDirectRun) {
   const server = createMockServer()
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Mock Preview Server listening on http://localhost:${PORT}`)
