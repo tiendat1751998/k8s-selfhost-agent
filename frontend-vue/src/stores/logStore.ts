@@ -361,7 +361,14 @@ export const useLogStore = defineStore('log', () => {
   async function fetchHistogram(params: HistogramParams = {}): Promise<LogAggregationBucket[]> {
     isHistogramLoading.value = true
     try {
-      const buckets = await getLogHistogram(params)
+      const raw = await getLogHistogram(params)
+      const buckets = Array.isArray(raw)
+        ? raw
+        : Array.isArray((raw as any)?.data)
+        ? (raw as any).data
+        : Array.isArray((raw as any)?.buckets)
+        ? (raw as any).buckets
+        : []
       histogram.value = buckets || []
       return histogram.value
     } finally {

@@ -1,4 +1,4 @@
-﻿import { api } from './client'
+import { api } from './client'
 
 export interface LogFilterParams {
   query?: string
@@ -55,9 +55,26 @@ export interface LogSearchResult {
 }
 
 export interface LogAggregationBucket {
-  time_bucket: string
-  total_count: number
+  time_bucket?: string
+  timestamp?: string
+  total_count?: number
+  total?: number
   level_count?: Record<string, number>
+  error_count?: number
+  warn_count?: number
+  info_count?: number
+  debug_count?: number
+}
+
+export function normalizeHistogramBuckets(raw: unknown): LogAggregationBucket[] {
+  const buckets = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as any)?.data)
+    ? (raw as any).data
+    : Array.isArray((raw as any)?.buckets)
+    ? (raw as any).buckets
+    : []
+  return buckets
 }
 
 export interface LogContextParams {
@@ -101,7 +118,8 @@ export async function getLogHistogram(params: HistogramParams = {}): Promise<Log
   if (params.start_time) queryParams.start_time = params.start_time
   if (params.end_time) queryParams.end_time = params.end_time
 
-  return api.get<LogAggregationBucket[]>('/logs/histogram', queryParams)
+  const raw = await api.get<unknown>('/logs/histogram', queryParams)
+  return normalizeHistogramBuckets(raw)
 }
 
 export async function getTraceLogs(traceId: string): Promise<LogSearchResult> {
