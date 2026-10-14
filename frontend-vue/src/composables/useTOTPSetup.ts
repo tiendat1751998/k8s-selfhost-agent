@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import QRCode from 'qrcode'
 import { authApi } from '../api/auth'
 import { useAuthStore } from '../stores/authStore'
@@ -46,6 +46,8 @@ export function useTOTPSetup() {
   const recoveryCodes = ref<string[]>([])
   const hasSavedCodes = ref(false)
   const allCodesCopied = ref(false)
+  let secretCopiedTimer: ReturnType<typeof setTimeout> | null = null
+  let allCodesCopiedTimer: ReturnType<typeof setTimeout> | null = null
 
   // MFA Enforcement State
   const mfaEnforcement = ref<MFAEnforcementState>({
@@ -127,8 +129,9 @@ export function useTOTPSetup() {
     if (!secretKey.value) return
     try {
       await navigator.clipboard.writeText(secretKey.value)
+      if (secretCopiedTimer) clearTimeout(secretCopiedTimer)
       secretCopied.value = true
-      setTimeout(() => { secretCopied.value = false }, 2500)
+      secretCopiedTimer = setTimeout(() => { secretCopied.value = false }, 2500)
     } catch {
       errorMessage.value = 'Clipboard access denied. Please copy the code manually.'
     }
@@ -181,12 +184,18 @@ export function useTOTPSetup() {
     if (!recoveryCodes.value.length) return
     try {
       await navigator.clipboard.writeText(recoveryCodes.value.join('\n'))
+      if (allCodesCopiedTimer) clearTimeout(allCodesCopiedTimer)
       allCodesCopied.value = true
-      setTimeout(() => { allCodesCopied.value = false }, 2500)
+      allCodesCopiedTimer = setTimeout(() => { allCodesCopied.value = false }, 2500)
     } catch {
       errorMessage.value = 'Failed to copy recovery codes to clipboard.'
     }
   }
+
+  onUnmounted(() => {
+    if (secretCopiedTimer) clearTimeout(secretCopiedTimer)
+    if (allCodesCopiedTimer) clearTimeout(allCodesCopiedTimer)
+  })
 
   // Downloads recovery codes as an offline plaintext backup document
   function downloadCodesAsFile(): void {

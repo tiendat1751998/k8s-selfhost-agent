@@ -39,5 +39,5 @@ defineProps<{
 </template>
 
 <style scoped>
-@import '../../assets/styles/views/infra-hosts.css';
+/* Inherited via InfraHostsView.vue: assets/styles/views/infra-hosts.css */
 </style>

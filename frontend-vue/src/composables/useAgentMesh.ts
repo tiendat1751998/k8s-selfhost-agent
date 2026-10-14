@@ -415,7 +415,7 @@ export function useAgentMesh() {
 
   // Auto-scroll watcher
   watch(
-    terminalLogs,
+    () => terminalLogs.value.length,
     () => {
       if (autoScroll.value) {
         nextTick(() => {
@@ -424,8 +424,7 @@ export function useAgentMesh() {
           }
         })
       }
-    },
-    { deep: true }
+    }
   )
 
   onMounted(() => {

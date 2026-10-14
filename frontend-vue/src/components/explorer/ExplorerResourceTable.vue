@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
@@ -77,6 +78,8 @@ const props = defineProps<{
   operatingNode: boolean
 }>()
 
+const cappedResources = computed(() => props.resources && props.resources.length > 100 ? props.resources.slice(0, 100) : props.resources)
+
 const emit = defineEmits<{
   (e: 'detail', res: K8sResource): void
   (e: 'logs', res: K8sResource): void
@@ -143,7 +146,7 @@ function handleRowAction(actionId: string, res: K8sResource) {
   <div class="section-box glass-panel table-box explorer-table-wrap">
     <DataTable
       :columns="columns"
-      :data="resources"
+      :data="cappedResources"
       :loading="loading"
       :error="error"
       empty-message="No Kubernetes resources discovered matching current filters."

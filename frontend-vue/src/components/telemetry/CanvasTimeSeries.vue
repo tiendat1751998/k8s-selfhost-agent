@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useTimeSync } from '../../composables/useTimeSync'
 
@@ -199,7 +199,15 @@ function queueDraw() {
   rafId = requestAnimationFrame(draw)
 }
 
-function handleMouseMove(e: MouseEvent) {
+let mouseMoveRafId: number | null = null
+let pendingMouseEvent: MouseEvent | null = null
+
+function processMouseMove() {
+  mouseMoveRafId = null
+  if (!pendingMouseEvent) return
+  const e = pendingMouseEvent
+  pendingMouseEvent = null
+
   const container = containerRef.value
   if (!container) return
   const rect = container.getBoundingClientRect()
@@ -212,7 +220,19 @@ function handleMouseMove(e: MouseEvent) {
   emit('timeHover', targetTime)
 }
 
+function handleMouseMove(e: MouseEvent) {
+  pendingMouseEvent = e
+  if (mouseMoveRafId === null) {
+    mouseMoveRafId = requestAnimationFrame(processMouseMove)
+  }
+}
+
 function handleMouseLeave() {
+  if (mouseMoveRafId !== null) {
+    cancelAnimationFrame(mouseMoveRafId)
+    mouseMoveRafId = null
+  }
+  pendingMouseEvent = null
   if (activeHoverGroup.value === props.syncGroup) { clearHoverTime(); emit('timeHover', null) }
 }
 
@@ -226,6 +246,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   if (rafId !== null) cancelAnimationFrame(rafId)
+  if (mouseMoveRafId !== null) cancelAnimationFrame(mouseMoveRafId)
   if (resizeObserver) resizeObserver.disconnect()
 })
 </script>

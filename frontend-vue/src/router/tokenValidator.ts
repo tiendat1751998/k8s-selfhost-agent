@@ -49,6 +49,7 @@ export function isPrivilegedAdminRole(role: string | undefined): boolean {
     normalized === 'platform admin' ||
     normalized === 'security auditor' ||
     normalized === 'platform-admin' ||
+    normalized === 'platform_admin' ||
     normalized === 'devops team'
   )
 }

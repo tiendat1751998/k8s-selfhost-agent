@@ -207,6 +207,7 @@ describe('Phase 1 — Emergency P0 Security & Frontend Auth Hardening Specificat
     // Role checks
     assert.strictEqual(isPrivilegedAdminRole('admin'), true)
     assert.strictEqual(isPrivilegedAdminRole('Platform Admin'), true)
+    assert.strictEqual(isPrivilegedAdminRole('platform_admin'), true)
     assert.strictEqual(isPrivilegedAdminRole('developer'), false)
     assert.strictEqual(isPrivilegedAdminRole('viewer'), false)
     assert.strictEqual(isPrivilegedAdminRole(undefined), false)

@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { k8sApi, type K8sResource, type K8sNamespace, type ResourceKind } from '../api/k8s'
 import { fleetApi, type Cluster } from '../api/compute'
 import type { Column } from '../components/ui/DataTable.vue'
@@ -95,14 +95,19 @@ export function useK8sExplorer() {
     }
   })
 
+  let toastTimer: ReturnType<typeof setTimeout> | null = null
   function showToast(text: string, type: 'success' | 'error' = 'success') {
+    if (toastTimer) clearTimeout(toastTimer)
     toastMessage.value = { text, type }
-    setTimeout(() => {
+    toastTimer = setTimeout(() => {
       if (toastMessage.value?.text === text) {
         toastMessage.value = null
       }
     }, 4000)
   }
+  onUnmounted(() => {
+    if (toastTimer) clearTimeout(toastTimer)
+  })
 
   function selectKind(kind: ResourceKind) {
     selectedKind.value = kind

@@ -207,7 +207,7 @@ router.beforeEach((to, _from, next) => {
   if (isSensitiveAdminRoute && isAuthenticated) {
     const savedUserStr = typeof window !== 'undefined' ? localStorage.getItem('k8s_user') : null
     let activeRole = claims.role || ''
-    if (savedUserStr) {
+    if (!activeRole && savedUserStr) {
       try {
         const parsed = JSON.parse(savedUserStr)
         if (parsed.role) activeRole = parsed.role

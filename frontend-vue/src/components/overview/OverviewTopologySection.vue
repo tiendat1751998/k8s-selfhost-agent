@@ -2,6 +2,7 @@
 import BaseIcon from '../ui/BaseIcon.vue'
 import NodeCard from './nodes/NodeCard.vue'
 import NodeTableView from './nodes/NodeTableView.vue'
+import VirtualNodeGrid from './virtual/VirtualNodeGrid.vue'
 import type { SystemOverview, NodeMetrics } from '../../api/overview'
 
 defineProps<{
@@ -148,8 +149,32 @@ const emit = defineEmits<{
       />
     </template>
     <template v-else>
+      <VirtualNodeGrid
+        v-if="filteredTopologyNodes.length > 24"
+        :nodes="filteredTopologyNodes"
+        :viewport-height="640"
+        @select="emit('cardClick', $event)"
+      >
+        <template #item="{ node }">
+          <NodeCard
+            :node="node"
+            :busiestNodeId="busiestNodeId"
+            :draggedNodeId="draggedNodeId"
+            :dragOverNodeId="dragOverNodeId"
+            @click="emit('cardClick', $event)"
+            @inspect="emit('inspect', $event)"
+            @manage="emit('manage', $event)"
+            @dragstart="emit('dragstart', $event, node)"
+            @dragover="emit('dragover', $event, node)"
+            @dragenter="emit('dragenter', node)"
+            @dragleave="emit('dragleave', $event, node)"
+            @drop="emit('drop', node)"
+            @dragend="emit('dragend')"
+          />
+        </template>
+      </VirtualNodeGrid>
       <!-- Node Cards Grid -->
-      <div class="node-cards-grid">
+      <div v-else class="node-cards-grid">
         <div
           v-if="filteredTopologyNodes.length === 0"
           class="empty-topology-state glass-panel"

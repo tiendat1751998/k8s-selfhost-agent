@@ -1,4 +1,4 @@
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { settingsApi, type Setting, type SettingUpdate, type IntegrationTestResult } from '../api/settings'
 import { authApi, type TOTPStatusResponse } from '../api/auth'
 
@@ -472,6 +472,10 @@ export function useSettings() {
   onMounted(() => {
     loadSettings()
     fetchTOTPStatus()
+  })
+
+  onUnmounted(() => {
+    if (messageTimer) clearTimeout(messageTimer)
   })
 
   return {

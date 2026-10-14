@@ -1,4 +1,4 @@
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   tenancyApi,
   type Organization,
@@ -103,6 +103,10 @@ export function useTenancyRbac() {
 
   onMounted(() => {
     loadData()
+  })
+
+  onUnmounted(() => {
+    if (feedbackTimer) clearTimeout(feedbackTimer)
   })
 
   // Computed Scoped Data
