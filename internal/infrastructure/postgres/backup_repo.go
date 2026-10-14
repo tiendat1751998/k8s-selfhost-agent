@@ -88,7 +88,7 @@ func (r *BackupRepo) CreateStorage(ctx context.Context, storage *backup.BackupSt
 }
 
 func (r *BackupRepo) ListStorages(ctx context.Context, tenantID string) ([]*backup.BackupStorage, error) {
-	query := `SELECT id, tenant_id, name, type, endpoint, bucket, credentials, created_at, updated_at FROM backup_storages WHERE tenant_id = $1`
+	query := `SELECT id, tenant_id, name, type, endpoint, bucket, credentials, created_at, updated_at FROM backup_storages WHERE tenant_id = $1 LIMIT 500`
 	query, args := BuildTenantQuery(ctx, query, tenantID)
 
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
@@ -159,7 +159,7 @@ func (r *BackupRepo) CreatePolicy(ctx context.Context, policy *backup.BackupPoli
 }
 
 func (r *BackupRepo) ListPolicies(ctx context.Context, tenantID string) ([]*backup.BackupPolicy, error) {
-	query := `SELECT id, tenant_id, name, db_type, db_host, db_port, db_name, storage_id, schedule, retention_count, backup_type, enabled, created_at, updated_at FROM backup_policies WHERE tenant_id = $1`
+	query := `SELECT id, tenant_id, name, db_type, db_host, db_port, db_name, storage_id, schedule, retention_count, backup_type, enabled, created_at, updated_at FROM backup_policies WHERE tenant_id = $1 LIMIT 500`
 	query, args := BuildTenantQuery(ctx, query, tenantID)
 
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
@@ -226,7 +226,7 @@ func (r *BackupRepo) ListJobs(ctx context.Context, tenantID string) ([]*backup.B
 		       size_bytes, COALESCE(compressed_size_bytes, 0), duration_ms, 
 		       COALESCE(checksum_sha256, ''), COALESCE(wal_start_lsn, ''), COALESCE(wal_end_lsn, ''),
 		       COALESCE(verification_status, 'unverified'), verified_at, COALESCE(error_message, ''), created_at, updated_at 
-		FROM backup_jobs WHERE tenant_id = $1 ORDER BY created_at DESC`
+		FROM backup_jobs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 500`
 	query, args := BuildTenantQuery(ctx, query, tenantID)
 
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
@@ -329,7 +329,7 @@ func (r *BackupRepo) ListRestores(ctx context.Context, tenantID string) ([]*back
 		SELECT id, tenant_id, backup_job_id, target_db_host, target_db_name, pitr_timestamp,
 		       COALESCE(dry_run, false), COALESCE(source_storage_type, ''), COALESCE(verification_log, ''),
 		       status, COALESCE(error_message, ''), created_at, updated_at 
-		FROM restore_jobs WHERE tenant_id = $1 ORDER BY created_at DESC`
+		FROM restore_jobs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 500`
 	query, args := BuildTenantQuery(ctx, query, tenantID)
 
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)

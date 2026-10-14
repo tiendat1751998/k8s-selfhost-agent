@@ -369,6 +369,7 @@ func (r *observabilityRepo) GetHealthSamples(ctx context.Context, serviceName st
 			FROM slo_health_samples
 			WHERE service_name = $1 AND recorded_at >= $2 AND tenant_id = $3
 			ORDER BY recorded_at DESC
+			LIMIT 1000
 		`
 		args = []any{serviceName, since, tUUID}
 	} else {
@@ -377,6 +378,7 @@ func (r *observabilityRepo) GetHealthSamples(ctx context.Context, serviceName st
 			FROM slo_health_samples
 			WHERE service_name = $1 AND recorded_at >= $2
 			ORDER BY recorded_at DESC
+			LIMIT 1000
 		`
 		args = []any{serviceName, since}
 	}

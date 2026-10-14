@@ -210,7 +210,7 @@ func (r *catalogRepo) List(ctx context.Context, tenantID string, filter catalog.
 	}
 
 	selectQuery := fmt.Sprintf(
-		"SELECT id, name, description, type, lifecycle, owner_team, owner_email, repo_url, docs_url, tags, annotations, tenant_id, created_at, updated_at %s ORDER BY created_at DESC",
+		"SELECT id, name, description, type, lifecycle, owner_team, owner_email, repo_url, docs_url, tags, annotations, tenant_id, created_at, updated_at %s ORDER BY created_at DESC LIMIT 500",
 		baseQuery,
 	)
 	selectQuery, args = BuildTenantQuery(ctx, selectQuery, args...)

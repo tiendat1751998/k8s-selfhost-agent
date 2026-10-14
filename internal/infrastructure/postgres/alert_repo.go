@@ -218,6 +218,7 @@ func (r *AlertRepo) ListHistory(ctx context.Context, tenantID string) ([]*alert.
 		FROM alert_history
 		WHERE tenant_id = $1
 		ORDER BY created_at DESC
+		LIMIT 500
 	`
 
 	rows, err := r.getDB(ctx).Query(ctx, query, tenantID)

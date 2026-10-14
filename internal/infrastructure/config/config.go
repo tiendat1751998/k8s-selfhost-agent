@@ -207,7 +207,7 @@ func Load() (*Config, error) {
 	v.SetDefault("postgres.password", "")
 	v.SetDefault("postgres.dbname", "k8sselfhost")
 	v.SetDefault("postgres.sslmode", "disable")
-	v.SetDefault("postgres.max_conns", 25)
+	v.SetDefault("postgres.max_conns", 50)
 	v.SetDefault("postgres.min_conns", 5)
 
 	v.SetDefault("redis.host", "localhost")

@@ -33,6 +33,7 @@ func (r *fleetRepo) ListClusters(ctx context.Context) ([]fleet.Cluster, error) {
 		       import_method, kubeconfig_hash, last_health_check, health_status, discovered_resources
 		FROM fleet_clusters
 		ORDER BY name ASC
+		LIMIT 500
 	`
 	
 	query, args := BuildTenantQuery(ctx, query)

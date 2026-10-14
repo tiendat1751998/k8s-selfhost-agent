@@ -77,7 +77,7 @@ func (r *userRepo) GetByID(ctx context.Context, id string) (*user.User, error) {
 		LEFT JOIN roles r_platform ON ur.role_id = r_platform.id AND r_platform.name = 'platform_admin'
 		LEFT JOIN tenant_bindings tb ON u.id = tb.user_id
 		LEFT JOIN roles r_tenant ON tb.role_id = r_tenant.id
-		WHERE u.id::text = $1
+		WHERE u.id = $1::uuid
 		LIMIT 1
 	`
 	var u user.User
@@ -102,34 +102,34 @@ func (r *userRepo) GetByID(ctx context.Context, id string) (*user.User, error) {
 func (r *userRepo) UpdateMFA(ctx context.Context, userID, encryptedSecret string, enabled bool) error {
 	if enabled {
 		if encryptedSecret != "" {
-			query := `UPDATE users SET mfa_secret = $2, mfa_enabled = true, mfa_verified_at = NOW(), updated_at = NOW() WHERE id::text = $1`
+			query := `UPDATE users SET mfa_secret = $2, mfa_enabled = true, mfa_verified_at = NOW(), updated_at = NOW() WHERE id = $1::uuid`
 			_, err := r.getDB(ctx).Exec(ctx, query, userID, encryptedSecret)
 			return err
 		}
-		query := `UPDATE users SET mfa_enabled = true, mfa_verified_at = NOW(), updated_at = NOW() WHERE id::text = $1`
+		query := `UPDATE users SET mfa_enabled = true, mfa_verified_at = NOW(), updated_at = NOW() WHERE id = $1::uuid`
 		_, err := r.getDB(ctx).Exec(ctx, query, userID)
 		return err
 	}
 
 	if encryptedSecret != "" {
-		query := `UPDATE users SET mfa_secret = $2, mfa_enabled = false, updated_at = NOW() WHERE id::text = $1`
+		query := `UPDATE users SET mfa_secret = $2, mfa_enabled = false, updated_at = NOW() WHERE id = $1::uuid`
 		_, err := r.getDB(ctx).Exec(ctx, query, userID, encryptedSecret)
 		return err
 	}
 
-	query := `UPDATE users SET mfa_secret = NULL, mfa_enabled = false, mfa_recovery_codes = NULL, mfa_verified_at = NULL, updated_at = NOW() WHERE id::text = $1`
+	query := `UPDATE users SET mfa_secret = NULL, mfa_enabled = false, mfa_recovery_codes = NULL, mfa_verified_at = NULL, updated_at = NOW() WHERE id = $1::uuid`
 	_, err := r.getDB(ctx).Exec(ctx, query, userID)
 	return err
 }
 
 func (r *userRepo) SetRecoveryCodes(ctx context.Context, userID, encryptedCodes string) error {
-	query := `UPDATE users SET mfa_recovery_codes = $2, updated_at = NOW() WHERE id::text = $1`
+	query := `UPDATE users SET mfa_recovery_codes = $2, updated_at = NOW() WHERE id = $1::uuid`
 	_, err := r.getDB(ctx).Exec(ctx, query, userID, encryptedCodes)
 	return err
 }
 
 func (r *userRepo) GetMFASecret(ctx context.Context, userID string) (string, error) {
-	query := `SELECT COALESCE(mfa_secret, '') FROM users WHERE id::text = $1`
+	query := `SELECT COALESCE(mfa_secret, '') FROM users WHERE id = $1::uuid`
 	var encryptedSecret string
 	err := r.getDB(ctx).QueryRow(ctx, query, userID).Scan(&encryptedSecret)
 	if err != nil {

@@ -37,6 +37,7 @@ func (r *auditRepo) ListFindings(ctx context.Context, status string) ([]audit.Au
 			FROM audit_findings 
 			WHERE status = $1 
 			ORDER BY detected_at DESC
+			LIMIT 500
 		`
 		args = append(args, status)
 	} else {
@@ -44,6 +45,7 @@ func (r *auditRepo) ListFindings(ctx context.Context, status string) ([]audit.Au
 			SELECT id, category, severity, description, remediation, status, detected_at, resolved_at 
 			FROM audit_findings 
 			ORDER BY detected_at DESC
+			LIMIT 500
 		`
 	}
 	query, args = BuildTenantQuery(ctx, query, args...)
@@ -256,8 +258,77 @@ func (r *auditRepo) ListLogs(ctx context.Context, filter audit.AuditLogFilter) (
 		offset = 0
 	}
 
-	baseQuery := `
-		WITH enriched AS (
+	var args []interface{}
+	argIdx := 1
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	userRole := tenancy.UserRoleFromContext(ctx)
+	if userRole != "platform_admin" {
+		if tenantID == "" {
+			return []audit.AuditLog{}, 0, nil
+		}
+	}
+
+	sql := " WHERE 1=1"
+	if userRole != "platform_admin" && tenantID != "" {
+		sql += fmt.Sprintf(" AND tenant_id = $%d", argIdx)
+		args = append(args, tenantID)
+		argIdx++
+	}
+
+	if filter.Actor != "" {
+		sql += fmt.Sprintf(" AND LOWER(actor) = LOWER($%d)", argIdx)
+		args = append(args, filter.Actor)
+		argIdx++
+	}
+
+	if filter.Search != "" {
+		searchPattern := fmt.Sprintf("%%%s%%", filter.Search)
+		sql += fmt.Sprintf(" AND (actor ILIKE $%d OR action ILIKE $%d OR target_name ILIKE $%d OR ip_address ILIKE $%d)", argIdx, argIdx, argIdx, argIdx)
+		args = append(args, searchPattern)
+		argIdx++
+	}
+
+	whereClause := " WHERE 1=1"
+	if filter.ActionType != "" {
+		whereClause += fmt.Sprintf(" AND LOWER(action_type) = LOWER($%d)", argIdx)
+		args = append(args, filter.ActionType)
+		argIdx++
+	}
+
+	if filter.Severity != "" {
+		whereClause += fmt.Sprintf(" AND LOWER(severity) = LOWER($%d)", argIdx)
+		args = append(args, filter.Severity)
+		argIdx++
+	}
+
+	if filter.Status != "" {
+		whereClause += fmt.Sprintf(" AND LOWER(status) = LOWER($%d)", argIdx)
+		args = append(args, filter.Status)
+		argIdx++
+	}
+
+	var sb strings.Builder
+	sb.WriteString(`
+		WITH filtered AS (
+			SELECT 
+				id,
+				actor,
+				action,
+				target_type,
+				target_id,
+				target_name,
+				result,
+				details,
+				ip_address,
+				user_agent,
+				created_at,
+				tenant_id
+			FROM audit_logs
+	`)
+	sb.WriteString(sql)
+	sb.WriteString(`
+		),
+		enriched AS (
 			SELECT 
 				id::text AS id,
 				actor,
@@ -297,56 +368,10 @@ func (r *auditRepo) ListLogs(ctx context.Context, filter audit.AuditLogFilter) (
 					WHEN result = 'pending' THEN 'pending'
 					ELSE result
 				END AS status
-			FROM audit_logs
+			FROM filtered
 		)
-	`
-
-	var args []interface{}
-	argIdx := 1
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	userRole := tenancy.UserRoleFromContext(ctx)
-	if userRole != "platform_admin" {
-		if tenantID == "" {
-			return []audit.AuditLog{}, 0, nil
-		}
-	}
-	whereClause := " WHERE 1=1"
-	if userRole != "platform_admin" && tenantID != "" {
-		whereClause += fmt.Sprintf(" AND tenant_id = $%d", argIdx)
-		args = append(args, tenantID)
-		argIdx++
-	}
-
-	if filter.Actor != "" {
-		whereClause += fmt.Sprintf(" AND LOWER(actor) = LOWER($%d)", argIdx)
-		args = append(args, filter.Actor)
-		argIdx++
-	}
-
-	if filter.ActionType != "" {
-		whereClause += fmt.Sprintf(" AND LOWER(action_type) = LOWER($%d)", argIdx)
-		args = append(args, filter.ActionType)
-		argIdx++
-	}
-
-	if filter.Severity != "" {
-		whereClause += fmt.Sprintf(" AND LOWER(severity) = LOWER($%d)", argIdx)
-		args = append(args, filter.Severity)
-		argIdx++
-	}
-
-	if filter.Status != "" {
-		whereClause += fmt.Sprintf(" AND LOWER(status) = LOWER($%d)", argIdx)
-		args = append(args, filter.Status)
-		argIdx++
-	}
-
-	if filter.Search != "" {
-		searchPattern := fmt.Sprintf("%%%s%%", filter.Search)
-		whereClause += fmt.Sprintf(" AND (actor ILIKE $%d OR action ILIKE $%d OR target_name ILIKE $%d OR ip_address ILIKE $%d)", argIdx, argIdx, argIdx, argIdx)
-		args = append(args, searchPattern)
-		argIdx++
-	}
+	`)
+	baseQuery := sb.String()
 
 	countQuery := fmt.Sprintf("%s SELECT COUNT(*) FROM enriched %s", baseQuery, whereClause)
 	var total int

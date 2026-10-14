@@ -174,6 +174,7 @@ func (r *computeHostRepo) List(ctx context.Context, tenantID string) ([]docker.C
 			FROM compute_hosts
 			WHERE tenant_id = $1
 			ORDER BY name ASC
+			LIMIT 500
 		`
 		args = []any{tenantID}
 	} else {
@@ -181,6 +182,7 @@ func (r *computeHostRepo) List(ctx context.Context, tenantID string) ([]docker.C
 			SELECT id, name, host_type, endpoint, tls_enabled, COALESCE(tls_ca, ''), COALESCE(tls_cert, ''), COALESCE(tls_key, ''), api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
 			FROM compute_hosts
 			ORDER BY name ASC
+			LIMIT 500
 		`
 	}
 
@@ -201,6 +203,7 @@ func (r *computeHostRepo) ListAll(ctx context.Context) ([]docker.ComputeHost, er
 		SELECT id, name, host_type, endpoint, tls_enabled, COALESCE(tls_ca, ''), COALESCE(tls_cert, ''), COALESCE(tls_key, ''), api_version, status, last_health_check, labels, tenant_id, created_at, updated_at
 		FROM compute_hosts
 		ORDER BY name ASC
+		LIMIT 500
 	`
 
 	rows, err := r.getDB(ctx).Query(ctx, query)
