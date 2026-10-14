@@ -59,7 +59,6 @@ func RegisterSRERoutes(r chi.Router, handlers *SREResilienceHandlers) {
 	}
 	if storage != nil {
 		r.With(mutRoles).Route("/clusters/{clusterId}/storage", storage.RegisterRoutes)
-		r.With(mutRoles).Route("/storage/resiliency", storage.RegisterRoutes)
 	}
 
 	// 2. Kernel Resiliency: cgroup v2, NUMA memory, and socket netscaler
@@ -141,7 +140,6 @@ func RegisterSRERoutes(r chi.Router, handlers *SREResilienceHandlers) {
 
 	// 11. Velero Snapshot Lock & Edge DR Healing
 	if handlers.DRHealing != nil {
-		r.With(mutRoles).Route("/dr", handlers.DRHealing.RegisterRoutes)
 		r.With(mutRoles).Route("/clusters/{clusterId}/dr/healing", handlers.DRHealing.RegisterRoutes)
 	}
 
@@ -222,10 +220,7 @@ func RegisterSRERoutes(r chi.Router, handlers *SREResilienceHandlers) {
 		r.With(mutRoles).Route("/crypto", handlers.Crypto.RegisterRoutes)
 	}
 
-	// 21. GitOps Sync-Wave DAG
-	if handlers.GitOpsSyncWave != nil {
-		r.With(mutRoles).Route("/gitops", handlers.GitOpsSyncWave.RegisterRoutes)
-	}
+	// 21. GitOps Sync-Wave DAG (mounted via platform_routes /gitops)
 
 	// 22. RoCEv2 PFC Deadlock & GPU RDMA
 	if handlers.RDMAWatch != nil {

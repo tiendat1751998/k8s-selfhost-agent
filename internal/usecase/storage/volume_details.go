@@ -104,9 +104,6 @@ func (u *VolumeUsecase) GetVolumeDetails(ctx context.Context, clusterID, namespa
 	usageSource := storage.UsageSourceUnknown
 
 	provider := u.metricsProvider
-	if provider == nil {
-		provider = u.defaultMetricsProvider
-	}
 	if provider != nil {
 		if uBytes, mErr := provider.GetVolumeMetrics(ctx, client, namespace, pvc.Name); mErr == nil && uBytes != nil {
 			uVal := *uBytes

@@ -181,6 +181,13 @@ func (rb *RingBuffer) Push(entry Entry) bool {
 // PushWait blocks until the entry can be pushed, or ctx is canceled.
 func (rb *RingBuffer) PushWait(ctx context.Context, entry Entry) error {
 	var spins int
+	var timer *time.Timer
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
+
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -211,10 +218,21 @@ func (rb *RingBuffer) PushWait(ctx context.Context, entry Entry) error {
 				spins++
 				continue
 			}
+			if timer == nil {
+				timer = time.NewTimer(50 * time.Microsecond)
+			} else {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(50 * time.Microsecond)
+			}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(50 * time.Microsecond):
+			case <-timer.C:
 				spins = 0
 				continue
 			}

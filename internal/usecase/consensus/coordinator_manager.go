@@ -41,8 +41,9 @@ type CoordinatorManager struct {
 	stateMachine *domainconsensus.EtcdDefragStateMachine
 
 	mu           sync.RWMutex
-	activeLocks  map[string]lockRecord
-	committedGen map[string]int64
+	activeLocks     map[string]lockRecord
+	committedGen    map[string]int64
+	activePrimaries map[string]string
 }
 
 // NewCoordinatorManager initializes a new CoordinatorManager with required infrastructure clients.
@@ -59,6 +60,7 @@ func NewCoordinatorManager(
 		stateMachine:     domainconsensus.NewEtcdDefragStateMachine(),
 		activeLocks:      make(map[string]lockRecord),
 		committedGen:     make(map[string]int64),
+		activePrimaries:  make(map[string]string),
 	}
 
 	for _, opt := range opts {
@@ -207,7 +209,22 @@ func (cm *CoordinatorManager) AcquireLockWithFencing(
 	return domainconsensus.NewFencingToken(key, ownerID, generation, expiresAt)
 }
 
-// ValidateFencingToken validates that a fencing token is strictly greater than the committed generation.
+// SetActivePrimary explicitly records the active primary host for a connection pooler.
+func (cm *CoordinatorManager) SetActivePrimary(poolerAddr, primaryAddr string) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.activePrimaries[poolerAddr] = primaryAddr
+}
+
+// GetActivePrimary returns the tracked primary host for a connection pooler.
+func (cm *CoordinatorManager) GetActivePrimary(poolerAddr string) string {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.activePrimaries[poolerAddr]
+}
+
+// ValidateFencingToken validates that a fencing token is strictly greater than the committed generation,
+// is monotonic against active lease generations, and has not expired.
 func (cm *CoordinatorManager) ValidateFencingToken(ctx context.Context, key string, token int64) (bool, error) {
 	if key == "" {
 		return false, fmt.Errorf("%w: key cannot be empty", domainconsensus.ErrInvalidConsensusInput)
@@ -223,6 +240,18 @@ func (cm *CoordinatorManager) ValidateFencingToken(ctx context.Context, key stri
 	if token <= committed {
 		cm.telemetry.IncStaleRejects()
 		return false, domainconsensus.ErrFencingTokenStale
+	}
+
+	// Validate monotonicity and expiration against active lock record
+	if record, exists := cm.activeLocks[key]; exists {
+		if token < record.generation {
+			cm.telemetry.IncStaleRejects()
+			return false, domainconsensus.ErrFencingTokenStale
+		}
+		if time.Now().UTC().After(record.expiresAt) {
+			cm.telemetry.IncStaleRejects()
+			return false, fmt.Errorf("%w: lock lease has expired", domainconsensus.ErrFencingTokenStale)
+		}
 	}
 
 	cm.committedGen[key] = token
@@ -243,14 +272,33 @@ func (cm *CoordinatorManager) FlushPgBouncerStaleConnections(
 		return fmt.Errorf("%w: pgbouncer client is not configured", domainconsensus.ErrInvalidConsensusInput)
 	}
 
+	// Resolve the target stale node deterministically:
+	// 1. Check if an active primary is tracked for this pooler
+	// 2. Or check active lock for poolerAddr or database primary
+	// 3. Or derive deterministically from pooler address
+	cm.mu.Lock()
+	staleHost := cm.activePrimaries[poolerAddr]
+	if staleHost == "" {
+		if rec, exists := cm.activeLocks[poolerAddr]; exists && rec.ownerID != "" {
+			staleHost = rec.ownerID
+		} else if rec, exists := cm.activeLocks["primary"]; exists && rec.ownerID != "" {
+			staleHost = rec.ownerID
+		} else if rec, exists := cm.activeLocks["patroni/master"]; exists && rec.ownerID != "" {
+			staleHost = rec.ownerID
+		} else {
+			staleHost = fmt.Sprintf("stale-%s", poolerAddr)
+		}
+	}
+	cm.mu.Unlock()
+
 	if err := cm.pgClient.Pause(ctx, poolerAddr); err != nil {
 		return fmt.Errorf("pausing pgbouncer pool: %w", err)
 	}
 
-	killed, err := cm.pgClient.KillStaleConnections(ctx, poolerAddr, "demoted-primary")
+	killed, err := cm.pgClient.KillStaleConnections(ctx, poolerAddr, staleHost)
 	if err != nil {
 		_ = cm.pgClient.Resume(ctx, poolerAddr)
-		return fmt.Errorf("killing stale connections: %w", err)
+		return fmt.Errorf("killing stale connections for host %s: %w", staleHost, err)
 	}
 	cm.telemetry.AddStaleSocketsKilled(uint64(killed))
 
@@ -262,6 +310,10 @@ func (cm *CoordinatorManager) FlushPgBouncerStaleConnections(
 	if err := cm.pgClient.Resume(ctx, poolerAddr); err != nil {
 		return fmt.Errorf("resuming pgbouncer pool: %w", err)
 	}
+
+	cm.mu.Lock()
+	cm.activePrimaries[poolerAddr] = newMasterAddr
+	cm.mu.Unlock()
 
 	cm.telemetry.IncPgBouncerFlushes()
 	return nil

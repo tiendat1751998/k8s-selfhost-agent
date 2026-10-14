@@ -86,7 +86,12 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 	helmHome := p.cfg.Helm.HomeDir
 	helmManager := helm.NewReleaseManager(p.clientManager, nil, helmHome)
 	helmHandler := adapthttp.NewHelmHandler(helmManager, p.auditRepo)
-	storageUsecase := usecaseStorage.NewVolumeUsecase(p.infra.k8sClient, p.clientManager, p.log)
+	storageUsecase := usecaseStorage.NewVolumeUsecase(
+		p.infra.k8sClient,
+		p.clientManager,
+		p.log,
+		usecaseStorage.WithMetricsProvider(infraK8s.NewKubeletVolumeMetricsProvider()),
+	)
 	storageHandler := adapthttp.NewStorageHandler(storageUsecase)
 	drUsecase := dr.NewDRUsecase(p.infra.k8sClient, p.clientManager, p.log)
 	remediationController := sre.NewRemediationController(p.infra.k8sClient, p.clientManager, p.log)

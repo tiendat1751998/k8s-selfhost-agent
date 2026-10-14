@@ -34,12 +34,18 @@ type RedactionRule struct {
 
 // InStreamRedactor performs in-stream detection and masking of sensitive credentials.
 type InStreamRedactor struct {
-	rules []RedactionRule
+	rules      []RedactionRule
+	triggerMap map[byte][]int
 }
 
 // NewInStreamRedactor constructs an InStreamRedactor with pre-compiled automata rules.
 func NewInStreamRedactor() *InStreamRedactor {
-	rules := []RedactionRule{
+	r := &InStreamRedactor{
+		rules:      make([]RedactionRule, 0, 8),
+		triggerMap: make(map[byte][]int),
+	}
+
+	defaultRules := []RedactionRule{
 		{
 			Type:        PatternConnectionString,
 			Regex:       regexp.MustCompile(`(?i)(postgres|mysql|mongodb|redis|amqp):\/\/[^:\s]+:[^@\s]+@`),
@@ -72,17 +78,63 @@ func NewInStreamRedactor() *InStreamRedactor {
 		},
 	}
 
-	for i := range rules {
-		rules[i].replacementStr = string(rules[i].Replacement)
-		rules[i].triggerBytes = make([][]byte, len(rules[i].triggers))
-		for j, tr := range rules[i].triggers {
-			rules[i].triggerBytes[j] = []byte(tr)
-		}
+	for _, rule := range defaultRules {
+		r.AddRule(rule)
 	}
 
-	return &InStreamRedactor{
-		rules: rules,
+	return r
+}
+
+// AddRule adds a new custom redaction rule to the InStreamRedactor with safe case indexing.
+func (r *InStreamRedactor) AddRule(rule RedactionRule) {
+	if rule.replacementStr == "" {
+		rule.replacementStr = string(rule.Replacement)
 	}
+	if len(rule.triggerBytes) == 0 && len(rule.triggers) > 0 {
+		rule.triggerBytes = make([][]byte, len(rule.triggers))
+		for j, tr := range rule.triggers {
+			rule.triggerBytes[j] = []byte(tr)
+		}
+	}
+	ruleIdx := len(r.rules)
+	r.rules = append(r.rules, rule)
+
+	if r.triggerMap == nil {
+		r.triggerMap = make(map[byte][]int)
+	}
+	for _, tr := range rule.triggers {
+		if len(tr) == 0 {
+			continue
+		}
+		r.indexTriggerByte(tr[0], ruleIdx)
+	}
+}
+
+// indexTriggerByte safely maps initial byte variations into triggerMap without arithmetic underflow.
+func (r *InStreamRedactor) indexTriggerByte(b byte, ruleIdx int) {
+	if r.triggerMap == nil {
+		r.triggerMap = make(map[byte][]int)
+	}
+	if b >= 'a' && b <= 'z' {
+		r.triggerMap[b] = append(r.triggerMap[b], ruleIdx)
+		upper := b - ('a' - 'A')
+		r.triggerMap[upper] = append(r.triggerMap[upper], ruleIdx)
+	} else if b >= 'A' && b <= 'Z' {
+		r.triggerMap[b] = append(r.triggerMap[b], ruleIdx)
+		lower := b + ('a' - 'A')
+		r.triggerMap[lower] = append(r.triggerMap[lower], ruleIdx)
+	} else {
+		// Digits ('0'..'9'), symbols, and non-ASCII bytes (b >= 128) are indexed safely without underflow
+		r.triggerMap[b] = append(r.triggerMap[b], ruleIdx)
+	}
+}
+
+// GetTriggerRules returns the rule indices matching an initial byte, if any.
+func (r *InStreamRedactor) GetTriggerRules(b byte) []int {
+	if r.triggerMap == nil {
+		return nil
+	}
+	return r.triggerMap[b]
 }
 
 // MaskBytes replaces sensitive credentials in line []byte with redacted placeholders.
@@ -97,8 +149,10 @@ func (r *InStreamRedactor) MaskBytes(line []byte) []byte {
 
 	for i := range r.rules {
 		if ruleTriggeredBytes(&r.rules[i], line) {
-			matchedIndices[matchCount] = i
-			matchCount++
+			if matchCount < len(matchedIndices) {
+				matchedIndices[matchCount] = i
+				matchCount++
+			}
 		}
 	}
 
@@ -129,8 +183,10 @@ func (r *InStreamRedactor) MaskString(s string) string {
 
 	for i := range r.rules {
 		if ruleTriggeredString(&r.rules[i], s) {
-			matchedIndices[matchCount] = i
-			matchCount++
+			if matchCount < len(matchedIndices) {
+				matchedIndices[matchCount] = i
+				matchCount++
+			}
 		}
 	}
 
@@ -188,7 +244,7 @@ func ruleTriggeredString(rule *RedactionRule, s string) bool {
 }
 
 // containsFoldBytes checks if sub occurs within s (ASCII case-insensitive) without heap allocation.
-// Assumes sub is lowercase.
+// Handles initial byte and subsequent characters safely for uppercase, lowercase, symbols, and non-ASCII bytes.
 func containsFoldBytes(s []byte, sub string) bool {
 	n := len(sub)
 	if n == 0 {
@@ -198,8 +254,18 @@ func containsFoldBytes(s []byte, sub string) bool {
 		return false
 	}
 
-	fLower := sub[0]
-	fUpper := fLower - ('a' - 'A')
+	b0 := sub[0]
+	var fLower, fUpper byte
+	if b0 >= 'a' && b0 <= 'z' {
+		fLower = b0
+		fUpper = b0 - ('a' - 'A')
+	} else if b0 >= 'A' && b0 <= 'Z' {
+		fLower = b0 + ('a' - 'A')
+		fUpper = b0
+	} else {
+		fLower = b0
+		fUpper = b0
+	}
 
 	max := len(s) - n
 	for i := 0; i <= max; i++ {
@@ -211,7 +277,11 @@ func containsFoldBytes(s []byte, sub string) bool {
 				if sc >= 'A' && sc <= 'Z' {
 					sc += 'a' - 'A'
 				}
-				if sc != sub[j] {
+				tc := sub[j]
+				if tc >= 'A' && tc <= 'Z' {
+					tc += 'a' - 'A'
+				}
+				if sc != tc {
 					match = false
 					break
 				}
@@ -225,7 +295,7 @@ func containsFoldBytes(s []byte, sub string) bool {
 }
 
 // containsFoldString checks if sub occurs within s (ASCII case-insensitive) without heap allocation.
-// Assumes sub is lowercase.
+// Handles initial byte and subsequent characters safely for uppercase, lowercase, symbols, and non-ASCII bytes.
 func containsFoldString(s string, sub string) bool {
 	n := len(sub)
 	if n == 0 {
@@ -235,8 +305,18 @@ func containsFoldString(s string, sub string) bool {
 		return false
 	}
 
-	fLower := sub[0]
-	fUpper := fLower - ('a' - 'A')
+	b0 := sub[0]
+	var fLower, fUpper byte
+	if b0 >= 'a' && b0 <= 'z' {
+		fLower = b0
+		fUpper = b0 - ('a' - 'A')
+	} else if b0 >= 'A' && b0 <= 'Z' {
+		fLower = b0 + ('a' - 'A')
+		fUpper = b0
+	} else {
+		fLower = b0
+		fUpper = b0
+	}
 
 	max := len(s) - n
 	for i := 0; i <= max; i++ {
@@ -248,7 +328,11 @@ func containsFoldString(s string, sub string) bool {
 				if sc >= 'A' && sc <= 'Z' {
 					sc += 'a' - 'A'
 				}
-				if sc != sub[j] {
+				tc := sub[j]
+				if tc >= 'A' && tc <= 'Z' {
+					tc += 'a' - 'A'
+				}
+				if sc != tc {
 					match = false
 					break
 				}
@@ -260,3 +344,4 @@ func containsFoldString(s string, sub string) bool {
 	}
 	return false
 }
+
