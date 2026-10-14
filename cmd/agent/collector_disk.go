@@ -209,10 +209,15 @@ func (c *SystemCollector) collectDiskIO(now time.Time) DiskIOMetrics {
 		}
 	}
 
+	c.mu.RLock()
+	prevDiskStats := c.prevDiskStats
+	prevDiskTime := c.prevDiskTime
+	c.mu.RUnlock()
+
 	var deltaSec float64
-	hasPrevTime := !c.prevDiskTime.IsZero()
+	hasPrevTime := !prevDiskTime.IsZero()
 	if hasPrevTime {
-		deltaSec = now.Sub(c.prevDiskTime).Seconds()
+		deltaSec = now.Sub(prevDiskTime).Seconds()
 	}
 
 	newSnap := make(map[string]diskDevSnapshot)
@@ -302,7 +307,7 @@ func (c *SystemCollector) collectDiskIO(now time.Time) DiskIOMetrics {
 		var avgWaitMs, avgReqSizeKB, ioUtilPct float64
 
 		if hasPrevTime && deltaSec >= 0.1 {
-			prev, ok := c.prevDiskStats[devName]
+			prev, ok := prevDiskStats[devName]
 			if ok {
 				var deltaReads, deltaSectorsRead, deltaReadTimeMs uint64
 				var deltaWrites, deltaSectorsWritten, deltaWriteTimeMs uint64
@@ -373,8 +378,10 @@ func (c *SystemCollector) collectDiskIO(now time.Time) DiskIOMetrics {
 		})
 	}
 
+	c.mu.Lock()
 	c.prevDiskStats = newSnap
 	c.prevDiskTime = now
+	c.mu.Unlock()
 
 	// Robust Fallback: If no root devices were matched or root devices reported 0 while sub-devices had active I/O,
 	// sum active non-ignored block devices

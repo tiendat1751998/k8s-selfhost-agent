@@ -175,6 +175,15 @@ func (m *IdentityManager) dialSocketWithBackoff(ctx context.Context, socketPath 
 	var lastErr error
 	backoff := m.cfg.BaseBackoff
 
+	backoffTimer := time.NewTimer(time.Hour)
+	if !backoffTimer.Stop() {
+		select {
+		case <-backoffTimer.C:
+		default:
+		}
+	}
+	defer backoffTimer.Stop()
+
 	attempts := m.cfg.MaxRetries + 1
 	for attempt := 0; attempt < attempts; attempt++ {
 		select {
@@ -204,10 +213,11 @@ func (m *IdentityManager) dialSocketWithBackoff(ctx context.Context, socketPath 
 			jitter := m.CalculateJitter(backoff, backoff/2)
 			sleepDur := backoff + jitter
 
+			backoffTimer.Reset(sleepDur)
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			case <-time.After(sleepDur):
+			case <-backoffTimer.C:
 			}
 			backoff *= 2
 		}
@@ -263,10 +273,12 @@ func (m *IdentityManager) RenewSVIDWithJitter(ctx context.Context, socketPath st
 
 	jitter := m.CalculateJitter(ttl, maxJitter)
 	if jitter > 0 {
+		jitterTimer := time.NewTimer(jitter)
+		defer jitterTimer.Stop()
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(jitter):
+		case <-jitterTimer.C:
 		}
 	}
 

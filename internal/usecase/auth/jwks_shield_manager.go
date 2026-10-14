@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	domainauth "github.com/datdt/k8sselfhost/internal/domain/auth"
 )
 
@@ -213,6 +215,7 @@ type JWKSShieldManager struct {
 	lastFetchError    string
 	lastFetchTime     time.Time
 	refreshInProgress int32
+	refreshGroup      singleflight.Group
 }
 
 // NewJWKSShieldManager creates an initialized JWKSShieldManager.
@@ -349,25 +352,28 @@ func (m *JWKSShieldManager) RefreshKeys(ctx context.Context) error {
 		return nil
 	}
 
-	keys, err := m.fetcher.FetchJWKS(ctx, m.providerURL)
-	now := m.now()
+	_, err, _ := m.refreshGroup.Do(m.providerURL, func() (any, error) {
+		keys, err := m.fetcher.FetchJWKS(ctx, m.providerURL)
+		now := m.now()
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+		m.mu.Lock()
+		defer m.mu.Unlock()
 
-	if err != nil {
-		m.metrics.RefreshErrors.Inc()
-		m.lastFetchError = err.Error()
-		return err
-	}
+		if err != nil {
+			m.metrics.RefreshErrors.Inc()
+			m.lastFetchError = err.Error()
+			return nil, err
+		}
 
-	// Update active cache without purging existing unexpired keys
-	for _, k := range keys {
-		m.keys[k.KID] = k
-	}
-	m.lastFetchError = ""
-	m.lastFetchTime = now
-	return nil
+		// Update active cache without purging existing unexpired keys
+		for _, k := range keys {
+			m.keys[k.KID] = k
+		}
+		m.lastFetchError = ""
+		m.lastFetchTime = now
+		return nil, nil
+	})
+	return err
 }
 
 // GetCacheStatus reports cache status, stale key age, and atomic counters.

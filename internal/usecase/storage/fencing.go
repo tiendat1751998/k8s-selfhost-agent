@@ -89,6 +89,9 @@ func (f *CSIFencingHelper) WaitForVolumeAttachmentsDetached(ctx context.Context,
 		interval = 50 * time.Millisecond
 	}
 
+	intervalTimer := time.NewTimer(interval)
+	defer intervalTimer.Stop()
+
 	for {
 		vaList, err := client.StorageV1().VolumeAttachments().List(ctx, metav1.ListOptions{})
 		if err != nil {
@@ -120,10 +123,18 @@ func (f *CSIFencingHelper) WaitForVolumeAttachmentsDetached(ctx context.Context,
 			return domainstorage.NewErrVolumeAttachmentLocked(lastLockedVolume, nodeName)
 		}
 
+		if !intervalTimer.Stop() {
+			select {
+			case <-intervalTimer.C:
+			default:
+			}
+		}
+		intervalTimer.Reset(interval)
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(interval):
+		case <-intervalTimer.C:
 		}
 	}
 }

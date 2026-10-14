@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/backup"
@@ -29,13 +30,12 @@ func (d *RedisDriver) ValidateConnection(ctx context.Context, opts backup.DumpOp
 	if port == 0 {
 		port = 6379
 	}
-	args := []string{"-h", opts.Host, "-p", fmt.Sprintf("%d", port)}
-	if opts.Password != "" {
-		args = append(args, "-a", opts.Password)
-	}
-	args = append(args, "PING")
+	args := []string{"-h", opts.Host, "-p", fmt.Sprintf("%d", port), "PING"}
 
 	cmd := exec.CommandContext(ctx, "redis-cli", args...)
+	if opts.Password != "" {
+		cmd.Env = append(os.Environ(), "REDISCLI_AUTH="+opts.Password)
+	}
 	return cmd.Run()
 }
 
@@ -57,13 +57,12 @@ func (d *RedisDriver) Dump(ctx context.Context, opts backup.DumpOptions, writer 
 	_ = tempFile.Close()
 	defer os.Remove(tempPath)
 
-	args := []string{"-h", opts.Host, "-p", fmt.Sprintf("%d", port)}
-	if opts.Password != "" {
-		args = append(args, "-a", opts.Password)
-	}
-	args = append(args, "--rdb", tempPath)
+	args := []string{"-h", opts.Host, "-p", fmt.Sprintf("%d", port), "--rdb", tempPath}
 
 	cmd := exec.CommandContext(ctx, "redis-cli", args...)
+	if opts.Password != "" {
+		cmd.Env = append(os.Environ(), "REDISCLI_AUTH="+opts.Password)
+	}
 	if err := cmd.Run(); err != nil {
 		return nil, errors.Wrap(err, "redis-cli dump execution failed")
 	}
@@ -85,13 +84,49 @@ func (d *RedisDriver) Dump(ctx context.Context, opts backup.DumpOptions, writer 
 	}, nil
 }
 
+func isForbiddenPath(cleaned string) bool {
+	lower := strings.ToLower(filepath.ToSlash(cleaned))
+	forbiddenPrefixes := []string{
+		"/etc",
+		"/root",
+		"/bin",
+		"/sbin",
+		"/usr",
+		"/proc",
+		"/sys",
+		"/dev",
+		"c:/windows",
+	}
+	for _, f := range forbiddenPrefixes {
+		if lower == f || strings.HasPrefix(lower, f+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func sanitizeRDBPath(raw string) string {
+	if strings.Contains(raw, "\x00") || strings.Contains(raw, "..") {
+		return ""
+	}
+	cleaned := filepath.Clean(raw)
+	if isForbiddenPath(cleaned) {
+		return ""
+	}
+	return cleaned
+}
+
 func (d *RedisDriver) resolveRDBPath(opts backup.RestoreOptions) string {
 	if opts.ExtraParams != nil {
 		if path := opts.ExtraParams["rdb_path"]; path != "" {
-			return path
+			return sanitizeRDBPath(path)
 		}
 		if dir := opts.ExtraParams["data_dir"]; dir != "" {
-			return filepath.Join(dir, "dump.rdb")
+			cleanedDir := sanitizeRDBPath(dir)
+			if cleanedDir != "" {
+				return filepath.Join(cleanedDir, "dump.rdb")
+			}
+			return ""
 		}
 	}
 	for _, dir := range []string{"/data", "/var/lib/redis"} {

@@ -47,12 +47,12 @@ func (e *Engine) VerifyBackup(ctx context.Context, jobID string) error {
 	}
 	defer srcStream.Close()
 
-	var encKey []byte
-	if policy.EncryptionEnabled && len(policy.EncryptionKeyID) >= 32 {
-		encKey = []byte(policy.EncryptionKeyID[:32])
+	encKey, err := resolveEncryptionKey(policy)
+	if err != nil {
+		return err
 	}
 
-	decompStream, err := dualsync.NewDecompressionPipe(srcStream, encKey, policy.EncryptionEnabled && len(encKey) == 32)
+	decompStream, err := dualsync.NewDecompressionPipe(srcStream, encKey, policy.EncryptionEnabled)
 	if err != nil {
 		return errors.Wrap(err, "initializing decompression stream for verification")
 	}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
@@ -70,6 +71,21 @@ func (r *AnsibleRunner) BaseDir() string {
 }
 
 func (r *AnsibleRunner) RunPlaybook(ctx context.Context, opts AnsiblePlaybookOptions, outStream io.Writer) (*AnsibleResult, error) {
+	// SEC-12: Input validation against path traversal and flag injection
+	trimmedPlaybook := strings.TrimSpace(opts.PlaybookFile)
+	if trimmedPlaybook == "" {
+		return nil, errors.NewValidation("playbook_file", "playbook file cannot be empty")
+	}
+	if strings.Contains(opts.PlaybookFile, "..") || strings.HasPrefix(trimmedPlaybook, "-") {
+		return nil, errors.NewValidation("playbook_file", "invalid playbook file path")
+	}
+	if opts.Limit != "" && strings.HasPrefix(strings.TrimSpace(opts.Limit), "-") {
+		return nil, errors.NewValidation("limit", "invalid limit parameter: flag injection detected")
+	}
+	if opts.User != "" && strings.HasPrefix(strings.TrimSpace(opts.User), "-") {
+		return nil, errors.NewValidation("user", "invalid user parameter: flag injection detected")
+	}
+
 	start := time.Now()
 
 	dir := opts.WorkingDir
@@ -104,7 +120,7 @@ func (r *AnsibleRunner) RunPlaybook(ctx context.Context, opts AnsiblePlaybookOpt
 		defer cancel()
 	}
 
-	args := []string{opts.PlaybookFile}
+	var args []string
 	if opts.Inventory != "" {
 		args = append(args, "-i", opts.Inventory)
 	}
@@ -120,6 +136,7 @@ func (r *AnsibleRunner) RunPlaybook(ctx context.Context, opts AnsiblePlaybookOpt
 	if opts.PrivateKey != "" {
 		args = append(args, "--private-key", opts.PrivateKey)
 	}
+	args = append(args, "--", opts.PlaybookFile)
 
 	cmd := exec.CommandContext(ctx, r.binaryPath, args...)
 	if opts.WorkingDir != "" {

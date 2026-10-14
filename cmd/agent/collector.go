@@ -31,6 +31,7 @@ type SystemCollector struct {
 	lastCPUCount  int
 	startTime     time.Time
 	lastMetrics   *MetricsResponse
+	collectMu     sync.Mutex
 	mu            sync.RWMutex
 	stopCh        chan struct{}
 	stopOnce      sync.Once
@@ -118,8 +119,8 @@ func NewSystemCollector(procPath, mountsPath string, diskUsageFn DiskUsageFunc, 
 
 // Collect executes a single metric collection pass and updates the cached snapshot.
 func (c *SystemCollector) Collect() (*MetricsResponse, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.collectMu.Lock()
+	defer c.collectMu.Unlock()
 
 	now := time.Now().UTC()
 
@@ -184,7 +185,10 @@ func (c *SystemCollector) Collect() (*MetricsResponse, error) {
 		CollectedAt:        now,
 	}
 
+	c.mu.Lock()
 	c.lastMetrics = resp
+	c.mu.Unlock()
+
 	return resp, nil
 }
 

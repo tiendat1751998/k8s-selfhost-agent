@@ -26,12 +26,13 @@ scp k8s-agent $REMOTE:$TMP_BIN
 
 # Install and run (no sudo needed!)
 echo "🚀 Installing and restarting on $REMOTE..."
-ssh -t $REMOTE "chmod +x $TMP_BIN && \
+printf '%s\n' "AGENT_AUTH_TOKEN=$AGENT_AUTH_TOKEN" | ssh $REMOTE "read -r token_line && \
+  chmod +x $TMP_BIN && \
   mkdir -p ~/.config/systemd/user && \
   mkdir -p ~/.k8s-agent/logengine && \
   (systemctl --user stop k8s-agent 2>/dev/null || true) && \
   mv -f $TMP_BIN ~/k8s-agent && \
-  (umask 077 && printf 'AGENT_AUTH_TOKEN=%s\n' \"$AGENT_AUTH_TOKEN\" > ~/.k8s-agent/agent.env && chmod 600 ~/.k8s-agent/agent.env) && \
+  (umask 077 && printf '%s\n' \"\$token_line\" > ~/.k8s-agent/agent.env && chmod 600 ~/.k8s-agent/agent.env) && \
   cat > ~/.config/systemd/user/k8s-agent.service << 'UNIT'
 [Unit]
 Description=K8sControl Monitoring Agent

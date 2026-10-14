@@ -36,9 +36,16 @@ func (c *SystemCollector) readTopProcesses(limit int, totalMem int64) []ProcessM
 		return nil
 	}
 
+	c.mu.RLock()
+	prevProcTime := c.prevProcTime
+	lastCPUDiff := c.lastCPUDiff
+	lastCPUCount := c.lastCPUCount
+	prevProcStats := c.prevProcStats
+	c.mu.RUnlock()
+
 	now := time.Now().UTC()
 	elapsed := 1.0
-	if diff := now.Sub(c.prevProcTime).Seconds(); !c.prevProcTime.IsZero() && diff > 0 {
+	if diff := now.Sub(prevProcTime).Seconds(); !prevProcTime.IsZero() && diff > 0 {
 		elapsed = diff
 	}
 
@@ -59,7 +66,7 @@ func (c *SystemCollector) readTopProcesses(limit int, totalMem int64) []ProcessM
 		}
 
 		readBytes, writeBytes := parseProcessIO(pidDir, pid)
-		cpuPercent, readRate, writeRate := c.calcProcRates(pid, utime, stime, readBytes, writeBytes, elapsed)
+		cpuPercent, readRate, writeRate := calcProcRates(prevProcStats, lastCPUDiff, lastCPUCount, pid, utime, stime, readBytes, writeBytes, elapsed)
 		currentProcStats[pid] = procStatSnapshot{utime: utime, stime: stime, readBytes: readBytes, writeBytes: writeBytes}
 
 		var memPercent float64
@@ -74,8 +81,10 @@ func (c *SystemCollector) readTopProcesses(limit int, totalMem int64) []ProcessM
 		})
 	}
 
+	c.mu.Lock()
 	c.prevProcStats = currentProcStats
 	c.prevProcTime = now
+	c.mu.Unlock()
 
 	sort.Slice(processes, func(i, j int) bool {
 		if processes[i].CPUPercent != processes[j].CPUPercent {
@@ -96,18 +105,18 @@ func (c *SystemCollector) readTopProcesses(limit int, totalMem int64) []ProcessM
 	return processes
 }
 
-func (c *SystemCollector) calcProcRates(pid int, utime, stime uint64, readBytes, writeBytes int64, elapsed float64) (cpuPercent float64, readRate, writeRate int64) {
-	prev, ok := c.prevProcStats[pid]
+func calcProcRates(prevProcStats map[int]procStatSnapshot, lastCPUDiff uint64, lastCPUCount int, pid int, utime, stime uint64, readBytes, writeBytes int64, elapsed float64) (cpuPercent float64, readRate, writeRate int64) {
+	prev, ok := prevProcStats[pid]
 	if !ok {
 		return 0, 0, 0
 	}
 	if ticks := int64((utime + stime) - (prev.utime + prev.stime)); ticks > 0 {
-		if c.lastCPUDiff > 0 {
-			cpuCount := c.lastCPUCount
+		if lastCPUDiff > 0 {
+			cpuCount := lastCPUCount
 			if cpuCount <= 0 {
 				cpuCount = runtime.NumCPU()
 			}
-			cpuPercent = math.Round((float64(ticks)/float64(c.lastCPUDiff))*100.0*float64(cpuCount)*100) / 100
+			cpuPercent = math.Round((float64(ticks)/float64(lastCPUDiff))*100.0*float64(cpuCount)*100) / 100
 		} else if elapsed > 0 {
 			cpuPercent = math.Round((float64(ticks)/(elapsed*100.0))*100.0*100) / 100
 		}
