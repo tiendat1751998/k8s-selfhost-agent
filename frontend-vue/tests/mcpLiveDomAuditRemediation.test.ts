@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { getNodeRole, isControlPlane } from '../src/components/overview/overviewMobileUtils.ts'
+import { getNodeRole, isControlPlane, getNodeIdentifier } from '../src/components/overview/overviewMobileUtils.ts'
 import { SIMULATION_SCENARIOS } from '../src/composables/incidentHelpers.ts'
 import type { NodeMetrics } from '../src/api/overview.ts'
 
@@ -36,6 +36,46 @@ describe('Live MCP & Mobile UX Remediation Unit Tests', () => {
     // Other roles default to normalized role or worker
     assert.strictEqual(getNodeRole({ ...baseNode, role: 'edge' }), 'edge')
     assert.strictEqual(getNodeRole({ ...baseNode, role: '' }), 'worker')
+  })
+
+  it('getNodeIdentifier returns IP when available and truncates 36-char UUIDs to 8 chars', () => {
+    // 1. IP available -> returns IP
+    const nodeWithIp: NodeMetrics = {
+      node_id: 'ad1504ff-878f-4a6e-83ab-94db5a3d907c',
+      node_name: 'k8smasterdeb',
+      status: 'ready',
+      role: 'control-plane',
+      cpu_percent: 20,
+      memory_percent: 40,
+      memory_total: 16000000000,
+      disk_percent: 30,
+      pod_count: 5,
+      ip: '192.168.1.100',
+    }
+    assert.strictEqual(getNodeIdentifier(nodeWithIp), '192.168.1.100')
+
+    // 2. No IP, UUID node_id -> returns first 8 characters
+    const nodeWithUuidNoIp: NodeMetrics = {
+      ...nodeWithIp,
+      ip: '',
+    }
+    assert.strictEqual(getNodeIdentifier(nodeWithUuidNoIp), 'ad1504ff')
+
+    // 3. No IP, short node_id <= 8 chars -> returns full node_id
+    const nodeWithShortId: NodeMetrics = {
+      ...nodeWithIp,
+      node_id: 'node-1',
+      ip: '',
+    }
+    assert.strictEqual(getNodeIdentifier(nodeWithShortId), 'node-1')
+
+    // 4. No IP and no node_id -> returns '--'
+    const emptyNode: NodeMetrics = {
+      ...nodeWithIp,
+      node_id: '',
+      ip: '',
+    }
+    assert.strictEqual(getNodeIdentifier(emptyNode), '--')
   })
 
   it('SIMULATION_SCENARIOS uses generic target placeholders and zero fake cluster IPs', () => {

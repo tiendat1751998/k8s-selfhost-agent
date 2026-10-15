@@ -2,6 +2,7 @@
    Cluster Overview Page Shell & Layout
    frontend-vue/src/assets/styles/views/overview.css
    ========================================================================== */
+@import '../components/overview-hosts.css';
 
 
 .overview-dashboard {

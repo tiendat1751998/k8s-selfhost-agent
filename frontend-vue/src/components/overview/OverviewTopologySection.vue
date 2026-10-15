@@ -248,3 +248,82 @@ function onMatrixSelect(matrixNode: MatrixNode) {
     </template>
   </section>
 </template>
+
+<style scoped>
+.filter-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  min-height: 28px;
+  max-height: 28px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #94a3b8;
+  transition: all 0.15s ease;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.filter-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.filter-pill-btn.active {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: #60a5fa;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.hosts-segmented-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.toggle-btn {
+  height: 24px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.toggle-btn:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.toggle-btn.active {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: #60a5fa;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+</style>
