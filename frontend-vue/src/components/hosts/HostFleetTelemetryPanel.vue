@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import HostMetricsHud from './HostMetricsHud.vue'
-import CanvasTimeSeries, { type TimeSeriesItem } from '../telemetry/CanvasTimeSeries.vue'
 
 const props = defineProps<{
   showTelemetry: boolean
@@ -14,150 +12,235 @@ const props = defineProps<{
   avgLatency: number
 }>()
 
-const fleetTelemetryWindow = computed(() => {
-  const stepMs = 30_000, count = 16, now = Date.now()
-  const baseTime = Math.floor(now / stepMs) * stepMs
-  const timestamps: number[] = []
-  for (let i = count - 1; i >= 0; i--) timestamps.push(baseTime - i * stepMs)
-
-  const activeCount = props.onlineHostsCount
-  const total = Math.max(1, props.totalHosts)
-  const isFleetOnline = activeCount > 0
-  const latencyTarget = isFleetOnline && props.avgLatency > 0 ? props.avgLatency : 0
-
-  const latencyData: [number, number][] = timestamps.map((t) => {
-    return [t, latencyTarget]
-  })
-
-  const availabilityPct = total > 0 ? Math.min(100, Math.round((activeCount / total) * 100)) : 0
-  const availabilityData: [number, number][] = timestamps.map((t) => {
-    return [t, availabilityPct]
-  })
-
-  return {
-    latency: [{ name: 'Fleet Probe Latency', data: latencyData, color: '#06b6d4' }] as TimeSeriesItem[],
-    availability: [{ name: 'Host Availability', data: availabilityData, color: '#10b981' }] as TimeSeriesItem[],
-  }
+const availabilityPct = computed(() => {
+  if (props.totalHosts <= 0) return 0
+  return Math.min(100, Math.round((props.onlineHostsCount / props.totalHosts) * 100))
 })
-
-const latencyThresholds = [
-  { value: 50, color: '#f59e0b', label: 'Warn 50ms' },
-  { value: 100, color: '#f43f5e', label: 'Crit 100ms' },
-]
-
-const availabilityThresholds = [
-  { value: 95, color: '#f59e0b', label: 'SLA 95%' },
-]
 </script>
 
 <template>
   <Transition name="fade">
-    <div v-if="showTelemetry" class="section-card glass-panel fleet-telemetry-panel animate-fade-in">
-      <div class="hosts-telemetry-hud-strip">
-        <HostMetricsHud
-          :total-hosts="totalHosts"
-          :connected-hosts="connectedHosts"
-          :disconnected-hosts="disconnectedHosts"
-          :error-hosts="errorHosts"
-          :type-counts="typeCounts"
-        />
-      </div>
-      <div class="section-top">
-        <div>
-          <div class="panel-badge-row">
-            <h2 class="section-title">Fleet Telemetry & Probe Latency</h2>
-            <span class="telemetry-live-badge font-mono">
-              <span class="pulse-dot pulse-dot-cyan"></span>
-              SYNCHRONIZED SCRUBBING
-            </span>
-          </div>
-          <p class="section-subtitle">Real-time probe round-trip latency and active node connectivity</p>
-        </div>
-        <div class="sync-legend font-mono text-xs">
-          <span class="legend-item"><span class="legend-color legend-cyan"></span> Probe Latency</span>
-          <span class="legend-item"><span class="legend-color legend-emerald"></span> Availability</span>
+    <section
+      v-if="showTelemetry"
+      class="fleet-diagnostics-panel animate-fade-in"
+      aria-label="Fleet Diagnostics & Telemetry"
+    >
+      <div class="diagnostics-header">
+        <div class="diagnostics-title-group">
+          <h2 class="diagnostics-title">Fleet Diagnostics</h2>
+          <span class="diagnostics-subtitle">Real-time connectivity, latency benchmarks, and protocol health</span>
         </div>
       </div>
 
-      <div class="fleet-telemetry-grid">
-        <div class="telemetry-chart-card">
-          <div class="chart-card-header">
-            <span class="chart-card-title font-mono text-cyan font-semibold">Fleet Probe Latency (RTT)</span>
-            <span class="chart-card-val font-mono">{{ onlineHostsCount > 0 && avgLatency > 0 ? `${avgLatency}ms avg` : '--' }}</span>
+      <div class="diagnostics-grid">
+        <!-- 1. Fleet Availability -->
+        <div class="diagnostic-card diag-col">
+          <div class="diag-card-header">
+            <span class="diag-card-label">Fleet Availability</span>
+            <span
+              class="diag-status-dot"
+              :class="availabilityPct >= 95 ? 'dot-emerald' : availabilityPct > 0 ? 'dot-amber' : 'dot-rose'"
+              aria-hidden="true"
+            ></span>
           </div>
-          <CanvasTimeSeries
-            :series="fleetTelemetryWindow.latency"
-            unit="ms"
-            :height="130"
-            sync-group="fleet-telemetry"
-            :min="0"
-            :thresholds="latencyThresholds"
-          />
+          <div class="diag-card-value font-mono">
+            {{ availabilityPct }}<span class="diag-unit">%</span>
+          </div>
+          <div class="diag-card-sub text-muted font-mono">
+            {{ onlineHostsCount }} of {{ totalHosts }} reachable
+          </div>
         </div>
 
-        <div class="telemetry-chart-card">
-          <div class="chart-card-header">
-            <span class="chart-card-title font-mono text-emerald font-semibold">Fleet Availability SLA</span>
-            <span class="chart-card-val font-mono">{{ onlineHostsCount }}/{{ totalHosts }} online</span>
+        <!-- 2. Measured Probe Latency -->
+        <div class="diagnostic-card diag-col">
+          <div class="diag-card-header">
+            <span class="diag-card-label">Probe Latency (RTT)</span>
+            <span
+              class="diag-status-dot"
+              :class="avgLatency > 0 && avgLatency < 100 ? 'dot-emerald' : avgLatency >= 100 ? 'dot-amber' : 'dot-slate'"
+              aria-hidden="true"
+            ></span>
           </div>
-          <CanvasTimeSeries
-            :series="fleetTelemetryWindow.availability"
-            unit="%"
-            :height="130"
-            sync-group="fleet-telemetry"
-            :min="0"
-            :max="100"
-            :thresholds="availabilityThresholds"
-          />
+          <div class="diag-card-value font-mono">
+            {{ avgLatency > 0 ? `${avgLatency}ms` : '--' }}
+          </div>
+          <div class="diag-card-sub text-muted font-mono">
+            {{ avgLatency > 0 ? 'Active HTTP/TCP probe' : 'Run probe to measure' }}
+          </div>
+        </div>
+
+        <!-- 3. Degraded / Unreachable -->
+        <div class="diagnostic-card diag-col">
+          <div class="diag-card-header">
+            <span class="diag-card-label">Degraded / Unreachable</span>
+            <span
+              class="diag-status-dot"
+              :class="(disconnectedHosts + errorHosts) === 0 ? 'dot-emerald' : 'dot-rose'"
+              aria-hidden="true"
+            ></span>
+          </div>
+          <div class="diag-card-value font-mono" :class="{ 'val-danger': (disconnectedHosts + errorHosts) > 0 }">
+            {{ disconnectedHosts + errorHosts }}
+          </div>
+          <div class="diag-card-sub text-muted font-mono">
+            {{ errorHosts }} error · {{ disconnectedHosts }} offline
+          </div>
+        </div>
+
+        <!-- 4. Protocol Distribution -->
+        <div class="diagnostic-card diag-col">
+          <div class="diag-card-header">
+            <span class="diag-card-label">Protocol Fleet</span>
+            <span class="diag-status-dot dot-slate" aria-hidden="true"></span>
+          </div>
+          <div class="diag-card-value font-mono">
+            {{ (typeCounts['k8s'] || 0) + (typeCounts['agent'] || 0) + (typeCounts['docker'] || 0) }}
+          </div>
+          <div class="diag-card-sub text-muted font-mono">
+            {{ typeCounts['k8s'] || 0 }} K8s · {{ typeCounts['agent'] || 0 }} Agent · {{ typeCounts['docker'] || 0 }} Docker
+          </div>
         </div>
       </div>
-    </div>
+    </section>
   </Transition>
 </template>
 
 <style scoped>
-.fleet-telemetry-panel { margin-bottom: 16px; }
-.hosts-telemetry-hud-strip { margin-bottom: 12px; }
-.section-top {
+.fleet-diagnostics-panel {
+  background: var(--bg-card, #141516);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  box-shadow: none;
+}
+
+.diagnostics-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
-.section-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  margin: 0;
-}
-.section-subtitle {
-  font-size: 11px;
-  color: #94a3b8;
-  margin: 2px 0 0 0;
-}
-.panel-badge-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.telemetry-live-badge {
-  display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 9999px;
-  font-size: 10px; font-weight: 600; background: rgba(6, 182, 212, 0.12); color: #06b6d4;
-  border: 1px solid rgba(6, 182, 212, 0.25); letter-spacing: 0.05em;
-}
-.sync-legend { display: flex; align-items: center; gap: 12px; color: #94a3b8; }
-.legend-item { display: inline-flex; align-items: center; gap: 5px; }
-.legend-color { width: 8px; height: 8px; border-radius: 2px; }
-.legend-cyan { background-color: #06b6d4; }
-.legend-emerald { background-color: #10b981; }
-.fleet-telemetry-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 14px; }
-@media (max-width: 768px) {
-  .fleet-telemetry-grid { grid-template-columns: 1fr; gap: 12px; }
-}
-.telemetry-chart-card {
-  background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(56, 189, 248, 0.12); border-radius: 8px; padding: 10px;
-}
-.chart-card-header {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 11px;
-}
-.chart-card-val { color: #f1f5f9; }
-</style>
 
+.diagnostics-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diagnostics-title {
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary, #f3f4f6);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.diagnostics-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary, #9ca3af);
+  line-height: 1.3;
+}
+
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.diagnostic-card {
+  background: var(--bg-surface, #0f1012);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diag-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diag-card-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary, #9ca3af);
+  letter-spacing: 0.01em;
+}
+
+.diag-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-emerald {
+  background-color: #10b981;
+}
+
+.dot-amber {
+  background-color: #f59e0b;
+}
+
+.dot-rose {
+  background-color: #ef4444;
+}
+
+.dot-slate {
+  background-color: #6b7280;
+}
+
+.diag-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary, #f3f4f6);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.diag-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #9ca3af);
+  margin-left: 2px;
+}
+
+.val-danger {
+  color: #ef4444;
+}
+
+.diag-card-sub {
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--text-muted, #6b7280);
+}
+
+@media (max-width: 640px) {
+  .fleet-diagnostics-panel {
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .diagnostics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .diagnostic-card {
+    padding: 8px 10px;
+    gap: 4px;
+  }
+  .diag-card-value {
+    font-size: 17px;
+  }
+  .diag-card-label {
+    font-size: 10px;
+  }
+  .diag-card-sub {
+    font-size: 9.5px;
+  }
+}
+</style>

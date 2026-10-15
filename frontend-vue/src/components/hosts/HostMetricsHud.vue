@@ -13,8 +13,8 @@ defineProps<{
 <template>
   <div class="hosts-metric-strip font-mono" role="status" aria-label="Host Fleet Overview">
     <div class="strip-item">
-      <span class="pulse-dot pulse-dot-cyan"></span>
-      <span class="strip-val font-bold">{{ totalHosts }} Total Hosts</span>
+      <span class="hud-status-dot" aria-hidden="true"></span>
+      <span class="strip-val font-semibold">{{ totalHosts }} Total Hosts</span>
     </div>
     <span class="strip-sep">·</span>
     <div class="strip-item">
@@ -23,7 +23,11 @@ defineProps<{
     </div>
     <span class="strip-sep">·</span>
     <div class="strip-item">
-      <BaseIcon name="alert-triangle" size="xs" :class="(disconnectedHosts + errorHosts) > 0 ? 'text-rose' : 'text-slate'" />
+      <BaseIcon
+        name="alert-triangle"
+        size="xs"
+        :class="(disconnectedHosts + errorHosts) > 0 ? 'text-rose' : 'text-slate'"
+      />
       <span :class="(disconnectedHosts + errorHosts) > 0 ? 'text-rose font-semibold' : 'text-slate'">
         {{ disconnectedHosts + errorHosts }} Degraded
       </span>
@@ -32,12 +36,19 @@ defineProps<{
     <span class="strip-sep">·</span>
     <div class="strip-item">
       <BaseIcon name="cpu" size="xs" class="text-slate" />
-      <span>{{ (typeCounts['agent'] || 0) + (typeCounts['k8s'] || 0) + (typeCounts['docker'] || 0) }} Agents</span>
+      <span class="text-secondary">{{ (typeCounts['agent'] || 0) + (typeCounts['k8s'] || 0) + (typeCounts['docker'] || 0) }} Agents</span>
       <span class="strip-sub text-muted">({{ typeCounts['k8s'] || 0 }} k8s, {{ typeCounts['docker'] || 0 }} swarm, {{ typeCounts['agent'] || 0 }} agent)</span>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Inherited via InfraHostsView.vue: assets/styles/views/infra-hosts.css */
+.hud-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-secondary, #9ca3af);
+  display: inline-block;
+  flex-shrink: 0;
+}
 </style>

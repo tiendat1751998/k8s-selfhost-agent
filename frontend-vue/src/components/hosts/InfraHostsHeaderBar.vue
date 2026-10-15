@@ -33,11 +33,11 @@ const emit = defineEmits<{
 
 <template>
   <div class="infra-hosts-header-bar-wrapper">
-    <!-- 44px Mobile Command Bar (< 640px) -->
+    <!-- 40px Mobile Command Bar (< 640px) -->
     <div class="hosts-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <BaseIcon name="server" size="sm" />
-        <span class="command-bar-title font-bold">Compute Hosts ({{ filteredHostsCount }})</span>
+        <span class="command-bar-title">Compute Hosts</span>
+        <span class="command-bar-count-pill font-mono">{{ filteredHostsCount }}</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -50,34 +50,45 @@ const emit = defineEmits<{
         >
           <BaseIcon name="activity" size="xs" />
         </button>
-        <button class="btn-icon-cmd" title="Add Host" @click="emit('addHost')">
-          <span class="font-bold text-sm">+</span>
-        </button>
-        <button class="btn-icon-cmd" title="Refresh" :disabled="loading" @click="emit('refresh')">
-          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
-        </button>
         <button
+          type="button"
           class="btn-icon-cmd"
           :class="{ active: showMobileSearch }"
           title="Search"
+          aria-label="Search"
           @click="emit('update:showMobileSearch', !showMobileSearch)"
         >
           <BaseIcon name="search" size="xs" />
+        </button>
+        <button
+          type="button"
+          class="btn-icon-cmd"
+          title="Refresh"
+          aria-label="Refresh"
+          :disabled="loading"
+          @click="emit('refresh')"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
+        </button>
+        <button
+          type="button"
+          class="btn-cmd-add"
+          title="Add Host"
+          aria-label="Add Host"
+          @click="emit('addHost')"
+        >
+          + Add
         </button>
       </div>
     </div>
 
     <!-- 20px Mobile Micro-Telemetry Strip (< 640px) -->
-    <div class="hosts-micro-telemetry mobile-only">
-      <span class="tel-item"><BaseIcon name="server" size="xs" /> {{ hosts.length }} hosts</span>
-      <span>·</span>
-      <span class="tel-item tel-online"><BaseIcon name="shield" size="xs" /> {{ onlineHostsCount }} online</span>
-      <span>·</span>
-      <span class="tel-item tel-offline"><BaseIcon name="alert-triangle" size="xs" /> {{ offlineHostsCount }} offline</span>
-      <template v-if="onlineHostsCount > 0 && avgLatency > 0">
-        <span>·</span>
-        <span class="tel-item tel-latency"><BaseIcon name="zap" size="xs" /> avg {{ avgLatency }}ms</span>
-      </template>
+    <div class="hosts-micro-telemetry mobile-only font-mono">
+      <span class="tel-item"><span class="micro-dot dot-emerald" aria-hidden="true"></span>{{ onlineHostsCount }} online</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item"><span class="micro-dot" :class="offlineHostsCount > 0 ? 'dot-rose' : 'dot-slate'" aria-hidden="true"></span>{{ offlineHostsCount }} offline</span>
+      <span class="tel-sep">·</span>
+      <span class="tel-item">avg {{ avgLatency > 0 ? `${avgLatency}ms` : '--' }}</span>
     </div>
 
     <!-- Mobile Search Expandable Input & Filter Controls -->
@@ -164,47 +175,223 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
+.hosts-mobile-command-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-surface, #0f1012);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  gap: 8px;
+}
+.command-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.command-bar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #f3f4f6);
+  letter-spacing: -0.01em;
+}
+.command-bar-count-pill {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary, #9ca3af);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+.command-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-icon-cmd {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--bg-card, #141516);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #9ca3af);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-icon-cmd:hover {
+  background: var(--bg-elevated, #1a1b1e);
+  color: var(--text-primary, #f3f4f6);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.btn-cmd-add {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--color-primary, #10b981);
+  color: #08090a;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.btn-cmd-add:hover {
+  opacity: 0.9;
+}
+.hosts-micro-telemetry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--text-muted, #6b7280);
+  background: var(--bg-canvas, #08090a);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+.tel-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tel-sep {
+  color: var(--text-muted, #6b7280);
+  opacity: 0.5;
+}
+.micro-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-emerald {
+  background: #10b981;
+}
+.dot-rose {
+  background: #ef4444;
+}
+.dot-slate {
+  background: #6b7280;
+}
+.mobile-search-box {
+  padding: 8px 12px;
+  background: var(--bg-card, #141516);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mobile-filter-pills-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.m-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.m-filter-pill {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #9ca3af);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.m-filter-pill.active {
+  background: var(--bg-elevated, #1a1b1e);
+  color: var(--text-primary, #f3f4f6);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.m-filter-select {
+  font-size: 11px;
+  background: var(--bg-surface, #0f1012);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #9ca3af);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
 .fencing-alert-strip {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 8px 12px;
   margin-bottom: 12px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 8px;
+  background: var(--bg-card, #141516);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-left: 3px solid var(--status-warning, #f59e0b);
+  border-radius: 6px;
   gap: 12px;
   flex-wrap: wrap;
 }
-.fencing-alert-info { display: flex; align-items: center; gap: 10px; }
-.fencing-alert-icon-box { color: #f59e0b; flex-shrink: 0; }
-.fencing-alert-texts { display: flex; flex-direction: column; font-size: 12px; line-height: 1.3; }
-.fencing-alert-title { font-size: 12px; }
-.fencing-alert-sub { font-size: 11px; }
-.fencing-alert-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fencing-alert-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fencing-alert-icon-box {
+  color: #f59e0b;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.fencing-alert-texts {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.fencing-alert-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f59e0b;
+}
+.fencing-alert-sub {
+  font-size: 11px;
+  color: var(--text-muted, #6b7280);
+}
+.fencing-alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .btn-action-fence {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 4px 10px;
+  border-radius: 5px;
   font-size: 11px;
-  font-weight: 700;
-  background: rgba(245, 158, 11, 0.15);
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.12);
   color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  border: 1px solid rgba(245, 158, 11, 0.35);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .btn-action-fence:hover {
   background: #f59e0b;
-  color: #0f172a;
+  color: #08090a;
 }
 @media (max-width: 640px) {
   .fencing-alert-strip {
-    padding: 8px 10px;
-    margin-bottom: 10px;
-    gap: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    gap: 6px;
   }
   .fencing-alert-title {
     font-size: 11px;
@@ -213,8 +400,8 @@ const emit = defineEmits<{
     display: none;
   }
   .btn-action-fence {
-    padding: 4px 8px;
-    font-size: 10.5px;
+    padding: 3px 6px;
+    font-size: 10px;
   }
 }
 </style>

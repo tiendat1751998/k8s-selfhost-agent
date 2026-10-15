@@ -74,14 +74,10 @@ async function handleInstallClick() {
 
 <template>
   <transition name="banner-slide">
-    <div v-if="shouldShow" class="pwa-install-banner glass-panel">
-      <!-- Glow Accent Line -->
-      <div class="banner-accent-line"></div>
-
+    <div v-if="shouldShow" class="pwa-install-banner">
       <div class="banner-content">
         <div class="banner-icon-box">
           <span class="banner-icon"><BaseIcon name="anchor" size="md" /></span>
-          <span class="banner-pulse"></span>
         </div>
 
         <div class="banner-text">
@@ -128,8 +124,8 @@ async function handleInstallClick() {
         </div>
         <ol class="ios-steps font-mono">
           <li>1. Tap Safari's Share button <span class="share-icon"><BaseIcon name="external-link" size="xs" /></span> at the bottom bar.</li>
-          <li>2. Scroll down and tap <strong class="text-cyan">"Add to Home Screen"</strong> (+).</li>
-          <li>3. Tap <strong class="text-cyan">"Add"</strong> in the top-right corner to launch fullscreen.</li>
+          <li>2. Scroll down and tap <strong>"Add to Home Screen"</strong> (+).</li>
+          <li>3. Tap <strong>"Add"</strong> in the top-right corner to launch fullscreen.</li>
         </ol>
       </div>
     </div>

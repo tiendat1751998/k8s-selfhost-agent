@@ -150,7 +150,6 @@ const displayLabel = computed<string>(() => {
 }
 .dot-emerald {
   background-color: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
 }
 
 /* Amber: Pending, Warning, Degraded, Elevated */
@@ -161,7 +160,6 @@ const displayLabel = computed<string>(() => {
 }
 .dot-amber {
   background-color: #f59e0b;
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
 }
 
 /* Rose: Failed, Critical, Offline, Error */
@@ -172,7 +170,6 @@ const displayLabel = computed<string>(() => {
 }
 .dot-rose {
   background-color: #f43f5e;
-  box-shadow: 0 0 6px rgba(244, 63, 94, 0.4);
 }
 
 /* Slate: Cordoned, Draining, Terminating, Unknown */
@@ -193,7 +190,6 @@ const displayLabel = computed<string>(() => {
 }
 .dot-cyan {
   background-color: #06b6d4;
-  box-shadow: 0 0 6px rgba(6, 182, 212, 0.4);
 }
 
 /* Violet */
@@ -204,7 +200,6 @@ const displayLabel = computed<string>(() => {
 }
 .dot-violet {
   background-color: #8b5cf6;
-  box-shadow: 0 0 6px rgba(139, 92, 246, 0.4);
 }
 
 .status-text {

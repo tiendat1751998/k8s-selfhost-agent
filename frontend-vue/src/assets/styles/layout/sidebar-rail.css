@@ -35,10 +35,9 @@
 }
 
 .sidebar-toggle-btn:hover {
-  background: rgba(6, 182, 212, 0.15);
-  border-color: rgba(6, 182, 212, 0.4);
-  color: #38bdf8;
-  transform: scale(1.05);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--text-primary, #f3f4f6);
 }
 
 .sidebar-toggle-btn .toggle-icon {
@@ -155,27 +154,27 @@
 
 /* Active route indicator on 64px rail */
 .sidebar.is-collapsed .nav-item.nav-active {
-  background: rgba(6, 182, 212, 0.18);
-  border-color: rgba(6, 182, 212, 0.5);
-  color: #38bdf8;
-  box-shadow: 0 0 12px rgba(6, 182, 212, 0.35), inset 0 0 8px rgba(6, 182, 212, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.10);
+  color: var(--text-primary, #f3f4f6);
+  box-shadow: none;
 }
 
 .sidebar.is-collapsed .nav-item.nav-active::before {
   content: '';
   position: absolute;
-  left: -2px;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  background: var(--accent-cyan, #38bdf8);
-  border-radius: 0 4px 4px 0;
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: #f3f4f6;
+  border-radius: 0 2px 2px 0;
+  box-shadow: none;
 }
 
 .sidebar.is-collapsed .nav-item.nav-active .nav-icon {
-  color: #38bdf8;
-  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6));
+  color: var(--text-primary, #f3f4f6);
+  filter: none;
 }
 
 .sidebar.is-collapsed .sidebar-footer {
@@ -193,11 +192,11 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 12px;
-  background: rgba(15, 23, 42, 0.96);
-  border: 1px solid rgba(6, 182, 212, 0.35);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(6, 182, 212, 0.2);
+  padding: 6px 12px;
+  background: var(--bg-card, #141516);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   pointer-events: none;
@@ -212,9 +211,9 @@
   transform: translateY(-50%) rotate(45deg);
   width: 8px;
   height: 8px;
-  background: rgba(15, 23, 42, 0.96);
-  border-left: 1px solid rgba(6, 182, 212, 0.35);
-  border-bottom: 1px solid rgba(6, 182, 212, 0.35);
+  background: var(--bg-card, #141516);
+  border-left: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
 }
 
 .rail-tooltip-name {

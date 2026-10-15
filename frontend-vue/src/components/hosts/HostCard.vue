@@ -84,7 +84,7 @@ function formatUptime(seconds?: number): string {
     </div>
 
     <div class="card-endpoint-box">
-      <span class="endpoint-text font-mono text-cyan" :title="host.endpoint">{{ host.endpoint }}</span>
+      <span class="endpoint-text font-mono text-secondary" :title="host.endpoint">{{ host.endpoint }}</span>
       <button class="btn-copy-sm" title="Copy endpoint URL" @click.stop="emit('copy', host.endpoint)"><BaseIcon name="copy" size="xs" /></button>
     </div>
 

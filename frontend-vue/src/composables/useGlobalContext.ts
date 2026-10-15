@@ -32,8 +32,9 @@ function setStored(key: string, value: string): void {
 }
 
 // Module-level reactive singleton store
-const storedCluster = getStored('k8s_active_cluster', 'local')
-const activeClusterId = ref<string>(storedCluster || 'local')
+const rawCluster = getStored('k8s_active_cluster', 'default')
+const storedCluster = (!rawCluster || rawCluster === 'c-prod-east' || rawCluster === 'local') ? 'default' : rawCluster
+const activeClusterId = ref<string>(storedCluster)
 const activeNamespace = ref<string>(getStored('k8s_active_namespace', 'all'))
 const availableClusters = ref<ClusterContextItem[]>([])
 const availableNamespaces = ref<string[]>(['all'])
@@ -111,40 +112,34 @@ async function loadClusters(): Promise<void> {
       availableClusters.value = list.map(c => ({
         id: c.id,
         name: c.name || c.id,
-        status: (c.health_status || c.status || 'healthy').toLowerCase(),
+        status: (c.health_status || c.status || 'unknown').toLowerCase(),
         region: c.region
       }))
       const activeCluster = availableClusters.value.find(c => ['active', 'healthy', 'ready'].includes(c.status)) || availableClusters.value[0]
       const exists = availableClusters.value.some(c => c.id === activeClusterId.value)
-      if ((!exists || activeClusterId.value === 'local') && activeCluster) {
+      if (!exists && activeCluster) {
         activeClusterId.value = activeCluster.id
         setStored('k8s_active_cluster', activeClusterId.value)
       }
     } else {
-      // Fallback to active cluster item so operator context is never empty
-      const fallbackId = activeClusterId.value || 'local'
+      // Clean fallback: no fake green healthy clusters when fleet registry returns empty
+      activeClusterId.value = 'default'
+      setStored('k8s_active_cluster', 'default')
       availableClusters.value = [{
-        id: fallbackId,
-        name: fallbackId,
-        status: 'healthy'
+        id: 'default',
+        name: 'default',
+        status: 'unknown'
       }]
-      if (!activeClusterId.value) {
-        activeClusterId.value = 'local'
-        setStored('k8s_active_cluster', 'local')
-      }
     }
   } catch (err: unknown) {
     error.value = err instanceof Error ? err.message : 'Failed to retrieve cluster list'
-    const fallbackId = activeClusterId.value || 'local'
+    activeClusterId.value = 'default'
+    setStored('k8s_active_cluster', 'default')
     availableClusters.value = [{
-      id: fallbackId,
-      name: fallbackId,
-      status: 'healthy'
+      id: 'default',
+      name: 'default',
+      status: 'unknown'
     }]
-    if (!activeClusterId.value) {
-      activeClusterId.value = 'local'
-      setStored('k8s_active_cluster', 'local')
-    }
   }
   await loadNamespacesForCluster(activeClusterId.value)
 }
