@@ -51,34 +51,7 @@ export function useReports() {
   })
 
   // Automated weekly email schedules
-  const schedules = ref<ReportSchedule[]>([
-    {
-      id: 'sched-101',
-      title: 'Weekly CIS Platform & Pod Security Audit',
-      type: 'compliance',
-      format: 'pdf',
-      cron: '0 8 * * 1',
-      cronLabel: 'Weekly (Every Monday @ 08:00 UTC)',
-      recipients: ['ciso-audit@enterprise.io', 'platform-lead@enterprise.io'],
-      clusterScope: 'all-clusters',
-      enabled: true,
-      createdAt: '2026-08-01T08:00:00Z',
-      lastRun: '2026-09-01T08:00:00Z'
-    },
-    {
-      id: 'sched-102',
-      title: 'Weekly FinOps Multi-Cluster Cost Allocation',
-      type: 'cost',
-      format: 'csv',
-      cron: '0 9 * * 1',
-      cronLabel: 'Weekly (Every Monday @ 09:00 UTC)',
-      recipients: ['finops-ops@enterprise.io', 'billing@enterprise.io'],
-      clusterScope: 'all-clusters',
-      enabled: true,
-      createdAt: '2026-08-15T09:00:00Z',
-      lastRun: '2026-09-01T09:00:00Z'
-    }
-  ])
+  const schedules = ref<ReportSchedule[]>([])
 
   const reportColumns: Column<PlatformReport>[] = [
     { key: 'id', label: 'Report ID', sortable: true, width: '10%' },

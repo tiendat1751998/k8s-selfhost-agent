@@ -12,7 +12,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   fallbackCause: 'UNRESPONSIVE_KUBELET_HEARTBEAT',
-  fallbackConfidence: 0.94,
+  fallbackConfidence: 0,
   fallbackRecommendation: 'Power isolate node (STONITH) and apply out-of-service taint to trigger volume release.'
 })
 

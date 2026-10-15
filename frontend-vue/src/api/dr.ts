@@ -385,7 +385,7 @@ export async function getFencingPreflight(clusterId: string, nodeName: string): 
     is_single_worker_cluster: !!raw.is_single_worker_cluster,
     master_has_no_schedule_taint: !!raw.master_has_no_schedule_taint,
     probable_cause: raw.probable_cause || raw.rca?.probable_cause || raw.dynamic_rca?.primary_cause || 'UNRESPONSIVE_KUBELET_HEARTBEAT',
-    confidence: raw.confidence ?? raw.rca?.confidence ?? raw.dynamic_rca?.confidence ?? 0.94,
+    confidence: raw.confidence ?? raw.rca?.confidence ?? raw.dynamic_rca?.confidence ?? 0,
     recommendation: raw.recommendation || raw.rca?.recommendation || raw.dynamic_rca?.action_plan || 'Power isolate node (STONITH) and apply out-of-service taint to trigger volume release.',
     stateful_pods: raw.stateful_pods ?? [],
     stateless_pods: raw.stateless_pods ?? [],

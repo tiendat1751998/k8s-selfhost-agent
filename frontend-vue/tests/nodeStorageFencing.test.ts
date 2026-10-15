@@ -78,6 +78,13 @@ export function shouldCancelFencing(rescueResult: {
   return Boolean(rescueResult.cancel_fencing || rescueResult.success || rescueResult.recovered_to_ready)
 }
 
+export function resolveFencingConfidence(preflight?: {
+  dynamic_rca?: { confidence?: number }
+  confidence?: number
+}): number {
+  return preflight?.dynamic_rca?.confidence ?? preflight?.confidence ?? 0
+}
+
 describe('Task 065: Dead Node Recovery & Zero-Data-Loss Storage Fencing Logic Tests', () => {
   const mockPreflight: NodeFencingPreflight = {
     node_name: 'worker-node-03',
@@ -165,5 +172,13 @@ describe('Task 065: Dead Node Recovery & Zero-Data-Loss Storage Fencing Logic Te
     assert.equal(shouldCancelFencing({ recovered_to_ready: true }), true)
     assert.equal(shouldCancelFencing({ cancel_fencing: false, success: false }), false)
     assert.equal(shouldCancelFencing({}), false)
+  })
+
+  it('resolveFencingConfidence falls back strictly to 0 instead of hardcoded 0.94 fallback', () => {
+    assert.equal(resolveFencingConfidence({ dynamic_rca: { confidence: 0.88 } }), 0.88)
+    assert.equal(resolveFencingConfidence({ confidence: 0.75 }), 0.75)
+    assert.equal(resolveFencingConfidence({}), 0)
+    assert.equal(resolveFencingConfidence(undefined), 0)
+    assert.notEqual(resolveFencingConfidence({}), 0.94)
   })
 })

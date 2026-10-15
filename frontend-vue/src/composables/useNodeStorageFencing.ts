@@ -63,7 +63,7 @@ export function useNodeStorageFencing(
   })
 
   const confidencePercent = computed(() => {
-    const conf = preflight.value?.dynamic_rca?.confidence ?? preflight.value?.confidence ?? 0.94
+    const conf = preflight.value?.dynamic_rca?.confidence ?? preflight.value?.confidence ?? 0
     return Math.round(conf * 100)
   })
 
