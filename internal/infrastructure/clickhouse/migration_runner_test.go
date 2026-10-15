@@ -1,4 +1,4 @@
-﻿package clickhouse_test
+package clickhouse_test
 
 import (
 	"context"
@@ -44,6 +44,8 @@ func TestRunMigrations_ExecutesAllIdempotentDDL(t *testing.T) {
 	require.Contains(t, joined, "error_fingerprint LowCardinality(String)")
 	require.Contains(t, joined, "idx_ngram")
 	require.Contains(t, joined, "idx_trace")
+	require.Contains(t, joined, "idx_pod_name")
+	require.Contains(t, joined, "idx_container_name")
 }
 
 func TestRunMigrations_NilConnReturnsError(t *testing.T) {

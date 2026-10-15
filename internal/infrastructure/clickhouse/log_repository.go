@@ -19,25 +19,30 @@ type LogRepository struct {
 	client    *Client
 	writer    *BatchWriter
 	tableName string
+	insertSQL string
 }
+
+// InsertSQL returns the pre-formatted cached insert query.
+func (r *LogRepository) InsertSQL() string { return r.insertSQL }
 
 // NewLogRepository creates a new ClickHouse log repository.
 func NewLogRepository(client *Client, writer *BatchWriter) *LogRepository {
+	tableName := "cluster_logs"
 	return &LogRepository{
 		client:    client,
 		writer:    writer,
-		tableName: "cluster_logs",
+		tableName: tableName,
+		insertSQL: fmt.Sprintf(
+			"INSERT INTO %s (timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes, trace_id, span_id, error_fingerprint)",
+			tableName,
+		),
 	}
 }
 
 // IngestBatch persists log entries via BatchWriter or direct batch insert.
 func (r *LogRepository) IngestBatch(ctx context.Context, entries []logging.LogEntry) error {
-	if len(entries) == 0 {
-		return nil
-	}
-	if r.writer != nil {
-		return r.writer.WriteBatch(entries)
-	}
+	if len(entries) == 0 { return nil }
+	if r.writer != nil { return r.writer.WriteBatch(entries) }
 	return r.insertBatchDirect(ctx, entries)
 }
 
@@ -50,11 +55,11 @@ func (r *LogRepository) insertBatchDirect(ctx context.Context, entries []logging
 	if err != nil {
 		return fmt.Errorf("acquiring connection for direct ingest: %w", err)
 	}
-	query := fmt.Sprintf(
-		"INSERT INTO %s (timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes, trace_id, span_id, error_fingerprint)",
-		r.tableName,
-	)
-	batch, err := conn.PrepareBatch(ctx, query)
+	insertSQL := r.insertSQL
+	if insertSQL == "" {
+		insertSQL = fmt.Sprintf("INSERT INTO %s (timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes, trace_id, span_id, error_fingerprint)", r.tableName)
+	}
+	batch, err := conn.PrepareBatch(ctx, insertSQL)
 	if err != nil {
 		return fmt.Errorf("preparing batch insert: %w", err)
 	}
@@ -90,18 +95,15 @@ func buildWhereClauses(f logging.LogFilter) ([]string, []any) {
 
 	// Primary index column 4 & partition pruning: timestamp
 	if !f.StartTime.IsZero() {
-		clauses = append(clauses, "timestamp >= ?")
-		args = append(args, f.StartTime)
+		clauses, args = append(clauses, "timestamp >= ?"), append(args, f.StartTime)
 	}
 	if !f.EndTime.IsZero() {
-		clauses = append(clauses, "timestamp <= ?")
-		args = append(args, f.EndTime)
+		clauses, args = append(clauses, "timestamp <= ?"), append(args, f.EndTime)
 	}
 
 	// Keyset cursor pagination
 	if !f.CursorTimestamp.IsZero() {
-		clauses = append(clauses, "timestamp < ?")
-		args = append(args, f.CursorTimestamp)
+		clauses, args = append(clauses, "timestamp < ?"), append(args, f.CursorTimestamp)
 	}
 
 	// Primary index column 5: log_level
@@ -144,6 +146,8 @@ func BuildLogQuery(f logging.LogFilter, table string) (string, []any) {
 	limit := f.Limit
 	if limit <= 0 {
 		limit = 500
+	} else if limit > 5000 {
+		limit = 5000
 	}
 	offset := f.Offset
 	if offset < 0 {
@@ -164,8 +168,7 @@ func BuildSurroundingContextQueries(tenantID, service string, timestamp time.Tim
 	}
 	if window <= 0 {
 		window = 50
-	}
-	if window > 500 {
+	} else if window > 500 {
 		window = 500
 	}
 
@@ -346,12 +349,10 @@ func BuildHistogramQuery(f logging.LogFilter, table string, intervalSeconds int)
 		args = append(args, f.Namespace)
 	}
 	if !f.StartTime.IsZero() {
-		clauses = append(clauses, "timestamp >= ?")
-		args = append(args, f.StartTime)
+		clauses, args = append(clauses, "timestamp >= ?"), append(args, f.StartTime)
 	}
 	if !f.EndTime.IsZero() {
-		clauses = append(clauses, "timestamp <= ?")
-		args = append(args, f.EndTime)
+		clauses, args = append(clauses, "timestamp <= ?"), append(args, f.EndTime)
 	}
 	query := fmt.Sprintf(
 		"SELECT toStartOfInterval(timestamp, toIntervalSecond(?)) AS bucket, log_level, count() AS total FROM %s WHERE %s GROUP BY bucket, log_level ORDER BY bucket ASC",
