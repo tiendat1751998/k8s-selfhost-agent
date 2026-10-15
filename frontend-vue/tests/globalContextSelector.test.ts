@@ -106,17 +106,16 @@ describe('Task 021: Rancher-Style Global Context Switcher Specifications', () =>
       assert.strictEqual(ctx.activeNamespace.value, 'kube-system', 'activeNamespace must sync with storage event')
     })
 
-    it('fetches clusters via fleetApi.getClusters with fallback to active cluster', async () => {
+    it('fetches clusters via fleetApi.getClusters with honest default fallback when empty', async () => {
       const ctx = useGlobalContext()
       assert.strictEqual(typeof fleetApi.getClusters, 'function', 'fleetApi must export getClusters method')
 
       ctx.setCluster('k8s-edge-node')
       await ctx.loadClusters()
-      assert.ok(ctx.availableClusters.value.length > 0, 'availableClusters must fall back to active cluster')
-      assert.ok(
-        ctx.availableClusters.value.some(c => c.id === 'k8s-edge-node'),
-        'availableClusters must include the active cluster'
-      )
+      assert.ok(ctx.availableClusters.value.length > 0, 'availableClusters must have fallback')
+      assert.strictEqual(ctx.activeClusterId.value, 'default', 'activeClusterId must reset to default on empty response')
+      assert.strictEqual(ctx.availableClusters.value[0].id, 'default')
+      assert.strictEqual(ctx.availableClusters.value[0].status, 'unknown')
     })
   })
 
