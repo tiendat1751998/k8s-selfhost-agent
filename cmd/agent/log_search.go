@@ -29,19 +29,31 @@ func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceSt
 	// Instant retrieval via embedded columnar engine using Bloom filter & sparse primary index
 	if eng != nil {
 		entries, err := eng.GetLogs(ctx, app, tail, sinceTime, untilTime, query, level)
-		if err == nil && len(entries) > 0 {
-			sort.SliceStable(entries, func(i, j int) bool {
-				return entries[i].Timestamp.Before(entries[j].Timestamp)
-			})
-			if tail > 0 && len(entries) > tail {
-				entries = entries[len(entries)-tail:]
+		if err == nil {
+			hasOtherSources := false
+			for _, src := range sources {
+				if src != eng {
+					hasOtherSources = true
+					break
+				}
 			}
-			return entries, nil
+			if len(entries) > 0 || eng.BlockCount() > 0 || !hasOtherSources {
+				sort.SliceStable(entries, func(i, j int) bool {
+					return entries[i].Timestamp.Before(entries[j].Timestamp)
+				})
+				if tail > 0 && len(entries) > tail {
+					entries = entries[len(entries)-tail:]
+				}
+				return entries, nil
+			}
 		}
 	}
 
 	var allEntries []LogEntry
 	for _, src := range sources {
+		if eng != nil && src == eng {
+			continue
+		}
 		entries, err := src.GetLogs(ctx, app, tail, sinceTime, untilTime, query, level)
 		if err != nil {
 			continue

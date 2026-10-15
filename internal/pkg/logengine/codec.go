@@ -1,4 +1,4 @@
-﻿package logengine
+package logengine
 
 import (
 	"encoding/binary"
@@ -126,6 +126,15 @@ func (d *LabelDictionary) Lookup(id uint16) (string, bool) {
 		return "", false
 	}
 	return d.idToStr[idx], true
+}
+
+// LookupID returns the uint16 ID for label without inserting, or false if not present.
+func (d *LabelDictionary) LookupID(label string) (uint16, bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	id, exists := d.strToID[label]
+	return id, exists
 }
 
 // Export returns a snapshot copy of the label entries for persistence.

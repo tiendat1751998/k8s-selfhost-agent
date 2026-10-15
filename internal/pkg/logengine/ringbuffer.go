@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	// DefaultRingBufferCapacity is 65,536 slots (power of 2: 1 << 16).
-	DefaultRingBufferCapacity = 65536
-	// DefaultRingBufferMask is 65,535.
+	// DefaultRingBufferCapacity is 4,096 slots (power of 2: 1 << 12, ~384KB static footprint).
+	DefaultRingBufferCapacity = 4096
+	// DefaultRingBufferMask is 4,095.
 	DefaultRingBufferMask = DefaultRingBufferCapacity - 1
 )
 
@@ -158,7 +158,7 @@ func (rb *RingBuffer) Push(entry Entry) bool {
 				spins++
 				continue
 			}
-			if spins < 150 {
+			if spins < 500 {
 				runtime.Gosched()
 				spins++
 				continue

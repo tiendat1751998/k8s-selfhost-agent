@@ -2,59 +2,20 @@ package logengine
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 )
 
-// Entry represents a single log entry passed into the log engine.
-type Entry struct {
-	Timestamp time.Time
-	Service   string
-	Level     string
-	Message   string
-	Raw       string
-}
-
-// WriterOption configures the Writer.
-type WriterOption func(*Writer)
-
-// WithMaxRowsPerBlock configures the threshold rows before flushing a block.
-func WithMaxRowsPerBlock(n int) WriterOption {
-	return func(w *Writer) {
-		if n > 0 {
-			w.maxRows = n
-		}
-	}
-}
-
-// WithFlushInterval configures the periodic flush duration.
-func WithFlushInterval(d time.Duration) WriterOption {
-	return func(w *Writer) {
-		if d > 0 {
-			w.flushInterval = d
-		}
-	}
-}
-
-// WithRedactor configures the secret redactor on the Writer (pass nil to disable).
-func WithRedactor(r *InStreamRedactor) WriterOption {
-	return func(w *Writer) {
-		w.redactor = r
-	}
-}
-
-// WithRingBufferCapacity configures the ingest ring buffer capacity.
-func WithRingBufferCapacity(cap int) WriterOption {
-	return func(w *Writer) {
-		if cap > 0 {
-			w.ringCap = cap
-		}
-	}
-}
+const (
+	maxBlocksPerPart = 256
+	maxPartBytes     = 16 * 1024 * 1024 // 16MB compressed
+)
 
 // Writer writes log entries to columnar parts on disk with sparse indexing.
 // Ingestion is completely decoupled from disk I/O via a lock-free MPSC ring buffer.
@@ -69,6 +30,12 @@ type Writer struct {
 	maxRows       int
 	flushInterval time.Duration
 	nextPartID    uint64
+
+	activePartDir    string
+	activePartBlocks int
+	activePartBytes  int64
+	maxRetention     time.Duration
+	maxDiskBytes     int64
 
 	flushReqCh chan chan error
 	closeCh    chan struct{}
@@ -242,11 +209,28 @@ func (w *Writer) drainToBuilder(batch []Entry) int {
 	for i := 0; i < n; i++ {
 		e := &batch[i]
 		svcID := w.dict.GetOrInsert(e.Service)
-		lvlID := w.dict.GetOrInsert(e.Level)
+		lvlID := ParseLevelID(e.Level)
 		ts := e.Timestamp.UnixNano()
 		w.builder.Append(ts, svcID, lvlID, []byte(e.Message))
+		batch[i] = Entry{}
 	}
 	return n
+}
+
+// SealActivePart closes the current active multi-block part directory so the next flush starts a new part.
+func (w *Writer) SealActivePart() {
+	w.closedMu.Lock()
+	defer w.closedMu.Unlock()
+	w.sealActivePartLocked()
+}
+
+func (w *Writer) sealActivePartLocked() {
+	if w.activePartDir != "" {
+		w.nextPartID++
+		w.activePartDir = ""
+		w.activePartBlocks = 0
+		w.activePartBytes = 0
+	}
 }
 
 // LastError returns the last asynchronous error encountered during flush.
@@ -352,13 +336,22 @@ func (w *Writer) flushCurrentBlock() error {
 		return nil
 	}
 
-	partName := fmt.Sprintf("part_%016d", w.nextPartID)
-	w.nextPartID++
-	partDir := filepath.Join(w.partsDir, partName)
-	tmpDir := filepath.Join(w.partsDir, fmt.Sprintf("%s.tmp_%d", partName, time.Now().UnixNano()))
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		return fmt.Errorf("failed to create temp part dir %s: %w", tmpDir, err)
+	w.closedMu.Lock()
+	if w.activePartDir == "" || w.activePartBlocks >= maxBlocksPerPart || w.activePartBytes >= maxPartBytes {
+		if w.activePartDir != "" {
+			w.nextPartID++
+		}
+		partName := fmt.Sprintf("part_%016d", w.nextPartID)
+		w.activePartDir = filepath.Join(w.partsDir, partName)
+		w.activePartBlocks = 0
+		w.activePartBytes = 0
+		if err := os.MkdirAll(w.activePartDir, 0755); err != nil {
+			w.closedMu.Unlock()
+			return fmt.Errorf("failed to create part dir %s: %w", w.activePartDir, err)
+		}
 	}
+	activeDir := w.activePartDir
+	w.closedMu.Unlock()
 
 	scratchBuf := GetBlockBuffer()
 	defer PutBlockBuffer(scratchBuf)
@@ -366,50 +359,80 @@ func (w *Writer) flushCurrentBlock() error {
 	compBuf := GetBlockBuffer()
 	defer PutBlockBuffer(compBuf)
 
-	uncompressed, minTime, maxTime, bloom := w.builder.Pack(scratchBuf)
-	compressed := CompressBlock(uncompressed, compBuf)
+	compressed, uncompressedSize, minTime, maxTime, bloom, levelMask, serviceBloom := w.builder.PackAndCompress(scratchBuf, compBuf)
 
-	// 1. Write data.bin
-	if err := os.WriteFile(filepath.Join(tmpDir, "data.bin"), compressed, 0644); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		return fmt.Errorf("failed to write data.bin: %w", err)
+	// 1. Append data.bin
+	dataPath := filepath.Join(activeDir, "data.bin")
+	df, err := os.OpenFile(dataPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open data.bin: %w", err)
 	}
+	offset, err := df.Seek(0, io.SeekEnd)
+	if err != nil {
+		_ = df.Close()
+		return fmt.Errorf("failed to seek data.bin: %w", err)
+	}
+	if _, err := df.Write(compressed); err != nil {
+		_ = df.Close()
+		return fmt.Errorf("failed to append data.bin: %w", err)
+	}
+	_ = df.Close()
 
-	// 2. Write marks.bin
+	// 2. Append marks.bin
+	marksPath := filepath.Join(activeDir, "marks.bin")
+	mf, err := os.OpenFile(marksPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open marks.bin: %w", err)
+	}
 	mark := BlockMark{
-		CompressedOffset: 0,
+		CompressedOffset: uint64(offset),
 		CompressedLength: uint32(len(compressed)),
-		UncompressedSize: uint32(len(uncompressed)),
+		UncompressedSize: uint32(uncompressedSize),
 		RowCount:         uint32(w.builder.RowCount()),
+		LevelMask:        levelMask,
+		ServiceBloom:     serviceBloom,
 	}
 	markBytes := make([]byte, BlockMarkSize)
 	mark.Encode(markBytes)
-	if err := os.WriteFile(filepath.Join(tmpDir, "marks.bin"), markBytes, 0644); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		return fmt.Errorf("failed to write marks.bin: %w", err)
+	if _, err := mf.Write(markBytes); err != nil {
+		_ = mf.Close()
+		return fmt.Errorf("failed to append marks.bin: %w", err)
 	}
+	_ = mf.Close()
 
-	// 3. Write bloom.bin
-	if err := os.WriteFile(filepath.Join(tmpDir, "bloom.bin"), bloom.Bytes(), 0644); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		return fmt.Errorf("failed to write bloom.bin: %w", err)
+	// 3. Append bloom.bin
+	bloomPath := filepath.Join(activeDir, "bloom.bin")
+	bf, err := os.OpenFile(bloomPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open bloom.bin: %w", err)
 	}
-
-	// 4. Write primary.idx
-	pidx := NewPrimaryIndex()
-	pidx.Add(minTime, maxTime)
-	if err := writePrimaryIndexAtomic(filepath.Join(tmpDir, "primary.idx"), pidx); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		return fmt.Errorf("failed to write primary.idx: %w", err)
+	if _, err := bf.Write(bloom.Bytes()); err != nil {
+		_ = bf.Close()
+		return fmt.Errorf("failed to append bloom.bin: %w", err)
 	}
+	_ = bf.Close()
 
-	// 5. Atomic Rename to final immutable part directory
-	if err := os.Rename(tmpDir, partDir); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		return fmt.Errorf("failed to commit atomic part directory %s: %w", partName, err)
+	// 4. Append primary.idx
+	pidxPath := filepath.Join(activeDir, "primary.idx")
+	pf, err := os.OpenFile(pidxPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open primary.idx: %w", err)
 	}
+	idxBytes := make([]byte, 16)
+	binary.LittleEndian.PutUint64(idxBytes[0:8], uint64(minTime))
+	binary.LittleEndian.PutUint64(idxBytes[8:16], uint64(maxTime))
+	if _, err := pf.Write(idxBytes); err != nil {
+		_ = pf.Close()
+		return fmt.Errorf("failed to append primary.idx: %w", err)
+	}
+	_ = pf.Close()
 
-	// 6. Persist dictionary snapshot
+	w.closedMu.Lock()
+	w.activePartBlocks++
+	w.activePartBytes += int64(len(compressed))
+	w.closedMu.Unlock()
+
+	// 5. Persist dictionary snapshot
 	dictData, err := json.Marshal(w.dict.Export())
 	if err != nil {
 		return fmt.Errorf("failed to marshal dict: %w", err)
@@ -419,16 +442,13 @@ func (w *Writer) flushCurrentBlock() error {
 	}
 
 	w.builder.Reset()
-	return nil
-}
 
-func writePrimaryIndexAtomic(path string, pidx *PrimaryIndex) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
+	// 6. Check retention / disk quota pruning
+	if err := pruneOldParts(w.partsDir, activeDir, w.maxRetention, w.maxDiskBytes); err != nil {
+		w.setLastError(err)
 	}
-	defer f.Close()
-	return pidx.WritePrimaryIndex(f)
+
+	return nil
 }
 
 // Close flushes all remaining items in the ring buffer, writes the final block, and stops flusher.
@@ -440,6 +460,7 @@ func (w *Writer) Close() error {
 	}
 	w.closed = true
 	close(w.closeCh)
+	w.sealActivePartLocked()
 	w.closedMu.Unlock()
 
 	w.wg.Wait()

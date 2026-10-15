@@ -26,12 +26,14 @@ import (
 
 // AgentConfig holds the configuration settings for the agent.
 type AgentConfig struct {
-	Port      int
-	BindAddr  string
-	Interval  time.Duration
-	AuthToken string
-	LogDir    string
-	EngineDir string
+	Port            int
+	BindAddr        string
+	Interval        time.Duration
+	AuthToken       string
+	LogDir          string
+	EngineDir       string
+	ControlPlaneURL string
+	NodeIP          string
 }
 
 // validateConfig validates that required configuration options are present.
@@ -292,12 +294,14 @@ func resolveEngineDir(logDir, requestedEngineDir string, logger *slog.Logger) st
 
 func main() {
 	var (
-		port      int
-		bindAddr  string
-		interval  time.Duration
-		authToken string
-		logDir    string
-		engineDir string
+		port            int
+		bindAddr        string
+		interval        time.Duration
+		authToken       string
+		logDir          string
+		engineDir       string
+		controlPlaneURL string
+		nodeIP          string
 	)
 
 	flag.IntVar(&port, "port", 9100, "Port for metrics and logs HTTP server")
@@ -306,20 +310,30 @@ func main() {
 	flag.StringVar(&authToken, "auth-token", "", "Required Bearer token for authentication")
 	flag.StringVar(&logDir, "log-dir", "/var/log", "Directory for local log file scanning")
 	flag.StringVar(&engineDir, "engine-dir", "", "Directory for columnar log engine data")
+	flag.StringVar(&controlPlaneURL, "control-plane-url", "", "Optional control plane URL for automatic agent registration")
+	flag.StringVar(&nodeIP, "node-ip", "", "Optional node IP to report to control plane (auto-detected if empty)")
 	flag.Parse()
 
 	port, bindAddr, logDir, engineDir, authToken = applyEnvOverrides(port, bindAddr, logDir, engineDir, authToken)
+	if controlPlaneURL == "" {
+		controlPlaneURL = os.Getenv("CONTROL_PLANE_URL")
+	}
+	if nodeIP == "" {
+		nodeIP = os.Getenv("AGENT_NODE_IP")
+	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
 	cfg := AgentConfig{
-		Port:      port,
-		BindAddr:  bindAddr,
-		Interval:  interval,
-		AuthToken: authToken,
-		LogDir:    logDir,
-		EngineDir: engineDir,
+		Port:            port,
+		BindAddr:        bindAddr,
+		Interval:        interval,
+		AuthToken:       authToken,
+		LogDir:          logDir,
+		EngineDir:       engineDir,
+		ControlPlaneURL: controlPlaneURL,
+		NodeIP:          nodeIP,
 	}
 
 	if err := validateConfig(cfg); err != nil {
@@ -388,8 +402,9 @@ func main() {
 			journalTailer.Start(ctx)
 		}()
 
-		// Continuous Kubernetes CRI Pod log tailing
-		podTailer = NewPodTailer("/var/log/pods", engineSrc.Writer(), logger)
+		// Continuous Kubernetes CRI Pod log tailing with offset checkpointing
+		checkpointPath := filepath.Join(engineDir, "tail_offsets.json")
+		podTailer = NewPodTailer("/var/log/pods", engineSrc.Writer(), logger, checkpointPath)
 		tailerWg.Add(1)
 		go func() {
 			defer tailerWg.Done()
@@ -397,6 +412,18 @@ func main() {
 		}()
 	} else {
 		logger.Warn("Failed to initialize columnar log engine, falling back to standard sources", slog.String("error", err.Error()))
+	}
+
+	if controlPlaneURL != "" {
+		registrar := NewRegistrar(RegistrarConfig{
+			ControlPlaneURL: controlPlaneURL,
+			NodeIP:          nodeIP,
+			Port:            port,
+			AuthToken:       authToken,
+			Interval:        10 * time.Second,
+			Logger:          logger,
+		})
+		go registrar.Start(ctx)
 	}
 
 	handler := setupHandler(collector, authToken, logServer)

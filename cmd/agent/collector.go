@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// DiskUsageFunc resolves disk metrics for a mount point.
-type DiskUsageFunc func(mountPoint string) (totalBytes int64, usedBytes int64, err error)
+// DiskUsageFunc resolves disk metrics and inode stats for a mount point.
+type DiskUsageFunc func(mountPoint string) (totalBytes, usedBytes, inodesTotal, inodesFree int64, err error)
 
 // SystemCollector collects local system metrics from Linux /proc (with cross-platform fallbacks).
 type SystemCollector struct {
@@ -182,6 +182,8 @@ func (c *SystemCollector) Collect() (*MetricsResponse, error) {
 		Network:            netMetrics,
 		Processes:          procCount,
 		TopProcesses:       topProcesses,
+		PSI:                c.collectPSI(),
+		K8s:                c.collectK8sMetrics(),
 		CollectedAt:        now,
 	}
 

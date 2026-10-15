@@ -124,7 +124,7 @@ func (c *SystemCollector) collectDisks() []DiskMetrics {
 					continue
 				}
 
-				total, used, err := c.diskUsageFn(mountPoint)
+				total, used, inodesTotal, inodesFree, err := c.diskUsageFn(mountPoint)
 				if err == nil && total > 0 {
 					dedupKey := fmt.Sprintf("%s:%d", strings.ToLower(fsType), total)
 					if seenDevices[dedupKey] {
@@ -133,12 +133,24 @@ func (c *SystemCollector) collectDisks() []DiskMetrics {
 					seenDevices[dedupKey] = true
 					seenMounts[mountPoint] = true
 					pct := math.Round((float64(used)/float64(total))*10000) / 100
+					inodesUsed := inodesTotal - inodesFree
+					if inodesUsed < 0 {
+						inodesUsed = 0
+					}
+					var inodesPct float64
+					if inodesTotal > 0 {
+						inodesPct = math.Round((float64(inodesUsed)/float64(inodesTotal))*10000) / 100
+					}
 					disks = append(disks, DiskMetrics{
-						MountPoint:   mountPoint,
-						TotalBytes:   total,
-						UsedBytes:    used,
-						UsagePercent: pct,
-						Filesystem:   fsType,
+						MountPoint:         mountPoint,
+						TotalBytes:         total,
+						UsedBytes:          used,
+						UsagePercent:       pct,
+						Filesystem:         fsType,
+						InodesTotal:        inodesTotal,
+						InodesUsed:         inodesUsed,
+						InodesFree:         inodesFree,
+						InodesUsagePercent: inodesPct,
 					})
 				}
 			}
@@ -147,15 +159,27 @@ func (c *SystemCollector) collectDisks() []DiskMetrics {
 
 	// Fallback if no mounts discovered
 	if len(disks) == 0 {
-		total, used, err := c.diskUsageFn("/")
+		total, used, inodesTotal, inodesFree, err := c.diskUsageFn("/")
 		if err == nil && total > 0 {
 			pct := math.Round((float64(used)/float64(total))*10000) / 100
+			inodesUsed := inodesTotal - inodesFree
+			if inodesUsed < 0 {
+				inodesUsed = 0
+			}
+			var inodesPct float64
+			if inodesTotal > 0 {
+				inodesPct = math.Round((float64(inodesUsed)/float64(inodesTotal))*10000) / 100
+			}
 			disks = append(disks, DiskMetrics{
-				MountPoint:   "/",
-				TotalBytes:   total,
-				UsedBytes:    used,
-				UsagePercent: pct,
-				Filesystem:   "ext4",
+				MountPoint:         "/",
+				TotalBytes:         total,
+				UsedBytes:          used,
+				UsagePercent:       pct,
+				Filesystem:         "ext4",
+				InodesTotal:        inodesTotal,
+				InodesUsed:         inodesUsed,
+				InodesFree:         inodesFree,
+				InodesUsagePercent: inodesPct,
 			})
 		}
 	}
