@@ -3,7 +3,7 @@ import BaseIcon from '../ui/BaseIcon.vue'
 import type { ComputeHost } from '../../api/compute'
 import type { HostTypeDefinition } from '../../types/hosts'
 
-defineProps<{
+const props = defineProps<{
   filteredHostsCount: number
   loading: boolean
   showMobileSearch: boolean
@@ -29,6 +29,13 @@ const emit = defineEmits<{
   (e: 'refresh'): void
   (e: 'openFencing', nodeName: string, clusterId: string): void
 }>()
+
+function handleFirstFencing() {
+  const first = props.hosts.find(h => h.status !== 'connected')
+  if (first) {
+    emit('openFencing', first.name, first.tenant_id || 'default')
+  }
+}
 </script>
 
 <template>
@@ -146,28 +153,22 @@ const emit = defineEmits<{
 
 
     <!-- SRE Storage Fencing Alert Banner (When Unready/Offline Nodes Exist) -->
-    <div v-if="offlineHostsCount > 0" class="fencing-alert-strip glass-panel animate-fade-in">
+    <div v-if="offlineHostsCount > 0" class="fencing-alert-strip animate-fade-in">
       <div class="fencing-alert-info">
-        <span class="fencing-alert-icon-box"><BaseIcon name="alert-triangle" size="sm" /></span>
+        <span class="fencing-alert-dot" aria-hidden="true"></span>
         <div class="fencing-alert-texts">
-          <span class="fencing-alert-title font-bold text-amber">
-            {{ offlineHostsCount }} Unready / Offline Host(s) Detected
-          </span>
-          <span class="fencing-alert-sub text-muted">
-            Workloads with RWO CSI volumes risk split-brain corruption without STONITH fencing.
-          </span>
+          <span class="fencing-alert-title font-medium">{{ offlineHostsCount }} unreachable host(s)</span>
+          <span class="fencing-alert-sub text-muted">— RWO volumes may require fencing</span>
         </div>
       </div>
       <div class="fencing-alert-actions">
         <button
-          v-for="unreadyHost in hosts.filter(h => h.status !== 'connected')"
-          :key="unreadyHost.id"
           type="button"
-          class="btn btn-warning-sm btn-action-fence font-mono"
-          @click="emit('openFencing', unreadyHost.name, unreadyHost.tenant_id || 'default')"
+          class="btn btn-action-fence font-mono"
+          @click="handleFirstFencing"
         >
           <BaseIcon name="shield" size="xs" />
-          <span>Safe Remediation / Fence: {{ unreadyHost.name }}</span>
+          <span>Fence Host...</span>
         </button>
       </div>
     </div>
@@ -236,9 +237,9 @@ const emit = defineEmits<{
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  background: var(--color-primary, #10b981);
-  color: #08090a;
-  border: 1px solid transparent;
+  background: #f3f4f6 !important;
+  color: #08090a !important;
+  border: 1px solid #ffffff !important;
   cursor: pointer;
   transition: opacity 0.15s ease;
 }
@@ -325,67 +326,74 @@ const emit = defineEmits<{
   border-radius: 4px;
 }
 .fencing-alert-strip {
+  min-height: 36px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  background: var(--bg-card, #141516);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-left: 2px solid #f59e0b;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  margin-bottom: 12px;
-  background: var(--bg-card, #141516);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  border-left: 3px solid var(--status-warning, #f59e0b);
-  border-radius: 6px;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 10px;
+  flex-wrap: nowrap;
 }
 .fencing-alert-info {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
-.fencing-alert-icon-box {
-  color: #f59e0b;
+.fencing-alert-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
 }
 .fencing-alert-texts {
   display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  line-height: 1.3;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .fencing-alert-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #f59e0b;
+  color: var(--text-primary, #f3f4f6);
+  font-weight: 500;
 }
 .fencing-alert-sub {
-  font-size: 11px;
   color: var(--text-muted, #6b7280);
 }
 .fencing-alert-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 .btn-action-fence {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--bg-elevated, #1a1b1e);
+  color: var(--text-primary, #f3f4f6);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  gap: 5px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .btn-action-fence:hover {
-  background: #f59e0b;
-  color: #08090a;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
 }
 @media (max-width: 640px) {
   .fencing-alert-strip {
@@ -393,15 +401,13 @@ const emit = defineEmits<{
     margin-bottom: 8px;
     gap: 6px;
   }
-  .fencing-alert-title {
-    font-size: 11px;
-  }
   .fencing-alert-sub {
     display: none;
   }
   .btn-action-fence {
-    padding: 3px 6px;
-    font-size: 10px;
+    height: 24px;
+    padding: 0 8px;
+    font-size: 10.5px;
   }
 }
 </style>
