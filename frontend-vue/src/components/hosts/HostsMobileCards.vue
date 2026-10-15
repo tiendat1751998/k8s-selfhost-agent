@@ -69,7 +69,7 @@ function formatHostDate(d?: string): string {
         class="mobile-host-card glass-panel"
         @click="emit('select', host)"
       >
-        <!-- Row 1: Type icon + Host Name + Role Chip on Left, Status + Test/Fence on Right -->
+        <!-- Row 1: Left has Icon + Host Name + Type Chip; Right has ONLY StatusBadge -->
         <div class="m-card-header-row">
           <div class="m-card-header-left">
             <span class="m-card-icon">
@@ -84,6 +84,40 @@ function formatHostDate(d?: string): string {
           </div>
           <div class="m-card-header-right" @click.stop>
             <StatusBadge :status="host.status || 'connected'" size="sm" />
+          </div>
+        </div>
+
+        <!-- Row 2: Left has Endpoint + Telemetry/LastSeen; Right has Action Buttons -->
+        <div class="m-card-meta-row">
+          <div class="m-meta-info-left">
+            <div class="m-meta-endpoint-group">
+              <BaseIcon name="server" size="xs" class="text-muted flex-shrink-0" />
+              <span
+                class="m-endpoint font-mono text-cyan"
+                :title="host.endpoint || host.labels?.['kubernetes.io/hostname'] || host.name"
+              >
+                {{ host.endpoint || host.labels?.['kubernetes.io/hostname'] || host.name }}
+              </span>
+            </div>
+            <span
+              v-if="hostTestResults[host.id]"
+              class="m-latency font-mono"
+              :class="getLatencyBadgeClass(hostTestResults[host.id].latency_ms)"
+            >
+              <template v-if="hostTestResults[host.id].latency_ms > 0">
+                <BaseIcon name="zap" size="xs" />
+                <span>{{ hostTestResults[host.id].latency_ms }}ms</span>
+              </template>
+              <template v-else>
+                <span>--</span>
+              </template>
+            </span>
+            <span v-else class="m-last-check font-mono text-muted">
+              {{ formatHostLastSeen(host, formatHostDate, true) }}
+            </span>
+          </div>
+
+          <div class="m-meta-actions-right" @click.stop>
             <button
               type="button"
               class="btn-m-action btn-m-test btn-m-compact"
@@ -108,55 +142,22 @@ function formatHostDate(d?: string): string {
               <BaseIcon name="shield" size="xs" />
               <span class="btn-m-text">Fence</span>
             </button>
-          </div>
-        </div>
-
-        <!-- Row 2: Endpoint / IP on Left, Latency or Last Check + Edit/Delete on Right -->
-        <div class="m-card-meta-row">
-          <div class="m-meta-endpoint-group">
-            <BaseIcon name="server" size="xs" class="text-muted flex-shrink-0" />
-            <span
-              class="m-endpoint font-mono text-cyan"
-              :title="host.endpoint || host.labels?.['kubernetes.io/hostname'] || host.name"
+            <button
+              type="button"
+              class="btn-m-action btn-m-icon-only btn-m-edit"
+              title="Edit Host"
+              @click.stop="emit('edit', host)"
             >
-              {{ host.endpoint || host.labels?.['kubernetes.io/hostname'] || host.name }}
-            </span>
-          </div>
-          <div class="m-meta-telemetry-group" @click.stop>
-            <span
-              v-if="hostTestResults[host.id]"
-              class="m-latency font-mono"
-              :class="getLatencyBadgeClass(hostTestResults[host.id].latency_ms)"
+              <BaseIcon name="edit" size="xs" />
+            </button>
+            <button
+              type="button"
+              class="btn-m-action btn-m-icon-only btn-m-delete"
+              title="Delete Host"
+              @click.stop="emit('delete', host)"
             >
-              <template v-if="hostTestResults[host.id].latency_ms > 0">
-                <BaseIcon name="zap" size="xs" />
-                <span>{{ hostTestResults[host.id].latency_ms }}ms</span>
-              </template>
-              <template v-else>
-                <span>--</span>
-              </template>
-            </span>
-            <span v-else class="m-last-check font-mono text-muted">
-              {{ formatHostLastSeen(host, formatHostDate, true) }}
-            </span>
-            <div class="m-card-actions-compact">
-              <button
-                type="button"
-                class="btn-m-action btn-m-icon-only btn-m-edit"
-                title="Edit Host"
-                @click.stop="emit('edit', host)"
-              >
-                <BaseIcon name="edit" size="xs" />
-              </button>
-              <button
-                type="button"
-                class="btn-m-action btn-m-icon-only btn-m-delete"
-                title="Delete Host"
-                @click.stop="emit('delete', host)"
-              >
-                <BaseIcon name="trash" size="xs" />
-              </button>
-            </div>
+              <BaseIcon name="trash" size="xs" />
+            </button>
           </div>
         </div>
       </div>

@@ -248,67 +248,8 @@ const {
 </style>
 
 <style scoped>
-
-.fleet-telemetry-panel { margin-bottom: 16px; }
-.hosts-telemetry-hud-strip { margin-bottom: 12px; }
-.panel-badge-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.telemetry-live-badge {
-  display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 9999px;
-  font-size: 10px; font-weight: 600; background: rgba(6, 182, 212, 0.12); color: #06b6d4;
-  border: 1px solid rgba(6, 182, 212, 0.25); letter-spacing: 0.05em;
-}
-.sync-legend { display: flex; align-items: center; gap: 12px; color: #94a3b8; }
-.legend-item { display: inline-flex; align-items: center; gap: 5px; }
-.legend-color { width: 8px; height: 8px; border-radius: 2px; }
-.legend-cyan { background-color: #06b6d4; }
-.legend-emerald { background-color: #10b981; }
-.fleet-telemetry-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 14px; }
-@media (max-width: 768px) {
-  .fleet-telemetry-grid { grid-template-columns: 1fr; gap: 12px; }
-}
-.telemetry-chart-card {
-  background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(56, 189, 248, 0.12); border-radius: 8px; padding: 10px;
-}
-.chart-card-header {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 11px;
-}
-.chart-card-val { color: #f1f5f9; }
 .empty-icon-wrap { font-size: 32px; margin-bottom: 12px; color: #64748b; }
 :deep(.pill-count) { margin-left: 4px; }
-
-.fencing-alert-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 8px;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.fencing-alert-info { display: flex; align-items: center; gap: 10px; }
-.fencing-alert-icon-box { color: #f59e0b; }
-.fencing-alert-texts { display: flex; flex-direction: column; font-size: 12px; line-height: 1.3; }
-.fencing-alert-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.btn-action-fence {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.btn-action-fence:hover {
-  background: #f59e0b;
-  color: #0f172a;
-}
 </style>
+
 

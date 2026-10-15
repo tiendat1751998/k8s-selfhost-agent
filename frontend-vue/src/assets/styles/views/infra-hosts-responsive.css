@@ -213,7 +213,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
 }
@@ -221,7 +221,7 @@
 .m-card-header-left {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
@@ -247,6 +247,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  flex-shrink: 1;
 }
 
 .m-type-chip {
@@ -268,7 +269,6 @@
 .m-card-header-right {
   display: flex;
   align-items: center;
-  gap: 5px;
   flex-shrink: 0;
 }
 
@@ -284,12 +284,21 @@
   min-width: 0;
 }
 
+.m-meta-info-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
 .m-meta-endpoint-group {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   overflow: hidden;
 }
 
@@ -314,7 +323,6 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: 2px;
 }
 
 .m-latency {
@@ -323,12 +331,22 @@
   gap: 3px;
   font-size: 10.5px;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .m-last-check {
   font-size: 10px;
   color: var(--text-muted, #94a3b8);
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.m-meta-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 /* Compact Touch Buttons */
@@ -337,11 +355,11 @@
   align-items: center;
   justify-content: center;
   gap: 3px;
-  height: 24px;
-  min-height: 24px;
-  padding: 0 6px;
-  border-radius: 5px;
-  font-size: 10.5px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -355,15 +373,15 @@
 .btn-m-compact {
   height: 22px;
   min-height: 22px;
-  padding: 0 6px;
+  padding: 0 5px;
   font-size: 10px;
 }
 
 .btn-m-icon-only {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  min-height: 24px;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  min-height: 22px;
   padding: 0;
 }
 
