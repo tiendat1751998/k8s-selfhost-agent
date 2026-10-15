@@ -23,10 +23,7 @@ const {
   realServices,
   totalSLOs,
   healthySLOs,
-  warningSLOs,
-  criticalSLOs,
   activeBurnAlerts,
-  avgBurnRate,
   fetchSLOData,
   setWindowFilter,
   formatPercent,
@@ -236,7 +233,8 @@ function handleEditSLO(def: SLODefinition) {
     <!-- Mobile 44px Command Bar (<=767px) -->
     <div class="slo-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <span class="command-bar-title font-bold"><BaseIcon name="target" size="xs" /> SLOs ({{ totalSLOs }})</span>
+        <span class="command-bar-title font-bold"><BaseIcon name="target" size="xs" /> SLOs</span>
+        <span class="slo-count-pill font-mono">{{ totalSLOs }} Objectives</span>
       </div>
       <div class="command-bar-actions">
         <button class="btn-icon-cmd" title="Create SLO definition" aria-label="Create SLO definition" @click="openCreateModal()">
@@ -249,17 +247,6 @@ function handleEditSLO(def: SLODefinition) {
           <BaseIcon name="search" size="xs" />
         </button>
       </div>
-    </div>
-
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<=767px) -->
-    <div class="slo-micro-telemetry mobile-only font-mono" role="status" aria-label="SLO Micro Telemetry">
-      <span class="tel-item tel-total"><BaseIcon name="target" size="xs" /> {{ totalSLOs }} slos</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-healthy"><BaseIcon name="shield" size="xs" /> {{ healthySLOs }} ok</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-warn"><BaseIcon name="alert-triangle" size="xs" /> {{ warningSLOs + criticalSLOs }} warn</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-burn"><BaseIcon name="flame" size="xs" /> {{ avgBurnRate }} burn</span>
     </div>
 
     <!-- Mobile Collapsible Search Drawer -->
@@ -288,7 +275,7 @@ function handleEditSLO(def: SLODefinition) {
           :class="{ active: selectedWindowFilter === w.key }"
           @click="setWindowFilter(w.key)"
         >
-          {{ w.key }} ({{ w.short }})
+          {{ w.key }}
         </button>
       </div>
     </div>

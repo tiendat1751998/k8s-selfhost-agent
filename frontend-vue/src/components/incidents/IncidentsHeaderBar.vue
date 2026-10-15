@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
-import IncidentMicroTelemetry from './IncidentMicroTelemetry.vue'
 
 defineProps<{
   searchQuery: string
@@ -163,15 +162,6 @@ const emit = defineEmits<{
         </button>
       </div>
     </div>
-
-    <!-- Mobile Micro-Telemetry Strip (20px) -->
-    <IncidentMicroTelemetry
-      class="mobile-only"
-      :total-incidents="totalIncidents"
-      :critical-count="criticalCount"
-      :analyzing-count="analyzingCount"
-      :resolved-count="resolvedCount"
-    />
 
     <!-- Mobile Collapsible Search & Filter Bar -->
     <div v-if="showMobileSearch" class="mobile-filter-bar mobile-only animate-fade-in">

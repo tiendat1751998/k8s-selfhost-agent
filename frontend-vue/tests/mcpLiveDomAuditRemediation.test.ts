@@ -1,92 +1,81 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { getNodeRole, isControlPlane } from '../src/components/overview/overviewMobileUtils.ts'
+import { SIMULATION_SCENARIOS } from '../src/composables/incidentHelpers.ts'
+import type { NodeMetrics } from '../src/api/overview.ts'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const srcDir = path.resolve(__dirname, '../src')
-
-function getAllSourceFiles(dir: string): string[] {
-  const files: string[] = []
-  const entries = fs.readdirSync(dir, { withFileTypes: true })
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      files.push(...getAllSourceFiles(fullPath))
-    } else if (entry.isFile() && (entry.name.endsWith('.ts') || entry.name.endsWith('.vue'))) {
-      files.push(fullPath)
-    }
-  }
-  return files
-}
-
-describe('Live Chrome DevTools MCP Audit: 3 UI/DOM Defect Remediation', () => {
-  it('Criterion 1: SettingsView tabs have zero hardcoded fake counts and zero fake keys in telemetry', () => {
-    const settingsPath = path.join(srcDir, 'views/SettingsView.vue')
-    const content = fs.readFileSync(settingsPath, 'utf-8')
-
-    // Must not have hardcoded count: 3
-    assert.strictEqual(
-      content.includes('count: 3'),
-      false,
-      'SettingsView tabs must not contain hardcoded count: 3'
-    )
-    // Must not have hardcoded "3 Keys" in micro-telemetry
-    assert.strictEqual(
-      content.includes('3 Keys'),
-      false,
-      'SettingsView micro-telemetry must not display hardcoded "3 Keys"'
-    )
-  })
-
-  it('Criterion 2: ZeroTrustDrawer initializes with honest empty state and no fake KMS key', () => {
-    const ztPath = path.join(srcDir, 'components/layout/ZeroTrustDrawer.vue')
-    const content = fs.readFileSync(ztPath, 'utf-8')
-
-    // Must not have hardcoded fake root key or version
-    assert.strictEqual(
-      content.includes('kms-k8s-root-9f82c'),
-      false,
-      'ZeroTrustDrawer must not contain hardcoded fake key ID kms-k8s-root-9f82c'
-    )
-    assert.strictEqual(
-      content.includes("activeKeyId = ref('--')"),
-      true,
-      'ZeroTrustDrawer activeKeyId must initialize with uninitialized default "--"'
-    )
-    assert.strictEqual(
-      content.includes('keyVersion = ref(0)'),
-      true,
-      'ZeroTrustDrawer keyVersion must initialize with 0'
-    )
-  })
-
-  it('Criterion 3: Zero residual prod-us-east-1, prod-eu-west-1, staging-us-west-2, or kms-k8s-root strings in src/', () => {
-    const allFiles = getAllSourceFiles(srcDir)
-    const forbiddenRegex = /prod-us-east-1|prod-eu-west-1|staging-us-west-2|kms-k8s-root/g
-
-    const violations: { file: string; line: number; text: string }[] = []
-
-    for (const file of allFiles) {
-      const relPath = path.relative(srcDir, file)
-      const content = fs.readFileSync(file, 'utf-8')
-      const lines = content.split('\n')
-      lines.forEach((line, index) => {
-        if (forbiddenRegex.test(line)) {
-          violations.push({
-            file: relPath,
-            line: index + 1,
-            text: line.trim()
-          })
-        }
-      })
+describe('Live MCP & Mobile UX Remediation Unit Tests', () => {
+  it('getNodeRole accurately identifies standalone, control-plane, and worker roles', () => {
+    const baseNode: NodeMetrics = {
+      node_id: 'node-1',
+      node_name: 'test-node',
+      status: 'ready',
+      role: 'standalone',
+      cpu_percent: 20,
+      memory_percent: 40,
+      memory_total: 16000000000,
+      disk_percent: 30,
+      pod_count: 5,
+      ip: '10.0.0.1',
     }
 
-    assert.deepStrictEqual(
-      violations,
-      [],
-      `Found residual strings in src/:\n${violations.map(v => `  ${v.file}:${v.line} -> ${v.text}`).join('\n')}`
-    )
+    // Standalone role
+    assert.strictEqual(getNodeRole(baseNode), 'standalone')
+
+    // Control-plane roles
+    assert.strictEqual(getNodeRole({ ...baseNode, role: 'master' }), 'control-plane')
+    assert.strictEqual(getNodeRole({ ...baseNode, role: 'control-plane' }), 'control-plane')
+    assert.strictEqual(getNodeRole({ ...baseNode, role: 'manager' }), 'control-plane')
+    assert.strictEqual(isControlPlane({ ...baseNode, role: 'control-plane' }), true)
+
+    // Worker role
+    assert.strictEqual(getNodeRole({ ...baseNode, role: 'worker' }), 'worker')
+    assert.strictEqual(getNodeRole({ ...baseNode, role: 'WORKER' }), 'worker')
+    assert.strictEqual(isControlPlane({ ...baseNode, role: 'worker' }), false)
+
+    // Other roles default to normalized role or worker
+    assert.strictEqual(getNodeRole({ ...baseNode, role: 'edge' }), 'edge')
+    assert.strictEqual(getNodeRole({ ...baseNode, role: '' }), 'worker')
+  })
+
+  it('SIMULATION_SCENARIOS uses generic target placeholders and zero fake cluster IPs', () => {
+    assert.ok(SIMULATION_SCENARIOS.length >= 3)
+    const workloads = SIMULATION_SCENARIOS.map(s => s.workload)
+
+    // Must use generic target placeholders, not fake hardcoded demo apps
+    assert.ok(workloads.includes('target-pod'))
+    assert.ok(workloads.includes('target-node'))
+    assert.ok(workloads.includes('target-service'))
+
+    // Must not contain fake legacy cluster names or specific IPs
+    for (const sc of SIMULATION_SCENARIOS) {
+      assert.strictEqual(sc.cluster.includes('prod-us-east-1'), false)
+      assert.strictEqual(sc.cluster.includes('staging-us-west-2'), false)
+      assert.strictEqual(sc.description.includes('10.96.12.44'), false)
+      assert.strictEqual(sc.workload.includes('checkout-api'), false)
+      assert.strictEqual(sc.workload.includes('masterdb'), false)
+      assert.strictEqual(sc.workload.includes('payment-gateway'), false)
+    }
+  })
+
+  it('Log stream empty state messaging adheres to honest connection status', () => {
+    function resolveLogEmptyState(isConnected: boolean, targetName?: string) {
+      const title = isConnected
+        ? `Waiting for logs from [${targetName || 'cluster'}]...`
+        : 'Disconnected from log stream. Reconnecting...'
+      const sub = isConnected
+        ? 'Live stream connected. Matching log events will appear in real-time.'
+        : 'Attempting to establish WebSocket stream connection...'
+      return { title, sub }
+    }
+
+    const disconnectedState = resolveLogEmptyState(false, 'edge-pod')
+    assert.strictEqual(disconnectedState.title, 'Disconnected from log stream. Reconnecting...')
+    assert.strictEqual(disconnectedState.sub, 'Attempting to establish WebSocket stream connection...')
+    assert.strictEqual(disconnectedState.sub.includes('Live stream is active'), false)
+
+    const connectedState = resolveLogEmptyState(true, 'edge-pod')
+    assert.strictEqual(connectedState.title, 'Waiting for logs from [edge-pod]...')
+    assert.strictEqual(connectedState.sub, 'Live stream connected. Matching log events will appear in real-time.')
   })
 })

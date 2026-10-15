@@ -27,7 +27,11 @@ export function isControlPlane(node: NodeMetrics): boolean {
 }
 
 export function getNodeRole(node: NodeMetrics): string {
-  return isControlPlane(node) ? 'control-plane' : 'worker'
+  const role = (node.role || '').toLowerCase().trim()
+  if (role === 'standalone') return 'standalone'
+  if (isControlPlane(node)) return 'control-plane'
+  if (role === 'worker') return 'worker'
+  return role || 'worker'
 }
 
 export function getNodeIdentifier(node: NodeMetrics): string {

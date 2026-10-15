@@ -25,7 +25,6 @@ const emit = defineEmits<{
 const viewMode = ref<'grid' | 'table'>('grid')
 
 import {
-  formatBytes,
   formatRps,
   isNodeDown,
   isControlPlane,
@@ -95,21 +94,6 @@ const mobileMemArea = computed(() => {
 
 <template>
   <div class="mobile-overview-stream">
-    <!-- Ultra-compact single-line status ticker -->
-    <div class="mobile-status-ticker glass-panel font-mono text-xs">
-      <span class="ticker-item"><span class="ticker-label">Nodes</span> <span class="ticker-val">{{ overview.healthy_nodes }}/{{ overview.total_nodes }}</span></span>
-      <span class="ticker-dot">•</span>
-      <span class="ticker-item"><span class="ticker-label">Pods</span> <span class="ticker-val">{{ runningContainers }}/{{ totalContainers }}</span></span>
-      <span class="ticker-dot">•</span>
-      <span class="ticker-item"><span class="ticker-label">CPU</span> <span :class="['ticker-val', (overview.total_cpu_percent || 0) >= 80 ? 'text-rose' : (overview.total_cpu_percent || 0) >= 50 ? 'text-amber' : 'text-emerald']">{{ Math.round(overview.total_cpu_percent || 0) }}%</span></span>
-      <span class="ticker-dot">•</span>
-      <span class="ticker-item"><span class="ticker-label">RAM</span> <span :class="['ticker-val', (overview.total_mem_percent || 0) >= 80 ? 'text-rose' : 'text-cyan']">{{ Math.round(overview.total_mem_percent || 0) }}%</span></span>
-      <span class="ticker-dot">•</span>
-      <span class="ticker-item"><span class="ticker-label">NET</span> <span class="ticker-val text-violet">↓{{ formatBytes(tpsData?.network?.total_rx_bytes_per_sec) }}/s ↑{{ formatBytes(tpsData?.network?.total_tx_bytes_per_sec) }}/s</span></span>
-      <span class="ticker-dot">•</span>
-      <span class="ticker-item"><span class="ticker-val text-cyan">{{ formatRps(effectiveHttpRps) }} rps</span></span>
-    </div>
-
     <!-- Live Saturation Trend Line Chart Card (<768px Mobile) -->
     <div class="mobile-saturation-chart-card glass-panel" @click="emit('deepDive')" title="Tap to open Telemetry Deep-Dive Modal">
       <div class="chart-card-header">

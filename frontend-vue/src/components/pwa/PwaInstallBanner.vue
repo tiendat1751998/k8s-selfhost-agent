@@ -1,20 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { usePwaInstall } from '../../registerServiceWorker'
+import { deferredPrompt, usePwaInstall } from '../../registerServiceWorker'
 import BaseIcon from '../ui/BaseIcon.vue'
 
-const { isInstallable, isInstalled, promptInstall } = usePwaInstall()
+const { isInstalled, promptInstall } = usePwaInstall()
 
 const STORAGE_KEY = 'k8scontrol_pwa_banner_dismissed_until'
 const isDismissed = ref(false)
 const showIosInstructions = ref(false)
 
-// iOS Safari Detection
-const isIos = computed(() => {
-  if (typeof window === 'undefined') return false
-  const ua = window.navigator.userAgent || ''
-  return /iPad|iPhone|iPod/.test(ua) && !(window as unknown as { MSStream?: boolean }).MSStream
-})
+// iOS Standalone Detection
 
 const isIosStandalone = computed(() => {
   if (typeof window === 'undefined') return false
@@ -59,15 +54,11 @@ const shouldShow = computed(() => {
   }
   if (isDismissed.value) return false
   if (isInstalled.value || isIosStandalone.value) return false
-  // Show if browser fired beforeinstallprompt or on iOS mobile devices
-  return isInstallable.value || isIos.value
+  // Do NOT show unless a real browser beforeinstallprompt event occurred
+  return deferredPrompt.value !== null
 })
 
 async function handleInstallClick() {
-  if (isIos.value && !isInstallable.value) {
-    showIosInstructions.value = !showIosInstructions.value
-    return
-  }
   await promptInstall()
 }
 </script>

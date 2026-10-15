@@ -38,20 +38,6 @@
 }
 .btn-icon-cmd:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Mobile 20px Centered Micro-Telemetry Strip (<640px) */
-.audit-micro-telemetry {
-  display: flex; align-items: center; justify-content: center;
-  height: 20px; min-height: 20px; font-size: 11px; font-weight: 600;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  gap: 6px; user-select: none; letter-spacing: -0.01em; padding: 0 4px;
-}
-.audit-micro-telemetry .tel-item { display: inline-flex; align-items: center; line-height: 1; }
-.audit-micro-telemetry .tel-events { color: #38bdf8; }
-.audit-micro-telemetry .tel-signed { color: #34d399; }
-.audit-micro-telemetry .tel-viol { color: #f43f5e; }
-.audit-micro-telemetry .tel-trust { color: #60a5fa; }
-.audit-micro-telemetry .tel-sep { color: rgba(148, 163, 184, 0.4); font-weight: 400; }
-
 .audit-view {
   display: flex; flex-direction: column; gap: 16px;
   width: 100%; max-width: 100%; overflow-x: hidden;
