@@ -41,6 +41,65 @@ export interface BannerMessage {
   text: string
 }
 
+// Error budget calculations & burn rate velocity
+export function calculateErrorBudget(target: number, actual: number): number {
+  const targetErrorRate = (100 - target) / 100
+  if (targetErrorRate <= 0) return 100
+  const actualErrorRate = Math.max(0, (100 - actual) / 100)
+  const consumedFraction = actualErrorRate / targetErrorRate
+  return Math.max(0, Math.min(100, (1 - consumedFraction) * 100))
+}
+
+export function calculateBurnRateVelocity(burnRate: number, windowStr = '30d'): { hoursToExhaustion: number; statusText: string } {
+  const effectiveRate = Math.max(burnRate, 0.01)
+  const windowHours = windowStr === '1h' ? 1 : windowStr === '6h' ? 6 : windowStr === '24h' ? 24 : windowStr === '7d' ? 168 : windowStr === '14d' ? 336 : 720
+  const hoursRemaining = windowHours / effectiveRate
+  let statusText = 'Normal depletion'
+  if (effectiveRate >= 14.4) statusText = 'P1 Extreme Fast Burn'
+  else if (effectiveRate >= 6.0) statusText = 'P2 Slow Burn Warning'
+  else if (effectiveRate >= 2.0) statusText = 'P3 Elevated Depletion'
+  else if (effectiveRate <= 1.0) statusText = 'Budget Positive'
+  return { hoursToExhaustion: Number(hoursRemaining.toFixed(1)), statusText }
+}
+
+export function getTargetLatencyPercentiles(targetLatencyP99?: number): LatencyPercentiles {
+  if (!targetLatencyP99 || targetLatencyP99 <= 0) {
+    return { p50: 0, p90: 0, p99: 0, p999: 0 }
+  }
+  return {
+    p50: 0,
+    p90: 0,
+    p99: Math.round(targetLatencyP99),
+    p999: 0
+  }
+}
+
+export function formatLatencyMetric(val?: number): string {
+  return (!val || val <= 0) ? '--' : `${val}ms`
+}
+
+export function formatPercent(val?: number): string {
+  if (val === undefined || val === null || isNaN(val)) return '0.00%'
+  const pct = val > 1 ? val : val * 100
+  return `${pct.toFixed(2)}%`
+}
+
+export function getEffectiveBurnRate(rawRate?: number): number {
+  if (rawRate === undefined || rawRate === null) return 0
+  return rawRate
+}
+
+export function getBurnRateColor(rate: number): string {
+  if (rate <= 1.0) return 'text-emerald'
+  if (rate <= 2.5) return 'text-amber'
+  return 'text-rose'
+}
+
+export function getBudgetBarWidth(budget?: number): number {
+  if (budget === undefined || budget === null || isNaN(budget)) return 0
+  return Math.min(Math.max(budget, 0), 100)
+}
+
 export function useSLOMonitor() {
   // State
   const loading = ref(false)
@@ -174,67 +233,6 @@ export function useSLOMonitor() {
   function setWindowFilter(filter: TimeWindowFilter) {
     selectedWindowFilter.value = filter
     fetchSLOData()
-  }
-
-  // Error budget calculations & burn rate velocity
-  function calculateErrorBudget(target: number, actual: number): number {
-    const targetErrorRate = (100 - target) / 100
-    if (targetErrorRate <= 0) return 100
-    const actualErrorRate = Math.max(0, (100 - actual) / 100)
-    const consumedFraction = actualErrorRate / targetErrorRate
-    return Math.max(0, Math.min(100, (1 - consumedFraction) * 100))
-  }
-
-  function calculateBurnRateVelocity(burnRate: number, windowStr = '30d'): { hoursToExhaustion: number; statusText: string } {
-    const effectiveRate = Math.max(burnRate, 0.01)
-    const windowHours = windowStr === '1h' ? 1 : windowStr === '6h' ? 6 : windowStr === '24h' ? 24 : windowStr === '7d' ? 168 : windowStr === '14d' ? 336 : 720
-    const hoursRemaining = windowHours / effectiveRate
-    let statusText = 'Normal depletion'
-    if (effectiveRate >= 14.4) statusText = 'P1 Extreme Fast Burn'
-    else if (effectiveRate >= 6.0) statusText = 'P2 Slow Burn Warning'
-    else if (effectiveRate >= 2.0) statusText = 'P3 Elevated Depletion'
-    else if (effectiveRate <= 1.0) statusText = 'Budget Positive'
-    return { hoursToExhaustion: Number(hoursRemaining.toFixed(1)), statusText }
-  }
-
-  function getTargetLatencyPercentiles(targetLatencyP99?: number): LatencyPercentiles {
-    if (!targetLatencyP99 || targetLatencyP99 <= 0) {
-      return { p50: 0, p90: 0, p99: 0, p999: 0 }
-    }
-    // Pure measured target only — no synthetic percentile multipliers
-    return {
-      p50: 0,
-      p90: 0,
-      p99: Math.round(targetLatencyP99),
-      p999: 0
-    }
-  }
-
-  function formatLatencyMetric(val?: number): string {
-    return (!val || val <= 0) ? '--' : `${val}ms`
-  }
-
-  // Formatters
-  function formatPercent(val?: number): string {
-    if (val === undefined || val === null || isNaN(val)) return '0.00%'
-    const pct = val > 1 ? val : val * 100
-    return `${pct.toFixed(2)}%`
-  }
-
-  function getEffectiveBurnRate(rawRate?: number): number {
-    if (rawRate === undefined || rawRate === null) return 0
-    return rawRate
-  }
-
-  function getBurnRateColor(rate: number): string {
-    if (rate <= 1.0) return 'text-emerald'
-    if (rate <= 2.5) return 'text-amber'
-    return 'text-rose'
-  }
-
-  function getBudgetBarWidth(budget?: number): number {
-    if (budget === undefined || budget === null || isNaN(budget)) return 0
-    return Math.min(Math.max(budget, 0), 100)
   }
 
   function formatDate(d?: string) {

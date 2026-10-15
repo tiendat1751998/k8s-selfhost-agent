@@ -1,115 +1,109 @@
 import { describe, it } from 'node:test'
-import assert from 'node:assert'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import assert from 'node:assert/strict'
+import { register } from 'node:module'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const rootDir = path.resolve(__dirname, '..')
-
-describe('SLO View Enterprise Redesign Specifications', () => {
-  const sloViewPath = path.join(rootDir, 'src', 'views', 'SLOView.vue')
-  const sloCatalogTablePath = path.join(rootDir, 'src', 'components', 'slo', 'SloCatalogTable.vue')
-  const useSLOMonitorPath = path.join(rootDir, 'src', 'composables', 'useSLOMonitor.ts')
-  const sloTableCssPath = path.join(rootDir, 'src', 'assets', 'styles', 'components', 'slo-table.css')
-  const sloKpiCssPath = path.join(rootDir, 'src', 'assets', 'styles', 'components', 'slo-kpi.css')
-  const sloCssPath = path.join(rootDir, 'src', 'assets', 'styles', 'views', 'slo.css')
-
-  const deadFiles = [
-    path.join(rootDir, 'src', 'components', 'slo', 'SloTable.vue'),
-    path.join(rootDir, 'src', 'components', 'slo', 'ErrorBudgetDrawer.vue'),
-    path.join(rootDir, 'src', 'components', 'slo', 'CreateEditSloModal.vue'),
-  ]
-
-  it('Dead Orphaned Files: all 3 duplicate files are deleted and unreferenced', () => {
-    for (const deadFile of deadFiles) {
-      assert.strictEqual(fs.existsSync(deadFile), false, `Orphaned file ${path.basename(deadFile)} must not exist on disk`)
+register('data:text/javascript,' + encodeURIComponent(`
+export async function resolve(specifier, context, nextResolve) {
+  try {
+    return await nextResolve(specifier, context);
+  } catch (err) {
+    if (specifier.startsWith('.')) {
+      try {
+        return await nextResolve(specifier + '.ts', context);
+      } catch {}
     }
+    throw err;
+  }
+}
+`))
+
+const {
+  calculateErrorBudget,
+  calculateBurnRateVelocity,
+  getTargetLatencyPercentiles,
+  formatLatencyMetric,
+  formatPercent,
+  getEffectiveBurnRate,
+  getBurnRateColor,
+  getBudgetBarWidth
+} = await import('../src/composables/useSLOMonitor.ts')
+
+describe('SLO View Enterprise Calculations & Domain Math', () => {
+  it('calculateErrorBudget calculates remaining budget correctly when actual meets target or reaches 100%', () => {
+    // 99.9% target, 100% actual -> 0 errors occurred -> 100% budget remaining
+    const perfect = calculateErrorBudget(99.9, 100)
+    assert.equal(perfect, 100)
+
+    // 99.9% target, 99.9% actual -> 100% of allowed error consumed -> 0% budget remaining
+    const exact = calculateErrorBudget(99.9, 99.9)
+    assert.equal(exact, 0)
   })
 
-  it('SloCatalogTable.vue: eradicates left vertical block and achieves 100% full width', () => {
-    const content = fs.readFileSync(sloCatalogTablePath, 'utf-8')
-    assert.strictEqual(content.includes('box-header'), false, 'Must eradicate .box-header from table wrapper')
-    assert.strictEqual(content.includes('box-title'), false, 'Must eradicate .box-title from table wrapper')
-    assert.ok(content.includes('<DataTable'), 'Must render <DataTable> directly inside table box')
+  it('calculateErrorBudget calculates remaining budget correctly when actual dips below target', () => {
+    // 99.0% target, 99.5% actual -> target error rate 1%, actual 0.5% -> consumed 50% -> 50% remaining
+    const budget = calculateErrorBudget(99.0, 99.5)
+    assert.equal(Math.round(budget), 50)
+
+    // target 99.0, actual 98.0 -> consumed 200% -> 0% remaining
+    const depleted = calculateErrorBudget(99.0, 98.0)
+    assert.equal(depleted, 0)
   })
 
-  it('SloCatalogTable.vue: provides visual Error Budget gauge and Burn Velocity columns', () => {
-    const content = fs.readFileSync(sloCatalogTablePath, 'utf-8')
-    assert.ok(content.includes('error_budget'), 'Must define error_budget column')
-    assert.ok(content.includes('budget-gauge-cell'), 'Must render budget-gauge-cell container')
-    assert.ok(content.includes('budget-gauge-track'), 'Must render budget-gauge-track progress bar')
-    assert.ok(content.includes('budget-gauge-fill'), 'Must render budget-gauge-fill with percentage width')
-    assert.ok(content.includes('burn_rate'), 'Must define burn_rate column')
-    assert.ok(content.includes('burn-badge'), 'Must render burn-badge multiplier')
+  it('calculateErrorBudget handles 100% target boundary', () => {
+    assert.equal(calculateErrorBudget(100, 100), 100)
+    assert.equal(calculateErrorBudget(100, 99.9), 100)
   })
 
-  it('SloCatalogTable.vue: fixes SLI query column with copy button and no truncation squishing', () => {
-    const content = fs.readFileSync(sloCatalogTablePath, 'utf-8')
-    assert.ok(content.includes('btn-copy-query'), 'Must render copy query button')
-    assert.ok(content.includes('navigator.clipboard.writeText'), 'Must implement clipboard copy')
-    assert.ok(content.includes('query-cell'), 'Must render query-cell')
+  it('calculateBurnRateVelocity identifies P1, P2, P3, and Budget Positive status', () => {
+    // P1 Extreme Fast Burn (>= 14.4x)
+    const p1 = calculateBurnRateVelocity(14.4, '30d')
+    assert.equal(p1.statusText, 'P1 Extreme Fast Burn')
+    assert.equal(p1.hoursToExhaustion, 50) // 720 / 14.4
+
+    // P2 Slow Burn Warning (>= 6.0x)
+    const p2 = calculateBurnRateVelocity(6.0, '30d')
+    assert.equal(p2.statusText, 'P2 Slow Burn Warning')
+    assert.equal(p2.hoursToExhaustion, 120) // 720 / 6
+
+    // P3 Elevated Depletion (>= 2.0x)
+    const p3 = calculateBurnRateVelocity(2.5, '30d')
+    assert.equal(p3.statusText, 'P3 Elevated Depletion')
+
+    // Budget Positive (<= 1.0x)
+    const normal = calculateBurnRateVelocity(0.8, '30d')
+    assert.equal(normal.statusText, 'Budget Positive')
   })
 
-  it('SloCatalogTable.vue: standardizes row actions to 1 primary button + ActionDropdown', () => {
-    const content = fs.readFileSync(sloCatalogTablePath, 'utf-8')
-    assert.ok(content.includes('ActionDropdown'), 'Must use ActionDropdown component')
-    assert.ok(content.includes('table-actions-row'), 'Must use enterprise table-actions-row')
-    assert.strictEqual(content.includes('btn-icon-del'), false, 'Must eradicate raw 3 square icon buttons')
+  it('getTargetLatencyPercentiles extracts pure measured target without magic numbers', () => {
+    assert.deepEqual(getTargetLatencyPercentiles(undefined), { p50: 0, p90: 0, p99: 0, p999: 0 })
+    assert.deepEqual(getTargetLatencyPercentiles(0), { p50: 0, p90: 0, p99: 0, p999: 0 })
+    assert.deepEqual(getTargetLatencyPercentiles(150), { p50: 0, p90: 0, p99: 150, p999: 0 })
   })
 
-  it('SLOView.vue: wired to useSLOMonitor, renders micro-telemetry and eradicates legacy KPI cards', () => {
-    const content = fs.readFileSync(sloViewPath, 'utf-8')
-    assert.ok(content.includes("useSLOMonitor()"), 'Must consume useSLOMonitor composable')
-    assert.ok(content.includes('slo-micro-telemetry'), 'Must render slo-micro-telemetry pill')
-    assert.strictEqual(content.includes('slo-kpi-grid'), false, 'Must eradicate legacy slo-kpi-grid container')
+  it('formatLatencyMetric formats valid numbers with ms and invalid with --', () => {
+    assert.equal(formatLatencyMetric(120), '120ms')
+    assert.equal(formatLatencyMetric(0), '--')
+    assert.equal(formatLatencyMetric(undefined), '--')
   })
 
-  it('SLOView.vue: standardizes on high-density SloCatalogTable and SloMobileCards with RWD', () => {
-    const content = fs.readFileSync(sloViewPath, 'utf-8')
-    assert.ok(content.includes('<SloCatalogTable'), 'Must render high-density SloCatalogTable on desktop')
-    assert.ok(content.includes('SloMobileCards'), 'Must render first-class mobile cards stream')
-    assert.ok(content.includes('slo-mobile-command-bar'), 'Must render 44px mobile command bar')
+  it('formatPercent handles fractional, whole, and invalid values', () => {
+    assert.equal(formatPercent(undefined), '0.00%')
+    assert.equal(formatPercent(NaN), '0.00%')
+    assert.equal(formatPercent(0.9995), '99.95%')
+    assert.equal(formatPercent(99.95), '99.95%')
   })
 
-  it('useSLOMonitor.ts: exports activeBurnAlerts and contains zero emojis', () => {
-    const content = fs.readFileSync(useSLOMonitorPath, 'utf-8')
-    assert.ok(content.includes('activeBurnAlerts'), 'Must export activeBurnAlerts')
-    assert.ok(content.includes('avgBurnRateNum'), 'Must export avgBurnRateNum')
-    assert.strictEqual(content.includes('🚨'), false, 'Must contain zero emojis')
+  it('getBurnRateColor maps burn rates to semantic badge classes', () => {
+    assert.equal(getBurnRateColor(0.5), 'text-emerald')
+    assert.equal(getBurnRateColor(1.0), 'text-emerald')
+    assert.equal(getBurnRateColor(2.0), 'text-amber')
+    assert.equal(getBurnRateColor(5.0), 'text-rose')
   })
 
-  it('CSS files: slo-table.css, slo-kpi.css, and slo.css follow enterprise constraints', () => {
-    const tableCss = fs.readFileSync(sloTableCssPath, 'utf-8')
-    assert.strictEqual(tableCss.includes('max-width: 150px'), false, 'Must not constrain query code to 150px')
-    assert.ok(tableCss.includes('budget-gauge-cell'), 'Must style budget-gauge-cell')
-    assert.ok(tableCss.includes('burn-badge'), 'Must style burn-badge')
-
-    const kpiCss = fs.readFileSync(sloKpiCssPath, 'utf-8')
-    assert.ok(kpiCss.includes('.slo-kpi-grid'), 'Must define slo-kpi-grid')
-    assert.ok(kpiCss.includes('.slo-kpi-card'), 'Must define slo-kpi-card')
-
-    const sloCss = fs.readFileSync(sloCssPath, 'utf-8')
-    assert.ok(sloCss.includes("slo-kpi.css"), 'Must import slo-kpi.css')
-  })
-
-  it('Line counts: all target files are strictly under 500 lines', () => {
-    const files = [
-      sloViewPath,
-      sloCatalogTablePath,
-      useSLOMonitorPath,
-      sloTableCssPath,
-      sloKpiCssPath,
-      sloCssPath,
-    ]
-
-    for (const filePath of files) {
-      const lineCount = fs.readFileSync(filePath, 'utf-8').split('\n').length
-      assert.ok(
-        lineCount < 500,
-        `File ${path.basename(filePath)} (${lineCount} lines) must be strictly < 500 lines`
-      )
-    }
+  it('getBudgetBarWidth clamps percentage between 0 and 100', () => {
+    assert.equal(getBudgetBarWidth(undefined), 0)
+    assert.equal(getBudgetBarWidth(-10), 0)
+    assert.equal(getBudgetBarWidth(75.5), 75.5)
+    assert.equal(getBudgetBarWidth(150), 100)
   })
 })

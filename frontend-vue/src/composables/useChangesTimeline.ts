@@ -75,22 +75,6 @@ export function useChangesTimeline() {
     feedbackTimer = setTimeout(() => { feedbackMessage.value = null; feedbackTimer = null }, 4500)
   }
 
-  function generateSyntheticDiff(title: string, resource: string, type: string): string {
-    const ts = new Date().toISOString().substring(0, 19).replace('T', ' ')
-    const reps = type === 'emergency' ? 6 : 4
-    return [
-      `--- a/${resource}.yaml (rev: live)`,
-      `+++ b/${resource}.yaml (rev: target - ${ts})`,
-      '@@ -12,6 +12,6 @@ metadata:',
-      `   name: ${resource.split('/').pop() || 'resource'}`,
-      ' spec:',
-      `-  replicas: ${reps - 2}`,
-      `+  replicas: ${reps} # Scale intent: ${title}`,
-      '-  image: "registry.enterprise.io/core/service:v2.14.1"',
-      '+  image: "registry.enterprise.io/core/service:v2.14.2"'
-    ].join('\n')
-  }
-
   async function loadTimelineData() {
     loading.value = true
     error.value = null
@@ -133,7 +117,7 @@ export function useChangesTimeline() {
         timestamp: cr.created_at || new Date().toISOString(),
         raw: cr,
         diffPayload: {
-          unifiedDiff: generateSyntheticDiff(cr.title, cr.resource || 'workload', cr.type),
+          unifiedDiff: ((cr as Record<string, unknown>).diff as string) || ((cr as Record<string, unknown>).unifiedDiff as string) || '',
           resourceKind: cr.resource?.split('/')[0] || 'Deployment',
           revision: 2
         },
@@ -160,7 +144,7 @@ export function useChangesTimeline() {
         diffPayload: {
           expectedState: drift.expected_state,
           actualState: drift.actual_state,
-          unifiedDiff: drift.diff || generateSyntheticDiff(`Drift ${drift.resource}`, drift.resource, 'standard'),
+          unifiedDiff: drift.diff || (drift.expected_state && drift.actual_state ? `# Expected:\n${drift.expected_state}\n# Actual:\n${drift.actual_state}` : ''),
           resourceKind: drift.resource_kind || 'Resource'
         },
         canRollback: true
@@ -183,7 +167,7 @@ export function useChangesTimeline() {
           timestamp: dep.created || new Date().toISOString(),
           raw: dep,
           diffPayload: {
-            unifiedDiff: generateSyntheticDiff(`Rollback point for ${dep.name}`, `deployment/${dep.name}`, 'standard'),
+            unifiedDiff: ((dep as Record<string, unknown>).diff as string) || ((dep as Record<string, unknown>).manifest as string) || '',
             resourceKind: 'Deployment',
             revision: dep.revision || 1
           },
@@ -208,7 +192,7 @@ export function useChangesTimeline() {
           timestamp: audit.detected_at || new Date().toISOString(),
           raw: audit,
           diffPayload: {
-            unifiedDiff: generateSyntheticDiff(audit.description, 'rbac-policy', 'emergency'),
+            unifiedDiff: ((audit as Record<string, unknown>).diff as string) || audit.description || '',
             resourceKind: 'SecurityPolicy'
           },
           canRollback: false

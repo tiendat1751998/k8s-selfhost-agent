@@ -129,29 +129,29 @@ export function useAlertManager() {
   async function handleSilence(item: AlertHistory, durationMinutes = 60, reason = 'Operator snoozed') {
     try {
       await alertsApi.silenceAlert(item.ID, durationMinutes, reason)
-    } catch {
-      // Offline fallback
+      silencedAlerts.value[item.ID] = {
+        id: item.ID,
+        ruleId: item.RuleID,
+        silencedAt: Date.now(),
+        expiresAt: Date.now() + durationMinutes * 60 * 1000,
+        reason
+      }
+      item.Status = 'silenced'
+      showFeedback(`Alert ${item.ID} silenced for ${durationMinutes}m.`)
+    } catch (e: unknown) {
+      showFeedback(`Failed to silence alert: ${e instanceof Error ? e.message : 'Unknown error'}`)
     }
-    silencedAlerts.value[item.ID] = {
-      id: item.ID,
-      ruleId: item.RuleID,
-      silencedAt: Date.now(),
-      expiresAt: Date.now() + durationMinutes * 60 * 1000,
-      reason
-    }
-    item.Status = 'silenced'
-    showFeedback(`Alert ${item.ID} silenced for ${durationMinutes}m.`)
   }
 
   async function handleResolve(item: AlertHistory) {
     try {
       await alertsApi.resolveAlert(item.ID)
-    } catch {
-      // Offline fallback
+      item.Status = 'resolved'
+      item.UpdatedAt = new Date().toISOString()
+      showFeedback(`Alert ${item.ID} marked as resolved.`)
+    } catch (e: unknown) {
+      showFeedback(`Failed to resolve alert: ${e instanceof Error ? e.message : 'Unknown error'}`)
     }
-    item.Status = 'resolved'
-    item.UpdatedAt = new Date().toISOString()
-    showFeedback(`Alert ${item.ID} marked as resolved.`)
   }
 
   function openTelemetry(item: AlertHistory) {
@@ -159,9 +159,16 @@ export function useAlertManager() {
     showDetailDrawer.value = true
   }
 
-  function toggleRuleState(rule: AlertRule) {
-    rule.Enabled = !rule.Enabled
-    showFeedback(`Rule "${rule.Name}" ${rule.Enabled ? 'ARMED' : 'PAUSED'}.`)
+  async function toggleRuleState(rule: AlertRule) {
+    const originalState = rule.Enabled
+    rule.Enabled = !originalState
+    try {
+      await alertsApi.updateRule(rule.ID, { enabled: rule.Enabled })
+      showFeedback(`Rule "${rule.Name}" ${rule.Enabled ? 'ARMED' : 'PAUSED'}.`)
+    } catch (e: unknown) {
+      rule.Enabled = originalState
+      showFeedback(`Failed to toggle rule state: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    }
   }
 
   async function handleDeleteRule(id: string) {

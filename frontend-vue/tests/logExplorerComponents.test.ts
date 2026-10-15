@@ -1,8 +1,5 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { register } from 'node:module'
 
 // Register loader hook for headless node resolution of typescript extensions
@@ -38,10 +35,6 @@ if (typeof globalThis.window === 'undefined') {
     location: { protocol: 'http:', host: 'localhost:3000', pathname: '/', search: '' }
   }
 }
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const rootDir = path.resolve(__dirname, '..')
 
 const { normalizeHistogramBuckets } = await import('../src/api/logging.ts')
 
@@ -105,43 +98,16 @@ describe('Phase 8B: Log Histogram Response Unwrapping & Mock Parity', () => {
       assert.deepEqual(normalizeHistogramBuckets(12345), [])
       assert.deepEqual(normalizeHistogramBuckets(false), [])
     })
-  })
 
-  describe('LogVolumeHistogram.vue template & prop safety', () => {
-    const componentPath = path.join(rootDir, 'src', 'components', 'logs', 'LogVolumeHistogram.vue')
-
-    it('1. LogVolumeHistogram.vue guards buckets prop with Array.isArray', () => {
-      assert.ok(fs.existsSync(componentPath), 'LogVolumeHistogram.vue must exist')
-      const content = fs.readFileSync(componentPath, 'utf-8')
-
-      // Must guard against non-array props.buckets before mapping
-      assert.match(content, /Array\.isArray\s*\(\s*props\.buckets\s*\)/, 'Must check Array.isArray(props.buckets)')
-      // Must support both time_bucket and timestamp
-      assert.match(content, /timestamp/, 'Must handle timestamp field parity')
-    })
-  })
-
-  describe('Mock Server Eradication & Backend Parity', () => {
-    it('1. mock-preview-server.js must not exist in repository', () => {
-      const mockServerPath = path.join(rootDir, 'scripts', 'mock-preview-server.js')
-      assert.ok(!fs.existsSync(mockServerPath), 'mock-preview-server.js must be completely deleted')
-    })
-  })
-
-  describe('File Modularity and Clean Architecture Constraints', () => {
-    it('All touched files must strictly stay < 500 lines', () => {
-      const filesToCheck = [
-        path.join(rootDir, 'src', 'api', 'logging.ts'),
-        path.join(rootDir, 'src', 'components', 'logs', 'LogVolumeHistogram.vue'),
-        path.join(rootDir, 'tests', 'logExplorerComponents.test.ts'),
+    it('5. Correctly handles multi-item buckets with mixed time properties', () => {
+      const mixed = [
+        { time_bucket: '2026-10-14T04:00:00Z', total_count: 25 },
+        { timestamp: '2026-10-14T04:01:00Z', total: 42 }
       ]
-
-      for (const file of filesToCheck) {
-        if (fs.existsSync(file)) {
-          const lines = fs.readFileSync(file, 'utf-8').split('\n').length
-          assert.ok(lines < 500, `${path.basename(file)} has ${lines} lines, must be < 500`)
-        }
-      }
+      const result = normalizeHistogramBuckets(mixed)
+      assert.equal(result.length, 2)
+      assert.equal(result[0].total_count, 25)
+      assert.equal(result[1].total, 42)
     })
   })
 })

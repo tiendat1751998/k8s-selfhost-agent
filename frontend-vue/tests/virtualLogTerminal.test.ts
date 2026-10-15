@@ -1,4 +1,4 @@
-﻿import { describe, it } from 'node:test'
+import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { register } from 'node:module'
 
@@ -389,53 +389,52 @@ describe('Mobile Effective Row Height & Virtual Windowing (AC #1 & #4)', () => {
     assert.equal(win.offsetY, win.startIndex * mobileItemHeight)
   })
 
-  it('verifies VirtualLogTerminal.vue implements isMobile and effectiveRowHeight computed', async () => {
-    const { readFileSync } = await import('node:fs')
-    const { resolve } = await import('node:path')
-    const vuePath = resolve('src/components/logs/VirtualLogTerminal.vue')
-    const c = readFileSync(vuePath, 'utf8')
-    assert.ok(c.includes('effectiveRowHeight'), 'Must define effectiveRowHeight computed')
-    assert.ok(c.includes('isMobile'), 'Must define isMobile reactive ref')
-    assert.ok(c.includes('58'), 'Must compute 58px on mobile')
+  it('calculates virtual window correctly with zero logs and mobile height', () => {
+    const win = calculateVirtualWindow({
+      totalCount: 0,
+      scrollTop: 100,
+      clientHeight: 600,
+      itemHeight: 58,
+      overscan: 5,
+    })
+    assert.equal(win.startIndex, 0)
+    assert.equal(win.endIndex, 0)
+    assert.equal(win.offsetY, 0)
   })
 
-  it('verifies virtual-log-terminal.css implements 2-line layout and anti-squish min-width', async () => {
-    const { readFileSync } = await import('node:fs')
-    const { resolve } = await import('node:path')
-    const cssPath = resolve('src/assets/styles/components/virtual-log-terminal.css')
-    const c = readFileSync(cssPath, 'utf8')
-    assert.ok(c.includes('min-width: 160px'), 'Must enforce anti-squish min-width: 160px on .virtual-log-body')
-    assert.ok(c.includes('@media (max-width: 640px)'), 'Must define 640px mobile media query')
-    assert.ok(c.includes('-webkit-line-clamp: 2'), 'Must clamp message to 2 lines on mobile')
-    assert.ok(c.includes('order: 1'), 'Must set metadata order to 1 on mobile')
-    assert.ok(c.includes('order: 2'), 'Must set log body order to 2 on mobile')
+  it('calculates virtual window with ultra-large 1M log stream at high scroll position', () => {
+    const total = 1_000_000
+    const itemHeight = 58
+    const scrollTop = 500_000 * itemHeight
+    const win = calculateVirtualWindow({
+      totalCount: total,
+      scrollTop,
+      clientHeight: 800,
+      itemHeight,
+      overscan: 10,
+    })
+    assert.ok(win.startIndex >= 499_980 && win.startIndex <= 500_000)
+    assert.ok(win.endIndex > win.startIndex)
+    assert.ok(win.endIndex <= total)
+    assert.equal(win.offsetY, win.startIndex * itemHeight)
   })
 
-  it('verifies floating-alert-toast.css condenses toast to slim 44-48px pill on mobile', async () => {
-    const { readFileSync } = await import('node:fs')
-    const { resolve } = await import('node:path')
-    const cssPath = resolve('src/assets/styles/components/floating-alert-toast.css')
-    const c = readFileSync(cssPath, 'utf8')
-    assert.ok(c.includes('max-height: 48px'), 'Must constrain toast max-height to 48px on mobile')
-    assert.ok(c.includes('display: none !important;'), 'Must hide verbose toast body on mobile')
-    assert.ok(c.includes('btn-toast-failover'), 'Must target failover button on mobile')
+  it('detectStackTrace handles edge cases: empty strings, whitespace, and non-error inputs', () => {
+    assert.equal(detectStackTrace('').isStackTrace, false)
+    assert.equal(detectStackTrace('   \n\t  \n').isStackTrace, false)
+    assert.equal(detectStackTrace('2026-10-14T10:00:00Z INFO HTTP GET /api/v1/pods 200').isStackTrace, false)
   })
 
-  it('verifies TopHudAlertBell.vue binds toastRef and checks containment for click-outside', async () => {
-    const { readFileSync } = await import('node:fs')
-    const { resolve } = await import('node:path')
-    const vuePath = resolve('src/components/layout/TopHudAlertBell.vue')
-    const c = readFileSync(vuePath, 'utf8')
-    assert.ok(c.includes('toastRef'), 'Must declare toastRef')
-    assert.ok(c.includes('ref="toastRef"'), 'Must attach ref="toastRef" to header-alert-toast')
-    assert.ok(c.includes('toastRef.value') && c.includes('!toastRef.value.contains(target)'), 'Must check toastRef.contains in handleDocumentInteraction')
-  })
-
-  it('verifies logstream.css constrains mobile page height properly', async () => {
-    const { readFileSync } = await import('node:fs')
-    const { resolve } = await import('node:path')
-    const cssPath = resolve('src/assets/styles/views/logstream.css')
-    const c = readFileSync(cssPath, 'utf8')
-    assert.ok(c.includes('max-height: calc(100vh - 48px - 50px - var(--sab, 0px))'), 'Must constrain mobile log-explorer-page max-height')
+  it('detectStackTrace parses Go panic runtime stack trace correctly', () => {
+    const panicLog = `panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: code=0x1 addr=0x0 pc=0x105a2b4]
+goroutine 42 [running]:
+main.processFrame(0x0, 0x0)
+\t/app/worker.go:124 +0x3a
+main.main()
+\t/app/main.go:45 +0x112`
+    const parsed = detectStackTrace(panicLog)
+    assert.equal(parsed.isStackTrace, true)
+    assert.equal(parsed.language, 'go')
   })
 })

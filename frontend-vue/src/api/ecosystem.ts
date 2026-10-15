@@ -46,4 +46,7 @@ export const ecosystemApi = {
 
   deleteTool: (id: string): Promise<void> =>
     api.delete<void>(`/ecosystem/tools/${encodeURIComponent(id)}`),
+
+  syncWebhook: (toolId: string): Promise<{ status: string }> =>
+    api.post<{ status: string }>(`/ecosystem/tools/${encodeURIComponent(toolId)}/sync`, {}),
 }

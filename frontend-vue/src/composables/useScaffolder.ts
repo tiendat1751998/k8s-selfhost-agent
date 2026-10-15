@@ -56,100 +56,6 @@ export const SCAFFOLDER_CATEGORIES: CategoryOption[] = [
   { key: 'fullstack', label: 'Full-Stack Apps', icon: 'server' },
 ]
 
-export const BUILTIN_SCAFFOLD_TEMPLATES: Template[] = [
-  {
-    id: 'tpl-builtin-go-microservice',
-    name: 'Go Chi Microservice',
-    description: 'Cloud-native Go REST microservice with Chi router, Prometheus metrics, and graceful shutdown',
-    category: 'api',
-    framework: 'go-chi',
-    manifest_yaml: 'apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: go-service',
-    helm_values: 'replicaCount: 2\nimage:\n  repository: golang\n  tag: 1.22',
-    docker_compose: 'version: "3.8"\nservices:\n  app:\n    image: golang:1.22',
-    variables: [
-      { name: 'service_name', description: 'Name of the service', default: 'my-go-service', required: true, type: 'string' },
-      { name: 'port', description: 'HTTP listen port', default: '8080', required: true, type: 'number' },
-      { name: 'replicas', description: 'K8s pod replicas', default: '2', required: true, type: 'number' },
-    ],
-    built_in: true,
-    tags: ['golang', 'chi', 'rest', 'k8s'],
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-25T00:00:00Z',
-  },
-  {
-    id: 'tpl-builtin-node-fastify',
-    name: 'Node.js Fastify API',
-    description: 'High-performance TypeScript Fastify microservice with schema validation and OpenAPI spec',
-    category: 'web',
-    framework: 'node-fastify',
-    manifest_yaml: 'apiVersion: apps/v1\nkind: Deployment',
-    helm_values: 'replicaCount: 2',
-    docker_compose: 'version: "3.8"',
-    variables: [
-      { name: 'service_name', description: 'Service name', default: 'fastify-app', required: true, type: 'string' },
-      { name: 'port', description: 'Listen port', default: '3000', required: true, type: 'number' },
-    ],
-    built_in: true,
-    tags: ['nodejs', 'fastify', 'typescript', 'docker'],
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-25T00:00:00Z',
-  },
-  {
-    id: 'tpl-builtin-python-fastapi',
-    name: 'Python FastAPI Service',
-    description: 'Modern asynchronous Python 3.11 service with Pydantic v2 data models and Swagger docs',
-    category: 'api',
-    framework: 'python-fastapi',
-    manifest_yaml: 'apiVersion: apps/v1\nkind: Deployment',
-    helm_values: 'replicaCount: 2',
-    docker_compose: 'version: "3.8"',
-    variables: [
-      { name: 'service_name', description: 'Service name', default: 'fastapi-service', required: true, type: 'string' },
-      { name: 'port', description: 'Listen port', default: '8000', required: true, type: 'number' },
-    ],
-    built_in: true,
-    tags: ['python', 'fastapi', 'async', 'rest'],
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-25T00:00:00Z',
-  },
-  {
-    id: 'tpl-builtin-nginx-proxy',
-    name: 'Nginx Reverse Proxy',
-    description: 'Production-ready Nginx reverse proxy with SSL termination, gzip compression, and caching headers',
-    category: 'web',
-    framework: 'nginx',
-    manifest_yaml: 'apiVersion: apps/v1\nkind: Deployment',
-    helm_values: 'replicaCount: 2',
-    docker_compose: 'version: "3.8"',
-    variables: [
-      { name: 'service_name', description: 'Proxy name', default: 'nginx-ingress', required: true, type: 'string' },
-      { name: 'upstream_host', description: 'Upstream hostname', default: 'backend-svc:8080', required: true, type: 'string' },
-    ],
-    built_in: true,
-    tags: ['nginx', 'ingress', 'cache', 'proxy'],
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-25T00:00:00Z',
-  },
-  {
-    id: 'tpl-builtin-postgres-db',
-    name: 'PostgreSQL HA Cluster',
-    description: 'Dedicated PostgreSQL 16 database with automated backup policies and connection pooling',
-    category: 'database',
-    framework: 'postgres',
-    manifest_yaml: 'apiVersion: apps/v1\nkind: StatefulSet',
-    helm_values: 'replicaCount: 1',
-    docker_compose: 'version: "3.8"',
-    variables: [
-      { name: 'database_name', description: 'Database name', default: 'app_db', required: true, type: 'string' },
-      { name: 'username', description: 'Admin user', default: 'postgres', required: true, type: 'string' },
-    ],
-    built_in: true,
-    tags: ['postgresql', 'database', 'sql', 'storage'],
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-25T00:00:00Z',
-  },
-]
-
 export function getFrameworkIcon(framework: string): string {
   switch (framework.toLowerCase()) {
     case 'go-chi':
@@ -252,15 +158,10 @@ export function useScaffolder() {
       const filter: Record<string, string> = {}
       if (selectedCategory.value !== 'all') filter.category = selectedCategory.value
       if (searchQuery.value.trim()) filter.search = searchQuery.value.trim()
-      const res = await scaffoldApi.list(filter).catch(() => null)
-      if (Array.isArray(res) && res.length > 0) {
-        templates.value = res
-      } else {
-        // Fallback to built-in system templates for resilience
-        templates.value = BUILTIN_SCAFFOLD_TEMPLATES
-      }
+      const res = await scaffoldApi.list(filter)
+      templates.value = Array.isArray(res) ? res : []
     } catch (err: unknown) {
-      templates.value = BUILTIN_SCAFFOLD_TEMPLATES
+      templates.value = []
       showToast(err instanceof Error ? err.message : 'Failed to load scaffold templates', 'error')
     } finally {
       loading.value = false

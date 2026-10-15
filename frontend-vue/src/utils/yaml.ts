@@ -130,7 +130,7 @@ metadata:
 data:
   APP_ENV: "production"
   LOG_LEVEL: "info"
-  DATABASE_HOST: "postgres.default.svc.cluster.local"
+  DATABASE_HOST: "postgres.default.svc"
 `
 
     case 'secret':

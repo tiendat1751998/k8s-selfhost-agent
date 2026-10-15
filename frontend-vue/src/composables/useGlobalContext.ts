@@ -96,7 +96,7 @@ async function loadClusters(): Promise<void> {
       }
     } catch {
       try {
-        const res = await api.get<ApiResponse<Cluster[]> | Cluster[]>('/clusters')
+        const res = await api.get<ApiResponse<Cluster[]> | Cluster[]>('/fleet/clusters')
         if (Array.isArray(res)) {
           list = res
         } else if (res && Array.isArray((res as ApiResponse<Cluster[]>).data)) {

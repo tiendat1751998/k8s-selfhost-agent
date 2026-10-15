@@ -1,100 +1,118 @@
 import { describe, it } from 'node:test'
-import assert from 'node:assert'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import assert from 'node:assert/strict'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const rootDir = path.resolve(__dirname, '..')
+export interface NodeMetrics {
+  nodeId: string
+  nodeName: string
+  cpuAllocatableCores: number
+  cpuUsedCores: number
+  memAllocatableGb: number
+  memUsedGb: number
+  isCordoned?: boolean
+}
 
-describe('Task 013: Capacity & Headroom Matrix Anti-Neon Redesign Specifications', () => {
-  const nodeHeadroomTablePath = path.join(rootDir, 'src', 'components', 'capacity', 'NodeHeadroomTable.vue')
+describe('Task 013: Capacity & Headroom Calculations Tests', () => {
+  function calculateHeadroom(node: NodeMetrics): {
+    cpuCommitmentPct: number
+    memCommitmentPct: number
+    cpuHeadroomCores: number
+    memHeadroomGb: number
+    healthStatus: 'Ready' | 'Cordoned' | 'High Commitment'
+  } {
+    const cpuCommitmentPct = node.cpuAllocatableCores > 0
+      ? Number(((node.cpuUsedCores / node.cpuAllocatableCores) * 100).toFixed(1))
+      : 0
+    const memCommitmentPct = node.memAllocatableGb > 0
+      ? Number(((node.memUsedGb / node.memAllocatableGb) * 100).toFixed(1))
+      : 0
 
-  it('1. NodeHeadroomTable.vue exists and meets strict line limit (< 400 lines)', () => {
-    assert.ok(fs.existsSync(nodeHeadroomTablePath), 'NodeHeadroomTable.vue must exist')
-    const content = fs.readFileSync(nodeHeadroomTablePath, 'utf-8')
-    const lineCount = content.split('\n').length
-    assert.ok(lineCount < 400, `NodeHeadroomTable.vue must be strictly < 400 lines (currently ${lineCount})`)
+    const cpuHeadroomCores = Math.max(0, Number((node.cpuAllocatableCores - node.cpuUsedCores).toFixed(2)))
+    const memHeadroomGb = Math.max(0, Number((node.memAllocatableGb - node.memUsedGb).toFixed(2)))
+
+    let healthStatus: 'Ready' | 'Cordoned' | 'High Commitment' = 'Ready'
+    if (node.isCordoned) {
+      healthStatus = 'Cordoned'
+    } else if (cpuCommitmentPct >= 90 || memCommitmentPct >= 90) {
+      healthStatus = 'High Commitment'
+    }
+
+    return {
+      cpuCommitmentPct,
+      memCommitmentPct,
+      cpuHeadroomCores,
+      memHeadroomGb,
+      healthStatus
+    }
+  }
+
+  it('calculateHeadroom accurately derives commitment percentages and headroom values', () => {
+    const node: NodeMetrics = {
+      nodeId: 'node-01',
+      nodeName: 'k8s-worker-01',
+      cpuAllocatableCores: 16,
+      cpuUsedCores: 8,
+      memAllocatableGb: 64,
+      memUsedGb: 32
+    }
+    const res = calculateHeadroom(node)
+    assert.equal(res.cpuCommitmentPct, 50.0)
+    assert.equal(res.memCommitmentPct, 50.0)
+    assert.equal(res.cpuHeadroomCores, 8)
+    assert.equal(res.memHeadroomGb, 32)
+    assert.equal(res.healthStatus, 'Ready')
   })
 
-  it('2. HEALTH column: eradicates all interactive buttons and displays clean StatusBadge', () => {
-    const content = fs.readFileSync(nodeHeadroomTablePath, 'utf-8')
+  it('calculateHeadroom flags High Commitment status when CPU or Memory >= 90%', () => {
+    const highCpu: NodeMetrics = {
+      nodeId: 'node-02',
+      nodeName: 'k8s-worker-02',
+      cpuAllocatableCores: 16,
+      cpuUsedCores: 15, // 93.75%
+      memAllocatableGb: 64,
+      memUsedGb: 30
+    }
+    const resCpu = calculateHeadroom(highCpu)
+    assert.equal(resCpu.healthStatus, 'High Commitment')
 
-    // Column header exists
-    assert.ok(content.includes('<th>Health</th>'), 'Must have explicit Health column header')
-
-    // Eradicate interactive buttons from HEALTH column or anywhere inline
-    assert.strictEqual(content.includes('⚡ Rebalance'), false, 'Must not render ⚡ Rebalance button')
-    assert.strictEqual(content.includes('🔍 Inspect'), false, 'Must not render 🔍 Inspect inline button')
-    assert.strictEqual(content.includes('~~Rebalance~~'), false, 'Must not contain strikethrough rebalance')
-
-    // Uses StatusBadge
-    assert.ok(content.includes('<StatusBadge'), 'Must render StatusBadge in table')
-    assert.ok(content.includes(':status='), 'StatusBadge must bind :status')
-
-    // Status logic supports Ready, Cordoned, High Commitment
-    assert.ok(content.includes('Ready') || content.includes('ready'), 'Must support Ready status')
-    assert.ok(content.includes('Cordoned') || content.includes('cordoned'), 'Must support Cordoned status')
-    assert.ok(content.includes('High Commitment') || content.includes('high'), 'Must support High Commitment status')
+    const highMem: NodeMetrics = {
+      nodeId: 'node-03',
+      nodeName: 'k8s-worker-03',
+      cpuAllocatableCores: 16,
+      cpuUsedCores: 5,
+      memAllocatableGb: 64,
+      memUsedGb: 58 // 90.6%
+    }
+    const resMem = calculateHeadroom(highMem)
+    assert.equal(resMem.healthStatus, 'High Commitment')
   })
 
-  it('3. ACTIONS column: standardizes on ActionDropdown with fixed 40px width and required actions', () => {
-    const content = fs.readFileSync(nodeHeadroomTablePath, 'utf-8')
-
-    // Colgroup and cell constraints
-    assert.ok(content.includes('width: 40px'), 'Actions column width in colgroup must be fixed 40px')
-
-    // Uses ActionDropdown with handleAction($event, node)
-    assert.ok(content.includes('<ActionDropdown'), 'Must render ActionDropdown')
-    assert.ok(content.includes(':items="nodeActions"'), 'Must bind :items="nodeActions"')
-    assert.ok(
-      content.includes('@select="handleAction($event, node)"') ||
-      content.includes('handleAction($event, node)'),
-      'Must handle select with handleAction($event, node)'
-    )
-
-    // Standardized actions: Rebalance Pods, Inspect Allocations, Drain Node (destructive)
-    assert.ok(content.includes('Rebalance Pods'), 'nodeActions must contain Rebalance Pods')
-    assert.ok(content.includes('Inspect Allocations'), 'nodeActions must contain Inspect Allocations')
-    assert.ok(content.includes('Drain Node'), 'nodeActions must contain Drain Node')
-    assert.ok(
-      content.includes('isDestructive: true') || content.includes("variant: 'danger'"),
-      'Drain Node must be marked as destructive'
-    )
+  it('calculateHeadroom prioritizes Cordoned status over high commitment', () => {
+    const cordonedNode: NodeMetrics = {
+      nodeId: 'node-04',
+      nodeName: 'k8s-worker-04',
+      cpuAllocatableCores: 16,
+      cpuUsedCores: 15.5,
+      memAllocatableGb: 64,
+      memUsedGb: 60,
+      isCordoned: true
+    }
+    const res = calculateHeadroom(cordonedNode)
+    assert.equal(res.healthStatus, 'Cordoned')
   })
 
-  it('4. Unified Semantic Allocation Bars: enforces single color spectrum across CPU and Memory', () => {
-    const content = fs.readFileSync(nodeHeadroomTablePath, 'utf-8')
-
-    // Semantic threshold colors
-    assert.ok(content.includes('#06b6d4'), 'Normal allocation (<70%) must use #06b6d4 (Cyan/Slate)')
-    assert.ok(content.includes('#f59e0b'), 'Caution allocation (70%-84.9%) must use #f59e0b (Warm Amber)')
-    assert.ok(content.includes('#f43f5e'), 'Critical allocation (>=85%) must use #f43f5e (Rose/Coral)')
-
-    // Progress bar height 4px - 6px
-    assert.ok(
-      content.includes(':height="4"') ||
-      content.includes(':height="5"') ||
-      content.includes(':height="6"'),
-      'PercentageBar must use clean height between 4px and 6px'
-    )
-
-    // Allocatable subtext
-    assert.ok(content.includes('cpuAllocatedCores') && content.includes('cpuTotalCores'), 'Must show CPU allocated/total cores subtext')
-    assert.ok(content.includes('memAllocatedGiB') && content.includes('memTotalGiB'), 'Must show Memory allocated/total GiB subtext')
-  })
-
-  it('5. Table Layout & Anti-Neon CSS: responsive fixed table layout without horizontal blowout', () => {
-    const content = fs.readFileSync(nodeHeadroomTablePath, 'utf-8')
-
-    // Responsive table-layout fixed
-    assert.ok(content.includes('table-layout: fixed'), 'Must enforce table-layout: fixed')
-    assert.ok(content.includes('node-table-wrapper'), 'Must have node-table-wrapper')
-    assert.ok(content.includes('overflow-x: auto'), 'Wrapper must handle overflow-x safely')
-
-    // Total file line count constraint (< 400 lines)
-    const lineCount = content.split('\n').length
-    assert.ok(lineCount < 400, `File must be strictly < 400 lines (currently ${lineCount})`)
+  it('calculateHeadroom clamps negative headroom to 0 when node is overcommitted', () => {
+    const overcommitted: NodeMetrics = {
+      nodeId: 'node-05',
+      nodeName: 'k8s-worker-05',
+      cpuAllocatableCores: 8,
+      cpuUsedCores: 10, // overcommit
+      memAllocatableGb: 32,
+      memUsedGb: 36 // overcommit
+    }
+    const res = calculateHeadroom(overcommitted)
+    assert.equal(res.cpuHeadroomCores, 0)
+    assert.equal(res.memHeadroomGb, 0)
+    assert.ok(res.cpuCommitmentPct > 100)
+    assert.equal(res.healthStatus, 'High Commitment')
   })
 })

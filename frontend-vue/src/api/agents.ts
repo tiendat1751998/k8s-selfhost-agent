@@ -91,4 +91,12 @@ export const agentsApi = {
     const res = await api.get<ApiResponse<AgentExecution[]>>('/agents/runs', params)
     return res.data || []
   },
+
+  async pauseTask(taskId: string): Promise<{ status: string }> {
+    return api.post<{ status: string }>(`/agents/tasks/${taskId}/pause`, {})
+  },
+
+  async terminateTask(taskId: string): Promise<{ status: string }> {
+    return api.post<{ status: string }>(`/agents/tasks/${taskId}/terminate`, {})
+  },
 }

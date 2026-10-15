@@ -59,12 +59,12 @@ export const SIMULATION_SCENARIOS: SimulationScenario[] = [
     icon: '🔥',
     title: 'Pod OOMKilled (Exit Code 137)',
     subtitle: 'JVM Heap Memory Exhaustion on checkout-api',
-    workload: 'checkout-api-7b9c6f8d-4x2kl',
+    workload: 'checkout-api',
     namespace: 'ecommerce',
-    cluster: 'prod-us-east-1',
+    cluster: '--',
     type: 'OOMKilled',
     severity: 'critical',
-    description: 'cgroup memory limit reached (512Mi). Kubernetes Linux kernel OOM killer terminated container with exit code 137.',
+    description: 'cgroup memory limit reached. Kubernetes Linux kernel OOM killer terminated container with exit code 137.',
     badgeText: 'JVM Heap Exhaustion'
   },
   {
@@ -74,7 +74,7 @@ export const SIMULATION_SCENARIOS: SimulationScenario[] = [
     subtitle: 'Infrastructure Host masterdb Unreachable',
     workload: 'masterdb',
     namespace: 'kube-system',
-    cluster: 'prod-eu-west-1',
+    cluster: '--',
     type: 'NodeNotReady',
     severity: 'critical',
     description: 'Host node heartbeat lease failed. Kubelet stopped posting status (NodeStatusUnknown), causing node eviction.',
@@ -85,12 +85,12 @@ export const SIMULATION_SCENARIOS: SimulationScenario[] = [
     icon: '⚠️',
     title: 'CrashLoopBackOff',
     subtitle: 'PostgreSQL Connection Refused on payment-gateway',
-    workload: 'payment-gateway-5f8d9b-w9z7x',
+    workload: 'payment-gateway',
     namespace: 'payments',
-    cluster: 'prod-us-east-1',
+    cluster: '--',
     type: 'CrashLoopBackOff',
     severity: 'high',
-    description: 'PostgreSQL Connection Refused on payment-gateway (dial tcp 10.96.12.44:5432). Repeated container exits triggered CrashLoopBackOff.',
+    description: 'PostgreSQL Connection Refused on payment-gateway. Repeated container exits triggered CrashLoopBackOff.',
     badgeText: 'DB Connection Refused'
   }
 ]
@@ -109,15 +109,21 @@ export function calculateBlastRadius(inc: Incident | null): BlastRadiusInfo | nu
   const isCritical = inc.severity === 'critical'
   const isHigh = inc.severity === 'high'
   const score = isCritical ? 92 : (isHigh ? 68 : 34)
-  const appBase = (inc.pod_name || 'workload').split('-')[0]
+  const affectedServices = inc.raw_data?.affected_services
+    ? inc.raw_data.affected_services.split(',').map(s => s.trim()).filter(Boolean)
+    : (inc.pod_name ? [inc.pod_name] : [])
+  const dependentWorkloads = inc.raw_data?.dependent_workloads
+    ? inc.raw_data.dependent_workloads.split(',').map(s => s.trim()).filter(Boolean)
+    : []
+
   return {
     affectedNamespace: inc.namespace || 'default',
-    affectedPod: inc.pod_name,
-    cluster: inc.cluster_name || 'prod-us-east-1',
+    affectedPod: inc.pod_name || '--',
+    cluster: inc.cluster_name || '--',
     impactScore: score,
     riskLevel: isCritical ? 'Critical Blast' : (isHigh ? 'Elevated Impact' : 'Localized Scope'),
-    affectedServices: [appBase, `${appBase}-ingress`, `${appBase}-svc`],
-    dependentWorkloads: [`${appBase}-worker`, `${appBase}-metrics`],
+    affectedServices,
+    dependentWorkloads,
     nodeHealth: isCritical ? 'Degraded Node Capacity' : 'Nominal Node Status'
   }
 }

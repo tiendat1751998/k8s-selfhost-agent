@@ -57,7 +57,7 @@ export function useCostFinOps() {
   // 1. Namespace Cost Allocation
   const namespaces = computed<TeamNamespaceCost[]>(() => {
     return rawNamespaces.value.map((ns) => {
-      const defaultLimit = Math.max(Math.round(ns.monthly_cost * 1.25), 1000)
+      const defaultLimit = Math.round(ns.monthly_cost || 0)
       const budgetLimit = budgetLimits.value[ns.namespace] || defaultLimit
       const budgetUtilization = budgetLimit > 0 ? Math.round((ns.monthly_cost / budgetLimit) * 100) : 0
       const budgetStatus: 'optimal' | 'warning' | 'exceeded' =
@@ -119,7 +119,7 @@ export function useCostFinOps() {
 
   const spotSavings = computed(() => {
     const spotSpend = totalMonthlyCost.value * (spotRatio.value / 100)
-    return Math.round(spotSpend * 0.6)
+    return Math.round(spotSpend)
   })
 
   // 4. Monthly Spend Forecast derived from workload trends and headroom
@@ -130,10 +130,6 @@ export function useCostFinOps() {
         const sumTrend = validClusters.reduce((acc, c) => acc + c.trend, 0)
         return Number((sumTrend / validClusters.length).toFixed(1))
       }
-    }
-    if (rawNamespaces.value.length > 0) {
-      const avgUtil = rawNamespaces.value.reduce((acc, n) => acc + (n.utilization || 0), 0) / rawNamespaces.value.length
-      return Number(Math.max(0, (100 - avgUtil) * 0.05).toFixed(1))
     }
     return 0
   })
@@ -146,7 +142,7 @@ export function useCostFinOps() {
     currentRunRate: totalMonthlyCost.value,
     projectedCost: projectedCost.value,
     growthRate: effectiveGrowthRate.value,
-    confidenceScore: rawNamespaces.value.length > 0 ? 95 : 80,
+    confidenceScore: 0,
     spotSavingsMonth: spotSavings.value,
     spotRatio: spotRatio.value,
     wasteSaved: wasteSaved.value,
@@ -199,22 +195,39 @@ export function useCostFinOps() {
     }
   }
 
-  function handleDismissWaste(id: string) {
+  async function handleDismissWaste(id: string) {
     const found = wasteAlerts.value.find((w) => w.id === id)
-    const savedAmount = found?.wasted_cost || 150
-    wasteSavedRemediated.value += savedAmount
-    wasteAlerts.value = wasteAlerts.value.filter((w) => w.id !== id)
-    statusMessage.value = {
-      type: 'success',
-      text: `Right-sizing patch generated for alert #${id}. Estimated monthly savings: $${savedAmount.toLocaleString()}.`,
+    const savedAmount = found?.wasted_cost || 0
+    try {
+      await costApi.dismissWaste(id)
+      wasteSavedRemediated.value += savedAmount
+      wasteAlerts.value = wasteAlerts.value.filter((w) => w.id !== id)
+      statusMessage.value = {
+        type: 'success',
+        text: `Right-sizing patch generated for alert #${id}. Estimated monthly savings: $${savedAmount.toLocaleString()}.`,
+      }
+    } catch (err: unknown) {
+      statusMessage.value = {
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to dismiss waste alert',
+      }
     }
   }
 
-  function setBudgetLimit(namespace: string, limit: number) {
-    budgetLimits.value = { ...budgetLimits.value, [namespace]: Math.max(100, Math.round(limit)) }
-    statusMessage.value = {
-      type: 'success',
-      text: `Budget cap updated to $${limit.toLocaleString()}/mo for namespace "${namespace}".`,
+  async function setBudgetLimit(namespace: string, limit: number) {
+    const newLimit = Math.max(0, Math.round(limit))
+    try {
+      await costApi.setBudgetLimit(namespace, newLimit)
+      budgetLimits.value = { ...budgetLimits.value, [namespace]: newLimit }
+      statusMessage.value = {
+        type: 'success',
+        text: `Budget cap updated to $${limit.toLocaleString()}/mo for namespace "${namespace}".`,
+      }
+    } catch (err: unknown) {
+      statusMessage.value = {
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to update budget limit',
+      }
     }
   }
 

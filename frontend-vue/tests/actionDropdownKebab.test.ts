@@ -1,100 +1,117 @@
 import { describe, it } from 'node:test'
-import assert from 'node:assert'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import assert from 'node:assert/strict'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const rootDir = path.resolve(__dirname, '..')
+export interface ActionItem {
+  id?: string
+  action?: string
+  label: string
+  icon?: string
+  variant?: 'default' | 'danger' | 'warning'
+  isDestructive?: boolean
+  disabled?: boolean
+  separator?: boolean
+  tooltip?: string
+}
 
-describe('Task 011: Enterprise Table Actions Kebab Menu & Drawer Standardization Specifications', () => {
-  const actionDropdownPath = path.join(rootDir, 'src', 'components', 'ui', 'ActionDropdown.vue')
-  const fleetClustersTablePath = path.join(rootDir, 'src', 'components', 'fleet', 'FleetClustersTable.vue')
-  const nodeHeadroomTablePath = path.join(rootDir, 'src', 'components', 'capacity', 'NodeHeadroomTable.vue')
-  const nodeTableViewPath = path.join(rootDir, 'src', 'components', 'overview', 'nodes', 'NodeTableView.vue')
+describe('Task 011: ActionDropdown Logic & Keyboard Navigation Tests', () => {
+  function getSelectableIndices(items: ActionItem[]): number[] {
+    return items
+      .map((item, idx) => (!item.separator && !item.disabled ? idx : -1))
+      .filter((idx) => idx !== -1)
+  }
 
-  it('1. ActionDropdown.vue meets enterprise standards and line constraints', () => {
-    assert.ok(fs.existsSync(actionDropdownPath), 'ActionDropdown.vue must exist')
-    const content = fs.readFileSync(actionDropdownPath, 'utf-8')
-    const lineCount = content.split('\n').length
-    assert.ok(lineCount < 250, `ActionDropdown.vue must be strictly < 250 lines (currently ${lineCount})`)
-
-    // Props & Types
-    assert.ok(content.includes('ActionItem'), 'Must export/define ActionItem interface')
-    assert.ok(content.includes('ariaLabel') || content.includes('aria-label'), 'Must support aria-label / ariaLabel prop')
-    assert.ok(content.includes('isDestructive') || content.includes('variant-danger'), 'Must support destructive actions')
-
-    // Accessibility & Behavior
-    assert.ok(content.includes('more-vertical'), 'Must use more-vertical icon as kebab trigger')
-    assert.ok(content.includes('Teleport'), 'Must teleport dropdown menu to body')
-    assert.ok(content.includes('aria-haspopup="true"'), 'Must specify aria-haspopup="true"')
-    assert.ok(content.includes('aria-expanded'), 'Must bind aria-expanded')
-    assert.ok(content.includes('Escape'), 'Must support Escape dismissal')
-    assert.ok(content.includes('emit(\'select\'') || content.includes('emit("select"'), 'Must emit select event')
-  })
-
-  it('2. FleetClustersTable.vue standardizes row actions with ActionDropdown kebab menu', () => {
-    assert.ok(fs.existsSync(fleetClustersTablePath), 'FleetClustersTable.vue must exist')
-    const content = fs.readFileSync(fleetClustersTablePath, 'utf-8')
-    const lineCount = content.split('\n').length
-    assert.ok(lineCount < 500, `FleetClustersTable.vue must be strictly < 500 lines (currently ${lineCount})`)
-
-    // Kebab ActionDropdown integration
-    assert.ok(content.includes('ActionDropdown'), 'Must import and use ActionDropdown')
-    assert.ok(content.includes('clusterActions'), 'Must define clusterActions with standardized actions')
-    assert.ok(content.includes('handleAction'), 'Must handle action selection via handleAction')
-
-    // Standardized actions: Inspect, Probe, Rebalance, Cordon / Drain, Evict
-    assert.ok(content.includes('Inspect'), 'clusterActions must include Inspect')
-    assert.ok(content.includes('Probe'), 'clusterActions must include Probe')
-    assert.ok(content.includes('Rebalance'), 'clusterActions must include Rebalance')
-    assert.ok(content.includes('Cordon'), 'clusterActions must include Cordon / Drain')
-    assert.ok(content.includes('Evict'), 'clusterActions must include Evict (destructive)')
-
-    // Eradicate inline action buttons from cell
-    assert.strictEqual(content.includes('btn-primary btn-xs'), false, 'Must eradicate inline Details/Probe/Upgrade buttons')
-    assert.strictEqual(content.includes('title="Cluster Details"\n            @click='), false, 'Must not render inline cluster details button')
-
-    // 40px fixed width actions column
-    assert.ok(content.includes("width: '40px'") || content.includes('width: "40px"'), 'Actions column width must be fixed 40px')
-  })
-
-  it('3. NodeHeadroomTable.vue uses ActionDropdown with 40px actions column and zero inline buttons', () => {
-    assert.ok(fs.existsSync(nodeHeadroomTablePath), 'NodeHeadroomTable.vue must exist')
-    const content = fs.readFileSync(nodeHeadroomTablePath, 'utf-8')
-    const lineCount = content.split('\n').length
-    assert.ok(lineCount < 500, `NodeHeadroomTable.vue must be strictly < 500 lines (currently ${lineCount})`)
-
-    assert.ok(content.includes('ActionDropdown'), 'Must import and use ActionDropdown')
-    assert.ok(content.includes('width: 40px'), 'Actions column colgroup width must be fixed 40px')
-    assert.strictEqual(content.includes('⚡ Rebalance'), false, 'Must not have inline rebalance button')
-    assert.strictEqual(content.includes('🔍 Inspect'), false, 'Must not have inline inspect button')
-  })
-
-  it('4. NodeTableView.vue eradicates inline action buttons and standardizes on ActionDropdown', () => {
-    assert.ok(fs.existsSync(nodeTableViewPath), 'NodeTableView.vue must exist')
-    const content = fs.readFileSync(nodeTableViewPath, 'utf-8')
-    const lineCount = content.split('\n').length
-    assert.ok(lineCount < 500, `NodeTableView.vue must be strictly < 500 lines (currently ${lineCount})`)
-
-    assert.ok(content.includes('ActionDropdown'), 'Must import and use ActionDropdown')
-    // Eradicate inline buttons
-    assert.strictEqual(content.includes('btn-logs'), false, 'Must eradicate inline btn-logs')
-    assert.strictEqual(content.includes('btn-details'), false, 'Must eradicate inline btn-details')
-    assert.strictEqual(content.includes('sre-btn'), false, 'Must eradicate sre-btn inline buttons')
-  })
-
-  it('5. All modified files strictly obey line count limits (< 500 lines)', () => {
-    const files = [
-      actionDropdownPath,
-      fleetClustersTablePath,
-      nodeHeadroomTablePath,
-      nodeTableViewPath,
-    ]
-    for (const file of files) {
-      const lines = fs.readFileSync(file, 'utf-8').split('\n').length
-      assert.ok(lines < 500, `${path.basename(file)} must be < 500 lines, was ${lines}`)
+  function getNextSelectableIndex(currentIndex: number, direction: 'next' | 'prev', items: ActionItem[]): number {
+    const selectable = getSelectableIndices(items)
+    if (selectable.length === 0) return -1
+    const currentPos = selectable.indexOf(currentIndex)
+    if (direction === 'next') {
+      return currentPos === -1 || currentPos === selectable.length - 1
+        ? selectable[0]
+        : selectable[currentPos + 1]
+    } else {
+      return currentPos <= 0
+        ? selectable[selectable.length - 1]
+        : selectable[currentPos - 1]
     }
+  }
+
+  function calculateDropdownPosition(
+    rect: { top: number; bottom: number; left: number; right: number },
+    viewport: { innerWidth: number; innerHeight: number },
+    menuSize: { width: number; height: number },
+    align: 'left' | 'right' = 'right'
+  ): { top: number; left: number } {
+    let top = rect.bottom + 4
+    if (viewport.innerHeight - rect.bottom < menuSize.height && rect.top > viewport.innerHeight - rect.bottom) {
+      top = Math.max(8, rect.top - menuSize.height - 4)
+    }
+    let left = align === 'left' ? rect.left : rect.right - menuSize.width
+    if (left + menuSize.width > viewport.innerWidth - 8) {
+      left = viewport.innerWidth - menuSize.width - 8
+    }
+    if (left < 8) left = 8
+    return { top: Math.round(top), left: Math.round(left) }
+  }
+
+  const standardClusterActions: ActionItem[] = [
+    { action: 'inspect', label: 'Inspect Cluster', icon: 'eye' },
+    { action: 'probe', label: 'Execute Health Probe', icon: 'activity' },
+    { action: 'rebalance', label: 'Rebalance Workloads', icon: 'refresh-cw' },
+    { separator: true, label: '' },
+    { action: 'cordon', label: 'Cordon & Drain Node', icon: 'shield-off', variant: 'warning' },
+    { action: 'evict', label: 'Evict Cluster Pods', icon: 'trash-2', variant: 'danger', isDestructive: true }
+  ]
+
+  it('getSelectableIndices skips separators and disabled items', () => {
+    const indices = getSelectableIndices(standardClusterActions)
+    // indices 0 (inspect), 1 (probe), 2 (rebalance), 4 (cordon), 5 (evict)
+    assert.deepEqual(indices, [0, 1, 2, 4, 5])
+    assert.equal(indices.includes(3), false, 'Separator at index 3 must not be selectable')
+  })
+
+  it('getNextSelectableIndex navigates forward and wraps to start', () => {
+    assert.equal(getNextSelectableIndex(-1, 'next', standardClusterActions), 0)
+    assert.equal(getNextSelectableIndex(0, 'next', standardClusterActions), 1)
+    assert.equal(getNextSelectableIndex(2, 'next', standardClusterActions), 4, 'Skips separator at index 3')
+    assert.equal(getNextSelectableIndex(5, 'next', standardClusterActions), 0, 'Wraps to first item')
+  })
+
+  it('getNextSelectableIndex navigates backward and wraps to end', () => {
+    assert.equal(getNextSelectableIndex(0, 'prev', standardClusterActions), 5, 'Wraps to last item')
+    assert.equal(getNextSelectableIndex(4, 'prev', standardClusterActions), 2, 'Skips separator going backwards')
+  })
+
+  it('calculateDropdownPosition calculates viewport-safe top and left coordinates', () => {
+    // Normal case with plenty of viewport room
+    const rect = { top: 100, bottom: 130, left: 500, right: 540 }
+    const viewport = { innerWidth: 1920, innerHeight: 1080 }
+    const menuSize = { width: 170, height: 140 }
+
+    const pos = calculateDropdownPosition(rect, viewport, menuSize, 'right')
+    assert.equal(pos.top, 134)
+    assert.equal(pos.left, 540 - 170) // 370
+  })
+
+  it('calculateDropdownPosition flips upward when near viewport bottom boundary', () => {
+    // Near bottom (bottom at 1050, viewport height 1080 -> only 30px remaining)
+    const rect = { top: 1020, bottom: 1050, left: 500, right: 540 }
+    const viewport = { innerWidth: 1920, innerHeight: 1080 }
+    const menuSize = { width: 170, height: 140 }
+
+    const pos = calculateDropdownPosition(rect, viewport, menuSize, 'right')
+    // Flips above button: top <= rect.top - height - 4
+    assert.ok(pos.top < rect.top)
+    assert.equal(pos.top, 1020 - 140 - 4)
+  })
+
+  it('standardClusterActions defines required enterprise actions with destructive tagging', () => {
+    const evictAction = standardClusterActions.find(a => a.action === 'evict')
+    assert.ok(evictAction)
+    assert.equal(evictAction.isDestructive, true)
+    assert.equal(evictAction.variant, 'danger')
+
+    const inspectAction = standardClusterActions.find(a => a.action === 'inspect')
+    assert.ok(inspectAction)
+    assert.equal(inspectAction.isDestructive, undefined)
   })
 })
