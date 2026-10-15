@@ -224,14 +224,8 @@ func (h *WSHub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	default:
 	}
 
-	var responseHeader http.Header
-	if secProto := r.Header.Get("Sec-WebSocket-Protocol"); secProto != "" {
-		if strings.Contains(strings.ToLower(secProto), "bearer") {
-			responseHeader = http.Header{"Sec-WebSocket-Protocol": []string{"bearer"}}
-		}
-	}
-
-	conn, err := upgrader.Upgrade(w, r, responseHeader)
+	w.Header().Del("Sec-WebSocket-Protocol")
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Get().Error("WebSocket upgrade failed", zap.Error(err))
 		return

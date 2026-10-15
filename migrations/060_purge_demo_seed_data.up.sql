@@ -14,17 +14,32 @@ WHERE id IN (
     'c0000000-0000-4000-8000-000000000008',
     'c0000000-0000-4000-8000-000000000009'
 )
+OR actor = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 OR actor LIKE '%@enterprise.io'
 OR target_name = 'crypto-miner-demo'
 OR target_name = 'istio-ingress-gateway.yaml';
 
--- 2. Purge fake incidents (including DESKTOP-GKK38T1 local PC host anomalies and demo services)
+DELETE FROM audit_logs
+WHERE actor = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+
+-- 2. Purge fake incidents (including DESKTOP-GKK38T1, local-control-plane, and demo services)
 DELETE FROM incidents
-WHERE pod_name = 'DESKTOP-GKK38T1'
-   OR pod_name IN ('checkout-api', 'payment-gateway', 'masterdb')
+WHERE pod_name IN ('local-control-plane', 'DESKTOP-GKK38T1', 'checkout-api', 'payment-gateway', 'masterdb')
+   OR message LIKE '%local-control-plane%'
    OR message LIKE '%DESKTOP-GKK38T1%'
    OR raw_data->>'title' LIKE '%DESKTOP-GKK38T1%'
-   OR raw_data->>'resource_name' IN ('DESKTOP-GKK38T1', 'checkout-api', 'payment-gateway', 'masterdb');
+   OR raw_data->>'title' LIKE '%local-control-plane%'
+   OR raw_data->>'resource_name' IN ('local-control-plane', 'DESKTOP-GKK38T1', 'checkout-api', 'payment-gateway', 'masterdb');
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'incidents' AND column_name = 'resource_name'
+    ) THEN
+        EXECUTE 'DELETE FROM incidents WHERE pod_name = ''local-control-plane'' OR resource_name = ''local-control-plane'' OR message LIKE ''%local-control-plane%''';
+    END IF;
+END $$;
 
 -- 3. Purge demo SLO definitions and snapshots
 DELETE FROM slo_snapshots
