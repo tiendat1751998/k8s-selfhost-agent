@@ -31,20 +31,13 @@ type WorkloadHealthChecker interface {
 	GetWorkloadErrorRate(ctx context.Context, deploymentName string) (float64, error)
 }
 
-// TelemetryState provides lock-free, cache-line padded operational metrics.
-// Each metric counter block has 56 bytes of padding so it occupies exactly 64 bytes
-// (one x86-64 / ARM64 cache line) to prevent CPU false sharing under high-throughput reconciliation.
+// TelemetryState provides operational metrics.
 type TelemetryState struct {
 	AuditRuns      uint64
-	_              [56]byte
 	MutationsDone  uint64
-	_              [56]byte
 	RolloutsDone   uint64
-	_              [56]byte
 	RolloutsHalted uint64
-	_              [56]byte
 	DriftDetected  uint64
-	_              [56]byte
 }
 
 // DriftReconciler coordinates secret drift detection, polling rate enforcement, and graceful rollouts.

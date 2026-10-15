@@ -421,7 +421,7 @@ func (p *defaultFSProvider) StatFS(ctx context.Context, mountPoint string) (uint
 	if _, err := os.Stat("/proc/mounts"); err != nil {
 		return 0, 0, fmt.Errorf("statfs unsupported without /proc/mounts: %w", err)
 	}
-	return 10000000, 7500000, nil
+	return 0, 0, fmt.Errorf("inode statfs telemetry requires injected OS statfs provider for mount %s", mountPoint)
 }
 
 type dirInodeEntry struct {

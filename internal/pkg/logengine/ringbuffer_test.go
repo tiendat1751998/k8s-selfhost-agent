@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRingBuffer_CacheLinePadding(t *testing.T) {
+func TestRingBuffer_FieldLayout(t *testing.T) {
 	var rb RingBuffer
 	headOffset := unsafe.Offsetof(rb.head)
 	tailOffset := unsafe.Offsetof(rb.tail)
@@ -22,9 +22,10 @@ func TestRingBuffer_CacheLinePadding(t *testing.T) {
 
 	t.Logf("head offset: %d, tail offset: %d, dropped offset: %d", headOffset, tailOffset, droppedOffset)
 
-	// Verify head and tail are on distinct 64-byte cache lines
-	assert.GreaterOrEqual(t, int(tailOffset-headOffset), 64, "head and tail must be separated by at least 64 bytes")
-	assert.GreaterOrEqual(t, int(droppedOffset-tailOffset), 64, "tail and dropped must be separated by at least 64 bytes")
+	// Verify compact layout without residual cache-line padding fields
+	assert.Equal(t, uintptr(0), headOffset, "head offset must be 0")
+	assert.Equal(t, uintptr(8), tailOffset, "tail offset must be 8")
+	assert.Equal(t, uintptr(16), droppedOffset, "dropped offset must be 16")
 }
 
 func TestRingBuffer_MPSC_Concurrent(t *testing.T) {

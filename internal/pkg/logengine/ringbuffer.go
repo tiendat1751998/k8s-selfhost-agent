@@ -46,17 +46,11 @@ type ringSlot struct {
 	entry    Entry
 }
 
-// RingBuffer is a lock-free Multi-Producer Single-Consumer (MPSC) ring buffer
-// engineered with 64-byte cache-line padding to prevent false sharing and
-// cache-line bouncing across multi-core processors.
+// RingBuffer is a lock-free Multi-Producer Single-Consumer (MPSC) ring buffer.
 type RingBuffer struct {
-	_pad0    [56]byte
 	head     uint64
-	_pad1    [56]byte
 	tail     uint64
-	_pad2    [56]byte
 	dropped  uint64
-	_pad3    [56]byte
 	capacity uint64
 	mask     uint64
 	slots    []ringSlot

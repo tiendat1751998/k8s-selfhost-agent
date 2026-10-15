@@ -59,13 +59,9 @@ type BatchWriterStats struct {
 
 // BatchWriter manages asynchronous, zero-allocation batched writes to ClickHouse.
 type BatchWriter struct {
-	// Hot-path state padded to 64 bytes to eliminate false sharing / cache-line bouncing
 	closed      atomic.Bool
-	_           [63]byte
 	droppedLogs atomic.Int64
-	_           [56]byte
 	retryCount  atomic.Int64
-	_           [56]byte
 
 	client       *Client
 	cfg          BatchWriterConfig
