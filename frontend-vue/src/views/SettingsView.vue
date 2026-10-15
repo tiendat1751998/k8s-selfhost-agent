@@ -42,10 +42,6 @@ const {
 
 const tabsList = computed(() => buildSettingsTabsList(apiKeys.value))
 
-const activeTabLabel = computed(() => {
-  const found = tabsList.value.find(t => t.id === activeTab.value)
-  return found ? found.label : 'General'
-})
 
 function handleSaveSettings() {
   if (activeTab.value === 'general') {
@@ -149,17 +145,6 @@ function handleResetSettings() {
           <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
         </button>
       </div>
-    </div>
-
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px): Active Tab · 2FA · API Keys · Org -->
-    <div class="settings-micro-telemetry mobile-only font-mono" role="status" aria-label="Settings Micro Telemetry">
-      <span class="tel-item tel-name"><BaseIcon name="sliders" size="xs" /> {{ activeTabLabel }}</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-sec"><BaseIcon name="shield" size="xs" /> {{ totpStatus?.enabled ? '2FA' : 'No 2FA' }}</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-alert"><BaseIcon name="key" size="xs" /> API Keys</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-tenancy"><BaseIcon name="server" size="xs" /> {{ form.name ? 'Active' : 'Default' }}</span>
     </div>
 
     <!-- Mobile Tabs Navigation (Pills with snap, <768px) -->

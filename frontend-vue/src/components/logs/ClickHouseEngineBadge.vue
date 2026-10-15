@@ -1,11 +1,11 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../../api/client'
 import BaseIcon from '../ui/BaseIcon.vue'
 
 interface EngineStatusPayload {
   engine: string
-  status: 'connected' | 'fallback' | string
+  status: 'connected' | 'fallback' | 'unavailable' | 'offline' | string
   latency_ms: number
   retention_days: number
   total_records: number
@@ -21,7 +21,12 @@ const status = ref<EngineStatusPayload>({
   total_records: 0,
 })
 
+const isOffline = computed(() => {
+  return status.value.status === 'unavailable' || status.value.status === 'offline'
+})
+
 const isFallback = computed(() => {
+  if (isOffline.value) return false
   const isPrimary =
     status.value.engine.includes('Distributed') ||
     status.value.engine.includes('Edge LogEngine') ||
@@ -29,13 +34,15 @@ const isFallback = computed(() => {
   return isPrimary ? false : status.value.status === 'fallback'
 })
 
-const storageFormat = computed(() =>
-  status.value.engine.toLowerCase().includes('clickhouse')
+const storageFormat = computed(() => {
+  if (isOffline.value) return 'Unavailable'
+  return status.value.engine.toLowerCase().includes('clickhouse')
     ? 'ClickHouse MergeTree'
     : 'Columnar Blocks (ZSTD >10x)'
-)
+})
 
 const badgeText = computed(() => {
+  if (isOffline.value) return 'Log Engine · Offline'
   if (isFallback.value) return `${status.value.engine} · Fallback`
   const latency = status.value.latency_ms > 0 ? `${status.value.latency_ms.toFixed(1)}ms` : '<1ms'
   return `${status.value.engine} · Ready · ${latency}`
@@ -43,6 +50,7 @@ const badgeText = computed(() => {
 
 const shortEngineName = computed(() => {
   const eng = status.value.engine
+  if (isOffline.value) return 'Offline'
   if (eng.includes('ClickHouse')) return 'ClickHouse'
   if (eng.includes('Distributed') || eng.includes('Edge')) return 'Edge LogEngine'
   if (eng.includes('RingBuffer')) return 'RingBuffer'
@@ -50,6 +58,7 @@ const shortEngineName = computed(() => {
 })
 
 const shortBadgeText = computed(() => {
+  if (isOffline.value) return 'Offline'
   if (isFallback.value) return `${shortEngineName.value} · Fallback`
   return `${shortEngineName.value} · Ready`
 })
@@ -68,10 +77,10 @@ async function fetchStatus() {
     }
   } catch {
     status.value = {
-      engine: 'In-Memory RingBuffer (Fallback)',
-      status: 'fallback',
-      latency_ms: 0.1,
-      retention_days: 7,
+      engine: 'Unavailable',
+      status: 'unavailable',
+      latency_ms: 0,
+      retention_days: 0,
       total_records: 0,
     }
   }
@@ -85,13 +94,13 @@ onMounted(fetchStatus)
     <button
       type="button"
       class="engine-badge engine-badge-trigger font-mono"
-      :class="isFallback ? 'badge-fallback' : 'badge-connected'"
+      :class="isOffline ? 'badge-offline' : (isFallback ? 'badge-fallback' : 'badge-connected')"
       role="status"
       aria-haspopup="dialog"
       :aria-expanded="showPopover"
       @click="showPopover = !showPopover"
     >
-      <span class="pulse-dot" :class="isFallback ? 'pulse-dot-cyan' : 'pulse-dot-emerald'" />
+      <span class="pulse-dot" :class="isOffline ? 'pulse-dot-rose' : (isFallback ? 'pulse-dot-cyan' : 'pulse-dot-emerald')" />
       <span class="engine-badge-text">
         <span class="badge-text-full">{{ badgeText }}</span>
         <span class="badge-text-compact">{{ shortBadgeText }}</span>
@@ -106,8 +115,8 @@ onMounted(fetchStatus)
             <BaseIcon name="layers" size="xs" />
             <span class="popover-title">ENGINE ARCHITECTURE</span>
           </div>
-          <span class="popover-tag" :class="isFallback ? 'tag-amber' : 'tag-emerald'">
-            {{ isFallback ? 'FALLBACK' : 'PRIMARY' }}
+          <span class="popover-tag" :class="isOffline ? 'tag-rose' : (isFallback ? 'tag-amber' : 'tag-emerald')">
+            {{ isOffline ? 'OFFLINE' : (isFallback ? 'FALLBACK' : 'PRIMARY') }}
           </span>
         </div>
         <div class="popover-row">
@@ -116,13 +125,13 @@ onMounted(fetchStatus)
         </div>
         <div class="popover-row">
           <span class="row-label"><BaseIcon name="activity" size="xs" /><span>Status</span></span>
-          <span class="status-pill" :class="isFallback ? 'pill-amber' : 'pill-emerald'">
-            {{ isFallback ? status.status : 'Active' }}
+          <span class="status-pill" :class="isOffline ? 'pill-rose' : (isFallback ? 'pill-amber' : 'pill-emerald')">
+            {{ isOffline ? 'Unavailable' : (isFallback ? status.status : 'Active') }}
           </span>
         </div>
         <div class="popover-row">
           <span class="row-label"><BaseIcon name="database" size="xs" /><span>Storage Format</span></span>
-          <strong class="text-emerald">{{ storageFormat }}</strong>
+          <strong :class="isOffline ? 'text-slate' : 'text-emerald'">{{ storageFormat }}</strong>
         </div>
         <div class="popover-row">
           <span class="row-label"><BaseIcon name="filter" size="xs" /><span>Index</span></span>
@@ -168,10 +177,13 @@ onMounted(fetchStatus)
 .badge-connected:hover { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.5); }
 .badge-fallback { background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); color: #22d3ee; }
 .badge-fallback:hover { background: rgba(6, 182, 212, 0.18); border-color: rgba(6, 182, 212, 0.5); }
+.badge-offline { background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: #fb7185; }
+.badge-offline:hover { background: rgba(244, 63, 94, 0.18); border-color: rgba(244, 63, 94, 0.5); }
 .engine-badge-text { letter-spacing: -0.01em; white-space: nowrap; }
 .pulse-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .pulse-dot-emerald { background: #10b981; box-shadow: 0 0 6px #10b981; }
 .pulse-dot-cyan { background: #06b6d4; box-shadow: 0 0 6px #06b6d4; }
+.pulse-dot-rose { background: #f43f5e; box-shadow: 0 0 6px #f43f5e; }
 .engine-popover {
   position: absolute;
   top: calc(100% + 6px);
@@ -204,11 +216,13 @@ onMounted(fetchStatus)
 .popover-tag { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; }
 .tag-emerald { background: rgba(16, 185, 129, 0.2); color: #34d399; }
 .tag-amber { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.tag-rose { background: rgba(244, 63, 94, 0.2); color: #fb7185; }
 .popover-row { display: flex; align-items: center; justify-content: space-between; font-size: 11px; gap: 8px; color: #94a3b8; }
 .row-label { display: inline-flex; align-items: center; gap: 5px; color: #94a3b8; white-space: nowrap; }
 .status-pill { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 9999px; font-size: 10px; font-weight: 600; }
 .pill-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
 .pill-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.pill-rose { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
 .tabular-nums { font-variant-numeric: tabular-nums; }
 .popover-row strong { font-weight: 600; }
 .text-slate { color: #f1f5f9; }

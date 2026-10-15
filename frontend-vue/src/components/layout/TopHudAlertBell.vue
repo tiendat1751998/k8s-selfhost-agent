@@ -67,11 +67,19 @@ function handleMuteAll() {
   alertStore.muteAll('restart')
 }
 
+const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth <= 640 : false)
+
+function updateIsMobile() {
+  if (typeof window !== 'undefined') {
+    isMobile.value = window.innerWidth <= 640
+  }
+}
+
 // Watch for toast drop trigger from alertStore
 watch(
   () => alertStore.isToastDropped,
   (dropped) => {
-    if (dropped && alertStore.activeAlerts.length > 0) {
+    if (!isMobile.value && dropped && alertStore.activeAlerts.length > 0) {
       startTimer()
     } else {
       stopTimer()
@@ -132,6 +140,7 @@ onMounted(() => {
   if (typeof document !== 'undefined') {
     document.addEventListener('click', handleDocumentInteraction)
     document.addEventListener('touchend', handleDocumentInteraction, { passive: true })
+    window.addEventListener('resize', updateIsMobile)
   }
 })
 
@@ -139,6 +148,7 @@ onUnmounted(() => {
   if (typeof document !== 'undefined') {
     document.removeEventListener('click', handleDocumentInteraction)
     document.removeEventListener('touchend', handleDocumentInteraction)
+    window.removeEventListener('resize', updateIsMobile)
   }
   stopTimer()
 })
@@ -191,7 +201,7 @@ onUnmounted(() => {
     <Teleport to="body">
       <transition name="dropdown-toast">
         <div
-          v-if="alertStore.isToastDropped && alertStore.activeAlerts.length > 0"
+          v-if="!isMobile && alertStore.isToastDropped && alertStore.activeAlerts.length > 0"
           ref="toastRef"
           class="header-alert-toast glass-panel"
           :class="alertStore.hasCriticalAlerts ? 'toast-critical' : 'toast-warning'"

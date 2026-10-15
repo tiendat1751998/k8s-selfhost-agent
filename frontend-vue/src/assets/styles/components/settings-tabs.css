@@ -199,41 +199,13 @@
   flex: 1 1 55%;
   max-width: 520px;
 }
-.setting-title {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary, #f1f5f9);
-  display: block;
-  margin-bottom: 4px;
-}
-.setting-desc {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-muted, #94a3b8);
-  margin: 0;
-}
-.setting-control-col {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-}
+.setting-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary, #f1f5f9); display: block; margin-bottom: 4px; }
+.setting-desc { font-size: 12px; line-height: 1.5; color: var(--text-muted, #94a3b8); margin: 0; }
+.setting-control-col { flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; }
 
 /* Bounded Input Utilities & Addon Wrappers */
-.input-compact-sm,
-.setting-control-col .input-compact-sm,
-.form-input.input-compact-sm {
-  width: 130px;
-  max-width: 130px;
-}
-
-.input-compact-md,
-.setting-control-col .input-compact-md,
-.form-select.input-compact-md,
-.form-input.input-compact-md {
-  width: 260px;
-  max-width: 260px;
-}
+.input-compact-sm, .setting-control-col .input-compact-sm, .form-input.input-compact-sm { width: 130px; max-width: 130px; }
+.input-compact-md, .setting-control-col .input-compact-md, .form-select.input-compact-md, .form-input.input-compact-md { width: 260px; max-width: 260px; }
 .form-select.input-compact-md {
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -438,8 +410,47 @@
 
 /* Responsive Overrides (<768px Mobile Adaptation) */
 @media (max-width: 767.98px) {
-  /* Responsive Setting Rows & Bounded Controls */
-  .setting-row { flex-direction: column; align-items: stretch; gap: 12px; }
+  /* Compact Mobile Typography & Spacing (<768px) */
+  .settings-panel-header,
+  .card-header {
+    padding: 10px 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .settings-panel-title,
+  .card-title {
+    font-size: 14px;
+  }
+  .settings-panel-subtitle,
+  .card-subtitle,
+  .setting-desc {
+    font-size: 11px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .setting-title {
+    font-size: 12.5px;
+    margin-bottom: 2px;
+  }
+  .setting-row {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px 12px;
+    gap: 6px;
+  }
+  .setting-input,
+  .setting-select,
+  .form-input,
+  .form-select {
+    height: 34px;
+    font-size: 12.5px;
+    padding: 6px 10px;
+  }
+
   .setting-control-col { justify-content: flex-start; width: 100%; }
   .input-compact-lg,
   .input-compact-md,
@@ -453,16 +464,15 @@
   .card-actions-bar { flex-direction: column-reverse; gap: 10px; align-items: stretch; }
   .card-actions-bar .btn { width: 100%; justify-content: center; }
 
-  .settings-card { padding: 16px; gap: 16px; }
-  .card-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .settings-card { padding: 12px; gap: 12px; }
   .card-header .btn { width: 100%; justify-content: center; }
-  .form-row { flex-direction: column; gap: 14px; }
-  .form-actions { flex-direction: column; align-items: stretch; gap: 10px; }
+  .form-row { flex-direction: column; gap: 10px; }
+  .form-actions { flex-direction: column; align-items: stretch; gap: 8px; }
   .form-actions-right { flex-direction: column; width: 100%; }
-  .form-actions .btn { width: 100%; min-height: 40px; justify-content: center; }
+  .form-actions .btn { width: 100%; min-height: 36px; justify-content: center; }
   .user-2fa-header { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .user-2fa-active-view, .user-2fa-inactive-view { flex-direction: column; align-items: stretch; gap: 12px; }
-  .user-2fa-actions .btn { width: 100%; min-height: 40px; justify-content: center; }
+  .user-2fa-active-view, .user-2fa-inactive-view { flex-direction: column; align-items: stretch; gap: 10px; }
+  .user-2fa-actions .btn { width: 100%; min-height: 36px; justify-content: center; }
   .spec-grid { grid-template-columns: 1fr; }
   .about-hero { flex-direction: column; text-align: center; }
   .about-version-tag { justify-content: center; }

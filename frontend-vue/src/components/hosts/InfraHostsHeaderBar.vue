@@ -89,15 +89,6 @@ function handleFirstFencing() {
       </div>
     </div>
 
-    <!-- 20px Mobile Micro-Telemetry Strip (< 640px) -->
-    <div class="hosts-micro-telemetry mobile-only font-mono">
-      <span class="tel-item"><span class="micro-dot dot-emerald" aria-hidden="true"></span>{{ onlineHostsCount }} online</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item"><span class="micro-dot" :class="offlineHostsCount > 0 ? 'dot-rose' : 'dot-slate'" aria-hidden="true"></span>{{ offlineHostsCount }} offline</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item">avg {{ avgLatency > 0 ? `${avgLatency}ms` : '--' }}</span>
-    </div>
-
     <!-- Mobile Search Expandable Input & Filter Controls -->
     <div v-if="showMobileSearch" class="mobile-search-box mobile-only animate-fade-in">
       <input

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
 
@@ -22,8 +22,8 @@ const emit = defineEmits<{
 <template>
   <div class="mobile-stream-container">
     <div class="mobile-stream-header">
-      <span class="mobile-stream-title"><BaseIcon name="target" size="xs" /> Touch-Optimized SLO Workload Stream</span>
-      <span class="mobile-stream-count font-mono">{{ definitions.length }} Objectives</span>
+      <span class="mobile-stream-title"><BaseIcon name="target" size="xs" /> SLO Objectives</span>
+      <span class="mobile-stream-count slo-count-pill font-mono">{{ definitions.length }} Objectives</span>
     </div>
 
     <div v-if="definitions.length === 0" class="mobile-stream-empty">
