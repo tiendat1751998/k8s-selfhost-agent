@@ -103,8 +103,6 @@ type HybridTunnelStatus struct {
 }
 
 // PMTUSweepState tracks high-frequency binary search sweep iterations.
-// 64-byte cache-line padding prevents false sharing across CPU cores under high-rate probe sweeps (MESI/MOESI).
-// 6 uint64 fields (48 bytes) + 16 bytes padding = exactly 64 bytes.
 type PMTUSweepState struct {
 	LowBound     int64
 	HighBound    int64
@@ -112,30 +110,24 @@ type PMTUSweepState struct {
 	OptimalPMTU  int64
 	ProbeCount   int64
 	Iterations   int64
-	_            [16]byte // Cache line padding (64 bytes total)
 }
 
 // FastLatencyTracker tracks lock-free / high-frequency probe latency metrics.
-// 64-byte cache-line padding prevents false sharing across CPU cores.
-// 5 uint64 fields (40 bytes) + 24 bytes padding = exactly 64 bytes.
 type FastLatencyTracker struct {
 	ProbeCount     uint64
 	TotalLatencyUs uint64
 	MinLatencyUs   uint64
 	MaxLatencyUs   uint64
 	PacketLoss     uint64
-	_              [24]byte // Cache line padding (64 bytes total)
 }
 
 // FastTunnelMetrics tracks per-tunnel high-throughput metrics on multi-core workers.
-// 5 uint64 fields (40 bytes) + 24 bytes padding = exactly 64 bytes.
 type FastTunnelMetrics struct {
 	TxBytes   uint64
 	RxBytes   uint64
 	TxPackets uint64
 	RxPackets uint64
 	Drops     uint64
-	_         [24]byte // Cache line padding (64 bytes total)
 }
 
 // TunnelWatchdog defines the primary port for tunnel PMTU sweeping, rp_filter auditing,

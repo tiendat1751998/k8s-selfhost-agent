@@ -4,7 +4,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	domainauth "github.com/datdt/k8sselfhost/internal/domain/auth"
 )
@@ -34,21 +33,10 @@ func TestJWKSKey_ExpirationAndStaleness(t *testing.T) {
 	}
 }
 
-func TestJWKSMetrics_CacheLinePadding(t *testing.T) {
+func TestJWKSMetrics_Operations(t *testing.T) {
 	var metrics domainauth.JWKSMetrics
-
-	// Ensure each padded counter occupies exactly 64 bytes (CPU cache-line size)
-	counterSize := unsafe.Sizeof(metrics.Hits)
-	if counterSize != 64 {
-		t.Fatalf("expected PaddedCounter size to be 64 bytes to eliminate false sharing, got %d", counterSize)
-	}
-
-	// Ensure offset delta between adjacent counters is a multiple of 64 bytes
-	hitsOffset := unsafe.Offsetof(metrics.Hits)
-	missesOffset := unsafe.Offsetof(metrics.Misses)
-	delta := missesOffset - hitsOffset
-	if delta < 64 || delta%64 != 0 {
-		t.Fatalf("expected offset delta between counters to be >= 64 bytes and 64-byte aligned, got %d", delta)
+	if metrics.Hits.Load() != 0 {
+		t.Fatalf("expected 0, got %d", metrics.Hits.Load())
 	}
 
 	// Verify concurrent atomic updates do not trigger race conditions or data corruption

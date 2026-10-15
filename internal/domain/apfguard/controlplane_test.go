@@ -4,21 +4,19 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/apfguard"
 )
 
-func TestPaddedMetrics_CacheLineAlignment(t *testing.T) {
+func TestPaddedMetrics_Initialization(t *testing.T) {
 	var apfMetrics apfguard.PaddedAPFMetrics
 	var compMetrics apfguard.PaddedCompactionMetrics
 
-	if sz := unsafe.Sizeof(apfMetrics); sz%64 != 0 {
-		t.Fatalf("PaddedAPFMetrics size %d is not a multiple of 64 bytes (cache line)", sz)
+	if apfMetrics.CurrentInQueue != 0 {
+		t.Fatalf("expected 0, got %d", apfMetrics.CurrentInQueue)
 	}
-
-	if sz := unsafe.Sizeof(compMetrics); sz%64 != 0 {
-		t.Fatalf("PaddedCompactionMetrics size %d is not a multiple of 64 bytes (cache line)", sz)
+	if compMetrics.Compacted410Errors != 0 {
+		t.Fatalf("expected 0, got %d", compMetrics.Compacted410Errors)
 	}
 }
 

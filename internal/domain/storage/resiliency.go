@@ -140,17 +140,11 @@ func isValidScannerSpeed(speed string) bool {
 	}
 }
 
-// IOTracker maintains low-overhead, atomic I/O telemetry with 64-byte cache-line padding.
-// Padding fields (_ [8]uint64, 8*8 = 64 bytes) eliminate CPU cache thrashing / false sharing
-// between high-frequency client request workers and background scanner routines on multi-core NUMA sockets.
+// IOTracker maintains atomic I/O telemetry.
 type IOTracker struct {
-	_               [8]uint64 // 64-byte cache-line padding boundary
 	clientIOPS      atomic.Int64
-	_               [8]uint64 // 64-byte cache-line padding boundary
 	waitingRequests atomic.Int64
-	_               [8]uint64 // 64-byte cache-line padding boundary
 	crawlerScans    atomic.Int64
-	_               [8]uint64 // 64-byte cache-line padding boundary
 }
 
 // NewIOTracker initializes an isolated IOTracker.
@@ -212,22 +206,15 @@ type QueueMetrics struct {
 	Throttled uint64 `json:"throttled"`
 }
 
-// BoundedHealingQueue provides a thread-safe, memory-bounded task queue with drop/throttle metrics
-// and 64-byte cache-line padding to prevent false sharing under high concurrency.
+// BoundedHealingQueue provides a thread-safe, memory-bounded task queue with drop/throttle metrics.
 type BoundedHealingQueue struct {
-	_              [8]uint64 // 64-byte cache-line padding
 	mu             sync.Mutex
 	tasks          []HealTask
 	capacity       int
-	_              [8]uint64 // 64-byte cache-line padding
 	enqueuedCount  atomic.Uint64
-	_              [8]uint64 // 64-byte cache-line padding
 	dequeuedCount  atomic.Uint64
-	_              [8]uint64 // 64-byte cache-line padding
 	droppedCount   atomic.Uint64
-	_              [8]uint64 // 64-byte cache-line padding
 	throttledCount atomic.Uint64
-	_              [8]uint64 // 64-byte cache-line padding
 }
 
 // NewBoundedHealingQueue constructs a new bounded healing queue with a fixed capacity limit.

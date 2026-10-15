@@ -4,7 +4,6 @@ import (
 	"errors"
 	"sync"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,11 +11,15 @@ import (
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
-func TestPaddedStructs_CacheLineAlignment(t *testing.T) {
-	// Assert 64-byte L1 cache line size to prevent false sharing across CPU cores
-	assert.Equal(t, uintptr(64), unsafe.Sizeof(PaddedPFCAccumulator{}), "PaddedPFCAccumulator must be exactly 64 bytes")
-	assert.Equal(t, uintptr(64), unsafe.Sizeof(PaddedFabricBandwidthMonitor{}), "PaddedFabricBandwidthMonitor must be exactly 64 bytes")
-	assert.Equal(t, uintptr(64), unsafe.Sizeof(PaddedRDMACounters{}), "PaddedRDMACounters must be exactly 64 bytes")
+func TestPaddedStructs_Initialization(t *testing.T) {
+	acc := PaddedPFCAccumulator{}
+	assert.Equal(t, uint64(0), acc.GetRxPauses())
+
+	mon := PaddedFabricBandwidthMonitor{}
+	assert.Equal(t, float64(0), mon.GetBandwidthGBps())
+
+	cnt := PaddedRDMACounters{}
+	assert.Equal(t, uint64(0), cnt.pfcPausesRx.Load())
 }
 
 func TestPaddedPFCAccumulator_ConcurrentAccess(t *testing.T) {

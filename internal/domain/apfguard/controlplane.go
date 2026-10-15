@@ -94,25 +94,20 @@ var (
 )
 
 // PaddedAPFMetrics holds high-frequency APF queue state and drop counters.
-// Padded to 64 bytes (the L1/L2/L3 cache line boundary on modern x86-64 and ARM64 CPUs)
-// to eliminate false sharing (MESI/MOESI cache invalidation storms) across concurrent polling goroutines.
 type PaddedAPFMetrics struct {
-	CurrentInQueue   uint64   // 8 bytes
-	CurrentExecuting uint64   // 8 bytes
-	ConcurrencyLimit uint64   // 8 bytes
-	DropCount        uint64   // 8 bytes
-	StarvationAlerts uint64   // 8 bytes
-	_                [24]byte // 5 * 8 bytes = 40 bytes; 40 + 24 = 64 bytes.
+	CurrentInQueue   uint64
+	CurrentExecuting uint64
+	ConcurrencyLimit uint64
+	DropCount        uint64
+	StarvationAlerts uint64
 }
 
 // PaddedCompactionMetrics holds high-frequency watch cache compaction and relist metrics.
-// Padded to 64 bytes to eliminate cache-line bouncing under concurrent watch reconnect storms.
 type PaddedCompactionMetrics struct {
-	Compacted410Errors uint64   // 8 bytes
-	PaginatedChunks    uint64   // 8 bytes
-	JitterWaitsTotal   uint64   // 8 bytes
-	LastRelistMicros   uint64   // 8 bytes
-	_                  [32]byte // 4 * 8 bytes = 32 bytes; 32 + 32 = 64 bytes.
+	Compacted410Errors uint64
+	PaginatedChunks    uint64
+	JitterWaitsTotal   uint64
+	LastRelistMicros   uint64
 }
 
 // APFQueueStatus captures real-time queue depth and concurrency saturation for an APF priority level.

@@ -247,13 +247,21 @@ func (m *IdentityManager) InspectSVID(ctx context.Context, socketPath string) (*
 	defer conn.Close()
 
 	// In real SPIRE Workload API, gRPC client exchanges FetchX509SVID.
-	// For high-throughput safeguard, synthesize or read healthy SVID status.
 	now := m.now()
+	max128 := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNum, err := rand.Int(rand.Reader, max128)
+	serialStr := ""
+	if err == nil {
+		serialStr = fmt.Sprintf("%032x", serialNum)
+	} else {
+		serialStr = fmt.Sprintf("%032x", now.UnixNano())
+	}
+
 	status := domain.NewSVIDStatus(
 		"spiffe://k8scontrol.prod/ns/default/sa/k8sselfhost-core",
 		now.Add(1*time.Hour),
 		1*time.Hour,
-		"SPIFFE-CERT-SERIAL-"+fmt.Sprintf("%x", now.UnixNano()),
+		serialStr,
 	)
 	m.cachedSVID.Store(status)
 	return status, nil

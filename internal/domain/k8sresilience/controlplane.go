@@ -96,25 +96,20 @@ var (
 )
 
 // PaddedWebhookMetrics holds high-frequency admission webhook audit and failure metrics.
-// Padded to 64 bytes (the L1/L2/L3 cache line boundary on modern x86-64 and ARM64 CPUs)
-// to eliminate false sharing (MESI/MOESI cache invalidation storms) across concurrent polling goroutines.
 type PaddedWebhookMetrics struct {
 	ConsecutiveFailures uint64
 	TotalAudits         uint64
 	BypassCount         uint64
 	RestoreCount        uint64
 	LastLatencyMicros   uint64
-	_                   [24]byte // 5 * 8 bytes = 40 bytes; 40 + 24 = 64 bytes.
 }
 
 // PaddedPLEGMetrics holds high-frequency PLEG timing metrics and node health monitors.
-// Padded to 64 bytes to eliminate false sharing between node status polling threads.
 type PaddedPLEGMetrics struct {
 	RelistDurationMicros uint64
 	TimeoutCount         uint64
 	RestartCount         uint64
 	HealthyChecks        uint64
-	_                    [32]byte // 4 * 8 bytes = 32 bytes; 32 + 32 = 64 bytes.
 }
 
 // WebhookHealthStatus captures the real-time operational and admission state of a webhook.

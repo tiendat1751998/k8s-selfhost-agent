@@ -103,34 +103,27 @@ var (
 const PortsPerNATIP = 64512
 
 // PaddedBurstTracker holds high-frequency EBS volume burst balance and IOPS metrics.
-// Padded to 64 bytes (the L1/L2/L3 cache line boundary on modern x86-64 and ARM64 CPUs)
-// to eliminate false sharing (MESI/MOESI cache invalidation storms) across concurrent polling goroutines.
 type PaddedBurstTracker struct {
 	BalancePermille uint64 // Burst balance stored as permille (e.g. 850 = 85.0%)
 	CurrentIOPS     uint64
 	AuditCount      uint64
 	DepletionAlerts uint64
-	_               [32]byte // 4 * 8 bytes = 32 bytes; 32 + 32 = 64 bytes.
 }
 
 // PaddedSpotTimer holds spot termination timestamps and eviction counters.
-// Padded to 64 bytes to prevent cache-line contention between metadata pollers and drain watchers.
 type PaddedSpotTimer struct {
 	NoticeReceivedUnixSec uint64
 	DrainDeadlineUnixSec  uint64
 	TotalNotices          uint64
 	SuccessfulDrains      uint64
-	_                     [32]byte // 4 * 8 bytes = 32 bytes; 32 + 32 = 64 bytes.
 }
 
 // PaddedSNATPortCounter holds high-frequency NAT Gateway connection and allocation counters.
-// Padded to 64 bytes to eliminate false sharing between gateway telemetry collectors.
 type PaddedSNATPortCounter struct {
 	ActiveConnections    uint64
 	PortAllocationErrors uint64
 	SaturationAlerts     uint64
 	TotalQueries         uint64
-	_                    [32]byte // 4 * 8 bytes = 32 bytes; 32 + 32 = 64 bytes.
 }
 
 // StorageBurstStatus represents the point-in-time I/O burst credit telemetry of a cloud block storage volume.

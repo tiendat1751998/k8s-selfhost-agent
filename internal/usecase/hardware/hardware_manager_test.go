@@ -347,3 +347,23 @@ func TestHardwareManager_ConcurrentAccessUnderLoad(t *testing.T) {
 		t.Fatalf("expected %d ops, got %d", numGoroutines, opsCompleted)
 	}
 }
+
+func TestHardwareManager_NilReaders_ReturnError(t *testing.T) {
+	mgr := usecase.NewHardwareManager(usecase.Config{NodeName: "test-node"}, nil, nil, nil, nil, nil, nil, zap.NewNop())
+	ctx := context.Background()
+
+	_, err := mgr.AuditECCMemoryErrors(ctx)
+	if err == nil {
+		t.Error("expected error when edacReader is nil, got nil")
+	}
+
+	_, err = mgr.AuditCPUThermalThrottling(ctx)
+	if err == nil {
+		t.Error("expected error when thermalReader is nil, got nil")
+	}
+
+	_, err = mgr.AuditPowerSupplyRedundancy(ctx)
+	if err == nil {
+		t.Error("expected error when psuReader is nil, got nil")
+	}
+}

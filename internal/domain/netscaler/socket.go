@@ -32,11 +32,10 @@
 //    Activating `net.ipv4.tcp_tw_reuse = 1` safely allows timestamps (`tcp_timestamps = 1`) to validate
 //    sequence numbers and recycle TIME_WAIT sockets for outbound connections.
 //
-// 5. NIC Interrupt Moderation & CPU Cache Coherency (False Sharing):
+// 5. NIC Interrupt Moderation & CPU Multi-Core Telemetry:
 //    High packet-per-second (PPS) workloads on 10/40/100GbE interfaces generate intense softirq/NAPI activity
-//    across multi-core SMP nodes. If telemetry counters share the same 64-byte L1/L2 cache line, concurrent atomic
-//    increments cause bus-level cache line bouncing under the MESI/MOESI cache coherence protocols. Structuring
-//    counters with 64-byte cache-line padding guarantees isolated L1/L2 caching without false sharing penalty.
+//    across multi-core SMP nodes. Telemetry counters utilize 64-bit atomic operations to safely track socket
+//    metrics under high multi-threaded packet throughput.
 // --------------------------------------------------------------------------------------------------
 package netscaler
 
@@ -82,11 +81,9 @@ var (
 	ErrInvalidNetConfig          = errors.New("invalid kernel network configuration")
 )
 
-// PaddedCounter is a 64-bit integer counter padded to a 64-byte CPU cache line boundary
-// (8 bytes data + 56 bytes padding) to eliminate false sharing across SMP cores under MESI/MOESI.
+// PaddedCounter is an atomic 64-bit integer counter.
 type PaddedCounter struct {
 	val int64
-	_   [56]byte
 }
 
 // Inc atomically increments the counter by 1 and returns the new value.

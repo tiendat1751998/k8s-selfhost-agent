@@ -24,12 +24,7 @@ ENGINEERING ANALYSIS NOTE: PHYSICAL HARDWARE BOTTLENECKS & REAL-WORLD FAILURE MO
      per modern Xeon/EPYC core, whereas RSA-4096 throughput drops by ~3.5x to ~5,500 verifications/sec due
      to O(n^2) bit-multiplication complexity. In contrast, ECDSA P-256 uses elliptic curve point
      multiplication with assembly-optimized field arithmetic (~25,000 ops/sec/core).
-   - L1/L2 CPU Cache Thrashing & False Sharing (MESI/MOESI Protocol):
-     Standard Go sync.RWMutex requires updating an atomic reader counter inside the struct on every RLock().
-     Across 64+ CPU cores, this causes cache line invalidation across all L1/L2 caches (Cache Line Bouncing).
-     Furthermore, placing adjacent atomic metrics (e.g. Hits, Misses) within the same 64-byte cache line
-     causes false sharing where core A's write invalidates core B's read cache line, degrading throughput
-     by up to 80%. We enforce 64-byte cache-line isolation using explicit struct padding.
+
    - Memory Allocation Pressure & Go GC P99 Tails:
      Decoding JWT tokens creates byte buffers, base64 strings, and JSON map allocations. Under 50,000 QPS,
      allocations exceed several GB/s, triggering Go GC Mark Assist. Goroutines allocating memory are
@@ -70,12 +65,9 @@ var (
 	ErrKeyNotFound = errors.New("jwks key not found for specified kid")
 )
 
-// PaddedCounter is a 64-byte cache-line aligned atomic counter.
-// The 56-byte trailing array ensures that adjacent fields in memory
-// reside on separate CPU cache lines, eliminating false sharing under MESI/MOESI cache coherence.
+// PaddedCounter is an atomic counter.
 type PaddedCounter struct {
 	value uint64
-	_     [7]uint64 // 56 bytes padding (total: 64 bytes)
 }
 
 // Inc atomically increments the counter and returns the new value.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -412,6 +413,22 @@ func TestVFSManager_RemountOrUnmountHungNFS_RejectsHyphenAndEmpty(t *testing.T) 
 		err := mgr.RemountOrUnmountHungNFS(ctx, bad)
 		if err == nil {
 			t.Errorf("expected RemountOrUnmountHungNFS to reject invalid mount %q, got nil", bad)
+		}
+	}
+}
+
+func TestVFSManager_DefaultFSProvider_MountHandling(t *testing.T) {
+	mgr := usecase.NewVFSManager()
+	ctx := context.Background()
+
+	reports, err := mgr.ScanInodes(ctx)
+	if err != nil {
+		if !strings.Contains(err.Error(), "/proc/mounts") {
+			t.Errorf("expected error mentioning /proc/mounts, got %v", err)
+		}
+	} else {
+		if len(reports) == 0 {
+			t.Errorf("expected non-empty reports when /proc/mounts is available")
 		}
 	}
 }

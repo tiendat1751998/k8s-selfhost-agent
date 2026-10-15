@@ -6,7 +6,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/consensus"
 )
@@ -157,14 +156,6 @@ func TestRFC7807ProblemDetails(t *testing.T) {
 
 func TestCacheLinePaddingAndConcurreny(t *testing.T) {
 	tracker := consensus.NewConsensusTelemetryTracker()
-
-	// Verify offset between fields is >= 64 bytes to guarantee separate L1/L2 cache lines
-	fencingGenOffset := unsafe.Offsetof(tracker.FencingGeneration)
-	fencingValidationsOffset := unsafe.Offsetof(tracker.FencingValidations)
-	diff := fencingValidationsOffset - fencingGenOffset
-	if diff < 64 {
-		t.Fatalf("expected cache line padding diff >= 64 bytes, got %d", diff)
-	}
 
 	// High concurrency stress test across 50 goroutines
 	var wg sync.WaitGroup

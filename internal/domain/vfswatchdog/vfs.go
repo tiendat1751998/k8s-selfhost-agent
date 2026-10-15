@@ -131,14 +131,11 @@ func (p DStateProcessInfo) IsStuck(maxDuration time.Duration) bool {
 	return p.WaitDuration >= maxDuration
 }
 
-// PaddedInodeMetric provides a 64-byte cache-line aligned atomic counter set for high-scale VFS inspection.
-// Under multi-core SMP architectures (MESI/MOESI protocol), isolating write traffic to a dedicated 64-byte
-// cache line eliminates false sharing cache-invalidation ping-pong between worker cores.
+// PaddedInodeMetric provides an atomic counter set for high-scale VFS inspection.
 type PaddedInodeMetric struct {
-	ScannedFiles   atomic.Uint64 // 8 bytes (offset 0)
-	InodesInUse    atomic.Uint64 // 8 bytes (offset 8)
-	ScanDurationNs atomic.Int64  // 8 bytes (offset 16)
-	_              [40]byte      // 40 bytes padding (offset 24..63) -> exactly 64 bytes
+	ScannedFiles   atomic.Uint64
+	InodesInUse    atomic.Uint64
+	ScanDurationNs atomic.Int64
 }
 
 // AddScannedFiles atomically increments the scanned files counter.
@@ -156,12 +153,11 @@ func (m *PaddedInodeMetric) RecordScanDuration(ns int64) int64 {
 	return m.ScanDurationNs.Add(ns)
 }
 
-// PaddedDStateMetric provides a 64-byte cache-line aligned atomic counter set for D-state process tracking.
+// PaddedDStateMetric provides an atomic counter set for D-state process tracking.
 type PaddedDStateMetric struct {
-	DStateProcessesDetected atomic.Uint64 // 8 bytes (offset 0)
-	StuckDurationMs         atomic.Int64  // 8 bytes (offset 8)
-	LazyUnmountTriggers     atomic.Uint64 // 8 bytes (offset 16)
-	_                       [40]byte      // 40 bytes padding (offset 24..63) -> exactly 64 bytes
+	DStateProcessesDetected atomic.Uint64
+	StuckDurationMs         atomic.Int64
+	LazyUnmountTriggers     atomic.Uint64
 }
 
 // IncDStateProcesses atomically records a detected D-state process.
@@ -179,12 +175,11 @@ func (m *PaddedDStateMetric) IncLazyUnmountTriggers() uint64 {
 	return m.LazyUnmountTriggers.Add(1)
 }
 
-// PaddedPIDMetric provides a 64-byte cache-line aligned atomic counter set for PID and zombie metrics.
+// PaddedPIDMetric provides an atomic counter set for PID and zombie metrics.
 type PaddedPIDMetric struct {
-	TotalPIDs     atomic.Uint64 // 8 bytes (offset 0)
-	ZombiePIDs    atomic.Uint64 // 8 bytes (offset 8)
-	ThrottledPIDs atomic.Uint64 // 8 bytes (offset 16)
-	_             [40]byte      // 40 bytes padding (offset 24..63) -> exactly 64 bytes
+	TotalPIDs     atomic.Uint64
+	ZombiePIDs    atomic.Uint64
+	ThrottledPIDs atomic.Uint64
 }
 
 // SetTotalPIDs atomically updates total monitored PIDs.

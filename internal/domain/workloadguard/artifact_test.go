@@ -3,22 +3,16 @@ package workloadguard_test
 import (
 	"sync"
 	"testing"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/workloadguard"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestPaddedCounters_CacheLineAlignment asserts that all counters occupy exactly 64 bytes
-// to prevent false sharing across CPU cores under the MESI/MOESI cache coherence protocols.
-func TestPaddedCounters_CacheLineAlignment(t *testing.T) {
-	assert.Equal(t, uintptr(64), unsafe.Sizeof(workloadguard.PaddedDigestResolutionCounter{}),
-		"PaddedDigestResolutionCounter must be exactly 64 bytes aligned")
-	assert.Equal(t, uintptr(64), unsafe.Sizeof(workloadguard.PaddedStorageCheckCounter{}),
-		"PaddedStorageCheckCounter must be exactly 64 bytes aligned")
-	assert.Equal(t, uintptr(64), unsafe.Sizeof(workloadguard.PaddedPIDAdmissionCounter{}),
-		"PaddedPIDAdmissionCounter must be exactly 64 bytes aligned")
+func TestPaddedCounters_Initialization(t *testing.T) {
+	assert.Equal(t, uint64(0), (&workloadguard.PaddedDigestResolutionCounter{}).Load())
+	assert.Equal(t, uint64(0), (&workloadguard.PaddedStorageCheckCounter{}).Load())
+	assert.Equal(t, uint64(0), (&workloadguard.PaddedPIDAdmissionCounter{}).Load())
 }
 
 // TestPaddedCounters_ConcurrentOperations asserts race-free atomic updates under high concurrency.

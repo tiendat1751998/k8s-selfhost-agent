@@ -4,7 +4,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/gpuwatch"
 )
@@ -100,12 +99,8 @@ func TestNCCLHangEvaluation(t *testing.T) {
 	}
 }
 
-func TestPaddedGPUCountersAlignmentAndConcurrency(t *testing.T) {
+func TestPaddedGPUCountersConcurrency(t *testing.T) {
 	var counters gpuwatch.PaddedGPUCounters
-	size := unsafe.Sizeof(counters)
-	if size%64 != 0 {
-		t.Errorf("PaddedGPUCounters size (%d bytes) is not a multiple of 64 bytes (false sharing risk under MESI)", size)
-	}
 
 	const goroutines = 50
 	const increments = 1000

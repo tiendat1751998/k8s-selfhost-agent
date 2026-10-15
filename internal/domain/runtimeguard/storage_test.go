@@ -5,28 +5,24 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/runtimeguard"
 )
 
-// TestPaddedCountersCacheLine verifies the 64-byte alignment and padding of telemetry counters
-// to eliminate false sharing on multicore CPUs under MESI/MOESI cache coherence protocols.
-func TestPaddedCountersCacheLine(t *testing.T) {
+// TestPaddedCountersInitialization verifies counter initialization.
+func TestPaddedCountersInitialization(t *testing.T) {
 	var inodeCounter runtimeguard.PaddedInodeUsageCounter
 	var rateLimitCounter runtimeguard.PaddedRateLimitTracker
 	var metricCounter runtimeguard.PaddedStorageMetricTracker
 
-	if sz := unsafe.Sizeof(inodeCounter); sz != 64 {
-		t.Fatalf("expected PaddedInodeUsageCounter size to be 64 bytes, got %d bytes", sz)
+	if inodeCounter.Load() != 0 {
+		t.Fatalf("expected 0, got %d", inodeCounter.Load())
 	}
-
-	if sz := unsafe.Sizeof(rateLimitCounter); sz != 64 {
-		t.Fatalf("expected PaddedRateLimitTracker size to be 64 bytes, got %d bytes", sz)
+	if rateLimitCounter.Load() != 0 {
+		t.Fatalf("expected 0, got %d", rateLimitCounter.Load())
 	}
-
-	if sz := unsafe.Sizeof(metricCounter); sz != 64 {
-		t.Fatalf("expected PaddedStorageMetricTracker size to be 64 bytes, got %d bytes", sz)
+	if metricCounter.Load() != 0 {
+		t.Fatalf("expected 0, got %d", metricCounter.Load())
 	}
 }
 

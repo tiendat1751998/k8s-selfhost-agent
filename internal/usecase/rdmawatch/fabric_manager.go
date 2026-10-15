@@ -17,8 +17,10 @@ package rdmawatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
+	"os"
 	"sync"
 	"time"
 
@@ -66,12 +68,17 @@ func NewFabricManager(
 	tainter NodeTaintApplier,
 	alerter EmergencyAlertSender,
 ) *FabricManager {
+	nodeName, err := os.Hostname()
+	if err != nil || nodeName == "" {
+		nodeName = "gpu-worker-node"
+	}
+
 	return &FabricManager{
 		prober:            prober,
 		collector:         collector,
 		tainter:           tainter,
 		alerter:           alerter,
-		defaultNodeName:   "gpu-worker-node",
+		defaultNodeName:   nodeName,
 		activeCheckpoints: make(map[string]int),
 	}
 }
@@ -91,7 +98,7 @@ func (m *FabricManager) GetCounters() *rdmawatch.PaddedRDMACounters {
 // AuditGPUFabricBandwidth analyzes NVLink interconnects and marks asymmetric links degraded.
 func (m *FabricManager) AuditGPUFabricBandwidth(ctx context.Context) ([]rdmawatch.GPUFabricBandwidth, error) {
 	if m.prober == nil {
-		return nil, nil
+		return nil, errors.New("rdma fabric prober is uninitialized")
 	}
 
 	links, err := m.prober.ProbeFabricLinks(ctx)

@@ -108,58 +108,14 @@ var (
 // FinOpsTelemetryTracker provides high-throughput, atomic telemetry counters for cluster-wide
 // FinOps scanning and remediation workloads.
 //
-// ARCHITECTURAL HARDWARE NOTE & CACHE LINE PADDING:
-// To eliminate false sharing across CPU core cache lines under high-concurrency multi-socket NUMA
-// scanning (MESI/MOESI cache coherency protocols), each atomic counter is isolated with a 64-byte
-// cache-line padding boundary (_ [8]uint64, 8 * 8 = 64 bytes).
-// Without padding, concurrent writes to adjacent atomic variables force continuous cache line
-// invalidation cycles (bus snooping / invalidation storms), severely degrading throughput.
-//
-// PHYSICAL HARDWARE BOTTLENECK & REAL-WORLD FAILURE ANALYSIS:
-// 1. Cross-AZ Fiber Propagation Latency (~1-2ms RTT):
-//    Inter-AZ communication crosses physical metropolitan dark fiber links adding 1-2ms round-trip
-//    latency compared to <0.1ms intra-AZ communication. High-frequency microservices performing
-//    hundreds of RPC hops compound this latency exponentially if traffic leaves the local AZ.
-// 2. Cloud Provider Cross-AZ Data Transfer Fees ($0.01/GB each direction):
-//    AWS/GCP/Azure bill $0.01/GB for cross-AZ ingress and egress ($0.02/GB effective roundtrip).
-//    In high-throughput distributed systems (e.g., Kafka, Elasticsearch, database replication),
-//    unhinted routing causes a cross-AZ traffic explosion, generating tens of thousands in unexpected egress bills.
-// 3. EBS/Disk Snapshot Creation I/O Performance Impact:
-//    Initiating an EBS volume snapshot triggers copy-on-write (COW) tracking. In busy I/O systems,
-//    initial snapshot block freezes cause block queue depth spikes and volume latency degradation.
-//    Reaping must ensure snapshot completion without saturating underlying disk channels.
-// 4. Cloud API Rate Limit Throttling:
-//    Cloud provider control planes enforce aggressive token bucket rate limits (e.g., AWS EC2 DescribeVolumes
-//    capped at ~20 TPS). Uncontrolled batch scanning leads to API throttling (RequestLimitExceeded),
-//    starving deployment controllers and critical health checks.
-// 5. Traffic Skew Failure Mode with Topology Hints:
-//    If topology hints ('service.kubernetes.io/topology-mode: Auto') are applied naively when endpoint
-//    distribution is asymmetrical (e.g. 1 pod in AZ-a, 9 pods in AZ-b), intra-AZ routing forces 100% of
-//    AZ-a traffic to that single pod, causing CPU saturation, memory exhaustion (OOMKill), and cascading
-//    service degradation. A proactive traffic skew detector must trigger fallback to global round-robin
-//    whenever a single pod handles >80% of local zone demand.
-// 6. Zombie Orphan Resource Accumulation:
-//    When K8s namespaces or Helm releases are destroyed without finalizer cleanup, external cloud
-//    resources (unattached gp3/io2 EBS volumes, unassociated Elastic IPs, orphaned NLB/ALB target groups)
-//    remain allocated, running up idle hourly charges ($0.08/GB-month for gp3, $0.005/hr for idle EIP,
-//    $0.0225/hr for ALB base). The automated reaper identifies resources idle >= 48h and prompts for
-//    safe backup-snapshot-verified deletion.
 type FinOpsTelemetryTracker struct {
-	_                       [8]uint64 // 64-byte cache-line padding boundary
 	crossAZEgressBytesSaved atomic.Uint64
-	_                       [8]uint64 // 64-byte cache-line padding boundary
 	unhintedServicesScanned atomic.Uint64
-	_                       [8]uint64 // 64-byte cache-line padding boundary
 	topologyHintsInjected   atomic.Uint64
-	_                       [8]uint64 // 64-byte cache-line padding boundary
 	skewFallbacksTriggered  atomic.Uint64
-	_                       [8]uint64 // 64-byte cache-line padding boundary
 	orphansDetected         atomic.Uint64
-	_                       [8]uint64 // 64-byte cache-line padding boundary
 	orphansReaped           atomic.Uint64
-	_                       [8]uint64 // 64-byte cache-line padding boundary
 	snapshotsGenerated      atomic.Uint64
-	_                       [8]uint64 // 64-byte cache-line padding boundary
 }
 
 // NewFinOpsTelemetryTracker constructs an isolated cache-padded telemetry tracker.

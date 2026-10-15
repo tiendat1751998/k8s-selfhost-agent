@@ -295,3 +295,20 @@ func TestFinOpsManager_OrphanScanningAndReaping(t *testing.T) {
 	assert.ErrorIs(t, err, finopsguard.ErrSnapshotGenerationFailed)
 	assert.False(t, scannerMock.deleteCalled, "Volume must NOT be deleted if snapshot generation fails!")
 }
+
+func TestFinOpsManager_NilPorts_ReturnError(t *testing.T) {
+	mgr := usecase.NewFinOpsManager(nil, nil, nil, nil)
+	ctx := context.Background()
+
+	_, err := mgr.AuditTopologyHints(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "uninitialized")
+
+	err = mgr.InjectTopologyAwareHints(ctx, "default", "my-svc")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "uninitialized")
+
+	_, err = mgr.ScanOrphanCloudResources(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "uninitialized")
+}

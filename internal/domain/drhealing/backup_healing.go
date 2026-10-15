@@ -35,12 +35,6 @@
 //    Any backup system operating without proactive key deletion protection auditing risks writing
 //    backups with keys doomed to expire, rendering multi-terabyte encrypted snapshots permanently unreadable.
 //
-// 5. Cache-Line False Sharing & MESI/MOESI CPU Degradation:
-//    High-frequency metrics and counters updated concurrently across multi-core processors suffer from
-//    "false sharing" when independent 8-byte variables share the same 64-byte L1/L2 cache line.
-//    Cache coherence protocols (MESI/MOESI) continuously invalidate lines across cores, causing bus
-//    storms and 10x throughput degradation. Padded structures with explicit 56-byte cache line buffers
-//    guarantee dedicated 64-byte cache lines for each atomic counter.
 // ==============================================================================================
 package drhealing
 
@@ -168,19 +162,14 @@ type KMSKeyPolicyAuditor interface {
 }
 
 // ==============================================================================================
-// CACHE-LINE PADDED CONCURRENT TELEMETRY & HIGH-FREQUENCY COUNTERS
+// CONCURRENT TELEMETRY & HIGH-FREQUENCY COUNTERS
 // ==============================================================================================
-// Each 8-byte uint64 counter is buffered with 56 bytes of padding to align to 64-byte boundaries,
-// isolating CPU cache lines and preventing false sharing across MESI/MOESI processor cores.
 
-// LockStateTelemetry records high-frequency lock state telemetry with cache line isolation.
+// LockStateTelemetry records high-frequency lock state telemetry.
 type LockStateTelemetry struct {
 	ActiveLocks       uint64
-	_pad0             [56]byte
 	StaleLocksCleared uint64
-	_pad1             [56]byte
 	LockBreaksFailed  uint64
-	_pad2             [56]byte
 }
 
 // NewLockStateTelemetry initializes an isolated LockStateTelemetry structure.
@@ -210,17 +199,14 @@ func (t *LockStateTelemetry) Snapshot() (active, cleared, failed uint64) {
 		atomic.LoadUint64(&t.LockBreaksFailed)
 }
 
-// BackupProgressCounter tracks backup progress with cache line isolation.
+// BackupProgressCounter tracks backup progress.
 type BackupProgressCounter struct {
 	BytesProcessed   uint64
-	_pad0            [56]byte
 	ObjectsScanned   uint64
-	_pad1            [56]byte
 	SnapshotsTracked uint64
-	_pad2            [56]byte
 }
 
-// NewBackupProgressCounter initializes a padded BackupProgressCounter.
+// NewBackupProgressCounter initializes a BackupProgressCounter.
 func NewBackupProgressCounter() *BackupProgressCounter {
 	return &BackupProgressCounter{}
 }
@@ -243,19 +229,15 @@ func (c *BackupProgressCounter) Snapshot() (bytes, objects, snapshots uint64) {
 		atomic.LoadUint64(&c.SnapshotsTracked)
 }
 
-// EdgeDatabaseIntegrityMetrics tracks edge DB repair operations with cache line isolation.
+// EdgeDatabaseIntegrityMetrics tracks edge DB repair operations.
 type EdgeDatabaseIntegrityMetrics struct {
 	ChecksPerformed   uint64
-	_pad0             [56]byte
 	CorruptionsFound  uint64
-	_pad1             [56]byte
 	RepairsSuccessful uint64
-	_pad2             [56]byte
 	RepairsFailed     uint64
-	_pad3             [56]byte
 }
 
-// NewEdgeDatabaseIntegrityMetrics initializes a padded EdgeDatabaseIntegrityMetrics.
+// NewEdgeDatabaseIntegrityMetrics initializes an EdgeDatabaseIntegrityMetrics.
 func NewEdgeDatabaseIntegrityMetrics() *EdgeDatabaseIntegrityMetrics {
 	return &EdgeDatabaseIntegrityMetrics{}
 }

@@ -6,50 +6,35 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 )
 
-func TestCacheLinePadding(t *testing.T) {
-	// Verify that struct offsets or field separations guarantee 64-byte spacing
-	// preventing false sharing across MESI/MOESI cache coherence lines.
-	var telemetry LockStateTelemetry
-	offsetActive := unsafe.Offsetof(telemetry.ActiveLocks)
-	offsetCleared := unsafe.Offsetof(telemetry.StaleLocksCleared)
-	offsetFailed := unsafe.Offsetof(telemetry.LockBreaksFailed)
-
-	if offsetCleared-offsetActive < 64 {
-		t.Errorf("expected spacing between ActiveLocks and StaleLocksCleared >= 64, got %d", offsetCleared-offsetActive)
-	}
-	if offsetFailed-offsetCleared < 64 {
-		t.Errorf("expected spacing between StaleLocksCleared and LockBreaksFailed >= 64, got %d", offsetFailed-offsetCleared)
+func TestTelemetryStructures(t *testing.T) {
+	telemetry := NewLockStateTelemetry()
+	telemetry.IncActiveLocks(2)
+	telemetry.IncStaleLocksCleared()
+	telemetry.IncLockBreaksFailed()
+	act, clr, fld := telemetry.Snapshot()
+	if act != 2 || clr != 1 || fld != 1 {
+		t.Errorf("unexpected telemetry snapshot: %d, %d, %d", act, clr, fld)
 	}
 
-	var progress BackupProgressCounter
-	offsetBytes := unsafe.Offsetof(progress.BytesProcessed)
-	offsetObjs := unsafe.Offsetof(progress.ObjectsScanned)
-	offsetSnaps := unsafe.Offsetof(progress.SnapshotsTracked)
-
-	if offsetObjs-offsetBytes < 64 {
-		t.Errorf("expected spacing between BytesProcessed and ObjectsScanned >= 64, got %d", offsetObjs-offsetBytes)
-	}
-	if offsetSnaps-offsetObjs < 64 {
-		t.Errorf("expected spacing between ObjectsScanned and SnapshotsTracked >= 64, got %d", offsetSnaps-offsetObjs)
+	progress := NewBackupProgressCounter()
+	progress.AddBytesProcessed(1024)
+	progress.IncObjectsScanned()
+	progress.IncSnapshotsTracked()
+	b, o, s := progress.Snapshot()
+	if b != 1024 || o != 1 || s != 1 {
+		t.Errorf("unexpected progress snapshot: %d, %d, %d", b, o, s)
 	}
 
-	var edge EdgeDatabaseIntegrityMetrics
-	offsetChecks := unsafe.Offsetof(edge.ChecksPerformed)
-	offsetCorrupt := unsafe.Offsetof(edge.CorruptionsFound)
-	offsetSuccess := unsafe.Offsetof(edge.RepairsSuccessful)
-	offsetRepairFailed := unsafe.Offsetof(edge.RepairsFailed)
-
-	if offsetCorrupt-offsetChecks < 64 {
-		t.Errorf("expected spacing between ChecksPerformed and CorruptionsFound >= 64, got %d", offsetCorrupt-offsetChecks)
-	}
-	if offsetSuccess-offsetCorrupt < 64 {
-		t.Errorf("expected spacing between CorruptionsFound and RepairsSuccessful >= 64, got %d", offsetSuccess-offsetCorrupt)
-	}
-	if offsetRepairFailed-offsetSuccess < 64 {
-		t.Errorf("expected spacing between RepairsSuccessful and RepairsFailed >= 64, got %d", offsetRepairFailed-offsetSuccess)
+	edge := NewEdgeDatabaseIntegrityMetrics()
+	edge.IncChecksPerformed()
+	edge.IncCorruptionsFound()
+	edge.IncRepairsSuccessful()
+	edge.IncRepairsFailed()
+	chk, crp, rep, fld2 := edge.Snapshot()
+	if chk != 1 || crp != 1 || rep != 1 || fld2 != 1 {
+		t.Errorf("unexpected edge metrics snapshot: %d, %d, %d, %d", chk, crp, rep, fld2)
 	}
 }
 

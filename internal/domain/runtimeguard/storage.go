@@ -149,11 +149,9 @@ func (c *RegistryMirrorConfig) Validate() error {
 	return nil
 }
 
-// PaddedInodeUsageCounter features 64-byte cache-line padding (56 bytes padding + 8 bytes uint64)
-// to prevent false sharing across CPU cores under high-frequency telemetry polling (MESI/MOESI protocol).
+// PaddedInodeUsageCounter is an atomic counter for inode usage.
 type PaddedInodeUsageCounter struct {
 	val uint64
-	_   [7]uint64
 }
 
 // Inc atomically increments the counter by 1.
@@ -176,10 +174,9 @@ func (c *PaddedInodeUsageCounter) Reset() {
 	atomic.StoreUint64(&c.val, 0)
 }
 
-// PaddedRateLimitTracker features 64-byte cache-line padding to isolate rate-limit state in L1/L2 caches.
+// PaddedRateLimitTracker tracks rate limits atomically.
 type PaddedRateLimitTracker struct {
 	val uint64
-	_   [7]uint64
 }
 
 // Add atomically increments the rate-limit tracker by delta.
@@ -197,10 +194,9 @@ func (t *PaddedRateLimitTracker) Reset() {
 	atomic.StoreUint64(&t.val, 0)
 }
 
-// PaddedStorageMetricTracker isolates node storage telemetry lookups across cores.
+// PaddedStorageMetricTracker tracks node storage telemetry.
 type PaddedStorageMetricTracker struct {
 	val uint64
-	_   [7]uint64
 }
 
 // Add atomically increments the metric tracker.

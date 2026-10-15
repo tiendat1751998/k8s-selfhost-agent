@@ -56,12 +56,47 @@ func WithBTFChecker(fn BTFCheckerFunc) Option {
 	}
 }
 
-// WithBTFPath sets a filesystem path to inspect for BTF vmlinux.
+// VerifyBTFIntegrity checks that a BTF/vmlinux file exists, has valid size,
+// and begins with either ELF magic (0x7F 'E' 'L' 'F') or raw BTF magic (0xeb9f).
+func VerifyBTFIntegrity(path string) (bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return false, fmt.Errorf("opening btf file %s: %w", path, err)
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		return false, fmt.Errorf("statting btf file %s: %w", path, err)
+	}
+	if stat.Size() < 4 {
+		return false, fmt.Errorf("btf file %s too small (%d bytes)", path, stat.Size())
+	}
+
+	header := make([]byte, 4)
+	if _, err := f.Read(header); err != nil {
+		return false, fmt.Errorf("reading btf file header %s: %w", path, err)
+	}
+
+	// Check ELF magic: 0x7f, 'E', 'L', 'F'
+	if header[0] == 0x7f && header[1] == 'E' && header[2] == 'L' && header[3] == 'F' {
+		return true, nil
+	}
+
+	// Check raw BTF magic: 0xeb9f (little-endian or big-endian)
+	if (header[0] == 0x9f && header[1] == 0xeb) || (header[0] == 0xeb && header[1] == 0x9f) {
+		return true, nil
+	}
+
+	return false, fmt.Errorf("invalid btf magic in %s: %02x%02x%02x%02x", path, header[0], header[1], header[2], header[3])
+}
+
+// WithBTFPath sets a filesystem path to inspect for BTF vmlinux and verifies its integrity.
 func WithBTFPath(path string) Option {
 	return func(m *WatchdogManager) {
 		m.btfChecker = func(ctx context.Context) bool {
-			_, err := os.Stat(path)
-			return err == nil
+			valid, _ := VerifyBTFIntegrity(path)
+			return valid
 		}
 	}
 }
@@ -72,8 +107,8 @@ func NewWatchdogManager(opts ...Option) *WatchdogManager {
 		probes: make(map[string]*probeState),
 		logger: zap.NewNop(),
 		btfChecker: func(ctx context.Context) bool {
-			_, err := os.Stat("/sys/kernel/btf/vmlinux")
-			return err == nil
+			valid, _ := VerifyBTFIntegrity("/sys/kernel/btf/vmlinux")
+			return valid
 		},
 	}
 
@@ -196,6 +231,9 @@ func (m *WatchdogManager) AutoExpandRingBuffer(ctx context.Context, probe string
 
 	if newPages <= 0 {
 		newPages = state.pages * 2
+	}
+	if newPages&(newPages-1) != 0 {
+		return fmt.Errorf("ring buffer pages must be a power of two, got %d", newPages)
 	}
 	if newPages > domain.MaxRingBufferPages {
 		newPages = domain.MaxRingBufferPages

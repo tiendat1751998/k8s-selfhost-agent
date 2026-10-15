@@ -27,13 +27,11 @@
 //      workload pods as Envoy breaches its cgroup memory limit. Enforcing egress scope via
 //      Sidecar.networking.istio.io drops proxy memory footprint back under 100MB.
 //
-// 3. Cryptographic Validation CPU Overhead & False Sharing:
+// 3. Cryptographic Validation CPU Overhead & Concurrent Telemetry:
 //    - High-frequency mTLS handshakes invoke extensive RSA/ECDSA signature verification and
 //      AES-GCM decryption, consuming significant CPU cycles on L1/L2 caches.
-//    - Telemetry tracking across high-concurrency worker threads causes cache-line bouncing
-//      and invalidation traffic under the MESI/MOESI cache coherence protocols if metric
-//      counters share the same 64-byte L1 cache line (false sharing). Explicit 64-byte
-//      padding isolates high-frequency atomic updates to dedicated cache lines.
+//    - Telemetry tracking across high-concurrency worker threads uses 64-bit atomic operations
+//      to ensure safe, lock-free metrics collection across cores.
 //
 // 4. Inter-Cluster VXLAN/Geneve Encapsulation & PMTU Black Holes:
 //    - Packet encapsulation (VXLAN adds 50 bytes: 20B IPv4 + 8B UDP + 8B VXLAN + 14B Ethernet;
@@ -140,15 +138,12 @@ type ServiceMeshResilienceEngine interface {
 	AuditTunnelMTUBlackHole(ctx context.Context, targetIP string, testPayloadSize int) (*TunnelMTUProbeResult, error)
 }
 
-// PaddedSDSLatencyTracker tracks SDS UDS socket probe latency with 64-byte cache-line padding
-// to eliminate false sharing under high-scale concurrent telemetry polling (MESI protocol).
-// Memory layout: 4 * 8-byte uint64 fields (32 bytes) + 32-byte padding = 64 bytes total.
+// PaddedSDSLatencyTracker tracks SDS UDS socket probe latency.
 type PaddedSDSLatencyTracker struct {
 	probes         uint64
 	totalLatencyNs uint64
 	lastLatencyNs  uint64
 	hungCount      uint64
-	_              [32]byte
 }
 
 // RecordLatency updates latency metrics atomically.
@@ -174,14 +169,12 @@ func (t *PaddedSDSLatencyTracker) Stats() (probes uint64, avgLatency time.Durati
 	return p, time.Duration(tot / p), h
 }
 
-// PaddedEnvoyMemoryMonitor tracks sidecar heap memory allocations with 64-byte cache-line padding.
-// Memory layout: 4 * 8-byte uint64 fields (32 bytes) + 32-byte padding = 64 bytes total.
+// PaddedEnvoyMemoryMonitor tracks sidecar heap memory allocations.
 type PaddedEnvoyMemoryMonitor struct {
 	allocatedMB   uint64
 	peakAllocMB   uint64
 	evictionCount uint64
 	scopedCount   uint64
-	_             [32]byte
 }
 
 // UpdateMemory updates currently allocated Envoy heap memory in MB and tracks peak usage.
@@ -209,13 +202,11 @@ func (m *PaddedEnvoyMemoryMonitor) Stats() (allocated uint64, peak uint64, scope
 }
 
 // PaddedTunnelMTUMetrics monitors PMTU probe transactions and TCP MSS clamping interventions.
-// Memory layout: 4 * 8-byte uint64 fields (32 bytes) + 32-byte padding = 64 bytes total.
 type PaddedTunnelMTUMetrics struct {
 	probesSent      uint64
 	probesDropped   uint64
 	blackHolesFound uint64
 	clampedCount    uint64
-	_               [32]byte
 }
 
 // RecordProbe records a probe result atomically.

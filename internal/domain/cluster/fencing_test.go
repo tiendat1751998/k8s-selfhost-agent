@@ -5,7 +5,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,19 +12,15 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/cluster"
 )
 
-func TestCacheLinePadding_64ByteAlignment(t *testing.T) {
-	// 64 bytes is the standard CPU cache line size (x86_64 and arm64).
-	// To eliminate false sharing in MESI/MOESI cache coherence protocols,
-	// telemetry counters and heartbeat state trackers must be at least 64 bytes
-	// or align to 64-byte multiples.
-	counterSize := unsafe.Sizeof(cluster.PaddedTelemetryCounter{})
-	assert.Equal(t, uintptr(64), counterSize, "PaddedTelemetryCounter must be exactly 64 bytes")
+func TestClusterTelemetry_Initialization(t *testing.T) {
+	counter := cluster.PaddedTelemetryCounter{}
+	assert.Equal(t, uint64(0), counter.HeartbeatChecks)
 
-	heartbeatSize := unsafe.Sizeof(cluster.HeartbeatStateTracker{})
-	assert.Equal(t, uintptr(64), heartbeatSize, "HeartbeatStateTracker must be exactly 64 bytes")
+	heartbeat := cluster.NewHeartbeatStateTracker()
+	assert.Equal(t, cluster.HeartbeatStatusHealthy, heartbeat.GetState())
 
-	fencingTrackerSize := unsafe.Sizeof(cluster.FencingExecutionTracker{})
-	assert.Equal(t, uintptr(64), fencingTrackerSize, "FencingExecutionTracker must be exactly 64 bytes")
+	fencing := cluster.NewFencingExecutionTracker()
+	assert.Equal(t, uint64(0), fencing.ExecutionsCount)
 }
 
 func TestPaddedTelemetryCounter_ConcurrentRaceSafety(t *testing.T) {

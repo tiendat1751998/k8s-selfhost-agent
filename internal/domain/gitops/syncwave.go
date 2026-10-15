@@ -27,10 +27,6 @@
 //    - Out-of-Band kubectl edit Corruption: Manual modifications generate conflicting field ownership in
 //      managedFields, permanently blocking automated GitOps sync loops with HTTP 409 Conflict.
 //
-// 5. CPU Cache Coherency (False Sharing):
-//    High-frequency webhook counters and latency metrics residing on the same 64-byte L1/L2 cache line
-//    cause severe cache line bouncing between CPU cores under MESI/MOESI cache coherence protocols.
-//    Padded counters with 64-byte alignment eliminate this performance degradation.
 // --------------------------------------------------------------------------------------------------
 package gitops
 
@@ -111,11 +107,9 @@ var (
 	}
 )
 
-// PaddedCounter is a 64-bit integer padded to exactly 64 bytes (1 CPU cache line)
-// to prevent false sharing across SMP cores under the MESI/MOESI cache coherence protocols.
+// PaddedCounter is an atomic 64-bit integer counter.
 type PaddedCounter struct {
 	val int64
-	_   [56]byte
 }
 
 // Inc atomically increments the counter by 1.

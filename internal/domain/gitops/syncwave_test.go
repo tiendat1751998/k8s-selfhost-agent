@@ -6,18 +6,19 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	domainGitops "github.com/datdt/k8sselfhost/internal/domain/gitops"
 )
 
-// TestPaddedCounter_CacheLineSize verifies that PaddedCounter occupies exactly 64 bytes
-// to prevent CPU false sharing under MESI/MOESI cache coherence protocols.
-func TestPaddedCounter_CacheLineSize(t *testing.T) {
+// TestPaddedCounter_Operations verifies that PaddedCounter properly tracks counter values.
+func TestPaddedCounter_Operations(t *testing.T) {
 	var counter domainGitops.PaddedCounter
-	size := unsafe.Sizeof(counter)
-	if size != 64 {
-		t.Fatalf("expected PaddedCounter size to be 64 bytes (exact CPU cache line), got %d bytes", size)
+	if counter.Load() != 0 {
+		t.Fatalf("expected initial 0, got %d", counter.Load())
+	}
+	counter.Inc()
+	if counter.Load() != 1 {
+		t.Fatalf("expected 1, got %d", counter.Load())
 	}
 }
 

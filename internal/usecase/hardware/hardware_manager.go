@@ -5,6 +5,7 @@ package hardware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -106,7 +107,7 @@ func NewHardwareManager(
 // emits a P0 SRE alert, and returns ErrECCMemoryCorrectableSurge.
 func (m *HardwareManager) AuditECCMemoryErrors(ctx context.Context) ([]domain.ECCDIMMStatus, error) {
 	if m.edacReader == nil {
-		return nil, nil
+		return nil, errors.New("hardware edac reader is uninitialized")
 	}
 
 	dimms, err := m.edacReader.ReadDIMMErrors(ctx)
@@ -173,7 +174,7 @@ func (m *HardwareManager) AuditECCMemoryErrors(ctx context.Context) ([]domain.EC
 // and returns ErrCPUThermalThrottled.
 func (m *HardwareManager) AuditCPUThermalThrottling(ctx context.Context) (*domain.CPUThermalStatus, error) {
 	if m.thermalReader == nil {
-		return nil, nil
+		return nil, errors.New("hardware thermal reader is uninitialized")
 	}
 
 	status, err := m.thermalReader.ReadCPUThermal(ctx)
@@ -235,7 +236,7 @@ func (m *HardwareManager) AuditCPUThermalThrottling(ctx context.Context) (*domai
 // to prevent branch circuit breaker trips on the rack PDU.
 func (m *HardwareManager) AuditPowerSupplyRedundancy(ctx context.Context) ([]domain.PowerSupplyStatus, error) {
 	if m.psuReader == nil {
-		return nil, nil
+		return nil, errors.New("hardware psu reader is uninitialized")
 	}
 
 	supplies, err := m.psuReader.ReadPowerSupplies(ctx)

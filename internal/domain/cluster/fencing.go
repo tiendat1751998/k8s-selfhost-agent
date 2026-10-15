@@ -30,12 +30,6 @@ ENGINEERING NOTE: PHYSICAL HARDWARE BOTTLENECKS & MULTI-DC FAILURE MODES
   via POSIX signals (SIGKILL / kill -9). Software-level daemon termination is ineffective; only
   hardware-enforced STONITH (physical IPMI power-cut or hypervisor force-stop) guarantees
   absolute write isolation before replica promotion.
-- NIC Interrupt Mitigation & Cache Coherence (MESI/MOESI):
-  High-throughput network traffic on cluster nodes causes NIC ring buffer drops and interrupt
-  coalescing latency. On multi-socket NUMA systems, high-rate heartbeat monitors updating
-  shared memory addresses incur severe CPU cache line bouncing across L3 caches. The 64-byte
-  cache line padding implemented below ensures each core's atomic counter operates without
-  MESI invalidation storm overhead (false sharing).
 
 2. REAL-WORLD FAILURE MODES:
 - GitHub October 2018 Database Split-Brain Incident:
@@ -126,15 +120,12 @@ func NewFailoverReadinessStatus(canPromote, oldPrimaryFenced bool, lag time.Dura
 }
 
 // PaddedTelemetryCounter holds high-frequency failover telemetry counters.
-// Padded to 64 bytes (the L1/L2/L3 cache-line width on x86-64 and ARM64) to eliminate
-// false sharing across CPU cores under high-rate cluster health monitoring (MESI/MOESI protocol).
 type PaddedTelemetryCounter struct {
 	HeartbeatChecks  uint64
 	HeartbeatMisses  uint64
 	FencingAttempts  uint64
 	FencingSuccesses uint64
 	FencingFailures  uint64
-	_                [24]byte // 5 * 8 bytes = 40 bytes; 40 + 24 = 64 bytes.
 }
 
 // HeartbeatStatus represents the health state of a node's heartbeat.
@@ -147,12 +138,11 @@ const (
 	HeartbeatStatusFenced
 )
 
-// HeartbeatStateTracker tracks node heartbeat with 64-byte cache-line isolation.
+// HeartbeatStateTracker tracks node heartbeat.
 type HeartbeatStateTracker struct {
 	LastHeartbeatNano int64
 	MissedBeats       uint64
 	State             uint32
-	_                 [44]byte // 8 + 8 + 4 = 20 bytes; 20 + 44 = 64 bytes.
 }
 
 // NewHeartbeatStateTracker constructs an initialized HeartbeatStateTracker.
@@ -200,12 +190,11 @@ func (h *HeartbeatStateTracker) GetLastHeartbeatTime() time.Time {
 	return time.Unix(0, nano)
 }
 
-// FencingExecutionTracker tracks STONITH executions per node with 64-byte cache-line isolation.
+// FencingExecutionTracker tracks STONITH executions per node.
 type FencingExecutionTracker struct {
 	ExecutionsCount uint64
 	LastDurationNs  int64
 	SuccessFlag     uint32
-	_               [44]byte // 8 + 8 + 4 = 20 bytes; 20 + 44 = 64 bytes.
 }
 
 // NewFencingExecutionTracker constructs an initialized FencingExecutionTracker.
