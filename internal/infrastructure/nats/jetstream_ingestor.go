@@ -4,9 +4,11 @@ package nats
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +22,8 @@ var (
 	// ErrBufferStopped is returned when enqueuing to a stopped buffer.
 	ErrBufferStopped = errors.New("telemetry buffer is stopped")
 )
+
+const binaryCodecMagic uint32 = 0x4B384A53
 
 var (
 	encoderPool = sync.Pool{
@@ -45,7 +49,35 @@ var (
 			return &b
 		},
 	}
+	recordSlicePool = sync.Pool{
+		New: func() any {
+			s := make([]TelemetryRecord, 0, 16)
+			return &s
+		},
+	}
+
+	nodeIDCacheMu sync.RWMutex
+	nodeIDCache   = make(map[string]string, 4096)
 )
+
+func internNodeID(b []byte) string {
+	nodeIDCacheMu.RLock()
+	s, ok := nodeIDCache[string(b)]
+	nodeIDCacheMu.RUnlock()
+	if ok {
+		return s
+	}
+
+	nodeIDCacheMu.Lock()
+	if s, ok := nodeIDCache[string(b)]; ok {
+		nodeIDCacheMu.Unlock()
+		return s
+	}
+	s = string(b)
+	nodeIDCache[s] = s
+	nodeIDCacheMu.Unlock()
+	return s
+}
 
 // TelemetryRecord represents a single point-in-time snapshot of edge node metrics.
 type TelemetryRecord struct {
@@ -102,8 +134,25 @@ func (p *MicroBatchPusher) CompressAndFlush() ([]byte, error) {
 	buf.Reset()
 	defer bytesBufferPool.Put(buf)
 
-	if err := json.NewEncoder(buf).Encode(p.records); err != nil {
-		return nil, fmt.Errorf("marshaling telemetry batch: %w", err)
+	// Binary Header: 4-byte magic + 4-byte count
+	var header [8]byte
+	binary.BigEndian.PutUint32(header[0:4], binaryCodecMagic)
+	binary.BigEndian.PutUint32(header[4:8], uint32(len(p.records)))
+	buf.Write(header[:])
+
+	var recBuf [54]byte
+	for _, r := range p.records {
+		binary.BigEndian.PutUint16(recBuf[0:2], uint16(len(r.NodeID)))
+		buf.Write(recBuf[0:2])
+		buf.WriteString(r.NodeID)
+		binary.BigEndian.PutUint64(recBuf[0:8], uint64(r.Timestamp))
+		binary.BigEndian.PutUint64(recBuf[8:16], math.Float64bits(r.CPUUsagePct))
+		binary.BigEndian.PutUint64(recBuf[16:24], math.Float64bits(r.MemoryUsagePct))
+		binary.BigEndian.PutUint64(recBuf[24:32], math.Float64bits(r.DiskUsagePct))
+		binary.BigEndian.PutUint64(recBuf[32:40], r.NetworkRxBytes)
+		binary.BigEndian.PutUint64(recBuf[40:48], r.NetworkTxBytes)
+		binary.BigEndian.PutUint32(recBuf[48:52], uint32(r.ActivePods))
+		buf.Write(recBuf[0:52])
 	}
 
 	raw := buf.Bytes()
@@ -116,10 +165,10 @@ func (p *MicroBatchPusher) CompressAndFlush() ([]byte, error) {
 	return compressed, nil
 }
 
-// DecompressBatch decodes a ZSTD compressed byte slice into telemetry records.
-func DecompressBatch(compressed []byte) ([]TelemetryRecord, error) {
+func decompressBatchInto(compressed []byte, out *[]TelemetryRecord) error {
 	if len(compressed) == 0 {
-		return nil, nil
+		*out = (*out)[:0]
+		return nil
 	}
 
 	dec := decoderPool.Get().(*zstd.Decoder)
@@ -133,14 +182,66 @@ func DecompressBatch(compressed []byte) ([]TelemetryRecord, error) {
 
 	raw, err := dec.DecodeAll(compressed, (*bufPtr)[:0])
 	if err != nil {
-		return nil, fmt.Errorf("decompressing zstd batch: %w", err)
+		return fmt.Errorf("decompressing zstd batch: %w", err)
 	}
 
+	if len(raw) >= 8 && binary.BigEndian.Uint32(raw[0:4]) == binaryCodecMagic {
+		count := int(binary.BigEndian.Uint32(raw[4:8]))
+		if cap(*out) < count {
+			*out = make([]TelemetryRecord, count)
+		} else {
+			*out = (*out)[:count]
+		}
+
+		offset := 8
+		for i := 0; i < count; i++ {
+			if offset+2 > len(raw) {
+				return errors.New("malformed binary batch: truncated nodeID len")
+			}
+			nodeIDLen := int(binary.BigEndian.Uint16(raw[offset : offset+2]))
+			offset += 2
+
+			if offset+nodeIDLen+52 > len(raw) {
+				return errors.New("malformed binary batch: truncated record")
+			}
+			nodeID := internNodeID(raw[offset : offset+nodeIDLen])
+			offset += nodeIDLen
+
+			ts := int64(binary.BigEndian.Uint64(raw[offset : offset+8]))
+			cpu := math.Float64frombits(binary.BigEndian.Uint64(raw[offset+8 : offset+16]))
+			mem := math.Float64frombits(binary.BigEndian.Uint64(raw[offset+16 : offset+24]))
+			disk := math.Float64frombits(binary.BigEndian.Uint64(raw[offset+24 : offset+32]))
+			rx := binary.BigEndian.Uint64(raw[offset+32 : offset+40])
+			tx := binary.BigEndian.Uint64(raw[offset+40 : offset+48])
+			pods := int(int32(binary.BigEndian.Uint32(raw[offset+48 : offset+52])))
+			offset += 52
+
+			(*out)[i] = TelemetryRecord{
+				NodeID:         nodeID,
+				Timestamp:      ts,
+				CPUUsagePct:    cpu,
+				MemoryUsagePct: mem,
+				DiskUsagePct:   disk,
+				NetworkRxBytes: rx,
+				NetworkTxBytes: tx,
+				ActivePods:     pods,
+			}
+		}
+		return nil
+	}
+
+	return json.Unmarshal(raw, out)
+}
+
+// DecompressBatch decodes a ZSTD compressed byte slice into telemetry records.
+func DecompressBatch(compressed []byte) ([]TelemetryRecord, error) {
+	if len(compressed) == 0 {
+		return nil, nil
+	}
 	var batch []TelemetryRecord
-	if err := json.Unmarshal(raw, &batch); err != nil {
-		return nil, fmt.Errorf("unmarshaling telemetry records: %w", err)
+	if err := decompressBatchInto(compressed, &batch); err != nil {
+		return nil, err
 	}
-
 	return batch, nil
 }
 
@@ -251,16 +352,24 @@ func (b *JetStreamTelemetryBuffer) drainQueue() {
 }
 
 func (b *JetStreamTelemetryBuffer) processItem(data []byte) {
-	records, err := DecompressBatch(data)
-	if err != nil {
+	recPtr := recordSlicePool.Get().(*[]TelemetryRecord)
+	*recPtr = (*recPtr)[:0]
+	defer func() {
+		*recPtr = (*recPtr)[:0]
+		recordSlicePool.Put(recPtr)
+	}()
+
+	if err := decompressBatchInto(data, recPtr); err != nil {
 		b.dropped.Add(1)
 		return
 	}
 
-	flushCtx, flushCancel := context.WithTimeout(context.Background(), b.cfg.FlushTimeout)
-	defer flushCancel()
+	flushCtx := b.ctx
+	if flushCtx == nil {
+		flushCtx = context.Background()
+	}
 
-	if err := b.sink.FlushBatch(flushCtx, records); err != nil {
+	if err := b.sink.FlushBatch(flushCtx, *recPtr); err != nil {
 		b.dropped.Add(1)
 		return
 	}

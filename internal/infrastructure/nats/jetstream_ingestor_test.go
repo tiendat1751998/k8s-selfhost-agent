@@ -2,11 +2,14 @@ package nats
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // mockBatchSink implements BatchSink for testing.
@@ -80,6 +83,87 @@ func TestMicroBatchPusher_Compression(t *testing.T) {
 	}
 	if decompressed[0].NodeID != "node-0000" {
 		t.Fatalf("expected first node node-0000, got %s", decompressed[0].NodeID)
+	}
+}
+
+func TestBinaryCodec_RoundTripAndJSONFallback(t *testing.T) {
+	// 1. Binary round-trip verification with exact field equality
+	pusher, err := NewMicroBatchPusher(3)
+	if err != nil {
+		t.Fatalf("failed to create pusher: %v", err)
+	}
+
+	expected := []TelemetryRecord{
+		{
+			NodeID:         "node-alpha-1234",
+			Timestamp:      1728954000123,
+			CPUUsagePct:    33.333,
+			MemoryUsagePct: 77.777,
+			DiskUsagePct:   12.345,
+			NetworkRxBytes: 987654321,
+			NetworkTxBytes: 123456789,
+			ActivePods:     42,
+		},
+		{
+			NodeID:         "node-beta-5678",
+			Timestamp:      1728954000456,
+			CPUUsagePct:    99.9,
+			MemoryUsagePct: 15.5,
+			DiskUsagePct:   88.8,
+			NetworkRxBytes: 4096,
+			NetworkTxBytes: 8192,
+			ActivePods:     1,
+		},
+	}
+
+	for _, rec := range expected {
+		pusher.Add(rec)
+	}
+
+	compressed, err := pusher.CompressAndFlush()
+	if err != nil {
+		t.Fatalf("compress failed: %v", err)
+	}
+
+	decompressed, err := DecompressBatch(compressed)
+	if err != nil {
+		t.Fatalf("decompress failed: %v", err)
+	}
+
+	if len(decompressed) != len(expected) {
+		t.Fatalf("expected %d records, got %d", len(expected), len(decompressed))
+	}
+
+	for i, exp := range expected {
+		got := decompressed[i]
+		if got != exp {
+			t.Errorf("record %d mismatch: got %+v, want %+v", i, got, exp)
+		}
+	}
+
+	// 2. Legacy JSON fallback test (ZSTD compressed JSON without binary magic)
+	jsonBytes, err := json.Marshal(expected)
+	if err != nil {
+		t.Fatalf("json marshal failed: %v", err)
+	}
+
+	enc, _ := zstd.NewWriter(nil)
+	jsonCompressed := enc.EncodeAll(jsonBytes, nil)
+	enc.Close()
+
+	jsonDecompressed, err := DecompressBatch(jsonCompressed)
+	if err != nil {
+		t.Fatalf("decompression of json payload failed: %v", err)
+	}
+
+	if len(jsonDecompressed) != len(expected) {
+		t.Fatalf("expected %d records from json fallback, got %d", len(expected), len(jsonDecompressed))
+	}
+	for i, exp := range expected {
+		got := jsonDecompressed[i]
+		if got != exp {
+			t.Errorf("json fallback record %d mismatch: got %+v, want %+v", i, got, exp)
+		}
 	}
 }
 
