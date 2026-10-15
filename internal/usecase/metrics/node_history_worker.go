@@ -208,8 +208,10 @@ func (w *NodeHistoryWorker) recordRollup(ctx context.Context) error {
 		}
 
 		// Sentinel check: detect node transition to offline or degraded
+		// Skip anomaly/incident generation (NodeNotReady) for synthetic host nodes
+		isSynthetic := n.Source == "host" || n.Role == "standalone" || strings.HasPrefix(n.NodeID, "host-")
 		prevStat, hasPrev := w.prevNodeStatus[nodeID]
-		if hasPrev && prevStat == "online" && (status == "offline" || status == "degraded") {
+		if !isSynthetic && hasPrev && prevStat == "online" && (status == "offline" || status == "degraded") {
 			anomalies = append(anomalies, anomalyTrigger{metrics: n, status: status})
 		}
 		w.prevNodeStatus[nodeID] = status
@@ -284,6 +286,9 @@ func (w *NodeHistoryWorker) triggerNodeAnomalyIncident(
 	now time.Time,
 ) {
 	if w.incidentRepo == nil {
+		return
+	}
+	if n.Source == "host" || n.Role == "standalone" || strings.HasPrefix(n.NodeID, "host-") {
 		return
 	}
 

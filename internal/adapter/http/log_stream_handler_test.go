@@ -445,3 +445,41 @@ func TestLogStreamHandler_EmptyHistory_ServiceFilter_EmitsHandshake(t *testing.T
 	}
 }
 
+func TestLogStreamHandler_WebSocketSecWebSocketProtocolBearer(t *testing.T) {
+	aggregator := logging.NewLogAggregator(100)
+	logStreamHandler := NewLogStreamHandler(aggregator)
+	platform := &PlatformHandlers{
+		LogStream: logStreamHandler,
+	}
+
+	healthHandler := health.NewHandler(5 * time.Second)
+	router := NewRouterWithWS(healthHandler, nil, platform)
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	token, err := mw.GenerateJWT("test-user", "platform_admin", "default-tenant")
+	if err != nil {
+		t.Fatalf("failed to generate JWT token: %v", err)
+	}
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/v1/logs/stream?service=app"
+
+	dialer := &websocket.Dialer{
+		Subprotocols: []string{"bearer", token},
+	}
+	conn, resp, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		if resp != nil {
+			t.Fatalf("failed to dial websocket (status %d): %v", resp.StatusCode, err)
+		}
+		t.Fatalf("failed to dial websocket: %v", err)
+	}
+	defer conn.Close()
+
+	proto := resp.Header.Get("Sec-WebSocket-Protocol")
+	if proto != "bearer" {
+		t.Fatalf("expected response Sec-WebSocket-Protocol: 'bearer', got %q", proto)
+	}
+}
+
