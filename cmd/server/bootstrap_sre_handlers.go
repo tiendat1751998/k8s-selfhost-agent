@@ -3,6 +3,7 @@ package main
 import (
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	domainIngestGuard "github.com/datdt/k8sselfhost/internal/domain/ingestguard"
+	infraClickhouse "github.com/datdt/k8sselfhost/internal/infrastructure/clickhouse"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	usecaseAPFGuard "github.com/datdt/k8sselfhost/internal/usecase/apfguard"
 	usecaseAuth "github.com/datdt/k8sselfhost/internal/usecase/auth"
@@ -55,7 +56,17 @@ func bootstrapSREHandlers(p platformHandlerParams) *adapthttp.SREResilienceHandl
 	driftReconciler := usecaseSecretGuard.NewDriftReconciler(nil, nil)
 	ebpfMgr := usecaseEBPFWatch.NewWatchdogManager(usecaseEBPFWatch.WithLogger(p.log))
 	netguardMgr := usecaseNetGuard.NewTunnelManager(usecaseNetGuard.WithLogger(p.log))
-	ingestMgr := usecaseIngestGuard.NewIngestManager(domainIngestGuard.DefaultBatchFlushConfig())
+	spillJournal := infraClickhouse.NewDiskSpillJournal("")
+	partsInspector := infraClickhouse.NewPartsInspector(nil)
+	bulkWriter := infraClickhouse.NewBulkWriter(nil, nil, nil, spillJournal)
+	mergeAccelerator := infraClickhouse.NewMergeAccelerator(nil)
+	ingestMgr := usecaseIngestGuard.NewIngestManager(
+		domainIngestGuard.DefaultBatchFlushConfig(),
+		usecaseIngestGuard.WithBulkWriter(bulkWriter),
+		usecaseIngestGuard.WithPartsInspector(partsInspector),
+		usecaseIngestGuard.WithMergeAccelerator(mergeAccelerator),
+		usecaseIngestGuard.WithSpillJournal(spillJournal),
+	)
 	runtimeMgr := usecaseRuntimeGuard.NewResilienceManager()
 	gpuMgr := usecaseGPUWatch.NewGPUManagerService(nil, nil)
 	drHealingMgr := usecaseDRHealing.NewHealingManager(nil, nil, nil, nil, nil)

@@ -80,7 +80,11 @@ type BatchWriter struct {
 	flushFn      func(ctx context.Context, batch []logging.LogEntry) error
 	lastFlushErr error
 	buf          []logging.LogEntry
+	insertSQL    string
 }
+
+// InsertSQL returns the pre-formatted cached insert query.
+func (w *BatchWriter) InsertSQL() string { return w.insertSQL }
 
 // NewBatchWriter constructs a new background BatchWriter attached to a ClickHouse Client.
 func NewBatchWriter(client *Client, cfg BatchConfig) *BatchWriter {
@@ -113,6 +117,10 @@ func NewBatchWriterWithFn(
 		doneCh:     make(chan struct{}),
 		flushFn:    flushFn,
 		buf:        make([]logging.LogEntry, 0, initialCap),
+		insertSQL: fmt.Sprintf(
+			"INSERT INTO %s (timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes, trace_id, span_id, error_fingerprint)",
+			cfg.TableName,
+		),
 	}
 
 	if ctx != nil {
@@ -456,12 +464,7 @@ func (w *BatchWriter) executeFlush(ctx context.Context, entries []logging.LogEnt
 		return fmt.Errorf("getting connection for batch insert: %w", err)
 	}
 
-	query := fmt.Sprintf(
-		"INSERT INTO %s (timestamp, tenant_id, cluster_id, namespace, pod_name, container_name, stream, log_level, message, attributes, trace_id, span_id, error_fingerprint)",
-		w.cfg.TableName,
-	)
-
-	batch, err := conn.PrepareBatch(ctx, query)
+	batch, err := conn.PrepareBatch(ctx, w.insertSQL)
 	if err != nil {
 		return fmt.Errorf("preparing native batch insert: %w", err)
 	}
@@ -469,19 +472,9 @@ func (w *BatchWriter) executeFlush(ctx context.Context, entries []logging.LogEnt
 	for i := range entries {
 		entry := &entries[i]
 		if appendErr := batch.Append(
-			entry.Timestamp,
-			entry.TenantID,
-			entry.ClusterID,
-			entry.Namespace,
-			entry.PodName,
-			entry.ContainerName,
-			entry.Stream,
-			string(entry.LogLevel),
-			entry.Message,
-			entry.Attributes,
-			entry.TraceID,
-			entry.SpanID,
-			entry.ErrorFingerprint,
+			entry.Timestamp, entry.TenantID, entry.ClusterID, entry.Namespace,
+			entry.PodName, entry.ContainerName, entry.Stream, string(entry.LogLevel),
+			entry.Message, entry.Attributes, entry.TraceID, entry.SpanID, entry.ErrorFingerprint,
 		); appendErr != nil {
 			return fmt.Errorf("appending entry to batch: %w", appendErr)
 		}

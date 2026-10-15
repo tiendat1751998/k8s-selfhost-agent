@@ -1,4 +1,4 @@
-﻿package clickhouse
+package clickhouse
 
 import (
 	"context"
@@ -22,7 +22,9 @@ var EnterpriseMigrations = []string{
 		log_level LowCardinality(String),
 		message String CODEC(ZSTD(3)),
 		attributes Map(String, String) CODEC(ZSTD(1)),
-		INDEX idx_msg message TYPE tokenbf_v1(30720, 2, 0) GRANULARITY 1
+		INDEX idx_msg message TYPE tokenbf_v1(30720, 2, 0) GRANULARITY 1,
+		INDEX idx_pod_name pod_name TYPE bloom_filter(0.01) GRANULARITY 1,
+		INDEX idx_container_name container_name TYPE bloom_filter(0.01) GRANULARITY 1
 	) ENGINE = MergeTree
 	PARTITION BY toYYYYMMDD(timestamp)
 	ORDER BY (tenant_id, cluster_id, namespace, timestamp, log_level)
@@ -32,6 +34,8 @@ var EnterpriseMigrations = []string{
 	`ALTER TABLE cluster_logs ADD COLUMN IF NOT EXISTS error_fingerprint LowCardinality(String);`,
 	`ALTER TABLE cluster_logs ADD INDEX IF NOT EXISTS idx_ngram message TYPE ngrambf_v1(4, 32768, 2, 0) GRANULARITY 1;`,
 	`ALTER TABLE cluster_logs ADD INDEX IF NOT EXISTS idx_trace trace_id TYPE bloom_filter(0.01) GRANULARITY 1;`,
+	`ALTER TABLE cluster_logs ADD INDEX IF NOT EXISTS idx_pod_name pod_name TYPE bloom_filter(0.01) GRANULARITY 1;`,
+	`ALTER TABLE cluster_logs ADD INDEX IF NOT EXISTS idx_container_name container_name TYPE bloom_filter(0.01) GRANULARITY 1;`,
 }
 
 // RunMigrations executes idempotent DDL statements safely on startup.
